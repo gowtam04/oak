@@ -250,3 +250,26 @@ export const CLARIFICATION_ANSWER: PokebotAnswer = {
     "Tauros (Paldean Blaze)",
   ],
 };
+
+// ---------------------------------------------------------------------------
+// Stop-and-ask fixture — clarification_needed with structured question.options
+// (the "ask the user" affordance → QuestionOptions). One option carries a
+// description, one does not, to exercise both render paths.
+// ---------------------------------------------------------------------------
+
+export const QUESTION_ANSWER: PokebotAnswer = {
+  status: "clarification_needed",
+  answer_markdown:
+    "Trick Room teams differ a lot by format — are you building for Singles or Doubles?",
+  reasoning_markdown:
+    "Format materially changes the recommended setters and abusers; asking before building.",
+  citations: [],
+  inferences: [],
+  generation_basis: GENERATION_BASIS_GEN9,
+  question: {
+    options: [
+      { label: "Singles", description: "6v6, one Pokémon active per side" },
+      { label: "Doubles" },
+    ],
+  },
+};

@@ -28,6 +28,7 @@ import {
   RESOLUTION_FAILED_ANSWER,
   FALLBACK_ANSWER,
   CLARIFICATION_ANSWER,
+  QUESTION_ANSWER,
 } from "@/components/test-fixtures";
 
 afterEach(() => cleanup());
@@ -141,7 +142,40 @@ describe("AnswerCard — minimal answered payload (no optional fields)", () => {
     expect(screen.queryByTestId("damage-readout")).not.toBeInTheDocument();
     expect(screen.queryByTestId("inference-callout")).not.toBeInTheDocument();
     expect(screen.queryByTestId("suggestion-chips")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("question-options")).not.toBeInTheDocument();
     expect(screen.queryByTestId("caveat-strip")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// question.options → QuestionOptions (the "stop and ask" affordance).
+// ---------------------------------------------------------------------------
+
+describe("AnswerCard — question options & follow-up wiring", () => {
+  it("renders QuestionOptions when the answer carries question.options", () => {
+    render(<AnswerCard answer={QUESTION_ANSWER} />);
+    const options = screen.getByTestId("question-options");
+    expect(options).toBeInTheDocument();
+    expect(within(options).getByText("Singles")).toBeInTheDocument();
+    expect(within(options).getByText("Doubles")).toBeInTheDocument();
+    // The question prose still renders through the AnswerBody.
+    expect(screen.getByTestId("answer-body")).toHaveTextContent(
+      "Singles or Doubles",
+    );
+  });
+
+  it("fires onFollowUp with the option label verbatim when clicked", () => {
+    const onFollowUp = vi.fn();
+    render(<AnswerCard answer={QUESTION_ANSWER} onFollowUp={onFollowUp} />);
+    fireEvent.click(screen.getByTestId("question-option-0"));
+    expect(onFollowUp).toHaveBeenCalledTimes(1);
+    expect(onFollowUp).toHaveBeenCalledWith("Singles");
+  });
+
+  it("does not render QuestionOptions for a plain suggestion-only clarification", () => {
+    render(<AnswerCard answer={CLARIFICATION_ANSWER} />);
+    expect(screen.queryByTestId("question-options")).not.toBeInTheDocument();
+    expect(screen.getByTestId("suggestion-chips")).toBeInTheDocument();
   });
 });
 

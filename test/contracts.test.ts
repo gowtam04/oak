@@ -217,12 +217,33 @@ const EXAMPLE_E: PokebotAnswer = {
   generation_basis: { generation: "gen-9", fallback: false },
 };
 
+// Example F — proactive "stop and ask" with structured question.options. The
+// agent declines to answer generally and presents mutually-exclusive choices;
+// each option label is sent verbatim as the user's reply when clicked.
+const EXAMPLE_F: PokebotAnswer = {
+  status: "clarification_needed",
+  answer_markdown:
+    "Trick Room teams differ a lot by format — are you building for **Singles** or **Doubles**?",
+  reasoning_markdown:
+    "Format materially changes the recommended setters and abusers; asking before building.",
+  question: {
+    options: [
+      { label: "Singles", description: "6v6, one Pokémon active per side" },
+      { label: "Doubles", description: "4v4, two Pokémon active per side" },
+    ],
+  },
+  citations: [],
+  inferences: [],
+  generation_basis: { generation: "gen-9", fallback: false },
+};
+
 const POKEBOT_ANSWER_EXAMPLES: Array<[string, PokebotAnswer]> = [
   ["Example A (conditional mechanics)", EXAMPLE_A],
   ["Example B (intersection candidates)", EXAMPLE_B],
   ["Example C (clarification)", EXAMPLE_C],
   ["Example D (stat math / damage_calc)", EXAMPLE_D],
   ["Example E (scope decline)", EXAMPLE_E],
+  ["Example F (stop and ask / question.options)", EXAMPLE_F],
 ];
 
 // ===========================================================================
@@ -319,6 +340,40 @@ describe("PokebotAnswer rejects invalid payloads", () => {
     const bad = {
       ...EXAMPLE_A,
       inferences: [{ claim: "x", confidence: "definitely" }],
+    };
+    expect(pokebotAnswerSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects a question with fewer than 2 options (.min(2))", () => {
+    const bad = { ...EXAMPLE_F, question: { options: [{ label: "Only one" }] } };
+    expect(pokebotAnswerSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects a question with more than 4 options (.max(4))", () => {
+    const bad = {
+      ...EXAMPLE_F,
+      question: {
+        options: [
+          { label: "A" },
+          { label: "B" },
+          { label: "C" },
+          { label: "D" },
+          { label: "E" },
+        ],
+      },
+    };
+    expect(pokebotAnswerSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects an option with an unknown key (.strict())", () => {
+    const bad = {
+      ...EXAMPLE_F,
+      question: {
+        options: [
+          { label: "Singles", value: "singles" },
+          { label: "Doubles" },
+        ],
+      },
     };
     expect(pokebotAnswerSchema.safeParse(bad).success).toBe(false);
   });

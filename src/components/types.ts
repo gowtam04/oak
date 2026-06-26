@@ -36,6 +36,8 @@ import type {
   Inference,
   GenerationBasis,
   DamageCalc,
+  Question,
+  QuestionOption,
   TypeName,
 } from "@/agent/schemas";
 import type {
@@ -54,6 +56,8 @@ export type {
   Inference,
   GenerationBasis,
   DamageCalc,
+  Question,
+  QuestionOption,
   TypeName,
   ToolActivityEvent,
   ErrorEvent,
@@ -173,6 +177,17 @@ export interface SuggestionChipsProps {
   suggestions: string[];
   status: AnswerStatus;
   onSelect: (suggestion: string) => void;
+}
+
+/**
+ * `question.options` — the "ask the user" affordance, shown when a
+ * `clarification_needed` answer carries structured options. Each option renders
+ * as a clickable button; clicking sends `label` verbatim as a follow-up turn.
+ * The always-present Composer covers the free-text path.
+ */
+export interface QuestionOptionsProps {
+  options: QuestionOption[];
+  onSelect: (label: string) => void;
 }
 
 // ---------------------------------------------------------------------------

@@ -288,6 +288,38 @@ describe("POST /api/chat — error surface", () => {
     },
   );
 
+  it("delivers a stop-and-ask clarification with question.options as one answer event, intact", async () => {
+    const question: PokebotAnswer = {
+      status: "clarification_needed",
+      answer_markdown: "Singles or Doubles?",
+      reasoning_markdown: "Format changes the recommendation.",
+      citations: [],
+      inferences: [],
+      generation_basis: { generation: "gen-9", fallback: false },
+      question: {
+        options: [
+          { label: "Singles", description: "6v6" },
+          { label: "Doubles", description: "4v4" },
+        ],
+      },
+    };
+    mockRunPokebot.mockResolvedValue(question);
+
+    const res = await post({ session_id: "s-ask", message: "build a TR team" });
+    const events = await readSse(res);
+
+    expect(events.filter((e) => e.event === "error")).toHaveLength(0);
+    const answers = events.filter((e) => e.event === "answer");
+    expect(answers).toHaveLength(1);
+    const streamed = (answers[0]!.data as { answer: PokebotAnswer }).answer;
+    // The question survives JSON round-trip + schema validation unchanged.
+    expect(pokebotAnswerSchema.safeParse(streamed).success).toBe(true);
+    expect(streamed.question?.options.map((o) => o.label)).toEqual([
+      "Singles",
+      "Doubles",
+    ]);
+  });
+
   it("surfaces a transport/API fault as a single error event (no answer, no key leak)", async () => {
     mockRunPokebot.mockRejectedValue(new Error("Anthropic 529 overloaded"));
 

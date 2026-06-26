@@ -10,6 +10,7 @@ import InferenceCallout from "@/components/InferenceCallout";
 import CaveatStrip from "@/components/CaveatStrip";
 import DamageReadout from "@/components/DamageReadout";
 import SuggestionChips from "@/components/SuggestionChips";
+import QuestionOptions from "@/components/QuestionOptions";
 
 /**
  * AnswerCard — the top-level renderer for a single `PokebotAnswer` (T11 /
@@ -18,13 +19,14 @@ import SuggestionChips from "@/components/SuggestionChips";
  *
  *   1. CaveatStrip       ← uncertainty_flags[] + generation_basis.fallback (prominent, top)
  *   2. AnswerBody        ← answer_markdown (always)
- *   3. SpriteCard[]      ← subjects[]
- *   4. CandidateTable    ← candidates ("N of M" when truncated)
- *   5. DamageReadout     ← damage_calc
- *   6. InferenceCallout  ← inferences[]
- *   7. SuggestionChips   ← suggestions[] (+ status) — click → follow-up turn
- *   8. ReasoningBlock    ← reasoning_markdown (collapsible)
- *   9. SourceList        ← citations[] (collapsible "Sources")
+ *   3. QuestionOptions   ← question.options[] — the "stop and ask" CTA; click → follow-up turn
+ *   4. SpriteCard[]      ← subjects[]
+ *   5. CandidateTable    ← candidates ("N of M" when truncated)
+ *   6. DamageReadout     ← damage_calc
+ *   7. InferenceCallout  ← inferences[]
+ *   8. SuggestionChips   ← suggestions[] (+ status) — click → follow-up turn
+ *   9. ReasoningBlock    ← reasoning_markdown (collapsible)
+ *  10. SourceList        ← citations[] (collapsible "Sources")
  *
  * `onFollowUp` is threaded into the interactive leaves (SuggestionChips,
  * CandidateTable). A suggestion click sends the chosen name verbatim; a candidate
@@ -44,6 +46,7 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
     candidates,
     damage_calc,
     suggestions,
+    question,
     uncertainty_flags,
   } = answer;
 
@@ -59,6 +62,13 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
       />
 
       <AnswerBody markdown={answer_markdown} />
+
+      {question && question.options.length > 0 && (
+        <QuestionOptions
+          options={question.options}
+          onSelect={(label) => followUp(label)}
+        />
+      )}
 
       {subjects && subjects.length > 0 && (
         <div

@@ -478,6 +478,27 @@ export const damageCalcSchema = z
   })
   .strict();
 
+// A single selectable option in a `question` (the "ask the user" affordance).
+// `label` is sent verbatim as the next user message when the option is clicked,
+// so it must read as the user's reply (e.g. "Singles", "Doubles"). `description`
+// is optional helper text shown under the label.
+export const questionOptionSchema = z
+  .object({
+    label: z.string(),
+    description: z.string().optional(),
+  })
+  .strict();
+
+// Present on a `clarification_needed` answer when the agent stops to ask a
+// focused question. The UI renders `options` as clickable buttons; the
+// always-present composer covers the free-text path. 2-4 mutually-exclusive
+// choices keep the affordance meaningful (a wider/narrower set is a prompt bug).
+export const questionSchema = z
+  .object({
+    options: z.array(questionOptionSchema).min(2).max(4),
+  })
+  .strict();
+
 export const pokebotAnswerSchema = z
   .object({
     status: z.enum([
@@ -495,6 +516,7 @@ export const pokebotAnswerSchema = z
     candidates: candidatesSchema.optional(),
     damage_calc: damageCalcSchema.optional(),
     suggestions: z.array(z.string()).optional(),
+    question: questionSchema.optional(),
     uncertainty_flags: z.array(z.string()).optional(),
   })
   .strict();
@@ -543,6 +565,8 @@ export type GenerationBasis = z.infer<typeof generationBasisSchema>;
 export type Subject = z.infer<typeof subjectSchema>;
 export type Candidates = z.infer<typeof candidatesSchema>;
 export type DamageCalc = z.infer<typeof damageCalcSchema>;
+export type QuestionOption = z.infer<typeof questionOptionSchema>;
+export type Question = z.infer<typeof questionSchema>;
 export type TypeName = z.infer<typeof typeNameSchema>;
 export type StatKey = z.infer<typeof statKeySchema>;
 export type EntityKind = z.infer<typeof entityKindSchema>;

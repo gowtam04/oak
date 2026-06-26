@@ -261,6 +261,32 @@ describe("submit_answer termination", () => {
     });
   });
 
+  it("passes a stop-and-ask payload (question.options) through unchanged", async () => {
+    const questionAnswer = {
+      status: "clarification_needed",
+      answer_markdown: "Singles or Doubles?",
+      reasoning_markdown: "Format changes the recommendation.",
+      citations: [],
+      inferences: [],
+      generation_basis: { generation: "gen-9", fallback: false },
+      question: {
+        options: [
+          { label: "Singles", description: "6v6" },
+          { label: "Doubles" },
+        ],
+      },
+    };
+    const { client } = scriptedClient([
+      message([toolUse("submit_answer", questionAnswer, "t1")]),
+    ]);
+
+    const result = await runPokebotWith(client, "build a TR team", [], ctx);
+
+    // The loop returns the validated answer verbatim — the new field is intact.
+    expect(result).toEqual(questionAnswer);
+    expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
   it("dispatches a tool, emits progress, then returns the answer", async () => {
     mockDispatch.mockResolvedValueOnce({ total_count: 3, results: [] });
     const onProgress = vi.fn();

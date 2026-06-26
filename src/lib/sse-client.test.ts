@@ -367,4 +367,27 @@ describe("readSseStream", () => {
     expect(data.answer.status).toBe("resolution_failed");
     expect(data.answer.suggestions).toEqual(["Garchomp"]);
   });
+
+  it("round-trips an answer carrying structured question.options unchanged", async () => {
+    const answer = {
+      status: "clarification_needed",
+      answer_markdown: "Singles or Doubles?",
+      reasoning_markdown: "Format changes the recommendation.",
+      citations: [],
+      inferences: [],
+      generation_basis: { generation: "gen-9", fallback: false },
+      question: {
+        options: [
+          { label: "Singles", description: "6v6" },
+          { label: "Doubles" },
+        ],
+      },
+    };
+    const stream = makeStream(frame("answer", { answer }));
+    const events = await collect(stream);
+    expect(events).toHaveLength(1);
+    // The wire layer needs no changes — the question field survives untouched.
+    const data = (events[0] as Extract<SseEvent, { event: "answer" }>).data;
+    expect(data.answer.question).toEqual(answer.question);
+  });
 });

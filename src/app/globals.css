@@ -1357,6 +1357,48 @@ img {
   transform: scale(0.97);
 }
 
+/* Question options — the "stop and ask" affordance (clarification_needed with
+   structured `question.options`). Stacked, card-style buttons rather than inline
+   pills, so each label + description reads as a distinct choice. */
+.question-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+.question-options__option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  transition: background var(--motion-spring), border-color var(--motion-fast),
+    transform var(--motion-spring);
+}
+.question-options__option:hover {
+  background: var(--azure-soft);
+  border-color: var(--azure);
+  transform: translateY(-1px);
+}
+.question-options__option:active {
+  transform: translateY(0);
+}
+.question-options__label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.question-options__desc {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
 /* --------------------------------------------------------------------------
    16. Progress / loading — the Poké Ball spinner
    -------------------------------------------------------------------------- */
@@ -1498,6 +1540,7 @@ img {
   .chat-turn,
   .sprite-card,
   .suggestion-chips__chip,
+  .question-options__option,
   .chat-empty__chip,
   .composer__field,
   .composer__send {
@@ -1507,6 +1550,8 @@ img {
   }
   .sprite-card:hover,
   .suggestion-chips__chip:hover,
+  .question-options__option:hover,
+  .question-options__option:active,
   .chat-empty__chip:hover,
   .composer__field:focus-within,
   .composer__send:hover:not(:disabled),
