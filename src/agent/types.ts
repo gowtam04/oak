@@ -52,6 +52,13 @@ export interface AgentContext {
    * selects the matching system-prompt variant. Never set by the model.
    */
   mode: AgentMode;
+  /**
+   * Per-request abort handle (the inbound request's `signal`). When the client
+   * disconnects (e.g. the user presses Stop), the runtime forwards this to the
+   * Anthropic SDK so generation halts immediately and checks it between loop
+   * iterations. Undefined for callers/tests that don't supply one.
+   */
+  signal?: AbortSignal;
 }
 
 /**

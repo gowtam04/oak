@@ -53,6 +53,12 @@ export interface CreateAgentContextOptions {
    * every existing caller/test keeps today's Gen 9 behavior unchanged.
    */
   mode?: AgentMode;
+  /**
+   * Inbound request abort signal, threaded onto the context so the runtime can
+   * abort the Anthropic stream and bail between loop iterations when the client
+   * disconnects (user pressed Stop). Optional — defaults to undefined.
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -104,6 +110,7 @@ export async function createAgentContext(
     logger,
     requestId,
     mode,
+    signal: opts.signal,
   };
 }
 
