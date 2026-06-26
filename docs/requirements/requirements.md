@@ -5,8 +5,8 @@
 Pokebot is a **personal, web-based chat agent** that answers natural-language
 questions about Pokemon — their moves, abilities, types, stats, evolutions,
 items, and game-mechanic interactions. The user types questions in plain
-English (e.g. *"find me a Pokemon that can learn both Trick Room and
-Will-O-Wisp"* or *"does Fake Out work on Farigiraf?"*) and gets back a direct
+English (e.g. _"find me a Pokemon that can learn both Trick Room and
+Will-O-Wisp"_ or _"does Fake Out work on Farigiraf?"_) and gets back a direct
 answer accompanied by the agent's reasoning and the data sources it relied on.
 
 All data is sourced from **[PokeAPI](https://pokeapi.co/)**. The agent is
@@ -190,6 +190,7 @@ There is a single user persona:
 ## Functional Requirements
 
 ### Natural-Language Query Understanding
+
 - The agent accepts free-form English questions and determines the user's
   intent and the relevant entities (Pokemon, moves, abilities, types, stats,
   items).
@@ -199,6 +200,7 @@ There is a single user persona:
   type + ability + stats) in a single question.
 
 ### Data Domains — In Scope
+
 - **Pokemon:** species, types, abilities (including hidden abilities), base
   stats, sprites/artwork, and forms.
 - **Moves:** type, power, accuracy, PP, priority, damage class
@@ -213,9 +215,11 @@ There is a single user persona:
   calculator).
 
 ### Data Domains — Out of Scope
+
 See the [Out of Scope](#out-of-scope) section.
 
 ### Answer Composition
+
 - Every answer is composed of: the direct answer, the reasoning, the cited
   source data, and (when relevant) uncertainty flags and the generation/source
   used.
@@ -223,6 +227,7 @@ See the [Out of Scope](#out-of-scope) section.
   badges.
 
 ### Conversational Session
+
 - The agent retains context within a chat session to support multi-turn
   refinement of prior results and follow-up questions.
 

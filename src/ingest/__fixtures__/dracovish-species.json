@@ -1,0 +1,36 @@
+{
+  "id": 882,
+  "name": "dracovish",
+  "order": 836,
+  "is_legendary": false,
+  "is_mythical": false,
+  "generation": {
+    "name": "generation-viii",
+    "url": "https://pokeapi.co/api/v2/generation/8/"
+  },
+  "pokedex_numbers": [
+    {
+      "entry_number": 882,
+      "pokedex": {
+        "name": "national",
+        "url": "https://pokeapi.co/api/v2/pokedex/1/"
+      }
+    },
+    {
+      "entry_number": 363,
+      "pokedex": {
+        "name": "galar",
+        "url": "https://pokeapi.co/api/v2/pokedex/27/"
+      }
+    }
+  ],
+  "varieties": [
+    {
+      "is_default": true,
+      "pokemon": {
+        "name": "dracovish",
+        "url": "https://pokeapi.co/api/v2/pokemon/882/"
+      }
+    }
+  ]
+}

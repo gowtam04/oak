@@ -1,0 +1,337 @@
+/**
+ * BACKEND-STACK-E2E ORACLE — the `POST /api/chat` SSE route exercised end-to-end
+ * by calling the exported handler directly and PARSING the streamed frames.
+ *
+ * This is the integration checkpoint design.md mandates after Phase 6
+ * ("backend-stack-e2e: POST /api/chat streams a valid PokebotAnswer for G1 + G4")
+ * and the Vitest RISK DIRECTIVE ("call the exported POST(new Request(...)) and
+ * parse response.body frames with runPokebot mocked"). The runtime + agent
+ * context are mocked, so no SQLite / model / network is touched: this asserts the
+ * ORCHESTRATION seam (SSE framing, event ordering, in-domain-as-answer vs.
+ * transport-as-error, the guardrails, and session history threading).
+ */
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { pokebotAnswerSchema, type PokebotAnswer } from "@/agent/schemas";
+
+// --- Mock the runtime + context so the route never opens SQLite / hits the model.
+const { mockRunPokebot } = vi.hoisted(() => ({ mockRunPokebot: vi.fn() }));
+vi.mock("@/agent/runtime", () => ({ runPokebot: mockRunPokebot }));
+vi.mock("@/agent/context", () => ({
+  createAgentContext: vi.fn(async () => ({
+    db: {},
+    requestId: "test-req",
+    logger: {
+      info: () => {},
+      error: () => {},
+      bindings: () => ({}),
+    },
+  })),
+}));
+
+import { POST } from "@/app/api/chat/route";
+import { _resetStoreForTests } from "@/server/rate-limit";
+import { clearSession } from "@/server/session-store";
+
+// A sentinel "secret" placed in the env so we can prove the route never leaks it
+// into any streamed frame (no-API-key-leak criterion).
+const SECRET = "sk-ant-LEAK-SENTINEL-DO-NOT-EMIT";
+
+// --- Canonical answers the mocked runtime "produces" ------------------------
+
+const G1_ANSWER: PokebotAnswer = {
+  status: "answered",
+  answer_markdown:
+    "Only **Ninetales** can learn both Trick Room and Will-O-Wisp in Gen 9.",
+  reasoning_markdown:
+    "Intersection of the two Gen-9 learnsets — Ninetales is the only Pokémon in both.",
+  citations: [
+    {
+      source: "learnset/trick-room (gen-9)",
+      detail: "learned_by includes ninetales",
+    },
+    {
+      source: "learnset/will-o-wisp (gen-9)",
+      detail: "learned_by includes ninetales",
+    },
+  ],
+  inferences: [],
+  generation_basis: { generation: "gen-9", fallback: false },
+  candidates: {
+    total_count: 1,
+    truncated: false,
+    sort: null,
+    shown: [{ name: "Ninetales", dex_number: 38, types: ["fire"] }],
+  },
+};
+
+const G4_ANSWER: PokebotAnswer = {
+  status: "answered",
+  answer_markdown:
+    "It depends on Farigiraf's ability — Armor Tail would block Fake Out's +3 priority.",
+  reasoning_markdown: "Fake Out is +3 priority; Armor Tail negates that.",
+  citations: [{ source: "move/fake-out", detail: "priority: 3" }],
+  inferences: [
+    {
+      claim:
+        "Armor Tail negates Fake Out because Fake Out has positive priority.",
+      confidence: "high",
+    },
+  ],
+  generation_basis: { generation: "gen-9", fallback: false },
+};
+
+// --- SSE helpers ------------------------------------------------------------
+
+interface SseEvent {
+  event: string;
+  data: unknown;
+}
+
+/** Drain a streamed Response and parse its `event:`/`data:` SSE frames. */
+async function readSse(res: Response): Promise<SseEvent[]> {
+  expect(res.body, "response has a body stream").toBeTruthy();
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+  }
+  buf += decoder.decode();
+
+  const events: SseEvent[] = [];
+  for (const frame of buf.split("\n\n")) {
+    const trimmed = frame.replace(/\n+$/, "");
+    if (trimmed.trim() === "") continue;
+    let event = "";
+    const dataLines: string[] = [];
+    for (const line of trimmed.split("\n")) {
+      if (line.startsWith("event:")) event = line.slice("event:".length).trim();
+      else if (line.startsWith("data:"))
+        dataLines.push(line.slice("data:".length).trim());
+    }
+    // The directive requires single-line data; assert exactly one data line and
+    // that it round-trips as JSON (proves the frame is well-formed).
+    expect(dataLines.length, `frame has one data line: ${trimmed}`).toBe(1);
+    events.push({ event, data: JSON.parse(dataLines[0]!) });
+  }
+  return events;
+}
+
+function post(body: unknown): Promise<Response> {
+  return POST(
+    new Request("http://localhost/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+/** Serialize all frames so we can scan for an accidental secret leak. */
+function rawOf(events: SseEvent[]): string {
+  return JSON.stringify(events);
+}
+
+beforeEach(() => {
+  mockRunPokebot.mockReset();
+  _resetStoreForTests();
+  process.env.ANTHROPIC_API_KEY = SECRET;
+});
+
+afterEach(() => {
+  clearSession("s-g1");
+  clearSession("s-g4");
+  clearSession("s-fail");
+  clearSession("s-throw");
+  clearSession("s-thread");
+});
+
+// --- Happy path: streamed answer + progress --------------------------------
+
+describe("POST /api/chat — SSE happy path", () => {
+  it("streams tool_activity events then exactly one answer carrying the G1 PokebotAnswer", async () => {
+    mockRunPokebot.mockImplementation(
+      async (
+        _message: string,
+        _history: unknown,
+        _ctx: unknown,
+        onProgress?: (e: { tool: string; label: string }) => void,
+      ) => {
+        onProgress?.({ tool: "resolve_entity", label: "🔍 resolving…" });
+        onProgress?.({ tool: "query_pokedex", label: "📊 querying Pokédex…" });
+        return G1_ANSWER;
+      },
+    );
+
+    const res = await post({
+      session_id: "s-g1",
+      message: "find a Pokémon that can learn both Trick Room and Will-O-Wisp",
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toMatch(/text\/event-stream/);
+    expect(res.headers.get("Cache-Control")).toMatch(/no-cache, no-transform/);
+    expect(res.headers.get("X-Accel-Buffering")).toBe("no");
+
+    const events = await readSse(res);
+    const activity = events.filter((e) => e.event === "tool_activity");
+    const answers = events.filter((e) => e.event === "answer");
+    const errors = events.filter((e) => e.event === "error");
+
+    // tool_activity* then EXACTLY ONE answer, no error.
+    expect(activity.map((e) => (e.data as { tool: string }).tool)).toEqual([
+      "resolve_entity",
+      "query_pokedex",
+    ]);
+    expect(answers).toHaveLength(1);
+    expect(errors).toHaveLength(0);
+    expect(events[events.length - 1]!.event).toBe("answer");
+
+    const streamed = (answers[0]!.data as { answer: PokebotAnswer }).answer;
+    expect(pokebotAnswerSchema.safeParse(streamed).success).toBe(true);
+    expect(streamed).toEqual(G1_ANSWER);
+    expect(streamed.candidates?.total_count).toBe(1);
+  });
+
+  it("streams a G4 conditional answer with its inference intact", async () => {
+    mockRunPokebot.mockResolvedValue(G4_ANSWER);
+
+    const res = await post({
+      session_id: "s-g4",
+      message: "does Fake Out work on Farigiraf?",
+    });
+    const events = await readSse(res);
+    const answers = events.filter((e) => e.event === "answer");
+    expect(answers).toHaveLength(1);
+    const streamed = (answers[0]!.data as { answer: PokebotAnswer }).answer;
+    expect(streamed.inferences.length).toBeGreaterThanOrEqual(1);
+    expect(streamed.inferences[0]!.claim).toMatch(/armor.?tail/i);
+  });
+});
+
+// --- Error surface: in-domain vs transport (integration.md) -----------------
+
+describe("POST /api/chat — error surface", () => {
+  it.each([
+    "insufficient_data",
+    "clarification_needed",
+    "resolution_failed",
+  ] as const)(
+    "delivers an in-domain '%s' result as an answer event, never an error event",
+    async (status) => {
+      const inDomain: PokebotAnswer = {
+        status,
+        answer_markdown: "I couldn't fully resolve that.",
+        reasoning_markdown: "—",
+        citations: [],
+        inferences: [],
+        generation_basis: { generation: "gen-9", fallback: false },
+        suggestions: ["Will-O-Wisp"],
+      };
+      mockRunPokebot.mockResolvedValue(inDomain);
+
+      const res = await post({ session_id: "s-fail", message: "wat" });
+      const events = await readSse(res);
+
+      expect(events.filter((e) => e.event === "error")).toHaveLength(0);
+      const answers = events.filter((e) => e.event === "answer");
+      expect(answers).toHaveLength(1);
+      expect(
+        (answers[0]!.data as { answer: PokebotAnswer }).answer.status,
+      ).toBe(status);
+    },
+  );
+
+  it("surfaces a transport/API fault as a single error event (no answer, no key leak)", async () => {
+    mockRunPokebot.mockRejectedValue(new Error("Anthropic 529 overloaded"));
+
+    const res = await post({ session_id: "s-throw", message: "hello" });
+    const events = await readSse(res);
+
+    const errors = events.filter((e) => e.event === "error");
+    const answers = events.filter((e) => e.event === "answer");
+    expect(answers).toHaveLength(0);
+    expect(errors).toHaveLength(1);
+    expect((errors[0]!.data as { code: string }).code).toBe("agent_error");
+    // The route emits a STATIC message; the secret must never appear in output.
+    expect(rawOf(events)).not.toContain(SECRET);
+  });
+});
+
+// --- Guardrails (pre-stream HTTP rejections) --------------------------------
+
+describe("POST /api/chat — guardrails", () => {
+  it("rejects an oversized message with 413 before any streaming", async () => {
+    const res = await post({
+      session_id: "s-g1",
+      message: "x".repeat(2_001), // default cap is 2000
+    });
+    expect(res.status).toBe(413);
+    expect(res.headers.get("Content-Type")).toMatch(/application\/json/);
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("input_too_long");
+    expect(mockRunPokebot).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed body with 400", async () => {
+    const res = await post({ session_id: "s-g1" }); // missing message
+    expect(res.status).toBe(400);
+    expect(mockRunPokebot).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits a session after the per-window cap with 429 + Retry-After", async () => {
+    mockRunPokebot.mockResolvedValue(G1_ANSWER);
+    // Default window cap is 20 requests; drain each stream so the task settles.
+    for (let i = 0; i < 20; i++) {
+      const ok = await post({ session_id: "s-g1", message: `q${i}` });
+      expect(ok.status).toBe(200);
+      await readSse(ok);
+    }
+    const limited = await post({ session_id: "s-g1", message: "one too many" });
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toBeTruthy();
+    const body = (await limited.json()) as { code: string };
+    expect(body.code).toBe("rate_limited");
+  });
+});
+
+// --- Multi-turn: history threading across turns in one session --------------
+
+describe("POST /api/chat — session history", () => {
+  it("threads the prior user+assistant turn into the next call's history", async () => {
+    mockRunPokebot.mockImplementation(async () => ({
+      ...G1_ANSWER,
+      answer_markdown: "first answer",
+    }));
+
+    const first = await post({
+      session_id: "s-thread",
+      message: "first question",
+    });
+    await readSse(first); // ensure the turn pair is committed before turn 2
+
+    mockRunPokebot.mockResolvedValue(G1_ANSWER);
+    const second = await post({
+      session_id: "s-thread",
+      message: "now only the Fire types",
+    });
+    await readSse(second);
+
+    // The SECOND runPokebot call receives the prior turn pair as history, and the
+    // current message is passed separately (never inside history).
+    const secondCall = mockRunPokebot.mock.calls[1]!;
+    const [message, history] = secondCall as [
+      string,
+      { role: string; content: string }[],
+    ];
+    expect(message).toBe("now only the Fire types");
+    expect(history).toEqual([
+      { role: "user", content: "first question" },
+      { role: "assistant", content: "first answer" },
+    ]);
+  });
+});

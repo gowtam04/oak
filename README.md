@@ -7,7 +7,7 @@ data**: [PokeAPI](https://pokeapi.co/) supplies the raw building blocks (move
 priority values, ability effect text, type charts, base stats), and the agent
 deduces how those pieces interact.
 
-> Example: *"does Fake Out work on Farigiraf?"* → "Fake Out is a +3 priority
+> Example: _"does Fake Out work on Farigiraf?"_ → "Fake Out is a +3 priority
 > move; Armor Tail negates priority moves; if Farigiraf has Armor Tail, Fake Out
 > fails." Every answer carries its reasoning, the cited PokeAPI data, an explicit
 > inference/uncertainty flag, and the generation it's based on (Gen 9 baseline
@@ -25,11 +25,11 @@ has not started.
 
 ## Documentation
 
-| Doc | What it covers |
-|-----|----------------|
-| [`docs/requirements/requirements.md`](docs/requirements/requirements.md) | Business requirements — user stories, acceptance criteria, business rules. |
-| [`docs/agent-design/`](docs/agent-design/) | The agent's internals (fixed): topology, the 11 tools, data sources, prompts, output schema, eval spec. |
-| [`docs/architecture/design.md`](docs/architecture/design.md) | Technical design — stack, data store, ingest pipeline, file structure, interfaces, build phases. |
+| Doc                                                                      | What it covers                                                                                          |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| [`docs/requirements/requirements.md`](docs/requirements/requirements.md) | Business requirements — user stories, acceptance criteria, business rules.                              |
+| [`docs/agent-design/`](docs/agent-design/)                               | The agent's internals (fixed): topology, the 11 tools, data sources, prompts, output schema, eval spec. |
+| [`docs/architecture/design.md`](docs/architecture/design.md)             | Technical design — stack, data store, ingest pipeline, file structure, interfaces, build phases.        |
 
 ## Planned stack
 

@@ -1,0 +1,155 @@
+{
+  "id": 38,
+  "name": "ninetales",
+  "is_default": true,
+  "order": 60,
+  "species": {
+    "name": "ninetales",
+    "url": "https://pokeapi.co/api/v2/pokemon-species/38/"
+  },
+  "forms": [
+    { "name": "ninetales", "url": "https://pokeapi.co/api/v2/pokemon-form/38/" }
+  ],
+  "abilities": [
+    {
+      "ability": {
+        "name": "flash-fire",
+        "url": "https://pokeapi.co/api/v2/ability/18/"
+      },
+      "is_hidden": false,
+      "slot": 1
+    },
+    {
+      "ability": {
+        "name": "drought",
+        "url": "https://pokeapi.co/api/v2/ability/70/"
+      },
+      "is_hidden": true,
+      "slot": 3
+    }
+  ],
+  "types": [
+    {
+      "slot": 1,
+      "type": { "name": "fire", "url": "https://pokeapi.co/api/v2/type/10/" }
+    }
+  ],
+  "stats": [
+    {
+      "base_stat": 73,
+      "effort": 0,
+      "stat": { "name": "hp", "url": "https://pokeapi.co/api/v2/stat/1/" }
+    },
+    {
+      "base_stat": 76,
+      "effort": 0,
+      "stat": { "name": "attack", "url": "https://pokeapi.co/api/v2/stat/2/" }
+    },
+    {
+      "base_stat": 75,
+      "effort": 0,
+      "stat": { "name": "defense", "url": "https://pokeapi.co/api/v2/stat/3/" }
+    },
+    {
+      "base_stat": 81,
+      "effort": 0,
+      "stat": {
+        "name": "special-attack",
+        "url": "https://pokeapi.co/api/v2/stat/4/"
+      }
+    },
+    {
+      "base_stat": 100,
+      "effort": 0,
+      "stat": {
+        "name": "special-defense",
+        "url": "https://pokeapi.co/api/v2/stat/5/"
+      }
+    },
+    {
+      "base_stat": 100,
+      "effort": 1,
+      "stat": { "name": "speed", "url": "https://pokeapi.co/api/v2/stat/6/" }
+    }
+  ],
+  "sprites": {
+    "front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/38.png",
+    "other": {
+      "official-artwork": {
+        "front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/38.png"
+      }
+    }
+  },
+  "moves": [
+    {
+      "move": {
+        "name": "will-o-wisp",
+        "url": "https://pokeapi.co/api/v2/move/261/"
+      },
+      "version_group_details": [
+        {
+          "level_learned_at": 0,
+          "move_learn_method": { "name": "machine" },
+          "version_group": { "name": "scarlet-violet" }
+        }
+      ]
+    },
+    {
+      "move": {
+        "name": "flamethrower",
+        "url": "https://pokeapi.co/api/v2/move/53/"
+      },
+      "version_group_details": [
+        {
+          "level_learned_at": 0,
+          "move_learn_method": { "name": "machine" },
+          "version_group": { "name": "scarlet-violet" }
+        }
+      ]
+    },
+    {
+      "move": {
+        "name": "hypnosis",
+        "url": "https://pokeapi.co/api/v2/move/95/"
+      },
+      "version_group_details": [
+        {
+          "level_learned_at": 0,
+          "move_learn_method": { "name": "egg" },
+          "version_group": { "name": "scarlet-violet" }
+        }
+      ]
+    },
+    {
+      "move": {
+        "name": "fire-spin",
+        "url": "https://pokeapi.co/api/v2/move/83/"
+      },
+      "version_group_details": [
+        {
+          "level_learned_at": 0,
+          "move_learn_method": { "name": "machine" },
+          "version_group": { "name": "sword-shield" }
+        }
+      ]
+    },
+    {
+      "move": {
+        "name": "flame-charge",
+        "url": "https://pokeapi.co/api/v2/move/488/"
+      },
+      "version_group_details": [
+        {
+          "level_learned_at": 0,
+          "move_learn_method": { "name": "egg" },
+          "version_group": { "name": "scarlet-violet" }
+        },
+        {
+          "level_learned_at": 28,
+          "move_learn_method": { "name": "level-up" },
+          "version_group": { "name": "scarlet-violet" }
+        }
+      ]
+    }
+  ]
+}

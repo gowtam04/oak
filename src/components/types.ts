@@ -1,0 +1,247 @@
+/**
+ * Frontend prop contract — the INTERFACE seam for Phase 7 (Frontend renderer).
+ *
+ * This module is the single, shared contract that the `AnswerCard` tree, the
+ * chat shell, and the `sse-client` hook all target. It is authored by the
+ * Frontend INTERFACE step so the parallel leaf-component authors and the hook
+ * author can build against fixed prop shapes without coordinating directly.
+ *
+ * Field → component mapping is fixed by `output-formats.md` / `ux-design.md`:
+ *   answer_markdown                          → AnswerBody
+ *   reasoning_markdown                       → ReasoningBlock (collapsible)
+ *   subjects[]                               → SpriteCard (+ TypeBadge per type)
+ *   candidates                               → CandidateTable ("N of M" when truncated)
+ *   citations[]                              → SourceList (collapsible "Sources")
+ *   inferences[]                             → InferenceCallout
+ *   generation_basis.fallback + uncertainty_flags[] → CaveatStrip
+ *   damage_calc                              → DamageReadout (assumptions + estimate tag)
+ *   suggestions[] (+ status)                 → SuggestionChips (click → follow-up POST)
+ *
+ * Rules (per the shared-tree + risk directives):
+ *  - The `PokebotAnswer` type and all its sub-types are owned by
+ *    `@/agent/schemas` — they are imported/re-exported here, never redefined.
+ *  - The SSE wire types (`ToolActivityEvent`, `ErrorEvent`, `ChatRequestBody`)
+ *    are owned by `@/lib/sse-types` — imported/re-exported here, never redefined.
+ *  - Leaf components import their props from THIS module (type-only). They must
+ *    NOT import `db` / `repos` / `runtime` (no server/native code under jsdom).
+ *    Every type below is structural and erasable, so importing it pulls in no
+ *    runtime/server code.
+ */
+
+import type {
+  PokebotAnswer,
+  Subject,
+  Candidates,
+  Citation,
+  Inference,
+  GenerationBasis,
+  DamageCalc,
+  TypeName,
+} from "@/agent/schemas";
+import type {
+  ToolActivityEvent,
+  ErrorEvent,
+  ChatRequestBody,
+} from "@/lib/sse-types";
+
+// Re-export the payload sub-types so leaf authors can import everything they
+// need from `@/components/types` alone (one frontend contract surface).
+export type {
+  PokebotAnswer,
+  Subject,
+  Candidates,
+  Citation,
+  Inference,
+  GenerationBasis,
+  DamageCalc,
+  TypeName,
+  ToolActivityEvent,
+  ErrorEvent,
+  ChatRequestBody,
+};
+
+/** The `status` discriminant of a PokebotAnswer (drives clarification UI). */
+export type AnswerStatus = PokebotAnswer["status"];
+
+/** One row of a candidate result set (`candidates.shown[]`). */
+export type CandidateRow = Candidates["shown"][number];
+
+/**
+ * Send a normal follow-up turn for the SAME session — used by clickable
+ * affordances (suggestion chips, candidate rows). The string becomes a new user
+ * message; there is no special protocol (ux-design.md UI → Agent Input Map).
+ */
+export type OnFollowUp = (message: string) => void;
+
+// ---------------------------------------------------------------------------
+// Top-level renderer — AnswerCard
+// ---------------------------------------------------------------------------
+
+/**
+ * Props for the top-level `AnswerCard` (the barrel/assembly component).
+ *
+ * AnswerCard receives the whole `PokebotAnswer` and fans its fields out to the
+ * leaf components below. `onFollowUp` is threaded down to the interactive leaves
+ * (SuggestionChips, CandidateTable) so a click POSTs a follow-up turn.
+ */
+export interface AnswerCardProps {
+  /** The structured answer emitted by `submit_answer` for this assistant turn. */
+  answer: PokebotAnswer;
+  /** Send a follow-up turn when the user clicks a suggestion / candidate. */
+  onFollowUp?: OnFollowUp;
+}
+
+// ---------------------------------------------------------------------------
+// Leaf component props (one per field; authors build these in parallel)
+// ---------------------------------------------------------------------------
+
+/** `answer_markdown` — the direct, bottom-line-first answer. Always present. */
+export interface AnswerBodyProps {
+  markdown: string;
+}
+
+/** `reasoning_markdown` — the "why". Collapsible; collapsed by default. */
+export interface ReasoningBlockProps {
+  markdown: string;
+  /** Expanded on first render (default: false → collapsed). */
+  defaultExpanded?: boolean;
+}
+
+/** One entry of `subjects[]` — sprite/artwork + name + its type badges. */
+export interface SpriteCardProps {
+  subject: Subject;
+}
+
+/** A single type rendered as a color-coded badge. Palette owned by frontend-design. */
+export interface TypeBadgeProps {
+  type: TypeName;
+}
+
+/**
+ * `candidates` — the filter/superlative result set. Renders rows (sprite, name,
+ * type badges, key stats, ability) and an honest "N of M" header when truncated.
+ * `onSelect` (optional) lets a row click send a follow-up about that Pokémon.
+ */
+export interface CandidateTableProps {
+  candidates: Candidates;
+  onSelect?: (name: string) => void;
+}
+
+/** `citations[]` — the PokeAPI data relied on. Collapsible "Sources" list. */
+export interface SourceListProps {
+  citations: Citation[];
+  /** Expanded on first render (default: false → collapsed). */
+  defaultExpanded?: boolean;
+}
+
+/** `inferences[]` — visually distinct "deduction, not stated data" callouts. */
+export interface InferenceCalloutProps {
+  inferences: Inference[];
+}
+
+/**
+ * Caveat strip — combines `uncertainty_flags[]` and a generation fallback
+ * (`generation_basis.fallback` + its note) into one prominent banner. Renders
+ * nothing when there are no flags and `generationBasis.fallback === false`.
+ */
+export interface CaveatStripProps {
+  uncertaintyFlags: string[];
+  generationBasis: GenerationBasis;
+}
+
+/** `damage_calc` — computed value, assumptions, worked breakdown, estimate tag. */
+export interface DamageReadoutProps {
+  damageCalc: DamageCalc;
+}
+
+/**
+ * `suggestions[]` (with `status`) — clickable closest-match chips shown for
+ * `clarification_needed` / `resolution_failed`. Clicking a chip sends it as a
+ * follow-up user message.
+ */
+export interface SuggestionChipsProps {
+  suggestions: string[];
+  status: AnswerStatus;
+  onSelect: (suggestion: string) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Chat shell
+// ---------------------------------------------------------------------------
+
+/** A committed user turn in the thread. */
+export interface UserTurn {
+  id: string;
+  role: "user";
+  content: string;
+}
+
+/** A committed assistant turn — its rendered `PokebotAnswer`. */
+export interface AssistantTurn {
+  id: string;
+  role: "assistant";
+  answer: PokebotAnswer;
+}
+
+/** One entry in the visible conversation thread. */
+export type ChatTurn = UserTurn | AssistantTurn;
+
+/** Lifecycle of the active POST /api/chat turn. */
+export type ChatStatus = "idle" | "streaming" | "error";
+
+/**
+ * Props for `ChatThread` — renders the committed turns, plus an in-flight
+ * progress indicator (from `activity`) while `status === "streaming"`, plus a
+ * transport-fault affordance when `transportError` is set.
+ */
+export interface ChatThreadProps {
+  turns: ChatTurn[];
+  /** Tool-activity labels for the in-flight turn (empty when idle). */
+  activity: ToolActivityEvent[];
+  status: ChatStatus;
+  /** Set only on transport faults (the `error` SSE event / network failure). */
+  transportError: ErrorEvent | null;
+  /** Threaded into each AnswerCard for suggestion/candidate follow-ups. */
+  onFollowUp: OnFollowUp;
+}
+
+/** Props for the `Composer` input box. */
+export interface ComposerProps {
+  /** Submit a new user turn. */
+  onSend: (message: string) => void;
+  /** Disabled while a turn is streaming (default: false). */
+  disabled?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// sse-client hook return shape (`src/lib/sse-client.ts`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Return shape of the `usePokebotChat` hook (the SSE client).
+ *
+ * Implementation contract (design.md SSE directive): the hook POSTs to
+ * `/api/chat` with `{ session_id, message }` and reads the response body with a
+ * MANUAL stream reader (NOT EventSource). It surfaces progress (`tool_activity`
+ * events → `activity`) and then the terminal `answer` event, committing it as an
+ * `AssistantTurn`. In-domain failures arrive as a normal `answer` (a
+ * `PokebotAnswer` with a non-`answered` status) and are committed like any other
+ * answer — only the transport-level `error` event sets `transportError`.
+ */
+export interface UsePokebotChatResult {
+  /** Stable session id sent as `session_id` on every turn. */
+  sessionId: string;
+  /** The committed conversation (user + assistant turns), in order. */
+  turns: ChatTurn[];
+  /** Lifecycle of the active turn. */
+  status: ChatStatus;
+  /** Tool-activity labels for the in-flight turn; cleared when the answer lands. */
+  activity: ToolActivityEvent[];
+  /** Set only on transport faults; null otherwise. */
+  transportError: ErrorEvent | null;
+  /** POST a new user turn (same session_id). No-op while a turn is streaming. */
+  send: (message: string) => void;
+}
+
+/** The hook signature implemented by `src/lib/sse-client.ts`. */
+export type UsePokebotChat = () => UsePokebotChatResult;

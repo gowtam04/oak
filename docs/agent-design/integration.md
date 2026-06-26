@@ -19,23 +19,23 @@ Internally the agent runs behind a single function:
 ```ts
 async function runPokebot(
   message: string,
-  history: ChatMessage[],          // in-session prior turns (D9)
-  ctx: AgentContext                // tool clients (index, cache), logger, request id
-): Promise<PokebotAnswer>
+  history: ChatMessage[], // in-session prior turns (D9)
+  ctx: AgentContext, // tool clients (index, cache), logger, request id
+): Promise<PokebotAnswer>;
 ```
 
 - The loop: build the cached prefix (system + tools + few-shot) → append history
-  + `message` → run the Sonnet 4.6 tool-loop (max 10 iterations) → return the
-  `submit_answer` payload.
+  - `message` → run the Sonnet 4.6 tool-loop (max 10 iterations) → return the
+    `submit_answer` payload.
 - `history` is supplied by the session store (in-memory; in-session only). No DB.
 
 ## Input Contract
 
-| Field | Used by the agent |
-|-------|-------------------|
-| `message` | The user's question — the primary input. |
-| `history` | Prior turns this session, for multi-turn refinement (US-10). The agent reads the prior candidate set / topic from here. |
-| `session_id` | Orchestration only (routing to the right in-memory history); not seen by the model. |
+| Field        | Used by the agent                                                                                                       |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `message`    | The user's question — the primary input.                                                                                |
+| `history`    | Prior turns this session, for multi-turn refinement (US-10). The agent reads the prior candidate set / topic from here. |
+| `session_id` | Orchestration only (routing to the right in-memory history); not seen by the model.                                     |
 
 ## Output Contract
 
@@ -65,15 +65,15 @@ The frontend `AnswerCard` renders the payload field-by-field (mapping table in
 
 ## Error Surface
 
-| Condition | Caller sees | Handling |
-|-----------|-------------|----------|
-| Entity unresolved | `PokebotAnswer` with `status: "resolution_failed"` + `suggestions` | Normal render (not an HTTP error). |
-| Need clarification | `status: "clarification_needed"` | Normal render. |
-| PokeAPI / cache down on a needed fetch | `status: "insufficient_data"` + `uncertainty_flags` | Normal render; user told plainly. |
-| Index unavailable | `status: "insufficient_data"` | Same. |
-| Loop hit max iterations without `submit_answer` | Orchestration synthesizes an `insufficient_data` answer | Log as an anomaly. |
-| `submit_answer` invalid after retries | Generic `insufficient_data` answer | Log validation error. |
-| Model/API transport error or timeout | HTTP 5xx to the route; frontend shows a retry affordance | Outside the answer schema. |
+| Condition                                       | Caller sees                                                        | Handling                           |
+| ----------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------- |
+| Entity unresolved                               | `PokebotAnswer` with `status: "resolution_failed"` + `suggestions` | Normal render (not an HTTP error). |
+| Need clarification                              | `status: "clarification_needed"`                                   | Normal render.                     |
+| PokeAPI / cache down on a needed fetch          | `status: "insufficient_data"` + `uncertainty_flags`                | Normal render; user told plainly.  |
+| Index unavailable                               | `status: "insufficient_data"`                                      | Same.                              |
+| Loop hit max iterations without `submit_answer` | Orchestration synthesizes an `insufficient_data` answer            | Log as an anomaly.                 |
+| `submit_answer` invalid after retries           | Generic `insufficient_data` answer                                 | Log validation error.              |
+| Model/API transport error or timeout            | HTTP 5xx to the route; frontend shows a retry affordance           | Outside the answer schema.         |
 
 ## Observability Hooks (dev-team to implement)
 
@@ -95,6 +95,7 @@ also what the eval harness and prod-sampling (G-cases) consume.
 ## Runtime / Stack (deferred to architect)
 
 Open items for `solution-architect` (do **not** decide here):
+
 - Language/runtime (TS server is the natural fit given a web frontend; confirm).
 - Where `runPokebot` lives (API route vs. service module) and the streaming
   mechanism (SSE vs. WebSocket).

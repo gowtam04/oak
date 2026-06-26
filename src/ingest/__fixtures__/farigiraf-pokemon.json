@@ -1,0 +1,126 @@
+{
+  "id": 981,
+  "name": "farigiraf",
+  "is_default": true,
+  "order": 1045,
+  "species": {
+    "name": "farigiraf",
+    "url": "https://pokeapi.co/api/v2/pokemon-species/981/"
+  },
+  "forms": [
+    {
+      "name": "farigiraf",
+      "url": "https://pokeapi.co/api/v2/pokemon-form/981/"
+    }
+  ],
+  "abilities": [
+    {
+      "ability": {
+        "name": "cud-chew",
+        "url": "https://pokeapi.co/api/v2/ability/291/"
+      },
+      "is_hidden": false,
+      "slot": 1
+    },
+    {
+      "ability": {
+        "name": "armor-tail",
+        "url": "https://pokeapi.co/api/v2/ability/296/"
+      },
+      "is_hidden": false,
+      "slot": 2
+    },
+    {
+      "ability": {
+        "name": "sap-sipper",
+        "url": "https://pokeapi.co/api/v2/ability/157/"
+      },
+      "is_hidden": true,
+      "slot": 3
+    }
+  ],
+  "types": [
+    {
+      "slot": 1,
+      "type": { "name": "normal", "url": "https://pokeapi.co/api/v2/type/1/" }
+    },
+    {
+      "slot": 2,
+      "type": { "name": "psychic", "url": "https://pokeapi.co/api/v2/type/14/" }
+    }
+  ],
+  "stats": [
+    {
+      "base_stat": 120,
+      "effort": 2,
+      "stat": { "name": "hp", "url": "https://pokeapi.co/api/v2/stat/1/" }
+    },
+    {
+      "base_stat": 90,
+      "effort": 0,
+      "stat": { "name": "attack", "url": "https://pokeapi.co/api/v2/stat/2/" }
+    },
+    {
+      "base_stat": 70,
+      "effort": 0,
+      "stat": { "name": "defense", "url": "https://pokeapi.co/api/v2/stat/3/" }
+    },
+    {
+      "base_stat": 110,
+      "effort": 0,
+      "stat": {
+        "name": "special-attack",
+        "url": "https://pokeapi.co/api/v2/stat/4/"
+      }
+    },
+    {
+      "base_stat": 70,
+      "effort": 0,
+      "stat": {
+        "name": "special-defense",
+        "url": "https://pokeapi.co/api/v2/stat/5/"
+      }
+    },
+    {
+      "base_stat": 60,
+      "effort": 0,
+      "stat": { "name": "speed", "url": "https://pokeapi.co/api/v2/stat/6/" }
+    }
+  ],
+  "sprites": {
+    "front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/981.png",
+    "other": {
+      "official-artwork": {
+        "front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/981.png"
+      }
+    }
+  },
+  "moves": [
+    {
+      "move": {
+        "name": "psychic",
+        "url": "https://pokeapi.co/api/v2/move/94/"
+      },
+      "version_group_details": [
+        {
+          "level_learned_at": 0,
+          "move_learn_method": { "name": "machine" },
+          "version_group": { "name": "scarlet-violet" }
+        }
+      ]
+    },
+    {
+      "move": {
+        "name": "twin-beam",
+        "url": "https://pokeapi.co/api/v2/move/888/"
+      },
+      "version_group_details": [
+        {
+          "level_learned_at": 30,
+          "move_learn_method": { "name": "level-up" },
+          "version_group": { "name": "scarlet-violet" }
+        }
+      ]
+    }
+  ]
+}

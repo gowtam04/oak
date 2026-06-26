@@ -7,6 +7,7 @@ in the loop. Tools return **structured errors the model can reason about**, neve
 raw exceptions.
 
 Conventions:
+
 - Names accepted by detail tools are canonical PokeAPI slugs (`will-o-wisp`,
   `flash-fire`). Use `resolve_entity` first if unsure.
 - Every detail tool's miss returns `{ found: false, suggestions: [...] }` rather
@@ -25,33 +26,50 @@ when a name is ambiguous across forms. Returns ranked candidate matches with
 their canonical slugs.
 
 **Input schema:**
+
 ```json
 {
   "type": "object",
   "properties": {
-    "query": { "type": "string", "description": "The name as the user wrote it, e.g. 'Will-o-Whisp', 'Farigiraf', 'Trik Room'." },
-    "kind": { "type": "string", "enum": ["pokemon", "move", "ability", "type", "item", "any"], "default": "any", "description": "Restrict the search to one entity kind, or 'any' to search all." },
+    "query": {
+      "type": "string",
+      "description": "The name as the user wrote it, e.g. 'Will-o-Whisp', 'Farigiraf', 'Trik Room'."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["pokemon", "move", "ability", "type", "item", "any"],
+      "default": "any",
+      "description": "Restrict the search to one entity kind, or 'any' to search all."
+    },
     "limit": { "type": "integer", "default": 5, "minimum": 1, "maximum": 10 }
   },
   "required": ["query"]
 }
 ```
+
 **Output shape (sample):**
+
 ```json
 {
   "matches": [
-    { "kind": "move", "slug": "will-o-wisp", "display_name": "Will-O-Wisp", "score": 0.94 },
+    {
+      "kind": "move",
+      "slug": "will-o-wisp",
+      "display_name": "Will-O-Wisp",
+      "score": 0.94
+    },
     { "kind": "move", "slug": "wisp", "display_name": "—", "score": 0.0 }
   ]
 }
 ```
+
 **Side effects:** Read-only. Idempotent. **Failure modes:** none fatal — returns
 `{ "matches": [] }` when nothing is close (agent then says it can't resolve and
 asks). **Auth:** none.
 
 ---
 
-## T2 — `query_pokedex`  *(the workhorse)*
+## T2 — `query_pokedex` _(the workhorse)_
 
 **Description (for the model):** Search the local Pokédex index for Pokémon
 matching structured filters, with optional sorting and a result limit. Use this
@@ -61,33 +79,72 @@ Pokémon that can learn ALL of them** in Gen 9 (intersection). Returns the total
 match count plus the top-N rows with stats, types, abilities, and sprite.
 
 **Input schema:**
+
 ```json
 {
   "type": "object",
   "properties": {
-    "types": { "type": "array", "items": { "type": "string" }, "description": "Match Pokémon having ALL listed types (e.g. ['fire'] or ['fire','flying'])." },
-    "abilities": { "type": "array", "items": { "type": "string" }, "description": "Match Pokémon that can have ANY of these abilities (slot1/slot2/hidden). Use one for an exact-ability filter." },
-    "moves": { "type": "array", "items": { "type": "string" }, "description": "Match Pokémon that can learn ALL listed moves in Gen 9 (intersection of learnsets, BR-7)." },
+    "types": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Match Pokémon having ALL listed types (e.g. ['fire'] or ['fire','flying'])."
+    },
+    "abilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Match Pokémon that can have ANY of these abilities (slot1/slot2/hidden). Use one for an exact-ability filter."
+    },
+    "moves": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Match Pokémon that can learn ALL listed moves in Gen 9 (intersection of learnsets, BR-7)."
+    },
     "stat_filters": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "stat": { "type": "string", "enum": ["hp","attack","defense","special_attack","special_defense","speed","base_stat_total"] },
-          "op": { "type": "string", "enum": [">",">=","<","<=","=="] },
+          "stat": {
+            "type": "string",
+            "enum": [
+              "hp",
+              "attack",
+              "defense",
+              "special_attack",
+              "special_defense",
+              "speed",
+              "base_stat_total"
+            ]
+          },
+          "op": { "type": "string", "enum": [">", ">=", "<", "<=", "=="] },
           "value": { "type": "integer" }
         },
-        "required": ["stat","op","value"]
+        "required": ["stat", "op", "value"]
       },
       "description": "Numeric base-stat constraints, ANDed together (e.g. attack > 130)."
     },
-    "sort_by": { "type": "string", "enum": ["hp","attack","defense","special_attack","special_defense","speed","base_stat_total","national_dex_number"], "description": "Stat/field to rank by — use for superlatives like 'fastest' (sort_by=speed, order=desc)." },
-    "order": { "type": "string", "enum": ["asc","desc"], "default": "desc" },
+    "sort_by": {
+      "type": "string",
+      "enum": [
+        "hp",
+        "attack",
+        "defense",
+        "special_attack",
+        "special_defense",
+        "speed",
+        "base_stat_total",
+        "national_dex_number"
+      ],
+      "description": "Stat/field to rank by — use for superlatives like 'fastest' (sort_by=speed, order=desc)."
+    },
+    "order": { "type": "string", "enum": ["asc", "desc"], "default": "desc" },
     "limit": { "type": "integer", "default": 20, "minimum": 1, "maximum": 100 }
   }
 }
 ```
+
 **Output shape (sample):**
+
 ```json
 {
   "total_count": 7,
@@ -95,17 +152,27 @@ match count plus the top-N rows with stats, types, abilities, and sprite.
   "sort": "speed desc",
   "results": [
     {
-      "display_name": "Garchomp", "national_dex_number": 445,
-      "types": ["dragon","ground"],
+      "display_name": "Garchomp",
+      "national_dex_number": 445,
+      "types": ["dragon", "ground"],
       "abilities": { "slot1": "sand-veil", "hidden": "rough-skin" },
-      "base_stats": { "hp": 108, "attack": 130, "defense": 95, "special_attack": 80, "special_defense": 85, "speed": 102 },
+      "base_stats": {
+        "hp": 108,
+        "attack": 130,
+        "defense": 95,
+        "special_attack": 80,
+        "special_defense": 85,
+        "speed": 102
+      },
       "base_stat_total": 600,
       "sprite_url": "https://.../445.png",
-      "is_gen9_native": true, "source_generation": null
+      "is_gen9_native": true,
+      "source_generation": null
     }
   ]
 }
 ```
+
 **Side effects:** Read-only against DS-2/DS-3. Idempotent. **Failure modes:**
 `{ "error": "index_unavailable" }`; or `{ "unresolved": ["trik-room"] }` when a
 passed move/ability/type slug isn't in the index (agent should `resolve_entity`
@@ -126,29 +193,50 @@ sprite/artwork, national dex number, available forms, and which generation the
 data is from. Use for single-Pokémon lookups (US-4) and to ground reasoning.
 
 **Input schema:**
+
 ```json
 {
   "type": "object",
   "properties": {
-    "name": { "type": "string", "description": "Canonical Pokémon slug, e.g. 'garchomp', 'tauros-paldea-aqua'." }
+    "name": {
+      "type": "string",
+      "description": "Canonical Pokémon slug, e.g. 'garchomp', 'tauros-paldea-aqua'."
+    }
   },
   "required": ["name"]
 }
 ```
+
 **Output shape (sample):**
+
 ```json
 {
   "found": true,
-  "display_name": "Farigiraf", "national_dex_number": 981,
-  "types": ["normal","psychic"],
-  "abilities": { "slot1": "cud-chew", "slot2": "armor-tail", "hidden": "sap-sipper" },
-  "base_stats": { "hp": 120, "attack": 90, "defense": 70, "special_attack": 110, "special_defense": 70, "speed": 60 },
+  "display_name": "Farigiraf",
+  "national_dex_number": 981,
+  "types": ["normal", "psychic"],
+  "abilities": {
+    "slot1": "cud-chew",
+    "slot2": "armor-tail",
+    "hidden": "sap-sipper"
+  },
+  "base_stats": {
+    "hp": 120,
+    "attack": 90,
+    "defense": 70,
+    "special_attack": 110,
+    "special_defense": 70,
+    "speed": 60
+  },
   "base_stat_total": 520,
-  "sprite_url": "https://.../981.png", "artwork_url": "https://.../981_official.png",
+  "sprite_url": "https://.../981.png",
+  "artwork_url": "https://.../981_official.png",
   "forms": ["farigiraf"],
-  "is_gen9_native": true, "source_generation": null
+  "is_gen9_native": true,
+  "source_generation": null
 }
 ```
+
 **Side effects:** Read-only (DS-2). Idempotent. **Failure modes:**
 `{ "found": false, "suggestions": ["farigiraf"] }`. **Auth:** none.
 
@@ -163,23 +251,32 @@ that Fake Out is a priority move). Optionally returns the count of Pokémon that
 learn it in Gen 9.
 
 **Input schema:**
+
 ```json
 {
   "type": "object",
   "properties": {
-    "name": { "type": "string", "description": "Canonical move slug, e.g. 'fake-out', 'will-o-wisp'." },
+    "name": {
+      "type": "string",
+      "description": "Canonical move slug, e.g. 'fake-out', 'will-o-wisp'."
+    },
     "include_gen9_learner_count": { "type": "boolean", "default": false }
   },
   "required": ["name"]
 }
 ```
+
 **Output shape (sample):**
+
 ```json
 {
   "found": true,
   "display_name": "Fake Out",
-  "type": "normal", "damage_class": "physical",
-  "power": 40, "accuracy": 100, "pp": 10,
+  "type": "normal",
+  "damage_class": "physical",
+  "power": 40,
+  "accuracy": 100,
+  "pp": 10,
   "priority": 3,
   "target": "selected-pokemon",
   "effect_short": "Hits first (priority +3) and makes the target flinch; only works on the user's first turn out.",
@@ -187,6 +284,7 @@ learn it in Gen 9.
   "gen9_learner_count": 112
 }
 ```
+
 **Side effects:** Read-only (DS-4, with DS-3 for the count). Idempotent.
 **Failure modes:** `{ "found": false, "suggestions": [...] }`;
 `{ "error": "upstream_unavailable" }` on a cache miss while PokeAPI is down.
@@ -201,14 +299,22 @@ description. Use when reasoning depends on what an ability does (e.g. Armor Tail
 negating priority moves, Flash Fire's Fire immunity).
 
 **Input schema:**
+
 ```json
 {
   "type": "object",
-  "properties": { "name": { "type": "string", "description": "Canonical ability slug, e.g. 'armor-tail', 'flash-fire'." } },
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Canonical ability slug, e.g. 'armor-tail', 'flash-fire'."
+    }
+  },
   "required": ["name"]
 }
 ```
+
 **Output shape (sample):**
+
 ```json
 {
   "found": true,
@@ -217,6 +323,7 @@ negating priority moves, Flash Fire's Fire immunity).
   "effect_full": "The Pokémon and its allies cannot be targeted by opposing moves that have positive priority (e.g. Fake Out, Quick Attack, Extreme Speed)."
 }
 ```
+
 **Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
 `{ "found": false, "suggestions": [...] }`; `{ "error": "upstream_unavailable" }`.
 **Auth:** none.
@@ -232,32 +339,42 @@ weaknesses/resistances/immunities). Use for matchup questions (US-6).
 Immunities are 0× and must be treated as immunities, not resistances.
 
 **Input schema:**
+
 ```json
 {
   "type": "object",
   "properties": {
-    "types": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 2, "description": "One type for full profile, or two for a combined defensive matchup (e.g. ['ground','flying'])." }
+    "types": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "maxItems": 2,
+      "description": "One type for full profile, or two for a combined defensive matchup (e.g. ['ground','flying'])."
+    }
   },
   "required": ["types"]
 }
 ```
+
 **Output shape (sample, single type 'ground'):**
+
 ```json
 {
   "found": true,
   "types": ["ground"],
   "offensive": {
-    "super_effective_against": ["fire","electric","poison","rock","steel"],
-    "not_very_effective_against": ["bug","grass"],
+    "super_effective_against": ["fire", "electric", "poison", "rock", "steel"],
+    "not_very_effective_against": ["bug", "grass"],
     "no_effect_against": ["flying"]
   },
   "defensive": {
-    "weak_to": ["water","grass","ice"],
-    "resists": ["poison","rock"],
+    "weak_to": ["water", "grass", "ice"],
+    "resists": ["poison", "rock"],
     "immune_to": ["electric"]
   }
 }
 ```
+
 **Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
 `{ "found": false, "suggestions": [...] }` for an unknown type;
 `{ "error": "upstream_unavailable" }`. **Auth:** none.
@@ -271,23 +388,42 @@ condition(s) for each stage (level, item, friendship, trade, time of day, etc.)
 as provided by PokeAPI. Use for evolution questions (US-5).
 
 **Input schema:**
+
 ```json
 {
   "type": "object",
-  "properties": { "species": { "type": "string", "description": "Canonical species slug, e.g. 'eevee'." } },
+  "properties": {
+    "species": {
+      "type": "string",
+      "description": "Canonical species slug, e.g. 'eevee'."
+    }
+  },
   "required": ["species"]
 }
 ```
+
 **Output shape (sample):**
+
 ```json
 {
   "found": true,
   "chain": [
-    { "from": "eevee", "to": "vaporeon", "conditions": [{ "trigger": "use-item", "item": "water-stone" }] },
-    { "from": "eevee", "to": "espeon", "conditions": [{ "trigger": "level-up", "min_happiness": 160, "time_of_day": "day" }] }
+    {
+      "from": "eevee",
+      "to": "vaporeon",
+      "conditions": [{ "trigger": "use-item", "item": "water-stone" }]
+    },
+    {
+      "from": "eevee",
+      "to": "espeon",
+      "conditions": [
+        { "trigger": "level-up", "min_happiness": 160, "time_of_day": "day" }
+      ]
+    }
   ]
 }
 ```
+
 **Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
 `{ "found": false, "suggestions": [...] }`; `{ "error": "upstream_unavailable" }`.
 **Auth:** none.
@@ -300,14 +436,22 @@ as provided by PokeAPI. Use for evolution questions (US-5).
 which Pokémon are found holding it in the wild. Use for item questions (US-8).
 
 **Input schema:**
+
 ```json
 {
   "type": "object",
-  "properties": { "name": { "type": "string", "description": "Canonical item slug, e.g. 'leftovers'." } },
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Canonical item slug, e.g. 'leftovers'."
+    }
+  },
   "required": ["name"]
 }
 ```
+
 **Output shape (sample):**
+
 ```json
 {
   "found": true,
@@ -317,6 +461,7 @@ which Pokémon are found holding it in the wild. Use for item questions (US-8).
   "held_by_wild": [{ "pokemon": "snorlax", "rarity_percent": 100 }]
 }
 ```
+
 **Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
 `{ "found": false, "suggestions": [...] }`; `{ "error": "upstream_unavailable" }`.
 **Auth:** none.
@@ -332,28 +477,48 @@ this stat. Returns the exact value and a step-by-step breakdown. Use this for an
 stat-math question — do not compute stats yourself.
 
 **Input schema:**
+
 ```json
 {
   "type": "object",
   "properties": {
     "base_stat": { "type": "integer" },
-    "is_hp": { "type": "boolean", "default": false, "description": "True for the HP stat (different formula)." },
+    "is_hp": {
+      "type": "boolean",
+      "default": false,
+      "description": "True for the HP stat (different formula)."
+    },
     "iv": { "type": "integer", "default": 31, "minimum": 0, "maximum": 31 },
     "ev": { "type": "integer", "default": 0, "minimum": 0, "maximum": 252 },
     "level": { "type": "integer", "default": 50, "minimum": 1, "maximum": 100 },
-    "nature_effect": { "type": "string", "enum": ["boosted","neutral","hindered"], "default": "neutral", "description": "Whether the chosen nature raises (×1.1), leaves (×1.0), or lowers (×0.9) this stat. Ignored for HP." }
+    "nature_effect": {
+      "type": "string",
+      "enum": ["boosted", "neutral", "hindered"],
+      "default": "neutral",
+      "description": "Whether the chosen nature raises (×1.1), leaves (×1.0), or lowers (×0.9) this stat. Ignored for HP."
+    }
   },
   "required": ["base_stat"]
 }
 ```
+
 **Output shape (sample — Garchomp Speed, base 102, lvl 50, 252 EV, 31 IV, Jolly):**
+
 ```json
 {
   "value": 169,
   "breakdown": "floor((2*102 + 31 + floor(252/4)) * 50 / 100) = 149; (149 + 5) * 1.1 = 169.4 -> floor 169",
-  "inputs_echo": { "base_stat": 102, "iv": 31, "ev": 252, "level": 50, "nature_effect": "boosted", "is_hp": false }
+  "inputs_echo": {
+    "base_stat": 102,
+    "iv": 31,
+    "ev": 252,
+    "level": 50,
+    "nature_effect": "boosted",
+    "is_hp": false
+  }
 }
 ```
+
 **Side effects:** Pure function. Idempotent. **Failure modes:**
 `{ "error": "invalid_input", "detail": "ev must be 0..252" }`. **Auth:** none.
 
@@ -374,30 +539,61 @@ damage questions — do not compute damage yourself. Always present the result a
 an estimate.
 
 **Input schema:**
+
 ```json
 {
   "type": "object",
   "properties": {
     "level": { "type": "integer", "default": 50 },
     "power": { "type": "integer", "description": "Move base power." },
-    "attack_stat": { "type": "integer", "description": "Attacker's effective Atk or SpA." },
-    "defense_stat": { "type": "integer", "description": "Defender's effective Def or SpD." },
-    "stab": { "type": "boolean", "default": false, "description": "Same-type-attack bonus (×1.5)." },
-    "type_effectiveness": { "type": "number", "default": 1, "description": "Product of type matchups, e.g. 2, 0.5, 0, 4." },
-    "other_modifier": { "type": "number", "default": 1, "description": "Combined weather/item/ability/etc. multiplier." }
+    "attack_stat": {
+      "type": "integer",
+      "description": "Attacker's effective Atk or SpA."
+    },
+    "defense_stat": {
+      "type": "integer",
+      "description": "Defender's effective Def or SpD."
+    },
+    "stab": {
+      "type": "boolean",
+      "default": false,
+      "description": "Same-type-attack bonus (×1.5)."
+    },
+    "type_effectiveness": {
+      "type": "number",
+      "default": 1,
+      "description": "Product of type matchups, e.g. 2, 0.5, 0, 4."
+    },
+    "other_modifier": {
+      "type": "number",
+      "default": 1,
+      "description": "Combined weather/item/ability/etc. multiplier."
+    }
   },
-  "required": ["power","attack_stat","defense_stat"]
+  "required": ["power", "attack_stat", "defense_stat"]
 }
 ```
+
 **Output shape (sample):**
+
 ```json
 {
-  "min_damage": 142, "max_damage": 168,
+  "min_damage": 142,
+  "max_damage": 168,
   "is_estimate": true,
   "breakdown": "base = floor(floor(floor((2*50/5+2)*120*169/95)/50)+2) = X; * STAB 1.5 * type 2.0 * roll[0.85..1.0]",
-  "inputs_echo": { "level": 50, "power": 120, "attack_stat": 169, "defense_stat": 95, "stab": true, "type_effectiveness": 2, "other_modifier": 1 }
+  "inputs_echo": {
+    "level": 50,
+    "power": 120,
+    "attack_stat": 169,
+    "defense_stat": 95,
+    "stab": true,
+    "type_effectiveness": 2,
+    "other_modifier": 1
+  }
 }
 ```
+
 **Side effects:** Pure function. Idempotent. **Failure modes:**
 `{ "error": "invalid_input", "detail": "..." }`. **Auth:** none.
 
@@ -408,7 +604,7 @@ an estimate.
 
 ---
 
-## T11 — `submit_answer`  *(structured output / final action)*
+## T11 — `submit_answer` _(structured output / final action)_
 
 **Description (for the model):** Submit your final answer. Call this exactly
 once, as your last action, every turn. Its fields populate the user-facing
@@ -431,14 +627,14 @@ validation error to the model and asks it to re-emit (see `integration.md`).
 
 ## Tool-existence status
 
-| Tool | Exists? | Build note |
-|------|---------|------------|
-| resolve_entity | ❌ | Needs a name→slug fuzzy index over DS-2/DS-4. |
-| query_pokedex | ❌ | Needs DS-2 + DS-3 + a query layer. **Largest build item.** |
-| get_pokemon | ❌ | Reads DS-2. |
-| get_move / get_ability / get_type_matchups / get_evolution_chain / get_item | ❌ | Read DS-4 (read-through cache over PokeAPI). |
-| compute_stat / estimate_damage | ❌ | Pure formula functions (D5). |
-| submit_answer | ❌ | Structured-output tool; schema in `output-formats.md`. |
+| Tool                                                                        | Exists? | Build note                                                 |
+| --------------------------------------------------------------------------- | ------- | ---------------------------------------------------------- |
+| resolve_entity                                                              | ❌      | Needs a name→slug fuzzy index over DS-2/DS-4.              |
+| query_pokedex                                                               | ❌      | Needs DS-2 + DS-3 + a query layer. **Largest build item.** |
+| get_pokemon                                                                 | ❌      | Reads DS-2.                                                |
+| get_move / get_ability / get_type_matchups / get_evolution_chain / get_item | ❌      | Read DS-4 (read-through cache over PokeAPI).               |
+| compute_stat / estimate_damage                                              | ❌      | Pure formula functions (D5).                               |
+| submit_answer                                                               | ❌      | Structured-output tool; schema in `output-formats.md`.     |
 
 All tools are new work. None require auth or carry side effects beyond reads —
 simplifying retry logic in the loop.

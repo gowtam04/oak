@@ -12,11 +12,23 @@ contract between the agent and the frontend renderer.
   "title": "PokebotAnswer",
   "type": "object",
   "additionalProperties": false,
-  "required": ["status", "answer_markdown", "reasoning_markdown", "citations", "inferences", "generation_basis"],
+  "required": [
+    "status",
+    "answer_markdown",
+    "reasoning_markdown",
+    "citations",
+    "inferences",
+    "generation_basis"
+  ],
   "properties": {
     "status": {
       "type": "string",
-      "enum": ["answered", "clarification_needed", "resolution_failed", "insufficient_data"],
+      "enum": [
+        "answered",
+        "clarification_needed",
+        "resolution_failed",
+        "insufficient_data"
+      ],
       "description": "Kind of response. 'answered' = a real answer; 'clarification_needed' = need user input (e.g. did-you-mean); 'resolution_failed' = couldn't resolve an entity at all; 'insufficient_data' = tools couldn't supply needed data (e.g. PokeAPI down)."
     },
     "answer_markdown": {
@@ -35,9 +47,18 @@ contract between the agent and the frontend renderer.
         "additionalProperties": false,
         "required": ["source", "detail"],
         "properties": {
-          "source": { "type": "string", "description": "Resource referenced, e.g. 'move/fake-out', 'ability/armor-tail', 'pokemon/garchomp', 'learnset/will-o-wisp (gen-9)', 'type/ground'." },
-          "detail": { "type": "string", "description": "The exact datum used, e.g. 'priority: 3', 'base speed: 102', the quoted effect text." },
-          "endpoint_url": { "type": "string", "description": "Optional canonical PokeAPI URL for verification." }
+          "source": {
+            "type": "string",
+            "description": "Resource referenced, e.g. 'move/fake-out', 'ability/armor-tail', 'pokemon/garchomp', 'learnset/will-o-wisp (gen-9)', 'type/ground'."
+          },
+          "detail": {
+            "type": "string",
+            "description": "The exact datum used, e.g. 'priority: 3', 'base speed: 102', the quoted effect text."
+          },
+          "endpoint_url": {
+            "type": "string",
+            "description": "Optional canonical PokeAPI URL for verification."
+          }
         }
       }
     },
@@ -51,7 +72,10 @@ contract between the agent and the frontend renderer.
         "properties": {
           "claim": { "type": "string" },
           "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
-          "note": { "type": "string", "description": "Why it's an inference / what it hinges on / known edge cases." }
+          "note": {
+            "type": "string",
+            "description": "Why it's an inference / what it hinges on / known edge cases."
+          }
         }
       }
     },
@@ -60,9 +84,18 @@ contract between the agent and the frontend renderer.
       "additionalProperties": false,
       "required": ["generation", "fallback"],
       "properties": {
-        "generation": { "type": "string", "description": "e.g. 'gen-9', 'gen-8'." },
-        "fallback": { "type": "boolean", "description": "True when the answer falls back to pre-Gen-9 data for a Pokémon not native to Gen 9 (BR-1)." },
-        "note": { "type": "string", "description": "Required-in-spirit when fallback=true: name the Pokémon and the generation/source used." }
+        "generation": {
+          "type": "string",
+          "description": "e.g. 'gen-9', 'gen-8'."
+        },
+        "fallback": {
+          "type": "boolean",
+          "description": "True when the answer falls back to pre-Gen-9 data for a Pokémon not native to Gen 9 (BR-1)."
+        },
+        "note": {
+          "type": "string",
+          "description": "Required-in-spirit when fallback=true: name the Pokémon and the generation/source used."
+        }
       }
     },
     "subjects": {
@@ -76,7 +109,10 @@ contract between the agent and the frontend renderer.
           "name": { "type": "string" },
           "dex_number": { "type": "integer" },
           "sprite_url": { "type": "string" },
-          "types": { "type": "array", "items": { "$ref": "#/definitions/typeName" } },
+          "types": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/typeName" }
+          },
           "is_fallback": { "type": "boolean" },
           "source_generation": { "type": "string" }
         }
@@ -88,9 +124,18 @@ contract between the agent and the frontend renderer.
       "additionalProperties": false,
       "required": ["total_count", "truncated", "shown"],
       "properties": {
-        "total_count": { "type": "integer", "description": "Total matches found (may exceed shown.length)." },
-        "truncated": { "type": "boolean", "description": "True when shown is a subset of total_count." },
-        "sort": { "type": ["string", "null"], "description": "Sort applied, e.g. 'speed desc'." },
+        "total_count": {
+          "type": "integer",
+          "description": "Total matches found (may exceed shown.length)."
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "True when shown is a subset of total_count."
+        },
+        "sort": {
+          "type": ["string", "null"],
+          "description": "Sort applied, e.g. 'speed desc'."
+        },
         "shown": {
           "type": "array",
           "items": {
@@ -101,9 +146,18 @@ contract between the agent and the frontend renderer.
               "name": { "type": "string" },
               "dex_number": { "type": "integer" },
               "sprite_url": { "type": "string" },
-              "types": { "type": "array", "items": { "$ref": "#/definitions/typeName" } },
-              "key_stats": { "type": "object", "description": "Subset of stats relevant to the query, e.g. { speed: 135 }." },
-              "ability": { "type": "string", "description": "Relevant ability when the filter was ability-based." }
+              "types": {
+                "type": "array",
+                "items": { "$ref": "#/definitions/typeName" }
+              },
+              "key_stats": {
+                "type": "object",
+                "description": "Subset of stats relevant to the query, e.g. { speed: 135 }."
+              },
+              "ability": {
+                "type": "string",
+                "description": "Relevant ability when the filter was ability-based."
+              }
             }
           }
         }
@@ -115,10 +169,19 @@ contract between the agent and the frontend renderer.
       "additionalProperties": false,
       "required": ["assumptions", "result", "is_estimate"],
       "properties": {
-        "assumptions": { "type": "object", "description": "Every assumption used: level, evs, ivs, nature, modifiers, etc." },
-        "result": { "type": "object", "description": "The computed value(s), e.g. { stat: 'speed', value: 169 } or { min_damage: 142, max_damage: 168 }." },
+        "assumptions": {
+          "type": "object",
+          "description": "Every assumption used: level, evs, ivs, nature, modifiers, etc."
+        },
+        "result": {
+          "type": "object",
+          "description": "The computed value(s), e.g. { stat: 'speed', value: 169 } or { min_damage: 142, max_damage: 168 }."
+        },
         "is_estimate": { "type": "boolean", "const": true },
-        "breakdown": { "type": "string", "description": "The worked steps (from compute_stat / estimate_damage)." }
+        "breakdown": {
+          "type": "string",
+          "description": "The worked steps (from compute_stat / estimate_damage)."
+        }
       }
     },
     "suggestions": {
@@ -135,7 +198,26 @@ contract between the agent and the frontend renderer.
   "definitions": {
     "typeName": {
       "type": "string",
-      "enum": ["normal","fire","water","electric","grass","ice","fighting","poison","ground","flying","psychic","bug","rock","ghost","dragon","dark","steel","fairy"]
+      "enum": [
+        "normal",
+        "fire",
+        "water",
+        "electric",
+        "grass",
+        "ice",
+        "fighting",
+        "poison",
+        "ground",
+        "flying",
+        "psychic",
+        "bug",
+        "rock",
+        "ghost",
+        "dragon",
+        "dark",
+        "steel",
+        "fairy"
+      ]
     }
   }
 }
@@ -166,17 +248,17 @@ contract between the agent and the frontend renderer.
 The **frontend chat renderer** (a React `AnswerCard`, per `ux-design.md`) ingests
 `PokebotAnswer`:
 
-| Field | Frontend component |
-|-------|--------------------|
-| `answer_markdown` | `AnswerBody` |
-| `reasoning_markdown` | `ReasoningBlock` (collapsible) |
-| `subjects[]` | `SpriteCard` (+ `TypeBadge` per type) |
-| `candidates` | `CandidateTable` ("N of M" when truncated) |
-| `citations[]` | `SourceList` (collapsible "Sources") |
-| `inferences[]` | `InferenceCallout` |
-| `generation_basis.fallback`, `uncertainty_flags[]` | `FallbackBanner` / `CaveatStrip` |
-| `damage_calc` | `DamageReadout` (shows assumptions + estimate tag) |
-| `suggestions[]` (with `status`) | `SuggestionChips` (click → follow-up message) |
+| Field                                              | Frontend component                                 |
+| -------------------------------------------------- | -------------------------------------------------- |
+| `answer_markdown`                                  | `AnswerBody`                                       |
+| `reasoning_markdown`                               | `ReasoningBlock` (collapsible)                     |
+| `subjects[]`                                       | `SpriteCard` (+ `TypeBadge` per type)              |
+| `candidates`                                       | `CandidateTable` ("N of M" when truncated)         |
+| `citations[]`                                      | `SourceList` (collapsible "Sources")               |
+| `inferences[]`                                     | `InferenceCallout`                                 |
+| `generation_basis.fallback`, `uncertainty_flags[]` | `FallbackBanner` / `CaveatStrip`                   |
+| `damage_calc`                                      | `DamageReadout` (shows assumptions + estimate tag) |
+| `suggestions[]` (with `status`)                    | `SuggestionChips` (click → follow-up message)      |
 
 The schema is also the headless test contract — evals assert against these fields
 directly (see `evaluation.md`).

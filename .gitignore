@@ -9,6 +9,10 @@ out/
 dist/
 build/
 
+# TypeScript / Next generated artifacts
+*.tsbuildinfo
+next-env.d.ts
+
 # Runtime data artifacts (built by `npm run ingest`)
 data/
 *.sqlite

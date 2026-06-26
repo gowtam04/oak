@@ -1,0 +1,83 @@
+/**
+ * Cross-phase agent contract types (design.md § Interface Definitions).
+ *
+ * These are the structural seams the runtime, tool layer, context factory, and
+ * web route all share. Concrete implementations live elsewhere:
+ *  - `AgentContext` is assembled in src/agent/context.ts (Phase 4),
+ *  - `ToolDef[]` / `dispatch` are built in src/agent/tools/index.ts (Phase 4),
+ *  - `runPokebot` is implemented in src/agent/runtime.ts (Phase 5).
+ *
+ * Schemas + the `PokebotAnswer` type are owned by src/agent/schemas.ts — import
+ * from there, never redefine.
+ */
+
+import type { Logger } from "pino";
+import type { JsonSchema, PokebotAnswer } from "@/agent/schemas";
+
+/**
+ * Bound data-access repositories for one request (assembled in
+ * src/agent/context.ts). Kept structural at the contract layer so the schema /
+ * type surface does not depend on the concrete repo wiring (Phase 4).
+ */
+export type DbCtx = {
+  [repo: string]: unknown;
+};
+
+/**
+ * Per-request agent context. Built in src/agent/context.ts; threaded into every
+ * tool `run` call and into `runPokebot`.
+ */
+export interface AgentContext {
+  /** Bound repos (the sole SQLite readers). */
+  db: DbCtx;
+  /** pino logger (carries request/session correlation fields). */
+  logger: Logger;
+  /** Correlation id for this request's turn trace. */
+  requestId: string;
+}
+
+/**
+ * A single tool exposed to the model. `name` and the output shape match
+ * tools.md exactly — the model depends on them.
+ */
+export interface ToolDef {
+  /** Matches a tools.md T1..T11 name exactly. */
+  name: string;
+  /** The "Description (for the model)" from tools.md. */
+  description: string;
+  /** Generated from the tool's Zod input schema (schemas.ts `toJsonSchema`). */
+  inputSchema: JsonSchema;
+  /** Executes the tool; returns the tools.md output shape (never throws in-domain). */
+  run(args: unknown, ctx: AgentContext): Promise<unknown>;
+}
+
+/** Dispatch a tool call by name (src/agent/tools/index.ts). */
+export type ToolDispatch = (
+  name: string,
+  args: unknown,
+  ctx: AgentContext,
+) => Promise<unknown>;
+
+/** In-session chat history turn (DS-5; design.md runtime signature). */
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+/** Progress callback fired once per tool call as the loop runs. */
+export type OnProgress = (event: { tool: string; label: string }) => void;
+
+/**
+ * The agent entry point (src/agent/runtime.ts).
+ *
+ * Always resolves to a schema-valid `PokebotAnswer` for in-domain conditions
+ * (never throws for unresolved entities / clarification / PokeAPI-down / loop-max
+ * / invalid-after-retry — those surface as a `PokebotAnswer` with the right
+ * `status`). Transport/API faults propagate as exceptions to the route.
+ */
+export type RunPokebot = (
+  message: string,
+  history: ChatMessage[],
+  ctx: AgentContext,
+  onProgress?: OnProgress,
+) => Promise<PokebotAnswer>;
