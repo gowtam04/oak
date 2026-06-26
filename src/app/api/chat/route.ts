@@ -200,6 +200,10 @@ export async function POST(req: Request): Promise<Response> {
             requestId,
             sessionId: session_id,
             mode,
+            // Forward the inbound abort signal so a client disconnect (the user
+            // pressed Stop) tears down the Anthropic stream immediately and the
+            // loop bails between iterations — no wasted tokens.
+            signal: req.signal,
           });
 
           // Stream one tool_activity event per tool call as the loop runs.
@@ -226,6 +230,13 @@ export async function POST(req: Request): Promise<Response> {
             onAnswerDelta,
           );
 
+          // If the client disconnected mid-flight (user pressed Stop) the turn is
+          // interrupted: do NOT persist it (keeps the session store consistent
+          // with the wiped/undone UI) and do NOT emit — the connection is gone.
+          if (req.signal.aborted) {
+            return;
+          }
+
           // In-domain success (any status). Persist the turn pair for multi-turn
           // refinement, then emit the single terminal answer event.
           appendTurn(session_id, { role: "user", content: message });
@@ -235,6 +246,13 @@ export async function POST(req: Request): Promise<Response> {
           });
           send("answer", { answer });
         } catch (err) {
+          // A client abort (user pressed Stop) surfaces as an AbortError out of
+          // the runtime; it is not a transport fault, and the SSE connection is
+          // already closed — swallow it quietly and just close the stream.
+          if (req.signal.aborted) {
+            return;
+          }
+
           // Transport/API fault ONLY (runPokebot never throws for in-domain
           // conditions — those return a PokebotAnswer with a status). Map to the
           // `error` SSE event per integration.md § Error Surface (last two rows).

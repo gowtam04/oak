@@ -241,6 +241,19 @@ export interface ComposerProps {
   onSend: (message: string) => void;
   /** Disabled while a turn is streaming (default: false). */
   disabled?: boolean;
+  /**
+   * True while a turn is in flight — the Send button becomes a Stop button
+   * (always clickable) so the user can abort the running request.
+   */
+  streaming?: boolean;
+  /** Abort the in-flight turn. Invoked when the Stop button is clicked. */
+  onStop?: () => void;
+  /**
+   * Push text into the (otherwise self-managed) input. Use a fresh object each
+   * time so the same text can be re-applied — the Composer reloads its value
+   * whenever this object's identity changes. Null leaves the input untouched.
+   */
+  prefill?: { text: string } | null;
 }
 
 // ---------------------------------------------------------------------------

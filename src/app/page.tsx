@@ -11,6 +11,9 @@ import type { ChatStatus, ChatTurn, PokebotAnswer } from "@/components/types";
 /** localStorage key for the persisted Champions-mode choice. */
 const CHAMPIONS_STORAGE_KEY = "pokebot-champions-mode";
 
+/** A request stopped within this many ms of being sent wipes the chat. */
+const QUICK_STOP_MS = 2000;
+
 /** Generate a stable id (session id + turn ids). Falls back when crypto.randomUUID is absent. */
 function makeId(): string {
   if (
@@ -33,10 +36,18 @@ function makeId(): string {
  * the same `session_id` (ux-design.md). Visuals deferred to `frontend-design`.
  */
 export default function Home() {
-  const [sessionId] = useState<string>(() => makeId());
+  const [sessionId, setSessionId] = useState<string>(() => makeId());
   const [turns, setTurns] = useState<ChatTurn[]>([]);
-  const { status, activities, answer, streamingMarkdown, error, send } =
+  const { status, activities, answer, streamingMarkdown, error, send, reset } =
     useSseClient();
+
+  // Track the active request so Stop can decide between a quick-stop reset and a
+  // plain stop, and restore the stopped message into the composer.
+  const requestStartRef = useRef<number>(0);
+  const inFlightMessageRef = useRef<string>("");
+  // A fresh object pushed into the Composer to reload its input after a quick
+  // stop (identity change is what triggers the reload).
+  const [prefill, setPrefill] = useState<{ text: string } | null>(null);
 
   // Champions mode: server-controlled scope sent on every request as
   // `champions_mode`. Resolve from localStorage only AFTER mount so the SSR
@@ -77,6 +88,8 @@ export default function Home() {
 
   const handleSend = useCallback(
     (message: string) => {
+      requestStartRef.current = Date.now();
+      inFlightMessageRef.current = message;
       setTurns((prev) => [
         ...prev,
         { id: makeId(), role: "user", content: message },
@@ -86,6 +99,22 @@ export default function Home() {
     },
     [send, sessionId, championsMode],
   );
+
+  // Stop the in-flight turn. `reset()` aborts the fetch (which propagates to the
+  // server, halting generation) and returns the SSE hook to idle. If the request
+  // was stopped within QUICK_STOP_MS, wipe the conversation to a brand-new
+  // session and restore the message into the composer for an easy redo;
+  // otherwise leave the (now answer-less) turn in the thread.
+  const handleStop = useCallback(() => {
+    const elapsed = Date.now() - requestStartRef.current;
+    reset();
+    committedAnswerRef.current = null;
+    if (elapsed < QUICK_STOP_MS) {
+      setTurns([]);
+      setSessionId(makeId());
+      setPrefill({ text: inFlightMessageRef.current });
+    }
+  }, [reset]);
 
   const chatStatus: ChatStatus =
     status === "thinking" ? "streaming" : status === "error" ? "error" : "idle";
@@ -118,7 +147,13 @@ export default function Home() {
         onFollowUp={handleSend}
       />
 
-      <Composer onSend={handleSend} disabled={status === "thinking"} />
+      <Composer
+        onSend={handleSend}
+        disabled={status === "thinking"}
+        streaming={status === "thinking"}
+        onStop={handleStop}
+        prefill={prefill}
+      />
     </main>
   );
 }

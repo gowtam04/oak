@@ -138,7 +138,7 @@ function faultStream(err: Error) {
  */
 function scriptedClient(responses: unknown[]) {
   const snapshots: any[] = [];
-  const stream = vi.fn((params: any) => {
+  const stream = vi.fn((params: any, _options?: { signal?: AbortSignal }) => {
     snapshots.push(structuredClone(params));
     const next = responses.shift();
     if (next === undefined) return faultStream(new Error("transcript exhausted"));
@@ -444,6 +444,36 @@ describe("orchestration fallbacks", () => {
     await expect(runPokebotWith(client, "q", [], ctx)).rejects.toThrow(
       "boom 529",
     );
+  });
+});
+
+// --- Client abort (the Stop button) ----------------------------------------
+
+describe("client abort (Stop)", () => {
+  it("forwards ctx.signal to messages.stream so the SDK can tear down the request", async () => {
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", validAnswer, "t1")]),
+    ]);
+    const controller = new AbortController();
+    const ctxWithSignal = { ...ctx, signal: controller.signal } as AgentContext;
+
+    await runPokebotWith(client, "q", [], ctxWithSignal);
+
+    // Second arg is the request options carrying the abort signal.
+    expect(stream.mock.calls[0]?.[1]).toEqual({ signal: controller.signal });
+  });
+
+  it("throws AbortError without calling the model when ctx.signal is already aborted", async () => {
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", validAnswer, "t1")]),
+    ]);
+    const ctxAborted = { ...ctx, signal: AbortSignal.abort() } as AgentContext;
+
+    await expect(runPokebotWith(client, "q", [], ctxAborted)).rejects.toThrow(
+      /Aborted/,
+    );
+    // The loop-top guard fires before the first model call.
+    expect(stream).not.toHaveBeenCalled();
   });
 });
 

@@ -769,7 +769,10 @@ export interface MessageStreamLike
 /** The single SDK method the runtime uses (the streaming helper). */
 export interface AnthropicClientLike {
   messages: {
-    stream(params: Anthropic.MessageStreamParams): MessageStreamLike;
+    stream(
+      params: Anthropic.MessageStreamParams,
+      options?: { signal?: AbortSignal },
+    ): MessageStreamLike;
   };
 }
 
@@ -918,19 +921,31 @@ export async function runPokebotWith(
     ctx.mode === "champions" ? CHAMPIONS_SYSTEM_BLOCKS : SYSTEM_BLOCKS;
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
-    // Transport/API faults here propagate to the route (NOT caught).
-    const stream = client.messages.stream({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: systemBlocks,
-      tools: TOOL_DEFS,
-      // RISK DIRECTIVE: thinking + forced tool_choice = HARD 400 on Sonnet 4.6.
-      // Use adaptive thinking with tool_choice "auto"; submit_answer is driven
-      // by the system prompt and the max-iteration guard, never forced.
-      thinking: { type: "adaptive" },
-      tool_choice: { type: "auto" },
-      messages,
-    });
+    // Bail if the client disconnected (user pressed Stop) during the prior tool
+    // dispatch — covers the gap between the SDK-level aborts below. Thrown as an
+    // AbortError so it propagates to the route like any transport fault (where it
+    // is recognized via req.signal.aborted and not surfaced as an error event).
+    if (ctx.signal?.aborted) {
+      throw new DOMException("Aborted by client", "AbortError");
+    }
+
+    // Transport/API faults here propagate to the route (NOT caught). Forward the
+    // request signal so an in-flight stream is torn down immediately on Stop.
+    const stream = client.messages.stream(
+      {
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        system: systemBlocks,
+        tools: TOOL_DEFS,
+        // RISK DIRECTIVE: thinking + forced tool_choice = HARD 400 on Sonnet 4.6.
+        // Use adaptive thinking with tool_choice "auto"; submit_answer is driven
+        // by the system prompt and the max-iteration guard, never forced.
+        thinking: { type: "adaptive" },
+        tool_choice: { type: "auto" },
+        messages,
+      },
+      { signal: ctx.signal },
+    );
 
     // Stream answer_markdown out of the submit_answer tool input as it arrives.
     // Keyed on the content-block index so parallel tool blocks stay isolated; a
