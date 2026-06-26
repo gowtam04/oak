@@ -174,16 +174,34 @@ function message(content: Block[]): unknown {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+function fakeStream(message: any, events: any[] = []) {
+  return {
+    async *[Symbol.asyncIterator]() {
+      // No incremental events needed for this oracle — finalMessage suffices.
+      for (const e of events) yield e;
+    },
+    finalMessage: () => Promise.resolve(message),
+  };
+}
+
 function scriptedClient(responses: unknown[]) {
   const snapshots: any[] = [];
-  const create = vi.fn((params: any): Promise<any> => {
+  const stream = vi.fn((params: any) => {
     snapshots.push(structuredClone(params));
     const next = responses.shift();
-    if (next === undefined)
-      return Promise.reject(new Error("transcript exhausted"));
-    return Promise.resolve(next);
+    if (next === undefined) {
+      return {
+        [Symbol.asyncIterator]() {
+          return {
+            next: () => Promise.reject(new Error("transcript exhausted")),
+          };
+        },
+        finalMessage: () => Promise.reject(new Error("transcript exhausted")),
+      };
+    }
+    return fakeStream(next);
   });
-  return { client: { messages: { create } } as any, create, snapshots };
+  return { client: { messages: { stream } } as any, stream, snapshots };
 }
 
 /** Concatenate the tool_result string content of the LAST user message. */
@@ -239,7 +257,7 @@ describe("G4 integration: Fake Out vs Farigiraf through the real runtime + tools
   it("dispatches the real tools and returns a schema-valid, conditional answer with an inference", async () => {
     ensureLoaded();
 
-    const { client, snapshots, create } = scriptedClient([
+    const { client, snapshots, stream } = scriptedClient([
       message([toolUse("get_move", { name: "fake-out" }, "m1")]),
       message([toolUse("get_pokemon", { name: "farigiraf" }, "m2")]),
       message([toolUse("get_ability", { name: "armor-tail" }, "m3")]),
@@ -257,7 +275,7 @@ describe("G4 integration: Fake Out vs Farigiraf through the real runtime + tools
 
     // (1) The REAL tools ran and returned the grounding facts (proven by the
     //     tool_result blocks fed back to the model on each subsequent turn).
-    expect(create).toHaveBeenCalledTimes(4);
+    expect(stream).toHaveBeenCalledTimes(4);
     expect(lastToolResultText(snapshots[1])).toMatch(/"priority":\s*3/); // get_move
     expect(lastToolResultText(snapshots[2])).toMatch(/armor-tail/); // get_pokemon abilities
     expect(lastToolResultText(snapshots[3])).toMatch(

@@ -450,6 +450,11 @@ export const candidateRowSchema = z
     dex_number: z.number().int().optional(),
     sprite_url: z.string().optional(),
     types: z.array(typeNameSchema),
+    // The full six-stat block, copied verbatim from the query_pokedex result.
+    // Rendered in fixed order (HP, Attack, Defense, SpA, SpD, Speed). Optional +
+    // strict keeps older `key_stats`-only payloads valid (CandidateTable falls
+    // back to key_stats when base_stats is absent).
+    base_stats: baseStatsSchema.optional(),
     key_stats: z.record(z.unknown()).optional(),
     ability: z.string().optional(),
   })

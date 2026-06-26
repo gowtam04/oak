@@ -481,6 +481,253 @@ img {
 }
 
 /* --------------------------------------------------------------------------
+   7b. Markdown body — rendered answer/reasoning/streaming prose
+   react-markdown (+ remark-gfm) output lives inside `.markdown-body`. The
+   wrapper carries no size/color of its own — it inherits the context
+   (.answer-body__content 16px, .reasoning-block__content 15px, the streaming
+   bubble below) so the same recipe reads correctly everywhere. Token-driven, so
+   light/dark both adapt. "Precise data": GFM tables mirror the candidate table.
+   -------------------------------------------------------------------------- */
+.markdown-body {
+  color: inherit;
+}
+/* Collapse the outer block margins so the body hugs its container. */
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+.markdown-body > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p {
+  margin: 0 0 var(--space-3);
+}
+
+/* Headings — display face, tightening as they descend. */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin: var(--space-5) 0 var(--space-2);
+  font-family: var(--display);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-strong);
+}
+.markdown-body h1 {
+  font-size: 1.45em;
+}
+.markdown-body h2 {
+  font-size: 1.28em;
+}
+.markdown-body h3 {
+  font-size: 1.14em;
+}
+.markdown-body h4 {
+  font-size: 1em;
+}
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 0.85em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Lists — red bullets are the "playful chrome"; numbers stay precise mono-ish. */
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+}
+.markdown-body li {
+  margin: var(--space-1) 0;
+}
+.markdown-body li::marker {
+  color: var(--poke-red);
+}
+.markdown-body ol li::marker {
+  color: var(--text-muted);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin: var(--space-1) 0 0;
+}
+/* GFM task lists */
+.markdown-body li:has(> input[type="checkbox"]) {
+  list-style: none;
+}
+.markdown-body input[type="checkbox"] {
+  margin: 0 var(--space-2) 0 calc(-1 * var(--space-4));
+  accent-color: var(--poke-red);
+}
+
+.markdown-body strong {
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.markdown-body em {
+  font-style: italic;
+}
+.markdown-body del {
+  color: var(--text-faint);
+}
+
+/* Links — azure, with an underline that fills in on hover. */
+.markdown-body a {
+  color: var(--azure);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--azure) 35%, transparent);
+  transition: color var(--motion-fast), border-color var(--motion-fast);
+}
+.markdown-body a:hover {
+  color: color-mix(in srgb, var(--azure) 80%, var(--text-strong));
+  border-bottom-color: var(--azure);
+}
+
+/* Inline code + fenced blocks */
+.markdown-body code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  padding: 0.1em 0.4em;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-strong);
+}
+.markdown-body pre {
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.markdown-body pre code {
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  font-size: inherit;
+  color: var(--text);
+}
+
+.markdown-body blockquote {
+  margin: var(--space-4) 0;
+  padding: var(--space-1) var(--space-4);
+  border-left: 3px solid color-mix(in srgb, var(--poke-red) 55%, var(--border));
+  color: var(--text-muted);
+  font-style: italic;
+}
+.markdown-body blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body hr {
+  margin: var(--space-5) 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* GFM tables — the issue #4 fix. Same "dense but scannable" recipe as the
+   candidate table: sunken uppercase header, hairline rows, zebra body, and an
+   x-scroll so a wide table never blows out the column. */
+.markdown-body table {
+  display: block;
+  width: 100%;
+  margin: var(--space-5) 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  border-collapse: collapse;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-raised);
+}
+.markdown-body thead th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.markdown-body tbody td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: top;
+}
+.markdown-body tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--surface-sunken) 55%, var(--surface));
+}
+.markdown-body tbody tr:last-child td {
+  border-bottom: none;
+}
+/* GFM column alignment markers */
+.markdown-body th[align="center"],
+.markdown-body td[align="center"] {
+  text-align: center;
+}
+.markdown-body th[align="right"],
+.markdown-body td[align="right"] {
+  text-align: right;
+}
+
+/* In the collapsible reasoning panel the prose reads quieter. */
+.reasoning-block__content .markdown-body {
+  color: var(--text);
+}
+
+/* In-flight streaming bubble — an assistant card with a live "typing" caret. */
+.chat-thread__streaming {
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.chat-thread__streaming .markdown-body p:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 0.55em;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--poke-red);
+  border-radius: 1px;
+  animation: md-caret-blink 1.05s steps(2, start) infinite;
+}
+@keyframes md-caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-thread__streaming .markdown-body p:last-child::after {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
    8. Sprite card (signature pop)
    -------------------------------------------------------------------------- */
 .sprite-card {
@@ -585,11 +832,16 @@ img {
   text-transform: uppercase;
   color: var(--text-muted);
 }
+/* Horizontal-scroll wrapper: keeps the real table layout intact while still
+   allowing the table to scroll sideways when it can't fit (e.g. Ability column,
+   very narrow viewports). Scrolling lived on the <table> before, which dropped
+   it out of the table formatting context and broke column alignment. */
+.candidate-table__scroll {
+  overflow-x: auto;
+}
 .candidate-table__table {
   width: 100%;
   border-collapse: collapse;
-  display: block;
-  overflow-x: auto;
 }
 .candidate-table__table thead th {
   position: sticky;
@@ -626,13 +878,15 @@ img {
   vertical-align: middle;
 }
 .candidate-table__name-cell {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
   font-weight: 600;
   color: var(--text-strong);
   text-transform: capitalize;
   white-space: nowrap;
+}
+.candidate-table__name-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 .candidate-table__sprite {
   width: 32px;
@@ -647,13 +901,16 @@ img {
   font-variant-numeric: tabular-nums;
 }
 .candidate-table__types-cell {
-  display: flex;
-  gap: 6px;
   white-space: nowrap;
 }
-.candidate-table__stats-cell {
+.candidate-table__types-inner {
   display: flex;
   flex-wrap: wrap;
+  gap: 6px;
+}
+.candidate-table__stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
   gap: var(--space-1) var(--space-3);
 }
 .candidate-table__stat-item {

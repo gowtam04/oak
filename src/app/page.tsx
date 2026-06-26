@@ -31,7 +31,8 @@ function makeId(): string {
 export default function Home() {
   const [sessionId] = useState<string>(() => makeId());
   const [turns, setTurns] = useState<ChatTurn[]>([]);
-  const { status, activities, answer, error, send } = useSseClient();
+  const { status, activities, answer, streamingMarkdown, error, send } =
+    useSseClient();
 
   // Commit each terminal answer exactly once (guard against effect re-runs /
   // React strict-mode double-invoke by tracking the committed object identity).
@@ -72,6 +73,7 @@ export default function Home() {
         turns={turns}
         activity={activities}
         status={chatStatus}
+        streamingMarkdown={streamingMarkdown}
         transportError={status === "error" ? error : null}
         onFollowUp={handleSend}
       />

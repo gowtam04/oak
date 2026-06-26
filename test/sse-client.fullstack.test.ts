@@ -149,6 +149,47 @@ describe("useSseClient — full-stack SSE consumption", () => {
     });
   });
 
+  it("accumulates answer_delta text into streamingMarkdown while in-flight", async () => {
+    // No terminal `answer` frame → the streamed buffer is retained (not cleared),
+    // which lets us observe the accumulation deterministically.
+    stubFetch(
+      sseResponse([
+        formatSseEvent("answer_start", {}),
+        formatSseEvent("answer_delta", { text: "Only " }),
+        formatSseEvent("answer_delta", { text: "**Ninetales**" }),
+      ]),
+    );
+
+    const { result } = renderHook(() => useSseClient());
+    act(() => {
+      result.current.send({ session_id: "s-stream", message: "..." });
+    });
+
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    expect(result.current.streamingMarkdown).toBe("Only **Ninetales**");
+    expect(result.current.answer).toBeNull();
+  });
+
+  it("clears streamingMarkdown when the terminal answer lands", async () => {
+    stubFetch(
+      sseResponse([
+        formatSseEvent("answer_start", {}),
+        formatSseEvent("answer_delta", { text: "Only Ninetales" }),
+        formatSseEvent("answer", { answer: ANSWERED }),
+      ]),
+    );
+
+    const { result } = renderHook(() => useSseClient());
+    act(() => {
+      result.current.send({ session_id: "s-stream2", message: "..." });
+    });
+
+    await waitFor(() => expect(result.current.status).toBe("done"));
+    expect(result.current.answer).toEqual(ANSWERED);
+    // The committed AnswerCard is authoritative; the in-flight buffer is cleared.
+    expect(result.current.streamingMarkdown).toBe("");
+  });
+
   it("surfaces an in-domain failure (resolution_failed) as a normal answer, not an error", async () => {
     stubFetch(
       sseResponse([formatSseEvent("answer", { answer: RESOLUTION_FAILED })]),

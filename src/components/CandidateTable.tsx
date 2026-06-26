@@ -3,6 +3,26 @@
 import type { CandidateTableProps, CandidateRow } from "@/components/types";
 import TypeBadge from "@/components/TypeBadge";
 
+/** Fixed display order for the six base stats (HP, Attack, Defense, SpA, SpD, Speed). */
+const STAT_ORDER = [
+  "hp",
+  "attack",
+  "defense",
+  "special_attack",
+  "special_defense",
+  "speed",
+] as const;
+
+/** Short competitive labels for each base stat, in {@link STAT_ORDER}. */
+const STAT_LABELS: Record<(typeof STAT_ORDER)[number], string> = {
+  hp: "HP",
+  attack: "Attack",
+  defense: "Defense",
+  special_attack: "SpA",
+  special_defense: "SpD",
+  speed: "Speed",
+};
+
 /**
  * CandidateTable — renders the `candidates` result set for filter/superlative
  * answers (US-1/2/3).
@@ -25,8 +45,10 @@ export default function CandidateTable({
     : `${total_count} result${total_count !== 1 ? "s" : ""}`;
 
   const hasAbilityColumn = shown.some((row) => row.ability != null);
-  const hasKeyStats = shown.some(
-    (row) => row.key_stats != null && Object.keys(row.key_stats).length > 0,
+  const hasStats = shown.some(
+    (row) =>
+      row.base_stats != null ||
+      (row.key_stats != null && Object.keys(row.key_stats).length > 0),
   );
 
   return (
@@ -48,28 +70,30 @@ export default function CandidateTable({
         )}
       </div>
 
-      <table className="candidate-table__table">
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Types</th>
-            {hasKeyStats && <th scope="col">Stats</th>}
-            {hasAbilityColumn && <th scope="col">Ability</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map((row, i) => (
-            <CandidateRow
-              key={`${row.name}-${i}`}
-              row={row}
-              index={i}
-              hasKeyStats={hasKeyStats}
-              hasAbilityColumn={hasAbilityColumn}
-              onSelect={onSelect}
-            />
-          ))}
-        </tbody>
-      </table>
+      <div className="candidate-table__scroll">
+        <table className="candidate-table__table">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Types</th>
+              {hasStats && <th scope="col">Stats</th>}
+              {hasAbilityColumn && <th scope="col">Ability</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((row, i) => (
+              <CandidateRow
+                key={`${row.name}-${i}`}
+                row={row}
+                index={i}
+                hasStats={hasStats}
+                hasAbilityColumn={hasAbilityColumn}
+                onSelect={onSelect}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -81,7 +105,7 @@ export default function CandidateTable({
 interface CandidateRowProps {
   row: CandidateRow;
   index: number;
-  hasKeyStats: boolean;
+  hasStats: boolean;
   hasAbilityColumn: boolean;
   onSelect?: (name: string) => void;
 }
@@ -89,7 +113,7 @@ interface CandidateRowProps {
 function CandidateRow({
   row,
   index,
-  hasKeyStats,
+  hasStats,
   hasAbilityColumn,
   onSelect,
 }: CandidateRowProps) {
@@ -106,36 +130,50 @@ function CandidateRow({
       data-testid={`candidate-row-${index}`}
     >
       <td className="candidate-table__name-cell">
-        {row.sprite_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={row.sprite_url}
-            alt={row.name}
-            width={40}
-            height={40}
-            className="candidate-table__sprite"
-          />
-        )}
-        <span>
-          {row.name}
-          {row.dex_number != null && (
-            <span className="candidate-table__dex"> #{row.dex_number}</span>
+        <div className="candidate-table__name-inner">
+          {row.sprite_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={row.sprite_url}
+              alt={row.name}
+              width={40}
+              height={40}
+              className="candidate-table__sprite"
+            />
           )}
-        </span>
+          <span>
+            {row.name}
+            {row.dex_number != null && (
+              <span className="candidate-table__dex"> #{row.dex_number}</span>
+            )}
+          </span>
+        </div>
       </td>
       <td className="candidate-table__types-cell">
-        {row.types.map((type) => (
-          <TypeBadge key={type} type={type} />
-        ))}
+        <div className="candidate-table__types-inner">
+          {row.types.map((type) => (
+            <TypeBadge key={type} type={type} />
+          ))}
+        </div>
       </td>
-      {hasKeyStats && (
+      {hasStats && (
         <td className="candidate-table__stats-cell">
-          {row.key_stats != null &&
-            Object.entries(row.key_stats).map(([k, v]) => (
-              <span key={k} className="candidate-table__stat-item">
-                {k}: {String(v)}
-              </span>
-            ))}
+          <div className="candidate-table__stats-grid">
+            {row.base_stats != null
+              ? // Full six stats, always in the fixed competitive order.
+                STAT_ORDER.map((k) => (
+                  <span key={k} className="candidate-table__stat-item">
+                    {STAT_LABELS[k]}: {row.base_stats![k]}
+                  </span>
+                ))
+              : // Fallback for older/edge answers that only carry key_stats.
+                row.key_stats != null &&
+                Object.entries(row.key_stats).map(([k, v]) => (
+                  <span key={k} className="candidate-table__stat-item">
+                    {k}: {String(v)}
+                  </span>
+                ))}
+          </div>
         </td>
       )}
       {hasAbilityColumn && (

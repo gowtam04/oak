@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, within } from "@testing-library/react";
 import AnswerBody from "./AnswerBody";
 
 afterEach(() => cleanup());
@@ -8,9 +8,30 @@ import { CANONICAL_ANSWER, MINIMAL_ANSWER } from "./test-fixtures";
 describe("AnswerBody", () => {
   it("renders the markdown text", () => {
     render(<AnswerBody markdown={CANONICAL_ANSWER.answer_markdown} />);
-    expect(screen.getByTestId("answer-body")).toBeInTheDocument();
+    expect(screen.getByTestId("answer-body")).toHaveTextContent(
+      CANONICAL_ANSWER.answer_markdown,
+    );
+  });
+
+  it("renders bold markdown as <strong>", () => {
+    render(<AnswerBody markdown="This is **bold** text." />);
+    const strong = screen.getByTestId("answer-body").querySelector("strong");
+    expect(strong).not.toBeNull();
+    expect(strong).toHaveTextContent("bold");
+  });
+
+  it("renders GFM pipe tables as a real <table> (issue #4)", () => {
+    const md = ["| Name | Type |", "| --- | --- |", "| Garchomp | Dragon |"].join(
+      "\n",
+    );
+    render(<AnswerBody markdown={md} />);
+    const body = screen.getByTestId("answer-body");
+    expect(within(body).getByRole("table")).toBeInTheDocument();
     expect(
-      screen.getByText(CANONICAL_ANSWER.answer_markdown),
+      within(body).getAllByRole("columnheader").map((h) => h.textContent),
+    ).toEqual(["Name", "Type"]);
+    expect(
+      within(body).getByRole("cell", { name: "Garchomp" }),
     ).toBeInTheDocument();
   });
 

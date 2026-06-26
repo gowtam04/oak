@@ -43,7 +43,11 @@ vi.mock("@/agent/tools", () => ({
   dispatch: (...args: unknown[]) => mockDispatch(...args),
 }));
 
-import { MAX_ITERATIONS, runPokebotWith } from "./runtime";
+import {
+  AnswerMarkdownExtractor,
+  MAX_ITERATIONS,
+  runPokebotWith,
+} from "./runtime";
 
 // --- Fixtures --------------------------------------------------------------
 
@@ -102,22 +106,70 @@ function message(content: Block[], stopReason = "tool_use"): unknown {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/** A fake MessageStream: async-iterable over `events`, finalMessage = `message`. */
+function fakeStream(message: any, events: any[] = []) {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const e of events) yield e;
+    },
+    finalMessage: () => Promise.resolve(message),
+  };
+}
+
+/** A fake MessageStream that faults (transport error) on iteration + finalMessage. */
+function faultStream(err: Error) {
+  return {
+    [Symbol.asyncIterator]() {
+      return { next: () => Promise.reject(err) };
+    },
+    finalMessage: () => Promise.reject(err),
+  };
+}
+
 /**
- * Build a client whose `messages.create` replays a scripted transcript. The
+ * Build a client whose `messages.stream` replays a scripted transcript. The
  * runtime keeps mutating its live `messages` array after each call, so we snap
  * a deep copy of every request's params into `snapshots[i]` for assertions.
+ *
+ * Each entry of `responses` is either a bare scripted message (no streaming
+ * events), an `Error` (a transport fault), or `{ message, events }` to also
+ * replay raw stream events (used by the answer-delta streaming test).
  */
 function scriptedClient(responses: unknown[]) {
   const snapshots: any[] = [];
-  const create = vi.fn((params: any): Promise<any> => {
+  const stream = vi.fn((params: any) => {
     snapshots.push(structuredClone(params));
     const next = responses.shift();
-    if (next === undefined) {
-      return Promise.reject(new Error("transcript exhausted"));
+    if (next === undefined) return faultStream(new Error("transcript exhausted"));
+    if (next instanceof Error) return faultStream(next);
+    if (next && typeof next === "object" && "message" in next) {
+      return fakeStream((next as any).message, (next as any).events ?? []);
     }
-    return Promise.resolve(next);
+    return fakeStream(next);
   });
-  return { client: { messages: { create } } as any, create, snapshots };
+  return { client: { messages: { stream } } as any, stream, snapshots };
+}
+
+/** Raw stream events for a submit_answer block, chunking its JSON input. */
+function submitAnswerEvents(input: unknown, index = 0, chunkSize = 7): any[] {
+  const json = JSON.stringify(input);
+  const deltas: any[] = [];
+  for (let i = 0; i < json.length; i += chunkSize) {
+    deltas.push({
+      type: "content_block_delta",
+      index,
+      delta: { type: "input_json_delta", partial_json: json.slice(i, i + chunkSize) },
+    });
+  }
+  return [
+    {
+      type: "content_block_start",
+      index,
+      content_block: { type: "tool_use", id: "t1", name: "submit_answer", input: {} },
+    },
+    ...deltas,
+    { type: "content_block_stop", index },
+  ];
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -293,7 +345,7 @@ describe("submit_answer validation + re-emit budget", () => {
   it("synthesizes insufficient_data after the re-emit budget is exhausted", async () => {
     const invalid = () =>
       message([toolUse("submit_answer", { status: "answered" }, "tx")]);
-    const { client, create } = scriptedClient([
+    const { client, stream } = scriptedClient([
       invalid(),
       invalid(),
       invalid(),
@@ -306,7 +358,7 @@ describe("submit_answer validation + re-emit budget", () => {
       "submit_answer_invalid_after_retries",
     );
     // 2 re-emits → 3 model calls total.
-    expect(create).toHaveBeenCalledTimes(3);
+    expect(stream).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -315,9 +367,9 @@ describe("submit_answer validation + re-emit budget", () => {
 describe("orchestration fallbacks", () => {
   it("synthesizes insufficient_data when the loop hits the iteration cap", async () => {
     // The model never submits — always asks for another tool.
-    const { client, create } = scriptedClient([]);
-    create.mockImplementation(() =>
-      Promise.resolve(message([toolUse("query_pokedex", {}, "t")])),
+    const { client, stream } = scriptedClient([]);
+    stream.mockImplementation(() =>
+      fakeStream(message([toolUse("query_pokedex", {}, "t")])),
     );
     mockDispatch.mockResolvedValue({ ok: true });
 
@@ -325,7 +377,7 @@ describe("orchestration fallbacks", () => {
 
     expect(result.status).toBe("insufficient_data");
     expect(result.uncertainty_flags).toContain("max_iterations_reached");
-    expect(create).toHaveBeenCalledTimes(MAX_ITERATIONS);
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
   });
 
   it("synthesizes insufficient_data when the model ends a turn without submitting", async () => {
@@ -360,11 +412,157 @@ describe("orchestration fallbacks", () => {
   });
 
   it("propagates a transport/API fault as a thrown error", async () => {
-    const { client, create } = scriptedClient([]);
-    create.mockRejectedValueOnce(new Error("boom 529"));
+    const { client } = scriptedClient([new Error("boom 529")]);
 
     await expect(runPokebotWith(client, "q", [], ctx)).rejects.toThrow(
       "boom 529",
     );
+  });
+});
+
+// --- Answer-markdown streaming (token-by-token) ----------------------------
+
+describe("answer_markdown streaming", () => {
+  it("fires onAnswerStart once and streams deltas equal to the final answer", async () => {
+    const { client } = scriptedClient([
+      {
+        message: message([toolUse("submit_answer", validAnswer, "t1")]),
+        events: submitAnswerEvents(validAnswer),
+      },
+    ]);
+
+    const starts: number[] = [];
+    const deltas: string[] = [];
+    const result = await runPokebotWith(
+      client,
+      "q",
+      [],
+      ctx,
+      undefined,
+      () => starts.push(1),
+      (text) => deltas.push(text),
+    );
+
+    expect(result).toEqual(validAnswer);
+    expect(starts).toHaveLength(1);
+    expect(deltas.join("")).toBe(validAnswer.answer_markdown);
+  });
+
+  it("does not stream answer text for non-submit tool blocks", async () => {
+    mockDispatch.mockResolvedValueOnce({ ok: true });
+    const { client } = scriptedClient([
+      {
+        message: message([toolUse("query_pokedex", { types: ["fire"] }, "t1")]),
+        events: [
+          {
+            type: "content_block_start",
+            index: 0,
+            content_block: {
+              type: "tool_use",
+              id: "t1",
+              name: "query_pokedex",
+              input: {},
+            },
+          },
+          {
+            type: "content_block_delta",
+            index: 0,
+            delta: {
+              type: "input_json_delta",
+              partial_json: '{"types":["fire"]}',
+            },
+          },
+          { type: "content_block_stop", index: 0 },
+        ],
+      },
+      message([toolUse("submit_answer", validAnswer, "t2")]),
+    ]);
+
+    const starts: number[] = [];
+    const deltas: string[] = [];
+    await runPokebotWith(
+      client,
+      "fire types",
+      [],
+      ctx,
+      undefined,
+      () => starts.push(1),
+      (text) => deltas.push(text),
+    );
+
+    // The query_pokedex block has no answer_markdown — nothing streams from it.
+    expect(starts).toHaveLength(0);
+    expect(deltas.join("")).toBe("");
+  });
+});
+
+// --- AnswerMarkdownExtractor (the incremental JSON string decoder) ----------
+
+describe("AnswerMarkdownExtractor", () => {
+  /** Feed `json` to a fresh extractor in `chunkSize`-char pushes; return output. */
+  function extract(json: string, chunkSize: number): string {
+    const ex = new AnswerMarkdownExtractor();
+    let out = "";
+    for (let i = 0; i < json.length; i += chunkSize) {
+      out += ex.push(json.slice(i, i + chunkSize));
+    }
+    return out;
+  }
+
+  it("reconstructs the value across every chunk boundary", () => {
+    const value = "Hello **world**\nLine two — *italics*, a \"quote\", and / slash.";
+    const json = JSON.stringify({
+      status: "answered",
+      answer_markdown: value,
+      reasoning_markdown: "why",
+    });
+    for (const size of [1, 2, 3, 5, 13, 1000]) {
+      expect(extract(json, size)).toBe(value);
+    }
+  });
+
+  it("ignores a decoy 'answer_markdown' substring inside an earlier value", () => {
+    const value = "the real answer";
+    const json = JSON.stringify({
+      reasoning_markdown: 'mentions the "answer_markdown" key literally',
+      answer_markdown: value,
+    });
+    for (const size of [1, 4, 1000]) {
+      expect(extract(json, size)).toBe(value);
+    }
+  });
+
+  it("skips nested objects/arrays that appear before the key", () => {
+    const value = "after the nested stuff";
+    const json = JSON.stringify({
+      citations: [{ source: "x", detail: "y" }],
+      candidates: { total_count: 2, shown: [{ name: "A" }, { name: "B" }] },
+      answer_markdown: value,
+    });
+    for (const size of [1, 3, 9, 1000]) {
+      expect(extract(json, size)).toBe(value);
+    }
+  });
+
+  it("decodes \\uXXXX surrogate pairs without splitting them across chunks", () => {
+    // Raw JSON text containing literal backslash-u escapes for 😀 (U+1F600).
+    const json = '{"status":"answered","answer_markdown":"hi \\uD83D\\uDE00 end"}';
+    for (const size of [1, 2, 3, 7, 1000]) {
+      expect(extract(json, size)).toBe("hi 😀 end");
+    }
+  });
+
+  it("stops at the closing quote and ignores trailing fields", () => {
+    const json = JSON.stringify({
+      answer_markdown: "only this",
+      reasoning_markdown: "ignored",
+      citations: [],
+    });
+    expect(extract(json, 1)).toBe("only this");
+  });
+
+  it("returns the empty string when there is no answer_markdown field", () => {
+    const json = JSON.stringify({ status: "answered", reasoning_markdown: "x" });
+    expect(extract(json, 1)).toBe("");
   });
 });

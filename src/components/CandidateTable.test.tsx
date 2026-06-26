@@ -9,7 +9,11 @@ import {
 
 afterEach(() => cleanup());
 import CandidateTable from "./CandidateTable";
-import { CANDIDATES_TRUNCATED, CANDIDATES_EXACT } from "./test-fixtures";
+import {
+  CANDIDATES_TRUNCATED,
+  CANDIDATES_EXACT,
+  CANDIDATES_KEYSTATS_ONLY,
+} from "./test-fixtures";
 import type { Candidates } from "./types";
 
 describe("CandidateTable", () => {
@@ -97,8 +101,24 @@ describe("CandidateTable", () => {
     fireEvent.click(screen.getByTestId("candidate-row-0"));
   });
 
-  it("renders key stats when present", () => {
+  it("renders all six base stats in fixed order with competitive labels", () => {
     render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    const row0 = screen.getByTestId("candidate-row-0");
+    const items = within(row0)
+      .getAllByText(/^(HP|Attack|Defense|SpA|SpD|Speed):/)
+      .map((el) => el.textContent);
+    expect(items).toEqual([
+      "HP: 108",
+      "Attack: 130",
+      "Defense: 95",
+      "SpA: 80",
+      "SpD: 85",
+      "Speed: 102",
+    ]);
+  });
+
+  it("falls back to key_stats when a row has no base_stats", () => {
+    render(<CandidateTable candidates={CANDIDATES_KEYSTATS_ONLY} />);
     expect(screen.getByText(/speed: 102/)).toBeInTheDocument();
   });
 

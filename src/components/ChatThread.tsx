@@ -2,6 +2,7 @@
 
 import type { ChatThreadProps } from "@/components/types";
 import AnswerCard from "@/components/AnswerCard";
+import Markdown from "@/components/Markdown";
 
 /** Fresh-session example prompts (design-system.md "Empty state"). */
 const EXAMPLE_QUERIES = [
@@ -29,6 +30,7 @@ export default function ChatThread({
   turns,
   activity,
   status,
+  streamingMarkdown,
   transportError,
   onFollowUp,
 }: ChatThreadProps) {
@@ -105,6 +107,16 @@ export default function ChatThread({
               ))}
             </ol>
           )}
+        </div>
+      )}
+
+      {status === "streaming" && streamingMarkdown && (
+        <div
+          className="chat-turn chat-turn--assistant chat-thread__streaming"
+          data-testid="streaming-answer"
+          aria-live="polite"
+        >
+          <Markdown markdown={streamingMarkdown} />
         </div>
       )}
 

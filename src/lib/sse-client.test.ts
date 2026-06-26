@@ -91,6 +91,19 @@ describe("parseFrame", () => {
     });
   });
 
+  it("parses an answer_start frame (empty payload)", () => {
+    const raw = "event: answer_start\ndata: {}";
+    expect(parseFrame(raw)).toEqual({ event: "answer_start", data: {} });
+  });
+
+  it("parses an answer_delta frame", () => {
+    const raw = `event: answer_delta\ndata: ${JSON.stringify({ text: "Hello " })}`;
+    expect(parseFrame(raw)).toEqual({
+      event: "answer_delta",
+      data: { text: "Hello " },
+    });
+  });
+
   it("handles extra whitespace around event name and data value", () => {
     const raw = 'event:  tool_activity \ndata:  {"tool":"x","label":"y"} ';
     const result = parseFrame(raw);
@@ -261,6 +274,35 @@ describe("readSseStream", () => {
     const stream = makeStream();
     const events = await collect(stream);
     expect(events).toHaveLength(0);
+  });
+
+  it("streams answer_start + answer_delta* then the terminal answer in order", async () => {
+    const answer = {
+      status: "answered",
+      answer_markdown: "Hi there",
+      reasoning_markdown: "ok",
+      citations: [],
+      inferences: [],
+      generation_basis: { generation: "gen-9", fallback: false },
+    };
+    const stream = makeStream(
+      frame("answer_start", {}),
+      frame("answer_delta", { text: "Hi " }),
+      frame("answer_delta", { text: "there" }),
+      frame("answer", { answer }),
+    );
+    const events = await collect(stream);
+    expect(events.map((e) => e.event)).toEqual([
+      "answer_start",
+      "answer_delta",
+      "answer_delta",
+      "answer",
+    ]);
+    const deltas = events
+      .filter((e) => e.event === "answer_delta")
+      .map((e) => (e.data as { text: string }).text)
+      .join("");
+    expect(deltas).toBe("Hi there");
   });
 
   it("stops iteration when the AbortSignal fires", async () => {

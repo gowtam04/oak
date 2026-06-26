@@ -197,6 +197,47 @@ describe("POST /api/chat — SSE happy path", () => {
     expect(streamed.candidates?.total_count).toBe(1);
   });
 
+  it("emits answer_start + answer_delta frames before the terminal answer", async () => {
+    mockRunPokebot.mockImplementation(
+      async (
+        _message: string,
+        _history: unknown,
+        _ctx: unknown,
+        _onProgress: unknown,
+        onAnswerStart?: () => void,
+        onAnswerDelta?: (text: string) => void,
+      ) => {
+        onAnswerStart?.();
+        onAnswerDelta?.("Only ");
+        onAnswerDelta?.("Ninetales");
+        return G1_ANSWER;
+      },
+    );
+
+    const res = await post({ session_id: "s-g1", message: "trick room list" });
+    const events = await readSse(res);
+    const names = events.map((e) => e.event);
+
+    // answer_start fires once, before any answer_delta; terminal answer is last.
+    expect(names.filter((n) => n === "answer_start")).toHaveLength(1);
+    expect(names.indexOf("answer_start")).toBeLessThan(
+      names.indexOf("answer_delta"),
+    );
+    expect(names[names.length - 1]).toBe("answer");
+
+    const streamed = events
+      .filter((e) => e.event === "answer_delta")
+      .map((e) => (e.data as { text: string }).text)
+      .join("");
+    expect(streamed).toBe("Only Ninetales");
+    // The terminal answer remains authoritative (full structured payload).
+    const answers = events.filter((e) => e.event === "answer");
+    expect(answers).toHaveLength(1);
+    expect((answers[0]!.data as { answer: PokebotAnswer }).answer).toEqual(
+      G1_ANSWER,
+    );
+  });
+
   it("streams a G4 conditional answer with its inference intact", async () => {
     mockRunPokebot.mockResolvedValue(G4_ANSWER);
 

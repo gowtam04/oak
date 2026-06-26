@@ -28,7 +28,7 @@
  *
  * Never throws for in-domain failures (unresolved entity / clarification /
  * PokeAPI down / loop-max / invalid-after-retry surface as a PokebotAnswer with
- * the right `status`). Transport/API faults from `messages.create` propagate to
+ * the right `status`). Transport/API faults from `messages.stream` propagate to
  * the route as exceptions (sse-types.ts: those become an `error` event).
  */
 
@@ -40,6 +40,8 @@ import { pokebotAnswerSchema, type PokebotAnswer } from "@/agent/schemas";
 import type {
   AgentContext,
   ChatMessage,
+  OnAnswerDelta,
+  OnAnswerStart,
   OnProgress,
   RunPokebot,
 } from "@/agent/types";
@@ -57,9 +59,9 @@ export const MAX_ITERATIONS = 10;
 export const MAX_SUBMIT_RETRIES = 2;
 
 /**
- * Non-streaming output budget. Comfortably fits the largest PokebotAnswer
- * (candidate lists + reasoning) while staying well under the SDK HTTP timeout
- * for a non-streaming request.
+ * Output budget. Comfortably fits the largest PokebotAnswer (candidate lists +
+ * reasoning). The per-turn call streams (messages.stream), so the SDK's
+ * non-streaming HTTP timeout no longer applies.
  */
 export const MAX_TOKENS = 16000;
 
@@ -100,6 +102,15 @@ reasoning correctly on top of it and being transparent about how you got there.
   compound query, use query_pokedex. Do not fetch Pokémon one-by-one to filter or
   rank them. To find Pokémon that learn SEVERAL moves, pass them all in \`moves\` —
   the tool returns the intersection (Pokémon that learn ALL of them in Gen 9).
+- When you present a list of Pokémon, put them in the \`candidates\` field and, for
+  EACH row, copy the row's full six \`base_stats\` (hp, attack, defense,
+  special_attack, special_defense, speed) verbatim from the query_pokedex result
+  into that row's \`base_stats\` field — always all six, never a subset, and never
+  invent them. The UI renders the full stat line and type badges from this. Do NOT
+  also reproduce that list as a markdown table inside \`answer_markdown\`: keep
+  \`answer_markdown\` as prose (the bottom line plus any notes); the structured
+  \`candidates\` list IS the table. (Markdown tables are still fine in
+  \`answer_markdown\` for OTHER things — type charts, head-to-head comparisons.)
 - For a single Pokémon's profile, use get_pokemon. For move/ability/type/
   evolution/item details, use the matching get_* tool. Fetch only what the answer
   needs (efficient API use matters).
@@ -187,9 +198,13 @@ User: find me a Pokémon that can learn both Trick Room and Will-O-Wisp
 ← { total_count: 6, truncated: false, results: [ { display_name: "Dusknoir", ... }, { display_name: "Ceruledge", ... }, ... ] }
 → submit_answer({
     status: "answered",
-    answer_markdown: "**6 Pokémon** can learn both Trick Room and Will-O-Wisp in Gen 9. Standouts: **Dusknoir** (Ghost), **Ceruledge** (Fire/Ghost). Full list below.",
+    answer_markdown: "**6 Pokémon** can learn both Trick Room and Will-O-Wisp in Gen 9. Standouts: **Dusknoir** (Ghost) as a bulky Trick Room setter, and **Ceruledge** (Fire/Ghost) for offense. The full list with stats is below.",
     reasoning_markdown: "I intersected the Gen 9 learnsets for both moves — only Pokémon that can learn BOTH appear. A straightforward set intersection, no inference.",
-    candidates: { total_count: 6, truncated: false, sort: null, shown: [ /* the 6 rows with sprite, types */ ] },
+    candidates: { total_count: 6, truncated: false, sort: null, shown: [
+      { name: "Dusknoir", dex_number: 477, sprite_url: "...", types: ["ghost"], base_stats: { hp: 45, attack: 100, defense: 135, special_attack: 65, special_defense: 135, speed: 45 } },
+      { name: "Ceruledge", dex_number: 937, sprite_url: "...", types: ["fire","ghost"], base_stats: { hp: 75, attack: 125, defense: 80, special_attack: 60, special_defense: 100, speed: 85 } }
+      /* …the remaining rows, each with all six base_stats copied from query_pokedex… */
+    ] },
     citations: [
       { source: "learnset/trick-room (gen-9)", detail: "learned_by set intersected" },
       { source: "learnset/will-o-wisp (gen-9)", detail: "learned_by set intersected" }
@@ -293,17 +308,288 @@ function progressLabel(tool: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Incremental answer_markdown extractor (token-by-token streaming)
+// ---------------------------------------------------------------------------
+
+/**
+ * Pulls the growing, decoded value of the top-level `answer_markdown` string out
+ * of the accumulating `partial_json` fragments of a streaming submit_answer tool
+ * input. Only a `submit_answer` input has an `answer_markdown` field, so feeding
+ * this just the submit_answer block's deltas is sufficient.
+ *
+ * `push(fragment)` returns ONLY the newly-decoded characters (or "") so the
+ * caller can forward them as an `answer_delta`. Concatenating every return value
+ * reproduces the decoded `answer_markdown` prefix seen so far — and, once the
+ * value's closing quote arrives, equals the final `answer.answer_markdown`.
+ *
+ * SDK-version-independent: it consumes only raw JSON text and decodes JSON string
+ * escapes itself (\n \t \r \b \f \/ \\ \" and \uXXXX incl. surrogate pairs),
+ * never emitting a partial escape and never splitting an escaped surrogate pair
+ * across two chunks. Keys may appear in any order; non-target values (objects,
+ * arrays, strings, primitives) are fully skipped, so a `reasoning_markdown` value
+ * that contains the literal substring `"answer_markdown"` cannot misfire.
+ */
+export class AnswerMarkdownExtractor {
+  private state:
+    | "before_object"
+    | "at_root"
+    | "key_string"
+    | "after_key"
+    | "before_value"
+    | "target_value"
+    | "skip_value"
+    | "done" = "before_object";
+
+  private keyBuf = "";
+  private targetKey = false;
+
+  // Shared JSON-string decode state (key_string + target_value).
+  private escape = false;
+  private uHex: string | null = null; // collecting \uXXXX digits when non-null
+  private pendingHigh: number | null = null; // buffered escaped high surrogate
+
+  // skip_value state.
+  private skipDepth = 0;
+  private skipInString = false;
+  private skipEscape = false;
+  private skipStarted = false;
+
+  /** Feed one `partial_json` fragment; returns newly-decoded answer_markdown. */
+  push(fragment: string): string {
+    let out = "";
+    for (let i = 0; i < fragment.length; i++) {
+      if (this.state === "done") break;
+      out += this.feed(fragment[i]!);
+    }
+    return out;
+  }
+
+  private resetStringState(): void {
+    this.escape = false;
+    this.uHex = null;
+    this.pendingHigh = null;
+  }
+
+  private flushPendingHigh(): string {
+    if (this.pendingHigh !== null) {
+      const s = String.fromCharCode(this.pendingHigh);
+      this.pendingHigh = null;
+      return s;
+    }
+    return "";
+  }
+
+  private feed(ch: string): string {
+    switch (this.state) {
+      case "before_object":
+        if (ch === "{") this.state = "at_root";
+        return "";
+      case "at_root":
+        if (ch === '"') {
+          this.keyBuf = "";
+          this.resetStringState();
+          this.state = "key_string";
+        } else if (ch === "}") {
+          this.state = "done";
+        }
+        return "";
+      case "key_string": {
+        const r = this.decodeStringChar(ch);
+        if (r.closed) {
+          this.targetKey = this.keyBuf === "answer_markdown";
+          this.state = "after_key";
+        } else {
+          this.keyBuf += r.char;
+        }
+        return "";
+      }
+      case "after_key":
+        if (ch === ":") this.state = "before_value";
+        return "";
+      case "before_value":
+        if (ch === " " || ch === "\n" || ch === "\t" || ch === "\r") return "";
+        if (this.targetKey && ch === '"') {
+          this.resetStringState();
+          this.state = "target_value";
+          return "";
+        }
+        // Non-target key, or a target value that isn't a string — skip it whole.
+        this.startSkip();
+        return this.feedSkip(ch);
+      case "target_value": {
+        const r = this.decodeStringChar(ch);
+        if (r.closed) {
+          this.state = "done";
+          return r.char;
+        }
+        return r.char;
+      }
+      case "skip_value":
+        return this.feedSkip(ch);
+      case "done":
+        return "";
+    }
+  }
+
+  /** Decode one char of a JSON string. `closed` marks the unescaped end quote. */
+  private decodeStringChar(ch: string): { char: string; closed: boolean } {
+    if (this.uHex !== null) {
+      this.uHex += ch;
+      if (this.uHex.length < 4) return { char: "", closed: false };
+      const code = parseInt(this.uHex, 16);
+      this.uHex = null;
+      if (Number.isNaN(code)) return { char: "", closed: false };
+      if (code >= 0xd800 && code <= 0xdbff) {
+        const flushed = this.flushPendingHigh();
+        this.pendingHigh = code;
+        return { char: flushed, closed: false };
+      }
+      if (code >= 0xdc00 && code <= 0xdfff && this.pendingHigh !== null) {
+        const s = String.fromCharCode(this.pendingHigh, code);
+        this.pendingHigh = null;
+        return { char: s, closed: false };
+      }
+      return {
+        char: this.flushPendingHigh() + String.fromCharCode(code),
+        closed: false,
+      };
+    }
+
+    if (this.escape) {
+      this.escape = false;
+      const lead = this.flushPendingHigh();
+      switch (ch) {
+        case "n":
+          return { char: lead + "\n", closed: false };
+        case "t":
+          return { char: lead + "\t", closed: false };
+        case "r":
+          return { char: lead + "\r", closed: false };
+        case "b":
+          return { char: lead + "\b", closed: false };
+        case "f":
+          return { char: lead + "\f", closed: false };
+        case "/":
+          return { char: lead + "/", closed: false };
+        case "\\":
+          return { char: lead + "\\", closed: false };
+        case '"':
+          return { char: lead + '"', closed: false };
+        case "u":
+          // A high surrogate buffered before this \u must wait for the result.
+          if (lead) this.pendingHighReinstate(lead);
+          this.uHex = "";
+          return { char: "", closed: false };
+        default:
+          return { char: lead + ch, closed: false };
+      }
+    }
+
+    if (ch === "\\") {
+      this.escape = true;
+      return { char: "", closed: false };
+    }
+    if (ch === '"') {
+      return { char: this.flushPendingHigh(), closed: true };
+    }
+    return { char: this.flushPendingHigh() + ch, closed: false };
+  }
+
+  // The `\u` escape branch flushes pendingHigh into `lead`, but a high surrogate
+  // immediately followed by `\u` is the start of a surrogate PAIR — re-buffer it
+  // so the low surrogate can combine. (Only reachable for back-to-back \u.)
+  private pendingHighReinstate(lead: string): void {
+    if (lead.length === 1) this.pendingHigh = lead.charCodeAt(0);
+  }
+
+  private startSkip(): void {
+    this.state = "skip_value";
+    this.skipDepth = 0;
+    this.skipInString = false;
+    this.skipEscape = false;
+    this.skipStarted = false;
+  }
+
+  private feedSkip(ch: string): string {
+    if (this.skipInString) {
+      if (this.skipEscape) {
+        this.skipEscape = false;
+      } else if (ch === "\\") {
+        this.skipEscape = true;
+      } else if (ch === '"') {
+        this.skipInString = false;
+        if (this.skipDepth === 0) this.state = "at_root";
+      }
+      return "";
+    }
+
+    if (!this.skipStarted) {
+      if (ch === " " || ch === "\n" || ch === "\t" || ch === "\r") return "";
+      this.skipStarted = true;
+      if (ch === '"') {
+        this.skipInString = true;
+        return "";
+      }
+      if (ch === "{" || ch === "[") {
+        this.skipDepth = 1;
+        return "";
+      }
+      // Primitive (number / true / false / null) — fall through.
+    }
+
+    if (ch === '"') {
+      this.skipInString = true;
+      return "";
+    }
+    if (ch === "{" || ch === "[") {
+      this.skipDepth++;
+      return "";
+    }
+    if (ch === "}" || ch === "]") {
+      if (this.skipDepth > 0) {
+        this.skipDepth--;
+        if (this.skipDepth === 0) this.state = "at_root";
+        return "";
+      }
+      // A primitive ended on the parent's closing brace — re-dispatch it.
+      this.state = "at_root";
+      return this.feed(ch);
+    }
+    if (this.skipDepth === 0) {
+      if (ch === ",") {
+        this.state = "at_root";
+        return this.feed(ch);
+      }
+      if (ch === " " || ch === "\n" || ch === "\t" || ch === "\r") {
+        this.state = "at_root";
+      }
+      // else: still mid-primitive token (digits, letters) — keep consuming.
+    }
+    return "";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Injectable client seam — keeps the public signature fixed while letting the
 // unit/integration tests drive a recorded transcript (design.md Phase 5: a
 // stubbed/recorded Anthropic client for determinism).
 // ---------------------------------------------------------------------------
 
-/** The single SDK method the runtime uses. */
+/**
+ * The minimal `MessageStream` surface the runtime consumes: it is async-iterable
+ * over the raw streaming events (used to extract `answer_markdown` deltas) and
+ * exposes `finalMessage()` to recover the fully-assembled message (which the
+ * existing loop body operates on, unchanged).
+ */
+export interface MessageStreamLike
+  extends AsyncIterable<Anthropic.RawMessageStreamEvent> {
+  finalMessage(): Promise<Anthropic.Message>;
+}
+
+/** The single SDK method the runtime uses (the streaming helper). */
 export interface AnthropicClientLike {
   messages: {
-    create(
-      params: Anthropic.MessageCreateParamsNonStreaming,
-    ): Promise<Anthropic.Message>;
+    stream(params: Anthropic.MessageStreamParams): MessageStreamLike;
   };
 }
 
@@ -425,6 +711,8 @@ export async function runPokebotWith(
   history: ChatMessage[],
   ctx: AgentContext,
   onProgress?: OnProgress,
+  onAnswerStart?: OnAnswerStart,
+  onAnswerDelta?: OnAnswerDelta,
 ): Promise<PokebotAnswer> {
   const state: TraceState = {
     startedAt: Date.now(),
@@ -444,7 +732,7 @@ export async function runPokebotWith(
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     // Transport/API faults here propagate to the route (NOT caught).
-    const response = await client.messages.create({
+    const stream = client.messages.stream({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system: SYSTEM_BLOCKS,
@@ -456,6 +744,43 @@ export async function runPokebotWith(
       tool_choice: { type: "auto" },
       messages,
     });
+
+    // Stream answer_markdown out of the submit_answer tool input as it arrives.
+    // Keyed on the content-block index so parallel tool blocks stay isolated; a
+    // re-emitted submit_answer (after a validation failure) starts a fresh block
+    // → fresh onAnswerStart → the client resets its buffer.
+    let submitIndex: number | null = null;
+    let extractor: AnswerMarkdownExtractor | null = null;
+    for await (const event of stream) {
+      if (event.type === "content_block_start") {
+        if (
+          event.content_block.type === "tool_use" &&
+          event.content_block.name === "submit_answer"
+        ) {
+          submitIndex = event.index;
+          extractor = new AnswerMarkdownExtractor();
+          onAnswerStart?.();
+        }
+      } else if (
+        event.type === "content_block_delta" &&
+        event.index === submitIndex &&
+        extractor !== null &&
+        event.delta.type === "input_json_delta"
+      ) {
+        const chunk = extractor.push(event.delta.partial_json);
+        if (chunk) onAnswerDelta?.(chunk);
+      } else if (
+        event.type === "content_block_stop" &&
+        event.index === submitIndex
+      ) {
+        submitIndex = null;
+        extractor = null;
+      }
+    }
+
+    // The fully-assembled message — structurally identical to the old
+    // messages.create result; the loop body below is unchanged.
+    const response = await stream.finalMessage();
 
     accumulateUsage(state, response.usage);
 
@@ -592,7 +917,22 @@ export async function runPokebotWith(
  * Sonnet-4.6 tool-loop against the real Anthropic client, and returns a
  * schema-valid PokebotAnswer. See the module header for the full contract.
  */
-export const runPokebot: RunPokebot = (message, history, ctx, onProgress) =>
-  runPokebotWith(getClient(), message, history, ctx, onProgress);
+export const runPokebot: RunPokebot = (
+  message,
+  history,
+  ctx,
+  onProgress,
+  onAnswerStart,
+  onAnswerDelta,
+) =>
+  runPokebotWith(
+    getClient(),
+    message,
+    history,
+    ctx,
+    onProgress,
+    onAnswerStart,
+    onAnswerDelta,
+  );
 
 export default runPokebot;

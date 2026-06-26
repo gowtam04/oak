@@ -68,6 +68,19 @@ export type ChatMessage = {
 export type OnProgress = (event: { tool: string; label: string }) => void;
 
 /**
+ * Fired when a new submit_answer block begins streaming — the client clears its
+ * in-flight answer buffer (so a re-emitted answer after a validation failure
+ * replaces the prior attempt rather than appending to it).
+ */
+export type OnAnswerStart = () => void;
+
+/**
+ * Fired with each newly-decoded fragment of `answer_markdown` as the model
+ * streams the submit_answer payload. The client appends each fragment.
+ */
+export type OnAnswerDelta = (text: string) => void;
+
+/**
  * The agent entry point (src/agent/runtime.ts).
  *
  * Always resolves to a schema-valid `PokebotAnswer` for in-domain conditions
@@ -80,4 +93,6 @@ export type RunPokebot = (
   history: ChatMessage[],
   ctx: AgentContext,
   onProgress?: OnProgress,
+  onAnswerStart?: OnAnswerStart,
+  onAnswerDelta?: OnAnswerDelta,
 ) => Promise<PokebotAnswer>;

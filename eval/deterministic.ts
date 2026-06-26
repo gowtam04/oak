@@ -39,7 +39,11 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 
-import { runPokebotWith, type AnthropicClientLike } from "@/agent/runtime";
+import {
+  runPokebotWith,
+  type AnthropicClientLike,
+  type MessageStreamLike,
+} from "@/agent/runtime";
 import type { AgentContext } from "@/agent/types";
 import type {
   Candidates,
@@ -99,7 +103,7 @@ function scriptedMessage(content: unknown[]): Anthropic.Message {
  * read phase recorded).
  */
 function extractToolOutputs(
-  params: Anthropic.MessageCreateParamsNonStreaming,
+  params: Anthropic.MessageStreamParams,
   idToName: Map<string, string>,
 ): Record<string, unknown> {
   const outputs: Record<string, unknown> = {};
@@ -129,6 +133,18 @@ function extractToolOutputs(
   return outputs;
 }
 
+/** Wrap a scripted message in a (no-events) MessageStreamLike. */
+function streamOf(message: Anthropic.Message): MessageStreamLike {
+  return {
+    // No incremental events are needed for the deterministic eval — the runtime
+    // just reads finalMessage(). An empty iterator keeps the for-await a no-op.
+    [Symbol.asyncIterator](): AsyncIterator<Anthropic.RawMessageStreamEvent> {
+      return { next: () => Promise.resolve({ done: true, value: undefined }) };
+    },
+    finalMessage: () => Promise.resolve(message),
+  };
+}
+
 /**
  * A scripted Anthropic client that replays a {@link DeterministicPlan}: read
  * phase first, then a single `submit_answer` composed from the real tool data.
@@ -139,9 +155,7 @@ function makeScriptedClient(plan: DeterministicPlan): AnthropicClientLike {
 
   return {
     messages: {
-      create(
-        params: Anthropic.MessageCreateParamsNonStreaming,
-      ): Promise<Anthropic.Message> {
+      stream(params: Anthropic.MessageStreamParams): MessageStreamLike {
         call += 1;
 
         // Turn 1 — issue the planned read tool calls (real dispatch follows).
@@ -151,7 +165,7 @@ function makeScriptedClient(plan: DeterministicPlan): AnthropicClientLike {
             idToName.set(id, read.name);
             return { type: "tool_use", id, name: read.name, input: read.input };
           });
-          return Promise.resolve(scriptedMessage(content));
+          return streamOf(scriptedMessage(content));
         }
 
         // Turn 2 — compose submit_answer from the real tool outputs.
@@ -171,7 +185,7 @@ function makeScriptedClient(plan: DeterministicPlan): AnthropicClientLike {
             generation_basis: { generation: "gen-9", fallback: false },
           };
         }
-        return Promise.resolve(
+        return streamOf(
           scriptedMessage([
             {
               type: "tool_use",
@@ -215,6 +229,7 @@ function candidatesFrom(q: QueryPokedexResult): Candidates {
       dex_number: r.national_dex_number,
       sprite_url: r.sprite_url,
       types: r.types as TypeName[],
+      base_stats: r.base_stats,
       ability: r.abilities.slot1,
     })),
   };

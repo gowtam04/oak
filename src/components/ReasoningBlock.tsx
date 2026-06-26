@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ReasoningBlockProps } from "@/components/types";
+import Markdown from "@/components/Markdown";
 
 /**
  * ReasoningBlock — collapsible "why" section driven by `reasoning_markdown`.
@@ -30,10 +31,9 @@ export default function ReasoningBlock({
       <summary className="reasoning-block__summary">Reasoning</summary>
       <div
         className="reasoning-block__content"
-        style={{ whiteSpace: "pre-wrap" }}
         data-testid="reasoning-block-content"
       >
-        {markdown}
+        <Markdown markdown={markdown} />
       </div>
     </details>
   );

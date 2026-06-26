@@ -7,6 +7,8 @@
  *
  * Wire format emitted by the route (design.md § API Design):
  *   event: tool_activity   data: { tool, label }     (zero or more; progress)
+ *   event: answer_start    data: {}                  (zero or more; buffer reset)
+ *   event: answer_delta    data: { text }            (zero or more; prose chunk)
  *   event: answer          data: { answer }           (exactly one; terminal)
  *   event: error           data: { code, message }    (transport faults only)
  *
@@ -27,7 +29,9 @@
 import { useCallback, useRef, useState } from "react";
 import type { PokebotAnswer } from "@/agent/schemas";
 import type {
+  AnswerDeltaEvent,
   AnswerEvent,
+  AnswerStartEvent,
   ChatRequestBody,
   ErrorEvent,
   SseEvent,
@@ -47,7 +51,7 @@ import type {
  *   - frames that have no `event:` field (comment-only / heartbeat / unknown),
  *   - frames that have no `data:` field,
  *   - frames whose `data:` is not valid JSON,
- *   - frames whose event name is not one of the three the endpoint emits.
+ *   - frames whose event name is not one the endpoint emits.
  *
  * The route always sends a single `event:` line and a single `data:` line per
  * frame (via `formatSseEvent`), so multi-line `data:` concatenation is not
@@ -77,10 +81,14 @@ export function parseFrame(frame: string): SseEvent | null {
     return null;
   }
 
-  // Only the three event names this endpoint emits are accepted.
+  // Only the event names this endpoint emits are accepted.
   switch (eventName as SseEventName) {
     case "tool_activity":
       return { event: "tool_activity", data: data as ToolActivityEvent };
+    case "answer_start":
+      return { event: "answer_start", data: data as AnswerStartEvent };
+    case "answer_delta":
+      return { event: "answer_delta", data: data as AnswerDeltaEvent };
     case "answer":
       return { event: "answer", data: data as AnswerEvent };
     case "error":
@@ -168,6 +176,13 @@ export interface SseClientState {
    */
   answer: PokebotAnswer | null;
   /**
+   * Answer prose accumulated from `answer_delta` events for the in-flight turn.
+   * Reset to "" on each `send` and on `answer_start` (a re-emitted answer), and
+   * cleared when the terminal `answer` lands (the committed AnswerCard becomes
+   * the single source of truth). Render this for token-by-token streaming.
+   */
+  streamingMarkdown: string;
+  /**
    * Transport-level error (null unless `status === "error"`).
    * In-domain failures arrive in `answer`, not here.
    */
@@ -178,6 +193,7 @@ const INITIAL_STATE: SseClientState = {
   status: "idle",
   activities: [],
   answer: null,
+  streamingMarkdown: "",
   error: null,
 };
 
@@ -234,6 +250,7 @@ export function useSseClient(): UseSseClientReturn {
       status: "thinking",
       activities: [],
       answer: null,
+      streamingMarkdown: "",
       error: null,
     });
 
@@ -295,12 +312,25 @@ export function useSseClient(): UseSseClientReturn {
               ...prev,
               activities: [...prev.activities, event.data],
             }));
+          } else if (event.event === "answer_start") {
+            // A fresh submit_answer began streaming — reset the in-flight buffer
+            // (drops a prior attempt that failed validation and is re-emitting).
+            setState((prev) => ({ ...prev, streamingMarkdown: "" }));
+          } else if (event.event === "answer_delta") {
+            // Append the newly-decoded answer_markdown fragment.
+            setState((prev) => ({
+              ...prev,
+              streamingMarkdown: prev.streamingMarkdown + event.data.text,
+            }));
           } else if (event.event === "answer") {
             // Terminal success (any answer.status — in-domain failures ride here).
+            // Clear the streaming buffer so the committed AnswerCard is the single
+            // source of truth (no double render of the prose).
             setState((prev) => ({
               ...prev,
               status: "done",
               answer: event.data.answer,
+              streamingMarkdown: "",
             }));
           } else if (event.event === "error") {
             // Transport fault (integration.md § Error Surface, last two rows).

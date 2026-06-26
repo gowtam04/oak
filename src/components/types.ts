@@ -100,6 +100,16 @@ export interface AnswerBodyProps {
   markdown: string;
 }
 
+/**
+ * Shared markdown renderer (react-markdown + remark-gfm). Wraps output in a
+ * `.markdown-body` div (the single CSS hook); `className` is merged after it.
+ */
+export interface MarkdownProps {
+  markdown: string;
+  /** Extra class merged after `markdown-body` (e.g. `answer-body__content`). */
+  className?: string;
+}
+
 /** `reasoning_markdown` — the "why". Collapsible; collapsed by default. */
 export interface ReasoningBlockProps {
   markdown: string;
@@ -199,6 +209,11 @@ export interface ChatThreadProps {
   /** Tool-activity labels for the in-flight turn (empty when idle). */
   activity: ToolActivityEvent[];
   status: ChatStatus;
+  /**
+   * In-flight answer_markdown accumulated from `answer_delta` events (empty when
+   * none). Rendered as a live, progressively-updating bubble while streaming.
+   */
+  streamingMarkdown: string;
   /** Set only on transport faults (the `error` SSE event / network failure). */
   transportError: ErrorEvent | null;
   /** Threaded into each AnswerCard for suggestion/candidate follow-ups. */

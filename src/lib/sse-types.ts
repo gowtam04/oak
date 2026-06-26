@@ -3,7 +3,14 @@
  *
  * The route emits, in order:
  *   event: tool_activity   data: { tool, label }     (zero or more)
- *   event: answer          data: { answer }          (exactly one, terminal)
+ *   event: answer_start    data: {}                  (zero or more; resets the
+ *                                                      client's in-flight buffer
+ *                                                      when a fresh submit_answer
+ *                                                      begins streaming)
+ *   event: answer_delta    data: { text }            (zero or more; incremental
+ *                                                      chunks of answer_markdown)
+ *   event: answer          data: { answer }          (exactly one, terminal,
+ *                                                      authoritative)
  *   event: error           data: { code, message }   (transport faults ONLY)
  *
  * IMPORTANT: every in-domain failure (unresolved entity, clarification, PokeAPI
@@ -11,6 +18,11 @@
  * `answer` event carrying a PokebotAnswer with the appropriate `status`
  * (resolution_failed / clarification_needed / insufficient_data) — NEVER as an
  * `error` event. The `error` event is reserved for model/API transport faults.
+ *
+ * `answer_start` / `answer_delta` stream the `answer_markdown` prose token-by-
+ * token while the loop runs; the single terminal `answer` event always carries
+ * the full validated PokebotAnswer and is authoritative (the client replaces any
+ * streamed buffer with it).
  */
 
 import type { PokebotAnswer } from "@/agent/schemas";
@@ -27,6 +39,18 @@ export interface ToolActivityEvent {
   label: string;
 }
 
+/**
+ * `event: answer_start` payload — a reset signal sent when a fresh submit_answer
+ * block begins streaming. Empty object `{}`; the client clears its in-flight
+ * markdown buffer (handles the validate-and-re-emit case).
+ */
+export type AnswerStartEvent = Record<string, never>;
+
+/** `event: answer_delta` payload — one newly-decoded chunk of answer_markdown. */
+export interface AnswerDeltaEvent {
+  text: string;
+}
+
 /** `event: answer` payload — the one terminal answer for the turn. */
 export interface AnswerEvent {
   answer: PokebotAnswer;
@@ -38,12 +62,19 @@ export interface ErrorEvent {
   message: string;
 }
 
-/** The three SSE event names this endpoint emits. */
-export type SseEventName = "tool_activity" | "answer" | "error";
+/** The SSE event names this endpoint emits. */
+export type SseEventName =
+  | "tool_activity"
+  | "answer_start"
+  | "answer_delta"
+  | "answer"
+  | "error";
 
 /** Maps each event name to its `data` payload type. */
 export interface SseEventDataMap {
   tool_activity: ToolActivityEvent;
+  answer_start: AnswerStartEvent;
+  answer_delta: AnswerDeltaEvent;
   answer: AnswerEvent;
   error: ErrorEvent;
 }

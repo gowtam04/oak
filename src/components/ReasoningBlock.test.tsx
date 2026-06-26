@@ -35,6 +35,16 @@ describe("ReasoningBlock", () => {
     );
   });
 
+  it("renders markdown formatting (bold) inside the content", () => {
+    render(
+      <ReasoningBlock markdown="Because **Armor Tail** blocks it." defaultExpanded />,
+    );
+    const strong = screen
+      .getByTestId("reasoning-block-content")
+      .querySelector("strong");
+    expect(strong).toHaveTextContent("Armor Tail");
+  });
+
   it("renders without crashing for minimal markdown", () => {
     render(<ReasoningBlock markdown="Simple reasoning." />);
     expect(screen.getByTestId("reasoning-block")).toBeInTheDocument();

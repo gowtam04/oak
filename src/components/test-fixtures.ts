@@ -83,13 +83,46 @@ export const CANDIDATES_TRUNCATED: Candidates = {
       sprite_url:
         "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/445.png",
       types: ["dragon", "ground"],
+      // Full six stats — rendered in fixed order. key_stats kept to prove that
+      // base_stats takes precedence when both are present.
+      base_stats: {
+        hp: 108,
+        attack: 130,
+        defense: 95,
+        special_attack: 80,
+        special_defense: 85,
+        speed: 102,
+      },
       key_stats: { speed: 102 },
     },
     {
       name: "Dragonite",
       dex_number: 149,
       types: ["dragon", "flying"],
+      base_stats: {
+        hp: 91,
+        attack: 134,
+        defense: 95,
+        special_attack: 100,
+        special_defense: 100,
+        speed: 80,
+      },
       key_stats: { speed: 80 },
+    },
+  ],
+};
+
+/** A candidate set with only `key_stats` (no `base_stats`) — the fallback path. */
+export const CANDIDATES_KEYSTATS_ONLY: Candidates = {
+  total_count: 1,
+  truncated: false,
+  sort: null,
+  shown: [
+    {
+      name: "Garchomp",
+      dex_number: 445,
+      types: ["dragon", "ground"],
+      key_stats: { speed: 102 },
     },
   ],
 };

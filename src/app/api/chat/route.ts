@@ -11,8 +11,9 @@
  *      answer conditions, and rejecting before the stream opens lets the client
  *      see a real HTTP status.
  *   3. Resolve the prior in-session history from the session store (trimming it
- *      to the context budget first), then drive `runPokebot` with an `onProgress`
- *      hook that streams `tool_activity` events as tools fire.
+ *      to the context budget first), then drive `runPokebot` with hooks that
+ *      stream `tool_activity` events as tools fire and `answer_start`/
+ *      `answer_delta` events as the answer_markdown prose is generated.
  *   4. Emit EXACTLY ONE terminal `answer` event carrying the validated
  *      PokebotAnswer. Every in-domain failure (resolution_failed /
  *      clarification_needed / insufficient_data) rides this normal `answer`
@@ -34,7 +35,7 @@
 import { randomUUID } from "node:crypto";
 
 import { createAgentContext } from "@/agent/context";
-import type { OnProgress } from "@/agent/types";
+import type { OnAnswerDelta, OnAnswerStart, OnProgress } from "@/agent/types";
 import { logger } from "@/server/logger";
 import { checkRateLimit } from "@/server/rate-limit";
 import { appendTurn, getHistory, trim } from "@/server/session-store";
@@ -190,7 +191,24 @@ export async function POST(req: Request): Promise<Response> {
             send("tool_activity", { tool: e.tool, label: e.label });
           };
 
-          const answer = await runPokebot(message, history, ctx, onProgress);
+          // Stream the answer_markdown prose token-by-token. answer_start resets
+          // the client's in-flight buffer (handles a re-emitted answer); the
+          // terminal `answer` event below stays authoritative.
+          const onAnswerStart: OnAnswerStart = () => {
+            send("answer_start", {});
+          };
+          const onAnswerDelta: OnAnswerDelta = (text) => {
+            send("answer_delta", { text });
+          };
+
+          const answer = await runPokebot(
+            message,
+            history,
+            ctx,
+            onProgress,
+            onAnswerStart,
+            onAnswerDelta,
+          );
 
           // In-domain success (any status). Persist the turn pair for multi-turn
           // refinement, then emit the single terminal answer event.
