@@ -27,6 +27,39 @@ frontend renderer, the eval harness, and the build phases. Technical approach:
 > structured **pino** JSON to stdout. One language, one deployable, mostly-free
 > infrastructure — right-sized for a single user.
 
+## Implementation status & drift from the original design
+
+**The system is fully built.** This document was written as a pre-build
+architecture pass; the sections below have been reconciled with the shipped code.
+Five things changed materially after the original design and are reflected
+throughout this doc — recorded here as well so the divergence is explicit:
+
+1. **Data source: PokeAPI → the `@pkmn` ecosystem.** All index data now comes
+   from local npm packages (`@pkmn/dex`, `@pkmn/data`, `@pkmn/mods`) — there is
+   **no network call, no throttle/retry, and no read-through cache**. The
+   throttled `src/data/pokeapi-client.ts` and `src/ingest/warm-cache.ts` were
+   never built; their role is filled by `src/data/pkmn/gen-provider.ts` (the
+   single `@pkmn` integration point) and an ingest that builds the
+   `reference_cache` **eagerly** (`src/ingest/build-reference.ts`). BR-8 (PokeAPI
+   fair-use) is therefore moot — nothing calls upstream.
+2. **Two formats (standard + Champions).** Every data table carries a `format`
+   discriminator (`"scarlet-violet"` | `"champions"`) and composite PKs include
+   it. The active format is derived from a **server-controlled** `AgentMode`
+   (`"standard"` | `"champions"`), bound onto `AgentContext.mode` and read by
+   repos + the runtime — never an LLM-visible tool field. See `src/data/formats.ts`
+   and `src/agent/prompts/champions.ts`.
+3. **`tool_choice` is `"auto"`, not forced.** Thinking + a forced `tool_choice`
+   is a hard 400 on Sonnet 4.6, so the loop runs `tool_choice: "auto"` with
+   adaptive thinking and drives `submit_answer` through the system prompt + the
+   max-iteration guard (the iteration cap is what guarantees termination).
+4. **The SSE protocol streams the answer.** Beyond `tool_activity` + the terminal
+   `answer`, the route emits `answer_start` / `answer_delta` events that stream
+   `answer_markdown` token-by-token (extracted from the streaming `submit_answer`
+   input). The request body gained a `champions_mode` boolean.
+5. **`learnset` is keyed by `format`, not `version_group`.** Multi-move
+   intersection (BR-7) is unchanged (SQL `GROUP BY … HAVING COUNT(DISTINCT)=N`).
+   Ingest's "reuse-last-good on upstream failure" path is gone (no upstream).
+
 ## Requirements Reference
 
 - Business requirements: `docs/requirements/requirements.md`
@@ -54,9 +87,9 @@ storage, file layout, and phasing.
 | Data access         | **Drizzle ORM**                                           | Typed schema + queries over better-sqlite3; lightweight migrations for the ingest schema.                     |
 | Streaming           | **Server-Sent Events (SSE)**                              | One-directional progress events + final answer over plain HTTP.                                               |
 | Validation          | **Zod** (+ `zod-to-json-schema`)                          | Single source of truth → runtime validation, TS types, and the Anthropic tool / `submit_answer` JSON Schemas. |
-| LLM SDK             | **`@anthropic-ai/sdk`**, model **Sonnet 4.6**             | Tool-loop, prompt caching, forced `tool_choice`. Model fixed by agent-design D2.                              |
-| Fuzzy resolve       | `fuse.js` (or `fastest-levenshtein`)                      | In-memory matcher for `resolve_entity` over the names table.                                                  |
-| HTTP (ingest/cache) | native `fetch` + small throttle/retry wrapper             | Descriptive User-Agent; honors PokeAPI fair-use (BR-8).                                                       |
+| LLM SDK             | **`@anthropic-ai/sdk`**, model **Sonnet 4.6**             | Streaming tool-loop, prompt caching, `tool_choice: "auto"` + adaptive thinking (forced + thinking = 400; D2). |
+| Fuzzy resolve       | `fuse.js`                                                 | In-memory matcher for `resolve_entity` over the names table.                                                  |
+| Data source         | **`@pkmn/dex` · `@pkmn/data` · `@pkmn/mods`**             | Local packages — Showdown's dex/learnsets + the `champions` mod. **No network**; ingest builds offline.       |
 | Logging             | **pino** → stdout                                         | Structured per-turn trace (see `integration.md`).                                                             |
 | Tests               | **Vitest**                                                | Unit + integration; eval harness split (deterministic CI subset vs. nightly LLM-judge).                       |
 | Tooling             | tsx (script runner), ESLint + Prettier, TypeScript strict | `npm run ingest`, `npm run eval` via tsx.                                                                     |
@@ -70,13 +103,21 @@ The **logical** data model is fixed by `docs/agent-design/data-sources.md`
 (DS-2 Pokédex index, DS-3 Gen-9 learnsets, DS-4 reference cache, DS-5 in-session
 history). This pass adds only the **physical schema** — the SQLite tables, column
 types, and indexes that back those logical stores. All tables are _derived_ from
-PokeAPI by the ingest pipeline; none hold user data (no PII, no auth — single user).
+the **`@pkmn` packages** by the ingest pipeline; none hold user data (no PII, no
+auth — single user).
 
-### `pokemon` — DS-2 Pokédex index (one row per Gen-9-legal form, D8)
+> **Per-format storage.** Every data table below carries a `format` text column
+> (`"scarlet-violet"` | `"champions"`) and includes it in the primary key, so one
+> physical schema holds both the standard Gen-9 index and the Champions index.
+> Repos filter by the format derived from the turn's `AgentMode`. The columns
+> shown below are otherwise as originally designed.
+
+### `pokemon` — DS-2 Pokédex index (one row per (format, battle-relevant form), D8)
 
 | Column                 | Type          | Notes                                                        |
 | ---------------------- | ------------- | ------------------------------------------------------------ |
-| `id`                   | text PK       | PokeAPI `pokemon` slug, e.g. `tauros-paldea-aqua`.           |
+| `format`               | text PK       | `scarlet-violet` \| `champions`. Part of the composite PK.   |
+| `id`                   | text PK       | PokeAPI-style `pokemon` slug, e.g. `tauros-paldea-aqua`.     |
 | `species_name`         | text          | e.g. `tauros`.                                               |
 | `form_name`            | text null     | e.g. `paldea-aqua`; null for base form.                      |
 | `display_name`         | text          | Disambiguating label, e.g. "Tauros (Paldean Aqua)".          |
@@ -90,54 +131,65 @@ PokeAPI by the ingest pipeline; none hold user data (no PII, no auth — single 
 | `base_stat_total`      | integer       | Precomputed sum (for BST sort/threshold).                    |
 | `sprite_url`           | text          |                                                              |
 | `artwork_url`          | text          |                                                              |
-| `generation`           | text          | e.g. `gen-9`.                                                |
-| `is_gen9_native`       | integer (0/1) | BR-1.                                                        |
-| `source_generation`    | text null     | Set when `is_gen9_native=0` (BR-1).                          |
+| `generation`           | text          | e.g. `gen-9` (standard) / `champions`.                       |
+| `is_gen9_native`       | integer (0/1) | BR-1. In Champions every indexed row is legal ⇒ always 1.    |
+| `source_generation`    | text null     | Set when `is_gen9_native=0` (BR-1), e.g. `gen-8`.            |
 
-Indexes: `national_dex_number`; each of the six `stat_*` columns + `base_stat_total`
-(threshold/superlative queries, AC-3.x); `type1`, `type2` (type filters, US-2).
+PK `(format, id)`. Indexes: `national_dex_number`; each of the six `stat_*`
+columns + `base_stat_total` (threshold/superlative queries, AC-3.x); `type1`,
+`type2` (type filters, US-2).
 
 ### `learnset` — DS-3 Gen-9 learnset index (D6, BR-2)
 
-| Column          | Type      | Notes                                                                    |
-| --------------- | --------- | ------------------------------------------------------------------------ |
-| `pokemon_id`    | text      | FK → `pokemon.id`.                                                       |
-| `move_slug`     | text      | Canonical move slug.                                                     |
-| `version_group` | text      | e.g. `scarlet-violet` (+ DLC groups).                                    |
-| `method`        | text null | `level-up` / `machine` / `tutor`. Egg moves **excluded** (out of scope). |
+| Column       | Type      | Notes                                                                    |
+| ------------ | --------- | ------------------------------------------------------------------------ |
+| `pokemon_id` | text      | FK → `pokemon.id` (within the same format).                              |
+| `move_slug`  | text      | Canonical move slug.                                                     |
+| `format`     | text      | `scarlet-violet` \| `champions`. Part of the composite PK.               |
+| `method`     | text null | `level-up` / `machine` / `tutor`. Egg moves **excluded** (out of scope). |
 
-PK `(pokemon_id, move_slug, version_group)`. Indexes: `move_slug` ("what learns X",
+PK `(pokemon_id, move_slug, format)`. Indexes: `move_slug` ("what learns X",
 AC-1.2); `pokemon_id`. Multi-move **intersection** (BR-7) is a single SQL
 `GROUP BY pokemon_id HAVING COUNT(DISTINCT move_slug) = N` — computed in the DB,
 never by the model.
 
-### `reference_cache` — DS-4 lazy read-through cache (BR-8)
+### `reference_cache` — DS-4 reference detail (pre-built per format at ingest)
+
+Originally designed as a lazy read-through cache over PokeAPI (BR-8). Since the
+`@pkmn` migration it is **pre-built eagerly** by ingest (`build-reference.ts`):
+the `get_*` tools read it from SQLite only — there is no upstream to fall back to
+and no TTL.
 
 | Column          | Type        | Notes                                                                                                 |
 | --------------- | ----------- | ----------------------------------------------------------------------------------------------------- |
+| `format`        | text PK     | `scarlet-violet` \| `champions`. Part of the composite PK.                                             |
 | `resource_key`  | text PK     | e.g. `move/fake-out`, `ability/armor-tail`, `type/ground`, `evolution-chain/eevee`, `item/leftovers`. |
 | `resource_kind` | text        | `move` / `ability` / `type` / `evolution` / `item`.                                                   |
-| `payload`       | text (JSON) | The **normalized** detail shape the tool returns (not raw PokeAPI).                                   |
-| `endpoint_url`  | text        | Canonical PokeAPI URL (for citations).                                                                |
-| `fetched_at`    | integer     | Epoch ms; TTL check (24h+).                                                                           |
+| `payload`       | text (JSON) | The **normalized** detail shape the tool returns (not raw source JSON).                                |
+| `endpoint_url`  | text        | Source label for citations (e.g. `@pkmn/dex (Pokémon Showdown)`).                                      |
+| `fetched_at`    | integer     | Epoch ms the row was built (informational; **no TTL**).                                                |
+
+PK `(format, resource_key)`.
 
 ### `searchable_names` — backs `resolve_entity` (T1, BR-9)
 
 | Column         | Type | Notes                                             |
 | -------------- | ---- | ------------------------------------------------- |
+| `format`       | text | `scarlet-violet` \| `champions`. Part of the PK.  |
 | `kind`         | text | `pokemon` / `move` / `ability` / `type` / `item`. |
 | `slug`         | text | Canonical slug.                                   |
 | `display_name` | text | Human label.                                      |
 
-PK `(kind, slug)`. Loaded into an in-memory fuzzy index at startup; `resolve_entity`
-ranks candidates over it.
+PK `(format, kind, slug)`. Loaded into an in-memory fuzzy index; `resolve_entity`
+ranks candidates over the active format's rows.
 
-### `ingest_meta` — pipeline bookkeeping
+### `ingest_meta` — pipeline bookkeeping (one row **per format**)
 
-Single-row table: `last_success_at`, `version_groups` (JSON), row counts per table,
-`schema_version`. Lets the app detect a missing/stale/empty index and return
-`index_unavailable` gracefully (per `data-sources.md` failure behavior) instead of
-crashing.
+Columns: `format` (PK), `last_success_at`, `pokemon_count`, `learnset_count`,
+`names_count`, `schema_version`. Lets the app detect a missing/stale/empty index
+and return `index_unavailable` gracefully (per `data-sources.md` failure behavior)
+instead of crashing. (The original single-row `version_groups` design was dropped
+with the move to per-format storage.)
 
 > DS-5 (in-session history) is **not** in SQLite — it lives in an in-memory
 > session store (D9, no persistence). See Component Design § Session Store.
@@ -151,13 +203,13 @@ code lives and how it's wired_, not _what the agent does_.
 
 | Component                                              | Responsibility                                                                                                                                                                                                                                                                                                         | Exposes                                                         | Depends on                         |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------- |
-| **Ingest pipeline** (`src/ingest/`)                    | Crawl PokeAPI politely; build `pokemon`, `learnset`, `searchable_names`; optionally warm `reference_cache`; write `ingest_meta`. Idempotent rebuild; reuse last-good index if upstream fails mid-build.                                                                                                                | `runIngest(opts): Promise<IngestReport>`; `npm run ingest` CLI. | PokeApiClient, Drizzle schema.     |
-| **PokeApiClient** (`src/data/pokeapi-client.ts`)       | The _only_ code that calls PokeAPI. Throttled `fetch` with retry/backoff + descriptive User-Agent (BR-8).                                                                                                                                                                                                              | `get(path): Promise<Result<Json>>`.                             | native fetch.                      |
-| **Data-access repositories** (`src/data/repos/`)       | Typed reads over SQLite. `PokedexRepo` (dynamic filter/sort/threshold SQL for `query_pokedex`), `LearnsetRepo` (intersection), `ReferenceCache` (read-through over PokeApiClient + TTL), `ResolveIndex` (fuzzy).                                                                                                       | Repo methods returning Result unions.                           | Drizzle, PokeApiClient.            |
+| **Ingest pipeline** (`src/ingest/`)                    | Build `pokemon`, `learnset`, `searchable_names`, `reference_cache` **per format** from the `@pkmn` packages; write `ingest_meta`. Build-all-in-memory then swap each table in one transaction; idempotent. `@pkmn` is local → no upstream, no reuse-last-good.                                                          | `runIngest(opts): Promise<IngestReport>`; `npm run ingest` CLI. | gen-provider, Drizzle schema.      |
+| **`@pkmn` provider** (`src/data/pkmn/gen-provider.ts`) | The _only_ code that touches `@pkmn`. `loadFormat(format)` resolves the gen-scoped or modded dex, the legal roster, moves/abilities/items/types, and `getLearnset`. No network.                                                                                                                                       | `loadFormat(format): Promise<FormatSource>`; `slugFor`.         | `@pkmn/dex`, `@pkmn/mods`.         |
+| **Data-access repositories** (`src/data/repos/`)       | Typed reads over SQLite, scoped to the turn's format. `PokedexRepo` (dynamic filter/sort/threshold SQL for `query_pokedex`), `LearnsetRepo` (intersection), `ReferenceCache` (reads the pre-built rows), `ResolveIndex` (in-memory fuzzy).                                                                             | Repo methods returning Result unions.                           | Drizzle.                           |
 | **Formula functions** (`src/agent/formulas/`)          | Deterministic `compute_stat` / `estimate_damage` (D5) — pure functions, per-step flooring.                                                                                                                                                                                                                             | `computeStat(...)`, `estimateDamage(...)`.                      | none.                              |
 | **Tool layer** (`src/agent/tools/`)                    | The 11 tool implementations (T1–T11) wrapping repos + formulas; each returns the exact structured shape in `tools.md`; Zod input/output schemas → JSON Schema for the SDK.                                                                                                                                             | `tools: ToolDef[]`; `submitAnswerSchema`.                       | repos, formulas, Zod.              |
-| **Agent runtime** (`src/agent/runtime.ts`)             | `runPokebot`: assemble cached prefix (system + tools + few-shot from `prompts.md`) → append history + message → Sonnet tool-loop (max 10) → force `submit_answer` (`tool_choice`) → validate `PokebotAnswer`, retry ≤2 on schema fail → return payload. Emits progress via callback; assembles the per-turn log trace. | `runPokebot(message, history, ctx): Promise<PokebotAnswer>`.    | Anthropic SDK, tool layer, logger. |
-| **Web API** (`src/app/api/chat/route.ts`)              | `POST /api/chat` SSE handler: input-length cap + per-session rate limit; resolve history from session store; call `runPokebot` with an `onProgress` hook streaming `tool_activity` events; emit final `answer` event; map errors per `integration.md`.                                                                 | HTTP SSE endpoint.                                              | Agent runtime, session store.      |
+| **Agent runtime** (`src/agent/runtime.ts`)             | `runPokebot`: assemble cached prefix (system + tools + few-shot; a Champions-mode prefix variant) → append history + message → streaming Sonnet tool-loop (max 10, `tool_choice: auto` + adaptive thinking) → drive `submit_answer` via prompt + iteration guard → validate `PokebotAnswer`, retry ≤2 on schema fail → return payload. Emits progress + answer-delta callbacks; assembles the per-turn log trace. | `runPokebot(message, history, ctx, onProgress?, onAnswerStart?, onAnswerDelta?): Promise<PokebotAnswer>`. | Anthropic SDK, tool layer, logger. |
+| **Web API** (`src/app/api/chat/route.ts`)              | `POST /api/chat` SSE handler: input-length cap + per-session rate limit; derive `AgentMode` from the body's `champions_mode`; resolve history from session store; call `runPokebot` with hooks streaming `tool_activity` then `answer_start`/`answer_delta`; emit the terminal `answer` event; map errors per `integration.md`.                                                                 | HTTP SSE endpoint.                                              | Agent runtime, session store.      |
 | **Session store** (`src/server/session-store.ts`)      | In-memory `Map<session_id, ChatMessage[]>` (DS-5, D9). Append turns; trim oldest when near context budget. No persistence.                                                                                                                                                                                             | `getHistory`, `appendTurn`, `trim`.                             | none.                              |
 | **Logger** (`src/server/logger.ts`)                    | pino instance + helper to assemble the per-turn trace (request_id, session_id, model, tokens, full tool-call trace, latency, status, citation count).                                                                                                                                                                  | `logger`, `logTurn(trace)`.                                     | pino.                              |
 | **Frontend renderer** (`src/app/` + `src/components/`) | Chat shell + `AnswerCard` component tree rendering `PokebotAnswer` field-by-field; SSE client hook; progress UI. **Visual styling deferred to the `frontend-design` skill.**                                                                                                                                           | React components.                                               | SSE endpoint.                      |
@@ -170,19 +222,32 @@ The HTTP contract (`POST /api/chat`, request/response, error surface) is fixed b
 protocol** the route emits (the architect's seam to nail down):
 
 ```
-POST /api/chat   Body: { session_id: string, message: string }
+POST /api/chat   Body: { session_id: string, message: string, champions_mode?: boolean }
 Response: text/event-stream, events emitted in order:
 
   event: tool_activity
   data: { "tool": "query_pokedex", "label": "📊 querying Pokédex…" }
   …(zero or more, as the loop calls tools)…
 
+  event: answer_start                           // submit_answer began streaming
+  data: {}                                       // resets the client's in-flight buffer
+  event: answer_delta                            // zero or more, token-by-token
+  data: { "text": "It depends on Farigiraf's…" } // newly-decoded answer_markdown fragment
+
   event: answer
-  data: { "answer": <PokebotAnswer> }          // exactly one, terminal
+  data: { "answer": <PokebotAnswer> }          // exactly one, terminal + authoritative
 
   event: error                                  // only on transport failure
   data: { "code": "agent_error", "message": "…" }   // → maps to HTTP-level retry affordance
 ```
+
+- `champions_mode: true` scopes the whole turn to the Champions index; omitted /
+  false is standard Gen-9 behavior. It is server-controlled (an `AgentMode` on the
+  context), never a model-visible tool field.
+- `answer_start` / `answer_delta` stream `answer_markdown` as the model emits the
+  `submit_answer` input; a re-emitted answer (after a validation failure) sends a
+  fresh `answer_start` so the client replaces rather than appends. The terminal
+  `answer` event remains authoritative.
 
 - All non-transport conditions (unresolved entity, clarification, PokeAPI down,
   index missing, loop-max-without-answer, invalid-after-retry) are delivered as a
@@ -215,30 +280,35 @@ pokebot/
 │   ├── env.ts                         — typed env loader (Zod-validated process.env)
 │   │
 │   ├── data/
-│   │   ├── db.ts                      — better-sqlite3 connection + Drizzle instance (singleton)
-│   │   ├── schema.ts                  — Drizzle table defs: pokemon, learnset, reference_cache,
-│   │   │                                searchable_names, ingest_meta (+ indexes)
-│   │   ├── pokeapi-client.ts          — throttled fetch + retry/backoff + User-Agent (the ONLY PokeAPI caller)
+│   │   ├── db.ts                      — better-sqlite3 connection + Drizzle instance (server-only singleton)
+│   │   ├── schema.ts                  — Drizzle table defs (each carries a `format` col): pokemon, learnset,
+│   │   │                                reference_cache, searchable_names, ingest_meta (+ indexes)
+│   │   ├── formats.ts                 — Format type + AgentMode→Format mapping + Champions regulation string
+│   │   ├── pkmn/
+│   │   │   └── gen-provider.ts        — the ONLY @pkmn integration point: loadFormat(format) → FormatSource
 │   │   └── repos/
 │   │       ├── pokedex-repo.ts        — query_pokedex dynamic SQL (filters/sort/threshold); get_pokemon read
-│   │       ├── learnset-repo.ts       — Gen-9 learnset membership + multi-move intersection (BR-7)
-│   │       ├── reference-cache.ts     — read-through cache over pokeapi-client (move/ability/type/evo/item)
+│   │       ├── learnset-repo.ts       — learnset membership + multi-move intersection (BR-7)
+│   │       ├── reference-cache.ts     — reads the pre-built reference_cache rows (move/ability/type/evo/item)
 │   │       └── resolve-index.ts       — in-memory fuzzy matcher over searchable_names (resolve_entity)
 │   │
 │   ├── ingest/
-│   │   ├── run.ts                     — CLI entry (`npm run ingest`): orchestrates the build, writes ingest_meta
-│   │   ├── build-pokedex.ts           — DS-2: crawl species→forms, map to pokemon rows (D8 forms rule)
-│   │   ├── build-learnsets.ts         — DS-3: per Gen-9 mon, filter moves[].version_group_details (D6)
-│   │   ├── build-names.ts             — searchable_names from DS-2 + PokeAPI name lists
-│   │   └── warm-cache.ts              — optional eager warm of reference_cache (else lazy at runtime)
+│   │   ├── run.ts                     — CLI (`npm run ingest`): per-format build → swap; writes ingest_meta
+│   │   ├── build-pokedex.ts           — DS-2: @pkmn roster → pokemon rows (D8 forms rule)
+│   │   ├── build-learnsets.ts         — DS-3: per kept form, @pkmn learnset → rows (source-string method; D6)
+│   │   ├── build-names.ts             — searchable_names from DS-2 + the @pkmn name lists
+│   │   └── build-reference.ts         — pre-builds reference_cache (move/ability/type/evo/item) per format
 │   │
 │   ├── agent/
-│   │   ├── runtime.ts                 — runPokebot: prefix assembly, tool-loop, forced submit_answer, validate+retry
-│   │   ├── context.ts                 — AgentContext factory (binds repos, logger, request_id into ctx)
+│   │   ├── runtime.ts                 — runPokebot: prefix assembly, streaming tool-loop (auto + adaptive
+│   │   │                                thinking), submit_answer validate+retry, answer-delta streaming
+│   │   ├── types.ts                   — cross-phase contract types (AgentContext, AgentMode, ToolDef, callbacks)
+│   │   ├── context.ts                 — AgentContext factory (binds db handle, logger, request_id, mode)
 │   │   ├── schemas.ts                 — Zod schemas for tool I/O + PokebotAnswer; zod-to-json-schema exports
 │   │   ├── prompts/
-│   │   │   ├── system.ts              — system prompt (transcribed from agent-design/prompts.md)
-│   │   │   └── few-shot.ts            — few-shot examples (transcribed from agent-design/prompts.md)
+│   │   │   ├── system.ts              — standard system prompt (from agent-design/prompts.md)
+│   │   │   ├── few-shot.ts            — standard few-shot examples (from agent-design/prompts.md)
+│   │   │   └── champions.ts           — Champions-mode system prompt + few-shot variant
 │   │   ├── formulas/
 │   │   │   ├── compute-stat.ts        — T9 pure function (+ HP/Shedinja edge case)
 │   │   │   └── estimate-damage.ts     — T10 pure function (min–max roll)
@@ -267,9 +337,12 @@ pokebot/
 │   │   └── api/
 │   │       └── chat/route.ts          — POST /api/chat SSE handler (input cap, rate limit, error mapping)
 │   │
-│   ├── components/                    — AnswerCard tree (structure only; visuals → frontend-design)
+│   ├── components/                    — AnswerCard tree + chat shell (styled per docs/design-system/)
 │   │   ├── ChatThread.tsx             — message list
 │   │   ├── Composer.tsx               — input box
+│   │   ├── ChampionsToggle.tsx        — Champions-mode switch (sets champions_mode on the POST)
+│   │   ├── ThemeToggle.tsx            — light/dark theme switch
+│   │   ├── Markdown.tsx               — react-markdown + remark-gfm renderer
 │   │   ├── AnswerCard.tsx             — top-level renderer of a PokebotAnswer
 │   │   ├── AnswerBody.tsx             — answer_markdown
 │   │   ├── ReasoningBlock.tsx         — reasoning_markdown (collapsible)
@@ -284,6 +357,7 @@ pokebot/
 │   │
 │   └── lib/
 │       ├── sse-client.ts              — client hook: POST /api/chat, parse SSE, surface progress + answer
+│       ├── sse-types.ts               — shared SSE event names/data map + formatSseEvent + ChatRequestBody
 │       └── result.ts                  — Result<T,E> discriminated-union helpers
 │
 └── eval/
@@ -344,7 +418,8 @@ function pokemonLearningAll(
 ): string[]; // pokemon ids
 function gen9LearnerCount(moveId: string, ctx: DbCtx): number;
 
-// reference-cache.ts — read-through; on miss fetch once via PokeApiClient, normalize, store
+// reference-cache.ts — reads the pre-built reference_cache row for the active format
+// (no upstream fetch; `upstream_unavailable` is retained in the union for a missing row)
 function getReference(
   kind: RefKind,
   slug: string,
@@ -417,6 +492,7 @@ interface AgentContext {
   db: DbCtx; // bound repos
   logger: Logger;
   requestId: string;
+  mode: AgentMode; // "standard" | "champions" — server-controlled query scope
 }
 interface ToolDef {
   name: string; // matches tools.md T1–T11 names exactly
@@ -439,11 +515,16 @@ async function runPokebot(
   history: ChatMessage[],
   ctx: AgentContext,
   onProgress?: (e: { tool: string; label: string }) => void,
+  onAnswerStart?: () => void, // submit_answer block began streaming
+  onAnswerDelta?: (text: string) => void, // newly-decoded answer_markdown fragment
 ): Promise<PokebotAnswer>;
-// - Builds cached prefix: system + tool defs + few-shot (prompt-cache the prefix).
-// - Loop ≤10 iterations; each tool call → onProgress(label) → dispatch → append result.
-// - Forces submit_answer via tool_choice; validates payload against the PokebotAnswer Zod
-//   schema; on validation failure returns the error to the model and re-emits ≤2 times,
+// - Builds cached prefix: system + tool defs + few-shot (a Champions-mode variant when
+//   ctx.mode === "champions"); prompt-cached and byte-identical across turns.
+// - Streaming loop ≤10 iterations; each tool call → onProgress(label) → dispatch → append
+//   result; answer_markdown is streamed out of the submit_answer input via onAnswerStart/Delta.
+// - tool_choice: "auto" + adaptive thinking (forced tool_choice + thinking = 400 on Sonnet 4.6);
+//   submit_answer is driven by the system prompt + the iteration guard. Validates the payload
+//   against the PokebotAnswer Zod schema; on failure returns the error and re-emits ≤2 times,
 //   else synthesizes an insufficient_data PokebotAnswer.
 // - Always returns a valid PokebotAnswer (never throws for in-domain failures); transport/API
 //   errors propagate to the route as exceptions.
@@ -452,20 +533,29 @@ async function runPokebot(
 ### Ingest pipeline (`src/ingest/run.ts`)
 
 ```ts
-interface IngestReport {
+interface FormatReport {
+  format: Format; // "scarlet-violet" | "champions"
   pokemon: number;
   learnsets: number;
   names: number;
+  references: number;
+}
+interface IngestReport {
+  formats: FormatReport[]; // one entry per built format
+  pokemon: number; // totals across all built formats
+  learnsets: number;
+  names: number;
+  references: number;
   startedAt: number;
   finishedAt: number;
-  reusedLastGood: boolean;
 }
 async function runIngest(opts?: {
-  versionGroups?: string[]; // default ["scarlet-violet", …gen-9 DLC groups]
-  warmCache?: boolean; // default false (lazy at runtime)
+  formats?: Format[]; // default both: ["scarlet-violet", "champions"]
+  onProgress?: (msg: string) => void;
 }): Promise<IngestReport>;
-// On PokeAPI failure mid-build: abort the write, keep the previous pokebot.sqlite intact,
-// set reusedLastGood=true, exit non-zero (data-sources.md failure behavior).
+// Build-then-swap: every format is built into in-memory arrays, then each table is replaced
+// in one synchronous transaction (DELETE all + chunked INSERT). @pkmn is local, so there is
+// no upstream and no reuse-last-good path — a rebuild is simply idempotent.
 ```
 
 ### Eval harness (`eval/`)
@@ -499,6 +589,14 @@ function runJudged(
 
 8 phases, dependency-ordered. Each carries Developer-mode **Success criteria** and
 **Review / test split**. Internal parallelism is noted per phase.
+
+> **Historical — the build is complete.** The phase plan and the Build Manifest
+> below are the _original_ build order and are kept for provenance. Where they name
+> `src/data/pokeapi-client.ts`, a PokeAPI crawl, lazy cache warming, or
+> `version_group` learnsets, see **Implementation status & drift** above for what
+> shipped instead (`@pkmn` provider, offline per-format ingest, pre-built
+> reference cache, `format`-keyed tables, Champions mode). A Champions-mode phase
+> was added after the original eight.
 
 ### Phase 1 — Scaffolding & tooling _(flags: scaffold)_
 
@@ -858,7 +956,7 @@ integration_checkpoints:
 | A7  | **pino → stdout, no vendor**                                         | logs-as-a-service tier; + Sentry                                  | Single user, hobby tier — stdout structured logs carry the full per-turn trace and double as the eval/prod-sampling source. Tradeoff: no retained/queryable history or alerting — acceptable now; ladder-up path noted below.                                                                               |
 | A8  | **Vitest + split eval harness**                                      | all evals in Vitest; Jest                                         | Deterministic subset in CI keeps PRs fast/cheap/stable; the live-Sonnet LLM-judge suite runs nightly/on release per `evaluation.md`. Tradeoff: a second runner script (`eval/run.ts`) outside Vitest — intentional, keeps nondeterminism out of CI.                                                         |
 | A9  | **No vector store; `resolve_entity` is fuzzy string matching**       | embed names into pgvector/sqlite-vss                              | There is no RAG; resolution is name→slug over a known finite set. An in-memory fuzzy index is simpler, faster, and free. Tradeoff: none meaningful at this corpus size.                                                                                                                                     |
-| A10 | **Ingest is a manual/scheduled CLI, not a queue**                    | in-process worker; managed queue                                  | The corpus is static between rebuilds; `npm run ingest` (optionally cron'd weekly/on deploy) is sufficient. Runtime cache misses fetch inline through the read-through cache. Tradeoff: no async job system — none needed.                                                                                  |
+| A10 | **Ingest is a manual/scheduled CLI, not a queue**                    | in-process worker; managed queue                                  | The corpus is static between rebuilds; `npm run ingest` (optionally cron'd weekly/on deploy) is sufficient. The reference detail is pre-built at ingest, so there are no runtime cache misses to service. Tradeoff: no async job system — none needed.                                                                                  |
 
 ## Deployment & Infrastructure
 
@@ -876,7 +974,7 @@ guaranteed cost is Anthropic API tokens.
 | --------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Hosting / runtime**       | Run locally (`next start`) or a single small VM / one PaaS instance (Fly.io / Railway free-ish).         | One user; no need for autoscale or a container platform. SQLite wants a persistent local disk → a single long-lived instance (not multi-instance serverless). |
 | **Database hosting**        | **Embedded SQLite file** (`data/pokebot.sqlite`) on the instance disk.                                   | No DB service to run or pay for; the corpus is a few MB. Built by `npm run ingest`.                                                                           |
-| **Background jobs / queue** | **None.** Ingest is a manual/scheduled CLI; cache misses fetch inline.                                   | No async workload requires a queue (A10).                                                                                                                     |
+| **Background jobs / queue** | **None.** Ingest is a manual/scheduled CLI; reference detail is pre-built (no runtime fetches).            | No async workload requires a queue (A10).                                                                                                                     |
 | **Object storage**          | **None.** Sprites are PokeAPI URLs rendered directly by the frontend.                                    | No assets to host.                                                                                                                                            |
 | **Caching**                 | The reference cache **is** SQLite (DS-4); resolve index in memory.                                       | No Redis/managed cache needed for one user.                                                                                                                   |
 | **Observability**           | **pino structured JSON → stdout** (the platform's log viewer). Full per-turn trace per `integration.md`. | Free; doubles as the eval/prod-sampling source (A7).                                                                                                          |
@@ -906,10 +1004,11 @@ Unresolved.)_
   functions/vars camelCase; DB columns snake_case (Drizzle maps to camelCase in TS).
   Tool **names** and tool **output field names** match `tools.md` / `output-formats.md`
   exactly — the model depends on them; never rename.
-- **Module boundaries:** the agent never imports `pokeapi-client` directly — only
-  repos do; repos are the sole SQLite readers; `runtime.ts` only knows the tool
-  layer (`ToolDef[]`/`dispatch`), not repos. `src/data/pokeapi-client.ts` is the
-  _only_ file that calls PokeAPI (BR-8 enforced structurally).
+- **Module boundaries:** repos are the sole SQLite readers; tools call repos;
+  `runtime.ts` only knows the tool layer (`ToolDef[]`/`dispatch`), not repos.
+  `src/data/pkmn/gen-provider.ts` is the _only_ file that touches `@pkmn`, and only
+  the ingest pipeline imports it — runtime/tools never do (they read the built
+  index). (There is no PokeAPI client; BR-8 is moot — nothing calls upstream.)
 - **Error handling (A6):** tool/data-layer functions return Result unions or the
   domain-specific structured shapes from `tools.md` (`{found:false,suggestions}`,
   `{error:"upstream_unavailable"}`, `{error:"index_unavailable"}`, `{unresolved:[…]}`)
@@ -925,10 +1024,11 @@ Unresolved.)_
   `thinking_tokens`, `tool_trace[]` (tool, args, latency_ms, cache_hit, error),
   `turn_latency_ms`, `status`, `citation_count` (the `integration.md` set). No
   secrets or full user PII (none exists) in logs.
-- **Concurrency / transactions:** better-sqlite3 is synchronous; ingest writes wrap
-  each table build in a transaction and swap atomically (reuse-last-good on
-  failure). Read paths need no transactions. No cross-request shared mutable state
-  except the in-memory session store and resolve index.
+- **Concurrency / transactions:** better-sqlite3 is synchronous; ingest builds all
+  formats in memory, then replaces each table in one transaction (DELETE all +
+  chunked INSERT) — idempotent, no reuse-last-good path (`@pkmn` is local, so a
+  failed build just re-runs). Read paths need no transactions. No cross-request
+  shared mutable state except the in-memory session store and resolve index.
 - **Frontend state (Proposed — confirm):** local React state + a small `useReducer`
   (or a tiny Zustand store) for the chat thread; **no** React Query/SWR (the single
   streaming POST is handled by the `sse-client` hook). Rationale: server-state libs
@@ -948,11 +1048,11 @@ Unresolved.)_
     tests rendering canonical `PokebotAnswer` payloads.
 - **Mocking policy — what's real vs faked:**
   - _Real:_ SQLite (fixture DB), the tool layer, formulas, Zod validation.
-  - _Faked in unit/integration:_ PokeAPI (mocked fetch / recorded fixtures — **no
-    live crawl in CI**); the Anthropic API (mocked client with recorded transcripts).
+  - _Faked in unit/integration:_ the Anthropic API (mocked client with recorded
+    transcripts). `@pkmn` is local and deterministic, so ingest transforms are
+    tested directly against it — there is no network layer to mock.
   - _Live:_ only the **judged eval suite** (`npm run eval`) hits real Sonnet, and
-    a `LIVE_INGEST`-flagged integration test does a tiny real PokeAPI crawl — both
-    excluded from the PR path.
+    it is excluded from the PR path. Ingest itself is offline (no live crawl).
 - **Eval harness wiring (A8, `evaluation.md`):** `eval/cases.ts` defines G1–G24.
   `eval/deterministic.ts` exports the deterministically-checkable subset (G3
   suggestion, G11 immunity, G15 = 169, tool-efficiency asserts) which is imported
