@@ -15,6 +15,18 @@ import type { Logger } from "pino";
 import type { JsonSchema, PokebotAnswer } from "@/agent/schemas";
 
 /**
+ * Query scope for a turn. Server-controlled (derived from the request body's
+ * `champions_mode`), bound onto {@link AgentContext}, and read by repos/tools and
+ * the runtime — NEVER an LLM-visible tool input. This guarantees that when the
+ * Champions toggle is on, every query in the turn is Champions-scoped (the model
+ * has no parameter to widen the scope).
+ *
+ *   "standard"  → Gen 9 / Scarlet-Violet (today's behavior).
+ *   "champions" → Pokémon Champions (current regulation), via the @pkmn mod.
+ */
+export type AgentMode = "standard" | "champions";
+
+/**
  * Bound data-access repositories for one request (assembled in
  * src/agent/context.ts). Kept structural at the contract layer so the schema /
  * type surface does not depend on the concrete repo wiring (Phase 4).
@@ -34,6 +46,12 @@ export interface AgentContext {
   logger: Logger;
   /** Correlation id for this request's turn trace. */
   requestId: string;
+  /**
+   * Query scope for this turn (server-controlled; defaults to "standard").
+   * Repos/tools map it to a data `Format` via `formatForMode` and the runtime
+   * selects the matching system-prompt variant. Never set by the model.
+   */
+  mode: AgentMode;
 }
 
 /**

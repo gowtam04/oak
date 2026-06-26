@@ -22,6 +22,7 @@ vi.mock("@/agent/context", () => ({
   createAgentContext: vi.fn(async () => ({
     db: {},
     requestId: "test-req",
+    mode: "standard",
     logger: {
       info: () => {},
       error: () => {},

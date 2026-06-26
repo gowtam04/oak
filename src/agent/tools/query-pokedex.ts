@@ -18,6 +18,7 @@ import {
   type QueryPokedexOutput,
 } from "@/agent/schemas";
 import { queryPokedex, type PokedexFilters } from "@/data/repos/pokedex-repo";
+import { formatForMode } from "@/data/formats";
 import type { PokebotDb } from "@/data/db";
 
 const description =
@@ -55,7 +56,7 @@ export const queryPokedexTool: ToolDef = {
       limit: i.limit,
     };
     return Promise.resolve(
-      queryPokedex(filters, ctx.db as unknown as PokebotDb),
+      queryPokedex(filters, formatForMode(ctx.mode), ctx.db as unknown as PokebotDb),
     );
   },
 };

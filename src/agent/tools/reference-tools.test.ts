@@ -36,7 +36,12 @@ const ctx = {
   db: {},
   logger: console,
   requestId: "test",
+  mode: "standard",
 } as unknown as AgentContext;
+
+// Standard mode maps to the scarlet-violet data format (formatForMode); the
+// reference tools thread it into getReference / gen9LearnerCount.
+const FMT = "scarlet-violet";
 
 beforeEach(() => {
   getReference.mockReset();
@@ -61,7 +66,7 @@ describe("get_move (T4)", () => {
   it("passes a hit through and queries the cache with kind 'move'", async () => {
     getReference.mockResolvedValue(fakeOut);
     const out = await getMoveTool.run({ name: "fake-out" }, ctx);
-    expect(getReference).toHaveBeenCalledWith("move", "fake-out", ctx.db);
+    expect(getReference).toHaveBeenCalledWith("move", "fake-out", FMT, ctx.db);
     expect(out).toEqual(fakeOut);
     expect(gen9LearnerCount).not.toHaveBeenCalled();
   });
@@ -73,7 +78,7 @@ describe("get_move (T4)", () => {
       { name: "fake-out", include_gen9_learner_count: true },
       ctx,
     )) as { gen9_learner_count?: number };
-    expect(gen9LearnerCount).toHaveBeenCalledWith("fake-out", ctx.db);
+    expect(gen9LearnerCount).toHaveBeenCalledWith("fake-out", FMT, ctx.db);
     expect(out.gen9_learner_count).toBe(112);
   });
 
@@ -103,13 +108,18 @@ describe("get_ability / get_evolution_chain / get_item kind routing (T5/T7/T8)",
       effect_full: "y",
     });
     await getAbilityTool.run({ name: "armor-tail" }, ctx);
-    expect(getReference).toHaveBeenCalledWith("ability", "armor-tail", ctx.db);
+    expect(getReference).toHaveBeenCalledWith(
+      "ability",
+      "armor-tail",
+      FMT,
+      ctx.db,
+    );
   });
 
   it("get_evolution_chain queries kind 'evolution' using the species arg", async () => {
     getReference.mockResolvedValue({ found: true, chain: [] });
     await getEvolutionChainTool.run({ species: "eevee" }, ctx);
-    expect(getReference).toHaveBeenCalledWith("evolution", "eevee", ctx.db);
+    expect(getReference).toHaveBeenCalledWith("evolution", "eevee", FMT, ctx.db);
   });
 
   it("get_item queries kind 'item' and passes a miss through", async () => {
@@ -118,7 +128,7 @@ describe("get_ability / get_evolution_chain / get_item kind routing (T5/T7/T8)",
       suggestions: ["leftovers"],
     });
     const out = await getItemTool.run({ name: "leftover" }, ctx);
-    expect(getReference).toHaveBeenCalledWith("item", "leftover", ctx.db);
+    expect(getReference).toHaveBeenCalledWith("item", "leftover", FMT, ctx.db);
     expect(out).toEqual({ found: false, suggestions: ["leftovers"] });
   });
 });

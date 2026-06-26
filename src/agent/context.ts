@@ -34,7 +34,7 @@ import { randomUUID } from "node:crypto";
 
 import type { Logger } from "pino";
 
-import type { AgentContext, DbCtx } from "@/agent/types";
+import type { AgentContext, AgentMode, DbCtx } from "@/agent/types";
 import type { PokebotDb } from "@/data/db";
 import { logger as defaultLogger } from "@/server/logger";
 
@@ -48,6 +48,11 @@ export interface CreateAgentContextOptions {
   requestId?: string;
   /** Optional session id, bound onto the child logger for correlation. */
   sessionId?: string;
+  /**
+   * Query scope for the turn (server-controlled). Defaults to "standard" so
+   * every existing caller/test keeps today's Gen 9 behavior unchanged.
+   */
+  mode?: AgentMode;
 }
 
 /**
@@ -85,10 +90,12 @@ export async function createAgentContext(
 
   const handle: PokebotDb = opts.db ?? (await import("@/data/db")).db;
   const requestId = opts.requestId ?? randomUUID();
+  const mode: AgentMode = opts.mode ?? "standard";
 
   const baseLogger = opts.logger ?? defaultLogger;
   const logger = baseLogger.child({
     request_id: requestId,
+    mode,
     ...(opts.sessionId ? { session_id: opts.sessionId } : {}),
   });
 
@@ -96,6 +103,7 @@ export async function createAgentContext(
     db: bindDbCtx(handle),
     logger,
     requestId,
+    mode,
   };
 }
 

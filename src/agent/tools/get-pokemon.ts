@@ -13,6 +13,7 @@ import {
   type GetPokemonOutput,
 } from "@/agent/schemas";
 import { getPokemon } from "@/data/repos/pokedex-repo";
+import { formatForMode } from "@/data/formats";
 import type { PokebotDb } from "@/data/db";
 
 const description =
@@ -31,7 +32,11 @@ export const getPokemonTool: ToolDef = {
       return Promise.resolve({ found: false, suggestions: [] });
     }
     return Promise.resolve(
-      getPokemon(parsed.data.name, ctx.db as unknown as PokebotDb),
+      getPokemon(
+        parsed.data.name,
+        formatForMode(ctx.mode),
+        ctx.db as unknown as PokebotDb,
+      ),
     );
   },
 };

@@ -35,7 +35,12 @@
 import { randomUUID } from "node:crypto";
 
 import { createAgentContext } from "@/agent/context";
-import type { OnAnswerDelta, OnAnswerStart, OnProgress } from "@/agent/types";
+import type {
+  AgentMode,
+  OnAnswerDelta,
+  OnAnswerStart,
+  OnProgress,
+} from "@/agent/types";
 import { logger } from "@/server/logger";
 import { checkRateLimit } from "@/server/rate-limit";
 import { appendTurn, getHistory, trim } from "@/server/session-store";
@@ -85,10 +90,15 @@ function jsonError(
 
 function parseBody(value: unknown): ChatRequestBody | null {
   if (typeof value !== "object" || value === null) return null;
-  const { session_id, message } = value as Record<string, unknown>;
+  const { session_id, message, champions_mode } = value as Record<
+    string,
+    unknown
+  >;
   if (typeof session_id !== "string" || session_id.length === 0) return null;
   if (typeof message !== "string" || message.length === 0) return null;
-  return { session_id, message };
+  // Coerce defensively: anything that is not strictly boolean `true` is
+  // standard mode (old clients omit the field entirely).
+  return { session_id, message, champions_mode: champions_mode === true };
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +131,11 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const { session_id, message } = body;
+
+  // Server-controlled query scope for the turn — derived here, threaded onto the
+  // AgentContext, never an LLM-visible tool field. ON ⇒ every query is scoped to
+  // Champions; omitted/false ⇒ today's Gen 9 behavior.
+  const mode: AgentMode = body.champions_mode ? "champions" : "standard";
 
   // 2. Orchestration guardrails — input-length cap + per-session rate limit
   //    (integration.md § Guardrails). Synchronous; runs before the stream opens.
@@ -184,6 +199,7 @@ export async function POST(req: Request): Promise<Response> {
           const ctx = await createAgentContext({
             requestId,
             sessionId: session_id,
+            mode,
           });
 
           // Stream one tool_activity event per tool call as the loop runs.

@@ -36,6 +36,10 @@ import Anthropic from "@anthropic-ai/sdk";
 
 import { env } from "@/env";
 import { dispatch, tools } from "@/agent/tools";
+import {
+  CHAMPIONS_FEW_SHOT,
+  CHAMPIONS_SYSTEM_PROMPT,
+} from "@/agent/prompts/champions";
 import { pokebotAnswerSchema, type PokebotAnswer } from "@/agent/schemas";
 import type {
   AgentContext,
@@ -268,6 +272,22 @@ const SYSTEM_BLOCKS: Anthropic.TextBlockParam[] = [
   {
     type: "text",
     text: FEW_SHOT,
+    cache_control: { type: "ephemeral" },
+  },
+];
+
+/**
+ * Champions-mode sibling of {@link SYSTEM_BLOCKS}. Same two-block shape and the
+ * SAME single ephemeral breakpoint on the last (few-shot) block, so the
+ * Champions scope gets its own warm prompt-cache prefix. Selected by
+ * `ctx.mode === "champions"` just before the stream call; the standard blocks
+ * above stay byte-identical so OFF mode keeps its cache.
+ */
+const CHAMPIONS_SYSTEM_BLOCKS: Anthropic.TextBlockParam[] = [
+  { type: "text", text: CHAMPIONS_SYSTEM_PROMPT },
+  {
+    type: "text",
+    text: CHAMPIONS_FEW_SHOT,
     cache_control: { type: "ephemeral" },
   },
 ];
@@ -730,12 +750,19 @@ export async function runPokebotWith(
 
   let submitRetries = 0;
 
+  // Server-controlled scope selects the system-prompt variant (loop-invariant).
+  // Standard stays referentially SYSTEM_BLOCKS (byte-identical → cache preserved);
+  // Champions uses its sibling prefix. Everything else (tools, thinking,
+  // tool_choice, model, max_tokens, messages) is identical across modes.
+  const systemBlocks =
+    ctx.mode === "champions" ? CHAMPIONS_SYSTEM_BLOCKS : SYSTEM_BLOCKS;
+
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     // Transport/API faults here propagate to the route (NOT caught).
     const stream = client.messages.stream({
       model: MODEL,
       max_tokens: MAX_TOKENS,
-      system: SYSTEM_BLOCKS,
+      system: systemBlocks,
       tools: TOOL_DEFS,
       // RISK DIRECTIVE: thinking + forced tool_choice = HARD 400 on Sonnet 4.6.
       // Use adaptive thinking with tool_choice "auto"; submit_answer is driven

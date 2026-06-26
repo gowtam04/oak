@@ -17,6 +17,7 @@ import {
 } from "@/agent/schemas";
 import { getReference } from "@/data/repos/reference-cache";
 import { gen9LearnerCount } from "@/data/repos/learnset-repo";
+import { formatForMode } from "@/data/formats";
 import type { PokebotDb } from "@/data/db";
 
 const description =
@@ -45,8 +46,9 @@ export const getMoveTool: ToolDef = {
       return { found: false, suggestions: [] };
     }
     const { name, include_gen9_learner_count } = parsed.data;
+    const format = formatForMode(ctx.mode);
 
-    const ref = (await getReference("move", name, ctx.db)) as GetMoveOutput;
+    const ref = (await getReference("move", name, format, ctx.db)) as GetMoveOutput;
     if (!isFound(ref)) {
       return ref;
     }
@@ -56,6 +58,7 @@ export const getMoveTool: ToolDef = {
         ...(ref as MoveDetail),
         gen9_learner_count: gen9LearnerCount(
           name,
+          format,
           ctx.db as unknown as PokebotDb,
         ),
       };

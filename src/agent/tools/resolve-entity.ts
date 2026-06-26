@@ -13,6 +13,7 @@ import {
   type ResolveEntityOutput,
 } from "@/agent/schemas";
 import { resolveEntity } from "@/data/repos/resolve-index";
+import { formatForMode } from "@/data/formats";
 
 const description =
   "Resolve a possibly-misspelled or ambiguous name to canonical Pokémon-data " +
@@ -25,7 +26,7 @@ export const resolveEntityTool: ToolDef = {
   name: "resolve_entity",
   description,
   inputSchema: toJsonSchema(resolveEntityInputSchema),
-  run(args): Promise<ResolveEntityOutput> {
+  run(args, ctx): Promise<ResolveEntityOutput> {
     const parsed = resolveEntityInputSchema.safeParse(args);
     if (!parsed.success) {
       // Malformed args (the SDK normally validates first) — degrade to "no match"
@@ -33,6 +34,8 @@ export const resolveEntityTool: ToolDef = {
       return Promise.resolve({ matches: [] });
     }
     const { query, kind, limit } = parsed.data;
-    return Promise.resolve(resolveEntity(query, kind, limit));
+    return Promise.resolve(
+      resolveEntity(query, kind, limit, formatForMode(ctx.mode)),
+    );
   },
 };

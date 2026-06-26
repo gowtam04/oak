@@ -20,42 +20,63 @@
  *      fetches.
  */
 
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 // The tool layer pulls in reference-cache.ts, which statically `import
 // "server-only"` (it throws under the node test env). Neutralize it — the same
-// pattern as src/data/repos/reference-cache.test.ts. The @/data/db singleton is
-// only lazy-loaded on a missing ctx.db, which never happens here (we pass the
-// fixture handle), so the on-disk DB is never opened.
+// pattern as src/data/repos/reference-cache.test.ts.
 vi.mock("server-only", () => ({}));
 
 import { createAgentContext } from "@/agent/context";
 import type { AgentContext } from "@/agent/types";
-import type { PokebotDb } from "@/data/db";
 
 import { deterministicCases } from "./cases";
-import { PLANNED_CASE_IDS, runDeterministic } from "./deterministic";
-import { createFixtureDb, type FixtureDb } from "./fixtures/seed-fixture-db";
+import { createFixtureFile } from "./fixtures/seed-fixture-db";
 import type { AssertResult } from "./judge";
 
 /** IDs design.md pins to the deterministic CI subset. */
 const EXPECTED_IDS = ["G1", "G3", "G5", "G6", "G8", "G11", "G15"];
 
-let db: FixtureDb;
 let ctx: AgentContext;
 let results: AssertResult[];
 let byId: Record<string, AssertResult>;
+let plannedIds: readonly string[];
+let fixtureDir: string;
 
 beforeAll(async () => {
-  db = createFixtureDb();
-  ctx = await createAgentContext({ db: db as unknown as PokebotDb });
+  // NOTE: resolve_entity (G3) reads the @/data/db SINGLETON, not ctx.db. So we
+  // point that singleton at a freshly-seeded on-disk fixture and clear the
+  // global memo BEFORE the first @/data/db import — which happens when
+  // ./deterministic (the runtime + tool layer) is imported dynamically below.
+  fixtureDir = mkdtempSync(path.join(tmpdir(), "pokebot-deterministic-"));
+  const fixturePath = path.join(fixtureDir, "fixture.sqlite");
+  process.env.POKEBOT_DB_PATH = fixturePath;
+  delete (globalThis as { __pokebotDb?: unknown }).__pokebotDb;
+
+  // Build + seed the on-disk fixture, then close it so the singleton reads it.
+  const seeded = createFixtureFile(fixturePath);
+  (seeded as unknown as { $client?: { close?: () => void } }).$client?.close?.();
+
+  const { PLANNED_CASE_IDS, runDeterministic } = await import(
+    "./deterministic"
+  );
+  plannedIds = PLANNED_CASE_IDS;
+
+  // No `db` override → ctx binds the singleton (the seeded fixture file), so the
+  // DB-backed tools AND resolve_entity read the same data.
+  ctx = await createAgentContext();
   results = await runDeterministic(deterministicCases, ctx);
   byId = Object.fromEntries(results.map((r) => [r.caseId, r]));
 });
 
-afterAll(() => {
-  // better-sqlite3 handle is in-memory; closing frees it deterministically.
-  (db as unknown as { $client?: { close?: () => void } }).$client?.close?.();
+afterAll(async () => {
+  const dbMod = (await import("@/data/db")) as { sqlite?: { close?: () => void } };
+  dbMod.sqlite?.close?.();
+  if (fixtureDir) rmSync(fixtureDir, { recursive: true, force: true });
 });
 
 describe("deterministic subset — membership", () => {
@@ -66,7 +87,7 @@ describe("deterministic subset — membership", () => {
 
   it("has a registered plan for every deterministic case", () => {
     for (const c of deterministicCases) {
-      expect(PLANNED_CASE_IDS).toContain(c.id);
+      expect(plannedIds).toContain(c.id);
     }
   });
 });

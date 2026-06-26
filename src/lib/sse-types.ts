@@ -31,6 +31,11 @@ import type { PokebotAnswer } from "@/agent/schemas";
 export interface ChatRequestBody {
   session_id: string;
   message: string;
+  /**
+   * Champions-mode toggle (server scopes the turn to Pokémon Champions when
+   * true). Optional ⇒ old clients that omit it default to standard / Gen 9.
+   */
+  champions_mode?: boolean;
 }
 
 /** `event: tool_activity` payload — progress shown while the loop runs. */

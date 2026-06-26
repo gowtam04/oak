@@ -40,17 +40,15 @@ const db: FixtureDb = createFixtureDb();
 // ===========================================================================
 
 describe("ingest_meta — availability sentinel", () => {
-  it("has exactly one singleton row", () => {
+  it("has exactly one row, for the scarlet-violet format", () => {
     const rows = db.select().from(ingest_meta).all();
     expect(rows).toHaveLength(1);
-    expect(rows[0].id).toBe("singleton");
+    expect(rows[0].format).toBe("scarlet-violet");
   });
 
-  it("version_groups includes scarlet-violet", () => {
+  it("records schema_version 2", () => {
     const rows = db.select().from(ingest_meta).all();
-    const vgs: unknown = JSON.parse(rows[0].version_groups);
-    expect(Array.isArray(vgs)).toBe(true);
-    expect(vgs).toContain("scarlet-violet");
+    expect(rows[0].schema_version).toBe("2");
   });
 
   it("pokemon_count matches actual rows", () => {
@@ -298,7 +296,7 @@ describe("learnset — Gen-9 multi-move intersection (G1)", () => {
         and(
           eq(learnset.pokemon_id, "ninetales"),
           inArray(learnset.move_slug, ["will-o-wisp", "trick-room"]),
-          eq(learnset.version_group, "scarlet-violet"),
+          eq(learnset.format, "scarlet-violet"),
         ),
       )
       .all();
@@ -314,7 +312,7 @@ describe("learnset — Gen-9 multi-move intersection (G1)", () => {
       .where(
         and(
           inArray(learnset.move_slug, ["trick-room", "will-o-wisp"]),
-          eq(learnset.version_group, "scarlet-violet"),
+          eq(learnset.format, "scarlet-violet"),
         ),
       )
       .groupBy(learnset.pokemon_id)
@@ -336,7 +334,7 @@ describe("learnset — Gen-9 multi-move intersection (G1)", () => {
         and(
           eq(learnset.pokemon_id, "talonflame"),
           eq(learnset.move_slug, "will-o-wisp"),
-          eq(learnset.version_group, "scarlet-violet"),
+          eq(learnset.format, "scarlet-violet"),
         ),
       )
       .limit(1)
@@ -350,7 +348,7 @@ describe("learnset — Gen-9 multi-move intersection (G1)", () => {
         and(
           eq(learnset.pokemon_id, "talonflame"),
           eq(learnset.move_slug, "trick-room"),
-          eq(learnset.version_group, "scarlet-violet"),
+          eq(learnset.format, "scarlet-violet"),
         ),
       )
       .limit(1)
@@ -609,7 +607,7 @@ describe("G5 precondition — Fire type with flash-fire that learns will-o-wisp"
         and(
           eq(learnset.pokemon_id, "ninetales"),
           eq(learnset.move_slug, "will-o-wisp"),
-          eq(learnset.version_group, "scarlet-violet"),
+          eq(learnset.format, "scarlet-violet"),
         ),
       )
       .limit(1)
@@ -636,7 +634,7 @@ describe("G8 precondition — Fire type with speed > 100 that learns will-o-wisp
         and(
           eq(learnset.pokemon_id, "talonflame"),
           eq(learnset.move_slug, "will-o-wisp"),
-          eq(learnset.version_group, "scarlet-violet"),
+          eq(learnset.format, "scarlet-violet"),
         ),
       )
       .limit(1)

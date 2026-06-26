@@ -12,6 +12,7 @@ import {
   type GetAbilityOutput,
 } from "@/agent/schemas";
 import { getReference } from "@/data/repos/reference-cache";
+import { formatForMode } from "@/data/formats";
 
 const description =
   "Get an ability's effect text and short description. Use when reasoning " +
@@ -30,6 +31,7 @@ export const getAbilityTool: ToolDef = {
     return (await getReference(
       "ability",
       parsed.data.name,
+      formatForMode(ctx.mode),
       ctx.db,
     )) as GetAbilityOutput;
   },

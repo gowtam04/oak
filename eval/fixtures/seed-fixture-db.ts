@@ -94,13 +94,18 @@ export const FIXTURE_DB_PATH = resolve(__dirname, "fixture.sqlite");
 // Fixture data
 // ===========================================================================
 
+/** Every fixture row is the standard (Scarlet-Violet) data scope. */
+const SV = "scarlet-violet";
+
 // ---------------------------------------------------------------------------
 // 1. Pokémon rows — pokemon table (DS-2)
 // ---------------------------------------------------------------------------
+// The `format` discriminator is identical for every fixture row, so it is
+// injected at insert time (seedFixtureDb) rather than repeated on each literal.
 
 type PokemonRow = typeof pokemon.$inferInsert;
 
-const POKEMON_ROWS: PokemonRow[] = [
+const POKEMON_ROWS: Omit<PokemonRow, "format">[] = [
   // ── Garchomp (National Dex #445) ─────────────────────────────────────────
   // Dragon/Ground, BST 600. Key for G9 (full profile) and G15 (speed stat).
   // "Garchomp stats [108,130,95,80,85,102], BST 600" (Phase 3 test spec).
@@ -374,33 +379,31 @@ const POKEMON_ROWS: PokemonRow[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// 2. Learnset rows — learnset table (DS-3, Gen-9, version_group=scarlet-violet)
+// 2. Learnset rows — learnset table (DS-3, Gen-9, format=scarlet-violet)
 // ---------------------------------------------------------------------------
 // Dracovish has no entries — it's not Gen-9 native (no SV learnset).
 // All other Gen-9 native Pokémon carry their key moves.
 
 type LearnsetRow = typeof learnset.$inferInsert;
 
-const SV = "scarlet-violet";
-
 const LEARNSET_ROWS: LearnsetRow[] = [
   // Garchomp — core Dragon/Ground moves
   {
     pokemon_id: "garchomp",
     move_slug: "earthquake",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "garchomp",
     move_slug: "dragon-claw",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "garchomp",
     move_slug: "fire-fang",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
 
@@ -408,13 +411,13 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "farigiraf",
     move_slug: "trick-room",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "farigiraf",
     move_slug: "hyper-voice",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
 
@@ -424,19 +427,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "ninetales",
     move_slug: "will-o-wisp",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "ninetales",
     move_slug: "trick-room",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "ninetales",
     move_slug: "flamethrower",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
 
@@ -444,19 +447,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "talonflame",
     move_slug: "will-o-wisp",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "talonflame",
     move_slug: "brave-bird",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "talonflame",
     move_slug: "flare-blitz",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
 
@@ -464,19 +467,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "tauros",
     move_slug: "tackle",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "tauros",
     move_slug: "horn-attack",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "tauros",
     move_slug: "work-up",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
 
@@ -484,19 +487,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "tauros-paldea-combat",
     move_slug: "close-combat",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-combat",
     move_slug: "bulk-up",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "tauros-paldea-combat",
     move_slug: "protect",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
 
@@ -504,19 +507,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "tauros-paldea-blaze",
     move_slug: "flare-blitz",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-blaze",
     move_slug: "close-combat",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-blaze",
     move_slug: "protect",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
 
@@ -524,19 +527,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "tauros-paldea-aqua",
     move_slug: "liquidation",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-aqua",
     move_slug: "close-combat",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-aqua",
     move_slug: "protect",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
 ];
@@ -545,14 +548,17 @@ const LEARNSET_ROWS: LearnsetRow[] = [
 // 3. Reference cache entries — reference_cache table (DS-4)
 // ---------------------------------------------------------------------------
 // Pre-normalized to the exact tool-output shapes (tools.md T4–T8 + schemas.ts).
-// These are the same shapes that warm-cache.ts / reference-cache.ts would write.
+// These are the same shapes that build-reference.ts writes at ingest and that
+// reference-cache.ts (getReference) reads back.
 
 type RefCacheRow = typeof reference_cache.$inferInsert;
 
-// Far-future timestamp (year 2040) so the TTL check never expires in tests.
+// Far-future timestamp (year 2040). `fetched_at` is informational now (no TTL
+// since reference detail is pre-built locally), but a stable far-future value
+// keeps the fixture deterministic.
 const FAR_FUTURE_MS = 2_208_992_400_000;
 
-const REFERENCE_CACHE_ROWS: RefCacheRow[] = [
+const REFERENCE_CACHE_ROWS: Omit<RefCacheRow, "format">[] = [
   // type/ground — G11: "is Ground super effective against Flying?"
   // → answer is "No — Flying is immune (0×)"; flying must be in no_effect_against.
   {
@@ -693,7 +699,7 @@ const REFERENCE_CACHE_ROWS: RefCacheRow[] = [
 type SearchableRow = typeof searchable_names.$inferInsert;
 
 // Pokémon
-const POKEMON_NAMES: SearchableRow[] = POKEMON_ROWS.map((p) => ({
+const POKEMON_NAMES: Omit<SearchableRow, "format">[] = POKEMON_ROWS.map((p) => ({
   kind: "pokemon" as const,
   slug: p.id,
   display_name: p.display_name,
@@ -719,11 +725,13 @@ const MOVE_SLUGS: Array<[string, string]> = [
   ["protect", "Protect"],
   ["liquidation", "Liquidation"],
 ];
-const MOVE_NAMES: SearchableRow[] = MOVE_SLUGS.map(([slug, display_name]) => ({
-  kind: "move" as const,
-  slug,
-  display_name,
-}));
+const MOVE_NAMES: Omit<SearchableRow, "format">[] = MOVE_SLUGS.map(
+  ([slug, display_name]) => ({
+    kind: "move" as const,
+    slug,
+    display_name,
+  }),
+);
 
 // Abilities — all abilities carried by fixture Pokémon + reference cache entries
 const ABILITY_SLUGS: Array<[string, string]> = [
@@ -743,7 +751,7 @@ const ABILITY_SLUGS: Array<[string, string]> = [
   ["anger-point", "Anger Point"],
   ["sheer-force", "Sheer Force"],
 ];
-const ABILITY_NAMES: SearchableRow[] = ABILITY_SLUGS.map(
+const ABILITY_NAMES: Omit<SearchableRow, "format">[] = ABILITY_SLUGS.map(
   ([slug, display_name]) => ({
     kind: "ability" as const,
     slug,
@@ -772,13 +780,15 @@ const TYPE_NAMES_DISPLAY: Record<string, string> = {
   steel: "Steel",
   fairy: "Fairy",
 };
-const TYPE_NAME_ROWS: SearchableRow[] = TYPE_NAMES.map((slug) => ({
-  kind: "type" as const,
-  slug,
-  display_name: TYPE_NAMES_DISPLAY[slug] ?? slug,
-}));
+const TYPE_NAME_ROWS: Omit<SearchableRow, "format">[] = TYPE_NAMES.map(
+  (slug) => ({
+    kind: "type" as const,
+    slug,
+    display_name: TYPE_NAMES_DISPLAY[slug] ?? slug,
+  }),
+);
 
-const SEARCHABLE_NAME_ROWS: SearchableRow[] = [
+const SEARCHABLE_NAME_ROWS: Omit<SearchableRow, "format">[] = [
   ...POKEMON_NAMES,
   ...MOVE_NAMES,
   ...ABILITY_NAMES,
@@ -790,13 +800,12 @@ const SEARCHABLE_NAME_ROWS: SearchableRow[] = [
 // ---------------------------------------------------------------------------
 
 const INGEST_META_ROW: typeof ingest_meta.$inferInsert = {
-  id: "singleton",
+  format: SV,
   last_success_at: Date.now(),
-  version_groups: JSON.stringify([SV]),
   pokemon_count: POKEMON_ROWS.length,
   learnset_count: LEARNSET_ROWS.length,
   names_count: SEARCHABLE_NAME_ROWS.length,
-  schema_version: "1",
+  schema_version: "2",
 };
 
 // ===========================================================================
@@ -813,10 +822,17 @@ const INGEST_META_ROW: typeof ingest_meta.$inferInsert = {
  * better-sqlite3 is synchronous — this function is NOT async.
  */
 export function seedFixtureDb(db: FixtureDb): void {
-  db.insert(pokemon).values(POKEMON_ROWS).run();
+  // Every fixture row is the standard scope; stamp `format` on insert.
+  db.insert(pokemon)
+    .values(POKEMON_ROWS.map((r) => ({ ...r, format: SV })))
+    .run();
   db.insert(learnset).values(LEARNSET_ROWS).run();
-  db.insert(reference_cache).values(REFERENCE_CACHE_ROWS).run();
-  db.insert(searchable_names).values(SEARCHABLE_NAME_ROWS).run();
+  db.insert(reference_cache)
+    .values(REFERENCE_CACHE_ROWS.map((r) => ({ ...r, format: SV })))
+    .run();
+  db.insert(searchable_names)
+    .values(SEARCHABLE_NAME_ROWS.map((r) => ({ ...r, format: SV })))
+    .run();
   db.insert(ingest_meta).values(INGEST_META_ROW).run();
 }
 

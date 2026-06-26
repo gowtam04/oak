@@ -12,6 +12,7 @@ import {
   type GetItemOutput,
 } from "@/agent/schemas";
 import { getReference } from "@/data/repos/reference-cache";
+import { formatForMode } from "@/data/formats";
 
 const description =
   "Get an item's effect text and, where available, which Pokémon are found " +
@@ -29,6 +30,7 @@ export const getItemTool: ToolDef = {
     return (await getReference(
       "item",
       parsed.data.name,
+      formatForMode(ctx.mode),
       ctx.db,
     )) as GetItemOutput;
   },

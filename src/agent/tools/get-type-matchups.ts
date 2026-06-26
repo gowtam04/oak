@@ -25,6 +25,7 @@ import {
   type TypeMatchupsDetail,
 } from "@/agent/schemas";
 import { getReference } from "@/data/repos/reference-cache";
+import { formatForMode } from "@/data/formats";
 
 const description =
   "Get type effectiveness relationships using the latest type chart. Pass one " +
@@ -69,12 +70,14 @@ export const getTypeMatchupsTool: ToolDef = {
       return { found: false, suggestions: [] };
     }
     const { types } = parsed.data;
+    const format = formatForMode(ctx.mode);
 
     // Single type: the cached profile already has offensive + defensive.
     if (types.length === 1) {
       return (await getReference(
         "type",
         types[0]!,
+        format,
         ctx.db,
       )) as GetTypeMatchupsOutput;
     }
@@ -83,6 +86,7 @@ export const getTypeMatchupsTool: ToolDef = {
     const ref1 = (await getReference(
       "type",
       types[0]!,
+      format,
       ctx.db,
     )) as GetTypeMatchupsOutput;
     if (!isFoundProfile(ref1)) return ref1;
@@ -90,6 +94,7 @@ export const getTypeMatchupsTool: ToolDef = {
     const ref2 = (await getReference(
       "type",
       types[1]!,
+      format,
       ctx.db,
     )) as GetTypeMatchupsOutput;
     if (!isFoundProfile(ref2)) return ref2;

@@ -1,17 +1,22 @@
 /**
- * Unit tests for src/ingest/build-names.ts
+ * Unit tests for src/ingest/build-names.ts (@pkmn-backed).
  *
- * Tests are fully offline — no live PokeAPI calls. The PokeApiClient is mocked
- * inline using vi.fn(), so tests run in CI without any network access.
+ * After the migration `buildNames(source, pokemonRows)` is synchronous and reads
+ * a resolved `FormatSource` (its moves / abilities / items / types collections,
+ * already battle-relevant + filtered by the gen-provider) plus the DS-2 Pokémon
+ * rows. We pass a minimal hand-built source so the mapping rules are asserted in
+ * isolation — no @pkmn, no network.
  *
  * Coverage:
  *   slugToDisplayName — pure helper
- *   buildNames        — five entity kinds, pseudo-type exclusion, display_name
- *                       pass-through for pokemon, error propagation
+ *   buildNames        — five entity kinds, display_name pass-through for pokemon,
+ *                       slug derivation, format stamping, dedupe
  */
 
-import { describe, expect, it, vi } from "vitest";
-import type { PokeApiClient } from "@/data/pokeapi-client";
+import { describe, expect, it } from "vitest";
+
+import type { Format } from "@/data/formats";
+import type { FormatSource } from "@/data/pkmn/gen-provider";
 import {
   buildNames,
   slugToDisplayName,
@@ -19,73 +24,56 @@ import {
   type PokemonNameSource,
 } from "./build-names";
 
+const SV: Format = "scarlet-violet";
+
 // ---------------------------------------------------------------------------
-// Test helpers
+// Test helpers — a minimal FormatSource (only the fields buildNames reads)
 // ---------------------------------------------------------------------------
 
-type StubLists = {
-  move: Array<{ name: string; url: string }>;
-  ability: Array<{ name: string; url: string }>;
-  type: Array<{ name: string; url: string }>;
-  item: Array<{ name: string; url: string }>;
-};
+type NamedEntity = { id: string; name: string };
 
-/**
- * Build a mock PokeApiClient whose `get()` routes by path prefix.
- * Each call returning a list result wraps it in the PokeAPI list-response shape.
- */
-function makeMockClient(lists: StubLists): PokeApiClient {
+function fakeSource(p: {
+  format: Format;
+  moves: NamedEntity[];
+  abilities: NamedEntity[];
+  items: NamedEntity[];
+  types: { name: string }[];
+}): FormatSource {
   return {
-    get: vi.fn().mockImplementation((path: string) => {
-      for (const [prefix, results] of Object.entries(lists) as [
-        keyof StubLists,
-        (typeof lists)[keyof StubLists],
-      ][]) {
-        if (path.startsWith(prefix)) {
-          return Promise.resolve({
-            ok: true,
-            value: { count: results.length, results },
-          });
-        }
-      }
-      return Promise.resolve({
-        ok: false,
-        error: { code: "http_error", status: 404, url: path, attempts: 1 },
-      });
-    }),
-  } as unknown as PokeApiClient;
+    format: p.format,
+    moves: p.moves,
+    abilities: p.abilities,
+    items: p.items,
+    types: p.types,
+    // Unused by buildNames; present so the cast is honest about the shape.
+    dex: {},
+    roster: [],
+    natures: [],
+    getLearnset: async () => ({}),
+  } as unknown as FormatSource;
 }
 
-// ---------------------------------------------------------------------------
-// Shared fixtures
-// ---------------------------------------------------------------------------
+const SOURCE = fakeSource({
+  format: SV,
+  moves: [
+    { id: "willowisp", name: "Will-O-Wisp" },
+    { id: "fakeout", name: "Fake Out" },
+    { id: "earthquake", name: "Earthquake" },
+  ],
+  abilities: [
+    { id: "flashfire", name: "Flash Fire" },
+    { id: "armortail", name: "Armor Tail" },
+    { id: "sapsipper", name: "Sap Sipper" },
+  ],
+  items: [
+    { id: "leftovers", name: "Leftovers" },
+    { id: "choiceband", name: "Choice Band" },
+  ],
+  // The gen-provider already restricts these to the 18 battle types.
+  types: [{ name: "Fire" }, { name: "Water" }, { name: "Dragon" }],
+});
 
-const STUB_LISTS: StubLists = {
-  move: [
-    { name: "fake-out", url: "https://pokeapi.co/api/v2/move/252/" },
-    { name: "will-o-wisp", url: "https://pokeapi.co/api/v2/move/261/" },
-    { name: "earthquake", url: "https://pokeapi.co/api/v2/move/89/" },
-  ],
-  ability: [
-    { name: "flash-fire", url: "https://pokeapi.co/api/v2/ability/18/" },
-    { name: "armor-tail", url: "https://pokeapi.co/api/v2/ability/296/" },
-    { name: "sap-sipper", url: "https://pokeapi.co/api/v2/ability/157/" },
-  ],
-  // Includes two pseudo-types that must be excluded from the index
-  type: [
-    { name: "fire", url: "https://pokeapi.co/api/v2/type/10/" },
-    { name: "water", url: "https://pokeapi.co/api/v2/type/11/" },
-    { name: "dragon", url: "https://pokeapi.co/api/v2/type/16/" },
-    { name: "unknown", url: "https://pokeapi.co/api/v2/type/10001/" },
-    { name: "shadow", url: "https://pokeapi.co/api/v2/type/10002/" },
-  ],
-  item: [
-    { name: "leftovers", url: "https://pokeapi.co/api/v2/item/234/" },
-    { name: "choice-band", url: "https://pokeapi.co/api/v2/item/220/" },
-  ],
-};
-
-const STUB_POKEMON: PokemonNameSource[] = [
+const POKEMON: PokemonNameSource[] = [
   { id: "garchomp", display_name: "Garchomp" },
   { id: "tauros-paldea-aqua", display_name: "Tauros (Paldean Aqua)" },
   { id: "farigiraf", display_name: "Farigiraf" },
@@ -121,9 +109,8 @@ describe("slugToDisplayName", () => {
   });
 
   it("does not double-capitalize already-uppercase letters", () => {
-    // Input is always lowercase from PokeAPI slugs; but ensure idempotency
     expect(slugToDisplayName("earthquake")).toBe("Earthquake");
-    expect(slugToDisplayName("Earthquake")).toBe("Earthquake"); // already capitalized
+    expect(slugToDisplayName("Earthquake")).toBe("Earthquake");
   });
 });
 
@@ -131,35 +118,24 @@ describe("slugToDisplayName", () => {
 // buildNames
 // ---------------------------------------------------------------------------
 
-describe("buildNames — pokemon rows (DS-2, no extra fetch)", () => {
-  it("emits one pokemon row per input PokemonRow", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    const pokemonRows = rows.filter((r) => r.kind === "pokemon");
-    expect(pokemonRows).toHaveLength(STUB_POKEMON.length);
+describe("buildNames — pokemon rows (DS-2 pass-through)", () => {
+  const rows = buildNames(SOURCE, POKEMON);
+  const pokemonRows = rows.filter((r) => r.kind === "pokemon");
+
+  it("emits one pokemon row per input PokemonRow", () => {
+    expect(pokemonRows).toHaveLength(POKEMON.length);
   });
 
-  it("passes display_name through unchanged (not re-derived from slug)", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    const pokemonRows = rows.filter((r) => r.kind === "pokemon");
-
-    // "Tauros (Paldean Aqua)" must not be mangled by slug conversion
+  it("passes display_name through unchanged (not re-derived from the slug)", () => {
     expect(
       pokemonRows.find((r) => r.slug === "tauros-paldea-aqua")?.display_name,
     ).toBe("Tauros (Paldean Aqua)");
     expect(pokemonRows.find((r) => r.slug === "garchomp")?.display_name).toBe(
       "Garchomp",
     );
-    expect(pokemonRows.find((r) => r.slug === "farigiraf")?.display_name).toBe(
-      "Farigiraf",
-    );
   });
 
-  it("uses the pokemon id as the slug", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    const pokemonRows = rows.filter((r) => r.kind === "pokemon");
+  it("uses the pokemon id as the slug", () => {
     const slugs = pokemonRows.map((r) => r.slug);
     expect(slugs).toContain("garchomp");
     expect(slugs).toContain("tauros-paldea-aqua");
@@ -168,18 +144,14 @@ describe("buildNames — pokemon rows (DS-2, no extra fetch)", () => {
 });
 
 describe("buildNames — move rows", () => {
-  it("emits one move row per slug returned by PokeAPI", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    const moveRows = rows.filter((r) => r.kind === "move");
-    expect(moveRows).toHaveLength(STUB_LISTS.move.length);
+  const rows = buildNames(SOURCE, POKEMON);
+  const moveRows = rows.filter((r) => r.kind === "move");
+
+  it("emits one move row per source move", () => {
+    expect(moveRows).toHaveLength(3);
   });
 
-  it("applies slugToDisplayName to move slugs", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    const moveRows = rows.filter((r) => r.kind === "move");
-
+  it("derives the slug from the name and the display via slugToDisplayName", () => {
     expect(moveRows.find((r) => r.slug === "will-o-wisp")?.display_name).toBe(
       "Will-O-Wisp",
     );
@@ -193,57 +165,28 @@ describe("buildNames — move rows", () => {
 });
 
 describe("buildNames — ability rows", () => {
-  it("emits one ability row per slug returned by PokeAPI", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    const abilityRows = rows.filter((r) => r.kind === "ability");
-    expect(abilityRows).toHaveLength(STUB_LISTS.ability.length);
-  });
+  const rows = buildNames(SOURCE, POKEMON);
+  const abilityRows = rows.filter((r) => r.kind === "ability");
 
-  it("applies slugToDisplayName to ability slugs", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    const abilityRows = rows.filter((r) => r.kind === "ability");
-
+  it("emits one ability row per source ability with a slugged display", () => {
+    expect(abilityRows).toHaveLength(3);
     expect(abilityRows.find((r) => r.slug === "armor-tail")?.display_name).toBe(
       "Armor-Tail",
     );
     expect(abilityRows.find((r) => r.slug === "flash-fire")?.display_name).toBe(
       "Flash-Fire",
     );
-    expect(abilityRows.find((r) => r.slug === "sap-sipper")?.display_name).toBe(
-      "Sap-Sipper",
-    );
   });
 });
 
-describe("buildNames — type rows (pseudo-type exclusion)", () => {
-  it("excludes 'unknown' from the type index", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    expect(
-      rows.find((r) => r.kind === "type" && r.slug === "unknown"),
-    ).toBeUndefined();
-  });
+describe("buildNames — type rows", () => {
+  const rows = buildNames(SOURCE, POKEMON);
+  const typeRows = rows.filter((r) => r.kind === "type");
 
-  it("excludes 'shadow' from the type index", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    expect(
-      rows.find((r) => r.kind === "type" && r.slug === "shadow"),
-    ).toBeUndefined();
-  });
-
-  it("keeps all real battle types", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    const typeRows = rows.filter((r) => r.kind === "type");
-    // 5 in stub minus 2 excluded = 3
+  it("maps each provided battle type (gen-provider already excludes pseudo-types)", () => {
     expect(typeRows).toHaveLength(3);
     expect(typeRows.find((r) => r.slug === "fire")?.display_name).toBe("Fire");
-    expect(typeRows.find((r) => r.slug === "water")?.display_name).toBe(
-      "Water",
-    );
+    expect(typeRows.find((r) => r.slug === "water")?.display_name).toBe("Water");
     expect(typeRows.find((r) => r.slug === "dragon")?.display_name).toBe(
       "Dragon",
     );
@@ -251,18 +194,11 @@ describe("buildNames — type rows (pseudo-type exclusion)", () => {
 });
 
 describe("buildNames — item rows", () => {
-  it("emits one item row per slug returned by PokeAPI", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    const itemRows = rows.filter((r) => r.kind === "item");
-    expect(itemRows).toHaveLength(STUB_LISTS.item.length);
-  });
+  const rows = buildNames(SOURCE, POKEMON);
+  const itemRows = rows.filter((r) => r.kind === "item");
 
-  it("applies slugToDisplayName to item slugs", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    const itemRows = rows.filter((r) => r.kind === "item");
-
+  it("emits one item row per source item with a slugged display", () => {
+    expect(itemRows).toHaveLength(2);
     expect(itemRows.find((r) => r.slug === "leftovers")?.display_name).toBe(
       "Leftovers",
     );
@@ -273,32 +209,25 @@ describe("buildNames — item rows", () => {
 });
 
 describe("buildNames — overall structure", () => {
-  it("covers all five entity kinds: pokemon, move, ability, type, item", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
+  const rows = buildNames(SOURCE, POKEMON);
+
+  it("covers all five entity kinds", () => {
     const kinds = new Set(rows.map((r) => r.kind));
-    expect(kinds).toContain("pokemon");
-    expect(kinds).toContain("move");
-    expect(kinds).toContain("ability");
-    expect(kinds).toContain("type");
-    expect(kinds).toContain("item");
+    expect(kinds).toEqual(
+      new Set(["pokemon", "move", "ability", "type", "item"]),
+    );
   });
 
-  it("returns the correct total row count across all kinds", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
-    const expected =
-      STUB_POKEMON.length +
-      STUB_LISTS.move.length +
-      STUB_LISTS.ability.length +
-      (STUB_LISTS.type.length - 2) + // minus "unknown" and "shadow"
-      STUB_LISTS.item.length;
+  it("stamps the source format on every row", () => {
+    expect(rows.every((r) => r.format === SV)).toBe(true);
+  });
+
+  it("returns the correct total row count across all kinds", () => {
+    const expected = POKEMON.length + 3 + 3 + 3 + 2; // pokemon + move + ability + type + item
     expect(rows).toHaveLength(expected);
   });
 
-  it("every row satisfies the searchable_names schema (kind, slug, display_name all present)", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames(STUB_POKEMON, client);
+  it("every row satisfies the searchable_names shape", () => {
     const validKinds: NameRow["kind"][] = [
       "pokemon",
       "move",
@@ -308,76 +237,29 @@ describe("buildNames — overall structure", () => {
     ];
     for (const row of rows) {
       expect(validKinds).toContain(row.kind);
-      expect(typeof row.slug).toBe("string");
       expect(row.slug.length).toBeGreaterThan(0);
-      expect(typeof row.display_name).toBe("string");
       expect(row.display_name.length).toBeGreaterThan(0);
     }
   });
 
-  it("handles an empty pokemon list (no DS-2 rows) without error", async () => {
-    const client = makeMockClient(STUB_LISTS);
-    const rows = await buildNames([], client);
+  it("dedupes by (kind, slug) — a duplicate move id collapses to one row", () => {
+    const dupeSource = fakeSource({
+      format: SV,
+      moves: [
+        { id: "tackle", name: "Tackle" },
+        { id: "tackle2", name: "Tackle" }, // same slugged name → same slug
+      ],
+      abilities: [],
+      items: [],
+      types: [],
+    });
+    const rows = buildNames(dupeSource, []);
+    expect(rows.filter((r) => r.kind === "move")).toHaveLength(1);
+  });
+
+  it("handles an empty pokemon list without error", () => {
+    const rows = buildNames(SOURCE, []);
     expect(rows.filter((r) => r.kind === "pokemon")).toHaveLength(0);
-    // Other kinds still populated from PokeAPI
     expect(rows.filter((r) => r.kind === "move").length).toBeGreaterThan(0);
-    expect(rows.filter((r) => r.kind === "item").length).toBeGreaterThan(0);
-  });
-});
-
-describe("buildNames — error handling", () => {
-  it("throws with a descriptive message when PokeAPI is unreachable", async () => {
-    const failingClient: PokeApiClient = {
-      get: vi.fn().mockResolvedValue({
-        ok: false,
-        error: {
-          code: "network_error",
-          url: "https://pokeapi.co/api/v2/move?limit=100000&offset=0",
-          detail: "ECONNREFUSED",
-          attempts: 4,
-        },
-      }),
-    } as unknown as PokeApiClient;
-
-    await expect(buildNames(STUB_POKEMON, failingClient)).rejects.toThrow(
-      /build-names: failed to fetch PokeAPI \/move list/,
-    );
-  });
-
-  it("throws with a descriptive message on a non-retryable HTTP error (e.g. 503)", async () => {
-    const errorClient: PokeApiClient = {
-      get: vi.fn().mockResolvedValue({
-        ok: false,
-        error: {
-          code: "http_error",
-          status: 503,
-          url: "https://pokeapi.co/api/v2/move?limit=100000&offset=0",
-          attempts: 4,
-        },
-      }),
-    } as unknown as PokeApiClient;
-
-    await expect(buildNames(STUB_POKEMON, errorClient)).rejects.toThrow(
-      /build-names: failed to fetch/,
-    );
-  });
-
-  it("error message includes JSON-serialised PokeApiError for diagnostics", async () => {
-    const failingClient: PokeApiClient = {
-      get: vi.fn().mockResolvedValue({
-        ok: false,
-        error: { code: "http_error", status: 429, url: "...", attempts: 4 },
-      }),
-    } as unknown as PokeApiClient;
-
-    let thrown: Error | null = null;
-    try {
-      await buildNames(STUB_POKEMON, failingClient);
-    } catch (e) {
-      thrown = e as Error;
-    }
-    expect(thrown).not.toBeNull();
-    // The serialised error should appear in the message for debuggability
-    expect(thrown?.message).toContain("http_error");
   });
 });

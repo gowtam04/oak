@@ -96,22 +96,25 @@ beforeAll(async () => {
     // Warm the two reference rows G4 reasons over so get_move / get_ability are
     // cache HITS (no network), exactly like the type-chart rows in the fixture.
     const insertRef = dbMod.sqlite.prepare(
-      `INSERT INTO reference_cache (resource_key, resource_kind, payload, endpoint_url, fetched_at)
-       VALUES (@resource_key, @resource_kind, @payload, @endpoint_url, @fetched_at)`,
+      `INSERT INTO reference_cache (format, resource_key, resource_kind, payload, endpoint_url, fetched_at)
+       VALUES (@format, @resource_key, @resource_kind, @payload, @endpoint_url, @fetched_at)`,
     );
     const now = Date.now();
+    // Standard mode → the scarlet-violet data scope (formatForMode).
     insertRef.run({
+      format: "scarlet-violet",
       resource_key: "move/fake-out",
       resource_kind: "move",
       payload: JSON.stringify(FAKE_OUT_MOVE),
-      endpoint_url: "https://pokeapi.co/api/v2/move/fake-out",
+      endpoint_url: "@pkmn/dex (Pokémon Showdown)",
       fetched_at: now,
     });
     insertRef.run({
+      format: "scarlet-violet",
       resource_key: "ability/armor-tail",
       resource_kind: "ability",
       payload: JSON.stringify(ARMOR_TAIL_ABILITY),
-      endpoint_url: "https://pokeapi.co/api/v2/ability/armor-tail",
+      endpoint_url: "@pkmn/dex (Pokémon Showdown)",
       fetched_at: now,
     });
 

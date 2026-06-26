@@ -1,112 +1,151 @@
 /**
- * INDEPENDENT ORACLE TESTS — DS-3 Gen-9 learnset transform (Phase 3,
- * build-learnsets). Authored from the docs BEFORE judging the implementation;
- * expected values derived from data-sources.md (DS-3, D6, BR-2) + design.md,
- * NOT from impl code. Fully offline against ./__fixtures__ — no live crawl.
+ * Unit tests for the DS-3 learnset transform (build-learnsets), @pkmn-backed.
  *
- * ── CONTRACT under test (src/ingest/build-learnsets.ts) ────────────────────
- *   export interface LearnsetRow { …exactly the `learnset` table columns from
- *     src/data/schema.ts: pokemon_id, move_slug, version_group, method }
+ * After the migration `buildLearnsetRows(pokemonId, learnset, moveSlugFor,
+ * { format, gen9Only })` consumes an @pkmn learnset record — `{ moveId:
+ * sourceString[] }` where each source encodes gen+method at indexes 0/1
+ * ("9M" = Gen-9 machine, "9L42" = Gen-9 level-up @42, "9E" = egg, "8M" = Gen-8
+ * machine, "9T" = tutor). The inputs here are small synthetic records so the
+ * filtering + method-priority rules are asserted directly.
  *
- *   export function buildLearnsetRows(
- *     pokemon: Json,   // a /pokemon/{id} resource (carries moves[])
- *     opts: { gen9VersionGroups: string[] },
- *   ): LearnsetRow[];
- *
- * Rules the transform must satisfy (D6 / DS-3):
- *   - Emit one row per (move_slug, version_group) whose version_group ∈
- *     gen9VersionGroups AND whose move_learn_method is NOT "egg".
- *   - Egg moves are EXCLUDED (breeding out of scope). A move that is ONLY
- *     learnable via egg in Gen 9 is absent; a move learnable via egg AND a
- *     non-egg method survives via the non-egg method.
- *   - Moves only present in non-Gen-9 version groups are excluded.
- *   - pokemon_id = the pokemon slug; rows are unique per (move, version_group).
+ * Rules (D6 / BR-2):
+ *   - Keep level-up / machine / tutor; drop egg (and event/virtual/other).
+ *   - gen9Only (standard) keeps only '9…' sources.
+ *   - One row per (pokemon_id, move_slug, format); highest-priority method wins
+ *     (level-up > machine > tutor).
+ *   - moveSlugFor → null skips the move.
  */
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { Json } from "@/data/pokeapi-client";
+
+import type { Format } from "@/data/formats";
 import { buildLearnsetRows } from "./build-learnsets";
 
-const FIXTURE_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "__fixtures__",
-);
-function load(name: string): Json {
-  return JSON.parse(readFileSync(join(FIXTURE_DIR, name), "utf8")) as Json;
-}
+const SV: Format = "scarlet-violet";
+const CH: Format = "champions";
 
-const GEN9 = { gen9VersionGroups: ["scarlet-violet"] };
+// @pkmn moveId → canonical slug. An id absent here resolves to null (skipped).
+const SLUGS: Record<string, string> = {
+  earthquake: "earthquake",
+  dragonclaw: "dragon-claw",
+  dragonrush: "dragon-rush",
+  dig: "dig",
+  firespin: "fire-spin",
+  willowisp: "will-o-wisp",
+};
+const moveSlugFor = (id: string): string | null => SLUGS[id] ?? null;
 
-describe("buildLearnsetRows — Ninetales (Gen-9 filtering + egg exclusion)", () => {
-  const rows = buildLearnsetRows(load("ninetales-pokemon.json"), GEN9);
-  const slugs = rows.map((r) => r.move_slug);
+describe("buildLearnsetRows — standard (gen9Only)", () => {
+  const learnset = {
+    earthquake: ["9M"], // Gen-9 machine
+    dragonclaw: ["9L1"], // Gen-9 level-up
+    dragonrush: ["9L5", "8M"], // Gen-9 level-up wins over the Gen-8 machine
+    dig: ["9E"], // egg-only → dropped
+    firespin: ["8M"], // Gen-8 only → dropped under gen9Only
+    unknownmove: ["9M"], // moveSlugFor → null → skipped
+  };
+  const rows = buildLearnsetRows("garchomp", learnset, moveSlugFor, {
+    format: SV,
+    gen9Only: true,
+  });
+  const bySlug = new Map(rows.map((r) => [r.move_slug, r]));
 
-  it("attributes every row to the source pokemon", () => {
+  it("attributes every row to the source pokemon and stamps the format", () => {
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((r) => r.pokemon_id === "ninetales")).toBe(true);
+    expect(rows.every((r) => r.pokemon_id === "garchomp")).toBe(true);
+    expect(rows.every((r) => r.format === SV)).toBe(true);
   });
 
-  it("includes the Gen-9 will-o-wisp learner row (learner set non-empty)", () => {
-    const wow = rows.filter((r) => r.move_slug === "will-o-wisp");
-    expect(wow).toHaveLength(1);
-    expect(wow[0].version_group).toBe("scarlet-violet");
-    expect(slugs).toContain("flamethrower");
+  it("keeps Gen-9 machine / level-up moves with the right method", () => {
+    expect(bySlug.get("earthquake")?.method).toBe("machine");
+    expect(bySlug.get("dragon-claw")?.method).toBe("level-up");
   });
 
-  it("excludes egg-only moves (hypnosis is egg-only in SV)", () => {
-    expect(slugs).not.toContain("hypnosis");
+  it("collapses multiple sources to the highest-priority non-egg method", () => {
+    // 9L5 (level-up) beats 8M (machine) — and 8M is filtered by gen9Only anyway.
+    expect(bySlug.get("dragon-rush")?.method).toBe("level-up");
   });
 
-  it("never emits a row with method 'egg'", () => {
+  it("never emits an egg row (egg-only moves are dropped)", () => {
     expect(rows.every((r) => r.method !== "egg")).toBe(true);
+    expect(bySlug.has("dig")).toBe(false);
   });
 
-  it("keeps a move learnable via egg AND level-up, via the non-egg method", () => {
-    const flameCharge = rows.filter((r) => r.move_slug === "flame-charge");
-    expect(flameCharge).toHaveLength(1);
-    expect(flameCharge[0].method).toBe("level-up");
+  it("excludes moves present only in non-Gen-9 sources", () => {
+    expect(bySlug.has("fire-spin")).toBe(false);
   });
 
-  it("excludes moves only present in non-Gen-9 version groups (fire-spin)", () => {
-    expect(slugs).not.toContain("fire-spin");
+  it("skips a move whose slug does not resolve (moveSlugFor → null)", () => {
+    // 'unknownmove' has a valid Gen-9 machine source but no canonical slug.
+    expect(rows.some((r) => r.move_slug === "unknownmove")).toBe(false);
   });
 
-  it("only emits rows for Gen-9 version groups", () => {
+  it("emits unique move_slug rows (composite-PK safe)", () => {
+    const slugs = rows.map((r) => r.move_slug);
+    expect(new Set(slugs).size).toBe(slugs.length);
+  });
+});
+
+describe("buildLearnsetRows — method priority", () => {
+  it("level-up beats machine", () => {
+    const rows = buildLearnsetRows(
+      "x",
+      { tackle: ["9M", "9L20"] },
+      (id) => id,
+      { format: SV, gen9Only: true },
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].method).toBe("level-up");
+  });
+
+  it("machine beats tutor", () => {
+    const rows = buildLearnsetRows(
+      "x",
+      { tackle: ["9T", "9M"] },
+      (id) => id,
+      { format: SV, gen9Only: true },
+    );
+    expect(rows[0].method).toBe("machine");
+  });
+});
+
+describe("buildLearnsetRows — champions (gen9Only false)", () => {
+  it("keeps non-'9' sources from the already-scoped mod learnset", () => {
+    const rows = buildLearnsetRows(
+      "y",
+      { firespin: ["8M"], willowisp: ["9M"] },
+      moveSlugFor,
+      { format: CH, gen9Only: false },
+    );
+    const bySlug = new Map(rows.map((r) => [r.move_slug, r]));
+    expect(bySlug.get("fire-spin")?.method).toBe("machine");
+    expect(bySlug.get("fire-spin")?.format).toBe(CH);
+    expect(bySlug.get("will-o-wisp")?.method).toBe("machine");
+  });
+
+  it("still drops egg moves regardless of gen9Only", () => {
+    const rows = buildLearnsetRows("y", { dig: ["9E"] }, moveSlugFor, {
+      format: CH,
+      gen9Only: false,
+    });
+    expect(rows).toEqual([]);
+  });
+});
+
+describe("buildLearnsetRows — edge cases", () => {
+  it("returns [] for an empty learnset", () => {
     expect(
-      rows.every((r) => GEN9.gen9VersionGroups.includes(r.version_group)),
-    ).toBe(true);
+      buildLearnsetRows("z", {}, moveSlugFor, { format: SV, gen9Only: true }),
+    ).toEqual([]);
   });
 
-  it("emits unique (move_slug, version_group) rows (composite-PK safe)", () => {
-    const keys = rows.map((r) => `${r.move_slug}|${r.version_group}`);
-    expect(new Set(keys).size).toBe(keys.length);
-  });
-});
-
-describe("buildLearnsetRows — Garchomp (multi-version-group collapse)", () => {
-  const rows = buildLearnsetRows(load("garchomp-pokemon.json"), GEN9);
-  const slugs = rows.map((r) => r.move_slug);
-
-  it("produces a non-empty Gen-9 learnset", () => {
-    expect(rows.length).toBeGreaterThan(0);
-    expect(slugs).toContain("dragon-claw");
-    expect(slugs).toContain("earthquake");
-  });
-
-  it("collapses a move present in both SV and SwSh to the SV row only", () => {
-    const dragonRush = rows.filter((r) => r.move_slug === "dragon-rush");
-    expect(dragonRush).toHaveLength(1);
-    expect(dragonRush[0].version_group).toBe("scarlet-violet");
-    expect(rows.every((r) => r.version_group !== "sword-shield")).toBe(true);
-  });
-});
-
-describe("buildLearnsetRows — Dracovish (no Gen-9 presence)", () => {
-  it("yields an empty Gen-9 learnset for a non-Gen-9 mon", () => {
-    const rows = buildLearnsetRows(load("dracovish-pokemon.json"), GEN9);
+  it("ignores malformed source strings", () => {
+    const rows = buildLearnsetRows(
+      "z",
+      { earthquake: ["", "9"] }, // too short / no method letter
+      moveSlugFor,
+      { format: SV, gen9Only: true },
+    );
     expect(rows).toEqual([]);
   });
 });

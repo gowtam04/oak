@@ -5,7 +5,11 @@ import { useSseClient } from "@/lib/sse-client";
 import ChatThread from "@/components/ChatThread";
 import Composer from "@/components/Composer";
 import ThemeToggle from "@/components/ThemeToggle";
+import ChampionsToggle from "@/components/ChampionsToggle";
 import type { ChatStatus, ChatTurn, PokebotAnswer } from "@/components/types";
+
+/** localStorage key for the persisted Champions-mode choice. */
+const CHAMPIONS_STORAGE_KEY = "pokebot-champions-mode";
 
 /** Generate a stable id (session id + turn ids). Falls back when crypto.randomUUID is absent. */
 function makeId(): string {
@@ -34,6 +38,30 @@ export default function Home() {
   const { status, activities, answer, streamingMarkdown, error, send } =
     useSseClient();
 
+  // Champions mode: server-controlled scope sent on every request as
+  // `champions_mode`. Resolve from localStorage only AFTER mount so the SSR
+  // markup stays stable (mirrors ThemeToggle's `getInitialTheme` + mounted
+  // guard) and we avoid a hydration mismatch.
+  const [championsMode, setChampionsMode] = useState(false);
+  useEffect(() => {
+    try {
+      setChampionsMode(
+        localStorage.getItem(CHAMPIONS_STORAGE_KEY) === "true",
+      );
+    } catch {
+      /* storage unavailable (private mode) — keep the default (off) */
+    }
+  }, []);
+
+  const setChampionsModePersisted = useCallback((next: boolean) => {
+    setChampionsMode(next);
+    try {
+      localStorage.setItem(CHAMPIONS_STORAGE_KEY, String(next));
+    } catch {
+      /* storage unavailable (private mode) — fall back to in-session only */
+    }
+  }, []);
+
   // Commit each terminal answer exactly once (guard against effect re-runs /
   // React strict-mode double-invoke by tracking the committed object identity).
   const committedAnswerRef = useRef<PokebotAnswer | null>(null);
@@ -54,9 +82,9 @@ export default function Home() {
         { id: makeId(), role: "user", content: message },
       ]);
       committedAnswerRef.current = null;
-      send({ session_id: sessionId, message });
+      send({ session_id: sessionId, message, champions_mode: championsMode });
     },
-    [send, sessionId],
+    [send, sessionId, championsMode],
   );
 
   const chatStatus: ChatStatus =
@@ -66,7 +94,19 @@ export default function Home() {
     <main className="chat-page" data-testid="chat-page">
       <header className="chat-page__header">
         <h1 className="chat-page__title">Pokebot</h1>
-        <ThemeToggle />
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "var(--space-3)",
+          }}
+        >
+          <ChampionsToggle
+            checked={championsMode}
+            onChange={setChampionsModePersisted}
+          />
+          <ThemeToggle />
+        </div>
       </header>
 
       <ChatThread

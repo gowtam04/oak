@@ -329,7 +329,7 @@ export const POKEMON_SEED: PokemonSeed[] = [
 export type LearnsetSeed = {
   pokemon_id: string;
   move_slug: string;
-  version_group: string;
+  format: string;
   method: string | null;
 };
 
@@ -345,85 +345,85 @@ export const LEARNSET_SEED: LearnsetSeed[] = [
   {
     pokemon_id: "garchomp",
     move_slug: "earthquake",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "garchomp",
     move_slug: "dragon-claw",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "garchomp",
     move_slug: "fire-fang",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "ninetales",
     move_slug: "will-o-wisp",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "ninetales",
     move_slug: "trick-room",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "ninetales",
     move_slug: "flamethrower",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "farigiraf",
     move_slug: "trick-room",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "farigiraf",
     move_slug: "psychic",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "tauros-paldea-blaze",
     move_slug: "will-o-wisp",
-    version_group: SV,
+    format: SV,
     method: "machine",
   },
   {
     pokemon_id: "tauros-paldea-blaze",
     move_slug: "flame-charge",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-combat",
     move_slug: "close-combat",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-aqua",
     move_slug: "aqua-jet",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "tauros",
     move_slug: "body-slam",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
   {
     pokemon_id: "dracovish",
     move_slug: "fishious-rend",
-    version_group: SV,
+    format: SV,
     method: "level-up",
   },
 ];
@@ -549,13 +549,13 @@ export function seedToolsFixture(sqlite: Database.Database): void {
 
   const insertPokemon = sqlite.prepare(
     `INSERT INTO pokemon (
-       id, species_name, form_name, display_name, national_dex_number,
+       format, id, species_name, form_name, display_name, national_dex_number,
        type1, type2, ability_slot1, ability_slot2, ability_hidden,
        stat_hp, stat_attack, stat_defense, stat_special_attack,
        stat_special_defense, stat_speed, base_stat_total,
        sprite_url, artwork_url, generation, is_gen9_native, source_generation
      ) VALUES (
-       @id, @species_name, @form_name, @display_name, @national_dex_number,
+       @format, @id, @species_name, @form_name, @display_name, @national_dex_number,
        @type1, @type2, @ability_slot1, @ability_slot2, @ability_hidden,
        @stat_hp, @stat_attack, @stat_defense, @stat_special_attack,
        @stat_special_defense, @stat_speed, @base_stat_total,
@@ -563,33 +563,34 @@ export function seedToolsFixture(sqlite: Database.Database): void {
      )`,
   );
   const insertLearnset = sqlite.prepare(
-    `INSERT INTO learnset (pokemon_id, move_slug, version_group, method)
-     VALUES (@pokemon_id, @move_slug, @version_group, @method)`,
+    `INSERT INTO learnset (pokemon_id, move_slug, format, method)
+     VALUES (@pokemon_id, @move_slug, @format, @method)`,
   );
   const insertName = sqlite.prepare(
-    `INSERT INTO searchable_names (kind, slug, display_name)
-     VALUES (@kind, @slug, @display_name)`,
+    `INSERT INTO searchable_names (format, kind, slug, display_name)
+     VALUES (@format, @kind, @slug, @display_name)`,
   );
   const insertRef = sqlite.prepare(
-    `INSERT INTO reference_cache (resource_key, resource_kind, payload, endpoint_url, fetched_at)
-     VALUES (@resource_key, @resource_kind, @payload, @endpoint_url, @fetched_at)`,
+    `INSERT INTO reference_cache (format, resource_key, resource_kind, payload, endpoint_url, fetched_at)
+     VALUES (@format, @resource_key, @resource_kind, @payload, @endpoint_url, @fetched_at)`,
   );
   const insertMeta = sqlite.prepare(
     `INSERT INTO ingest_meta (
-       id, last_success_at, version_groups, pokemon_count, learnset_count,
+       format, last_success_at, pokemon_count, learnset_count,
        names_count, schema_version
      ) VALUES (
-       @id, @last_success_at, @version_groups, @pokemon_count, @learnset_count,
+       @format, @last_success_at, @pokemon_count, @learnset_count,
        @names_count, @schema_version
      )`,
   );
 
   const tx = sqlite.transaction(() => {
-    for (const p of POKEMON_SEED) insertPokemon.run(p);
+    for (const p of POKEMON_SEED) insertPokemon.run({ ...p, format: SV });
     for (const l of LEARNSET_SEED) insertLearnset.run(l);
-    for (const n of SEARCHABLE_NAMES_SEED) insertName.run(n);
+    for (const n of SEARCHABLE_NAMES_SEED) insertName.run({ ...n, format: SV });
     for (const r of REFERENCE_CACHE_SEED) {
       insertRef.run({
+        format: SV,
         resource_key: r.resource_key,
         resource_kind: r.resource_kind,
         payload: JSON.stringify(r.payload),
@@ -598,13 +599,12 @@ export function seedToolsFixture(sqlite: Database.Database): void {
       });
     }
     insertMeta.run({
-      id: "singleton",
+      format: SV,
       last_success_at: now,
-      version_groups: JSON.stringify([SV]),
       pokemon_count: POKEMON_SEED.length,
       learnset_count: LEARNSET_SEED.length,
       names_count: SEARCHABLE_NAMES_SEED.length,
-      schema_version: "1",
+      schema_version: "2",
     });
   });
 
@@ -695,5 +695,6 @@ async function buildMinimalContext(): Promise<AgentContext> {
     db: { db: dbMod.db },
     logger,
     requestId: "oracle",
+    mode: "standard",
   } as unknown as AgentContext;
 }

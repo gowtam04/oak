@@ -13,6 +13,7 @@ import {
   type GetEvolutionChainOutput,
 } from "@/agent/schemas";
 import { getReference } from "@/data/repos/reference-cache";
+import { formatForMode } from "@/data/formats";
 
 const description =
   "Get a Pokémon's full evolution line and the condition(s) for each stage " +
@@ -31,6 +32,7 @@ export const getEvolutionChainTool: ToolDef = {
     return (await getReference(
       "evolution",
       parsed.data.species,
+      formatForMode(ctx.mode),
       ctx.db,
     )) as GetEvolutionChainOutput;
   },

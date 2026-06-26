@@ -5,6 +5,11 @@
  * via the Zod schema; invalid values (e.g. a zero defense_stat) resolve to the
  * documented `{ error: "invalid_input", detail }` shape rather than throwing.
  * The result is always tagged `is_estimate: true` (the 0.85–1.0 roll range).
+ *
+ * No Champions (`ctx.mode`) branch: the core Lv50 damage equation is identical in
+ * Champions. Champions correctness comes entirely from Champions-correct INPUTS —
+ * effective stats from the Champions `compute_stat` variant and move base power
+ * from the Champions reference data — not from a different formula here.
  */
 
 import type { ToolDef } from "@/agent/types";
