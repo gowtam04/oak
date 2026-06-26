@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { ChatThreadProps } from "@/components/types";
 import AnswerCard from "@/components/AnswerCard";
 import Markdown from "@/components/Markdown";
@@ -13,11 +14,24 @@ const EXAMPLE_QUERIES = [
 ];
 
 /**
+ * Heuristic: has the streaming answer begun laying out a markdown table? A table
+ * row/header/separator is the only prose that starts a line with a pipe, so one
+ * such line means the agent is mid-table — which we surface as a distinct label
+ * (the blinking-caret-only case the user flagged as ambiguous).
+ */
+function isBuildingTable(markdown: string): boolean {
+  return /^\s*\|/m.test(markdown);
+}
+
+/**
  * ChatThread — renders the committed conversation (user + assistant turns) in
  * order, plus:
- *   - an in-flight progress indicator while `status === "streaming"`, driven by
- *     the `activity` tool-activity labels (or a generic "Thinking…" before the
- *     first tool_activity event lands), and
+ *   - an in-flight progress indicator while `status === "streaming"`: a single
+ *     emphasized "current sub-task" line (the latest `activity` label, or a
+ *     "composing the answer / building a table" label once prose starts
+ *     streaming, or a generic "thinking" line before the first tool_activity
+ *     event lands) with a live elapsed-seconds counter, above which completed
+ *     sub-tasks linger as a dim history trail, and
  *   - a transport-fault affordance when `status === "error"` and
  *     `transportError` is set (in-domain failures arrive as normal answer cards,
  *     never here — sse-client.ts / integration.md).
@@ -35,6 +49,39 @@ export default function ChatThread({
   onFollowUp,
 }: ChatThreadProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
+
+  // Liveness heartbeat: while the turn is in flight, count wall-clock seconds so
+  // a slow turn (long model "thinking" before the first tool, or while composing)
+  // visibly keeps moving instead of reading as stuck. Computed from a start
+  // timestamp rather than incremented, so a throttled/backgrounded tab stays
+  // accurate. Resets whenever the turn ends.
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  useEffect(() => {
+    if (status !== "streaming") {
+      setElapsedSeconds(0);
+      return;
+    }
+    setElapsedSeconds(0);
+    const startedAt = Date.now();
+    const id = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [status]);
+
+  // The in-flight progress trail (completed sub-tasks) and the single active
+  // sub-task line. Once the answer starts streaming the active line becomes a
+  // "composing" label; before the first tool it's a generic "thinking" line.
+  const trail = activity.slice(0, -1);
+  const lastActivity = activity[activity.length - 1];
+  const isThinking = !streamingMarkdown && !lastActivity;
+  const currentLabel = streamingMarkdown
+    ? isBuildingTable(streamingMarkdown)
+      ? "📋 Building the results table…"
+      : "✍️ Writing the answer…"
+    : lastActivity
+      ? lastActivity.label
+      : "Thinking through your question…";
 
   return (
     <div className="chat-thread" data-testid="chat-thread">
@@ -82,21 +129,10 @@ export default function ChatThread({
       )}
 
       {status === "streaming" && (
-        <div
-          className="chat-thread__progress"
-          data-testid="progress"
-          aria-live="polite"
-        >
-          {activity.length === 0 ? (
-            <span
-              className="chat-thread__progress-label"
-              data-testid="progress-thinking"
-            >
-              Thinking…
-            </span>
-          ) : (
-            <ol className="chat-thread__progress-list">
-              {activity.map((a, i) => (
+        <div className="chat-thread__progress" data-testid="progress">
+          {trail.length > 0 && (
+            <ol className="chat-thread__progress-list" aria-hidden="true">
+              {trail.map((a, i) => (
                 <li
                   key={i}
                   className="chat-thread__progress-item"
@@ -107,6 +143,24 @@ export default function ChatThread({
               ))}
             </ol>
           )}
+          <p
+            className="chat-thread__progress-current"
+            data-testid={isThinking ? "progress-thinking" : "progress-current"}
+            aria-live="polite"
+          >
+            <span className="chat-thread__progress-current-label">
+              {currentLabel}
+            </span>
+            {elapsedSeconds >= 3 && (
+              <span
+                className="chat-thread__progress-elapsed"
+                data-testid="progress-elapsed"
+                aria-hidden="true"
+              >
+                ({elapsedSeconds}s)
+              </span>
+            )}
+          </p>
         </div>
       )}
 

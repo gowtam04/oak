@@ -1404,17 +1404,42 @@ img {
    -------------------------------------------------------------------------- */
 .chat-thread__progress {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-1);
   padding: var(--space-2) 0;
   color: var(--text-muted);
 }
-.chat-thread__progress::before {
+/* Trail of completed sub-tasks (dim history), indented to align with the active
+   line's label (past the spinner). */
+.chat-thread__progress-list {
+  margin: 0;
+  padding: 0 0 0 calc(22px + var(--space-3));
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.chat-thread__progress-item {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+/* The active sub-task line: spinner + emphasized 1-line description + elapsed. */
+.chat-thread__progress-current {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-strong);
+}
+.chat-thread__progress-current::before {
   content: "";
   flex: none;
   width: 22px;
   height: 22px;
-  margin-top: 1px;
   border-radius: 50%;
   border: 1.5px solid var(--text-strong);
   background:
@@ -1433,24 +1458,10 @@ img {
     transform: rotate(360deg);
   }
 }
-.chat-thread__progress-label {
-  font-size: 13px;
-  font-weight: 600;
-}
-.chat-thread__progress-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.chat-thread__progress-item {
-  font-size: 13px;
-  line-height: 1.5;
-}
-.chat-thread__progress-item:not(:last-child) {
+.chat-thread__progress-elapsed {
+  font-weight: 500;
   color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Transport error — distinct from in-domain answer statuses */
@@ -1559,7 +1570,7 @@ img {
   .composer__send:disabled {
     transform: none;
   }
-  .chat-thread__progress::before {
+  .chat-thread__progress-current::before {
     animation: none;
   }
 }

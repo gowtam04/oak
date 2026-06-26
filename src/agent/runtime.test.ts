@@ -45,6 +45,7 @@ vi.mock("@/agent/tools", () => ({
 
 import {
   AnswerMarkdownExtractor,
+  describeToolCall,
   MAX_ITERATIONS,
   runPokebotWith,
 } from "./runtime";
@@ -590,5 +591,40 @@ describe("AnswerMarkdownExtractor", () => {
   it("returns the empty string when there is no answer_markdown field", () => {
     const json = JSON.stringify({ status: "answered", reasoning_markdown: "x" });
     expect(extract(json, 1)).toBe("");
+  });
+});
+
+describe("describeToolCall — context-rich progress labels", () => {
+  it("names the subject pulled from the tool input", () => {
+    expect(describeToolCall("get_pokemon", { name: "pikachu" })).toContain(
+      "Pikachu",
+    );
+    expect(describeToolCall("get_move", { name: "will-o-wisp" })).toContain(
+      "Will-O-Wisp",
+    );
+    expect(describeToolCall("resolve_entity", { query: "garchom" })).toContain(
+      "garchom",
+    );
+  });
+
+  it("summarizes the query_pokedex filters", () => {
+    const label = describeToolCall("query_pokedex", {
+      types: ["fire"],
+      moves: ["will-o-wisp"],
+      stat_filters: [{ stat: "speed", op: ">", value: 100 }],
+    });
+    expect(label).toContain("Fire");
+    expect(label).toContain("learns Will-O-Wisp");
+    expect(label).toContain("Speed > 100");
+  });
+
+  it("falls back to the generic label when args are missing or malformed", () => {
+    // Empty/garbage input never throws and still yields a usable string.
+    expect(describeToolCall("get_pokemon", {})).toMatch(/Pokémon/);
+    expect(describeToolCall("query_pokedex", { types: [] })).toMatch(/Pokédex/);
+    expect(describeToolCall("get_move", { name: 123 })).toEqual(
+      expect.any(String),
+    );
+    expect(describeToolCall("unknown_tool", null)).toEqual(expect.any(String));
   });
 });

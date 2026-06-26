@@ -1,5 +1,5 @@
-import { afterEach, describe, it, expect } from "vitest";
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { render, screen, cleanup, within, act } from "@testing-library/react";
 
 afterEach(() => cleanup());
 import ChatThread from "./ChatThread";
@@ -49,5 +49,86 @@ describe("ChatThread — in-flight streaming bubble", () => {
       />,
     );
     expect(screen.queryByTestId("streaming-answer")).not.toBeInTheDocument();
+  });
+});
+
+describe("ChatThread — in-flight current sub-task line", () => {
+  it("shows the latest activity as the current line and earlier ones as a dim trail", () => {
+    render(
+      <ChatThread
+        {...props({
+          status: "streaming",
+          activity: [
+            { tool: "resolve_entity", label: "🔍 Resolving “garchom”…" },
+            {
+              tool: "query_pokedex",
+              label: "📊 Searching the Pokédex: Fire · Speed > 100…",
+            },
+          ],
+        })}
+      />,
+    );
+    // The active line is the *latest* sub-task.
+    expect(screen.getByTestId("progress-current")).toHaveTextContent(
+      "Searching the Pokédex: Fire · Speed > 100",
+    );
+    // The earlier sub-task lingers as a (single) trail item.
+    expect(screen.getByTestId("progress-item-0")).toHaveTextContent(
+      "Resolving",
+    );
+    expect(screen.queryByTestId("progress-item-1")).toBeNull();
+    // Not the generic thinking placeholder once a tool has run.
+    expect(screen.queryByTestId("progress-thinking")).toBeNull();
+  });
+
+  it("labels the composing phase while answer prose streams", () => {
+    render(
+      <ChatThread
+        {...props({
+          status: "streaming",
+          streamingMarkdown: "Only **Ninetales** can learn both.",
+        })}
+      />,
+    );
+    expect(screen.getByTestId("progress-current")).toHaveTextContent(
+      "Writing the answer",
+    );
+  });
+
+  it("labels the table-building phase when a markdown table starts streaming", () => {
+    render(
+      <ChatThread
+        {...props({
+          status: "streaming",
+          streamingMarkdown:
+            "Fastest Fire-types:\n\n| Name | Speed |\n| --- | --- |\n| Talonflame | 126 |",
+        })}
+      />,
+    );
+    expect(screen.getByTestId("progress-current")).toHaveTextContent(
+      "Building the results table",
+    );
+  });
+
+  it("falls back to a generic thinking line before the first tool runs", () => {
+    render(<ChatThread {...props({ status: "streaming" })} />);
+    expect(screen.getByTestId("progress-thinking")).toHaveTextContent(
+      "Thinking through your question",
+    );
+  });
+
+  it("reveals the elapsed-time counter only after a few seconds", () => {
+    vi.useFakeTimers();
+    try {
+      render(<ChatThread {...props({ status: "streaming" })} />);
+      // Hidden initially so a fast turn never flashes a "(0s)" badge.
+      expect(screen.queryByTestId("progress-elapsed")).toBeNull();
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(screen.getByTestId("progress-elapsed")).toHaveTextContent("(3s)");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

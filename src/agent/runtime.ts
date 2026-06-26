@@ -346,7 +346,7 @@ const TOOL_DEFS: Anthropic.Tool[] = tools.map((tool) => ({
 
 const PROGRESS_LABELS: Record<string, string> = {
   resolve_entity: "🔍 Resolving name…",
-  query_pokedex: "📊 Querying Pokédex…",
+  query_pokedex: "📊 Searching the Pokédex…",
   get_pokemon: "📇 Looking up Pokémon…",
   get_move: "⚔️ Looking up move…",
   get_ability: "✨ Looking up ability…",
@@ -355,11 +355,136 @@ const PROGRESS_LABELS: Record<string, string> = {
   get_item: "🎒 Looking up item…",
   compute_stat: "🧮 Computing stat…",
   estimate_damage: "💥 Estimating damage…",
-  submit_answer: "✍️ Composing answer…",
+  submit_answer: "✍️ Composing the answer…",
 };
 
+/** The generic per-tool label, used as the fallback when args are unusable. */
 function progressLabel(tool: string): string {
   return PROGRESS_LABELS[tool] ?? `Running ${tool}…`;
+}
+
+/**
+ * Title-cases a slug/name for display in a progress label, preserving internal
+ * separators: `"will-o-wisp"` → `"Will-O-Wisp"`, `"iron hands"` → `"Iron Hands"`,
+ * `"garchomp"` → `"Garchomp"`. Returns "" for non-strings/empties so callers can
+ * fall back to the generic label. Only the first letter after a word boundary is
+ * uppercased (existing casing is left intact), and the result is length-capped so
+ * a pathological input can't bloat the label.
+ */
+export function titleizeSlug(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  const cleaned = raw.trim().replace(/_/g, " ").slice(0, 48);
+  if (!cleaned) return "";
+  return cleaned.replace(/(^|[\s-])([a-z])/g, (_m, sep, ch) => sep + ch.toUpperCase());
+}
+
+const STAT_FILTER_LABELS: Record<string, string> = {
+  hp: "HP",
+  attack: "Attack",
+  defense: "Defense",
+  special_attack: "Sp. Atk",
+  special_defense: "Sp. Def",
+  speed: "Speed",
+  base_stat_total: "BST",
+};
+
+const STAT_OP_LABELS: Record<string, string> = {
+  ">": ">",
+  ">=": "≥",
+  "<": "<",
+  "<=": "≤",
+  "==": "=",
+};
+
+/** Pulls the string members out of a value that may or may not be an array. */
+function asStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === "string")
+    : [];
+}
+
+/** Joins the present query_pokedex filters into a readable "Fire · Speed > 100 · learns Will-O-Wisp" clause. */
+function describePokedexFilters(obj: Record<string, unknown>): string {
+  const parts: string[] = [];
+
+  const types = asStringList(obj.types).map(titleizeSlug).filter(Boolean);
+  if (types.length) parts.push(types.join("/"));
+
+  const abilities = asStringList(obj.abilities).map(titleizeSlug).filter(Boolean);
+  if (abilities.length) parts.push(abilities.join(", "));
+
+  const moves = asStringList(obj.moves).map(titleizeSlug).filter(Boolean);
+  if (moves.length) parts.push(`learns ${moves.join(", ")}`);
+
+  if (Array.isArray(obj.stat_filters)) {
+    for (const f of obj.stat_filters) {
+      if (!f || typeof f !== "object") continue;
+      const sf = f as Record<string, unknown>;
+      const stat = typeof sf.stat === "string" ? STAT_FILTER_LABELS[sf.stat] ?? sf.stat : null;
+      const op = typeof sf.op === "string" ? STAT_OP_LABELS[sf.op] ?? sf.op : null;
+      const val = typeof sf.value === "number" ? sf.value : null;
+      if (stat && op && val !== null) parts.push(`${stat} ${op} ${val}`);
+    }
+  }
+
+  return parts.join(" · ");
+}
+
+/**
+ * Builds a human-readable, context-rich progress label for one tool call by
+ * enriching the generic per-tool verb with the concrete subject from the model's
+ * `input`. Input is model-supplied and untrusted, so every field read is guarded
+ * and any missing/malformed field falls back to the generic `progressLabel`.
+ */
+export function describeToolCall(tool: string, input: unknown): string {
+  const base = progressLabel(tool);
+  const obj =
+    input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+
+  switch (tool) {
+    case "resolve_entity": {
+      const q = typeof obj.query === "string" ? obj.query.trim() : "";
+      return q ? `🔍 Resolving “${q.slice(0, 48)}”…` : base;
+    }
+    case "query_pokedex": {
+      const filters = describePokedexFilters(obj);
+      return filters ? `📊 Searching the Pokédex: ${filters}…` : base;
+    }
+    case "get_pokemon": {
+      const name = titleizeSlug(obj.name);
+      return name ? `📇 Looking up ${name}…` : base;
+    }
+    case "get_move": {
+      const name = titleizeSlug(obj.name);
+      return name ? `⚔️ Looking up the move ${name}…` : base;
+    }
+    case "get_ability": {
+      const name = titleizeSlug(obj.name);
+      return name ? `✨ Reading the ${name} ability…` : base;
+    }
+    case "get_type_matchups": {
+      const types = asStringList(obj.types).map(titleizeSlug).filter(Boolean);
+      return types.length ? `🛡️ Checking ${types.join("/")} matchups…` : base;
+    }
+    case "get_evolution_chain": {
+      const name = titleizeSlug(obj.species);
+      return name ? `🧬 Tracing ${name}’s evolution…` : base;
+    }
+    case "get_item": {
+      const name = titleizeSlug(obj.name);
+      return name ? `🎒 Looking up ${name}…` : base;
+    }
+    case "compute_stat": {
+      const lvl = typeof obj.level === "number" ? obj.level : null;
+      return lvl ? `🧮 Computing a stat at Lv ${lvl}…` : "🧮 Computing a stat…";
+    }
+    case "estimate_damage":
+      return "💥 Running the damage calc…";
+    case "submit_answer":
+      return "✍️ Composing the answer…";
+    default:
+      return base;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -872,7 +997,7 @@ export async function runPokebotWith(
     let submitFailed = false;
 
     for (const block of toolUseBlocks) {
-      onProgress?.({ tool: block.name, label: progressLabel(block.name) });
+      onProgress?.({ tool: block.name, label: describeToolCall(block.name, block.input) });
 
       if (block.name === "submit_answer") {
         const started = Date.now();
