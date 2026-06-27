@@ -64,9 +64,29 @@ history) first requires a notion of "who," so this is the prerequisite for B-2 a
 
 ## B-2 — Team building
 
-> **Status: SPECIFIED** (not yet built) — refined into a buildable spec at
-> `docs/features/team-builder/requirements/requirements.md` (TEAM-US-1..11,
-> BR-T1..11, AC-*). Decisions locked: **both** a manual builder (a **dedicated
+> **Status: BUILT** — implemented per
+> `docs/features/team-builder/architecture/design.md` (decisions TEAM-AD-1..6)
+> from the spec at `docs/features/team-builder/requirements/requirements.md`
+> (TEAM-US-1..11, BR-T1..11, AC-*). Delivered: a saved-team data model (one row +
+> JSON `members`, per-account + format-bound), a dedicated **Teams page** manual
+> builder (create / rename / duplicate / delete, per-slot editing, live computed
+> stats), **warn-but-allow** validation (`validateTeam` → `TeamWarning[]`, never
+> blocks a save), **Showdown paste import/export** (`@pkmn/sets`, isolated to
+> `src/data/pkmn/team-paste.ts`), and the `/api/teams/*` route surface
+> (per-account isolation → 404, guests → 401). Agent-side, a per-conversation
+> **active team** is server-bound onto `AgentContext.activeTeam` (the analogue of
+> `mode`) and read on demand by the new no-arg **`get_active_team` (T12)** tool —
+> growing the documented 11-tool contract to **12 tools** — and the agent can
+> **propose** a team via the additive optional `proposed_team` answer field, which
+> the user explicitly **applies** (save-new / apply-existing) — the agent never
+> writes a team itself (BR-T8). These inlined agent internals are reconciled into
+> `docs/agent-design/{tools.md,prompts.md,output-formats.md}` (TEAM-AD-3). This
+> resolves all three original open questions below: build mode → both; set depth →
+> full competitive set; team-as-agent-input → server-bound + read via a no-arg
+> tool (never a scope-widening LLM input, mirroring the server-controlled format).
+> Original SPECIFIED framing + history retained below.
+>
+> **Decisions locked (from the spec):** **both** a manual builder (a **dedicated
 > Teams page**) and **agent-assisted** construction in chat, where the agent
 > **proposes** a team/edit and the user explicitly **applies** it (the agent
 > never mutates saved teams); the **full competitive set** per Pokémon (species,

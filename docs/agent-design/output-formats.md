@@ -193,6 +193,21 @@ contract between the agent and the frontend renderer.
       "type": "array",
       "items": { "type": "string" },
       "description": "Top-level caveats surfaced prominently (e.g. 'Couldn't reach PokeAPI for item data', 'Result assumes the standard ability')."
+    },
+    "proposed_team": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "OPTIONAL — added by the team-builder feature (TEAM-AD-6). A team the agent built/suggested for a 'build me a team' (or 'tweak my team') turn. INERT: the agent never saves a team itself (BR-T8); the frontend renders it with Apply buttons (save as new / apply onto an existing same-format team) that perform the actual Teams API write on the user's click. Additive + optional, so previously-stored answer_json (no proposed_team key) still validates under the strict schema.",
+      "required": ["name", "format", "members"],
+      "properties": {
+        "name": { "type": "string", "description": "Suggested team name (the user can rename on Apply)." },
+        "format": { "type": "string", "enum": ["scarlet-violet", "champions"], "description": "The format the proposal targets — must match the active scope." },
+        "members": {
+          "type": "array",
+          "maxItems": 6,
+          "description": "Up to six member sets (the shared `teamMembersSchema`). Each: species, ability, item, moves (≤4), nature, evs/ivs (per-stat 0–255), tera_type, level (1–100), and optional nickname/gender/shiny. Partial sets are allowed — omit fields you're unsure of."
+        }
+      }
     }
   },
   "definitions": {
@@ -242,6 +257,10 @@ contract between the agent and the frontend renderer.
   populated when any close match exists.
 - All `types` / `subjects[].types` / `candidates.shown[].types` values must be
   one of the 18 `typeName` enum values (so the frontend can color-map badges).
+- `proposed_team` is **optional and additive** (TEAM-AD-6): present only on a
+  "build/tweak a team" turn. Its `members` validate against the shared
+  `teamMembersSchema` (per-stat EVs/IVs 0–255, ≤4 moves, ≤6 members). The agent
+  emits it as a suggestion only — it never performs a write (BR-T8).
 
 ## Consumer Contract
 
@@ -259,6 +278,7 @@ The **frontend chat renderer** (a React `AnswerCard`, per `ux-design.md`) ingest
 | `generation_basis.fallback`, `uncertainty_flags[]` | `FallbackBanner` / `CaveatStrip`                   |
 | `damage_calc`                                      | `DamageReadout` (shows assumptions + estimate tag) |
 | `suggestions[]` (with `status`)                    | `SuggestionChips` (click → follow-up message)      |
+| `proposed_team`                                    | `ProposedTeamCard` (Apply → save-new / apply-existing) |
 
 The schema is also the headless test contract — evals assert against these fields
 directly (see `evaluation.md`).

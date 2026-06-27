@@ -1,10 +1,14 @@
 # Tools
 
-Eleven tools. Eight read data (one queries the local index, six fetch reference
-details, one resolves names), two compute battle math, one emits the final
-answer. All read/compute tools are **read-only and idempotent** — safe to retry
-in the loop. Tools return **structured errors the model can reason about**, never
-raw exceptions.
+Twelve tools. Nine read data (one queries the local index, six fetch reference
+details, one resolves names, one reads the conversation's active team), two
+compute battle math, one emits the final answer. All read/compute tools are
+**read-only and idempotent** — safe to retry in the loop. Tools return
+**structured errors the model can reason about**, never raw exceptions.
+
+> The twelfth tool — `get_active_team` (T12) — was added by the **team-builder**
+> feature (see `docs/features/team-builder/architecture/design.md`, decisions
+> TEAM-AD-1 / TEAM-AD-3). The "11-tool contract" is now a **12-tool contract**.
 
 Conventions:
 
@@ -625,6 +629,78 @@ validation error to the model and asks it to re-emit (see `integration.md`).
 
 ---
 
+## T12 — `get_active_team`
+
+_(Added by the team-builder feature — TEAM-AD-1 / TEAM-AD-3.)_
+
+**Description (for the model):** Get the user's currently-selected (active) team
+for this conversation — its members (species, ability, item, moves, nature,
+EVs/IVs, Tera type, level), their display names, and any validity/legality
+warnings. **Takes no arguments:** the active team is whatever the user has
+selected (you cannot pick or change it). Returns `{ "active": false }` when no
+team is selected. Call this when the user asks about "my team", a specific
+member, or wants advice grounded in the team they're building (BR-T9).
+
+**Input schema:** none — a strict empty object.
+
+```json
+{ "type": "object", "properties": {}, "additionalProperties": false }
+```
+
+The active team is **server-controlled**: the chat route resolves + authorizes
+`active_team_id` and binds the team onto `AgentContext.activeTeam` (the exact
+analogue of `mode` / the active format). It is deliberately **not** a tool input,
+so the model has no parameter to widen scope (TEAM-AD-1). The cached prompt
+prefix gains the tool *definition* once and otherwise stays byte-identical — the
+team is never injected into the prefix or history per turn.
+
+**Output shape (sample):**
+
+```json
+{
+  "active": true,
+  "team": {
+    "name": "Sun Offense",
+    "format": "scarlet-violet",
+    "members": [
+      {
+        "species": "garchomp",
+        "species_display": "Garchomp",
+        "ability": "rough-skin",
+        "ability_display": "Rough Skin",
+        "item": "leftovers",
+        "item_display": "Leftovers",
+        "moves": ["earthquake", "dragon-claw"],
+        "moves_display": ["Earthquake", "Dragon Claw"],
+        "nature": "adamant",
+        "evs": { "hp": 4, "atk": 252, "def": 0, "spa": 0, "spd": 0, "spe": 252 },
+        "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+        "tera_type": "ground",
+        "level": 50
+      }
+    ],
+    "warnings": [
+      { "code": "incomplete", "slot": 0, "message": "Slot has only 2 of 4 moves." }
+    ]
+  }
+}
+```
+
+Display names come from the same `searchable_names` master list `resolve_entity`
+uses; the `warnings[]` are computed on demand by `validateTeam` (warn-but-allow,
+never stored — so they can't go stale across a re-ingest). Warning codes:
+`incomplete`, `ev_total_exceeded`, `ev_stat_exceeded`, `iv_out_of_range`,
+`species_illegal`, `ability_not_for_species`, `item_illegal`,
+`move_not_in_learnset`, `duplicate_species`, `duplicate_item`.
+
+**Side effects:** Read-only. Idempotent. **Failure modes:** never fatal — an
+absent active team OR any read fault while enriching degrades to
+`{ "active": false }`. **Auth:** none at the tool layer (the route already
+resolved + authorized the team account-scoped; the agent never sees an account
+id).
+
+---
+
 ## Tool-existence status
 
 | Tool                                                                        | Exists? | Build note                                                 |
@@ -635,6 +711,10 @@ validation error to the model and asks it to re-emit (see `integration.md`).
 | get_move / get_ability / get_type_matchups / get_evolution_chain / get_item | ❌      | Read DS-4 (read-through cache over PokeAPI).               |
 | compute_stat / estimate_damage                                              | ❌      | Pure formula functions (D5).                               |
 | submit_answer                                                               | ❌      | Structured-output tool; schema in `output-formats.md`.     |
+| get_active_team                                                             | ✅      | Built by team-builder (TEAM-AD-1); reads server-bound `ctx.activeTeam`. |
+
+(The ❌ marks are the original agent-design backlog state; `get_active_team` is
+implemented as part of the team-builder feature.)
 
 All tools are new work. None require auth or carry side effects beyond reads —
 simplifying retry logic in the loop.
