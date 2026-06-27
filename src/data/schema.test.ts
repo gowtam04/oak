@@ -21,11 +21,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import {
   account,
   auth_session,
+  conversation,
   ingest_meta,
   learnset,
   otp_code,
   reference_cache,
   searchable_names,
+  team,
 } from "@/data/schema";
 
 import { createPgSchema, type PgFixture, type PgDb } from "../../test/support/pg";
@@ -151,7 +153,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 10 tables (5 Pokédex index + 3 auth + 2 chat-history)", async () => {
+  it("creates all 11 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
@@ -169,10 +171,12 @@ describe("Drizzle migration — table creation", () => {
         // Chat-history tables (account-scoped) — added by the 0002 migration.
         "conversation",
         "conversation_message",
+        // Team builder (account-scoped) — added by the 0003 migration.
+        "team",
       ]),
     );
-    // Exactly 10 user tables (5 index + 3 auth + 2 chat-history, no extras).
-    expect(tables).toHaveLength(10);
+    // Exactly 11 user tables (5 index + 3 auth + 2 chat-history + 1 team).
+    expect(tables).toHaveLength(11);
   });
 
   it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {
@@ -185,9 +189,12 @@ describe("Drizzle migration — table creation", () => {
         "pinned",
         "created_at",
         "updated_at",
+        // Added by the 0003 (team-builder) migration — the conversation's
+        // active team (BR-T9); logical FK → team.id, nullable (AC-8.1).
+        "active_team_id",
       ]),
     );
-    expect(await columnNames(db, "conversation")).toHaveLength(7);
+    expect(await columnNames(db, "conversation")).toHaveLength(8);
     expect(await pkColumns(db, "conversation")).toEqual(["id"]);
 
     expect(await columnNames(db, "conversation_message")).toEqual(
@@ -368,6 +375,26 @@ describe("Drizzle migration — table creation", () => {
     );
     expect(cols).toHaveLength(6);
     expect(await pkColumns(db, "ingest_meta")).toEqual(["format"]);
+  });
+
+  it("migration creates the team table with the correct columns, PK, and index", async () => {
+    expect(await columnNames(db, "team")).toEqual(
+      expect.arrayContaining([
+        "id",
+        "account_id",
+        "format",
+        "name",
+        "members",
+        "created_at",
+        "updated_at",
+      ]),
+    );
+    expect(await columnNames(db, "team")).toHaveLength(7);
+    expect(await pkColumns(db, "team")).toEqual(["id"]);
+
+    const indexes = await indexNames(db);
+    // Backs the per-account list (ORDER BY updated_at DESC, scoped by account_id).
+    expect(indexes).toContain("team_account_updated_idx");
   });
 });
 
@@ -630,6 +657,69 @@ describe("Schema constraints", () => {
     expect(row).toBeDefined();
     expect(row!.code_hash).toBe("hash-two");
     expect(row!.attempts).toBe(0);
+  });
+
+  it("team row round-trips the JSON members column and orders by updated_at", async () => {
+    const members = JSON.stringify([
+      { species: "garchomp", moves: ["earthquake"], level: 50 },
+    ]);
+    await cdb.insert(team).values({
+      id: "team-1",
+      account_id: "acct-1",
+      format: "scarlet-violet",
+      name: "Untitled team",
+      members,
+      created_at: 1_700_000_000_000,
+      updated_at: 1_700_000_000_000,
+    });
+
+    const rows = await cdb.select().from(team);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.members).toBe(members);
+    // bigint mode:"number" reads back as a JS number, not a string.
+    expect(rows[0]!.updated_at).toBe(1_700_000_000_000);
+    expect(JSON.parse(rows[0]!.members)).toEqual([
+      { species: "garchomp", moves: ["earthquake"], level: 50 },
+    ]);
+  });
+
+  it("team.account_id is a logical (not physical) FK — no constraint blocks an unknown account", async () => {
+    // Matches the schema's logical-FK convention (isolation is enforced in the
+    // repo, BR-T2). Inserting a team for an account row that does not exist must
+    // NOT be rejected by a physical FK constraint.
+    await expect(
+      cdb.insert(team).values({
+        id: "team-2",
+        account_id: "ghost-account",
+        format: "champions",
+        name: "Ghost team",
+        members: "[]",
+        created_at: 1_700_000_000_000,
+        updated_at: 1_700_000_000_000,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("conversation.active_team_id defaults to NULL and accepts a team id (logical FK)", async () => {
+    await cdb.insert(conversation).values({
+      id: "conv-1",
+      account_id: "acct-1",
+      title: "Hello",
+      format: "scarlet-violet",
+      created_at: 1_700_000_000_000,
+      updated_at: 1_700_000_000_000,
+    });
+    const before = await cdb.select().from(conversation);
+    expect(before[0]!.active_team_id).toBeNull();
+
+    // No physical FK — setting it to an arbitrary team id is allowed (the repo
+    // enforces ownership + format match; BR-T9/BR-T10).
+    await cdb
+      .update(conversation)
+      .set({ active_team_id: "team-1" })
+      .where(sql`id = 'conv-1'`);
+    const after = await cdb.select().from(conversation);
+    expect(after[0]!.active_team_id).toBe("team-1");
   });
 
   it("ingest_meta per-format row can be UPSERTED without error", async () => {

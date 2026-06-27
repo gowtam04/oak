@@ -325,6 +325,14 @@ export const conversation = pgTable(
     created_at: bigint("created_at", { mode: "number" }).notNull(),
     /** Epoch ms of last activity — drives most-recently-active list ordering. */
     updated_at: bigint("updated_at", { mode: "number" }).notNull(),
+    /**
+     * Logical FK → team.id (NOT a physical constraint, schema convention). The
+     * conversation's active team (BR-T9); NULL = none (AC-8.1). Bound onto the
+     * agent context like `mode` (server-controlled, never an LLM tool input).
+     * On team delete the repo clears this in the same transaction (BR-T10) —
+     * there is no ON DELETE CASCADE.
+     */
+    active_team_id: text("active_team_id"),
   },
   (t) => [
     // Per-account list query: ORDER BY pinned DESC, updated_at DESC, scoped to
@@ -377,5 +385,56 @@ export const conversation_message = pgTable(
     ),
     // Isolation / cleanup queries by owning account.
     index("message_account_idx").on(t.account_id),
+  ],
+);
+
+// ===========================================================================
+// Team builder (docs/features/team-builder § Data Model)
+//
+// Durable, account-scoped competitive teams for signed-in users (B-2). Like the
+// auth/chat-history tables this is GLOBAL (no `format` column) — a team's
+// `format` is a per-row property fixed for its life (BR-T3), not a partition of
+// the store. Epoch-ms timestamps are `bigint` mode "number"; the `members`
+// array is stored whole as JSON TEXT (the reference_cache.payload /
+// conversation_message.answer_json convention) since teams are always read and
+// written as a unit. FKs are logical indexed columns, NOT physical constraints
+// (cf. conversation.account_id), so deletes are explicit in the repo: deleteTeam
+// removes the row AND nulls conversation.active_team_id references in one tx
+// (BR-T10) — there is no ON DELETE CASCADE.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// team — one row per saved team (TEAM-AD-1: members stored as a JSON column)
+// ---------------------------------------------------------------------------
+export const team = pgTable(
+  "team",
+  {
+    /** UUID (crypto.randomUUID()). */
+    id: text("id").primaryKey(),
+    /**
+     * Logical FK → account.id; every read/write filters by it (BR-T2 / BR-A9).
+     * Plain indexed column, not a physical FK (schema convention). A team owned
+     * by another account is indistinguishable from missing (404, never 403).
+     */
+    account_id: text("account_id").notNull(),
+    /** "scarlet-violet" | "champions"; fixed for the team's life (BR-T3). */
+    format: text("format").notNull(),
+    /** User-facing name; non-empty (defaults to "Untitled team", BR-T1/AC-1.2). */
+    name: text("name").notNull(),
+    /**
+     * JSON: TeamMember[] (0–6), validated by `teamMembersSchema`
+     * (src/data/teams/team-schema.ts). Stored whole — no cross-member SQL.
+     */
+    members: text("members").notNull(),
+    /** Epoch ms the team was created. */
+    created_at: bigint("created_at", { mode: "number" }).notNull(),
+    /** Epoch ms of last edit — drives list ordering (ORDER BY updated_at DESC). */
+    updated_at: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    // Per-account list query: ORDER BY updated_at DESC scoped to account_id.
+    // account_id leads so the filter uses the index prefix; format is filtered
+    // in the query (tiny N per account).
+    index("team_account_updated_idx").on(t.account_id, t.updated_at),
   ],
 );

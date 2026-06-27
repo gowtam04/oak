@@ -33,6 +33,7 @@
     "@pkmn/data": "^0.10.11",
     "@pkmn/dex": "^0.10.11",
     "@pkmn/mods": "^0.10.11",
+    "@pkmn/sets": "^5.2.0",
     "drizzle-orm": "0.45.2",
     "fuse.js": "7.4.2",
     "next": "15.5.19",
