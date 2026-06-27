@@ -169,6 +169,46 @@ export interface DamageReadoutProps {
 }
 
 /**
+ * `proposed_team` — the team the agent built for a "build me a team" turn
+ * (TEAM-AD-6). ADDITIVE optional field on `PokebotAnswer`; a `ChatTurn`'s
+ * assistant `answer` carries it through unchanged (it lives inside
+ * `PokebotAnswer`). The agent NEVER writes a team (BR-T8) — the user Applies it
+ * via a normal authenticated Teams API write (save-new / apply-existing).
+ */
+export type ProposedTeam = NonNullable<PokebotAnswer["proposed_team"]>;
+
+/**
+ * `proposed_team` card — renders the agent's proposed team and the two Apply
+ * affordances (save as a NEW team via `createTeam`, or apply its members onto an
+ * EXISTING same-format team via `updateTeam`). All writes go through the
+ * never-throwing teams-client; guests / failures fold into an inline message.
+ */
+export interface ProposedTeamCardProps {
+  proposedTeam: ProposedTeam;
+}
+
+/**
+ * Chat-side active-team selector (TEAM-US-8 / AC-8.1). Lists the signed-in
+ * account's teams for the CURRENT format only, defaults to none, and on select
+ * both lifts the choice via `onChange` (so the next chat turn carries
+ * `active_team_id`) and PATCHes the conversation row (a 404 for a not-yet-created
+ * conversation is harmless — the next turn persists it). Cleared by the host on a
+ * format toggle / different-format conversation (AC-8.3).
+ */
+export interface ActiveTeamSelectorProps {
+  /** The active format (`"scarlet-violet"` | `"champions"`) to scope the list. */
+  format: string;
+  /** The live conversation id (== session id) to PATCH on select. */
+  conversationId: string;
+  /** The currently-selected team id, or null for "no active team". */
+  value: string | null;
+  /** Lift the selection so the host can send it in the chat body + hold it. */
+  onChange: (teamId: string | null) => void;
+  /** False for guests → empty, no fetch, no selector (BR-T2). */
+  enabled: boolean;
+}
+
+/**
  * `suggestions[]` (with `status`) — clickable closest-match chips shown for
  * `clarification_needed` / `resolution_failed`. Clicking a chip sends it as a
  * follow-up user message.
