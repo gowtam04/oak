@@ -90,6 +90,23 @@ into an ongoing workflow.
 
 ## B-3 — Chat history
 
+> **Status: SPECIFIED** (not yet built) — refined into a buildable spec at
+> `docs/features/chat-history/requirements/requirements.md` (HIST-US-1..12,
+> BR-H1..11, AC-*). Decisions locked: **signed-in users only** (guests stay
+> ephemeral/in-memory); store the **full structured `PokebotAnswer`** per turn
+> (not markdown-only, and the tool-activity trace is **not** persisted);
+> conversations are **resumable with in-conversation memory** (prior turns
+> re-fed within the existing context budget); **auto-save all**, auto-derived +
+> renamable titles; manage via delete (permanent, confirmed) / rename / search
+> (title+text) / pin / filter-by-format (export is out of scope); a guest's
+> on-screen conversation **auto-saves to the new account on sign-in** (extends
+> BR-A10); **indefinite retention** (optional abuse-backstop cap TBD). Builds on
+> B-1 accounts and BR-A9 isolation. The three original open questions below are
+> resolved by the spec: store full structured payloads (not markdown); resuming
+> re-feeds prior turns with existing trimming and leaves the cached prefix /
+> `MAX_ITERATIONS` untouched; retention is indefinite (cap is an open detail, not
+> a policy). Original framing retained below as history.
+
 **Why:** Conversation history is currently **in-memory only** (per-session store in
 `route.ts`) — it evaporates on restart and isn't visible across devices. Persisting it
 gives the user a durable record of past answers (with their reasoning and citations,
