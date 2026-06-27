@@ -8,6 +8,13 @@
       "when": 1782503928458,
       "tag": "0000_same_moon_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782513726015,
+      "tag": "0001_confused_electro",
+      "breakpoints": true
     }
   ]
 }

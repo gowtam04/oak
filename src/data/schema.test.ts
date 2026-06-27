@@ -19,8 +19,11 @@ import { sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  account,
+  auth_session,
   ingest_meta,
   learnset,
+  otp_code,
   reference_cache,
   searchable_names,
 } from "@/data/schema";
@@ -148,19 +151,69 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 5 tables", async () => {
+  it("creates all 8 tables (5 Pokédex index + 3 auth)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
+        // Pokédex index tables (format-scoped)
         "ingest_meta",
         "learnset",
         "pokemon",
         "reference_cache",
         "searchable_names",
+        // Auth tables (account-creation, NOT format-scoped) — added by the
+        // 0001 migration, applied to every fresh Testcontainers schema.
+        "account",
+        "auth_session",
+        "otp_code",
       ]),
     );
-    // Exactly 5 user tables (no extras).
-    expect(tables).toHaveLength(5);
+    // Exactly 8 user tables (5 index + 3 auth, no extras).
+    expect(tables).toHaveLength(8);
+  });
+
+  it("migration creates the 3 auth tables with the correct columns + PKs", async () => {
+    // migration_applies_auth_tables: account / auth_session / otp_code exist on
+    // a fresh schema with the exact columns and primary keys from § Data Model.
+    expect(await columnNames(db, "account")).toEqual(
+      expect.arrayContaining(["id", "email", "created_at"]),
+    );
+    expect(await columnNames(db, "account")).toHaveLength(3);
+    expect(await pkColumns(db, "account")).toEqual(["id"]);
+
+    expect(await columnNames(db, "auth_session")).toEqual(
+      expect.arrayContaining([
+        "id",
+        "token_hash",
+        "account_id",
+        "created_at",
+        "expires_at",
+      ]),
+    );
+    expect(await columnNames(db, "auth_session")).toHaveLength(5);
+    expect(await pkColumns(db, "auth_session")).toEqual(["id"]);
+
+    expect(await columnNames(db, "otp_code")).toEqual(
+      expect.arrayContaining([
+        "email",
+        "code_hash",
+        "created_at",
+        "expires_at",
+        "attempts",
+        "consumed_at",
+      ]),
+    );
+    expect(await columnNames(db, "otp_code")).toHaveLength(6);
+    // BR-A5: email is the PK so a fresh code upserts/supersedes the prior row.
+    expect(await pkColumns(db, "otp_code")).toEqual(["email"]);
+  });
+
+  it("creates the auth unique indexes (account.email, auth_session.token_hash)", async () => {
+    const indexes = await indexNames(db);
+    expect(indexes).toContain("account_email_idx");
+    expect(indexes).toContain("auth_session_token_hash_idx");
+    expect(indexes).toContain("auth_session_account_id_idx");
+    expect(indexes).toContain("auth_session_expires_at_idx");
   });
 
   it("creates all expected indexes", async () => {
@@ -445,6 +498,99 @@ describe("Schema constraints", () => {
         fetched_at: 1_700_000_000_001,
       }),
     ).rejects.toThrow();
+  });
+
+  it("account UNIQUE email rejects a duplicate normalized email (BR-A1)", async () => {
+    // BR-A1: exactly one account per normalized email — the unique index on
+    // account.email enforces it, so a second insert of the same email rejects.
+    await cdb.insert(account).values({
+      id: "acct-1",
+      email: "ash@example.com",
+      created_at: 1_700_000_000_000,
+    });
+
+    await expect(
+      cdb.insert(account).values({
+        id: "acct-2",
+        email: "ash@example.com",
+        created_at: 1_700_000_000_001,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("auth_session UNIQUE token_hash rejects a duplicate token hash", async () => {
+    // resolve-on-request looks a session up by token_hash, so the column is
+    // UNIQUE — two rows with the same hash are rejected.
+    await cdb.insert(auth_session).values({
+      id: "sess-1",
+      token_hash: "deadbeef",
+      account_id: "acct-1",
+      created_at: 1_700_000_000_000,
+      expires_at: 1_700_000_000_000 + 30 * 24 * 60 * 60_000,
+    });
+
+    await expect(
+      cdb.insert(auth_session).values({
+        id: "sess-2",
+        token_hash: "deadbeef",
+        account_id: "acct-2",
+        created_at: 1_700_000_000_001,
+        expires_at: 1_700_000_000_001 + 30 * 24 * 60 * 60_000,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("otp_code PK(email) rejects a duplicate insert; upsert supersedes (BR-A5)", async () => {
+    // email is the PK: a raw second insert for the same email is rejected...
+    await cdb.insert(otp_code).values({
+      email: "ash@example.com",
+      code_hash: "hash-one",
+      created_at: 1_700_000_000_000,
+      expires_at: 1_700_000_000_000 + 10 * 60_000,
+      attempts: 3,
+      consumed_at: null,
+    });
+
+    await expect(
+      cdb.insert(otp_code).values({
+        email: "ash@example.com",
+        code_hash: "hash-two",
+        created_at: 1_700_000_000_500,
+        expires_at: 1_700_000_000_500 + 10 * 60_000,
+        attempts: 0,
+        consumed_at: null,
+      }),
+    ).rejects.toThrow();
+
+    // ...but issuing a new code is an upsert-by-email that supersedes the prior
+    // row (resets attempts/consumed_at), so only the latest code is ever valid.
+    await cdb
+      .insert(otp_code)
+      .values({
+        email: "ash@example.com",
+        code_hash: "hash-two",
+        created_at: 1_700_000_000_500,
+        expires_at: 1_700_000_000_500 + 10 * 60_000,
+        attempts: 0,
+        consumed_at: null,
+      })
+      .onConflictDoUpdate({
+        target: otp_code.email,
+        set: {
+          code_hash: "hash-two",
+          created_at: 1_700_000_000_500,
+          expires_at: 1_700_000_000_500 + 10 * 60_000,
+          attempts: 0,
+          consumed_at: null,
+        },
+      });
+
+    const rows = await cdb.select().from(otp_code);
+    expect(rows).toHaveLength(1);
+    const row = rows.find((r) => r.email === "ash@example.com");
+    expect(row).toBeDefined();
+    expect(row!.code_hash).toBe("hash-two");
+    expect(row!.attempts).toBe(0);
   });
 
   it("ingest_meta per-format row can be UPSERTED without error", async () => {

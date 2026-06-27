@@ -12,6 +12,35 @@ of those assumptions, so they're listed in dependency order: accounts unlock the
 
 ## B-1 — Account creation
 
+> **Status: BUILT** — specified and implemented as **Account Creation (Email +
+> OTP Auth)**. See `docs/features/account-creation/requirements/requirements.md`
+> (BR-A1..A11, AUTH-US-1..7, AC-*) and
+> `docs/features/account-creation/architecture/design.md`. Delivered passwordless
+> email-OTP accounts with a retained anonymous guest mode, DB-backed opaque
+> cookie sessions (~30-day, per-device, revocable on sign out), and tiered chat
+> rate limits (per-account for signed-in users, per-IP for guests). Auth is a
+> separate cookie/account concern, orthogonal to the conversation `session_id`,
+> so guest→user thread continuity and the agent/SSE contract are untouched
+> (BR-A10, BR-A11). This **supersedes** the "single user / no auth" stance in
+> `docs/requirements/requirements.md` (§Non-Functional, §Out of Scope) for the
+> auth dimension.
+>
+> **Deliberately deferred (not built — tracked for later):**
+> - **Production email sender identity** — `EMAIL_FROM` + a verified Resend
+>   domain. Dev/test use a console transport; the `onboarding@resend.dev` default
+>   only delivers to the account owner, so this is needed before real multi-user
+>   delivery (not before building).
+> - **Account deletion / data export / GDPR** — out of scope for this build;
+>   revisit before a genuinely public launch.
+> - **Multi-instance throttle** — the OTP request throttle (and the conversation
+>   store) are in-memory, sized for a single-instance hobby deploy; a shared
+>   backend is required if Pokebot ever runs multiple processes.
+>
+> The "auth strategy" and "where identity lives" open questions below are now
+> resolved by the design (hand-rolled email-OTP; identity in the existing
+> Drizzle/Postgres layer — note the backlog's original "Drizzle/SQLite" framing
+> predates the Postgres migration). Original framing retained below as history.
+
 **Why:** The product is single-user by design today (one Owner, no auth — see
 `requirements.md` §Users and Personas). Persisting anything per-person (teams, chat
 history) first requires a notion of "who," so this is the prerequisite for B-2 and B-3.

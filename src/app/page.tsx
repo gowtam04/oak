@@ -6,6 +6,9 @@ import ChatThread from "@/components/ChatThread";
 import Composer from "@/components/Composer";
 import ThemeToggle from "@/components/ThemeToggle";
 import ChampionsToggle from "@/components/ChampionsToggle";
+import AuthMenu from "@/components/auth/AuthMenu";
+import AuthDialog from "@/components/auth/AuthDialog";
+import { fetchMe, type MeResult } from "@/lib/auth-client";
 import type { ChatStatus, ChatTurn, PokebotAnswer } from "@/components/types";
 
 /** localStorage key for the persisted Champions-mode choice. */
@@ -73,6 +76,45 @@ export default function Home() {
     }
   }, []);
 
+  // Auth identity (account-creation design.md § API "/api/auth/me"; AUTH-US-1 /
+  // AC-1.2). Auth is a SEPARATE concern from the conversation: it lives in a
+  // cookie/account, never in `sessionId`/`turns[]`, so signing in or out must
+  // leave the on-screen thread untouched (BR-A10 / AUTH-US-6 — enforced below).
+  const [auth, setAuth] = useState<MeResult>({ signedIn: false });
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+
+  // Resolve auth state on mount so the header renders guest vs signed-in. The
+  // page is a client component, so this runs after hydration; `fetchMe` never
+  // throws (a guest / unknown cookie / transport fault all resolve to
+  // `{ signedIn: false }`), so no error path is needed (BR-A11).
+  useEffect(() => {
+    let active = true;
+    void fetchMe().then((me) => {
+      if (active) setAuth(me);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Sign-in completed in the dialog. Close it and re-resolve identity (to pick up
+  // the account email for the menu). CRITICAL: we do NOT touch `sessionId` or
+  // `turns[]` — the conversation visible before sign-in stays visible and usable
+  // (BR-A10 / AC-6.1, AC-6.2). The `created` flag (new account vs returning
+  // login) is intentionally not surfaced here; both paths land in the same UI.
+  const handleSignedIn = useCallback(() => {
+    setAuthDialogOpen(false);
+    void fetchMe().then(setAuth);
+  }, []);
+
+  // Sign-out completed (current device only — AC-5.2). Revert to the guest tier
+  // WITHOUT resetting `sessionId` or clearing `turns[]`: the thread persists
+  // across the user→guest transition exactly as it does across guest→user
+  // (BR-A10).
+  const handleSignedOut = useCallback(() => {
+    setAuth({ signedIn: false });
+  }, []);
+
   // Commit each terminal answer exactly once (guard against effect re-runs /
   // React strict-mode double-invoke by tracking the committed object identity).
   const committedAnswerRef = useRef<PokebotAnswer | null>(null);
@@ -135,6 +177,12 @@ export default function Home() {
             onChange={setChampionsModePersisted}
           />
           <ThemeToggle />
+          <AuthMenu
+            signedIn={auth.signedIn}
+            email={auth.email}
+            onSignInClick={() => setAuthDialogOpen(true)}
+            onSignedOut={handleSignedOut}
+          />
         </div>
       </header>
 
@@ -153,6 +201,12 @@ export default function Home() {
         streaming={status === "thinking"}
         onStop={handleStop}
         prefill={prefill}
+      />
+
+      <AuthDialog
+        open={authDialogOpen}
+        onClose={() => setAuthDialogOpen(false)}
+        onSignedIn={handleSignedIn}
       />
     </main>
   );

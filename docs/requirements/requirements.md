@@ -268,6 +268,14 @@ See the [Out of Scope](#out-of-scope) section.
 
 - **Single user.** Personal tool; no authentication, accounts, or multi-user
   access control required.
+  - **SUPERSEDED (auth dimension) by B-1 — Account Creation.** As of the
+    Account Creation feature, Pokebot is multi-tenant with passwordless
+    email-OTP accounts plus a retained anonymous guest mode, so the "no
+    authentication / accounts / multi-user access control" stance no longer
+    holds for the auth dimension. History preserved above for context. See
+    `docs/features/account-creation/` (requirements `BR-A1..A11`,
+    `AUTH-US-1..7`; architecture `design.md`). The remainder of the product
+    stays personal-scale (single agent persona, no admin/owner role).
 - **Platform.** Web-based chat UI, used in a desktop browser. Sprites + text
   presentation.
 - **Performance.** Conversational responsiveness; a few seconds per answer
@@ -336,6 +344,12 @@ add these without them being moved into scope:
 - **Locations & encounters** — where to catch a Pokemon, encounter rates,
   version exclusives.
 - **Multi-user features** — accounts, authentication, sharing, permissions.
+  - **SUPERSEDED (auth dimension) by B-1 — Account Creation.** Accounts and
+    authentication are now in scope and shipped (passwordless email-OTP +
+    guest mode + tiered rate limits); see `docs/features/account-creation/`.
+    History preserved above. Still out of scope: cross-account **sharing** and
+    elevated **permissions/roles** — registration is open and all accounts are
+    peers (no admin/owner role).
 - **Native mobile / chat-platform (Discord/Slack) clients** — web chat UI only.
 - **A full battle simulator** — the agent reasons about interactions and can
   estimate damage, but it does not simulate full turn-by-turn battles.

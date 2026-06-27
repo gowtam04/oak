@@ -41,8 +41,13 @@ import type {
   OnAnswerStart,
   OnProgress,
 } from "@/agent/types";
+import type { Account } from "@/data/repos/accounts-repo";
 import { logger } from "@/server/logger";
-import { checkRateLimit } from "@/server/rate-limit";
+import {
+  checkRateLimit,
+  GUEST_CONFIG,
+  SIGNED_IN_CONFIG,
+} from "@/server/rate-limit";
 import { appendTurn, getHistory, trim } from "@/server/session-store";
 import {
   formatSseEvent,
@@ -82,6 +87,29 @@ function jsonError(
     status,
     headers: { "Content-Type": "application/json", ...extraHeaders },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Guest IP derivation (account-creation design.md § API Design)
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive the guest rate-limit identity from the request.  Per the design's
+ * documented trust assumption (a single reverse proxy in front of the app on the
+ * hobby deploy), the client IP is the FIRST hop of `X-Forwarded-For`, falling
+ * back to `X-Real-IP`, then to a constant when neither header is present (the
+ * Web `Request` exposes no socket address). The constant simply means all such
+ * header-less guests share one bucket — acceptable abuse-bounding at this tier.
+ */
+function clientIp(req: Request): string {
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    const firstHop = forwardedFor.split(",")[0]?.trim();
+    if (firstHop) return firstHop;
+  }
+  const realIp = req.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+  return "unknown";
 }
 
 // ---------------------------------------------------------------------------
@@ -137,9 +165,46 @@ export async function POST(req: Request): Promise<Response> {
   // Champions; omitted/false ⇒ today's Gen 9 behavior.
   const mode: AgentMode = body.champions_mode ? "champions" : "standard";
 
-  // 2. Orchestration guardrails — input-length cap + per-session rate limit
-  //    (integration.md § Guardrails). Synchronous; runs before the stream opens.
-  const gate = checkRateLimit(session_id, message);
+  // 2. Orchestration guardrails — input-length cap + TIERED rate limit
+  //    (integration.md § Guardrails; account-creation design.md § API Design
+  //    "POST /api/chat (modified)", BR-A8 / AUTH-US-7). Resolve the account from
+  //    the session cookie BEFORE the gate, then key + configure by auth tier:
+  //      signed in → `acct:<id>` + SIGNED_IN_CONFIG (60/60s).
+  //      guest     → `ip:<clientIp>` + GUEST_CONFIG (20/60s).
+  //    The two pools never share a key, so guest sessions can't pool into the
+  //    account allowance (AC-7.3). The conversation `session_id` is intentionally
+  //    NOT the rate-limit key — identity ≠ conversation (AD-2), so the on-screen
+  //    thread survives sign-in unchanged (BR-A10). Synchronous gate; the only
+  //    await before it is the cookie resolution.
+  // Resolve identity defensively: a session-resolution fault (e.g. a DB blip
+  // reading the cookie's session) must NOT 500 the chat — it degrades to the
+  // guest tier (BR-A11: guests are first-class, never an error path).
+  let account: Account | null = null;
+  try {
+    // Dynamic import defers the auth chain's env evaluation (current-user →
+    // sessions → @/env) to request time, not build time — the same reason the
+    // runPokebot import below is deferred. A static import would trip
+    // `next build` (env's AUTH_SECRET prod guard throws at page-data collection).
+    const { getCurrentAccount } = await import("@/server/auth/current-user");
+    account = await getCurrentAccount();
+  } catch (err) {
+    logger.warn(
+      {
+        event: "chat_account_resolve_failed",
+        request_id: requestId,
+        session_id,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "pokebot_chat_account_resolve_failed",
+    );
+  }
+
+  const rateLimitKey = account
+    ? `acct:${account.id}`
+    : `ip:${clientIp(req)}`;
+  const rateLimitConfig = account ? SIGNED_IN_CONFIG : GUEST_CONFIG;
+
+  const gate = checkRateLimit(rateLimitKey, message, rateLimitConfig);
   if (!gate.allowed) {
     if (gate.reason === "input_too_long") {
       return jsonError(

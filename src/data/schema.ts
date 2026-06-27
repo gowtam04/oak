@@ -1,11 +1,10 @@
 /**
  * Drizzle ORM table definitions for Pokebot's Postgres store.
  *
- * Five tables (design.md § Data Model). Since the @pkmn migration each data
- * table carries a `format` discriminator ("scarlet-violet" | "champions") so one
- * physical schema holds both the standard Gen-9 index and the Champions index;
- * repos filter by the active format (derived from the turn's mode). See
- * src/data/formats.ts.
+ * The five Pokédex-index tables (design.md § Data Model) each carry a `format`
+ * discriminator ("scarlet-violet" | "champions") so one physical schema holds
+ * both the standard Gen-9 index and the Champions index; repos filter by the
+ * active format (derived from the turn's mode). See src/data/formats.ts.
  *
  *   pokemon          — DS-2 Pokédex index, one row per (format, battle form)
  *   learnset         — DS-3 learnset index, PK (pokemon_id, move_slug, format)
@@ -13,6 +12,14 @@
  *                      (format, resource_key); pre-built per format at ingest
  *   searchable_names — backs resolve_entity (T1, BR-9), PK (format, kind, slug)
  *   ingest_meta      — pipeline bookkeeping, one row PER FORMAT
+ *
+ * Three further tables back the email-OTP auth layer
+ * (docs/features/account-creation, § Data Model). Auth is GLOBAL, so unlike the
+ * index tables these are NOT format-scoped (no `format` column):
+ *
+ *   account          — one row per registered user; UNIQUE normalized email
+ *   auth_session     — one row per active device session; UNIQUE token_hash
+ *   otp_code         — at most one active code per email (upsert by email PK)
  *
  * Postgres type notes (vs. the old SQLite schema):
  *   - `integer` is int4 — fine for dex numbers, stats, counts, and the 0/1
@@ -31,6 +38,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
@@ -183,4 +191,98 @@ export const ingest_meta = pgTable("ingest_meta", {
    * to detect a stale/empty index and return index_unavailable gracefully.
    */
   schema_version: text("schema_version").notNull(),
+});
+
+// ===========================================================================
+// Auth layer (docs/features/account-creation § Data Model)
+//
+// GLOBAL, NOT format-scoped — auth identity is orthogonal to the Pokédex index,
+// so these three tables carry no `format` column. Epoch-ms timestamps are
+// `bigint` with mode "number" (int4 overflows ~1.75e12), matching the
+// fetched_at / last_success_at convention above.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// account — one row per registered user (BR-A1: exactly one account per email)
+// ---------------------------------------------------------------------------
+export const account = pgTable(
+  "account",
+  {
+    /** UUID (crypto.randomUUID()). */
+    id: text("id").primaryKey(),
+    /** Normalized (trim + lowercase) email — the account identity. UNIQUE. */
+    email: text("email").notNull(),
+    /** Epoch milliseconds the account was created. */
+    created_at: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    // Unique normalized email enforces BR-A1 ("exactly one account per email")
+    // and powers the login/find-or-create lookup (BR-A2). PII: email is the
+    // only identity field stored.
+    uniqueIndex("account_email_idx").on(t.email),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// auth_session — one row per active device session (BR-A7, AC-4.3)
+// ---------------------------------------------------------------------------
+export const auth_session = pgTable(
+  "auth_session",
+  {
+    /** UUID. */
+    id: text("id").primaryKey(),
+    /**
+     * SHA-256 hex of the opaque cookie token. The raw token is NEVER stored
+     * (BR-A2 / security) — only its hash, which is what resolve-on-request
+     * looks up. UNIQUE.
+     */
+    token_hash: text("token_hash").notNull(),
+    /**
+     * Logical FK → account.id (a session always belongs to a real account,
+     * BR-A9). Modeled as a plain indexed column — NOT a physical FK constraint —
+     * matching this schema's existing convention (cf. learnset.pokemon_id →
+     * pokemon.id, also a logical-only FK). Referential integrity is enforced in
+     * the auth repo/service layer; the index below backs revoke/enumerate.
+     */
+    account_id: text("account_id").notNull(),
+    /** Epoch ms the session was issued. */
+    created_at: bigint("created_at", { mode: "number" }).notNull(),
+    /** Epoch ms (created_at + 30 days, BR-A7); a row past this reads as absent. */
+    expires_at: bigint("expires_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    // Resolve-on-request: every authenticated call looks up by token_hash.
+    uniqueIndex("auth_session_token_hash_idx").on(t.token_hash),
+    // Enumerate / revoke a single account's sessions (future multi-device work).
+    index("auth_session_account_id_idx").on(t.account_id),
+    // Lazy expired-session cleanup sweep (deleteExpiredSessions).
+    index("auth_session_expires_at_idx").on(t.expires_at),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// otp_code — at most one active code per email; `email` PK ⇒ issuing a new code
+// is an upsert that supersedes the prior row (BR-A5: only the latest code valid)
+// ---------------------------------------------------------------------------
+export const otp_code = pgTable("otp_code", {
+  /**
+   * Normalized email. PK (not an FK — a code can exist before its account does,
+   * on first signup). Upsert-by-email overwrites the prior row, so only the most
+   * recent code is ever valid (BR-A5).
+   */
+  email: text("email").primaryKey(),
+  /**
+   * HMAC-SHA256(AUTH_SECRET, `${email}:${code}`) hex. The 6-digit plaintext is
+   * never stored/logged; the HMAC secret defeats precomputation of the 10⁶
+   * possible codes from a DB leak.
+   */
+  code_hash: text("code_hash").notNull(),
+  /** Epoch ms the code was issued; drives the resend cooldown (BR-A5). */
+  created_at: bigint("created_at", { mode: "number" }).notNull(),
+  /** Epoch ms (created_at + ~10 min, BR-A3); an expired code cannot authenticate. */
+  expires_at: bigint("expires_at", { mode: "number" }).notNull(),
+  /** Wrong-attempt counter; the code locks out at 5 (BR-A4). */
+  attempts: integer("attempts").notNull(),
+  /** Epoch ms of successful verify → single-use (BR-A3). Null until consumed. */
+  consumed_at: bigint("consumed_at", { mode: "number" }),
 });

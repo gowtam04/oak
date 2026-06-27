@@ -15,6 +15,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pokebotAnswerSchema, type PokebotAnswer } from "@/agent/schemas";
 
+// The chat route now resolves the current account for tiered rate-limiting (it
+// dynamically imports current-user → sessions → server-only + next/headers,
+// none of which exist in this orchestration-only test). Mock the seam to resolve
+// a guest (null) directly — this test asserts SSE framing as a guest, and keeps
+// the real db/auth chain (server-only, cookies()) out of the node test entirely.
+vi.mock("server-only", () => ({}));
+vi.mock("@/server/auth/current-user", () => ({
+  getCurrentAccount: vi.fn(async () => null),
+}));
+
 // --- Mock the runtime + context so the route never opens SQLite / hits the model.
 const { mockRunPokebot } = vi.hoisted(() => ({ mockRunPokebot: vi.fn() }));
 vi.mock("@/agent/runtime", () => ({ runPokebot: mockRunPokebot }));

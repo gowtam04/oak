@@ -7,23 +7,66 @@ import { z } from "zod";
  * truth for required configuration. Everything else has a sensible default so
  * the app and the ingest/eval scripts run with only the API key supplied.
  */
-const EnvSchema = z.object({
-  ANTHROPIC_API_KEY: z
-    .string({ required_error: "ANTHROPIC_API_KEY is required" })
-    .min(1, "ANTHROPIC_API_KEY must not be empty"),
-  ANTHROPIC_MODEL: z.string().min(1).default("claude-sonnet-4-6"),
-  DATABASE_URL: z
-    .string()
-    .url()
-    .default("postgres://pokebot:pokebot@localhost:5432/pokebot"),
-  POKEAPI_BASE_URL: z.string().url().default("https://pokeapi.co/api/v2"),
-  LOG_LEVEL: z
-    .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
-    .default("info"),
-  NODE_ENV: z
-    .enum(["development", "test", "production"])
-    .default("development"),
-});
+
+/**
+ * Insecure placeholder for AUTH_SECRET used in local dev / test only. It is
+ * REJECTED in production by the cross-field refinement below — production must
+ * supply a strong, explicit secret (account-creation design.md § Secrets, AD-4).
+ */
+const DEV_AUTH_SECRET = "dev-insecure-auth-secret-change-me";
+
+/** Treat an empty/whitespace-only env var as "unset" (→ undefined). */
+const emptyToUndefined = (v: unknown): unknown =>
+  typeof v === "string" && v.trim() === "" ? undefined : v;
+
+const EnvSchema = z
+  .object({
+    ANTHROPIC_API_KEY: z
+      .string({ required_error: "ANTHROPIC_API_KEY is required" })
+      .min(1, "ANTHROPIC_API_KEY must not be empty"),
+    ANTHROPIC_MODEL: z.string().min(1).default("claude-sonnet-4-6"),
+    DATABASE_URL: z
+      .string()
+      .url()
+      .default("postgres://pokebot:pokebot@localhost:5432/pokebot"),
+    POKEAPI_BASE_URL: z.string().url().default("https://pokeapi.co/api/v2"),
+    LOG_LEVEL: z
+      .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
+      .default("info"),
+    NODE_ENV: z
+      .enum(["development", "test", "production"])
+      .default("development"),
+
+    // --- Account creation (email + OTP auth) — design.md § Secrets ---------
+    // Server secret for HMAC-hashing OTP codes (AD-4) and any other auth
+    // signing. A dev default keeps local/test runs zero-config; production is
+    // required to override it (enforced by the refinement below).
+    AUTH_SECRET: z.string().min(1).default(DEV_AUTH_SECRET),
+    // Resend API key. Absent ⇒ the console transport is used (no real mail).
+    // An empty value is treated as absent so `RESEND_API_KEY=` in a compose
+    // env_file does not crash the app.
+    RESEND_API_KEY: z.preprocess(
+      emptyToUndefined,
+      z.string().min(1).optional(),
+    ),
+    // From-address for transactional OTP email. The default delivers only to
+    // the Resend account owner; a verified domain is needed for real sends.
+    EMAIL_FROM: z.string().min(1).default("Pokebot <onboarding@resend.dev>"),
+  })
+  .superRefine((value, ctx) => {
+    // AUTH_SECRET must be an explicit, non-default secret in production.
+    if (
+      value.NODE_ENV === "production" &&
+      value.AUTH_SECRET === DEV_AUTH_SECRET
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["AUTH_SECRET"],
+        message:
+          "AUTH_SECRET must be set to a strong, explicit secret in production",
+      });
+    }
+  });
 
 export type Env = z.infer<typeof EnvSchema>;
 

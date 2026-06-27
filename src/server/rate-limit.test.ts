@@ -1,10 +1,39 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// The route-keying suite below mocks the agent + auth seams so `POST /api/chat`
+// never opens Postgres, reads a real cookie, or hits the model — Docker-light,
+// mirroring test/api-chat.integration.test.ts. `checkRateLimit` itself is left
+// REAL but wrapped in a recording spy, so the route's (key, config) arguments
+// can be asserted while the genuine fixed-window logic still runs (the direct
+// unit suites in this file exercise that same real implementation).
+const { mockRunPokebot, mockCreateAgentContext, mockGetCurrentAccount } =
+  vi.hoisted(() => ({
+    mockRunPokebot: vi.fn(),
+    mockCreateAgentContext: vi.fn(),
+    mockGetCurrentAccount: vi.fn(),
+  }));
+vi.mock("@/agent/runtime", () => ({ runPokebot: mockRunPokebot }));
+vi.mock("@/agent/context", () => ({
+  createAgentContext: mockCreateAgentContext,
+}));
+vi.mock("@/server/auth/current-user", () => ({
+  getCurrentAccount: mockGetCurrentAccount,
+}));
+vi.mock("@/server/rate-limit", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/rate-limit")>();
+  return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
+});
+
 import {
   _resetStoreForTests,
   checkRateLimit,
   DEFAULT_CONFIG,
+  GUEST_CONFIG,
+  SIGNED_IN_CONFIG,
   type RateLimitConfig,
 } from "@/server/rate-limit";
+import { POST } from "@/app/api/chat/route";
+import { clearSession } from "@/server/session-store";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -261,5 +290,360 @@ describe("edge cases", () => {
     if (!result.allowed) {
       expect(result.reason).toBe("input_too_long");
     }
+  });
+});
+
+// ===========================================================================
+// Tiered chat configs (account-creation Phase 5; BR-A8 / AUTH-US-7)
+// ===========================================================================
+
+describe("tiered chat configs", () => {
+  it("GUEST_CONFIG is 20 / 60 s with the 2000-char cap (AC-1.3, BR-A8)", () => {
+    expect(GUEST_CONFIG.maxRequestsPerWindow).toBe(20);
+    expect(GUEST_CONFIG.windowMs).toBe(60_000);
+    expect(GUEST_CONFIG.maxInputLength).toBe(2_000);
+  });
+
+  it("SIGNED_IN_CONFIG is 60 / 60 s with the 2000-char cap (AC-7.1, BR-A8)", () => {
+    expect(SIGNED_IN_CONFIG.maxRequestsPerWindow).toBe(60);
+    expect(SIGNED_IN_CONFIG.windowMs).toBe(60_000);
+    expect(SIGNED_IN_CONFIG.maxInputLength).toBe(2_000);
+  });
+
+  it("the signed-in allowance is strictly higher than the guest allowance (AUTH-US-7)", () => {
+    expect(SIGNED_IN_CONFIG.maxRequestsPerWindow).toBeGreaterThan(
+      GUEST_CONFIG.maxRequestsPerWindow,
+    );
+    // Both keep the input cap unchanged (BR-A11): only the request allowance differs.
+    expect(SIGNED_IN_CONFIG.maxInputLength).toBe(GUEST_CONFIG.maxInputLength);
+  });
+});
+
+// ===========================================================================
+// Independent per-key counters across tiers (BR-A8 / AC-7.3)
+//
+// The point of BR-A8: the guest pool (keyed `ip:<addr>`) and the account pool
+// (keyed `acct:<id>`) never share a Map entry, so a guest can never pool into,
+// or drain, the account tier — and each guest IP is independently capped, so a
+// single user cannot exceed the guest tier by spawning guest sessions (AC-7.3).
+// ===========================================================================
+
+describe("independent per-key counters across tiers", () => {
+  const MSG = "Which Pokemon learn earthquake?"; // well under either input cap
+
+  it("enforces the guest cap exactly: 20 allowed, then blocked (AC-1.3)", () => {
+    for (let i = 0; i < GUEST_CONFIG.maxRequestsPerWindow; i++) {
+      expect(checkRateLimit("ip:1.1.1.1", MSG, GUEST_CONFIG, i).allowed).toBe(
+        true,
+      );
+    }
+    const blocked = checkRateLimit("ip:1.1.1.1", MSG, GUEST_CONFIG, 500);
+    expect(blocked.allowed).toBe(false);
+    if (!blocked.allowed) expect(blocked.reason).toBe("rate_limited");
+  });
+
+  it("enforces the higher signed-in cap exactly: 60 allowed, then blocked (AC-7.1)", () => {
+    for (let i = 0; i < SIGNED_IN_CONFIG.maxRequestsPerWindow; i++) {
+      expect(
+        checkRateLimit("acct:a1", MSG, SIGNED_IN_CONFIG, i).allowed,
+      ).toBe(true);
+    }
+    const blocked = checkRateLimit("acct:a1", MSG, SIGNED_IN_CONFIG, 9_999);
+    expect(blocked.allowed).toBe(false);
+    if (!blocked.allowed) expect(blocked.reason).toBe("rate_limited");
+  });
+
+  it("a guest bucket cannot pool into the account tier — exhausting ip:<x> leaves acct:<y> fully available (AC-7.3, BR-A8)", () => {
+    // Exhaust the guest IP bucket completely.
+    for (let i = 0; i < GUEST_CONFIG.maxRequestsPerWindow; i++) {
+      checkRateLimit("ip:9.9.9.9", MSG, GUEST_CONFIG, i);
+    }
+    const guestBlocked = checkRateLimit("ip:9.9.9.9", MSG, GUEST_CONFIG, 500);
+    expect(guestBlocked.allowed).toBe(false);
+    if (!guestBlocked.allowed) expect(guestBlocked.reason).toBe("rate_limited");
+
+    // The account key is a SEPARATE bucket: untouched by the guest activity and
+    // still good for its full, higher allowance.
+    for (let i = 0; i < SIGNED_IN_CONFIG.maxRequestsPerWindow; i++) {
+      expect(
+        checkRateLimit("acct:owner", MSG, SIGNED_IN_CONFIG, 600 + i).allowed,
+      ).toBe(true);
+    }
+    const acctBlocked = checkRateLimit(
+      "acct:owner",
+      MSG,
+      SIGNED_IN_CONFIG,
+      30_000,
+    );
+    expect(acctBlocked.allowed).toBe(false);
+    if (!acctBlocked.allowed) expect(acctBlocked.reason).toBe("rate_limited");
+  });
+
+  it("two distinct guest IPs are limited independently — spawning guest sessions does not borrow allowance (AC-7.3)", () => {
+    for (let i = 0; i < GUEST_CONFIG.maxRequestsPerWindow; i++) {
+      checkRateLimit("ip:2.2.2.2", MSG, GUEST_CONFIG, i);
+    }
+    // ip:2.2.2.2 is exhausted...
+    const exhausted = checkRateLimit("ip:2.2.2.2", MSG, GUEST_CONFIG, 500);
+    expect(exhausted.allowed).toBe(false);
+    if (!exhausted.allowed) expect(exhausted.reason).toBe("rate_limited");
+    // ...but a different guest IP starts fresh (independent counter).
+    expect(checkRateLimit("ip:3.3.3.3", MSG, GUEST_CONFIG, 500).allowed).toBe(
+      true,
+    );
+  });
+});
+
+// ===========================================================================
+// POST /api/chat — tiered rate-limit keying (account-creation Phase 5)
+//
+// Asserts the ROUTE wiring: getCurrentAccount() resolves BEFORE the gate, then
+// the route keys + configures by auth tier and passes them to checkRateLimit.
+// The agent loop, context, and auth seam are mocked (Docker-light). The real
+// fixed-window logic still runs through the spy, so the 429 / input-cap
+// branches below are genuine end-to-end rejections.
+// ===========================================================================
+
+/** Drain a streamed SSE Response to completion (so the detached task settles). */
+async function drain(res: Response): Promise<string> {
+  expect(res.body).toBeTruthy();
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+  }
+  buf += decoder.decode();
+  return buf;
+}
+
+/** Parse the `event:` names out of raw SSE frames. */
+function sseEventNames(raw: string): string[] {
+  const names: string[] = [];
+  for (const frame of raw.split("\n\n")) {
+    for (const line of frame.split("\n")) {
+      if (line.startsWith("event:")) names.push(line.slice("event:".length).trim());
+    }
+  }
+  return names;
+}
+
+function post(
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<Response> {
+  return POST(
+    new Request("http://localhost/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+const ROUTE_ANSWER = {
+  status: "answered" as const,
+  answer_markdown: "Pikachu is an Electric-type.",
+};
+
+const ACCOUNT = { id: "acct-42", email: "ash@pallet.town", createdAt: 0 };
+
+describe("POST /api/chat — tiered rate-limit keying", () => {
+  beforeEach(() => {
+    mockRunPokebot.mockReset();
+    mockRunPokebot.mockResolvedValue(ROUTE_ANSWER);
+    mockCreateAgentContext.mockReset();
+    mockCreateAgentContext.mockResolvedValue({});
+    mockGetCurrentAccount.mockReset();
+    mockGetCurrentAccount.mockResolvedValue(null); // guest unless overridden
+    vi.mocked(checkRateLimit).mockClear();
+  });
+
+  afterEach(() => {
+    for (const id of ["s-guest", "s-signed", "s-cap", "s-thread", "s-champ"]) {
+      clearSession(id);
+    }
+  });
+
+  it("keys a guest by ip:<first X-Forwarded-For hop> with GUEST_CONFIG (AC-1.1, AC-1.3, BR-A8)", async () => {
+    mockGetCurrentAccount.mockResolvedValue(null);
+    const res = await post(
+      { session_id: "s-guest", message: "hi" },
+      { "X-Forwarded-For": "203.0.113.7, 70.41.3.18, 150.172.238.178" },
+    );
+    expect(res.status).toBe(200); // chat works for guests without auth (AC-1.1)
+    await drain(res);
+
+    const calls = vi.mocked(checkRateLimit).mock.calls;
+    expect(calls).toHaveLength(1);
+    const [key, msg, config] = calls[0]!;
+    expect(key).toBe("ip:203.0.113.7"); // FIRST hop only, not the whole chain
+    expect(msg).toBe("hi");
+    expect(config).toBe(GUEST_CONFIG);
+    // Identity != conversation: the rate-limit key is NEVER the session_id.
+    expect(key).not.toBe("s-guest");
+  });
+
+  it("keys a signed-in user by acct:<id> with SIGNED_IN_CONFIG, ignoring the IP (AC-7.1, BR-A8)", async () => {
+    mockGetCurrentAccount.mockResolvedValue(ACCOUNT);
+    const res = await post(
+      { session_id: "s-signed", message: "hi" },
+      { "X-Forwarded-For": "203.0.113.7" }, // present but irrelevant once signed in
+    );
+    expect(res.status).toBe(200);
+    await drain(res);
+
+    const calls = vi.mocked(checkRateLimit).mock.calls;
+    expect(calls).toHaveLength(1);
+    const [key, , config] = calls[0]!;
+    expect(key).toBe("acct:acct-42");
+    expect(config).toBe(SIGNED_IN_CONFIG);
+    expect(key).not.toMatch(/^ip:/); // an authed user is never keyed by IP
+  });
+
+  it("falls back to ip:unknown for a guest with no forwarding headers (still GUEST_CONFIG)", async () => {
+    mockGetCurrentAccount.mockResolvedValue(null);
+    const res = await post({ session_id: "s-guest", message: "hi" });
+    await drain(res);
+    const [key, , config] = vi.mocked(checkRateLimit).mock.calls[0]!;
+    expect(key).toBe("ip:unknown");
+    expect(config).toBe(GUEST_CONFIG);
+  });
+
+  it("prefers X-Real-IP when X-Forwarded-For is absent", async () => {
+    mockGetCurrentAccount.mockResolvedValue(null);
+    const res = await post(
+      { session_id: "s-guest", message: "hi" },
+      { "X-Real-IP": "198.51.100.9" },
+    );
+    await drain(res);
+    expect(vi.mocked(checkRateLimit).mock.calls[0]![0]).toBe("ip:198.51.100.9");
+  });
+
+  it("degrades to the GUEST tier when account resolution throws — never a 500 (BR-A11)", async () => {
+    mockGetCurrentAccount.mockRejectedValue(
+      new Error("cookies() called outside a request scope"),
+    );
+    const res = await post(
+      { session_id: "s-guest", message: "hi" },
+      { "X-Forwarded-For": "8.8.8.8" },
+    );
+    expect(res.status).toBe(200); // a session-resolution fault must not block chat
+    await drain(res);
+    const [key, , config] = vi.mocked(checkRateLimit).mock.calls[0]!;
+    expect(key).toBe("ip:8.8.8.8");
+    expect(config).toBe(GUEST_CONFIG);
+  });
+
+  it("keeps the 2000-char input cap for a GUEST → 413, runtime never invoked (BR-A11)", async () => {
+    mockGetCurrentAccount.mockResolvedValue(null);
+    const res = await post({ session_id: "s-cap", message: "x".repeat(2_001) });
+    expect(res.status).toBe(413);
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("input_too_long");
+    expect(mockRunPokebot).not.toHaveBeenCalled();
+  });
+
+  it("keeps the 2000-char input cap for a SIGNED-IN user → 413 (BR-A11)", async () => {
+    mockGetCurrentAccount.mockResolvedValue(ACCOUNT);
+    const res = await post({ session_id: "s-signed", message: "y".repeat(2_001) });
+    expect(res.status).toBe(413);
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("input_too_long");
+    expect(mockRunPokebot).not.toHaveBeenCalled();
+  });
+
+  it("enforces the guest cap at the route (20/60s) → 429 + Retry-After, while the account pool stays independent (AC-1.3, AC-7.3, BR-A8)", async () => {
+    mockGetCurrentAccount.mockResolvedValue(null);
+    const ipHeader = { "X-Forwarded-For": "9.9.9.9" };
+    for (let i = 0; i < GUEST_CONFIG.maxRequestsPerWindow; i++) {
+      const ok = await post({ session_id: "s-guest", message: `q${i}` }, ipHeader);
+      expect(ok.status).toBe(200);
+      await drain(ok);
+    }
+    // The 21st guest request from that IP is rejected before the stream opens.
+    const limited = await post(
+      { session_id: "s-guest", message: "one too many" },
+      ipHeader,
+    );
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toBeTruthy();
+    const limitedBody = (await limited.json()) as { code: string };
+    expect(limitedBody.code).toBe("rate_limited");
+    // Runtime ran for the 20 allowed posts only — never for the blocked one.
+    expect(mockRunPokebot).toHaveBeenCalledTimes(
+      GUEST_CONFIG.maxRequestsPerWindow,
+    );
+
+    // A signed-in user (separate `acct:` pool) is unaffected by the exhausted
+    // guest bucket — guests cannot drain the account tier (AC-7.3).
+    mockGetCurrentAccount.mockResolvedValue(ACCOUNT);
+    const signed = await post(
+      { session_id: "s-signed", message: "as a user" },
+      ipHeader,
+    );
+    expect(signed.status).toBe(200);
+    await drain(signed);
+  });
+
+  it("leaves the conversation session_id + SSE contract unchanged across sign-in (BR-A10, AC-6.2)", async () => {
+    mockRunPokebot.mockReset();
+    mockRunPokebot.mockResolvedValueOnce({
+      ...ROUTE_ANSWER,
+      answer_markdown: "first answer",
+    });
+    mockRunPokebot.mockResolvedValueOnce(ROUTE_ANSWER);
+
+    // Turn 1 — as a guest (keyed ip:5.5.5.5).
+    mockGetCurrentAccount.mockResolvedValueOnce(null);
+    const t1 = await post(
+      { session_id: "s-thread", message: "first question" },
+      { "X-Forwarded-For": "5.5.5.5" },
+    );
+    const raw1 = await drain(t1);
+    expect(sseEventNames(raw1)).toContain("answer"); // SSE contract unchanged
+
+    // Turn 2 — now signed in (keyed acct:acct-42), SAME conversation session_id.
+    mockGetCurrentAccount.mockResolvedValueOnce(ACCOUNT);
+    const t2 = await post({ session_id: "s-thread", message: "follow up" });
+    await drain(t2);
+
+    // The conversation is keyed by session_id, NOT auth tier: the prior turn
+    // pair threads into turn 2 even though the rate-limit key changed ip→acct.
+    const secondCall = mockRunPokebot.mock.calls[1]! as [
+      string,
+      { role: string; content: string }[],
+    ];
+    expect(secondCall[0]).toBe("follow up");
+    expect(secondCall[1]).toEqual([
+      { role: "user", content: "first question" },
+      { role: "assistant", content: "first answer" },
+    ]);
+
+    // ...and the two turns used DIFFERENT rate-limit keys (guest vs account).
+    const keys = vi.mocked(checkRateLimit).mock.calls.map((c) => c[0]);
+    expect(keys).toEqual(["ip:5.5.5.5", "acct:acct-42"]);
+  });
+
+  it("leaves Champions mode untouched — champions_mode still flows to the agent context (BR-A11)", async () => {
+    mockGetCurrentAccount.mockResolvedValue(null);
+    const champ = await post({
+      session_id: "s-champ",
+      message: "hi",
+      champions_mode: true,
+    });
+    await drain(champ);
+    expect(mockCreateAgentContext).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "s-champ", mode: "champions" }),
+    );
+
+    mockCreateAgentContext.mockClear();
+    const std = await post({ session_id: "s-champ", message: "hi again" });
+    await drain(std);
+    expect(mockCreateAgentContext).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "standard" }),
+    );
   });
 });
