@@ -197,3 +197,40 @@ existing `gen-provider.ts` integration point.
 **Depends on:** Standable as a read-only reference surface on its own; deeper integration
 (save a competitive set, "is this set legal in Reg M?") overlaps B-2 (team building) and
 benefits from B-1 (per-account).
+
+---
+
+## B-6 — Clickable sources → source-detail artifact
+
+**Why:** Citations are core to the product — every answer carries its sources so the
+reasoning stays grounded (BR-4). Today each citation in `SourceList` shows only the
+resource key + the specific datum, with an optional `↗` link that navigates *out* to the
+canonical PokeAPI endpoint (`citation.endpoint_url`). The user never sees *what the source
+actually says* without leaving the app. Letting a click on a source open an in-app
+artifact that details that source — the raw datum, its provenance, and how it fed the
+answer — keeps users in context and makes the citations inspectable rather than just
+attributed.
+
+**Scope:**
+- Make each citation in `SourceList` clickable (beyond the existing external `↗` link),
+  opening a focused **source-detail artifact** rather than navigating away.
+- The artifact details the cited source: the resource/entity it refers to
+  (`citation.source`), the specific datum used (`citation.detail`), the underlying
+  structured value the agent reasoned over, the format/generation it's drawn from, and a
+  link to the canonical endpoint where one exists.
+- Render it through the **B-4 artifact surface** (open / pin / dismiss alongside the live
+  conversation), reusing the citation / generation-tag conventions so the source artifact
+  stays consistent with the rest of the answer tree.
+
+**Open questions:**
+- Where does the artifact's richer detail come from — is the full underlying datum already
+  present in the `PokebotAnswer` citation payload, or does opening a source trigger a fresh
+  read (a tool/repo lookup) to hydrate it? A fresh read collides with the fixed 11-tool
+  contract and the "tools never throw in-domain" seam.
+- Is "source detail" a distinct artifact type, or one rendering of a more general entity
+  artifact (overlapping a species/move/ability sheet from B-4)?
+- Does this stay purely frontend-derived from the existing `citations[]`, or does the
+  citation schema (`src/agent/schemas.ts`) need a richer shape to carry the detail?
+
+**Depends on:** B-4 (reuses the artifact surface). Ephemeral, in-session only; persisting
+or sharing a source artifact inherits B-4's B-1/B-3 dependencies.
