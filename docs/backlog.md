@@ -332,3 +332,49 @@ attributed.
 
 **Depends on:** B-4 (reuses the artifact surface). Ephemeral, in-session only; persisting
 or sharing a source artifact inherits B-4's B-1/B-3 dependencies.
+
+---
+
+## B-7 — Rename "Pokebot" → "Oak"
+
+**Why:** "Pokebot" reads as a generic lookup bot and leans on the trademarked "Poké-"
+prefix; the product's identity is a reasoning expert that explains its work. **Oak**
+(after Professor Oak — the franchise's archetypal knowledge-giver) is warmer, signals
+"ask the expert," and carries no trademarked string while still landing the Pokémon
+association for fans. This is a branding/identity change, orthogonal to B-1..B-6.
+
+**Scope (phased — the two phases have very different cost/risk):**
+- **Phase 1 — user-facing name (cheap, low-risk, do first).** Rename everything a person
+  sees or that identifies the product externally: page `<title>`/metadata and UI copy
+  (`src/app/layout.tsx`, `src/app/page.tsx`, `src/components/*`), `README.md`, `CLAUDE.md`,
+  `package.json` `name`, `.env.example`/compose comments, and the agent's **self-identity in
+  the system prompt / few-shot persona** ("You are Pokebot…"). Note the prompt persona lives
+  **inline in `src/agent/runtime.ts`** for the live standard path; `src/agent/prompts/system.ts`
+  + `few-shot.ts` are an orphaned tested mirror and `champions.ts` is the only imported prompt
+  module — update the live inline copy plus `champions.ts`, and the mirror for consistency.
+- **Phase 2 — internal code identifiers (large, optional, separate change).** The name is
+  baked into ~85 files as identifiers: `PokebotAnswer` (×172), `runPokebot` (×60),
+  `PokebotDb` (×59), `pokebotAnswerSchema`/`pokebotAnswerJsonSchema`, `RunPokebotFn`,
+  `usePokebotChat`, etc. These are an internal refactor only — **but `PokebotAnswer` and its
+  fields surface through `zod-to-json-schema` into the `submit_answer` tool schema the model
+  reasons against** (CLAUDE.md: "tool names and tool output field names are a contract"), so
+  renaming the *schema/field* identifiers is behaviorally load-bearing and must be re-evaluated
+  against the golden eval suite, not just typechecked. Recommendation: rename internal symbols
+  that are *not* model-visible freely; leave the `PokebotAnswer` schema shape/field names alone
+  unless there's a reason to touch the contract.
+
+**Open questions:**
+- Does Phase 2 happen at all, or do we keep `PokebotAnswer`/`runPokebot` as internal legacy
+  names and only rebrand the surface? (Phase 1 alone fully rebrands the product.)
+- Final wordmark/casing — "Oak" vs. "Oak." vs. an "Ask Oak" lockup — and a one-line tagline
+  for metadata/landing copy.
+- Domain / npm package name availability for "oak" (the npm name `oak` is taken by a Deno HTTP
+  framework — affects only `package.json` `name`, not the product brand).
+
+**Touches:** Phase 1 — `src/app/layout.tsx`, `src/app/page.tsx`, `src/components/*`,
+`src/agent/runtime.ts` (inline persona), `src/agent/prompts/{system,few-shot,champions}.ts`,
+`README.md`, `CLAUDE.md`, `package.json`, `.env.example`, `docker-compose.dev.yml`.
+Phase 2 (if pursued) — schema/runtime/repo/test identifiers across ~85 files; gate on
+`npm run typecheck` **and** the golden eval suite if any model-visible field name changes.
+
+**Depends on:** Nothing.
