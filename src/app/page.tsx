@@ -9,6 +9,7 @@ import ChampionsToggle from "@/components/ChampionsToggle";
 import AuthMenu from "@/components/auth/AuthMenu";
 import AuthDialog from "@/components/auth/AuthDialog";
 import ConversationList from "@/components/history/ConversationList";
+import SidebarToggle from "@/components/SidebarToggle";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";
 import { fetchMe, type MeResult } from "@/lib/auth-client";
@@ -18,6 +19,12 @@ import type { ChatStatus, ChatTurn, PokebotAnswer } from "@/components/types";
 
 /** localStorage key for the persisted Champions-mode choice. */
 const CHAMPIONS_STORAGE_KEY = "pokebot-champions-mode";
+
+/** localStorage key for the persisted history-sidebar collapsed choice. */
+const SIDEBAR_STORAGE_KEY = "pokebot-sidebar-collapsed";
+
+/** DOM id of the history sidebar — the toggle's `aria-controls` target. */
+const SIDEBAR_ID = "history-sidebar";
 
 /** A request stopped within this many ms of being sent wipes the chat. */
 const QUICK_STOP_MS = 2000;
@@ -74,6 +81,37 @@ export default function Home() {
     setChampionsMode(next);
     try {
       localStorage.setItem(CHAMPIONS_STORAGE_KEY, String(next));
+    } catch {
+      /* storage unavailable (private mode) — fall back to in-session only */
+    }
+  }, []);
+
+  // History-sidebar collapsed state. Default expanded so the first render is
+  // deterministic (the sidebar + its toggle are both gated on `auth.signedIn`,
+  // which only flips after `fetchMe()` resolves post-mount, so no SSR markup
+  // ever contains them — no hydration risk). Resolve the real choice after
+  // mount: a stored explicit choice wins; absent one, narrow screens (≤768px)
+  // start collapsed (decided once, like the artifact viewer's CSS breakpoint).
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+      if (stored === "true" || stored === "false") {
+        setSidebarCollapsed(stored === "true");
+      } else {
+        setSidebarCollapsed(
+          window.matchMedia?.("(max-width: 768px)").matches ?? false,
+        );
+      }
+    } catch {
+      /* storage/matchMedia unavailable — keep the default (expanded) */
+    }
+  }, []);
+
+  const setSidebarCollapsedPersisted = useCallback((next: boolean) => {
+    setSidebarCollapsed(next);
+    try {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
     } catch {
       /* storage unavailable (private mode) — fall back to in-session only */
     }
@@ -237,7 +275,22 @@ export default function Home() {
   return (
     <main className="chat-page" data-testid="chat-page">
       <header className="chat-page__header">
-        <h1 className="chat-page__title">Pokebot</h1>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "var(--space-3)",
+          }}
+        >
+          {auth.signedIn && (
+            <SidebarToggle
+              collapsed={sidebarCollapsed}
+              onToggle={() => setSidebarCollapsedPersisted(!sidebarCollapsed)}
+              controlsId={SIDEBAR_ID}
+            />
+          )}
+          <h1 className="chat-page__title">Pokebot</h1>
+        </div>
         <div
           style={{
             display: "inline-flex",
@@ -272,32 +325,37 @@ export default function Home() {
           format={artifactFormat}
           onAskInChat={handleAskInChat}
         >
-          {/* History sidebar — signed-in only (guests have no server history). */}
+          {/* History sidebar — signed-in only (guests have no server history).
+              Collapses to width 0 via the toggle; the inner wrapper keeps its
+              fixed width so content doesn't reflow mid-slide, and goes `inert`
+              when collapsed so its controls leave the tab + a11y trees. */}
           {auth.signedIn && (
             <aside
+              id={SIDEBAR_ID}
               data-testid="history-sidebar"
-              style={{
-                width: "300px",
-                flexShrink: 0,
-                minHeight: 0,
-                borderRight: "1px solid var(--border)",
-                background: "var(--surface)",
-                overflow: "hidden",
-              }}
+              className={
+                "chat-page__sidebar" +
+                (sidebarCollapsed ? " chat-page__sidebar--collapsed" : "")
+              }
             >
-              <ConversationList
-                conversations={conversations.conversations}
-                activeId={sessionId}
-                query={conversations.query}
-                onQueryChange={conversations.setQuery}
-                formatFilter={conversations.formatFilter}
-                onFormatFilterChange={conversations.setFormatFilter}
-                onNewChat={handleNewChat}
-                onOpen={handleOpenConversation}
-                onRename={conversations.rename}
-                onPin={conversations.pin}
-                onDelete={handleDeleteConversation}
-              />
+              <div
+                className="chat-page__sidebar-inner"
+                inert={sidebarCollapsed ? true : undefined}
+              >
+                <ConversationList
+                  conversations={conversations.conversations}
+                  activeId={sessionId}
+                  query={conversations.query}
+                  onQueryChange={conversations.setQuery}
+                  formatFilter={conversations.formatFilter}
+                  onFormatFilterChange={conversations.setFormatFilter}
+                  onNewChat={handleNewChat}
+                  onOpen={handleOpenConversation}
+                  onRename={conversations.rename}
+                  onPin={conversations.pin}
+                  onDelete={handleDeleteConversation}
+                />
+              </div>
             </aside>
           )}
 

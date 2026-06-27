@@ -47,6 +47,21 @@ function makeAnswer(markdown: string): PokebotAnswer {
   return { ...MINIMAL_ANSWER, answer_markdown: markdown };
 }
 
+/** A minimal in-memory localStorage (this jsdom config provides no real one). */
+function makeStorageStub(): Storage {
+  const map = new Map<string, string>();
+  return {
+    get length() {
+      return map.size;
+    },
+    clear: () => map.clear(),
+    getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
+    setItem: (k: string, v: string) => void map.set(k, String(v)),
+    removeItem: (k: string) => void map.delete(k),
+    key: (i: number) => Array.from(map.keys())[i] ?? null,
+  };
+}
+
 function jsonResponse(status: number, body: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -85,6 +100,9 @@ beforeEach(() => {
   serverConvos = [];
   meState = { signedIn: false };
   clock = 0;
+  // Fresh in-memory localStorage per test so a persisted UI pref (e.g.
+  // sidebar-collapsed) made in one test doesn't bleed into the next.
+  vi.stubGlobal("localStorage", makeStorageStub());
 
   vi.stubGlobal(
     "fetch",
@@ -272,6 +290,38 @@ describe("Home — chat-history sidebar", () => {
     expect(screen.queryByTestId("history-sidebar")).not.toBeInTheDocument();
     // Thread persists across the user→guest transition.
     expect(screen.getByText("keep me")).toBeInTheDocument();
+  });
+
+  it("toggles the sidebar collapsed/expanded and persists the choice", async () => {
+    render(<Home />);
+    await screen.findByTestId("auth-signin-button");
+
+    // Guest: no toggle (the sidebar itself is also absent).
+    expect(screen.queryByTestId("sidebar-toggle")).not.toBeInTheDocument();
+
+    await signIn();
+    const sidebar = await screen.findByTestId("history-sidebar");
+    const toggle = screen.getByTestId("sidebar-toggle");
+    const inner = sidebar.querySelector(".chat-page__sidebar-inner")!;
+
+    // Starts expanded (no stored pref; jsdom has no matchMedia → not narrow).
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(sidebar).not.toHaveClass("chat-page__sidebar--collapsed");
+    expect(inner).not.toHaveAttribute("inert");
+
+    // Collapse.
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(sidebar).toHaveClass("chat-page__sidebar--collapsed");
+    expect(inner).toHaveAttribute("inert");
+    expect(localStorage.getItem("pokebot-sidebar-collapsed")).toBe("true");
+
+    // Expand again.
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(sidebar).not.toHaveClass("chat-page__sidebar--collapsed");
+    expect(inner).not.toHaveAttribute("inert");
+    expect(localStorage.getItem("pokebot-sidebar-collapsed")).toBe("false");
   });
 
   it("deleting the open conversation resets to a new chat (AC-8.2)", async () => {
