@@ -123,17 +123,36 @@ function clientIp(req: Request): string {
 // Body validation
 // ---------------------------------------------------------------------------
 
-function parseBody(value: unknown): ChatRequestBody | null {
+/**
+ * The parsed body, widened with the team-builder's optional `active_team_id`
+ * (kept LOCAL — `ChatRequestBody` lives in `@/lib/sse-types`, outside this
+ * phase's edit scope). Always present after parsing: a non-empty string id or
+ * `null` (guests / old clients / explicit deselect).
+ */
+type ParsedChatBody = ChatRequestBody & { active_team_id: string | null };
+
+function parseBody(value: unknown): ParsedChatBody | null {
   if (typeof value !== "object" || value === null) return null;
-  const { session_id, message, champions_mode } = value as Record<
-    string,
-    unknown
-  >;
+  const { session_id, message, champions_mode, active_team_id } =
+    value as Record<string, unknown>;
   if (typeof session_id !== "string" || session_id.length === 0) return null;
   if (typeof message !== "string" || message.length === 0) return null;
   // Coerce defensively: anything that is not strictly boolean `true` is
   // standard mode (old clients omit the field entirely).
-  return { session_id, message, champions_mode: champions_mode === true };
+  // `active_team_id` is optional; anything that is not a non-empty string means
+  // "no active team" (null) — guests/old clients omit it, the toggle deselects
+  // by sending null. Authorization + format gating happens later via
+  // resolveActiveTeam (server-controlled, never trusted from the body alone).
+  const teamId =
+    typeof active_team_id === "string" && active_team_id.length > 0
+      ? active_team_id
+      : null;
+  return {
+    session_id,
+    message,
+    champions_mode: champions_mode === true,
+    active_team_id: teamId,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +294,45 @@ export async function POST(req: Request): Promise<Response> {
     history = [...getHistory(session_id)];
   }
 
+  // 3b. Resolve + authorize the conversation's ACTIVE TEAM before opening the
+  //    stream — the exact analogue of `mode`: server-controlled, never an
+  //    LLM-visible tool input (BR-T9 / TEAM-AD-1). Gated on a signed-in account
+  //    (guests have no saved teams). `resolveActiveTeam` binds the team ONLY when
+  //    it is account-owned AND `team.format === formatForMode(mode)` — a missing
+  //    id, a not-owned team, or a format mismatch all yield `null` (BR-T3,
+  //    AC-8.3). It runs AFTER the history block so `mode` is already finalized
+  //    from the stored conversation format on a resume. The resolved team is
+  //    bound onto `ctx.activeTeam` (below) and persisted last-selected-wins. A DB
+  //    blip degrades to no active team rather than a 500 (guest-first stance).
+  let activeTeam:
+    | import("@/server/teams/active-team").ActiveTeam
+    | null = null;
+  if (account) {
+    try {
+      const [{ resolveActiveTeam }, { db }] = await Promise.all([
+        import("@/server/teams/active-team"),
+        import("@/data/db"),
+      ]);
+      activeTeam = await resolveActiveTeam(
+        account.id,
+        body.active_team_id,
+        mode,
+        db,
+      );
+    } catch (err) {
+      logger.warn(
+        {
+          event: "chat_active_team_resolve_failed",
+          request_id: requestId,
+          account_id: account.id,
+          session_id,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "pokebot_chat_active_team_resolve_failed",
+      );
+    }
+  }
+
   // 4. Build the SSE stream. Return the Response SYNCHRONOUSLY; emit from the
   //    async task inside start() (never await the whole loop first).
   const encoder = new TextEncoder();
@@ -310,6 +368,10 @@ export async function POST(req: Request): Promise<Response> {
             requestId,
             sessionId: session_id,
             mode,
+            // Server-bound active team (already resolved + authorized above).
+            // `undefined` ⇒ no team is bound; the model only ever sees it via the
+            // arg-less `get_active_team` tool, never as an input it can widen.
+            activeTeam: activeTeam ?? undefined,
             // Forward the inbound abort signal so a client disconnect (the user
             // pressed Stop) tears down the Anthropic stream immediately and the
             // loop bails between iterations — no wasted tokens.
@@ -368,6 +430,11 @@ export async function POST(req: Request): Promise<Response> {
                 assistantTurnId: repo.newTurnId(),
                 answer,
                 now: Date.now(),
+                // Persist the conversation's active team last-selected-wins
+                // (TEAM-US-8): the RESOLVED id when one bound, else `null` (no
+                // selection / not-owned / format mismatch) so resume restores
+                // exactly what was in effect this turn (BR-T9).
+                activeTeamId: activeTeam?.id ?? null,
               });
             } catch (err) {
               logger.error(
