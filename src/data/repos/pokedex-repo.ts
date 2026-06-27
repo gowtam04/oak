@@ -481,3 +481,50 @@ export async function getPokemon(
   };
   return profile;
 }
+
+// ===========================================================================
+// pokemonWithAbility — backs the ability artifact's `learned_by` (B-4)
+// ===========================================================================
+
+/** A species that has a given ability (for the ability artifact's roster). */
+export interface AbilityHolderRow {
+  /** Canonical Pokémon slug (clickable → opens that Pokémon artifact). */
+  slug: string;
+  displayName: string;
+}
+
+/**
+ * Every Pokémon in `format` that has `abilitySlug` in ANY ability slot
+ * (slot1 / slot2 / hidden). Ordered by national-dex number then slug for a
+ * stable list. Returns `[]` for an unknown ability or an unreadable index.
+ *
+ * @param abilitySlug canonical ability slug (e.g. "rough-skin").
+ * @param format      the active data scope ("scarlet-violet" | "champions").
+ * @param db          the Drizzle handle (from the request's DbCtx / fixture).
+ */
+export async function pokemonWithAbility(
+  abilitySlug: string,
+  format: Format,
+  db: PokebotDb,
+): Promise<AbilityHolderRow[]> {
+  try {
+    const rows = await db
+      .select({ id: pokemon.id, displayName: pokemon.display_name })
+      .from(pokemon)
+      .where(
+        and(
+          eq(pokemon.format, format),
+          or(
+            eq(pokemon.ability_slot1, abilitySlug),
+            eq(pokemon.ability_slot2, abilitySlug),
+            eq(pokemon.ability_hidden, abilitySlug),
+          ),
+        ),
+      )
+      .orderBy(asc(pokemon.national_dex_number), asc(pokemon.id));
+    return rows.map((r) => ({ slug: r.id, displayName: r.displayName }));
+  } catch {
+    // Index unreadable (table missing) — no holders rather than throwing.
+    return [];
+  }
+}

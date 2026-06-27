@@ -9,6 +9,8 @@ import ChampionsToggle from "@/components/ChampionsToggle";
 import AuthMenu from "@/components/auth/AuthMenu";
 import AuthDialog from "@/components/auth/AuthDialog";
 import ConversationList from "@/components/history/ConversationList";
+import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
+import ArtifactViewer from "@/components/artifact/ArtifactViewer";
 import { fetchMe, type MeResult } from "@/lib/auth-client";
 import { useConversations } from "@/lib/use-conversations";
 import { getConversation, importConversation } from "@/lib/history-client";
@@ -62,9 +64,7 @@ export default function Home() {
   const [championsMode, setChampionsMode] = useState(false);
   useEffect(() => {
     try {
-      setChampionsMode(
-        localStorage.getItem(CHAMPIONS_STORAGE_KEY) === "true",
-      );
+      setChampionsMode(localStorage.getItem(CHAMPIONS_STORAGE_KEY) === "true");
     } catch {
       /* storage unavailable (private mode) — keep the default (off) */
     }
@@ -225,6 +225,15 @@ export default function Home() {
   const chatStatus: ChatStatus =
     status === "thinking" ? "streaming" : status === "error" ? "error" : "idle";
 
+  // Artifact viewer (B-4). The viewer's data scope mirrors the current Champions
+  // toggle (snapshotted onto each artifact at open, BR-AV-7). "Ask about this in
+  // chat" pre-fills the composer (TD-7) by reusing the existing prefill channel —
+  // a fresh object so the same text can be re-applied on its next use.
+  const artifactFormat = championsMode ? "champions" : "scarlet-violet";
+  const handleAskInChat = useCallback((text: string) => {
+    setPrefill({ text });
+  }, []);
+
   return (
     <main className="chat-page" data-testid="chat-page">
       <header className="chat-page__header">
@@ -259,62 +268,71 @@ export default function Home() {
           alignItems: "stretch",
         }}
       >
-        {/* History sidebar — signed-in only (guests have no server history). */}
-        {auth.signedIn && (
-          <aside
-            data-testid="history-sidebar"
+        <ArtifactViewerProvider
+          format={artifactFormat}
+          onAskInChat={handleAskInChat}
+        >
+          {/* History sidebar — signed-in only (guests have no server history). */}
+          {auth.signedIn && (
+            <aside
+              data-testid="history-sidebar"
+              style={{
+                width: "300px",
+                flexShrink: 0,
+                minHeight: 0,
+                borderRight: "1px solid var(--border)",
+                background: "var(--surface)",
+                overflow: "hidden",
+              }}
+            >
+              <ConversationList
+                conversations={conversations.conversations}
+                activeId={sessionId}
+                query={conversations.query}
+                onQueryChange={conversations.setQuery}
+                formatFilter={conversations.formatFilter}
+                onFormatFilterChange={conversations.setFormatFilter}
+                onNewChat={handleNewChat}
+                onOpen={handleOpenConversation}
+                onRename={conversations.rename}
+                onPin={conversations.pin}
+                onDelete={handleDeleteConversation}
+              />
+            </aside>
+          )}
+
+          <div
+            className="chat-page__main"
             style={{
-              width: "300px",
-              flexShrink: 0,
+              display: "flex",
+              flexDirection: "column",
+              flex: 1,
+              minWidth: 0,
               minHeight: 0,
-              borderRight: "1px solid var(--border)",
-              background: "var(--surface)",
-              overflow: "hidden",
             }}
           >
-            <ConversationList
-              conversations={conversations.conversations}
-              activeId={sessionId}
-              query={conversations.query}
-              onQueryChange={conversations.setQuery}
-              formatFilter={conversations.formatFilter}
-              onFormatFilterChange={conversations.setFormatFilter}
-              onNewChat={handleNewChat}
-              onOpen={handleOpenConversation}
-              onRename={conversations.rename}
-              onPin={conversations.pin}
-              onDelete={handleDeleteConversation}
+            <ChatThread
+              turns={turns}
+              activity={activities}
+              status={chatStatus}
+              streamingMarkdown={streamingMarkdown}
+              transportError={status === "error" ? error : null}
+              onFollowUp={handleSend}
             />
-          </aside>
-        )}
 
-        <div
-          className="chat-page__main"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            minWidth: 0,
-            minHeight: 0,
-          }}
-        >
-          <ChatThread
-            turns={turns}
-            activity={activities}
-            status={chatStatus}
-            streamingMarkdown={streamingMarkdown}
-            transportError={status === "error" ? error : null}
-            onFollowUp={handleSend}
-          />
+            <Composer
+              onSend={handleSend}
+              disabled={status === "thinking"}
+              streaming={status === "thinking"}
+              onStop={handleStop}
+              prefill={prefill}
+            />
+          </div>
 
-          <Composer
-            onSend={handleSend}
-            disabled={status === "thinking"}
-            streaming={status === "thinking"}
-            onStop={handleStop}
-            prefill={prefill}
-          />
-        </div>
+          {/* Docked side panel (full-screen overlay on mobile); hidden until an
+              artifact is opened, at which point the chat reflows (AV-US-7). */}
+          <ArtifactViewer />
+        </ArtifactViewerProvider>
       </div>
 
       <AuthDialog

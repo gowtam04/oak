@@ -1,0 +1,379 @@
+/*
+ * Artifact viewer (B-4). A docked side panel on desktop; a full-screen overlay
+ * on narrow viewports (BR-AV-9). BEM classes + the globals.css design tokens
+ * (no Tailwind, no CSS modules) — visual language consistent with the answer
+ * card (BR-AV-6/NFR-3).
+ */
+
+/* ---- Panel shell -------------------------------------------------------- */
+.artifact-viewer {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 420px;
+  width: 420px;
+  max-width: 420px;
+  align-self: stretch;
+  max-height: 100%;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-floating);
+}
+
+.artifact-viewer__header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.artifact-viewer__titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.artifact-viewer__title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.15rem;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifact-viewer__format-tag {
+  align-self: flex-start;
+  padding: 2px var(--space-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+
+.artifact-viewer__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.artifact-viewer__btn {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+  transition: background var(--motion-fast);
+}
+.artifact-viewer__btn:hover {
+  background: var(--surface-sunken);
+}
+.artifact-viewer__close {
+  border-radius: var(--radius-pill);
+  line-height: 1;
+}
+.artifact-viewer__ask {
+  white-space: nowrap;
+  color: var(--azure);
+  font-weight: 600;
+}
+
+.artifact-viewer__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.artifact-viewer__loading,
+.artifact-viewer__state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-2);
+  color: var(--text-muted);
+}
+.artifact-viewer__state {
+  flex-direction: column;
+  text-align: center;
+}
+.artifact-viewer__suggestions {
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+
+.artifact-viewer__spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--poke-red);
+  animation: artifact-spin 0.8s linear infinite;
+}
+@keyframes artifact-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .artifact-viewer__spinner {
+    animation: none;
+  }
+}
+
+/* Full-screen overlay on narrow viewports (BR-AV-9). */
+@media (max-width: 768px) {
+  .artifact-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    flex-basis: auto;
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+}
+
+/* ---- Shared section bits ------------------------------------------------ */
+.artifact-section__title {
+  margin: 0 0 var(--space-2);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.artifact-text {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text);
+}
+.artifact-empty {
+  margin: 0;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* ---- Clickable entity links --------------------------------------------- */
+.entity-link {
+  font: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-sm);
+}
+.entity-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.entity-link--chip,
+.entity-link--move {
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  transition: background var(--motion-fast);
+}
+.entity-link--chip:hover,
+.entity-link--move:hover {
+  background: var(--clickable);
+  color: var(--neutral-0);
+}
+.entity-link--card {
+  width: 100%;
+  text-align: left;
+}
+
+/* ---- Pokémon artifact --------------------------------------------------- */
+.pokemon-artifact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.pokemon-artifact__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.pokemon-artifact__art {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md);
+}
+.pokemon-artifact__dex {
+  font-family: var(--mono);
+  color: var(--text-muted);
+}
+.pokemon-artifact__types,
+.move-artifact__type {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.stat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.stat-list__row {
+  display: grid;
+  grid-template-columns: 64px 40px 1fr;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+}
+.stat-list__label {
+  color: var(--text-muted);
+}
+.stat-list__value {
+  font-family: var(--mono);
+  text-align: right;
+  color: var(--text-strong);
+}
+.stat-list__bar {
+  height: 8px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.stat-list__bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--azure);
+  border-radius: var(--radius-pill);
+}
+.stat-list__row--total .stat-list__value {
+  font-weight: 700;
+}
+
+.ability-chips,
+.matchup-row__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* ---- Matchup rows ------------------------------------------------------- */
+.matchup-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.matchup-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  gap: var(--space-2);
+}
+.matchup-row__label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.matchup-row__empty {
+  color: var(--text-faint);
+}
+
+/* ---- Key/value grid (move stats) --------------------------------------- */
+.kv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+}
+.kv-grid__pair {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+}
+.kv-grid__key {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.kv-grid__value {
+  margin: 0;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* ---- Movepool ----------------------------------------------------------- */
+.movepool {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.movepool__method {
+  margin: 0 0 var(--space-2);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.movepool__moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ---- Item held-by ------------------------------------------------------- */
+.held-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.held-list__row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---- Comparison --------------------------------------------------------- */
+.comparison-artifact__cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* ---- Sections ----------------------------------------------------------- */
+.pokemon-artifact__section,
+.type-artifact__section,
+.move-artifact__effect,
+.ability-artifact__effect,
+.ability-artifact__holders,
+.item-artifact__effect,
+.item-artifact__held {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

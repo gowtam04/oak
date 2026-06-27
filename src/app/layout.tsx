@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Fredoka, Nunito_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import "./artifact-viewer.css";
 
 export const metadata: Metadata = {
   title: "Pokebot",

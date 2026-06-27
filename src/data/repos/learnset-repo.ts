@@ -115,3 +115,36 @@ export async function gen9LearnerCount(
 
   return rows[0]?.count ?? 0;
 }
+
+/** One learnable move for a Pokémon: its slug and how it's learned. */
+export interface LearnedMove {
+  moveSlug: string;
+  /** "level-up" | "machine" | "tutor"; null when ingest left it unset. */
+  method: string | null;
+}
+
+/**
+ * Every move `pokemonId` can learn within `format`, for the artifact viewer's
+ * Pokémon movepool (B-4). Ordered by move slug for a stable, deterministic list;
+ * the caller groups by `method` and hydrates display names/types separately
+ * (one batched `moveSummaries` read) to keep this a single cheap learnset scan.
+ *
+ * @param pokemonId canonical Pokémon slug (e.g. "garchomp").
+ * @param format    the active data scope ("scarlet-violet" | "champions").
+ * @param database  the Drizzle handle (from the request's DbCtx / fixture).
+ */
+export async function movesForPokemon(
+  pokemonId: string,
+  format: Format,
+  database: PokebotDb,
+): Promise<LearnedMove[]> {
+  const rows = await database
+    .select({ moveSlug: learnset.move_slug, method: learnset.method })
+    .from(learnset)
+    .where(
+      and(eq(learnset.pokemon_id, pokemonId), eq(learnset.format, format)),
+    )
+    .orderBy(learnset.move_slug);
+
+  return rows.map((row) => ({ moveSlug: row.moveSlug, method: row.method }));
+}

@@ -2,6 +2,7 @@
 
 import type { CandidateTableProps, CandidateRow } from "@/components/types";
 import TypeBadge from "@/components/TypeBadge";
+import EntityLink from "@/components/artifact/EntityLink";
 
 /** Fixed display order for the six base stats (HP, Attack, Defense, SpA, SpD, Speed). */
 const STAT_ORDER = [
@@ -141,18 +142,30 @@ function CandidateRow({
               className="candidate-table__sprite"
             />
           )}
-          <span>
+          <EntityLink
+            kind="pokemon"
+            q={row.name}
+            className="candidate-table__name-link"
+            testid={`candidate-entity-${index}`}
+          >
             {row.name}
             {row.dex_number != null && (
               <span className="candidate-table__dex"> #{row.dex_number}</span>
             )}
-          </span>
+          </EntityLink>
         </div>
       </td>
       <td className="candidate-table__types-cell">
         <div className="candidate-table__types-inner">
           {row.types.map((type) => (
-            <TypeBadge key={type} type={type} />
+            <EntityLink
+              key={type}
+              kind="type"
+              q={type}
+              className="entity-link--type"
+            >
+              <TypeBadge type={type} />
+            </EntityLink>
           ))}
         </div>
       </td>

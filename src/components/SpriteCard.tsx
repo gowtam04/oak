@@ -1,10 +1,15 @@
 import type { SpriteCardProps } from "@/components/types";
 import TypeBadge from "@/components/TypeBadge";
+import EntityLink from "@/components/artifact/EntityLink";
 
 /**
  * SpriteCard — renders one entry from `subjects[]`: sprite image, display
  * name, optional Dex number, type badges, and a fallback indicator when
  * `is_fallback` is true (pre-Gen-9 data used per BR-1).
+ *
+ * The name opens the Pokémon's artifact and each type badge opens that type's
+ * artifact (B-4, AV-US-1) via `EntityLink` — whose no-op default keeps the card
+ * fully renderable in isolation tests with no viewer provider mounted (TD-5).
  *
  * Sprite URL comes directly from the agent payload (PokeAPI CDN). Visual layout
  * deferred to `frontend-design`.
@@ -30,12 +35,19 @@ export default function SpriteCard({ subject }: SpriteCardProps) {
         height={96}
       />
       <div className="sprite-card__info">
-        <span className="sprite-card__name">
-          {name}
-          {dex_number != null && (
-            <span className="sprite-card__dex"> #{dex_number}</span>
-          )}
-        </span>
+        <EntityLink
+          kind="pokemon"
+          q={name}
+          className="sprite-card__name-link"
+          testid="sprite-card-link"
+        >
+          <span className="sprite-card__name">
+            {name}
+            {dex_number != null && (
+              <span className="sprite-card__dex"> #{dex_number}</span>
+            )}
+          </span>
+        </EntityLink>
         {is_fallback && (
           <span
             className="sprite-card__fallback-badge"
@@ -51,7 +63,14 @@ export default function SpriteCard({ subject }: SpriteCardProps) {
         )}
         <div className="sprite-card__types">
           {types.map((type) => (
-            <TypeBadge key={type} type={type} />
+            <EntityLink
+              key={type}
+              kind="type"
+              q={type}
+              className="entity-link--type"
+            >
+              <TypeBadge type={type} />
+            </EntityLink>
           ))}
         </div>
       </div>

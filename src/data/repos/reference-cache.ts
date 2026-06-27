@@ -18,7 +18,7 @@
 
 import "server-only";
 
-import { and, eq, ilike } from "drizzle-orm";
+import { and, eq, ilike, inArray } from "drizzle-orm";
 
 import type { PokebotDb } from "@/data/db";
 import type { Format } from "@/data/formats";
@@ -150,4 +150,62 @@ export async function getReference(
     found: false,
     suggestions: await suggestSlugs(db, kind, slug, format),
   };
+}
+
+/** Minimal move facts for hydrating a movepool list (B-4). */
+export interface MoveSummary {
+  displayName: string;
+  type: string;
+}
+
+/**
+ * Batched read of `{ displayName, type }` for a set of move slugs in `format`,
+ * to hydrate a Pokémon's movepool (B-4) without N per-move `getReference` calls.
+ * Reads the pre-built `move/<slug>` reference rows and pulls the two display
+ * fields off each normalized `MoveDetail` payload. Slugs with no reference row
+ * (or a corrupt payload) are simply absent from the map — the caller falls back
+ * to the slug. Returns an empty map for an empty input or an unreadable index.
+ *
+ * @param moveSlugs canonical move slugs to hydrate.
+ * @param format    the active data scope ("scarlet-violet" | "champions").
+ * @param db        the Drizzle handle (from the request's DbCtx / fixture).
+ */
+export async function moveSummaries(
+  moveSlugs: string[],
+  format: Format,
+  db: PokebotDb,
+): Promise<Map<string, MoveSummary>> {
+  const out = new Map<string, MoveSummary>();
+  const distinct = [...new Set(moveSlugs)];
+  if (distinct.length === 0) return out;
+
+  const keys = distinct.map((slug) => resourceKey("move", slug));
+  let rows: { resource_key: string; payload: string }[];
+  try {
+    rows = await db
+      .select({
+        resource_key: reference_cache.resource_key,
+        payload: reference_cache.payload,
+      })
+      .from(reference_cache)
+      .where(
+        and(
+          eq(reference_cache.format, format),
+          inArray(reference_cache.resource_key, keys),
+        ),
+      );
+  } catch {
+    // Table missing (migrations not applied) — no summaries rather than throwing.
+    return out;
+  }
+
+  for (const row of rows) {
+    const record = parsePayload(row.payload);
+    if (!record || !("display_name" in record)) continue;
+    const move = record as MoveDetail;
+    // resource_key is "move/<slug>" — strip the prefix back to the slug.
+    const slug = row.resource_key.slice("move/".length);
+    out.set(slug, { displayName: move.display_name, type: move.type });
+  }
+  return out;
 }

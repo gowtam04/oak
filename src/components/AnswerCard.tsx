@@ -11,6 +11,7 @@ import CaveatStrip from "@/components/CaveatStrip";
 import DamageReadout from "@/components/DamageReadout";
 import SuggestionChips from "@/components/SuggestionChips";
 import QuestionOptions from "@/components/QuestionOptions";
+import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 
 /**
  * AnswerCard — the top-level renderer for a single `PokebotAnswer` (T11 /
@@ -54,6 +55,11 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
   // host did not pass one (keeps rows/chips clickable in isolation/tests).
   const followUp = onFollowUp ?? (() => {});
 
+  // Per-section "open in viewer" controls (B-4, AV-US-2). `openStructured` opens
+  // a rich block (damage-calc, comparison) from THIS committed payload — no
+  // fetch (TD-2). Its no-op default keeps the card renderable without a provider.
+  const { openStructured } = useArtifactViewer();
+
   return (
     <div className="answer-card" data-testid="answer-card" data-status={status}>
       <CaveatStrip
@@ -78,6 +84,16 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
           {subjects.map((subject, i) => (
             <SpriteCard key={`${subject.name}-${i}`} subject={subject} />
           ))}
+          {subjects.length >= 2 && (
+            <button
+              type="button"
+              className="answer-card__open-viewer"
+              data-testid="open-comparison"
+              onClick={() => openStructured({ kind: "comparison", subjects })}
+            >
+              Compare in viewer
+            </button>
+          )}
         </div>
       )}
 
@@ -88,7 +104,21 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
         />
       )}
 
-      {damage_calc && <DamageReadout damageCalc={damage_calc} />}
+      {damage_calc && (
+        <div className="answer-card__damage">
+          <DamageReadout damageCalc={damage_calc} />
+          <button
+            type="button"
+            className="answer-card__open-viewer"
+            data-testid="open-damage-calc"
+            onClick={() =>
+              openStructured({ kind: "damage-calc", damageCalc: damage_calc })
+            }
+          >
+            Open in viewer
+          </button>
+        </div>
+      )}
 
       <InferenceCallout inferences={inferences} />
 

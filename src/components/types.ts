@@ -288,3 +288,18 @@ export interface UsePokebotChatResult {
 
 /** The hook signature implemented by `src/lib/sse-client.ts`. */
 export type UsePokebotChat = () => UsePokebotChatResult;
+
+// ---------------------------------------------------------------------------
+// Artifact viewer (B-4)
+// ---------------------------------------------------------------------------
+
+// Re-export the artifact-viewer client contract (the back-stack view types +
+// the context API) so page/leaf consumers import it from this one frontend
+// surface, alongside the PokebotAnswer + SSE types above.
+export type {
+  ArtifactView,
+  ArtifactViewerApi,
+  EntityRequest,
+  StructuredArtifact,
+  StructuredArtifactInput,
+} from "@/components/artifact/types";

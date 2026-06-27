@@ -20,10 +20,10 @@ import type { ToolDef } from "@/agent/types";
 import {
   getTypeMatchupsInputSchema,
   toJsonSchema,
-  TYPE_NAMES,
   type GetTypeMatchupsOutput,
   type TypeMatchupsDetail,
 } from "@/agent/schemas";
+import { combineDefensive } from "@/agent/formulas/type-chart";
 import { getReference } from "@/data/repos/reference-cache";
 import { formatForMode } from "@/data/formats";
 
@@ -34,30 +34,12 @@ const description =
   "immunities). Use for matchup questions. Immunities are 0× and must be " +
   "treated as immunities, not resistances.";
 
-type DefensiveProfile = {
-  weak_to: string[];
-  resists: string[];
-  immune_to: string[];
-};
-
 function isFoundProfile(ref: unknown): ref is TypeMatchupsDetail {
   return (
     typeof ref === "object" &&
     ref !== null &&
     (ref as { found?: unknown }).found === true
   );
-}
-
-/**
- * Defensive multiplier of one (single) type against an attacking type, derived
- * from its classified defensive lists. A single type's matchups are exactly
- * 0× / 0.5× / 2× / 1×, so this reconstruction is exact.
- */
-function defMultiplier(def: DefensiveProfile, attacking: string): number {
-  if (def.immune_to.includes(attacking)) return 0;
-  if (def.weak_to.includes(attacking)) return 2;
-  if (def.resists.includes(attacking)) return 0.5;
-  return 1;
 }
 
 export const getTypeMatchupsTool: ToolDef = {
@@ -99,29 +81,10 @@ export const getTypeMatchupsTool: ToolDef = {
     )) as GetTypeMatchupsOutput;
     if (!isFoundProfile(ref2)) return ref2;
 
-    const d1 = ref1.defensive;
-    const d2 = ref2.defensive;
-
-    const weak_to: string[] = [];
-    const resists: string[] = [];
-    const immune_to: string[] = [];
-
-    for (const attacking of TYPE_NAMES) {
-      const m = defMultiplier(d1, attacking) * defMultiplier(d2, attacking);
-      if (m === 0) {
-        immune_to.push(attacking);
-      } else if (m > 1) {
-        weak_to.push(attacking);
-      } else if (m < 1) {
-        resists.push(attacking);
-      }
-      // m === 1 -> neutral, omitted
-    }
-
     return {
       found: true,
       types: [types[0]!, types[1]!],
-      defensive: { weak_to, resists, immune_to },
+      defensive: combineDefensive([ref1.defensive, ref2.defensive]),
     };
   },
 };
