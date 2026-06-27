@@ -179,7 +179,7 @@ export default function ArtifactViewer(): React.JSX.Element | null {
       aria-label="Artifact viewer"
     >
       <header className="artifact-viewer__header">
-        <div className="artifact-viewer__nav">
+        <div className="artifact-viewer__topline">
           {canGoBack && (
             <button
               type="button"
@@ -190,37 +190,35 @@ export default function ArtifactViewer(): React.JSX.Element | null {
               ← Back
             </button>
           )}
-        </div>
-        <div className="artifact-viewer__titles">
           <h2 className="artifact-viewer__title" data-testid="artifact-title">
             {title}
           </h2>
-          <span
-            className="artifact-viewer__format-tag"
-            data-testid="artifact-format-tag"
-          >
-            {formatTag}
-          </span>
+          <div className="artifact-viewer__control-actions">
+            <button
+              type="button"
+              className="artifact-viewer__btn artifact-viewer__ask"
+              data-testid="artifact-ask"
+              onClick={() => askInChat(askText)}
+            >
+              Ask about this in chat
+            </button>
+            <button
+              type="button"
+              className="artifact-viewer__btn artifact-viewer__close"
+              data-testid="artifact-close"
+              aria-label="Close artifact viewer"
+              onClick={close}
+            >
+              ✕
+            </button>
+          </div>
         </div>
-        <div className="artifact-viewer__actions">
-          <button
-            type="button"
-            className="artifact-viewer__btn artifact-viewer__ask"
-            data-testid="artifact-ask"
-            onClick={() => askInChat(askText)}
-          >
-            Ask about this in chat
-          </button>
-          <button
-            type="button"
-            className="artifact-viewer__btn artifact-viewer__close"
-            data-testid="artifact-close"
-            aria-label="Close artifact viewer"
-            onClick={close}
-          >
-            ✕
-          </button>
-        </div>
+        <span
+          className="artifact-viewer__format-tag"
+          data-testid="artifact-format-tag"
+        >
+          {formatTag}
+        </span>
       </header>
 
       <div className="artifact-viewer__body" data-testid="artifact-viewer-body">

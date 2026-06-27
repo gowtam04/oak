@@ -21,48 +21,59 @@
   box-shadow: var(--shadow-floating);
 }
 
+/* Thin, sticky header: a single control row (title + actions) over a compact
+ * format-tag line. Only the body scrolls, so the header stays pinned. */
 .artifact-viewer__header {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
   border-bottom: 1px solid var(--border);
   background: var(--surface-raised);
 }
 
-.artifact-viewer__titles {
+.artifact-viewer__topline {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.artifact-viewer__control-actions {
+  flex: 0 0 auto;
+  margin-left: auto; /* pins Ask + ✕ right even when Back is absent */
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .artifact-viewer__title {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   font-family: var(--display);
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   color: var(--text-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Refined-neutral format/generation badge — full-width row, never wraps. */
 .artifact-viewer__format-tag {
   align-self: flex-start;
+  max-width: 100%;
   padding: 2px var(--space-2);
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--text-muted);
   background: var(--surface-sunken);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
-}
-
-.artifact-viewer__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .artifact-viewer__btn {
@@ -131,6 +142,11 @@
   .artifact-viewer__spinner {
     animation: none;
   }
+  .entity-link--chip,
+  .entity-link--move {
+    transition: background var(--motion-fast);
+    transform: none;
+  }
 }
 
 /* Full-screen overlay on narrow viewports (BR-AV-9). */
@@ -187,16 +203,25 @@
 .entity-link--chip,
 .entity-link--move {
   padding: var(--space-1) var(--space-2);
+  font-size: 0.82rem;
+  font-weight: 600;
   background: var(--surface-sunken);
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   color: var(--text);
-  transition: background var(--motion-fast);
+  transition: background var(--motion-fast), border-color var(--motion-fast),
+    transform var(--motion-spring);
 }
 .entity-link--chip:hover,
 .entity-link--move:hover {
-  background: var(--clickable);
-  color: var(--neutral-0);
+  background: var(--azure-soft);
+  border-color: var(--azure);
+  color: var(--text-strong);
+  transform: translateY(-1px);
+}
+.entity-link--chip:active,
+.entity-link--move:active {
+  transform: translateY(0);
 }
 .entity-link--card {
   width: 100%;
