@@ -64,6 +64,25 @@ history) first requires a notion of "who," so this is the prerequisite for B-2 a
 
 ## B-2 — Team building
 
+> **Status: SPECIFIED** (not yet built) — refined into a buildable spec at
+> `docs/features/team-builder/requirements/requirements.md` (TEAM-US-1..11,
+> BR-T1..11, AC-*). Decisions locked: **both** a manual builder (a **dedicated
+> Teams page**) and **agent-assisted** construction in chat, where the agent
+> **proposes** a team/edit and the user explicitly **applies** it (the agent
+> never mutates saved teams); the **full competitive set** per Pokémon (species,
+> ability, item, 4 moves, nature, EVs, IVs, Tera type, level); **many named
+> teams**, **partial/in-progress allowed**; **warn-but-allow** validation
+> (EV/IV caps, learnset/ability/item legality, species + item clause) that never
+> blocks a save; **Pokémon Showdown paste import & export**; an **active team
+> that is per-conversation, defaults to none, is manually selected, and is read
+> by the agent only when the question is about it**; teams are **per-account**
+> (B-1) and **format-bound** (`scarlet-violet` | `champions`). This resolves the
+> three original open questions below: build mode → both; set depth → full set;
+> team-as-agent-input → the agent must read the active team, but **how** it's
+> wired given the fixed 11-tool contract is **handed to the architect** (the team
+> must not become a scope-widening LLM input, mirroring the server-controlled
+> format). Original framing retained below as history.
+
 **Why:** Competitive team-building is one of the two core use cases
 (`requirements.md` §Overview), but the agent only *reasons about* teams — it can't
 *save* one. Letting the user persist and revisit named teams turns one-off answers
