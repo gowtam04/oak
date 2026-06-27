@@ -44,6 +44,15 @@ export function formatForMode(mode: AgentMode): Format {
   return mode === "champions" ? CHAMPIONS_FORMAT : STANDARD_FORMAT;
 }
 
+/**
+ * Inverse of {@link formatForMode}: map a stored conversation `format` back to
+ * the agent mode. Used when resuming a saved conversation, whose mode is derived
+ * from its stored format — never from the request body (BR-H6).
+ */
+export function modeForFormat(format: Format): AgentMode {
+  return format === CHAMPIONS_FORMAT ? "champions" : "standard";
+}
+
 /** Type guard for a known format string (e.g. when reading CLI args). */
 export function isFormat(value: string): value is Format {
   return (FORMATS as readonly string[]).includes(value);

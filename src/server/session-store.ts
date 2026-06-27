@@ -95,12 +95,39 @@ export function estimateTokens(messages: ChatMessage[]): number {
 }
 
 /**
+ * Pure context-budget trim: returns a copy of `messages` with the oldest turns
+ * dropped from the front until the estimated token count falls at or below
+ * `budgetTokens`. The input is not mutated. Shared by both the guest in-memory
+ * path (via {@link trim}) and the signed-in DB path (chat-history, BR-H5) so
+ * both apply identical trimming.
+ *
+ * - If `budgetTokens` is omitted, `DEFAULT_HISTORY_TOKEN_BUDGET` is used.
+ * - Returns `messages` unchanged when empty or already within budget.
+ * - When even a single message exceeds the budget, all messages are dropped
+ *   (returns `[]`); the next turn starts from a clean slate.
+ */
+export function trimMessages(
+  messages: ChatMessage[],
+  budgetTokens: number = DEFAULT_HISTORY_TOKEN_BUDGET,
+): ChatMessage[] {
+  const result = [...messages];
+  while (result.length > 0 && estimateTokens(result) > budgetTokens) {
+    result.shift(); // drop the oldest turn
+  }
+  return result;
+}
+
+/**
  * Removes the oldest turns from the session history until the estimated token
  * count falls at or below `budgetTokens`. Individual messages are dropped one
  * at a time from the front of the array; this preserves the most-recent
  * context (the active topic, the last candidate set) and discards the oldest
  * context first — consistent with how long-context LLM conversations are
  * typically pruned.
+ *
+ * Delegates the budget logic to {@link trimMessages}, then splices the live
+ * stored array in place so `getHistory`'s "returned array is live" contract
+ * still holds.
  *
  * - If `budgetTokens` is omitted, `DEFAULT_HISTORY_TOKEN_BUDGET` is used.
  * - No-op when the session does not exist, is empty, or is already within
@@ -116,9 +143,10 @@ export function trim(
   const history = store.get(sessionId);
   if (!history || history.length === 0) return;
 
-  while (history.length > 0 && estimateTokens(history) > budgetTokens) {
-    history.shift(); // drop the oldest turn
-  }
+  // trimMessages only ever drops from the front, so the number kept equals the
+  // tail of `history`; splice the dropped prefix off the live array in place.
+  const dropCount = history.length - trimMessages(history, budgetTokens).length;
+  if (dropCount > 0) history.splice(0, dropCount);
 }
 
 // ---------------------------------------------------------------------------

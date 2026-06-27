@@ -15,6 +15,13 @@
       "when": 1782513726015,
       "tag": "0001_confused_electro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782527720078,
+      "tag": "0002_green_ben_parker",
+      "breakpoints": true
     }
   ]
 }

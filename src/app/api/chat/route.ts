@@ -37,18 +37,25 @@ import { randomUUID } from "node:crypto";
 import { createAgentContext } from "@/agent/context";
 import type {
   AgentMode,
+  ChatMessage,
   OnAnswerDelta,
   OnAnswerStart,
   OnProgress,
 } from "@/agent/types";
 import type { Account } from "@/data/repos/accounts-repo";
+import { formatForMode, modeForFormat, type Format } from "@/data/formats";
 import { logger } from "@/server/logger";
 import {
   checkRateLimit,
   GUEST_CONFIG,
   SIGNED_IN_CONFIG,
 } from "@/server/rate-limit";
-import { appendTurn, getHistory, trim } from "@/server/session-store";
+import {
+  appendTurn,
+  getHistory,
+  trim,
+  trimMessages,
+} from "@/server/session-store";
 import {
   formatSseEvent,
   type ChatRequestBody,
@@ -162,8 +169,10 @@ export async function POST(req: Request): Promise<Response> {
 
   // Server-controlled query scope for the turn — derived here, threaded onto the
   // AgentContext, never an LLM-visible tool field. ON ⇒ every query is scoped to
-  // Champions; omitted/false ⇒ today's Gen 9 behavior.
-  const mode: AgentMode = body.champions_mode ? "champions" : "standard";
+  // Champions; omitted/false ⇒ today's Gen 9 behavior. For a RESUMED signed-in
+  // conversation this is overridden below from the stored format (BR-H6); hence
+  // `let`, not `const`.
+  let mode: AgentMode = body.champions_mode ? "champions" : "standard";
 
   // 2. Orchestration guardrails — input-length cap + TIERED rate limit
   //    (integration.md § Guardrails; account-creation design.md § API Design
@@ -225,10 +234,46 @@ export async function POST(req: Request): Promise<Response> {
   // 3. Resolve the prior history (trim to the context budget first). The current
   //    message is passed to runPokebot SEPARATELY — it must NOT be in `history`,
   //    which holds only prior turns (integration.md § Input Contract). We commit
-  //    the user+assistant pair to the store only on a successful answer (below),
-  //    so a transport fault leaves the session clean for a retry.
-  trim(session_id);
-  const history = [...getHistory(session_id)];
+  //    the user+assistant pair only on a successful answer (below), so a
+  //    transport fault leaves the conversation clean for a retry.
+  //
+  //    SIGNED IN: the durable DB is the source of truth (chat-history HIST-AD-4).
+  //    Load the conversation + its turns, derive the model history from the
+  //    stored text, trim it, and override `mode` from the stored format (BR-H6).
+  //    A DB blip here degrades gracefully to an empty history (never a 500),
+  //    consistent with the guest-first stance for account resolution.
+  //    GUEST: the in-memory session store, exactly as before.
+  let history: ChatMessage[];
+  if (account) {
+    try {
+      const repo = await import("@/data/repos/conversation-repo");
+      const conv = await repo.getConversation(account.id, session_id);
+      if (conv) {
+        mode = modeForFormat(conv.format as Format); // BR-H6 — fixed per conversation
+        const stored = await repo.getMessages(account.id, session_id);
+        history = trimMessages(
+          stored.map((m) => ({ role: m.role, content: m.textContent })),
+        );
+      } else {
+        history = []; // new conversation; mode stays body-derived
+      }
+    } catch (err) {
+      logger.warn(
+        {
+          event: "chat_history_load_failed",
+          request_id: requestId,
+          account_id: account.id,
+          session_id,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "pokebot_chat_history_load_failed",
+      );
+      history = [];
+    }
+  } else {
+    trim(session_id);
+    history = [...getHistory(session_id)];
+  }
 
   // 4. Build the SSE stream. Return the Response SYNCHRONOUSLY; emit from the
   //    async task inside start() (never await the whole loop first).
@@ -304,12 +349,47 @@ export async function POST(req: Request): Promise<Response> {
 
           // In-domain success (any status). Persist the turn pair for multi-turn
           // refinement, then emit the single terminal answer event.
-          appendTurn(session_id, { role: "user", content: message });
-          appendTurn(session_id, {
-            role: "assistant",
-            content: answer.answer_markdown,
-          });
-          send("answer", { answer });
+          if (account) {
+            // SIGNED IN: durable, account-scoped persistence (chat-history
+            // HIST-AD-3/BR-H2). Deliver the answer FIRST, then write — keeping
+            // the DB round-trip off the SSE critical path. The write carries no
+            // client turn ids (the chat body has none), so we mint fresh server
+            // UUIDs. A persistence failure is LOGGED but never surfaces as an SSE
+            // error: the answer is already delivered (BR-H2, off critical path).
+            send("answer", { answer });
+            try {
+              const repo = await import("@/data/repos/conversation-repo");
+              await repo.appendTurnPair({
+                accountId: account.id,
+                conversationId: session_id,
+                format: formatForMode(mode),
+                userTurnId: repo.newTurnId(),
+                userMessage: message,
+                assistantTurnId: repo.newTurnId(),
+                answer,
+                now: Date.now(),
+              });
+            } catch (err) {
+              logger.error(
+                {
+                  event: "chat_persist_failed",
+                  request_id: requestId,
+                  account_id: account.id,
+                  session_id,
+                  err: err instanceof Error ? err.message : String(err),
+                },
+                "pokebot_chat_persist_failed",
+              );
+            }
+          } else {
+            // GUEST: in-memory session store, exactly as before (byte-identical).
+            appendTurn(session_id, { role: "user", content: message });
+            appendTurn(session_id, {
+              role: "assistant",
+              content: answer.answer_markdown,
+            });
+            send("answer", { answer });
+          }
         } catch (err) {
           // A client abort (user pressed Stop) surfaces as an AbortError out of
           // the runtime; it is not a transport fault, and the SSE connection is

@@ -151,7 +151,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 8 tables (5 Pokédex index + 3 auth)", async () => {
+  it("creates all 10 tables (5 Pokédex index + 3 auth + 2 chat-history)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
@@ -166,10 +166,49 @@ describe("Drizzle migration — table creation", () => {
         "account",
         "auth_session",
         "otp_code",
+        // Chat-history tables (account-scoped) — added by the 0002 migration.
+        "conversation",
+        "conversation_message",
       ]),
     );
-    // Exactly 8 user tables (5 index + 3 auth, no extras).
-    expect(tables).toHaveLength(8);
+    // Exactly 10 user tables (5 index + 3 auth + 2 chat-history, no extras).
+    expect(tables).toHaveLength(10);
+  });
+
+  it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {
+    expect(await columnNames(db, "conversation")).toEqual(
+      expect.arrayContaining([
+        "id",
+        "account_id",
+        "title",
+        "format",
+        "pinned",
+        "created_at",
+        "updated_at",
+      ]),
+    );
+    expect(await columnNames(db, "conversation")).toHaveLength(7);
+    expect(await pkColumns(db, "conversation")).toEqual(["id"]);
+
+    expect(await columnNames(db, "conversation_message")).toEqual(
+      expect.arrayContaining([
+        "id",
+        "conversation_id",
+        "account_id",
+        "seq",
+        "role",
+        "text_content",
+        "answer_json",
+        "created_at",
+      ]),
+    );
+    expect(await columnNames(db, "conversation_message")).toHaveLength(8);
+    expect(await pkColumns(db, "conversation_message")).toEqual(["id"]);
+
+    const indexes = await indexNames(db);
+    expect(indexes).toContain("conversation_account_updated_idx");
+    expect(indexes).toContain("message_conversation_seq_idx"); // UNIQUE (seq backstop)
+    expect(indexes).toContain("message_account_idx");
   });
 
   it("migration creates the 3 auth tables with the correct columns + PKs", async () => {

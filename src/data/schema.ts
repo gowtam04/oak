@@ -286,3 +286,96 @@ export const otp_code = pgTable("otp_code", {
   /** Epoch ms of successful verify → single-use (BR-A3). Null until consumed. */
   consumed_at: bigint("consumed_at", { mode: "number" }),
 });
+
+// ===========================================================================
+// Chat history (docs/features/chat-history § Data Model)
+//
+// Durable, account-scoped conversations for signed-in users (B-3). Like the
+// auth tables these are GLOBAL (no `format` column) — `format` is a property of
+// each conversation, not a partition of the store (BR-H6). Epoch-ms timestamps
+// are `bigint` mode "number"; `pinned` is the 0/1 `integer` convention; FKs are
+// logical indexed columns, NOT physical constraints (cf. auth_session.account_id),
+// so deletes are explicit in the repo (no ON DELETE CASCADE).
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// conversation — one row per saved conversation (HIST-AD-1: id = client session_id)
+// ---------------------------------------------------------------------------
+export const conversation = pgTable(
+  "conversation",
+  {
+    /**
+     * The client `session_id` for this conversation (HIST-AD-1) — a
+     * client-generated UUID. NEVER trusted alone for isolation; every query
+     * also filters by account_id (BR-H1).
+     */
+    id: text("id").primaryKey(),
+    /**
+     * Logical FK → account.id; every read/write filters by it (BR-H1 / BR-A9).
+     * Plain indexed column, not a physical FK (schema convention).
+     */
+    account_id: text("account_id").notNull(),
+    /** Derived from the first user message; renamable (BR-H7). */
+    title: text("title").notNull(),
+    /** "scarlet-violet" | "champions"; fixed for the conversation's life (BR-H6). */
+    format: text("format").notNull(),
+    /** 0/1; pinned conversations group above the rest (HIST-US-9). */
+    pinned: integer("pinned").notNull().default(0),
+    /** Epoch ms the conversation was created. */
+    created_at: bigint("created_at", { mode: "number" }).notNull(),
+    /** Epoch ms of last activity — drives most-recently-active list ordering. */
+    updated_at: bigint("updated_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    // Per-account list query: ORDER BY pinned DESC, updated_at DESC, scoped to
+    // account_id. account_id leads so the filter uses the index prefix.
+    index("conversation_account_updated_idx").on(t.account_id, t.updated_at),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// conversation_message — one row per turn (HIST-AD-2)
+// ---------------------------------------------------------------------------
+export const conversation_message = pgTable(
+  "conversation_message",
+  {
+    /**
+     * UUID. For the guest→sign-in import path this is the client `ChatTurn.id`
+     * so the import is idempotent (ON CONFLICT (id) DO NOTHING); for the
+     * server-authoritative append path the route mints a fresh UUID.
+     */
+    id: text("id").primaryKey(),
+    /** Logical FK → conversation.id. */
+    conversation_id: text("conversation_id").notNull(),
+    /** Denormalized account.id for isolation-safe queries + delete (BR-H1). */
+    account_id: text("account_id").notNull(),
+    /** Monotonic order within the conversation (0,1,2,…). */
+    seq: integer("seq").notNull(),
+    /** "user" | "assistant". */
+    role: text("role").notNull(),
+    /**
+     * Human-visible text: the user message, or the assistant `answer_markdown`.
+     * Powers ILIKE search (BR-H11) and the model re-feed (BR-H5) without parsing
+     * answer_json. Intentionally denormalized out of answer_json.
+     */
+    text_content: text("text_content").notNull(),
+    /**
+     * Full `PokebotAnswer` JSON (assistant rows only; NULL for user rows) —
+     * powers exact re-render (BR-H3). TEXT JSON, like reference_cache.payload.
+     */
+    answer_json: text("answer_json"),
+    /** Epoch ms the turn was stored. */
+    created_at: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    // Ordered load AND the seq-uniqueness backstop: a UNIQUE (conversation_id,
+    // seq) turns a concurrent-append race into a clean conflict instead of a
+    // silently duplicated seq. appendTurnPair serializes on the conversation row.
+    uniqueIndex("message_conversation_seq_idx").on(
+      t.conversation_id,
+      t.seq,
+    ),
+    // Isolation / cleanup queries by owning account.
+    index("message_account_idx").on(t.account_id),
+  ],
+);

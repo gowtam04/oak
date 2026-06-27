@@ -6,18 +6,36 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // REAL but wrapped in a recording spy, so the route's (key, config) arguments
 // can be asserted while the genuine fixed-window logic still runs (the direct
 // unit suites in this file exercise that same real implementation).
-const { mockRunPokebot, mockCreateAgentContext, mockGetCurrentAccount } =
-  vi.hoisted(() => ({
-    mockRunPokebot: vi.fn(),
-    mockCreateAgentContext: vi.fn(),
-    mockGetCurrentAccount: vi.fn(),
-  }));
+const {
+  mockRunPokebot,
+  mockCreateAgentContext,
+  mockGetCurrentAccount,
+  mockGetConversation,
+  mockGetMessages,
+  mockAppendTurnPair,
+} = vi.hoisted(() => ({
+  mockRunPokebot: vi.fn(),
+  mockCreateAgentContext: vi.fn(),
+  mockGetCurrentAccount: vi.fn(),
+  mockGetConversation: vi.fn(),
+  mockGetMessages: vi.fn(),
+  mockAppendTurnPair: vi.fn(),
+}));
 vi.mock("@/agent/runtime", () => ({ runPokebot: mockRunPokebot }));
 vi.mock("@/agent/context", () => ({
   createAgentContext: mockCreateAgentContext,
 }));
 vi.mock("@/server/auth/current-user", () => ({
   getCurrentAccount: mockGetCurrentAccount,
+}));
+// Chat-history (B-3): for a SIGNED-IN turn the route reads/writes the durable DB
+// via this repo (it dynamically imports it). Mock it so this Docker-light suite
+// never opens Postgres; signed-in history is whatever these mocks return.
+vi.mock("@/data/repos/conversation-repo", () => ({
+  getConversation: mockGetConversation,
+  getMessages: mockGetMessages,
+  appendTurnPair: mockAppendTurnPair,
+  newTurnId: () => "test-turn-id",
 }));
 vi.mock("@/server/rate-limit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/rate-limit")>();
@@ -458,6 +476,14 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
     mockCreateAgentContext.mockResolvedValue({});
     mockGetCurrentAccount.mockReset();
     mockGetCurrentAccount.mockResolvedValue(null); // guest unless overridden
+    // Default: a signed-in conversation does not exist yet (new), so signed-in
+    // history is empty unless a test seeds the DB-mock for a resume.
+    mockGetConversation.mockReset();
+    mockGetConversation.mockResolvedValue(null);
+    mockGetMessages.mockReset();
+    mockGetMessages.mockResolvedValue([]);
+    mockAppendTurnPair.mockReset();
+    mockAppendTurnPair.mockResolvedValue(undefined);
     vi.mocked(checkRateLimit).mockClear();
   });
 
@@ -606,12 +632,29 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
     expect(sseEventNames(raw1)).toContain("answer"); // SSE contract unchanged
 
     // Turn 2 — now signed in (keyed acct:acct-42), SAME conversation session_id.
+    // Under chat-history (B-3) a signed-in turn reads its prior turns from the
+    // DURABLE DB (the client imported the on-screen thread on sign-in, BR-H10),
+    // not the in-memory guest store. Simulate that imported conversation here.
     mockGetCurrentAccount.mockResolvedValueOnce(ACCOUNT);
+    mockGetConversation.mockResolvedValueOnce({
+      id: "s-thread",
+      accountId: ACCOUNT.id,
+      title: "first question",
+      format: "scarlet-violet",
+      pinned: false,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    mockGetMessages.mockResolvedValueOnce([
+      { id: "m0", role: "user", seq: 0, textContent: "first question", answerJson: null, createdAt: 1 },
+      { id: "m1", role: "assistant", seq: 1, textContent: "first answer", answerJson: "{}", createdAt: 1 },
+    ]);
     const t2 = await post({ session_id: "s-thread", message: "follow up" });
     await drain(t2);
 
     // The conversation is keyed by session_id, NOT auth tier: the prior turn
-    // pair threads into turn 2 even though the rate-limit key changed ip→acct.
+    // pair threads into turn 2 (now DB-sourced) even though the rate-limit key
+    // changed ip→acct.
     const secondCall = mockRunPokebot.mock.calls[1]! as [
       string,
       { role: string; content: string }[],

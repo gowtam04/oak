@@ -14,6 +14,7 @@ import {
   estimateTokens,
   getHistory,
   trim,
+  trimMessages,
 } from "@/server/session-store";
 import type { ChatMessage } from "@/agent/types";
 
@@ -246,6 +247,71 @@ describe("trim", () => {
 
     expect(getHistory(SESSION_B)).toHaveLength(1);
     expect(getHistory(SESSION_B)[0].content).toBe("untouched");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// trimMessages (pure — shared by the guest in-memory path and the signed-in DB
+// path; trim() delegates to it)
+// ---------------------------------------------------------------------------
+
+describe("trimMessages", () => {
+  it("returns an empty array unchanged", () => {
+    expect(trimMessages([])).toEqual([]);
+  });
+
+  it("returns all messages when already within budget", () => {
+    const messages = [msg("user", "short"), msg("assistant", "reply")];
+    expect(trimMessages(messages, DEFAULT_HISTORY_TOKEN_BUDGET)).toEqual(
+      messages,
+    );
+  });
+
+  it("does NOT mutate the input array", () => {
+    const messages = [
+      msg("user", "x".repeat(400)),
+      msg("assistant", "y".repeat(400)),
+    ];
+    const copy = [...messages];
+    trimMessages(messages, 5); // would drop everything
+    expect(messages).toEqual(copy); // input untouched
+  });
+
+  it("drops oldest first until within budget, preserving the most recent", () => {
+    const messages = [
+      msg("user", "first"),
+      msg("assistant", "second"),
+      msg("user", "third"),
+      msg("assistant", "fourth"),
+    ];
+    const kept = trimMessages(messages, 5);
+    const contents = kept.map((m) => m.content);
+    expect(contents).toContain("fourth");
+    expect(contents).not.toContain("first");
+    expect(estimateTokens(kept)).toBeLessThanOrEqual(5);
+  });
+
+  it("returns [] when a single message exceeds the budget", () => {
+    expect(trimMessages([msg("user", "x".repeat(1000))], 10)).toEqual([]);
+  });
+
+  it("uses DEFAULT_HISTORY_TOKEN_BUDGET when no budget is given", () => {
+    const messages = [msg("user", "a small message")];
+    expect(trimMessages(messages)).toEqual(messages);
+  });
+
+  it("matches what trim() applies to the live store (parity)", () => {
+    const built: ChatMessage[] = [];
+    for (let i = 0; i < 5; i++) {
+      const u = msg("user", "x".repeat(400));
+      const a = msg("assistant", "y".repeat(400));
+      built.push(u, a);
+      appendTurn(SESSION_A, u);
+      appendTurn(SESSION_A, a);
+    }
+    const expected = trimMessages(built, 200);
+    trim(SESSION_A, 200);
+    expect(getHistory(SESSION_A)).toEqual(expected);
   });
 });
 

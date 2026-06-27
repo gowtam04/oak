@@ -8,7 +8,10 @@ import ThemeToggle from "@/components/ThemeToggle";
 import ChampionsToggle from "@/components/ChampionsToggle";
 import AuthMenu from "@/components/auth/AuthMenu";
 import AuthDialog from "@/components/auth/AuthDialog";
+import ConversationList from "@/components/history/ConversationList";
 import { fetchMe, type MeResult } from "@/lib/auth-client";
+import { useConversations } from "@/lib/use-conversations";
+import { getConversation, importConversation } from "@/lib/history-client";
 import type { ChatStatus, ChatTurn, PokebotAnswer } from "@/components/types";
 
 /** localStorage key for the persisted Champions-mode choice. */
@@ -83,6 +86,15 @@ export default function Home() {
   const [auth, setAuth] = useState<MeResult>({ signedIn: false });
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
 
+  // Durable chat history (chat-history B-3). The hook lists/searches/filters and
+  // mutates the signed-in account's conversations; it stays empty + makes no
+  // fetch for guests (`enabled = auth.signedIn`). The conversation `sessionId`
+  // below IS the conversation id (HIST-AD-1), so opening / new-chat / import all
+  // hang off it. `refresh`/`remove` are stable, so we use them in deps directly.
+  const conversations = useConversations(auth.signedIn);
+  const { refresh: refreshConversations, remove: removeConversation } =
+    conversations;
+
   // Resolve auth state on mount so the header renders guest vs signed-in. The
   // page is a client component, so this runs after hydration; `fetchMe` never
   // throws (a guest / unknown cookie / transport fault all resolve to
@@ -104,8 +116,19 @@ export default function Home() {
   // login) is intentionally not surfaced here; both paths land in the same UI.
   const handleSignedIn = useCallback(() => {
     setAuthDialogOpen(false);
-    void fetchMe().then(setAuth);
-  }, []);
+    void fetchMe().then((me) => {
+      setAuth(me);
+      // BR-H10 / HIST-US-12: the on-screen guest thread's full-fidelity turns
+      // live only on the client at this moment, so save them into the new
+      // account (idempotent import), then surface it in the now-enabled history
+      // list. An empty thread imports nothing (AC-12.2 — repo returns null).
+      if (me.signedIn && turns.length > 0) {
+        void importConversation(sessionId, championsMode, turns).then(() =>
+          refreshConversations(),
+        );
+      }
+    });
+  }, [sessionId, championsMode, turns, refreshConversations]);
 
   // Sign-out completed (current device only — AC-5.2). Revert to the guest tier
   // WITHOUT resetting `sessionId` or clearing `turns[]`: the thread persists
@@ -125,8 +148,12 @@ export default function Home() {
         ...prev,
         { id: makeId(), role: "assistant", answer },
       ]);
+      // Signed in: the server just persisted this turn (creating the
+      // conversation on the first turn, or bumping it to the top on a
+      // follow-up). Re-list so the sidebar reflects the new title / ordering.
+      if (auth.signedIn) refreshConversations();
     }
-  }, [status, answer]);
+  }, [status, answer, auth.signedIn, refreshConversations]);
 
   const handleSend = useCallback(
     (message: string) => {
@@ -140,6 +167,43 @@ export default function Home() {
       send({ session_id: sessionId, message, champions_mode: championsMode });
     },
     [send, sessionId, championsMode],
+  );
+
+  // Start a brand-new conversation (AC-6.1): a fresh session id + empty thread.
+  // No DB row is created until the first successful turn. The previous
+  // conversation remains saved + unchanged.
+  const handleNewChat = useCallback(() => {
+    reset();
+    committedAnswerRef.current = null;
+    setSessionId(makeId());
+    setTurns([]);
+  }, [reset]);
+
+  // Open a saved conversation (HIST-US-4): load its full-fidelity turns, make it
+  // the live thread (its id becomes the session id, so the composer continues
+  // it), and follow its stored format (AC-5.4).
+  const handleOpenConversation = useCallback(
+    (id: string) => {
+      void getConversation(id).then((detail) => {
+        if (!detail) return;
+        reset();
+        committedAnswerRef.current = null;
+        setSessionId(detail.id);
+        setTurns(detail.turns);
+        setChampionsModePersisted(detail.format === "champions");
+      });
+    },
+    [reset, setChampionsModePersisted],
+  );
+
+  // Delete a conversation (HIST-US-8). If it is the one currently on screen,
+  // reset to a fresh empty chat so we never show a broken/empty thread (AC-8.2).
+  const handleDeleteConversation = useCallback(
+    (id: string) => {
+      void removeConversation(id);
+      if (id === sessionId) handleNewChat();
+    },
+    [removeConversation, sessionId, handleNewChat],
   );
 
   // Stop the in-flight turn. `reset()` aborts the fetch (which propagates to the
@@ -186,22 +250,72 @@ export default function Home() {
         </div>
       </header>
 
-      <ChatThread
-        turns={turns}
-        activity={activities}
-        status={chatStatus}
-        streamingMarkdown={streamingMarkdown}
-        transportError={status === "error" ? error : null}
-        onFollowUp={handleSend}
-      />
+      <div
+        className="chat-page__body"
+        style={{
+          display: "flex",
+          flex: 1,
+          minHeight: 0,
+          alignItems: "stretch",
+        }}
+      >
+        {/* History sidebar — signed-in only (guests have no server history). */}
+        {auth.signedIn && (
+          <aside
+            data-testid="history-sidebar"
+            style={{
+              width: "300px",
+              flexShrink: 0,
+              minHeight: 0,
+              borderRight: "1px solid var(--border)",
+              background: "var(--surface)",
+              overflow: "hidden",
+            }}
+          >
+            <ConversationList
+              conversations={conversations.conversations}
+              activeId={sessionId}
+              query={conversations.query}
+              onQueryChange={conversations.setQuery}
+              formatFilter={conversations.formatFilter}
+              onFormatFilterChange={conversations.setFormatFilter}
+              onNewChat={handleNewChat}
+              onOpen={handleOpenConversation}
+              onRename={conversations.rename}
+              onPin={conversations.pin}
+              onDelete={handleDeleteConversation}
+            />
+          </aside>
+        )}
 
-      <Composer
-        onSend={handleSend}
-        disabled={status === "thinking"}
-        streaming={status === "thinking"}
-        onStop={handleStop}
-        prefill={prefill}
-      />
+        <div
+          className="chat-page__main"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minWidth: 0,
+            minHeight: 0,
+          }}
+        >
+          <ChatThread
+            turns={turns}
+            activity={activities}
+            status={chatStatus}
+            streamingMarkdown={streamingMarkdown}
+            transportError={status === "error" ? error : null}
+            onFollowUp={handleSend}
+          />
+
+          <Composer
+            onSend={handleSend}
+            disabled={status === "thinking"}
+            streaming={status === "thinking"}
+            onStop={handleStop}
+            prefill={prefill}
+          />
+        </div>
+      </div>
 
       <AuthDialog
         open={authDialogOpen}
