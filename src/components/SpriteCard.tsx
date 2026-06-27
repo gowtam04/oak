@@ -7,9 +7,9 @@ import EntityLink from "@/components/artifact/EntityLink";
  * name, optional Dex number, type badges, and a fallback indicator when
  * `is_fallback` is true (pre-Gen-9 data used per BR-1).
  *
- * The name opens the Pokémon's artifact and each type badge opens that type's
- * artifact (B-4, AV-US-1) via `EntityLink` — whose no-op default keeps the card
- * fully renderable in isolation tests with no viewer provider mounted (TD-5).
+ * The sprite and name open the Pokémon's artifact and each type badge opens that
+ * type's artifact (B-4, AV-US-1) via `EntityLink` — whose no-op default keeps the
+ * card fully renderable in isolation tests with no viewer provider mounted (TD-5).
  *
  * Sprite URL comes directly from the agent payload (PokeAPI CDN). Visual layout
  * deferred to `frontend-design`.
@@ -26,14 +26,21 @@ export default function SpriteCard({ subject }: SpriteCardProps) {
 
   return (
     <div className="sprite-card" data-testid="sprite-card">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        className="sprite-card__sprite"
-        src={sprite_url}
-        alt={name}
-        width={96}
-        height={96}
-      />
+      <EntityLink
+        kind="pokemon"
+        q={name}
+        className="sprite-card__sprite-link"
+        testid="sprite-card-sprite-link"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          className="sprite-card__sprite"
+          src={sprite_url}
+          alt={name}
+          width={96}
+          height={96}
+        />
+      </EntityLink>
       <div className="sprite-card__info">
         <EntityLink
           kind="pokemon"

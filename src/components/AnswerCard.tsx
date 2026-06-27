@@ -32,10 +32,11 @@ import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
  *  10. SourceList        ← citations[] (collapsible "Sources")
  *
  * `onFollowUp` is threaded into the interactive leaves (SuggestionChips,
- * CandidateTable). A suggestion click sends the chosen name verbatim; a candidate
- * row click sends a "Tell me about <name>" follow-up — both are plain follow-up
- * turns for the SAME session (ux-design.md UI → Agent Input Map). Visual styling
- * is deferred to the `frontend-design` skill.
+ * QuestionOptions, and CandidateTable's "Show all N"). A suggestion click sends
+ * the chosen name verbatim — a plain follow-up turn for the SAME session
+ * (ux-design.md UI → Agent Input Map). A candidate row click instead opens that
+ * Pokémon's artifact in the viewer (CandidateTable owns that, no follow-up).
+ * Visual styling is deferred to the `frontend-design` skill.
  */
 export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
   const {
@@ -108,7 +109,6 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
       {candidates && (
         <CandidateTable
           candidates={candidates}
-          onSelect={(name) => followUp(`Tell me about ${name}`)}
           onShowAll={() =>
             followUp(
               `Show me all ${candidates.total_count} of those, not just the top ${candidates.shown.length}.`,

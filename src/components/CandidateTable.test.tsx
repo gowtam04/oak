@@ -7,7 +7,27 @@ import {
   within,
 } from "@testing-library/react";
 
-afterEach(() => cleanup());
+// Spy on the artifact viewer: every row now opens that Pokémon's artifact, so
+// assert against openEntity. Hoisted so the vi.mock factory can close over it.
+const { openEntity } = vi.hoisted(() => ({ openEntity: vi.fn() }));
+vi.mock("./artifact/useArtifactViewer", () => ({
+  useArtifactViewer: () => ({
+    isOpen: false,
+    current: null,
+    canGoBack: false,
+    openEntity,
+    openStructured: () => {},
+    openTeam: () => {},
+    back: () => {},
+    close: () => {},
+    askInChat: () => {},
+  }),
+}));
+
+afterEach(() => {
+  cleanup();
+  openEntity.mockClear();
+});
 import CandidateTable from "./CandidateTable";
 import {
   CANDIDATES_TRUNCATED,
@@ -77,28 +97,16 @@ describe("CandidateTable", () => {
     expect(screen.getByText("drought")).toBeInTheDocument();
   });
 
-  it("calls onSelect with the Pokémon name on row click", () => {
-    const onSelect = vi.fn();
-    render(
-      <CandidateTable candidates={CANDIDATES_TRUNCATED} onSelect={onSelect} />,
-    );
-    fireEvent.click(screen.getByTestId("candidate-row-0"));
-    expect(onSelect).toHaveBeenCalledWith("Garchomp");
-  });
-
-  it("calls onSelect for the correct row when the second row is clicked", () => {
-    const onSelect = vi.fn();
-    render(
-      <CandidateTable candidates={CANDIDATES_TRUNCATED} onSelect={onSelect} />,
-    );
-    fireEvent.click(screen.getByTestId("candidate-row-1"));
-    expect(onSelect).toHaveBeenCalledWith("Dragonite");
-  });
-
-  it("does not crash when onSelect is omitted", () => {
+  it("opens the Pokémon's artifact in the viewer on row click", () => {
     render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
-    // click should not throw
     fireEvent.click(screen.getByTestId("candidate-row-0"));
+    expect(openEntity).toHaveBeenCalledWith({ kind: "pokemon", q: "Garchomp" });
+  });
+
+  it("opens the correct Pokémon when the second row is clicked", () => {
+    render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    fireEvent.click(screen.getByTestId("candidate-row-1"));
+    expect(openEntity).toHaveBeenCalledWith({ kind: "pokemon", q: "Dragonite" });
   });
 
   it("renders all six base stats in fixed order with competitive labels", () => {

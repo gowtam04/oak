@@ -3,6 +3,7 @@
 import type { CandidateTableProps, CandidateRow } from "@/components/types";
 import TypeBadge from "@/components/TypeBadge";
 import EntityLink from "@/components/artifact/EntityLink";
+import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 
 /** Fixed display order for the six base stats (HP, Attack, Defense, SpA, SpD, Speed). */
 const STAT_ORDER = [
@@ -29,15 +30,14 @@ const STAT_LABELS: Record<(typeof STAT_ORDER)[number], string> = {
  * answers (US-1/2/3).
  *
  * Always shows an honest "N of M" header when `candidates.truncated` is true
- * (the displayed `shown.length` vs. `total_count`).  `onSelect` is optional;
- * when provided, rows are clickable and POST a follow-up for the selected name.
+ * (the displayed `shown.length` vs. `total_count`).  Every row is clickable and
+ * opens that Pokémon's artifact in the viewer (AV-US-1).
  *
  * Visual styling (grid vs table, column widths, hover states) deferred to
  * `frontend-design`.
  */
 export default function CandidateTable({
   candidates,
-  onSelect,
   onShowAll,
 }: CandidateTableProps) {
   const { total_count, truncated, shown, sort } = candidates;
@@ -100,7 +100,6 @@ export default function CandidateTable({
                 index={i}
                 hasStats={hasStats}
                 hasAbilityColumn={hasAbilityColumn}
-                onSelect={onSelect}
               />
             ))}
           </tbody>
@@ -119,7 +118,6 @@ interface CandidateRowProps {
   index: number;
   hasStats: boolean;
   hasAbilityColumn: boolean;
-  onSelect?: (name: string) => void;
 }
 
 function CandidateRow({
@@ -127,18 +125,17 @@ function CandidateRow({
   index,
   hasStats,
   hasAbilityColumn,
-  onSelect,
 }: CandidateRowProps) {
-  const clickable = onSelect != null;
+  const { openEntity } = useArtifactViewer();
 
-  function handleClick() {
-    onSelect?.(row.name);
-  }
-
+  // The whole row opens that Pokémon's artifact (AV-US-1). The name/type
+  // EntityLinks below are still real <button>s — they preserve keyboard access
+  // and (via their own stopPropagation) keep a type-chip click scoped to the
+  // type artifact rather than re-opening the row's Pokémon.
   return (
     <tr
-      className={`candidate-table__row${clickable ? " candidate-table__row--clickable" : ""}`}
-      onClick={clickable ? handleClick : undefined}
+      className="candidate-table__row candidate-table__row--clickable"
+      onClick={() => openEntity({ kind: "pokemon", q: row.name })}
       data-testid={`candidate-row-${index}`}
     >
       <td className="candidate-table__name-cell">

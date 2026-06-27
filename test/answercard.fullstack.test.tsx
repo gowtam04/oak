@@ -31,7 +31,27 @@ import {
   QUESTION_ANSWER,
 } from "@/components/test-fixtures";
 
-afterEach(() => cleanup());
+// Spy on the artifact viewer: a candidate row / subject sprite opens that
+// Pokémon's artifact (no real provider is mounted here, so stub the hook).
+const { openEntity } = vi.hoisted(() => ({ openEntity: vi.fn() }));
+vi.mock("@/components/artifact/useArtifactViewer", () => ({
+  useArtifactViewer: () => ({
+    isOpen: false,
+    current: null,
+    canGoBack: false,
+    openEntity,
+    openStructured: () => {},
+    openTeam: () => {},
+    back: () => {},
+    close: () => {},
+    askInChat: () => {},
+  }),
+}));
+
+afterEach(() => {
+  cleanup();
+  openEntity.mockClear();
+});
 
 // ---------------------------------------------------------------------------
 // Canonical "answered" payload — every optional field populated.
@@ -233,10 +253,11 @@ describe("AnswerCard — suggestion chips & follow-up wiring", () => {
     );
   });
 
-  it('sends a "Tell me about <name>" follow-up when a candidate row is clicked', () => {
+  it("opens the Pokémon's artifact (not a chat follow-up) when a candidate row is clicked", () => {
     const onFollowUp = vi.fn();
     render(<AnswerCard answer={CANONICAL_ANSWER} onFollowUp={onFollowUp} />);
     fireEvent.click(screen.getByTestId("candidate-row-0"));
-    expect(onFollowUp).toHaveBeenCalledWith("Tell me about Garchomp");
+    expect(openEntity).toHaveBeenCalledWith({ kind: "pokemon", q: "Garchomp" });
+    expect(onFollowUp).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,26 @@
-import { afterEach, describe, it, expect } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
-afterEach(() => cleanup());
+// Spy on the artifact viewer: the sprite (and name) open the Pokémon's artifact.
+const { openEntity } = vi.hoisted(() => ({ openEntity: vi.fn() }));
+vi.mock("./artifact/useArtifactViewer", () => ({
+  useArtifactViewer: () => ({
+    isOpen: false,
+    current: null,
+    canGoBack: false,
+    openEntity,
+    openStructured: () => {},
+    openTeam: () => {},
+    back: () => {},
+    close: () => {},
+    askInChat: () => {},
+  }),
+}));
+
+afterEach(() => {
+  cleanup();
+  openEntity.mockClear();
+});
 import SpriteCard from "./SpriteCard";
 import { SUBJECT_GARCHOMP, SUBJECT_MEWTWO_FALLBACK } from "./test-fixtures";
 
@@ -21,6 +40,15 @@ describe("SpriteCard", () => {
       render(<SpriteCard subject={SUBJECT_GARCHOMP} />);
       const img = screen.getByRole("img", { name: "Garchomp" });
       expect(img).toHaveAttribute("src", SUBJECT_GARCHOMP.sprite_url);
+    });
+
+    it("opens the Pokémon's artifact when the sprite is clicked", () => {
+      render(<SpriteCard subject={SUBJECT_GARCHOMP} />);
+      fireEvent.click(screen.getByTestId("sprite-card-sprite-link"));
+      expect(openEntity).toHaveBeenCalledWith({
+        kind: "pokemon",
+        q: SUBJECT_GARCHOMP.name,
+      });
     });
 
     it("renders a TypeBadge for each type", () => {

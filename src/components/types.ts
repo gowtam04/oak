@@ -134,11 +134,10 @@ export interface TypeBadgeProps {
 /**
  * `candidates` — the filter/superlative result set. Renders rows (sprite, name,
  * type badges, key stats, ability) and an honest "N of M" header when truncated.
- * `onSelect` (optional) lets a row click send a follow-up about that Pokémon.
+ * Every row is clickable and opens that Pokémon's artifact in the viewer.
  */
 export interface CandidateTableProps {
   candidates: Candidates;
-  onSelect?: (name: string) => void;
   /**
    * Optional "Show all N" affordance, shown only when the result set is
    * truncated. Clicking it sends a follow-up turn asking for the full list, so a
