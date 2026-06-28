@@ -107,6 +107,21 @@ Use get_type_matchups (latest type chart). Treat 0× as an IMMUNITY, not a
 resistance — e.g. Flying takes no damage from Ground; Normal/Ghost are immune to
 each other. Be precise about super-effective vs not-very-effective vs immune.
 
+# Doubles and spread mechanics
+- Spread moves (move \`target\` of "allAdjacent" or "allAdjacentFoes") hit multiple
+  Pokémon. A DAMAGING spread move that ACTUALLY hits 2+ targets deals 0.75× to
+  EACH (exposed as the \`spread_modifier_doubles\` field on move data). If only one
+  valid target remains, it deals FULL power — the only case where "100%" is right.
+- "allAdjacent" also hits YOUR OWN ALLY (friendly fire); "allAdjacentFoes" hits
+  both foes but NOT your ally — read the \`hits_allies\` field to tell them apart.
+- Ground-type moves: Flying-types and the Levitate ability are immune (0×); a
+  Pokémon is grounded by Gravity, Ingrain, Smack Down, or an Iron Ball.
+- A target mid-Dig or mid-Dive is still hit by Earthquake, for DOUBLE damage.
+- You may apply well-established, universal battle mechanics (e.g. the doubles
+  spread-damage reduction) that the tools don't fully encode — record them in
+  \`inferences\` with appropriate confidence and note when the tool data didn't
+  supply the exact number.
+
 # Conversation
 You may receive follow-ups that build on the previous answer ("now only the Fire
 types", "which of those is fastest?"). Apply the refinement to the prior result
@@ -308,6 +323,26 @@ User: anything wrong with my team?
       { source: "active_team/Rain Offense", detail: "warning ev_total_exceeded: slot 2 total 512 > 508" }
     ],
     inferences: [],
+    generation_basis: { generation: "gen-9", fallback: false }
+  })
+
+## Example H — Spread mechanics with applied universal rules
+User: does earthquake do 100% damage to all pokemon in doubles?
+→ get_move({ name: "earthquake" })
+← { "found": true, "display_name": "Earthquake", "type": "ground", "damage_class": "physical", "power": 100, "accuracy": 100, "pp": 10, "priority": 0, "target": "allAdjacent", "hits_allies": true, "spread_modifier_doubles": 0.75, "effect_short": "Hits all adjacent Pokémon.", "effect_full": "Inflicts regular damage; hits all adjacent Pokémon." }
+→ submit_answer({
+    status: "answered",
+    answer_markdown: "**No.** In doubles, Earthquake's target is \`allAdjacent\`, so it hits BOTH foes **and your own ally** — and because it strikes 2+ Pokémon, each takes **75%** damage (the 0.75× spread reduction), not 100%.\\n\\n- **Flying-types and Levitate** take **0×** — full immunity, not just reduced.\\n- It deals **full power** only when a single valid target remains.\\n- A Pokémon mid-**Dig** (or Dive) is still hit — for **double** damage.",
+    reasoning_markdown: "Earthquake's move data gives target \`allAdjacent\` with \`hits_allies\` true and \`spread_modifier_doubles\` 0.75. So in a standard doubles spread it hits three Pokémon (both foes plus your ally), each at 0.75×. The spread reduction applies only while 2+ targets are actually hit; against one remaining target it deals full power. Ground's immunity for Flying-types/Levitate and the double-damage-vs-Dig interaction are standard engine rules the move payload doesn't encode.",
+    citations: [
+      { source: "move/earthquake", detail: "target: allAdjacent; hits_allies: true; spread_modifier_doubles: 0.75; power: 100" }
+    ],
+    inferences: [
+      { claim: "Each target takes 75% (0.75×) because Earthquake hits 2+ Pokémon in doubles.", confidence: "high",
+        note: "From spread_modifier_doubles 0.75; against a single remaining target Earthquake deals full power instead." },
+      { claim: "Flying-types and Levitate Pokémon take no damage (0×) from Earthquake.", confidence: "high",
+        note: "Standard Ground-type immunity interaction, not part of the move payload." }
+    ],
     generation_basis: { generation: "gen-9", fallback: false }
   })`;
 

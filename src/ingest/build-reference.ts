@@ -45,6 +45,15 @@ export const SOURCE_LABEL = "@pkmn/dex (Pokémon Showdown)";
 // Normalizers (exported for unit tests)
 // ---------------------------------------------------------------------------
 
+/**
+ * @pkmn spread targets — moves that strike 2+ Pokémon. `allAdjacent` also hits
+ * your own ally (the spread reduction applies); `allAdjacentFoes` hits only the
+ * opposing side. Damaging spread moves take a per-target damage reduction
+ * (default 0.75 in doubles), unless the move overrides it via `spreadModifier`.
+ */
+const SPREAD_TARGETS = new Set(["allAdjacent", "allAdjacentFoes"]);
+const DEFAULT_SPREAD_MODIFIER = 0.75;
+
 export function normalizeMove(m: {
   name: string;
   type: string;
@@ -54,12 +63,18 @@ export function normalizeMove(m: {
   pp: number;
   priority: number;
   target: string;
+  spreadModifier?: number;
   shortDesc?: string;
   desc?: string;
 }): MoveDetail {
   const dc = m.category.toLowerCase();
   const damage_class: "physical" | "special" | "status" =
     dc === "physical" || dc === "special" ? dc : "status";
+  const isSpread = SPREAD_TARGETS.has(m.target);
+  const spread_modifier_doubles =
+    damage_class !== "status" && isSpread
+      ? m.spreadModifier ?? DEFAULT_SPREAD_MODIFIER
+      : null;
   return {
     found: true,
     display_name: m.name,
@@ -70,6 +85,8 @@ export function normalizeMove(m: {
     pp: typeof m.pp === "number" ? m.pp : null,
     priority: m.priority ?? 0,
     target: m.target,
+    hits_allies: m.target === "allAdjacent",
+    spread_modifier_doubles,
     effect_short: m.shortDesc ?? "",
     effect_full: m.desc || m.shortDesc || "",
   };

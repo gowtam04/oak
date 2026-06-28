@@ -241,6 +241,8 @@ export const moveDetailSchema = z.object({
   pp: z.number().int().nullable(),
   priority: z.number().int(),
   target: z.string(),
+  hits_allies: z.boolean().optional(),
+  spread_modifier_doubles: z.number().nullable().optional(),
   effect_short: z.string(),
   effect_full: z.string(),
   gen9_learner_count: z.number().int().optional(),

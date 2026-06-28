@@ -488,6 +488,28 @@ export const cases: GoldenCase[] = [
     },
     covers: ["US-12", "BR-4"],
   },
+
+  // =========================================================================
+  // G25 — Spread-move damage mechanics: Earthquake in doubles (mechanics_precision,
+  // inference_flagging, BR-3). Earthquake targets allAdjacent, so it hits the
+  // user's own ally AND applies the 0.75 doubles spread modifier (NOT 100% to
+  // every Pokémon). The answer must surface the spread modifier (0.75 / 75%),
+  // that it hits the ally, and that Flying / Levitate targets are immune.
+  // JUDGED (no deterministic flag): runs nightly against the re-ingested index
+  // where get_move now returns hits_allies + spread_modifier_doubles. The
+  // mechanics_precision + inference_flagging rubric dimensions carry the weight;
+  // mustInclude/mustCite are applied structurally in judged mode too.
+  // =========================================================================
+  {
+    id: "G25",
+    input: "Does Earthquake do 100% damage to all Pokémon in doubles?",
+    expect: {
+      status: "answered",
+      mustCite: ["move/earthquake"],
+      mustInclude: ["75", "ally", "immune"],
+    },
+    covers: ["mechanics_precision", "inference_flagging", "BR-3"],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -521,5 +543,5 @@ export const deterministicCases: GoldenCase[] = cases.filter(
  * Spec: evaluation.md § Regression Approach: "G1/G5/G6/G7/G17".
  */
 export const rebuildRegressionCases: GoldenCase[] = cases.filter((c) =>
-  ["G1", "G5", "G6", "G7", "G17"].includes(c.id),
+  ["G1", "G5", "G6", "G7", "G17", "G25"].includes(c.id),
 );

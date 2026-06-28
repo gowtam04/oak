@@ -1,10 +1,10 @@
 /**
- * eval/cases.test.ts — structural unit tests for the G1..G24 case definitions.
+ * eval/cases.test.ts — structural unit tests for the G1..G25 case definitions.
  *
  * Owned by: phase "Eval" / track "cases".
  *
  * Tests the STRUCTURE and INTENT of cases.ts without any LLM or DB calls:
- *  - all 24 cases present with unique IDs G1..G24
+ *  - all 25 cases present with unique IDs G1..G25
  *  - every case has the required fields with valid types
  *  - multi-turn input (G19) is correctly shaped
  *  - deterministic subset matches the design.md spec
@@ -53,6 +53,8 @@ const EXPECTED_DETERMINISTIC_IDS = new Set([
 
 /**
  * Index-rebuild regression set per evaluation.md § Regression Approach.
+ * G25 joins to catch ingest drift of the move spread-damage fields
+ * (spread_modifier_doubles / hits_allies) after every re-ingest.
  */
 const EXPECTED_REBUILD_REGRESSION_IDS = new Set([
   "G1",
@@ -60,6 +62,7 @@ const EXPECTED_REBUILD_REGRESSION_IDS = new Set([
   "G6",
   "G7",
   "G17",
+  "G25",
 ]);
 
 /**
@@ -87,8 +90,8 @@ describe("eval/cases", () => {
   // Top-level structure
   // -------------------------------------------------------------------------
 
-  it("exports exactly 24 cases", () => {
-    expect(cases).toHaveLength(24);
+  it("exports exactly 25 cases", () => {
+    expect(cases).toHaveLength(25);
   });
 
   it("all IDs follow the G<number> pattern", () => {
@@ -97,17 +100,17 @@ describe("eval/cases", () => {
     }
   });
 
-  it("all IDs G1..G24 are present and unique", () => {
+  it("all IDs G1..G25 are present and unique", () => {
     const ids = new Set(cases.map((c) => c.id));
-    expect(ids.size).toBe(24);
-    for (let n = 1; n <= 24; n++) {
+    expect(ids.size).toBe(25);
+    for (let n = 1; n <= 25; n++) {
       expect(ids.has(`G${n}`), `G${n} should be present`).toBe(true);
     }
   });
 
-  it("caseById indexes all 24 cases", () => {
-    expect(Object.keys(caseById)).toHaveLength(24);
-    for (let n = 1; n <= 24; n++) {
+  it("caseById indexes all 25 cases", () => {
+    expect(Object.keys(caseById)).toHaveLength(25);
+    for (let n = 1; n <= 25; n++) {
       expect(
         caseById[`G${n}`],
         `caseById["G${n}"] should be defined`,
@@ -115,7 +118,7 @@ describe("eval/cases", () => {
     }
   });
 
-  it("cases array order matches G1..G24 numerically", () => {
+  it("cases array order matches G1..G25 numerically", () => {
     for (let i = 0; i < cases.length; i++) {
       const expected = `G${i + 1}`;
       expect(cases[i].id).toBe(expected);
@@ -327,9 +330,9 @@ describe("eval/cases", () => {
   // -------------------------------------------------------------------------
 
   describe("rebuildRegressionCases", () => {
-    it("contains exactly G1/G5/G6/G7/G17", () => {
+    it("contains exactly G1/G5/G6/G7/G17/G25", () => {
       const actual = new Set(rebuildRegressionCases.map((c) => c.id));
-      expect(actual.size).toBe(5);
+      expect(actual.size).toBe(6);
       for (const id of EXPECTED_REBUILD_REGRESSION_IDS) {
         expect(
           actual.has(id),

@@ -53,16 +53,17 @@ describe("parseArgs", () => {
 });
 
 describe("selectCases", () => {
-  it("defaults to all 24 cases for the judged suite", () => {
+  it("defaults to all 25 cases for the judged suite", () => {
     const { cases } = selectCases(parseArgs([]));
-    expect(cases).toHaveLength(24);
+    expect(cases).toHaveLength(25);
   });
 
-  it("uses the G1/G5/G6/G7/G17 set for --rebuild", () => {
+  it("uses the G1/G5/G6/G7/G17/G25 set for --rebuild", () => {
     const { cases } = selectCases(parseArgs(["--rebuild"]));
     expect(cases.map((c) => c.id).sort()).toEqual([
       "G1",
       "G17",
+      "G25",
       "G5",
       "G6",
       "G7",
@@ -70,12 +71,12 @@ describe("selectCases", () => {
   });
 
   it("narrows --deterministic to planned cases and reports the rest", () => {
-    // --rebuild ∩ deterministic-plans = G1/G5/G6; G7/G17 need the live judge.
+    // --rebuild ∩ deterministic-plans = G1/G5/G6; G7/G17/G25 need the live judge.
     const { cases, excludedFromDeterministic } = selectCases(
       parseArgs(["--deterministic", "--rebuild"]),
     );
     expect(cases.map((c) => c.id).sort()).toEqual(["G1", "G5", "G6"]);
-    expect(excludedFromDeterministic.sort()).toEqual(["G17", "G7"]);
+    expect(excludedFromDeterministic.sort()).toEqual(["G17", "G25", "G7"]);
   });
 
   it("honors a --case filter", () => {
