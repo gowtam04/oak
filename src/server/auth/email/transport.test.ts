@@ -194,20 +194,20 @@ describe("ConsoleEmailTransport.sendOtpEmail — capture, no real mail", () => {
 
 describe("env additions — AUTH_SECRET / RESEND_API_KEY / EMAIL_FROM", () => {
   it("applies dev defaults when only the API key is supplied", () => {
-    const parsed = parseEnv({ ANTHROPIC_API_KEY: "sk-test" });
+    const parsed = parseEnv({ XAI_API_KEY: "xai-test" });
     expect(parsed.AUTH_SECRET).toBe("dev-insecure-auth-secret-change-me");
     expect(parsed.RESEND_API_KEY).toBeUndefined();
     expect(parsed.EMAIL_FROM).toBe("Oak <onboarding@resend.dev>");
   });
 
   it("treats an empty RESEND_API_KEY as absent (→ undefined)", () => {
-    const parsed = parseEnv({ ANTHROPIC_API_KEY: "sk-test", RESEND_API_KEY: "" });
+    const parsed = parseEnv({ XAI_API_KEY: "xai-test", RESEND_API_KEY: "" });
     expect(parsed.RESEND_API_KEY).toBeUndefined();
   });
 
   it("keeps a non-empty RESEND_API_KEY", () => {
     const parsed = parseEnv({
-      ANTHROPIC_API_KEY: "sk-test",
+      XAI_API_KEY: "xai-test",
       RESEND_API_KEY: "re_live_abc",
     });
     expect(parsed.RESEND_API_KEY).toBe("re_live_abc");
@@ -215,13 +215,13 @@ describe("env additions — AUTH_SECRET / RESEND_API_KEY / EMAIL_FROM", () => {
 
   it("rejects the default AUTH_SECRET in production (AD-4)", () => {
     expect(() =>
-      parseEnv({ ANTHROPIC_API_KEY: "sk-test", NODE_ENV: "production" }),
+      parseEnv({ XAI_API_KEY: "xai-test", NODE_ENV: "production" }),
     ).toThrowError(/AUTH_SECRET/);
   });
 
   it("accepts an explicit AUTH_SECRET in production", () => {
     const parsed = parseEnv({
-      ANTHROPIC_API_KEY: "sk-test",
+      XAI_API_KEY: "xai-test",
       NODE_ENV: "production",
       AUTH_SECRET: "a-strong-production-secret",
     });

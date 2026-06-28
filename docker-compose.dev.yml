@@ -36,9 +36,11 @@ services:
       - DATABASE_URL=postgres://oak:oak@db:5432/oak
     env_file:
       # Feeds vars to BOTH next dev AND the tsx ingest/eval scripts (tsx does not
-      # auto-load .env). ANTHROPIC_API_KEY comes from here — NOT a bare passthrough
-      # in `environment`, which would clobber it with an empty value whenever the
-      # host shell hasn't exported it. required:false keeps `up` working if absent.
+      # auto-load .env). XAI_API_KEY (required — Grok is primary; boot throws
+      # without it) and the optional ANTHROPIC_API_KEY come from here — NOT a bare
+      # passthrough in `environment`, which would clobber them with an empty value
+      # whenever the host shell hasn't exported them. required:false keeps `up`
+      # working if absent (but the app/scripts won't boot without XAI_API_KEY set).
       - path: .env.local
         required: false
     volumes:

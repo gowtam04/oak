@@ -56,8 +56,8 @@ export interface CreateAgentContextOptions {
    */
   mode?: AgentMode;
   /**
-   * Which LLM answers the turn (server-controlled). Defaults to the Claude key
-   * so every existing caller/test keeps today's behavior unchanged.
+   * Which LLM answers the turn (server-controlled). Defaults to the primary
+   * model (Grok) — the model the app is designed around.
    */
   model?: ModelKey;
   /**

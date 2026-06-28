@@ -127,7 +127,8 @@ export interface TurnRequest {
 
 /**
  * The transport adapter for one model. Implementations: `AnthropicProvider`
- * (Claude) and `OpenAICompatibleProvider` (GPT-5.5 + Grok 4.3).
+ * (Claude), `GrokProvider` (the native xAI Responses API — the primary model),
+ * and `OpenAICompatibleProvider` (the Chat Completions shim, now GPT-5.5 only).
  */
 export interface LLMProvider {
   /** Which upstream API this provider speaks (selects the tuned prompt style). */

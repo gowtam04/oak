@@ -928,7 +928,7 @@ export async function runOakWith(
 }
 
 /**
- * The agent entry point. Selects the provider for `ctx.model` (default Claude),
+ * The agent entry point. Selects the provider for `ctx.model` (default Grok),
  * runs the tool-loop, and returns a schema-valid OakAnswer. See the module
  * header for the full contract.
  */

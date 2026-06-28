@@ -107,10 +107,10 @@ export default function Home() {
   }, []);
 
   // Selected model: a GLOBAL preference (not conversation-scoped) sent on every
-  // request as `model`. Default to the Claude key so SSR markup is deterministic,
-  // then resolve the stored choice AFTER mount (same hydration pattern as
-  // championsMode), validating it through `isModelKey` so a stale/garbage value
-  // falls back to the default rather than being trusted.
+  // request as `model`. Default to the primary model (Grok) so SSR markup is
+  // deterministic, then resolve the stored choice AFTER mount (same hydration
+  // pattern as championsMode), validating it through `isModelKey` so a
+  // stale/garbage value falls back to the default rather than being trusted.
   const [selectedModel, setSelectedModel] =
     useState<ModelKey>(DEFAULT_MODEL_KEY);
   useEffect(() => {
@@ -118,7 +118,7 @@ export default function Home() {
       const stored = localStorage.getItem(MODEL_STORAGE_KEY);
       if (stored && isModelKey(stored)) setSelectedModel(stored);
     } catch {
-      /* storage unavailable (private mode) — keep the default (Claude) */
+      /* storage unavailable (private mode) — keep the default (Grok) */
     }
   }, []);
 
@@ -158,7 +158,8 @@ export default function Home() {
   }, []);
 
   // If the persisted/selected model isn't configured on this server, fall back to
-  // Claude (always configured) so the user can't sit on an unusable selection.
+  // the default (Grok — always configured, since XAI_API_KEY is required at boot)
+  // so the user can't sit on an unusable selection.
   useEffect(() => {
     if (configuredModels && !configuredModels.includes(selectedModel)) {
       setSelectedModelPersisted(DEFAULT_MODEL_KEY);
@@ -166,8 +167,8 @@ export default function Home() {
   }, [configuredModels, selectedModel, setSelectedModelPersisted]);
 
   // A model/provider fault (503 model_unavailable pre-stream, or model_provider_error
-  // mid-stream) means the chosen model isn't usable right now — revert to Claude so
-  // the next attempt works.
+  // mid-stream) means the chosen model isn't usable right now — revert to the
+  // default (Grok) so the next attempt works.
   useEffect(() => {
     if (
       status === "error" &&

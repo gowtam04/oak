@@ -34,8 +34,9 @@ has not started.
 ## Planned stack
 
 TypeScript / Next.js monolith · SQLite + Drizzle ORM · Server-Sent Events ·
-Zod · Anthropic SDK (Claude Sonnet 4.6) · Vitest. All Pokémon data is derived
-from PokeAPI into a local index + cache. See the architecture doc for details.
+Zod · xAI Grok 4.3 (native Responses API — the primary model), with Claude and
+GPT-5.5 selectable in the switcher · Vitest. All Pokémon data is derived from
+PokeAPI into a local index + cache. See the architecture doc for details.
 
 ## Next steps
 

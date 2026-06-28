@@ -21,6 +21,7 @@ import {
   type ProviderKind,
 } from "@/agent/models";
 import { AnthropicProvider } from "@/agent/providers/anthropic-provider";
+import { GrokProvider } from "@/agent/providers/grok-provider";
 import { OpenAICompatibleProvider } from "@/agent/providers/openai-compatible-provider";
 import type { LLMProvider, ReasoningEffort } from "@/agent/providers/types";
 
@@ -76,7 +77,7 @@ const MODEL_CONFIG: Record<
   },
 };
 
-/** Resolve a (possibly missing/unknown) key to its wiring; defaults to Claude. */
+/** Resolve a (possibly missing/unknown) key to its wiring; defaults to Grok. */
 export function resolveModel(key: string | undefined | null): ResolvedModel {
   const resolvedKey: ModelKey = isModelKey(key) ? key : DEFAULT_MODEL_KEY;
   const option = MODELS.find((m) => m.key === resolvedKey)!;
@@ -109,8 +110,9 @@ function keyFor(provider: ProviderKind): string | undefined {
 
 /**
  * Is the selected model's provider configured (its API key present)? Used by the
- * route to fail fast with a clean 503 before opening the SSE stream. Anthropic is
- * always configured (its key is required at boot).
+ * route to fail fast with a clean 503 before opening the SSE stream. xAI (the
+ * primary provider) is required at boot, so the default model is always
+ * configured; Anthropic/OpenAI are validate-on-use.
  */
 export function isModelConfigured(key: string | undefined | null): boolean {
   const { provider } = resolveModel(key);
@@ -121,18 +123,34 @@ export function isModelConfigured(key: string | undefined | null): boolean {
 export function providerFor(key: string | undefined | null): LLMProvider {
   const model = resolveModel(key);
 
+  // Validate-on-use for EVERY provider (Anthropic's key is now optional, so it can
+  // be absent just like OpenAI/xAI) — throw a typed model_unavailable instead of
+  // constructing a provider with no key.
+  const apiKey = keyFor(model.provider);
+  if (!apiKey) throw new ProviderNotConfiguredError(model.provider);
+
   if (model.provider === "anthropic") {
     return new AnthropicProvider({ apiModelId: model.apiModelId });
   }
 
-  const apiKey = keyFor(model.provider);
-  if (!apiKey) throw new ProviderNotConfiguredError(model.provider);
+  if (model.provider === "xai") {
+    return new GrokProvider({
+      apiModelId: model.apiModelId,
+      apiKey,
+      baseURL: env.XAI_BASE_URL,
+      effort: model.effort,
+      temperature: model.temperature,
+      maxOutputTokens: model.maxOutputTokens,
+      parallelToolCalls: model.parallelToolCalls,
+    });
+  }
 
+  // openai (GPT-5.5) keeps the Chat Completions shim.
   return new OpenAICompatibleProvider({
     kind: model.provider,
     apiModelId: model.apiModelId,
     apiKey,
-    baseURL: model.provider === "xai" ? env.XAI_BASE_URL : env.OPENAI_BASE_URL,
+    baseURL: env.OPENAI_BASE_URL,
     effort: model.effort,
     temperature: model.temperature,
     maxOutputTokens: model.maxOutputTokens,

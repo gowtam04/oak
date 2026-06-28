@@ -1,8 +1,9 @@
 /**
- * Typed transport error for the OpenAI-compatible providers (GPT-5.5 / Grok 4.3).
+ * Typed transport error for the OpenAI-SDK providers — `GrokProvider` (native xAI
+ * Responses) and `OpenAICompatibleProvider` (GPT-5.5 Chat Completions).
  *
- * Thrown by {@link OpenAICompatibleProvider} when the upstream returns a 4xx/5xx
- * (bad/expired key, unsupported parameter, rate limit, unknown model). The chat
+ * Thrown when the upstream returns a 4xx/5xx (bad/expired key, unsupported
+ * parameter, rate limit, unknown model). The chat
  * route recognizes it and renders a MODEL-SCOPED error message — so the user knows
  * to switch models or fix the provider key — instead of the generic
  * "transport error". Kept in its own tiny module (no SDK import) so both the

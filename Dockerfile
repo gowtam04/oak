@@ -14,10 +14,12 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # `next build` runs with NODE_ENV=production internally. If any built module
-# evaluates src/env.ts, Zod requires a non-empty ANTHROPIC_API_KEY AND, because
-# NODE_ENV=production during the build, a non-default AUTH_SECRET (prod guard).
-# Supply DUMMY, build-only values so the build can never crash. These never reach
-# the final image; the real values come from Fly secrets at runtime.
+# evaluates src/env.ts, Zod requires a non-empty XAI_API_KEY (the primary, only
+# required key) AND, because NODE_ENV=production during the build, a non-default
+# AUTH_SECRET (prod guard). Supply DUMMY, build-only values so the build can never
+# crash. These never reach the final image; the real values come from Fly secrets
+# at runtime. (The dummy ANTHROPIC key keeps Claude code paths building too.)
+ENV XAI_API_KEY="dummy-build-key-not-used-at-runtime"
 ENV ANTHROPIC_API_KEY="dummy-build-key-not-used-at-runtime"
 ENV AUTH_SECRET="dummy-build-secret-not-the-dev-default"
 ENV NEXT_TELEMETRY_DISABLED=1

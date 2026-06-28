@@ -160,7 +160,7 @@ function parseBody(value: unknown): ParsedChatBody | null {
       ? active_team_id
       : null;
   // Whitelist-validate the model against the registry: an unknown/missing/non-
-  // string key falls back to the default (Claude). Never forward the raw client
+  // string key falls back to the default (Grok). Never forward the raw client
   // string downstream — the runtime keys the provider off this resolved value.
   const modelKey: ModelKey = isModelKey(model) ? model : DEFAULT_MODEL_KEY;
   return {
@@ -373,7 +373,8 @@ export async function POST(req: Request): Promise<Response> {
   // 3c. Fail fast if the selected model's provider isn't configured on this
   //     server (its API key is absent) — a clean 503 BEFORE the stream opens, so
   //     the client sees a real HTTP status rather than a mid-stream error. The
-  //     default (Claude) is always configured, so old clients never hit this.
+  //     default (Grok) is always configured (XAI_API_KEY is required at boot), so
+  //     old clients that omit `model` never hit this.
   //     Dynamic import defers the factory's env/SDK evaluation to request time
   //     (the same reason the runtime import below is deferred). `body.model` is
   //     already a validated registry key.
@@ -563,7 +564,7 @@ export async function POST(req: Request): Promise<Response> {
             const statusPart = err.status ? ` (HTTP ${err.status})` : "";
             send("error", {
               code: "model_provider_error",
-              message: `${modelLabel(body.model)} is unavailable right now${statusPart} — try Claude or check the provider key.`,
+              message: `${modelLabel(body.model)} is unavailable right now${statusPart} — switch models or check the provider key.`,
               ...(err.status !== undefined ? { status: err.status } : {}),
             });
           } else {

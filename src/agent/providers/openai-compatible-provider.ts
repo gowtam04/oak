@@ -1,10 +1,12 @@
 /**
  * OpenAICompatibleProvider — the Chat Completions transport behind the
- * {@link LLMProvider} seam, serving BOTH OpenAI GPT-5.5 and xAI Grok 4.3.
+ * {@link LLMProvider} seam, serving OpenAI GPT-5.5.
  *
- * xAI's API is OpenAI-SDK-compatible, so a single adapter handles both: only the
- * api key, base URL, model id, provider kind, and `reasoning_effort` differ
- * (injected from the provider factory). Differences from the Anthropic path:
+ * (xAI's API is also OpenAI-SDK-compatible, so this adapter CAN drive Grok through
+ * the Chat Completions shim — and the `kind:"xai"` paths/tests below preserve that
+ * capability — but the production Grok path is now the dedicated native
+ * {@link GrokProvider} on xAI's Responses API.) Differences from the Anthropic
+ * path:
  *  - System segments are joined into ONE `{role:"system"}` message (Chat
  *    Completions has no separate system field), and there is NO `cache_control`
  *    (OpenAI/xAI cache a stable prefix automatically).

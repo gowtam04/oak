@@ -54,7 +54,7 @@ export interface AgentContext {
    */
   mode: AgentMode;
   /**
-   * Which LLM answers this turn (server-controlled; defaults to the Claude key).
+   * Which LLM answers this turn (server-controlled; defaults to the primary model, Grok).
    * Derived from the validated request body, bound here, and read by the runtime
    * to select the provider — exactly like {@link mode}, NEVER an LLM-visible tool
    * input. Cross-turn history is plain text, so switching models per turn is

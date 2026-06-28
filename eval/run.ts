@@ -6,23 +6,26 @@
  *
  * Three runnable modes (the module never auto-runs — see the bottom guard):
  *
- *   tsx eval/run.ts                  Full LLM-judge suite (G1..G24), LIVE Sonnet
- *                                    for both the agent and the judge, against
- *                                    the built on-disk index (data/oak.sqlite,
- *                                    or the fixture if no index exists yet).
- *                                    Nightly / on-release; NOT PR-blocking.
+ *   tsx eval/run.ts                  Full LLM-judge suite (G1..G24): the agent
+ *                                    runs LIVE on the primary model (Grok by
+ *                                    default, via the registry default) and the
+ *                                    judge runs LIVE on Claude, against the built
+ *                                    on-disk index (data/oak.sqlite, or the
+ *                                    fixture if no index exists yet). Nightly /
+ *                                    on-release; NOT PR-blocking.
  *
  *   tsx eval/run.ts --rebuild        Index-rebuild regression set (G1/G5/G6/G7/
  *                                    G17) — run on demand after every ingest to
  *                                    catch data drift (evaluation.md § Regression
  *                                    Approach). Live judge by default.
  *
- *   tsx eval/run.ts --deterministic  The CI subset, OFFLINE (mocked Anthropic
+ *   tsx eval/run.ts --deterministic  The CI subset, OFFLINE (mocked provider
  *                                    client + real tools + fixture DB). No model
- *                                    call, no API key needed beyond a non-empty
- *                                    placeholder. This is what the Vitest gate
- *                                    runs (eval/deterministic.test.ts); exposed
- *                                    here for ad-hoc local runs.
+ *                                    call, no real API key needed beyond a
+ *                                    non-empty XAI_API_KEY placeholder (so @/env
+ *                                    imports). This is what the Vitest gate runs
+ *                                    (eval/deterministic.test.ts); exposed here
+ *                                    for ad-hoc local runs.
  *
  * Flags:
  *   --rebuild              use the G1/G5/G6/G7/G17 regression set
@@ -32,9 +35,10 @@
  *   --live-index[=URI]     force the live Postgres index (default: $DATABASE_URL)
  *   --json                 emit a machine-readable JSON report
  *
- * Live mode (judged) needs a REAL ANTHROPIC_API_KEY in the environment; the
- * dummy key used by the Vitest config will 401. The deterministic mode needs no
- * real key.
+ * Live mode (judged) needs BOTH a REAL XAI_API_KEY (the agent runs on Grok) and a
+ * REAL ANTHROPIC_API_KEY (the judge runs on Claude); the dummy keys used by the
+ * Vitest config will 401. The deterministic mode needs no real key (only a
+ * non-empty XAI_API_KEY placeholder so @/env imports).
  */
 
 import { createRequire } from "node:module";
@@ -44,6 +48,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 
 import { env } from "@/env";
 import { createAgentContext } from "@/agent/context";
+import { DEFAULT_MODEL_KEY, modelLabel } from "@/agent/models";
 import type { AgentContext } from "@/agent/types";
 import * as schema from "@/data/schema";
 
@@ -354,10 +359,13 @@ export async function main(argv: string[]): Promise<number> {
       return results.every((r) => r.pass) ? 0 : 1;
     }
 
-    // Judged (live Sonnet + live judge).
+    // Judged: the agent runs on the primary model (Grok by default); the judge
+    // stays on Claude (env.ANTHROPIC_MODEL) to avoid same-family self-preference.
     const mode = opts.rebuild ? "rebuild-regression (judged)" : "judged (full)";
     if (!opts.json)
-      log(`Mode: ${mode}  DB: ${built.label}  model: ${env.ANTHROPIC_MODEL}`);
+      log(
+        `Mode: ${mode}  DB: ${built.label}  agent: ${modelLabel(DEFAULT_MODEL_KEY)}  judge: ${env.ANTHROPIC_MODEL}`,
+      );
     // Dynamic import: pulls the agent runtime + judge (server-only) after the shim.
     const { runJudged } = await import("./judge");
     const results = await runJudged(selected, built.ctx);

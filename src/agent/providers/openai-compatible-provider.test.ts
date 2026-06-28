@@ -1,6 +1,8 @@
 /**
- * Unit tests for OpenAICompatibleProvider (GPT-5.5 + Grok 4.3) with a MOCKED
- * Chat Completions stream — deterministic, never hits the network. Asserts the
+ * Unit tests for OpenAICompatibleProvider (GPT-5.5; plus the legacy Grok-via-shim
+ * `kind:"xai"` compat paths — production Grok now uses the native GrokProvider)
+ * with a MOCKED Chat Completions stream — deterministic, never hits the network.
+ * Asserts the
  * request shape (function tools, tool_choice auto, reasoning_effort, streamed
  * usage, NO cache_control), that streamed tool-call argument fragments feed the
  * runtime's AnswerMarkdownExtractor to reproduce answer_markdown, the normalized

@@ -3,9 +3,10 @@ import { z } from "zod";
 /**
  * Zod-validated process.env (design.md § File Structure: src/env.ts).
  *
- * The schema REJECTS a missing/empty ANTHROPIC_API_KEY — a single source of
- * truth for required configuration. Everything else has a sensible default so
- * the app and the ingest/eval scripts run with only the API key supplied.
+ * The schema REJECTS a missing/empty XAI_API_KEY — Grok is the primary provider,
+ * so its key is the single source of truth for required configuration. Everything
+ * else has a sensible default so the app and the ingest/eval scripts run with only
+ * the API key supplied. Claude/OpenAI keys are OPTIONAL (validate-on-use).
  */
 
 /**
@@ -21,20 +22,25 @@ const emptyToUndefined = (v: unknown): unknown =>
 
 const EnvSchema = z
   .object({
-    ANTHROPIC_API_KEY: z
-      .string({ required_error: "ANTHROPIC_API_KEY is required" })
-      .min(1, "ANTHROPIC_API_KEY must not be empty"),
-    ANTHROPIC_MODEL: z.string().min(1).default("claude-sonnet-4-6"),
+    // xAI (Grok 4.3) is the PRIMARY provider — its key is required at boot.
+    XAI_API_KEY: z
+      .string({ required_error: "XAI_API_KEY is required" })
+      .min(1, "XAI_API_KEY must not be empty"),
 
     // --- Optional alternate model providers (model switcher) ---------------
-    // OpenAI (GPT-5.5) and xAI (Grok 4.3) are OPTIONAL: Claude remains the
-    // default and the only required key. A provider's key is validated ON USE
-    // (the provider factory throws a typed model_unavailable, surfaced by the
-    // route as a clean 503) — NOT at module load — so the app still boots with
-    // only ANTHROPIC_API_KEY. An empty value (`OPENAI_API_KEY=` in a compose
-    // env_file) is treated as absent, like RESEND_API_KEY below.
+    // Anthropic (Claude) and OpenAI (GPT-5.5) are OPTIONAL: Grok is the default
+    // and the only required key. A provider's key is validated ON USE (the
+    // provider factory throws a typed model_unavailable, surfaced by the route as
+    // a clean 503) — NOT at module load — so the app still boots with only
+    // XAI_API_KEY. An empty value (`ANTHROPIC_API_KEY=` in a compose env_file) is
+    // treated as absent, like RESEND_API_KEY below. Claude stays fully selectable
+    // whenever its key is present.
+    ANTHROPIC_API_KEY: z.preprocess(
+      emptyToUndefined,
+      z.string().min(1).optional(),
+    ),
+    ANTHROPIC_MODEL: z.string().min(1).default("claude-sonnet-4-6"),
     OPENAI_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
-    XAI_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     // Base URLs. xAI is OpenAI-SDK-compatible; its API lives behind a different
     // host, so it has a sensible default. OpenAI uses the SDK default when unset.
     OPENAI_BASE_URL: z.preprocess(
@@ -109,6 +115,6 @@ export function parseEnv(
 
 /**
  * The validated environment, parsed once at module load. Importing this module
- * with a missing ANTHROPIC_API_KEY throws immediately (fail fast on boot).
+ * with a missing XAI_API_KEY throws immediately (fail fast on boot).
  */
 export const env: Env = parseEnv();

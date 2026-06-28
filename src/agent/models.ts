@@ -1,6 +1,6 @@
 /**
  * Model registry — the single source of truth for which LLMs the model switcher
- * exposes (Claude / GPT-5.5 / Grok 4.3).
+ * exposes (Grok 4.3 / Claude / GPT-5.5).
  *
  * CLIENT-SAFE by design: this module holds ONLY pure constants/mappings and has
  * NO `server-only`, SDK, or `@/env` imports — modeled on `src/data/formats.ts`.
@@ -33,21 +33,23 @@ export interface ModelOption {
 }
 
 /**
- * Every selectable model, in stable display order. Claude is first (the
- * default). Adding a model is a one-line change here + a factory entry.
+ * Every selectable model, in stable display order. Grok 4.3 is first (the
+ * primary/default). Adding a model is a one-line change here + a factory entry.
  */
 export const MODELS: readonly ModelOption[] = [
+  { key: "grok-4.3", label: "xAI Grok 4.3", provider: "xai" },
   { key: "claude", label: "Claude", provider: "anthropic" },
   { key: "gpt-5.5", label: "OpenAI GPT-5.5", provider: "openai" },
-  { key: "grok-4.3", label: "xAI Grok 4.3", provider: "xai" },
 ] as const;
 
 /**
  * The default model — used for old clients that omit `model`, an unknown/invalid
- * key, and every validation fallback. Claude stays the default: it is the path
- * the system prompt + few-shot are tuned for (zero-regression baseline).
+ * key, and every validation fallback. Grok 4.3 is the primary model the app is
+ * designed around; its native provider is the first-class path (Claude remains
+ * fully supported and selectable). Because XAI_API_KEY is required at boot, the
+ * default is always configured, so falling back to it is always safe.
  */
-export const DEFAULT_MODEL_KEY: ModelKey = "claude";
+export const DEFAULT_MODEL_KEY: ModelKey = "grok-4.3";
 
 /** Type guard for a known model key (the route's request-body whitelist). */
 export function isModelKey(value: unknown): value is ModelKey {

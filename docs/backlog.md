@@ -442,6 +442,22 @@ across resume depends on B-1 / B-3.
 
 ## B-9 — Make Grok native
 
+> **Status: BUILT** — Grok 4.3 is now the PRIMARY model, served by a dedicated
+> native adapter (`src/agent/providers/grok-provider.ts`) on xAI's **Responses
+> API** (`client.responses.create` via the OpenAI SDK pointed at `XAI_BASE_URL` —
+> no new dependency), constructed by `factory.ts` and registered in `models.ts`.
+> Delivered: native request shaping (flattened function tools, `reasoning.effort`
+> high, `parallel_tool_calls` false, `store:false` + `include:["reasoning.encrypted_content"]`),
+> a Responses→normalized streaming-event mapping feeding the same
+> AnswerMarkdownExtractor, the opaque-transcript echo/flatten mechanism (zero loop
+> changes), and the same `OakAnswer` validation seam. Made primary: `XAI_API_KEY`
+> required at boot (Anthropic/OpenAI now optional, validate-on-use),
+> `DEFAULT_MODEL_KEY="grok-4.3"`, switcher reordered, the judged eval suite runs
+> the agent on Grok (judge stays on Claude). Open questions resolved: prompt
+> caching is automatic on a stable prefix (no `cache_control`); the loop uses
+> `tool_choice:"auto"` + `reasoning.effort` (no forced-tool-choice conflict).
+> Recorded-stream tests in `src/agent/providers/grok-provider.test.ts`.
+
 **Why:** Oak already has a model-provider seam (the `LLMProvider` abstraction in
 `src/agent/providers/` with a client-safe `src/agent/models.ts` registry and a
 server-only `factory.ts`; the Anthropic path is `anthropic-provider.ts` and a

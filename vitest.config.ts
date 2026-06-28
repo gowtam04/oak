@@ -5,13 +5,16 @@ import { shared } from "./vitest.shared";
 // config): a Node project for backend/unit tests and a jsdom project for
 // React component tests. Both extend the shared config so `@/` resolves.
 //
-// A dummy ANTHROPIC_API_KEY is injected for every test run so unit tests can
-// import src/env.ts (which rejects a missing key) and can never reach the API.
+// A dummy XAI_API_KEY (the now-required primary key) is injected for every test
+// run so unit tests can import src/env.ts (which rejects a missing key) and can
+// never reach the API. A dummy ANTHROPIC_API_KEY is also injected so Claude code
+// paths (the optional provider) stay configured/selectable under test.
 export default defineConfig({
   ...shared,
   test: {
     passWithNoTests: true,
     env: {
+      XAI_API_KEY: "test-dummy-xai-key",
       ANTHROPIC_API_KEY: "test-dummy-anthropic-key",
       NODE_ENV: "test",
     },
