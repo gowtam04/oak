@@ -486,3 +486,70 @@ describe("POST /api/chat — image attachments", () => {
     expect(mockRunOak).not.toHaveBeenCalled();
   });
 });
+
+// --- SSE robustness: long/slow turns (image turns especially) -----------------
+
+describe("POST /api/chat — SSE lifecycle robustness", () => {
+  /** Spin the event loop until `cond()` holds (or a bounded number of ticks). */
+  async function until(cond: () => boolean, ticks = 100): Promise<void> {
+    for (let i = 0; i < ticks && !cond(); i++) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  }
+
+  it("does not crash (enqueue-after-close) when the client disconnects mid-turn", async () => {
+    // A turn whose answer we resolve manually, AFTER the client has gone away.
+    let resolveRun: (a: OakAnswer) => void = () => {};
+    mockRunOak.mockImplementation(
+      () =>
+        new Promise<OakAnswer>((res) => {
+          resolveRun = res;
+        }),
+    );
+
+    const res = await post({ session_id: "s-img", message: "slow image turn" });
+    expect(res.status).toBe(200);
+
+    // Wait until the detached task is parked inside runOak…
+    await until(() => mockRunOak.mock.calls.length > 0);
+    // …then the client disconnects (cancels the response stream → the route's
+    // ReadableStream cancel() fires).
+    await res.body!.cancel();
+
+    // The turn finishes on the server. The post-answer send()/close() now run
+    // against a dead controller — they MUST be no-ops, not an unhandled
+    // "Invalid state: Controller is already closed" rejection (which would fail
+    // this test). No assertion needed beyond completing cleanly.
+    resolveRun(G1_ANSWER);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(mockRunOak).toHaveBeenCalledTimes(1);
+  });
+
+  it("emits keep-alive heartbeats while a turn is in flight", async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveRun: (a: OakAnswer) => void = () => {};
+      mockRunOak.mockImplementation(
+        () =>
+          new Promise<OakAnswer>((res) => {
+            resolveRun = res;
+          }),
+      );
+
+      const res = await post({ session_id: "s-img", message: "quiet turn" });
+      // Advance past one 15s heartbeat tick (the route emits an SSE comment).
+      await vi.advanceTimersByTimeAsync(15_100);
+
+      const reader = res.body!.getReader();
+      const { value } = await reader.read();
+      const text = new TextDecoder().decode(value);
+      expect(text).toContain(": keep-alive");
+
+      // Let the turn finish so the detached task settles before teardown.
+      resolveRun(G1_ANSWER);
+      await reader.cancel();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

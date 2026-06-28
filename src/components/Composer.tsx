@@ -7,12 +7,16 @@ import {
   type ChangeEvent,
   type ClipboardEvent,
   type FormEvent,
+  type KeyboardEvent,
 } from "react";
 import type { ComposerProps, PendingImage } from "@/components/types";
 import {
   filesToPendingImages,
   MAX_ATTACHMENTS,
 } from "@/lib/image-attachments";
+
+/** Max auto-grow height (px) for the textarea before it starts scrolling. */
+const MAX_INPUT_PX = 160;
 
 /**
  * Composer — the chat input box. Submits via `onSend(message, images)` and clears
@@ -22,6 +26,10 @@ import {
  * removable thumbnails, and capped at {@link MAX_ATTACHMENTS}. While a turn is
  * streaming the input is disabled and Send becomes Stop (`onStop`). A new
  * `prefill` object reloads the text input (used to restore a stopped message).
+ *
+ * The field is a multi-line textarea that auto-grows up to {@link MAX_INPUT_PX}.
+ * Enter submits and Shift+Enter inserts a newline on desktop; on touch devices
+ * (coarse pointer) Enter always inserts a newline and Send is the only submit.
  */
 export default function Composer({
   onSend,
@@ -33,7 +41,7 @@ export default function Composer({
   const [value, setValue] = useState("");
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reload the input whenever the parent pushes a fresh `prefill` object (e.g.
@@ -42,6 +50,18 @@ export default function Composer({
   useEffect(() => {
     if (prefill) setValue(prefill.text);
   }, [prefill]);
+
+  // Auto-grow the textarea to fit its content, capped at MAX_INPUT_PX (past
+  // which it scrolls). Runs on every value change so typing, prefill, and the
+  // post-send reset all re-measure. Collapsing to "auto" first lets it shrink
+  // back down when text is deleted. A CSS min-height floors the single-line
+  // case (and keeps jsdom, where scrollHeight is 0, at its resting height).
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_INPUT_PX)}px`;
+  }, [value]);
 
   // Keep the dock above the iOS on-screen keyboard. iOS does NOT shrink the
   // layout viewport (or dvh/svh) when the keyboard opens, so a `bottom:0` sticky
@@ -100,7 +120,7 @@ export default function Composer({
     e.target.value = ""; // allow re-selecting the same file
   }
 
-  function handlePaste(e: ClipboardEvent<HTMLInputElement>) {
+  function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
     const items = e.clipboardData?.items;
     if (!items) return;
     const files: File[] = [];
@@ -121,8 +141,7 @@ export default function Composer({
     setAttachError(null);
   }
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  function submit() {
     if (disabled) return;
     const trimmed = value.trim();
     if (trimmed.length === 0 && pendingImages.length === 0) return;
@@ -130,6 +149,25 @@ export default function Composer({
     setValue("");
     setPendingImages([]);
     setAttachError(null);
+  }
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    submit();
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== "Enter") return;
+    // Shift+Enter always inserts a newline (the textarea default).
+    if (e.shiftKey) return;
+    // Don't submit mid-IME-composition (e.g. an unconfirmed CJK candidate);
+    // the Enter is committing the candidate, not the message.
+    if (e.nativeEvent.isComposing) return;
+    // On touch devices the on-screen return key inserts a newline; Send is the
+    // only way to submit. On desktop, a bare Enter sends.
+    if (window.matchMedia?.("(pointer: coarse)").matches) return;
+    e.preventDefault();
+    submit();
   }
 
   const atCapacity = pendingImages.length >= MAX_ATTACHMENTS;
@@ -191,13 +229,15 @@ export default function Composer({
           hidden
           onChange={handleFiles}
         />
-        <input
+        <textarea
           ref={inputRef}
           className="composer__input"
           data-testid="composer-input"
-          type="text"
+          rows={1}
+          enterKeyHint="enter"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onFocus={() => {
             // Fallback for browsers without visualViewport handling: nudge the

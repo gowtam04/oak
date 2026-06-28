@@ -430,23 +430,62 @@ export async function POST(req: Request): Promise<Response> {
   //    async task inside start() (never await the whole loop first).
   const encoder = new TextEncoder();
 
+  // SSE lifecycle state shared by `start` (the producer) AND `cancel` (fired when
+  // the client disconnects). `closed` makes every subsequent write a no-op once
+  // the turn finishes OR the connection is abandoned; `heartbeat` keeps a long,
+  // quiet turn alive (see below). Hoisted here so `cancel()` can reach them.
+  let closed = false;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  const stopHeartbeat = (): void => {
+    if (heartbeat !== null) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+  };
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      let closed = false;
+      // Single guarded write path: once the client disconnects, the controller is
+      // dead and enqueue throws "Invalid state: Controller is already closed". We
+      // catch that, flip `closed`, and stop — never letting it become an
+      // unhandledRejection out of the detached task below.
+      const enqueue = (chunk: string): void => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(chunk));
+        } catch {
+          closed = true;
+          stopHeartbeat();
+        }
+      };
 
       const send = <K extends SseEventName>(
         event: K,
         data: SseEventDataMap[K],
       ): void => {
-        if (closed) return;
-        controller.enqueue(encoder.encode(formatSseEvent(event, data)));
+        enqueue(formatSseEvent(event, data));
       };
 
       const close = (): void => {
         if (closed) return;
         closed = true;
-        controller.close();
+        stopHeartbeat();
+        try {
+          controller.close();
+        } catch {
+          // Already closed by a client disconnect — nothing to do.
+        }
       };
+
+      // Keep-alive heartbeat. A turn can spend 60s+ in silent reasoning before
+      // the first tool/answer byte (image turns especially — large input + long
+      // thinking, often with NO tool calls), during which no SSE traffic flows.
+      // An idle connection gets dropped by the proxy/browser, which surfaces as a
+      // `stream_error` and strands the finished answer. An SSE comment every 15s
+      // keeps it warm; comment frames are ignored by the client's frame parser.
+      heartbeat = setInterval(() => {
+        enqueue(": keep-alive\n\n");
+      }, 15_000);
 
       // Detached async task — drives the agent loop and streams events.
       void (async () => {
@@ -629,6 +668,15 @@ export async function POST(req: Request): Promise<Response> {
           close();
         }
       })();
+    },
+    cancel() {
+      // The client went away (closed the tab, navigated, lost network). Mark the
+      // stream closed so the still-running detached task's send()/close() become
+      // no-ops instead of enqueuing on a dead controller (the
+      // "Controller is already closed" crash). The agent loop independently sees
+      // req.signal abort and bails between iterations.
+      closed = true;
+      stopHeartbeat();
     },
   });
 

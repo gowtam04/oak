@@ -1173,7 +1173,8 @@ img {
 /* The unified "Pokédex console" field — leading icon · input · nested Send */
 .composer__field {
   display: flex;
-  align-items: center;
+  /* Anchor the attach/Send buttons to the bottom as the textarea auto-grows. */
+  align-items: flex-end;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   background: var(--surface);
@@ -1291,18 +1292,25 @@ img {
   color: var(--danger);
 }
 
-/* Borderless input that fills the field */
+/* Borderless multi-line input that fills the field. Auto-grows in Composer.tsx
+   via an inline height (capped at MAX_INPUT_PX); min-height floors the
+   single-line resting height and overflow-y lets it scroll past the cap. */
 .composer__input {
   flex: 1;
   min-width: 0;
-  height: 44px;
-  padding: 0 var(--space-2);
+  min-height: 44px;
+  max-height: 160px;
+  /* (44px floor − 24px line-height) / 2 ≈ 10px vertical padding centers one line. */
+  padding: 10px var(--space-2);
   background: transparent;
   color: var(--text);
   font-family: var(--body);
   /* 16px floor: iOS Safari auto-zooms the page on focus for anything smaller. */
   font-size: 1rem;
+  line-height: 1.5;
   border: none;
+  resize: none;
+  overflow-y: auto;
 }
 .composer__input:focus {
   outline: none;

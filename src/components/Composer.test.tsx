@@ -105,6 +105,63 @@ describe("Composer — submit + prefill", () => {
     expect(input.value).toBe("");
   });
 
+  it("submits on a bare Enter (desktop / fine pointer)", () => {
+    // jsdom's matchMedia defaults to matches:false, so (pointer: coarse) is
+    // false here — i.e. the desktop path.
+    const onSend = vi.fn();
+    render(<Composer {...props({ onSend })} />);
+    const input = screen.getByTestId("composer-input") as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: "Garchomp speed?" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSend).toHaveBeenCalledWith("Garchomp speed?", []);
+    expect(input.value).toBe("");
+  });
+
+  it("does NOT submit on Shift+Enter (newline inserted instead)", () => {
+    const onSend = vi.fn();
+    render(<Composer {...props({ onSend })} />);
+    const input = screen.getByTestId("composer-input") as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: "line one" } });
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(onSend).not.toHaveBeenCalled();
+    // Field is preserved (not cleared by a submit).
+    expect(input.value).toBe("line one");
+  });
+
+  it("does NOT submit on Enter while composing (IME candidate)", () => {
+    const onSend = vi.fn();
+    render(<Composer {...props({ onSend })} />);
+    const input = screen.getByTestId("composer-input") as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: "にほんご" } });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("does NOT submit on Enter on a touch device (coarse pointer)", () => {
+    // Simulate a touch device: (pointer: coarse) matches.
+    const original = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((q: string) => ({
+      matches: q.includes("coarse"),
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      onchange: null,
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const onSend = vi.fn();
+      render(<Composer {...props({ onSend })} />);
+      const input = screen.getByTestId("composer-input") as HTMLTextAreaElement;
+      fireEvent.change(input, { target: { value: "mobile question" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onSend).not.toHaveBeenCalled();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   it("loads a fresh prefill object's text into the input", () => {
     const { rerender } = render(<Composer {...props({ prefill: null })} />);
     const input = screen.getByTestId("composer-input") as HTMLInputElement;
