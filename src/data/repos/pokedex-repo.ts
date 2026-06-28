@@ -490,9 +490,23 @@ export async function getPokemon(
 
 /** Index reference for one Pokémon: the fields the answer UI renders. */
 export interface SpriteRef {
+  /** Canonical display name (e.g. "Swampert (Mega)") — disambiguates formes. */
+  display_name: string;
   sprite_url: string;
   dex_number: number;
   types: string[];
+  /**
+   * Base stats, so the team artifact can compute final stats client-side. The
+   * answer-enrichment caller ignores this; the team-sprite lookup uses it.
+   */
+  base_stats: {
+    hp: number;
+    attack: number;
+    defense: number;
+    special_attack: number;
+    special_defense: number;
+    speed: number;
+  };
 }
 
 /**
@@ -539,6 +553,12 @@ export async function spriteRefsByNames(
     type1: string;
     type2: string | null;
     sprite_url: string;
+    stat_hp: number;
+    stat_attack: number;
+    stat_defense: number;
+    stat_special_attack: number;
+    stat_special_defense: number;
+    stat_speed: number;
   }[];
   try {
     rows = await db
@@ -549,6 +569,12 @@ export async function spriteRefsByNames(
         type1: pokemon.type1,
         type2: pokemon.type2,
         sprite_url: pokemon.sprite_url,
+        stat_hp: pokemon.stat_hp,
+        stat_attack: pokemon.stat_attack,
+        stat_defense: pokemon.stat_defense,
+        stat_special_attack: pokemon.stat_special_attack,
+        stat_special_defense: pokemon.stat_special_defense,
+        stat_speed: pokemon.stat_speed,
       })
       .from(pokemon)
       .where(
@@ -570,9 +596,18 @@ export async function spriteRefsByNames(
   const byKey = new Map<string, SpriteRef>();
   for (const r of rows) {
     const ref: SpriteRef = {
+      display_name: r.display_name,
       sprite_url: r.sprite_url,
       dex_number: r.national_dex_number,
       types: r.type2 ? [r.type1, r.type2] : [r.type1],
+      base_stats: {
+        hp: r.stat_hp,
+        attack: r.stat_attack,
+        defense: r.stat_defense,
+        special_attack: r.stat_special_attack,
+        special_defense: r.stat_special_defense,
+        speed: r.stat_speed,
+      },
     };
     byKey.set(r.display_name.toLowerCase(), ref);
     byKey.set(r.id, ref);

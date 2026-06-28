@@ -124,10 +124,12 @@ say so and offer to help build or import one rather than inventing a team. Use t
 warnings to ground your advice, and reason on top of the team the same way you do
 for any other data (cite what you read, flag inferences).
 When the user asks you to BUILD or suggest a team (or changes to one), put the
-result in the \`proposed_team\` field — a name, the format, and the members array
-(species/ability/item/moves/nature/EVs/IVs/tera_type/level per slot; partial sets
-are fine, omit what you're unsure of). Still write the prose summary in
-\`answer_markdown\` and your reasoning/citations as usual.
+result in the \`proposed_team\` field — a name, the format, and the members array.
+Give EVERY member a COMPLETE set: species, ability, a held item, FOUR moves,
+nature, an EV spread, and level. Do NOT leave the item or moves empty — a member
+with no item or no moves isn't battle-ready and renders as a bare card; only leave
+a slot partial if the user EXPLICITLY asked for just a rough core/skeleton. Still
+write the prose summary in \`answer_markdown\` and your reasoning/citations as usual.
 When the user APPROVES a team you proposed earlier in this conversation — "looks
 good", "save it", "build this team", "I like this", "yes save it" — call
 save_team to persist it to their saved Teams. It takes no members: it saves the

@@ -390,6 +390,270 @@
   gap: var(--space-3);
 }
 
+/* ---- Team artifact (detailed team view) -------------------------------- */
+.team-artifact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.team-artifact__members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.team-artifact__empty {
+  margin: 0;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* One member = one card, tinted by its primary type along the left edge. */
+.team-member {
+  --member-type: var(--type-normal);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-left: 3px solid color-mix(in srgb, var(--member-type) 55%, var(--border));
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.team-member--empty {
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5) var(--space-3);
+  border-style: dashed;
+  border-left-color: var(--border);
+}
+.team-member__empty {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* Head: sprite chip + identity (name / dex / level / types / Tera). */
+.team-member__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.team-member__sprite-chip {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: radial-gradient(
+    circle at 50% 42%,
+    color-mix(in srgb, var(--member-type) 26%, var(--surface)),
+    color-mix(in srgb, var(--member-type) 8%, var(--surface-sunken))
+  );
+  border: 1px solid color-mix(in srgb, var(--member-type) 28%, transparent);
+}
+.team-member__sprite {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.18));
+}
+.team-member__sprite-fallback {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--member-type) 55%, var(--text-faint));
+}
+.team-member__ident {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.team-member__name-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.team-member__name {
+  font-family: var(--display);
+  font-size: 1rem;
+  color: var(--text-strong);
+}
+.team-member__dex {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+.team-member__level {
+  margin-left: auto;
+  padding: 1px var(--space-2);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+.team-member__badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Tera chip — a gem-styled badge tinted by the Tera type. */
+.team-member__tera {
+  --tera-type: var(--type-normal);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px var(--space-2);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--tera-type) 72%, var(--text-strong));
+  background: color-mix(in srgb, var(--tera-type) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--tera-type) 40%, transparent);
+}
+.team-member__tera-glyph {
+  font-size: 9px;
+  color: var(--tera-type);
+}
+
+/* Meta line: item / ability / nature, separated by middots. */
+.team-member__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.team-member__meta > * + *::before {
+  content: "·";
+  margin-right: var(--space-2);
+  color: var(--text-faint);
+}
+.team-member__item {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Computed final stats: label · value · proportional bar · EV/SP. */
+.team-member__stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.team-stat {
+  display: grid;
+  grid-template-columns: 30px 30px 1fr 38px;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.75rem;
+}
+.team-stat__label {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.team-stat__value {
+  font-family: var(--mono);
+  text-align: right;
+  color: var(--text-strong);
+}
+.team-stat__bar {
+  height: 7px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.team-stat__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--member-type) 55%, var(--azure));
+}
+.team-stat__ev {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  text-align: right;
+  color: var(--text-faint);
+}
+/* Nature shading: boosted stat reads positive, hindered reads negative. */
+.team-stat--boosted .team-stat__label,
+.team-stat--boosted .team-stat__value {
+  color: var(--success);
+}
+.team-stat--boosted .team-stat__bar-fill {
+  background: var(--success);
+}
+.team-stat--hindered .team-stat__label,
+.team-stat--hindered .team-stat__value {
+  color: var(--danger);
+}
+.team-stat--hindered .team-stat__bar-fill {
+  background: color-mix(in srgb, var(--danger) 70%, var(--surface-sunken));
+}
+
+/* Moves: a 2-column chip grid. */
+.team-member__moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-1) var(--space-2);
+}
+.team-member__move {
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.team-member__no-moves {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--text-faint);
+}
+
+/* Validity warnings + the saved-only Edit link. */
+.team-artifact__warnings {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.82rem;
+  color: color-mix(in srgb, var(--danger) 80%, var(--text));
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  border-radius: var(--radius-md);
+}
+.team-artifact__edit {
+  align-self: flex-start;
+  color: var(--azure);
+  font-weight: 600;
+  text-decoration: none;
+}
+.team-artifact__edit:hover {
+  text-decoration: underline;
+}
+
 /* ---- Sections ----------------------------------------------------------- */
 .pokemon-artifact__section,
 .type-artifact__section,

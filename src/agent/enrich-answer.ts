@@ -119,9 +119,11 @@ async function refByFuzzy(
     const profile = await getPokemon(slug, format, db);
     if (!profile.found) return null;
     return {
+      display_name: profile.display_name,
       sprite_url: profile.sprite_url,
       dex_number: profile.national_dex_number,
       types: profile.types,
+      base_stats: profile.base_stats,
     };
   } catch {
     return null;

@@ -18,6 +18,7 @@ import type {
 } from "@/lib/entity-artifact";
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { TeamDetail } from "@/lib/teams-client";
+import type { SpriteRef } from "@/data/repos/pokedex-repo";
 
 export type { ArtifactFormat, EntityKind };
 
@@ -68,6 +69,12 @@ export interface TeamArtifactView {
   source: "saved" | "proposed";
   phase: "loading" | "done" | "error";
   detail: TeamDetail | null;
+  /**
+   * Sprite / type / base-stat refs for the members, keyed by species slug
+   * (resolved async after open). Absent until loaded; the view still renders the
+   * slug-only member data (TeamArtifact degrades gracefully without it).
+   */
+  spriteRefs?: Record<string, SpriteRef>;
 }
 
 export type ArtifactView =

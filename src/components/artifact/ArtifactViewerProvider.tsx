@@ -25,6 +25,8 @@ import {
 import type { EntityArtifactResponse } from "@/lib/entity-artifact";
 import { fetchEntityArtifact } from "@/lib/entity-client";
 import { getTeam, type TeamDetail } from "@/lib/teams-client";
+import { resolveSprites } from "@/lib/sprites-client";
+import type { TeamMember } from "@/data/teams/team-schema";
 
 import type {
   ArtifactFormat,
@@ -115,6 +117,22 @@ export function ArtifactViewerProvider({
     const fmt = formatRef.current;
     const id = ++idRef.current;
 
+    // Resolve sprite/type/base-stat refs for the members and patch them onto the
+    // matching view (progressive enhancement — the card renders without them).
+    const resolveAndPatch = (members: TeamMember[], teamFormat: string) => {
+      const slugs = members
+        .map((m) => m.species)
+        .filter((s): s is string => Boolean(s));
+      if (slugs.length === 0) return;
+      void resolveSprites(teamFormat, slugs).then((refs) => {
+        setStack((prev) =>
+          prev.map((v) =>
+            v.id === id && v.type === "team" ? { ...v, spriteRefs: refs } : v,
+          ),
+        );
+      });
+    };
+
     // Proposed team → render inline (no fetch), like a structured artifact.
     if ("team" in input) {
       const detail: TeamDetail = {
@@ -136,6 +154,7 @@ export function ArtifactViewerProvider({
           detail,
         },
       ]);
+      resolveAndPatch(input.team.members, input.team.format);
       return;
     }
 
@@ -165,6 +184,7 @@ export function ArtifactViewerProvider({
             : v,
         ),
       );
+      if (detail) resolveAndPatch(detail.members, detail.format);
     });
   }, []);
 

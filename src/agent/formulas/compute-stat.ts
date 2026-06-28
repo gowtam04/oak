@@ -141,3 +141,66 @@ export function computeStat(p: ComputeStatParams): ComputeStatResult {
     `(${inner} + 5) * ${NATURE_MOD_LABEL[nature_effect]} = ${scaled} -> floor ${value}`;
   return { value, breakdown, inputs_echo };
 }
+
+// Champions per-stat Stat-Point cap (32). Stat Points arrive in the `ev` field.
+const CHAMPIONS_SP_MAX = 32;
+
+/**
+ * Champions Level-50 Stat-Point stat (mirrors the @pkmn `champions` mod
+ * `statModify`): with IV fixed at 31 and Level 50 folded into the constants,
+ *   HP     = base + SP + 75
+ *   non-HP = floor((base + SP + 20) × natureMod)   (natureMod ∈ {1.1, 1.0, 0.9})
+ * where SP is the Stat Points value the caller passes in `ev`, clamped to 0..32.
+ * `iv` and `level` are deliberately ignored. The breakdown echoes the Stat-Points
+ * / IV=31 / Lv50 framing so the answer card is unambiguous.
+ *
+ * The single source of truth for Champions stat math: the `compute_stat` tool
+ * (Champions mode) and the team artifact's client-side stat readout both call it.
+ */
+export function computeStatChampions(p: ComputeStatParams): ComputeStatResult {
+  const is_hp = p.is_hp ?? false;
+  const ev = p.ev ?? 0;
+  const nature_effect = p.nature_effect ?? "neutral";
+  const base_stat = p.base_stat;
+
+  if (!isInteger(base_stat) || base_stat < 1) {
+    return { error: "invalid_input", detail: "base_stat must be an integer >= 1" };
+  }
+
+  // Stat Points ride in on the `ev` field; clamp to the Champions 0..32 cap.
+  const sp = Math.min(CHAMPIONS_SP_MAX, Math.max(0, ev));
+  const inputs_echo: Record<string, unknown> = {
+    base_stat,
+    stat_points: sp,
+    iv: 31,
+    level: 50,
+    nature_effect,
+    is_hp,
+    model: "champions",
+  };
+
+  if (is_hp) {
+    // Shedinja is always 1 HP in every game (base HP 1) — preserve that edge.
+    if (base_stat === 1) {
+      return {
+        value: 1,
+        breakdown: "Shedinja: HP is always 1 (special case)",
+        inputs_echo,
+      };
+    }
+    const value = base_stat + sp + 75;
+    return {
+      value,
+      breakdown: `Champions Lv50 (IV 31, Stat Points): ${base_stat} + ${sp} + 75 = ${value}`,
+      inputs_echo,
+    };
+  }
+
+  const mod = NATURE_MOD[nature_effect];
+  const value = Math.floor((base_stat + sp + 20) * mod);
+  return {
+    value,
+    breakdown: `Champions Lv50 (IV 31, Stat Points): floor((${base_stat} + ${sp} + 20) * ${NATURE_MOD_LABEL[nature_effect]}) = ${value}`,
+    inputs_echo,
+  };
+}
