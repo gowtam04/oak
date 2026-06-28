@@ -208,6 +208,17 @@ contract between the agent and the frontend renderer.
           "description": "Up to six member sets (the shared `teamMembersSchema`). Each: species, ability, item, moves (≤4), nature, evs/ivs (per-stat 0–255), tera_type, level (1–100), and optional nickname/gender/shiny. Partial sets are allowed — omit fields you're unsure of."
         }
       }
+    },
+    "saved_team": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "OPTIONAL — added by the team-builder feature (TEAM-AD-7). A reference to the team the agent SAVED this turn via the `save_team` tool (T13) on explicit user approval. NOT emitted by the model: the chat route STAMPS it from the server-owned save result (authoritative id), so the UI renders a persistent 'Saved ✓ — open in viewer' card. Additive + optional, so previously-stored answer_json (no saved_team key) still validates under the strict schema.",
+      "required": ["id", "name", "format"],
+      "properties": {
+        "id": { "type": "string", "description": "The saved team's id (a /teams row), used to re-open it in the artifact viewer." },
+        "name": { "type": "string", "description": "The saved team's name." },
+        "format": { "type": "string", "enum": ["scarlet-violet", "champions"], "description": "The saved team's format." }
+      }
     }
   },
   "definitions": {
@@ -260,7 +271,11 @@ contract between the agent and the frontend renderer.
 - `proposed_team` is **optional and additive** (TEAM-AD-6): present only on a
   "build/tweak a team" turn. Its `members` validate against the shared
   `teamMembersSchema` (per-stat EVs/IVs 0–255, ≤4 moves, ≤6 members). The agent
-  emits it as a suggestion only — it never performs a write (BR-T8).
+  emits it as a suggestion — the user can Apply it manually OR approve it in chat.
+- `saved_team` is **optional and additive** (TEAM-AD-7): present only when the
+  user approved a team and the `save_team` tool persisted it. It is **route-
+  stamped, never model-emitted** — the single exception to "the agent never
+  writes a team" (BR-T8), gated on explicit approval (see `tools.md` T13).
 
 ## Consumer Contract
 
@@ -278,7 +293,8 @@ The **frontend chat renderer** (a React `AnswerCard`, per `ux-design.md`) ingest
 | `generation_basis.fallback`, `uncertainty_flags[]` | `FallbackBanner` / `CaveatStrip`                   |
 | `damage_calc`                                      | `DamageReadout` (shows assumptions + estimate tag) |
 | `suggestions[]` (with `status`)                    | `SuggestionChips` (click → follow-up message)      |
-| `proposed_team`                                    | `ProposedTeamCard` (Apply → save-new / apply-existing) |
+| `proposed_team`                                    | `ProposedTeamCard` (Apply → save-new / apply-existing; Open in viewer) |
+| `saved_team`                                       | `SavedTeamCard` (persistent "Saved ✓ — Open in viewer"); auto-opens the viewer on arrival |
 
 The schema is also the headless test contract — evals assert against these fields
 directly (see `evaluation.md`).

@@ -1,14 +1,19 @@
 # Tools
 
-Twelve tools. Nine read data (one queries the local index, six fetch reference
+Thirteen tools. Nine read data (one queries the local index, six fetch reference
 details, one resolves names, one reads the conversation's active team), two
-compute battle math, one emits the final answer. All read/compute tools are
-**read-only and idempotent** — safe to retry in the loop. Tools return
-**structured errors the model can reason about**, never raw exceptions.
+compute battle math, one emits the final answer, and one writes (saves a team on
+approval). All read/compute tools are **read-only and idempotent** — safe to
+retry in the loop. Tools return **structured errors the model can reason about**,
+never raw exceptions.
 
-> The twelfth tool — `get_active_team` (T12) — was added by the **team-builder**
-> feature (see `docs/features/team-builder/architecture/design.md`, decisions
-> TEAM-AD-1 / TEAM-AD-3). The "11-tool contract" is now a **12-tool contract**.
+> Two tools beyond the original eleven were added by the **team-builder** feature
+> (see `docs/features/team-builder/architecture/design.md`): `get_active_team`
+> (T12, decisions TEAM-AD-1 / TEAM-AD-3) and `save_team` (T13, TEAM-AD-7). The
+> "11-tool contract" is now a **13-tool contract**. `save_team` is the single
+> deliberate exception to "the agent never writes a team" (BR-T8): it writes ONLY
+> on an explicit user approval the prompt describes, mirroring the manual Apply
+> button — see T13.
 
 Conventions:
 
@@ -701,6 +706,71 @@ id).
 
 ---
 
+## T13 — `save_team`
+
+_(Added by the team-builder feature — TEAM-AD-7. The one **write** tool.)_
+
+**Description (for the model):** Save a team to the user's saved Teams. Call this
+ONLY when the user EXPLICITLY approves a team you proposed earlier in this
+conversation ("looks good", "save it", "build this team", "I like this"), or asks
+you to build AND save one. It saves the **exact team you proposed** — you do not
+pass the members. Optional `name` renames; optional `team` is for build-and-save
+in one message (no prior proposal). On `{ "saved": true }`, tell the user it's on
+their Teams page (the app opens it in the viewer); on `not_signed_in`, ask them to
+sign in; on `no_team`, propose a team first.
+
+**Input schema:**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "team": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "format": { "enum": ["scarlet-violet", "champions"] },
+        "members": { "type": "array" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+The team it saves is **server-bound**: the chat route extracts the most recent
+`proposed_team` from the conversation's stored answers and binds it onto
+`AgentContext.proposedTeam` (the analogue of `activeTeam`), so the saved EVs / IVs
+/ moves are byte-for-byte what the user saw — the model never re-types the set.
+`team` is only the fallback when there is no prior proposal in context. The new
+team becomes the conversation's active team, and the route stamps the saved id +
+name + format onto `answer.saved_team` (authoritative — the model never copies a
+UUID), which the UI renders as a persistent "Saved ✓ — open in viewer" card.
+
+**Output shape (sample):**
+
+```json
+{ "saved": true, "team_id": "…uuid…", "name": "Rain Offense", "format": "champions" }
+```
+
+or a structured miss:
+
+```json
+{ "saved": false, "reason": "not_signed_in" }
+```
+
+**Side effects:** WRITES one team row (account-scoped) + sets the conversation's
+active team. **Not** idempotent — calling it twice saves twice, so the prompt
+gates it on an explicit one-time approval. **Failure modes:** never throws —
+a guest is `{ "saved": false, "reason": "not_signed_in" }`, nothing-to-save is
+`"no_team"`, a write fault is `"index_unavailable"`. **Auth:** the account is
+server-bound onto the context (the agent never sees an account id); a guest turn
+binds none, so a guest can never write.
+
+---
+
 ## Tool-existence status
 
 | Tool                                                                        | Exists? | Build note                                                 |
@@ -712,9 +782,10 @@ id).
 | compute_stat / estimate_damage                                              | ❌      | Pure formula functions (D5).                               |
 | submit_answer                                                               | ❌      | Structured-output tool; schema in `output-formats.md`.     |
 | get_active_team                                                             | ✅      | Built by team-builder (TEAM-AD-1); reads server-bound `ctx.activeTeam`. |
+| save_team                                                                   | ✅      | Built by team-builder (TEAM-AD-7); the one write tool — saves server-bound `ctx.proposedTeam` on approval. |
 
-(The ❌ marks are the original agent-design backlog state; `get_active_team` is
-implemented as part of the team-builder feature.)
+(The ❌ marks are the original agent-design backlog state; `get_active_team` and
+`save_team` are implemented as part of the team-builder feature.)
 
 All tools are new work. None require auth or carry side effects beyond reads —
 simplifying retry logic in the loop.
