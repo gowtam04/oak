@@ -1282,6 +1282,9 @@ img {
 .composer__stop:active {
   transform: scale(0.94);
 }
+
+/* --------------------------------------------------------------------------
+   11. Disclosures — Reasoning · Sources · Assumptions
    -------------------------------------------------------------------------- */
 .reasoning-block,
 .source-list {
