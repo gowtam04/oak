@@ -241,13 +241,20 @@
   font-size: 0.82rem;
   font-weight: 600;
   background: var(--surface-sunken);
-  /* Azure-tinted rest border so chips/moves read as interactive without relying
-     on :hover (which touch devices never get). */
-  border: 1px solid color-mix(in srgb, var(--azure) 28%, var(--border));
+  border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   color: var(--text);
   transition: background var(--motion-fast), border-color var(--motion-fast),
     transform var(--motion-spring);
+}
+/* Touch devices never get :hover, so give chips/moves an azure-tinted rest
+   border there as the "interactive" cue. Desktop keeps the neutral border +
+   hover lift. */
+@media (pointer: coarse) {
+  .entity-link--chip,
+  .entity-link--move {
+    border-color: color-mix(in srgb, var(--azure) 28%, var(--border));
+  }
 }
 .entity-link--chip:hover,
 .entity-link--move:hover {

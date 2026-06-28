@@ -186,6 +186,7 @@ export default function ArtifactViewer(): React.JSX.Element | null {
   const { isOpen, current, canGoBack, back, close, askInChat } =
     useArtifactViewer();
   const panelRef = useRef<HTMLElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // Are we in the full-screen-overlay regime (mirrors the CSS 768px breakpoint)?
   // There the panel is a modal dialog; on desktop it's a docked complementary
@@ -209,12 +210,22 @@ export default function ArtifactViewer(): React.JSX.Element | null {
     return () => window.removeEventListener("keydown", onKey);
   }, [isOpen, close]);
 
+  // Focus capture/restore keyed on isOpen ALONE, so flipping the mobile/desktop
+  // regime mid-open (a resize/rotation) never yanks focus out of the still-open
+  // panel. Capture on open; restore to the opener only on an actual close.
+  useEffect(() => {
+    if (!isOpen) return;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    return () => {
+      previousFocusRef.current?.focus?.();
+    };
+  }, [isOpen]);
+
   // Modal behavior for the mobile overlay only: lock the page behind it (so iOS
-  // can't scroll the hidden chat), move focus in, restore it on close, and trap
-  // Tab so keyboard/AT focus can't escape onto the obscured chat.
+  // can't scroll the hidden chat), move focus in, and trap Tab so keyboard/AT
+  // focus can't escape onto the obscured chat.
   useEffect(() => {
     if (!isOpen || !isMobileOverlay) return;
-    const previouslyFocused = document.activeElement as HTMLElement | null;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const panel = panelRef.current;
@@ -227,10 +238,17 @@ export default function ArtifactViewer(): React.JSX.Element | null {
       if (focusables.length === 0) return;
       const first = focusables[0];
       const last = focusables[focusables.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
+      // Treat "focus is on the panel container itself (not among focusables)" as
+      // an edge to wrap from — otherwise the first Shift+Tab right after open
+      // (focus sits on the tabIndex=-1 <aside>) escapes onto the chat behind.
+      const inTrap = Array.prototype.includes.call(
+        focusables,
+        document.activeElement,
+      );
+      if (e.shiftKey && (document.activeElement === first || !inTrap)) {
         e.preventDefault();
         last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
+      } else if (!e.shiftKey && (document.activeElement === last || !inTrap)) {
         e.preventDefault();
         first.focus();
       }
@@ -239,7 +257,6 @@ export default function ArtifactViewer(): React.JSX.Element | null {
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = prevOverflow;
-      previouslyFocused?.focus?.();
     };
   }, [isOpen, isMobileOverlay]);
 

@@ -56,14 +56,21 @@ export default function ChatThread({
   // bottom; if they've scrolled up to read, we don't yank them back down.
   const bottomRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
+  const lastTopRef = useRef(0);
   useEffect(() => {
     const scroller = bottomRef.current?.closest(
       ".chat-page__main",
     ) as HTMLElement | null;
     if (!scroller) return;
     const onScroll = () => {
-      pinnedRef.current =
+      // Direction-aware: only an UPWARD user scroll un-pins; reaching the bottom
+      // re-pins. A plain distance check would flip off mid-stream because our own
+      // programmatic follow lags behind fast-growing content, stalling auto-scroll.
+      const atBottom =
         scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
+      if (scroller.scrollTop < lastTopRef.current - 8) pinnedRef.current = false;
+      else if (atBottom) pinnedRef.current = true;
+      lastTopRef.current = scroller.scrollTop;
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
     onScroll();

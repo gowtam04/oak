@@ -414,6 +414,7 @@ export default function Home() {
   // renders them inline and never shows the gear. Close on outside-tap / Escape.
   const [menuOpen, setMenuOpen] = useState(false);
   const headerClusterRef = useRef<HTMLDivElement>(null);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!menuOpen) return;
     const onPointerDown = (e: PointerEvent) => {
@@ -422,7 +423,12 @@ export default function Home() {
       }
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMenuOpen(false);
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        // Return focus to the trigger — the focused control inside the panel is
+        // about to be display:none'd, which would otherwise drop focus to <body>.
+        moreBtnRef.current?.focus();
+      }
     };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -431,6 +437,24 @@ export default function Home() {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [menuOpen]);
+
+  // Mobile history drawer is a modal overlay (covers the chat behind a scrim), so
+  // let Escape dismiss it too — parity with the popover + artifact viewer. Uses
+  // the NON-persisting setter + a viewport guard so it never collapses the
+  // in-flow desktop sidebar or clobbers the stored desktop preference.
+  useEffect(() => {
+    if (!auth.signedIn || sidebarCollapsed) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === "Escape" &&
+        (window.matchMedia?.("(max-width: 768px)").matches ?? false)
+      ) {
+        setSidebarCollapsed(true);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [auth.signedIn, sidebarCollapsed]);
 
   return (
     <main className="chat-page" data-testid="chat-page">
@@ -491,6 +515,7 @@ export default function Home() {
           </div>
           {/* Mobile-only trigger for the control popover (CSS hides it ≥640px). */}
           <button
+            ref={moreBtnRef}
             type="button"
             className="chat-page__more"
             aria-label="More settings"
@@ -567,7 +592,10 @@ export default function Home() {
               className="chat-page__scrim"
               data-testid="sidebar-scrim"
               aria-hidden="true"
-              onClick={() => setSidebarCollapsedPersisted(true)}
+              // Non-persisting: dismissing the mobile overlay must not overwrite
+              // the stored DESKTOP sidebar preference (mount force-collapses on
+              // mobile without persisting for the same reason).
+              onClick={() => setSidebarCollapsed(true)}
             />
           )}
 

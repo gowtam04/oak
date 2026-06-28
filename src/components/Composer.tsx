@@ -37,6 +37,10 @@ export default function Composer({
   useEffect(() => {
     const vv = typeof window !== "undefined" ? window.visualViewport : null;
     if (!vv) return;
+    // Touch only. On desktop, trackpad pinch-zoom shrinks visualViewport too, so
+    // running this there would set --kb-inset > 0 and shove the sticky dock
+    // off-screen. Gating on a coarse pointer keeps desktop fully inert.
+    if (!window.matchMedia?.("(pointer: coarse)").matches) return;
     const root = document.documentElement;
     const update = () => {
       const occluded = Math.max(

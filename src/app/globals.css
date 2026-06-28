@@ -475,7 +475,6 @@ img {
    behavior so auto-scroll-to-latest doesn't jump. */
 .chat-page__main {
   scroll-padding-bottom: calc(var(--space-16) + var(--space-8));
-  scroll-behavior: smooth;
 }
 
 /* Scrolling thread, centered text column */
@@ -1081,17 +1080,14 @@ img {
   align-items: center;
   gap: var(--space-2);
 }
-/* Persistent (non-hover) cue that the name drills into the artifact viewer —
-   touch devices never get :hover, so a rest-state underline is what tells a
-   phone user the row/name is interactive. */
-.candidate-table__name-link {
+/* The name drills into the artifact viewer. Desktop underlines on :hover; touch
+   (which never gets :hover) gets a persistent underline via the pointer:coarse
+   block below, so a phone user still sees the row/name is interactive. */
+.candidate-table__name-link:hover {
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--azure) 35%, transparent);
+  text-decoration-color: var(--azure);
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
-}
-.candidate-table__name-link:hover {
-  text-decoration-color: var(--azure);
 }
 .candidate-table__sprite {
   width: 32px;
@@ -1818,9 +1814,6 @@ img {
   .chat-page__sidebar {
     transition: none;
   }
-  .chat-page__main {
-    scroll-behavior: auto;
-  }
   .composer {
     transition: none;
   }
@@ -1918,9 +1911,14 @@ img {
     transform: translateX(-100%);
     pointer-events: none;
   }
-  /* Cancel the desktop 300px floor so it never reintroduces page overflow. */
+  /* Cancel the desktop 300px floor so it never reintroduces page overflow.
+     The drawer overlays the header area, which sits under the notch when
+     viewport-fit=cover, so pad past the safe-area insets too. */
   .chat-page__sidebar-inner {
     width: 100%;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
   .chat-page__scrim {
     display: block;
@@ -1991,6 +1989,11 @@ img {
       color-mix(in srgb, var(--neutral-900) 12%, var(--poke-red-active));
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-overlay);
+    /* Scroll internally on short / landscape phones instead of being clipped by
+       .chat-page { overflow: hidden } (the page itself doesn't scroll). */
+    max-height: calc(100dvh - 4.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .chat-page__controls--open {
     display: flex;
@@ -2101,6 +2104,13 @@ img {
   .conv-list__search,
   .conv-list__filter {
     min-height: 44px;
+  }
+  /* Persistent name underline on touch (no :hover to reveal interactivity). */
+  .candidate-table__name-link {
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--azure) 35%, transparent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
   }
 }
 

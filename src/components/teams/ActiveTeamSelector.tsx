@@ -89,6 +89,21 @@ export default function ActiveTeamSelector({
           </option>
         ))}
       </select>
+      {/* Caret — appearance:none strips the native arrow, so mirror ModelSelector
+          and draw one (inherits the white pill text color). */}
+      <span
+        aria-hidden="true"
+        style={{
+          width: "10px",
+          height: "10px",
+          flex: "none",
+          background: "currentColor",
+          WebkitMask: "var(--icon-chevron) center / contain no-repeat",
+          mask: "var(--icon-chevron) center / contain no-repeat",
+          transform: "rotate(90deg)",
+          opacity: 0.85,
+        }}
+      />
     </label>
   );
 }
