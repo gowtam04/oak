@@ -57,8 +57,11 @@ describe("ProposedTeamCard — Open in viewer", () => {
   it("opens the proposed team INLINE in the viewer (no fetch)", () => {
     render(<ProposedTeamCard proposedTeam={TEAM} />);
     fireEvent.click(screen.getByTestId("proposed-team-open-viewer"));
+    // The proposal's server-stamped legality warnings ride along so the viewer
+    // can flag an illegal member; none here ⇒ an empty array.
     expect(openTeam).toHaveBeenCalledWith({
       team: { name: "Rain", format: "champions", members: TEAM.members },
+      validation: [],
     });
   });
 });

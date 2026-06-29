@@ -36,26 +36,12 @@ import { searchable_names } from "@/data/schema";
 import { getPokemon } from "@/data/repos/pokedex-repo";
 import { movesForPokemon } from "@/data/repos/learnset-repo";
 
-export type WarningCode =
-  | "incomplete" // informational (BR-T4)
-  | "ev_total_exceeded" // sum(evs) > 508
-  | "ev_stat_exceeded" // an EV > 252
-  | "iv_out_of_range" // an IV outside 0..31
-  | "species_illegal" // species not in the format roster
-  | "ability_not_for_species" // ability not one of the species' legal abilities
-  | "item_illegal" // item not legal in the format
-  | "move_not_in_learnset" // move not in the species' learnset for the format
-  | "duplicate_species" // species clause
-  | "duplicate_item"; // item clause
-
-export interface TeamWarning {
-  code: WarningCode;
-  message: string;
-  /** 0..5; absent ⇒ team-level (e.g. clauses). */
-  slot?: number;
-  /** e.g. "evs.atk", "moves[2]", "ability". */
-  field?: string;
-}
+// The warning shape is defined in the client-safe team-schema (single source of
+// truth) so it can be shared with the agent answer schema + frontend without
+// pulling this server-only service into a client bundle. Re-exported here for
+// back-compat with existing `@/server/teams/validate-team` importers.
+export type { WarningCode, TeamWarning } from "@/data/teams/team-schema";
+import type { TeamWarning } from "@/data/teams/team-schema";
 
 /** Legal EV ceilings (Gen 3+ rules). */
 const EV_TOTAL_MAX = 508;

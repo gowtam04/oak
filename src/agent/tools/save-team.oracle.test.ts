@@ -44,21 +44,25 @@ let dispatch: Dispatch;
 let createAgentContext: typeof import("@/agent/context").createAgentContext;
 let getTeam: typeof import("@/data/repos/team-repo").getTeam;
 
+// A team legal in the seeded "tools" roster (garchomp is seeded; standard mode →
+// scarlet-violet). The save mechanics under test are format-agnostic; using a
+// roster-legal set keeps them clean of the species_illegal save gate (which is
+// covered by its own test below).
 const MEMBER: TeamMember = {
-  species: "pelipper",
-  ability: "drizzle",
-  item: "damp-rock",
-  moves: ["hurricane", "hydro-pump", "tailwind", "protect"],
-  nature: "modest",
-  evs: { hp: 252, atk: 0, def: 4, spa: 252, spd: 0, spe: 0 },
+  species: "garchomp",
+  ability: "rough-skin",
+  item: "life-orb",
+  moves: ["earthquake", "dragon-claw", "fire-fang"],
+  nature: "jolly",
+  evs: { hp: 0, atk: 252, def: 0, spa: 0, spd: 4, spe: 252 },
   ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
-  tera_type: "water",
+  tera_type: "steel",
   level: 50,
 };
 
 const PROPOSED: ProposedTeam = {
-  name: "Rain Offense",
-  format: "champions",
+  name: "Dragon Offense",
+  format: "scarlet-violet",
   members: [MEMBER],
 };
 
@@ -111,14 +115,14 @@ describe("save_team tool (T13)", () => {
     const out = (await dispatch("save_team", {}, ctx)) as SaveTeamOutput;
     expect(out.saved).toBe(true);
     if (!out.saved) throw new Error("expected saved");
-    expect(out.name).toBe("Rain Offense");
-    expect(out.format).toBe("champions");
+    expect(out.name).toBe("Dragon Offense");
+    expect(out.format).toBe("scarlet-violet");
 
     // The route's stamp source is set to the authoritative server-owned id.
     expect(ctx.savedTeam).toEqual({
       id: out.team_id,
-      name: "Rain Offense",
-      format: "champions",
+      name: "Dragon Offense",
+      format: "scarlet-violet",
     });
 
     // The row exists, account-scoped, with the EXACT members the user saw.
@@ -171,6 +175,29 @@ describe("save_team tool (T13)", () => {
     if (!out.saved) throw new Error("expected saved");
     const saved = await getTeam("acct-2", out.team_id);
     expect(saved).not.toBeNull();
-    expect(saved!.name).toBe("Rain Offense");
+    expect(saved!.name).toBe("Dragon Offense");
+  });
+
+  it("refuses an out-of-roster member with illegal_team, without writing", async () => {
+    ensureLoaded();
+    const ctx = await ctxWith({ accountId: "acct-3", sessionId: "conv-6" });
+    // `heatran` is absent from the seeded scarlet-violet roster → species_illegal.
+    const illegal: ProposedTeam = {
+      name: "Bad Team",
+      format: "scarlet-violet",
+      members: [{ ...MEMBER, species: "heatran" }],
+    };
+    const out = (await dispatch(
+      "save_team",
+      { team: illegal },
+      ctx,
+    )) as SaveTeamOutput;
+
+    expect(out.saved).toBe(false);
+    if (out.saved) throw new Error("expected refusal");
+    expect(out.reason).toBe("illegal_team");
+    expect(out.warnings?.some((w) => w.code === "species_illegal")).toBe(true);
+    // Refused BEFORE any write — no stamp, nothing persisted.
+    expect(ctx.savedTeam).toBeUndefined();
   });
 });

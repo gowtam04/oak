@@ -145,4 +145,31 @@ describe("ProposedTeamCard", () => {
     await waitFor(() => expect(listMock).toHaveBeenCalled());
     expect(screen.queryByTestId("proposed-team-apply-existing")).toBeNull();
   });
+
+  it("renders a species_illegal legality badge when warnings are present", async () => {
+    render(
+      <ProposedTeamCard
+        proposedTeam={proposed()}
+        warnings={[
+          {
+            code: "species_illegal",
+            message: 'Species "heatran" is not legal in this format.',
+            slot: 0,
+            field: "species",
+          },
+        ]}
+      />,
+    );
+    const block = screen.getByTestId("proposed-team-warnings");
+    expect(block).toHaveTextContent("not legal in this format");
+    expect(screen.getByTestId("team-warning")).toHaveAttribute(
+      "data-code",
+      "species_illegal",
+    );
+  });
+
+  it("renders no legality block for a clean proposal (no warnings)", async () => {
+    render(<ProposedTeamCard proposedTeam={proposed()} />);
+    expect(screen.queryByTestId("proposed-team-warnings")).toBeNull();
+  });
 });

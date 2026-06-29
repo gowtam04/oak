@@ -140,7 +140,10 @@ export function ArtifactViewerProvider({
         name: input.team.name,
         format: input.team.format,
         members: input.team.members,
-        validation: [],
+        // Server-stamped legality warnings (e.g. a species not in this format's
+        // roster) so the viewer flags an illegal proposal just like a saved team;
+        // absent ⇒ clean.
+        validation: input.validation ?? [],
       };
       setStack((prev) => [
         ...prev,

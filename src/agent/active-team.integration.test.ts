@@ -377,3 +377,101 @@ describe("active-team-agent-e2e — persist + restore on resume", () => {
     ).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// proposed_team roster gate — the runtime roster-validates a proposed team
+// against the turn's format. An out-of-roster species (`species_illegal`) is
+// fed back so the model rebuilds legally (one dedicated retry), then accepted
+// with warnings stamped (warn-but-allow). `heatran` is ABSENT from the "tools"
+// seed → species_illegal; `garchomp` is present → legal.
+// ---------------------------------------------------------------------------
+
+/** A complete set whose species is NOT in the seed roster → species_illegal. */
+function heatranMember(): TeamMember {
+  return {
+    species: "heatran",
+    ability: "flash-fire",
+    item: "leftovers",
+    moves: ["magma-storm", "earth-power", "flash-cannon", "stealth-rock"],
+    nature: "modest",
+    evs: { ...spread(), spa: 252, spe: 252, hp: 4 },
+    ivs: spread(31),
+    tera_type: "fire",
+    level: 50,
+  };
+}
+
+describe("active-team-agent-e2e — proposed_team roster gate", () => {
+  it("re-emits on an out-of-roster species, then accepts the rebuilt legal team", async () => {
+    const ctx = await buildCtx("standard", undefined);
+    const illegalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: { name: "Bad", format: SV, members: [heatranMember()] },
+    };
+    const legalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: { name: "Good", format: SV, members: [garchompMember()] },
+    };
+    const { client, snapshots, stream } = scriptedClient([
+      message([toolUse("submit_answer", illegalAnswer, "t1")]),
+      message([toolUse("submit_answer", legalAnswer, "t2")]),
+    ]);
+
+    const result = await runtime.runOakWith(
+      client,
+      "build me a team",
+      [] as ChatMessage[],
+      ctx,
+    );
+
+    // The server fed the illegality back (turn 2's incoming tool_result) and the
+    // model re-emitted — so the stream ran twice, not once.
+    expect(stream).toHaveBeenCalledTimes(2);
+    const feedback = lastToolResultText(snapshots[1]);
+    expect(feedback).toMatch(/not in the .*roster/i);
+    expect(feedback).toContain("heatran");
+
+    // Final answer carries the LEGAL rebuild; no species_illegal survives.
+    expect(result.proposed_team?.members[0]?.species).toBe("garchomp");
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "species_illegal",
+      ),
+    ).toBe(false);
+  });
+
+  it("accepts with species_illegal stamped once the retry budget is spent (warn-fallback)", async () => {
+    const ctx = await buildCtx("standard", undefined);
+    const illegalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "Still bad",
+        format: SV,
+        members: [heatranMember(), garchompMember()],
+      },
+    };
+    // Model stays illegal on the retry; budget (MAX_PROPOSED_TEAM_RETRIES=1) spent.
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", illegalAnswer, "t1")]),
+      message([toolUse("submit_answer", illegalAnswer, "t2")]),
+    ]);
+
+    const result = await runtime.runOakWith(
+      client,
+      "build me a team",
+      [] as ChatMessage[],
+      ctx,
+    );
+
+    // One re-emit, then accepted on the 2nd despite still being illegal — the
+    // turn never fails; the warning rides through for the UI to flag.
+    expect(stream).toHaveBeenCalledTimes(2);
+    expect(result.proposed_team).toBeDefined();
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "species_illegal",
+      ),
+    ).toBe(true);
+    expect(oakAnswerSchema.safeParse(result).success).toBe(true);
+  });
+});

@@ -62,6 +62,9 @@ import type {
   OnProgress,
   RunOak,
 } from "@/agent/types";
+import type { OakDb } from "@/data/db";
+import { formatForMode } from "@/data/formats";
+import { validateTeam, type TeamWarning } from "@/server/teams/validate-team";
 import { logTurn, type ToolTraceEntry, type TurnTrace } from "@/server/logger";
 
 // Re-exported for back-compat (was previously declared here). The value lives in
@@ -81,6 +84,16 @@ export const MAX_ITERATIONS = 14;
 
 /** Re-emit budget when a `submit_answer` payload fails schema validation. */
 export const MAX_SUBMIT_RETRIES = 2;
+
+/**
+ * Re-emit budget when a `proposed_team` contains a species NOT in the turn's
+ * format roster (an out-of-format Pokémon, e.g. Heatran in Champions). The
+ * server roster-validates the proposal and feeds the illegality back so the
+ * model rebuilds legally. Bounded so the loop can't churn: once spent, the
+ * answer is accepted with the warnings attached (warn-but-allow, surfaced in
+ * the UI) rather than failing the turn (MAX_ITERATIONS is the hard backstop).
+ */
+export const MAX_PROPOSED_TEAM_RETRIES = 1;
 
 /**
  * Re-prompt budget when the model ends a turn with no tool call at all (it wrote
@@ -706,6 +719,10 @@ export async function runWithProvider(
   let emptyTurnNudges = 0;
   // Fire the late-iteration submit nudge at most once per turn (see SUBMIT_NUDGE).
   let submitNudged = false;
+  // Dedicated budget for the proposed-team roster re-emit (see
+  // MAX_PROPOSED_TEAM_RETRIES) — separate from the schema-failure budget so an
+  // illegal team never burns the schema retries or trips insufficient_data.
+  let proposedTeamRetries = 0;
 
   // get_pokemon profiles fetched this turn — used by answer enrichment to
   // synthesize subjects[] when the model omits it on a single-entity answer.
@@ -810,6 +827,9 @@ export async function runWithProvider(
     const toolResults: ToolResult[] = [];
     let validAnswer: OakAnswer | null = null;
     let submitFailed = false;
+    // Roster warnings for an accepted proposed_team this iteration, stamped onto
+    // the answer below (server-authoritative — the model never authors these).
+    let proposedTeamWarnings: TeamWarning[] = [];
 
     for (const call of toolCalls) {
       onProgress?.({
@@ -821,7 +841,58 @@ export async function runWithProvider(
         const started = Date.now();
         const parsed = oakAnswerSchema.safeParse(call.input);
         if (parsed.success) {
+          // Roster-validate a proposed team against the turn's ACTUAL format
+          // (server-controlled — never the model-emitted proposed_team.format, so
+          // the model can't dodge the check by mislabeling). validateTeam never
+          // throws. An out-of-format species (`species_illegal`) is a hard
+          // illegality: feed it back and let the model rebuild — one dedicated
+          // retry, then accept-with-warnings (warn-but-allow). Softer warnings
+          // (EV/IV caps, learnset/item/ability edge cases) ride through as badges.
+          const pt = parsed.data.proposed_team;
+          const teamWarnings = pt
+            ? await validateTeam(
+                pt.members,
+                formatForMode(ctx.mode),
+                ctx.db as unknown as OakDb,
+              )
+            : [];
+          const illegalSpecies = teamWarnings.filter(
+            (w) => w.code === "species_illegal",
+          );
+          if (
+            illegalSpecies.length > 0 &&
+            proposedTeamRetries < MAX_PROPOSED_TEAM_RETRIES
+          ) {
+            proposedTeamRetries += 1;
+            state.toolTrace.push({
+              tool: call.name,
+              args: call.input,
+              latency_ms: Date.now() - started,
+              cache_hit: false,
+              error: "proposed_team_species_illegal",
+            });
+            const offenders = illegalSpecies
+              .map((w) => {
+                const species =
+                  w.slot !== undefined ? pt?.members[w.slot]?.species : null;
+                return species ?? `slot ${w.slot ?? "?"}`;
+              })
+              .join(", ");
+            toolResults.push({
+              toolCallId: call.id,
+              isError: true,
+              content:
+                `Your proposed_team includes Pokémon that are NOT in the ` +
+                `${formatForMode(ctx.mode)} roster (${offenders}). Rebuild the ` +
+                `team using ONLY Pokémon legal in this format — drop or replace ` +
+                `the illegal members — and call submit_answer again. If unsure ` +
+                `whether a species exists in this format, verify it with ` +
+                `resolve_entity first.`,
+            });
+            continue;
+          }
           validAnswer = parsed.data;
+          proposedTeamWarnings = teamWarnings;
           state.toolTrace.push({
             tool: call.name,
             args: call.input,
@@ -899,6 +970,14 @@ export async function runWithProvider(
     // are model-independent. Enrichment never throws and never weakens the answer.
     if (validAnswer) {
       const enriched = await enrichAnswer(validAnswer, ctx, lookedUpProfiles);
+      // Stamp proposed-team warnings server-authoritatively (like saved_team):
+      // overwrite anything the model emitted. Only present when there IS a
+      // proposal with warnings; otherwise the key stays absent (clean proposal).
+      if (enriched.proposed_team && proposedTeamWarnings.length > 0) {
+        enriched.proposed_team_warnings = proposedTeamWarnings;
+      } else {
+        delete enriched.proposed_team_warnings;
+      }
       return finalize(enriched, state, ctx);
     }
 

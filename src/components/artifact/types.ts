@@ -16,7 +16,7 @@ import type {
   ArtifactFormat,
   EntityArtifactResponse,
 } from "@/lib/entity-artifact";
-import type { TeamMember } from "@/data/teams/team-schema";
+import type { TeamMember, TeamWarning } from "@/data/teams/team-schema";
 import type { TeamDetail } from "@/lib/teams-client";
 import type { SpriteRef } from "@/data/repos/pokedex-repo";
 
@@ -85,7 +85,11 @@ export type ArtifactView =
 /** Open-a-team input — a saved team by id, or a proposed team rendered inline. */
 export type TeamArtifactInput =
   | { teamId: string; name?: string }
-  | { team: { name: string; format: string; members: TeamMember[] } };
+  | {
+      team: { name: string; format: string; members: TeamMember[] };
+      /** Server-computed legality warnings for the proposal (BR-T5); ⇒ []. */
+      validation?: TeamWarning[];
+    };
 
 /** Open-a-structured-artifact input — the provider stamps the format. */
 export type StructuredArtifactInput =

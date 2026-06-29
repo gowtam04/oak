@@ -53,6 +53,7 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
     question,
     uncertainty_flags,
     proposed_team,
+    proposed_team_warnings,
     saved_team,
   } = answer;
 
@@ -102,7 +103,12 @@ export default function AnswerCard({ answer, onFollowUp }: AnswerCardProps) {
         </div>
       )}
 
-      {proposed_team && <ProposedTeamCard proposedTeam={proposed_team} />}
+      {proposed_team && (
+        <ProposedTeamCard
+          proposedTeam={proposed_team}
+          warnings={proposed_team_warnings}
+        />
+      )}
 
       {saved_team && <SavedTeamCard savedTeam={saved_team} />}
 

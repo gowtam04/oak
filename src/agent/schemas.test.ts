@@ -103,6 +103,45 @@ describe("oakAnswerSchema — proposed_team (TEAM-AD-6)", () => {
   });
 });
 
+describe("oakAnswerSchema — proposed_team_warnings (server-stamped, BR-T5)", () => {
+  it("parses a stored answer WITHOUT proposed_team_warnings (backward compatible)", () => {
+    const parsed = oakAnswerSchema.safeParse(BASE_ANSWER);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.proposed_team_warnings).toBeUndefined();
+    }
+  });
+
+  it("parses an answer carrying a species_illegal warning", () => {
+    const parsed = oakAnswerSchema.safeParse({
+      ...BASE_ANSWER,
+      proposed_team: { name: "T", format: "champions", members: [MEMBER] },
+      proposed_team_warnings: [
+        {
+          code: "species_illegal",
+          message: 'Species "heatran" is not legal in this format.',
+          slot: 0,
+          field: "species",
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.proposed_team_warnings?.[0]?.code).toBe(
+        "species_illegal",
+      );
+    }
+  });
+
+  it("rejects an unknown warning code (.strict() enum)", () => {
+    const parsed = oakAnswerSchema.safeParse({
+      ...BASE_ANSWER,
+      proposed_team_warnings: [{ code: "not_a_code", message: "x" }],
+    });
+    expect(parsed.success).toBe(false);
+  });
+});
+
 describe("get_active_team I/O (T12)", () => {
   it("registers get_active_team in TOOL_NAMES and toolInputJsonSchemas", () => {
     expect(TOOL_NAMES).toContain("get_active_team");

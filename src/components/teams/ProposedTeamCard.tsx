@@ -10,6 +10,7 @@ import {
   type TeamSummary,
 } from "@/lib/teams-client";
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
+import TeamWarnings from "@/components/teams/TeamWarnings";
 
 /** Human-friendly format label for the header badge. */
 function formatLabel(format: string): string {
@@ -46,7 +47,10 @@ type ApplyState =
  * into an inline message rather than throwing. The apply-existing picker is only
  * shown when the account has at least one same-format team to overwrite.
  */
-export default function ProposedTeamCard({ proposedTeam }: ProposedTeamCardProps) {
+export default function ProposedTeamCard({
+  proposedTeam,
+  warnings = [],
+}: ProposedTeamCardProps) {
   const { name, format, members } = proposedTeam;
   const [existing, setExisting] = useState<TeamSummary[]>([]);
   const [targetId, setTargetId] = useState<string>("");
@@ -133,12 +137,20 @@ export default function ProposedTeamCard({ proposedTeam }: ProposedTeamCardProps
         ))}
       </ol>
 
+      <TeamWarnings
+        warnings={warnings}
+        title="Legality"
+        testid="proposed-team-warnings"
+      />
+
       <div className="proposed-team__actions">
         <button
           type="button"
           className="proposed-team__open-viewer"
           data-testid="proposed-team-open-viewer"
-          onClick={() => openTeam({ team: { name, format, members } })}
+          onClick={() =>
+            openTeam({ team: { name, format, members }, validation: warnings })
+          }
         >
           Open in viewer
         </button>

@@ -190,6 +190,12 @@ export type ProposedTeam = NonNullable<OakAnswer["proposed_team"]>;
  */
 export interface ProposedTeamCardProps {
   proposedTeam: ProposedTeam;
+  /**
+   * Server-stamped roster/legality warnings for the proposal (BR-T5), from the
+   * answer's `proposed_team_warnings`. Absent/empty ⇒ a clean proposal. Drives
+   * the inline "illegal in this format" badges + the viewer warnings.
+   */
+  warnings?: NonNullable<OakAnswer["proposed_team_warnings"]>;
 }
 
 /**

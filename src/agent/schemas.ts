@@ -16,7 +16,11 @@
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-import { teamMembersSchema } from "@/data/teams/team-schema";
+import {
+  teamMembersSchema,
+  teamWarningSchema,
+  type TeamWarning,
+} from "@/data/teams/team-schema";
 // Type-only — erased at compile, so this shared module never pulls the
 // server-only active-team service (or its repos) into a client bundle.
 import type { EnrichedActiveTeam } from "@/server/teams/active-team";
@@ -640,6 +644,13 @@ export const oakAnswerSchema = z
     // by the route from `ctx.savedTeam` after a successful `save_team` call —
     // never emitted by the model. Drives the persistent "Saved ✓" card.
     saved_team: savedTeamSchema.optional(),
+    // Roster/legality warnings for `proposed_team` (BR-T5). ADDITIVE optional
+    // field, SERVER-STAMPED by the runtime after it runs validateTeam against the
+    // turn's format — never emitted by the model (kept off `proposed_team` so the
+    // tool input schema stays clean), exactly like `saved_team`. Empty/absent ⇒
+    // the proposal is clean. Drives the "illegal in this format" badges in the
+    // proposed-team card + viewer. Previously stored answers (no key) stay valid.
+    proposed_team_warnings: z.array(teamWarningSchema).optional(),
   })
   .strict();
 
@@ -689,7 +700,15 @@ export type SaveTeamOutput =
   | { saved: true; team_id: string; name: string; format: string }
   | {
       saved: false;
-      reason: "not_signed_in" | "no_team" | "index_unavailable";
+      reason:
+        | "not_signed_in"
+        | "no_team"
+        | "index_unavailable"
+        // The team includes a species not in the format roster — refused rather
+        // than persisting an unusable team (mirrors the runtime proposal gate).
+        | "illegal_team";
+      /** Present for `illegal_team`: the species_illegal warnings that blocked it. */
+      warnings?: TeamWarning[];
     };
 
 // ===========================================================================

@@ -75,3 +75,43 @@ export type TeamMember = z.infer<typeof teamMemberSchema>;
 export const teamMembersSchema = z.array(teamMemberSchema).max(6);
 
 export type TeamMembers = z.infer<typeof teamMembersSchema>;
+
+// ---------------------------------------------------------------------------
+// Team warnings — the advisory validity/legality results produced by
+// validateTeam (src/server/teams/validate-team.ts). Defined HERE, in the
+// client-safe schema home, so they can be shared by storage, the Teams API,
+// the agent's `proposed_team_warnings` answer field, and the frontend without
+// any of them pulling the server-only validate-team service into a client
+// bundle. validate-team.ts derives its WarningCode/TeamWarning from these
+// (single source of truth).
+// ---------------------------------------------------------------------------
+
+/** The validity/legality rules validateTeam can flag (BR-T5). */
+export const warningCodeSchema = z.enum([
+  "incomplete", // informational (BR-T4)
+  "ev_total_exceeded", // sum(evs) > 508
+  "ev_stat_exceeded", // an EV > 252
+  "iv_out_of_range", // an IV outside 0..31
+  "species_illegal", // species not in the format roster
+  "ability_not_for_species", // ability not one of the species' legal abilities
+  "item_illegal", // item not legal in the format
+  "move_not_in_learnset", // move not in the species' learnset for the format
+  "duplicate_species", // species clause
+  "duplicate_item", // item clause
+]);
+
+export type WarningCode = z.infer<typeof warningCodeSchema>;
+
+/** One advisory team warning. `slot` absent ⇒ team-level (e.g. clauses). */
+export const teamWarningSchema = z
+  .object({
+    code: warningCodeSchema,
+    message: z.string(),
+    /** 0..5; absent ⇒ team-level. */
+    slot: z.number().int().optional(),
+    /** e.g. "evs.atk", "moves[2]", "ability". */
+    field: z.string().optional(),
+  })
+  .strict();
+
+export type TeamWarning = z.infer<typeof teamWarningSchema>;

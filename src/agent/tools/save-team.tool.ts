@@ -24,8 +24,11 @@ import {
   toJsonSchema,
   type SaveTeamOutput,
 } from "@/agent/schemas";
+import type { OakDb } from "@/data/db";
+import { formatForMode } from "@/data/formats";
 import { createTeam } from "@/data/repos/team-repo";
 import { setActiveTeam } from "@/data/repos/conversation-repo";
+import { validateTeam } from "@/server/teams/validate-team";
 
 const description =
   "Save a team to the user's saved Teams. Call this ONLY when the user EXPLICITLY " +
@@ -35,8 +38,10 @@ const description =
   "Optional args: `name` to rename the saved team; `team` ONLY when building and " +
   "saving in the same message with no prior proposal. Returns { saved: true, " +
   "team_id, name, format } on success, or { saved: false, reason } — reason " +
-  "\"not_signed_in\" (ask them to sign in), \"no_team\" (propose a team first), or " +
-  "\"index_unavailable\". On success, tell the user it's saved to their Teams " +
+  "\"not_signed_in\" (ask them to sign in), \"no_team\" (propose a team first), " +
+  "\"illegal_team\" (a member is not in this format's roster — tell the user and " +
+  "offer to rebuild it legally; `warnings` says which), or \"index_unavailable\". " +
+  "On success, tell the user it's saved to their Teams " +
   "page; the app then shows it and opens it in the viewer.";
 
 export const saveTeamTool: ToolDef = {
@@ -57,6 +62,26 @@ export const saveTeamTool: ToolDef = {
     }
 
     const name = (input.name ?? team.name ?? "").trim() || "Untitled team";
+
+    // Don't persist an unusable team. Roster-validate against the turn's format
+    // (server-controlled, like the runtime proposal gate) and refuse an
+    // out-of-format species — the same illegality the model is told to rebuild
+    // away from. Softer warnings (EV/IV caps, learnset edge cases) are advisory
+    // and still allowed through, matching the warn-but-allow Teams API.
+    try {
+      const warnings = await validateTeam(
+        team.members,
+        formatForMode(ctx.mode),
+        ctx.db as unknown as OakDb,
+      );
+      const illegal = warnings.filter((w) => w.code === "species_illegal");
+      if (illegal.length > 0) {
+        return { saved: false, reason: "illegal_team", warnings: illegal };
+      }
+    } catch {
+      // A validation read fault must not block a legitimate save; fall through
+      // and let createTeam proceed (validateTeam is advisory, never a hard gate).
+    }
 
     try {
       const saved = await createTeam({
