@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
 import TeamWarnings from "./TeamWarnings";
-import type { TeamWarning } from "@/lib/teams-client";
+import type { TeamWarning } from "@/lib/api/teams-client";
 
 afterEach(() => cleanup());
 

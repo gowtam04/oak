@@ -5,7 +5,7 @@ import TeamMemberPanel, {
   type MemberBaseStats,
 } from "./TeamMemberPanel";
 import type { TeamMember } from "@/data/teams/team-schema";
-import type { TeamWarning } from "@/lib/teams-client";
+import type { TeamWarning } from "@/lib/api/teams-client";
 
 afterEach(() => cleanup());
 

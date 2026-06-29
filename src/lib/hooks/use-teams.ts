@@ -27,7 +27,7 @@ import {
   type ImportNote,
   type TeamDetail,
   type TeamSummary,
-} from "@/lib/teams-client";
+} from "@/lib/api/teams-client";
 import type { TeamMember } from "@/data/teams/team-schema";
 
 export interface UseTeamsResult {

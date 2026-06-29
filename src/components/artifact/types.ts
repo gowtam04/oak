@@ -17,7 +17,7 @@ import type {
   EntityArtifactResponse,
 } from "@/lib/entity-artifact";
 import type { TeamMember, TeamWarning } from "@/data/teams/team-schema";
-import type { TeamDetail } from "@/lib/teams-client";
+import type { TeamDetail } from "@/lib/api/teams-client";
 import type { SpriteRef } from "@/data/repos/pokedex-repo";
 
 export type { ArtifactFormat, EntityKind };

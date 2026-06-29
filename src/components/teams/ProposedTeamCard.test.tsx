@@ -7,11 +7,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 
-import { createTeam, updateTeam, listTeams } from "@/lib/teams-client";
+import { createTeam, updateTeam, listTeams } from "@/lib/api/teams-client";
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { ProposedTeam } from "@/components/types";
 
-vi.mock("@/lib/teams-client", () => ({
+vi.mock("@/lib/api/teams-client", () => ({
   createTeam: vi.fn(),
   updateTeam: vi.fn(),
   listTeams: vi.fn().mockResolvedValue([]),

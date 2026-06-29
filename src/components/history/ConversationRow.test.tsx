@@ -3,7 +3,7 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
 afterEach(() => cleanup());
 import ConversationRow from "./ConversationRow";
-import type { ConversationSummary } from "@/lib/history-client";
+import type { ConversationSummary } from "@/lib/api/history-client";
 
 function summary(over: Partial<ConversationSummary> = {}): ConversationSummary {
   return {

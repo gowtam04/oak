@@ -18,7 +18,7 @@ import {
   renameConversation as apiRename,
   setPinned as apiSetPinned,
   type ConversationSummary,
-} from "@/lib/history-client";
+} from "@/lib/api/history-client";
 
 /** Debounce (ms) before a typed search query triggers a re-list. */
 const SEARCH_DEBOUNCE_MS = 200;

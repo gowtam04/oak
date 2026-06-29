@@ -10,7 +10,7 @@
  * from the parent (which wires the `useConversations` hook).
  */
 
-import type { ConversationSummary } from "@/lib/history-client";
+import type { ConversationSummary } from "@/lib/api/history-client";
 import ConversationRow from "./ConversationRow";
 
 export interface ConversationListProps {

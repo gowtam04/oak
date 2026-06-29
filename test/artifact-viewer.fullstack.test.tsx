@@ -13,9 +13,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, act, waitFor, fireEvent, cleanup } from "@testing-library/react";
 
-vi.mock("@/lib/entity-client", () => ({ fetchEntityArtifact: vi.fn() }));
+vi.mock("@/lib/api/entity-client", () => ({ fetchEntityArtifact: vi.fn() }));
 
-import { fetchEntityArtifact } from "@/lib/entity-client";
+import { fetchEntityArtifact } from "@/lib/api/entity-client";
 import type { EntityKind } from "@/agent/schemas";
 
 import AnswerCard from "@/components/AnswerCard";

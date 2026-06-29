@@ -2,7 +2,7 @@
  * AuthMenu — jsdom component tests (account-creation design.md § Phase 6,
  * test_focus "guest vs signed-in menu").
  *
- * Drives the REAL `@/lib/auth-client.signOut` over a mocked global `fetch`; no
+ * Drives the REAL `@/lib/api/auth-client.signOut` over a mocked global `fetch`; no
  * server modules imported (jsdom project rule). Covers the guest affordance
  * (AC-1.2), the signed-in identity + Sign out (AUTH-US-5 / AC-5.1), and that
  * sign-out targets only the current device's session endpoint (AC-5.2).

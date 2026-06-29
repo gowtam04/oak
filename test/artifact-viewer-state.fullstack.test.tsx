@@ -10,9 +10,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 
-vi.mock("@/lib/entity-client", () => ({ fetchEntityArtifact: vi.fn() }));
+vi.mock("@/lib/api/entity-client", () => ({ fetchEntityArtifact: vi.fn() }));
 
-import { fetchEntityArtifact } from "@/lib/entity-client";
+import { fetchEntityArtifact } from "@/lib/api/entity-client";
 import type { EntityArtifactResponse } from "@/lib/entity-artifact";
 import {
   DAMAGE_CALC_GARCHOMP,

@@ -23,9 +23,9 @@ import {
 } from "react";
 
 import type { EntityArtifactResponse } from "@/lib/entity-artifact";
-import { fetchEntityArtifact } from "@/lib/entity-client";
-import { getTeam, type TeamDetail } from "@/lib/teams-client";
-import { resolveSprites } from "@/lib/sprites-client";
+import { fetchEntityArtifact } from "@/lib/api/entity-client";
+import { getTeam, type TeamDetail } from "@/lib/api/teams-client";
+import { resolveSprites } from "@/lib/api/sprites-client";
 import type { TeamMember } from "@/data/teams/team-schema";
 
 import type {

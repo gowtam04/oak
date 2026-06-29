@@ -12,7 +12,7 @@
  * UI shows them as a non-fatal `status`, never an error that gates an action.
  */
 
-import type { TeamWarning } from "@/lib/teams-client";
+import type { TeamWarning } from "@/lib/api/teams-client";
 
 export interface TeamWarningsProps {
   /** The warnings to render (already filtered to the relevant scope). */

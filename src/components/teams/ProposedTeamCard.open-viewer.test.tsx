@@ -22,7 +22,7 @@ vi.mock("@/components/artifact/useArtifactViewer", () => ({
 }));
 
 // The card lists same-format teams on mount; stub the never-throwing client.
-vi.mock("@/lib/teams-client", () => ({
+vi.mock("@/lib/api/teams-client", () => ({
   createTeam: vi.fn(),
   updateTeam: vi.fn(),
   listTeams: vi.fn().mockResolvedValue([]),

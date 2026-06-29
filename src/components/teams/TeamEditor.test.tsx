@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 import TeamEditor from "./TeamEditor";
-import type { TeamDetail } from "@/lib/teams-client";
+import type { TeamDetail } from "@/lib/api/teams-client";
 import type { TeamMember } from "@/data/teams/team-schema";
 
 afterEach(() => cleanup());

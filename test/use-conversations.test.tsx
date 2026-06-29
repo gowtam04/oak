@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
 
-vi.mock("@/lib/history-client", () => ({
+vi.mock("@/lib/api/history-client", () => ({
   listConversations: vi.fn(),
   renameConversation: vi.fn(),
   setPinned: vi.fn(),
@@ -20,7 +20,7 @@ import {
   setPinned,
   deleteConversation,
   type ConversationSummary,
-} from "@/lib/history-client";
+} from "@/lib/api/history-client";
 import { useConversations } from "@/lib/hooks/use-conversations";
 
 const SUMMARY: ConversationSummary = {

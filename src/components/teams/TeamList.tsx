@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 
-import type { TeamSummary } from "@/lib/teams-client";
+import type { TeamSummary } from "@/lib/api/teams-client";
 
 export interface TeamListProps {
   teams: TeamSummary[];

@@ -15,9 +15,9 @@ import ActiveTeamSelector from "@/components/teams/ActiveTeamSelector";
 import SavedTeamAutoOpen from "@/components/teams/SavedTeamAutoOpen";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";
-import { fetchMe, type MeResult } from "@/lib/auth-client";
+import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useConversations } from "@/lib/hooks/use-conversations";
-import { getConversation, importConversation } from "@/lib/history-client";
+import { getConversation, importConversation } from "@/lib/api/history-client";
 import type {
   ChatStatus,
   ChatTurn,

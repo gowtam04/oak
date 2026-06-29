@@ -1,6 +1,6 @@
 /**
  * auth-client — typed `fetch` helpers over the `/api/auth/*` routes
- * (account-creation design.md § Interface Definitions "src/lib/auth-client.ts",
+ * (account-creation design.md § Interface Definitions "src/lib/api/auth-client.ts",
  * Phase 6 / p6).
  *
  * These are the ONLY thing the auth UI talks to — `AuthDialog` / `AuthMenu`

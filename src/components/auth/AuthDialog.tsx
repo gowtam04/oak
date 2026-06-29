@@ -11,7 +11,7 @@ import {
   requestCode,
   verifyCode,
   type VerifyCodeResult,
-} from "@/lib/auth-client";
+} from "@/lib/api/auth-client";
 
 /**
  * AuthDialog — the two-step passwordless sign-in dialog (account-creation
@@ -31,7 +31,7 @@ import {
  * login AC-2.4); the parent updates auth state WITHOUT resetting the on-screen
  * conversation (BR-A10).
  *
- * All network calls go through `@/lib/auth-client` (no direct `fetch` here), so
+ * All network calls go through `@/lib/api/auth-client` (no direct `fetch` here), so
  * this component stays a pure jsdom-testable unit. Styling lives in the global
  * BEM `auth-dialog` block (`src/app/globals.css`).
  */

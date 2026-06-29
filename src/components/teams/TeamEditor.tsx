@@ -22,7 +22,7 @@
 import { useEffect, useState } from "react";
 
 import type { TeamMember } from "@/data/teams/team-schema";
-import type { TeamDetail } from "@/lib/teams-client";
+import type { TeamDetail } from "@/lib/api/teams-client";
 import TeamMemberPanel, {
   type MemberBaseStats,
 } from "./TeamMemberPanel";

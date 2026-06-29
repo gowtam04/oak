@@ -14,7 +14,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { ConversationSummary } from "@/lib/history-client";
+import type { ConversationSummary } from "@/lib/api/history-client";
 
 export interface ConversationRowProps {
   conversation: ConversationSummary;

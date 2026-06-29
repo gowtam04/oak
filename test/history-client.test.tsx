@@ -1,5 +1,5 @@
 /**
- * Unit tests for src/lib/history-client.ts (chat-history Phase 5). `fetch` is
+ * Unit tests for src/lib/api/history-client.ts (chat-history Phase 5). `fetch` is
  * stubbed; asserts the never-throw contract — success maps to typed values, and
  * HTTP errors / transport faults fold into safe defaults ([] / null / false).
  * Runs under the jsdom project (test/**\/*.test.tsx).
@@ -14,7 +14,7 @@ import {
   listConversations,
   renameConversation,
   setPinned,
-} from "@/lib/history-client";
+} from "@/lib/api/history-client";
 import type { OakAnswer } from "@/components/types";
 
 function res(status: number, body: unknown): Response {

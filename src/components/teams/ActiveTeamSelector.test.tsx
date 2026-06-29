@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 
 import ActiveTeamSelector from "./ActiveTeamSelector";
-import type { TeamSummary } from "@/lib/teams-client";
+import type { TeamSummary } from "@/lib/api/teams-client";
 
 function summary(over: Partial<TeamSummary>): TeamSummary {
   return {

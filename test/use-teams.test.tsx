@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
 
-vi.mock("@/lib/teams-client", () => ({
+vi.mock("@/lib/api/teams-client", () => ({
   listTeams: vi.fn(),
   getTeam: vi.fn(),
   createTeam: vi.fn(),
@@ -30,7 +30,7 @@ import {
   exportPaste,
   type TeamDetail,
   type TeamSummary,
-} from "@/lib/teams-client";
+} from "@/lib/api/teams-client";
 import { useTeams } from "@/lib/hooks/use-teams";
 
 const SUMMARY: TeamSummary = {

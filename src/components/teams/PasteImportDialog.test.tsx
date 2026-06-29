@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 
 import PasteImportDialog from "./PasteImportDialog";
-import type { ImportNote, TeamDetail } from "@/lib/teams-client";
+import type { ImportNote, TeamDetail } from "@/lib/api/teams-client";
 
 afterEach(() => cleanup());
 

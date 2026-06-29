@@ -8,7 +8,7 @@ import {
   listTeams,
   updateTeam,
   type TeamSummary,
-} from "@/lib/teams-client";
+} from "@/lib/api/teams-client";
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 import TeamWarnings from "@/components/teams/TeamWarnings";
 

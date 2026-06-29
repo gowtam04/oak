@@ -1,5 +1,5 @@
 /**
- * Unit tests for src/lib/teams-client.ts (team-builder Phase 8). `fetch` is
+ * Unit tests for src/lib/api/teams-client.ts (team-builder Phase 8). `fetch` is
  * stubbed; asserts the never-throw contract — success maps to typed values
  * (the route's `{ team, validation }` folds into a flat TeamDetail), and HTTP
  * errors (guest 401 / other-account 404) / transport faults fold into safe
@@ -17,7 +17,7 @@ import {
   importPaste,
   listTeams,
   updateTeam,
-} from "@/lib/teams-client";
+} from "@/lib/api/teams-client";
 import type { TeamMember } from "@/data/teams/team-schema";
 
 function res(status: number, body: unknown): Response {

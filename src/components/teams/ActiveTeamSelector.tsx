@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import type { ActiveTeamSelectorProps } from "@/components/types";
-import { listTeams, type TeamSummary } from "@/lib/teams-client";
+import { listTeams, type TeamSummary } from "@/lib/api/teams-client";
 
 const JSON_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",

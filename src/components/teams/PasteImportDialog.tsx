@@ -15,7 +15,7 @@
 
 import { useEffect, useState } from "react";
 
-import type { ImportNote, TeamDetail } from "@/lib/teams-client";
+import type { ImportNote, TeamDetail } from "@/lib/api/teams-client";
 
 export interface PasteImportDialogProps {
   open: boolean;

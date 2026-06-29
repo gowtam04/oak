@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signOut } from "@/lib/auth-client";
+import { signOut } from "@/lib/api/auth-client";
 
 /**
  * AuthMenu — the header auth control (account-creation design.md § File Structure
@@ -19,7 +19,7 @@ import { signOut } from "@/lib/auth-client";
  *
  * Stateless w.r.t. auth identity: the parent owns `signedIn` / `email` (resolved
  * from `fetchMe`) and re-renders this control when they change. The only network
- * call here is `signOut`, routed through `@/lib/auth-client` — no direct `fetch`,
+ * call here is `signOut`, routed through `@/lib/api/auth-client` — no direct `fetch`,
  * no server imports, so it is a pure jsdom-testable unit.
  */
 

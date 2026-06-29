@@ -3,7 +3,7 @@
  * § Implementation Phases "Phase 6 — Frontend auth UI", test_focus "two-step
  * dialog states").
  *
- * These exercise the REAL `@/lib/auth-client` over a mocked global `fetch`, so a
+ * These exercise the REAL `@/lib/api/auth-client` over a mocked global `fetch`, so a
  * single suite covers both the fetch→result mapping AND every dialog branch. No
  * server modules are imported (jsdom project rule). Each negative branch asserts
  * the feedback discriminant via the `data-kind` attribute — never happy-path only.

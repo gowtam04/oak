@@ -20,7 +20,7 @@
 
 import { computeStat } from "@/agent/formulas/compute-stat";
 import type { StatSpread, TeamMember } from "@/data/teams/team-schema";
-import type { TeamWarning } from "@/lib/teams-client";
+import type { TeamWarning } from "@/lib/api/teams-client";
 import TeamWarnings from "./TeamWarnings";
 
 /** Base-stat spread as exposed by the entity index (`base_stats`). */
