@@ -7,8 +7,6 @@ import ChatThread from "@/components/ChatThread";
 import Composer from "@/components/Composer";
 import ThemeToggle from "@/components/ThemeToggle";
 import ChampionsToggle from "@/components/ChampionsToggle";
-import ModelSelector from "@/components/ModelSelector";
-import { DEFAULT_MODEL_KEY, isModelKey, type ModelKey } from "@/agent/models";
 import AuthMenu from "@/components/auth/AuthMenu";
 import AuthDialog from "@/components/auth/AuthDialog";
 import ConversationList from "@/components/history/ConversationList";
@@ -30,9 +28,6 @@ import type {
 
 /** localStorage key for the persisted Champions-mode choice. */
 const CHAMPIONS_STORAGE_KEY = "oak-champions-mode";
-
-/** localStorage key for the persisted model choice (global preference). */
-const MODEL_STORAGE_KEY = "oak-model";
 
 /** localStorage key for the persisted history-sidebar collapsed choice. */
 const SIDEBAR_STORAGE_KEY = "oak-sidebar-collapsed";
@@ -132,80 +127,6 @@ export default function Home() {
       /* storage unavailable (private mode) — fall back to in-session only */
     }
   }, []);
-
-  // Selected model: a GLOBAL preference (not conversation-scoped) sent on every
-  // request as `model`. Default to the primary model (Grok) so SSR markup is
-  // deterministic, then resolve the stored choice AFTER mount (same hydration
-  // pattern as championsMode), validating it through `isModelKey` so a
-  // stale/garbage value falls back to the default rather than being trusted.
-  const [selectedModel, setSelectedModel] =
-    useState<ModelKey>(DEFAULT_MODEL_KEY);
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(MODEL_STORAGE_KEY);
-      if (stored && isModelKey(stored)) setSelectedModel(stored);
-    } catch {
-      /* storage unavailable (private mode) — keep the default (Grok) */
-    }
-  }, []);
-
-  const setSelectedModelPersisted = useCallback((next: ModelKey) => {
-    setSelectedModel(next);
-    try {
-      localStorage.setItem(MODEL_STORAGE_KEY, next);
-    } catch {
-      /* storage unavailable (private mode) — fall back to in-session only */
-    }
-  }, []);
-
-  // Which models the SERVER actually has configured (GET /api/config). Drives the
-  // dropdown's disabled options and an auto-revert if the persisted/selected model
-  // isn't usable. `null` until resolved (or on failure) ⇒ nothing is disabled.
-  const [configuredModels, setConfiguredModels] = useState<ModelKey[] | null>(
-    null,
-  );
-  useEffect(() => {
-    let active = true;
-    void fetch("/api/config")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { configuredModels?: unknown } | null) => {
-        if (!active || !data) return;
-        if (Array.isArray(data.configuredModels)) {
-          setConfiguredModels(
-            data.configuredModels.filter((k): k is ModelKey => isModelKey(k)),
-          );
-        }
-      })
-      .catch(() => {
-        /* config is non-critical — leave every model enabled */
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  // If the persisted/selected model isn't configured on this server, fall back to
-  // the default (Grok — always configured, since XAI_API_KEY is required at boot)
-  // so the user can't sit on an unusable selection.
-  useEffect(() => {
-    if (configuredModels && !configuredModels.includes(selectedModel)) {
-      setSelectedModelPersisted(DEFAULT_MODEL_KEY);
-    }
-  }, [configuredModels, selectedModel, setSelectedModelPersisted]);
-
-  // A model/provider fault (503 model_unavailable pre-stream, or model_provider_error
-  // mid-stream) means the chosen model isn't usable right now — revert to the
-  // default (Grok) so the next attempt works.
-  useEffect(() => {
-    if (
-      status === "error" &&
-      (error?.code === "model_unavailable" ||
-        error?.code === "model_provider_error") &&
-      selectedModel !== DEFAULT_MODEL_KEY
-    ) {
-      setSelectedModelPersisted(DEFAULT_MODEL_KEY);
-    }
-  }, [status, error, selectedModel, setSelectedModelPersisted]);
 
   // History-sidebar collapsed state. Default expanded so the first render is
   // deterministic (the sidebar + its toggle are both gated on `auth.signedIn`,
@@ -352,7 +273,6 @@ export default function Home() {
         message,
         champions_mode: championsMode,
         active_team_id: activeTeamId,
-        model: selectedModel,
         // Wire-only image fields (mimeType + raw base64); the preview URLs stay
         // client-side. Omitted entirely for a text-only turn.
         ...(images.length > 0
@@ -361,7 +281,7 @@ export default function Home() {
       };
       send(body);
     },
-    [send, sessionId, championsMode, activeTeamId, selectedModel],
+    [send, sessionId, championsMode, activeTeamId],
   );
 
   // Start a brand-new conversation (AC-6.1): a fresh session id + empty thread.
@@ -454,10 +374,10 @@ export default function Home() {
     setPrefill({ text });
   }, []);
 
-  // Header overflow menu (mobile): below 640px the secondary controls (model /
-  // champions / theme + the signed-in team controls) collapse behind a single
-  // gear button so they stop overflowing the red band off-screen. Desktop
-  // renders them inline and never shows the gear. Close on outside-tap / Escape.
+  // Header overflow menu (mobile): below 640px the secondary controls (champions
+  // / theme + the signed-in team controls) collapse behind a single gear button
+  // so they stop overflowing the red band off-screen. Desktop renders them inline
+  // and never shows the gear. Close on outside-tap / Escape.
   const [menuOpen, setMenuOpen] = useState(false);
   const headerClusterRef = useRef<HTMLDivElement>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
@@ -541,11 +461,6 @@ export default function Home() {
                 <span className="chat-page__header-divider" aria-hidden></span>
               </>
             )}
-            <ModelSelector
-              value={selectedModel}
-              onChange={setSelectedModelPersisted}
-              configuredModels={configuredModels ?? undefined}
-            />
             <ChampionsToggle
               checked={championsMode}
               onChange={handleChampionsToggle}

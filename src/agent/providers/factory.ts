@@ -93,6 +93,15 @@ export function resolveModel(key: string | undefined | null): ResolvedModel {
   };
 }
 
+/**
+ * The operator-selected active model (from the `ACTIVE_MODEL` secret). There is
+ * no per-turn picker — this is the single source for `ctx.model`. Passes through
+ * the safe resolver so an unexpected value still falls back to the default.
+ */
+export function activeModelKey(): ModelKey {
+  return resolveModel(env.ACTIVE_MODEL).key;
+}
+
 /** Thrown when the selected model's provider API key is not configured. */
 export class ProviderNotConfiguredError extends Error {
   constructor(public readonly provider: ProviderKind) {

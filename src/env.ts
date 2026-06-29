@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isModelKey, type ModelKey } from "@/agent/models";
 
 /**
  * Zod-validated process.env (design.md § File Structure: src/env.ts).
@@ -27,14 +28,30 @@ const EnvSchema = z
       .string({ required_error: "XAI_API_KEY is required" })
       .min(1, "XAI_API_KEY must not be empty"),
 
-    // --- Optional alternate model providers (model switcher) ---------------
+    // The operator-controlled active model. There is no per-turn model picker:
+    // this single secret decides which LLM answers (a model registry key —
+    // `grok-4.3` | `claude` | `gpt-5.5`). Defaults to the primary model (Grok);
+    // an empty value (`ACTIVE_MODEL=` in a compose env_file) is treated as unset.
+    // A non-registry value fails fast at boot (same contract as XAI_API_KEY).
+    // Switching the model is a one-line secret change (`ACTIVE_MODEL=claude`) with
+    // no rebuild — its provider key just has to be configured (validated on use).
+    ACTIVE_MODEL: z.preprocess(
+      emptyToUndefined,
+      z
+        .custom<ModelKey>(isModelKey, {
+          message: "ACTIVE_MODEL must be one of: grok-4.3, claude, gpt-5.5",
+        })
+        .default("grok-4.3"),
+    ),
+
+    // --- Optional alternate model providers --------------------------------
     // Anthropic (Claude) and OpenAI (GPT-5.5) are OPTIONAL: Grok is the default
     // and the only required key. A provider's key is validated ON USE (the
     // provider factory throws a typed model_unavailable, surfaced by the route as
     // a clean 503) — NOT at module load — so the app still boots with only
     // XAI_API_KEY. An empty value (`ANTHROPIC_API_KEY=` in a compose env_file) is
-    // treated as absent, like RESEND_API_KEY below. Claude stays fully selectable
-    // whenever its key is present.
+    // treated as absent, like RESEND_API_KEY below. Selecting Claude via
+    // ACTIVE_MODEL requires its key to be present.
     ANTHROPIC_API_KEY: z.preprocess(
       emptyToUndefined,
       z.string().min(1).optional(),

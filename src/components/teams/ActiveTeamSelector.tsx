@@ -89,8 +89,8 @@ export default function ActiveTeamSelector({
           </option>
         ))}
       </select>
-      {/* Caret — appearance:none strips the native arrow, so mirror ModelSelector
-          and draw one (inherits the white pill text color). */}
+      {/* Caret — appearance:none strips the native arrow, so draw a shared
+          pill-caret one (inherits the white pill text color). */}
       <span aria-hidden="true" className="pill-caret" />
     </label>
   );

@@ -14,11 +14,32 @@ describe("env", () => {
     const parsed = parseEnv({ XAI_API_KEY: "xai-test" });
     expect(parsed.XAI_API_KEY).toBe("xai-test");
     expect(parsed.ANTHROPIC_MODEL).toBe("claude-sonnet-4-6");
+    expect(parsed.ACTIVE_MODEL).toBe("grok-4.3");
     expect(parsed.DATABASE_URL).toBe(
       "postgres://oak:oak@localhost:5432/oak",
     );
     expect(parsed.POKEAPI_BASE_URL).toBe("https://pokeapi.co/api/v2");
     expect(parsed.LOG_LEVEL).toBe("info");
+  });
+
+  it("defaults ACTIVE_MODEL to grok-4.3 when empty (compose env_file safety)", () => {
+    expect(parseEnv({ XAI_API_KEY: "xai-test", ACTIVE_MODEL: "" }).ACTIVE_MODEL)
+      .toBe("grok-4.3");
+    expect(
+      parseEnv({ XAI_API_KEY: "xai-test", ACTIVE_MODEL: "   " }).ACTIVE_MODEL,
+    ).toBe("grok-4.3");
+  });
+
+  it("accepts a registry ACTIVE_MODEL and rejects an unknown one", () => {
+    expect(
+      parseEnv({ XAI_API_KEY: "xai-test", ACTIVE_MODEL: "claude" }).ACTIVE_MODEL,
+    ).toBe("claude");
+    expect(
+      parseEnv({ XAI_API_KEY: "xai-test", ACTIVE_MODEL: "gpt-5.5" }).ACTIVE_MODEL,
+    ).toBe("gpt-5.5");
+    expect(() =>
+      parseEnv({ XAI_API_KEY: "xai-test", ACTIVE_MODEL: "gpt-9000" }),
+    ).toThrowError(/ACTIVE_MODEL/);
   });
 
   it("rejects an invalid LOG_LEVEL", () => {

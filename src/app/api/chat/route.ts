@@ -36,12 +36,7 @@ import { randomUUID } from "node:crypto";
 
 import { createAgentContext } from "@/agent/context";
 import { proposedTeamSchema, type ProposedTeam } from "@/agent/schemas";
-import {
-  DEFAULT_MODEL_KEY,
-  isModelKey,
-  modelLabel,
-  type ModelKey,
-} from "@/agent/models";
+import { modelLabel } from "@/agent/models";
 import { ProviderTransportError } from "@/agent/providers/errors";
 import type {
   AgentMode,
@@ -149,8 +144,6 @@ function clientIp(req: Request): string {
  */
 type ParsedChatBody = ChatRequestBody & {
   active_team_id: string | null;
-  /** Always a resolved registry key — never the raw client string. */
-  model: ModelKey;
 };
 
 function parseBody(
@@ -158,7 +151,7 @@ function parseBody(
   hasImages: boolean,
 ): ParsedChatBody | null {
   if (typeof value !== "object" || value === null) return null;
-  const { session_id, message, champions_mode, active_team_id, model } =
+  const { session_id, message, champions_mode, active_team_id } =
     value as Record<string, unknown>;
   if (typeof session_id !== "string" || session_id.length === 0) return null;
   // The message must be a string, but may be EMPTY when one or more images are
@@ -176,16 +169,14 @@ function parseBody(
     typeof active_team_id === "string" && active_team_id.length > 0
       ? active_team_id
       : null;
-  // Whitelist-validate the model against the registry: an unknown/missing/non-
-  // string key falls back to the default (Grok). Never forward the raw client
-  // string downstream — the runtime keys the provider off this resolved value.
-  const modelKey: ModelKey = isModelKey(model) ? model : DEFAULT_MODEL_KEY;
+  // The answering model is NOT taken from the body — it is operator-controlled
+  // via the ACTIVE_MODEL secret (resolved server-side below). Any `model` field a
+  // client happens to send is ignored.
   return {
     session_id,
     message,
     champions_mode: champions_mode === true,
     active_team_id: teamId,
-    model: modelKey,
   };
 }
 
@@ -407,23 +398,25 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
-  // 3c. Fail fast if the selected model's provider isn't configured on this
-  //     server (its API key is absent) — a clean 503 BEFORE the stream opens, so
-  //     the client sees a real HTTP status rather than a mid-stream error. The
-  //     default (Grok) is always configured (XAI_API_KEY is required at boot), so
-  //     old clients that omit `model` never hit this.
+  // 3c. Resolve the operator-selected active model (the ACTIVE_MODEL secret) and
+  //     fail fast if its provider isn't configured on this server (its API key is
+  //     absent) — a clean 503 BEFORE the stream opens, so the client sees a real
+  //     HTTP status rather than a mid-stream error. The default (Grok) is always
+  //     configured (XAI_API_KEY is required at boot), so an unset ACTIVE_MODEL
+  //     never hits this; it only fires on a deployment misconfig (e.g.
+  //     ACTIVE_MODEL=claude with no ANTHROPIC_API_KEY).
   //     Dynamic import defers the factory's env/SDK evaluation to request time
-  //     (the same reason the runtime import below is deferred). `body.model` is
-  //     already a validated registry key.
-  {
-    const { isModelConfigured } = await import("@/agent/providers/factory");
-    if (!isModelConfigured(body.model)) {
-      return jsonError(
-        503,
-        "model_unavailable",
-        "The selected model isn't configured on this server. Pick a different model and try again.",
-      );
-    }
+  //     (the same reason the runtime import below is deferred).
+  const { activeModelKey, isModelConfigured } = await import(
+    "@/agent/providers/factory"
+  );
+  const activeModel = activeModelKey();
+  if (!isModelConfigured(activeModel)) {
+    return jsonError(
+      503,
+      "model_unavailable",
+      `The configured model (${modelLabel(activeModel)}) has no provider key on this server. Set ACTIVE_MODEL to a configured model or add the provider's API key.`,
+    );
   }
 
   // 4. Build the SSE stream. Return the Response SYNCHRONOUSLY; emit from the
@@ -500,11 +493,11 @@ export async function POST(req: Request): Promise<Response> {
             requestId,
             sessionId: session_id,
             mode,
-            // Which LLM answers this turn — validated registry key, authoritative
-            // for guests and signed-in users every turn (unlike `mode`, NOT
-            // overridden from the stored conversation; history is plain text, so
-            // switching models per turn is correctness-safe).
-            model: body.model,
+            // Which LLM answers this turn — the operator-selected active model
+            // (ACTIVE_MODEL), resolved above. Server-controlled like `mode`; never
+            // taken from the body. History is plain text, so the model in effect
+            // can change between turns without correctness risk.
+            model: activeModel,
             // Server-bound active team (already resolved + authorized above).
             // `undefined` ⇒ no team is bound; the model only ever sees it via the
             // arg-less `get_active_team` tool, never as an input it can widen.
@@ -641,21 +634,20 @@ export async function POST(req: Request): Promise<Response> {
               event: "chat_transport_error",
               request_id: requestId,
               session_id,
-              model: body.model,
+              model: activeModel,
               err: detail,
             },
             "oak_chat_transport_error",
           );
           // A typed provider fault (xAI/OpenAI 4xx/5xx — bad key, unsupported
-          // param, rate limit, unknown model) gets a MODEL-SCOPED message so the
-          // user knows to switch models / fix the provider key, plus the upstream
-          // status so the client can auto-revert to the default model. The generic
-          // Anthropic/unknown fault keeps the neutral retry message.
+          // param, rate limit, unknown model) gets a MODEL-SCOPED message naming
+          // the active model + the upstream status. The generic Anthropic/unknown
+          // fault keeps the neutral retry message.
           if (err instanceof ProviderTransportError) {
             const statusPart = err.status ? ` (HTTP ${err.status})` : "";
             send("error", {
               code: "model_provider_error",
-              message: `${modelLabel(body.model)} is unavailable right now${statusPart} — switch models or check the provider key.`,
+              message: `${modelLabel(activeModel)} is unavailable right now${statusPart} — please try again, or check the provider key.`,
               ...(err.status !== undefined ? { status: err.status } : {}),
             });
           } else {

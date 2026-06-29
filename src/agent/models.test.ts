@@ -13,6 +13,7 @@ import {
   modelLabel,
 } from "@/agent/models";
 import {
+  activeModelKey,
   isModelConfigured,
   providerFor,
   ProviderNotConfiguredError,
@@ -36,9 +37,17 @@ describe("model registry", () => {
   });
 
   it("modelLabel returns the display label", () => {
-    expect(modelLabel("claude")).toBe("Claude");
+    expect(modelLabel("claude")).toBe("Claude Sonnet 4.6");
     expect(modelLabel("gpt-5.5")).toBe("OpenAI GPT-5.5");
     expect(modelLabel("grok-4.3")).toBe("xAI Grok 4.3");
+  });
+});
+
+describe("activeModelKey", () => {
+  it("returns the default (Grok) when ACTIVE_MODEL is unset", () => {
+    // The test runner injects no ACTIVE_MODEL, so env defaults it to grok-4.3;
+    // activeModelKey passes through the safe resolver.
+    expect(activeModelKey()).toBe("grok-4.3");
   });
 });
 

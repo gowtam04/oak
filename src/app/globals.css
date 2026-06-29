@@ -2094,40 +2094,6 @@
   background: var(--poke-red);
 }
 
-/* Model selector — native <select> dressed as a translucent header pill */
-.model-selector-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: var(--space-10);
-  padding-inline: var(--space-3);
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.16);
-  color: var(--neutral-0);
-  font: inherit;
-  font-size: var(--text-input); /* 16px: stops iOS Safari auto-zoom on the picker */
-  font-weight: 600;
-  line-height: 1.2;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.model-selector-pill__select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  border: none;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  padding-inline-end: var(--space-1);
-}
-.model-selector-pill__option {
-  color: var(--neutral-900, #111); /* OS-rendered option list needs explicit dark text */
-}
-
 /* Auth header control — account email + the translucent sign-in/out pills */
 .auth-menu {
   display: inline-flex;
@@ -3062,7 +3028,6 @@
     display: none;
   }
   /* Each control becomes a full-width menu row. */
-  .chat-page__controls .model-selector-pill,
   .chat-page__controls .champions-toggle {
     width: 100%;
     justify-content: space-between;
@@ -3125,7 +3090,6 @@
     height: 44px;
   }
   /* Bump the 40px pill controls up to the 44px touch target. */
-  .model-selector-pill,
   .champions-toggle,
   .auth-pill,
   .active-team-selector__select,
