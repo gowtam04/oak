@@ -51,6 +51,7 @@ import { buildPokedex, type PokemonRow } from "./build-pokedex";
 import { buildLearnsetRows, type LearnsetRow } from "./build-learnsets";
 import { buildNames, type NameRow } from "./build-names";
 import { buildReferenceRows, type ReferenceRow } from "./build-reference";
+import { buildEncounterRows } from "./build-encounters";
 
 // ---------------------------------------------------------------------------
 // Connection (own handle — db.ts is server-only and unusable under tsx)
@@ -200,6 +201,12 @@ export async function runIngest(
     // searchable_names + reference
     const formatNames = buildNames(source, formatPokemon);
     const formatRefs = buildReferenceRows(source, startedAt);
+    // Catch-location / obtain-method data (PokeAPI snapshot) — STANDARD ONLY.
+    // Appended into the reference rows so they ride the existing reference_cache
+    // write; Champions ships no encounter data (the tool is also mode-gated).
+    if (gen9Only) {
+      formatRefs.push(...buildEncounterRows(source, startedAt));
+    }
     report(`[${format}] names: ${formatNames.length}, references: ${formatRefs.length}`);
 
     pokemonRows.push(...formatPokemon);

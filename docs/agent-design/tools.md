@@ -1,11 +1,18 @@
 # Tools
 
-Thirteen tools. Nine read data (one queries the local index, six fetch reference
+Fourteen tools. Ten read data (one queries the local index, seven fetch reference
 details, one resolves names, one reads the conversation's active team), two
 compute battle math, one emits the final answer, and one writes (saves a team on
 approval). All read/compute tools are **read-only and idempotent** — safe to
 retry in the loop. Tools return **structured errors the model can reason about**,
 never raw exceptions.
+
+> `get_encounters` (T14) was added later for catch-location / obtain-method data
+> sourced from a committed PokeAPI snapshot. It is **standard-mode only**
+> (Champions ships no encounter data; the tool returns
+> `not_available_in_champions` in that mode) and its coverage is Gen 1 →
+> Sword/Shield + Let's Go — PokeAPI has no encounter data for Scarlet/Violet,
+> Legends: Arceus, or BDSP, which the tool/prompt surface transparently.
 
 > Two tools beyond the original eleven were added by the **team-builder** feature
 > (see `docs/features/team-builder/architecture/design.md`): `get_active_team`
@@ -771,6 +778,37 @@ binds none, so a guest can never write.
 
 ---
 
+## T14 — `get_encounters`
+
+**Purpose:** where and how to OBTAIN a Pokémon — wild encounters (walk/surf/
+fishing) plus gifts, gift-eggs, static and in-game trades — grouped by game.
+Answers "where do I catch / how do I get X" questions. **Standard mode only.**
+
+**Input:** `{ name: string }` — a Pokémon name/slug (resolve_entity first if
+unsure). The repo resolves any form to its base species, so locations are
+reported at the species level.
+
+**Output (hit):** `{ found: true, name, encounters: EncounterGroup[],
+coverage_note: string | null }`, where each `EncounterGroup` is
+`{ version_group, generation, versions[], locations: [{ location_display, region,
+method, min_level, max_level, chance, conditions[] }] }`. `coverage_note` is set
+(and `encounters` empty) when the species has no recorded catch data.
+
+**Misses / modes:** `{ found: false, suggestions }` (unknown name);
+`{ error: "index_unavailable" }` (index not built);
+`{ error: "not_available_in_champions" }` (Champions turn — encounters are
+standard-only). Never throws in-domain.
+
+**Data source & coverage:** built offline at ingest from a committed PokeAPI
+snapshot (`src/ingest/data/encounters.json`, produced by
+`scripts/fetch-pokeapi-encounters.ts`) into `reference_cache` under
+resource_kind `encounters`. **Coverage is Gen 1 → Sword/Shield + Let's Go only**
+— PokeAPI has NO encounter data for Scarlet/Violet (Gen 9), Legends: Arceus, or
+BDSP; the empty list + `coverage_note` and the prompt make that gap explicit. The
+per-game model means a future re-crawl auto-absorbs Gen 9 if PokeAPI fills it in.
+
+---
+
 ## Tool-existence status
 
 | Tool                                                                        | Exists? | Build note                                                 |
@@ -783,6 +821,7 @@ binds none, so a guest can never write.
 | submit_answer                                                               | ❌      | Structured-output tool; schema in `output-formats.md`.     |
 | get_active_team                                                             | ✅      | Built by team-builder (TEAM-AD-1); reads server-bound `ctx.activeTeam`. |
 | save_team                                                                   | ✅      | Built by team-builder (TEAM-AD-7); the one write tool — saves server-bound `ctx.proposedTeam` on approval. |
+| get_encounters                                                              | ✅      | Catch-location / obtain-method data from a committed PokeAPI snapshot (standard mode only; Gen 1–8 coverage). |
 
 (The ❌ marks are the original agent-design backlog state; `get_active_team` and
 `save_team` are implemented as part of the team-builder feature.)

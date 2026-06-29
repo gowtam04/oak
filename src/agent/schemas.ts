@@ -383,6 +383,58 @@ export const getItemOutputSchema = z.union([
 ]);
 
 // ===========================================================================
+// T14 — get_encounters (PokeAPI catch-location / obtain-method data)
+//
+// STANDARD MODE ONLY. The data covers Gen 1 → Sword/Shield + Let's Go (PokeAPI
+// has no encounter records for Scarlet/Violet, Legends: Arceus, or BDSP). Built
+// offline from a committed snapshot (src/ingest/build-encounters.ts) and stored
+// in reference_cache under resource_kind "encounters". See get-encounters.ts.
+// ===========================================================================
+
+export const getEncountersInputSchema = z.object({
+  name: z.string(),
+});
+
+/** One place a species can be obtained within a version-group. */
+export const encounterLocationSchema = z.object({
+  location_display: z.string(),
+  region: z.string().nullable(),
+  /** "walk" | "surf" | "old-rod" | "gift" | "gift-egg" | "npc-trade" | … */
+  method: z.string(),
+  min_level: z.number().int().nullable(),
+  max_level: z.number().int().nullable(),
+  /** Best (max) encounter rate % across the aggregated slots; null if unknown. */
+  chance: z.number().nullable(),
+  /** Meaningful conditions (swarm/season/radar/story); time-of-day is stripped. */
+  conditions: z.array(z.string()),
+});
+
+/** Encounters for one version-group (e.g. Gold/Silver), with its game versions. */
+export const encounterGroupSchema = z.object({
+  version_group: z.string(),
+  generation: z.number().int(),
+  versions: z.array(z.string()),
+  locations: z.array(encounterLocationSchema),
+});
+
+export const encounterDetailSchema = z.object({
+  found: z.literal(true),
+  name: z.string(),
+  encounters: z.array(encounterGroupSchema),
+  // Non-null ONLY when `encounters` is empty: explains that PokeAPI records no
+  // catch data for this species (obtain via evolution/breeding/trade/event, or it
+  // exists only in a PokeAPI-uncovered game — Gen 9 / Legends: Arceus / BDSP).
+  coverage_note: z.string().nullish(),
+});
+
+export const getEncountersOutputSchema = z.union([
+  encounterDetailSchema,
+  notFoundSchema,
+  z.object({ error: z.literal("index_unavailable") }),
+  z.object({ error: z.literal("not_available_in_champions") }),
+]);
+
+// ===========================================================================
 // T9 — compute_stat
 // ===========================================================================
 
@@ -672,6 +724,11 @@ export type GetEvolutionChainOutput = z.infer<
 export type GetItemInput = z.infer<typeof getItemInputSchema>;
 export type ItemDetail = z.infer<typeof itemDetailSchema>;
 export type GetItemOutput = z.infer<typeof getItemOutputSchema>;
+export type GetEncountersInput = z.infer<typeof getEncountersInputSchema>;
+export type EncounterLocation = z.infer<typeof encounterLocationSchema>;
+export type EncounterGroup = z.infer<typeof encounterGroupSchema>;
+export type EncounterDetail = z.infer<typeof encounterDetailSchema>;
+export type GetEncountersOutput = z.infer<typeof getEncountersOutputSchema>;
 export type ComputeStatInput = z.infer<typeof computeStatInputSchema>;
 export type ComputeStatOutput = z.infer<typeof computeStatOutputSchema>;
 export type EstimateDamageInput = z.infer<typeof estimateDamageInputSchema>;
@@ -747,6 +804,8 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   get_active_team: toJsonSchema(getActiveTeamInputSchema),
   // T13 — save a proposed team to the user's Teams on approval.
   save_team: toJsonSchema(saveTeamInputSchema),
+  // T14 — catch-location / obtain-method data (standard mode only).
+  get_encounters: toJsonSchema(getEncountersInputSchema),
 };
 
 /** The generated `submit_answer` (OakAnswer) JSON Schema. */
@@ -768,6 +827,7 @@ export const TOOL_NAMES = [
   "submit_answer",
   "get_active_team",
   "save_team",
+  "get_encounters",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

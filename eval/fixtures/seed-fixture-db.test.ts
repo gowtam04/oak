@@ -619,8 +619,8 @@ describe("fixture totals", () => {
     expect(await db.select().from(pokemon)).toHaveLength(9);
   });
 
-  it("has 6 reference_cache entries", async () => {
-    expect(await db.select().from(reference_cache)).toHaveLength(6);
+  it("has 8 reference_cache entries", async () => {
+    expect(await db.select().from(reference_cache)).toHaveLength(8);
   });
 
   it("all base_stat_total values are the arithmetic sum of the six stat columns", async () => {

@@ -661,6 +661,52 @@ const REFERENCE_CACHE_ROWS: Omit<RefCacheRow, "format">[] = [
     endpoint_url: "https://pokeapi.co/api/v2/move/trick-room",
     fetched_at: FAR_FUTURE_MS,
   },
+
+  // encounters/garchomp — T14 get_encounters: a grouped HIT (catch-location data).
+  {
+    resource_key: "encounters/garchomp",
+    resource_kind: "encounters",
+    payload: JSON.stringify({
+      found: true,
+      name: "Garchomp",
+      encounters: [
+        {
+          version_group: "sword-shield",
+          generation: 8,
+          versions: ["shield", "sword"],
+          locations: [
+            {
+              location_display: "Lake of Outrage",
+              region: "Galar",
+              method: "walk",
+              min_level: 55,
+              max_level: 60,
+              chance: 5,
+              conditions: [],
+            },
+          ],
+        },
+      ],
+      coverage_note: null,
+    }),
+    endpoint_url: "https://pokeapi.co",
+    fetched_at: FAR_FUTURE_MS,
+  },
+
+  // encounters/dracovish — T14: known-but-empty (no recorded catch data).
+  {
+    resource_key: "encounters/dracovish",
+    resource_kind: "encounters",
+    payload: JSON.stringify({
+      found: true,
+      name: "Dracovish",
+      encounters: [],
+      coverage_note:
+        "PokeAPI records no catch/encounter data for this Pokémon. Obtain it by evolution, breeding, in-game trade, or events.",
+    }),
+    endpoint_url: "https://pokeapi.co",
+    fetched_at: FAR_FUTURE_MS,
+  },
 ];
 
 // ---------------------------------------------------------------------------

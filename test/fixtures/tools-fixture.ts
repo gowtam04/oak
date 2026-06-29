@@ -544,6 +544,51 @@ export const REFERENCE_CACHE_SEED: ReferenceCacheSeed[] = [
       },
     },
   },
+  // --- T14 get_encounters: a grouped HIT + an explicit known-but-empty -------
+  {
+    // Forward hit: Garchomp has grouped, multi-game-shaped encounter data.
+    resource_key: "encounters/garchomp",
+    resource_kind: "encounters",
+    endpoint_url: "https://pokeapi.co",
+    payload: {
+      found: true,
+      name: "Garchomp",
+      encounters: [
+        {
+          version_group: "sword-shield",
+          generation: 8,
+          versions: ["shield", "sword"],
+          locations: [
+            {
+              location_display: "Lake of Outrage",
+              region: "Galar",
+              method: "walk",
+              min_level: 55,
+              max_level: 60,
+              chance: 5,
+              conditions: [],
+            },
+          ],
+        },
+      ],
+      coverage_note: null,
+    },
+  },
+  {
+    // Known-but-empty (builder-style): species covered, but no recorded catch
+    // data — found:true, empty list, coverage_note set.
+    resource_key: "encounters/dracovish",
+    resource_kind: "encounters",
+    endpoint_url: "https://pokeapi.co",
+    payload: {
+      found: true,
+      name: "Dracovish",
+      encounters: [],
+      coverage_note:
+        "PokeAPI records no catch/encounter data for this Pokémon. Obtain it " +
+        "by evolution, breeding, in-game trade, or events.",
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------

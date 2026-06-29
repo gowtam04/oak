@@ -25,7 +25,13 @@ import type {
   ItemDetail,
 } from "@/agent/schemas";
 
-export type RefKind = "move" | "ability" | "type" | "evolution" | "item";
+export type RefKind =
+  | "move"
+  | "ability"
+  | "type"
+  | "evolution"
+  | "item"
+  | "encounters";
 
 export interface ReferenceRow {
   format: Format;

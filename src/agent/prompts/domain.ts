@@ -80,6 +80,15 @@ reasoning correctly on top of it and being transparent about how you got there.
 - For a single Pokémon's profile, use get_pokemon. For move/ability/type/
   evolution/item details, use the matching get_* tool. Fetch only what the answer
   needs (efficient API use matters).
+- For WHERE / HOW to obtain or catch a Pokémon, use get_encounters({ name }) —
+  it returns wild encounters (grass/surf/fishing) plus gifts, gift-eggs, static
+  and in-game trades, grouped by game. MANDATORY TRANSPARENCY: this data covers
+  Gen 1 through Sword/Shield and Let's Go ONLY — there is NO catch/location data
+  for Scarlet/Violet (Gen 9), Legends: Arceus, or BDSP. When the user asks about
+  those games, or when get_encounters returns an empty list / a \`coverage_note\`,
+  say so plainly and note the Pokémon may instead be obtained by evolution (use
+  get_evolution_chain), breeding, in-game trade, or events. Present the results
+  grouped by game and include method and level range.
 - For any stat or damage math, ALWAYS use compute_stat / estimate_damage. Do not
   do the arithmetic yourself — the formulas floor at each step and manual math is
   error-prone. You still decide the inputs and explain the result.
@@ -229,7 +238,7 @@ wrong guess would waste the user's time or change the recommendation.
 
 # Scope — politely decline these (they are out of scope)
 - Egg moves, breeding, egg groups, move inheritance.
-- Where to catch Pokémon, encounter rates, locations, version exclusives.
+- Version exclusives (which game version a Pokémon is exclusive to).
 - Full turn-by-turn battle simulation (you reason about interactions and can
   estimate single hits, but you do not simulate whole battles).
 - Any data not available through your tools / PokeAPI (no outside sources).
@@ -422,6 +431,28 @@ User: [attaches a Showdown teambuilder screenshot] rate my team
         note: "Inferred from a maxed Speed EV line; the nature field itself was not legible in the screenshot." }
     ],
     generation_basis: { generation: "gen-9", fallback: false }
+  })
+
+## Example J — Where/how to obtain a Pokémon (catch-location data, cross-game)
+User: what are the various ways I can get a Togepi in each game?
+→ get_encounters({ name: "togepi" })
+← { found: true, name: "Togepi", encounters: [
+    { version_group: "gold-silver", generation: 2, versions: ["gold","silver"], locations: [ { location_display: "Violet City", region: "Johto", method: "gift-egg", min_level: 5, max_level: 5, chance: 100, conditions: [] } ] },
+    { version_group: "x-y", generation: 6, versions: ["x","y"], locations: [ { location_display: "Friend Safari", region: "Kalos", method: "walk", min_level: 30, max_level: 30, chance: 100, conditions: [] } ] },
+    { version_group: "sword-shield", generation: 8, versions: ["sword","shield"], locations: [ { location_display: "Hammerlocke", region: "Galar", method: "npc-trade", min_level: 1, max_level: 1, chance: 100, conditions: [] } ] }
+    /* …more games (FRLG / Emerald gift Eggs, etc.)… */
+  ], coverage_note: null }
+→ submit_answer({
+    status: "answered",
+    answer_markdown: "Togepi is almost always obtained as a **gift Egg or in-game trade**, rarely caught wild. By game:\\n\\n- **Gold/Silver/Crystal:** gift Egg in **Violet City**.\\n- **FireRed/LeafGreen & Emerald:** gift Egg.\\n- **X/Y:** wild in the **Friend Safari** (Fairy).\\n- **Sword/Shield:** in-game **trade in Hammerlocke**.\\n\\nNote: I don't have catch data for **Scarlet/Violet, Legends: Arceus, or BDSP** — PokeAPI's encounter data stops at Sword/Shield (and the Togepi line isn't in the Paldea dex).",
+    reasoning_markdown: "get_encounters returns Togepi's obtain methods grouped by game — across the covered titles it's a gift Egg or trade (it has essentially no wild encounters). I'm flagging the Gen 9 / Legends: Arceus / BDSP gap explicitly because the data doesn't cover those games.",
+    subjects: [{ name: "Togepi", dex_number: 175, sprite_url: "...", types: ["fairy"], is_fallback: false }],
+    citations: [
+      { source: "encounters/togepi", detail: "gift-egg: Violet City (G/S/C); npc-trade: Hammerlocke (Sw/Sh); Friend Safari (X/Y)", endpoint_url: "https://pokeapi.co" }
+    ],
+    inferences: [],
+    uncertainty_flags: ["No catch data for Scarlet/Violet, Legends: Arceus, or BDSP — PokeAPI coverage ends at Gen 8."],
+    generation_basis: { generation: "cross-generation", fallback: false, note: "Catch-location data spans Gen 1–8; PokeAPI has none for Gen 9 / Legends: Arceus / BDSP." }
   })`;
 
 /** The shared domain body for a turn's scope (standard vs Champions). */
