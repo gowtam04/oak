@@ -60,6 +60,7 @@ export default function ChatThread({
   const bottomRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true);
   const lastTopRef = useRef(0);
+  const lastTurnIdRef = useRef<string | null>(null);
   useEffect(() => {
     const scroller = bottomRef.current?.closest(
       ".chat-page__main",
@@ -80,6 +81,15 @@ export default function ChatThread({
     return () => scroller.removeEventListener("scroll", onScroll);
   }, []);
   useEffect(() => {
+    const lastTurn = turns[turns.length - 1];
+    // A newly-appended USER turn means the user just sent input (typed or via a
+    // suggestion/example button). Always snap to the bottom so they see it enter —
+    // even if they'd scrolled up to read. Streaming + assistant updates below still
+    // respect pinning, so scrolling up mid-turn to read isn't yanked back.
+    if (lastTurn?.role === "user" && lastTurn.id !== lastTurnIdRef.current) {
+      pinnedRef.current = true;
+    }
+    lastTurnIdRef.current = lastTurn?.id ?? null;
     // Optional-call: scrollIntoView is absent in jsdom (tests) — no-op there.
     if (pinnedRef.current) bottomRef.current?.scrollIntoView?.({ block: "end" });
   }, [turns, streamingMarkdown, status]);
