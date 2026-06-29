@@ -103,7 +103,20 @@ The agent loop is **provider-agnostic** behind the `LLMProvider` seam (`src/agen
 - **Zod is the single source of truth** (`src/agent/schemas.ts`): runtime validation, inferred TS types, and the provider tool / `submit_answer` JSON Schemas (via `zod-to-json-schema`) all derive from one definition — the same JSON Schema feeds Anthropic, OpenAI, and the Grok Responses adapter. Don't hand-maintain a duplicate JSON Schema.
 - **Tool names and tool output field names are a contract** the model depends on (`tools.md` / `output-formats.md`). Never rename them.
 - **Error styles split at the runtime/route seam:** Result unions / structured shapes in the tool+data layer (never throw in-domain); try/catch → error mapping at the HTTP edge.
-- **Frontend** (`src/components/`) renders a `OakAnswer` field-by-field (`AnswerCard` tree). Component tests render fixture payloads only and must **never** import db/repos/runtime — they pull `server-only`/open a Postgres pool, and the jsdom project has no Testcontainers Postgres.
+- **Frontend** (`src/components/`) renders a `OakAnswer` field-by-field (`AnswerCard` tree, under `src/components/answer-card/`). Component tests render fixture payloads only and must **never** import db/repos/runtime — they pull `server-only`/open a Postgres pool, and the jsdom project has no Testcontainers Postgres.
+
+### Portable modules (mobile-readiness)
+
+A future mobile client would talk to the same **`POST /api/chat` (SSE)** seam the web app uses; no LLM keys or DB access live on the client. If a JS/TS client (e.g. React Native) is ever built, these modules are already pure and platform-agnostic (no Node/Next/React/`server-only`/DB imports) and could be reused verbatim — or lifted into a shared package with no rewrite:
+
+- `src/agent/schemas.ts` — Zod schemas + the `OakAnswer` output contract.
+- `src/agent/formulas/*` — battle math (`compute-stat`, `estimate-damage`, `natures`, `type-chart`); pure, deterministic, test-guarded.
+- `src/lib/sse/sse-types.ts` — the request body + SSE event types (the wire contract).
+- `src/data/teams/team-schema.ts` — the team data model.
+- `src/data/formats.ts` — the mode↔format mapping.
+- `src/agent/models.ts` — the client-safe model registry.
+
+Everything else (repos/`db.ts`, `src/server/auth/*`, `env.ts`, the React components) is server- or DOM-bound and stays behind the API. No shared package exists today — this is a map for when one is needed, not an existing boundary to maintain.
 
 ## Testing
 
