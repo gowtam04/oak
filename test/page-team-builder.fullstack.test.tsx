@@ -29,7 +29,7 @@ import {
 
 import TeamsPage from "@/app/teams/page";
 import Home from "@/app/page";
-import { formatSseEvent } from "@/lib/sse-types";
+import { formatSseEvent } from "@/lib/sse/sse-types";
 import { MINIMAL_ANSWER } from "@/components/test-fixtures";
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { OakAnswer } from "@/components/types";

@@ -1,5 +1,5 @@
 /**
- * Unit tests for `useScreenWakeLock` (src/lib/use-screen-wake-lock.ts).
+ * Unit tests for `useScreenWakeLock` (src/lib/hooks/use-screen-wake-lock.ts).
  *
  * Runs in the jsdom project (`test/**\/*.test.tsx`) — no Docker. `navigator.wakeLock`
  * is absent in jsdom, so we install a configurable mock and drive the Page
@@ -9,7 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import { useScreenWakeLock } from "@/lib/use-screen-wake-lock";
+import { useScreenWakeLock } from "@/lib/hooks/use-screen-wake-lock";
 
 // --- Fake WakeLockSentinel ------------------------------------------------
 

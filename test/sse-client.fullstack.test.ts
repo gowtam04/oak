@@ -18,8 +18,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
 
-import { useSseClient } from "@/lib/sse-client";
-import { formatSseEvent } from "@/lib/sse-types";
+import { useSseClient } from "@/lib/sse/sse-client";
+import { formatSseEvent } from "@/lib/sse/sse-types";
 import type { OakAnswer } from "@/components/types";
 
 // ---------------------------------------------------------------------------

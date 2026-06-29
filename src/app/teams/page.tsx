@@ -20,7 +20,7 @@ import Link from "next/link";
 
 import { fetchMe, type MeResult } from "@/lib/auth-client";
 import { fetchEntityArtifact } from "@/lib/entity-client";
-import { useTeams } from "@/lib/use-teams";
+import { useTeams } from "@/lib/hooks/use-teams";
 import type { TeamDetail } from "@/lib/teams-client";
 import type { TeamMember } from "@/data/teams/team-schema";
 import { FORMATS, type Format } from "@/data/formats";

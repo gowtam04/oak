@@ -1,5 +1,5 @@
 /**
- * Tests for src/lib/use-conversations.ts (chat-history Phase 5). Mocks the
+ * Tests for src/lib/hooks/use-conversations.ts (chat-history Phase 5). Mocks the
  * history-client entirely so the hook's list/search/filter/mutation/refresh
  * behaviour is asserted without any network. Runs under the jsdom project.
  */
@@ -21,7 +21,7 @@ import {
   deleteConversation,
   type ConversationSummary,
 } from "@/lib/history-client";
-import { useConversations } from "@/lib/use-conversations";
+import { useConversations } from "@/lib/hooks/use-conversations";
 
 const SUMMARY: ConversationSummary = {
   id: "c1",

@@ -21,7 +21,7 @@
  *  - The `OakAnswer` type and all its sub-types are owned by
  *    `@/agent/schemas` — they are imported/re-exported here, never redefined.
  *  - The SSE wire types (`ToolActivityEvent`, `ErrorEvent`, `ChatRequestBody`)
- *    are owned by `@/lib/sse-types` — imported/re-exported here, never redefined.
+ *    are owned by `@/lib/sse/sse-types` — imported/re-exported here, never redefined.
  *  - Leaf components import their props from THIS module (type-only). They must
  *    NOT import `db` / `repos` / `runtime` (no server/native code under jsdom).
  *    Every type below is structural and erasable, so importing it pulls in no
@@ -44,7 +44,7 @@ import type {
   ToolActivityEvent,
   ErrorEvent,
   ChatRequestBody,
-} from "@/lib/sse-types";
+} from "@/lib/sse/sse-types";
 
 // Re-export the payload sub-types so leaf authors can import everything they
 // need from `@/components/types` alone (one frontend contract surface).
@@ -363,7 +363,7 @@ export interface ComposerProps {
 }
 
 // ---------------------------------------------------------------------------
-// sse-client hook return shape (`src/lib/sse-client.ts`)
+// sse-client hook return shape (`src/lib/sse/sse-client.ts`)
 // ---------------------------------------------------------------------------
 
 /**
@@ -392,7 +392,7 @@ export interface UseOakChatResult {
   send: (message: string) => void;
 }
 
-/** The hook signature implemented by `src/lib/sse-client.ts`. */
+/** The hook signature implemented by `src/lib/sse/sse-client.ts`. */
 export type UseOakChat = () => UseOakChatResult;
 
 // ---------------------------------------------------------------------------

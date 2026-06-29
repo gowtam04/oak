@@ -1,5 +1,5 @@
 /**
- * Unit tests for src/lib/sse-client.ts — parseFrame and readSseStream.
+ * Unit tests for src/lib/sse/sse-client.ts — parseFrame and readSseStream.
  *
  * These tests run in the Vitest **node** project (src/**\/\*.test.ts pattern).
  * They cover the two pure / non-React exports:
@@ -16,8 +16,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { parseFrame, readSseStream } from "@/lib/sse-client";
-import type { SseEvent } from "@/lib/sse-types";
+import { parseFrame, readSseStream } from "@/lib/sse/sse-client";
+import type { SseEvent } from "@/lib/sse/sse-types";
 
 // ---------------------------------------------------------------------------
 // Helpers

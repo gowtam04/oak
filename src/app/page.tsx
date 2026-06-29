@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSseClient } from "@/lib/sse-client";
-import { useScreenWakeLock } from "@/lib/use-screen-wake-lock";
+import { useSseClient } from "@/lib/sse/sse-client";
+import { useScreenWakeLock } from "@/lib/hooks/use-screen-wake-lock";
 import ChatThread from "@/components/ChatThread";
 import Composer from "@/components/Composer";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -16,7 +16,7 @@ import SavedTeamAutoOpen from "@/components/teams/SavedTeamAutoOpen";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";
 import { fetchMe, type MeResult } from "@/lib/auth-client";
-import { useConversations } from "@/lib/use-conversations";
+import { useConversations } from "@/lib/hooks/use-conversations";
 import { getConversation, importConversation } from "@/lib/history-client";
 import type {
   ChatStatus,

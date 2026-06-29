@@ -1,5 +1,5 @@
 /**
- * Tests for src/lib/use-teams.ts (team-builder Phase 8). Mocks the teams-client
+ * Tests for src/lib/hooks/use-teams.ts (team-builder Phase 8). Mocks the teams-client
  * entirely so the hook's list / format-filter / create / update / delete /
  * duplicate / import / export / refresh behaviour is asserted without any
  * network. Runs under the jsdom project.
@@ -31,7 +31,7 @@ import {
   type TeamDetail,
   type TeamSummary,
 } from "@/lib/teams-client";
-import { useTeams } from "@/lib/use-teams";
+import { useTeams } from "@/lib/hooks/use-teams";
 
 const SUMMARY: TeamSummary = {
   id: "t1",

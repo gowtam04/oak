@@ -66,7 +66,7 @@ import {
   type ChatRequestBody,
   type SseEventDataMap,
   type SseEventName,
-} from "@/lib/sse-types";
+} from "@/lib/sse/sse-types";
 
 // Node runtime (node-postgres + the Anthropic SDK need it) and never cached /
 // statically optimized — this is a live streaming handler.
@@ -138,7 +138,7 @@ function clientIp(req: Request): string {
 
 /**
  * The parsed body, widened with the team-builder's optional `active_team_id`
- * (kept LOCAL — `ChatRequestBody` lives in `@/lib/sse-types`, outside this
+ * (kept LOCAL — `ChatRequestBody` lives in `@/lib/sse/sse-types`, outside this
  * phase's edit scope). Always present after parsing: a non-empty string id or
  * `null` (guests / old clients / explicit deselect).
  */

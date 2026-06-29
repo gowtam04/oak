@@ -17,7 +17,7 @@
  * guest→user→guest transitions AND that every /api/chat send keeps reusing the
  * SAME `session_id` S captured from the very first guest turn.
  *
- * Imports only view code + the lib layer (`@/lib/sse-types`, plain fixtures) —
+ * Imports only view code + the lib layer (`@/lib/sse/sse-types`, plain fixtures) —
  * never db/repos/runtime/server-only. Runs in the Vitest "jsdom" project.
  */
 
@@ -32,7 +32,7 @@ import {
 } from "@testing-library/react";
 
 import Home from "@/app/page";
-import { formatSseEvent } from "@/lib/sse-types";
+import { formatSseEvent } from "@/lib/sse/sse-types";
 import { MINIMAL_ANSWER } from "@/components/test-fixtures";
 import type { OakAnswer } from "@/components/types";
 

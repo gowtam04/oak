@@ -24,7 +24,7 @@ import {
 } from "@testing-library/react";
 
 import Home from "@/app/page";
-import { formatSseEvent } from "@/lib/sse-types";
+import { formatSseEvent } from "@/lib/sse/sse-types";
 import { MINIMAL_ANSWER } from "@/components/test-fixtures";
 import type { ChatTurn, OakAnswer } from "@/components/types";
 

@@ -37,7 +37,7 @@ import type {
   SseEvent,
   SseEventName,
   ToolActivityEvent,
-} from "@/lib/sse-types";
+} from "@/lib/sse/sse-types";
 
 // ---------------------------------------------------------------------------
 // Pure helpers — exported for unit tests
