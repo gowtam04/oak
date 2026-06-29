@@ -10,6 +10,10 @@ The agent's internals (topology, the 11 tools, prompts, the `OakAnswer` output s
 
 > Note: `README.md` is stale — it claims "design phase, no code yet." The app is fully implemented. Trust the code and `docs/`, not the README's status line.
 
+## Git workflow
+
+Commit on the **current branch** — never create a new branch for a commit unless the user explicitly asks for one. This holds even when the current branch is `main`/the default branch.
+
 ## Commands
 
 ```bash
