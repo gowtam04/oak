@@ -46,6 +46,8 @@ export default function ChatThread({
   status,
   streamingMarkdown,
   transportError,
+  reconnecting = false,
+  onRetry,
   onFollowUp,
   imagePreviews,
 }: ChatThreadProps) {
@@ -87,6 +89,9 @@ export default function ChatThread({
   // visibly keeps moving instead of reading as stuck. Computed from a start
   // timestamp rather than incremented, so a throttled/backgrounded tab stays
   // accurate. Resets whenever the turn ends.
+  // Also restart when a reconnect begins/ends so the counter measures the
+  // current attempt, not the cumulative wall-clock across a suspended gap (which
+  // would read as "stuck").
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   useEffect(() => {
     if (status !== "streaming") {
@@ -99,21 +104,23 @@ export default function ChatThread({
       setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
     }, 1000);
     return () => clearInterval(id);
-  }, [status]);
+  }, [status, reconnecting]);
 
   // The in-flight progress trail (completed sub-tasks) and the single active
   // sub-task line. Once the answer starts streaming the active line becomes a
   // "composing" label; before the first tool it's a generic "thinking" line.
   const trail = activity.slice(0, -1);
   const lastActivity = activity[activity.length - 1];
-  const isThinking = !streamingMarkdown && !lastActivity;
-  const currentLabel = streamingMarkdown
-    ? isBuildingTable(streamingMarkdown)
-      ? "📋 Building the results table…"
-      : "✍️ Writing the answer…"
-    : lastActivity
-      ? lastActivity.label
-      : "Thinking through your question…";
+  const isThinking = !reconnecting && !streamingMarkdown && !lastActivity;
+  const currentLabel = reconnecting
+    ? "🔄 Reconnecting…"
+    : streamingMarkdown
+      ? isBuildingTable(streamingMarkdown)
+        ? "📋 Building the results table…"
+        : "✍️ Writing the answer…"
+      : lastActivity
+        ? lastActivity.label
+        : "Thinking through your question…";
 
   return (
     <div className="chat-thread" data-testid="chat-thread">
@@ -195,7 +202,13 @@ export default function ChatThread({
           )}
           <p
             className="chat-thread__progress-current"
-            data-testid={isThinking ? "progress-thinking" : "progress-current"}
+            data-testid={
+              reconnecting
+                ? "progress-reconnecting"
+                : isThinking
+                  ? "progress-thinking"
+                  : "progress-current"
+            }
             aria-live="polite"
           >
             <span className="chat-thread__progress-current-label">
@@ -230,7 +243,19 @@ export default function ChatThread({
           data-testid="transport-error"
           role="alert"
         >
-          Something went wrong ({transportError.code}). Please try again.
+          <span className="chat-thread__error-text">
+            Something went wrong ({transportError.code}). Please try again.
+          </span>
+          {onRetry && (
+            <button
+              type="button"
+              className="chat-thread__error-retry"
+              data-testid="transport-error-retry"
+              onClick={onRetry}
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 

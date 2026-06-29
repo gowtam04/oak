@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSseClient } from "@/lib/sse-client";
+import { useScreenWakeLock } from "@/lib/use-screen-wake-lock";
 import ChatThread from "@/components/ChatThread";
 import Composer from "@/components/Composer";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -71,8 +72,24 @@ export default function Home() {
   const [imagePreviews, setImagePreviews] = useState<Record<string, string[]>>(
     {},
   );
-  const { status, activities, answer, streamingMarkdown, error, send, reset } =
-    useSseClient();
+  const {
+    status,
+    activities,
+    answer,
+    streamingMarkdown,
+    error,
+    reconnecting,
+    send,
+    reset,
+    retry,
+  } = useSseClient();
+
+  // Keep the screen awake while a turn is in flight. On a phone the screen
+  // otherwise auto-locks during a long (image) turn, suspending the page and
+  // killing the SSE connection — the root cause of the mobile "stream error".
+  // `status === "thinking"` spans the whole in-flight window, including an
+  // automatic reconnect (status stays "thinking" throughout).
+  useScreenWakeLock(status === "thinking");
 
   // Track the active request so Stop can decide between a quick-stop reset and a
   // plain stop, and restore the stopped message into the composer.
@@ -621,6 +638,8 @@ export default function Home() {
               status={chatStatus}
               streamingMarkdown={streamingMarkdown}
               transportError={status === "error" ? error : null}
+              reconnecting={reconnecting}
+              onRetry={retry}
               onFollowUp={handleSend}
               imagePreviews={imagePreviews}
             />

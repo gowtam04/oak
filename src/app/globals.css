@@ -1839,6 +1839,32 @@
   font-weight: 600;
   color: color-mix(in srgb, var(--danger) 30%, var(--text-strong));
 }
+.chat-thread__error-text {
+  flex: 1 1 auto;
+}
+/* Inline "Retry" — re-sends the last turn (message + images) without retyping. */
+.chat-thread__error-retry {
+  flex: 0 0 auto;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.chat-thread__error-retry:hover {
+  background: var(--danger);
+  color: var(--surface);
+}
+.chat-thread__error-retry:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
 
 /* --------------------------------------------------------------------------
    17. First-run empty state

@@ -26,7 +26,7 @@
  */
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { OakAnswer } from "@/agent/schemas";
 import type {
   AnswerDeltaEvent,
@@ -187,6 +187,14 @@ export interface SseClientState {
    * In-domain failures arrive in `answer`, not here.
    */
   error: ErrorEvent | null;
+  /**
+   * True only while an automatic reconnect is in progress after a
+   * backgrounding-induced connection drop (phone screen turned off mid-turn).
+   * The turn stays in-flight (`status === "thinking"`); the UI shows a
+   * "Reconnecting…" affordance instead of a dead-end error. Cleared as soon as
+   * the re-sent turn produces output again, or on a terminal answer/error.
+   */
+  reconnecting: boolean;
 }
 
 const INITIAL_STATE: SseClientState = {
@@ -195,6 +203,7 @@ const INITIAL_STATE: SseClientState = {
   answer: null,
   streamingMarkdown: "",
   error: null,
+  reconnecting: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -212,6 +221,12 @@ export interface UseSseClientReturn extends SseClientState {
   send: (body: ChatRequestBody) => void;
   /** Reset to `idle` state, discarding the current answer, activities, and error. */
   reset: () => void;
+  /**
+   * Re-send the most recent turn (same message + images). A no-op once a turn
+   * has succeeded (the retained body is released on a terminal answer); used by
+   * the manual "Retry" affordance shown on a surfaced transport error.
+   */
+  retry: () => void;
 }
 
 /**
@@ -232,6 +247,18 @@ export interface UseSseClientReturn extends SseClientState {
  * // When status === "error", show a retry affordance.
  * ```
  */
+/**
+ * Max automatic re-sends after a backgrounding-induced connection drop.
+ *
+ * Capped at 1 deliberately: there is a narrow server window where a turn can be
+ * persisted just before the suspended client loses the answer frame, so an
+ * unbounded auto-retry could double-persist / double-charge. One attempt heals
+ * the dominant case (screen off during the long silent reasoning phase, which
+ * aborts BEFORE persistence) while bounding that blast radius. A fully
+ * idempotent fix would need a per-turn key the server dedupes on (server-side).
+ */
+const MAX_RETRIES = 1;
+
 export function useSseClient(): UseSseClientReturn {
   const [state, setState] = useState<SseClientState>(INITIAL_STATE);
 
@@ -239,25 +266,71 @@ export function useSseClient(): UseSseClientReturn {
   // before starting a new one, preventing stale state updates.
   const abortRef = useRef<AbortController | null>(null);
 
-  const send = useCallback((body: ChatRequestBody): void => {
-    // Cancel the previous request if still running.
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+  // ── Screen-off recovery bookkeeping (all refs so the long-lived
+  // visibilitychange listener never reads stale values) ─────────────────────
+  // The body of the most recent turn, retained so we can re-send it (auto on
+  // resume, or via the manual Retry button). Released on a terminal answer.
+  const lastBodyRef = useRef<ChatRequestBody | null>(null);
+  // Set true when the page is hidden (screen locked) DURING the current
+  // attempt. Gates auto-retry so only a real suspension — not any error —
+  // triggers a re-send. Reset at the start of every attempt.
+  const hiddenDuringTurnRef = useRef(false);
+  // Auto-retries already spent on the current turn (bounded by MAX_RETRIES).
+  const retryCountRef = useRef(0);
+  // A recoverable failure happened while still hidden; fire the retry once the
+  // page returns to the foreground (we can't re-fetch/acquire a wake lock while
+  // suspended).
+  const pendingRetryRef = useRef(false);
+  // Indirection so the stable `runRequest` and the mounted-once visibility
+  // listener always call the latest `fireRetry` without a dependency cycle.
+  const fireRetryRef = useRef<() => void>(() => {});
 
-    // Immediately transition to "thinking" and clear previous turn state.
-    setState({
-      status: "thinking",
-      activities: [],
-      answer: null,
-      streamingMarkdown: "",
-      error: null,
-    });
+  // One request attempt: fetch → consume the SSE stream → drive state. Stable
+  // (no deps — reads only refs + the stable `setState`), so the retry path and
+  // the visibility listener can call it with zero stale-closure risk. Each call
+  // owns its `controller`, so the `signal.aborted` guards are correctly scoped
+  // to that attempt. Connection-drop failures route to a shared retry path;
+  // clean server faults (HTTP errors, in-band `error` frames) surface as before.
+  const runRequest = useCallback(
+    async (
+      body: ChatRequestBody,
+      controller: AbortController,
+    ): Promise<void> => {
+      // Only a FRESH hide during THIS attempt should arm a retry (prevents
+      // looping on a genuine, visible failure).
+      hiddenDuringTurnRef.current = false;
 
-    // Run the async stream consumer in a detached promise. We use `void` to
-    // signal intentional fire-and-forget (the hook owns the lifecycle via
-    // `controller`). State updates happen via `setState` from inside.
-    void (async (): Promise<void> => {
+      // Decide whether a connection-drop failure should be auto-recovered.
+      // Returns true if it took ownership (retry fired or armed); false means
+      // the caller should surface the error as a normal transport fault.
+      const handleRecoverableFailure = (): boolean => {
+        if (
+          !hiddenDuringTurnRef.current ||
+          retryCountRef.current >= MAX_RETRIES
+        ) {
+          return false;
+        }
+        if (
+          typeof document !== "undefined" &&
+          document.visibilityState === "visible"
+        ) {
+          // Already back in the foreground — re-send immediately.
+          fireRetryRef.current();
+        } else {
+          // Still suspended — show "Reconnecting…" and fire on resume.
+          pendingRetryRef.current = true;
+          setState((prev) => ({
+            ...prev,
+            status: "thinking",
+            reconnecting: true,
+            activities: [],
+            streamingMarkdown: "",
+            error: null,
+          }));
+        }
+        return true;
+      };
+
       // ── Step 1: open the connection ────────────────────────────────────────
       let response: Response;
       try {
@@ -268,11 +341,14 @@ export function useSseClient(): UseSseClientReturn {
           signal: controller.signal,
         });
       } catch (fetchError) {
-        // An AbortError is expected when `send` is called again — ignore it.
+        // An AbortError is expected when `send`/`reset` fires — ignore it.
         if (controller.signal.aborted) return;
+        // A pre-stream fetch throw is a connection drop — recover if backgrounded.
+        if (handleRecoverableFailure()) return;
         setState((prev) => ({
           ...prev,
           status: "error",
+          reconnecting: false,
           error: {
             code: "network_error",
             message:
@@ -285,6 +361,8 @@ export function useSseClient(): UseSseClientReturn {
       }
 
       // ── Step 2: check HTTP-level errors (e.g. 413 / 429 / 503 pre-stream) ──
+      // A clean server response — NEVER auto-retried (several of these, e.g.
+      // model_unavailable, drive the host's model auto-revert on `status:error`).
       if (!response.ok || !response.body) {
         // Prefer the server's JSON `{ code, message }` (e.g. 503
         // model_unavailable) so the UI shows a meaningful, actionable error and
@@ -312,11 +390,17 @@ export function useSseClient(): UseSseClientReturn {
         } catch {
           /* non-JSON body — keep the http_<status> fallback */
         }
-        setState((prev) => ({ ...prev, status: "error", error: errorEvent }));
+        setState((prev) => ({
+          ...prev,
+          status: "error",
+          reconnecting: false,
+          error: errorEvent,
+        }));
         return;
       }
 
       // ── Step 3: consume the SSE stream ─────────────────────────────────────
+      let sawTerminal = false; // an `answer` or `error` frame landed
       try {
         for await (const event of readSseStream(
           response.body,
@@ -326,54 +410,79 @@ export function useSseClient(): UseSseClientReturn {
           if (controller.signal.aborted) return;
 
           if (event.event === "tool_activity") {
-            // Accumulate progress events for the progress UI.
+            // Output resumed → clear any "Reconnecting…" state. Accumulate the
+            // progress event for the progress UI.
             setState((prev) => ({
               ...prev,
+              reconnecting: false,
               activities: [...prev.activities, event.data],
             }));
           } else if (event.event === "answer_start") {
             // A fresh submit_answer began streaming — reset the in-flight buffer
             // (drops a prior attempt that failed validation and is re-emitting).
-            setState((prev) => ({ ...prev, streamingMarkdown: "" }));
+            setState((prev) => ({
+              ...prev,
+              reconnecting: false,
+              streamingMarkdown: "",
+            }));
           } else if (event.event === "answer_delta") {
             // Append the newly-decoded answer_markdown fragment.
             setState((prev) => ({
               ...prev,
+              reconnecting: false,
               streamingMarkdown: prev.streamingMarkdown + event.data.text,
             }));
           } else if (event.event === "answer") {
             // Terminal success (any answer.status — in-domain failures ride here).
-            // Clear the streaming buffer so the committed AnswerCard is the single
-            // source of truth (no double render of the prose).
+            // Release the retained body (turn succeeded → no retry needed) and
+            // clear the streaming buffer so the committed AnswerCard is the
+            // single source of truth (no double render of the prose).
+            sawTerminal = true;
+            lastBodyRef.current = null;
+            retryCountRef.current = 0;
+            pendingRetryRef.current = false;
             setState((prev) => ({
               ...prev,
               status: "done",
+              reconnecting: false,
               answer: event.data.answer,
               streamingMarkdown: "",
             }));
           } else if (event.event === "error") {
-            // Transport fault (integration.md § Error Surface, last two rows).
+            // In-band transport fault (integration.md § Error Surface): the
+            // connection was healthy enough to deliver it, so it's a real
+            // model/agent fault — surface it, never auto-retry.
+            sawTerminal = true;
             setState((prev) => ({
               ...prev,
               status: "error",
+              reconnecting: false,
               error: event.data,
             }));
           }
         }
 
-        // Guard: if the stream ended without emitting an answer or error event
-        // (should not happen with a conformant server, but be defensive).
-        setState((prev) => {
-          if (prev.status === "thinking") {
-            return { ...prev, status: "done" };
-          }
-          return prev;
-        });
+        // The stream ended. A conformant server always emits a terminal event;
+        // its absence means the connection closed (a dropped socket can return a
+        // clean EOF instead of throwing). Recover if the screen went off,
+        // otherwise fall back to `done` (defensive, pre-existing behavior).
+        if (controller.signal.aborted) return;
+        if (!sawTerminal) {
+          if (handleRecoverableFailure()) return;
+          setState((prev) =>
+            prev.status === "thinking"
+              ? { ...prev, status: "done", reconnecting: false }
+              : prev,
+          );
+        }
       } catch (streamError) {
         if (controller.signal.aborted) return;
+        // A mid-stream read throw is a connection drop — recover if backgrounded.
+        if (handleRecoverableFailure()) return;
         setState((prev) => ({
           ...prev,
           status: "error",
+          reconnecting: false,
           error: {
             code: "stream_error",
             message:
@@ -383,14 +492,100 @@ export function useSseClient(): UseSseClientReturn {
           },
         }));
       }
-    })();
+    },
+    [],
+  );
+
+  // Re-send the retained body as an automatic recovery attempt. Keeps the turn
+  // in-flight (status stays "thinking") and shows the reconnecting state.
+  const fireRetry = useCallback((): void => {
+    const body = lastBodyRef.current;
+    if (!body) return;
+    pendingRetryRef.current = false;
+    retryCountRef.current += 1;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setState((prev) => ({
+      ...prev,
+      status: "thinking",
+      reconnecting: true,
+      activities: [],
+      streamingMarkdown: "",
+      error: null,
+    }));
+    void runRequest(body, controller);
+  }, [runRequest]);
+
+  // Keep the ref pointing at the current `fireRetry` (stable, so this runs once)
+  // so `runRequest` and the visibility listener call the live implementation.
+  useEffect(() => {
+    fireRetryRef.current = fireRetry;
+  }, [fireRetry]);
+
+  // Single page-visibility listener (mounted once). On hide DURING a turn, arm
+  // the screen-off gate; on return to the foreground, fire any deferred retry.
+  // Handles the iOS resume race either way: if `visible` fires before the frozen
+  // read rejects, the later failure sees `visible` and retries immediately;
+  // if the read rejects first, it arms `pendingRetryRef` and this fires it.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVisibilityChange = (): void => {
+      const inFlight =
+        abortRef.current !== null && !abortRef.current.signal.aborted;
+      if (document.visibilityState === "hidden") {
+        if (inFlight) hiddenDuringTurnRef.current = true;
+      } else if (document.visibilityState === "visible") {
+        if (pendingRetryRef.current) fireRetryRef.current();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
   }, []);
+
+  const send = useCallback(
+    (body: ChatRequestBody): void => {
+      // Cancel the previous request if still running.
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      // New turn → reset recovery bookkeeping (supersedes any pending retry).
+      lastBodyRef.current = body;
+      hiddenDuringTurnRef.current = false;
+      retryCountRef.current = 0;
+      pendingRetryRef.current = false;
+
+      // Immediately transition to "thinking" and clear previous turn state.
+      setState({
+        status: "thinking",
+        activities: [],
+        answer: null,
+        streamingMarkdown: "",
+        error: null,
+        reconnecting: false,
+      });
+
+      void runRequest(body, controller);
+    },
+    [runRequest],
+  );
 
   const reset = useCallback((): void => {
     abortRef.current?.abort();
     abortRef.current = null;
+    // Cancel any pending/auto retry and drop the retained body.
+    lastBodyRef.current = null;
+    hiddenDuringTurnRef.current = false;
+    retryCountRef.current = 0;
+    pendingRetryRef.current = false;
     setState(INITIAL_STATE);
   }, []);
 
-  return { ...state, send, reset };
+  // Manual re-send of the last turn (the Retry affordance on a surfaced error).
+  const retry = useCallback((): void => {
+    if (lastBodyRef.current) send(lastBodyRef.current);
+  }, [send]);
+
+  return { ...state, send, reset, retry };
 }

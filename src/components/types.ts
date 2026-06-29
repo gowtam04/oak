@@ -310,6 +310,18 @@ export interface ChatThreadProps {
   streamingMarkdown: string;
   /** Set only on transport faults (the `error` SSE event / network failure). */
   transportError: ErrorEvent | null;
+  /**
+   * True while an automatic reconnect is in progress after a screen-off
+   * connection drop. Swaps the in-flight label for a "Reconnecting…" affordance
+   * and restarts the elapsed counter (the turn stays `status === "streaming"`).
+   */
+  reconnecting?: boolean;
+  /**
+   * Re-send the last turn from the surfaced transport-error state (reuses the
+   * message + attached images, so the user need not retype / re-attach). Renders
+   * a "Retry" button when provided.
+   */
+  onRetry?: () => void;
   /** Threaded into each AnswerCard for suggestion/candidate follow-ups. */
   onFollowUp: OnFollowUp;
   /**
