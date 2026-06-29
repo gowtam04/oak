@@ -3,16 +3,20 @@
  * system prompt as provider-tuned {@link SystemSegment}s.
  *
  * Two orthogonal axes:
- *  - MODE (standard vs champions) selects the shared DOMAIN body (`./domain`).
- *  - PROVIDER (anthropic/openai/xai) selects the tuned STYLE that wraps it
- *    (`./style-claude`, `./style-openai`, `./style-grok`).
+ *  - MODE (standard vs champions) selects the DOMAIN body.
+ *  - PROVIDER (anthropic/openai/xai) selects the body's authoring + the tuned
+ *    STYLE that wraps it. anthropic/openai share the Markdown body (`./domain`)
+ *    via their style wrappers (`./style-claude`, `./style-openai`); xai (Oak's
+ *    default model) runs on a Grok-NATIVE, XML-sectioned body (`./domain-grok`)
+ *    behind a thin `./style-grok` builder. The two bodies carry the same domain
+ *    facts in two prompt structures and are kept in parity (see CLAUDE.md).
  *
- * This keeps the Pokémon domain knowledge authored ONCE while each model still
- * gets a prompt tuned to its own published guidance. No SDK/env imports — the
- * runtime imports this; nothing here pulls a secret or a client.
+ * No SDK/env imports — the runtime imports this; nothing here pulls a secret or a
+ * client.
  */
 
 import { domainForMode } from "@/agent/prompts/domain";
+import { grokDomainForMode } from "@/agent/prompts/domain-grok";
 import { buildClaudeSegments } from "@/agent/prompts/style-claude";
 import { buildGrokSegments } from "@/agent/prompts/style-grok";
 import { buildOpenAISegments } from "@/agent/prompts/style-openai";
@@ -30,14 +34,14 @@ export function buildSystemSegments({
   provider,
   mode,
 }: BuildSystemSegmentsOptions): SystemSegment[] {
-  const domain = domainForMode(mode);
   switch (provider) {
     case "openai":
-      return buildOpenAISegments(domain);
+      return buildOpenAISegments(domainForMode(mode));
     case "xai":
-      return buildGrokSegments(domain);
+      // Grok runs on its own XML-sectioned body, not the shared Markdown one.
+      return buildGrokSegments(grokDomainForMode(mode));
     case "anthropic":
     default:
-      return buildClaudeSegments(domain);
+      return buildClaudeSegments(domainForMode(mode));
   }
 }

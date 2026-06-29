@@ -71,7 +71,13 @@ describe("Interpreting attached images — present in both modes and all styles"
         const text = buildSystemSegments({ provider, mode })
           .map((s) => s.text)
           .join("\n");
-        expect(text).toContain("# Interpreting attached images");
+        // The image-interpreting section: a Markdown heading on the shared body,
+        // an XML section on the Grok-native body.
+        expect(text).toContain(
+          provider === "xai"
+            ? "<image_input>"
+            : "# Interpreting attached images",
+        );
         // The general-not-just-teams guarantee + the uncertainty discipline cue.
         expect(text).toContain("general, not just teams");
         expect(text).toContain("uncertainty_flags");
@@ -82,24 +88,29 @@ describe("Interpreting attached images — present in both modes and all styles"
   }
 });
 
-describe("Grok 4.3 style — XML-tagged scaffolding", () => {
+describe("Grok 4.3 style — XML-sectioned native body", () => {
   const text = buildSystemSegments({ provider: "xai", mode: "standard" })
     .map((s) => s.text)
     .join("\n");
 
-  it("wraps the domain + examples in labeled XML tags", () => {
-    expect(text).toContain("<grok_directives>");
+  it("authors the whole body as labeled XML sections (no wrapper)", () => {
+    expect(text).toContain("<role>");
+    expect(text).toContain("<data_rules>");
     expect(text).toContain("<tool_routing>");
-    expect(text).toContain("<playbook>");
+    expect(text).toContain("<reasoning>");
     expect(text).toContain("<examples>");
+    // The wrapper-era tags are gone — the body IS Grok-native now, not the
+    // shared Markdown body wrapped in a <playbook>.
+    expect(text).not.toContain("<playbook>");
+    expect(text).not.toContain("<grok_directives>");
   });
 
-  it("includes the explicit stop condition and the shared domain body", () => {
+  it("includes the explicit stop condition and the Oak identity", () => {
     expect(text).toContain("<stop_condition>");
     expect(text).toContain("You are Oak");
   });
 
-  it("re-expresses the brittle output rules as a top-level <output_contract>", () => {
+  it("front-loads the brittle output rules as a top-level <output_contract>", () => {
     expect(text).toContain("<output_contract>");
     // The three brittle structured-output rules a structured agent tends to drop.
     expect(text).toContain("truncated:false"); // complete-lists rule
