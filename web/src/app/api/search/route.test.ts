@@ -7,8 +7,8 @@
  * singleton BEFORE the first dynamic import of the handler and neutralise
  * `server-only` under the vitest node env.
  *
- * Focus: param validation (bad kind/format → 400), blank query → empty list,
- * a ranked match by kind, and never-throws (in-domain results always 200).
+ * Focus: param validation (bad kind/format → 400), blank query → alphabetical
+ * listing, a ranked match by kind, and never-throws (in-domain results 200).
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -56,10 +56,17 @@ describe("GET /api/search", () => {
     expect(await res.json()).toEqual({ error: "invalid_format" });
   });
 
-  it("returns an empty list for a blank query (not an error)", async () => {
+  it("lists the kind's options (alphabetical) for a blank query", async () => {
     const res = await route.GET(req({ kind: "pokemon", q: "", format: SV }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ matches: [] });
+    const body = (await res.json()) as {
+      matches: { slug: string; display_name: string; kind: string }[];
+    };
+    // Focusing an empty picker browses options, not an empty list.
+    expect(body.matches.length).toBeGreaterThan(0);
+    expect(body.matches.every((m) => m.kind === "pokemon")).toBe(true);
+    const names = body.matches.map((m) => m.display_name);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
   });
 
   it("returns ranked, slug-bearing matches for a partial name", async () => {

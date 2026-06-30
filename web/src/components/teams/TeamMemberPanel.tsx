@@ -205,6 +205,10 @@ export default function TeamMemberPanel({
   // A Mega must hold its stone — auto-filled by the editor and locked here.
   const requiredItem = spriteRef?.required_item ?? null;
   const itemLocked = Boolean(requiredItem);
+  // The species' legal abilities, as picker options (only these are offered).
+  const abilityOptions: PickerOption[] = (spriteRef?.abilities ?? []).map(
+    (slug) => ({ slug, display_name: titleize(slug) }),
+  );
 
   return (
     <div className="team-member-panel" data-testid={id("panel")}>
@@ -295,14 +299,17 @@ export default function TeamMemberPanel({
         <div className="team-member-panel__row2">
           <PickerField label="Ability" htmlFor={id("ability")}>
             <EntityPicker
-              kind="ability"
+              options={abilityOptions}
               format={format}
               value={member.ability ?? ""}
               onChange={(v) => set({ ability: v || null })}
               testid={id("ability")}
               inputId={id("ability")}
               ariaLabel="Ability"
-              placeholder="Search abilities…"
+              placeholder={
+                member.species ? "Search abilities…" : "Select a species first"
+              }
+              disabled={!member.species}
             />
           </PickerField>
           <PickerField

@@ -11,8 +11,8 @@
  * display names while storing canonical slugs — no more typing raw slugs.
  *
  * Responses (all in-domain results ride a 200, mirroring `/api/entity`):
- *   - 200 { matches: { slug, display_name, kind }[] }   (≤ LIMIT, best-first)
- *   - 200 { matches: [] }   for a blank query (a normal typeahead state)
+ *   - 200 { matches: { slug, display_name, kind }[] }   (typed: ≤ LIMIT best-first;
+ *           blank query: an alphabetical listing ≤ LISTING_LIMIT, to browse on focus)
  *   - 400 { error }         for a malformed/missing kind or format
  *
  * Never throws for in-domain misses: an unreadable index degrades to an empty
@@ -30,8 +30,12 @@ export const dynamic = "force-dynamic";
 
 const KINDS = new Set<string>(ENTITY_KINDS);
 
-/** Max matches returned per query — enough for a dropdown, bounds abuse. */
+/** Max matches returned per typed query — enough for a dropdown, bounds abuse. */
 const LIMIT = 8;
+
+/** Max entities listed for a blank query (focus with no input) — a browsable
+ *  window the user then narrows by typing. Larger than LIMIT but still bounded. */
+const LISTING_LIMIT = 50;
 
 /** Cap the query length — names are short; this bounds fuse.js work. */
 const MAX_Q = 64;
@@ -49,12 +53,14 @@ export async function GET(req: Request): Promise<Response> {
   const kind = kindParam as EntityKind;
   const format = formatParam as Format;
 
-  // A blank query is a normal typeahead state, not an error — no matches.
-  if (q.length === 0) return json(200, { matches: [] });
-
   try {
-    const { resolveEntity } = await import("@/data/repos/resolve-index");
-    const { matches } = await resolveEntity(q, kind, LIMIT, format);
+    const repo = await import("@/data/repos/resolve-index");
+    // A blank query (a focused, empty picker) lists the kind's options so the
+    // user can browse + filter; a typed query fuzzy-ranks the best matches.
+    const { matches } =
+      q.length === 0
+        ? await repo.listEntities(kind, LISTING_LIMIT, format)
+        : await repo.resolveEntity(q, kind, LIMIT, format);
     return json(200, {
       matches: matches.map((m) => ({
         slug: m.slug,

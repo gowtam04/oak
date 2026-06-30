@@ -502,6 +502,12 @@ export interface SpriteRef {
    */
   required_item?: string | null;
   /**
+   * This form's legal ability slugs (slot1 / slot2 / hidden, in that order, nulls
+   * dropped) — the team builder's Ability picker offers ONLY these. Optional so
+   * older callers/fixtures stay valid.
+   */
+  abilities?: string[];
+  /**
    * Base stats, so the team artifact can compute final stats client-side. The
    * answer-enrichment caller ignores this; the team-sprite lookup uses it.
    */
@@ -560,6 +566,9 @@ export async function spriteRefsByNames(
     type2: string | null;
     sprite_url: string;
     required_item: string | null;
+    ability_slot1: string;
+    ability_slot2: string | null;
+    ability_hidden: string | null;
     stat_hp: number;
     stat_attack: number;
     stat_defense: number;
@@ -577,6 +586,9 @@ export async function spriteRefsByNames(
         type2: pokemon.type2,
         sprite_url: pokemon.sprite_url,
         required_item: pokemon.required_item,
+        ability_slot1: pokemon.ability_slot1,
+        ability_slot2: pokemon.ability_slot2,
+        ability_hidden: pokemon.ability_hidden,
         stat_hp: pokemon.stat_hp,
         stat_attack: pokemon.stat_attack,
         stat_defense: pokemon.stat_defense,
@@ -609,6 +621,9 @@ export async function spriteRefsByNames(
       dex_number: r.national_dex_number,
       types: r.type2 ? [r.type1, r.type2] : [r.type1],
       required_item: r.required_item,
+      abilities: [r.ability_slot1, r.ability_slot2, r.ability_hidden].filter(
+        (a): a is string => Boolean(a),
+      ),
       base_stats: {
         hp: r.stat_hp,
         attack: r.stat_attack,

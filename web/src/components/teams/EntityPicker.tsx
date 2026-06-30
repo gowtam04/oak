@@ -134,8 +134,10 @@ export default function EntityPicker({
       return;
     }
 
-    // Network search — debounced, with a stale-response guard.
-    if (!kind || query.length === 0) {
+    // Network search — debounced, with a stale-response guard. An empty query is
+    // sent too: the endpoint lists the kind's options so focusing shows a
+    // browsable list before any typing.
+    if (!kind) {
       setResults([]);
       return;
     }

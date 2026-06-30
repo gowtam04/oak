@@ -81,9 +81,31 @@ function toScore(fuseScore: number | undefined): number {
  */
 export class ResolveIndex {
   private readonly fuse: Fuse<SearchableName>;
+  private readonly rows: SearchableName[];
 
   constructor(rows: SearchableName[]) {
     this.fuse = new Fuse(rows, FUSE_OPTIONS);
+    this.rows = rows;
+  }
+
+  /**
+   * List the entities of one `kind` (alphabetical by display name), capped at
+   * `limit`. Backs the picker's "show options on focus" with no query — there is
+   * nothing to rank, so order is just the friendly name. `score` is a constant 1.
+   */
+  list(kind: ResolveKind = "any", limit = 50): ResolveEntityOutput {
+    const matches = this.rows
+      .filter((r) => kind === "any" || r.kind === kind)
+      .slice()
+      .sort((a, b) => a.display_name.localeCompare(b.display_name))
+      .slice(0, Math.max(0, limit))
+      .map((r) => ({
+        kind: r.kind,
+        slug: r.slug,
+        display_name: r.display_name,
+        score: 1,
+      }));
+    return { matches };
   }
 
   /**
@@ -170,6 +192,18 @@ export async function resolveEntity(
   format: Format = "scarlet-violet",
 ): Promise<ResolveEntityOutput> {
   return (await getIndex(format)).resolve(query, kind, limit);
+}
+
+/**
+ * List entities of one `kind` for `format`, alphabetical, capped at `limit` —
+ * backs the picker's "show options on focus" (empty query). Never throws.
+ */
+export async function listEntities(
+  kind: ResolveKind = "any",
+  limit = 50,
+  format: Format = "scarlet-violet",
+): Promise<ResolveEntityOutput> {
+  return (await getIndex(format)).list(kind, limit);
 }
 
 /**

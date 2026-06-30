@@ -28,7 +28,9 @@ function toRef(value: unknown): SpriteRef | null {
     bs === null ||
     typeof bs !== "object" ||
     // required_item is nullable but, when present, must be a string.
-    (r.required_item != null && typeof r.required_item !== "string")
+    (r.required_item != null && typeof r.required_item !== "string") ||
+    // abilities is optional but, when present, must be a string array.
+    (r.abilities != null && !Array.isArray(r.abilities))
   ) {
     return null;
   }

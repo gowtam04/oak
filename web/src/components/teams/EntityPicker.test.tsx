@@ -122,7 +122,10 @@ describe("EntityPicker", () => {
     expect(search.searchEntities).not.toHaveBeenCalled();
   });
 
-  it("does not query the network for a blank query", async () => {
+  it("lists options on focus (queries with an empty string)", async () => {
+    search.searchEntities.mockResolvedValue([
+      { slug: "leftovers", display_name: "Leftovers", kind: "item" },
+    ]);
     render(
       <EntityPicker
         kind="item"
@@ -133,8 +136,14 @@ describe("EntityPicker", () => {
       />,
     );
     fireEvent.focus(screen.getByTestId("member-0-item"));
+    // Focusing browses the kind's options — the picker queries with "".
     await waitFor(() => {
-      expect(search.searchEntities).not.toHaveBeenCalled();
+      expect(search.searchEntities).toHaveBeenCalledWith(
+        "item",
+        "",
+        "scarlet-violet",
+      );
     });
+    expect(await screen.findByText("Leftovers")).toBeInTheDocument();
   });
 });

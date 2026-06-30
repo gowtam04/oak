@@ -119,6 +119,16 @@ describe("createResolveIndex().resolve", () => {
     expect(index.resolve("", "any", 5).matches).toEqual([]);
   });
 
+  it("list() returns a kind's options alphabetically, capped by limit", () => {
+    const { matches } = index.list("pokemon", 3);
+    expect(matches.length).toBeLessThanOrEqual(3);
+    expect(matches.every((m) => m.kind === "pokemon")).toBe(true);
+    const names = matches.map((m) => m.display_name);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+    // Farigiraf sorts before Garchomp before Ninetales.
+    expect(matches[0]!.slug).toBe("farigiraf");
+  });
+
   it("honours the limit", () => {
     const { matches } = index.resolve("a", "any", 2);
     expect(matches.length).toBeLessThanOrEqual(2);
