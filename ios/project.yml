@@ -34,7 +34,7 @@ settings:
     TARGETED_DEVICE_FAMILY: "1"
     ENABLE_USER_SCRIPT_SANDBOXING: "NO"
     MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "2"
   configs:
     Debug:
       # Debug builds target staging (BaseURL.swift switches on OAK_STAGING).
@@ -68,6 +68,12 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: "YES"
         SUPPORTS_MACCATALYST: "NO"
+        # iPhone only (M-CON-2). MUST be set on the TARGET: XcodeGen's application
+        # settingPreset injects TARGETED_DEVICE_FAMILY="1,2" (iPhone+iPad) at the
+        # target level, which overrides the project-level base "1" — so without
+        # this the binary ships as iPhone+iPad and App Store Connect demands iPad
+        # screenshots.
+        TARGETED_DEVICE_FAMILY: "1"
 
   OakAppTests:
     type: bundle.unit-test

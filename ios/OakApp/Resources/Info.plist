@@ -24,18 +24,12 @@
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<!-- Portrait-only (iPhone, M-CON-2): a chat/team-builder UI that matches the
+	     portrait App Store screenshots. -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<!-- iPhone-only, always full screen (M-CON-2). Declaring this exempts the app
-	     from the App Store rule (error 90474) that otherwise requires all four
-	     orientations (incl. PortraitUpsideDown) once landscape is supported; it
-	     has no behavioral effect on iPhone, which is always full screen. -->
-	<key>UIRequiresFullScreen</key>
-	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
