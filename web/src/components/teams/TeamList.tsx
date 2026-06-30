@@ -3,11 +3,12 @@
  * top-level create / import entry points (TEAM-US-1/2/3/4, AC-4.x).
  *
  * Pure presentational + local confirm state: every mutation is a parent callback
- * (the page wires them to the never-throwing `useTeams` hook). Each row shows the
- * team name, format, member count, and an "incomplete" hint (a partial team is
- * valid — BR-T4); selecting a row opens it in the editor. Duplicate clones the
- * team (AC-4.2). Delete is a two-step confirm in place (AC-4.3) so a stray click
- * can't destroy a team. An empty list renders an explicit empty state.
+ * (the page wires them to the never-throwing `useTeams` hook). Each row is a card
+ * showing the team name, format, member count, and an "incomplete" hint (a
+ * partial team is valid — BR-T4) or a "full" badge at 6/6; selecting a row opens
+ * it in the editor. Duplicate clones the team (AC-4.2). Delete is a two-step
+ * confirm in place (AC-4.3) so a stray click can't destroy a team. An empty list
+ * renders an inviting empty state with the two primary actions.
  *
  * Guests never reach this component (the page shows a sign-in prompt instead),
  * so there is no auth branch here.
@@ -44,23 +45,37 @@ export default function TeamList({
   return (
     <div className="team-list" data-testid="team-list">
       <div className="team-list__actions">
-        <button type="button" data-testid="team-new" onClick={onNew}>
-          New team
+        <button
+          type="button"
+          className="tm-btn tm-btn--primary team-list__new"
+          data-testid="team-new"
+          onClick={onNew}
+        >
+          <span aria-hidden>+</span> New team
         </button>
-        <button type="button" data-testid="team-import" onClick={onImport}>
+        <button
+          type="button"
+          className="tm-btn tm-btn--secondary"
+          data-testid="team-import"
+          onClick={onImport}
+        >
           Import paste
         </button>
       </div>
 
       {teams.length === 0 ? (
-        <p className="team-list__empty" data-testid="team-list-empty">
-          No teams yet. Create one or import a Showdown paste to get started.
-        </p>
+        <div className="team-list__empty" data-testid="team-list-empty">
+          <span className="team-list__empty-icon" aria-hidden />
+          <p className="team-list__empty-text">
+            No teams yet. Create one or import a Showdown paste to get started.
+          </p>
+        </div>
       ) : (
         <ul className="team-list__items" data-testid="team-list-items">
           {teams.map((team) => {
             const selected = team.id === selectedId;
             const confirming = confirmingId === team.id;
+            const full = team.memberCount === 6 && !team.incomplete;
             return (
               <li
                 key={team.id}
@@ -74,21 +89,33 @@ export default function TeamList({
                   data-testid={`team-open-${team.id}`}
                   onClick={() => onSelect(team.id)}
                 >
-                  {team.name || "Untitled team"}
+                  <span className="team-list__name">
+                    {team.name || "Untitled team"}
+                  </span>
+                  <span className="team-list__meta">
+                    {team.format} · {team.memberCount}/6
+                    {team.incomplete && (
+                      <span
+                        className="team-list__flag team-list__flag--incomplete"
+                        data-testid={`team-incomplete-${team.id}`}
+                      >
+                        {" "}
+                        · incomplete
+                      </span>
+                    )}
+                  </span>
                 </button>
-                <span className="team-list__meta">
-                  {team.format} · {team.memberCount}/6
-                  {team.incomplete && (
-                    <span data-testid={`team-incomplete-${team.id}`}>
-                      {" "}
-                      · incomplete
-                    </span>
-                  )}
-                </span>
+
+                {full && (
+                  <span className="team-list__badge" aria-label="Full team">
+                    ✓
+                  </span>
+                )}
 
                 <div className="team-list__row-actions">
                   <button
                     type="button"
+                    className="tm-btn tm-btn--ghost tm-btn--sm"
                     data-testid={`team-duplicate-${team.id}`}
                     onClick={() => onDuplicate(team.id)}
                   >
@@ -98,16 +125,18 @@ export default function TeamList({
                     <>
                       <button
                         type="button"
+                        className="tm-btn tm-btn--danger tm-btn--sm"
                         data-testid={`team-delete-confirm-${team.id}`}
                         onClick={() => {
                           setConfirmingId(null);
                           onDelete(team.id);
                         }}
                       >
-                        Confirm delete
+                        Confirm
                       </button>
                       <button
                         type="button"
+                        className="tm-btn tm-btn--ghost tm-btn--sm"
                         data-testid={`team-delete-cancel-${team.id}`}
                         onClick={() => setConfirmingId(null)}
                       >
@@ -117,6 +146,7 @@ export default function TeamList({
                   ) : (
                     <button
                       type="button"
+                      className="tm-btn tm-btn--ghost tm-btn--sm team-list__delete"
                       data-testid={`team-delete-${team.id}`}
                       onClick={() => setConfirmingId(team.id)}
                     >

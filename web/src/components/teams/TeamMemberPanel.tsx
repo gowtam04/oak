@@ -1,29 +1,43 @@
 /**
- * TeamMemberPanel — the editor for ONE team slot (set).
+ * TeamMemberPanel — the focused editor for ONE team slot (set).
  *
- * Renders every competitive field of a {@link TeamMember} as a controlled input
- * (species / ability / item / 4 moves / nature / tera type / level / EV + IV
- * spreads, plus the cosmetic nickname) and emits an updated member on each edit.
- * Slugs are stored, `null` = empty (BR-T4); a partial member is valid.
+ * Renders every competitive field of a {@link TeamMember} (species / ability /
+ * item / 4 moves / nature / tera type / level / EV + IV spreads, plus the
+ * cosmetic nickname) and emits an updated member on each edit. Slugs are stored,
+ * `null` = empty (BR-T4); a partial member is valid. The free-text slug inputs
+ * are now {@link EntityPicker} autocompletes — but each still keeps its
+ * `data-testid` and commits the typed/selected value verbatim via `onChange`, so
+ * a typed slug behaves exactly as before.
  *
- * When the species' base stats are supplied (`baseStats`, fetched by the page
- * from the entity index), the panel shows LIVE final stats computed by the PURE
- * `compute-stat` formula — the exact in-game per-step flooring, including the
- * nature ±10% — so the user sees the spread react as they type EVs/IVs/level.
- * No base stats ⇒ the live column is simply omitted (the field is still fully
- * editable). Per-slot validity warnings (already filtered to this slot) render
- * inline via {@link TeamWarnings}.
+ * When the species' base stats are supplied (`baseStats`, looked up by the page
+ * from the sprite/entity index) the panel shows LIVE final stats computed by the
+ * PURE `compute-stat` formula — the exact in-game per-step flooring, including
+ * the nature ±10% — as relative bars that react as the user types EVs/IVs/level.
+ * No base stats ⇒ the live bars are simply omitted (fields stay editable). A
+ * `spriteRef` adds the sprite header + type badges. Per-slot validity warnings
+ * (already filtered to this slot) render inline via {@link TeamWarnings}.
  *
  * Reorder (up/down) and remove are parent-driven callbacks; the panel never
  * mutates the team array itself.
  */
 
+"use client";
+
 import { computeStat } from "@/agent/formulas/compute-stat";
-import type { StatSpread, TeamMember } from "@/data/teams/team-schema";
+import type { TeamMember } from "@/data/teams/team-schema";
 import type { TeamWarning } from "@/lib/api/teams-client";
+import type { SpriteRef } from "@/lib/api/sprites-client";
+import { type Format } from "@/data/formats";
+import EntityPicker from "./EntityPicker";
+import {
+  NATURE_EFFECTS,
+  NATURE_OPTIONS,
+  TYPE_OPTIONS,
+  type SpreadKey,
+} from "./dex-constants";
 import TeamWarnings from "./TeamWarnings";
 
-/** Base-stat spread as exposed by the entity index (`base_stats`). */
+/** Base-stat spread as exposed by the entity/sprite index (`base_stats`). */
 export interface MemberBaseStats {
   hp: number;
   attack: number;
@@ -32,8 +46,6 @@ export interface MemberBaseStats {
   special_defense: number;
   speed: number;
 }
-
-type SpreadKey = keyof StatSpread; // hp | atk | def | spa | spd | spe
 
 interface StatRow {
   spread: SpreadKey;
@@ -51,37 +63,15 @@ const STAT_ROWS: StatRow[] = [
   { spread: "spe", base: "speed", label: "Spe", isHp: false },
 ];
 
-/** Nature → (boosted, hindered) stat. Neutral natures are absent from the map. */
-const NATURES: Record<string, { plus?: SpreadKey; minus?: SpreadKey }> = {
-  lonely: { plus: "atk", minus: "def" },
-  brave: { plus: "atk", minus: "spe" },
-  adamant: { plus: "atk", minus: "spa" },
-  naughty: { plus: "atk", minus: "spd" },
-  bold: { plus: "def", minus: "atk" },
-  relaxed: { plus: "def", minus: "spe" },
-  impish: { plus: "def", minus: "spa" },
-  lax: { plus: "def", minus: "spd" },
-  timid: { plus: "spe", minus: "atk" },
-  hasty: { plus: "spe", minus: "def" },
-  jolly: { plus: "spe", minus: "spa" },
-  naive: { plus: "spe", minus: "spd" },
-  modest: { plus: "spa", minus: "atk" },
-  mild: { plus: "spa", minus: "def" },
-  quiet: { plus: "spa", minus: "spe" },
-  rash: { plus: "spa", minus: "spd" },
-  calm: { plus: "spd", minus: "atk" },
-  gentle: { plus: "spd", minus: "def" },
-  sassy: { plus: "spd", minus: "spe" },
-  careful: { plus: "spd", minus: "spa" },
-  // hardy / docile / serious / bashful / quirky are neutral (no entry).
-};
+/** Competitive EV budget: 508 total, 252 per stat. */
+const EV_TOTAL_CAP = 508;
 
 function natureEffectFor(
   nature: string | null,
   stat: SpreadKey,
 ): "boosted" | "neutral" | "hindered" {
   if (!nature) return "neutral";
-  const mod = NATURES[nature.toLowerCase()];
+  const mod = NATURE_EFFECTS[nature.toLowerCase()];
   if (!mod) return "neutral";
   if (mod.plus === stat) return "boosted";
   if (mod.minus === stat) return "hindered";
@@ -113,14 +103,28 @@ function clampInt(raw: string, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
+/** Title-case a slug for display ("great-tusk" → "Great Tusk"). */
+function titleize(value: string | null): string {
+  if (!value) return "Empty slot";
+  return value
+    .split(/[-\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 export interface TeamMemberPanelProps {
   member: TeamMember;
   /** 0-based slot index (for ids + labels). */
   slot: number;
   /** Warnings already filtered to this slot. */
   warnings: TeamWarning[];
-  /** Species base stats for the live-stat column; omit ⇒ no live column. */
+  /** Species base stats for the live-stat bars; omit ⇒ no live bars. */
   baseStats?: MemberBaseStats;
+  /** Sprite/types for the header chip; omit ⇒ no sprite header. */
+  spriteRef?: SpriteRef;
+  /** Data scope for the autocomplete pickers. */
+  format?: Format;
   onChange: (next: TeamMember) => void;
   onRemove: () => void;
   onMoveUp?: () => void;
@@ -134,6 +138,8 @@ export default function TeamMemberPanel({
   slot,
   warnings,
   baseStats,
+  spriteRef,
+  format = "scarlet-violet",
   onChange,
   onRemove,
   onMoveUp,
@@ -160,13 +166,32 @@ export default function TeamMemberPanel({
     onChange({ ...member, moves: next.map((m) => m.trim()).filter(Boolean) });
   };
 
+  // Live stats + a shared max so the bars are relative to this set's spread.
+  const lives = STAT_ROWS.map((row) =>
+    baseStats ? liveStat(row, member, baseStats) : null,
+  );
+  const maxLive = Math.max(1, ...lives.map((v) => v ?? 0));
+
+  const evTotal = STAT_ROWS.reduce((sum, r) => sum + member.evs[r.spread], 0);
+  const evOver = evTotal > EV_TOTAL_CAP;
+  const spriteUrl = spriteRef?.sprite_url ?? null;
+  const types = spriteRef?.types ?? [];
+
   return (
     <div className="team-member-panel" data-testid={id("panel")}>
       <div className="team-member-panel__header">
-        <span className="team-member-panel__slot-label">Slot {slot + 1}</span>
+        <div className="team-member-panel__title">
+          <span className="team-member-panel__slot-label">Slot {slot + 1}</span>
+          {member.species && (
+            <span className="team-member-panel__species-name">
+              {titleize(member.species)}
+            </span>
+          )}
+        </div>
         <div className="team-member-panel__actions">
           <button
             type="button"
+            className="tm-icon-btn"
             data-testid={id("up")}
             aria-label={`Move slot ${slot + 1} up`}
             onClick={onMoveUp}
@@ -176,6 +201,7 @@ export default function TeamMemberPanel({
           </button>
           <button
             type="button"
+            className="tm-icon-btn"
             data-testid={id("down")}
             aria-label={`Move slot ${slot + 1} down`}
             onClick={onMoveDown}
@@ -185,6 +211,7 @@ export default function TeamMemberPanel({
           </button>
           <button
             type="button"
+            className="tm-icon-btn tm-icon-btn--danger"
             data-testid={id("remove")}
             aria-label={`Remove slot ${slot + 1}`}
             onClick={onRemove}
@@ -194,144 +221,231 @@ export default function TeamMemberPanel({
         </div>
       </div>
 
-      <Field label="Nickname" htmlFor={id("nickname")}>
-        <input
-          id={id("nickname")}
-          data-testid={id("nickname")}
-          value={member.nickname ?? ""}
-          onChange={(e) => set({ nickname: e.target.value || null })}
-        />
-      </Field>
+      {member.species && (
+        <div className="team-member-panel__identity">
+          <span className="team-member-panel__sprite">
+            {spriteUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={spriteUrl} alt="" aria-hidden loading="lazy" />
+            ) : (
+              <span className="team-member-panel__sprite-empty" aria-hidden />
+            )}
+          </span>
+          <div className="team-member-panel__identity-meta">
+            <span className="team-member-panel__identity-name">
+              {titleize(member.species)}
+            </span>
+            {types.length > 0 && (
+              <span className="team-member-panel__types">
+                {types.map((t) => (
+                  <span key={t} className={`type-badge type-badge--${t}`}>
+                    {t}
+                  </span>
+                ))}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
-      <Field label="Species" htmlFor={id("species")}>
-        <input
-          id={id("species")}
-          data-testid={id("species")}
-          value={member.species ?? ""}
-          placeholder="species slug"
-          onChange={(e) => set({ species: e.target.value || null })}
-        />
-      </Field>
+      <div className="team-member-panel__fields">
+        <PickerField label="Species" htmlFor={id("species")}>
+          <EntityPicker
+            kind="pokemon"
+            format={format}
+            value={member.species ?? ""}
+            onChange={(v) => set({ species: v || null })}
+            testid={id("species")}
+            inputId={id("species")}
+            ariaLabel="Species"
+            placeholder="Search Pokémon…"
+            withSprite
+          />
+        </PickerField>
 
-      <Field label="Ability" htmlFor={id("ability")}>
-        <input
-          id={id("ability")}
-          data-testid={id("ability")}
-          value={member.ability ?? ""}
-          onChange={(e) => set({ ability: e.target.value || null })}
-        />
-      </Field>
-
-      <Field label="Item" htmlFor={id("item")}>
-        <input
-          id={id("item")}
-          data-testid={id("item")}
-          value={member.item ?? ""}
-          onChange={(e) => set({ item: e.target.value || null })}
-        />
-      </Field>
+        <div className="team-member-panel__row2">
+          <PickerField label="Ability" htmlFor={id("ability")}>
+            <EntityPicker
+              kind="ability"
+              format={format}
+              value={member.ability ?? ""}
+              onChange={(v) => set({ ability: v || null })}
+              testid={id("ability")}
+              inputId={id("ability")}
+              ariaLabel="Ability"
+              placeholder="Search abilities…"
+            />
+          </PickerField>
+          <PickerField label="Item" htmlFor={id("item")}>
+            <EntityPicker
+              kind="item"
+              format={format}
+              value={member.item ?? ""}
+              onChange={(v) => set({ item: v || null })}
+              testid={id("item")}
+              inputId={id("item")}
+              ariaLabel="Item"
+              placeholder="Search items…"
+            />
+          </PickerField>
+        </div>
+      </div>
 
       <fieldset className="team-member-panel__moves" data-testid={id("moves")}>
         <legend className="team-member-panel__moves-legend">Moves</legend>
         <div className="team-member-panel__moves-grid">
           {[0, 1, 2, 3].map((i) => (
-            <input
+            <EntityPicker
               key={i}
-              data-testid={id(`move-${i}`)}
-              aria-label={`Move ${i + 1}`}
-              value={moveInputs[i]}
-              onChange={(e) => setMove(i, e.target.value)}
+              kind="move"
+              format={format}
+              value={moveInputs[i]!}
+              onChange={(v) => setMove(i, v)}
+              testid={id(`move-${i}`)}
+              ariaLabel={`Move ${i + 1}`}
+              placeholder={`Move ${i + 1}`}
             />
           ))}
         </div>
       </fieldset>
 
       <div className="team-member-panel__meta-grid">
-        <Field label="Nature" htmlFor={id("nature")}>
-          <input
-            id={id("nature")}
-            data-testid={id("nature")}
+        <PickerField label="Nature" htmlFor={id("nature")}>
+          <EntityPicker
+            options={NATURE_OPTIONS}
+            format={format}
             value={member.nature ?? ""}
-            onChange={(e) => set({ nature: e.target.value || null })}
+            onChange={(v) => set({ nature: v || null })}
+            testid={id("nature")}
+            inputId={id("nature")}
+            ariaLabel="Nature"
+            placeholder="Nature"
           />
-        </Field>
-        <Field label="Tera type" htmlFor={id("tera")}>
-          <input
-            id={id("tera")}
-            data-testid={id("tera")}
+        </PickerField>
+        <PickerField label="Tera type" htmlFor={id("tera")}>
+          <EntityPicker
+            options={TYPE_OPTIONS}
+            format={format}
             value={member.tera_type ?? ""}
-            onChange={(e) => set({ tera_type: e.target.value || null })}
+            onChange={(v) => set({ tera_type: v || null })}
+            testid={id("tera")}
+            inputId={id("tera")}
+            ariaLabel="Tera type"
+            placeholder="Tera type"
           />
-        </Field>
-        <Field label="Level" htmlFor={id("level")}>
+        </PickerField>
+        <label className="team-member-panel__field" htmlFor={id("level")}>
+          Level
           <input
             id={id("level")}
             data-testid={id("level")}
+            className="team-member-panel__level-input"
             type="number"
             min={1}
             max={100}
             value={member.level}
             onChange={(e) => set({ level: clampInt(e.target.value, 1, 100) })}
           />
-        </Field>
+        </label>
       </div>
 
-      <table className="team-member-panel__stats" data-testid={id("stats")}>
-        <thead>
-          <tr className="team-member-panel__stats-head-row">
-            <th className="team-member-panel__col-head">Stat</th>
-            <th>EV</th>
-            <th>IV</th>
-            {baseStats && <th data-testid={id("stats-live-head")}>Final</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {STAT_ROWS.map((row) => {
-            const live = baseStats ? liveStat(row, member, baseStats) : null;
-            return (
-              <tr key={row.spread}>
-                <td className="team-member-panel__stat-name">{row.label}</td>
-                <td>
-                  <input
-                    data-testid={id(`ev-${row.spread}`)}
-                    aria-label={`${row.label} EV`}
-                    type="number"
-                    min={0}
-                    max={255}
-                    value={member.evs[row.spread]}
-                    onChange={(e) =>
-                      setSpread("evs", row.spread, e.target.value)
-                    }
-                    className="team-member-panel__spread-input"
+      <div className="team-member-panel__stats" data-testid={id("stats")}>
+        <div className="team-member-panel__stats-head">
+          <span className="team-member-panel__stats-title">EVs</span>
+          <span
+            className={
+              "team-member-panel__ev-total" +
+              (evOver ? " team-member-panel__ev-total--over" : "")
+            }
+            data-testid={id("ev-total")}
+          >
+            {evTotal} / {EV_TOTAL_CAP}
+          </span>
+        </div>
+
+        {STAT_ROWS.map((row, i) => {
+          const ev = member.evs[row.spread];
+          const live = lives[i];
+          const effect = row.isHp ? "neutral" : natureEffectFor(member.nature, row.spread);
+          return (
+            <div className="tm-stat" key={row.spread} data-effect={effect}>
+              <span className="tm-stat__label">{row.label}</span>
+              <input
+                className="tm-stat__slider"
+                type="range"
+                min={0}
+                max={252}
+                step={4}
+                value={Math.min(ev, 252)}
+                aria-label={`${row.label} EV slider`}
+                onChange={(e) => setSpread("evs", row.spread, e.target.value)}
+              />
+              <input
+                className="tm-stat__ev"
+                data-testid={id(`ev-${row.spread}`)}
+                aria-label={`${row.label} EV`}
+                type="number"
+                min={0}
+                max={255}
+                value={ev}
+                onChange={(e) => setSpread("evs", row.spread, e.target.value)}
+              />
+              {baseStats && (
+                <span className="tm-stat__bar">
+                  <span
+                    className="tm-stat__bar-fill"
+                    // eslint-disable-next-line react/forbid-dom-props -- bar width is a live computed percentage
+                    style={{
+                      width: `${live ? Math.round((live / maxLive) * 100) : 0}%`,
+                    }}
                   />
-                </td>
-                <td>
-                  <input
-                    data-testid={id(`iv-${row.spread}`)}
-                    aria-label={`${row.label} IV`}
-                    type="number"
-                    min={0}
-                    max={31}
-                    value={member.ivs[row.spread]}
-                    onChange={(e) =>
-                      setSpread("ivs", row.spread, e.target.value)
-                    }
-                    className="team-member-panel__spread-input"
-                  />
-                </td>
-                {baseStats && (
-                  <td
+                  <span
+                    className="tm-stat__final"
                     data-testid={id(`stat-${row.spread}`)}
-                    className="team-member-panel__stat-final"
                   >
                     {live ?? "—"}
-                  </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  </span>
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <details className="team-member-panel__advanced">
+        <summary className="team-member-panel__advanced-summary">
+          Advanced — IVs & nickname
+        </summary>
+        <div className="team-member-panel__iv-grid">
+          {STAT_ROWS.map((row) => (
+            <label
+              key={row.spread}
+              className="team-member-panel__iv-field"
+            >
+              {row.label} IV
+              <input
+                data-testid={id(`iv-${row.spread}`)}
+                aria-label={`${row.label} IV`}
+                type="number"
+                min={0}
+                max={31}
+                value={member.ivs[row.spread]}
+                onChange={(e) => setSpread("ivs", row.spread, e.target.value)}
+              />
+            </label>
+          ))}
+        </div>
+        <label className="team-member-panel__field" htmlFor={id("nickname")}>
+          Nickname
+          <input
+            id={id("nickname")}
+            data-testid={id("nickname")}
+            value={member.nickname ?? ""}
+            placeholder="(optional)"
+            onChange={(e) => set({ nickname: e.target.value || null })}
+          />
+        </label>
+      </details>
 
       <TeamWarnings
         warnings={warnings}
@@ -342,8 +456,9 @@ export default function TeamMemberPanel({
   );
 }
 
-/** A labeled wrapper around a single control. */
-function Field({
+/** A labeled wrapper around a picker (label is not a <label> to avoid wrapping
+ *  the combobox dropdown — the picker's input carries its own aria-label). */
+function PickerField({
   label,
   htmlFor,
   children,
@@ -353,9 +468,11 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label htmlFor={htmlFor} className="team-member-panel__field">
-      {label}
+    <div className="team-member-panel__field">
+      <label className="team-member-panel__field-label" htmlFor={htmlFor}>
+        {label}
+      </label>
       {children}
-    </label>
+    </div>
   );
 }

@@ -3,6 +3,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 import TeamEditor from "./TeamEditor";
 import type { TeamDetail } from "@/lib/api/teams-client";
+import type { SpriteRef } from "@/lib/api/sprites-client";
 import type { TeamMember } from "@/data/teams/team-schema";
 
 afterEach(() => cleanup());
@@ -45,11 +46,22 @@ function setup(overrides: Partial<React.ComponentProps<typeof TeamEditor>> = {})
 }
 
 describe("TeamEditor", () => {
-  it("seeds the name and a panel per member", () => {
+  it("seeds the name, a roster chip per member, and a focused panel", () => {
     setup();
     expect(screen.getByTestId("team-name")).toHaveValue("My Team");
+    // The roster shows every member; only the selected slot mounts a panel.
+    expect(screen.getByTestId("roster-slot-0")).toBeInTheDocument();
+    expect(screen.getByTestId("roster-slot-1")).toBeInTheDocument();
     expect(screen.getByTestId("member-0-panel")).toBeInTheDocument();
+    expect(screen.queryByTestId("member-1-panel")).not.toBeInTheDocument();
+  });
+
+  it("focuses a member when its roster chip is clicked", () => {
+    setup();
+    expect(screen.getByTestId("member-0-species")).toHaveValue("gyarados");
+    fireEvent.click(screen.getByTestId("roster-slot-1"));
     expect(screen.getByTestId("member-1-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("member-1-species")).toHaveValue("garchomp");
   });
 
   it("renames and saves the draft", () => {
@@ -63,12 +75,12 @@ describe("TeamEditor", () => {
     );
   });
 
-  it("adds a blank member up to six", () => {
+  it("adds a blank member and focuses it", () => {
     setup({ team: detail({ members: [fullMember("ditto")] }) });
     expect(screen.queryByTestId("member-1-panel")).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId("team-add-member"));
+    // The new (empty) slot becomes the focused panel (partial team — BR-T4).
     expect(screen.getByTestId("member-1-panel")).toBeInTheDocument();
-    // The new slot is empty (partial team allowed, BR-T4).
     expect(screen.getByTestId("member-1-species")).toHaveValue("");
   });
 
@@ -78,17 +90,23 @@ describe("TeamEditor", () => {
     expect(screen.queryByTestId("team-add-member")).not.toBeInTheDocument();
   });
 
-  it("removes a member", () => {
+  it("removes the focused member", () => {
     setup();
+    fireEvent.click(screen.getByTestId("roster-slot-1"));
     fireEvent.click(screen.getByTestId("member-1-remove"));
-    expect(screen.queryByTestId("member-1-panel")).not.toBeInTheDocument();
+    // Back to a single member; slot 1 no longer exists.
+    expect(screen.queryByTestId("roster-slot-1")).not.toBeInTheDocument();
+    expect(screen.getByTestId("member-0-species")).toHaveValue("gyarados");
   });
 
-  it("reorders members (swap on move up)", () => {
+  it("reorders members (swap on move up, focus follows)", () => {
     setup();
-    expect(screen.getByTestId("member-0-species")).toHaveValue("gyarados");
+    fireEvent.click(screen.getByTestId("roster-slot-1"));
+    expect(screen.getByTestId("member-1-species")).toHaveValue("garchomp");
     fireEvent.click(screen.getByTestId("member-1-up"));
+    // The moved member (garchomp) is now slot 0 and stays focused.
     expect(screen.getByTestId("member-0-species")).toHaveValue("garchomp");
+    fireEvent.click(screen.getByTestId("roster-slot-1"));
     expect(screen.getByTestId("member-1-species")).toHaveValue("gyarados");
   });
 
@@ -120,7 +138,8 @@ describe("TeamEditor", () => {
     expect(screen.getByTestId("team-level-warnings")).toHaveTextContent(
       "Two Leftovers.",
     );
-    // Per-slot inside that member's panel.
+    // Per-slot warnings show inside that member's panel once it is focused.
+    fireEvent.click(screen.getByTestId("roster-slot-1"));
     expect(screen.getByTestId("member-1-warnings")).toHaveTextContent(
       "Slot 2 incomplete.",
     );
@@ -133,18 +152,23 @@ describe("TeamEditor", () => {
   });
 
   it("passes live stats through when base stats are supplied", () => {
+    const garchompRef: SpriteRef = {
+      display_name: "Garchomp",
+      sprite_url: "https://example.test/garchomp.png",
+      dex_number: 445,
+      types: ["dragon", "ground"],
+      base_stats: {
+        hp: 108,
+        attack: 130,
+        defense: 95,
+        special_attack: 80,
+        special_defense: 85,
+        speed: 102,
+      },
+    };
     setup({
       team: detail({ members: [fullMember("garchomp")] }),
-      baseStatsBySpecies: {
-        garchomp: {
-          hp: 108,
-          attack: 130,
-          defense: 95,
-          special_attack: 80,
-          special_defense: 85,
-          speed: 102,
-        },
-      },
+      spriteBySpecies: { garchomp: garchompRef },
     });
     expect(screen.getByTestId("member-0-stat-hp")).toBeInTheDocument();
   });

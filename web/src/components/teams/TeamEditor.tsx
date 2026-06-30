@@ -3,18 +3,22 @@
  * members and save (TEAM-US-3/4/5, AC-3.1, AC-5.x). Partial teams are first-class
  * (BR-T4) — Save works with empty slots / incomplete sets.
  *
- * Holds a local draft (name + members) seeded from the `team` prop and re-seeded
- * whenever a different team is opened (`team.id` changes). Add / remove / reorder
- * act on the draft array; each slot is a {@link TeamMemberPanel}. Save hands the
- * draft back to the page (`onSave`) which writes through the never-throwing
- * `useTeams.update`; the returned team carries fresh server `validation`, so the
- * advisory warnings (per-slot inside each panel, team-level via {@link
- * TeamWarnings}) reflect the last saved state. Export opens the {@link
- * ExportDialog} via the page.
+ * Workbench layout: a {@link RosterStrip} of the (up to six) members sits above a
+ * single focused {@link TeamMemberPanel} for the selected slot — so the editor
+ * stays roomy and sprite-forward instead of cramming six panels into a grid.
+ * Holds a local draft (name + members + selected slot) seeded from the `team`
+ * prop and re-seeded whenever a different team is opened (`team.id` changes). Add
+ * / remove / reorder act on the draft array and keep the selection sensible; Save
+ * hands the draft back to the page (`onSave`) which writes through the
+ * never-throwing `useTeams.update`. The returned team carries fresh server
+ * `validation`, so the advisory warnings (per-slot inside the focused panel,
+ * team-level via {@link TeamWarnings}) reflect the last saved state. Export opens
+ * the {@link ExportDialog} via the page.
  *
- * Live computed stats need species base stats, which the page fetches from the
- * entity index and supplies in `baseStatsBySpecies`; a species with no entry just
- * shows no live column (still fully editable).
+ * Sprites / types / base stats (for the roster chips, the panel's type badges,
+ * and its live-stat bars) come from the page's batch `resolveSprites` lookup in
+ * `spriteBySpecies`; a species with no entry just shows no sprite / live bars
+ * (still fully editable).
  */
 
 "use client";
@@ -23,9 +27,10 @@ import { useEffect, useState } from "react";
 
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { TeamDetail } from "@/lib/api/teams-client";
-import TeamMemberPanel, {
-  type MemberBaseStats,
-} from "./TeamMemberPanel";
+import type { SpriteRef } from "@/lib/api/sprites-client";
+import { type Format } from "@/data/formats";
+import TeamMemberPanel from "./TeamMemberPanel";
+import RosterStrip from "./RosterStrip";
 import TeamWarnings from "./TeamWarnings";
 
 /** A fresh, empty member (partial team allowed — BR-T4). IVs default to 31. */
@@ -44,10 +49,17 @@ export function blankMember(): TeamMember {
   };
 }
 
+/** Human-friendly format label for the editor badge. */
+function formatLabel(format: string): string {
+  if (format === "champions") return "Champions";
+  if (format === "scarlet-violet") return "Scarlet/Violet";
+  return format;
+}
+
 export interface TeamEditorProps {
   team: TeamDetail;
-  /** Species slug → base stats, for the live-stat columns. */
-  baseStatsBySpecies?: Record<string, MemberBaseStats | undefined>;
+  /** Species slug → sprite/types/base-stats, for the roster + live-stat bars. */
+  spriteBySpecies?: Record<string, SpriteRef | undefined>;
   /** True while a save is in flight (disables Save). */
   saving?: boolean;
   onSave: (input: { name: string; members: TeamMember[] }) => void;
@@ -57,7 +69,7 @@ export interface TeamEditorProps {
 
 export default function TeamEditor({
   team,
-  baseStatsBySpecies,
+  spriteBySpecies = {},
   saving = false,
   onSave,
   onExport,
@@ -65,35 +77,48 @@ export default function TeamEditor({
 }: TeamEditorProps) {
   const [name, setName] = useState(team.name);
   const [members, setMembers] = useState<TeamMember[]>(team.members);
+  const [selectedSlot, setSelectedSlot] = useState(0);
 
   // Re-seed the draft whenever a different team is opened. Keyed on id so typing
   // in the same team doesn't clobber the draft on an unrelated re-render.
   useEffect(() => {
     setName(team.name);
     setMembers(team.members);
+    setSelectedSlot(0);
   }, [team.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateMember = (index: number, next: TeamMember) =>
     setMembers((prev) => prev.map((m, i) => (i === index ? next : m)));
 
-  const removeMember = (index: number) =>
+  const removeMember = (index: number) => {
     setMembers((prev) => prev.filter((_, i) => i !== index));
+    setSelectedSlot((s) => (s > index ? s - 1 : s));
+  };
 
   const addMember = () =>
-    setMembers((prev) =>
-      prev.length >= 6 ? prev : [...prev, blankMember()],
-    );
+    setMembers((prev) => {
+      if (prev.length >= 6) return prev;
+      const next = [...prev, blankMember()];
+      setSelectedSlot(next.length - 1);
+      return next;
+    });
 
   const moveMember = (index: number, dir: -1 | 1) =>
     setMembers((prev) => {
       const target = index + dir;
       if (target < 0 || target >= prev.length) return prev;
       const next = [...prev];
-      [next[index], next[target]] = [next[target], next[index]];
+      [next[index], next[target]] = [next[target]!, next[index]!];
+      // Keep the focus on the member that moved.
+      setSelectedSlot((s) =>
+        s === index ? target : s === target ? index : s,
+      );
       return next;
     });
 
   const teamLevelWarnings = team.validation.filter((w) => w.slot === undefined);
+  const slot = members.length === 0 ? 0 : Math.min(selectedSlot, members.length - 1);
+  const focused = members[slot];
 
   return (
     <div className="team-editor" data-testid="team-editor">
@@ -103,27 +128,41 @@ export default function TeamEditor({
           data-testid="team-name"
           aria-label="Team name"
           value={name}
+          placeholder="Team name"
           onChange={(e) => setName(e.target.value)}
         />
         <span className="team-editor__format" data-testid="team-editor-format">
-          {team.format}
+          {formatLabel(team.format)} · {members.length}/6
         </span>
-        <button
-          type="button"
-          data-testid="team-save"
-          onClick={() => onSave({ name, members })}
-          disabled={saving}
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
-        <button type="button" data-testid="team-export" onClick={onExport}>
-          Export
-        </button>
-        {onClose && (
-          <button type="button" data-testid="team-editor-close" onClick={onClose}>
-            Close
+        <div className="team-editor__header-actions">
+          <button
+            type="button"
+            className="tm-btn tm-btn--primary"
+            data-testid="team-save"
+            onClick={() => onSave({ name, members })}
+            disabled={saving}
+          >
+            {saving ? "Saving…" : "Save"}
           </button>
-        )}
+          <button
+            type="button"
+            className="tm-btn tm-btn--secondary"
+            data-testid="team-export"
+            onClick={onExport}
+          >
+            Export
+          </button>
+          {onClose && (
+            <button
+              type="button"
+              className="tm-btn tm-btn--ghost"
+              data-testid="team-editor-close"
+              onClick={onClose}
+            >
+              Close
+            </button>
+          )}
+        </div>
       </div>
 
       <TeamWarnings
@@ -132,39 +171,40 @@ export default function TeamEditor({
         testid="team-level-warnings"
       />
 
-      {/* min(280px, 100%) lets a panel shrink below 280px on a narrow phone
-          instead of forcing horizontal overflow; == 280px on desktop. */}
-      <div className="team-editor__grid">
-        {members.map((member, i) => (
-          <TeamMemberPanel
-            key={i}
-            slot={i}
-            member={member}
-            warnings={team.validation.filter((w) => w.slot === i)}
-            baseStats={
-              member.species
-                ? baseStatsBySpecies?.[member.species]
-                : undefined
-            }
-            onChange={(next) => updateMember(i, next)}
-            onRemove={() => removeMember(i)}
-            onMoveUp={() => moveMember(i, -1)}
-            onMoveDown={() => moveMember(i, 1)}
-            canMoveUp={i > 0}
-            canMoveDown={i < members.length - 1}
-          />
-        ))}
-      </div>
+      <RosterStrip
+        members={members}
+        selectedSlot={slot}
+        spriteBySpecies={spriteBySpecies}
+        onSelect={(i) => setSelectedSlot(i)}
+        onAdd={addMember}
+      />
 
-      {members.length < 6 && (
-        <button
-          type="button"
-          className="team-editor__add"
-          data-testid="team-add-member"
-          onClick={addMember}
-        >
-          Add Pokémon ({members.length}/6)
-        </button>
+      {focused ? (
+        <TeamMemberPanel
+          key={slot}
+          slot={slot}
+          member={focused}
+          format={team.format as Format}
+          warnings={team.validation.filter((w) => w.slot === slot)}
+          baseStats={
+            focused.species
+              ? spriteBySpecies[focused.species]?.base_stats
+              : undefined
+          }
+          spriteRef={
+            focused.species ? spriteBySpecies[focused.species] : undefined
+          }
+          onChange={(next) => updateMember(slot, next)}
+          onRemove={() => removeMember(slot)}
+          onMoveUp={() => moveMember(slot, -1)}
+          onMoveDown={() => moveMember(slot, 1)}
+          canMoveUp={slot > 0}
+          canMoveDown={slot < members.length - 1}
+        />
+      ) : (
+        <p className="team-editor__empty" data-testid="team-editor-empty">
+          This team has no Pokémon yet. Add one to start building.
+        </p>
       )}
     </div>
   );
