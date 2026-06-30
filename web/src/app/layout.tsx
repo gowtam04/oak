@@ -6,7 +6,8 @@ import "./artifact-viewer.css";
 
 export const metadata: Metadata = {
   title: "Oak",
-  description: "Natural-language Pokémon question answering agent",
+  description:
+    "Ask anything about Pokémon — answers backed by reasoning, battle math, and cited sources.",
 };
 
 // Mobile foundation: map the layout to the real device width and let the page
