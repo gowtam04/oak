@@ -343,6 +343,53 @@ struct ChatViewModelTests {
     #expect(appState.guestThread.last?.role == .assistant)
   }
 
+  // MARK: Resuming a saved conversation
+
+  @Test
+  func loadResumedSeedsThreadAndSessionFromTurns() throws {
+    // Resuming a stored conversation (HistoryDetail → Chat thread): the saved turns
+    // rehydrate the visible thread and the session id becomes the conversation id, so
+    // follow-ups continue the same conversation (chat-experience.md M-CHAT-US-2/3).
+    let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
+    let vm = makeViewModel(fake: FakeChatService())
+
+    // Dirty the in-flight state first, so we can prove `loadResumed` resets it. Apply
+    // `.error` BEFORE the activity/delta — `.error` clears those, so this order leaves
+    // the banner, a tool activity, and a streamed buffer all populated together.
+    vm.apply(.error(code: "model_unavailable", message: "down", status: 503))
+    vm.apply(.toolActivity(tool: "resolve_entity", label: "Resolving \"Garchomp\""))
+    vm.apply(.answerDelta(text: "leftover draft"))
+
+    let turns: [ChatTurn] = [
+      .user(id: "u1", content: "Tell me about Garchomp"),
+      .assistant(id: "a1", answer: answer),
+    ]
+    vm.loadResumed(conversationId: "conv-42", turns: turns)
+
+    // The session id becomes the resumed conversation id.
+    #expect(vm.sessionId == "conv-42")
+
+    // Turns map one-to-one, preserving order and count: a `.user` turn → a user item
+    // with no images, an `.assistant` turn → the rendered answer.
+    #expect(vm.turns.count == 2)
+    if case let .user(text, imageCount) = vm.turns.first?.content {
+      #expect(text == "Tell me about Garchomp")
+      #expect(imageCount == 0)                  // resumed user turns carry no attachments
+    } else {
+      Issue.record("expected the first resumed turn to be the user message")
+    }
+    if case let .assistant(rendered) = vm.turns.last?.content {
+      #expect(rendered.status == .answered)
+    } else {
+      Issue.record("expected the second resumed turn to be the assistant answer")
+    }
+
+    // In-flight streaming state is cleared.
+    #expect(vm.streamingText == "")
+    #expect(vm.toolActivities.isEmpty)
+    #expect(vm.errorBanner == nil)
+  }
+
   // MARK: Streaming phase (the "working vs done" signal)
 
   @Test

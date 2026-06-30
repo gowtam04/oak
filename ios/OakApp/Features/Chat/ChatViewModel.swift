@@ -203,6 +203,27 @@ final class ChatViewModel {
     }
   }
 
+  /// Seeds the thread from a resumed conversation's rehydrated turns and binds the
+  /// session to its id (M-AC-H3.1/M-AC-H3.2), so the earlier answers re-render
+  /// through the normal answer-card tree and follow-ups continue the saved thread
+  /// under the same `session_id`. The mapped user turns carry no image count (the
+  /// rehydrated wire turn keeps only its text, not the original attachments).
+  func loadResumed(conversationId: String, turns: [ChatTurn]) {
+    cancelStreaming()
+    sessionId = conversationId
+    self.turns = turns.map { turn in
+      switch turn {
+      case let .user(_, content):
+        return ChatTurnItem(content: .user(text: content, imageCount: 0))
+      case let .assistant(_, answer):
+        return ChatTurnItem(content: .assistant(answer))
+      }
+    }
+    streamingText = ""
+    toolActivities = []
+    errorBanner = nil
+  }
+
   /// Cancels the in-flight stream (a new turn, or the view disappearing). Leaves the
   /// thread intact; a cancelled consumer never writes a banner.
   func cancelStreaming() {

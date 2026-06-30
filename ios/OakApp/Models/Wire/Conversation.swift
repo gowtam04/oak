@@ -24,7 +24,12 @@ import Foundation
 /// (`{ conversations: ConversationSummary[] }`). Mirrors the repo
 /// `ConversationSummary` (web/src/data/repos/conversation-repo.ts): no full
 /// turns, and **no `created_at`** — the list only carries `updatedAt`.
-struct ConversationSummary: Decodable, Sendable, Identifiable {
+///
+/// `Hashable` so a summary can ride a `NavigationStack` path as the value that
+/// identifies which saved conversation to open (the Chat tab's `existing` route).
+/// `Format` is an associated-value-free enum and so is already `Hashable`, which
+/// lets the struct synthesize `Hashable` from its stored fields.
+struct ConversationSummary: Decodable, Sendable, Identifiable, Hashable {
   let id: String
   let title: String
   let format: Format

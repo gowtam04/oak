@@ -12,26 +12,51 @@ import UIKit
 /// uncertainty…); a clarify-option or suggestion tap is sent verbatim as the next
 /// user turn. Layout uses Dynamic-Type styles and semantic colors so it adapts to
 /// text size and light/dark.
+///
+/// The view is **content-only** — it does not own a `NavigationStack`; the caller
+/// provides one (the guest single-thread home wraps it; a signed-in thread is pushed
+/// onto the Chat tab's stack). Two flags adapt it to those contexts:
+/// ``showsNewConversationButton`` hides the toolbar's New-conversation button for a
+/// pushed signed-in thread (where "New Chat" lives on the list and Back returns to
+/// it), and ``signInAction`` — set for a guest only — renders the "Sign in to save
+/// your conversations" nudge above the thread (accounts-and-access.md M-ACCT-US-1).
 struct ChatView: View {
   @State private var model: ChatViewModel
 
-  init(model: ChatViewModel) {
+  /// Whether the toolbar shows the New-conversation button (M-CHAT-US-3). On for the
+  /// guest single thread; off for a pushed signed-in thread.
+  private let showsNewConversationButton: Bool
+
+  /// When non-nil, renders the guest sign-in nudge above the thread; the "Sign in"
+  /// button calls this (it presents the sign-in sheet). `nil` for a signed-in thread.
+  private let signInAction: (() -> Void)?
+
+  init(
+    model: ChatViewModel,
+    showsNewConversationButton: Bool = true,
+    signInAction: (() -> Void)? = nil
+  ) {
     _model = State(initialValue: model)
+    self.showsNewConversationButton = showsNewConversationButton
+    self.signInAction = signInAction
   }
 
   var body: some View {
-    NavigationStack {
-      VStack(spacing: 0) {
-        thread
-        Divider()
-        if let banner = model.errorBanner {
-          errorBannerView(banner)
-        }
-        ComposerView(model: model)
+    VStack(spacing: 0) {
+      if let signInAction {
+        signInNudge(action: signInAction)
       }
-      .navigationTitle("Oak")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
+      thread
+      Divider()
+      if let banner = model.errorBanner {
+        errorBannerView(banner)
+      }
+      ComposerView(model: model)
+    }
+    .navigationTitle("Oak")
+    .navigationBarTitleDisplayMode(.inline)
+    .toolbar {
+      if showsNewConversationButton {
         ToolbarItem(placement: .topBarTrailing) {
           Button {
             model.startNewConversation()
@@ -43,6 +68,32 @@ struct ChatView: View {
     }
     // Tear down the stream when the screen goes away (conventions.md "Concurrency").
     .onDisappear { model.cancelStreaming() }
+  }
+
+  // MARK: Sign-in nudge (guest)
+
+  /// A slim banner inviting a guest to sign in so their conversations persist
+  /// (accounts-and-access.md M-ACCT-US-1). Shown only in the guest single-thread
+  /// context; the "Sign in" button presents the sign-in sheet via ``signInAction``.
+  /// Styled like the error banner — an icon paired with text so meaning is never
+  /// carried by color alone (M-AC-UI9.3).
+  @ViewBuilder
+  private func signInNudge(action: @escaping () -> Void) -> some View {
+    HStack(spacing: 8) {
+      Image(systemName: "icloud.and.arrow.up")
+        .foregroundStyle(Theme.accent)
+      Text("Sign in to save your conversations")
+        .font(Theme.body(.footnote))
+        .foregroundStyle(Theme.textPrimary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+      Button("Sign in", action: action)
+        .font(Theme.display(.footnote))
+        .buttonStyle(.borderless)
+        .tint(Theme.accent)
+    }
+    .padding(12)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(Theme.accent.opacity(0.10))
   }
 
   // MARK: Thread
@@ -228,6 +279,17 @@ struct PreviewChatService: ChatService {
 }
 
 #Preview("Chat") {
-  ChatView(model: ChatViewModel(chat: PreviewChatService(), appState: AppState()))
+  NavigationStack {
+    ChatView(model: ChatViewModel(chat: PreviewChatService(), appState: AppState()))
+  }
+}
+
+#Preview("Chat (guest nudge)") {
+  NavigationStack {
+    ChatView(
+      model: ChatViewModel(chat: PreviewChatService(), appState: AppState()),
+      signInAction: {}
+    )
+  }
 }
 #endif

@@ -57,19 +57,19 @@ enum OakUITest {
     case mockAnswer
     /// A fake chat stream that throws a transport error mid-flight (offline path).
     case mockTransportError
-    /// Boots already signed-in with fake history/teams for navigation checks.
+    /// Boots already signed-in with a fake conversation list for navigation checks.
     case mockSignedIn
   }
 
   // MARK: Visible-label targets (mirror the app's labels)
 
-  /// Tab-bar button labels (`RootView`).
+  /// Tab-bar button labels (`RootView`). The app ships exactly TWO tabs — Chat and
+  /// Account. History folded into the Chat tab (signed-in users see a conversation
+  /// list there); the Teams tab was removed (phase 1).
   enum Tab {
     static let chat = "Chat"
-    static let history = "History"
-    static let teams = "Teams"
     static let account = "Account"
-    static let all = [chat, history, teams, account]
+    static let all = [chat, account]
   }
 
   /// Chat surface (`ChatView` / `ComposerView`).

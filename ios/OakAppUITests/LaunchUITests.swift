@@ -1,9 +1,10 @@
 import XCTest
 
-/// Launch smoke (hermetic — no backend). The app boots to the four-tab shell with
-/// Chat as the default surface (M-AC-UI2.1). Runs in any environment; it is the
-/// floor the rest of the suite builds on. The full critical path (ask → streamed
-/// answer) lives in ``ChatCriticalPathUITests`` and runs live (CP5).
+/// Launch smoke (hermetic — no backend). The app boots to the two-tab shell — Chat
+/// and Account — with Chat as the default surface (M-AC-UI2.1). Runs in any
+/// environment; it is the floor the rest of the suite builds on. The full critical
+/// path (ask → streamed answer) lives in ``ChatCriticalPathUITests`` and runs live
+/// (CP5).
 final class LaunchUITests: XCTestCase {
   override func setUp() {
     super.setUp()
@@ -25,7 +26,8 @@ final class LaunchUITests: XCTestCase {
   }
 
   /// Every parity surface is reachable from the tab bar (M-UI-US-2 / M-AC-UI2.2):
-  /// Chat, History, Teams, Account are all present.
+  /// Chat and Account are both present (History folded into the Chat tab; Teams
+  /// removed — phase 1).
   @MainActor
   func testAllParityTabsPresent() {
     let app = XCUIApplication().launchOak()

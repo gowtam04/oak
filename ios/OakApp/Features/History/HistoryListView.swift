@@ -1,19 +1,21 @@
 import SwiftUI
 
-/// The chat-history list screen (history-and-teams.md M-HIST-US-2; M-UI-US-4): a
-/// searchable, format-filterable list of saved conversations with native list
-/// patterns — swipe actions, context menus, and pull-to-refresh (M-AC-H2.5).
+/// The saved-conversation list (history-and-teams.md M-HIST-US-2; M-UI-US-4): a
+/// searchable, format-filterable list of conversations with native list patterns —
+/// swipe actions, context menus, and pull-to-refresh (M-AC-H2.5).
 ///
-/// History is signed-in only (M-BR-H1): a guest sees a sign-in prompt, not an empty
-/// list. The view owns its ``HistoryListViewModel`` (`@State`) and drives it; all
-/// logic lives in the view model. Tapping a row hands the conversation back to the
-/// presenter via ``onSelect`` (which loads the detail and resumes into chat).
-struct HistoryListView: View {
-  @Environment(AppState.self) private var appState
+/// **Content-only / signed-in only.** It does not own a `NavigationStack` — the Chat
+/// tab's signed-in home embeds it inside its own stack (titled "Chats") and supplies
+/// the New-Chat toolbar button. It is shown only when signed in (M-BR-H1), so there
+/// is no guest branch here; a guest gets the single-thread chat instead. The view
+/// owns its ``HistoryListViewModel`` (`@State`) and drives it; all logic lives in the
+/// view model. Tapping a row hands the conversation back to the Chat tab via
+/// ``onSelect``, which pushes the thread route (load detail + resume into chat).
+struct ConversationListView: View {
   @State private var model: HistoryListViewModel
 
-  /// Called when a conversation row is tapped — the presenter opens the detail and
-  /// resumes the thread into chat. Defaults to a no-op for standalone previews.
+  /// Called when a conversation row is tapped — the Chat tab pushes the thread
+  /// route, which loads the detail and resumes it into chat (M-AC-H3.1).
   private let onSelect: (ConversationSummary) -> Void
 
   /// The conversation currently being renamed (drives the rename alert).
@@ -22,56 +24,38 @@ struct HistoryListView: View {
 
   init(
     model: HistoryListViewModel,
-    onSelect: @escaping (ConversationSummary) -> Void = { _ in }
+    onSelect: @escaping (ConversationSummary) -> Void
   ) {
     _model = State(initialValue: model)
     self.onSelect = onSelect
   }
 
-  private var isSignedIn: Bool {
-    if case .signedIn = appState.authState { return true }
-    return false
-  }
-
   var body: some View {
     @Bindable var model = model
-    NavigationStack {
-      Group {
-        if !isSignedIn {
-          guestState
-        } else {
-          listContent
-        }
-      }
-      .navigationTitle("History")
+    listContent
       .toolbar {
-        if isSignedIn {
-          ToolbarItem(placement: .topBarTrailing) {
-            formatFilterMenu
-          }
+        ToolbarItem(placement: .topBarTrailing) {
+          formatFilterMenu
         }
       }
-    }
-    .searchable(text: $model.searchQuery, prompt: "Search conversations")
-    .onSubmit(of: .search) {
-      Task { await model.search() }
-    }
-    // Load once signed in (and reload if the auth state flips).
-    .task(id: isSignedIn) {
-      if isSignedIn { await model.reload() }
-    }
-    .alert(
-      "Rename conversation",
-      isPresented: renameBinding,
-      presenting: renameTarget
-    ) { conversation in
-      TextField("Title", text: $renameText)
-      Button("Save") {
-        let title = renameText
-        Task { await model.rename(conversation, to: title) }
+      .searchable(text: $model.searchQuery, prompt: "Search conversations")
+      .onSubmit(of: .search) {
+        Task { await model.search() }
       }
-      Button("Cancel", role: .cancel) {}
-    }
+      // Initial load; pull-to-refresh and search/filter changes re-fetch on their own.
+      .task { await model.reload() }
+      .alert(
+        "Rename conversation",
+        isPresented: renameBinding,
+        presenting: renameTarget
+      ) { conversation in
+        TextField("Title", text: $renameText)
+        Button("Save") {
+          let title = renameText
+          Task { await model.rename(conversation, to: title) }
+        }
+        Button("Cancel", role: .cancel) {}
+      }
   }
 
   // MARK: List
@@ -167,15 +151,7 @@ struct HistoryListView: View {
     }
   }
 
-  // MARK: Empty / guest / error states
-
-  private var guestState: some View {
-    ContentUnavailableView {
-      Label("Sign in for history", systemImage: "clock.arrow.circlepath")
-    } description: {
-      Text("Sign in to save your conversations and pick them up on any device.")
-    }
-  }
+  // MARK: Empty / error states
 
   private var emptyState: some View {
     ContentUnavailableView {
@@ -263,3 +239,40 @@ private struct ConversationRow: View {
     Date(timeIntervalSince1970: Double(conversation.updatedAt) / 1000)
   }
 }
+
+#if DEBUG
+/// A preview-only ``HistoryService`` returning a small static list without the
+/// network, so the canvas renders the conversation list. Confined to this file.
+private struct PreviewHistoryService: HistoryService {
+  func list(query: String?, format: Format?) async throws -> [ConversationSummary] {
+    [
+      ConversationSummary(
+        id: "1", title: "Garchomp's best moveset",
+        format: .scarletViolet, pinned: true, updatedAt: 1_700_000_000_000
+      ),
+      ConversationSummary(
+        id: "2", title: "Champions: Miraidon counters",
+        format: .champions, pinned: false, updatedAt: 1_699_900_000_000
+      ),
+    ]
+  }
+  func get(id: String) async throws -> ConversationDetail {
+    ConversationDetail(id: id, title: "Conversation", format: .scarletViolet, pinned: false, activeTeamId: nil, turns: [])
+  }
+  func rename(id: String, title: String) async throws {}
+  func setPinned(id: String, pinned: Bool) async throws {}
+  func setActiveTeam(id: String, teamId: String?) async throws {}
+  func delete(id: String) async throws {}
+  func importGuestThread(sessionId: String, championsMode: Bool, turns: [ChatTurn]) async throws -> String? { nil }
+}
+
+#Preview("Conversations") {
+  NavigationStack {
+    ConversationListView(
+      model: HistoryListViewModel(history: PreviewHistoryService()),
+      onSelect: { _ in }
+    )
+    .navigationTitle("Chats")
+  }
+}
+#endif

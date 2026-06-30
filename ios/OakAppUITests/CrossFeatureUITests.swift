@@ -2,26 +2,27 @@ import Foundation
 import XCTest
 
 /// **CP5 cross-feature flows** — the parity paths that span more than one feature:
-///   1. guest → sign-in → durable history shows the just-asked thread
-///      (M-ACCT-US-4 / M-HIST-US-1 / M-SUCCESS-1).
-///   2. active team → chat → artifact bottom sheet over the chat
-///      (M-TEAM-US / M-ART-US / M-UI-US-8).
+///   1. guest → sign-in → the signed-in Chat conversation list shows the just-asked
+///      thread (M-ACCT-US-4 / M-HIST-US-1 / M-SUCCESS-1). History folded into the
+///      Chat tab (phase 1) — there is no standalone History tab.
+///   2. chat answer → artifact bottom sheet over the chat (M-ART-US / M-UI-US-8).
 ///
-/// Both need a live backend and a signed-in account; the OTP step is a genuine human
-/// checkpoint (a code arrives by email), so it is gated behind ``requireTestOTP()``
-/// for unattended runs and otherwise skips. The flows target the documented UI and
-/// degrade to a clean SKIP (never a false failure) when a precondition surface is not
-/// reachable in the current build.
+/// Flow 1 needs a live backend and a signed-in account; the OTP step is a genuine
+/// human checkpoint (a code arrives by email), so it is gated behind
+/// ``requireTestOTP()`` for unattended runs and otherwise skips. The flows target the
+/// documented UI and degrade to a clean SKIP (never a false failure) when a
+/// precondition surface is not reachable in the current build.
 final class CrossFeatureUITests: XCTestCase {
   override func setUp() {
     super.setUp()
     continueAfterFailure = false
   }
 
-  // MARK: 1) guest → sign-in → history
+  // MARK: 1) guest → sign-in → signed-in Chat conversation list
 
-  /// Ask as a guest, sign in, and confirm the thread appears in durable history — the
-  /// guest→sign-in continuity parity path (M-AC-4.1 / M-AC-4.2).
+  /// Ask as a guest, sign in, and confirm the thread appears in the signed-in Chat
+  /// conversation list — the guest→sign-in continuity parity path (M-AC-4.1 /
+  /// M-AC-4.2). History folded into the Chat tab (phase 1).
   @MainActor
   func testGuestThreadAppearsInHistoryAfterSignIn() throws {
     try requireLiveBackend()
@@ -65,39 +66,33 @@ final class CrossFeatureUITests: XCTestCase {
     codeField.tap()
     codeField.typeText(credentials.code)  // 6 digits auto-submit (AuthView)
 
-    // History now lists the imported thread (M-AC-4.2). We only assert the History
-    // surface populated — the conversation title is backend-derived.
-    XCTAssertTrue(goToTab(OakUITest.Tab.history, in: app), "History tab unreachable.")
+    // After sign-in the Chat tab re-renders into the signed-in conversation list,
+    // which now lists the imported guest thread (M-AC-4.2). Folded into the Chat tab —
+    // there is no standalone History tab (phase 1). We only assert the list populated;
+    // the conversation title is backend-derived.
+    XCTAssertTrue(goToTab(OakUITest.Tab.chat, in: app), "Chat tab unreachable.")
     XCTAssertTrue(
       app.cells.firstMatch.waitForExistence(timeout: 20)
         || app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Garchomp"))
           .firstMatch.waitForExistence(timeout: 5),
-      "Expected the signed-in History list to contain the imported guest thread (M-AC-4.2)."
+      "Expected the signed-in Chat conversation list to contain the imported guest thread (M-AC-4.2)."
     )
     XCTAssertEqual(app.state, .runningForeground)
   }
 
-  // MARK: 2) active team → chat → artifact
+  // MARK: 2) chat answer → artifact
 
-  /// Set an active team, ask a team-aware question, then open an entity from the
-  /// structured answer into the artifact bottom sheet and dismiss it by gesture
-  /// (M-ART-US-1 / M-UI-US-8 / M-AC-UI8.2/8.4).
+  // Removed: the Teams tab folded out of the shell (phase 1). The team-active
+  // precondition is gone; what remains is the Chat-tab → artifact-sheet flow.
+
+  /// Ask a question, then open an entity from the structured answer into the artifact
+  /// bottom sheet and dismiss it by gesture (M-ART-US-1 / M-UI-US-8 / M-AC-UI8.2/8.4).
   @MainActor
-  func testActiveTeamChatOpensArtifactSheet() throws {
+  func testChatAnswerOpensArtifactSheet() throws {
     try requireLiveBackend()
-    _ = try requireTestOTP()  // teams require a signed-in account
 
-    let app = XCUIApplication().launchOak(.mockSignedIn)
+    let app = XCUIApplication().launchOak()
     XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
-
-    // Teams must be reachable for a signed-in user (M-AC-UI2.2). Selecting/creating a
-    // team and binding it active is exercised in the unit suite; here we confirm the
-    // surface is reachable, then drive a chat turn that yields an openable entity.
-    let teamsReachable = goToTab(OakUITest.Tab.teams, in: app)
-    try XCTSkipUnless(
-      teamsReachable,
-      "Teams tab unreachable — wire TeamsListView into RootView, then run live (CP5)."
-    )
 
     XCTAssertTrue(goToTab(OakUITest.Tab.chat, in: app), "Chat tab unreachable.")
     try requireComposer(in: app)
