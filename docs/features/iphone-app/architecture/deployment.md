@@ -98,5 +98,5 @@ everything else reuses existing infra or Apple-provided free tooling.
 - Accurate **age rating** (M-NFR-11); native app, not a wrapper (M-NFR-10).
 - **Sign in with Apple not required** (email OTP is first-party; M-NFR-9) — document the
   rationale in the review notes.
-- **IP/trademark review** before submission (see `decisions.md` Unresolved) — the one
-  genuine blocker beyond engineering.
+- **IP/trademark review** before submission (resolved — `decisions.md` ADR-11, tolerated-risk
+  fan posture; an IP-attorney pass stays prudent but is not gating v1).

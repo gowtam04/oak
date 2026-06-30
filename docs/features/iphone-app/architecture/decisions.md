@@ -117,9 +117,39 @@
   TestFlight/Xcode Organizer crash reports; no third-party SDK.
 - **Alternatives considered:** "Pokébot" (contains a Nintendo mark — rejection/takedown
   risk); free crash SDK (adds a dependency + privacy disclosure — deferred).
-- **Consequences:** Simplest privacy nutrition label; broader IP review still required
-  before submission (see Unresolved). No remote analytics → adoption metrics are
-  aspirational only (consistent with requirements).
+- **Consequences:** Simplest privacy nutrition label; broader IP review resolved in ADR-11.
+  No remote analytics → adoption metrics are aspirational only (consistent with requirements).
+
+## ADR-11: Ship Pokémon names + hot-linked sprites/artwork under a tolerated-risk fan posture
+- **Status:** accepted
+- **Context:** Resolves the IP/trademark-review item (from M-OQ-4). Oak displays copyrighted
+  images at runtime — official artwork and sprites **hot-linked** from the PokeAPI and Pokémon
+  Showdown CDNs (`web/src/lib/sprites.ts`, iOS `SpriteImage`), not bundled in the binary — and
+  references the word "Pokémon" plus game/character names. Nintendo / The Pokémon Company are
+  aggressive IP enforcers; Apple's App Review Guideline 5.2 is permission-based and its IP
+  enforcement is **complaint-driven** (a rights holder files a dispute → Apple can pull the app
+  pending review). Fair use is an affirmative defense a court decides — not self-declarable, not
+  recognized by App Review — so it gives no listing-side protection and is not asserted in store
+  copy (see `docs/app-store/`).
+- **Decision:** Ship as an unofficial fan reference under a **tolerated-risk** posture, mirroring
+  long-running community tools that use the same data/assets without a license (Pokémon Showdown,
+  Smogon's damage calculators, PokeAPI — the `@pkmn` lineage Oak builds on). Concretely: (1)
+  facts/data are uncopyrightable (*Feist*), so the data layer is low-risk; (2) names are used
+  **nominatively** — only as needed to describe compatibility, no logos or stylized brand fonts;
+  (3) a prominent **non-affiliation disclaimer** ships in the listing and in-app (already
+  present), with **no "fair use" claim** in store copy; (4) keep displaying the hot-linked
+  sprites/artwork, accepting that this is the highest-risk element. Hold the fair-use /
+  nominative-use argument in reserve for a private App Review appeal or a takedown response.
+- **Alternatives considered:** Drop the official artwork (highest-risk asset) and keep only
+  low-profile pixel sprites — lower exposure but a worse artifact viewer; **kept as the first
+  fallback if a complaint arrives.** Ship no images at all (safest, matches the "no artwork"
+  posture the listing docs once wrongly assumed — rejected as a needless UX downgrade given the
+  tolerated-risk precedent). License the assets (not viable at hobby scale; rights aren't offered).
+- **Consequences:** Submission is unblocked on IP grounds. Risk is real but low for a
+  facts-and-names tool and has precedent — but it is **tolerance, not tested immunity** (no
+  fan-tool case of this kind has been adjudicated). Response path if Nintendo/TPC complain: pull or
+  replace the artwork, lean on the disclaimer + nominative use, and answer Apple's dispute notice.
+  Not legal advice — an IP-attorney review before submission stays prudent but is not gating v1.
 
 ---
 
@@ -127,14 +157,9 @@
 
 Resolved here: M-OQ-1 (API audit — done; backend is fully consumable + two additive
 changes), M-OQ-2 (telemetry — Apple-only, ADR-10), M-OQ-3 (min iOS — 18, ADR-4), M-OQ-4
-(name — "Oak", ADR-10).
+(name — "Oak", ADR-10; IP/trademark review — tolerated-risk fan posture, ADR-11).
 
 Still open / to confirm:
-- **IP / trademark review (blocking for submission).** Using Pokémon sprites (from
-  `@pkmn`/PokeAPI), type names, and the word "Pokémon" in store metadata carries
-  Nintendo-IP risk independent of the app name. Needs a human call before App Store
-  submission. (From requirements M-OQ-4.) *Proposed:* position clearly as unofficial/fan
-  reference, review sprite-asset licensing — **confirm with owner/legal.**
 - **Session lifetime / sliding refresh.** Tokens are a 30-day fixed window; there's no
   refresh. If "stay signed in indefinitely" is desired, that's a backend change. *Proposed:*
   keep the 30-day window for v1 — **confirm with dev team.**
