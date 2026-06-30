@@ -15,10 +15,14 @@
 - **Device mockup**: generic iPhone Pro-style frame (no real-device photography, no third-party logos). Vary tilt/position per frame for rhythm, per the notes below.
 - **Loading/activity motif**: where a frame needs to suggest "the agent is working," use a simple dual-tone circular spinner (red/white split) — a generic loading indicator, not any franchise-specific iconography.
 
-## Aspect ratio guidance
+## Screenshot dimensions
 
-- Primary target: iPhone 6.9" class (iPhone 17 Pro Max-equivalent) — **1320×2868 px**.
-- Apple currently auto-generates smaller required sizes from the largest uploaded set; still prepare a 6.7" fallback set — **1290×2796 px** — in case manual upload is needed.
+- Portrait sets:
+  - **1242×2688 px**
+  - **1284×2778 px**
+- Landscape equivalents, if a future composition ever needs them:
+  - **2688×1242 px**
+  - **2778×1284 px**
 - Oak is iPhone-only (no iPad target in v1) — do not prepare iPad-sized frames.
 
 ---

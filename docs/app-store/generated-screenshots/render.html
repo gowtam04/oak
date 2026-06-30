@@ -1,0 +1,1044 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Oak App Store Screenshot Renderer</title>
+    <style>
+      :root {
+        --red: #ee5a5a;
+        --red-dark: #d94545;
+        --gold: #f5a524;
+        --gold-dark: #f8b73e;
+        --azure: #3aa0e3;
+        --azure-dark: #5bb4ef;
+        --cream: #fbf7ee;
+        --cream-red: #f7e9e6;
+        --paper: #fbf7f4;
+        --surface: #ffffff;
+        --sunken: #f7f1eb;
+        --border: #e9e0d8;
+        --text: #2a2521;
+        --muted: #6e625a;
+        --faint: #94867a;
+        --near-black: #1c1a18;
+        --shadow: 0 42px 90px rgba(42, 37, 33, 0.24);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        font-family:
+          "SF Pro Rounded", "Arial Rounded MT Bold", "Avenir Next", system-ui,
+          -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--text);
+        background: var(--cream);
+      }
+
+      body {
+        display: grid;
+        place-items: stretch;
+      }
+
+      .frame {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        isolation: isolate;
+      }
+
+      .frame::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at 78% 11%, rgba(255, 255, 255, 0.32), transparent 18%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.26), transparent 28%);
+        mix-blend-mode: screen;
+        opacity: 0.8;
+        z-index: -1;
+      }
+
+      .frame-1 {
+        background: linear-gradient(180deg, #fbf7ee 0%, #f7e9e6 100%);
+      }
+
+      .frame-2 {
+        background:
+          radial-gradient(circle at 22% 18%, rgba(255, 255, 255, 0.2), transparent 26%),
+          linear-gradient(150deg, var(--red) 0%, var(--red-dark) 100%);
+      }
+
+      .frame-3 {
+        background:
+          radial-gradient(circle at 8% 12%, rgba(58, 160, 227, 0.28), transparent 30%),
+          radial-gradient(circle at 96% 48%, rgba(91, 180, 239, 0.42), transparent 32%),
+          linear-gradient(180deg, #ffffff 0%, #e7f5ff 100%);
+      }
+
+      .frame-4 {
+        background:
+          linear-gradient(90deg, rgba(245, 165, 36, 0.9) 0%, rgba(245, 165, 36, 0.55) 45%, rgba(238, 90, 90, 0.7) 55%, rgba(238, 90, 90, 0.98) 100%),
+          #f6d082;
+      }
+
+      .frame-5 {
+        background: #f4f1ea;
+      }
+
+      .frame-6 {
+        background:
+          radial-gradient(circle at 18% 84%, rgba(245, 165, 36, 0.34), transparent 30%),
+          radial-gradient(circle at 88% 18%, rgba(58, 160, 227, 0.28), transparent 28%),
+          radial-gradient(circle at 50% 22%, rgba(238, 90, 90, 0.24), transparent 38%),
+          linear-gradient(180deg, #fffdf7 0%, #fbf7ee 100%);
+      }
+
+      .copy {
+        position: absolute;
+        top: 4.7vh;
+        left: 7.2vw;
+        right: 7.2vw;
+        text-align: center;
+        z-index: 10;
+      }
+
+      .copy h1 {
+        margin: 0;
+        font-size: clamp(68px, 7.3vw, 98px);
+        line-height: 0.98;
+        font-weight: 800;
+        letter-spacing: 0;
+        color: var(--text);
+      }
+
+      .frame-2 .copy h1,
+      .frame-2 .copy p,
+      .frame-4 .copy h1,
+      .frame-4 .copy p {
+        color: #fff8f0;
+        text-shadow: 0 8px 28px rgba(65, 26, 22, 0.22);
+      }
+
+      .copy p {
+        max-width: 940px;
+        margin: 26px auto 0;
+        color: var(--muted);
+        font-size: clamp(31px, 3.05vw, 42px);
+        line-height: 1.22;
+        font-weight: 650;
+        letter-spacing: 0;
+      }
+
+      .stage {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding-top: 16.5vh;
+      }
+
+      .phone {
+        --phone-w: min(72vw, 864px);
+        position: relative;
+        width: var(--phone-w);
+        height: calc(var(--phone-w) * 2.13);
+        border-radius: calc(var(--phone-w) * 0.136);
+        background:
+          linear-gradient(145deg, #f6eee5 0%, #8f8378 17%, #171412 35%, #0b0a09 48%, #d9cfc4 66%, #4f4740 100%);
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.65) inset,
+          0 -1px 0 rgba(0, 0, 0, 0.55) inset,
+          var(--shadow);
+        overflow: visible;
+        padding: calc(var(--phone-w) * 0.026);
+      }
+
+      .phone::before {
+        content: "";
+        position: absolute;
+        inset: calc(var(--phone-w) * 0.012);
+        border-radius: calc(var(--phone-w) * 0.125);
+        background: #0d0b0a;
+        box-shadow:
+          inset 0 0 0 calc(var(--phone-w) * 0.009) rgba(0, 0, 0, 0.9),
+          inset 0 0 0 calc(var(--phone-w) * 0.014) rgba(255, 255, 255, 0.08);
+        z-index: 0;
+      }
+
+      .phone::after {
+        content: "";
+        position: absolute;
+        inset: calc(var(--phone-w) * 0.021);
+        border-radius: calc(var(--phone-w) * 0.111);
+        pointer-events: none;
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+          inset 0 18px 22px rgba(255, 255, 255, 0.08);
+        z-index: 4;
+      }
+
+      .side-button {
+        position: absolute;
+        display: block;
+        width: calc(var(--phone-w) * 0.014);
+        border-radius: 999px;
+        background: linear-gradient(180deg, #d6ccc1, #4d463f 45%, #171412);
+        box-shadow:
+          0 6px 14px rgba(0, 0, 0, 0.28),
+          inset 1px 0 0 rgba(255, 255, 255, 0.42);
+        z-index: -1;
+      }
+
+      .side-power {
+        top: 23%;
+        right: calc(var(--phone-w) * -0.011);
+        height: 13.5%;
+      }
+
+      .side-volume-up,
+      .side-volume-down {
+        left: calc(var(--phone-w) * -0.011);
+        height: 9.8%;
+      }
+
+      .side-volume-up {
+        top: 18.5%;
+      }
+
+      .side-volume-down {
+        top: 30%;
+      }
+
+      .phone.tilt-right {
+        transform: rotate(8deg);
+      }
+
+      .phone.tilt-left {
+        transform: rotate(-8deg);
+      }
+
+      .phone.crop-bottom {
+        transform: translateY(7vh);
+      }
+
+      .phone.small {
+        --phone-w: min(41vw, 500px);
+      }
+
+      .phone.behind {
+        position: absolute;
+        right: 8vw;
+        top: 31vh;
+        opacity: 0.68;
+        transform: rotate(7deg);
+        filter: saturate(0.85);
+        z-index: 1;
+      }
+
+      .phone .screen {
+        position: absolute;
+        inset: calc(var(--phone-w) * 0.042);
+        overflow: hidden;
+        border-radius: calc(var(--phone-w) * 0.092);
+        background: var(--paper);
+        z-index: 1;
+      }
+
+      .notch {
+        position: absolute;
+        top: 1.55%;
+        left: 50%;
+        width: 28.5%;
+        height: 3.05%;
+        transform: translateX(-50%);
+        border-radius: 999px;
+        background: #050505;
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+          0 2px 3px rgba(255, 255, 255, 0.04);
+        z-index: 8;
+      }
+
+      .notch::after {
+        content: "";
+        position: absolute;
+        right: 12.5%;
+        top: 50%;
+        width: 13%;
+        aspect-ratio: 1;
+        transform: translateY(-50%);
+        border-radius: 999px;
+        background:
+          radial-gradient(circle at 62% 38%, rgba(92, 137, 197, 0.9) 0 8%, transparent 9%),
+          radial-gradient(circle at 42% 50%, #172131 0 26%, #050505 50%);
+        opacity: 0.78;
+      }
+
+      .app {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--paper);
+      }
+
+      .topbar {
+        height: 12.2%;
+        padding: 8.4% 5.6% 3.2%;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        color: #fffdf8;
+        background: var(--red);
+      }
+
+      .brand {
+        font-size: calc(var(--phone-w) * 0.056);
+        line-height: 1;
+        font-weight: 850;
+      }
+
+      .tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0.52em 0.84em;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.22);
+        font-size: calc(var(--phone-w) * 0.022);
+        font-weight: 800;
+      }
+
+      .content {
+        flex: 1;
+        padding: 4.8% 5.2% 5.6%;
+        overflow: hidden;
+      }
+
+      .bubble {
+        max-width: 82%;
+        padding: 3.6% 4%;
+        margin-bottom: 3.2%;
+        border-radius: 24px;
+        font-size: calc(var(--phone-w) * 0.026);
+        line-height: 1.32;
+        color: var(--text);
+        background: #fff;
+        border: 1px solid var(--border);
+      }
+
+      .bubble.user {
+        margin-left: auto;
+        color: #fff;
+        background: var(--red);
+        border-color: transparent;
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 28px;
+        background: #fff;
+        box-shadow: 0 18px 42px rgba(42, 37, 33, 0.09);
+        overflow: hidden;
+      }
+
+      .answer-card {
+        padding: 4.8%;
+      }
+
+      .card-title {
+        margin: 0 0 2.2%;
+        font-size: calc(var(--phone-w) * 0.036);
+        line-height: 1.18;
+        font-weight: 850;
+      }
+
+      .body-line {
+        height: calc(var(--phone-w) * 0.022);
+        border-radius: 99px;
+        background: #eee5dc;
+        margin: 2.1% 0;
+      }
+
+      .body-line.short {
+        width: 62%;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 4%;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0.55em 0.85em;
+        border-radius: 999px;
+        font-size: calc(var(--phone-w) * 0.019);
+        font-weight: 800;
+        color: #4e453f;
+        background: #fbf2e7;
+        border: 1px solid #eadccf;
+      }
+
+      .chip.info {
+        color: #1d658f;
+        background: #e6f2fb;
+        border-color: rgba(58, 160, 227, 0.24);
+      }
+
+      .reasoning {
+        margin-top: 4.8%;
+        padding: 4%;
+        border-radius: 20px;
+        background: #f7f1eb;
+        border: 1px solid #e9e0d8;
+      }
+
+      .reasoning-head,
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2.5%;
+        font-size: calc(var(--phone-w) * 0.024);
+        font-weight: 850;
+      }
+
+      .mono {
+        font-family: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .team-editor .topbar {
+        background: #fff;
+        color: var(--text);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .team-editor .brand {
+        color: var(--red);
+      }
+
+      .editor-panel {
+        padding: 4.4%;
+      }
+
+      .slot {
+        padding: 4.3%;
+        margin-bottom: 3.6%;
+        border-radius: 26px;
+        background: #fff;
+        border: 1px solid var(--border);
+      }
+
+      .slot.active {
+        box-shadow: 0 18px 40px rgba(81, 33, 30, 0.12);
+        border-color: #f0c2bd;
+      }
+
+      .slot-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 3.4%;
+      }
+
+      .avatar {
+        width: calc(var(--phone-w) * 0.105);
+        height: calc(var(--phone-w) * 0.105);
+        border-radius: 26px;
+        background:
+          radial-gradient(circle at 35% 30%, #fff9ef 0 14%, transparent 15%),
+          linear-gradient(135deg, #ffdf65, #ee5a5a 55%, #3aa0e3);
+      }
+
+      .slot-name {
+        flex: 1;
+      }
+
+      .slot-name strong {
+        display: block;
+        font-size: calc(var(--phone-w) * 0.033);
+      }
+
+      .slot-name span {
+        color: var(--muted);
+        font-size: calc(var(--phone-w) * 0.021);
+        font-weight: 750;
+      }
+
+      .pill-row,
+      .move-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .field {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: calc(var(--phone-w) * 0.082);
+        padding: 0 3.6%;
+        border-radius: 18px;
+        background: #f7f1eb;
+        font-size: calc(var(--phone-w) * 0.022);
+        font-weight: 800;
+        color: var(--muted);
+      }
+
+      .move-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 3.3% 0;
+      }
+
+      .move {
+        padding: 0.72em 0.9em;
+        border-radius: 16px;
+        background: #fff9f3;
+        border: 1px solid #e9e0d8;
+        font-size: calc(var(--phone-w) * 0.02);
+        font-weight: 820;
+      }
+
+      .slider-row {
+        display: grid;
+        grid-template-columns: 48px 1fr 54px;
+        align-items: center;
+        gap: 10px;
+        margin-top: 2.4%;
+        color: var(--muted);
+        font-size: calc(var(--phone-w) * 0.019);
+        font-weight: 850;
+      }
+
+      .track {
+        height: 10px;
+        border-radius: 999px;
+        background: #eaded4;
+        overflow: hidden;
+      }
+
+      .fill {
+        height: 100%;
+        border-radius: inherit;
+        background: var(--red);
+      }
+
+      .collapsed {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 3.8% 4.2%;
+        margin-top: 2.4%;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid var(--border);
+        font-size: calc(var(--phone-w) * 0.024);
+        font-weight: 850;
+      }
+
+      .import-sheet {
+        height: 100%;
+        padding: 16% 5% 6%;
+        background: #fbf7f4;
+      }
+
+      .sheet-title {
+        font-size: calc(var(--phone-w) * 0.04);
+        font-weight: 850;
+        margin-bottom: 4%;
+      }
+
+      .import-split {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 3.4%;
+      }
+
+      .text-block,
+      .team-list {
+        padding: 4%;
+        border-radius: 24px;
+        background: #fff;
+        border: 1px solid var(--border);
+      }
+
+      .text-row {
+        height: calc(var(--phone-w) * 0.018);
+        border-radius: 999px;
+        margin: 2.4% 0;
+        background: #e9e0d8;
+      }
+
+      .transform {
+        display: grid;
+        place-items: center;
+        width: calc(var(--phone-w) * 0.12);
+        height: calc(var(--phone-w) * 0.12);
+        border-radius: 999px;
+        margin: 0 auto;
+        color: #fff;
+        background: var(--azure);
+        font-size: calc(var(--phone-w) * 0.052);
+        font-weight: 850;
+        box-shadow: 0 16px 36px rgba(58, 160, 227, 0.28);
+      }
+
+      .member {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 3.2%;
+        border-radius: 18px;
+        background: #f7f1eb;
+        margin-top: 2%;
+      }
+
+      .dot {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: var(--red);
+      }
+
+      .member:nth-child(2) .dot {
+        background: var(--gold);
+      }
+
+      .member:nth-child(3) .dot {
+        background: var(--azure);
+      }
+
+      .floating-card {
+        position: absolute;
+        right: 4.5vw;
+        top: 47vh;
+        width: min(32vw, 380px);
+        padding: 28px;
+        border: 1px solid rgba(58, 160, 227, 0.22);
+        border-radius: 34px;
+        background: rgba(255, 255, 255, 0.72);
+        box-shadow: 0 30px 70px rgba(58, 160, 227, 0.18);
+        backdrop-filter: blur(16px);
+        font-size: clamp(24px, 2.4vw, 32px);
+        font-weight: 850;
+        color: #1d658f;
+      }
+
+      .format-ui .topbar {
+        background: #fff;
+        color: var(--text);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .toggle {
+        width: 44%;
+        height: calc(var(--phone-w) * 0.073);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        align-items: center;
+        padding: 5px;
+        border-radius: 999px;
+        background: #f3ece6;
+        border: 1px solid var(--border);
+        font-size: calc(var(--phone-w) * 0.017);
+        font-weight: 900;
+        color: var(--muted);
+      }
+
+      .toggle span {
+        display: grid;
+        place-items: center;
+        height: 100%;
+        border-radius: 999px;
+      }
+
+      .toggle .active {
+        color: #fff;
+        background: var(--red);
+      }
+
+      .tap {
+        position: absolute;
+        top: 11.5%;
+        right: 10%;
+        width: calc(var(--phone-w) * 0.095);
+        height: calc(var(--phone-w) * 0.095);
+        border-radius: 999px;
+        border: 5px solid rgba(238, 90, 90, 0.38);
+        background: rgba(238, 90, 90, 0.14);
+      }
+
+      .format-tag {
+        display: inline-flex;
+        padding: 0.58em 0.9em;
+        border-radius: 999px;
+        color: #7b4900;
+        background: #fdf1dc;
+        border: 1px solid rgba(245, 165, 36, 0.32);
+        font-size: calc(var(--phone-w) * 0.019);
+        font-weight: 900;
+      }
+
+      .sheet-frame .content {
+        filter: blur(2.2px) brightness(0.92);
+        opacity: 0.58;
+      }
+
+      .bottom-sheet {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -1px;
+        height: 58%;
+        padding: 4.2% 5% 5.4%;
+        border-radius: 38px 38px 0 0;
+        background: #fff;
+        box-shadow: 0 -24px 70px rgba(42, 37, 33, 0.22);
+        border-top: 1px solid var(--border);
+      }
+
+      .grabber {
+        width: 16%;
+        height: 7px;
+        margin: 0 auto 4%;
+        border-radius: 999px;
+        background: #d8ccc1;
+      }
+
+      .calc-result {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 4%;
+      }
+
+      .calc-result strong {
+        font-size: calc(var(--phone-w) * 0.058);
+      }
+
+      .type-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .type {
+        padding: 0.58em 0.4em;
+        border-radius: 999px;
+        text-align: center;
+        font-size: calc(var(--phone-w) * 0.017);
+        font-weight: 900;
+      }
+
+      .account-panel {
+        padding: 15% 5% 6%;
+      }
+
+      .tier-card {
+        padding: 5%;
+        border-radius: 28px;
+        background: #fff;
+        border: 1px solid var(--border);
+        box-shadow: 0 18px 40px rgba(42, 37, 33, 0.08);
+        margin-bottom: 4%;
+      }
+
+      .tier-card strong {
+        display: block;
+        font-size: calc(var(--phone-w) * 0.037);
+        margin-bottom: 2.6%;
+      }
+
+      .cta {
+        display: grid;
+        place-items: center;
+        min-height: calc(var(--phone-w) * 0.098);
+        border-radius: 20px;
+        background: var(--red);
+        color: #fff;
+        font-size: calc(var(--phone-w) * 0.024);
+        font-weight: 900;
+        margin-top: 4%;
+      }
+
+      .signin {
+        padding: 22% 6% 6%;
+      }
+
+      .input {
+        height: calc(var(--phone-w) * 0.09);
+        border-radius: 18px;
+        border: 1px solid var(--border);
+        background: #fff;
+        margin-top: 4%;
+        padding: 0 4%;
+        display: flex;
+        align-items: center;
+        color: var(--muted);
+        font-size: calc(var(--phone-w) * 0.021);
+        font-weight: 750;
+      }
+
+      .code {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 7px;
+        margin-top: 4%;
+      }
+
+      .code span {
+        aspect-ratio: 1;
+        display: grid;
+        place-items: center;
+        border-radius: 15px;
+        border: 1px solid var(--border);
+        background: #fff;
+        font-size: calc(var(--phone-w) * 0.026);
+        font-weight: 900;
+      }
+
+      .main-phone {
+        z-index: 2;
+      }
+
+      .subtle {
+        color: var(--muted);
+        font-size: calc(var(--phone-w) * 0.023);
+        line-height: 1.32;
+        font-weight: 720;
+      }
+
+      .source-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 2.3%;
+      }
+
+      .source-line::before {
+        content: "";
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: var(--azure);
+      }
+    </style>
+  </head>
+  <body>
+    <main id="root" class="frame"></main>
+    <script>
+      const types = [
+        ["Normal", "#A8A77A", "#2A2521"],
+        ["Fire", "#EE8130", "#fff"],
+        ["Water", "#6390F0", "#fff"],
+        ["Electric", "#F7D02C", "#2A2521"],
+        ["Grass", "#7AC74C", "#2A2521"],
+        ["Ice", "#96D9D6", "#2A2521"],
+        ["Fighting", "#C22E28", "#fff"],
+        ["Poison", "#A33EA1", "#fff"],
+        ["Ground", "#E2BF65", "#2A2521"],
+        ["Flying", "#A98FF3", "#2A2521"],
+        ["Psychic", "#F95587", "#fff"],
+        ["Bug", "#A6B91A", "#2A2521"],
+        ["Rock", "#B6A136", "#2A2521"],
+        ["Ghost", "#735797", "#fff"],
+        ["Dragon", "#6F35FC", "#fff"],
+        ["Dark", "#705746", "#fff"],
+        ["Steel", "#B7B7CE", "#2A2521"],
+        ["Fairy", "#D685AD", "#2A2521"],
+      ];
+
+      const copy = {
+        1: ["Answers, Not Just Data", "Ask anything &mdash; get reasoning, sources, and honesty about what&rsquo;s uncertain."],
+        2: ["Build Your Battle Team", "Full competitive sets &mdash; species, item, moves, nature, EVs, IVs, Tera type."],
+        3: ["Import Teams Instantly", "Paste a team string from your favorite calculator &mdash; Oak builds it for you."],
+        4: ["Switch Formats Instantly", "One toggle scopes your entire chat to the current competitive ruleset."],
+        5: ["See the Math Behind It", "Drill into damage calcs and type matchups without losing your chat."],
+        6: ["Start Free, Sync Anywhere", "Chat instantly as a guest. Sign in with an email code to save it all."],
+      };
+
+      function phone(inner, cls = "") {
+        return `<section class="phone ${cls}">
+          <span class="side-button side-volume-up"></span>
+          <span class="side-button side-volume-down"></span>
+          <span class="side-button side-power"></span>
+          <div class="screen"><div class="notch"></div>${inner}</div>
+        </section>`;
+      }
+
+      function chatTop(tab = "Chat") {
+        return `<div class="topbar"><div class="brand">Oak</div><div class="tab">${tab}</div></div>`;
+      }
+
+      function lines(count = 3) {
+        return Array.from({ length: count }, (_, i) => `<div class="body-line ${i === count - 1 ? "short" : ""}"></div>`).join("");
+      }
+
+      function answerCard() {
+        return `
+          <div class="bubble user">Can my setup win after one speed boost?</div>
+          <article class="card answer-card">
+            <h2 class="card-title">Yes, with one important caveat.</h2>
+            ${lines(4)}
+            <div class="chips">
+              <span class="chip info">Source: Move data</span>
+              <span class="chip info">Source: Ability text</span>
+              <span class="chip">Inference: likely range</span>
+            </div>
+            <section class="reasoning">
+              <div class="reasoning-head"><span>Reasoning</span><span class="mono">3 steps</span></div>
+              ${lines(3)}
+            </section>
+          </article>`;
+      }
+
+      function frame1() {
+        return phone(`<div class="app">${chatTop()}<div class="content">${answerCard()}</div></div>`, "tilt-right");
+      }
+
+      function frame2() {
+        return phone(`
+          <div class="app team-editor">
+            ${chatTop("Teams")}
+            <div class="content editor-panel">
+              <div class="slot active">
+                <div class="slot-head">
+                  <div class="avatar"></div>
+                  <div class="slot-name"><strong>Slot 1</strong><span>Item, ability, type</span></div>
+                  <span class="chip">Editing</span>
+                </div>
+                <div class="field"><span>Nature</span><strong>Jolly</strong></div>
+                <div class="move-grid">
+                  <div class="move">Quick Strike</div><div class="move">Stone Edge</div>
+                  <div class="move">Guard Break</div><div class="move">Protect</div>
+                </div>
+                ${slider("HP", 44)}${slider("Atk", 78)}${slider("Spe", 92)}
+              </div>
+              <div class="collapsed">Slot 2 <span class="chip">Complete</span></div>
+              <div class="collapsed">Slot 3 <span class="chip">Complete</span></div>
+              <div class="collapsed">Slot 4 <span class="chip">Complete</span></div>
+            </div>
+          </div>`);
+      }
+
+      function slider(label, pct) {
+        return `<div class="slider-row"><span>${label}</span><div class="track"><div class="fill" style="width:${pct}%"></div></div><span class="mono">${Math.round(pct * 2.52)}</span></div>`;
+      }
+
+      function frame3() {
+        return `
+          ${phone(`
+            <div class="import-sheet">
+              <div class="sheet-title">Import team</div>
+              <div class="import-split">
+                <div class="text-block">${lines(7)}</div>
+                <div class="transform">&rarr;</div>
+                <div class="team-list">
+                  <div class="member"><span class="dot"></span><strong>Lead set formatted</strong></div>
+                  <div class="member"><span class="dot"></span><strong>Support set ready</strong></div>
+                  <div class="member"><span class="dot"></span><strong>Cleaner set saved</strong></div>
+                </div>
+              </div>
+            </div>`)}
+          <aside class="floating-card">Paste<br />team text</aside>`;
+      }
+
+      function frame4() {
+        return phone(`
+          <div class="app format-ui">
+            <div class="topbar">
+              <div class="brand">Oak</div>
+              <div class="toggle"><span>Open</span><span class="active">Ruleset</span></div>
+            </div>
+            <div class="tap"></div>
+            <div class="content">
+              <span class="format-tag">Current ruleset active</span>
+              <div class="bubble user">Show legal speed control options.</div>
+              <article class="card answer-card">
+                <h2 class="card-title">Scoped to this format.</h2>
+                ${lines(5)}
+                <div class="chips"><span class="chip info">Format data</span><span class="chip">Legal list</span></div>
+              </article>
+            </div>
+          </div>`, "tilt-left");
+      }
+
+      function frame5() {
+        const grid = types.map(([name, bg, color]) => `<span class="type" style="background:${bg};color:${color}">${name}</span>`).join("");
+        return phone(`
+          <div class="app sheet-frame">
+            ${chatTop()}
+            <div class="content">
+              ${answerCard()}
+            </div>
+            <section class="bottom-sheet">
+              <div class="grabber"></div>
+              <div class="calc-result"><strong class="mono">42-50%</strong><span class="chip">Damage range</span></div>
+              <div class="section-head">Type matchup grid <span class="mono">18</span></div>
+              <div class="type-grid">${grid}</div>
+            </section>
+          </div>`, "crop-bottom");
+      }
+
+      function frame6() {
+        return `
+          ${phone(`
+            <div class="app">
+              ${chatTop("Account")}
+              <div class="account-panel">
+                <div class="tier-card">
+                  <strong>Guest mode</strong>
+                  <p class="subtle">Start a chat immediately. No account required.</p>
+                  <div class="cta">Continue as guest</div>
+                </div>
+                <div class="tier-card">
+                  <strong>Sync account</strong>
+                  <p class="subtle">Save history and teams with an email code.</p>
+                  <div class="chips"><span class="chip info">History</span><span class="chip info">Teams</span></div>
+                </div>
+              </div>
+            </div>`, "main-phone")}
+          ${phone(`
+            <div class="signin">
+              <div class="sheet-title">Email sign in</div>
+              <div class="input">you@example.com</div>
+              <div class="code"><span>2</span><span>8</span><span>4</span><span>1</span><span>0</span><span>6</span></div>
+              <div class="cta">Verify code</div>
+            </div>`, "small behind")}`;
+      }
+
+      const renderers = { 1: frame1, 2: frame2, 3: frame3, 4: frame4, 5: frame5, 6: frame6 };
+      const params = new URLSearchParams(location.search);
+      const frame = Number(params.get("frame") || 1);
+      const root = document.getElementById("root");
+      const [headline, subheadline] = copy[frame] || copy[1];
+      root.className = `frame frame-${frame}`;
+      root.innerHTML = `
+        <section class="copy">
+          <h1>${headline}</h1>
+          <p>${subheadline}</p>
+        </section>
+        <section class="stage">${renderers[frame]()}</section>
+      `;
+    </script>
+  </body>
+</html>
