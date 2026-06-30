@@ -23,6 +23,19 @@ import UIKit
 struct ChatView: View {
   @State private var model: ChatViewModel
 
+  /// The injected service container — read to build the artifact viewer's data seam
+  /// (``ServiceContainer/artifact``). Available here because the whole app is wrapped
+  /// in `.oakServices(…)` above `RootView`.
+  @Environment(\.services) private var services
+
+  /// The thread's artifact bottom-sheet viewer (artifact-viewer.md M-ART-US-1/2/3).
+  /// One per chat thread, hosted once via ``artifactViewerHost(_:)``. Built lazily in
+  /// `.task(id:)` (the environment isn't available in `init`) and rebuilt when the
+  /// Champions toggle flips so entity fetches re-scope to the active format
+  /// (M-BR-ART-4); rebuilding clears the back stack, which is fine since the sheet is
+  /// closed when the composer toggle is reached.
+  @State private var artifactModel: ArtifactViewModel?
+
   /// Whether the toolbar shows the New-conversation button (M-CHAT-US-3). On for the
   /// guest single thread; off for a pushed signed-in thread.
   private let showsNewConversationButton: Bool
@@ -68,6 +81,17 @@ struct ChatView: View {
     }
     // Tear down the stream when the screen goes away (conventions.md "Concurrency").
     .onDisappear { model.cancelStreaming() }
+    // Build the viewer once on appear, and rebuild it when the Champions toggle
+    // flips so its fixed format re-scopes to the active mode (M-BR-ART-4).
+    .task(id: model.championsMode) {
+      artifactModel = ArtifactViewModel(
+        service: services.artifact,
+        format: model.championsMode ? .champions : .scarletViolet
+      )
+    }
+    // Host the artifact bottom sheet once at the screen level; pushing an entity
+    // opens it, an empty back stack closes it (M-AC-A3.3, M-BR-ART-5).
+    .artifactViewerHost(artifactModel)
   }
 
   // MARK: Sign-in nudge (guest)
@@ -134,9 +158,21 @@ struct ChatView: View {
       UserMessageView(text: text, imageCount: imageCount)
     case let .assistant(answer):
       // The full field-by-field card. A clarify-option / suggestion tap sends its
-      // text verbatim as the next user turn (the same UI→agent-input path the web
-      // uses); team-block actions are wired by later phases (P10 / artifact).
-      AnswerCardView(answer: answer, onFollowUp: sendFollowUp)
+      // text verbatim as the next user turn; tapping a candidate / subject / type or
+      // a proposed/saved team opens it in the artifact viewer (M-ART-US-1/2/3).
+      AnswerCardView(
+        answer: answer,
+        onFollowUp: sendFollowUp,
+        onOpenSavedTeam: { ref in
+          Task { await artifactModel?.openSavedTeam(id: ref.id, name: ref.name) }
+        },
+        onOpenEntity: { kind, query in
+          Task { await artifactModel?.openEntity(kind: kind, query: query) }
+        },
+        onOpenProposedTeam: { team, warnings in
+          artifactModel?.openProposedTeam(team, warnings: warnings)
+        }
+      )
     }
   }
 
@@ -235,6 +271,27 @@ private struct UserMessageView: View {
             .font(Theme.body(.caption))
             .foregroundStyle(Theme.textSecondary)
         }
+      }
+    }
+  }
+}
+
+// MARK: - Optional artifact-viewer host
+
+private extension View {
+  /// Hosts the artifact bottom sheet once the thread's ``ArtifactViewModel`` has been
+  /// built (it's created lazily in `.task`, so it's `nil` for the first frame).
+  ///
+  /// The sheet is attached to a **stateless background layer** rather than wrapped
+  /// around `self` in a conditional: the chat subtree (composer focus, scroll offset)
+  /// then keeps a stable identity when the model flips `nil → non-nil` on first
+  /// appear. A `.sheet` presents window-modally regardless of its anchor, so a
+  /// `Color.clear` host is sufficient; it reuses the model-owned
+  /// ``SwiftUICore/View/artifactViewer(_:)`` modifier.
+  func artifactViewerHost(_ model: ArtifactViewModel?) -> some View {
+    background {
+      if let model {
+        Color.clear.artifactViewer(model)
       }
     }
   }

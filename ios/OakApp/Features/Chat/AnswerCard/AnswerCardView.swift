@@ -146,7 +146,14 @@ struct AnswerCardView: View {
       ClarifyQuestionView(question: answer.question, onSelect: onFollowUp)
     case .candidates:
       if let candidates = answer.candidates {
-        CandidatesTableView(candidates: candidates)
+        // Each candidate is an openable entity in a structured part of the answer
+        // (M-ART-US-1 / M-BR-ART-3): a row opens its Pokémon profile, a type chip
+        // opens that type — both pushed onto the viewer's back stack via the host.
+        CandidatesTableView(
+          candidates: candidates,
+          onOpenPokemon: { onOpenEntity(.pokemon, $0) },
+          onOpenType: { onOpenEntity(.type, $0) }
+        )
       }
     case .damageCalc:
       if let damageCalc = answer.damageCalc {

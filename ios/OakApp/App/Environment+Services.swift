@@ -28,6 +28,10 @@ struct ServiceContainer: Sendable {
   /// production.
   let chat: any ChatService
 
+  /// The artifact-viewer data seam (entity profiles + saved-team detail) read by
+  /// ``ArtifactViewModel``. Backed by ``LiveArtifactService`` in production.
+  let artifact: any ArtifactService
+
   /// The production wiring (real `Live…` services).
   ///
   /// All three services share **one** ``TokenStore`` (the Keychain) and **one**
@@ -41,7 +45,8 @@ struct ServiceContainer: Sendable {
     return ServiceContainer(
       auth: LiveAuthService(apiClient: api, tokenStore: tokenStore),
       history: LiveHistoryService(apiClient: api),
-      chat: LiveChatService(sseClient: SSEClient(apiClient: api))
+      chat: LiveChatService(sseClient: SSEClient(apiClient: api)),
+      artifact: LiveArtifactService(apiClient: api)
     )
   }
 
@@ -55,7 +60,8 @@ struct ServiceContainer: Sendable {
     ServiceContainer(
       auth: PreviewStubAuthService(),
       history: PreviewStubHistoryService(),
-      chat: PreviewStubChatService()
+      chat: PreviewStubChatService(),
+      artifact: PreviewStubArtifactService()
     )
     #else
     live()
@@ -132,6 +138,15 @@ struct PreviewStubHistoryService: HistoryService {
     championsMode: Bool,
     turns: [ChatTurn]
   ) async throws -> String? { nil }
+}
+
+/// No-network ``ArtifactService`` for SwiftUI previews: every fetch resolves to
+/// `nil`, so a preview that happens to open the viewer shows the honest
+/// "couldn't load" state instead of touching the network.
+struct PreviewStubArtifactService: ArtifactService {
+  func entity(kind: EntityKind, q: String, format: Format) async -> EntityArtifact? { nil }
+
+  func savedTeam(id: String) async -> (team: Team, validation: TeamValidationResult)? { nil }
 }
 
 /// No-network ``ChatService`` for SwiftUI previews: a tiny scripted stream that

@@ -23,6 +23,17 @@ import SwiftUI
 struct CandidatesTableView: View {
   let candidates: Candidates
 
+  /// Opens a row's Pokémon profile in the artifact viewer when its row is tapped
+  /// (the whole row except the type chips, mirroring the web table's row-click —
+  /// AV-US-1). Carries the row's display `name`; the chat host routes it to
+  /// ``ArtifactViewModel/openEntity(kind:query:)`` with `.pokemon`. No-op default
+  /// so the table renders in isolation / previews.
+  var onOpenPokemon: (String) -> Void = { _ in }
+
+  /// Opens a tapped type chip's own Type profile (M-AC-A3.1), scoped to the chip so
+  /// a type tap never also opens the row's Pokémon. No-op default.
+  var onOpenType: (String) -> Void = { _ in }
+
   var body: some View {
     if candidates.shown.isEmpty {
       EmptyView()
@@ -111,9 +122,23 @@ struct CandidatesTableView: View {
 
   private func dataRow(_ row: CandidateRow, index: Int) -> some View {
     let background = rowBackground(index)
+    // The whole row (every cell except the types cell) opens that Pokémon's
+    // profile (AV-US-1). The types cell owns its own per-chip taps, so a type tap
+    // stays scoped to the type — SwiftUI has no event bubbling, so this is the
+    // native equivalent of the web's row-click + type-link stopPropagation.
+    let openPokemon = { onOpenPokemon(row.name) }
     return GridRow {
       cell(background: background, alignment: .leading) {
-        pokemonCell(row)
+        // A real Button (not a bare tap gesture) so VoiceOver exposes the default
+        // activation action — matching SubjectsView / the movepool rows. The label
+        // fills the cell so the whole name band is a tap target.
+        Button(action: openPokemon) {
+          pokemonCell(row)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens \(row.name)")
       }
       cell(background: background, alignment: .leading) {
         typesCell(row)
@@ -127,11 +152,15 @@ struct CandidatesTableView: View {
             .monospacedDigit()
             .foregroundStyle(isSorted ? Theme.textPrimary : Theme.textSecondary)
         }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: openPokemon)
       }
       if showsAbility {
         cell(background: background, alignment: .leading) {
           abilityCell(row)
         }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: openPokemon)
       }
     }
   }
@@ -159,7 +188,13 @@ struct CandidatesTableView: View {
   private func typesCell(_ row: CandidateRow) -> some View {
     HStack(spacing: 6) {
       ForEach(row.types, id: \.self) { type in
-        TypeBadge(type: type)
+        Button {
+          onOpenType(type)
+        } label: {
+          TypeBadge(type: type)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens the \(type.capitalized) type")
       }
     }
   }
