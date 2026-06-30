@@ -39,9 +39,10 @@ const description =
   "saving in the same message with no prior proposal. Returns { saved: true, " +
   "team_id, name, format } on success, or { saved: false, reason } — reason " +
   "\"not_signed_in\" (ask them to sign in), \"no_team\" (propose a team first), " +
-  "\"illegal_team\" (a member is not in this format's roster — tell the user and " +
-  "offer to rebuild it legally; `warnings` says which), or \"index_unavailable\". " +
-  "On success, tell the user it's saved to their Teams " +
+  "\"illegal_team\" (a member is not in this format's roster, two members share a " +
+  "species (species clause), or two members hold the same item (item clause) — " +
+  "tell the user and offer to rebuild it legally; `warnings` says which), or " +
+  "\"index_unavailable\". On success, tell the user it's saved to their Teams " +
   "page; the app then shows it and opens it in the viewer.";
 
 export const saveTeamTool: ToolDef = {
@@ -64,17 +65,24 @@ export const saveTeamTool: ToolDef = {
     const name = (input.name ?? team.name ?? "").trim() || "Untitled team";
 
     // Don't persist an unusable team. Roster-validate against the turn's format
-    // (server-controlled, like the runtime proposal gate) and refuse an
-    // out-of-format species — the same illegality the model is told to rebuild
-    // away from. Softer warnings (EV/IV caps, learnset edge cases) are advisory
-    // and still allowed through, matching the warn-but-allow Teams API.
+    // (server-controlled, like the runtime proposal gate) and refuse a HARD
+    // illegality — an out-of-format species, the species clause, or the item
+    // clause — the same violations the model is told to rebuild away from in
+    // the submit_answer loop. Softer warnings (EV/IV caps, learnset edge cases)
+    // are advisory and still allowed through, matching the warn-but-allow Teams
+    // API.
     try {
       const warnings = await validateTeam(
         team.members,
         formatForMode(ctx.mode),
         ctx.db as unknown as OakDb,
       );
-      const illegal = warnings.filter((w) => w.code === "species_illegal");
+      const illegal = warnings.filter(
+        (w) =>
+          w.code === "species_illegal" ||
+          w.code === "duplicate_species" ||
+          w.code === "duplicate_item",
+      );
       if (illegal.length > 0) {
         return { saved: false, reason: "illegal_team", warnings: illegal };
       }

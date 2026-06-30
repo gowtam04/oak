@@ -86,12 +86,14 @@ export const MAX_ITERATIONS = 14;
 export const MAX_SUBMIT_RETRIES = 2;
 
 /**
- * Re-emit budget when a `proposed_team` contains a species NOT in the turn's
- * format roster (an out-of-format Pokémon, e.g. Heatran in Champions). The
- * server roster-validates the proposal and feeds the illegality back so the
- * model rebuilds legally. Bounded so the loop can't churn: once spent, the
- * answer is accepted with the warnings attached (warn-but-allow, surfaced in
- * the UI) rather than failing the turn (MAX_ITERATIONS is the hard backstop).
+ * Re-emit budget when a `proposed_team` has a HARD legality violation: a
+ * species NOT in the turn's format roster (e.g. Heatran in Champions), the
+ * species clause (the same species held twice), or the item clause (the same
+ * held item twice). The server validates the proposal and feeds the
+ * violation(s) back so the model rebuilds legally. Bounded so the loop can't
+ * churn: once spent, the answer is accepted with the warnings attached
+ * (warn-but-allow, surfaced in the UI) rather than failing the turn
+ * (MAX_ITERATIONS is the hard backstop).
  */
 export const MAX_PROPOSED_TEAM_RETRIES = 1;
 
@@ -864,10 +866,13 @@ export async function runWithProvider(
           // Roster-validate a proposed team against the turn's ACTUAL format
           // (server-controlled — never the model-emitted proposed_team.format, so
           // the model can't dodge the check by mislabeling). validateTeam never
-          // throws. An out-of-format species (`species_illegal`) is a hard
-          // illegality: feed it back and let the model rebuild — one dedicated
-          // retry, then accept-with-warnings (warn-but-allow). Softer warnings
-          // (EV/IV caps, learnset/item/ability edge cases) ride through as badges.
+          // throws. Three codes are HARD illegality: an out-of-format species
+          // (`species_illegal`) and the two team-level competitive clauses,
+          // `duplicate_species` (species clause) and `duplicate_item` (item
+          // clause) — feed them back and let the model rebuild, one dedicated
+          // retry, then accept-with-warnings (warn-but-allow). Softer per-slot
+          // warnings (EV/IV caps, learnset/item/ability edge cases) ride through
+          // as badges.
           const pt = parsed.data.proposed_team;
           const teamWarnings = pt
             ? await validateTeam(
@@ -876,11 +881,14 @@ export async function runWithProvider(
                 ctx.db as unknown as OakDb,
               )
             : [];
-          const illegalSpecies = teamWarnings.filter(
-            (w) => w.code === "species_illegal",
+          const hardViolations = teamWarnings.filter(
+            (w) =>
+              w.code === "species_illegal" ||
+              w.code === "duplicate_species" ||
+              w.code === "duplicate_item",
           );
           if (
-            illegalSpecies.length > 0 &&
+            hardViolations.length > 0 &&
             proposedTeamRetries < MAX_PROPOSED_TEAM_RETRIES
           ) {
             proposedTeamRetries += 1;
@@ -889,25 +897,42 @@ export async function runWithProvider(
               args: call.input,
               latency_ms: Date.now() - started,
               cache_hit: false,
-              error: "proposed_team_species_illegal",
+              error: "proposed_team_illegal",
             });
-            const offenders = illegalSpecies
-              .map((w) => {
-                const species =
-                  w.slot !== undefined ? pt?.members[w.slot]?.species : null;
-                return species ?? `slot ${w.slot ?? "?"}`;
-              })
-              .join(", ");
+            const illegalSpecies = hardViolations.filter(
+              (w) => w.code === "species_illegal",
+            );
+            const clauseViolations = hardViolations.filter(
+              (w) => w.code !== "species_illegal",
+            );
+            const messageParts: string[] = [];
+            if (illegalSpecies.length > 0) {
+              const offenders = illegalSpecies
+                .map((w) => {
+                  const species =
+                    w.slot !== undefined ? pt?.members[w.slot]?.species : null;
+                  return species ?? `slot ${w.slot ?? "?"}`;
+                })
+                .join(", ");
+              messageParts.push(
+                `Your proposed_team includes Pokémon that are NOT in the ` +
+                  `${formatForMode(ctx.mode)} roster (${offenders}).`,
+              );
+            }
+            if (clauseViolations.length > 0) {
+              messageParts.push(clauseViolations.map((w) => w.message).join(" "));
+            }
+            messageParts.push(
+              `Rebuild the team so every member is legal in this format and ` +
+                `no two members share a species or a held item — drop or ` +
+                `replace the offending members — and call submit_answer again. ` +
+                `If unsure whether a species exists in this format, verify it ` +
+                `with resolve_entity first.`,
+            );
             toolResults.push({
               toolCallId: call.id,
               isError: true,
-              content:
-                `Your proposed_team includes Pokémon that are NOT in the ` +
-                `${formatForMode(ctx.mode)} roster (${offenders}). Rebuild the ` +
-                `team using ONLY Pokémon legal in this format — drop or replace ` +
-                `the illegal members — and call submit_answer again. If unsure ` +
-                `whether a species exists in this format, verify it with ` +
-                `resolve_entity first.`,
+              content: messageParts.join(" "),
             });
             continue;
           }

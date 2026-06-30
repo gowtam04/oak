@@ -200,4 +200,31 @@ describe("save_team tool (T13)", () => {
     // Refused BEFORE any write — no stamp, nothing persisted.
     expect(ctx.savedTeam).toBeUndefined();
   });
+
+  it("refuses a duplicate held item (item clause) with illegal_team, without writing", async () => {
+    ensureLoaded();
+    const ctx = await ctxWith({ accountId: "acct-4", sessionId: "conv-7" });
+    // Two roster-legal members holding the SAME item → item clause violation,
+    // the same severity as an out-of-roster species (the bug this gate fixes:
+    // a duplicate-item team must never be persisted as-is).
+    const illegal: ProposedTeam = {
+      name: "Triple Life Orb",
+      format: "scarlet-violet",
+      members: [
+        MEMBER,
+        { ...MEMBER, species: "ninetales", ability: "flash-fire" },
+      ],
+    };
+    const out = (await dispatch(
+      "save_team",
+      { team: illegal },
+      ctx,
+    )) as SaveTeamOutput;
+
+    expect(out.saved).toBe(false);
+    if (out.saved) throw new Error("expected refusal");
+    expect(out.reason).toBe("illegal_team");
+    expect(out.warnings?.some((w) => w.code === "duplicate_item")).toBe(true);
+    expect(ctx.savedTeam).toBeUndefined();
+  });
 });

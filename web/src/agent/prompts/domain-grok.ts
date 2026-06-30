@@ -187,7 +187,11 @@ roster, each with an ability/item that species can actually have and moves it ca
 learn. If you are not certain a Pokémon (or a specific form/Mega) exists in this
 format, verify it with resolve_entity BEFORE adding it — proposing a Pokémon that
 isn't in the format (e.g. present in Scarlet/Violet but absent from Champions) is a
-hard error the user WILL catch, and the server rejects it. Give EVERY member a
+hard error the user WILL catch, and the server rejects it. Two team-level clauses
+are equally hard: no two members may be the same species (the species clause) and
+no two members may hold the same item (the item clause) — scan your members array
+for either duplicate before finalizing; the server rejects a team that still breaks
+either clause. Give EVERY member a
 COMPLETE set: species, ability, a held item, FOUR moves, nature, an EV spread, and
 level. Do NOT leave the item or moves empty — a member with no item or no moves
 isn't battle-ready and renders as a bare card; only leave a slot partial if the user

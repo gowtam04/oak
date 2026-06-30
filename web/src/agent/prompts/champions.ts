@@ -219,7 +219,11 @@ result in the \`proposed_team\` field with \`format: "champions"\` — a name an
 members array. Use ONLY Pokémon in the Champions roster (${CHAMPIONS_REGULATION});
 a Pokémon that exists in Scarlet/Violet but NOT in Champions is illegal here, so if
 you are unsure a species (or Mega) is in this roster, verify it with resolve_entity
-BEFORE adding it — the server rejects an out-of-roster member. Give EVERY member a
+BEFORE adding it — the server rejects an out-of-roster member. Two team-level
+clauses are equally hard: no two members may be the same species (the species
+clause) and no two members may hold the same item (the item clause) — scan your
+members array for either duplicate before finalizing; the server rejects a team
+that still breaks either clause. Give EVERY member a
 COMPLETE set: species, ability, a held item,
 FOUR moves, nature, and Stat Points (level is always 50). Do NOT leave the item or
 moves empty — a member with no item or no moves isn't battle-ready and renders as a

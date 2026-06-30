@@ -827,10 +827,12 @@ export type SaveTeamOutput =
         | "not_signed_in"
         | "no_team"
         | "index_unavailable"
-        // The team includes a species not in the format roster — refused rather
-        // than persisting an unusable team (mirrors the runtime proposal gate).
+        // A HARD legality violation — a species not in the format roster, the
+        // species clause (duplicate species), or the item clause (duplicate
+        // held item) — refused rather than persisting an unusable team
+        // (mirrors the runtime proposal gate).
         | "illegal_team";
-      /** Present for `illegal_team`: the species_illegal warnings that blocked it. */
+      /** Present for `illegal_team`: the species_illegal/duplicate_species/duplicate_item warnings that blocked it. */
       warnings?: TeamWarning[];
     };
 

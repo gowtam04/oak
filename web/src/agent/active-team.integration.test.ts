@@ -342,6 +342,21 @@ describe("team-lookup-agent-e2e — list_teams + get_team via the real runtime",
 // seed → species_illegal; `garchomp` is present → legal.
 // ---------------------------------------------------------------------------
 
+/** A second seeded-roster species (distinct from garchomp), for clause tests. */
+function ninetalesMember(item: string): TeamMember {
+  return {
+    species: "ninetales",
+    ability: "flash-fire",
+    item,
+    moves: ["will-o-wisp", "trick-room", "flamethrower"],
+    nature: "timid",
+    evs: { ...spread(), spa: 252, spe: 252, hp: 4 },
+    ivs: spread(31),
+    tera_type: "fire",
+    level: 50,
+  };
+}
+
 /** A complete set whose species is NOT in the seed roster → species_illegal. */
 function heatranMember(): TeamMember {
   return {
@@ -429,5 +444,132 @@ describe("active-team-agent-e2e — proposed_team roster gate", () => {
       ),
     ).toBe(true);
     expect(oakAnswerSchema.safeParse(result).success).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// proposed_team clause gate — the species clause (duplicate species) and item
+// clause (duplicate held item) are the other two HARD violations alongside
+// species_illegal: fed back so the model rebuilds legally (one dedicated
+// retry), then accepted with warnings stamped (warn-but-allow) once spent.
+// ---------------------------------------------------------------------------
+
+describe("active-team-agent-e2e — proposed_team clause gate (species/item)", () => {
+  it("re-emits on a duplicate held item, then accepts the rebuilt legal team", async () => {
+    const ctx = await buildCtx("standard", undefined);
+    const illegalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "Bad Items",
+        format: SV,
+        members: [garchompMember(), ninetalesMember("leftovers")],
+      },
+    };
+    const legalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "Good Items",
+        format: SV,
+        members: [garchompMember(), ninetalesMember("life-orb")],
+      },
+    };
+    const { client, snapshots, stream } = scriptedClient([
+      message([toolUse("submit_answer", illegalAnswer, "t1")]),
+      message([toolUse("submit_answer", legalAnswer, "t2")]),
+    ]);
+
+    const result = await runtime.runOakWith(
+      client,
+      "build me a team",
+      [] as ChatMessage[],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    const feedback = lastToolResultText(snapshots[1]);
+    expect(feedback).toMatch(/item clause/i);
+    expect(feedback).toContain("leftovers");
+
+    expect(result.proposed_team?.members[1]?.item).toBe("life-orb");
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "duplicate_item",
+      ),
+    ).toBe(false);
+  });
+
+  it("accepts with duplicate_item stamped once the retry budget is spent (warn-fallback)", async () => {
+    const ctx = await buildCtx("standard", undefined);
+    const illegalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "Still bad",
+        format: SV,
+        members: [garchompMember(), ninetalesMember("leftovers")],
+      },
+    };
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", illegalAnswer, "t1")]),
+      message([toolUse("submit_answer", illegalAnswer, "t2")]),
+    ]);
+
+    const result = await runtime.runOakWith(
+      client,
+      "build me a team",
+      [] as ChatMessage[],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    expect(result.proposed_team).toBeDefined();
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "duplicate_item",
+      ),
+    ).toBe(true);
+    expect(oakAnswerSchema.safeParse(result).success).toBe(true);
+  });
+
+  it("re-emits on a duplicate species, then accepts the rebuilt legal team", async () => {
+    const ctx = await buildCtx("standard", undefined);
+    const illegalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "Bad Species",
+        format: SV,
+        members: [garchompMember(), { ...garchompMember(), item: "life-orb" }],
+      },
+    };
+    const legalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "Good Species",
+        format: SV,
+        members: [garchompMember(), ninetalesMember("life-orb")],
+      },
+    };
+    const { client, snapshots, stream } = scriptedClient([
+      message([toolUse("submit_answer", illegalAnswer, "t1")]),
+      message([toolUse("submit_answer", legalAnswer, "t2")]),
+    ]);
+
+    const result = await runtime.runOakWith(
+      client,
+      "build me a team",
+      [] as ChatMessage[],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(2);
+    const feedback = lastToolResultText(snapshots[1]);
+    expect(feedback).toMatch(/species clause/i);
+    expect(feedback).toContain("garchomp");
+
+    expect(result.proposed_team?.members[1]?.species).toBe("ninetales");
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "duplicate_species",
+      ),
+    ).toBe(false);
   });
 });
