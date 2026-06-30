@@ -160,7 +160,7 @@ struct APIErrorBody: Decodable, Sendable { let code: String; let message: String
 
 | State | Store | Notes |
 |---|---|---|
-| Session token | **Keychain** (`kSecClassGenericPassword`, service `us.optiwise.oak`, account `session-token`) | Written on verify, read on every request, deleted on signout/account-deletion. `kSecAttrAccessibleAfterFirstUnlock`. |
+| Session token | **Keychain** (`kSecClassGenericPassword`, service `ai.gowtam.oak`, account `session-token`) | Written on verify, read on every request, deleted on signout/account-deletion. `kSecAttrAccessibleAfterFirstUnlock`. |
 | Signed-in email (display) | Keychain or UserDefaults | Convenience for the account screen; cleared with the token. |
 | Champions-mode default | `UserDefaults` | The toggle's persisted default; per-conversation mode still derives from the conversation's format on resume. |
 | Current guest session id | `UserDefaults` (or in-memory) | A client UUID for the active guest thread; rotated on "new conversation"/signout. |

@@ -15,7 +15,7 @@ Per explicit decision: the words "Pokémon"/"Pokédex" never appear in the App N
 ## Blockers before App Store Connect submission (not produced by this listing)
 
 - **Privacy Policy must go live** at `oak.optiwise.us/privacy` — the iOS app's Account screen already links there, but no policy exists yet. Apple requires a real, reachable URL at submission time.
-- **Support page must go live** at `oak.optiwise.us/support` — same placeholder-URL gap, referenced in the Description's contact line.
+- **Support URL** points to `www.gowtam.ai/#contact` (an existing, live page) — referenced in the Description's contact line. Confirm the `#contact` section is reachable before submission.
 - **App Icon is still a placeholder** in `ios/OakApp/Resources/Assets.xcassets/AppIcon.appiconset` — needs a final design; the screenshot guide deliberately stays icon-agnostic so it isn't blocked on this.
 
 ## What to sanity-check first

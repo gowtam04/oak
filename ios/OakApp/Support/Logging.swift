@@ -10,7 +10,7 @@ import OSLog
 /// message content, or image bytes — log an error `code`/status and a request
 /// label, not payloads.
 enum Log {
-  private static let subsystem = "us.optiwise.oak"
+  private static let subsystem = "ai.gowtam.oak"
 
   /// Networking: requests, status codes, transport faults (no payloads/tokens).
   static let network = Logger(subsystem: subsystem, category: "network")

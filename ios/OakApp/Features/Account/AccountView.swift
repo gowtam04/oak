@@ -207,13 +207,13 @@ struct AccountView: View {
       .font(Theme.body(.body))
   }
 
-  // MARK: Placeholder links + version
+  // MARK: Legal/support links + version
   //
-  // NOTE: these URLs are PLACEHOLDERS — replace with the real hosted privacy
-  // policy and support pages before App Store submission (M-NFR-7). They are
-  // present so the about/legal surface (M-UI-US-7) exists and is wired.
+  // NOTE: the privacy policy must be live at this URL before App Store
+  // submission (M-NFR-7). Support points to gowtam.ai's contact section.
+  // These wire the about/legal surface (M-UI-US-7).
   static let privacyPolicyURL = URL(string: "https://oak.optiwise.us/privacy")!
-  static let supportURL = URL(string: "https://oak.optiwise.us/support")!
+  static let supportURL = URL(string: "https://www.gowtam.ai/#contact")!
 
   /// The marketing version + build, read from the bundle (set in `project.yml`).
   static var versionString: String {

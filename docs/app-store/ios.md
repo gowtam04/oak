@@ -46,7 +46,7 @@ ABOUT THIS APP
 
 Oak is an independent, unofficial fan project. It is not affiliated with, endorsed by, sponsored by, or otherwise connected to Nintendo, Game Freak, Creatures Inc., or The Pokémon Company. Game and character names referenced by the underlying data are the property of their respective owners and are mentioned solely to describe what Oak's chat and team builder are compatible with.
 
-Questions or feedback? Reach us at oak.optiwise.us/support.
+Questions or feedback? Reach us at www.gowtam.ai/#contact.
 ```
 **2,085 / 4000 chars** (well within budget).
 
@@ -67,5 +67,5 @@ Welcome to Oak for iPhone — chat-based team reasoning, a full competitive team
 ## Submission checklist (not produced by this listing — flagged for the user)
 
 - **Privacy Policy URL** — `AccountView` already links to `oak.optiwise.us/privacy`, but no policy exists yet. Apple requires a live URL at submission; this must go live first.
-- **Support URL** — same placeholder issue for `oak.optiwise.us/support`, referenced above in the Description's contact line.
+- **Support URL** — points to `www.gowtam.ai/#contact` (an existing, live page), referenced above in the Description's contact line. Confirm the `#contact` section is reachable before submission.
 - **App Icon** — still a placeholder in `Assets.xcassets/AppIcon.appiconset`; needs a final design before screenshots/marketing assets that show the icon can be finalized.

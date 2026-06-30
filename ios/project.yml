@@ -15,7 +15,7 @@
 name: OakApp
 
 options:
-  bundleIdPrefix: us.optiwise.oak
+  bundleIdPrefix: ai.gowtam.oak
   deploymentTarget:
     iOS: "18.0"
   developmentLanguage: en
@@ -60,7 +60,7 @@ targets:
       - path: OakApp
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: us.optiwise.oak
+        PRODUCT_BUNDLE_IDENTIFIER: ai.gowtam.oak
         INFOPLIST_FILE: OakApp/Resources/Info.plist
         GENERATE_INFOPLIST_FILE: "NO"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -93,7 +93,7 @@ targets:
       - target: OakApp
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: us.optiwise.oak.OakAppTests
+        PRODUCT_BUNDLE_IDENTIFIER: ai.gowtam.oak.OakAppTests
         GENERATE_INFOPLIST_FILE: "YES"
 
   OakAppUITests:
@@ -106,7 +106,7 @@ targets:
       - target: OakApp
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: us.optiwise.oak.OakAppUITests
+        PRODUCT_BUNDLE_IDENTIFIER: ai.gowtam.oak.OakAppUITests
         GENERATE_INFOPLIST_FILE: "YES"
 
 # Explicit shared scheme. `xcodebuild -scheme OakApp` resolves; the Test action

@@ -61,7 +61,7 @@ App/AppState + UI/ are shared leaf layers; Support/ is leaf utilities.
   requires it).
 
 ## Logging (Apple-only)
-- `OSLog` `Logger` with a subsystem `us.optiwise.oak` and per-area categories:
+- `OSLog` `Logger` with a subsystem `ai.gowtam.oak` and per-area categories:
   `network`, `auth`, `chat`, `ui`. Use levels: `.debug` (dev detail), `.info`
   (lifecycle), `.error` (caught `OakError`).
 - **Never log** the session token, OTP codes, email beyond what's needed, message

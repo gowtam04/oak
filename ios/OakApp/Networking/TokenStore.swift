@@ -23,7 +23,7 @@ private let keychainBackstop = Mutex<[String: String]>([:])
 ///
 /// An `actor` so concurrent reads/writes from different tasks serialize safely.
 /// The token is held as a `kSecClassGenericPassword` item keyed on the service
-/// `us.optiwise.oak` + account `session-token`, accessible
+/// `ai.gowtam.oak` + account `session-token`, accessible
 /// `kSecAttrAccessibleAfterFirstUnlock` (readable in the background after the
 /// first unlock following a reboot, never written off-device).
 ///
@@ -37,10 +37,10 @@ actor TokenStore {
   /// either component, so it's an unambiguous separator.
   private var backstopKey: String { "\(service)\u{0}\(account)" }
 
-  /// The production keys (service `us.optiwise.oak`, account `session-token`) are
+  /// The production keys (service `ai.gowtam.oak`, account `session-token`) are
   /// the defaults; tests may pass a unique account to avoid touching the real
   /// item.
-  init(service: String = "us.optiwise.oak", account: String = "session-token") {
+  init(service: String = "ai.gowtam.oak", account: String = "session-token") {
     self.service = service
     self.account = account
   }
