@@ -3815,6 +3815,23 @@
   border-color: var(--azure);
 }
 
+/* ----- Legal pages (privacy policy, etc.) — standalone, unlinked routes -- */
+.legal-page {
+  min-height: 100dvh;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: max(var(--space-10), env(safe-area-inset-top)) var(--space-5)
+    var(--space-16);
+  font-size: 1rem;
+}
+.legal-page__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-8);
+  font-weight: 600;
+}
+
 /* ==========================================================================
    20. Responsive — mobile-first overrides
    The desktop layout lives entirely above. Everything here is scoped to
