@@ -96,6 +96,26 @@ enum Theme {
     "fairy": solid(0xD685AD),
   ]
 
+  // MARK: Pokémon type display order (mirrors web TYPE_DISPLAY_ORDER — schemas.ts)
+
+  /// Champions display order for the 18 types — same permutation the web uses to
+  /// cluster same-type moves in the movepool. Unknown/"" sorts last.
+  private static let typeDisplayOrder: [String] = [
+    "normal", "grass", "fire", "water", "electric", "bug", "flying", "rock",
+    "poison", "ground", "ice", "fighting", "psychic", "ghost", "dragon", "dark",
+    "steel", "fairy",
+  ]
+
+  private static let typeDisplayRank: [String: Int] = Dictionary(
+    uniqueKeysWithValues: typeDisplayOrder.enumerated().map { ($1, $0) }
+  )
+
+  /// Sort index for a type slug in display order; unknown/"" sorts last
+  /// (mirrors `typeDisplayIndex` in schemas.ts).
+  static func typeDisplayIndex(_ type: String) -> Int {
+    typeDisplayRank[type.lowercased()] ?? Int.max
+  }
+
   // MARK: Helpers
 
   /// A color that resolves to `light`/`dark` 0xRRGGBB values per the active

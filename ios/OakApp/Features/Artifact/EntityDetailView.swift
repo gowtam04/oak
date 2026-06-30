@@ -152,7 +152,7 @@ struct EntityDetailView: View {
               Text(Self.titleize(group.method))
                 .font(Theme.body(.caption).weight(.semibold))
                 .foregroundStyle(Theme.textSecondary)
-              ForEach(Array(group.moves.enumerated()), id: \.offset) { _, move in
+              ForEach(Array(Self.sortMovesByType(group.moves).enumerated()), id: \.offset) { _, move in
                 Button {
                   onOpen(.move, move.slug)
                 } label: {
@@ -435,6 +435,19 @@ struct EntityDetailView: View {
 
   private static func percent(_ value: Double) -> String {
     value == value.rounded() ? "\(Int(value))%" : "\((value * 10).rounded() / 10)%"
+  }
+
+  /// Order a group's moves by type in display order, then alphabetically by name
+  /// within each type, so same-type moves cluster together and their colored
+  /// badges read as type groups — the native mirror of the web's `sortMovesByType`
+  /// (PokemonArtifact.tsx). Untyped moves sort last (`typeDisplayIndex` → `Int.max`).
+  private static func sortMovesByType(_ moves: [MovepoolMove]) -> [MovepoolMove] {
+    moves.sorted { a, b in
+      let ia = Theme.typeDisplayIndex(a.type)
+      let ib = Theme.typeDisplayIndex(b.type)
+      if ia != ib { return ia < ib }
+      return a.displayName.localizedCaseInsensitiveCompare(b.displayName) == .orderedAscending
+    }
   }
 
   private static func titleize(_ slug: String) -> String {
