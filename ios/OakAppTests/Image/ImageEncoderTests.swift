@@ -27,6 +27,24 @@ struct ImageEncoderTests {
     }
   }
 
+  /// A large image at EXACT pixel dimensions (`format.scale = 1`), with some structure
+  /// so it doesn't compress to nothing — the stand-in for a full-resolution camera
+  /// photo / screenshot that used to blow past the per-image cap before downscaling.
+  private func largeImage(width: CGFloat = 4000, height: CGFloat = 3000) -> UIImage {
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    let renderer = UIGraphicsImageRenderer(
+      size: CGSize(width: width, height: height), format: format)
+    return renderer.image { context in
+      let colors: [UIColor] = [.systemRed, .systemBlue, .systemGreen, .systemOrange]
+      let stripe = width / CGFloat(colors.count)
+      for (index, color) in colors.enumerated() {
+        color.setFill()
+        context.fill(CGRect(x: CGFloat(index) * stripe, y: 0, width: stripe, height: height))
+      }
+    }
+  }
+
   // MARK: Count cap → .tooMany
 
   @Test
@@ -90,6 +108,39 @@ struct ImageEncoderTests {
     #expect(throws: OakError.imageRejected(reason: .unsupportedType)) {
       try encoder.encode([UIImage()])
     }
+  }
+
+  // MARK: Downscaling — the "images never send" regression guard
+
+  @Test
+  func largeImageIsDownscaledUnderTheCaps() throws {
+    // The bug: a full-resolution photo re-encoded at native dimensions blew the
+    // per-image byte cap, so `encode` threw `.perImageTooLarge` and the turn failed
+    // with a generic banner. With downscaling, it must encode SUCCESSFULLY — under
+    // both the longest-edge cap and the per-image byte cap.
+    let encoder = ImageEncoder()
+    let encoded = try encoder.encode([largeImage()])
+    let attachment = try #require(encoded.first)
+
+    let bytes = try #require(Data(base64Encoded: attachment.data))
+    #expect(bytes.count <= ImageEncoder.defaultMaxImageBytes)
+
+    // The decoded pixels are capped at the longest-edge limit — the content-agnostic
+    // proof that the downscale ran (a flat image would slip under the byte cap even
+    // un-scaled, so the byte check alone wouldn't catch a regression).
+    let decoded = try #require(UIImage(data: bytes)?.cgImage)
+    #expect(max(decoded.width, decoded.height) <= ImageEncoder.defaultMaxDimension)
+  }
+
+  @Test
+  func multipleLargeImagesStayUnderTheTotalCap() throws {
+    // Four full-resolution photos (the max per turn) must fit the 10 MiB total after
+    // downscaling — otherwise a normal multi-image turn would `.totalTooLarge`.
+    let encoder = ImageEncoder()
+    let encoded = try encoder.encode((0..<4).map { _ in largeImage() })
+    #expect(encoded.count == 4)
+    let total = encoded.reduce(0) { $0 + (Data(base64Encoded: $1.data)?.count ?? 0) }
+    #expect(total <= ImageEncoder.defaultMaxTotalBytes)
   }
 
   // MARK: Output shape — raw base64, supported MIME, no prefix

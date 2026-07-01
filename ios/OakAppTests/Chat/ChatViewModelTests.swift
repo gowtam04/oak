@@ -199,6 +199,25 @@ struct ChatViewModelTests {
     #expect(vm.isStreaming == false)
   }
 
+  @Test
+  func imageRejectionShowsItsSpecificReasonNotTheGenericBanner() async {
+    // A client-side image rejection must surface the ACTUAL reason (the fix for the
+    // dead-end "Something went wrong" banner), never the generic fallback.
+    let fake = FakeChatService()
+    fake.thrownError = OakError.imageRejected(reason: .perImageTooLarge)
+    let vm = makeViewModel(fake: fake)
+
+    vm.composerText = "what is this?"
+    vm.send()
+    await vm.streamTask?.value
+
+    #expect(
+      vm.errorBanner?.message == ChatViewModel.imageRejectedMessage(.perImageTooLarge))
+    #expect(vm.errorBanner?.message != ChatViewModel.genericMessage)
+    #expect(vm.errorBanner?.isRetryable == true)
+    #expect(vm.isStreaming == false)
+  }
+
   // MARK: In-domain non-answered statuses render (NOT as errors)
 
   @Test

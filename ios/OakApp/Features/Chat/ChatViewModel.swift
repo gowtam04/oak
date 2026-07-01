@@ -336,8 +336,29 @@ final class ChatViewModel {
       return ErrorBanner(message: Self.sessionExpiredMessage, isRetryable: false)
     case let .http(_, _, message):
       return ErrorBanner(message: message.isEmpty ? Self.genericMessage : message, isRetryable: true)
-    case .decoding, .imageRejected:
+    case let .imageRejected(reason):
+      // Surface the ACTUAL reason (too large / unsupported / too many) rather than
+      // the dead-end generic banner, so a rejected attachment is self-explanatory
+      // and instantly distinguishable from a server/transport fault.
+      return ErrorBanner(message: Self.imageRejectedMessage(reason), isRetryable: true)
+    case .decoding:
       return ErrorBanner(message: Self.genericMessage, isRetryable: true)
+    }
+  }
+
+  /// User-facing copy for a client-side image rejection (``ImageRejectReason``). The
+  /// encoder downscales attachments to fit the caps, so `.perImageTooLarge` /
+  /// `.totalTooLarge` are now rare — but when one does fire the user learns why.
+  static func imageRejectedMessage(_ reason: ImageRejectReason) -> String {
+    switch reason {
+    case .tooMany:
+      return "You can attach up to \(ChatViewModel.maxAttachedImages) images."
+    case .perImageTooLarge:
+      return "That image is too large to send. Try a smaller one."
+    case .totalTooLarge:
+      return "Those images are too large together. Remove one and try again."
+    case .unsupportedType:
+      return "That image couldn't be processed. Try a different one."
     }
   }
 
