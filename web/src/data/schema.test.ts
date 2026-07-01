@@ -152,7 +152,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 11 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team)", async () => {
+  it("creates all 13 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
@@ -172,10 +172,13 @@ describe("Drizzle migration — table creation", () => {
         "conversation_message",
         // Team builder (account-scoped) — added by the 0003 migration.
         "team",
+        // Admin panel (append-only usage/auth records) — added by the 0005 migration.
+        "turn_record",
+        "auth_event",
       ]),
     );
-    // Exactly 11 user tables (5 index + 3 auth + 2 chat-history + 1 team).
-    expect(tables).toHaveLength(11);
+    // Exactly 13 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin).
+    expect(tables).toHaveLength(13);
   });
 
   it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {

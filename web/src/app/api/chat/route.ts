@@ -48,7 +48,7 @@ import type {
 } from "@/agent/types";
 import type { Account } from "@/data/repos/accounts-repo";
 import { formatForMode, modeForFormat, type Format } from "@/data/formats";
-import { logger } from "@/server/logger";
+import { logger, type TurnTrace } from "@/server/logger";
 import {
   checkRateLimit,
   GUEST_CONFIG,
@@ -213,6 +213,21 @@ export async function POST(req: Request): Promise<Response> {
 
   const { session_id, message } = body;
 
+  // Fire-and-forget recording-fault logger (ADMIN-BR-3): a `turn_record` write
+  // failure is LOGGED and never affects the chat path. Shared by the rate-limit
+  // rejection branch and the post-answer recording below.
+  const logRecordFailure = (err: unknown): void => {
+    logger.error(
+      {
+        event: "turn_record_failed",
+        request_id: requestId,
+        session_id,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "oak_turn_record_failed",
+    );
+  };
+
   // Server-controlled query scope for the turn — derived here, threaded onto the
   // AgentContext, never an LLM-visible tool field. ON ⇒ every query is scoped to
   // Champions; omitted/false ⇒ today's Gen 9 behavior. For a RESUMED signed-in
@@ -268,7 +283,38 @@ export async function POST(req: Request): Promise<Response> {
         `Message exceeds the ${gate.maxLength}-character limit (got ${gate.actualLength}).`,
       );
     }
-    // rate_limited
+    // rate_limited — record the rejected turn as a `turn_record` (design.md AD-4:
+    // "rate_limited" is a recorded-status superset, so the errors/heavy-user views
+    // have a single source). The model is unresolved on this pre-stream branch, so
+    // model/providerModel are null and there is no answer. Fire-and-forget: the
+    // recordTurn promise is NEVER awaited (only the cheap, cached module import is)
+    // and a write fault only logs. input_too_long is a separate rejection and is
+    // deliberately NOT recorded (it never reached the model path).
+    try {
+      const { recordTurn } = await import("@/data/repos/usage-repo");
+      void recordTurn({
+        id: requestId,
+        sessionId: session_id,
+        accountId: account?.id ?? null,
+        model: null,
+        providerModel: null,
+        mode,
+        status: "rate_limited",
+        inputTokens: 0,
+        outputTokens: 0,
+        thinkingTokens: 0,
+        toolTrace: [],
+        citationCount: 0,
+        turnLatencyMs: 0,
+        imagesCount: images.length,
+        promptText: message,
+        answerText: null,
+        answer: null,
+        createdAt: Date.now(),
+      }).catch(logRecordFailure);
+    } catch (err) {
+      logRecordFailure(err);
+    }
     return jsonError(
       429,
       "rate_limited",
@@ -456,6 +502,20 @@ export async function POST(req: Request): Promise<Response> {
             signal: req.signal,
           });
 
+          // Capture the per-turn trace the runtime assembles in finalize() via the
+          // onTurnComplete sink (admin-panel recording, AD-2). createAgentContext
+          // does not take this field, so it is set POST-CONSTRUCTION on the ctx —
+          // the same way the route owns the other server-controlled ctx fields.
+          // The captured trace is composed into the turn_record after the answer
+          // is delivered (below). A holder object (not a bare closure-assigned
+          // `let`, which TS would keep narrowed to its `null` initializer at the
+          // read site) — the property's declared type is restored after the
+          // intervening `await runOak`.
+          const traceRef: { current: TurnTrace | null } = { current: null };
+          ctx.onTurnComplete = (trace) => {
+            traceRef.current = trace;
+          };
+
           // Stream one tool_activity event per tool call as the loop runs.
           const onProgress: OnProgress = (e) => {
             send("tool_activity", { tool: e.tool, label: e.label });
@@ -548,6 +608,41 @@ export async function POST(req: Request): Promise<Response> {
               content: answer.answer_markdown,
             });
             send("answer", { answer });
+          }
+
+          // Non-blocking admin recording (ADMIN-BR-3, AD-2/AD-3): persist ONE
+          // turn_record per turn (guest + signed-in) from the captured trace
+          // (tokens / tool_trace / latency) plus this turn's own message / images
+          // / answer / account / mode. The answer was already delivered above, so
+          // this never blocks or delays the user; the recordTurn promise is NEVER
+          // awaited (only the cheap, cached module import is) and a write fault
+          // only logs. An interrupted (client-aborted) turn returns before here,
+          // so it is intentionally not recorded.
+          try {
+            const { recordTurn } = await import("@/data/repos/usage-repo");
+            void recordTurn({
+              id: requestId,
+              sessionId: session_id,
+              accountId: account?.id ?? null,
+              model: activeModel,
+              providerModel: traceRef.current?.model ?? null,
+              mode,
+              status: answer.status,
+              inputTokens: traceRef.current?.input_tokens ?? 0,
+              outputTokens: traceRef.current?.output_tokens ?? 0,
+              thinkingTokens: traceRef.current?.thinking_tokens ?? 0,
+              toolTrace: traceRef.current?.tool_trace ?? [],
+              citationCount:
+                traceRef.current?.citation_count ?? answer.citations.length,
+              turnLatencyMs: traceRef.current?.turn_latency_ms ?? 0,
+              imagesCount: images.length,
+              promptText: message,
+              answerText: answer.answer_markdown,
+              answer,
+              createdAt: Date.now(),
+            }).catch(logRecordFailure);
+          } catch (err) {
+            logRecordFailure(err);
           }
         } catch (err) {
           // A client abort (user pressed Stop) surfaces as an AbortError out of

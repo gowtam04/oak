@@ -92,7 +92,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await fix.db.execute(
-    sql`TRUNCATE TABLE account, auth_session, otp_code RESTART IDENTITY`,
+    sql`TRUNCATE TABLE account, auth_session, otp_code, auth_event RESTART IDENTITY`,
   );
   _resetForTests();
   emailMock.sendOtpEmail.mockReset();
@@ -127,6 +127,34 @@ async function accountCount(email: string): Promise<number> {
     sql`SELECT count(*)::int AS n FROM account WHERE email = ${email}`,
   );
   return (res.rows[0] as { n: number }).n;
+}
+
+interface AuthEventRow {
+  type: string;
+  email: string | null;
+  account_id: string | null;
+  created_flag: number | null;
+  detail: string | null;
+}
+
+/**
+ * Poll the `auth_event` table until a row matching `predicate` appears. The
+ * recorder is fire-and-forget (a dynamic import + INSERT not awaited by
+ * requestCode/verifyCode, ADMIN-BR-3), so the row lands shortly AFTER the call
+ * resolves — this waits for it deterministically instead of racing.
+ */
+async function waitForAuthEvent(
+  predicate: (r: AuthEventRow) => boolean,
+): Promise<AuthEventRow> {
+  for (let i = 0; i < 100; i++) {
+    const res = await fix.db.execute(
+      sql`SELECT type, email, account_id, created_flag, detail FROM auth_event`,
+    );
+    const found = (res.rows as unknown as AuthEventRow[]).find(predicate);
+    if (found) return found;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  throw new Error("no auth_event row matched the predicate in time");
 }
 
 // ===========================================================================
@@ -387,5 +415,65 @@ describe("verifyCode — per-IP verify throttle", () => {
     if (r.reason !== "throttled") throw new Error(`expected throttled, got ${r.reason}`);
     expect(r.reason).toBe("throttled");
     expect(r.retryAfterMs).toBeGreaterThan(0);
+  });
+});
+
+// ===========================================================================
+// Admin-panel auth-event recording (non-blocking) — ADMIN-US-6, ADMIN-BR-3.
+// Recording is fire-and-forget against the same `@/data/db` singleton, so each
+// assertion polls the `auth_event` table for the expected row.
+// ===========================================================================
+
+describe("auth-event recording (ADMIN-US-6)", () => {
+  it("records an otp_requested event on a successful request", async () => {
+    await issueAndCapture("event-req@test.com");
+
+    const row = await waitForAuthEvent(
+      (r) => r.type === "otp_requested" && r.email === "event-req@test.com",
+    );
+    expect(row.account_id).toBeNull();
+    expect(row.created_flag).toBeNull();
+  });
+
+  it("records an otp_email_failed event carrying the error detail", async () => {
+    emailMock.sendOtpEmail.mockRejectedValueOnce(new Error("resend 500"));
+
+    expect(await auth.requestCode("event-bounce@test.com", IP)).toEqual({
+      ok: false,
+      reason: "email_failed",
+    });
+
+    const row = await waitForAuthEvent(
+      (r) => r.type === "otp_email_failed" && r.email === "event-bounce@test.com",
+    );
+    // `detail` is JSON.stringified by the repo; it carries the delivery error.
+    expect(row.detail).toContain("resend 500");
+  });
+
+  it("records an otp_verified event with created_flag=1 on a new signup", async () => {
+    const code = await issueAndCapture("event-new@test.com");
+    const result = await auth.verifyCode("event-new@test.com", code, IP);
+    if (!result.ok) throw new Error("expected ok");
+
+    const row = await waitForAuthEvent((r) => r.type === "otp_verified");
+    expect(row.email).toBe("event-new@test.com");
+    expect(row.account_id).toBe(result.account.id);
+    expect(row.created_flag).toBe(1);
+  });
+
+  it("records created_flag=0 when an existing account signs back in", async () => {
+    const code1 = await issueAndCapture("event-dup@test.com");
+    const first = await auth.verifyCode("event-dup@test.com", code1, IP);
+    if (!first.ok) throw new Error("expected first ok");
+
+    const code2 = await issueAndCapture("event-dup@test.com");
+    const second = await auth.verifyCode("event-dup@test.com", code2, IP);
+    if (!second.ok) throw new Error("expected second ok");
+
+    const signIn = await waitForAuthEvent(
+      (r) => r.type === "otp_verified" && r.created_flag === 0,
+    );
+    expect(signIn.email).toBe("event-dup@test.com");
+    expect(signIn.account_id).toBe(second.account.id);
   });
 });

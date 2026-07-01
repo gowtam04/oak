@@ -1,0 +1,570 @@
+/* ==========================================================================
+   admin.css — styling for the read-only /admin panel (Phase 6 shell + the
+   shared admin primitives). Imported once by `admin/layout.tsx`, so it loads
+   only on the code-split /admin bundle (AD-1), never on the main app routes.
+
+   Built on the global design tokens declared in globals.css (`--surface`,
+   `--border`, `--text`, `--space-*`, `--radius-*`, etc.), so the panel inherits
+   the app's light/dark theming for free. Pure presentation: BEM class names
+   matching the components' structure; no behavior lives here.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Shell — header bar, brand, nav, content region
+   -------------------------------------------------------------------------- */
+
+.admin-shell {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+}
+
+.admin-shell__header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-raised);
+}
+
+.admin-shell__bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.admin-shell__brand {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: var(--text-lg);
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+.admin-shell__controls {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.admin-shell__main {
+  padding: var(--space-6);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* --------------------------------------------------------------------------
+   Nav tabs
+   -------------------------------------------------------------------------- */
+
+.admin-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.admin-nav__tab {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.admin-nav__tab:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+.admin-nav__tab--active {
+  background: var(--poke-red-soft);
+  color: var(--poke-red-active);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   Date-range picker (global control in the header)
+   -------------------------------------------------------------------------- */
+
+.date-range-picker {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.date-range-picker__presets {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.date-range-picker__preset {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--motion-fast), border-color var(--motion-fast);
+}
+
+.date-range-picker__preset:hover {
+  background: var(--surface-sunken);
+}
+
+.date-range-picker__preset[aria-pressed="true"] {
+  background: var(--azure-soft);
+  border-color: var(--azure);
+  color: var(--azure);
+  font-weight: 600;
+}
+
+.date-range-picker__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.date-range-picker__label {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.date-range-picker__input,
+.date-range-picker__select {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-family: var(--body);
+}
+
+/* --------------------------------------------------------------------------
+   KpiCard
+   -------------------------------------------------------------------------- */
+
+.kpi-card {
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+}
+
+.kpi-card__label {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.kpi-card__value {
+  font-family: var(--display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-strong);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.kpi-card--warn .kpi-card__value {
+  color: var(--warning);
+}
+
+.kpi-card--danger .kpi-card__value {
+  color: var(--danger);
+}
+
+.kpi-card__badge {
+  font-family: var(--body);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  background: var(--surface-sunken);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+}
+
+.kpi-card__hint {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+
+/* --------------------------------------------------------------------------
+   DataTable
+   -------------------------------------------------------------------------- */
+
+.admin-table {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.admin-table__scroll {
+  overflow-x: auto;
+}
+
+.admin-table__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.admin-table__caption {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  font-weight: 600;
+  color: var(--text-strong);
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-table__table th,
+.admin-table__table td {
+  padding: var(--space-2) var(--space-4);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-table__table th {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-table__sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.admin-table__sort-indicator {
+  color: var(--azure);
+}
+
+.admin-table__row:hover {
+  background: var(--surface-sunken);
+}
+
+.admin-table__row--empty:hover {
+  background: transparent;
+}
+
+.admin-table__empty {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.admin-table__footer {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-3);
+}
+
+.admin-table__load-more {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.admin-table__load-more:hover {
+  background: var(--surface-sunken);
+}
+
+/* --------------------------------------------------------------------------
+   FilterBar
+   -------------------------------------------------------------------------- */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.filter-bar__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.filter-bar__field--search {
+  flex: 1 1 220px;
+}
+
+.filter-bar__label {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.filter-bar__search,
+.filter-bar__select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-family: var(--body);
+}
+
+.filter-bar__search {
+  width: 100%;
+}
+
+.filter-bar__clear {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.filter-bar__clear:hover {
+  background: var(--surface-sunken);
+}
+
+/* --------------------------------------------------------------------------
+   TimeSeriesChart (hand-rolled inline SVG — no chart dependency)
+   -------------------------------------------------------------------------- */
+
+.time-series-chart {
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.time-series-chart__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.time-series-chart__grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.time-series-chart__axis,
+.time-series-chart__xaxis,
+.time-series-chart__yaxis {
+  stroke: var(--border-strong);
+}
+
+.time-series-chart__xtick,
+.time-series-chart__ytick {
+  fill: var(--text-faint);
+  font-size: 10px;
+}
+
+.time-series-chart__line {
+  fill: none;
+  stroke: var(--azure);
+  stroke-width: 2;
+}
+
+.time-series-chart__area {
+  fill: var(--azure-soft);
+  opacity: 0.6;
+}
+
+.time-series-chart__dot {
+  fill: var(--azure);
+}
+
+.time-series-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.time-series-chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.time-series-chart__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
+.time-series-chart__empty,
+.cost-chart__empty {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-faint);
+}
+
+/* --------------------------------------------------------------------------
+   TurnDetail (per-turn drill-down view)
+   -------------------------------------------------------------------------- */
+
+.turn-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.turn-detail__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.turn-detail__id {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+
+.turn-detail__identity {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.turn-detail__status {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+
+.turn-detail__estimate-tag {
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+
+.turn-detail__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.turn-detail__section-title {
+  font-weight: 600;
+  color: var(--text-strong);
+  font-size: var(--text-md);
+}
+
+.turn-detail__grid,
+.turn-detail__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+
+.turn-detail__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.turn-detail__field-label {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.turn-detail__field-value {
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.turn-detail__prompt,
+.turn-detail__answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.turn-detail__prompt-text,
+.turn-detail__answer-text,
+.turn-detail__tool-args,
+.turn-detail__tool-trace {
+  padding: var(--space-3);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.turn-detail__empty {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-faint);
+}
+
+/* --------------------------------------------------------------------------
+   Shared page-level helpers used by the screens (Phase 7/8)
+   -------------------------------------------------------------------------- */
+
+.admin-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.admin-page__title {
+  font-family: var(--display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
