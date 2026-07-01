@@ -89,6 +89,7 @@ export default function AdminShell({ children, initialRange }: AdminShellProps) 
         <header className="admin-shell__header" data-testid="admin-header">
           <div className="admin-shell__bar">
             <span className="admin-shell__brand" data-testid="admin-brand">
+              <span className="admin-shell__logo" aria-hidden="true" />
               Oak Admin
             </span>
             <AdminNav pathname={pathname} />

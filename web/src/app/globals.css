@@ -143,6 +143,7 @@
   --control-touch: 44px; /* min tap target on pointer:coarse */
 
   /* CSS-only icon set — masked SVGs, tinted via currentColor */
+  --brand-mark: url("/oak-app-icon.png");
   --icon-chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M9 6l6 6-6 6'/></svg>");
   --icon-send: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='black' d='M2.5 21.5l20-9-20-9V10l14 2.5-14 2.5z'/></svg>");
   --icon-warning: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'><path d='M12 3.2L1.6 20.4h20.8L12 3.2z'/><path d='M12 9.5v4.2'/><circle cx='12' cy='17.4' r='0.6' fill='black' stroke='none'/></svg>");
@@ -340,12 +341,14 @@
 }
 .chat-page__title::before {
   content: "";
-  width: 28px;
-  height: 28px;
-  background: var(--neutral-0);
-  -webkit-mask: var(--icon-pokeball) center / contain no-repeat;
-  mask: var(--icon-pokeball) center / contain no-repeat;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--brand-mark) center / cover no-repeat;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--neutral-0) 62%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.24);
 }
 
 /* Right-side header controls: logical groups wrapped in a cluster, split by a
@@ -1908,11 +1911,12 @@
 }
 .chat-empty__wordmark::before {
   content: "";
-  width: 40px;
-  height: 40px;
-  background: var(--poke-red);
-  -webkit-mask: var(--icon-pokeball) center / contain no-repeat;
-  mask: var(--icon-pokeball) center / contain no-repeat;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  background: var(--brand-mark) center / cover no-repeat;
+  box-shadow: var(--shadow-raised);
 }
 .chat-empty__invite {
   margin: 0;
@@ -2627,12 +2631,14 @@
 }
 .teams-page__wordmark::before {
   content: "";
-  width: 28px;
-  height: 28px;
-  background: var(--neutral-0);
-  -webkit-mask: var(--icon-pokeball) center / contain no-repeat;
-  mask: var(--icon-pokeball) center / contain no-repeat;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--brand-mark) center / cover no-repeat;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--neutral-0) 62%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.24);
 }
 .teams-page__wordmark:hover,
 .teams-page__wordmark:focus-visible {

@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   title: "Oak",
   description:
     "Ask anything about Pokémon — answers backed by reasoning, battle math, and cited sources.",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-icon.png",
+  },
 };
 
 // Mobile foundation: map the layout to the real device width and let the page

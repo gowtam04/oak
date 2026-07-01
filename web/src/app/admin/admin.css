@@ -41,11 +41,23 @@
 }
 
 .admin-shell__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: var(--display);
   font-weight: 600;
   font-size: var(--text-lg);
   color: var(--text-strong);
   white-space: nowrap;
+}
+
+.admin-shell__logo {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  background: var(--brand-mark) center / cover no-repeat;
+  box-shadow: 0 1px 2px rgba(74, 53, 42, 0.14);
 }
 
 .admin-shell__controls {
@@ -96,8 +108,12 @@
 }
 
 .admin-login__logo {
-  font-size: var(--text-xl);
-  line-height: 1;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--brand-mark) center / cover no-repeat;
+  box-shadow: 0 1px 2px rgba(74, 53, 42, 0.14);
 }
 
 .admin-login__wordmark {

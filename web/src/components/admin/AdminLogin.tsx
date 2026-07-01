@@ -237,7 +237,7 @@ export default function AdminLogin({
     <div className="admin-login" data-testid="admin-login">
       <div className="admin-login__card" role="dialog" aria-labelledby="admin-login-title">
         <div className="admin-login__brand" aria-hidden="true">
-          <span className="admin-login__logo">◓</span>
+          <span className="admin-login__logo" />
           <span className="admin-login__wordmark">Oak</span>
         </div>
         <h1 id="admin-login-title" className="admin-login__title">
