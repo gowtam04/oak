@@ -691,6 +691,9 @@ function finalize(
     citation_count: answer.citations.length,
   };
   logTurn(trace, ctx.logger);
+  // Hand the assembled trace to the optional recording sink (admin-panel, AD-2).
+  // Pure hand-off — never awaited, never inspected; absent in tests/eval.
+  ctx.onTurnComplete?.(trace);
   return answer;
 }
 

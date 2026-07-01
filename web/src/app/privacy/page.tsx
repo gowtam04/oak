@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { OPERATOR_ACCESS_DISCLOSURE_MARKDOWN } from "@/components/admin/operator-access-disclosure";
 import Markdown from "@/components/Markdown";
 
 export const metadata: Metadata = {
@@ -29,19 +30,23 @@ it's used, and the choices you have.
   so we can send a one-time sign-in code. Oak never uses passwords.
 - **Chat messages and history.** If you're signed in, your conversations with
   Oak are stored so you can return to them later and have them sync across
-  devices. If you're using Oak as a guest (no account), your conversation
-  exists only in memory for that session and is never written to durable
-  storage — it's gone once the session ends.
+  devices. If you're using Oak as a guest (no account), your conversation isn't
+  tied to an account and you can't return to it later — the live session exists
+  only in memory and is discarded once it ends. Separately, and regardless of
+  whether you're signed in, Oak keeps an internal operational record of each
+  message and answer (see "Operational records and operator access" below).
 - **Team data.** If you build or save a competitive team (species, ability,
   held item, moves, nature, EVs, IVs, Tera type, and similar details), that
   data is stored against your account.
 - **Images you attach.** A photo or screenshot you attach to a message is sent
   to the active AI model to help answer that one question. It's used only for
-  that single message — it is never stored in your chat history or saved
-  anywhere.
+  that single message — the image itself is never stored in your chat history or
+  saved anywhere (Oak keeps only a count of how many images a message included).
 - **Technical data.** We log IP addresses transiently to rate-limit sign-in
   requests and prevent abuse. Oak does not use analytics, advertising, or
   tracking SDKs of any kind.
+
+${OPERATOR_ACCESS_DISCLOSURE_MARKDOWN}
 
 ## How we use this information
 
@@ -69,8 +74,10 @@ personal information to anyone.
 
 - Signed-in account data (chats, saved teams) is retained until you delete it
   or delete your account.
-- Guest sessions are never persisted — they exist only in memory and are
-  discarded when the session ends.
+- A guest's live conversation isn't tied to an account and can't be reloaded
+  later — it exists only in memory and is discarded when the session ends.
+- The internal operational records described above (one per chat turn, one per
+  sign-in event) are kept indefinitely, for signed-in and guest activity alike.
 - Attached images are never stored; each is used for a single message and
   then discarded.
 

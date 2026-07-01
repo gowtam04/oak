@@ -436,3 +436,123 @@ export const team = pgTable(
     index("team_account_updated_idx").on(t.account_id, t.updated_at),
   ],
 );
+
+// ===========================================================================
+// Admin panel — usage recording (docs/features/admin-panel § Data Model)
+//
+// Two APPEND-ONLY tables that back the read-only admin/observability panel
+// (ADMIN-US-6). Written once on a NON-BLOCKING, fire-and-forget path
+// (ADMIN-BR-3) and NEVER updated; the panel only reads them. Like the
+// auth/chat/team tables these are GLOBAL (no `format` column — `mode` is a
+// per-row property), epoch-ms timestamps are `bigint` mode "number", JSON is
+// stored whole as TEXT, FKs are logical (un-constrained) indexed columns, and
+// indexes target the panel's query patterns. No existing table is altered.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// turn_record — one row per chat turn, guest and signed-in (ADMIN-US-6, AD-3/AD-4)
+//
+// The persisted form of the runtime's `TurnTrace` plus the turn's content. The
+// PK is the turn's `request_id` (one row per turn). `account_id` is nullable
+// (null ⇒ guest turn). The recorded `status` is a SUPERSET of the agent's
+// `TurnStatus`: it adds "rate_limited" for requests rejected before the model
+// ran (AD-4) — those rows are inserted on the chat route's rate-limit branch
+// BEFORE the model is resolved, so `model` / `provider_model` are NULLABLE here
+// (no resolved model yet) and `answer_text` / `answer_json` are null. The
+// analytics repo treats a null `model` as "n/a".
+// ---------------------------------------------------------------------------
+export const turn_record = pgTable(
+  "turn_record",
+  {
+    /** = the turn's `request_id` (UUID, unique per turn). PK. */
+    id: text("id").primaryKey(),
+    /** Conversation/session id (groups a session's turns). */
+    session_id: text("session_id").notNull(),
+    /** Logical FK → account.id; NULL ⇒ guest turn. */
+    account_id: text("account_id"),
+    /**
+     * `ModelKey` ("grok-4.3" | "claude" | "gpt-5.5"); keys the cost lookup.
+     * NULLABLE: a "rate_limited" row is recorded before the model is resolved,
+     * so it has no model. The analytics repo treats null as "n/a".
+     */
+    model: text("model"),
+    /**
+     * Provider API model id from the trace (e.g. "grok-2"). NULLABLE for the
+     * same reason as `model` — unresolved on the rate-limit branch.
+     */
+    provider_model: text("provider_model"),
+    /** "standard" | "champions". */
+    mode: text("mode").notNull(),
+    /**
+     * Recorded status — a SUPERSET of the agent's TurnStatus (AD-4):
+     * "answered" | "clarification_needed" | "resolution_failed" |
+     * "insufficient_data" | "rate_limited".
+     */
+    status: text("status").notNull(),
+    input_tokens: integer("input_tokens").notNull().default(0),
+    output_tokens: integer("output_tokens").notNull().default(0),
+    thinking_tokens: integer("thinking_tokens").notNull().default(0),
+    /** JSON `ToolTraceEntry[]` (stringified by the repo). */
+    tool_trace: text("tool_trace").notNull().default("[]"),
+    /**
+     * Denormalized count of tool_trace entries with `error != null` — derived
+     * by the repo on insert, for cheap error rollups (no JSON parse on read).
+     */
+    tool_error_count: integer("tool_error_count").notNull().default(0),
+    citation_count: integer("citation_count").notNull().default(0),
+    turn_latency_ms: integer("turn_latency_ms").notNull().default(0),
+    /** Attached image count; image bytes are NEVER stored. */
+    images_count: integer("images_count").notNull().default(0),
+    /** The user message (searchable; empty when image-only). */
+    prompt_text: text("prompt_text").notNull().default(""),
+    /** `answer_markdown` (searchable; null for "rate_limited"). */
+    answer_text: text("answer_text"),
+    /** Full `OakAnswer` JSON for drill-down re-render (null for "rate_limited"). */
+    answer_json: text("answer_json"),
+    /** Epoch ms; the primary time dimension for all series/rollups. */
+    created_at: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    // Time-series + retention scans.
+    index("turn_record_created_idx").on(t.created_at),
+    // Per-account activity & heavy-user rollups.
+    index("turn_record_account_created_idx").on(t.account_id, t.created_at),
+    // Group a session's turns.
+    index("turn_record_session_idx").on(t.session_id),
+    // Errors view (status filter over a range).
+    index("turn_record_status_created_idx").on(t.status, t.created_at),
+    // Cost-by-model.
+    index("turn_record_model_created_idx").on(t.model, t.created_at),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// auth_event — one row per auth event (ADMIN-US-6)
+//
+// Append-only; recorded fire-and-forget alongside the existing auth logs.
+// ---------------------------------------------------------------------------
+export const auth_event = pgTable(
+  "auth_event",
+  {
+    /** UUID. PK. */
+    id: text("id").primaryKey(),
+    /** "otp_requested" | "otp_verified" | "otp_email_failed". */
+    type: text("type").notNull(),
+    /** The email involved (normalized); nullable. */
+    email: text("email"),
+    /** Logical FK → account.id; set on "otp_verified", null otherwise. */
+    account_id: text("account_id"),
+    /** For "otp_verified": 1 = new signup, 0 = returning sign-in; null otherwise. */
+    created_flag: integer("created_flag"),
+    /** JSON extra (e.g. the error string on "otp_email_failed"); nullable. */
+    detail: text("detail"),
+    /** Epoch ms. */
+    created_at: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    // Time-series scans.
+    index("auth_event_created_idx").on(t.created_at),
+    // Per-type rollups over a range (signups vs sign-ins vs email failures).
+    index("auth_event_type_created_idx").on(t.type, t.created_at),
+  ],
+);

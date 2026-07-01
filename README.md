@@ -45,6 +45,11 @@ the design intent.
   "rate this team sheet"); all three models are vision-capable.
 - **Champions mode** — a header toggle switches the entire data scope between the
   standard Scarlet/Violet index and the **Champions** regulation format.
+- **Admin panel** (operator-only) — a private, **read-only** `/admin` dashboard
+  for the single owner: usage/growth, estimated cost by model, error rollups,
+  per-turn drill-down, a live view, and read-only account/conversation/team
+  browsers. It is gated by an `ADMIN_EMAILS` allowlist on top of the existing
+  email-OTP auth (see [Admin panel](#admin-panel)).
 
 ## Stack
 
@@ -111,6 +116,9 @@ keys are optional and validated on use:
   strong value is required in production).
 - `RESEND_API_KEY` — to send real OTP emails. Absent ⇒ the code is logged to the
   console (fine for local dev).
+- `ADMIN_EMAILS` — comma-separated allowlist of admin emails for the `/admin`
+  panel. Unset ⇒ zero admins ⇒ the panel is dark (the safe default). See
+  [Admin panel](#admin-panel).
 
 To run the Next dev server directly against a local Postgres instead of in Docker:
 
@@ -151,6 +159,46 @@ Switching is one secret change, no rebuild. The chosen model's provider key must
 be configured or the request returns a clean 503; an unknown value fails fast at
 boot.
 
+## Admin panel
+
+A private, **read-only** operator dashboard for the single owner, served as a
+protected `/admin` route group inside the same Next.js app (no second deploy).
+It surfaces usage & growth, **estimated** cost by model, error rollups, a
+searchable per-turn drill-down, a live activity view, and read-only browsers for
+accounts, conversations, and saved teams. It mutates nothing — the only writes
+the feature adds are the two append-only records below.
+
+- **Access** — reuses the existing email-OTP login, gated by an `ADMIN_EMAILS`
+  allowlist (comma-separated). Set it as a secret:
+
+  ```bash
+  fly secrets set ADMIN_EMAILS=you@example.com,ops@example.com
+  ```
+
+  The allowlist is read from the environment at call time, and gating is
+  enforced **server-side on every `/api/admin/*` request** plus the `/admin`
+  layout. **Unset `ADMIN_EMAILS` ⇒ zero admins ⇒ the panel is dark** (the safe
+  default); there is no link to it from the main app — reach it at the `/admin`
+  URL.
+- **Recording enabler** — Oak now persists **one `turn_record` per chat turn**
+  (guest **and** signed-in: prompt text, answer, model, mode, token counts, tool
+  trace, status, timing) and **one `auth_event` per auth event** (code
+  requested / verified / delivery failed). Recording is **non-blocking and
+  best-effort** — fired as `void recordX(...).catch(logOnly)`, never awaited on
+  the chat or auth path, so it can never fail or slow a user's turn. These two
+  tables are the analytics store the panel reads.
+- **Cost is an estimate** — dollar figures come from a static in-code per-model
+  price table and are always labelled as estimates; provider billing is
+  authoritative.
+- **Retention** — recorded turns and auth events are retained **indefinitely**
+  (no prune job). Because this means **guest** prompts and answers — previously
+  ephemeral — are now stored and readable by the operator, the
+  [privacy policy](web/src/app/privacy/page.tsx) discloses operator read access
+  and usage recording.
+
+Full requirements and design live in
+[`docs/features/admin-panel/`](docs/features/admin-panel/).
+
 ## Deploy
 
 Deployed to Fly from `web/` (`cd web && fly deploy`) via the production
@@ -168,7 +216,7 @@ deployment notes for details.
 | [`docs/requirements/requirements.md`](docs/requirements/requirements.md) | Core business requirements — user stories, acceptance criteria, business rules.                         |
 | [`docs/agent-design/`](docs/agent-design/)                               | The agent's internals (fixed): topology, tools, data sources, prompts, output schema, eval spec.        |
 | [`docs/architecture/design.md`](docs/architecture/design.md)             | Technical design — stack, data store, ingest pipeline, file structure, interfaces, build phases.        |
-| [`docs/features/`](docs/features/)                                       | Per-feature requirements + design: account creation, chat history, team builder, artifact viewer.       |
+| [`docs/features/`](docs/features/)                                       | Per-feature requirements + design: account creation, chat history, team builder, artifact viewer, admin panel. |
 | [`docs/design-system/`](docs/design-system/)                             | Visual language — color, typography, spacing, component patterns.                                       |
 | [`docs/eval-reports/`](docs/eval-reports/)                               | Judged eval runs (incl. a Grok-vs-Claude A/B).                                                           |
 

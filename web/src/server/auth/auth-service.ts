@@ -105,6 +105,35 @@ function isValidEmail(email: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Admin-panel auth-event recording (non-blocking) — design.md § Component
+// Design "1. Usage recording", ADMIN-US-6, ADMIN-BR-3.
+// ---------------------------------------------------------------------------
+
+/**
+ * Fire-and-forget recording of one auth event for the admin panel. Mirrors the
+ * existing pino logs at the three emit sites (otp_requested / otp_verified /
+ * otp_email_failed) and is NEVER awaited on the auth critical path (ADMIN-BR-3):
+ * a recording fault only logs. The usage repo is reached via a DYNAMIC import so
+ * this module's static graph (and its boot/env footprint) is unchanged.
+ */
+function recordAuthEventSafe(
+  input: import("@/data/repos/usage-repo").AuthEventInput,
+): void {
+  void import("@/data/repos/usage-repo")
+    .then(({ recordAuthEvent }) => recordAuthEvent(input))
+    .catch((err) => {
+      logger.warn(
+        {
+          event: "auth_event_record_failed",
+          type: input.type,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "oak_auth_event_record_failed",
+      );
+    });
+}
+
+// ---------------------------------------------------------------------------
 // requestCode — non-enumerating issue + email (BR-A1, BR-A5, BR-A6)
 // ---------------------------------------------------------------------------
 
@@ -148,10 +177,21 @@ export async function requestCode(
     // A genuine delivery fault — surfaced to the user as retryable, NOT as an
     // enumeration signal. The code stays valid until expiry. (No code logged.)
     logger.warn({ event: "otp_email_failed", err }, "OTP email delivery failed");
+    recordAuthEventSafe({
+      type: "otp_email_failed",
+      email: normalized,
+      detail: err instanceof Error ? err.message : String(err),
+      createdAt: Date.now(),
+    });
     return { ok: false, reason: "email_failed" };
   }
 
   logger.info({ event: "otp_requested" }, "OTP code requested");
+  recordAuthEventSafe({
+    type: "otp_requested",
+    email: normalized,
+    createdAt: Date.now(),
+  });
   return { ok: true };
 }
 
@@ -234,5 +274,12 @@ export async function verifyCode(
 
   const { token, expiresAt } = await issueSession(account.id);
   logger.info({ event: "otp_verified", created }, "OTP verified, session issued");
+  recordAuthEventSafe({
+    type: "otp_verified",
+    email: normalized,
+    accountId: account.id,
+    createdFlag: created ? 1 : 0,
+    createdAt: Date.now(),
+  });
   return { ok: true, account, token, expiresAt, created };
 }

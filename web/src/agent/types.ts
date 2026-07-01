@@ -14,6 +14,7 @@
 import type { Logger } from "pino";
 import type { ModelKey } from "@/agent/models";
 import type { JsonSchema, OakAnswer } from "@/agent/schemas";
+import type { TurnTrace } from "@/server/logger";
 
 /**
  * Query scope for a turn. Server-controlled (derived from the request body's
@@ -117,6 +118,17 @@ export interface AgentContext {
    * a text-only turn (the providers then keep `content` a plain string).
    */
   images?: ImageAttachment[];
+  /**
+   * Optional per-turn completion sink (admin-panel recording — design.md AD-2,
+   * ADMIN-BR-3). The runtime calls this exactly ONCE in `finalize()`, right after
+   * it assembles the per-turn {@link TurnTrace} (next to `logTurn`). A pure
+   * hand-off: the runtime never inspects the result and `runOak`'s return type is
+   * unchanged. The route binds it to capture the trace, then fires a NON-BLOCKING
+   * `recordTurn` off the chat critical path. Server-bound like {@link mode}/
+   * {@link model}; never an LLM-visible input. `undefined` ⇒ no recording
+   * (tests/eval and callers that don't opt in).
+   */
+  onTurnComplete?: (trace: TurnTrace) => void;
 }
 
 /**

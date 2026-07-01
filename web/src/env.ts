@@ -102,6 +102,20 @@ const EnvSchema = z
     // From-address for transactional OTP email. The default delivers only to
     // the Resend account owner; a verified domain is needed for real sends.
     EMAIL_FROM: z.string().min(1).default("Oak <onboarding@resend.dev>"),
+
+    // --- Admin panel allowlist (admin-panel design.md § Component Design §2) -
+    // Comma-separated list of operator emails permitted into the read-only
+    // `/admin` panel and `/api/admin/*` surface (ADMIN-US-1, ADMIN-BR-1). OPTIONAL
+    // and documentation-only here: unset/empty ⇒ ZERO admins ⇒ the panel is dark
+    // (safe default), so the app must boot fine without it. An empty value
+    // (`ADMIN_EMAILS=` in a compose env_file) is treated as absent.
+    //
+    // NOTE: the allowlist is NOT read through this memoized `env` object —
+    // `src/server/auth/admin.ts` reads `process.env.ADMIN_EMAILS` AT CALL TIME
+    // (like logger.ts reads LOG_LEVEL). That sidesteps the build-time env throw on
+    // env-touching imports and lets tests re-stub the list per case (vi.stubEnv).
+    // This entry exists only to validate/document the variable's shape.
+    ADMIN_EMAILS: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   })
   .superRefine((value, ctx) => {
     // AUTH_SECRET must be an explicit, non-default secret in production.
