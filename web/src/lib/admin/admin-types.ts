@@ -458,3 +458,40 @@ export interface LiveResponse {
   recent: TurnSummary[];
   window: LiveWindow;
 }
+
+// ---------------------------------------------------------------------------
+// Champions item availability (operator-curated allowlist)
+// ---------------------------------------------------------------------------
+
+/**
+ * One held item in the Champions item universe, with whether the operator
+ * currently marks it available. `available` is the ALLOWLIST view: it is true
+ * unless the item's slug is in the `champions_item_exclusion` table (the
+ * "pre-select all, uncheck what's not in the game yet" model).
+ */
+export interface AdminChampionsItem {
+  slug: string;
+  displayName: string;
+  available: boolean;
+}
+
+/** GET /api/admin/champions-items — the full Champions item list + availability. */
+export interface ChampionsItemsResponse {
+  items: AdminChampionsItem[];
+}
+
+/**
+ * POST /api/admin/champions-items — toggle one item's Champions availability.
+ * `available:false` excludes it (unavailable in Champions); `available:true`
+ * re-includes it.
+ */
+export interface ChampionsItemToggleRequest {
+  slug: string;
+  available: boolean;
+}
+
+/** POST /api/admin/champions-items response — the item's new availability. */
+export interface ChampionsItemToggleResponse {
+  slug: string;
+  available: boolean;
+}

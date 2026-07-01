@@ -39,6 +39,7 @@ export const ADMIN_NAV_TABS: readonly AdminNavTab[] = [
   { label: "Accounts", href: "/admin/accounts" },
   { label: "Conversations", href: "/admin/conversations" },
   { label: "Teams", href: "/admin/teams" },
+  { label: "Champions Items", href: "/admin/champions-items" },
 ];
 
 /**

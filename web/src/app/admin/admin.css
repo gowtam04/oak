@@ -753,3 +753,106 @@
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: var(--space-4);
 }
+
+/* --------------------------------------------------------------------------
+   Champions items — operator-curated availability toggle grid (first write UI)
+   -------------------------------------------------------------------------- */
+
+.champions-items-view__intro {
+  max-width: 60ch;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.champions-items-view__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.champions-items-view__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.champions-items-view__label {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.champions-items-view__search {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-family: var(--body);
+  min-width: 240px;
+}
+
+.champions-items-view__summary {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.champions-items-view__error {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger, #c0392b);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--danger, #c0392b);
+  font-size: var(--text-sm);
+}
+
+.champions-items-view__empty {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.champions-items-view__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-2);
+}
+
+.champions-items-view__toggle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.champions-items-view__item--excluded .champions-items-view__toggle {
+  background: var(--surface-sunken);
+}
+
+.champions-items-view__item--excluded .champions-items-view__name {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.champions-items-view__name {
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+}
+
+.champions-items-view__slug {
+  margin-left: auto;
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  font-family: var(--mono, monospace);
+}

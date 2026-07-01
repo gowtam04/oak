@@ -12,7 +12,7 @@ import {
   type GetItemOutput,
 } from "@/agent/schemas";
 import { getReference } from "@/data/repos/reference-cache";
-import { formatForMode } from "@/data/formats";
+import { formatForMode, CHAMPIONS_FORMAT } from "@/data/formats";
 
 const description =
   "Get an item's effect text and, where available, which Pokémon are found " +
@@ -27,10 +27,24 @@ export const getItemTool: ToolDef = {
     if (!parsed.success) {
       return { found: false, suggestions: [] };
     }
+    const format = formatForMode(ctx.mode);
+    // Champions: an item the operator marked unavailable is treated as
+    // not-found (defense in depth — resolve_entity already won't surface it, so
+    // the model shouldn't reach here with an excluded slug). `ctx.db` carries
+    // the bound handle, exactly as forwarded to getReference below.
+    if (format === CHAMPIONS_FORMAT) {
+      const { loadChampionsItemExclusions } = await import(
+        "@/data/repos/champions-items-repo"
+      );
+      const excluded = await loadChampionsItemExclusions(ctx.db);
+      if (excluded.has(parsed.data.name)) {
+        return { found: false, suggestions: [] };
+      }
+    }
     return (await getReference(
       "item",
       parsed.data.name,
-      formatForMode(ctx.mode),
+      format,
       ctx.db,
     )) as GetItemOutput;
   },
