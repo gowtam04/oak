@@ -14,7 +14,24 @@ The agent's internals (topology, the original T1–T11 tools, prompts, the `OakA
 
 ## Git workflow
 
-Commit on the **current branch** — never create a new branch for a commit unless the user explicitly asks for one. This holds even when the current branch is `main`/the default branch.
+Multiple agents work on this repo in parallel, so **`develop` is the shared integration branch** — every agent's work lands there, never `main` (unless the user explicitly asks for a `main` commit/release).
+
+To avoid agents stepping on each other's uncommitted changes, **each agent must create its own git worktree off `develop` before starting any work**, rather than editing directly in a shared checkout:
+
+```bash
+git worktree add ../oak-<task> -b agent/<task> develop
+```
+
+Do all edits and commits inside that worktree, on its own branch. **Only once the work is complete and verified** (the relevant `typecheck`/`lint`/`test` commands passing per the Commands section) does the agent merge its branch back into `develop`:
+
+```bash
+git checkout develop && git pull
+git merge agent/<task>
+git worktree remove ../oak-<task>
+git branch -d agent/<task>
+```
+
+Never commit straight to a shared `develop` working copy while other agents may also be active in it — always go through a worktree, and never leave finished work stranded on an agent branch instead of merged into `develop`.
 
 ## Repository layout
 
