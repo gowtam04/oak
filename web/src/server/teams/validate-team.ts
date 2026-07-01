@@ -85,7 +85,10 @@ export async function validateTeam(
   // ---- Master lists / per-species index reads (gathered once) ----
 
   // Held-item legality: the format's item master list. A read fault leaves the
-  // set null → item legality is simply skipped (never a false warning).
+  // set null → item legality is simply skipped (never a false warning). For
+  // Champions, items the operator marked unavailable (champions_item_exclusion)
+  // are removed from the legal set so they fire `item_illegal` (the @pkmn data
+  // has no per-item Champions legality — see champions-items-repo).
   let legalItems: Set<string> | null = null;
   try {
     const rows = await db
@@ -97,7 +100,16 @@ export async function validateTeam(
           eq(searchable_names.kind, "item"),
         ),
       );
-    legalItems = new Set(rows.map((r) => r.slug));
+    const items = new Set(rows.map((r) => r.slug));
+    if (format === "champions") {
+      const { loadChampionsItemExclusions } = await import(
+        "@/data/repos/champions-items-repo"
+      );
+      for (const slug of await loadChampionsItemExclusions({ db })) {
+        items.delete(slug);
+      }
+    }
+    legalItems = items;
   } catch {
     legalItems = null;
   }

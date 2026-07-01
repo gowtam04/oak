@@ -107,6 +107,7 @@ type ConversationsIdRoute = typeof import("./conversations/[id]/route");
 type TeamsRoute = typeof import("./teams/route");
 type TeamsIdRoute = typeof import("./teams/[id]/route");
 type LiveRoute = typeof import("./live/route");
+type ChampionsItemsRoute = typeof import("./champions-items/route");
 
 let fix: PgFixture;
 let overview: OverviewRoute;
@@ -121,6 +122,7 @@ let conversationsId: ConversationsIdRoute;
 let teams: TeamsRoute;
 let teamsId: TeamsIdRoute;
 let live: LiveRoute;
+let championsItems: ChampionsItemsRoute;
 
 // ---------------------------------------------------------------------------
 // Identity + request harness
@@ -190,6 +192,7 @@ beforeAll(async () => {
   teams = await import("./teams/route");
   teamsId = await import("./teams/[id]/route");
   live = await import("./live/route");
+  championsItems = await import("./champions-items/route");
 }, 60_000);
 
 afterAll(async () => {
@@ -260,6 +263,10 @@ function routeCases(): RouteCase[] {
         ),
     },
     { name: "live", call: () => live.GET(adminReq("/api/admin/live")) },
+    {
+      name: "champions-items",
+      call: () => championsItems.GET(adminReq("/api/admin/champions-items")),
+    },
   ];
 }
 
@@ -320,6 +327,53 @@ describe("gating — every /api/admin/* route", () => {
     vi.stubEnv("ADMIN_EMAILS", "owner@oak.test, someone@else.test");
     const res = await overview.GET(adminReq("/api/admin/overview"));
     expect(res.status).toBe(200);
+  });
+});
+
+// ===========================================================================
+// POST /api/admin/champions-items — the FIRST admin WRITE (toggle availability)
+// ===========================================================================
+
+describe("POST /api/admin/champions-items", () => {
+  function toggleReq(body: unknown): Request {
+    return new Request("http://admin.test/api/admin/champions-items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("rejects a guest (401) and a non-admin (403) — gated like every route", async () => {
+    asGuest();
+    expect(
+      (await championsItems.POST(toggleReq({ slug: "leftovers", available: false }))).status,
+    ).toBe(401);
+    asNonAdmin();
+    expect(
+      (await championsItems.POST(toggleReq({ slug: "leftovers", available: false }))).status,
+    ).toBe(403);
+  });
+
+  it("400s an admin on a malformed body", async () => {
+    asAdmin();
+    const res = await championsItems.POST(toggleReq({ slug: "" }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe("invalid_request");
+  });
+
+  it("200s an admin on a valid toggle and echoes the new availability", async () => {
+    asAdmin();
+    const off = await championsItems.POST(
+      toggleReq({ slug: "focus-sash", available: false }),
+    );
+    expect(off.status).toBe(200);
+    expect(await off.json()).toEqual({ slug: "focus-sash", available: false });
+
+    const on = await championsItems.POST(
+      toggleReq({ slug: "focus-sash", available: true }),
+    );
+    expect(on.status).toBe(200);
+    expect(await on.json()).toEqual({ slug: "focus-sash", available: true });
   });
 });
 

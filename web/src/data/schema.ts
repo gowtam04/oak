@@ -556,3 +556,31 @@ export const auth_event = pgTable(
     index("auth_event_type_created_idx").on(t.type, t.created_at),
   ],
 );
+
+// ===========================================================================
+// Champions item availability (operator-curated)
+//
+// Pokémon Champions is still rolling out its item pool, and the @pkmn data set
+// carries NO per-item Champions legality (its `champions` mod curates the
+// species roster but ships no item data), so the Champions index otherwise
+// treats every Gen-9 item as legal. This table records the small set of items
+// the operator has marked NOT-yet-available in Champions, curated from the admin
+// panel. The effective Champions item allowlist is
+//   (all Champions items in searchable_names) − (rows here),
+// so the default (empty table) leaves every item available ("pre-select all")
+// and a newly-ingested item stays available until the operator excludes it.
+//
+// CHAMPIONS-ONLY by design — the concept does not exist for scarlet-violet, so
+// unlike the format-scoped index tables there is NO `format` column. Read at
+// query time (resolve-index / validate-team / get_item) so an operator toggle
+// takes effect immediately with no re-ingest. `excluded_at` is epoch ms
+// (`bigint` mode "number", matching the schema's timestamp convention).
+// ===========================================================================
+export const champions_item_exclusion = pgTable("champions_item_exclusion", {
+  /** Canonical item slug — matches searchable_names.slug (kind="item"). PK. */
+  slug: text("slug").primaryKey(),
+  /** Epoch ms the item was excluded (informational / audit). */
+  excluded_at: bigint("excluded_at", { mode: "number" }).notNull(),
+  /** Admin email that made the change; null if unknown. Audit only. */
+  excluded_by: text("excluded_by"),
+});

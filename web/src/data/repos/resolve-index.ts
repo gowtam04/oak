@@ -31,8 +31,9 @@ import { eq } from "drizzle-orm";
 import Fuse from "fuse.js";
 
 import { db } from "@/data/db";
-import type { Format } from "@/data/formats";
+import { type Format, CHAMPIONS_FORMAT } from "@/data/formats";
 import { searchable_names } from "@/data/schema";
+import { loadChampionsItemExclusions } from "@/data/repos/champions-items-repo";
 import { type EntityKind, type ResolveEntityOutput } from "@/agent/schemas";
 
 /** One searchable name row (the in-memory record fuse.js indexes). */
@@ -155,9 +156,16 @@ export function createResolveIndex(rows: SearchableName[]): ResolveIndex {
 /** One lazily-built fuzzy index per format (searchable_names is format-scoped). */
 const byFormat = new Map<Format, ResolveIndex>();
 
-/** Read the `searchable_names` rows for one format. */
+/**
+ * Read the `searchable_names` rows for one format. For Champions, item rows the
+ * operator has marked unavailable (`champions_item_exclusion`) are dropped, so
+ * an excluded item cannot resolve — steering both the team-builder picker and
+ * the agent's `resolve_entity` away from items that aren't in the game yet. The
+ * built index is cached per format and rebuilt via `resetResolveIndex`
+ * (`setChampionsItemAvailability` resets Champions on every toggle).
+ */
 async function loadRows(format: Format): Promise<SearchableName[]> {
-  return (await db
+  const rows = (await db
     .select({
       kind: searchable_names.kind,
       slug: searchable_names.slug,
@@ -165,6 +173,12 @@ async function loadRows(format: Format): Promise<SearchableName[]> {
     })
     .from(searchable_names)
     .where(eq(searchable_names.format, format))) as SearchableName[];
+
+  if (format !== CHAMPIONS_FORMAT) return rows;
+
+  const excluded = await loadChampionsItemExclusions({ db });
+  if (excluded.size === 0) return rows;
+  return rows.filter((r) => r.kind !== "item" || !excluded.has(r.slug));
 }
 
 /** Get (building lazily on first use) the resolve index for `format`. */

@@ -50,6 +50,13 @@
       "when": 1782864389355,
       "tag": "0006_melted_loners",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782877670795,
+      "tag": "0007_tiny_wildside",
+      "breakpoints": true
     }
   ]
 }
