@@ -38,9 +38,11 @@ RUN groupadd --system --gid 1001 nodejs \
  && useradd --system --uid 1001 --gid nodejs nextjs
 
 # Standalone server + its pruned node_modules, plus the static assets.
-# (No public/ dir exists in this repo — do NOT add `COPY ... public`.)
+# Next standalone does NOT bundle public/ or .next/static — copy both explicitly
+# so files under public/ (e.g. champions-logo.png, oak-app-icon.png) are served.
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=build --chown=nextjs:nodejs /app/public ./public
 
 # Migration assets for the Fly release_command (tiny). drizzle-orm's migrator and
 # pg are already traced into ./node_modules via src/data/db.ts; we only add the
