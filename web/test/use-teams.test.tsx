@@ -161,6 +161,21 @@ describe("useTeams", () => {
     expect(result.current.teams).toEqual([]);
   });
 
+  it("remove reconciles (re-lists) when the API delete fails", async () => {
+    vi.mocked(deleteTeam).mockResolvedValue(false);
+    const { result } = renderHook(() => useTeams(true));
+    await waitFor(() => expect(result.current.teams).toHaveLength(1));
+    vi.mocked(listTeams).mockClear();
+
+    await act(async () => {
+      await result.current.remove("t1");
+    });
+    expect(deleteTeam).toHaveBeenCalledWith("t1");
+    // Failed delete → refresh() → re-list restores the row from server state.
+    await waitFor(() => expect(listTeams).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.teams).toHaveLength(1));
+  });
+
   it("duplicate calls the API and refreshes", async () => {
     const { result } = renderHook(() => useTeams(true));
     await waitFor(() => expect(result.current.teams).toHaveLength(1));
