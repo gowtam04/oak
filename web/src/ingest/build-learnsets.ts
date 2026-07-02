@@ -8,8 +8,10 @@
  * Rules (D6, BR-2):
  *   - Keep only level-up / machine / tutor methods; drop egg (and event/virtual/
  *     other) sources.
- *   - Standard (scarlet-violet) keeps only Gen-9 ('9…') sources — the SV
- *     learnset. Champions uses the mod's already-scoped learnset as-is.
+ *   - A mainline format keeps only sources from that format's generation
+ *     (`genFilter`) — e.g. Gen-9 ('9…') sources for scarlet-violet, Gen-7 ('7…')
+ *     for gen-7. Champions (no `genFilter`) uses the mod's already-scoped
+ *     learnset as-is.
  *   - One row per (pokemon_id, move_slug, format); when several non-egg methods
  *     qualify, the highest-priority one wins (level-up > machine > tutor).
  */
@@ -21,7 +23,7 @@ export interface LearnsetRow {
   pokemon_id: string;
   /** Canonical move slug, e.g. "will-o-wisp". */
   move_slug: string;
-  /** Data scope ("scarlet-violet" | "champions"). */
+  /** Data scope (a Format: "scarlet-violet" | "champions" | "gen-5"…"gen-8"). */
   format: Format;
   /** "level-up" | "machine" | "tutor". Never "egg". */
   method: string | null;
@@ -51,13 +53,17 @@ function methodPriority(method: string): number {
  * @param learnset    `{ moveId: sourceString[] }` from `FormatSource.getLearnset`.
  * @param moveSlugFor Resolve an @pkmn moveId → canonical move slug (null to skip).
  * @param opts.format       The data scope.
- * @param opts.gen9Only     When true (standard), only '9…' sources count.
+ * @param opts.genFilter    A mainline generation number: keep only that gen's
+ *                          sources (e.g. 9 → '9…', 7 → '7…'). Gen numbers are
+ *                          single-digit (≤9), so the source's index-0 char is
+ *                          the whole gen tag. Omit for Champions — the mod
+ *                          learnset is already scoped, so keep every gen.
  */
 export function buildLearnsetRows(
   pokemonId: string,
   learnset: Record<string, string[]>,
   moveSlugFor: (moveId: string) => string | null,
-  opts: { format: Format; gen9Only: boolean },
+  opts: { format: Format; genFilter?: number },
 ): LearnsetRow[] {
   const rows: LearnsetRow[] = [];
 
@@ -67,7 +73,8 @@ export function buildLearnsetRows(
     let bestMethod: string | undefined;
     for (const src of sources) {
       if (typeof src !== "string" || src.length < 2) continue;
-      if (opts.gen9Only && src[0] !== "9") continue;
+      if (opts.genFilter !== undefined && src[0] !== String(opts.genFilter))
+        continue;
       const method = METHOD_BY_LETTER[src[1]!];
       if (!method) continue; // egg / event / virtual / other → drop
       if (

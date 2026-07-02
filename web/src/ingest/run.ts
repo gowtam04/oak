@@ -41,6 +41,7 @@ import {
   type Format,
   DEFAULT_FORMATS,
   STANDARD_FORMAT,
+  CHAMPIONS_FORMAT,
   isFormat,
 } from "@/data/formats";
 import { loadFormat, slugFor } from "@/data/pkmn/gen-provider";
@@ -95,7 +96,7 @@ export interface IngestReport {
 }
 
 export interface RunIngestOptions {
-  /** Formats to build. Default: both ("scarlet-violet", "champions"). */
+  /** Formats to build. Default: every format in DEFAULT_FORMATS (all six). */
   formats?: Format[];
   /** Optional human-readable progress callback. */
   onProgress?: (msg: string) => void;
@@ -167,7 +168,11 @@ export async function runIngest(
   for (const format of formats) {
     report(`[${format}] loading @pkmn data…`);
     const source = await loadFormat(format);
-    const gen9Only = format === STANDARD_FORMAT;
+    // A mainline format keeps only its own generation's learnset sources; the
+    // filter is the format's Dex gen (9 for scarlet-violet, else 5–8). Champions
+    // uses the mod's already-scoped learnset as-is → no gen filter.
+    const isChampions = format === CHAMPIONS_FORMAT;
+    const genFilter = isChampions ? undefined : source.genNumber;
 
     // DS-2 Pokédex
     const formatPokemon = buildPokedex(source);
@@ -192,7 +197,7 @@ export async function runIngest(
         const base = source.dex.species.get(s.baseSpecies);
         if (base) ls = await source.getLearnset(base.id);
       }
-      const rows = buildLearnsetRows(row.id, ls, moveSlugFor, { format, gen9Only });
+      const rows = buildLearnsetRows(row.id, ls, moveSlugFor, { format, genFilter });
       for (const r of rows) learnsetRows.push(r);
       formatLearnsets += rows.length;
     }
@@ -201,10 +206,12 @@ export async function runIngest(
     // searchable_names + reference
     const formatNames = buildNames(source, formatPokemon);
     const formatRefs = buildReferenceRows(source, startedAt);
-    // Catch-location / obtain-method data (PokeAPI snapshot) — STANDARD ONLY.
-    // Appended into the reference rows so they ride the existing reference_cache
-    // write; Champions ships no encounter data (the tool is also mode-gated).
-    if (gen9Only) {
+    // Catch-location / obtain-method data (PokeAPI snapshot) — scarlet-violet
+    // ONLY (GS-D4). Appended into the reference rows so they ride the existing
+    // reference_cache write. Champions and the mainline gen scopes (gen-5…gen-8)
+    // ship no encounter rows: get_encounters reads STANDARD_FORMAT in every
+    // mainline mode, and is mode-gated off in Champions.
+    if (format === STANDARD_FORMAT) {
       formatRefs.push(...buildEncounterRows(source, startedAt));
     }
     report(`[${format}] names: ${formatNames.length}, references: ${formatRefs.length}`);
