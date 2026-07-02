@@ -5,19 +5,25 @@
  * PR").
  *
  * Runs in the Vitest node project (the eval test glob) so the real tool layer
- * + Postgres fixture schema are available. The Anthropic client is mocked
- * inside runDeterministic (a scripted transcript via runOakWith), so this
- * test NEVER reaches the network — the dummy ANTHROPIC_API_KEY from
- * vitest.config.ts is enough and no real model call can occur.
+ * + Postgres fixture schema are available. The model client is mocked inside
+ * runDeterministic (a scripted transcript, per provider), so this test NEVER
+ * reaches the network — the dummy XAI_API_KEY / ANTHROPIC_API_KEY from
+ * vitest.config.ts are enough and no real model call can occur.
+ *
+ * The subset is driven through BOTH scripted transports (T1): the Anthropic
+ * content-block path AND the native Grok Responses path. Grok is the production
+ * default (`DEFAULT_MODEL_KEY`), so a loop-level regression in its stream
+ * adaptation / single-shot arg fallback / echo-flatten fails its own named `it`
+ * here rather than slipping past CI.
  *
  * Asserts:
  *   1. Every deterministic case (G1/G3/G5/G6/G8/G11/G15) passes its structural
- *      checks against the real tools + fixture data.
+ *      checks against the real tools + fixture data, under EACH provider.
  *   2. The subset is exactly the one design.md specifies (a guard against the
  *      subset silently drifting), and every such case has a registered plan.
  *   3. Spot-checks on the load-bearing values: G15 = 169, G11 says "immune",
- *      G3 suggests "Will-O-Wisp", and G1 used query_pokedex with zero per-mon
- *      fetches.
+ *      G3 suggests "Will-O-Wisp", and G1 cites both learnsets — under each
+ *      provider (the composed answer is derived from identical tool output).
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -33,13 +39,21 @@ import type { AgentContext } from "@/agent/types";
 import { deterministicCases } from "./cases";
 import { createPgSchema, installAsSingleton, type PgFixture } from "../test/support/pg";
 import type { AssertResult } from "./judge";
+import type { DeterministicProvider } from "./deterministic";
 
 /** IDs design.md pins to the deterministic CI subset. */
 const EXPECTED_IDS = ["G1", "G3", "G5", "G6", "G8", "G11", "G15"];
 
+/** Both scripted transports are gated — Anthropic content-blocks AND native Grok. */
+const PROVIDERS: readonly DeterministicProvider[] = ["anthropic", "grok"];
+
+interface ProviderRun {
+  results: AssertResult[];
+  byId: Record<string, AssertResult>;
+}
+
 let ctx: AgentContext;
-let results: AssertResult[];
-let byId: Record<string, AssertResult>;
+let byProvider: Record<DeterministicProvider, ProviderRun>;
 let plannedIds: readonly string[];
 let fix: PgFixture;
 
@@ -59,8 +73,14 @@ beforeAll(async () => {
   // No `db` override → ctx binds the singleton (the seeded fixture schema), so
   // the DB-backed tools AND resolve_entity read the same data.
   ctx = await createAgentContext();
-  results = await runDeterministic(deterministicCases, ctx);
-  byId = Object.fromEntries(results.map((r) => [r.caseId, r]));
+  byProvider = {} as Record<DeterministicProvider, ProviderRun>;
+  for (const provider of PROVIDERS) {
+    const results = await runDeterministic(deterministicCases, ctx, provider);
+    byProvider[provider] = {
+      results,
+      byId: Object.fromEntries(results.map((r) => [r.caseId, r])),
+    };
+  }
 }, 120_000);
 
 afterAll(async () => {
@@ -80,49 +100,53 @@ describe("deterministic subset — membership", () => {
   });
 });
 
-describe("deterministic subset — all cases pass structural assertions", () => {
-  it("produces a result for every case", () => {
-    expect(results.map((r) => r.caseId).sort()).toEqual(
-      [...EXPECTED_IDS].sort(),
-    );
+for (const provider of PROVIDERS) {
+  describe(`deterministic subset [${provider}] — all cases pass structural assertions`, () => {
+    it("produces a result for every case", () => {
+      expect(byProvider[provider].results.map((r) => r.caseId).sort()).toEqual(
+        [...EXPECTED_IDS].sort(),
+      );
+    });
+
+    // One assertion per case so a failure names the exact case + its failures.
+    for (const id of EXPECTED_IDS) {
+      it(`${id} passes`, () => {
+        const r = byProvider[provider].byId[id];
+        expect(r, `no result for ${id}`).toBeDefined();
+        expect(r.pass, `${id} failed:\n - ${r.failures.join("\n - ")}`).toBe(
+          true,
+        );
+      });
+    }
   });
 
-  // One assertion per case so a failure names the exact case + its failures.
-  for (const id of EXPECTED_IDS) {
-    it(`${id} passes`, () => {
-      const r = byId[id];
-      expect(r, `no result for ${id}`).toBeDefined();
-      expect(r.pass, `${id} failed:\n - ${r.failures.join("\n - ")}`).toBe(
+  describe(`deterministic subset [${provider}] — load-bearing spot checks`, () => {
+    it("G15 computes Garchomp's Speed as exactly 169 (BR-6)", () => {
+      const { byId } = byProvider[provider];
+      expect(byId.G15.answer.answer_markdown).toContain("169");
+      expect(byId.G15.answer.damage_calc?.result.value).toBe(169);
+    });
+
+    it("G11 reports the Ground→Flying immunity as 'immune', not a resist (BR-5)", () => {
+      const md = byProvider[provider].byId.G11.answer.answer_markdown.toLowerCase();
+      expect(md).toContain("immune");
+      expect(md).not.toContain("not very effective");
+    });
+
+    it("G3 suggests the correctly-spelled move (BR-9)", () => {
+      const a = byProvider[provider].byId.G3.answer;
+      expect(a.status).toBe("clarification_needed");
+      expect(a.suggestions ?? []).toContain("Will-O-Wisp");
+    });
+
+    it("G1 finds at least one intersection candidate and cites both learnsets", () => {
+      const a = byProvider[provider].byId.G1.answer;
+      expect(a.candidates?.total_count ?? 0).toBeGreaterThanOrEqual(1);
+      const sources = a.citations.map((c) => c.source);
+      expect(sources.some((s) => s.startsWith("learnset/trick-room"))).toBe(true);
+      expect(sources.some((s) => s.startsWith("learnset/will-o-wisp"))).toBe(
         true,
       );
     });
-  }
-});
-
-describe("deterministic subset — load-bearing spot checks", () => {
-  it("G15 computes Garchomp's Speed as exactly 169 (BR-6)", () => {
-    expect(byId.G15.answer.answer_markdown).toContain("169");
-    expect(byId.G15.answer.damage_calc?.result.value).toBe(169);
   });
-
-  it("G11 reports the Ground→Flying immunity as 'immune', not a resist (BR-5)", () => {
-    const md = byId.G11.answer.answer_markdown.toLowerCase();
-    expect(md).toContain("immune");
-    expect(md).not.toContain("not very effective");
-  });
-
-  it("G3 suggests the correctly-spelled move (BR-9)", () => {
-    expect(byId.G3.answer.status).toBe("clarification_needed");
-    expect(byId.G3.answer.suggestions ?? []).toContain("Will-O-Wisp");
-  });
-
-  it("G1 finds at least one intersection candidate and cites both learnsets", () => {
-    const a = byId.G1.answer;
-    expect(a.candidates?.total_count ?? 0).toBeGreaterThanOrEqual(1);
-    const sources = a.citations.map((c) => c.source);
-    expect(sources.some((s) => s.startsWith("learnset/trick-room"))).toBe(true);
-    expect(sources.some((s) => s.startsWith("learnset/will-o-wisp"))).toBe(
-      true,
-    );
-  });
-});
+}

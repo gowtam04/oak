@@ -11,11 +11,17 @@
  * Sonnet call. It runs in Vitest on every PR (eval/deterministic.test.ts) and is
  * runnable from the CLI via `tsx eval/run.ts --deterministic`.
  *
- * HOW IT STAYS DETERMINISTIC ("MOCKED Anthropic client / pure tools")
+ * HOW IT STAYS DETERMINISTIC ("MOCKED model client / pure tools")
  * -------------------------------------------------------------------
- * Each case is driven through the REAL agent runtime (`runOakWith`) but with
- * a *scripted* Anthropic client injected in place of the model. The scripted
- * client:
+ * Each case is driven through the REAL agent runtime but with a *scripted*
+ * model client injected in place of the model. Two providers are exercised over
+ * the SAME provider-agnostic plans (T1): the Anthropic content-block path
+ * (`runOakWith` + a scripted `messages.stream`) AND the native Grok Responses
+ * path (`runWithProvider` + a scripted `responses.create`) — Grok is the
+ * production default (`DEFAULT_MODEL_KEY`), so its stream adaptation, the
+ * single-shot `function_call_arguments.done` fallback, and the echo/.flat()
+ * transcript logic are regression-gated through the real loop, not just unit
+ * tests. The scripted client:
  *   1. On its first turn, emits the exact `tool_use` block(s) a correct agent
  *      would issue for the case (e.g. one `query_pokedex` call).
  *   2. The runtime dispatches those calls against the REAL tool layer + the
@@ -33,14 +39,18 @@
  * returning 169) makes the composed answer fail the structural assertion — which
  * is the whole point of the deterministic subset.
  *
- * No real Anthropic client is ever constructed here (the client is injected via
- * `runOakWith`), so this module never reaches the network.
+ * No real model client is ever constructed here (a fake is injected into each
+ * provider), so this module never reaches the network.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
+import type OpenAI from "openai";
 
+import { GrokProvider } from "@/agent/providers/grok-provider";
+import type { GrokResponsesClientLike } from "@/agent/providers/grok-provider";
 import {
   runOakWith,
+  runWithProvider,
   type AnthropicClientLike,
   type MessageStreamLike,
 } from "@/agent/runtime";
@@ -195,6 +205,226 @@ function makeScriptedClient(plan: DeterministicPlan): AnthropicClientLike {
             },
           ]),
         );
+      },
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Scripted native-Grok client (T1 — drive the production-default provider
+// through the REAL loop, not only the Anthropic path). Same DeterministicPlan,
+// but shaped as xAI Responses-API stream events feeding grok-provider.ts.
+// ---------------------------------------------------------------------------
+
+type RStreamEvent = OpenAI.Responses.ResponseStreamEvent;
+
+/**
+ * Token usage the scripted Grok stream reports. `normalizeUsage`
+ * (grok-provider.ts) reads exactly these three fields.
+ */
+const GROK_USAGE = {
+  input_tokens: 0,
+  output_tokens: 0,
+  output_tokens_details: { reasoning_tokens: 0 },
+};
+
+/**
+ * The minimal subset of Responses-API stream events the scripted client emits —
+ * only the fields `adaptGrokStream` actually reads. Typed so the file stays
+ * `any`-free; a single localized `as unknown as RStreamEvent` cast rides at the
+ * yield seam (mirroring the provider's own casts).
+ */
+type ScriptedGrokEvent =
+  | {
+      type: "response.output_item.added";
+      output_index: number;
+      sequence_number: number;
+      item: {
+        type: "function_call";
+        id: string;
+        call_id: string;
+        name: string;
+        arguments: string;
+        status: string;
+      };
+    }
+  | {
+      type: "response.function_call_arguments.done";
+      output_index: number;
+      item_id: string;
+      name: string;
+      sequence_number: number;
+      arguments: string;
+    }
+  | {
+      type: "response.completed";
+      sequence_number: number;
+      response: { output: unknown[]; usage: typeof GROK_USAGE };
+    };
+
+/** A completed function_call item, as it appears in `response.completed.output`. */
+function grokFnCall(callId: string, name: string, args: string) {
+  return {
+    type: "function_call",
+    id: `fc-${callId}`,
+    call_id: callId,
+    name,
+    arguments: args,
+    status: "completed",
+  };
+}
+
+/**
+ * A single-shot tool call as two Responses events: `output_item.added` (the
+ * function_call in-progress) → `function_call_arguments.done` carrying the WHOLE
+ * argument string. Omitting the incremental `...delta` is the
+ * production-representative xAI shape, and deliberately drives the
+ * `function_call_arguments.done` fallback → AnswerMarkdownExtractor.
+ */
+function grokCallEvents(
+  outputIndex: number,
+  callId: string,
+  name: string,
+  args: string,
+  startSeq: number,
+): ScriptedGrokEvent[] {
+  return [
+    {
+      type: "response.output_item.added",
+      output_index: outputIndex,
+      sequence_number: startSeq,
+      item: {
+        type: "function_call",
+        id: `fc-${callId}`,
+        call_id: callId,
+        name,
+        arguments: "",
+        status: "in_progress",
+      },
+    },
+    {
+      type: "response.function_call_arguments.done",
+      output_index: outputIndex,
+      item_id: `fc-${callId}`,
+      name,
+      sequence_number: startSeq + 1,
+      arguments: args,
+    },
+  ];
+}
+
+/** The terminal `response.completed` carrying the echoed output items + usage. */
+function grokCompleted(output: unknown[], seq: number): ScriptedGrokEvent {
+  return {
+    type: "response.completed",
+    sequence_number: seq,
+    response: { output, usage: GROK_USAGE },
+  };
+}
+
+/** Replay scripted events as a fresh Responses stream (a consumed generator can't be reused). */
+function grokStream(events: ScriptedGrokEvent[]): AsyncIterable<RStreamEvent> {
+  return (async function* () {
+    for (const e of events) yield e as unknown as RStreamEvent;
+  })();
+}
+
+/**
+ * Pull the real tool outputs out of the `function_call_output` items the loop
+ * placed in `body.input` (the flattened transcript), keyed by tool name via the
+ * id map the read phase recorded. The Grok twin of {@link extractToolOutputs}.
+ */
+function grokExtractToolOutputs(
+  body: OpenAI.Responses.ResponseCreateParamsStreaming,
+  idToName: Map<string, string>,
+): Record<string, unknown> {
+  const outputs: Record<string, unknown> = {};
+  const input = body.input;
+  if (!Array.isArray(input)) return outputs;
+
+  for (const item of input) {
+    const it = item as { type?: string; call_id?: string; output?: unknown };
+    if (it.type !== "function_call_output" || !it.call_id) continue;
+    const name = idToName.get(it.call_id);
+    if (!name) continue;
+    let parsed: unknown = it.output;
+    if (typeof it.output === "string") {
+      try {
+        parsed = JSON.parse(it.output);
+      } catch {
+        parsed = it.output;
+      }
+    }
+    outputs[name] = parsed;
+  }
+  return outputs;
+}
+
+/**
+ * A scripted native-Grok client that replays a {@link DeterministicPlan}: read
+ * phase first (a reasoning item echoed alongside each function_call), then a
+ * single `submit_answer` composed from the real tool data read off `body.input`.
+ */
+function makeScriptedGrokClient(plan: DeterministicPlan): GrokResponsesClientLike {
+  const idToName = new Map<string, string>();
+  let call = 0;
+
+  return {
+    responses: {
+      create(
+        body: OpenAI.Responses.ResponseCreateParamsStreaming,
+      ): AsyncIterable<RStreamEvent> {
+        call += 1;
+
+        // Turn 1 — issue the planned read tool calls (real dispatch follows).
+        if (call === 1 && plan.reads.length > 0) {
+          // An encrypted reasoning item echoed back exercises the reasoning
+          // round-trip + the depth-1 `.flat()` of the echoed output[] array.
+          const reasoningItem = {
+            type: "reasoning",
+            id: "rs_1",
+            encrypted_content: "enc",
+            summary: [],
+          };
+          const events: ScriptedGrokEvent[] = [];
+          const outputItems: unknown[] = [reasoningItem];
+          plan.reads.forEach((read, i) => {
+            const callId = `call-${i}`;
+            idToName.set(callId, read.name);
+            const args = JSON.stringify(read.input);
+            events.push(
+              ...grokCallEvents(i, callId, read.name, args, events.length + 1),
+            );
+            outputItems.push(grokFnCall(callId, read.name, args));
+          });
+          events.push(grokCompleted(outputItems, events.length + 1));
+          return grokStream(events);
+        }
+
+        // Turn 2 — compose submit_answer from the real tool outputs.
+        const outputs = grokExtractToolOutputs(body, idToName);
+        let answer: OakAnswer;
+        try {
+          answer = plan.compose(outputs);
+        } catch (err) {
+          answer = {
+            status: "insufficient_data",
+            answer_markdown: `deterministic compose failed: ${String(err)}`,
+            reasoning_markdown: "",
+            citations: [],
+            inferences: [],
+            generation_basis: { generation: "gen-9", fallback: false },
+          };
+        }
+        const args = JSON.stringify(answer);
+        const events: ScriptedGrokEvent[] = [
+          ...grokCallEvents(0, "call-submit", "submit_answer", args, 1),
+          grokCompleted(
+            [grokFnCall("call-submit", "submit_answer", args)],
+            3,
+          ),
+        ];
+        return grokStream(events);
       },
     },
   };
@@ -478,12 +708,50 @@ function primaryInput(gc: GoldenCase): string {
 }
 
 /**
+ * Which scripted model transport to drive a case through. Both replay the SAME
+ * {@link DeterministicPlan} over the real loop + real tools; only the wire shape
+ * differs. `"grok"` covers the production default (`DEFAULT_MODEL_KEY`) — T1.
+ */
+export type DeterministicProvider = "anthropic" | "grok";
+
+/**
+ * Drive one plan through the real runtime with the scripted transport for the
+ * chosen provider, collecting the tool-call trace. The Anthropic path injects a
+ * fake `messages.stream` via `runOakWith`; the Grok path injects a fake
+ * `responses.create` into the NATIVE `GrokProvider` via `runWithProvider`.
+ */
+function driveCase(
+  plan: DeterministicPlan,
+  input: string,
+  ctx: AgentContext,
+  provider: DeterministicProvider,
+  onTool: (tool: string) => void,
+): Promise<OakAnswer> {
+  if (provider === "grok") {
+    const grok = new GrokProvider(
+      { apiModelId: "grok-4.3", apiKey: "test" },
+      makeScriptedGrokClient(plan),
+    );
+    return runWithProvider(grok, input, [], ctx, (event) => onTool(event.tool));
+  }
+  return runOakWith(
+    makeScriptedClient(plan),
+    input,
+    [],
+    ctx,
+    (event) => onTool(event.tool),
+  );
+}
+
+/**
  * Run the deterministic subset against the supplied {@link AgentContext} (which
  * must be bound to the fixture DB — see eval/fixtures/seed-fixture-db.ts).
  *
- * For each case: drive the real runtime with a scripted (mocked) Anthropic
- * client + the real tool layer, then apply the shared structural assertions
- * (runStructural — the same checks the judged suite uses). No LLM is called.
+ * For each case: drive the real runtime with a scripted (mocked) model client
+ * for `provider` + the real tool layer, then apply the shared structural
+ * assertions (runStructural — the same checks the judged suite uses). No LLM is
+ * called. `provider` defaults to `"anthropic"`; the CI gate + CLI run BOTH so
+ * the production-default Grok path is regression-covered through the loop (T1).
  *
  * A case without a registered plan is reported as a failure (so the subset can
  * never silently shrink), not skipped.
@@ -491,6 +759,7 @@ function primaryInput(gc: GoldenCase): string {
 export async function runDeterministic(
   cases: GoldenCase[],
   ctx: AgentContext,
+  provider: DeterministicProvider = "anthropic",
 ): Promise<AssertResult[]> {
   const results: AssertResult[] = [];
 
@@ -517,13 +786,12 @@ export async function runDeterministic(
     }
 
     const toolCalls: string[] = [];
-    const client = makeScriptedClient(plan);
-    const answer = await runOakWith(
-      client,
+    const answer = await driveCase(
+      plan,
       primaryInput(gc),
-      [],
       ctx,
-      (event) => toolCalls.push(event.tool),
+      provider,
+      (tool) => toolCalls.push(tool),
     );
 
     const failures = runStructural(answer, gc, toolCalls);
