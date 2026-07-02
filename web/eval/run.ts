@@ -464,22 +464,34 @@ export async function main(argv: string[]): Promise<number> {
       // Dynamic import: pulls the agent runtime (server-only) — load it only
       // after the shim above has run. NOTE: --repeat is inert here — the
       // deterministic subset uses a mocked, deterministic provider, so repeating
-      // a case yields identical results.
+      // a case yields identical results. Both scripted transports are run so the
+      // production-default Grok path is exercised through the loop, not only
+      // Anthropic (T1).
       const { runDeterministic } = await import("./deterministic");
-      const results = await runDeterministic(selected, built.ctx);
+      const providers = ["anthropic", "grok"] as const;
+      const byProvider: Record<string, AssertResult[]> = {};
+      let allPass = true;
+      for (const provider of providers) {
+        const results = await runDeterministic(selected, built.ctx, provider);
+        byProvider[provider] = results;
+        allPass = allPass && results.every((r) => r.pass);
+      }
       if (opts.json) {
         log(
           JSON.stringify(
-            { mode: "deterministic", db: built.label, results },
+            { mode: "deterministic", db: built.label, byProvider },
             null,
             2,
           ),
         );
       } else {
         log(`Mode: deterministic (offline)  DB: ${built.label}`);
-        log(formatAssertReport(results));
+        for (const provider of providers) {
+          log(`\n── provider: ${provider} ──`);
+          log(formatAssertReport(byProvider[provider]));
+        }
       }
-      return results.every((r) => r.pass) ? 0 : 1;
+      return allPass ? 0 : 1;
     }
 
     // Judged: the agent runs on the primary model (Grok by default); the judge

@@ -300,7 +300,22 @@ appends.
 The node/Testcontainers project could not be run at review time (no Docker daemon); jsdom is green
 (638/638), typecheck and lint clean.
 
-#### T1 — The primary model's end-to-end path is not in the gating eval. **P2. CONFIRMED.**
+#### T1 — The primary model's end-to-end path is not in the gating eval. **P2. RESOLVED.**
+
+> **Resolved:** `eval/deterministic.ts` now drives the SAME provider-agnostic `PLANS`
+> through the real loop via BOTH transports — the existing scripted Anthropic path
+> AND a new scripted **native `GrokProvider`** (`makeScriptedGrokClient` injects a fake
+> `responses.create`, driven through `runWithProvider`). The Grok script emits real
+> xAI Responses events (`output_item.added` → single-shot `function_call_arguments.done`
+> → `response.completed`) with an echoed reasoning item, so `adaptGrokStream`, the
+> single-shot `...done` fallback → `AnswerMarkdownExtractor` feed, and the echo/`.flat()`
+> + reasoning round-trip are now exercised through the loop, not just unit tests.
+> `runDeterministic(cases, ctx, provider)` takes a `"anthropic" | "grok"` selector
+> (default `"anthropic"`); the Vitest gate (`deterministic.test.ts`) and the CLI
+> (`run.ts --deterministic`) run BOTH and fail if either regresses. Verified: full
+> node/Testcontainers suite green (1317/1317), typecheck + lint clean, and a
+> break-the-extraction sanity check makes the Grok cases fail (proving real tool data
+> flows through the Grok loop, not a passthrough). Answer shape / plans unchanged.
 
 `web/eval/deterministic.ts` drives `runOakWith` with a scripted **Anthropic** client for all cases.
 Grok is `DEFAULT_MODEL_KEY` and the production default. So the deterministic CI subset never
@@ -467,7 +482,7 @@ Fine for one honest user, fragile for one dishonest one.
 | C1 | P2 | CONFIRMED | `server/session-store.ts`, `server/rate-limit.ts` |
 | C2 | P2 | RESOLVED | `agent/formulas/estimate-damage.ts` (per-step flooring) |
 | U1 | P2 | CONFIRMED † | `app/api/teams/import/route.ts:50-60,91-93`, `server/teams/import-export.ts:276-279` |
-| T1 | P2 | CONFIRMED | `eval/deterministic.ts`, `enrich-answer.integration.test.ts:133-135` |
+| T1 | P2 | RESOLVED | `eval/deterministic.ts` (native-Grok scripted variant, both providers gated) |
 | T2 | P2 | CONFIRMED † | `data/pkmn/gen-provider.ts` (no real-behavior test) |
 | T3 | P2 | RESOLVED † | `eval/judge.ts` (fail-closed no-tool-call fallback) |
 | S2 | P3 | CONFIRMED | `app/api/chat/route.ts:175-178` |
