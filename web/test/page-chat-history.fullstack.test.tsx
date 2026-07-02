@@ -287,20 +287,21 @@ describe("Home — chat-history sidebar", () => {
     expect(screen.queryByTestId("champions-toggle")).toBeInTheDocument();
   });
 
-  it("keeps the Champions choice when starting a new conversation", async () => {
+  it("keeps the toggle choice when starting a new conversation", async () => {
     render(<Home />);
     await screen.findByTestId("auth-signin-button");
     await signIn();
 
-    // Enable Champions on the empty thread, send a turn (the toggle then hides).
+    // Turn Champions OFF on the empty thread (it defaults ON), send a turn (the
+    // toggle then hides).
     await act(async () => {
       fireEvent.click(screen.getByTestId("champions-toggle"));
     });
-    await sendAndAwait("a champions question", 1);
-    expect(lastChatBody).toEqual({ champions_mode: true });
+    await sendAndAwait("a standard question", 1);
+    expect(lastChatBody).toEqual({ champions_mode: false });
     expect(screen.queryByTestId("champions-toggle")).not.toBeInTheDocument();
 
-    // New conversation → the toggle returns still ENABLED (the choice persists;
+    // New conversation → the toggle returns still DISABLED (the choice persists;
     // handleNewChat resets the thread but not championsMode, and it's in
     // localStorage too).
     const sidebar = await screen.findByTestId("history-sidebar");
@@ -309,7 +310,7 @@ describe("Home — chat-history sidebar", () => {
     });
     expect(screen.getByTestId("champions-toggle")).toHaveAttribute(
       "aria-checked",
-      "true",
+      "false",
     );
   });
 

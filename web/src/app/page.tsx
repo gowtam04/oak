@@ -93,21 +93,22 @@ export default function Home() {
   const [prefill, setPrefill] = useState<{ text: string } | null>(null);
 
   // Champions mode: server-controlled scope sent on every request as
-  // `champions_mode`. Defaults to OFF (Standard / Gen 9) — the broad, forgiving
-  // scope a first-time visitor expects. Resolve from localStorage only AFTER
-  // mount so the SSR markup stays stable (mirrors ThemeToggle's
-  // `getInitialTheme` + mounted guard) and we avoid a hydration mismatch. A
-  // never-set value (null) means the user hasn't chosen, so default to off; an
-  // explicit "true" (the user turned it on) is honored. `useState(false)`
-  // already matches the default, so there's no post-mount flip for new users.
-  const [championsMode, setChampionsMode] = useState(false);
+  // `champions_mode`. Defaults to ON (Champions) — most first-time visitors now
+  // arrive for Champions, so that's the scope they expect. Resolve from
+  // localStorage only AFTER mount so the SSR markup stays stable (mirrors
+  // ThemeToggle's `getInitialTheme` + mounted guard) and we avoid a hydration
+  // mismatch. A never-set value (null) means the user hasn't chosen, so default
+  // to on; an explicit "false" (the user turned it off) is honored.
+  // `useState(true)` already matches the default, so there's no post-mount flip
+  // for new users.
+  const [championsMode, setChampionsMode] = useState(true);
   useEffect(() => {
     try {
       const stored = localStorage.getItem(CHAMPIONS_STORAGE_KEY);
-      setChampionsMode(stored === null ? false : stored === "true");
+      setChampionsMode(stored === null ? true : stored === "true");
     } catch {
-      /* storage unavailable (private mode) — fall back to the default (off) */
-      setChampionsMode(false);
+      /* storage unavailable (private mode) — fall back to the default (on) */
+      setChampionsMode(true);
     }
   }, []);
 
