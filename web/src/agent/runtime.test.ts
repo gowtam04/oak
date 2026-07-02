@@ -74,6 +74,10 @@ const info = vi.fn();
 const ctx = {
   db: {},
   requestId: "req-1",
+  // Server-controlled scope. "standard" is the Gen 9 alias — the synthesized
+  // fallbacks read it to stamp generation_basis, so it must be present (the route
+  // always binds a mode; the prior hardcoded gen-9 basis is preserved here).
+  mode: "standard",
   logger: {
     info,
     bindings: () => ({ request_id: "req-1", session_id: "sess-1" }),
@@ -560,6 +564,74 @@ describe("orchestration fallbacks", () => {
     await expect(runOakWith(client, "q", [], ctx)).rejects.toThrow(
       "boom 529",
     );
+  });
+});
+
+// --- Synthesized-fallback generation_basis (GS-D5 / §2.5) ------------------
+
+describe("synthesized fallbacks stamp the turn's scope basis", () => {
+  it("an insufficient_data fallback in a gen scope carries that gen's basis tag", async () => {
+    // Model never submits → the loop exhausts MAX_ITERATIONS and synthesizes
+    // insufficient_data. Under mode "gen-7" the basis must be "gen-7", not the
+    // old hardcoded "gen-9".
+    const gen7Ctx = { ...ctx, mode: "gen-7" } as unknown as AgentContext;
+    const { client, stream } = scriptedClient([]);
+    stream.mockImplementation(() =>
+      fakeStream(message([toolUse("query_pokedex", {}, "t")])),
+    );
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    const result = await runOakWith(client, "analyze my gen 7 team", [], gen7Ctx);
+
+    expect(result.status).toBe("insufficient_data");
+    expect(result.uncertainty_flags).toContain("max_iterations_reached");
+    expect(result.generation_basis).toEqual({
+      generation: "gen-7",
+      fallback: false,
+    });
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
+  });
+
+  it("a recovered-prose fallback in a gen scope carries that gen's basis tag", async () => {
+    // Empty (no-tool) turns until the nudge budget is spent, then the last
+    // turn's prose is surfaced as an `answered` fallback — its basis is the
+    // turn's scope (gen-6), matching the tuned per-scope system prompt.
+    const gen6Ctx = { ...ctx, mode: "gen-6" } as unknown as AgentContext;
+    const proseTurn = (text: string) => ({
+      message: message([textBlock(text)], "end_turn"),
+      events: textEvents(text),
+    });
+    const { client } = scriptedClient(
+      Array.from({ length: MAX_EMPTY_TURN_NUDGES + 1 }, (_, i) =>
+        proseTurn(i === MAX_EMPTY_TURN_NUDGES ? "gen 6 prose answer" : `draft ${i}`),
+      ),
+    );
+
+    const result = await runOakWith(client, "gen 6 question", [], gen6Ctx);
+
+    expect(result.status).toBe("answered");
+    expect(result.answer_markdown).toBe("gen 6 prose answer");
+    expect(result.uncertainty_flags).toContain("recovered_prose_no_submit_answer");
+    expect(result.generation_basis).toEqual({
+      generation: "gen-6",
+      fallback: false,
+    });
+  });
+
+  it("keeps the gen-9 basis for a standard-mode fallback (unchanged behavior)", async () => {
+    // The base ctx is mode "standard" (the Gen 9 alias) — an insufficient_data
+    // fallback there still reports generation "gen-9" exactly as before.
+    const invalid = () =>
+      message([toolUse("submit_answer", { status: "answered" }, "tx")]);
+    const { client } = scriptedClient([invalid(), invalid(), invalid()]);
+
+    const result = await runOakWith(client, "q", [], ctx);
+
+    expect(result.status).toBe("insufficient_data");
+    expect(result.generation_basis).toEqual({
+      generation: "gen-9",
+      fallback: false,
+    });
   });
 });
 

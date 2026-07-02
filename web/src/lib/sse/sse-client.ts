@@ -34,6 +34,7 @@ import type {
   AnswerStartEvent,
   ChatRequestBody,
   ErrorEvent,
+  ScopeEvent,
   SseEvent,
   SseEventName,
   ToolActivityEvent,
@@ -83,6 +84,8 @@ export function parseFrame(frame: string): SseEvent | null {
 
   // Only the event names this endpoint emits are accepted.
   switch (eventName as SseEventName) {
+    case "scope":
+      return { event: "scope", data: data as ScopeEvent };
     case "tool_activity":
       return { event: "tool_activity", data: data as ToolActivityEvent };
     case "answer_start":
@@ -163,6 +166,16 @@ export interface SseClientState {
   /** Lifecycle status of the current turn. */
   status: SseClientStatus;
   /**
+   * The server-resolved game scope for the current turn, from the single
+   * `scope` event the route emits first (before any tool activity). `null`
+   * until that frame lands (and on a fresh `send`, or a transport error that
+   * precedes it). Carries the resolved `format` and the `source` that decided
+   * it (an in-message signal, the conversation's sticky scope, or the
+   * `champions_mode` toggle seed) — the scope chip renders from this, so a
+   * server override of the toggle is visible rather than silently applied.
+   */
+  scope: ScopeEvent | null;
+  /**
    * Tool-activity progress events accumulated for the current turn (cleared on
    * each `send` call). Used by the progress UI while the agent loop runs.
    */
@@ -199,6 +212,7 @@ export interface SseClientState {
 
 const INITIAL_STATE: SseClientState = {
   status: "idle",
+  scope: null,
   activities: [],
   answer: null,
   streamingMarkdown: "",
@@ -409,7 +423,18 @@ export function useSseClient(): UseSseClientReturn {
           // Abort may fire mid-iteration; check before each state update.
           if (controller.signal.aborted) return;
 
-          if (event.event === "tool_activity") {
+          if (event.event === "scope") {
+            // The turn's server-resolved game scope — always the FIRST frame,
+            // before any tool activity. Record it so the scope chip reflects
+            // the scope actually used (which may differ from the toggle when an
+            // in-message signal or the conversation's sticky scope overrode it).
+            // Output has resumed, so clear any "Reconnecting…" state too.
+            setState((prev) => ({
+              ...prev,
+              reconnecting: false,
+              scope: event.data,
+            }));
+          } else if (event.event === "tool_activity") {
             // Output resumed → clear any "Reconnecting…" state. Accumulate the
             // progress event for the progress UI.
             setState((prev) => ({
@@ -559,6 +584,7 @@ export function useSseClient(): UseSseClientReturn {
       // Immediately transition to "thinking" and clear previous turn state.
       setState({
         status: "thinking",
+        scope: null,
         activities: [],
         answer: null,
         streamingMarkdown: "",

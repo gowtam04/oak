@@ -5,7 +5,10 @@
  * `Specie` (deterministic local data from `Dex.forGen(9)`), and
  * `buildPokedex({ format, roster })` applies the D8 forms rule. Expected values
  * are @pkmn ground truth (cross-checked: Garchomp BST 600, Farigiraf's three
- * abilities incl. Armor Tail, Dracovish's non-SV fallback).
+ * abilities incl. Armor Tail, Dracovish's non-SV fallback). Gen-scope formats
+ * (gen-5…gen-8) build from `Dex.forGen(n)` and stamp a format-relative
+ * `generation` basis tag ("gen-7"), keeping the frozen is_gen9_native/
+ * source_generation fallback semantics.
  *
  * Fully offline — @pkmn ships its dex data as a local npm package.
  */
@@ -18,6 +21,7 @@ import type { PkmnSpecies } from "@/data/pkmn/gen-provider";
 import { buildPokemonRow, buildPokedex, type PokemonRow } from "./build-pokedex";
 
 const g = Dex.forGen(9);
+const g7 = Dex.forGen(7);
 const SV: Format = "scarlet-violet";
 
 function row(name: string, format: Format = SV): PokemonRow {
@@ -175,6 +179,57 @@ describe("buildPokemonRow — Champions format (BR-1: every indexed species is l
 });
 
 // ---------------------------------------------------------------------------
+// Generation-scope formats (gen-5…gen-8): `generation` is format-relative, and
+// the is_gen9_native/source_generation fallback logic is unchanged (the column
+// name is contract-frozen; its meaning generalizes to the active format's game).
+// ---------------------------------------------------------------------------
+
+describe("buildPokemonRow — gen-7 format basis tag", () => {
+  it("stamps generation:'gen-7' on a gen-7-native species (Decidueye)", () => {
+    // Decidueye (#724) is a Gen 7 native — falsy isNonstandard in Dex.forGen(7).
+    const r = buildPokemonRow(g7.species.get("decidueye"), "gen-7");
+    expect(r.format).toBe("gen-7");
+    expect(r.generation).toBe("gen-7");
+    expect(r.is_gen9_native).toBe(1);
+    expect(r.source_generation).toBeNull();
+    expect(r.national_dex_number).toBe(724);
+    expect(r.type1).toBe("grass");
+    expect(r.type2).toBe("ghost");
+  });
+
+  it("treats a pre-gen native (Garchomp, gen 4) as native to the gen-7 game", () => {
+    // A species that predates the format's generation is still native (isNonstandard
+    // is falsy) — is_gen9_native means "native to the ACTIVE format's generation".
+    const r = buildPokemonRow(g7.species.get("garchomp"), "gen-7");
+    expect(r.generation).toBe("gen-7");
+    expect(r.is_gen9_native).toBe(1);
+    expect(r.source_generation).toBeNull();
+  });
+});
+
+describe("buildPokemonRow — gen-7 format, 'Past'-flagged fallback (BR-1)", () => {
+  it("yields is_gen9_native=0 + source_generation while stamping generation:'gen-7'", () => {
+    // A species cut from this generation's game surfaces with isNonstandard "Past";
+    // it is indexed as an earlier-gen fallback row exactly as in the Gen 9 scope.
+    const past = fakeSpecies({
+      id: "fakepast",
+      name: "Fakepast",
+      num: 9998,
+      types: ["Normal"],
+      abilities: { 0: "Truant" },
+      stats: [60, 60, 60, 60, 60, 60],
+      isNonstandard: "Past",
+      gen: 5,
+    });
+    const r = buildPokemonRow(past, "gen-7");
+    expect(r.format).toBe("gen-7");
+    expect(r.generation).toBe("gen-7");
+    expect(r.is_gen9_native).toBe(0);
+    expect(r.source_generation).toBe("gen-5");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // buildPokedex — D8 forms rule
 // ---------------------------------------------------------------------------
 
@@ -188,6 +243,10 @@ function fakeSpecies(p: {
   types: string[];
   abilities: Record<string, string>;
   stats: [number, number, number, number, number, number];
+  /** Defaults to null (native); set "Past" to exercise the BR-1 fallback path. */
+  isNonstandard?: string | null;
+  /** Origin generation used by source_generation; defaults to 9. */
+  gen?: number;
 }): PkmnSpecies {
   const [hp, atk, def, spa, spd, spe] = p.stats;
   return {
@@ -199,8 +258,8 @@ function fakeSpecies(p: {
     types: p.types,
     abilities: p.abilities,
     baseStats: { hp, atk, def, spa, spd, spe },
-    isNonstandard: null,
-    gen: 9,
+    isNonstandard: p.isNonstandard ?? null,
+    gen: p.gen ?? 9,
   } as unknown as PkmnSpecies;
 }
 

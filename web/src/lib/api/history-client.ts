@@ -10,6 +10,7 @@
  */
 
 import type { ChatTurn } from "@/components/types";
+import type { Format } from "@/data/formats";
 
 /** List-view summary (no turns). */
 export interface ConversationSummary {
@@ -141,11 +142,17 @@ export async function deleteConversation(id: string): Promise<boolean> {
 /**
  * `POST /api/conversations/import` — guest→sign-in bulk save (HIST-US-12).
  * Returns the saved conversation id, or `null` (empty thread / refusal / fault).
+ *
+ * `format` is the guest thread's RESOLVED scope (GS-C): a thread that switched
+ * to gen-7 via an in-message signal must import as gen-7, not as whatever the
+ * Champions toggle currently reads. Optional — the route falls back to
+ * `champions_mode` for back-compat when it is absent.
  */
 export async function importConversation(
   sessionId: string,
   championsMode: boolean,
   turns: ChatTurn[],
+  format?: Format,
 ): Promise<string | null> {
   try {
     const res = await fetch("/api/conversations/import", {
@@ -155,6 +162,7 @@ export async function importConversation(
       body: JSON.stringify({
         session_id: sessionId,
         champions_mode: championsMode,
+        ...(format ? { format } : {}),
         turns,
       }),
     });

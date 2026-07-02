@@ -56,6 +56,7 @@ import {
 import { enrichAnswer } from "@/agent/enrich-answer";
 import type {
   AgentContext,
+  AgentMode,
   ChatMessage,
   OnAnswerDelta,
   OnAnswerStart,
@@ -63,7 +64,7 @@ import type {
   RunOak,
 } from "@/agent/types";
 import type { OakDb } from "@/data/db";
-import { formatForMode } from "@/data/formats";
+import { basisForFormat, formatForMode } from "@/data/formats";
 import {
   validateTeam,
   isHardViolation,
@@ -602,9 +603,11 @@ function formatZodIssues(error: import("zod").ZodError): string {
 /**
  * Build a schema-valid `insufficient_data` answer for the orchestration-level
  * fallbacks (loop-max, invalid-after-retries, no-submit). Never user-blaming;
- * states plainly that the turn couldn't be completed (integration.md).
+ * states plainly that the turn couldn't be completed (integration.md). The
+ * `mode` stamps the turn's scope onto `generation_basis` so a fallback in a gen
+ * scope (or Champions) still reports the right basis tag, not a hardcoded gen-9.
  */
-function synthesizeInsufficientData(reason: string): OakAnswer {
+function synthesizeInsufficientData(reason: string, mode: AgentMode): OakAnswer {
   return {
     status: "insufficient_data",
     answer_markdown:
@@ -615,7 +618,10 @@ function synthesizeInsufficientData(reason: string): OakAnswer {
       "so it is reporting insufficient data rather than guessing.",
     citations: [],
     inferences: [],
-    generation_basis: { generation: "gen-9", fallback: false },
+    generation_basis: {
+      generation: basisForFormat(formatForMode(mode)),
+      fallback: false,
+    },
     uncertainty_flags: [reason],
   };
 }
@@ -625,9 +631,11 @@ function synthesizeInsufficientData(reason: string): OakAnswer {
  * calls submit_answer (nudge budget exhausted). Rather than discard the prose and
  * show the generic apology, wrap it in a schema-valid `answered` payload — flagged
  * so the trace records that it bypassed the structured tool path. No citations or
- * inferences are available (the model never supplied them).
+ * inferences are available (the model never supplied them). The `mode` stamps the
+ * turn's scope onto `generation_basis` (the prose was produced under the tuned
+ * per-scope system prompt, so its basis is that scope, not a hardcoded gen-9).
  */
-function synthesizeFromProse(prose: string): OakAnswer {
+function synthesizeFromProse(prose: string, mode: AgentMode): OakAnswer {
   return {
     status: "answered",
     answer_markdown: prose,
@@ -636,7 +644,10 @@ function synthesizeFromProse(prose: string): OakAnswer {
       "submit_answer, so it carries no structured citations or inferences.",
     citations: [],
     inferences: [],
-    generation_basis: { generation: "gen-9", fallback: false },
+    generation_basis: {
+      generation: basisForFormat(formatForMode(mode)),
+      fallback: false,
+    },
     uncertainty_flags: ["recovered_prose_no_submit_answer"],
   };
 }
@@ -843,8 +854,11 @@ export async function runWithProvider(
       const prose = assistantText.trim();
       return finalize(
         prose.length > 0
-          ? synthesizeFromProse(prose)
-          : synthesizeInsufficientData("model_ended_turn_without_submit_answer"),
+          ? synthesizeFromProse(prose, ctx.mode)
+          : synthesizeInsufficientData(
+              "model_ended_turn_without_submit_answer",
+              ctx.mode,
+            ),
         state,
         ctx,
       );
@@ -1022,7 +1036,10 @@ export async function runWithProvider(
       submitRetries += 1;
       if (submitRetries > MAX_SUBMIT_RETRIES) {
         return finalize(
-          synthesizeInsufficientData("submit_answer_invalid_after_retries"),
+          synthesizeInsufficientData(
+            "submit_answer_invalid_after_retries",
+            ctx.mode,
+          ),
           state,
           ctx,
         );
@@ -1048,7 +1065,7 @@ export async function runWithProvider(
 
   // Iteration cap reached without a valid submit_answer.
   return finalize(
-    synthesizeInsufficientData("max_iterations_reached"),
+    synthesizeInsufficientData("max_iterations_reached", ctx.mode),
     state,
     ctx,
   );

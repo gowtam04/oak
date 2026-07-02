@@ -12,21 +12,28 @@
  */
 
 import type { Logger } from "pino";
+import type { GenFormat } from "@/data/formats"; // type-only; keeps this module pure (no runtime cycle)
 import type { ModelKey } from "@/agent/models";
 import type { JsonSchema, OakAnswer } from "@/agent/schemas";
 import type { TurnTrace } from "@/server/logger";
 
 /**
- * Query scope for a turn. Server-controlled (derived from the request body's
- * `champions_mode`), bound onto {@link AgentContext}, and read by repos/tools and
- * the runtime — NEVER an LLM-visible tool input. This guarantees that when the
- * Champions toggle is on, every query in the turn is Champions-scoped (the model
- * has no parameter to widen the scope).
+ * Query scope for a turn. Server-controlled — resolved per turn on the server
+ * (explicit in-message signal → sticky conversation scope → the `champions_mode`
+ * toggle seed; see `@/lib/scope`), bound onto {@link AgentContext}, and read by
+ * repos/tools and the runtime — NEVER an LLM-visible tool input. This guarantees
+ * the model has no parameter to widen the scope; it only ever sees a
+ * scope-specific system prompt + scope-filtered tool results.
  *
- *   "standard"  → Gen 9 / Scarlet-Violet (today's behavior).
- *   "champions" → Pokémon Champions (current regulation), via the @pkmn mod.
+ *   "standard"      → Gen 9 / Scarlet-Violet (today's behavior; the gen-9 alias).
+ *   "champions"     → Pokémon Champions (current regulation), via the @pkmn mod.
+ *   "gen-5"…"gen-8" → mainline generations 5–8 (generation-scope feature).
+ *
+ * `"standard"` REMAINS the Gen 9 alias, so all existing `mode === "champions"`
+ * guards and the `"standard"` default stay valid. The gen members derive from
+ * {@link GenFormat} in `@/data/formats` (one source of truth for the literal set).
  */
-export type AgentMode = "standard" | "champions";
+export type AgentMode = "standard" | "champions" | GenFormat;
 
 /**
  * Bound data-access repositories for one request (assembled in

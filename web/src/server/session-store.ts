@@ -16,6 +16,7 @@
  */
 
 import type { ChatMessage } from "@/agent/types";
+import type { Format } from "@/data/formats";
 import { BoundedStore } from "@/server/bounded-store";
 
 // ---------------------------------------------------------------------------
@@ -79,6 +80,7 @@ export const SESSION_TTL_MS = 2 * 60 * 60_000; // 2 hours
  */
 const globalForSessionStore = globalThis as typeof globalThis & {
   __oakSessionStore?: BoundedStore<ChatMessage[]>;
+  __oakSessionScopeStore?: BoundedStore<Format>;
 };
 
 function getStore(): BoundedStore<ChatMessage[]> {
@@ -89,6 +91,28 @@ function getStore(): BoundedStore<ChatMessage[]> {
     });
   }
   return globalForSessionStore.__oakSessionStore;
+}
+
+/**
+ * Parallel store holding each guest session's sticky data scope (GS-B / GS-D3).
+ * The Champions toggle only SEEDS a new conversation's scope; once a turn
+ * resolves a format (from an explicit in-message signal or the sticky value),
+ * that format sticks to the session so later turns keep it without re-inferring.
+ *
+ * Kept SEPARATE from the message store — the resolved scope is not part of the
+ * `ChatMessage[]` shape that `trim`/`getHistory` (and their tests) depend on.
+ * Same lifecycle as the message store: same LRU cap ({@link SESSION_MAX_ENTRIES})
+ * and idle TTL ({@link SESSION_TTL_MS}), memoized on `globalThis` so Next's dev
+ * hot-reload reuses the SAME store, and cleared by `_resetStoreForTests`.
+ */
+function getScopeStore(): BoundedStore<Format> {
+  if (!globalForSessionStore.__oakSessionScopeStore) {
+    globalForSessionStore.__oakSessionScopeStore = new BoundedStore<Format>({
+      maxEntries: SESSION_MAX_ENTRIES,
+      ttlMs: SESSION_TTL_MS,
+    });
+  }
+  return globalForSessionStore.__oakSessionScopeStore;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +155,40 @@ export function appendTurn(
     store.set(sessionId, history, now);
   }
   history.push(message);
+}
+
+// ---------------------------------------------------------------------------
+// Guest scope stickiness (GS-B / GS-D3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the sticky data scope for a guest session, or `undefined` if the
+ * session has no stored scope yet (a brand-new conversation) or its scope entry
+ * has idled past {@link SESSION_TTL_MS}. `undefined` means "no sticky scope" —
+ * the route falls back to the toggle seed.
+ *
+ * `now` is injectable for deterministic tests; defaults to `Date.now()`.
+ */
+export function getSessionScope(
+  sessionId: string,
+  now: number = Date.now(),
+): Format | undefined {
+  return getScopeStore().get(sessionId, now);
+}
+
+/**
+ * Records the resolved data scope for a guest session so subsequent turns stay
+ * in it (until an explicit in-message signal switches it, or the entry idles
+ * out). Idempotent — writing the same format again just refreshes recency.
+ *
+ * `now` is injectable for deterministic tests; defaults to `Date.now()`.
+ */
+export function setSessionScope(
+  sessionId: string,
+  format: Format,
+  now: number = Date.now(),
+): void {
+  getScopeStore().set(sessionId, format, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -238,4 +296,5 @@ export function activeSessionCount(): number {
  */
 export function _resetStoreForTests(): void {
   getStore().clear();
+  getScopeStore().clear();
 }

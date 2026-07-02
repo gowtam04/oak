@@ -16,6 +16,10 @@
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
+// Pure, client-safe module (no server-only / env / SDK) — safe to import from
+// this shared schema surface. Single source of truth for the full `Format` set
+// (all six scopes) so the team enums below stay in lockstep with the ingest.
+import { FORMATS } from "@/data/formats";
 import {
   teamMembersSchema,
   teamWarningSchema,
@@ -689,7 +693,7 @@ export const questionSchema = z
 export const proposedTeamSchema = z
   .object({
     name: z.string(),
-    format: z.enum(["scarlet-violet", "champions"]),
+    format: z.enum(FORMATS),
     members: teamMembersSchema,
   })
   .strict();
@@ -702,7 +706,7 @@ export const savedTeamSchema = z
   .object({
     id: z.string(),
     name: z.string(),
-    format: z.enum(["scarlet-violet", "champions"]),
+    format: z.enum(FORMATS),
   })
   .strict();
 

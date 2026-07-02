@@ -593,6 +593,200 @@ export const REFERENCE_CACHE_SEED: ReferenceCacheSeed[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Gen-7 slice (generation-scope feature) — a SMALL second row-set under the
+// "gen-7" format, alongside the scarlet-violet rows above, so the oracle can
+// prove that a `ctx.mode = "gen-7"` turn reads the gen-7 index (not gen-9).
+//
+// The DIVERGENCE from gen 9 is deliberate and single-pointed: Incineroar learns
+// `hidden-power` here, a move legal in Gen 7 but removed from Gen 8+ — so it is
+// present in NO scarlet-violet learnset above. A moves-filter query therefore
+// resolves Incineroar under gen-7 but reports `unresolved` under standard/SV,
+// pinning the format cut. Real @pkmn stats/types/abilities (ground truth).
+// ---------------------------------------------------------------------------
+
+const GEN7 = "gen-7";
+
+/** Curated gen-7 Pokédex rows (real @pkmn/dex values). */
+export const POKEMON_SEED_GEN7: PokemonSeed[] = [
+  {
+    // Gen-7 starter flagship; carries the divergence move.
+    id: "incineroar",
+    species_name: "incineroar",
+    form_name: null,
+    display_name: "Incineroar",
+    national_dex_number: 727,
+    type1: "fire",
+    type2: "dark",
+    ability_slot1: "blaze",
+    ability_slot2: null,
+    ability_hidden: "intimidate",
+    stat_hp: 95,
+    stat_attack: 115,
+    stat_defense: 90,
+    stat_special_attack: 80,
+    stat_special_defense: 90,
+    stat_speed: 60,
+    base_stat_total: bst({
+      hp: 95,
+      atk: 115,
+      def: 90,
+      spa: 80,
+      spd: 90,
+      spe: 60,
+    }),
+    sprite_url: "https://img.example/sprite/727.png",
+    artwork_url: "https://img.example/art/727.png",
+    generation: "gen-7",
+    is_gen9_native: 1, // native to gen 7 (field name is historical)
+    source_generation: null,
+  },
+  {
+    id: "decidueye",
+    species_name: "decidueye",
+    form_name: null,
+    display_name: "Decidueye",
+    national_dex_number: 724,
+    type1: "grass",
+    type2: "ghost",
+    ability_slot1: "overgrow",
+    ability_slot2: null,
+    ability_hidden: "long-reach",
+    stat_hp: 78,
+    stat_attack: 107,
+    stat_defense: 75,
+    stat_special_attack: 100,
+    stat_special_defense: 100,
+    stat_speed: 70,
+    base_stat_total: bst({
+      hp: 78,
+      atk: 107,
+      def: 75,
+      spa: 100,
+      spd: 100,
+      spe: 70,
+    }),
+    sprite_url: "https://img.example/sprite/724.png",
+    artwork_url: "https://img.example/art/724.png",
+    generation: "gen-7",
+    is_gen9_native: 1,
+    source_generation: null,
+  },
+  {
+    // A gen-4 species that is ALSO a real, current mon in USUM (not a "Past"
+    // fallback) — its stats are unchanged across gens, so it doubles as a cross-
+    // format control (the same slug exists under scarlet-violet above).
+    id: "garchomp",
+    species_name: "garchomp",
+    form_name: null,
+    display_name: "Garchomp",
+    national_dex_number: 445,
+    type1: "dragon",
+    type2: "ground",
+    ability_slot1: "sand-veil",
+    ability_slot2: null,
+    ability_hidden: "rough-skin",
+    stat_hp: 108,
+    stat_attack: 130,
+    stat_defense: 95,
+    stat_special_attack: 80,
+    stat_special_defense: 85,
+    stat_speed: 102,
+    base_stat_total: bst({
+      hp: 108,
+      atk: 130,
+      def: 95,
+      spa: 80,
+      spd: 85,
+      spe: 102,
+    }),
+    sprite_url: "https://img.example/sprite/445.png",
+    artwork_url: "https://img.example/art/445.png",
+    generation: "gen-7",
+    is_gen9_native: 1,
+    source_generation: null,
+  },
+];
+
+/**
+ * Controlled gen-7 learnsets. `hidden-power` on Incineroar is the divergence:
+ * gen-7-legal, absent from every scarlet-violet learnset above (Gen 8+ dropped
+ * it), so it resolves only under the gen-7 format.
+ */
+export const LEARNSET_SEED_GEN7: LearnsetSeed[] = [
+  {
+    pokemon_id: "incineroar",
+    move_slug: "hidden-power",
+    format: GEN7,
+    method: "machine",
+  },
+  {
+    pokemon_id: "incineroar",
+    move_slug: "fake-out",
+    format: GEN7,
+    method: "level-up",
+  },
+  {
+    pokemon_id: "incineroar",
+    move_slug: "flare-blitz",
+    format: GEN7,
+    method: "level-up",
+  },
+  {
+    pokemon_id: "decidueye",
+    move_slug: "spirit-shackle",
+    format: GEN7,
+    method: "level-up",
+  },
+  {
+    pokemon_id: "garchomp",
+    move_slug: "earthquake",
+    format: GEN7,
+    method: "machine",
+  },
+  {
+    pokemon_id: "garchomp",
+    move_slug: "dragon-claw",
+    format: GEN7,
+    method: "level-up",
+  },
+];
+
+/** Names index backing resolve_entity for the gen-7 format. */
+export const SEARCHABLE_NAMES_SEED_GEN7: SearchableNameSeed[] = [
+  { kind: "pokemon", slug: "incineroar", display_name: "Incineroar" },
+  { kind: "pokemon", slug: "decidueye", display_name: "Decidueye" },
+  { kind: "pokemon", slug: "garchomp", display_name: "Garchomp" },
+  { kind: "move", slug: "hidden-power", display_name: "Hidden Power" },
+  { kind: "move", slug: "flare-blitz", display_name: "Flare Blitz" },
+  { kind: "move", slug: "spirit-shackle", display_name: "Spirit Shackle" },
+  { kind: "ability", slug: "intimidate", display_name: "Intimidate" },
+];
+
+/** One reference_cache row so the gen-7 format carries reference detail too. */
+export const REFERENCE_CACHE_SEED_GEN7: ReferenceCacheSeed[] = [
+  {
+    resource_key: "move/hidden-power",
+    resource_kind: "move",
+    endpoint_url: "https://data.pkmn.cc/gen7",
+    payload: {
+      found: true,
+      display_name: "Hidden Power",
+      type: "normal",
+      damage_class: "special",
+      power: 60,
+      accuracy: 100,
+      pp: 15,
+      priority: 0,
+      target: "selected-pokemon",
+      effect_short: "Type and power depend on the user's IVs (Gen 7 only).",
+      effect_full:
+        "A Normal-type attack whose actual type is determined by the user's " +
+        "individual values. Removed from Generation 8 onward.",
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Seeder
 // ---------------------------------------------------------------------------
 
@@ -627,6 +821,35 @@ export async function seedToolsFixture(db: ToolsFixtureDb): Promise<void> {
       pokemon_count: POKEMON_SEED.length,
       learnset_count: LEARNSET_SEED.length,
       names_count: SEARCHABLE_NAMES_SEED.length,
+      schema_version: "2",
+    });
+
+    // --- Gen-7 slice (generation-scope) — a second row-set under "gen-7" -----
+    // Additive: leaves the scarlet-violet rows above untouched. The gen-7
+    // ingest_meta row is what makes the index read as "available" for the format.
+    await tx
+      .insert(pokemon)
+      .values(POKEMON_SEED_GEN7.map((p) => ({ ...p, format: GEN7 })));
+    await tx.insert(learnset).values(LEARNSET_SEED_GEN7);
+    await tx
+      .insert(searchable_names)
+      .values(SEARCHABLE_NAMES_SEED_GEN7.map((n) => ({ ...n, format: GEN7 })));
+    await tx.insert(reference_cache).values(
+      REFERENCE_CACHE_SEED_GEN7.map((r) => ({
+        format: GEN7,
+        resource_key: r.resource_key,
+        resource_kind: r.resource_kind,
+        payload: JSON.stringify(r.payload),
+        endpoint_url: r.endpoint_url,
+        fetched_at: now,
+      })),
+    );
+    await tx.insert(ingest_meta).values({
+      format: GEN7,
+      last_success_at: now,
+      pokemon_count: POKEMON_SEED_GEN7.length,
+      learnset_count: LEARNSET_SEED_GEN7.length,
+      names_count: SEARCHABLE_NAMES_SEED_GEN7.length,
       schema_version: "2",
     });
   });

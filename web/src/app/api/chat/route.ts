@@ -35,7 +35,11 @@
 import { randomUUID } from "node:crypto";
 
 import { createAgentContext } from "@/agent/context";
-import { proposedTeamSchema, type ProposedTeam } from "@/agent/schemas";
+import {
+  proposedTeamSchema,
+  type OakAnswer,
+  type ProposedTeam,
+} from "@/agent/schemas";
 import { modelLabel } from "@/agent/models";
 import { ProviderTransportError } from "@/agent/providers/errors";
 import type {
@@ -47,7 +51,14 @@ import type {
   OnProgress,
 } from "@/agent/types";
 import type { Account } from "@/data/repos/accounts-repo";
-import { formatForMode, modeForFormat, type Format } from "@/data/formats";
+import {
+  CHAMPIONS_FORMAT,
+  formatForMode,
+  modeForFormat,
+  STANDARD_FORMAT,
+  type Format,
+} from "@/data/formats";
+import { detectScopeSignal } from "@/lib/scope/detect-scope";
 import { logger, type TurnTrace } from "@/server/logger";
 import {
   checkRateLimit,
@@ -59,6 +70,8 @@ import { clientIp } from "@/server/client-ip";
 import {
   appendTurn,
   getHistory,
+  getSessionScope,
+  setSessionScope,
   trim,
   trimMessages,
 } from "@/server/session-store";
@@ -113,6 +126,43 @@ function jsonError(
 // The guest rate-limit identity (`ip:<clientIp(req)>`) is derived by the shared
 // `@/server/client-ip` helper — Fly-Client-IP first, then the trusted-proxy XFF
 // hop — so a forged `X-Forwarded-For` can no longer defeat the cap (finding S1).
+
+// ---------------------------------------------------------------------------
+// Unsupported-generation short-circuit (generation-scope GS-D1 / §3.4 step 5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the in-domain answer for an EXPLICITLY named but unsupported generation
+ * (Gens 1–4 — not ingested). The route detects the signal deterministically and
+ * short-circuits the agent so we NEVER answer an older-gen question from Gen 9
+ * data. Delivered as a NORMAL terminal `answer` event (in-domain failures never
+ * use the `error` event): honest copy, status `insufficient_data`, a
+ * `generation: "unsupported"` basis, and the `unsupported_generation_requested`
+ * uncertainty flag. `label` is the detector's `gen-N` tag.
+ */
+function synthesizeUnsupportedAnswer(label: string): OakAnswer {
+  const m = /^gen-(\d)$/.exec(label);
+  const genName = m ? `Generation ${m[1]}` : label;
+  return {
+    status: "insufficient_data",
+    answer_markdown:
+      `I don't have ${genName} data yet — I currently cover Gen 5–9 and Pokémon ` +
+      `Champions. Ask me about one of those scopes (for example, "in Scarlet and ` +
+      `Violet…") and I can help.`,
+    reasoning_markdown:
+      `The message explicitly asked about ${genName}, which is outside my indexed ` +
+      `scopes (Gen 5–9 and Pokémon Champions). I stop here rather than answer from ` +
+      `the wrong generation's data.`,
+    citations: [],
+    inferences: [],
+    generation_basis: {
+      generation: "unsupported",
+      fallback: false,
+      note: `${genName} is not indexed yet (supported: Gen 5–9 and Pokémon Champions).`,
+    },
+    uncertainty_flags: ["unsupported_generation_requested"],
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Body validation
@@ -210,12 +260,14 @@ export async function POST(req: Request): Promise<Response> {
     );
   };
 
-  // Server-controlled query scope for the turn — derived here, threaded onto the
-  // AgentContext, never an LLM-visible tool field. ON ⇒ every query is scoped to
-  // Champions; omitted/false ⇒ today's Gen 9 behavior. For a RESUMED signed-in
-  // conversation this is overridden below from the stored format (BR-H6); hence
-  // `let`, not `const`.
-  let mode: AgentMode = body.champions_mode ? "champions" : "standard";
+  // Server-controlled query scope — never an LLM-visible tool field. The
+  // Champions toggle is only a SEED for a brand-new conversation's scope, not a
+  // lock (GS-D3): the turn's ACTUAL scope is RESOLVED below from (explicit
+  // in-message signal) > (conversation's sticky scope) > (this seed). ON ⇒ seed
+  // Champions; omitted/false ⇒ seed Gen 9 / Scarlet-Violet.
+  const seedFormat: Format = body.champions_mode
+    ? CHAMPIONS_FORMAT
+    : STANDARD_FORMAT;
 
   // 2. Orchestration guardrails — input-length cap + TIERED rate limit
   //    (integration.md § Guardrails; account-creation design.md § API Design
@@ -280,7 +332,10 @@ export async function POST(req: Request): Promise<Response> {
         accountId: account?.id ?? null,
         model: null,
         providerModel: null,
-        mode,
+        // The rate-limit gate runs BEFORE scope resolution (it must stay cheap,
+        // pre-history), so record the seed-derived mode — identical to the
+        // pre-generation-scope value for this rejected turn.
+        mode: modeForFormat(seedFormat),
         status: "rate_limited",
         inputTokens: 0,
         outputTokens: 0,
@@ -322,12 +377,20 @@ export async function POST(req: Request): Promise<Response> {
   // bound onto ctx so the agent can act on "save it" / "this team" reliably —
   // history forwards only the markdown, dropping the structured proposal.
   let proposedTeam: ProposedTeam | undefined;
+  // The turn's STICKY scope (GS-D3): a resumed signed-in conversation's stored
+  // format, or a guest session's remembered scope. `undefined` for a brand-new
+  // conversation (the seed then wins). `existingConversation` marks the signed-in
+  // resume path so a resolved switch below can be persisted (and compared against
+  // the CURRENT stored format, which `stickyFormat` holds).
+  let stickyFormat: Format | undefined;
+  let existingConversation = false;
   if (account) {
     try {
       const repo = await import("@/data/repos/conversation-repo");
       const conv = await repo.getConversation(account.id, session_id);
       if (conv) {
-        mode = modeForFormat(conv.format as Format); // BR-H6 — fixed per conversation
+        existingConversation = true;
+        stickyFormat = conv.format as Format; // BR-H6′ — sticky, switchable below
         const stored = await repo.getMessages(account.id, session_id);
         history = trimMessages(
           stored.map((m) => ({ role: m.role, content: m.textContent })),
@@ -347,7 +410,7 @@ export async function POST(req: Request): Promise<Response> {
           }
         }
       } else {
-        history = []; // new conversation; mode stays body-derived
+        history = []; // new conversation; scope resolves from the seed below
       }
     } catch (err) {
       logger.warn(
@@ -365,6 +428,72 @@ export async function POST(req: Request): Promise<Response> {
   } else {
     trim(session_id);
     history = [...getHistory(session_id)];
+    stickyFormat = getSessionScope(session_id); // guest sticky scope (GS-D3)
+  }
+
+  // 3b. Resolve THIS turn's data scope (generation-scope GS-B / §3.4 step 3).
+  //     An explicit, high-precision in-message signal wins over the
+  //     conversation's sticky scope, which wins over the toggle seed. The
+  //     lexicon is DETERMINISTIC — no LLM pre-pass. `mode` then flows downstream
+  //     exactly as before (ctx / formatForMode(mode) at persist / turn_record).
+  const detection = detectScopeSignal(message);
+  const format: Format =
+    (detection?.kind === "scope" ? detection.format : undefined) ??
+    stickyFormat ??
+    seedFormat;
+  const mode: AgentMode = modeForFormat(format);
+
+  // Observability for tuning the lexicon later (§3.4 step 3): one structured
+  // line whenever a signal fired, recording what it moved the scope from → to.
+  if (detection) {
+    logger.info(
+      {
+        event: "scope_signal",
+        request_id: requestId,
+        session_id,
+        matched: detection.matched,
+        from: stickyFormat ?? seedFormat,
+        to:
+          detection.kind === "scope"
+            ? detection.format
+            : `unsupported:${detection.label}`,
+      },
+      "oak_scope_signal",
+    );
+  }
+
+  // Persist a scope SWITCH (fire-and-forget, same non-blocking discipline as
+  // recording — never on the user's critical path). Signed-in + an existing
+  // conversation whose stored format actually moved → UPDATE it (appendTurnPair
+  // stamps format only on CREATE, so a mid-conversation switch needs this
+  // explicit write). Guest → refresh the session's sticky scope every turn
+  // (cheap + idempotent).
+  if (account) {
+    if (existingConversation && format !== stickyFormat) {
+      const acctId = account.id;
+      const logScopePersistFailure = (err: unknown): void => {
+        logger.error(
+          {
+            event: "conversation_format_update_failed",
+            request_id: requestId,
+            account_id: acctId,
+            session_id,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "oak_conversation_format_update_failed",
+        );
+      };
+      try {
+        const repo = await import("@/data/repos/conversation-repo");
+        void repo
+          .updateConversationFormat(acctId, session_id, format)
+          .catch(logScopePersistFailure);
+      } catch (err) {
+        logScopePersistFailure(err);
+      }
+    }
+  } else {
+    setSessionScope(session_id, format);
   }
 
   // 3c. Resolve the operator-selected active model (the ACTIVE_MODEL secret) and
@@ -452,91 +581,118 @@ export async function POST(req: Request): Promise<Response> {
       // Detached async task — drives the agent loop and streams events.
       void (async () => {
         try {
-          // Dynamic import defers env validation to request time, not build
-          // time (runtime.ts evaluates env at module load; a static import at
-          // the top of this file would trigger parseEnv() during `next build`
-          // even though the route is force-dynamic).
-          const { runOak } = await import("@/agent/runtime");
-
-          const ctx = await createAgentContext({
-            requestId,
-            sessionId: session_id,
-            mode,
-            // Which LLM answers this turn — the operator-selected active model
-            // (ACTIVE_MODEL), resolved above. Server-controlled like `mode`; never
-            // taken from the body. History is plain text, so the model in effect
-            // can change between turns without correctness risk.
-            model: activeModel,
-            // Signed-in account id + the conversation's pending proposed team —
-            // both server-bound. The account id lets the team tools
-            // (list_teams/get_team/save_team) read+write account-scoped teams;
-            // the proposed team lets an approval ("save it") persist the EXACT
-            // set the user saw.
-            accountId: account?.id,
-            proposedTeam,
-            // Images attached to THIS turn (validated + mime-sniffed above).
-            // Consume-on-turn: handed straight to the model in the current user
-            // message, never stored in history. `undefined` ⇒ a text-only turn.
-            images: images.length > 0 ? images : undefined,
-            // Forward the inbound abort signal so a client disconnect (the user
-            // pressed Stop) tears down the Anthropic stream immediately and the
-            // loop bails between iterations — no wasted tokens.
-            signal: req.signal,
-          });
-
-          // Capture the per-turn trace the runtime assembles in finalize() via the
-          // onTurnComplete sink (admin-panel recording, AD-2). createAgentContext
-          // does not take this field, so it is set POST-CONSTRUCTION on the ctx —
-          // the same way the route owns the other server-controlled ctx fields.
-          // The captured trace is composed into the turn_record after the answer
-          // is delivered (below). A holder object (not a bare closure-assigned
-          // `let`, which TS would keep narrowed to its `null` initializer at the
-          // read site) — the property's declared type is restored after the
-          // intervening `await runOak`.
+          // This turn's answer + its trace — produced by EITHER the unsupported
+          // short-circuit (Gen 1–4) or the agent path, then fed to the SHARED
+          // persist + emit + record path below. The trace holder is set
+          // POST-CONSTRUCTION on ctx (agent path only); it stays null for the
+          // short-circuit, and recordTurn's `?? 0` fallbacks cover that.
           const traceRef: { current: TurnTrace | null } = { current: null };
-          ctx.onTurnComplete = (trace) => {
-            traceRef.current = trace;
-          };
+          let answer: OakAnswer;
 
-          // Stream one tool_activity event per tool call as the loop runs.
-          const onProgress: OnProgress = (e) => {
-            send("tool_activity", { tool: e.tool, label: e.label });
-          };
+          if (detection?.kind === "unsupported") {
+            // §3.4 step 5 — an EXPLICITLY named but unsupported generation
+            // (Gen 1–4). Do NOT run the agent against wrong-gen data: answer
+            // honestly in-domain (a normal terminal `answer`, never an `error`),
+            // with no `scope`/tool events (the conversation keeps its prior
+            // sticky scope). The turn pair is still persisted like any other.
+            if (req.signal.aborted) {
+              return;
+            }
+            answer = synthesizeUnsupportedAnswer(detection.label);
+          } else {
+            // §3.4 step 6 — emit the resolved scope FIRST, before any tool
+            // activity, so the client can render the scope chip immediately
+            // (GS-C). `source` records how the scope was resolved.
+            send("scope", {
+              format,
+              source: detection
+                ? "message"
+                : stickyFormat
+                  ? "conversation"
+                  : "toggle",
+            });
 
-          // Stream the answer_markdown prose token-by-token. answer_start resets
-          // the client's in-flight buffer (handles a re-emitted answer); the
-          // terminal `answer` event below stays authoritative.
-          const onAnswerStart: OnAnswerStart = () => {
-            send("answer_start", {});
-          };
-          const onAnswerDelta: OnAnswerDelta = (text) => {
-            send("answer_delta", { text });
-          };
+            // Dynamic import defers env validation to request time, not build
+            // time (runtime.ts evaluates env at module load; a static import at
+            // the top of this file would trigger parseEnv() during `next build`
+            // even though the route is force-dynamic).
+            const { runOak } = await import("@/agent/runtime");
 
-          const answer = await runOak(
-            message,
-            history,
-            ctx,
-            onProgress,
-            onAnswerStart,
-            onAnswerDelta,
-          );
+            const ctx = await createAgentContext({
+              requestId,
+              sessionId: session_id,
+              mode,
+              // Which LLM answers this turn — the operator-selected active model
+              // (ACTIVE_MODEL), resolved above. Server-controlled like `mode`;
+              // never taken from the body. History is plain text, so the model in
+              // effect can change between turns without correctness risk.
+              model: activeModel,
+              // Signed-in account id + the conversation's pending proposed team —
+              // both server-bound. The account id lets the team tools
+              // (list_teams/get_team/save_team) read+write account-scoped teams;
+              // the proposed team lets an approval ("save it") persist the EXACT
+              // set the user saw.
+              accountId: account?.id,
+              proposedTeam,
+              // Images attached to THIS turn (validated + mime-sniffed above).
+              // Consume-on-turn: handed straight to the model in the current user
+              // message, never stored in history. `undefined` ⇒ a text-only turn.
+              images: images.length > 0 ? images : undefined,
+              // Forward the inbound abort signal so a client disconnect (the user
+              // pressed Stop) tears down the Anthropic stream immediately and the
+              // loop bails between iterations — no wasted tokens.
+              signal: req.signal,
+            });
 
-          // If the client disconnected mid-flight (user pressed Stop) the turn is
-          // interrupted: do NOT persist it (keeps the session store consistent
-          // with the wiped/undone UI) and do NOT emit — the connection is gone.
-          if (req.signal.aborted) {
-            return;
-          }
+            // Capture the per-turn trace the runtime assembles in finalize() via
+            // the onTurnComplete sink (admin-panel recording, AD-2).
+            // createAgentContext does not take this field, so it is set
+            // POST-CONSTRUCTION on the ctx — the same way the route owns the
+            // other server-controlled ctx fields.
+            ctx.onTurnComplete = (trace) => {
+              traceRef.current = trace;
+            };
 
-          // In-domain success (any status). Persist the turn pair for multi-turn
-          // refinement, then emit the single terminal answer event.
-          // If `save_team` (T13) persisted a team this turn, stamp the answer
-          // authoritatively from the server-owned result (the model never copies
-          // the UUID). This drives the persistent "Saved ✓" card + viewer open,
-          // and the active-team persistence below.
-          if (ctx.savedTeam) {
-            answer.saved_team = ctx.savedTeam;
+            // Stream one tool_activity event per tool call as the loop runs.
+            const onProgress: OnProgress = (e) => {
+              send("tool_activity", { tool: e.tool, label: e.label });
+            };
+
+            // Stream the answer_markdown prose token-by-token. answer_start resets
+            // the client's in-flight buffer (handles a re-emitted answer); the
+            // terminal `answer` event below stays authoritative.
+            const onAnswerStart: OnAnswerStart = () => {
+              send("answer_start", {});
+            };
+            const onAnswerDelta: OnAnswerDelta = (text) => {
+              send("answer_delta", { text });
+            };
+
+            answer = await runOak(
+              message,
+              history,
+              ctx,
+              onProgress,
+              onAnswerStart,
+              onAnswerDelta,
+            );
+
+            // If the client disconnected mid-flight (user pressed Stop) the turn
+            // is interrupted: do NOT persist it (keeps the session store
+            // consistent with the wiped/undone UI) and do NOT emit — the
+            // connection is gone.
+            if (req.signal.aborted) {
+              return;
+            }
+
+            // In-domain success (any status). If `save_team` (T13) persisted a
+            // team this turn, stamp the answer authoritatively from the
+            // server-owned result (the model never copies the UUID). This drives
+            // the persistent "Saved ✓" card + viewer open, and the active-team
+            // persistence below.
+            if (ctx.savedTeam) {
+              answer.saved_team = ctx.savedTeam;
+            }
           }
 
           // What to store as the user turn's text for FUTURE turns (history) and

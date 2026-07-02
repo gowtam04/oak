@@ -16,7 +16,7 @@ import {
   type GetEncountersOutput,
 } from "@/agent/schemas";
 import { getEncounters } from "@/data/repos/encounter-repo";
-import { formatForMode } from "@/data/formats";
+import { STANDARD_FORMAT } from "@/data/formats";
 import type { OakDb } from "@/data/db";
 
 const description =
@@ -39,9 +39,12 @@ export const getEncountersTool: ToolDef = {
     if (ctx.mode === "champions") {
       return Promise.resolve({ error: "not_available_in_champions" });
     }
+    // GS-D4: encounter reference rows only exist under the scarlet-violet
+    // format (the data itself is cross-game, Gen 1–8, grouped per game), so
+    // every mainline scope — gen-5…gen-9 — reads STANDARD_FORMAT here.
     return getEncounters(
       parsed.data.name,
-      formatForMode(ctx.mode),
+      STANDARD_FORMAT,
       ctx.db as unknown as OakDb,
     );
   },

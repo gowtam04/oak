@@ -10,8 +10,8 @@ ecosystem, and the agent deduces how those pieces interact.
 > Example: _"does Fake Out work on Farigiraf?"_ → "Fake Out is a +3 priority
 > move; Armor Tail negates priority moves; if Farigiraf has Armor Tail, Fake Out
 > fails." Every answer carries its reasoning, the cited data, an explicit
-> inference/uncertainty flag, and the generation/format it's based on (Gen 9
-> baseline with flagged fallback).
+> inference/uncertainty flag, and the generation/format it's based on (one of six
+> scopes — Gen 9, Champions, or Gens 5–8 — with flagged fallback).
 
 It serves two blended use cases: **competitive team-building** (filter queries,
 mechanics reasoning, battle math) and **general Pokédex curiosity** (lookups,
@@ -43,8 +43,16 @@ the design intent.
   matchups) with clickable entity links and citations.
 - **Image input (vision)** — attach up to 4 images per turn ("what is this?",
   "rate this team sheet"); all three models are vision-capable.
-- **Champions mode** — a header toggle switches the entire data scope between the
-  standard Scarlet/Violet index and the **Champions** regulation format.
+- **Multi-generation scope** — Oak answers from real data across **six scopes**:
+  Gen 9 / Scarlet-Violet, **Pokémon Champions**, and mainline **Gens 5–8**
+  (Sword/Shield, Sun/Moon–USUM, XY/ORAS, Black/White). The scope is **resolved per
+  turn on the server** — an explicit mention ("analyze my **gen 7** team", "in
+  **Scarlet and Violet**…") switches it; otherwise the conversation stays in its
+  current scope. A header **Champions toggle** seeds the scope for new chats, and a
+  header **scope chip** always shows which game a given answer is based on, so a
+  wrong guess is a one-tap correction rather than a silently mis-scoped answer.
+  (Gens 1–4 aren't supported yet — Oak says so plainly instead of answering from
+  the wrong game.)
 - **Admin panel** (operator-only) — a private, **read-only** `/admin` dashboard
   for the single owner: usage/growth, estimated cost by model, error rollups,
   per-turn drill-down, a live view, and read-only account/conversation/team
@@ -57,8 +65,9 @@ A single **TypeScript / Next.js (App Router) monolith** — one language across
 frontend, API, agent loop, and the ingest CLI.
 
 - **Data** — **Postgres + Drizzle ORM** (node-postgres), one row-set per format
-  (`scarlet-violet` / `champions`). The index is built offline from the `@pkmn`
-  ecosystem (`@pkmn/dex`, `@pkmn/data`, `@pkmn/mods`). The one exception is
+  (`scarlet-violet`, `champions`, and mainline `gen-5`…`gen-8`). The index is built
+  offline from the `@pkmn` ecosystem (`@pkmn/dex`, `@pkmn/data`, `@pkmn/mods`); the
+  gen scopes come from `Dex.forGen(n)`. The one exception is
   encounter (catch-location) data, which comes from a **committed PokeAPI
   snapshot** — see [Data](#data) below.
 - **Agent** — a provider-agnostic tool-loop over **14 tools** that return
@@ -216,7 +225,8 @@ deployment notes for details.
 | [`docs/requirements/requirements.md`](docs/requirements/requirements.md) | Core business requirements — user stories, acceptance criteria, business rules.                         |
 | [`docs/agent-design/`](docs/agent-design/)                               | The agent's internals (fixed): topology, tools, data sources, prompts, output schema, eval spec.        |
 | [`docs/architecture/design.md`](docs/architecture/design.md)             | Technical design — stack, data store, ingest pipeline, file structure, interfaces, build phases.        |
-| [`docs/features/`](docs/features/)                                       | Per-feature requirements + design: account creation, chat history, team builder, artifact viewer, admin panel. |
+| [`docs/features/`](docs/features/)                                       | Per-feature requirements + design: account creation, chat history, team builder, artifact viewer, admin panel, generation scope. |
+| [`docs/agent-design/generation-scope-addendum.md`](docs/agent-design/generation-scope-addendum.md) | How the multi-generation scope (Gen 9 + Champions + Gens 5–8) amends the frozen agent-design contract. |
 | [`docs/design-system/`](docs/design-system/)                             | Visual language — color, typography, spacing, component patterns.                                       |
 | [`docs/eval-reports/`](docs/eval-reports/)                               | Judged eval runs (incl. a Grok-vs-Claude A/B).                                                           |
 

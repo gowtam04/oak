@@ -10,12 +10,13 @@
  *   D8  — each battle-relevant form is a distinct row; purely cosmetic forms
  *         (identical type/stats/abilities to the base form) are collapsed.
  *   BR-1 — is_gen9_native / source_generation reflect whether the species is
- *         native to the format's game. In Champions every indexed species is
- *         legal ⇒ is_gen9_native = 1, source_generation = null.
+ *         native to the format's game (Gen 9 for scarlet-violet/champions, else
+ *         the gen-scope's generation, e.g. Gen 7 for "gen-7"). In Champions every
+ *         indexed species is legal ⇒ is_gen9_native = 1, source_generation = null.
  */
 
 import type { Format } from "@/data/formats";
-import { CHAMPIONS_FORMAT } from "@/data/formats";
+import { basisForFormat, CHAMPIONS_FORMAT } from "@/data/formats";
 import {
   slugFor,
   slugify,
@@ -34,7 +35,7 @@ import {
 // ---------------------------------------------------------------------------
 
 export interface PokemonRow {
-  /** Data scope ("scarlet-violet" | "champions"). */
+  /** Data scope ("scarlet-violet" | "champions" | "gen-5"…"gen-8"). */
   format: Format;
   /** PokeAPI-style pokemon slug, e.g. "tauros-paldea-aqua". */
   id: string;
@@ -64,9 +65,14 @@ export interface PokemonRow {
    * ("swampertite"); null for ordinary forms (from @pkmn `requiredItem`).
    */
   required_item: string | null;
-  /** "gen-9" (standard) / "champions". */
+  /** The format's basis tag: "gen-9" (standard) / "champions" / "gen-5"…"gen-8". */
   generation: string;
-  /** 1 if native to the format's game; 0 if an earlier-gen fallback (BR-1). */
+  /**
+   * 1 if native to the format's game; 0 if an earlier-gen fallback (BR-1). The
+   * column name is a contract-frozen historical artifact (`is_gen9_native`); its
+   * meaning is format-relative — "native to the ACTIVE format's generation" (Gen 9
+   * for scarlet-violet/champions, else the gen-scope's generation).
+   */
   is_gen9_native: 0 | 1;
   /** Set when is_gen9_native = 0, e.g. "gen-8" (BR-1); null otherwise. */
   source_generation: string | null;
@@ -142,6 +148,8 @@ export function buildPokemonRow(s: PkmnSpecies, format: Format): PokemonRow {
     stat_speed;
 
   const champions = format === CHAMPIONS_FORMAT;
+  // Native ⟺ falsy isNonstandard, evaluated against the format's own dex — a
+  // "Past"-flagged species (cut from that generation's game) is a fallback row.
   const native = champions ? true : !s.isNonstandard;
 
   return {
@@ -168,7 +176,7 @@ export function buildPokemonRow(s: PkmnSpecies, format: Format): PokemonRow {
     // A Mega's stone (e.g. "Swampertite" → "swampertite"); slugify matches the
     // item index slugs ("Charizardite X" → "charizardite-x"). null otherwise.
     required_item: s.requiredItem ? slugify(s.requiredItem) : null,
-    generation: champions ? "champions" : "gen-9",
+    generation: champions ? "champions" : basisForFormat(format),
     is_gen9_native: native ? 1 : 0,
     source_generation: native ? null : `gen-${s.gen}`,
   };
