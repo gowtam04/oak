@@ -2,7 +2,8 @@
  * Unit tests for src/server/session-store.ts (DS-5, D9).
  *
  * Covers: getHistory, appendTurn, estimateTokens, trim, clearSession,
- * activeSessionCount. No external I/O — pure in-memory Map.
+ * activeSessionCount, getSessionScope/setSessionScope. No external I/O — pure
+ * in-memory Map.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -16,6 +17,8 @@ import {
   clearSession,
   estimateTokens,
   getHistory,
+  getSessionScope,
+  setSessionScope,
   trim,
   trimMessages,
 } from "@/server/session-store";
@@ -454,5 +457,66 @@ describe("bounded store (C1)", () => {
     // Same underlying array reference; the new turn is visible on the captured one.
     expect(getHistory(SESSION_A, 5)).toBe(live);
     expect(live).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Guest scope stickiness (GS-B / GS-D3). Uses the GLOBAL scope store, so fully
+// reset it around each case to get a known baseline (like the bounded-store
+// suite above).
+// ---------------------------------------------------------------------------
+
+describe("getSessionScope / setSessionScope", () => {
+  beforeEach(() => _resetStoreForTests());
+  afterEach(() => _resetStoreForTests());
+
+  it("returns undefined for a session with no stored scope", () => {
+    expect(getSessionScope(SESSION_A)).toBeUndefined();
+  });
+
+  it("round-trips a set scope back out of get", () => {
+    setSessionScope(SESSION_A, "gen-7");
+    expect(getSessionScope(SESSION_A)).toBe("gen-7");
+  });
+
+  it("overwrites (switches) the sticky scope on a later set", () => {
+    setSessionScope(SESSION_A, "gen-7");
+    setSessionScope(SESSION_A, "scarlet-violet");
+    expect(getSessionScope(SESSION_A)).toBe("scarlet-violet");
+  });
+
+  it("keeps each session's scope isolated from the others", () => {
+    setSessionScope(SESSION_A, "gen-7");
+    setSessionScope(SESSION_B, "champions");
+
+    expect(getSessionScope(SESSION_A)).toBe("gen-7");
+    expect(getSessionScope(SESSION_B)).toBe("champions");
+  });
+
+  it("expires a stored scope after SESSION_TTL_MS of inactivity", () => {
+    setSessionScope(SESSION_A, "gen-8", 0);
+    // Exactly TTL elapsed → expired (>= semantics), same as the history store.
+    expect(getSessionScope(SESSION_A, SESSION_TTL_MS)).toBeUndefined();
+  });
+
+  it("keeps a stored scope just under the idle TTL", () => {
+    setSessionScope(SESSION_A, "gen-8", 0);
+    expect(getSessionScope(SESSION_A, SESSION_TTL_MS - 1)).toBe("gen-8");
+  });
+
+  it("_resetStoreForTests clears stored scopes", () => {
+    setSessionScope(SESSION_A, "gen-6");
+    _resetStoreForTests();
+    expect(getSessionScope(SESSION_A)).toBeUndefined();
+  });
+
+  it("is stored separately from message history (clearing history keeps scope)", () => {
+    setSessionScope(SESSION_A, "gen-5");
+    appendTurn(SESSION_A, msg("user", "hi"));
+    clearSession(SESSION_A);
+
+    // clearSession wipes the message history only; the sticky scope survives.
+    expect(getHistory(SESSION_A)).toEqual([]);
+    expect(getSessionScope(SESSION_A)).toBe("gen-5");
   });
 });

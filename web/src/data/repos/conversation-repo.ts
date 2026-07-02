@@ -29,6 +29,7 @@ import { and, asc, desc, eq, exists, ilike, or, sql } from "drizzle-orm";
 
 import { db } from "@/data/db";
 import { conversation, conversation_message } from "@/data/schema";
+import type { Format } from "@/data/formats";
 import { deriveTitle } from "@/server/history/derive-title";
 import type { ChatTurn } from "@/components/types";
 import type { OakAnswer } from "@/agent/schemas";
@@ -366,6 +367,27 @@ export async function renameConversation(
     .update(conversation)
     .set({ title })
     .where(and(eq(conversation.account_id, accountId), eq(conversation.id, id)));
+}
+
+/**
+ * GS-D3 / BR-H6′: update a conversation's format when an explicit in-message
+ * signal switches its scope. Account-scoped like every other conversation write.
+ * No-op if not this account's.
+ */
+export async function updateConversationFormat(
+  accountId: string,
+  conversationId: string,
+  format: Format,
+): Promise<void> {
+  await db
+    .update(conversation)
+    .set({ format })
+    .where(
+      and(
+        eq(conversation.account_id, accountId),
+        eq(conversation.id, conversationId),
+      ),
+    );
 }
 
 /** Pin / unpin a conversation (HIST-US-9). No-op if not this account's. */

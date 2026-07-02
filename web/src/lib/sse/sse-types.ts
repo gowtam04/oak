@@ -2,6 +2,9 @@
  * SSE event protocol for `POST /api/chat` (design.md § API Design).
  *
  * The route emits, in order:
+ *   event: scope           data: { format, source }  (exactly one, first; the
+ *                                                      server-resolved game scope
+ *                                                      for this turn — GS-C)
  *   event: tool_activity   data: { tool, label }     (zero or more)
  *   event: answer_start    data: {}                  (zero or more; resets the
  *                                                      client's in-flight buffer
@@ -26,6 +29,7 @@
  */
 
 import type { OakAnswer } from "@/agent/schemas";
+import type { Format } from "@/data/formats";
 
 /**
  * One image attached to a chat message (wire shape). `data` is RAW base64 (no
@@ -54,6 +58,20 @@ export interface ChatRequestBody {
    * true). Optional ⇒ old clients that omit it default to standard / Gen 9.
    */
   champions_mode?: boolean;
+}
+
+/**
+ * `event: scope` payload — the server-resolved game scope for this turn (GS-C).
+ * Emitted exactly once, as the FIRST event of the turn, before any
+ * `tool_activity`. `format` is the resolved scope the tools/prompt ran under;
+ * `source` records how it was resolved: an explicit in-message signal
+ * (`"message"`), the conversation's sticky scope (`"conversation"`), or the
+ * `champions_mode` toggle seed (`"toggle"`). Additive — old clients that don't
+ * listen for `scope` simply ignore it.
+ */
+export interface ScopeEvent {
+  format: Format;
+  source: "message" | "conversation" | "toggle";
 }
 
 /** `event: tool_activity` payload — progress shown while the loop runs. */
@@ -92,6 +110,7 @@ export interface ErrorEvent {
 
 /** The SSE event names this endpoint emits. */
 export type SseEventName =
+  | "scope"
   | "tool_activity"
   | "answer_start"
   | "answer_delta"
@@ -100,6 +119,7 @@ export type SseEventName =
 
 /** Maps each event name to its `data` payload type. */
 export interface SseEventDataMap {
+  scope: ScopeEvent;
   tool_activity: ToolActivityEvent;
   answer_start: AnswerStartEvent;
   answer_delta: AnswerDeltaEvent;

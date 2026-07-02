@@ -44,7 +44,10 @@ vi.mock("@/agent/context", () => ({
 import { POST } from "@/app/api/chat/route";
 import { createAgentContext } from "@/agent/context";
 import { _resetStoreForTests } from "@/server/rate-limit";
-import { clearSession } from "@/server/session-store";
+import {
+  clearSession,
+  _resetStoreForTests as resetSessionStore,
+} from "@/server/session-store";
 
 // A sentinel "secret" placed in the env so we can prove the route never leaks it
 // into any streamed frame (no-API-key-leak criterion).
@@ -422,6 +425,87 @@ describe("POST /api/chat — session history", () => {
   });
 });
 
+// --- Scope resolution (generation-scope GS-B / §3.4) ------------------------
+
+describe("POST /api/chat — scope resolution", () => {
+  // The guest scope store is GLOBAL and outlives clearSession() (which only
+  // wipes message history), so fully reset the session store around each case.
+  beforeEach(() => {
+    resetSessionStore();
+    vi.mocked(createAgentContext).mockClear();
+  });
+  afterEach(() => resetSessionStore());
+
+  /** The single `scope` event's payload, if the turn emitted one. */
+  function scopeOf(
+    events: SseEvent[],
+  ): { format: string; source: string } | undefined {
+    const e = events.find((ev) => ev.event === "scope");
+    return e?.data as { format: string; source: string } | undefined;
+  }
+
+  it("an explicit in-message gen signal overrides the Champions toggle seed, then sticks", async () => {
+    mockRunOak.mockResolvedValue(G1_ANSWER);
+    const sid = "s-scope";
+
+    // (a) A gen-7 signal on a FRESH session, with the Champions toggle ON: the
+    //     explicit signal wins over the seed → the turn runs in gen-7, and the
+    //     `scope` event reports it as message-sourced.
+    const res1 = await post({
+      session_id: sid,
+      message: "analyze my gen 7 team",
+      champions_mode: true,
+    });
+    const events1 = await readSse(res1);
+    expect(scopeOf(events1)).toEqual({ format: "gen-7", source: "message" });
+    // The mode threaded onto the AgentContext (what the tools scope by) is gen-7.
+    const call1 = vi.mocked(createAgentContext).mock.calls[0]![0] as {
+      mode: string;
+    };
+    expect(call1.mode).toBe("gen-7");
+
+    // (b) A follow-up with NO signal stays gen-7 via the session's sticky scope
+    //     (source becomes "conversation"). The toggle is not re-applied.
+    const res2 = await post({
+      session_id: sid,
+      message: "what about defensively?",
+    });
+    const events2 = await readSse(res2);
+    expect(scopeOf(events2)).toEqual({ format: "gen-7", source: "conversation" });
+    const call2 = vi.mocked(createAgentContext).mock.calls[1]![0] as {
+      mode: string;
+    };
+    expect(call2.mode).toBe("gen-7");
+  });
+
+  it("(c) an unsupported gen (gen 3) short-circuits to an in-domain answer without running the agent", async () => {
+    // If the agent WERE run it would resolve G1; assert it is never called.
+    mockRunOak.mockResolvedValue(G1_ANSWER);
+
+    const res = await post({
+      session_id: "s-scope-unsupported",
+      message: "analyze my gen 3 team",
+    });
+    const events = await readSse(res);
+
+    // No agent run, no scope/tool/error events — just the one terminal answer.
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(scopeOf(events)).toBeUndefined();
+    expect(events.filter((e) => e.event === "tool_activity")).toHaveLength(0);
+    expect(events.filter((e) => e.event === "error")).toHaveLength(0);
+
+    const answers = events.filter((e) => e.event === "answer");
+    expect(answers).toHaveLength(1);
+    const answer = (answers[0]!.data as { answer: OakAnswer }).answer;
+    expect(oakAnswerSchema.safeParse(answer).success).toBe(true);
+    expect(answer.status).toBe("insufficient_data");
+    expect(answer.uncertainty_flags).toEqual([
+      "unsupported_generation_requested",
+    ]);
+    expect(answer.generation_basis.generation).toBe("unsupported");
+  });
+});
+
 // --- Image attachments (vision input) --------------------------------------
 
 /** A minimal valid PNG payload (8-byte signature + filler), base64-encoded. */
@@ -541,8 +625,14 @@ describe("POST /api/chat — SSE lifecycle robustness", () => {
       await vi.advanceTimersByTimeAsync(15_100);
 
       const reader = res.body!.getReader();
-      const { value } = await reader.read();
-      const text = new TextDecoder().decode(value);
+      // The turn's FIRST frame is now the resolved-`scope` event; the keep-alive
+      // comment follows. Drain a few chunks and assert one is the heartbeat.
+      let text = "";
+      for (let i = 0; i < 5 && !text.includes(": keep-alive"); i++) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        text += new TextDecoder().decode(value);
+      }
       expect(text).toContain(": keep-alive");
 
       // Let the turn finish so the detached task settles before teardown.

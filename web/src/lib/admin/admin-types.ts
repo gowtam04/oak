@@ -18,9 +18,12 @@
  *     ADMIN-BR-9 (failure taxonomy).
  *
  * CLIENT-SAFE: pure types/constants only — NO `server-only`, NO `@/data/db`,
- * NO SDK imports. The two imports below are erased at compile time
+ * NO SDK imports. The three imports below are erased at compile time
  * (`import type`), so this module pulls nothing server- or Node-bound into a
  * client bundle:
+ *   - `AgentMode` is the server-controlled per-turn scope union (`@/agent/types`,
+ *     a pure module); `TurnMode` aliases it so `turn_record.mode` has one source
+ *     of truth and can carry the gen scopes ("gen-5"…"gen-8") too.
  *   - `ToolTraceEntry` is the canonical per-tool-call trace shape (owned by
  *     `@/server/logger`); reusing it keeps the drill-down (ADMIN-AC-5.2) aligned
  *     with what the runtime records instead of re-declaring a parallel shape.
@@ -28,6 +31,7 @@
  *     listed as a mobile-portable module in CLAUDE.md).
  */
 
+import type { AgentMode } from "@/agent/types";
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { ToolTraceEntry } from "@/server/logger";
 
@@ -38,8 +42,12 @@ import type { ToolTraceEntry } from "@/server/logger";
 /** Time bucket granularity for analytics series (API param `bucket`). */
 export type BucketSize = "day" | "hour";
 
-/** The active format/mode a turn ran under (mirrors `AgentMode`). */
-export type TurnMode = "standard" | "champions";
+/**
+ * The active format/mode a turn ran under. Aliases `AgentMode` (one source of
+ * truth) so `turn_record.mode` can carry the gen scopes ("gen-5"…"gen-8") added
+ * by the generation-scope feature, not just "standard" | "champions".
+ */
+export type TurnMode = AgentMode;
 
 /**
  * The recorded turn status. Superset of the agent's `TurnStatus`: it adds
