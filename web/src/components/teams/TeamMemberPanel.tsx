@@ -25,7 +25,10 @@
 
 import { useEffect, useState } from "react";
 
-import { computeStat } from "@/agent/formulas/compute-stat";
+import {
+  computeStat,
+  computeStatChampions,
+} from "@/agent/formulas/compute-stat";
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { TeamWarning } from "@/lib/api/teams-client";
 import type { SpriteRef } from "@/lib/api/sprites-client";
@@ -81,22 +84,39 @@ function natureEffectFor(
   return "neutral";
 }
 
-/** Compute one live final stat, or `null` if inputs are out of formula range. */
+/**
+ * Compute one live final stat, or `null` if inputs are out of formula range.
+ *
+ * Champions uses its own Level-50 Stat-Point formula (`computeStatChampions`,
+ * where 1 Stat Point = +1 to the final stat; IV/level are fixed and ignored),
+ * matching the chat artifact card and the agent's `compute_stat` tool. Every
+ * other format uses the mainline `computeStat` with the member's real IVs/level.
+ */
 function liveStat(
   row: StatRow,
   member: TeamMember,
   base: MemberBaseStats,
+  format: Format,
 ): number | null {
-  const result = computeStat({
-    base_stat: base[row.base],
-    is_hp: row.isHp,
-    iv: member.ivs[row.spread],
-    ev: member.evs[row.spread],
-    level: member.level,
-    nature_effect: row.isHp
-      ? "neutral"
-      : natureEffectFor(member.nature, row.spread),
-  });
+  const nature_effect = row.isHp
+    ? "neutral"
+    : natureEffectFor(member.nature, row.spread);
+  const result =
+    format === "champions"
+      ? computeStatChampions({
+          base_stat: base[row.base],
+          is_hp: row.isHp,
+          ev: member.evs[row.spread], // Stat Points ride in on `ev` (clamped 0..32)
+          nature_effect,
+        })
+      : computeStat({
+          base_stat: base[row.base],
+          is_hp: row.isHp,
+          iv: member.ivs[row.spread],
+          ev: member.evs[row.spread],
+          level: member.level,
+          nature_effect,
+        });
   return "value" in result ? result.value : null;
 }
 
@@ -185,7 +205,7 @@ export default function TeamMemberPanel({
 
   // Live stats + a shared max so the bars are relative to this set's spread.
   const lives = STAT_ROWS.map((row) =>
-    baseStats ? liveStat(row, member, baseStats) : null,
+    baseStats ? liveStat(row, member, baseStats, format) : null,
   );
   const maxLive = Math.max(1, ...lives.map((v) => v ?? 0));
 
@@ -371,6 +391,7 @@ export default function TeamMemberPanel({
             />
           </PickerField>
         )}
+        {/* Champions battles are fixed at Level 50 — lock the field there. */}
         <label className="team-member-panel__field" htmlFor={id("level")}>
           Level
           <input
@@ -380,7 +401,13 @@ export default function TeamMemberPanel({
             type="number"
             min={1}
             max={100}
-            value={member.level}
+            value={format === "champions" ? 50 : member.level}
+            disabled={format === "champions"}
+            title={
+              format === "champions"
+                ? "Champions battles are fixed at Level 50"
+                : undefined
+            }
             onChange={(e) => set({ level: clampInt(e.target.value, 1, 100) })}
           />
         </label>
@@ -451,27 +478,36 @@ export default function TeamMemberPanel({
 
       <details className="team-member-panel__advanced">
         <summary className="team-member-panel__advanced-summary">
-          Advanced — IVs & nickname
+          {format === "champions"
+            ? "Advanced — nickname"
+            : "Advanced — IVs & nickname"}
         </summary>
-        <div className="team-member-panel__iv-grid">
-          {STAT_ROWS.map((row) => (
-            <label
-              key={row.spread}
-              className="team-member-panel__iv-field"
-            >
-              {row.label} IV
-              <input
-                data-testid={id(`iv-${row.spread}`)}
-                aria-label={`${row.label} IV`}
-                type="number"
-                min={0}
-                max={31}
-                value={member.ivs[row.spread]}
-                onChange={(e) => setSpread("ivs", row.spread, e.target.value)}
-              />
-            </label>
-          ))}
-        </div>
+        {/* Champions fixes every IV at 31, so the IV editor is hidden there. */}
+        {format === "champions" ? (
+          <p className="team-member-panel__iv-note">
+            IVs are fixed at 31 in Champions.
+          </p>
+        ) : (
+          <div className="team-member-panel__iv-grid">
+            {STAT_ROWS.map((row) => (
+              <label
+                key={row.spread}
+                className="team-member-panel__iv-field"
+              >
+                {row.label} IV
+                <input
+                  data-testid={id(`iv-${row.spread}`)}
+                  aria-label={`${row.label} IV`}
+                  type="number"
+                  min={0}
+                  max={31}
+                  value={member.ivs[row.spread]}
+                  onChange={(e) => setSpread("ivs", row.spread, e.target.value)}
+                />
+              </label>
+            ))}
+          </div>
+        )}
         <label className="team-member-panel__field" htmlFor={id("nickname")}>
           Nickname
           <input

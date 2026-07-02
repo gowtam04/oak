@@ -153,6 +153,51 @@ describe("TeamMemberPanel", () => {
     expect(screen.getByTestId("member-0-ev-spe")).toHaveAttribute("max", "32");
   });
 
+  it("locks Level to 50 and hides the IV editor in Champions", () => {
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member({ level: 100 })}
+        format="champions"
+        warnings={[]}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    // Champions is Level-50-only: the field is fixed at 50 and disabled.
+    const level = screen.getByTestId("member-0-level");
+    expect(level).toBeDisabled();
+    expect(level).toHaveValue(50);
+    // IVs are fixed at 31 in Champions, so the IV editor is absent.
+    expect(screen.queryByTestId("member-0-iv-hp")).not.toBeInTheDocument();
+  });
+
+  it("computes Champions Stat-Point stats (1 Stat Point = +1)", () => {
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member({
+          nature: "adamant", // +Atk, -SpA
+          level: 100, // ignored in Champions (Lv50 baked in)
+          evs: { hp: 32, atk: 32, def: 0, spa: 0, spd: 0, spe: 0 },
+          ivs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 }, // ignored (fixed 31)
+        })}
+        format="champions"
+        warnings={[]}
+        baseStats={GARCHOMP_BASE}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    // Champions HP = base + SP + 75 = 108 + 32 + 75 = 215 (0-SP baseline 183 → +32).
+    expect(screen.getByTestId("member-0-stat-hp")).toHaveTextContent("215");
+    // Atk (adamant +Atk): floor((130 + 32 + 20) * 1.1) = floor(200.2) = 200.
+    expect(screen.getByTestId("member-0-stat-atk")).toHaveTextContent("200");
+    // Def (0 SP, neutral): floor((95 + 0 + 20) * 1.0) = 115 — proves IV=0/level=100
+    // are ignored (the mainline formula would give 195 here).
+    expect(screen.getByTestId("member-0-stat-def")).toHaveTextContent("115");
+  });
+
   it("clamps an EV edit into 0..255", () => {
     const onChange = vi.fn();
     render(
