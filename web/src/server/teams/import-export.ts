@@ -42,8 +42,11 @@ import {
 export interface ImportNote {
   /** 0-based slot the note applies to. */
   slot: number;
-  /** What kind of name failed to resolve. */
-  kind: "pokemon" | "move" | "ability" | "item" | "nature" | "tera";
+  /**
+   * What was off in the paste — a name that failed to resolve, or (for
+   * `"level"`) an out-of-range numeric field that was clamped into schema range.
+   */
+  kind: "pokemon" | "move" | "ability" | "item" | "nature" | "tera" | "level";
   /** The raw text that was in the paste. */
   raw: string;
   /** The slug it was resolved to, when resolution still succeeded fuzzily. */
@@ -264,6 +267,21 @@ function mapSet(
     }
   }
 
+  // level — preserved verbatim (warn-but-allow); an out-of-range value gets a
+  // note here and is clamped into the schema range at the route (like EV/IV).
+  const level =
+    typeof set.level === "number" && Number.isFinite(set.level)
+      ? set.level
+      : DEFAULT_LEVEL;
+  if (level < 1 || level > 100) {
+    notes.push({
+      slot,
+      kind: "level",
+      raw: String(set.level),
+      message: `Level ${set.level} is out of range (1–100) — clamped.`,
+    });
+  }
+
   const member: TeamMember = {
     species,
     ability,
@@ -273,10 +291,7 @@ function mapSet(
     evs: toStatSpread(set.evs, DEFAULT_EV),
     ivs: toStatSpread(set.ivs, DEFAULT_IV),
     tera_type: teraType,
-    level:
-      typeof set.level === "number" && Number.isFinite(set.level)
-        ? set.level
-        : DEFAULT_LEVEL,
+    level,
   };
 
   // Cosmetics — round-tripped, not competitively significant (BR-T1).

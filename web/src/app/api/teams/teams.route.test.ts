@@ -307,6 +307,31 @@ describe("POST /api/teams/import", () => {
     expect(out.validation.map((w) => w.code)).toContain("ev_stat_exceeded");
   });
 
+  it("out-of-range level is a SAFE 200 — team NOT wiped, clamped + noted (U1)", async () => {
+    signedIn(ACCT_A);
+    const paste = [
+      "Garchomp",
+      "Level: 150", // > 100 — would fail teamMembersSchema and drop the whole team
+      "Ability: Rough Skin",
+      "- Earthquake",
+    ].join("\n");
+
+    const res = await imp.POST(post({ format: SV, paste }));
+    expect(res.status).toBe(200);
+    const out = (await res.json()) as {
+      team: { members: TeamMember[] };
+      notes: { kind: string }[];
+    };
+    // The member survived (not wiped to an empty team)...
+    expect(out.team.members).toHaveLength(1);
+    expect(out.team.members[0]?.species).toBe("garchomp");
+    // ...level clamped into the schema-legal range...
+    expect(out.team.members[0]?.level).toBeGreaterThanOrEqual(1);
+    expect(out.team.members[0]?.level).toBeLessThanOrEqual(100);
+    // ...and the clamp is surfaced to the user.
+    expect(out.notes.some((n) => n.kind === "level")).toBe(true);
+  });
+
   it("400s a missing paste / bad format", async () => {
     signedIn(ACCT_A);
     expect((await imp.POST(post({ format: SV }))).status).toBe(400);
