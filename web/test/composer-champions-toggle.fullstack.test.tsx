@@ -111,13 +111,17 @@ describe("Composer Champions toggle", () => {
     expect(toggle).toHaveAttribute("aria-checked", "false");
   });
 
-  it("sends champions_mode:false by default, then true after toggling on", async () => {
+  it("sends champions_mode:false by default (never toggled)", async () => {
     render(<Home />);
     await screen.findByTestId("composer");
 
-    // Default send is Gen 9.
     await send("what beats Garchomp?", 1);
     expect(chatBodies.at(-1)).toMatchObject({ champions_mode: false });
+  });
+
+  it("toggling on before the first message scopes the turn to Champions", async () => {
+    render(<Home />);
+    await screen.findByTestId("composer");
 
     // Flip the toggle on — it lights up and persists the choice.
     const toggle = screen.getByTestId("champions-toggle");
@@ -127,8 +131,20 @@ describe("Composer Champions toggle", () => {
     expect(toggle).toHaveAttribute("aria-checked", "true");
     expect(localStorage.getItem(CHAMPIONS_STORAGE_KEY)).toBe("true");
 
-    // The next turn is scoped to Champions.
-    await send("build a rain team", 2);
+    await send("build a rain team", 1);
     expect(chatBodies.at(-1)).toMatchObject({ champions_mode: true });
+  });
+
+  it("hides the toggle once the conversation has started", async () => {
+    render(<Home />);
+    await screen.findByTestId("composer");
+
+    // Present on the empty thread…
+    expect(screen.queryByTestId("champions-toggle")).not.toBeNull();
+
+    // …and gone once the first message is sent (the scope is now fixed for the
+    // rest of the conversation).
+    await send("what beats Garchomp?", 1);
+    expect(screen.queryByTestId("champions-toggle")).toBeNull();
   });
 });

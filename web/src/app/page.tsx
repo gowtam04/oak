@@ -528,14 +528,20 @@ export default function Home() {
               imagePreviews={imagePreviews}
             />
 
+            {/* The Champions toggle scopes the whole conversation, so it only
+                belongs on an empty thread — passing the props only when `turns`
+                is empty hides it once the first message is sent (it returns when
+                a new conversation resets `turns`). */}
             <Composer
               onSend={handleSend}
               disabled={status === "thinking"}
               streaming={status === "thinking"}
               onStop={handleStop}
               prefill={prefill}
-              championsMode={championsMode}
-              onChampionsChange={handleChampionsToggle}
+              championsMode={turns.length === 0 ? championsMode : undefined}
+              onChampionsChange={
+                turns.length === 0 ? handleChampionsToggle : undefined
+              }
             />
           </div>
 

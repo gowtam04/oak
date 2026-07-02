@@ -42,6 +42,8 @@ interface ServerConvo {
 let serverConvos: ServerConvo[];
 let meState: { signedIn: boolean; email?: string };
 let clock: number;
+/** The most recent /api/chat request body (to assert the active scope). */
+let lastChatBody: { champions_mode: boolean } | null;
 
 function makeAnswer(markdown: string): OakAnswer {
   return { ...MINIMAL_ANSWER, answer_markdown: markdown };
@@ -127,6 +129,7 @@ beforeEach(() => {
       // --- chat ---
       if (path === "/api/chat") {
         const body = JSON.parse(init!.body!);
+        lastChatBody = { champions_mode: body.champions_mode };
         return sseAnswerResponse(makeAnswer(`answer to: ${body.message}`));
       }
 
@@ -257,8 +260,11 @@ describe("Home — chat-history sidebar", () => {
     // Turns load into the thread.
     await waitFor(() => expect(screen.getByText("Build a rain team")).toBeInTheDocument());
     expect(screen.getByText("Here is a rain team")).toBeInTheDocument();
-    // Champions toggle follows the stored format (AC-5.4).
-    expect(screen.getByTestId("champions-toggle")).toHaveAttribute("aria-checked", "true");
+    // The loaded conversation's Champions scope carries forward (AC-5.4). The
+    // toggle itself is hidden mid-conversation, so verify via the next request.
+    expect(screen.queryByTestId("champions-toggle")).not.toBeInTheDocument();
+    await sendAndAwait("another rain question", 2);
+    expect(lastChatBody).toEqual({ champions_mode: true });
   });
 
   it("New chat resets to an empty thread (AC-6.1)", async () => {
@@ -267,12 +273,44 @@ describe("Home — chat-history sidebar", () => {
     await sendAndAwait("a question", 1);
     await signIn();
 
+    // The Champions toggle is hidden mid-conversation (scope is fixed once the
+    // thread has started).
+    expect(screen.queryByTestId("champions-toggle")).not.toBeInTheDocument();
+
     const sidebar = await screen.findByTestId("history-sidebar");
     await act(async () => {
       fireEvent.click(within(sidebar).getByTestId("new-chat"));
     });
     expect(screen.queryByTestId("user-turn")).not.toBeInTheDocument();
     expect(screen.queryByTestId("assistant-turn")).not.toBeInTheDocument();
+    // …and it returns on the fresh (empty) thread.
+    expect(screen.queryByTestId("champions-toggle")).toBeInTheDocument();
+  });
+
+  it("keeps the Champions choice when starting a new conversation", async () => {
+    render(<Home />);
+    await screen.findByTestId("auth-signin-button");
+    await signIn();
+
+    // Enable Champions on the empty thread, send a turn (the toggle then hides).
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("champions-toggle"));
+    });
+    await sendAndAwait("a champions question", 1);
+    expect(lastChatBody).toEqual({ champions_mode: true });
+    expect(screen.queryByTestId("champions-toggle")).not.toBeInTheDocument();
+
+    // New conversation → the toggle returns still ENABLED (the choice persists;
+    // handleNewChat resets the thread but not championsMode, and it's in
+    // localStorage too).
+    const sidebar = await screen.findByTestId("history-sidebar");
+    await act(async () => {
+      fireEvent.click(within(sidebar).getByTestId("new-chat"));
+    });
+    expect(screen.getByTestId("champions-toggle")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
   });
 
   it("sign-out hides the sidebar but keeps the thread", async () => {
