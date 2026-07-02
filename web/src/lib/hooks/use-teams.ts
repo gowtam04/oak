@@ -104,10 +104,14 @@ export function useTeams(enabled: boolean): UseTeamsResult {
     [refresh],
   );
 
-  const remove = useCallback(async (id: string) => {
-    setTeams((prev) => prev.filter((t) => t.id !== id));
-    await apiDelete(id);
-  }, []);
+  const remove = useCallback(
+    async (id: string) => {
+      setTeams((prev) => prev.filter((t) => t.id !== id));
+      const ok = await apiDelete(id);
+      if (!ok) refresh(); // restore the row from server state on failure
+    },
+    [refresh],
+  );
 
   const duplicate = useCallback(
     async (id: string) => {

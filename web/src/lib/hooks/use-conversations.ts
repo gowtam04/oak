@@ -94,10 +94,14 @@ export function useConversations(enabled: boolean): UseConversationsResult {
     [refresh],
   );
 
-  const remove = useCallback(async (id: string) => {
-    setConversations((prev) => prev.filter((c) => c.id !== id));
-    await apiDelete(id);
-  }, []);
+  const remove = useCallback(
+    async (id: string) => {
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      const ok = await apiDelete(id);
+      if (!ok) refresh(); // restore the row from server state on failure
+    },
+    [refresh],
+  );
 
   return {
     conversations,

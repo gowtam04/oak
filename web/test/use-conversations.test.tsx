@@ -112,6 +112,21 @@ describe("useConversations", () => {
     expect(result.current.conversations).toEqual([]);
   });
 
+  it("remove reconciles (re-lists) when the API delete fails", async () => {
+    vi.mocked(deleteConversation).mockResolvedValue(false);
+    const { result } = renderHook(() => useConversations(true));
+    await waitFor(() => expect(result.current.conversations).toHaveLength(1));
+    vi.mocked(listConversations).mockClear();
+
+    await act(async () => {
+      await result.current.remove("c1");
+    });
+    expect(deleteConversation).toHaveBeenCalledWith("c1");
+    // Failed delete → refresh() → re-list restores the row from server state.
+    await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.conversations).toHaveLength(1));
+  });
+
   it("refresh re-lists", async () => {
     const { result } = renderHook(() => useConversations(true));
     await waitFor(() => expect(result.current.conversations).toHaveLength(1));
