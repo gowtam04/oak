@@ -339,6 +339,14 @@ export interface ComposerProps {
    * whenever this object's identity changes. Null leaves the input untouched.
    */
   prefill?: { text: string } | null;
+  /**
+   * Champions-mode scope for the next turn. When provided (together with
+   * `onChampionsChange`), the composer renders the Champions logo toggle in a
+   * controls row above the input. Omit both to hide the control entirely.
+   */
+  championsMode?: boolean;
+  /** Report a Champions-mode toggle. Paired with `championsMode`. */
+  onChampionsChange?: (next: boolean) => void;
 }
 
 // ---------------------------------------------------------------------------

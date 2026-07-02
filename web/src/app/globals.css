@@ -1197,6 +1197,16 @@
   -webkit-backdrop-filter: blur(6px);
 }
 
+/* Controls row above the input — currently the Champions logo toggle, mirroring
+   the iOS composer's controlsRow so the active scope is always visible. */
+.composer__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding-inline: var(--space-1);
+}
+
 /* The unified "Pokédex console" field — leading icon · input · nested Send */
 .composer__field {
   display: flex;
@@ -2064,56 +2074,52 @@
   opacity: 0.85;
 }
 
-/* Champions toggle — switch state via [aria-checked] on the button */
+/* Champions toggle — the Pokémon Champions logo IS the control. On/off state
+   is driven off [aria-checked] on the button: full-color + a soft glow when on,
+   greyscale + dimmed when off. Lives in the composer toolbar (light surface). */
 .champions-toggle {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  height: var(--space-10);
-  padding-inline: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.16);
-  color: var(--neutral-0);
-  font: inherit;
-  font-size: var(--text-md);
-  font-weight: 600;
-  line-height: 1.2;
-  white-space: nowrap;
+  background: transparent;
   cursor: pointer;
-  transition: background var(--motion-fast);
+  transition:
+    background var(--motion-fast),
+    border-color var(--motion-fast);
+}
+.champions-toggle:hover:not(:disabled) {
+  background: var(--surface-sunken);
 }
 .champions-toggle[aria-checked="true"] {
-  background: rgba(255, 255, 255, 0.32);
+  border-color: color-mix(in srgb, var(--poke-red) 35%, transparent);
+  background: color-mix(in srgb, var(--poke-red) 8%, transparent);
 }
-.champions-toggle__track {
-  position: relative;
-  display: inline-block;
-  width: 34px;
-  height: var(--space-5);
-  flex-shrink: 0;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.3);
-  transition: background var(--motion-fast);
+.champions-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
-.champions-toggle[aria-checked="true"] .champions-toggle__track {
-  background: var(--neutral-0);
+.champions-toggle:focus-visible {
+  outline: 2px solid var(--poke-red);
+  outline-offset: 2px;
 }
-.champions-toggle__thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: var(--space-4);
-  height: var(--space-4);
-  border-radius: var(--radius-pill);
-  background: var(--neutral-0);
+.champions-toggle__logo {
+  display: block;
+  height: 30px;
+  width: auto;
+  /* Off = "not the active scope": drained of colour and dimmed. */
+  filter: grayscale(1);
+  opacity: 0.5;
   transition:
-    left var(--motion-fast),
-    background var(--motion-fast);
+    filter var(--motion-fast),
+    opacity var(--motion-fast);
 }
-.champions-toggle[aria-checked="true"] .champions-toggle__thumb {
-  left: var(--space-4);
-  background: var(--poke-red);
+.champions-toggle[aria-checked="true"] .champions-toggle__logo {
+  filter: none;
+  opacity: 1;
+  /* Subtle glow so "on" reads as lit-up, not just coloured. */
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--poke-red) 45%, transparent));
 }
 
 /* Auth header control — account email + the translucent sign-in/out pills */
@@ -3993,10 +3999,6 @@
     display: none;
   }
   /* Each control becomes a full-width menu row. */
-  .chat-page__controls .champions-toggle {
-    width: 100%;
-    justify-content: space-between;
-  }
   .chat-page__controls .active-team-selector {
     justify-content: space-between;
   }

@@ -2,25 +2,32 @@
 
 /**
  * ChampionsToggle — a controlled switch that scopes the chat to Pokémon
- * Champions.
+ * Champions. Lives in the composer's controls row (above the input), mirroring
+ * the iOS app's placement so the current scope is always visible — not buried
+ * behind a header gear.
  *
- * Modeled on `ThemeToggle` (lives in the header band, translucent-white look)
- * but STATELESS: the parent (`page.tsx`) owns the on/off boolean and its
- * localStorage persistence. This component only renders the switch and reports
+ * STATELESS: the parent (`page.tsx`) owns the on/off boolean and its
+ * localStorage persistence. This component only renders the control and reports
  * intent via `onChange(!checked)`.
  *
- * Styling lives in `globals.css` (`.champions-toggle*`) — the on/off look is
- * driven off the `aria-checked` attribute (no inline style branches), so it sits
- * cleanly beside the theme toggle in the header band.
+ * The control IS the Pokémon Champions logo (the logo already reads
+ * "Champions", so there's no separate text label). Styling lives in
+ * `globals.css` (`.champions-toggle*`) and is driven off the `aria-checked`
+ * attribute (no inline style branches): full-color when on, greyscale + dimmed
+ * when off. The accessible name is carried by `aria-label`, so screen readers
+ * still hear the on/off state even though the visible content is an image.
  */
 type ChampionsToggleProps = {
   checked: boolean;
   onChange: (next: boolean) => void;
+  /** Disabled while a turn is streaming (mirrors the iOS composer control). */
+  disabled?: boolean;
 };
 
 export default function ChampionsToggle({
   checked,
   onChange,
+  disabled = false,
 }: ChampionsToggleProps) {
   const label = checked
     ? "Champions mode on — answers are scoped to Pokémon Champions"
@@ -32,18 +39,23 @@ export default function ChampionsToggle({
       role="switch"
       className="champions-toggle"
       aria-checked={checked}
-      aria-pressed={checked}
       aria-label={label}
       title={label}
       data-testid="champions-toggle"
+      disabled={disabled}
       onClick={() => onChange(!checked)}
     >
-      <span>Champions</span>
-      {/* The switch track + sliding thumb (purely decorative; state is on the
-          button via role/aria-checked, which the CSS reads to drive the look). */}
-      <span aria-hidden="true" className="champions-toggle__track">
-        <span className="champions-toggle__thumb" />
-      </span>
+      {/* The Pokémon Champions logo. Currently a placeholder SVG — swap in the
+          official artwork by replacing web/public/champions-logo.svg (or drop a
+          champions-logo.png and update this src). */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        className="champions-toggle__logo"
+        src="/champions-logo.svg"
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+      />
     </button>
   );
 }

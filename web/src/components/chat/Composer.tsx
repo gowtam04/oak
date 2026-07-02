@@ -10,6 +10,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { ComposerProps, PendingImage } from "@/components/types";
+import ChampionsToggle from "@/components/controls/ChampionsToggle";
 import {
   filesToPendingImages,
   MAX_ATTACHMENTS,
@@ -37,6 +38,8 @@ export default function Composer({
   streaming = false,
   onStop,
   prefill = null,
+  championsMode,
+  onChampionsChange,
 }: ComposerProps) {
   const [value, setValue] = useState("");
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
@@ -175,6 +178,15 @@ export default function Composer({
 
   return (
     <form className="composer" data-testid="composer" onSubmit={handleSubmit}>
+      {championsMode !== undefined && onChampionsChange && (
+        <div className="composer__toolbar" data-testid="composer-toolbar">
+          <ChampionsToggle
+            checked={championsMode}
+            onChange={onChampionsChange}
+            disabled={disabled}
+          />
+        </div>
+      )}
       {pendingImages.length > 0 && (
         <div
           className="composer__attachments"
