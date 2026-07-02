@@ -15,6 +15,7 @@
 
 import { z } from "zod";
 
+import { FORMATS } from "@/data/formats";
 import {
   abilityDetailSchema,
   citationSchema,
@@ -29,8 +30,13 @@ import {
 // Scope + shared leaf shapes
 // ---------------------------------------------------------------------------
 
-/** Data scope, mirroring `Format` in `@/data/formats` (kept inline so this stays client-safe). */
-export const formatSchema = z.enum(["scarlet-violet", "champions"]);
+/**
+ * Data scope — the full `Format` set (all six scopes: scarlet-violet, champions,
+ * and gen-5…gen-8). Sourced from the `FORMATS` tuple in `@/data/formats` (a pure,
+ * client-safe module) so this stays the single source of truth and remains
+ * importable under jsdom. `z.infer<typeof formatSchema>` therefore equals `Format`.
+ */
+export const formatSchema = z.enum(FORMATS);
 
 /** A combined (or single-type) defensive profile — reused for the Pokémon grid. */
 export const defensiveProfileSchema = typeMatchupsDetailSchema.shape.defensive;

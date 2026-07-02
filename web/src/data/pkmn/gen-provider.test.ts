@@ -68,20 +68,26 @@ describe("slugFor — overrides map (currently empty) then slugify", () => {
 describe("loadFormat", () => {
   let standard: FormatSource;
   let champions: FormatSource;
+  let gen7: FormatSource;
   let standardIds: Set<string>;
   let championIds: Set<string>;
+  let gen7Ids: Set<string>;
 
   beforeAll(async () => {
     standard = await loadFormat("scarlet-violet");
     // Exercises the dynamic import of @pkmn/mods/champions + Dex.mod.
     champions = await loadFormat("champions");
+    // Exercises a mainline gen scope (generation-scope feature): Dex.forGen(7).
+    gen7 = await loadFormat("gen-7");
     standardIds = new Set(standard.roster.map((s) => s.id));
     championIds = new Set(champions.roster.map((s) => s.id));
+    gen7Ids = new Set(gen7.roster.map((s) => s.id));
   });
 
   describe("scarlet-violet (standard / Dex.forGen(9))", () => {
     it("stamps the format and resolves the whole national-dex roster", () => {
       expect(standard.format).toBe("scarlet-violet");
+      expect(standard.genNumber).toBe(9);
       // Real ≈1416; assert a floor so a @pkmn dex bump doesn't flake the test.
       expect(standard.roster.length).toBeGreaterThan(1000);
     });
@@ -118,6 +124,7 @@ describe("loadFormat", () => {
   describe("champions (Dex.mod + FormatsData legality gate)", () => {
     it("stamps the format and resolves a smaller, gated roster", () => {
       expect(champions.format).toBe("champions");
+      expect(champions.genNumber).toBe(9); // Champions rides the Gen 9 dex.
       // The FormatsData isNonstandard gate (~314), NOT species.all() (~1416).
       expect(champions.roster.length).toBeGreaterThan(200);
       expect(champions.roster.length).toBeLessThan(standard.roster.length);
@@ -143,6 +150,58 @@ describe("loadFormat", () => {
       expect(venuMega).toBeDefined();
       expect(venuMega?.baseSpecies).toBe("Venusaur");
       expect(venuMega?.forme).toBe("Mega");
+    });
+  });
+
+  describe("gen-7 (Dex.forGen(7)) — generation-scope mainline gen", () => {
+    // Probed against @pkmn 0.10.11 (recorded in gen-provider.ts's header):
+    //   roster 1027, no isNonstandard==="Future" species pass, 18 battle types
+    //   (Fairy exists from gen 6), raichualola learnset has 102 moves.
+    it("stamps the format + genNumber and resolves a plausible gen-7 roster", () => {
+      expect(gen7.format).toBe("gen-7");
+      expect(gen7.genNumber).toBe(7);
+      // Real ≈1027 (base + battle formes); floor guards against a dex bump flake.
+      expect(gen7.roster.length).toBeGreaterThan(800);
+    });
+
+    it("includes species that exist in gen 7 (incl. gen-1 'Past' natives and Megas)", () => {
+      for (const id of ["incineroar", "raichualola", "decidueye", "pikachu", "charizardmegax"]) {
+        expect(gen7Ids.has(id)).toBe(true);
+      }
+    });
+
+    it("EXCLUDES later-generation species (they surface as 'Future' and are dropped)", () => {
+      // Absent from the gen-7 roster…
+      for (const id of ["grookey", "sprigatito", "koraidon"]) {
+        expect(gen7Ids.has(id)).toBe(false);
+      }
+      // …because the gen-7 dex marks them isNonstandard === "Future", which
+      // isRealSpecies now filters out (documents the exclusion mechanism).
+      const grookey = gen7.dex.species.get("grookey");
+      expect(grookey.exists).toBe(true);
+      expect(grookey.isNonstandard).toBe("Future");
+    });
+
+    it("indexes NO isNonstandard === 'Future' species in the roster", () => {
+      expect(gen7.roster.some((s) => s.isNonstandard === "Future")).toBe(false);
+    });
+
+    it("builds the battle-type set from the gen-7 dex (≤18; Fairy present from gen 6)", () => {
+      expect(gen7.types.length).toBeGreaterThan(0);
+      expect(gen7.types.length).toBeLessThanOrEqual(18);
+      const typeNames = gen7.types.map((t) => t.name);
+      for (const t of ["Fire", "Water", "Fairy"]) {
+        expect(typeNames).toContain(t);
+      }
+      expect(typeNames).not.toContain("Stellar");
+    });
+
+    it("returns a non-empty, gen-7-scoped learnset (Alolan Raichu)", async () => {
+      const ls = await gen7.getLearnset("raichualola");
+      expect(Object.keys(ls).length).toBeGreaterThan(0);
+      // A move Alolan Raichu learns; sources carry a gen-7 method string.
+      expect(ls.thunderbolt).toBeDefined();
+      expect(ls.thunderbolt.some((src) => src.startsWith("7"))).toBe(true);
     });
   });
 

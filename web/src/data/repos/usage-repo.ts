@@ -31,6 +31,7 @@ import { randomUUID } from "node:crypto";
 
 import { db } from "@/data/db";
 import { auth_event, turn_record } from "@/data/schema";
+import type { AgentMode } from "@/agent/types";
 import type { ToolTraceEntry } from "@/server/logger";
 
 // ---------------------------------------------------------------------------
@@ -50,7 +51,7 @@ export interface TurnRecordInput {
   accountId: string | null; // null = guest
   model: string | null; // ModelKey; null for rate_limited (no model resolved)
   providerModel: string | null; // trace.model; null for rate_limited
-  mode: "standard" | "champions";
+  mode: AgentMode; // "standard" | "champions" | gen scopes (generation-scope feature)
   status:
     | "answered"
     | "clarification_needed"

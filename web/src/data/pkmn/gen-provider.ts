@@ -5,6 +5,7 @@
  * packages — no network, no throttle, no read-through cache):
  *   - standard (`scarlet-violet`) ← `Dex.forGen(9)`
  *   - champions                   ← `Dex.mod('champions', @pkmn/mods/champions)`
+ *   - gen scopes (`gen-5`…`gen-8`) ← `Dex.forGen(n)` (generation-scope feature)
  *
  * The ingest builders consume the `FormatSource` returned by {@link loadFormat}
  * and never import @pkmn directly, so every @pkmn-specific quirk lives here.
@@ -18,11 +19,18 @@
  *     species resolve via `modDex.species.get('venusaurmega')`.
  *   - Champions learnsets via `modDex.learnsets.get(id)` are genuinely scoped.
  *   - Move source strings encode gen+method at indexes 0/1 ('9M','9L42','9E'…).
+ *   - `Dex.forGen(7)` returns a gen-7-scoped view: its roster (real species,
+ *     >700) EXCLUDES gen 8/9 species — those surface with `isNonstandard ===
+ *     "Future"`, which `isRealSpecies` now drops (so e.g. Grookey is absent from
+ *     a gen-7 roster). `"Past"` species are KEPT (the BR-1 native/fallback flag).
+ *     `getLearnset('raichualola')` is non-empty in gen 7. Older gens can carry
+ *     fewer than 18 battle types (no Fairy before gen 6); the `BATTLE_TYPE_NAMES`
+ *     intersection handles a short type list without change.
  */
 
 import { Dex, type ModData, type ID } from "@pkmn/dex";
 
-import { type Format, CHAMPIONS_FORMAT } from "@/data/formats";
+import { type Format, CHAMPIONS_FORMAT, genNumberForFormat } from "@/data/formats";
 
 /** The @pkmn dex flavor we use (gen-scoped or modded — same shape). */
 export type PkmnDex = ReturnType<typeof Dex.forGen>;
@@ -39,6 +47,12 @@ export type PkmnNature = ReturnType<PkmnDex["natures"]["get"]>;
  */
 export interface FormatSource {
   format: Format;
+  /**
+   * The Dex generation number this source resolves to (Champions and
+   * `scarlet-violet` → 9; gen scopes → 5–8). Ingest builders use it to filter
+   * learnset move sources to this generation.
+   */
+  genNumber: number;
   /** The resolved (gen-scoped or modded) dex. */
   dex: PkmnDex;
   /**
@@ -121,16 +135,24 @@ function isRealSpecies(s: PkmnSpecies): boolean {
     typeof s.num === "number" &&
     s.num > 0 &&
     s.isNonstandard !== "CAP" &&
-    s.isNonstandard !== "Custom"
+    s.isNonstandard !== "Custom" &&
+    // In an older-gen dex (e.g. Dex.forGen(7)) species introduced in a LATER
+    // generation surface as `isNonstandard === "Future"`; they are not part of
+    // that gen's game and must not be indexed (unlike "Past" species, which we
+    // KEEP as native/fallback rows — BR-1). No-op for the Gen 9 dex.
+    s.isNonstandard !== "Future"
   );
 }
 
 /**
- * Standard (Gen 9) roster: the full national-dex view as @pkmn knows it in
- * Gen 9 — real species + battle formes, INCLUDING species not native to SV
- * (`isNonstandard === "Past"`), so standard mode keeps answering about the whole
- * dex with a native/fallback flag (BR-1), matching today's behavior. Native ⟺
- * `isNonstandard` is falsy; otherwise the species is a fallback from `gen-{n}`.
+ * Standard / mainline roster: the full national-dex view as @pkmn knows it in
+ * the resolved generation — real species + battle formes, INCLUDING species not
+ * native to the current game (`isNonstandard === "Past"`), so the scope keeps
+ * answering about the whole reachable dex with a native/fallback flag (BR-1),
+ * matching today's Gen 9 behavior. Native ⟺ `isNonstandard` is falsy; otherwise
+ * the species is a fallback from `gen-{n}`. For gen scopes 5–8 this is the
+ * `Dex.forGen(n)` view, whose later-generation species are dropped as "Future"
+ * by {@link isRealSpecies}.
  */
 function standardRoster(dex: PkmnDex): PkmnSpecies[] {
   return dex.species.all().filter(isRealSpecies);
@@ -167,14 +189,18 @@ function championsRoster(dex: PkmnDex, champData: ModData): PkmnSpecies[] {
 export async function loadFormat(format: Format): Promise<FormatSource> {
   let dex: PkmnDex;
   let roster: PkmnSpecies[];
+  let genNumber: number;
 
   if (format === CHAMPIONS_FORMAT) {
     const champData = (await import("@pkmn/mods/champions")) as unknown as ModData;
     dex = Dex.mod("champions" as ID, champData);
     roster = championsRoster(dex, champData);
+    genNumber = 9; // Champions rides the Gen 9 dex.
   } else {
-    dex = Dex.forGen(9);
+    const gen = genNumberForFormat(format); // 9 for "scarlet-violet", else 5–8
+    dex = Dex.forGen(gen);
     roster = standardRoster(dex);
+    genNumber = gen;
   }
 
   const types = dex.types.all().filter((t) => BATTLE_TYPE_NAMES.has(t.name));
@@ -187,6 +213,7 @@ export async function loadFormat(format: Format): Promise<FormatSource> {
 
   return {
     format,
+    genNumber,
     dex,
     roster,
     moves,
