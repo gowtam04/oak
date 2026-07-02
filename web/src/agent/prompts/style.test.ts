@@ -10,10 +10,8 @@
 import { describe, expect, it } from "vitest";
 
 import { buildSystemSegments } from "@/agent/prompts";
-import {
-  STANDARD_FEW_SHOT,
-  STANDARD_SYSTEM_PROMPT,
-} from "@/agent/prompts/domain";
+import { domainForMode } from "@/agent/prompts/domain";
+import { MAINLINE_GEN_INFO } from "@/agent/prompts/gen-info";
 import type { SystemSegment } from "@/agent/providers/types";
 
 function oneBreakpointOnLast(segments: SystemSegment[]): void {
@@ -29,18 +27,49 @@ describe("buildSystemSegments — cache breakpoint invariant", () => {
     it(`places exactly one breakpoint on the last segment (${provider})`, () => {
       oneBreakpointOnLast(buildSystemSegments({ provider, mode: "standard" }));
       oneBreakpointOnLast(buildSystemSegments({ provider, mode: "champions" }));
+      // A gen scope builds its own per-scope prefix — same breakpoint invariant.
+      oneBreakpointOnLast(buildSystemSegments({ provider, mode: "gen-7" }));
     });
   }
 });
 
 describe("Claude style — byte-identical to the domain body (no regression)", () => {
-  it("is exactly [systemPrompt, fewShot] for standard mode", () => {
-    const segs = buildSystemSegments({ provider: "anthropic", mode: "standard" });
-    expect(segs).toEqual([
-      { text: STANDARD_SYSTEM_PROMPT },
-      { text: STANDARD_FEW_SHOT, cacheBreakpoint: true },
-    ]);
-  });
+  // The standard consts became per-scope builders (`domainForMode`); the Claude
+  // path must still be exactly [systemPrompt, fewShot] for EACH scope it serves.
+  for (const mode of ["standard", "gen-7"] as const) {
+    it(`is exactly [systemPrompt, fewShot] for ${mode} mode`, () => {
+      const domain = domainForMode(mode);
+      const segs = buildSystemSegments({ provider: "anthropic", mode });
+      expect(segs).toEqual([
+        { text: domain.systemPrompt },
+        { text: domain.fewShot, cacheBreakpoint: true },
+      ]);
+    });
+  }
+});
+
+describe("Generation-scope facts — per-scope label/basis tag in the assembled body", () => {
+  // Both the Markdown (anthropic/openai) and Grok-XML (xai) assembled bodies must
+  // carry the RESOLVED scope's label + basis tag, and a gen-7 build must never
+  // leak "Generation 9" — the semantic tripwire the generation-scope feature adds.
+  for (const provider of ["anthropic", "openai", "xai"] as const) {
+    it(`carries the standard (Gen 9) label + basis tag (${provider})`, () => {
+      const text = buildSystemSegments({ provider, mode: "standard" })
+        .map((s) => s.text)
+        .join("\n");
+      expect(text).toContain(MAINLINE_GEN_INFO.standard.label);
+      expect(text).toContain(MAINLINE_GEN_INFO.standard.basisTag);
+    });
+
+    it(`carries the gen-7 label + basis tag and drops "Generation 9" (${provider})`, () => {
+      const text = buildSystemSegments({ provider, mode: "gen-7" })
+        .map((s) => s.text)
+        .join("\n");
+      expect(text).toContain(MAINLINE_GEN_INFO["gen-7"].label);
+      expect(text).toContain(MAINLINE_GEN_INFO["gen-7"].basisTag);
+      expect(text).not.toContain("Generation 9");
+    });
+  }
 });
 
 describe("GPT-5.5 style — tuned scaffolding", () => {

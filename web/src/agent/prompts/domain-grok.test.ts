@@ -12,11 +12,19 @@ import { describe, expect, it } from "vitest";
 import {
   GROK_CHAMPIONS_FEW_SHOT,
   GROK_CHAMPIONS_SYSTEM_PROMPT,
-  GROK_STANDARD_FEW_SHOT,
-  GROK_STANDARD_SYSTEM_PROMPT,
   grokDomainForMode,
 } from "@/agent/prompts/domain-grok";
+import { MAINLINE_GEN_INFO } from "@/agent/prompts/gen-info";
 import { CHAMPIONS_REGULATION } from "@/data/formats";
+
+// The standard Grok body became a per-scope BUILDER (`grokDomainForMode`); the
+// old `GROK_STANDARD_*` consts are gone. Derive the "standard" (Gen 9) pair from
+// the builder so the existing structure assertions still pin the default scope,
+// and hold a gen-7 build alongside to prove the per-gen templating.
+const grokStandard = grokDomainForMode("standard");
+const GROK_STANDARD_SYSTEM_PROMPT = grokStandard.systemPrompt;
+const GROK_STANDARD_FEW_SHOT = grokStandard.fewShot;
+const grokGen7 = grokDomainForMode("gen-7");
 
 const STANDARD_SECTIONS = [
   "role",
@@ -87,6 +95,29 @@ describe("Grok standard few-shot — <examples> block", () => {
   });
 });
 
+describe("Grok standard body — per-scope generation facts (gen-7)", () => {
+  it("keeps every XML section when built for a gen scope", () => {
+    for (const tag of STANDARD_SECTIONS) {
+      expect(grokGen7.systemPrompt).toContain(`<${tag}>`);
+      expect(grokGen7.systemPrompt).toContain(`</${tag}>`);
+    }
+  });
+
+  it("carries the gen-7 label + basis tag and drops 'Generation 9'", () => {
+    const text = grokGen7.systemPrompt + grokGen7.fewShot;
+    expect(text).toContain(MAINLINE_GEN_INFO["gen-7"].label);
+    expect(text).toContain(MAINLINE_GEN_INFO["gen-7"].basisTag);
+    // The gen-9-only label/mechanics text must not leak into a gen-7 build.
+    expect(text).not.toContain("Generation 9");
+  });
+
+  it("the standard (default) body carries the Gen 9 label + basis tag", () => {
+    const text = GROK_STANDARD_SYSTEM_PROMPT + GROK_STANDARD_FEW_SHOT;
+    expect(text).toContain(MAINLINE_GEN_INFO.standard.label);
+    expect(text).toContain(MAINLINE_GEN_INFO.standard.basisTag);
+  });
+});
+
 describe("Grok Champions body — XML-sectioned, Champions-correct", () => {
   it("adds the Champions scope + mechanics sections and the regulation string", () => {
     expect(GROK_CHAMPIONS_SYSTEM_PROMPT.startsWith("<role>")).toBe(true);
@@ -120,6 +151,13 @@ describe("grokDomainForMode — mode selection", () => {
       systemPrompt: GROK_STANDARD_SYSTEM_PROMPT,
       fewShot: GROK_STANDARD_FEW_SHOT,
     });
+  });
+
+  it("returns a distinct, gen-specific Grok pair for a gen scope", () => {
+    const g7 = grokDomainForMode("gen-7");
+    expect(g7.systemPrompt).toContain(MAINLINE_GEN_INFO["gen-7"].label);
+    // The gen scope is NOT just the standard body — the generation facts differ.
+    expect(g7.systemPrompt).not.toBe(GROK_STANDARD_SYSTEM_PROMPT);
   });
 
   it("returns the Champions Grok pair for champions mode", () => {
