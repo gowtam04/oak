@@ -494,3 +494,121 @@ with the Anthropic path.
 `.env.example`.
 
 **Depends on:** Nothing (builds on the existing provider abstraction).
+
+---
+
+## B-10 — Generations 1–4 support
+
+**Why:** The **generation-scope** feature (BUILT — see
+`docs/features/generation-scope/` and `docs/agent-design/generation-scope-addendum.md`)
+widened Oak's data scope from two formats to six: Gen 9 (`scarlet-violet`),
+`champions`, and mainline **Gens 5–8**. It deliberately stopped at Gen 5 (GS-D1)
+because Gens 1–4 predate the modern battle math the app reuses as-is: EVs/IVs +
+natures (natures arrive in Gen 3; the current Gen-5-era damage formula and
+`compute-stat`/`estimate-damage` assume them), the physical/special **type** split
+(Gen 1–3 split damage class by type, not per move), and no Fairy type. Answering a
+"gen 2" question from the Gen-5 formula would be silently wrong, so today the scope
+resolver **detects** Gens 1–4 and returns an honest "not supported yet" answer
+(`unsupported_generation_requested`) rather than mis-answering. This item closes
+that gap.
+
+**Scope:**
+- Ingest Gens 1–4 as new `format` row-sets (`Dex.forGen(1..4)`), including the
+  reduced type charts (no Dark/Steel pre-Gen 2, no Fairy pre-Gen 6) — the
+  gen-provider already intersects `BATTLE_TYPE_NAMES`, so verify it holds down to
+  Gen 1.
+- **Formula variants** in `src/agent/formulas/` behind the active gen: the Gen-1/2
+  stat formula (DVs/stat experience, no natures/EVs), the Gen-1 special stat, and
+  the older damage formula + the by-type physical/special split. Keep the modern
+  path intact for Gens 5–9; select per gen (the formulas are pure + test-guarded,
+  so add gen-keyed variants, don't fork the tool layer).
+- Per-gen prompt mechanics notes in `gen-info.ts` (no natures/abilities pre-Gen 3,
+  no held items pre-Gen 2, etc.) — parity across `domain.ts` + `domain-grok.ts`.
+- Extend the scope lexicon's currently-`unsupported` Gen 1–4 rules
+  (`src/lib/scope/detect-scope.ts`) to resolve to real `scope` targets, and widen
+  `Format`/`AgentMode`/`FORMATS` accordingly.
+
+**Open questions:**
+- How much formula divergence is worth modelling vs. flagging as an estimate? (The
+  generation-scope feature chose "reuse + flag" for Gens 5–8; Gens 1–4 genuinely
+  need code, not just a prompt note.)
+- DV↔IV and stat-experience↔EV translation in the team builder for old-gen teams.
+
+**Touches:** `src/data/formats.ts`, `src/agent/types.ts`,
+`src/data/pkmn/gen-provider.ts`, `src/agent/formulas/*`,
+`src/agent/prompts/gen-info.ts` (+ both domain bodies), `src/lib/scope/detect-scope.ts`,
+ingest builders.
+
+**Depends on:** Generation-scope feature (BUILT) — this extends it.
+
+---
+
+## B-11 — LLM classifier fallback for ambiguous scope signals
+
+**Why:** Per-turn scope is resolved by a **deterministic lexicon** with **no LLM
+pre-pass** (`src/lib/scope/detect-scope.ts`, GS-D3) — a conscious "precision over
+recall" choice: it fires only on high-precision signals and otherwise falls back to
+the conversation's sticky scope. That means genuinely ambiguous phrasings ("the old
+games", "back in the DS era", an unpaired "sun") never switch scope. Every fired
+signal already logs a structured `oak_scope_signal` line (matched phrase, from→to)
+for exactly this tuning. If those logs show the lexicon missing real intent, a
+narrow LLM classifier could be a **fallback** — run only when the lexicon returns
+`null` — to catch fuzzy scope mentions the regexes can't.
+
+**Scope:**
+- A cheap, bounded classifier (small prompt, constrained output = one `Format` or
+  "no signal") invoked **only** on lexicon miss, so the common path stays
+  deterministic and free.
+- Keep the invariant: scope is still **server-resolved and never an LLM-visible
+  tool input** — the classifier runs server-side on the raw message, before the
+  agent loop, and its output feeds the same precedence chain (signal > sticky >
+  seed).
+- Guardrails so a low-confidence classification never silently overrides an
+  explicit toggle/sticky scope; surface it via the same `scope` SSE event + chip.
+
+**Open questions:**
+- Is the added latency/cost of a per-turn pre-pass worth it, or should it be gated
+  to turns whose message contains a weak scope hint?
+- Which model runs it (a fast/cheap tier vs. the active agent model)?
+
+**Touches:** `src/lib/scope/*` (a new optional classifier seam),
+`src/app/api/chat/route.ts` (invoke on lexicon miss), providers/models config.
+
+**Depends on:** Generation-scope feature (BUILT); **gated on the `scope_signal`
+telemetry** — only pursue if the lexicon's precision proves insufficient in
+practice.
+
+---
+
+## B-12 — Per-generation encounter (catch-location) filtering
+
+**Why:** Encounter/catch-location data is inherently cross-game (Gen 1 →
+Sword/Shield + Let's Go) and is stored under the **`scarlet-violet` format only**;
+in any mainline scope `get_encounters` reads `STANDARD_FORMAT` and returns the full
+grouped set (GS-D4). So a **Gen 7** turn asking "where do I catch X?" gets catch
+data grouped by *every* covered game, not just Gen-7 (Sun/Moon/USUM) locations.
+That's correct-but-noisy: the answer includes version groups from other
+generations. A nicety would filter/emphasize the encounter groups that match the
+active scope.
+
+**Scope:**
+- Filter (or sort/annotate) the `get_encounters` grouped result to the active
+  format's generation — e.g. a `gen-7` turn foregrounds Sun/Moon/USUM version
+  groups and de-emphasizes (or drops) the rest, without changing the stored data or
+  the Champions gate.
+- Decide filter-vs-annotate: hard-filtering risks an empty result for a species
+  whose only catch data is off-gen; annotating ("this location is from Gen 8")
+  keeps the answer honest.
+- No new tool and no scope-widening input — the generation is already derivable
+  server-side from `ctx.mode` (`genNumberForFormat`), so the filter stays inside
+  the tool, invisible to the model's argument surface.
+
+**Open questions:**
+- Filter vs. annotate (see above) — and what to do when the active gen has no
+  encounter coverage (Gen 9 / Champions already have none).
+- Is this worth it before Gens 1–4 (B-10) broaden the mismatch?
+
+**Touches:** `src/agent/tools/get-encounters.ts`, encounter repo/reference read
+path, the encounters answer/prompt guidance.
+
+**Depends on:** Generation-scope feature (BUILT).
