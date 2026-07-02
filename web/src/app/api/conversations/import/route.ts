@@ -15,7 +15,7 @@
 
 import { json, jsonError, readJsonObject } from "@/app/api/auth/_lib/http";
 import { oakAnswerSchema } from "@/agent/schemas";
-import { formatForMode } from "@/data/formats";
+import { formatForMode, isFormat, type Format } from "@/data/formats";
 import type { ChatTurn } from "@/components/types";
 import { currentAccount, conversationRepo } from "../_lib/route-helpers";
 
@@ -82,8 +82,14 @@ export async function POST(req: Request): Promise<Response> {
     return json(200, { id: null });
   }
 
-  const championsMode = body.champions_mode === true;
-  const format = formatForMode(championsMode ? "champions" : "standard");
+  // GS-C import-flow: prefer the RESOLVED scope the client sends (a guest thread
+  // that switched to gen-7 via an in-message signal must import as gen-7), and
+  // fall back to the `champions_mode` toggle seed for back-compat when `format`
+  // is absent or not a known format.
+  const format: Format =
+    typeof body.format === "string" && isFormat(body.format)
+      ? body.format
+      : formatForMode(body.champions_mode === true ? "champions" : "standard");
 
   const repo = await conversationRepo();
   const id = await repo.importConversation({

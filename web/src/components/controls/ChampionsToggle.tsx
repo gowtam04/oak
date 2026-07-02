@@ -1,10 +1,16 @@
 "use client";
 
 /**
- * ChampionsToggle — a controlled switch that scopes the chat to Pokémon
- * Champions. Lives in the composer's controls row (above the input), mirroring
- * the iOS app's placement so the current scope is always visible — not buried
- * behind a header gear.
+ * ChampionsToggle — a controlled switch that SEEDS new chats into Pokémon
+ * Champions scope. Lives in the composer's controls row (above the input),
+ * mirroring the iOS app's placement so the current scope is always visible —
+ * not buried behind a header gear.
+ *
+ * With the generation-scope feature (GS-D3) the toggle is a *seed* for a new
+ * conversation, not a per-turn lock: the resolved scope can still switch on an
+ * explicit in-message signal, and a resumed conversation keeps its own sticky
+ * scope regardless of this control. The header `ScopeChip` shows what actually
+ * resolved. (The parent hides this toggle once the first message is sent.)
  *
  * STATELESS: the parent (`page.tsx`) owns the on/off boolean and its
  * localStorage persistence. This component only renders the control and reports
@@ -30,8 +36,8 @@ export default function ChampionsToggle({
   disabled = false,
 }: ChampionsToggleProps) {
   const label = checked
-    ? "Champions mode on — answers are scoped to Pokémon Champions"
-    : "Champions mode off — answers use Generation 9";
+    ? "Champions scope on — new chats start in Pokémon Champions"
+    : "Champions scope off — new chats start in Generation 9";
 
   return (
     <button

@@ -10,12 +10,14 @@ import AuthMenu from "@/components/auth/AuthMenu";
 import AuthDialog from "@/components/auth/AuthDialog";
 import ConversationList from "@/components/history/ConversationList";
 import SidebarToggle from "@/components/controls/SidebarToggle";
+import ScopeChip from "@/components/controls/ScopeChip";
 import SavedTeamAutoOpen from "@/components/teams/SavedTeamAutoOpen";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useConversations } from "@/lib/hooks/use-conversations";
 import { getConversation, importConversation } from "@/lib/api/history-client";
+import type { Format } from "@/data/formats";
 import type {
   ChatStatus,
   ChatTurn,
@@ -67,6 +69,7 @@ export default function Home() {
   );
   const {
     status,
+    scope,
     activities,
     answer,
     streamingMarkdown,
@@ -83,6 +86,17 @@ export default function Home() {
   // `status === "thinking"` spans the whole in-flight window, including an
   // automatic reconnect (status stays "thinking" throughout).
   useScreenWakeLock(status === "thinking");
+
+  // Server-resolved scope for the conversation (GS-C). The hook's `scope` is the
+  // per-turn `scope` SSE frame — `null` on a fresh send and until that frame
+  // lands — so mirror it into page-level state that STICKS between turns (and is
+  // seeded from a saved conversation's stored format in `handleOpenConversation`
+  // below). This drives the header scope chip + the artifact viewer's data scope,
+  // so a server override of the toggle (e.g. a "gen 7" message) is made visible.
+  const [resolvedScope, setResolvedScope] = useState<Format | null>(null);
+  useEffect(() => {
+    if (scope) setResolvedScope(scope.format);
+  }, [scope]);
 
   // Track the active request so Stop can decide between a quick-stop reset and a
   // plain stop, and restore the stopped message into the composer.
@@ -202,12 +216,21 @@ export default function Home() {
       // account (idempotent import), then surface it in the now-enabled history
       // list. An empty thread imports nothing (AC-12.2 — repo returns null).
       if (me.signedIn && turns.length > 0) {
-        void importConversation(sessionId, championsMode, turns).then(() =>
-          refreshConversations(),
-        );
+        // Import the guest thread under its RESOLVED scope (GS-C): a thread that
+        // switched to e.g. gen-7 via an in-message signal must import as gen-7,
+        // not as whatever the Champions toggle currently reads. Fall back to the
+        // toggle-derived seed when no turn has resolved a scope yet.
+        const importFormat: Format =
+          resolvedScope ?? (championsMode ? "champions" : "scarlet-violet");
+        void importConversation(
+          sessionId,
+          championsMode,
+          turns,
+          importFormat,
+        ).then(() => refreshConversations());
       }
     });
-  }, [sessionId, championsMode, turns, refreshConversations]);
+  }, [sessionId, championsMode, turns, refreshConversations, resolvedScope]);
 
   // Sign-out completed (current device only — AC-5.2). Revert to the guest tier
   // WITHOUT resetting `sessionId` or clearing `turns[]`: the thread persists
@@ -303,6 +326,9 @@ export default function Home() {
         setTurns(detail.turns);
         setImagePreviews({}); // session-only thumbnails don't survive a reload
         setChampionsModePersisted(detail.format === "champions");
+        // Follow the conversation's stored scope so the chip + artifact scope
+        // reflect it immediately, before the first resumed turn re-emits `scope`.
+        setResolvedScope(detail.format as Format);
       });
     },
     [reset, setChampionsModePersisted],
@@ -347,11 +373,14 @@ export default function Home() {
   const chatStatus: ChatStatus =
     status === "thinking" ? "streaming" : status === "error" ? "error" : "idle";
 
-  // Artifact viewer (B-4). The viewer's data scope mirrors the current Champions
-  // toggle (snapshotted onto each artifact at open, BR-AV-7). "Ask about this in
-  // chat" pre-fills the composer (TD-7) by reusing the existing prefill channel —
-  // a fresh object so the same text can be re-applied on its next use.
-  const artifactFormat = championsMode ? "champions" : "scarlet-violet";
+  // The scope in effect for the conversation: the server-resolved scope once a
+  // turn has run (GS-C), else the Champions-toggle seed. Drives BOTH the header
+  // scope chip and the artifact viewer (B-4) — the viewer snapshots this onto
+  // each artifact at open (BR-AV-7). "Ask about this in chat" pre-fills the
+  // composer (TD-7) via the existing prefill channel — a fresh object so the same
+  // text can be re-applied on its next use.
+  const artifactFormat: Format =
+    resolvedScope ?? (championsMode ? "champions" : "scarlet-violet");
   const handleAskInChat = useCallback((text: string) => {
     setPrefill({ text });
   }, []);
@@ -425,6 +454,11 @@ export default function Home() {
           </button>
         </div>
         <div className="chat-page__header-cluster" ref={headerClusterRef}>
+          {/* Server-resolved scope for the current turn (GS-C). Rendered OUTSIDE
+              the collapsible controls so it stays visible on mobile — a scope the
+              server inferred (e.g. a "gen 7" message overriding the toggle) must
+              be surfaced, not hidden behind the gear. */}
+          <ScopeChip format={artifactFormat} />
           {/* Collapsible group: inline on desktop, a popover under the gear on
               mobile (≤640px). The popover panel re-uses the red-band background
               in CSS so the translucent-white pills keep their contrast. */}

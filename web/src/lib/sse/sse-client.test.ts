@@ -16,8 +16,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { parseFrame, readSseStream } from "@/lib/sse/sse-client";
-import type { SseEvent } from "@/lib/sse/sse-types";
+import {
+  parseFrame,
+  readSseStream,
+  type UseSseClientReturn,
+} from "@/lib/sse/sse-client";
+import type { ScopeEvent, SseEvent } from "@/lib/sse/sse-types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,6 +70,14 @@ describe("parseFrame", () => {
       event: "tool_activity",
       data: { tool: "query_pokedex", label: "querying…" },
     });
+  });
+
+  it("parses a scope frame (the new GS-C event)", () => {
+    // Without the `case "scope"` in parseFrame, this frame would be silently
+    // dropped as an unknown event and never reach the hook / scope chip.
+    const data: ScopeEvent = { format: "gen-7", source: "message" };
+    const raw = `event: scope\ndata: ${JSON.stringify(data)}`;
+    expect(parseFrame(raw)).toEqual({ event: "scope", data });
   });
 
   it("parses an answer frame", () => {
@@ -206,6 +218,33 @@ describe("readSseStream", () => {
     expect(events[0]).toEqual({ event: "tool_activity", data: act1 });
     expect(events[1]).toEqual({ event: "tool_activity", data: act2 });
     expect(events[2]).toEqual({ event: "answer", data: { answer } });
+  });
+
+  it("yields the scope event first, ahead of tool activity and the answer", async () => {
+    // The route emits `scope` as the FIRST frame of the turn. The stream layer
+    // must surface it in order so the hook can drive the scope chip immediately.
+    const scope: ScopeEvent = { format: "gen-7", source: "message" };
+    const act = { tool: "query_pokedex", label: "querying…" };
+    const answer = {
+      status: "answered",
+      answer_markdown: "Use these gen 7 mons",
+      reasoning_markdown: "scoped to Sun/Moon",
+      citations: [],
+      inferences: [],
+      generation_basis: { generation: "gen-7", fallback: false },
+    };
+    const stream = makeStream(
+      frame("scope", scope),
+      frame("tool_activity", act),
+      frame("answer", { answer }),
+    );
+    const events = await collect(stream);
+    expect(events.map((e) => e.event)).toEqual([
+      "scope",
+      "tool_activity",
+      "answer",
+    ]);
+    expect(events[0]).toEqual({ event: "scope", data: scope });
   });
 
   it("handles all frames arriving in a single chunk", async () => {
@@ -389,5 +428,27 @@ describe("readSseStream", () => {
     // The wire layer needs no changes — the question field survives untouched.
     const data = (events[0] as Extract<SseEvent, { event: "answer" }>).data;
     expect(data.answer.question).toEqual(answer.question);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useSseClient — hook contract (type-level; runtime behaviour lives in the
+// jsdom component tests, which can render the hook)
+// ---------------------------------------------------------------------------
+
+describe("useSseClient contract", () => {
+  it("exposes the resolved scope on the hook return", () => {
+    // Compile-time guard: this only type-checks if `scope: ScopeEvent | null`
+    // is part of the hook's return (via SseClientState). The `send`/loop wiring
+    // that populates it is exercised by the jsdom component tests; here we just
+    // pin the shape the scope chip depends on.
+    const cleared: Pick<UseSseClientReturn, "scope"> = { scope: null };
+    expect(cleared.scope).toBeNull();
+
+    const resolved: UseSseClientReturn["scope"] = {
+      format: "gen-7",
+      source: "message",
+    };
+    expect(resolved).toEqual({ format: "gen-7", source: "message" });
   });
 });
