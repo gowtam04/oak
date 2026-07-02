@@ -546,7 +546,7 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
   });
 
   afterEach(() => {
-    for (const id of ["s-guest", "s-signed", "s-cap", "s-thread", "s-champ"]) {
+    for (const id of ["s-guest", "s-signed", "s-cap", "s-thread", "s-champ", "s-fresh"]) {
       clearSession(id);
     }
   });
@@ -744,8 +744,15 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
     expect(keys).toEqual(["ip:5.5.5.5", "acct:acct-42"]);
   });
 
-  it("leaves Champions mode untouched — champions_mode still flows to the agent context (BR-A11)", async () => {
+  // GS-D3 (amends BR-A11): the Champions toggle is a SEED for a NEW guest session,
+  // not a per-turn lock. Once a guest session resolves to Champions it is STICKY —
+  // a later turn that omits the toggle (and carries no explicit in-message game
+  // signal) stays in Champions. A brand-new session with the toggle off falls back
+  // to the standard seed. (Leaving Champions mid-session requires an explicit signal
+  // or a new session; see docs/features/generation-scope GS-D3.)
+  it("Champions toggle SEEDS a guest session and the resolved scope is sticky (GS-D3, amends BR-A11)", async () => {
     mockGetCurrentAccount.mockResolvedValue(null);
+    // Turn 1: toggle ON seeds the fresh session → champions.
     const champ = await post({
       session_id: "s-champ",
       message: "hi",
@@ -756,11 +763,20 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
       expect.objectContaining({ sessionId: "s-champ", mode: "champions" }),
     );
 
+    // Turn 2: same session, toggle omitted, no in-message signal → STAYS champions (sticky).
     mockCreateAgentContext.mockClear();
-    const std = await post({ session_id: "s-champ", message: "hi again" });
-    await drain(std);
+    const again = await post({ session_id: "s-champ", message: "hi again" });
+    await drain(again);
     expect(mockCreateAgentContext).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: "standard" }),
+      expect.objectContaining({ sessionId: "s-champ", mode: "champions" }),
+    );
+
+    // A brand-new session with the toggle off falls back to the standard seed.
+    mockCreateAgentContext.mockClear();
+    const fresh = await post({ session_id: "s-fresh", message: "hello" });
+    await drain(fresh);
+    expect(mockCreateAgentContext).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "s-fresh", mode: "standard" }),
     );
   });
 });

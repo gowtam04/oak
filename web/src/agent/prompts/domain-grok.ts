@@ -398,11 +398,11 @@ User: find me a Pokémon that can learn both Trick Room and Will-O-Wisp
 ← { total_count: 6, truncated: false, results: [ { display_name: "Dusknoir", ... }, { display_name: "Chandelure", ... }, ... ] }
 → submit_answer({
     status: "answered",
-    answer_markdown: "**6 Pokémon** can learn both Trick Room and Will-O-Wisp in ${info.label}. Standouts: **Dusknoir** (Ghost) as a bulky Trick Room setter, and **Chandelure** (Fire/Ghost) for offense. The full list with stats is below.",
+    answer_markdown: "**6 Pokémon** can learn both Trick Room and Will-O-Wisp in ${info.label}. Standouts: **Dusknoir** (Ghost) as a bulky Trick Room setter, and **Chandelure** (Ghost/Fire) for offense. The full list with stats is below.",
     reasoning_markdown: "I intersected the ${info.label} learnsets for both moves — only Pokémon that can learn BOTH appear. A straightforward set intersection, no inference.",
     candidates: { total_count: 6, truncated: false, sort: null, shown: [
       { name: "Dusknoir", dex_number: 477, sprite_url: "...", types: ["ghost"], base_stats: { hp: 45, attack: 100, defense: 135, special_attack: 65, special_defense: 135, speed: 45 } },
-      { name: "Chandelure", dex_number: 609, sprite_url: "...", types: ["fire","ghost"], base_stats: { hp: 60, attack: 55, defense: 90, special_attack: 145, special_defense: 90, speed: 80 } }
+      { name: "Chandelure", dex_number: 609, sprite_url: "...", types: ["ghost","fire"], base_stats: { hp: 60, attack: 55, defense: 90, special_attack: 145, special_defense: 90, speed: 80 } }
       /* …the remaining rows, each with all six base_stats copied from query_pokedex… */
     ] },
     citations: [
