@@ -5,7 +5,7 @@
  * The route is a THIN adapter, so these tests pin the HTTP contract: each
  * `auth-service.requestCode` discriminant maps to the right status / error code
  * / headers, the success body is the non-enumerating `{ ok: true }`, and the
- * client IP is derived from the first X-Forwarded-For hop. The service itself is
+ * client IP is derived from the trusted (rightmost) X-Forwarded-For hop. The service itself is
  * mocked (its own branch behavior is covered in auth-service.test.ts), so no DB
  * or transport is needed here. Every negative branch asserts the discriminant
  * (status + `code`) explicitly — not happy-path only.
@@ -48,8 +48,9 @@ describe("POST /api/auth/request-code", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    // IP keyed from the FIRST forwarded hop, passed to the throttle (BR-A6).
-    expect(svc.requestCode).toHaveBeenCalledWith("ash@pallet.town", "1.2.3.4");
+    // IP keyed from the TRUSTED (rightmost, proxy-appended) hop — not the
+    // client-supplied leftmost `1.2.3.4` (finding S1) — passed to the throttle (BR-A6).
+    expect(svc.requestCode).toHaveBeenCalledWith("ash@pallet.town", "9.9.9.9");
   });
 
   it("maps invalid_email → 400 invalid_email (AC-2.1)", async () => {

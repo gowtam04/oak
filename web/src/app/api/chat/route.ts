@@ -55,6 +55,7 @@ import {
   SIGNED_IN_CONFIG,
 } from "@/server/rate-limit";
 import { validateImages } from "@/server/image-upload";
+import { clientIp } from "@/server/client-ip";
 import {
   appendTurn,
   getHistory,
@@ -109,28 +110,9 @@ function jsonError(
   });
 }
 
-// ---------------------------------------------------------------------------
-// Guest IP derivation (account-creation design.md § API Design)
-// ---------------------------------------------------------------------------
-
-/**
- * Derive the guest rate-limit identity from the request.  Per the design's
- * documented trust assumption (a single reverse proxy in front of the app on the
- * hobby deploy), the client IP is the FIRST hop of `X-Forwarded-For`, falling
- * back to `X-Real-IP`, then to a constant when neither header is present (the
- * Web `Request` exposes no socket address). The constant simply means all such
- * header-less guests share one bucket — acceptable abuse-bounding at this tier.
- */
-function clientIp(req: Request): string {
-  const forwardedFor = req.headers.get("x-forwarded-for");
-  if (forwardedFor) {
-    const firstHop = forwardedFor.split(",")[0]?.trim();
-    if (firstHop) return firstHop;
-  }
-  const realIp = req.headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
-  return "unknown";
-}
+// The guest rate-limit identity (`ip:<clientIp(req)>`) is derived by the shared
+// `@/server/client-ip` helper — Fly-Client-IP first, then the trusted-proxy XFF
+// hop — so a forged `X-Forwarded-For` can no longer defeat the cap (finding S1).
 
 // ---------------------------------------------------------------------------
 // Body validation

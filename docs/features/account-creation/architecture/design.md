@@ -202,9 +202,14 @@ path (BR-A1). The session cookie is `oak_session`: httpOnly, `SameSite=Lax`,
   sign-in (BR-A10, AUTH-US-6). Agent context, tools, Champions mode: untouched
   (BR-A11). Input-length cap unchanged (2000).
 
-`clientIp` is derived from `X-Forwarded-For` (first hop) falling back to the
-socket address; documented trust assumption: a single reverse proxy in front of
-the app on the hobby deploy.
+`clientIp` (shared helper `src/server/client-ip.ts`) is derived from a source the
+client cannot forge: `Fly-Client-IP` (the Fly edge's authoritative, unspoofable
+client address) first, then the **trusted-proxy** `X-Forwarded-For` hop — the
+rightmost hop the proxy appended, under the documented single-reverse-proxy
+assumption (`TRUSTED_PROXY_HOPS = 1`) — then `X-Real-IP`, else `"unknown"`. The
+leftmost XFF hop is client-supplied and deliberately ignored (assessment finding
+S1: trusting it let a forged `X-Forwarded-For` defeat the rate limit). This value
+keys abuse-bounding throttles only — never authorization.
 
 ## File Structure
 

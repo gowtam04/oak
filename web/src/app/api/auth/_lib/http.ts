@@ -50,21 +50,13 @@ export function retryAfterHeader(retryAfterMs: number): Record<string, string> {
 }
 
 /**
- * Derive the client IP used as the OTP-throttle key (design.md § API Design):
- * the first hop of `X-Forwarded-For` under the documented single-reverse-proxy
- * trust model, then `X-Real-IP`, else `"unknown"`. This value keys an
+ * The client IP that keys the OTP request/verify throttles. Shared with the chat
+ * rate limit via `@/server/client-ip`: it trusts `Fly-Client-IP` first, then the
+ * proxy-appended (rightmost) `X-Forwarded-For` hop — NOT the spoofable leftmost
+ * hop (finding S1) — then `X-Real-IP`, else `"unknown"`. This value keys an
  * abuse-bounding throttle ONLY — it is never trusted for authorization.
  */
-export function clientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const first = xff.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  const real = req.headers.get("x-real-ip")?.trim();
-  if (real) return real;
-  return "unknown";
-}
+export { clientIp } from "@/server/client-ip";
 
 /**
  * Read + shape-check a JSON request body. Returns the parsed object, or `null`

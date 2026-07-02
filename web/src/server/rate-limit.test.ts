@@ -493,7 +493,7 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
     }
   });
 
-  it("keys a guest by ip:<first X-Forwarded-For hop> with GUEST_CONFIG (AC-1.1, AC-1.3, BR-A8)", async () => {
+  it("keys a guest by ip:<trusted (rightmost) X-Forwarded-For hop> with GUEST_CONFIG (AC-1.1, AC-1.3, BR-A8; S1)", async () => {
     mockGetCurrentAccount.mockResolvedValue(null);
     const res = await post(
       { session_id: "s-guest", message: "hi" },
@@ -505,11 +505,27 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
     const calls = vi.mocked(checkRateLimit).mock.calls;
     expect(calls).toHaveLength(1);
     const [key, msg, config] = calls[0]!;
-    expect(key).toBe("ip:203.0.113.7"); // FIRST hop only, not the whole chain
+    // The RIGHTMOST hop (appended by the trusted proxy) — the leftmost hops are
+    // client-supplied and must be ignored, else a forged XFF defeats the cap (S1).
+    expect(key).toBe("ip:150.172.238.178");
     expect(msg).toBe("hi");
     expect(config).toBe(GUEST_CONFIG);
     // Identity != conversation: the rate-limit key is NEVER the session_id.
     expect(key).not.toBe("s-guest");
+  });
+
+  it("keys a guest by ip:<Fly-Client-IP>, ignoring a spoofed X-Forwarded-For (S1)", async () => {
+    mockGetCurrentAccount.mockResolvedValue(null);
+    const res = await post(
+      { session_id: "s-guest", message: "hi" },
+      // Attacker forges the whole XFF chain; Fly's edge-set header wins.
+      { "Fly-Client-IP": "10.0.0.1", "X-Forwarded-For": "6.6.6.6, 7.7.7.7" },
+    );
+    expect(res.status).toBe(200);
+    await drain(res);
+    const [key, , config] = vi.mocked(checkRateLimit).mock.calls[0]!;
+    expect(key).toBe("ip:10.0.0.1");
+    expect(config).toBe(GUEST_CONFIG);
   });
 
   it("keys a signed-in user by acct:<id> with SIGNED_IN_CONFIG, ignoring the IP (AC-7.1, BR-A8)", async () => {
