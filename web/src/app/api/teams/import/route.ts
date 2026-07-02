@@ -14,7 +14,9 @@
  * write/read. We CLAMP those into the schema range here so the import is a safe
  * **200** (never a 500); `validateTeam` then owns the competitive cap warnings
  * (>252 per stat / total >508 / IV outside 0..31). `importPaste` itself emits no
- * cap warnings.
+ * cap warnings. `level` (1..100) is clamped the same way — an out-of-range paste
+ * value must not fail the schema and wipe the whole import (U1); `importPaste`
+ * surfaces that clamp as an ImportNote.
  *
  * Guests → **401**.
  */
@@ -43,6 +45,17 @@ function clampStat(v: number): number {
 }
 
 /**
+ * Clamp `level` into the schema-legal range (1..100) so an out-of-range paste
+ * value (e.g. `Level: 150` / `Level: 0`) can't fail `teamMembersSchema` and nuke
+ * the whole import. `importPaste` already surfaces the clamp as an ImportNote;
+ * non-finite falls back to the Showdown default (100).
+ */
+function clampLevel(v: number): number {
+  if (!Number.isFinite(v)) return 100;
+  return Math.max(1, Math.min(100, Math.trunc(v)));
+}
+
+/**
  * Bring a member's EV/IV spreads into the schema range so the team can be
  * persisted/round-tripped. `@pkmn` may hand back out-of-range values; we never
  * reject the import for them (validateTeam flags the competitive caps).
@@ -56,7 +69,12 @@ function clampMember(m: TeamMember): TeamMember {
     spd: clampStat(s.spd),
     spe: clampStat(s.spe),
   });
-  return { ...m, evs: clampSpread(m.evs), ivs: clampSpread(m.ivs) };
+  return {
+    ...m,
+    evs: clampSpread(m.evs),
+    ivs: clampSpread(m.ivs),
+    level: clampLevel(m.level),
+  };
 }
 
 export async function POST(req: Request): Promise<Response> {

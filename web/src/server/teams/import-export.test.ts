@@ -140,6 +140,23 @@ Ability: Rough Skin
     expect(notes).toEqual([]); // import itself emits no warning — that's validate-team's job
   });
 
+  it("notes an out-of-range level but still imports the member (U1)", async () => {
+    const { members, notes } = await importPaste(
+      `Garchomp\nLevel: 150\nAbility: Rough Skin\n- Earthquake`,
+      SV,
+      db,
+    );
+    // The member still imports (species resolved, moves kept) — the whole team
+    // is NOT wiped by the bad level.
+    expect(members).toHaveLength(1);
+    expect(members[0].species).toBe("garchomp");
+    expect(members[0].moves).toEqual(["earthquake"]);
+    // The out-of-range level is surfaced as a note (clamped at the route).
+    const levelNotes = notes.filter((n) => n.kind === "level");
+    expect(levelNotes).toHaveLength(1);
+    expect(levelNotes[0]).toMatchObject({ slot: 0, raw: "150" });
+  });
+
   it("imports multiple members and indexes notes by slot", async () => {
     const paste = `Garchomp\nAbility: Rough Skin\n- Earthquake\n\nNotamon\nAbility: Rough Skin\n- Earthquake`;
     const { members, notes } = await importPaste(paste, SV, db);
