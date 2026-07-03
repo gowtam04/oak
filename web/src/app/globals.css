@@ -1847,66 +1847,199 @@
 /* --------------------------------------------------------------------------
    16. Progress / loading — the Poké Ball spinner
    -------------------------------------------------------------------------- */
+/* Streaming "field notes" trail (fable-ui-strategy §4 screen 03): the agent's
+   tool-loop rendered as a cascading stack of instrument chips + an answer
+   skeleton, collapsing to a summary chip once prose streams. */
 .chat-thread__progress {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2) 0;
-  color: var(--text-muted);
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
 }
-/* Trail of completed sub-tasks (dim history), indented to align with the active
-   line's label (past the spinner). */
-.chat-thread__progress-list {
+.chat-thread__trail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.chat-thread__notes {
   margin: 0;
-  padding: 0 0 0 calc(22px + var(--space-3));
+  padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
-.chat-thread__progress-item {
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  color: var(--text-faint);
-}
-/* The active sub-task line: spinner + emphasized 1-line description + elapsed. */
-.chat-thread__progress-current {
+/* One field-note chip: status glyph · mono tool token · human-readable subject.
+   Each enters with the shared turn-in cascade on mount (the live trail's chips
+   arrive seconds apart, so their real timing IS the stagger). */
+.chat-thread__note {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  align-items: baseline;
+  gap: var(--space-2);
   margin: 0;
   font-size: 0.8125rem;
-  font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.4;
+  color: var(--text-muted);
+  animation: turn-in var(--motion-base) both;
+}
+.chat-thread__note--done {
+  color: var(--text-faint);
+}
+.chat-thread__note--active {
   color: var(--text-strong);
 }
-.chat-thread__progress-current::before {
-  content: "";
+.chat-thread__note-tool {
   flex: none;
-  width: 22px;
-  height: 22px;
+}
+.chat-thread__note-desc {
+  min-width: 0;
+}
+.chat-thread__note--active .chat-thread__note-desc {
+  font-weight: 600;
+}
+/* Status glyph — pokeball micro-spinner while in flight, a tick once done. */
+.chat-thread__note-glyph {
+  flex: none;
+  align-self: center;
+  width: 15px;
+  height: 15px;
+}
+.chat-thread__note-glyph[data-state="active"] {
   border-radius: 50%;
   border: 1.5px solid var(--text-strong);
   background:
     radial-gradient(
         circle at center,
-        var(--neutral-0) 0 3.5px,
-        var(--text-strong) 3.5px 5px,
-        transparent 5px
+        var(--neutral-0) 0 2.4px,
+        var(--text-strong) 2.4px 3.4px,
+        transparent 3.4px
       ),
-    linear-gradient(var(--text-strong) 0 0) center / 100% 2px no-repeat,
+    linear-gradient(var(--text-strong) 0 0) center / 100% 1.5px no-repeat,
     linear-gradient(180deg, var(--poke-red) 0 50%, var(--neutral-0) 50% 100%);
   animation: pokeball-spin 0.9s linear infinite;
+}
+.chat-thread__note-glyph[data-state="done"] {
+  background: var(--success);
+  -webkit-mask: var(--icon-check) center / 13px 13px no-repeat;
+  mask: var(--icon-check) center / 13px 13px no-repeat;
+  --icon-check: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5 13l4 4L19 7'/></svg>");
 }
 @keyframes pokeball-spin {
   to {
     transform: rotate(360deg);
   }
 }
-.chat-thread__progress-elapsed {
-  font-weight: 500;
+.chat-thread__elapsed {
+  font-size: 0.75rem;
   color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
+  padding-left: calc(15px + var(--space-2));
+}
+
+/* Batch reveal (expanding the collapsed summary shows every note at once): here
+   the 60ms stagger is a real simultaneous cascade, so apply it via nth-child. */
+.chat-thread__notes--batch .chat-thread__note:nth-child(2) {
+  animation-delay: 60ms;
+}
+.chat-thread__notes--batch .chat-thread__note:nth-child(3) {
+  animation-delay: 120ms;
+}
+.chat-thread__notes--batch .chat-thread__note:nth-child(4) {
+  animation-delay: 180ms;
+}
+.chat-thread__notes--batch .chat-thread__note:nth-child(5) {
+  animation-delay: 240ms;
+}
+.chat-thread__notes--batch .chat-thread__note:nth-child(6) {
+  animation-delay: 300ms;
+}
+.chat-thread__notes--batch .chat-thread__note:nth-child(7) {
+  animation-delay: 360ms;
+}
+.chat-thread__notes--batch .chat-thread__note:nth-child(n + 8) {
+  animation-delay: 420ms;
+}
+
+/* Collapsed summary chip pinned above the streaming answer. */
+.chat-thread__summary {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  cursor: pointer;
+  animation: turn-in var(--motion-base) both;
+  transition: background var(--motion-fast), border-color var(--motion-fast);
+}
+.chat-thread__summary:hover {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+.chat-thread__summary:focus-visible {
+  outline: 2px solid var(--azure);
+  outline-offset: 2px;
+}
+.chat-thread__summary-sep {
+  color: var(--text-faint);
+}
+.chat-thread__summary-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.chat-thread__summary-caret {
+  width: 0;
+  height: 0;
+  margin-left: var(--space-1);
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text-faint);
+  transition: transform var(--motion-fast);
+}
+.chat-thread__summary-caret[data-open="true"] {
+  transform: rotate(180deg);
+}
+.chat-thread__trail--collapsed .chat-thread__notes {
+  margin-top: var(--space-2);
+}
+
+/* Answer skeleton — masthead bar + prose lines with a soft opacity pulse; holds
+   the layout so the streamed answer replaces it in place with no jump. */
+.chat-thread__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+.chat-thread__skeleton-masthead,
+.chat-thread__skeleton-line {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
+}
+.chat-thread__skeleton-masthead {
+  height: 1.6rem;
+  width: 62%;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-md);
+}
+.chat-thread__skeleton-line {
+  height: 0.85rem;
+}
+.chat-thread__skeleton-line--short {
+  width: 45%;
+}
+@keyframes chat-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
 }
 
 /* Transport error — distinct from in-domain answer statuses */
@@ -2048,8 +2181,20 @@
   .composer__send:disabled {
     transform: none;
   }
-  .chat-thread__progress-current::before {
-    animation: none;
+  /* Streaming trail: keep the pokeball spinner turning (it signals liveness),
+     but drop the note cascade, the summary chip's entrance, and the skeleton
+     pulse — motion for feedback stays, decorative motion goes. */
+  .chat-thread__note,
+  .chat-thread__summary {
+    animation: none !important;
+  }
+  .chat-thread__skeleton-masthead,
+  .chat-thread__skeleton-line {
+    animation: none !important;
+    opacity: 0.7;
+  }
+  .chat-thread__summary-caret {
+    transition: none;
   }
   .chat-page__sidebar {
     transition: none;

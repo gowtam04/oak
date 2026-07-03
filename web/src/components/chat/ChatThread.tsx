@@ -2,33 +2,75 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ChatThreadProps } from "@/components/types";
+import type { ToolActivityEvent } from "@/lib/sse/sse-types";
 import AnswerCard from "@/components/answer-card/AnswerCard";
 import Markdown from "@/components/Markdown";
 import { STARTER_PROMPTS, pickRandomPrompts } from "@/lib/example-prompts";
 import { CHAMPIONS_REGULATION } from "@/data/formats";
 
 /**
- * Heuristic: has the streaming answer begun laying out a markdown table? A table
- * row/header/separator is the only prose that starts a line with a pipe, so one
- * such line means the agent is mid-table — which we surface as a distinct label
- * (the blinking-caret-only case the user flagged as ambiguous).
+ * The tool_activity label carries a leading status emoji (🔍/📊/…) as its own
+ * decoration. A field-note chip renders its own spinner/tick glyph instead, so we
+ * strip the leading pictographic run (emoji + optional variation selector / ZWJ
+ * sequence) and let the mono tool token carry the "which tool" signal. Falls back
+ * to the raw label if stripping would empty it.
  */
-function isBuildingTable(markdown: string): boolean {
-  return /^\s*\|/m.test(markdown);
+const EMOJI_PREFIX = /^[\p{Extended_Pictographic}️‍]+\s*/u;
+function noteDescription(label: string): string {
+  return label.replace(EMOJI_PREFIX, "").trimStart() || label;
+}
+
+/**
+ * One "field note" chip in the streaming trail: the mono instrument token derived
+ * from the tool name (`GET_POKEMON`) beside the human-readable subject, with a
+ * pokeball micro-spinner while in flight (the latest, unfinished call) or a tick
+ * once the loop has moved on. Presentation only — data comes straight from the
+ * `tool_activity` SSE payload the client already accumulates.
+ */
+function FieldNote({
+  activity,
+  state,
+}: {
+  activity: ToolActivityEvent;
+  state: "active" | "done";
+}) {
+  return (
+    <li
+      className={`chat-thread__note chat-thread__note--${state}`}
+      data-testid="field-note"
+    >
+      <span
+        className="chat-thread__note-glyph"
+        data-state={state}
+        aria-hidden="true"
+      />
+      <span className="ilabel chat-thread__note-tool">
+        {activity.tool.toUpperCase()}
+      </span>
+      <span className="chat-thread__note-desc">
+        {noteDescription(activity.label)}
+      </span>
+    </li>
+  );
 }
 
 /**
  * ChatThread — renders the committed conversation (user + assistant turns) in
- * order, plus:
- *   - an in-flight progress indicator while `status === "streaming"`: a single
- *     emphasized "current sub-task" line (the latest `activity` label, or a
- *     "composing the answer / building a table" label once prose starts
- *     streaming, or a generic "thinking" line before the first tool_activity
- *     event lands) with a live elapsed-seconds counter, above which completed
- *     sub-tasks linger as a dim history trail, and
+ * order, plus the streaming "field notes" experience while `status ===
+ * "streaming"` (fable-ui-strategy §4 screen 03):
+ *   - a vertical trail of instrument chips, one per accumulated `tool_activity`
+ *     event (mono tool token + subject); the latest carries the pokeball micro-
+ *     spinner, completed ones a tick. Before the first tool it's a single
+ *     "thinking" chip; a live elapsed-seconds counter sits below, in mono.
+ *   - an answer-card skeleton (masthead bar + prose lines, soft pulse) shown the
+ *     instant a turn starts, holding the layout so real content doesn't jump in.
+ *   - once prose begins streaming (`answer_start`), the trail collapses to one
+ *     compact summary chip ("6 lookups · 12s") pinned above the streaming card,
+ *     re-expandable to the full trail — continuity, not deletion.
  *   - a transport-fault affordance when `status === "error"` and
  *     `transportError` is set (in-domain failures arrive as normal answer cards,
- *     never here — sse-client.ts / integration.md).
+ *     never here — sse-client.ts / integration.md); it replaces the skeleton in
+ *     place, no layout jump.
  *
  * Each assistant turn is rendered through `AnswerCard`, with `onFollowUp`
  * threaded down so suggestion-chip / candidate-row clicks POST a follow-up turn
@@ -123,21 +165,24 @@ export default function ChatThread({
     return () => clearInterval(id);
   }, [status, reconnecting]);
 
-  // The in-flight progress trail (completed sub-tasks) and the single active
-  // sub-task line. Once the answer starts streaming the active line becomes a
-  // "composing" label; before the first tool it's a generic "thinking" line.
-  const trail = activity.slice(0, -1);
-  const lastActivity = activity[activity.length - 1];
-  const isThinking = !reconnecting && !streamingMarkdown && !lastActivity;
-  const currentLabel = reconnecting
-    ? "🔄 Reconnecting…"
-    : streamingMarkdown
-      ? isBuildingTable(streamingMarkdown)
-        ? "📋 Building the results table…"
-        : "✍️ Writing the answer…"
-      : lastActivity
-        ? lastActivity.label
-        : "Thinking through your question…";
+  // Once prose streams, the trail collapses to a summary chip; the user can
+  // re-expand it to re-show every field note. Reset the toggle whenever the turn
+  // ends so the next turn starts collapsed.
+  const [trailExpanded, setTrailExpanded] = useState(false);
+  useEffect(() => {
+    if (status !== "streaming") setTrailExpanded(false);
+  }, [status]);
+
+  // The field-notes trail: while working (no prose yet) it's shown in full with
+  // the latest chip live-spinning; once prose streams it collapses. Before the
+  // first tool lands there are no activities — a lone "thinking" chip stands in.
+  const hasActivity = activity.length > 0;
+  const lastIndex = activity.length - 1;
+  const collapsed = Boolean(streamingMarkdown);
+  const lookupCount = activity.length;
+  const thinkingLabel = reconnecting
+    ? "Reconnecting…"
+    : "Thinking through your question…";
 
   return (
     <div className="chat-thread" data-testid="chat-thread">
@@ -213,43 +258,112 @@ export default function ChatThread({
 
       {status === "streaming" && (
         <div className="chat-thread__progress" data-testid="progress">
-          {trail.length > 0 && (
-            <ol className="chat-thread__progress-list" aria-hidden="true">
-              {trail.map((a, i) => (
-                <li
-                  key={i}
-                  className="chat-thread__progress-item"
-                  data-testid={`progress-item-${i}`}
+          {collapsed ? (
+            // Prose is streaming — the trail folds into one summary chip pinned
+            // above the answer, re-expandable to the full field-notes trail.
+            hasActivity && (
+              <div className="chat-thread__trail chat-thread__trail--collapsed">
+                <button
+                  type="button"
+                  className="chat-thread__summary"
+                  data-testid="trail-summary"
+                  aria-expanded={trailExpanded}
+                  onClick={() => setTrailExpanded((v) => !v)}
                 >
-                  {a.label}
-                </li>
-              ))}
-            </ol>
+                  <span
+                    className="chat-thread__note-glyph"
+                    data-state="done"
+                    aria-hidden="true"
+                  />
+                  <span className="ilabel chat-thread__summary-count">
+                    {lookupCount} {lookupCount === 1 ? "lookup" : "lookups"}
+                  </span>
+                  <span className="chat-thread__summary-sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="mono-num chat-thread__summary-time">
+                    {elapsedSeconds}s
+                  </span>
+                  <span
+                    className="chat-thread__summary-caret"
+                    data-open={trailExpanded}
+                    aria-hidden="true"
+                  />
+                </button>
+                {trailExpanded && (
+                  <ol
+                    className="chat-thread__notes chat-thread__notes--batch"
+                    data-testid="trail-full"
+                  >
+                    {activity.map((a, i) => (
+                      <FieldNote key={i} activity={a} state="done" />
+                    ))}
+                  </ol>
+                )}
+              </div>
+            )
+          ) : (
+            // Still working — the live trail. Latest chip spins; the rest tick.
+            <div className="chat-thread__trail">
+              {hasActivity ? (
+                <ol
+                  className="chat-thread__notes"
+                  data-testid="trail-full"
+                  aria-live="polite"
+                >
+                  {activity.map((a, i) => (
+                    <FieldNote
+                      key={i}
+                      activity={a}
+                      state={
+                        !reconnecting && i === lastIndex ? "active" : "done"
+                      }
+                    />
+                  ))}
+                </ol>
+              ) : (
+                <p
+                  className="chat-thread__note chat-thread__note--active chat-thread__note--thinking"
+                  data-testid="progress-thinking"
+                  aria-live="polite"
+                >
+                  <span
+                    className="chat-thread__note-glyph"
+                    data-state="active"
+                    aria-hidden="true"
+                  />
+                  <span className="chat-thread__note-desc">
+                    {thinkingLabel}
+                  </span>
+                </p>
+              )}
+              {elapsedSeconds >= 3 && (
+                <span
+                  className="chat-thread__elapsed mono-num"
+                  data-testid="progress-elapsed"
+                  aria-hidden="true"
+                >
+                  {elapsedSeconds}s
+                </span>
+              )}
+            </div>
           )}
-          <p
-            className="chat-thread__progress-current"
-            data-testid={
-              reconnecting
-                ? "progress-reconnecting"
-                : isThinking
-                  ? "progress-thinking"
-                  : "progress-current"
-            }
-            aria-live="polite"
-          >
-            <span className="chat-thread__progress-current-label">
-              {currentLabel}
-            </span>
-            {elapsedSeconds >= 3 && (
-              <span
-                className="chat-thread__progress-elapsed"
-                data-testid="progress-elapsed"
-                aria-hidden="true"
-              >
-                ({elapsedSeconds}s)
-              </span>
-            )}
-          </p>
+        </div>
+      )}
+
+      {/* Answer skeleton — shown the instant a turn starts (before prose), so the
+          shape of what's coming holds the layout and the streamed answer (or the
+          error strip) replaces it in place with no jump. */}
+      {status === "streaming" && !streamingMarkdown && (
+        <div
+          className="chat-turn chat-turn--assistant chat-thread__skeleton"
+          data-testid="answer-skeleton"
+          aria-hidden="true"
+        >
+          <div className="chat-thread__skeleton-masthead" />
+          <div className="chat-thread__skeleton-line" />
+          <div className="chat-thread__skeleton-line" />
+          <div className="chat-thread__skeleton-line chat-thread__skeleton-line--short" />
         </div>
       )}
 
