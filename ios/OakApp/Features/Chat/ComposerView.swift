@@ -3,17 +3,16 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-/// The chat composer (chat-experience.md M-CHAT-US-1/5/6): a growing text field, a
-/// send button, the Champions-mode toggle, and (P8) image attach — the photo library
-/// (`PhotosPicker`) or the camera (``CameraPicker``) behind one attach menu — with
-/// thumbnail/remove UI and permission handling.
+/// The chat composer (chat-experience.md M-CHAT-US-1/5): a growing text field, a
+/// send button, and (P8) image attach — the photo library (`PhotosPicker`) or the
+/// camera (``CameraPicker``) behind one attach menu — with thumbnail/remove UI and
+/// permission handling. Scope is no longer set here: the header scope chip
+/// (`ChatView`) is the sole scope control (the Champions pill was removed).
 ///
 /// It reads and writes the feature's ``ChatViewModel`` directly (a sibling view in
 /// the same feature). All chat/turn logic lives in the view model; this view is
 /// layout + bindings plus the local picker presentation state. Dynamic-Type styles
-/// and semantic colors adapt to text size and light/dark, and the mode toggle pairs
-/// its state with a text label so the current scope is obvious at a glance
-/// (M-AC-6.3) without relying on color alone.
+/// and semantic colors adapt to text size and light/dark.
 struct ComposerView: View {
   let model: ChatViewModel
 
@@ -134,54 +133,15 @@ struct ComposerView: View {
     remainingSlots > 0 && !model.isStreaming
   }
 
-  // MARK: Controls row — mode toggle + image attach
+  // MARK: Controls row — image attach
 
   @ViewBuilder
   private func controlsRow(model: ChatViewModel) -> some View {
     HStack(spacing: 12) {
-      championsPill(model: model)
-
       Spacer(minLength: 0)
 
       attachControls(model: model)
     }
-  }
-
-  /// The Champions-mode toggle rendered as a compact capsule pill (M-AC-6.1): inactive
-  /// is a neutral bordered chip, active fills sunflower-18% with a sunflower label and
-  /// border. State is paired with the crown icon + "Champions" text so the current
-  /// scope never rides on color alone (M-AC-UI9.3 / M-AC-6.3). Semantics/labels are
-  /// unchanged from the prior toggle; the selected trait is added for VoiceOver.
-  @ViewBuilder
-  private func championsPill(model: ChatViewModel) -> some View {
-    let active = model.championsMode
-    Button {
-      model.setChampionsMode(!active)
-    } label: {
-      HStack(spacing: 4) {
-        Image(systemName: "crown")
-          .symbolEffect(.bounce, value: reduceMotion ? false : active)
-        Text("Champions")
-      }
-      .font(Theme.body(.footnote).weight(.medium))
-      .foregroundStyle(active ? Theme.sunflower : Theme.textSecondary)
-      .padding(.horizontal, 12)
-      .padding(.vertical, 6)
-      .background(active ? Theme.sunflower.opacity(0.18) : .clear, in: Capsule())
-      .overlay {
-        Capsule().strokeBorder(
-          active ? Theme.sunflower.opacity(0.5) : Theme.separator,
-          lineWidth: 1
-        )
-      }
-      .contentShape(Capsule())
-    }
-    .buttonStyle(OakPressableButtonStyle())
-    .disabled(model.isStreaming)
-    .animation(reduceMotion ? nil : Theme.Motion.snappy, value: active)
-    .accessibilityLabel("Champions mode")
-    .accessibilityValue(active ? "On" : "Off")
-    .accessibilityAddTraits(active ? .isSelected : [])
   }
 
   // MARK: Image attach control (one menu → photo library / camera)

@@ -4,9 +4,9 @@ import Observation
 /// Root session/app state, injected through the SwiftUI environment.
 ///
 /// Holds the cross-cutting state that outlives any single screen: the current
-/// auth state, the active conversation id, the in-memory guest thread, and the
-/// Champions-mode default for new conversations. `@MainActor` because everything
-/// here drives UI; `@Observable` so views update on change.
+/// auth state, the active conversation id, the in-memory guest thread, and that
+/// thread's resolved data scope (for the sign-in import). `@MainActor` because
+/// everything here drives UI; `@Observable` so views update on change.
 ///
 /// P1 ships this as a real stub; later phases extend it (P5 wires auth
 /// transitions + the guest→sign-in handoff via `HistoryService.importGuestThread`;
@@ -26,9 +26,11 @@ final class AppState {
   /// here with a lightweight turn model; P6 populates it as the chat streams.
   var guestThread: [GuestTurn] = []
 
-  /// The Champions-mode default applied to new conversations (M-CHAT-US-3). The
-  /// per-request value is server-controlled; this is just the composer's default.
-  var championsMode: Bool = true
+  /// The guest thread's resolved data scope (GS-C), mirrored from the chat
+  /// reducer's `scope` events so the guest→sign-in import can persist the thread
+  /// under the scope it actually ran in. Defaults to champions (the server
+  /// default) until a turn resolves otherwise; reset with the guest thread.
+  var guestThreadScope: Format = .champions
 
   init() {}
 }
@@ -130,7 +132,7 @@ extension AppState {
     do {
       let id = try await history.importGuestThread(
         sessionId: sessionId,
-        championsMode: championsMode,
+        format: guestThreadScope,
         turns: turns
       )
       if let id {

@@ -10,7 +10,7 @@ import Testing
 ///     `answer_start` resets the buffer but keeps tool history, the terminal answer
 ///     finalizes, an `error` event becomes a banner;
 ///   * the end-to-end `send` path over the real fixtures parsed by the production
-///     `SSEParser`, plus the request-shape checks (Champions flag) and the in-domain
+///     `SSEParser`, plus the request-shape checks (`scope_seed`) and the in-domain
 ///     non-`answered` rendering.
 ///
 /// The view model is `@MainActor`, so the suite is too.
@@ -258,48 +258,103 @@ struct ChatViewModelTests {
     }
   }
 
-  // MARK: Champions toggle flows into the request
+  // MARK: Scope chip → scope_seed on the request (GS-C)
 
   @Test
-  func championsToggleIsSentOnTheRequest() async throws {
+  func displayFormatDefaultsToChampionsWithNoSeedOrResolvedScope() {
+    let vm = makeViewModel(fake: FakeChatService())
+    // seed ?? resolved ?? champions — a fresh thread has neither.
+    #expect(vm.displayFormat == .champions)
+    #expect(vm.scopeSeed == nil)
+    #expect(vm.resolvedScope == nil)
+  }
+
+  @Test
+  func selectScopeSeedsDisplayFormatAndRidesTheNextRequest() async throws {
+    let fake = FakeChatService()
+    fake.scriptedEvents = []  // no `scope` event, so the seed is NOT cleared
+    let vm = makeViewModel(fake: fake)
+
+    vm.selectScope(.gen7)
+    #expect(vm.displayFormat == .gen7)        // a pending pick outranks resolved/default
+
+    vm.composerText = "in this scope, what changed?"
+    vm.send()
+    await vm.streamTask?.value
+
+    #expect(fake.lastScopeSeed == .gen7)      // the pick rode the request as scope_seed
+  }
+
+  @Test
+  func noSeedSendsNilScopeSeed() async throws {
     let fake = FakeChatService()
     fake.scriptedEvents = try events(fromSSE: "chat_answered_full.sse")
     let vm = makeViewModel(fake: fake)
 
-    vm.setChampionsMode(true)
-    vm.composerText = "champions scope question"
+    vm.composerText = "no explicit scope"
     vm.send()
     await vm.streamTask?.value
 
-    #expect(fake.lastChampionsMode == true)
+    #expect(fake.lastScopeSeed == nil)        // absent scope_seed ⇒ server precedence resolves
   }
 
   @Test
-  func standardModeSendsChampionsFalse() async throws {
+  func scopeEventAdoptsResolvedScopeAndClearsThePendingSeed() {
+    let vm = makeViewModel(fake: FakeChatService())
+    vm.selectScope(.gen7)
+    #expect(vm.displayFormat == .gen7)
+
+    // A resolved `scope` event lands (e.g. the server honored an in-message signal
+    // for a DIFFERENT scope): adopt it, retire the seed, and reflect it in display.
+    vm.apply(.scope(format: .gen5, source: .message))
+
+    #expect(vm.resolvedScope == .gen5)
+    #expect(vm.resolvedScopeSource == .message)
+    #expect(vm.scopeSeed == nil)              // seed cleared once a turn resolved
+    #expect(vm.displayFormat == .gen5)        // now shows the resolved scope
+  }
+
+  @Test
+  func seedRidesOnlyOneTurnThenClearsOnScopeEvent() async throws {
+    // A `scope` event in the stream clears the seed mid-turn, so it does NOT leak
+    // onto the following send (mirrors web's `scope` effect clearing `scopeSeed`).
     let fake = FakeChatService()
-    fake.scriptedEvents = try events(fromSSE: "chat_answered_full.sse")
-    let appState = AppState()
-    appState.championsMode = false
-    let vm = makeViewModel(fake: fake, appState: appState)
+    fake.scriptedEvents = [
+      .scope(format: .champions, source: .seed),
+      .answer(try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")),
+    ]
+    let vm = makeViewModel(fake: fake)
 
-    vm.composerText = "standard scope question"
+    vm.selectScope(.champions)
+    vm.composerText = "first"
     vm.send()
     await vm.streamTask?.value
+    #expect(fake.lastScopeSeed == .champions) // rode the FIRST turn
 
-    #expect(fake.lastChampionsMode == false)
+    vm.composerText = "second"
+    vm.send()
+    await vm.streamTask?.value
+    #expect(fake.lastScopeSeed == nil)        // NOT re-sent on the next turn
   }
 
   @Test
-  func championsModeSeedsFromAppStateDefaultAndPersistsBack() {
-    let appState = AppState()
-    appState.championsMode = true
+  func scopeEventMirrorsResolvedScopeToGuestThread() {
+    let appState = AppState()               // defaults to .guest
     let vm = makeViewModel(fake: FakeChatService(), appState: appState)
 
-    #expect(vm.championsMode == true)         // seeded from the app-wide default
+    vm.apply(.scope(format: .gen8, source: .conversation))
 
-    vm.setChampionsMode(false)
-    #expect(vm.championsMode == false)
-    #expect(appState.championsMode == false)  // written back as the new default
+    // The resolved scope is mirrored so the guest→sign-in import uploads under it.
+    #expect(appState.guestThreadScope == .gen8)
+  }
+
+  @Test
+  func selectScopeIsIgnoredMidStream() {
+    let vm = makeViewModel(fake: FakeChatService())
+    vm.composerText = "q"
+    vm.send()                                 // isStreaming → true
+    vm.selectScope(.gen6)
+    #expect(vm.scopeSeed == nil)              // ignored while a turn streams
   }
 
   // MARK: Composer + conversation lifecycle
@@ -385,10 +440,15 @@ struct ChatViewModelTests {
       .user(id: "u1", content: "Tell me about Garchomp"),
       .assistant(id: "a1", answer: answer),
     ]
-    vm.loadResumed(conversationId: "conv-42", turns: turns)
+    vm.loadResumed(conversationId: "conv-42", format: .gen7, turns: turns)
 
     // The session id becomes the resumed conversation id.
     #expect(vm.sessionId == "conv-42")
+
+    // The stored scope seeds the display immediately (before the first turn re-emits).
+    #expect(vm.resolvedScope == .gen7)
+    #expect(vm.displayFormat == .gen7)
+    #expect(vm.scopeSeed == nil)
 
     // Turns map one-to-one, preserving order and count: a `.user` turn → a user item
     // with no images, an `.assistant` turn → the rendered answer.

@@ -5,9 +5,9 @@ import UIKit
 /// The chat thread's view model — the **SSE reducer** at the heart of the chat
 /// experience (chat-experience.md M-CHAT-US-1/2/3/4; component-design.md "Streaming
 /// reducer"). It holds the visible turns, the in-progress streaming state
-/// (tool-activity items + a streamed-text buffer), and the composer state (text +
-/// images + Champions mode), and folds the `SSEEvent` stream into UI
-/// state one event at a time.
+/// (tool-activity items + a streamed-text buffer), the composer state (text +
+/// images), and the turn's game scope (the server-resolved scope + a pending chip
+/// pick), and folds the `SSEEvent` stream into UI state one event at a time.
 ///
 /// `@MainActor @Observable` — all state mutates on the main actor and views observe
 /// it directly. It depends on the ``ChatService`` **protocol** (never
@@ -62,9 +62,29 @@ final class ChatViewModel {
   /// the reducer for the user bubble and the image-only send rule (M-AC-5.4).
   private(set) var pendingImages: [UIImage] = []
 
-  /// The composer's Champions-mode toggle (M-CHAT-US-6). Seeded from the app-wide
-  /// default; flipping it also updates the default for new conversations.
-  private(set) var championsMode: Bool
+  // MARK: Scope state (generation-scope GS-C)
+
+  /// The scope the server resolved for the latest turn (the `scope` SSE event's
+  /// `format`). `nil` on a fresh thread and until the first `scope` frame lands.
+  /// Mirrors web's `resolvedScope` (`web/src/app/page.tsx`).
+  private(set) var resolvedScope: Format?
+
+  /// How the latest turn's scope was resolved (informational; the chip displays
+  /// `displayFormat`, not this). `nil` until the first `scope` frame lands.
+  private(set) var resolvedScopeSource: ScopeSource?
+
+  /// An explicit scope pick from the header chip, sent as `scope_seed` on the NEXT
+  /// turn only and cleared once ANY `scope` event lands — by then the server has a
+  /// sticky scope that outranks a stale seed (`scope_seed` > sticky). Mirrors web's
+  /// `scopeSeed` (`web/src/app/page.tsx`).
+  private(set) var scopeSeed: Format?
+
+  /// The scope the header chip displays and the artifact viewer scopes to: a
+  /// pending chip pick, else the server-resolved scope, else the champions default
+  /// — identical to web's `displayFormat = scopeSeed ?? resolvedScope ?? "champions"`.
+  var displayFormat: Format {
+    scopeSeed ?? resolvedScope ?? .champions
+  }
 
   // MARK: Dependencies + identity
 
@@ -87,7 +107,6 @@ final class ChatViewModel {
     self.chat = chat
     self.appState = appState
     self.sessionId = appState.activeConversationId ?? UUID().uuidString
-    self.championsMode = appState.championsMode
   }
 
   // MARK: Derived state
@@ -126,10 +145,12 @@ final class ChatViewModel {
 
     composerText = ""
     pendingImages = []
+    // The pending chip pick (if any) rides THIS turn as `scope_seed`; a `scope`
+    // event will clear `scopeSeed` mid-turn so it doesn't leak onto the next turn.
     let request = PendingRequest(
       message: text,
       images: images,
-      championsMode: championsMode
+      scopeSeed: scopeSeed
     )
     lastRequest = request
     beginStreaming(request)
@@ -142,12 +163,14 @@ final class ChatViewModel {
     beginStreaming(request)
   }
 
-  /// Sets the Champions-mode toggle and persists it as the default for future
-  /// conversations (M-CHAT-US-6). Ignored mid-stream so a turn's scope is stable.
-  func setChampionsMode(_ on: Bool) {
+  /// Records an explicit scope pick from the header chip (GS-C). It seeds the NEXT
+  /// turn as `scope_seed` and immediately updates `displayFormat` (a pending seed
+  /// outranks the resolved scope), so the chip reflects the pick before the turn
+  /// runs. Ignored mid-stream so a turn's scope is stable — the chip is disabled
+  /// then in the UI. Mirrors web's `setScopeSeed` (`web/src/app/page.tsx`).
+  func selectScope(_ format: Format) {
     guard !isStreaming else { return }
-    championsMode = on
-    appState.championsMode = on
+    scopeSeed = format
   }
 
   /// Stages images for the next turn, capped at ``maxAttachedImages`` (the backend's
@@ -185,9 +208,15 @@ final class ChatViewModel {
     pendingImages = []
     lastRequest = nil
     sessionId = UUID().uuidString
+    // A fresh thread has no resolved scope yet — the chip falls back to the
+    // champions default until a turn resolves one (web `handleNewChat`).
+    resolvedScope = nil
+    resolvedScopeSource = nil
+    scopeSeed = nil
     appState.activeConversationId = nil
     if case .guest = appState.authState {
       appState.guestThread = []
+      appState.guestThreadScope = .champions
     }
   }
 
@@ -196,7 +225,11 @@ final class ChatViewModel {
   /// through the normal answer-card tree and follow-ups continue the saved thread
   /// under the same `session_id`. The mapped user turns carry no image count (the
   /// rehydrated wire turn keeps only its text, not the original attachments).
-  func loadResumed(conversationId: String, turns: [ChatTurn]) {
+  ///
+  /// `format` is the conversation's stored scope: it seeds `resolvedScope` so the
+  /// header chip + artifact viewer reflect the saved scope immediately, before the
+  /// first resumed turn re-emits a `scope` event (web `handleOpenConversation`).
+  func loadResumed(conversationId: String, format: Format, turns: [ChatTurn]) {
     cancelStreaming()
     sessionId = conversationId
     self.turns = turns.map { turn in
@@ -207,6 +240,9 @@ final class ChatViewModel {
         return ChatTurnItem(content: .assistant(answer))
       }
     }
+    resolvedScope = format
+    resolvedScopeSource = nil
+    scopeSeed = nil
     streamingText = ""
     toolActivities = []
     errorBanner = nil
@@ -227,6 +263,15 @@ final class ChatViewModel {
   /// `send` path.
   func apply(_ event: SSEEvent) {
     switch event {
+    case let .scope(format, source):
+      // The server resolved this turn's scope. Adopt it and retire any pending
+      // chip pick — the conversation's scope is now sticky server-side and
+      // outranks a stale seed on the following turn (web clears `scopeSeed` here).
+      resolvedScope = format
+      resolvedScopeSource = source
+      scopeSeed = nil
+      mirrorGuestScope(format)
+
     case let .toolActivity(tool, label):
       toolActivities.append(ToolActivity(tool: tool, label: label))
 
@@ -269,7 +314,7 @@ final class ChatViewModel {
       sessionId: sessionId,
       message: request.message,
       images: request.images,
-      championsMode: request.championsMode
+      scopeSeed: request.scopeSeed
     )
     streamTask = Task { [weak self] in
       await self?.consume(stream)
@@ -316,6 +361,15 @@ final class ChatViewModel {
   private func mirrorGuestTurn(_ turn: GuestTurn) {
     guard case .guest = appState.authState else { return }
     appState.guestThread.append(turn)
+  }
+
+  /// Mirrors the latest turn's RESOLVED scope onto the guest thread (guests only),
+  /// so the guest→sign-in import can upload the thread under the scope it actually
+  /// ran in (web imports `resolvedScope ?? "champions"`). A pending chip pick is
+  /// intentionally NOT mirrored — no turn has run under it yet.
+  private func mirrorGuestScope(_ format: Format) {
+    guard case .guest = appState.authState else { return }
+    appState.guestThreadScope = format
   }
 
   // MARK: Error copy (instance for the guest hint; statics for assertable strings)
@@ -443,6 +497,6 @@ extension ChatViewModel {
   fileprivate struct PendingRequest {
     let message: String
     let images: [UIImage]
-    let championsMode: Bool
+    let scopeSeed: Format?
   }
 }

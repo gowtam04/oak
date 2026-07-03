@@ -144,7 +144,7 @@ struct PreviewStubHistoryService: HistoryService {
 
   func importGuestThread(
     sessionId: String,
-    championsMode: Bool,
+    format: Format,
     turns: [ChatTurn]
   ) async throws -> String? { nil }
 }
@@ -210,7 +210,7 @@ struct PreviewStubChatService: ChatService {
     sessionId: String,
     message: String,
     images: [UIImage],
-    championsMode: Bool
+    scopeSeed: Format?
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     AsyncThrowingStream { continuation in
       continuation.yield(.answerStart)

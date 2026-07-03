@@ -38,12 +38,14 @@ protocol HistoryService: Sendable {
   func delete(id: String) async throws
 
   /// The guest→sign-in bulk save (`POST /api/conversations/import`, M-ACCT-US-4).
-  /// Uploads the in-memory guest thread's turns under `sessionId`; the returned id
-  /// becomes the active conversation. An empty thread imports nothing and returns
-  /// `nil` (a normal value, not an error).
+  /// Uploads the in-memory guest thread's turns under `sessionId` and the scope the
+  /// thread resolved to (`format`); the returned id becomes the active
+  /// conversation. An empty thread imports nothing and returns `nil` (a normal
+  /// value, not an error). The import route prefers `format` over the legacy
+  /// `champions_mode` seed (GS-C import flow).
   func importGuestThread(
     sessionId: String,
-    championsMode: Bool,
+    format: Format,
     turns: [ChatTurn]
   ) async throws -> String?
 }
@@ -120,7 +122,7 @@ struct LiveHistoryService: HistoryService {
 
   func importGuestThread(
     sessionId: String,
-    championsMode: Bool,
+    format: Format,
     turns: [ChatTurn]
   ) async throws -> String? {
     let endpoint = Endpoint(
@@ -128,7 +130,7 @@ struct LiveHistoryService: HistoryService {
       path: "/api/conversations/import",
       body: ImportRequestBody(
         sessionId: sessionId,
-        championsMode: championsMode,
+        format: format,
         turns: turns.map(ImportTurn.init)
       ),
       requiresAuth: true
@@ -160,15 +162,18 @@ private struct PinnedBody: Encodable, Sendable {
   let pinned: Bool
 }
 
-/// `POST /api/conversations/import` body (`{ session_id, champions_mode, turns }`).
+/// `POST /api/conversations/import` body (`{ session_id, format, turns }`). The
+/// import route prefers `format` (the resolved scope) over the deprecated
+/// `champions_mode` seed, so we send the current field; `format` encodes as its
+/// `Format` rawValue string.
 private struct ImportRequestBody: Encodable, Sendable {
   let sessionId: String
-  let championsMode: Bool
+  let format: Format
   let turns: [ImportTurn]
 
   enum CodingKeys: String, CodingKey {
     case sessionId = "session_id"
-    case championsMode = "champions_mode"
+    case format
     case turns
   }
 }

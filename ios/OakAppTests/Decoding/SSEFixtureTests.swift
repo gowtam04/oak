@@ -92,6 +92,24 @@ struct SSEFixtureTests {
     #expect(terminalAnswers == 1)
   }
 
+  /// The generation-scope stream: the FIRST frame is a `scope` event carrying the
+  /// resolved format + source, decoding into `SSEEvent.ScopeData` (GS-C).
+  @Test
+  func scopeStreamDecodesLeadingScopeFrame() throws {
+    let frames = try parseFrames(in: "chat_scope_gen7.sse")
+    let scopeFrame = try #require(frames.first)
+    #expect(scopeFrame.event == "scope")
+
+    let payload = try JSONDecoder().decode(
+      SSEEvent.ScopeData.self,
+      from: Data(scopeFrame.dataJSON.utf8)
+    )
+    #expect(payload.format == .gen7)
+    #expect(payload.source == .message)
+    // The terminal frame is still a valid answer.
+    #expect(frames.last?.event == "answer")
+  }
+
   /// The Grok case: the answer markdown arrives in a SINGLE delta before the
   /// terminal answer.
   @Test
@@ -151,4 +169,5 @@ private let sseFixtures: [String] = [
   "chat_single_delta_grok.sse",
   "chat_error.sse",
   "chat_heartbeat.sse",
+  "chat_scope_gen7.sse",
 ]

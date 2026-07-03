@@ -8,7 +8,7 @@ import Foundation
 ///
 /// Mapping rule (conventions.md): the wire mixes conventions, so each type maps
 /// fields with EXPLICIT `CodingKeys` rather than a global `.convertFromSnakeCase`
-/// — e.g. `session_id`/`champions_mode` are snake_case but the image's `mimeType`
+/// — e.g. `session_id`/`scope_seed` are snake_case but the image's `mimeType`
 /// is intentionally camelCase on the wire.
 
 // MARK: - Request
@@ -24,14 +24,22 @@ struct ChatRequest: Encodable, Sendable {
     let message: String
     /// Images attached to this turn (≤ 4). `nil` ⇒ a text-only turn.
     let images: [ChatImage]?
-    /// Champions-mode toggle. `nil` ⇒ standard / Gen 9.
-    let championsMode: Bool?
+    /// An explicit scope pick from the header scope chip, applied as this turn's
+    /// seed (`scope_seed`, mirroring `ChatRequestBody.scope_seed` in
+    /// `web/src/lib/sse/sse-types.ts`). Encoded as its `Format` rawValue string;
+    /// `nil` ⇒ no pick, so the server falls through to the conversation's sticky
+    /// scope, else the champions default.
+    ///
+    /// The deprecated `champions_mode` boolean is deliberately NOT on this body:
+    /// server-side scope precedence (in-message signal > `scope_seed` > sticky >
+    /// champions default) makes its absence a no-op, and champions IS the default.
+    let scopeSeed: Format?
 
     private enum CodingKeys: String, CodingKey {
         case sessionId = "session_id"
         case message
         case images
-        case championsMode = "champions_mode"
+        case scopeSeed = "scope_seed"
     }
 }
 
@@ -57,16 +65,20 @@ struct ChatImage: Encodable, Sendable {
 
 /// One decoded server-sent event from the chat stream.
 ///
-/// The endpoint emits, in order: `tool_activity`* → `answer_start`*/`answer_delta`*
-/// → exactly one terminal `answer` (authoritative). An `error` event is reserved
-/// for transport/API faults ONLY — every in-domain failure (unresolved entity,
-/// clarification, index missing, loop-max) rides a normal `answer` event whose
-/// `OakAnswer.status` carries the failure.
+/// The endpoint emits, in order: `scope` (exactly one, FIRST) → `tool_activity`*
+/// → `answer_start`*/`answer_delta`* → exactly one terminal `answer`
+/// (authoritative). An `error` event is reserved for transport/API faults ONLY —
+/// every in-domain failure (unresolved entity, clarification, index missing,
+/// loop-max) rides a normal `answer` event whose `OakAnswer.status` carries the
+/// failure.
 ///
 /// `event:`-name decoding lives in `SSEParser`; this type only models the events
 /// and (via the nested `*Data` payloads below) the way to decode each frame's
 /// `data:` JSON.
 enum SSEEvent: Sendable, Equatable {
+    /// `scope` — the server-resolved game scope for this turn (`ScopeEvent`),
+    /// emitted once, before any `tool_activity`. Drives the header scope chip.
+    case scope(format: Format, source: ScopeSource)
     /// `tool_activity` — one per tool call, shown as progress while the loop runs.
     case toolActivity(tool: String, label: String)
     /// `answer_start` — re-emit reset: the client clears its in-flight markdown buffer.
@@ -79,7 +91,62 @@ enum SSEEvent: Sendable, Equatable {
     case error(code: String, message: String, status: Int?)
 }
 
+/// How the server resolved a turn's scope — the `source` field of the `scope`
+/// SSE event (`ScopeEvent.source` in `web/src/lib/sse/sse-types.ts`):
+///   - `.message` — an explicit in-message signal ("in gen 7, …");
+///   - `.seed` — the client's `scope_seed` chip pick (or a legacy `champions_mode`);
+///   - `.conversation` — the conversation's sticky scope;
+///   - `.default` — the champions default (no signal/seed/sticky).
+///
+/// **Tolerant decoding (`.unknown`)** mirrors ``Format``: the server can add a
+/// resolution source independently of when this app ships, so an unrecognized
+/// value degrades to `.unknown(raw)` rather than failing the frame's decode. The
+/// client uses the scope's `format` for display; `source` is informational.
+enum ScopeSource: Sendable, Equatable {
+    case message
+    case conversation
+    case seed
+    case `default`
+    /// A source string not in the known four — preserves the original wire value.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "message": self = .message
+        case "conversation": self = .conversation
+        case "seed": self = .seed
+        case "default": self = .default
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .message: return "message"
+        case .conversation: return "conversation"
+        case .seed: return "seed"
+        case .default: return "default"
+        case let .unknown(raw): return raw
+        }
+    }
+}
+
+extension ScopeSource: Decodable {
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+}
+
 extension SSEEvent {
+    /// `event: scope` data payload — the server-resolved game scope for this turn
+    /// (`ScopeEvent`). `format` decodes tolerantly (unknown → `.unknown(raw)`), and
+    /// so does `source`, so a widened wire never fails the frame.
+    struct ScopeData: Decodable, Sendable {
+        let format: Format
+        let source: ScopeSource
+    }
+
     /// `event: tool_activity` data payload.
     struct ToolActivityData: Decodable, Sendable {
         let tool: String

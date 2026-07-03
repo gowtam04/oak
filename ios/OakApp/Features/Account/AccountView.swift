@@ -1,8 +1,10 @@
 import SwiftUI
 
 /// The Account / Settings screen (M-UI-US-7): sign in/out, the current tier &
-/// what it unlocks, the **account-deletion** flow (M-ACCT-US-6 / M-NFR-6), the
-/// Champions-mode default, and standard about/legal links.
+/// what it unlocks, the **account-deletion** flow (M-ACCT-US-6 / M-NFR-6), and
+/// standard about/legal links. The former "Champions mode by default" preference
+/// was removed — scope is chosen per conversation via the header scope chip
+/// (`ChatView`), matching web (which also dropped its default toggle).
 ///
 /// The view owns its ``AccountViewModel`` (`@State`) and drives it from `Task`s;
 /// all logic and copy live in the view model. Layout uses Dynamic-Type styles and
@@ -19,7 +21,6 @@ import SwiftUI
 /// Motion is on). The color/gradient is decorative — the tier is always spelled out
 /// in text (M-AC-UI9.3).
 struct AccountView: View {
-  @Environment(AppState.self) private var appState
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var model: AccountViewModel
 
@@ -33,7 +34,6 @@ struct AccountView: View {
   }
 
   var body: some View {
-    @Bindable var appState = appState
     NavigationStack {
       Form {
         profileHeaderSection
@@ -41,7 +41,6 @@ struct AccountView: View {
         if let message = model.errorMessage {
           errorSection(message)
         }
-        preferencesSection(championsDefault: $appState.championsMode)
         if model.isSignedIn {
           dangerSection
         }
@@ -174,22 +173,6 @@ struct AccountView: View {
       }
     } footer: {
       Text(model.tierDescription)
-    }
-  }
-
-  // MARK: Preferences
-
-  @ViewBuilder
-  private func preferencesSection(championsDefault: Binding<Bool>) -> some View {
-    Section {
-      Toggle(isOn: championsDefault) {
-        Label("Champions mode by default", systemImage: "trophy")
-      }
-      .accessibilityHint("New conversations start in the Champions data scope.")
-    } header: {
-      Text("Preferences")
-    } footer: {
-      Text("New conversations open in this data scope. You can still switch scope per conversation.")
     }
   }
 

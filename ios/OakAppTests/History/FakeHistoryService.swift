@@ -43,7 +43,7 @@ final class FakeHistoryService: HistoryService, @unchecked Sendable {
 
   private(set) var importCount = 0
   private(set) var lastImportSessionId: String?
-  private(set) var lastImportChampionsMode: Bool?
+  private(set) var lastImportFormat: Format?
   private(set) var lastImportTurns: [ChatTurn]?
 
   // MARK: HistoryService
@@ -86,12 +86,12 @@ final class FakeHistoryService: HistoryService, @unchecked Sendable {
 
   func importGuestThread(
     sessionId: String,
-    championsMode: Bool,
+    format: Format,
     turns: [ChatTurn]
   ) async throws -> String? {
     importCount += 1
     lastImportSessionId = sessionId
-    lastImportChampionsMode = championsMode
+    lastImportFormat = format
     lastImportTurns = turns
     return try importResult.get()
   }
