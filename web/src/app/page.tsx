@@ -11,6 +11,7 @@ import AuthDialog from "@/components/auth/AuthDialog";
 import ConversationList from "@/components/history/ConversationList";
 import SidebarToggle from "@/components/controls/SidebarToggle";
 import ScopeChip from "@/components/controls/ScopeChip";
+import VoiceOverlay from "@/components/voice/VoiceOverlay";
 import SavedTeamAutoOpen from "@/components/teams/SavedTeamAutoOpen";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";
@@ -186,6 +187,10 @@ export default function Home() {
   // leave the on-screen thread untouched (BR-A10 / AUTH-US-6 — enforced below).
   const [auth, setAuth] = useState<MeResult>({ signedIn: false });
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  // Voice mode (signed-in only). Guests tapping the mic get the sign-in dialog
+  // — the app's existing gate for signed-in-only features — instead of the
+  // overlay. The endpoints 401 regardless, so this is UX, not the security line.
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   // Durable chat history (chat-history B-3). The hook lists/searches/filters and
   // mutates the signed-in account's conversations; it stays empty + makes no
@@ -392,6 +397,29 @@ export default function Home() {
     setPrefill({ text });
   }, []);
 
+  // Mic button tapped. Signed in → open the voice overlay at the current
+  // display scope; guest → the sign-in dialog (the existing signed-in gate).
+  const handleVoiceClick = useCallback(() => {
+    if (!auth.signedIn) {
+      setAuthDialogOpen(true);
+      return;
+    }
+    setVoiceOpen(true);
+  }, [auth.signedIn]);
+
+  // Overlay closed. Voice turns were persisted server-side during the session,
+  // so reload the thread (and re-list conversations) — the same refresh path a
+  // normal answer triggers — so the spoken turns appear in the chat.
+  const handleVoiceClose = useCallback(() => {
+    setVoiceOpen(false);
+    if (auth.signedIn) {
+      void getConversation(sessionId).then((detail) => {
+        if (detail) setTurns(detail.turns);
+      });
+      refreshConversations();
+    }
+  }, [auth.signedIn, sessionId, refreshConversations]);
+
   // The single composer element, placed in either the hero slot or the bottom
   // dock (never both) — see `heroComposer` at the render site.
   const composer = (
@@ -401,6 +429,8 @@ export default function Home() {
       streaming={status === "thinking"}
       onStop={handleStop}
       prefill={prefill}
+      onVoice={handleVoiceClick}
+      voiceReady={auth.signedIn}
     />
   );
 
@@ -627,6 +657,15 @@ export default function Home() {
         open={authDialogOpen}
         onClose={() => setAuthDialogOpen(false)}
         onSignedIn={handleSignedIn}
+      />
+
+      {/* Voice mode (signed-in only) — opens at the current display scope; on
+          close the thread reloads so persisted spoken turns appear. */}
+      <VoiceOverlay
+        open={voiceOpen}
+        onClose={handleVoiceClose}
+        sessionId={sessionId}
+        format={displayFormat}
       />
     </main>
   );

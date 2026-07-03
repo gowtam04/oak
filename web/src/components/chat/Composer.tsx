@@ -37,7 +37,15 @@ export default function Composer({
   streaming = false,
   onStop,
   prefill = null,
-}: ComposerProps) {
+  onVoice,
+  voiceReady = false,
+}: ComposerProps & {
+  /** Open voice mode; when absent the mic button is not rendered. The parent
+   *  decides signed-in (open overlay) vs signed-out (sign-in nudge). */
+  onVoice?: () => void;
+  /** True when voice is available (signed in) — tunes the button's label. */
+  voiceReady?: boolean;
+}) {
   const [value, setValue] = useState("");
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -231,6 +239,20 @@ export default function Composer({
           hidden
           onChange={handleFiles}
         />
+        {onVoice && (
+          <button
+            className="composer__voice"
+            data-testid="composer-voice"
+            type="button"
+            onClick={onVoice}
+            // Never open voice mid-text-stream (the field is disabled then too).
+            disabled={disabled || streaming}
+            aria-label={voiceReady ? "Start voice mode" : "Sign in to use voice mode"}
+            title={voiceReady ? "Talk to Oak" : "Sign in to use voice mode"}
+          >
+            <MicIcon />
+          </button>
+        )}
         <textarea
           ref={inputRef}
           className="composer__input"
@@ -275,5 +297,23 @@ export default function Composer({
         )}
       </div>
     </form>
+  );
+}
+
+/** Microphone glyph for the voice-mode button. */
+function MicIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x={9} y={2} width={6} height={12} rx={3} />
+      <path d="M5 10a7 7 0 0 0 14 0M12 17v5" />
+    </svg>
   );
 }

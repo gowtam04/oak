@@ -5215,3 +5215,223 @@ button.scope-chip:focus-visible {
     writing-mode: horizontal-tb;
   }
 }
+
+/* ==========================================================================
+   Voice mode — the mic button (in the composer) + the Pokédex voice overlay.
+   Voice-scoped classes only; tokens adapt to the dark theme automatically.
+   ========================================================================== */
+
+/* Mic button — sits beside the attach affordance in the composer field. */
+.composer__voice {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+.composer__voice svg {
+  width: 20px;
+  height: 20px;
+}
+.composer__voice:hover:not(:disabled) {
+  background: var(--surface-sunken);
+  color: var(--poke-red);
+}
+.composer__voice:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Overlay — a centered modal card over a dimming scrim. */
+.voice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.voice-overlay__panel {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-6) var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-floating);
+  text-align: center;
+}
+.voice-overlay__dismiss {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+.voice-overlay__dismiss:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+
+/* The mic orb — the hero. A faint ring that pulses while listening/speaking. */
+.voice-orb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  color: var(--neutral-0);
+  background: radial-gradient(
+    circle at 50% 38%,
+    var(--poke-red) 0%,
+    var(--poke-red-active) 100%
+  );
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--poke-red) 45%, transparent);
+}
+.voice-orb svg {
+  width: 40px;
+  height: 40px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .voice-orb--listening {
+    animation: voice-orb-pulse 1.8s ease-in-out infinite;
+  }
+  .voice-orb--speaking {
+    animation: voice-orb-pulse 0.9s ease-in-out infinite;
+  }
+}
+@keyframes voice-orb-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--poke-red) 45%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 18px color-mix(in srgb, var(--poke-red) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--poke-red) 0%, transparent);
+  }
+}
+
+.voice-overlay__phase {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+}
+.voice-overlay__error {
+  margin: 0;
+  color: var(--poke-red);
+  font-size: 0.9rem;
+}
+
+.voice-overlay__captions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+.voice-caption {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  text-align: left;
+}
+.voice-caption__who {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 2px;
+}
+.voice-caption--user {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+.voice-caption--assistant {
+  background: var(--poke-red-soft);
+  color: var(--text);
+}
+
+/* Tool ticker — reuses the "field note" language of the chat streaming trail. */
+.voice-tools {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+}
+.voice-tools__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 0.8rem;
+  text-align: left;
+}
+.voice-tools__tool {
+  color: var(--poke-red);
+  font-weight: 700;
+}
+.voice-tools__desc {
+  color: var(--text-muted);
+}
+
+.voice-overlay__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: var(--space-2);
+}
+.voice-overlay__timer {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+.voice-overlay__end {
+  padding: var(--space-2) var(--space-6);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--poke-red);
+  color: var(--neutral-0);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--motion-fast);
+}
+.voice-overlay__end:hover {
+  background: var(--poke-red-hover);
+}
