@@ -22,6 +22,12 @@ struct SuggestionsView: View {
   /// Sends the tapped suggestion verbatim as the next user message.
   let onSelect: (String) -> Void
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// Flips once, on this view instance's first appearance, to drive the one-shot
+  /// chip-stagger below.
+  @State private var hasAppeared = false
+
   var body: some View {
     let items = suggestions
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -31,12 +37,16 @@ struct SuggestionsView: View {
       VStack(alignment: .leading, spacing: 10) {
         header
         SuggestionFlowLayout(spacing: 8) {
-          ForEach(Array(items.enumerated()), id: \.offset) { _, text in
+          ForEach(Array(items.enumerated()), id: \.offset) { index, text in
             chip(text)
+              .opacity(hasAppeared ? 1 : 0)
+              .offset(x: hasAppeared ? 0 : -6)
+              .animation(reduceMotion ? nil : Theme.Motion.staggered(index), value: hasAppeared)
           }
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
+      .onAppear { hasAppeared = true }
     }
   }
 
@@ -65,6 +75,7 @@ struct SuggestionsView: View {
   /// (never truncates) so a long suggestion grows the chip instead of clipping.
   private func chip(_ text: String) -> some View {
     Button {
+      Haptics.tap()
       onSelect(text)
     } label: {
       Text(text)
@@ -78,7 +89,7 @@ struct SuggestionsView: View {
         .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1))
         .contentShape(Capsule())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(OakPressableButtonStyle())
     .accessibilityLabel("Ask: \(text)")
     .accessibilityHint("Sends this as your next message")
   }

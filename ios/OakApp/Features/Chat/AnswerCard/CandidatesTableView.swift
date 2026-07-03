@@ -34,6 +34,12 @@ struct CandidatesTableView: View {
   /// a type tap never also opens the row's Pokémon. No-op default.
   var onOpenType: (String) -> Void = { _ in }
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// Flips once, on this view instance's first appearance, to drive the one-shot
+  /// row-stagger below.
+  @State private var hasAppeared = false
+
   var body: some View {
     if candidates.shown.isEmpty {
       EmptyView()
@@ -81,11 +87,23 @@ struct CandidatesTableView: View {
       }
     }
     .background(Theme.surface)
-    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-    .overlay {
-      RoundedRectangle(cornerRadius: Theme.Radius.md)
-        .strokeBorder(Theme.separator, lineWidth: 1)
-    }
+    .oakCard(radius: Theme.Radius.md)
+    // A trailing fade hints there's more to scroll to; a plain static overlay is
+    // fine here — it just dims when the content already fits (no measurement).
+    .overlay(alignment: .trailing) { scrollFade }
+    .onAppear { hasAppeared = true }
+  }
+
+  /// A ~24pt clear→surface gradient on the trailing edge, signaling horizontal
+  /// scroll affordance without a dependency on measuring content width.
+  private var scrollFade: some View {
+    LinearGradient(
+      colors: [Theme.surface.opacity(0), Theme.surface],
+      startPoint: .leading,
+      endPoint: .trailing
+    )
+    .frame(width: 24)
+    .allowsHitTesting(false)
   }
 
   private var headerRow: some View {
@@ -97,7 +115,8 @@ struct CandidatesTableView: View {
         headerLabel("Types")
       }
       ForEach(statColumns) { column in
-        cell(background: headerBackground, alignment: .trailing) {
+        let isSorted = column.id == sortedColumnID
+        cell(background: headerBackground, accentWash: isSorted, alignment: .trailing) {
           headerStatLabel(column)
         }
       }
@@ -145,7 +164,7 @@ struct CandidatesTableView: View {
       }
       ForEach(statColumns) { column in
         let isSorted = column.id == sortedColumnID
-        cell(background: background, alignment: .trailing) {
+        cell(background: background, accentWash: isSorted, alignment: .trailing) {
           Text(column.value(row))
             .font(Theme.mono(.subheadline))
             .fontWeight(isSorted ? .semibold : .regular)
@@ -163,6 +182,9 @@ struct CandidatesTableView: View {
         .onTapGesture(perform: openPokemon)
       }
     }
+    .opacity(hasAppeared ? 1 : 0)
+    .offset(y: hasAppeared ? 0 : 6)
+    .animation(reduceMotion ? nil : Theme.Motion.staggered(index), value: hasAppeared)
   }
 
   // MARK: Cells
@@ -251,10 +273,13 @@ struct CandidatesTableView: View {
 
   /// One table cell: consistent padding, fills its grid column (so the row
   /// background reads as one continuous band with `horizontalSpacing: 0`), and
-  /// aligns its content.
+  /// aligns its content. `accentWash` layers a faint accent tint on top of
+  /// `background` (not a replacement) for the actively-sorted column, so the sort
+  /// is legible without depending on the header caret alone.
   @ViewBuilder
   private func cell<Content: View>(
     background: Color,
+    accentWash: Bool = false,
     alignment: Alignment,
     @ViewBuilder content: () -> Content
   ) -> some View {
@@ -262,7 +287,14 @@ struct CandidatesTableView: View {
       .padding(.horizontal, 12)
       .padding(.vertical, 8)
       .frame(maxWidth: .infinity, alignment: alignment)
-      .background(background)
+      .background {
+        ZStack {
+          background
+          if accentWash {
+            Theme.accent.opacity(0.06)
+          }
+        }
+      }
   }
 
   // MARK: Columns

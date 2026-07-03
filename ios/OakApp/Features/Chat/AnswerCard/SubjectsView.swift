@@ -41,12 +41,16 @@ private struct SubjectCard: View {
   /// size is appropriate — `@ScaledMetric` keeps it proportional.
   @ScaledMetric(relativeTo: .body) private var spriteSize: CGFloat = 72
 
+  /// The card's tint anchor — the subject's own type color, primary type first.
+  private var primaryType: String { subject.types.first ?? "normal" }
+  private var secondaryType: String? { subject.types.count > 1 ? subject.types[1] : nil }
+
   var body: some View {
     HStack(alignment: .top, spacing: 12) {
       SpriteImage(url: URL(string: subject.spriteUrl), name: subject.name, size: spriteSize)
         .padding(6)
         .background(
-          Theme.azure.opacity(0.06),
+          Theme.type(primaryType).opacity(0.12),
           in: RoundedRectangle(cornerRadius: Theme.Radius.md)
         )
 
@@ -61,14 +65,13 @@ private struct SubjectCard: View {
     }
     .padding(12)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(
-      Theme.surfaceRaised,
-      in: RoundedRectangle(cornerRadius: Theme.Radius.lg)
-    )
-    .overlay(
-      RoundedRectangle(cornerRadius: Theme.Radius.lg)
-        .strokeBorder(Theme.separator, lineWidth: 1)
-    )
+    // The dual-type wash sits behind oakCard's own raised fill; passing it as a
+    // background (rather than oakCard's single-color `tint:`) lets a dual-type
+    // subject blend both type colors while still resolving to exactly one shadow
+    // source (oakCard's) — a single-type subject degrades to the same wash oakCard
+    // would have produced from `tint:` directly.
+    .background(Theme.typeGradient(primary: primaryType, secondary: secondaryType))
+    .oakCard()
     // One combined VoiceOver label so the card reads as a single, ordered unit
     // (M-AC-UI9.1) instead of disjoint sprite/badge fragments.
     .accessibilityElement(children: .ignore)

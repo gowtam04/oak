@@ -25,6 +25,12 @@ struct ClarifyQuestionView: View {
   /// choice becomes a normal follow-up message.
   let onSelect: (String) -> Void
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// Flips once, on this view instance's first appearance, to drive the one-shot
+  /// option-stagger below.
+  @State private var hasAppeared = false
+
   var body: some View {
     if let options = question?.options, !options.isEmpty {
       VStack(alignment: .leading, spacing: 10) {
@@ -33,17 +39,22 @@ struct ClarifyQuestionView: View {
           .foregroundStyle(Theme.info)
           .accessibilityLabel("Pick one option to continue")
 
-        ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+        ForEach(Array(options.enumerated()), id: \.offset) { index, option in
           optionButton(option)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 6)
+            .animation(reduceMotion ? nil : Theme.Motion.staggered(index), value: hasAppeared)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
+      .onAppear { hasAppeared = true }
     }
   }
 
   /// One option rendered as a full-width tappable card.
   private func optionButton(_ option: ClarifyOption) -> some View {
     Button {
+      Haptics.tap()
       onSelect(option.label)
     } label: {
       HStack(alignment: .top, spacing: 10) {
@@ -73,16 +84,13 @@ struct ClarifyQuestionView: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(12)
-      .background(
-        Theme.surfaceRaised,
-        in: RoundedRectangle(cornerRadius: Theme.Radius.md)
-      )
+      .oakCard(radius: Theme.Radius.md)
       .overlay(
         RoundedRectangle(cornerRadius: Theme.Radius.md)
-          .strokeBorder(Theme.info.opacity(0.35), lineWidth: 1)
+          .strokeBorder(Theme.info.opacity(0.25), lineWidth: 1)
       )
     }
-    .buttonStyle(.plain)
+    .buttonStyle(OakPressableButtonStyle())
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(accessibilityLabel(for: option))
     .accessibilityHint("Sends this as your reply")
