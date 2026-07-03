@@ -28,6 +28,14 @@ struct ChatView: View {
   /// in `.oakServices(…)` above `RootView`.
   @Environment(\.services) private var services
 
+  /// Gates every entrance/movement animation (constraint 2): under Reduce Motion the
+  /// bubble/banner slides and the chip cascade collapse to plain opacity or nothing.
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// Flipped `true` in the empty state's `.onAppear` so the example chips cascade in
+  /// once (staggered fade), rather than snapping in with the hero.
+  @State private var emptyStateAppeared = false
+
   /// The thread's artifact bottom-sheet viewer (artifact-viewer.md M-ART-US-1/2/3).
   /// One per chat thread, hosted once via ``artifactViewerHost(_:)``. Built lazily in
   /// `.task(id:)` (the environment isn't available in `init`) and rebuilt when the
@@ -58,13 +66,22 @@ struct ChatView: View {
     VStack(spacing: 0) {
       if let signInAction {
         signInNudge(action: signInAction)
+          .transition(bannerTransition)
       }
       thread
       Divider()
       if let banner = model.errorBanner {
         errorBannerView(banner)
+          .transition(bannerTransition)
       }
       ComposerView(model: model)
+    }
+    // The error banner slides up from the composer seam as it appears/clears.
+    .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.errorBanner)
+    // Answer arrival is a redundant success haptic — the new card is the visible cue
+    // (M-AC-UI9.3). Fires only when the newest turn is an assistant answer.
+    .onChange(of: model.turns.count) { _, _ in
+      if case .assistant = model.turns.last?.content { Haptics.success() }
     }
     .navigationTitle("Oak")
     .navigationBarTitleDisplayMode(.inline)
@@ -134,6 +151,9 @@ struct ChatView: View {
             turnView(turn)
               .id(turn.id)
           }
+          // Turn insertion animates so the user bubble's entrance transition fires
+          // (Reduce Motion: the transition itself degrades to opacity-only).
+          .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.turns.count)
 
           // The in-flight turn: live status + streamed prose as it arrives.
           if model.isStreaming || !model.streamingText.isEmpty {
@@ -198,14 +218,75 @@ struct ChatView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
+  /// The three seed prompts offered on an empty thread; a tap sends the text verbatim
+  /// as the first user turn (same path as a suggestion chip).
+  private static let exampleQuestions = [
+    "What's Garchomp's best moveset?",
+    "Who outspeeds Dragapult?",
+    "Explain Intimidate vs Defiant",
+  ]
+
+  /// A branded empty state: the ``OakBrandMark`` hero, a title + description, and three
+  /// example-question chips (styled like ``SuggestionsView`` chips) that cascade in.
   private var emptyState: some View {
-    ContentUnavailableView {
-      Label("Ask Oak", systemImage: "bubble.left.and.text.bubble.right")
-    } description: {
-      Text("Every answer carries its reasoning, sources, and the generation it's based on.")
+    VStack(spacing: 20) {
+      OakBrandMark()
+
+      VStack(spacing: 6) {
+        Text("Ask Oak")
+          .font(Theme.display(.title))
+          .foregroundStyle(Theme.textPrimary)
+        Text("Every answer carries its reasoning, sources, and the generation it's based on.")
+          .font(Theme.body(.subheadline))
+          .foregroundStyle(Theme.textSecondary)
+          .multilineTextAlignment(.center)
+      }
+
+      VStack(spacing: 8) {
+        ForEach(Array(Self.exampleQuestions.enumerated()), id: \.offset) { index, question in
+          exampleChip(question, index: index)
+        }
+      }
+      .padding(.top, 4)
     }
     .frame(maxWidth: .infinity)
     .padding(.top, 48)
+    .padding(.horizontal, 8)
+    .onAppear { emptyStateAppeared = true }
+  }
+
+  /// One example-question chip. Accent-tinted bordered capsule (mirrors the suggestion
+  /// chips); tapping sends it as the next user turn. Cascades in with a per-index
+  /// stagger, collapsing to an instant appearance under Reduce Motion.
+  private func exampleChip(_ text: String, index: Int) -> some View {
+    let shown = reduceMotion || emptyStateAppeared
+    return Button {
+      Haptics.tap()
+      sendFollowUp(text)
+    } label: {
+      Text(text)
+        .font(Theme.body(.subheadline).weight(.medium))
+        .foregroundStyle(Theme.accent)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Theme.accent.opacity(0.12), in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1))
+        .contentShape(Capsule())
+    }
+    .buttonStyle(OakPressableButtonStyle())
+    .opacity(shown ? 1 : 0)
+    .offset(y: shown ? 0 : 8)
+    .animation(reduceMotion ? nil : Theme.Motion.staggered(index), value: emptyStateAppeared)
+    .accessibilityLabel("Ask: \(text)")
+    .accessibilityHint("Sends this as your next message")
+  }
+
+  /// The entrance transition for the error banner / sign-in nudge — a slide up from
+  /// the composer seam, degrading to a plain crossfade under Reduce Motion.
+  private var bannerTransition: AnyTransition {
+    reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
   }
 
   // MARK: Error banner
@@ -215,6 +296,7 @@ struct ChatView: View {
     HStack(alignment: .top, spacing: 8) {
       Image(systemName: "exclamationmark.triangle.fill")
         .foregroundStyle(Theme.danger)
+        .symbolEffect(.pulse, options: .nonRepeating, isActive: !reduceMotion)
       Text(banner.message)
         .font(Theme.body(.footnote))
         .foregroundStyle(Theme.textPrimary)
@@ -251,6 +333,7 @@ struct ChatView: View {
 /// A user's message bubble, trailing-aligned. Shows an attached-image caption when
 /// the turn carried photos (the actual thumbnails are P8).
 private struct UserMessageView: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let text: String
   let imageCount: Int
 
@@ -264,7 +347,16 @@ private struct UserMessageView: View {
             .foregroundStyle(Color.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Theme.accent, in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+            .background(
+              LinearGradient(
+                colors: [Theme.accent, Theme.accentActive],
+                startPoint: .top,
+                endPoint: .bottom
+              ),
+              in: bubbleShape
+            )
+            // A small tinted halo to lift the user's own bubble off the thread.
+            .oakShadow(Theme.Shadow.glow(Theme.accent))
         }
         if imageCount > 0 {
           Label("\(imageCount) image(s) attached", systemImage: "photo")
@@ -273,6 +365,31 @@ private struct UserMessageView: View {
         }
       }
     }
+    .transition(entrance)
+  }
+
+  /// Asymmetric corners — the bottom-trailing corner tucks in (`Radius.sm`) so the
+  /// bubble reads as anchored to the sender's edge; the rest stay `Radius.lg`.
+  private var bubbleShape: UnevenRoundedRectangle {
+    UnevenRoundedRectangle(
+      topLeadingRadius: Theme.Radius.lg,
+      bottomLeadingRadius: Theme.Radius.lg,
+      bottomTrailingRadius: Theme.Radius.sm,
+      topTrailingRadius: Theme.Radius.lg,
+      style: .continuous
+    )
+  }
+
+  /// Pops in from the sending corner (scale + rise + fade); Reduce Motion keeps only
+  /// the fade (constraint 2). Removal is always a plain fade.
+  private var entrance: AnyTransition {
+    if reduceMotion { return .opacity }
+    return .asymmetric(
+      insertion: .scale(scale: 0.92, anchor: .bottomTrailing)
+        .combined(with: .opacity)
+        .combined(with: .offset(y: 8)),
+      removal: .opacity
+    )
   }
 }
 
