@@ -108,8 +108,12 @@ ships none).
 ## Getting started
 
 Requires Node 20+ (`.nvmrc`) and a Docker daemon (for the local Postgres and the
-test suite). The app lives in **`web/`** — run every command from there. A future
-mobile client would be a sibling folder; `docs/` stays at the repo root.
+test suite). The web app lives in **`web/`** — run every command from there.
+Native clients are sibling folders: **`ios/`** (Swift 6/SwiftUI,
+[`ios/README.md`](ios/README.md)) and **`android/`** (Kotlin/Jetpack Compose,
+[`android/README.md`](android/README.md)) — both pure clients of this same
+backend, holding no LLM keys or DB access of their own. `docs/` stays at the
+repo root.
 
 ```bash
 cd web
@@ -229,7 +233,7 @@ deployment notes for details.
 | [`docs/requirements/requirements.md`](docs/requirements/requirements.md) | Core business requirements — user stories, acceptance criteria, business rules.                         |
 | [`docs/agent-design/`](docs/agent-design/)                               | The agent's internals (fixed): topology, tools, data sources, prompts, output schema, eval spec.        |
 | [`docs/architecture/design.md`](docs/architecture/design.md)             | Technical design — stack, data store, ingest pipeline, file structure, interfaces, build phases.        |
-| [`docs/features/`](docs/features/)                                       | Per-feature requirements + design: account creation, chat history, team builder, artifact viewer, admin panel, generation scope. |
+| [`docs/features/`](docs/features/)                                       | Per-feature requirements + design: account creation, chat history, team builder, artifact viewer, admin panel, generation scope, the [iOS app](docs/features/iphone-app/) and the [Android app](docs/features/android-app/). |
 | [`docs/agent-design/generation-scope-addendum.md`](docs/agent-design/generation-scope-addendum.md) | How the multi-generation scope (Gen 9 + Champions + Gens 5–8) amends the frozen agent-design contract. |
 | [`docs/design-system/`](docs/design-system/)                             | Visual language — color, typography, spacing, component patterns.                                       |
 | [`docs/eval-reports/`](docs/eval-reports/)                               | Judged eval runs (incl. a Grok-vs-Claude A/B).                                                           |
