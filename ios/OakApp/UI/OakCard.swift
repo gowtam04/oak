@@ -121,7 +121,7 @@ struct OakPressableButtonStyle: ButtonStyle {
 }
 
 #Preview("oakCard — light & dark") {
-  func demo(_ scheme: ColorScheme) -> some View {
+  @MainActor func demo(_ scheme: ColorScheme) -> some View {
     VStack(spacing: 16) {
       Text("Plain card")
         .frame(maxWidth: .infinity, alignment: .leading)
