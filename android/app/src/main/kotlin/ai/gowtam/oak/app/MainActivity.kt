@@ -1,7 +1,9 @@
 package ai.gowtam.oak.app
 
+import ai.gowtam.oak.features.artifact.ArtifactViewModel
 import ai.gowtam.oak.features.chat.ChatViewModel
 import ai.gowtam.oak.ui.OakTheme
+import ai.gowtam.oak.wire.Format
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -34,6 +36,7 @@ class MainActivity : ComponentActivity() {
             val services = remember { ServiceContainer.live(context) }
             val appState = remember { AppState() }
             val chatViewModel = remember { ChatViewModel(services.chat, appState) }
+            val artifactViewModel = remember { ArtifactViewModel(services.artifact, Format.Champions) }
 
             LaunchedEffect(services) { appState.restoreSession(services.auth) }
 
@@ -48,7 +51,7 @@ class MainActivity : ComponentActivity() {
 
             OakTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    OakApp(services = services, appState = appState, chatViewModel = chatViewModel)
+                    OakApp(services = services, appState = appState, chatViewModel = chatViewModel, artifactViewModel = artifactViewModel)
                 }
             }
         }

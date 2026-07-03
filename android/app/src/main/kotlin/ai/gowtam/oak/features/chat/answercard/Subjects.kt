@@ -61,8 +61,13 @@ fun Subjects(
     }
 }
 
+/**
+ * The tappable sprite/name/type-badge card for one [Subject]. `internal` (not
+ * `private`) so the artifact viewer's comparison artifact (P7) can reuse the exact
+ * same card rather than duplicating its layout.
+ */
 @Composable
-private fun SubjectCard(subject: Subject, onClick: () -> Unit) {
+internal fun SubjectCard(subject: Subject, onClick: () -> Unit) {
     val oak = LocalOakColors.current
     val primaryType = subject.types.firstOrNull() ?: "normal"
     Row(

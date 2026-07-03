@@ -2,6 +2,7 @@ package ai.gowtam.oak.app
 
 import ai.gowtam.oak.features.account.AccountScreen
 import ai.gowtam.oak.features.account.AccountViewModel
+import ai.gowtam.oak.features.artifact.ArtifactViewModel
 import ai.gowtam.oak.features.chat.ChatScreen
 import ai.gowtam.oak.features.chat.ChatViewModel
 import androidx.compose.foundation.layout.Box
@@ -34,12 +35,17 @@ private enum class OakTab(val label: String) {
 /**
  * The app's root composable — the 3-tab `NavigationBar` shell (component-design.md
  * "Navigation graph"). Chat and Account are fully wired to their real screens; Teams
- * stays a placeholder until P10. The [ChatViewModel] is owned by the caller
- * (`MainActivity`) and passed in so its stream/keep-screen-on state survives a tab
- * switch away from Chat and back.
+ * stays a placeholder until P10. The [ChatViewModel] and [ArtifactViewModel] are owned
+ * by the caller (`MainActivity`) and passed in so their stream/back-stack state
+ * survives a tab switch away from Chat and back.
  */
 @Composable
-fun OakApp(services: ServiceContainer, appState: AppState, chatViewModel: ChatViewModel) {
+fun OakApp(
+    services: ServiceContainer,
+    appState: AppState,
+    chatViewModel: ChatViewModel,
+    artifactViewModel: ArtifactViewModel,
+) {
     var selectedTab by remember { mutableStateOf(OakTab.Chat) }
 
     Scaffold(
@@ -58,7 +64,7 @@ fun OakApp(services: ServiceContainer, appState: AppState, chatViewModel: ChatVi
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             when (selectedTab) {
-                OakTab.Chat -> ChatScreen(viewModel = chatViewModel)
+                OakTab.Chat -> ChatScreen(viewModel = chatViewModel, artifactViewModel = artifactViewModel)
                 OakTab.Teams -> PlaceholderScreen(name = "Teams")
                 OakTab.Account -> {
                     val accountViewModel = remember(services, appState) { AccountViewModel(services.auth, appState) }

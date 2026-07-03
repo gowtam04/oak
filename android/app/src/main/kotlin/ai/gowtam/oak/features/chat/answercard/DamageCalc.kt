@@ -43,12 +43,18 @@ import androidx.compose.ui.unit.dp
  * alone). Below the marker it shows the `result`, the `assumptions`, and an optional
  * `breakdown` disclosure. Free-form maps render in stable key-sorted order. Mirrors the
  * iOS `DamageCalcView`; named `DamageCalcBlock` to avoid clashing with the wire type.
+ *
+ * [showOpenInViewerButton] defaults to `true` for the answer card's own rendering; the
+ * artifact viewer (P7) reuses this same composable for its damage-calc artifact and
+ * passes `false`, since the button's destination (this same content) is already what's
+ * on screen there.
  */
 @Composable
 fun DamageCalcBlock(
     damageCalc: DamageCalc,
     onOpenInViewer: () -> Unit,
     modifier: Modifier = Modifier,
+    showOpenInViewerButton: Boolean = true,
 ) {
     val oak = LocalOakColors.current
     var breakdownExpanded by remember { mutableStateOf(false) }
@@ -136,8 +142,10 @@ fun DamageCalcBlock(
             }
         }
 
-        OutlinedButton(onClick = onOpenInViewer) {
-            Text(text = "Open in viewer", color = oak.accent)
+        if (showOpenInViewerButton) {
+            OutlinedButton(onClick = onOpenInViewer) {
+                Text(text = "Open in viewer", color = oak.accent)
+            }
         }
     }
 }

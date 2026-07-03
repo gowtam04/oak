@@ -1,5 +1,7 @@
 package ai.gowtam.oak.features.chat
 
+import ai.gowtam.oak.features.artifact.ArtifactSheet
+import ai.gowtam.oak.features.artifact.ArtifactViewModel
 import ai.gowtam.oak.features.chat.answercard.AnswerCard
 import ai.gowtam.oak.features.chat.answercard.AnswerCardActions
 import ai.gowtam.oak.ui.LocalOakColors
@@ -44,6 +46,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -78,6 +81,7 @@ import androidx.lifecycle.LifecycleEventObserver
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
+    artifactViewModel: ArtifactViewModel,
     modifier: Modifier = Modifier,
     showsNewConversationButton: Boolean = true,
 ) {
@@ -85,6 +89,23 @@ fun ChatScreen(
     val oak = LocalOakColors.current
     val listState = rememberLazyListState()
     var showScopePicker by remember { mutableStateOf(false) }
+
+    // The artifact viewer's "Ask about this in chat" (P7) prefills THIS screen's
+    // composer; a scope change clears any open artifact stack (D-BR-ART-4) since its
+    // entries were fetched under the old format.
+    SideEffect { artifactViewModel.onAskInChat = viewModel::prefillComposer }
+    LaunchedEffect(uiState.displayFormat) { artifactViewModel.updateFormat(uiState.displayFormat) }
+
+    val cardActions = remember(viewModel, artifactViewModel) {
+        AnswerCardActions(
+            onFollowUp = viewModel::sendFollowUp,
+            onOpenEntity = artifactViewModel::openEntity,
+            onOpenSavedTeam = artifactViewModel::openSavedTeam,
+            onOpenProposedTeam = artifactViewModel::openProposedTeam,
+            onOpenComparison = artifactViewModel::openComparison,
+            onOpenDamageCalc = artifactViewModel::openDamageCalc,
+        )
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, viewModel) {
@@ -143,7 +164,7 @@ fun ChatScreen(
                         item(key = "empty-state") { EmptyState(onExampleTap = viewModel::sendFollowUp) }
                     }
                     items(uiState.turns, key = { it.id }) { turn ->
-                        TurnRow(turn, onFollowUp = viewModel::sendFollowUp)
+                        TurnRow(turn, actions = cardActions)
                     }
                     if (showInProgress) {
                         item(key = "in-progress") {
@@ -187,6 +208,11 @@ fun ChatScreen(
             )
         }
     }
+
+    // The artifact bottom sheet overlays the chat (co-visible, not a separate tab —
+    // component-design.md "Navigation graph"); it self-hides when its back stack is
+    // empty, so it is always safe to host unconditionally.
+    ArtifactSheet(artifactViewModel)
 }
 
 // ---------------------------------------------------------------------------
@@ -268,13 +294,10 @@ private fun ScopePickerSheet(current: Format, onSelect: (Format) -> Unit) {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun TurnRow(turn: ChatTurnItem, onFollowUp: (String) -> Unit) {
+private fun TurnRow(turn: ChatTurnItem, actions: AnswerCardActions) {
     when (turn) {
         is ChatTurnItem.User -> UserMessageRow(turn)
-        is ChatTurnItem.Assistant -> AnswerCard(
-            answer = turn.answer,
-            actions = AnswerCardActions(onFollowUp = onFollowUp),
-        )
+        is ChatTurnItem.Assistant -> AnswerCard(answer = turn.answer, actions = actions)
     }
 }
 
