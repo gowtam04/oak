@@ -712,7 +712,7 @@
 /* Answer lead — the first paragraph of every answer is the verdict line (UI
    §4 screen 04 hero moment). Nunito 700 22px/1.35, a full step above body
    text; every following paragraph stays plain body copy. */
-.answer-body__content .markdown-body > p:first-child {
+.answer-body__content.markdown-body > p:first-child {
   font-family: var(--body);
   font-weight: 700;
   font-size: var(--text-xl);

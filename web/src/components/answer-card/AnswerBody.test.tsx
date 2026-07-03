@@ -55,4 +55,17 @@ describe("AnswerBody", () => {
     render(<AnswerBody markdown="" />);
     expect(screen.getByTestId("answer-body")).toBeInTheDocument();
   });
+
+  it("merges markdown-body and answer-body__content onto the SAME wrapper element (pins the answer-lead selector's target shape)", () => {
+    // The answer-lead rule in globals.css (`.answer-body__content.markdown-body
+    // > p:first-child`) is a compound selector — it only matches when both
+    // classes land on one element, which is how <Markdown> renders (it can't
+    // set a component-level className on react-markdown v9+, so it merges the
+    // caller's class into its own wrapper div). A regression back to two
+    // nested elements (or a descendant-selector rewrite) would silently break
+    // the lead-paragraph styling with no jsdom-visible symptom other than this.
+    render(<AnswerBody markdown="Garchomp's base Speed is **102**." />);
+    const wrapper = screen.getByTestId("answer-body").firstElementChild;
+    expect(wrapper).toHaveClass("markdown-body", "answer-body__content");
+  });
 });
