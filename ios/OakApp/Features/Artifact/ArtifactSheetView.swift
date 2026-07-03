@@ -224,7 +224,7 @@ private struct TeamArtifactDetail: View {
           .fixedSize(horizontal: false, vertical: true)
       }
       Spacer(minLength: 8)
-      Text(formatLabel(team.format))
+      Text(team.format.shortLabel)
         .font(Theme.body(.caption2).weight(.semibold))
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
@@ -336,13 +336,6 @@ private func titleize(_ slug: String) -> String {
     .split(whereSeparator: { $0 == "-" || $0 == " " || $0 == "_" })
     .map { $0.prefix(1).uppercased() + $0.dropFirst() }
     .joined(separator: " ")
-}
-
-private func formatLabel(_ format: Format) -> String {
-  switch format {
-  case .scarletViolet: return "Scarlet/Violet"
-  case .champions: return "Champions"
-  }
 }
 
 #if DEBUG

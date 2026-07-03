@@ -457,7 +457,7 @@ struct EntityDetailView: View {
   }
 
   private func formatBadge(_ format: Format) -> some View {
-    Text(Self.formatLabel(format))
+    Text(format.shortLabel)
       .font(Theme.body(.caption2).weight(.semibold))
       .padding(.horizontal, 8)
       .padding(.vertical, 3)
@@ -511,12 +511,6 @@ struct EntityDetailView: View {
       .joined(separator: " ")
   }
 
-  private static func formatLabel(_ format: Format) -> String {
-    switch format {
-    case .scarletViolet: return "Scarlet/Violet"
-    case .champions: return "Champions"
-    }
-  }
 }
 
 // MARK: - Stat bar

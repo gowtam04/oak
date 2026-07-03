@@ -166,10 +166,14 @@ struct ConversationListView: View {
     .listStyle(.plain)
   }
 
+  /// Exactly the web history sidebar's three filter chips (`ConversationList.tsx`
+  /// `FILTERS`) — **not** a six-way format filter (that's the Teams list's job;
+  /// see `TeamsListView`). Conversation history stays scoped to the two most
+  /// common formats for now.
   private var formatFilterMenu: some View {
     Menu {
-      filterButton(title: "All formats", format: nil)
-      filterButton(title: "Standard", format: .scarletViolet)
+      filterButton(title: "All", format: nil)
+      filterButton(title: "Gen 9", format: .scarletViolet)
       filterButton(title: "Champions", format: .champions)
     } label: {
       Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
@@ -277,10 +281,7 @@ private struct ConversationRow: View {
   }
 
   private var formatLabel: String {
-    switch conversation.format {
-    case .scarletViolet: return "Standard"
-    case .champions: return "Champions"
-    }
+    conversation.format.shortLabel
   }
 
   private var updatedAt: Date {
@@ -289,10 +290,13 @@ private struct ConversationRow: View {
 }
 
 /// The leading 34pt format medallion: Champions reads as a sunflower `crown.fill`
-/// on a sunflower-tinted disc, Standard as an azure `leaf.fill` on an azure-tinted
-/// disc — deliberately not a ball motif (constraint 1). Decorative only; the
-/// format text label alongside it carries the actual meaning (M-AC-UI9.3), so this
-/// is hidden from VoiceOver.
+/// on a sunflower-tinted disc; every other scope (Gen 9 and the mainline
+/// gen-scope formats, plus an unrecognized future format) shares an azure
+/// `leaf.fill` disc — deliberately not a ball motif (constraint 1), and
+/// deliberately one shared "standard" treatment rather than a bespoke icon per
+/// generation (the format text label alongside it, not the icon, carries which
+/// generation it actually is). Decorative only (M-AC-UI9.3), so hidden from
+/// VoiceOver.
 private struct FormatMedallion: View {
   let format: Format
 
@@ -311,14 +315,14 @@ private struct FormatMedallion: View {
   private var iconName: String {
     switch format {
     case .champions: return "crown.fill"
-    case .scarletViolet: return "leaf.fill"
+    case .scarletViolet, .gen5, .gen6, .gen7, .gen8, .unknown: return "leaf.fill"
     }
   }
 
   private var tint: Color {
     switch format {
     case .champions: return Theme.sunflower
-    case .scarletViolet: return Theme.azure
+    case .scarletViolet, .gen5, .gen6, .gen7, .gen8, .unknown: return Theme.azure
     }
   }
 }
