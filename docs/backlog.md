@@ -678,3 +678,35 @@ answer path), `src/data/teams/*` (`validateTeam`), `src/agent/schemas.ts`
 (`proposed_team` shape), team-proposal rendering in `src/components/*`.
 
 **Depends on:** B-2 (team building — the `proposed_team` field and `validateTeam`).
+
+---
+
+## B-14 — Verify Champions learnset completeness (level-up moves missing?)
+
+**Why:** The Champions `learnset` table is **~99.9% `machine`-method**: of ~19,553
+rows across the 314-mon roster, **19,530 are `machine`, only 16 are `level-up`, and 7
+are `tutor`**. That means level-up moves are almost entirely absent from the Champions
+index, so a Pokémon's index learnset can omit moves it clearly has in-game. Concretely,
+**Incineroar lacks Knock Off and U-turn** in Champions even though it has both in
+`scarlet-violet`/`gen-7`. This surfaced while fixing B-13: the agent proposes a
+real-VGC-legal move, `validateTeam` rejects it as `move_not_in_learnset`, and the
+proposal churns. It is unclear whether this is **intended** (Pokémon Champions genuinely
+curates/restricts movesets) or an **ingest gap** (the builder only capturing TM/`machine`
+sources and dropping level-up/egg/etc.).
+
+**Scope:**
+- Confirm the numbers and characterize the gap: how many species have suspiciously few
+  level-up moves; spot-check well-known Champions sets against the index.
+- Probe `@pkmn`: does `modDex.learnsets.get(id)` for the Champions mod actually return
+  level-up sources, or only `machine`? Determine whether the data source has them at all.
+- Trace the ingest: `src/data/pkmn/gen-provider.ts` `getLearnset` (returns
+  `{ moveid: sourceString[] }`) and the learnset builder that writes the `method` column —
+  check whether non-`machine` sources are being filtered/dropped.
+- Decide: if it's a real gap, fix ingest + re-ingest; if it's intended curation, document
+  it (and make sure prompts/tooling steer the agent to verify moves against the index,
+  which B-13 already added).
+
+**Touches:** `src/data/pkmn/gen-provider.ts` (`getLearnset`), the learnset ingest builder
+under `src/ingest/*`, the `learnset` table (`src/data/schema.ts`), and re-ingest.
+
+**Depends on:** (surfaced by) B-13 (illegal proposed teams).
