@@ -24,9 +24,14 @@ struct ChatView: View {
   @State private var model: ChatViewModel
 
   /// The injected service container — read to build the artifact viewer's data seam
-  /// (``ServiceContainer/artifact``). Available here because the whole app is wrapped
-  /// in `.oakServices(…)` above `RootView`.
+  /// (``ServiceContainer/artifact``) and, after a voice session ends, to reload the
+  /// thread (``ServiceContainer/history``). Available here because the whole app is
+  /// wrapped in `.oakServices(…)` above `RootView`.
   @Environment(\.services) private var services
+
+  /// Read to gate voice mode (signed-in only, M-AC voice-mode) and to build the
+  /// signed-out mic nudge.
+  @Environment(AppState.self) private var appState
 
   /// Gates every entrance/movement animation (constraint 2): under Reduce Motion the
   /// bubble/banner slides and the chip cascade collapse to plain opacity or nothing.
@@ -48,6 +53,12 @@ struct ChatView: View {
   /// (M-BR-ART-4); rebuilding clears the back stack, which is fine since the sheet is
   /// closed when the composer toggle is reached.
   @State private var artifactModel: ArtifactViewModel?
+
+  /// Drives the voice-mode `.fullScreenCover` (``VoiceLauncher``). Flipped true by
+  /// the composer's mic button (only after it's cleared the sign-in + microphone
+  /// permission gates); flipping back to false — however the cover closes — is
+  /// what triggers ``refreshAfterVoice()``.
+  @State private var isVoicePresented = false
 
   /// Whether the toolbar shows the New-conversation button (M-CHAT-US-3). On for the
   /// guest single thread; off for a pushed signed-in thread.
@@ -79,7 +90,12 @@ struct ChatView: View {
         errorBannerView(banner)
           .transition(bannerTransition)
       }
-      ComposerView(model: model)
+      ComposerView(
+        model: model,
+        onVoice: { isVoicePresented = true },
+        voiceReady: voiceReady,
+        onSignInNudge: signInAction
+      )
     }
     // The error banner slides up from the composer seam as it appears/clears.
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.errorBanner)
@@ -139,6 +155,16 @@ struct ChatView: View {
     // Host the artifact bottom sheet once at the screen level; pushing an entity
     // opens it, an empty back stack closes it (M-AC-A3.3, M-BR-ART-5).
     .artifactViewerHost(artifactModel)
+    // Voice mode (T5): a fresh `VoiceLauncher` — and a fresh `VoiceSession` — is
+    // built every time this opens. However it closes (End button, `.onDisappear`
+    // teardown, anything else), the `isVoicePresented` binding flips back to
+    // false, which is what triggers the post-session refresh below.
+    .fullScreenCover(isPresented: $isVoicePresented) {
+      VoiceLauncher(sessionId: model.sessionId, format: model.displayFormat)
+    }
+    .onChange(of: isVoicePresented) { wasPresented, isPresented in
+      if wasPresented, !isPresented { refreshAfterVoice() }
+    }
   }
 
   // MARK: Scope chip (generation-scope GS-C)
@@ -181,6 +207,30 @@ struct ChatView: View {
     .accessibilityLabel("Answer scope")
     .accessibilityValue(model.displayFormat.displayLabel)
     .accessibilityHint("Choose which game or generation answers are based on")
+  }
+
+  // MARK: Voice mode (T5)
+
+  /// Voice mode is signed-in only (the server 401s a guest, component-design.md
+  /// voice-mode section) — the composer's mic button uses this to choose between
+  /// the permission gate and the sign-in nudge.
+  private var voiceReady: Bool {
+    if case .signedIn = appState.authState { return true }
+    return false
+  }
+
+  /// Reloads the thread once the voice overlay closes, guest-guarded (mirrors
+  /// web's `handleVoiceClose`). The realtime session persisted its turns
+  /// server-side as it went, so this is the same "pull the authoritative thread"
+  /// refresh a normal answer's finalize already relies on elsewhere — errors
+  /// (including a 401 that slipped through, or the just-finished turn not having
+  /// landed yet) are silently swallowed rather than surfaced as a banner.
+  private func refreshAfterVoice() {
+    guard case .signedIn = appState.authState else { return }
+    Task {
+      guard let detail = try? await services.history.get(id: model.sessionId) else { return }
+      model.loadResumed(conversationId: detail.id, format: detail.format, turns: detail.turns)
+    }
   }
 
   // MARK: Sign-in nudge (guest)
@@ -546,17 +596,21 @@ struct PreviewChatService: ChatService {
 }
 
 #Preview("Chat") {
-  NavigationStack {
-    ChatView(model: ChatViewModel(chat: PreviewChatService(), appState: AppState()))
+  let state = AppState()
+  return NavigationStack {
+    ChatView(model: ChatViewModel(chat: PreviewChatService(), appState: state))
   }
+  .environment(state)
 }
 
 #Preview("Chat (guest nudge)") {
-  NavigationStack {
+  let state = AppState()
+  return NavigationStack {
     ChatView(
-      model: ChatViewModel(chat: PreviewChatService(), appState: AppState()),
+      model: ChatViewModel(chat: PreviewChatService(), appState: state),
       signInAction: {}
     )
   }
+  .environment(state)
 }
 #endif

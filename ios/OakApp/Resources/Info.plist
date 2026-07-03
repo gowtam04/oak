@@ -40,6 +40,9 @@
 	<string>Oak uses the camera so you can attach a photo to a question (for example, a screenshot or a card).</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Oak uses your photo library so you can attach images to a question.</string>
+	<!-- Shown when the composer's mic button starts voice mode (signed-in only). -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Oak uses the microphone in voice mode so you can talk with the Pokédex assistant.</string>
 	<!-- App Transport Security: defaults (HTTPS enforced; no arbitrary loads). -->
 	<key>NSAppTransportSecurity</key>
 	<dict>

@@ -16,6 +16,19 @@ import UIKit
 struct ComposerView: View {
   let model: ChatViewModel
 
+  /// Fires once voice mode is actually clear to start: signed in AND the
+  /// microphone permission gate passed. The mic button itself always renders
+  /// (mirrors the attach button); a `nil` closure just makes a successful tap a
+  /// no-op, which previews rely on.
+  var onVoice: (() -> Void)? = nil
+  /// Whether voice mode is available (signed in). Tunes the mic tap: ready taps
+  /// run the permission gate; not-ready taps show the sign-in nudge.
+  var voiceReady: Bool = false
+  /// Presents the sign-in flow, invoked from the nudge alert's "Sign In" button.
+  /// `nil` (a pushed signed-in thread, where `voiceReady` is always true and this
+  /// path is unreachable) collapses the nudge alert to a single "OK".
+  var onSignInNudge: (() -> Void)? = nil
+
   @FocusState private var isInputFocused: Bool
 
   /// Drives the light-mode-only upward lift shadow (dark mode leans on the divider).
@@ -38,6 +51,13 @@ struct ComposerView: View {
   @State private var showCameraDeniedAlert = false
   /// A transient inline note, e.g. when the 4-image cap is reached (M-AC-5.2).
   @State private var attachNote: String?
+
+  // MARK: Voice local state
+
+  /// Drives the "microphone access is off" alert when permission is denied.
+  @State private var showMicDeniedAlert = false
+  /// Drives the "sign in to use voice mode" nudge for a signed-out tap.
+  @State private var showVoiceSignInAlert = false
 
   var body: some View {
     @Bindable var model = model
@@ -120,6 +140,22 @@ struct ComposerView: View {
         "Enable camera access in Settings to take a photo. You can still attach images from your photo library."
       )
     }
+    .alert("Microphone access is off", isPresented: $showMicDeniedAlert) {
+      Button("Open Settings") { openSettings() }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("Enable microphone access in Settings to use voice mode.")
+    }
+    .alert("Sign in required", isPresented: $showVoiceSignInAlert) {
+      if let onSignInNudge {
+        Button("Sign In") { onSignInNudge() }
+        Button("Cancel", role: .cancel) {}
+      } else {
+        Button("OK", role: .cancel) {}
+      }
+    } message: {
+      Text("Sign in to use voice mode.")
+    }
   }
 
   // MARK: Derived attach state
@@ -141,6 +177,7 @@ struct ComposerView: View {
       Spacer(minLength: 0)
 
       attachControls(model: model)
+      voiceControl(model: model)
     }
   }
 
@@ -175,6 +212,52 @@ struct ComposerView: View {
     .tint(Theme.accent)
     .disabled(!canAttachMore)
     .accessibilityLabel("Attach image")
+  }
+
+  // MARK: Voice control (mic button)
+
+  /// The mic button: always visible (matches the attach control), disabled only
+  /// mid-stream. A tap runs ``handleMicTap()``, which branches on sign-in state
+  /// and then the microphone permission before ever calling ``onVoice``.
+  @ViewBuilder
+  private func voiceControl(model: ChatViewModel) -> some View {
+    Button {
+      Haptics.tap()
+      handleMicTap()
+    } label: {
+      Image(systemName: "mic.fill")
+        .font(Theme.body(.title3))
+        .symbolRenderingMode(.hierarchical)
+    }
+    .tint(Theme.accent)
+    .disabled(model.isStreaming)
+    .accessibilityLabel(voiceReady ? "Start voice mode" : "Sign in to use voice mode")
+  }
+
+  /// Signed-out taps show the sign-in nudge; signed-in taps run the same
+  /// permission-gate shape as ``presentCamera()`` but for the microphone
+  /// (`AVAudioApplication`, iOS 17+): granted fires ``onVoice`` immediately,
+  /// undetermined requests permission and fires ``onVoice`` only if granted, and
+  /// denied shows the "enable in Settings" alert.
+  private func handleMicTap() {
+    guard voiceReady else {
+      showVoiceSignInAlert = true
+      return
+    }
+    switch AVAudioApplication.shared.recordPermission {
+    case .granted:
+      onVoice?()
+    case .undetermined:
+      AVAudioApplication.requestRecordPermission { granted in
+        Task { @MainActor in
+          if granted { onVoice?() }
+        }
+      }
+    case .denied:
+      showMicDeniedAlert = true
+    @unknown default:
+      showMicDeniedAlert = true
+    }
   }
 
   // MARK: Attached-image thumbnails (with per-image remove)
