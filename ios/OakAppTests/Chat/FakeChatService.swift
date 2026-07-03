@@ -24,6 +24,12 @@ final class FakeChatService: ChatService, @unchecked Sendable {
   /// `@Sendable` builder closure under Swift 6 strict concurrency.
   var thrownError: OakError?
 
+  /// When non-empty, each `send` call consumes the NEXT entry (events + optional throw)
+  /// so a test can script DIFFERENT behavior per attempt — e.g. a transport drop on the
+  /// first attempt then a clean answer on the auto-retry — to exercise the reconnect
+  /// path deterministically. Falls back to `scriptedEvents`/`thrownError` once exhausted.
+  var attemptScripts: [(events: [SSEEvent], error: OakError?)] = []
+
   // MARK: Recording
 
   private(set) var sendCount = 0
@@ -44,8 +50,16 @@ final class FakeChatService: ChatService, @unchecked Sendable {
     lastScopeSeed = scopeSeed
     lastImageCount = images.count
 
-    let events = scriptedEvents
-    let error = thrownError
+    let events: [SSEEvent]
+    let error: OakError?
+    if !attemptScripts.isEmpty {
+      let next = attemptScripts.removeFirst()
+      events = next.events
+      error = next.error
+    } else {
+      events = scriptedEvents
+      error = thrownError
+    }
     return AsyncThrowingStream { continuation in
       for event in events {
         continuation.yield(event)

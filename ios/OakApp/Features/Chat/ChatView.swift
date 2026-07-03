@@ -32,6 +32,11 @@ struct ChatView: View {
   /// bubble/banner slides and the chip cascade collapse to plain opacity or nothing.
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+  /// Drives the screen-off auto-reconnect: a `.background` transition mid-stream arms
+  /// the retry gate, `.active` fires any deferred retry (mirrors web's
+  /// `visibilitychange` handling in `sse-client.ts`).
+  @Environment(\.scenePhase) private var scenePhase
+
   /// Flipped `true` in the empty state's `.onAppear` so the example chips cascade in
   /// once (staggered fade), rather than snapping in with the hero.
   @State private var emptyStateAppeared = false
@@ -104,7 +109,19 @@ struct ChatView: View {
       }
     }
     // Tear down the stream when the screen goes away (conventions.md "Concurrency").
+    // cancelStreaming also releases the screen-wake hold, so it can't stick on.
     .onDisappear { model.cancelStreaming() }
+    // Screen-off auto-reconnect: arm on background, fire any deferred retry on resume.
+    .onChange(of: scenePhase) { _, newPhase in
+      switch newPhase {
+      case .background:
+        model.sceneDidEnterBackground()
+      case .active:
+        model.sceneWillEnterForeground()
+      default:
+        break
+      }
+    }
     // Build the viewer once on appear, and rebuild it when the displayed scope
     // changes (a chip pick or a resolved `scope` event) so its fixed format
     // re-scopes to the active scope (M-BR-ART-4; web scopes the viewer to
@@ -258,7 +275,11 @@ struct ChatView: View {
   /// the terminal answer later replaces, authoritatively).
   private var inProgressView: some View {
     VStack(alignment: .leading, spacing: 12) {
-      StreamingStatusView(phase: model.streamingPhase, activities: model.toolActivities)
+      StreamingStatusView(
+        phase: model.streamingPhase,
+        activities: model.toolActivities,
+        reconnecting: model.reconnecting
+      )
       if !model.streamingText.isEmpty {
         MarkdownText(model.streamingText)
           .font(Theme.body(.body))

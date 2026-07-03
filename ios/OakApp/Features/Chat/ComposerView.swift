@@ -229,26 +229,31 @@ struct ComposerView: View {
   @ViewBuilder
   private var sendButton: some View {
     Button {
-      isInputFocused = false
-      attachNote = nil
       Haptics.tap()
-      model.send()
+      if model.isStreaming {
+        // Stop the in-flight turn (quick-stop restores this text; a later stop keeps
+        // the answer-less turn) — see `ChatViewModel.stopStreaming()`.
+        model.stopStreaming()
+      } else {
+        isInputFocused = false
+        attachNote = nil
+        model.send()
+      }
     } label: {
-      // A filled accent disc. The glyph morphs to `stop.fill` while a turn streams —
-      // a purely visual state cue; the button stays disabled (canSend is false), so
-      // there is no cancel affordance, matching the VM contract.
+      // A filled accent disc. The glyph morphs to `stop.fill` while a turn streams; the
+      // button is active then so tapping it cancels the stream (web's Stop parity).
       Image(systemName: model.isStreaming ? "stop.fill" : "arrow.up")
         .font(.system(.headline, design: .rounded).weight(.semibold))
         .foregroundStyle(.white)
         .frame(width: 38, height: 38)
         .background(Theme.accent, in: Circle())
         .contentTransition(.symbolEffect(.replace))
-        .opacity(model.canSend ? 1 : 0.4)
+        .opacity(model.isStreaming || model.canSend ? 1 : 0.4)
     }
     .buttonStyle(OakPressableButtonStyle())
-    .disabled(!model.canSend)
+    .disabled(!model.isStreaming && !model.canSend)
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.isStreaming)
-    .accessibilityLabel("Send")
+    .accessibilityLabel(model.isStreaming ? "Stop" : "Send")
   }
 
   // MARK: Attach actions

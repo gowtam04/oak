@@ -12,11 +12,14 @@ import Testing
 struct AppStateGuestImportTests {
 
   @Test
-  func importMapsInMemoryTurnsToPayload() async {
+  func importMapsInMemoryTurnsToPayloadNonLossy() async throws {
+    // The guest→sign-in import must carry the COMPLETE OakAnswer, not just the prose:
+    // reasoning, citations, inferences, and subjects all survive sign-in.
+    let fullAnswer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
     let state = AppState()
     state.guestThread = [
-      GuestTurn(role: .user, text: "What's the fastest dragon?"),
-      GuestTurn(role: .assistant, text: "Dragapult, at 142 base Speed."),
+      GuestTurn(content: .user(text: "What's the fastest dragon?")),
+      GuestTurn(content: .assistant(answer: fullAnswer)),
     ]
     let fake = FakeHistoryService()
     fake.importResult = .success("conv_new")
@@ -40,10 +43,13 @@ struct AppStateGuestImportTests {
       Issue.record("second imported turn should be an assistant answer")
       return
     }
-    // The assistant turn round-trips its prose inside a minimal, schema-valid answer.
-    #expect(answer.answerMarkdown == "Dragapult, at 142 base Speed.")
+    // Fields BEYOND answer_markdown survive the round-trip — the import is non-lossy.
+    #expect(answer.answerMarkdown == fullAnswer.answerMarkdown)
     #expect(answer.status == .answered)
-    #expect(answer.citations.isEmpty)
+    #expect(answer.citations.count == 2)                 // citations preserved
+    #expect(answer.citations == fullAnswer.citations)
+    #expect(answer.reasoningMarkdown == fullAnswer.reasoningMarkdown)
+    #expect(answer.subjects?.first?.name == "Garchomp")  // structured blocks preserved
   }
 
   @Test
@@ -53,7 +59,7 @@ struct AppStateGuestImportTests {
     let state = AppState()
     state.guestThreadScope = .gen7
     state.activeConversationId = "existing_session"  // reused as the import session id
-    state.guestThread = [GuestTurn(role: .user, text: "hi")]
+    state.guestThread = [GuestTurn(content: .user(text: "hi"))]
     let fake = FakeHistoryService()
     fake.importResult = .success("existing_session")
 
@@ -68,7 +74,7 @@ struct AppStateGuestImportTests {
     // A guest who never had a turn resolve a scope imports under the champions
     // default (web: `resolvedScope ?? "champions"`).
     let state = AppState()  // guestThreadScope defaults to .champions
-    state.guestThread = [GuestTurn(role: .user, text: "hi")]
+    state.guestThread = [GuestTurn(content: .user(text: "hi"))]
     let fake = FakeHistoryService()
     fake.importResult = .success("conv_x")
 
@@ -92,7 +98,7 @@ struct AppStateGuestImportTests {
   @Test
   func importFailureIsNonFatalAndKeepsThread() async {
     let state = AppState()
-    state.guestThread = [GuestTurn(role: .user, text: "hi")]
+    state.guestThread = [GuestTurn(content: .user(text: "hi"))]
     let fake = FakeHistoryService()
     fake.importResult = .failure(.transport(underlying: "URLError.-1009"))
 

@@ -103,6 +103,44 @@ final class ChatViewModel {
   /// recoverable failure without re-appending the user turn (M-AC-4.4).
   private var lastRequest: PendingRequest?
 
+  // MARK: Stop + stream-resilience state (mirrors web `page.tsx` / `sse-client.ts`)
+
+  /// The quick-stop window: a Stop tap within this of ``send()`` wipes the just-sent
+  /// turn and restores its text (vs. a later stop, which keeps the answer-less turn).
+  /// Mirrors web's `QUICK_STOP_MS` (2000ms).
+  static let quickStopThreshold: TimeInterval = 2
+
+  /// Max automatic reconnect attempts after a backgrounding-induced drop. Capped at 1
+  /// (web's `MAX_RETRIES`): one attempt heals the dominant screen-off case while
+  /// bounding the double-persist blast radius.
+  private static let maxRetries = 1
+
+  /// When the current turn's stream started (set on ``send()``), for the quick-stop
+  /// window. `nil` when no turn is in flight.
+  private var turnStartedAt: Date?
+
+  /// True while an automatic reconnect is pending or in flight after a backgrounding
+  /// drop — the turn stays "in flight" and the status view shows "Reconnecting…"
+  /// instead of a dead-end error. Cleared once output resumes, or on any terminal.
+  private(set) var reconnecting = false
+
+  /// True if the app backgrounded DURING the current stream attempt. Gates auto-retry
+  /// so only a real suspension (not any visible failure) triggers a re-send; reset at
+  /// the start of every attempt. Mirrors web's `hiddenDuringTurnRef`.
+  private var hiddenDuringTurn = false
+
+  /// Auto-retries already spent on the current turn (bounded by ``maxRetries``).
+  private var retryCount = 0
+
+  /// A recoverable drop was noticed while the app was still backgrounded; the retry
+  /// fires once the app returns to the foreground. Mirrors web's `pendingRetryRef`.
+  private var pendingRetry = false
+
+  /// Whether the app is currently in the foreground. Updated by the scene-phase hooks
+  /// (``sceneDidEnterBackground()`` / ``sceneWillEnterForeground()``); read when a
+  /// drop is noticed to decide between an immediate retry and a deferred one.
+  private var isForeground = true
+
   init(chat: any ChatService, appState: AppState) {
     self.chat = chat
     self.appState = appState
@@ -141,10 +179,17 @@ final class ChatViewModel {
     cancelStreaming()
 
     turns.append(ChatTurnItem(content: .user(text: text, imageCount: images.count)))
-    mirrorGuestTurn(GuestTurn(role: .user, text: text))
+    mirrorGuestTurn(GuestTurn(content: .user(text: text)))
 
     composerText = ""
     pendingImages = []
+    // Reset the reconnect bookkeeping for this fresh turn (supersedes any pending
+    // retry from a prior turn) and stamp the quick-stop window.
+    turnStartedAt = Date()
+    retryCount = 0
+    pendingRetry = false
+    hiddenDuringTurn = false
+    reconnecting = false
     // The pending chip pick (if any) rides THIS turn as `scope_seed`; a `scope`
     // event will clear `scopeSeed` mid-turn so it doesn't leak onto the next turn.
     let request = PendingRequest(
@@ -161,6 +206,69 @@ final class ChatViewModel {
   func retry() {
     guard !isStreaming, let request = lastRequest else { return }
     beginStreaming(request)
+  }
+
+  /// Handles the composer's Stop tap (mirrors web's `handleStop`, `web/src/app/page.tsx`).
+  /// Aborts the in-flight stream cleanly — a user-initiated stop is NOT a failure, so no
+  /// error banner is shown. A stop within ``quickStopThreshold`` of ``send()`` is a
+  /// "quick stop": the just-sent turn is discarded and its message (and staged images)
+  /// restored into the composer for an easy redo. A later stop leaves the now-answerless
+  /// user turn in the thread.
+  ///
+  /// WEB-PARITY NOTE: web's quick-stop wipes the ENTIRE thread and rotates the session
+  /// (not merely the just-sent turn) while keeping the displayed scope — this mirrors
+  /// that behaviour exactly.
+  func stopStreaming() {
+    performStop(now: Date())
+  }
+
+  /// The clock-injectable core of ``stopStreaming()`` — exposed (internal) so tests can
+  /// drive the quick-stop vs. late-stop decision deterministically without waiting on
+  /// the real ``quickStopThreshold``.
+  func performStop(now: Date) {
+    guard isStreaming else { return }
+    let elapsed = now.timeIntervalSince(turnStartedAt ?? .distantPast)
+    let stopped = lastRequest
+    // Tear down the stream (no banner) and clear all reconnect state / idle-timer hold.
+    cancelStreaming()
+
+    guard elapsed < Self.quickStopThreshold, let request = stopped else {
+      // Late stop: keep the answer-less user turn in the thread; nothing else to do.
+      return
+    }
+
+    // Quick stop: wipe to a brand-new session and restore the message for a redo. Scope
+    // is intentionally NOT reset (web keeps `resolvedScope`/`scopeSeed` on stop).
+    turns = []
+    streamingText = ""
+    toolActivities = []
+    errorBanner = nil
+    lastRequest = nil
+    turnStartedAt = nil
+    sessionId = UUID().uuidString
+    appState.activeConversationId = nil
+    if case .guest = appState.authState {
+      appState.guestThread = []
+    }
+    composerText = request.message
+    pendingImages = request.images
+  }
+
+  // MARK: Scene lifecycle (screen-off auto-reconnect — web's `visibilitychange`)
+
+  /// The app entered the background (screen lock / app switch). If a turn is streaming,
+  /// arm the screen-off auto-retry gate so a resulting connection drop can heal on
+  /// resume. Mirrors web's `visibilitychange` → hidden while a request is in flight.
+  func sceneDidEnterBackground() {
+    isForeground = false
+    if isStreaming { hiddenDuringTurn = true }
+  }
+
+  /// The app returned to the foreground. Fire any retry that was deferred because the
+  /// drop was noticed while still backgrounded. Mirrors web's `visible` handler.
+  func sceneWillEnterForeground() {
+    isForeground = true
+    if pendingRetry { fireRetry() }
   }
 
   /// Records an explicit scope pick from the header chip (GS-C). It seeds the NEXT
@@ -249,11 +357,18 @@ final class ChatViewModel {
   }
 
   /// Cancels the in-flight stream (a new turn, or the view disappearing). Leaves the
-  /// thread intact; a cancelled consumer never writes a banner.
+  /// thread intact; a cancelled consumer never writes a banner. Also clears the
+  /// reconnect bookkeeping and releases the idle-timer hold so the screen-wake lock and
+  /// a "Reconnecting…" state can never get stuck on after the stream is gone.
   func cancelStreaming() {
     streamTask?.cancel()
     streamTask = nil
     isStreaming = false
+    reconnecting = false
+    pendingRetry = false
+    hiddenDuringTurn = false
+    retryCount = 0
+    setIdleTimerDisabled(false)
   }
 
   // MARK: Reducer (one event at a time)
@@ -262,6 +377,9 @@ final class ChatViewModel {
   /// transition rules are unit-testable directly, in addition to the end-to-end
   /// `send` path.
   func apply(_ event: SSEEvent) {
+    // Any event means the stream is producing output again → clear any "Reconnecting…"
+    // state (mirrors web, where every event handler resets `reconnecting`).
+    reconnecting = false
     switch event {
     case let .scope(format, source):
       // The server resolved this turn's scope. Adopt it and retire any pending
@@ -287,18 +405,24 @@ final class ChatViewModel {
       // The terminal, authoritative answer replaces any streamed buffer and ends
       // the turn. A non-`answered` status is rendered as a normal answer (M-AC-1.3).
       turns.append(ChatTurnItem(content: .assistant(answer)))
-      mirrorGuestTurn(GuestTurn(role: .assistant, text: answer.answerMarkdown))
+      // Mirror the FULL answer (not just its prose) so the guest→sign-in import is
+      // non-lossy — reasoning/citations/inferences survive.
+      mirrorGuestTurn(GuestTurn(content: .assistant(answer: answer)))
       streamingText = ""
       toolActivities = []
       isStreaming = false
+      setIdleTimerDisabled(false)
 
     case let .error(code, message, _):
       // Transport/API fault delivered in-band: surface a recoverable banner and do
-      // not leave a half-rendered answer (M-AC-4.4). The user turn stays in place.
+      // not leave a half-rendered answer (M-AC-4.4). The user turn stays in place. An
+      // in-band `error` frame is NEVER auto-retried (it's a real model/agent fault, not
+      // a connection drop) — this path runs inside `apply`, outside the retry gate.
       errorBanner = ErrorBanner(message: Self.bannerMessage(code: code, fallback: message), isRetryable: true)
       streamingText = ""
       toolActivities = []
       isStreaming = false
+      setIdleTimerDisabled(false)
     }
   }
 
@@ -309,6 +433,11 @@ final class ChatViewModel {
     toolActivities = []
     errorBanner = nil
     isStreaming = true
+    // A fresh attempt: only a hide DURING it should arm the auto-retry (web resets
+    // `hiddenDuringTurnRef` at the start of every attempt).
+    hiddenDuringTurn = false
+    // Hold the screen-wake lock while a turn streams (web's Screen Wake Lock analog).
+    setIdleTimerDisabled(true)
 
     let stream = chat.send(
       sessionId: sessionId,
@@ -331,17 +460,26 @@ final class ChatViewModel {
       return
     } catch let error as OakError {
       if Task.isCancelled { return }
+      // A connection drop (`.transport`) while backgrounded auto-recovers; every other
+      // OakError (rate limit, HTTP status, image rejection, decode) is a clean server
+      // fault — surface it, never auto-retry (mirrors web: HTTP errors are not retried).
+      if case .transport = error, handleRecoverableFailure() { return }
       applyStreamFailure(error)
       return
     } catch {
       if Task.isCancelled { return }
+      // An unexpected non-`OakError` throw is treated as a connection drop.
+      if handleRecoverableFailure() { return }
       applyStreamFailure(OakError.transportFailure(error))
       return
     }
-    // Defensive: the stream finished without a terminal answer/error and was not
-    // cancelled. Clear the in-progress flag so the UI doesn't hang in "working".
+    // The stream ended without a terminal answer/error and was not cancelled — a
+    // dropped socket can return a clean EOF instead of throwing. Recover if the drop
+    // coincided with backgrounding; otherwise clear the working flag (defensive).
     if !Task.isCancelled, isStreaming {
+      if handleRecoverableFailure() { return }
       isStreaming = false
+      setIdleTimerDisabled(false)
     }
   }
 
@@ -353,6 +491,51 @@ final class ChatViewModel {
     streamingText = ""
     toolActivities = []
     isStreaming = false
+    reconnecting = false
+    setIdleTimerDisabled(false)
+  }
+
+  // MARK: Auto-reconnect after a backgrounding drop (mirrors web `sse-client.ts`)
+
+  /// Decides whether a connection drop should be auto-recovered. Returns `true` if it
+  /// took ownership (fired or armed a retry); `false` ⇒ the caller surfaces the error.
+  /// Only a drop that happened while the app was backgrounded, and only up to
+  /// ``maxRetries`` times, is recoverable. Mirrors web's `handleRecoverableFailure`.
+  private func handleRecoverableFailure() -> Bool {
+    guard hiddenDuringTurn, retryCount < Self.maxRetries else { return false }
+    if isForeground {
+      // Already back in the foreground — re-send immediately.
+      fireRetry()
+    } else {
+      // Still backgrounded — show "Reconnecting…" and fire on foreground. The turn
+      // stays in flight; keep the streamed buffer cleared so no half-answer lingers.
+      pendingRetry = true
+      reconnecting = true
+      isStreaming = true
+      streamingText = ""
+      toolActivities = []
+      errorBanner = nil
+    }
+    return true
+  }
+
+  /// Re-opens the stream for the retained turn as an automatic recovery attempt (keeps
+  /// the turn in flight; shows "Reconnecting…" until output resumes). Mirrors web's
+  /// `fireRetry`.
+  private func fireRetry() {
+    guard let request = lastRequest else { return }
+    pendingRetry = false
+    retryCount += 1
+    beginStreaming(request)
+    reconnecting = true
+  }
+
+  /// Sets the screen-wake hold. Centralized so both the hold (turn start) and every
+  /// release path (terminal answer/error, transport fault, stop, cancel) go through one
+  /// place — the idle timer can never be left stuck on. `UIApplication` is main-actor
+  /// isolated; this type is `@MainActor`, so the access is safe.
+  private func setIdleTimerDisabled(_ disabled: Bool) {
+    UIApplication.shared.isIdleTimerDisabled = disabled
   }
 
   /// Mirrors a completed turn into the in-memory guest thread (guests only) so the
