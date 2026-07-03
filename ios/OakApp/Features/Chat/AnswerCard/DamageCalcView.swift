@@ -20,6 +20,7 @@ struct DamageCalcView: View {
   let damageCalc: DamageCalc
 
   @State private var breakdownExpanded = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -39,13 +40,19 @@ struct DamageCalcView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(12)
-    .background(
-      Theme.surface,
-      in: RoundedRectangle(cornerRadius: Theme.Radius.md)
-    )
+    .oakCard(radius: Theme.Radius.md)
+    // A warning-tinted gradient hairline in BOTH modes (oakCard's own stroke is
+    // dark-mode-only and neutral) — the damage estimate always carries this cue.
     .overlay(
-      RoundedRectangle(cornerRadius: Theme.Radius.md)
-        .strokeBorder(Theme.warning.opacity(0.4), lineWidth: 1)
+      RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+        .strokeBorder(
+          LinearGradient(
+            colors: [Theme.warning.opacity(0.4), Theme.warning.opacity(0.15)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          ),
+          lineWidth: 1
+        )
     )
   }
 
@@ -82,7 +89,9 @@ struct DamageCalcView: View {
 
   // MARK: Result
 
-  /// The computed figure(s) — rendered prominently in the monospaced face.
+  /// The computed figure(s) — rendered prominently in the monospaced face. Whole
+  /// numbers (the min/max damage figures) get the emphasized title3 face with a
+  /// one-shot count-up; other scalars (e.g. `"78–92%"`) render statically.
   private var resultSection: some View {
     VStack(alignment: .leading, spacing: 6) {
       ForEach(sortedEntries(damageCalc.result), id: \.key) { entry in
@@ -92,15 +101,25 @@ struct DamageCalcView: View {
             .foregroundStyle(Theme.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
           Spacer(minLength: 8)
-          Text(entry.value.displayText)
-            .font(Theme.mono(.body).weight(.semibold))
-            .foregroundStyle(Theme.textPrimary)
-            .multilineTextAlignment(.trailing)
-            .fixedSize(horizontal: false, vertical: true)
+          resultValue(entry.value)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(humanize(entry.key)): \(entry.value.displayText)")
       }
+    }
+  }
+
+  @ViewBuilder
+  private func resultValue(_ value: JSONScalar) -> some View {
+    if case .int(let intValue) = value {
+      CountUpIntText(value: intValue)
+        .multilineTextAlignment(.trailing)
+    } else {
+      Text(value.displayText)
+        .font(Theme.mono(.body).weight(.semibold))
+        .foregroundStyle(Theme.textPrimary)
+        .multilineTextAlignment(.trailing)
+        .fixedSize(horizontal: false, vertical: true)
     }
   }
 
@@ -145,6 +164,11 @@ struct DamageCalcView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .textSelection(.enabled)
+        .padding(10)
+        .background(
+          Theme.textPrimary.opacity(0.05),
+          in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+        )
         .padding(.top, 6)
     } label: {
       Label("Show the math", systemImage: "function")
@@ -152,6 +176,7 @@ struct DamageCalcView: View {
         .foregroundStyle(Theme.textSecondary)
     }
     .tint(Theme.textSecondary)
+    .animation(reduceMotion ? nil : Theme.Motion.smooth, value: breakdownExpanded)
   }
 
   // MARK: Helpers
@@ -174,6 +199,34 @@ struct DamageCalcView: View {
     guard let value else { return nil }
     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? nil : trimmed
+  }
+}
+
+/// A `damage_calc` integer result (e.g. `min_damage`), rendered in the emphasized
+/// title3 mono face with a one-shot count-up from 0 on first appear — `.numericText()`
+/// rolls the digits as the backing state animates to its final value. Reduce Motion
+/// skips straight to the final value (no roll).
+private struct CountUpIntText: View {
+  let value: Int
+
+  @State private var displayed = 0
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  var body: some View {
+    Text("\(displayed)")
+      .font(Theme.mono(.title3).weight(.semibold))
+      .foregroundStyle(Theme.textPrimary)
+      .contentTransition(.numericText())
+      .fixedSize(horizontal: false, vertical: true)
+      .onAppear {
+        if reduceMotion {
+          displayed = value
+        } else {
+          withAnimation(Theme.Motion.smooth) {
+            displayed = value
+          }
+        }
+      }
   }
 }
 

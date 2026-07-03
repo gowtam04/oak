@@ -16,6 +16,14 @@ import SwiftUI
 struct ArtifactSheetView: View {
   let model: ArtifactViewModel
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// Mirrors the back-stack depth of the *previous* render so the drill transition can tell a
+  /// push (depth grew → new content slides in from the trailing edge) from a back (depth shrank →
+  /// from the leading edge). Updated in `.onChange` after each swap, so during the render that
+  /// swaps `current` it still holds the pre-change depth. Read-only reflection of the model's
+  /// stack — it adds no navigation API (the model still owns all navigation).
+  @State private var previousDepth = 0
+
   var body: some View {
     NavigationStack {
       Group {
@@ -24,6 +32,14 @@ struct ArtifactSheetView: View {
         } else {
           Color.clear
         }
+      }
+      // Keying on the artifact id makes SwiftUI treat each drill as a remove+insert so the
+      // directional transition fires; the count drives the push/back direction.
+      .id(model.current?.id)
+      .transition(drillTransition)
+      .animation(Theme.Motion.smooth, value: model.current?.id)
+      .onChange(of: model.stack.count) { _, newValue in
+        previousDepth = newValue
       }
       .navigationTitle(model.current?.title ?? "")
       .navigationBarTitleDisplayMode(.inline)
@@ -47,6 +63,21 @@ struct ArtifactSheetView: View {
     }
     .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
+    .presentationBackground(.thinMaterial)
+    .presentationCornerRadius(24)
+  }
+
+  /// Push (deeper) slides content in from the trailing edge and out to the leading edge; back
+  /// reverses it. Under Reduce Motion (constraint 2) both directions collapse to a plain opacity
+  /// crossfade — no lateral movement. `previousDepth` still holds the pre-swap depth here, so the
+  /// comparison against the just-updated `model.stack.count` yields the correct direction.
+  private var drillTransition: AnyTransition {
+    if reduceMotion { return .opacity }
+    let isPush = model.stack.count >= previousDepth
+    return .asymmetric(
+      insertion: .move(edge: isPush ? .trailing : .leading).combined(with: .opacity),
+      removal: .move(edge: isPush ? .leading : .trailing).combined(with: .opacity)
+    )
   }
 
   // MARK: Content dispatch
@@ -77,14 +108,39 @@ struct ArtifactSheetView: View {
     }
   }
 
+  /// A skeleton profile stands in while an entity/team fetch settles — a header row (sprite tile +
+  /// name/dex bars + a type-chip row) over a column of stat-bar rows, mirroring the shape an
+  /// entity profile resolves into. Built from the Phase-1 `SkeletonBlock` (which shimmers, or sits
+  /// at a steady 60% under Reduce Motion). The blocks are decorative and VoiceOver-hidden, so the
+  /// whole placeholder announces itself as one "Loading" element (M-AC-UI9.3).
   private var loadingView: some View {
-    VStack(spacing: 12) {
-      ProgressView()
-      Text("Loading\u{2026}")
-        .font(Theme.body(.footnote))
-        .foregroundStyle(Theme.textSecondary)
+    VStack(alignment: .leading, spacing: 18) {
+      HStack(alignment: .top, spacing: 14) {
+        SkeletonBlock(width: 96, height: 96)
+        VStack(alignment: .leading, spacing: 8) {
+          SkeletonBlock(width: 150, height: 22)
+          SkeletonBlock(width: 80, height: 13)
+          HStack(spacing: 6) {
+            SkeletonBlock(width: 54, height: 20)
+            SkeletonBlock(width: 54, height: 20)
+          }
+        }
+        Spacer(minLength: 0)
+      }
+      VStack(alignment: .leading, spacing: 12) {
+        ForEach(0..<6, id: \.self) { _ in
+          HStack(spacing: 10) {
+            SkeletonBlock(width: 40, height: 12)
+            SkeletonBlock(width: 32, height: 12)
+            SkeletonBlock(height: 8)
+          }
+        }
+      }
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(16)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Loading")
   }
 
   /// An honest miss — the sheet stays open and the user can always get back to chat

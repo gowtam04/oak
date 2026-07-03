@@ -39,6 +39,12 @@ import SwiftUI
 struct AnswerCardView: View {
   let answer: OakAnswer
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// Flips once, on this view instance's first appearance, to drive the one-shot
+  /// entrance cascade below — never reset, so re-layout/scroll never re-plays it.
+  @State private var hasAppeared = false
+
   /// Sends the given text verbatim as the next user turn (clarify options +
   /// suggestion chips). Defaults to a no-op so the card renders in isolation.
   var onFollowUp: (String) -> Void = { _ in }
@@ -63,13 +69,19 @@ struct AnswerCardView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
-      ForEach(sections, id: \.self) { section in
+      ForEach(Array(sections.enumerated()), id: \.element) { index, section in
         view(for: section)
+          .opacity(hasAppeared ? 1 : 0)
+          .offset(y: hasAppeared ? 0 : 6)
+          .animation(
+            reduceMotion ? nil : Theme.Motion.staggered(index), value: hasAppeared
+          )
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     // The whole answer reads as one VoiceOver container with ordered children.
     .accessibilityElement(children: .contain)
+    .onAppear { hasAppeared = true }
   }
 
   // MARK: Section model (testable orchestration seam)
@@ -138,7 +150,7 @@ struct AnswerCardView: View {
           } label: {
             SubjectsView(subjects: [subject])
           }
-          .buttonStyle(.plain)
+          .buttonStyle(OakPressableButtonStyle())
           .accessibilityHint("Opens \(subject.name)'s full profile")
         }
       }
@@ -301,6 +313,7 @@ private struct ReasoningSection: View {
   let markdown: String
 
   @State private var isExpanded = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     DisclosureGroup(isExpanded: $isExpanded) {
@@ -316,6 +329,7 @@ private struct ReasoningSection: View {
         .foregroundStyle(Theme.textPrimary)
     }
     .tint(Theme.textSecondary)
+    .animation(reduceMotion ? nil : Theme.Motion.smooth, value: isExpanded)
     .accessibilityHint("Shows how Oak reached this answer")
   }
 }

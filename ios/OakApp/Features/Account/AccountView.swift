@@ -10,8 +10,17 @@ import SwiftUI
 /// destructive and status rows pair an icon + text with color so meaning is never
 /// carried by color alone (M-AC-UI9.3). Interactive controls carry VoiceOver
 /// labels/hints (M-AC-UI9.1).
+///
+/// Chrome (UI-polish P6): a **profile header card** sits above the Form — a gradient
+/// wash with a 56pt avatar (email initial or `person.fill`), the tier title in the
+/// display face, and the email/sub-line beneath. The old `tierRow` folds into it.
+/// The header crossfades between the guest and signed-in faces (a crossfade is the
+/// Reduce-Motion-safe treatment; it's still gated so nothing animates when Reduce
+/// Motion is on). The color/gradient is decorative — the tier is always spelled out
+/// in text (M-AC-UI9.3).
 struct AccountView: View {
   @Environment(AppState.self) private var appState
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var model: AccountViewModel
 
   /// Drives the sign-in sheet (presented over the guest state).
@@ -27,6 +36,7 @@ struct AccountView: View {
     @Bindable var appState = appState
     NavigationStack {
       Form {
+        profileHeaderSection
         accountSection
         if let message = model.errorMessage {
           errorSection(message)
@@ -57,12 +67,95 @@ struct AccountView: View {
     }
   }
 
-  // MARK: Account / tier
+  // MARK: Profile header card
 
+  /// The gradient profile card. Lives in its own Section with cleared insets and a
+  /// clear row background so it reads as a floating card rather than a Form row.
+  @ViewBuilder
+  private var profileHeaderSection: some View {
+    Section {
+      profileHeader
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+    }
+  }
+
+  private var profileHeader: some View {
+    HStack(spacing: 16) {
+      avatar
+      VStack(alignment: .leading, spacing: 4) {
+        Text(model.tierTitle)
+          .font(Theme.display(.title2))
+        Text(headerSubtitle)
+          .font(Theme.body(.subheadline))
+          .foregroundStyle(Theme.textSecondary)
+          .contentTransition(.opacity)
+      }
+      Spacer(minLength: 0)
+    }
+    .padding(16)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background {
+      RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+        .fill(
+          LinearGradient(
+            colors: [Theme.accent.opacity(0.14), Theme.azure.opacity(0.10)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+        )
+    }
+    // Guest ↔ signed-in crossfade. A crossfade is inherently Reduce-Motion-safe, but
+    // gate it anyway so nothing animates when the user has asked for stillness.
+    .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.isSignedIn)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(accessibilityTierLabel)
+  }
+
+  /// The 56pt avatar: the email's initial on an accent wash when signed in, a
+  /// `person.fill` glyph when a guest. Crossfades with the rest of the header.
+  private var avatar: some View {
+    ZStack {
+      Circle().fill(Theme.accent.opacity(0.20))
+      if let initial = emailInitial {
+        Text(initial)
+          .font(Theme.display(.title2))
+          .foregroundStyle(Theme.accent)
+      } else {
+        Image(systemName: "person.fill")
+          .font(.title2)
+          .foregroundStyle(Theme.accent)
+      }
+    }
+    .frame(width: 56, height: 56)
+    .accessibilityHidden(true)
+  }
+
+  /// The first letter of the signed-in email, uppercased; `nil` for a guest.
+  private var emailInitial: String? {
+    guard let first = model.email?.trimmingCharacters(in: .whitespaces).first else { return nil }
+    return String(first).uppercased()
+  }
+
+  /// The header's second line: the email when signed in, an invitation when a guest.
+  private var headerSubtitle: String {
+    model.email ?? "Sign in to save your history and teams"
+  }
+
+  private var accessibilityTierLabel: String {
+    if let email = model.email {
+      return "\(model.tierTitle), \(email)"
+    }
+    return model.tierTitle
+  }
+
+  // MARK: Account actions
+
+  /// The sign-in / sign-out control. The tier row it used to sit beside now lives in
+  /// the profile header above; this section keeps the primary account action.
   @ViewBuilder
   private var accountSection: some View {
     Section {
-      tierRow
       if model.isSignedIn {
         Button {
           Task { await model.signOut() }
@@ -79,39 +172,9 @@ struct AccountView: View {
         }
         .accessibilityHint("Sign in with your email to unlock saved history and the team builder.")
       }
-    } header: {
-      Text("Account")
     } footer: {
       Text(model.tierDescription)
     }
-  }
-
-  /// The tier row: an icon + the tier title (color is never the only signal — the
-  /// tier is spelled out in text, M-AC-UI9.3).
-  private var tierRow: some View {
-    Label {
-      VStack(alignment: .leading, spacing: 2) {
-        Text(model.tierTitle)
-          .font(Theme.display(.headline))
-        if let email = model.email {
-          Text(email)
-            .font(Theme.body(.subheadline))
-            .foregroundStyle(Theme.textSecondary)
-        }
-      }
-    } icon: {
-      Image(systemName: model.isSignedIn ? "checkmark.seal.fill" : "person.crop.circle")
-        .foregroundStyle(model.isSignedIn ? Theme.success : Theme.textSecondary)
-    }
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel(accessibilityTierLabel)
-  }
-
-  private var accessibilityTierLabel: String {
-    if let email = model.email {
-      return "\(model.tierTitle), \(email)"
-    }
-    return model.tierTitle
   }
 
   // MARK: Preferences
@@ -136,6 +199,9 @@ struct AccountView: View {
   private var dangerSection: some View {
     Section {
       Button(role: .destructive) {
+        // A cautionary tap as the destructive confirmation opens (redundant with the
+        // visible alert — never the sole signal, M-AC-UI9.3).
+        Haptics.warning()
         showingDeleteConfirm = true
       } label: {
         HStack {

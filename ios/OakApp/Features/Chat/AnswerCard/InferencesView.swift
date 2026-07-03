@@ -30,10 +30,9 @@ struct InferencesView: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(12)
-      .background(
-        Theme.azure.opacity(0.10),
-        in: RoundedRectangle(cornerRadius: Theme.Radius.md)
-      )
+      .oakCard(radius: Theme.Radius.md, tint: Theme.azure)
+      // The DASHED edge is the visual tell for "inferred, not cited" — kept on top
+      // of oakCard's own chrome so it stays legible in both modes.
       .overlay(
         RoundedRectangle(cornerRadius: Theme.Radius.md)
           .strokeBorder(

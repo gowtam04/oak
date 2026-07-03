@@ -14,6 +14,11 @@ import UIKit
 struct TeamEditorView: View {
   @State private var model: TeamEditorViewModel
   @State private var exportedPaste: ExportPayload?
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// `true` for a brief window right after a successful save — drives the
+  /// transient "Saved" checkmark overlay (self-clearing after ~1s).
+  @State private var showSaveConfirmation = false
 
   /// When `true`, the editor fetches the full team on appear (existing-team path).
   private let loadsOnAppear: Bool
@@ -57,10 +62,12 @@ struct TeamEditorView: View {
         Section("Team legality") {
           ForEach(Array(model.teamLevelWarnings.enumerated()), id: \.offset) { _, warning in
             WarningRow(warning: warning)
+              .transition(warningTransition)
           }
         }
       }
     }
+    .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.warnings)
     .navigationTitle(model.savedTeam == nil ? "New team" : "Edit team")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
@@ -69,7 +76,7 @@ struct TeamEditorView: View {
           ProgressView()
         } else {
           Button("Save") {
-            Task { await model.save() }
+            Task { await saveAndConfirm() }
           }
           .fontWeight(.semibold)
         }
@@ -93,12 +100,49 @@ struct TeamEditorView: View {
         errorBanner(message)
       }
     }
+    .overlay(alignment: .top) {
+      if showSaveConfirmation {
+        saveConfirmationBadge
+          .padding(.top, 4)
+          .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+      }
+    }
     .sheet(item: $exportedPaste) { payload in
       ExportSheet(text: payload.text)
     }
     .task {
       if loadsOnAppear { await model.load() }
     }
+  }
+
+  // MARK: Save confirmation
+
+  /// Saves the team; on success, fires the success haptic and shows the transient
+  /// "Saved" badge for ~1s before fading it back out.
+  private func saveAndConfirm() async {
+    guard await model.save() != nil else { return }
+    Haptics.success()
+    withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
+      showSaveConfirmation = true
+    }
+    try? await Task.sleep(nanoseconds: 1_000_000_000)
+    withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
+      showSaveConfirmation = false
+    }
+  }
+
+  private var saveConfirmationBadge: some View {
+    Label("Saved", systemImage: "checkmark.circle.fill")
+      .font(Theme.body(.subheadline).weight(.semibold))
+      .foregroundStyle(Theme.success)
+      .padding(.horizontal, 14)
+      .padding(.vertical, 8)
+      .oakCard(radius: Theme.Radius.pill)
+  }
+
+  /// One-shot entrance for a newly-surfaced team-level legality warning.
+  private var warningTransition: AnyTransition {
+    reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
   }
 
   // MARK: Details
@@ -180,35 +224,50 @@ private struct MemberEditorSection: View {
   let warnings: [TeamWarning]
   let onRemove: () -> Void
 
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
   var body: some View {
     Section {
-      identityFields
-      moveFields
-      naturePicker
-      teraPicker
-      Stepper(value: $member.level, in: 1...100) {
-        LabeledContent("Level", value: "\(member.level)")
-      }
-      StatStepperGrid(
-        title: "EVs",
-        spread: $member.evs,
-        range: 0...252,
-        step: 4,
-        footnote: evFootnote
-      )
-      StatStepperGrid(
-        title: "IVs",
-        spread: $member.ivs,
-        range: 0...31,
-        step: 1
-      )
-      cosmeticFields
+      // The whole set renders as one `.oakCard()` unit rather than a stack of
+      // plain Form rows. `EditableMember` carries no per-species type data, so
+      // this is the plain-card degradation the plan calls for — no type tint.
+      VStack(alignment: .leading, spacing: 16) {
+        identityFields
+        moveFields
+        naturePicker
+        teraPicker
+        Stepper(value: $member.level, in: 1...100) {
+          LabeledContent("Level", value: "\(member.level)")
+        }
+        StatStepperGrid(
+          title: "EVs",
+          spread: $member.evs,
+          range: 0...252,
+          step: 4,
+          footnote: evFootnote
+        )
+        StatStepperGrid(
+          title: "IVs",
+          spread: $member.ivs,
+          range: 0...31,
+          step: 1
+        )
+        cosmeticFields
 
-      if !warnings.isEmpty {
-        ForEach(Array(warnings.enumerated()), id: \.offset) { _, warning in
-          WarningRow(warning: warning)
+        if !warnings.isEmpty {
+          VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(warnings.enumerated()), id: \.offset) { _, warning in
+              WarningRow(warning: warning)
+                .transition(warningTransition)
+            }
+          }
+          .animation(reduceMotion ? nil : Theme.Motion.smooth, value: warnings)
         }
       }
+      .padding(16)
+      .oakCard(radius: Theme.Radius.md)
+      .listRowInsets(EdgeInsets())
+      .listRowBackground(Color.clear)
     } header: {
       HStack {
         Text(headerTitle)
@@ -220,6 +279,11 @@ private struct MemberEditorSection: View {
         .accessibilityLabel("Remove Pokémon \(index + 1)")
       }
     }
+  }
+
+  /// One-shot entrance for a newly-surfaced per-slot legality warning.
+  private var warningTransition: AnyTransition {
+    reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
   }
 
   private var headerTitle: String {

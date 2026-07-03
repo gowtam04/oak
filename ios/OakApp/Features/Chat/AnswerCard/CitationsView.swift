@@ -14,6 +14,7 @@ struct CitationsView: View {
   let citations: [Citation]
 
   @State private var isExpanded = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     if !citations.isEmpty {
@@ -30,6 +31,7 @@ struct CitationsView: View {
       }
       // Tint the disclosure chevron to the muted text color (it's a footer affordance).
       .tint(Theme.textSecondary)
+      .animation(reduceMotion ? nil : Theme.Motion.smooth, value: isExpanded)
     }
   }
 
@@ -59,21 +61,40 @@ struct CitationsView: View {
       .accessibilityHidden(true)
   }
 
-  /// One citation: `source` bold, `detail` muted, and the optional endpoint link.
+  /// One citation: a per-source glyph, `source` bold, `detail` muted, and the
+  /// optional endpoint link.
   private func citationRow(_ citation: Citation) -> some View {
-    VStack(alignment: .leading, spacing: 2) {
-      Text(citation.source)
+    HStack(alignment: .top, spacing: 8) {
+      Image(systemName: sourceGlyph(citation))
         .font(Theme.body(.footnote))
-        .fontWeight(.semibold)
-        .foregroundStyle(Theme.textPrimary)
-      Text(citation.detail)
-        .font(Theme.body(.footnote))
-        .foregroundStyle(Theme.textSecondary)
-      if let endpointUrl = citation.endpointUrl, !endpointUrl.isEmpty {
-        endpointLink(endpointUrl)
+        .foregroundStyle(Theme.textMuted)
+        .accessibilityHidden(true)
+
+      VStack(alignment: .leading, spacing: 2) {
+        Text(citation.source)
+          .font(Theme.body(.footnote))
+          .fontWeight(.semibold)
+          .foregroundStyle(Theme.textPrimary)
+        Text(citation.detail)
+          .font(Theme.body(.footnote))
+          .foregroundStyle(Theme.textSecondary)
+        if let endpointUrl = citation.endpointUrl, !endpointUrl.isEmpty {
+          endpointLink(endpointUrl)
+        }
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  /// A link glyph for a citation with a resolvable `endpoint_url`, else a
+  /// reference-book glyph — a lightweight per-source visual cue (SF Symbols only).
+  private func sourceGlyph(_ citation: Citation) -> String {
+    guard let endpointUrl = citation.endpointUrl, !endpointUrl.isEmpty,
+      URL(string: endpointUrl) != nil
+    else {
+      return "books.vertical"
+    }
+    return "link"
   }
 
   /// `endpoint_url` rendered as a tappable link — azure, underlined, with a link

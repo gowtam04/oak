@@ -19,6 +19,11 @@ struct ComposerView: View {
 
   @FocusState private var isInputFocused: Bool
 
+  /// Drives the light-mode-only upward lift shadow (dark mode leans on the divider).
+  @Environment(\.colorScheme) private var colorScheme
+  /// Gates the focus/toggle/thumbnail motion (constraint 2).
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
   // MARK: Image-attach local state (presentation only; staged images live on the VM)
 
   /// Selections from the SwiftUI photo-library picker, loaded into `UIImage`s and
@@ -59,13 +64,34 @@ struct ComposerView: View {
           .padding(.horizontal, 12)
           .padding(.vertical, 8)
           .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+          // The border brightens to accent while focused (a color change, so it's kept
+          // under Reduce Motion) — a subtle "you're typing here" cue.
+          .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+              .strokeBorder(
+                isInputFocused ? Theme.accent.opacity(0.4) : Theme.separator,
+                lineWidth: 1
+              )
+          }
+          .animation(Theme.Motion.snappy, value: isInputFocused)
 
         sendButton
       }
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
-    .background(.bar)
+    // A frosted bar lifted off the thread with a hairline top divider and (light mode
+    // only) a faint upward shadow; dark mode leans on the divider alone (constraint 6).
+    .background {
+      Rectangle()
+        .fill(.ultraThinMaterial)
+        .overlay(alignment: .top) { Divider() }
+        .shadow(
+          color: colorScheme == .dark ? .clear : .black.opacity(0.05),
+          radius: 8, y: -3
+        )
+        .ignoresSafeArea(edges: .bottom)
+    }
     .onChange(of: photoSelections) { _, items in
       guard !items.isEmpty else { return }
       Task { @MainActor in await stagePicked(items) }
@@ -113,24 +139,49 @@ struct ComposerView: View {
   @ViewBuilder
   private func controlsRow(model: ChatViewModel) -> some View {
     HStack(spacing: 12) {
-      // Champions-mode toggle (M-AC-6.1). A labeled toggle, so the current scope is
-      // never conveyed by color alone (M-AC-UI9.3 / M-AC-6.3).
-      Toggle(isOn: Binding(get: { model.championsMode }, set: { model.setChampionsMode($0) })) {
-        Label("Champions", systemImage: "crown")
-          .font(Theme.body(.footnote))
-          .labelStyle(.titleAndIcon)
-      }
-      .toggleStyle(.button)
-      .buttonStyle(.bordered)
-      .tint(model.championsMode ? Theme.sunflower : Theme.textSecondary)
-      .disabled(model.isStreaming)
-      .accessibilityLabel("Champions mode")
-      .accessibilityValue(model.championsMode ? "On" : "Off")
+      championsPill(model: model)
 
       Spacer(minLength: 0)
 
       attachControls(model: model)
     }
+  }
+
+  /// The Champions-mode toggle rendered as a compact capsule pill (M-AC-6.1): inactive
+  /// is a neutral bordered chip, active fills sunflower-18% with a sunflower label and
+  /// border. State is paired with the crown icon + "Champions" text so the current
+  /// scope never rides on color alone (M-AC-UI9.3 / M-AC-6.3). Semantics/labels are
+  /// unchanged from the prior toggle; the selected trait is added for VoiceOver.
+  @ViewBuilder
+  private func championsPill(model: ChatViewModel) -> some View {
+    let active = model.championsMode
+    Button {
+      model.setChampionsMode(!active)
+    } label: {
+      HStack(spacing: 4) {
+        Image(systemName: "crown")
+          .symbolEffect(.bounce, value: reduceMotion ? false : active)
+        Text("Champions")
+      }
+      .font(Theme.body(.footnote).weight(.medium))
+      .foregroundStyle(active ? Theme.sunflower : Theme.textSecondary)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 6)
+      .background(active ? Theme.sunflower.opacity(0.18) : .clear, in: Capsule())
+      .overlay {
+        Capsule().strokeBorder(
+          active ? Theme.sunflower.opacity(0.5) : Theme.separator,
+          lineWidth: 1
+        )
+      }
+      .contentShape(Capsule())
+    }
+    .buttonStyle(OakPressableButtonStyle())
+    .disabled(model.isStreaming)
+    .animation(reduceMotion ? nil : Theme.Motion.snappy, value: active)
+    .accessibilityLabel("Champions mode")
+    .accessibilityValue(active ? "On" : "Off")
+    .accessibilityAddTraits(active ? .isSelected : [])
   }
 
   // MARK: Image attach control (one menu → photo library / camera)
@@ -175,9 +226,12 @@ struct ComposerView: View {
         HStack(spacing: 8) {
           ForEach(Array(model.pendingImages.enumerated()), id: \.offset) { index, image in
             thumbnail(image: image, index: index, total: model.pendingImages.count, model: model)
+              .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
           }
         }
         .padding(.vertical, 2)
+        // Staged thumbnails pop in / out as they're attached or removed.
+        .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.pendingImages.count)
       }
     }
   }
@@ -217,14 +271,23 @@ struct ComposerView: View {
     Button {
       isInputFocused = false
       attachNote = nil
+      Haptics.tap()
       model.send()
     } label: {
-      Image(systemName: "arrow.up.circle.fill")
-        .font(.system(.title, design: .rounded))
-        .symbolRenderingMode(.hierarchical)
+      // A filled accent disc. The glyph morphs to `stop.fill` while a turn streams —
+      // a purely visual state cue; the button stays disabled (canSend is false), so
+      // there is no cancel affordance, matching the VM contract.
+      Image(systemName: model.isStreaming ? "stop.fill" : "arrow.up")
+        .font(.system(.headline, design: .rounded).weight(.semibold))
+        .foregroundStyle(.white)
+        .frame(width: 38, height: 38)
+        .background(Theme.accent, in: Circle())
+        .contentTransition(.symbolEffect(.replace))
+        .opacity(model.canSend ? 1 : 0.4)
     }
-    .tint(Theme.accent)
+    .buttonStyle(OakPressableButtonStyle())
     .disabled(!model.canSend)
+    .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.isStreaming)
     .accessibilityLabel("Send")
   }
 
