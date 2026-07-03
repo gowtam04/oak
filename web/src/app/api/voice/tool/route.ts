@@ -6,11 +6,12 @@
  *
  * Signed-in only (401 gate). Defense in depth: the socket is a client-driven
  * channel, so the `name` MUST be one of the voice-advertised tools (Oak's tool
- * layer minus `submit_answer`) — never let it push `submit_answer` or an
- * arbitrary name into `dispatch`. Malformed `arguments` return an IN-DOMAIN
- * error (200) so the voice model hears the miss and can recover, rather than a
- * transport fault. `dispatch` never throws in-domain; a genuine thrown fault
- * (e.g. a DB outage) is a clean 502.
+ * layer minus `VOICE_EXCLUDED_TOOLS`, `@/agent/tools/voice-gating`) — never let
+ * it push `submit_answer`, a network/warehouse tool, or an arbitrary name into
+ * `dispatch`. Malformed `arguments` return an IN-DOMAIN error (200) so the
+ * voice model hears the miss and can recover, rather than a transport fault.
+ * `dispatch` never throws in-domain; a genuine thrown fault (e.g. a DB outage)
+ * is a clean 502.
  *
  * Env gotcha (same as /api/chat): the tool layer, agent context, and auth are
  * DYNAMIC-imported inside the handler so `next build` never evaluates `@/env`.
@@ -23,6 +24,7 @@ import { readJsonBodyWithLimit } from "@/server/body-limit";
 import { checkRateLimit, type RateLimitConfig } from "@/server/rate-limit";
 import { FORMATS, modeForFormat, type Format } from "@/data/formats";
 import { logger } from "@/server/logger";
+import { VOICE_EXCLUDED_TOOLS } from "@/agent/tools/voice-gating";
 import type { VoiceToolResponseBody } from "@/lib/voice/voice-types";
 
 export const runtime = "nodejs";
@@ -116,12 +118,13 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 3) TOOL ALLOWLIST — the socket is client-driven, so the name must be one of
-  //    the voice-advertised tools (Oak's tool layer minus `submit_answer`). This
-  //    is the SAME filter `voiceToolDefs()` applies; building it straight from
-  //    `@/agent/tools` keeps the route independent of the voice-prompt module.
+  //    the voice-advertised tools (Oak's tool layer minus VOICE_EXCLUDED_TOOLS).
+  //    This is the SAME filter `voiceToolDefs()` applies; building it straight
+  //    from `@/agent/tools` keeps the route independent of the voice-prompt
+  //    module.
   const { tools, dispatch } = await import("@/agent/tools");
   const allowedNames = new Set(
-    tools.filter((t) => t.name !== "submit_answer").map((t) => t.name),
+    tools.filter((t) => !VOICE_EXCLUDED_TOOLS.has(t.name)).map((t) => t.name),
   );
   if (!allowedNames.has(name)) {
     return jsonError(

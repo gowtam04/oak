@@ -2,10 +2,11 @@
  * Voice-session server module (server-only; the voice-mode plan §5, workstream
  * S). Three responsibilities, all consumed by the `/api/voice/*` routes:
  *
- *   - `voiceToolDefs()`        — Oak's tool layer, minus `submit_answer`, in the
+ *   - `voiceToolDefs()`        — Oak's tool layer, minus `VOICE_EXCLUDED_TOOLS`
+ *                                (`@/agent/tools/voice-gating`), in the
  *                                FLATTENED xAI Responses function shape the
  *                                realtime session accepts (same flattening as
- *                                runtime.ts::toProviderToolDefs). 16 tools.
+ *                                runtime.ts::toProviderToolDefs).
  *   - `mintEphemeralToken()`   — mint a short-lived client secret from xAI so the
  *                                browser can open the realtime socket directly
  *                                (no WebSocket proxy through us).
@@ -23,6 +24,7 @@ import "server-only";
 
 import { env } from "@/env";
 import { tools } from "@/agent/tools";
+import { VOICE_EXCLUDED_TOOLS } from "@/agent/tools/voice-gating";
 import { buildVoiceInstructions } from "@/agent/prompts/voice";
 import type { ChatMessage } from "@/agent/types";
 import type { Format } from "@/data/formats";
@@ -44,15 +46,17 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * The realtime-session tool list: Oak's full tool layer EXCEPT `submit_answer`
- * (voice speaks its answer — there is no OakAnswer output contract), mapped into
- * xAI's flattened Responses function shape. This is also the allowlist the
- * `/api/voice/tool` route validates a socket-driven call against, so the model
- * can never drive `submit_answer` or an unknown name into `dispatch`.
+ * The realtime-session tool list: Oak's full tool layer minus
+ * `VOICE_EXCLUDED_TOOLS` (voice speaks its answer — there is no OakAnswer
+ * output contract, and network/warehouse tools stay off the realtime socket),
+ * mapped into xAI's flattened Responses function shape. This is also the
+ * allowlist the `/api/voice/tool` route validates a socket-driven call
+ * against, so the model can never drive an excluded or unknown name into
+ * `dispatch`.
  */
 export function voiceToolDefs(): VoiceToolDefWire[] {
   return tools
-    .filter((tool) => tool.name !== "submit_answer")
+    .filter((tool) => !VOICE_EXCLUDED_TOOLS.has(tool.name))
     .map((tool) => ({
       type: "function" as const,
       name: tool.name,

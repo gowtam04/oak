@@ -882,6 +882,40 @@ export type GetLearnsetOutput =
   | { found: false; suggestions: string[] };
 
 // ===========================================================================
+// T20 — web_search (live web results — Tavily; the second network-at-request-
+// time tool, after get_usage_stats). For time-sensitive facts Oak's own data
+// can't carry: release dates, current events, live-service status, "newest/
+// current" questions. `recency` narrows to results published within that
+// window when the model knows freshness matters. Missing API key, timeout, a
+// non-OK upstream response, or a malformed body all collapse to the single
+// `search_unavailable` miss shape (tools never throw in-domain). See
+// web-search.ts.
+// ===========================================================================
+
+export const webSearchRecencySchema = z.enum(["day", "week", "month", "year"]);
+
+export const webSearchInputSchema = z.object({
+  query: z.string().min(1).max(300),
+  recency: webSearchRecencySchema.optional(),
+});
+
+export const webSearchResultSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  snippet: z.string(),
+  published_at: z.string().optional(),
+});
+
+export const webSearchResultsSchema = z.object({
+  results: z.array(webSearchResultSchema).max(8),
+});
+
+export const webSearchOutputSchema = z.union([
+  webSearchResultsSchema,
+  z.object({ error: z.literal("search_unavailable") }),
+]);
+
+// ===========================================================================
 // Inferred TypeScript types
 // ===========================================================================
 
@@ -942,6 +976,10 @@ export type SavedTeam = z.infer<typeof savedTeamSchema>;
 export type TypeName = z.infer<typeof typeNameSchema>;
 export type StatKey = z.infer<typeof statKeySchema>;
 export type EntityKind = z.infer<typeof entityKindSchema>;
+export type WebSearchRecency = z.infer<typeof webSearchRecencySchema>;
+export type WebSearchInput = z.infer<typeof webSearchInputSchema>;
+export type WebSearchResult = z.infer<typeof webSearchResultSchema>;
+export type WebSearchOutput = z.infer<typeof webSearchOutputSchema>;
 
 /** The single structured output the agent emits per turn (T11). */
 export type OakAnswer = z.infer<typeof oakAnswerSchema>;
@@ -1006,6 +1044,8 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   list_teams: toJsonSchema(listTeamsInputSchema),
   // T17 — every legal move a form can learn in the turn's format (team legality).
   get_learnset: toJsonSchema(getLearnsetInputSchema),
+  // T20 — live web search (Tavily) for time-sensitive facts outside Oak's data.
+  web_search: toJsonSchema(webSearchInputSchema),
 };
 
 /** The generated `submit_answer` (OakAnswer) JSON Schema. */
@@ -1031,6 +1071,7 @@ export const TOOL_NAMES = [
   "get_usage_stats",
   "list_teams",
   "get_learnset",
+  "web_search",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

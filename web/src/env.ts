@@ -80,6 +80,12 @@ const EnvSchema = z
       emptyToUndefined,
       z.string().url().default("https://championsbattledata.com"),
     ),
+    // Tavily — live web search (T20 `web_search`; the second network-at-request-
+    // time tool, after CHAMPIONSBATTLEDATA_BASE_URL). NOT boot-required: unset
+    // ⇒ the tool degrades to `{ error: "search_unavailable" }` (validate-on-use,
+    // same pattern as ANTHROPIC_API_KEY/OPENAI_API_KEY). An empty value
+    // (`TAVILY_API_KEY=` in a compose env_file) is treated as absent.
+    TAVILY_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),
