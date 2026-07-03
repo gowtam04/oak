@@ -4836,6 +4836,12 @@ button.scope-chip:focus-visible {
   .chat-page__controls .theme-toggle {
     align-self: flex-end;
   }
+  /* The auth control now lives in the popover (it was the header overflow). The
+     account email stays hidden here (rule above); the "Sign in" / "Sign out"
+     pill aligns right, matching the theme toggle. */
+  .chat-page__controls .auth-menu {
+    justify-content: flex-end;
+  }
 }
 
 /* ---- ≤480px: tightest portrait ------------------------------------------ */
