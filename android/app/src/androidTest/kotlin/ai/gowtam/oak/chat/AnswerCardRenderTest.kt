@@ -35,10 +35,8 @@ import org.junit.Test
 /**
  * Renders [AnswerCard] against fixture [OakAnswer]s for all four statuses
  * (implementation-plan.md P6 acceptance check 5; mirrors iOS
- * `AnswerCardViewTests`). **Not run in this phase** (no emulator/AVD wired up yet,
- * per implementation-plan.md CP-A) — kept here so it compiles as part of the
- * androidTest source-set validation; CP-A is the first phase that actually executes
- * it on a booted AVD.
+ * `AnswerCardViewTests`). Verified green on a booted AVD at CP-A
+ * (implementation-plan.md's connectedDebugAndroidTest checkpoint).
  *
  * Verifies the render-if-present rule (a fixture with every optional field present
  * shows every one of the 13 sections, in the exact reading order from
@@ -64,28 +62,47 @@ class AnswerCardRenderTest {
         val expectedOrder = answerSections(answer).map { it.testTag }
         assertEquals(EXPECTED_FULL_ORDER, expectedOrder)
 
+        // Order is verified from the semantics tree's own DFS traversal order, NOT by
+        // sorting on boundsInRoot.top. A fully-populated card is taller than one
+        // screen and this test hosts it in a plain, non-scrolling root, so on a real
+        // device/emulator the sections below the visible viewport (confirmed on an
+        // OakPixel(AVD) API 35, 1080x2400px: everything from "teams" onward, right
+        // where "damage" bottoms out at exactly bottom=2400.0) are composed but never
+        // placed — Compose reports boundsInRoot = (0,0,0,0) for them, which used to
+        // sort those "zero" nodes to the FRONT and produce a false-negative reorder.
+        // fetchSemanticsNodes()'s own return order already reflects the semantics
+        // tree's depth-first (= composition/document) order, which for a plain linear
+        // Column matches top-to-bottom reading order regardless of viewport height,
+        // scroll position, or per-node placement — so it stays correct however tall
+        // the card is or however small the test host's screen is.
         val sectionMatcher = SemanticsMatcher("has a section:* testTag") { node ->
             node.testTagOrNull()?.startsWith("section:") == true
         }
         val renderedTags = composeTestRule.onAllNodes(sectionMatcher, useUnmergedTree = true)
             .fetchSemanticsNodes()
-            .sortedBy { it.boundsInRoot.top }
             .mapNotNull { it.testTagOrNull() }
 
         assertEquals(expectedOrder, renderedTags)
     }
 
     @Test
-    fun aMinimalAnsweredCardOmitsEveryOptionalSectionButTheAnswerBody() {
+    fun aMinimalAnsweredCardShowsOnlyTheAlwaysOnScopeTagAndTheAnswerBody() {
         val answer = minimalAnswer(OakAnswer.Status.ANSWERED)
 
         composeTestRule.setContent {
             OakTheme { AnswerCard(answer = answer) }
         }
 
+        // `generation_basis.generation` is a REQUIRED, non-blank field on every real
+        // OakAnswer (web/src/agent/schemas.ts) — component-design.md gates the scope
+        // tag on "generation non-blank", which every genuine payload satisfies. So a
+        // realistic "minimal" answer (this fixture) always shows the scope tag; it is
+        // not one of the truly optional (render-if-present) blocks. Every field that
+        // IS actually optional (status badge, caveat, subjects, …) is correctly absent.
         composeTestRule.onNodeWithTag("section:answer").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("section:scope").assertIsDisplayed()
         composeTestRule.onNodeWithTag("section:status").assertDoesNotExist()
-        assertEquals(listOf(AnswerSection.ANSWER), answerSections(answer))
+        assertEquals(listOf(AnswerSection.SCOPE, AnswerSection.ANSWER), answerSections(answer))
     }
 
     @Test
