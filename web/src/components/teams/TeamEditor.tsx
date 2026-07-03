@@ -44,6 +44,18 @@ import RosterStrip from "./RosterStrip";
 import TeamWarnings from "./TeamWarnings";
 import { formatLabel } from "./display-names";
 
+/**
+ * A team is "incomplete" when it isn't a full, battle-ready six — mirrors the
+ * server's `isIncomplete` (team-repo) so the save-bar legality pill reacts to
+ * the LIVE draft (< 6 members, or any slot missing a species / its 4th move).
+ */
+export function isTeamIncomplete(members: TeamMember[]): boolean {
+  return (
+    members.length < 6 ||
+    members.some((m) => m.species === null || m.moves.length < 4)
+  );
+}
+
 /** A fresh, empty member (partial team allowed — BR-T4). IVs default to 31. */
 export function blankMember(): TeamMember {
   return {
@@ -229,9 +241,24 @@ export default function TeamEditor({
       return next;
     });
 
+  // Save-success pulse: when a save finishes (saving true → false) flash the
+  // legality pill to --success briefly (motion-safe; see globals.css).
+  const [savePulse, setSavePulse] = useState(false);
+  const prevSaving = useRef(saving);
+  useEffect(() => {
+    if (prevSaving.current && !saving) {
+      setSavePulse(true);
+      const t = setTimeout(() => setSavePulse(false), 1100);
+      prevSaving.current = saving;
+      return () => clearTimeout(t);
+    }
+    prevSaving.current = saving;
+  }, [saving]);
+
   const teamLevelWarnings = team.validation.filter((w) => w.slot === undefined);
   const slot = members.length === 0 ? 0 : Math.min(selectedSlot, members.length - 1);
   const focused = members[slot];
+  const complete = !isTeamIncomplete(members);
 
   return (
     <div className="team-editor" data-testid="team-editor">
@@ -241,22 +268,10 @@ export default function TeamEditor({
           data-testid="team-name"
           aria-label="Team name"
           value={name}
-          placeholder="Team name"
+          placeholder="Untitled team"
           onChange={(e) => setName(e.target.value)}
         />
-        <span className="team-editor__format" data-testid="team-editor-format">
-          {formatLabel(team.format)} · {members.length}/6
-        </span>
         <div className="team-editor__header-actions">
-          <button
-            type="button"
-            className="tm-btn tm-btn--primary"
-            data-testid="team-save"
-            onClick={() => onSave({ name, members })}
-            disabled={saving}
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
           <button
             type="button"
             className="tm-btn tm-btn--secondary"
@@ -315,6 +330,39 @@ export default function TeamEditor({
           This team has no Pokémon yet. Add one to start building.
         </p>
       )}
+
+      <div className="team-editor__savebar" data-testid="team-editor-savebar">
+        <span
+          className="team-editor__savebar-meta"
+          data-testid="team-editor-format"
+        >
+          <span className="ilabel">{formatLabel(team.format)}</span>
+          <span className="team-editor__savebar-dot" aria-hidden>
+            ·
+          </span>
+          <span className="mono-num team-editor__savebar-count">
+            {members.length}/6
+          </span>
+        </span>
+        <span
+          className="team-editor__legality"
+          data-testid="team-legality"
+          data-state={complete ? "legal" : "incomplete"}
+          data-pulse={savePulse ? "true" : "false"}
+        >
+          <span aria-hidden>{complete ? "✓" : "⚠"}</span>
+          {complete ? "Legal" : "Incomplete"}
+        </span>
+        <button
+          type="button"
+          className="tm-btn tm-btn--primary team-editor__save"
+          data-testid="team-save"
+          onClick={() => onSave({ name, members })}
+          disabled={saving}
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
     </div>
   );
 }

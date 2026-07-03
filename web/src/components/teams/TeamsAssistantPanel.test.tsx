@@ -117,6 +117,18 @@ describe("TeamsAssistantPanel", () => {
     expect(screen.getByTestId("assistant-send")).toBeDisabled();
   });
 
+  it("offers first-use suggestion chips that send with the live draft", () => {
+    const { props } = setup();
+    const chips = screen.getByTestId("assistant-suggestions");
+    expect(chips).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Check my coverage"));
+    expect(props.getDraft).toHaveBeenCalled();
+    expect(fakeAssistant.send).toHaveBeenCalledWith(
+      "Check my coverage",
+      expect.objectContaining({ format: "champions", name: "Test" }),
+    );
+  });
+
   it("sends the trimmed message with the live draft (format attached)", () => {
     const { props } = setup();
     fireEvent.change(screen.getByTestId("assistant-input"), {

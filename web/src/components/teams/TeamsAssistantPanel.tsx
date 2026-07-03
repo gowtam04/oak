@@ -30,6 +30,13 @@ import { titleizeSlug } from "./display-names";
 /** Collapse-state persistence key (a UX nicety, not load-bearing). */
 const COLLAPSE_KEY = "oak-teams-assistant-collapsed";
 
+/** First-use prompts — one tap sends them with the live draft attached. */
+const ASSISTANT_SUGGESTIONS = [
+  "Check my coverage",
+  "Fill slot 3",
+  "Suggest an item",
+] as const;
+
 export interface TeamsAssistantPanelProps {
   /** The open team's id — switching teams resets the thread. */
   teamId: string;
@@ -212,11 +219,31 @@ export default function TeamsAssistantPanel({
 
       <div className="assistant-panel__thread" ref={threadRef}>
         {assistant.turns.length === 0 && !thinking && (
-          <p className="assistant-panel__empty" data-testid="assistant-empty">
-            I can see the team you have open. Ask me to fill a slot, fix a
-            moveset, check your coverage, or suggest a spread — edits apply to
-            your unsaved draft, and you keep the Save button.
-          </p>
+          <div className="assistant-panel__intro" data-testid="assistant-empty">
+            <p className="assistant-panel__empty">
+              I can see the team you have open. Ask me to fill a slot, fix a
+              moveset, check your coverage, or suggest a spread — edits apply to
+              your unsaved draft, and you keep the Save button.
+            </p>
+            <div
+              className="assistant-panel__suggestions"
+              data-testid="assistant-suggestions"
+            >
+              <span className="ilabel">Try asking</span>
+              <div className="assistant-panel__chips">
+                {ASSISTANT_SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="assistant-panel__chip"
+                    onClick={() => sendMessage(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
 
         {assistant.turns.map((turn) => (
@@ -229,7 +256,9 @@ export default function TeamsAssistantPanel({
                 className="assistant-turn__answer"
                 data-testid="assistant-answer"
               >
-                <Markdown markdown={turn.answer.answer_markdown} />
+                <div className="assistant-turn__bubble">
+                  <Markdown markdown={turn.answer.answer_markdown} />
+                </div>
                 {turn.answer.team_patch &&
                   turn.answer.team_patch.slots.length +
                     (turn.answer.team_patch.name != null ? 1 : 0) >
