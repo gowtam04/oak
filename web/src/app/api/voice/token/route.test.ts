@@ -3,8 +3,8 @@
  *
  * Auth + the conversation repo are mocked; the voice-prompt module is mocked
  * (workstream P may not exist yet) so the REAL voice-session module composes the
- * bootstrap — letting us assert the 16-tool list, the injected history, and the
- * constants. `global.fetch` stands in for xAI's client_secrets mint.
+ * bootstrap — letting us assert the voice tool list, the injected history, and
+ * the constants. `global.fetch` stands in for xAI's client_secrets mint.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,6 +37,13 @@ import {
   type RateLimitConfig,
 } from "@/server/rate-limit";
 import type { VoiceTokenResponseBody } from "@/lib/voice/voice-types";
+import { tools } from "@/agent/tools";
+import { VOICE_EXCLUDED_TOOLS } from "@/agent/tools/voice-gating";
+
+/** Main tool-barrel count minus the voice exclusion set — not a literal. */
+const EXPECTED_VOICE_TOOL_COUNT = tools.filter(
+  (t) => !VOICE_EXCLUDED_TOOLS.has(t.name),
+).length;
 
 let route: typeof import("./route");
 
@@ -111,7 +118,7 @@ describe("POST /api/voice/token", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns 200 with the token, 16 tools, injected history, and constants", async () => {
+  it("returns 200 with the token, the voice tool list, injected history, and constants", async () => {
     signedIn(ACCT);
     repo.getMessages.mockResolvedValue([
       { role: "user", textContent: "Tell me about Garchomp" },
@@ -123,8 +130,9 @@ describe("POST /api/voice/token", () => {
 
     expect(json.token).toBe("tok-abc");
     expect(json.expires_at).toBe(1_700_000_600);
-    expect(json.session.tools).toHaveLength(16);
+    expect(json.session.tools).toHaveLength(EXPECTED_VOICE_TOOL_COUNT);
     expect(json.session.tools.some((t) => t.name === "submit_answer")).toBe(false);
+    expect(json.session.tools.some((t) => t.name === "web_search")).toBe(false);
     expect(json.session.model).toBe("grok-voice-latest");
     expect(json.session.voice).toBe("rex");
     expect(json.session.reasoning_effort).toBe("none");

@@ -59,6 +59,7 @@ import { getEncountersTool } from "./get-encounters";
 import { getUsageStatsTool } from "./get-usage-stats.tool";
 import { listTeamsTool } from "./list-teams.tool";
 import { getLearnsetTool } from "./get-learnset";
+import { webSearchTool } from "./web-search";
 
 /**
  * The 17 tools, in T1..T17 order. T1..T11 are the fixed agent-design contract;
@@ -69,9 +70,12 @@ import { getLearnsetTool } from "./get-learnset";
  * (champions mode only); T16 (`list_teams`) lists the user's saved teams so the
  * model can resolve a by-name reference; T17 (`get_learnset`, B-13) lists a
  * form's legal movepool for the turn's format so proposed/edited teams stay
- * legal. All appended after T11 so the existing T1..T11 order — and thus most of
- * the cached prefix — is unchanged. The list is sent byte-identical for both
- * modes; each mode-gated tool self-gates on `ctx.mode`.
+ * legal; T20 (`web_search`, oak-v2 P5) is Oak's first live web tool (Tavily),
+ * for time-sensitive facts outside Oak's own data — gated OUT of voice mode via
+ * `VOICE_EXCLUDED_TOOLS` (`@/agent/tools/voice-gating`), not this barrel. All
+ * appended after T11 so the existing T1..T11 order — and thus most of the
+ * cached prefix — is unchanged. The list is sent byte-identical for both modes;
+ * each mode-gated tool self-gates on `ctx.mode`.
  */
 export const tools: ToolDef[] = [
   resolveEntityTool,
@@ -91,6 +95,7 @@ export const tools: ToolDef[] = [
   getUsageStatsTool,
   listTeamsTool,
   getLearnsetTool,
+  webSearchTool,
 ];
 
 /** name -> ToolDef lookup, built once at module load. */

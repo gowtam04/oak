@@ -38,6 +38,13 @@ import {
   VOICE_TOKEN_TTL_SECONDS,
 } from "@/server/voice/voice-config";
 import type { ChatMessage } from "@/agent/types";
+import { tools } from "@/agent/tools";
+import { VOICE_EXCLUDED_TOOLS } from "@/agent/tools/voice-gating";
+
+/** Main tool-barrel count minus the voice exclusion set — not a literal. */
+const EXPECTED_VOICE_TOOL_COUNT = tools.filter(
+  (t) => !VOICE_EXCLUDED_TOOLS.has(t.name),
+).length;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -46,11 +53,11 @@ afterEach(() => {
 // --- voiceToolDefs -----------------------------------------------------------
 
 describe("voiceToolDefs", () => {
-  it("exposes Oak's tool layer minus submit_answer, in the flattened shape", () => {
+  it("exposes Oak's tool layer minus VOICE_EXCLUDED_TOOLS, in the flattened shape", () => {
     const defs = voiceToolDefs();
-    // 17 tools total − submit_answer = 16.
-    expect(defs).toHaveLength(16);
+    expect(defs).toHaveLength(EXPECTED_VOICE_TOOL_COUNT);
     expect(defs.some((d) => d.name === "submit_answer")).toBe(false);
+    expect(defs.some((d) => d.name === "web_search")).toBe(false);
     // A few known tools are present.
     for (const name of ["get_move", "get_pokemon", "resolve_entity"]) {
       expect(defs.some((d) => d.name === name)).toBe(true);
@@ -123,7 +130,7 @@ describe("buildSessionBootstrap", () => {
     expect(boot.reasoning_effort).toBe(VOICE_REASONING_EFFORT);
     expect(boot.idle_timeout_ms).toBe(VOICE_IDLE_TIMEOUT_MS);
     expect(boot.max_session_ms).toBe(VOICE_MAX_SESSION_MS);
-    expect(boot.tools).toHaveLength(16);
+    expect(boot.tools).toHaveLength(EXPECTED_VOICE_TOOL_COUNT);
     expect(boot.instructions).toContain("PERSONA for champions");
     // No history ⇒ no injected digest section.
     expect(boot.instructions).not.toContain("EARLIER:");
