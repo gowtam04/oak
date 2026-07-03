@@ -11,9 +11,10 @@ import Foundation
 /// instant ``flush()`` is called, so a barge-in test can capture the assistant
 /// caption before the session clears it and confirm flush ran first.
 ///
-/// `@unchecked Sendable`: all access is serial on the main actor (see
-/// `FakeVoiceConnection`).
-final class FakeVoiceAudioIO: VoiceAudioIO, @unchecked Sendable {
+/// `@MainActor`: ``VoiceAudioIO`` is main-actor-isolated (the session drives it
+/// entirely on the main actor); the suite is `@MainActor` too.
+@MainActor
+final class FakeVoiceAudioIO: VoiceAudioIO {
   let sampleRate: Int
 
   /// Ordered method-call log: `startCapture`, `enqueue:<b64>`, `flush`,
