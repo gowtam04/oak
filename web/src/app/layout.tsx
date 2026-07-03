@@ -19,14 +19,17 @@ export const metadata: Metadata = {
 // non-zero (the header/composer pad themselves with it). `viewportFit: "cover"`
 // is the prerequisite for any safe-area handling. We deliberately do NOT cap
 // zoom (no maximumScale/userScalable) — that would break WCAG 1.4.4. themeColor
-// tints the browser chrome to match each theme's app background.
+// tints the browser chrome to match each theme's app background — the header
+// is paper now (UI §3), not a red band, so the chrome tint follows suit and
+// switches with the OS/media-query theme instead of staying fixed red.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  // Light is the app default, so the browser chrome tint is the light brand
-  // color regardless of OS preference (matches the unconditional light theme).
-  themeColor: "#ee5a5a",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbf7f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#161311" },
+  ],
 };
 
 // Display / body / mono — exposed as CSS variables consumed by globals.css.

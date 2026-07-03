@@ -204,7 +204,10 @@ export default function TeamsPage() {
               Saved teams, the team builder, and Showdown import/export unlock
               with a free account — sign in from the chat page to get started.
             </p>
-            <Link href="/" className="tm-btn tm-btn--primary">
+            <Link
+              href="/"
+              className="tm-btn tm-btn--primary teams-page__guest-cta"
+            >
               Go to chat to sign in
             </Link>
           </div>
