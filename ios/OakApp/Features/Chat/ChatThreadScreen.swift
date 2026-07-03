@@ -73,7 +73,7 @@ struct ChatThreadScreen: View {
         // Bind the active conversation, then seed a thread with its rehydrated turns.
         detailVM.resume()
         let vm = ChatViewModel(chat: services.chat, appState: appState)
-        vm.loadResumed(conversationId: detail.id, turns: detail.turns)
+        vm.loadResumed(conversationId: detail.id, format: detail.format, turns: detail.turns)
         model = vm
       } else {
         loadError = detailVM.errorMessage ?? HistoryDetailViewModel.genericMessage

@@ -349,7 +349,7 @@ private struct PreviewHistoryService: HistoryService {
   func rename(id: String, title: String) async throws {}
   func setPinned(id: String, pinned: Bool) async throws {}
   func delete(id: String) async throws {}
-  func importGuestThread(sessionId: String, championsMode: Bool, turns: [ChatTurn]) async throws -> String? { nil }
+  func importGuestThread(sessionId: String, format: Format, turns: [ChatTurn]) async throws -> String? { nil }
 }
 
 #Preview("Conversations") {

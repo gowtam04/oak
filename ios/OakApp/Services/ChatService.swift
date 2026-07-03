@@ -21,7 +21,9 @@ protocol ChatService: Sendable {
   /// - `images`: attached photos (≤4), encoded to raw base64 with the client-side
   ///   caps enforced by `ImageEncoder`. A cap/type violation finishes the returned
   ///   stream by throwing `OakError.imageRejected(...)` before any event is yielded.
-  /// - `championsMode`: scopes the turn to the Champions format when `true`.
+  /// - `scopeSeed`: an explicit scope pick from the header chip, sent as
+  ///   `scope_seed`; `nil` ⇒ no pick (server precedence resolves the scope). Scope
+  ///   is otherwise server-controlled — the model never sees it as a tool input.
   ///
   /// Saved teams are referenced **by name in chat** (resolved server-side via
   /// `list_teams` / `get_team`), so the body carries no team id.
@@ -29,7 +31,7 @@ protocol ChatService: Sendable {
     sessionId: String,
     message: String,
     images: [UIImage],
-    championsMode: Bool
+    scopeSeed: Format?
   ) -> AsyncThrowingStream<SSEEvent, Error>
 }
 
@@ -47,7 +49,7 @@ struct LiveChatService: ChatService {
     sessionId: String,
     message: String,
     images: [UIImage],
-    championsMode: Bool
+    scopeSeed: Format?
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     // Encode + validate the attached images BEFORE opening the stream (M-AC-5.5).
     // `encode` is synchronous and runs in the caller's context (the main actor),
@@ -70,7 +72,7 @@ struct LiveChatService: ChatService {
       sessionId: sessionId,
       message: message,
       images: encodedImages.isEmpty ? nil : encodedImages,
-      championsMode: championsMode
+      scopeSeed: scopeSeed
     )
     return sseClient.stream(request)
   }

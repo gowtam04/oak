@@ -79,6 +79,9 @@ struct SSEParser {
     let decoder = JSONDecoder()
     do {
       switch name {
+      case "scope":
+        let data = try decoder.decode(SSEEvent.ScopeData.self, from: json)
+        return [.scope(format: data.format, source: data.source)]
       case "tool_activity":
         let data = try decoder.decode(SSEEvent.ToolActivityData.self, from: json)
         return [.toolActivity(tool: data.tool, label: data.label)]

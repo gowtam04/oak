@@ -86,6 +86,13 @@ struct ChatView: View {
     .navigationTitle("Oak")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
+      // The scope control (GS-C): the header's visible counterpart to the `scope`
+      // SSE event and the ONLY interactive scope control (the Champions pill +
+      // Account toggle are gone). Centered so it reads as the thread's scope, not
+      // an action; disabled mid-stream so a turn's scope stays stable.
+      ToolbarItem(placement: .principal) {
+        scopeChip
+      }
       if showsNewConversationButton {
         ToolbarItem(placement: .topBarTrailing) {
           Button {
@@ -98,17 +105,61 @@ struct ChatView: View {
     }
     // Tear down the stream when the screen goes away (conventions.md "Concurrency").
     .onDisappear { model.cancelStreaming() }
-    // Build the viewer once on appear, and rebuild it when the Champions toggle
-    // flips so its fixed format re-scopes to the active mode (M-BR-ART-4).
-    .task(id: model.championsMode) {
+    // Build the viewer once on appear, and rebuild it when the displayed scope
+    // changes (a chip pick or a resolved `scope` event) so its fixed format
+    // re-scopes to the active scope (M-BR-ART-4; web scopes the viewer to
+    // `displayFormat` too).
+    .task(id: model.displayFormat) {
       artifactModel = ArtifactViewModel(
         service: services.artifact,
-        format: model.championsMode ? .champions : .scarletViolet
+        format: model.displayFormat
       )
     }
     // Host the artifact bottom sheet once at the screen level; pushing an entity
     // opens it, an empty back stack closes it (M-AC-A3.3, M-BR-ART-5).
     .artifactViewerHost(artifactModel)
+  }
+
+  // MARK: Scope chip (generation-scope GS-C)
+
+  /// The header scope control: a compact pill showing the displayed scope's short
+  /// label, opening a menu of all six known formats as an inline radio list
+  /// (checkmark on the current pick). Picking one seeds the next turn's scope
+  /// (`selectScope`). Disabled while a turn streams so the scope can't change
+  /// mid-turn — mirrors `ScopeChip.tsx` (label = the scope, menu = the six
+  /// `Format.knownCases`, disabled while streaming).
+  @ViewBuilder
+  private var scopeChip: some View {
+    Menu {
+      Picker(
+        "Answer scope",
+        selection: Binding(
+          get: { model.displayFormat },
+          set: { model.selectScope($0) }
+        )
+      ) {
+        ForEach(Format.knownCases, id: \.self) { format in
+          Text(format.displayLabel).tag(format)
+        }
+      }
+    } label: {
+      HStack(spacing: 3) {
+        Text(model.displayFormat.shortLabel)
+          .font(Theme.body(.footnote).weight(.semibold))
+        Image(systemName: "chevron.down")
+          .font(.system(size: 9, weight: .bold))
+      }
+      .foregroundStyle(Theme.textSecondary)
+      .padding(.horizontal, 10)
+      .padding(.vertical, 5)
+      .background(Theme.surface, in: Capsule())
+      .overlay(Capsule().strokeBorder(Theme.separator, lineWidth: 1))
+      .contentShape(Capsule())
+    }
+    .disabled(model.isStreaming)
+    .accessibilityLabel("Answer scope")
+    .accessibilityValue(model.displayFormat.displayLabel)
+    .accessibilityHint("Choose which game or generation answers are based on")
   }
 
   // MARK: Sign-in nudge (guest)
@@ -226,6 +277,11 @@ struct ChatView: View {
     "Explain Intimidate vs Defiant",
   ]
 
+  /// The current Champions regulation, duplicated from web's `CHAMPIONS_REGULATION`
+  /// (`web/src/data/formats.ts` — no shared module between the two clients). Update
+  /// it here when that rotates, alongside `Format.displayLabel`'s "Reg M-B".
+  private static let championsRegulation = "Regulation M-B"
+
   /// A branded empty state: the ``OakBrandMark`` hero, a title + description, and three
   /// example-question chips (styled like ``SuggestionsView`` chips) that cascade in.
   private var emptyState: some View {
@@ -240,6 +296,13 @@ struct ChatView: View {
           .font(Theme.body(.subheadline))
           .foregroundStyle(Theme.textSecondary)
           .multilineTextAlignment(.center)
+        // Scope hint parity with web's `ChatThread.tsx` empty state — the chip
+        // (top of the screen) is the interactive counterpart named here.
+        Text("Answers default to Pokémon Champions (\(Self.championsRegulation)). For mainline games, mention one (“in Scarlet/Violet”, “gen 7”) or use the scope chip at the top.")
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.textMuted)
+          .multilineTextAlignment(.center)
+          .padding(.top, 2)
       }
 
       VStack(spacing: 8) {
@@ -422,7 +485,7 @@ struct PreviewChatService: ChatService {
     sessionId: String,
     message: String,
     images: [UIImage],
-    championsMode: Bool
+    scopeSeed: Format?
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     AsyncThrowingStream { continuation in
       let answer = OakAnswer(
