@@ -14,30 +14,49 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 
 /**
  * The single Activity hosting the whole Compose app (component-design.md "Navigation
- * graph"). Builds the composition root — one [ServiceContainer] + [AppState] shared by
- * every screen, and the [ChatViewModel] the Chat tab uses (constructed here, not inside
- * [OakApp], so it survives a tab switch away from Chat and back) — restores the session
- * once at launch, and mirrors the chat reducer's [ChatViewModel.keepScreenOn] flag onto
- * `FLAG_KEEP_SCREEN_ON` (the Android analog of iOS's `isIdleTimerDisabled`), released on
- * every terminal/stop/cancel path per the view model's own bookkeeping.
+ * graph"). [ServiceContainer] + [AppState] live on [OakApplication] (process-scoped);
+ * [ChatViewModel] and [ArtifactViewModel] are resolved through this Activity's
+ * [androidx.lifecycle.ViewModelStore] via [ViewModelProvider] rather than `remember`ed
+ * in composition — the `ViewModelStore` is retained by the framework across a
+ * configuration change (e.g. rotation), so both survive it. (A prior version built all
+ * four with bare `remember {}` blocks inside `setContent`; those die with the Activity
+ * on every recreation, which wiped the on-screen thread and reset the scope chip to its
+ * Champions default on rotation.) Restores the session once at launch, and mirrors the
+ * chat reducer's [ChatViewModel.keepScreenOn] flag onto `FLAG_KEEP_SCREEN_ON` (the
+ * Android analog of iOS's `isIdleTimerDisabled`), released on every terminal/stop/cancel
+ * path per the view model's own bookkeeping.
  */
 class MainActivity : ComponentActivity() {
+    private val oakApplication: OakApplication
+        get() = application as OakApplication
+
+    private val chatViewModel: ChatViewModel by lazy {
+        ViewModelProvider(
+            this,
+            factoryOf { ChatViewModel(oakApplication.services.chat, oakApplication.appState) },
+        )[ChatViewModel::class.java]
+    }
+
+    private val artifactViewModel: ArtifactViewModel by lazy {
+        ViewModelProvider(
+            this,
+            factoryOf { ArtifactViewModel(oakApplication.services.artifact, Format.Champions) },
+        )[ArtifactViewModel::class.java]
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            val context = LocalContext.current
-            val services = remember { ServiceContainer.live(context) }
-            val appState = remember { AppState() }
-            val chatViewModel = remember { ChatViewModel(services.chat, appState) }
-            val artifactViewModel = remember { ArtifactViewModel(services.artifact, Format.Champions) }
+        val services = oakApplication.services
+        val appState = oakApplication.appState
 
+        setContent {
             LaunchedEffect(services) { appState.restoreSession(services.auth) }
 
             val keepScreenOn by chatViewModel.keepScreenOn.collectAsState()
@@ -57,3 +76,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+/** A minimal [ViewModelProvider.Factory] built from a plain constructor lambda, so
+ * [ChatViewModel]/[ArtifactViewModel] can take their real (non-`SavedStateHandle`)
+ * constructor args while still being stored in the Activity's `ViewModelStore`. */
+private fun <T : ViewModel> factoryOf(build: () -> T): ViewModelProvider.Factory =
+    object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <VM : ViewModel> create(modelClass: Class<VM>): VM = build() as VM
+    }
