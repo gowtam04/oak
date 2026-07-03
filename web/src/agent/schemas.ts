@@ -916,6 +916,55 @@ export const webSearchOutputSchema = z.union([
 ]);
 
 // ===========================================================================
+// T18 — run_sql (guarded read-only SQL over Oak's offline warehouse; Oak v2 §5).
+// The model writes its own SQL for aggregations/set-operations the typed tools
+// can't express (natdex==BST, catch-rate vs pre-evo, unique type combos, dual→
+// mono evolutions). Safety is enforced at the DB layer (READ ONLY txn, single
+// statement, statement_timeout, oak_readonly role / deny-list, 200-row cap) —
+// see src/data/sql-sandbox.ts. On any failure the tool returns a structured
+// miss shape carrying the raw Postgres message as a `hint` (the loop's ≤10
+// iterations are the retry mechanism); it never throws in-domain.
+// ===========================================================================
+
+export const runSqlInputSchema = z.object({
+  /** A single read-only SELECT/CTE query against the warehouse. */
+  query: z.string().min(1).max(5000),
+  /** A short natural-language note on what the query is for (audit/log only). */
+  purpose: z.string().min(1).max(200),
+});
+
+/** One returned cell — always coerced to a JSON primitive by the executor. */
+export const runSqlCellSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]);
+
+export const runSqlRowsSchema = z.object({
+  /** Column names, in select order. */
+  columns: z.array(z.string()),
+  /** Result rows (≤200), each a cell array aligned to `columns`. */
+  rows: z.array(z.array(runSqlCellSchema)),
+  /** Number of rows returned (= rows.length; ≤200). */
+  row_count: z.number().int(),
+  /** True when the 200-row cap clipped the result. */
+  truncated: z.boolean(),
+});
+
+export const runSqlErrorSchema = z.object({
+  /** "query_failed" (bad SQL / permission) | "query_timeout" (>3s). */
+  error: z.enum(["query_failed", "query_timeout"]),
+  /** Raw Postgres message (or timeout note) — the model uses it to fix the SQL. */
+  hint: z.string().optional(),
+});
+
+export const runSqlOutputSchema = z.union([
+  runSqlRowsSchema,
+  runSqlErrorSchema,
+]);
+
+// ===========================================================================
 // Inferred TypeScript types
 // ===========================================================================
 
@@ -980,6 +1029,12 @@ export type WebSearchRecency = z.infer<typeof webSearchRecencySchema>;
 export type WebSearchInput = z.infer<typeof webSearchInputSchema>;
 export type WebSearchResult = z.infer<typeof webSearchResultSchema>;
 export type WebSearchOutput = z.infer<typeof webSearchOutputSchema>;
+
+export type RunSqlInput = z.infer<typeof runSqlInputSchema>;
+export type RunSqlCell = z.infer<typeof runSqlCellSchema>;
+export type RunSqlRows = z.infer<typeof runSqlRowsSchema>;
+export type RunSqlError = z.infer<typeof runSqlErrorSchema>;
+export type RunSqlOutput = z.infer<typeof runSqlOutputSchema>;
 
 /** The single structured output the agent emits per turn (T11). */
 export type OakAnswer = z.infer<typeof oakAnswerSchema>;
@@ -1046,6 +1101,8 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   get_learnset: toJsonSchema(getLearnsetInputSchema),
   // T20 — live web search (Tavily) for time-sensitive facts outside Oak's data.
   web_search: toJsonSchema(webSearchInputSchema),
+  // T18 — guarded read-only SQL over Oak's offline warehouse (aggregations).
+  run_sql: toJsonSchema(runSqlInputSchema),
 };
 
 /** The generated `submit_answer` (OakAnswer) JSON Schema. */
@@ -1072,6 +1129,7 @@ export const TOOL_NAMES = [
   "list_teams",
   "get_learnset",
   "web_search",
+  "run_sql",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

@@ -64,6 +64,13 @@
       "when": 1783115623129,
       "tag": "0008_equal_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783120000000,
+      "tag": "0009_oak_readonly_role",
+      "breakpoints": true
     }
   ]
 }
