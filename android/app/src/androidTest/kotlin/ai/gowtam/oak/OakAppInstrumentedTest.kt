@@ -2,7 +2,7 @@ package ai.gowtam.oak
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import ai.gowtam.oak.app.OakTheme
+import ai.gowtam.oak.ui.OakTheme
 import ai.gowtam.oak.app.OakApp
 import org.junit.Rule
 import org.junit.Test
