@@ -66,6 +66,55 @@ struct SSEParserTests {
     #expect(answer.subjects?.first?.dexNumber == 445)
   }
 
+  /// The generation-scope stream: the first event is a `.scope` carrying the
+  /// resolved format + source, followed by the usual activity → reset → delta →
+  /// answer (GS-C).
+  @Test
+  func scopeStreamYieldsLeadingScopeEvent() throws {
+    let events = try parseEvents(in: "chat_scope_gen7.sse")
+    #expect(events.count == 5)
+
+    guard case let .scope(format, source) = events[0] else {
+      Issue.record("event 0 was not scope: \(events[0])")
+      return
+    }
+    #expect(format == .gen7)
+    #expect(source == .message)
+
+    guard case .toolActivity = events[1] else {
+      Issue.record("event 1 was not tool_activity: \(events[1])")
+      return
+    }
+    #expect(events[2] == .answerStart)
+
+    guard case let .answer(answer) = events.last else {
+      Issue.record("terminal event was not answer: \(String(describing: events.last))")
+      return
+    }
+    #expect(answer.status == .answered)
+  }
+
+  /// An unrecognized `source` on a `scope` frame decodes tolerantly to
+  /// `.unknown(raw)` rather than failing the stream (forward-compatible, like
+  /// `Format`). A widened `format` is likewise absorbed by `Format`'s tolerant init.
+  @Test
+  func scopeFrameWithUnknownSourceDecodesTolerantly() throws {
+    var parser = SSEParser()
+    var out: [SSEEvent] = []
+    out.append(contentsOf: try parser.consume(line: "event: scope"))
+    out.append(contentsOf: try parser.consume(
+      line: "data: {\"format\":\"gen-99\",\"source\":\"future_source\"}"))
+    out.append(contentsOf: try parser.consume(line: ""))
+
+    #expect(out.count == 1)
+    guard case let .scope(format, source) = out[0] else {
+      Issue.record("event was not scope: \(out[0])")
+      return
+    }
+    #expect(format == .unknown("gen-99"))
+    #expect(source == .unknown("future_source"))
+  }
+
   /// The Grok case: a single delta carries the whole markdown before the answer.
   @Test
   func grokSingleDeltaStreamHasOneDelta() throws {

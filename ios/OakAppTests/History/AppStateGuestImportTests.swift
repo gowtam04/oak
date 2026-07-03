@@ -47,9 +47,11 @@ struct AppStateGuestImportTests {
   }
 
   @Test
-  func importForwardsChampionsModeAndSessionId() async {
+  func importForwardsResolvedScopeAndSessionId() async {
+    // The guest thread's resolved scope (GS-C) rides the import as `format`, not
+    // the removed `champions_mode` — a thread that switched to gen-7 imports as gen-7.
     let state = AppState()
-    state.championsMode = true
+    state.guestThreadScope = .gen7
     state.activeConversationId = "existing_session"  // reused as the import session id
     state.guestThread = [GuestTurn(role: .user, text: "hi")]
     let fake = FakeHistoryService()
@@ -57,8 +59,22 @@ struct AppStateGuestImportTests {
 
     _ = await state.importGuestThread(using: fake)
 
-    #expect(fake.lastImportChampionsMode == true)
+    #expect(fake.lastImportFormat == .gen7)
     #expect(fake.lastImportSessionId == "existing_session")
+  }
+
+  @Test
+  func importDefaultsToChampionsScopeWhenNoTurnResolvedOne() async {
+    // A guest who never had a turn resolve a scope imports under the champions
+    // default (web: `resolvedScope ?? "champions"`).
+    let state = AppState()  // guestThreadScope defaults to .champions
+    state.guestThread = [GuestTurn(role: .user, text: "hi")]
+    let fake = FakeHistoryService()
+    fake.importResult = .success("conv_x")
+
+    _ = await state.importGuestThread(using: fake)
+
+    #expect(fake.lastImportFormat == .champions)
   }
 
   @Test

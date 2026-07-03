@@ -6,9 +6,11 @@ import Testing
 /// Round-trips the outbound `ChatRequest` body (testing-strategy.md "encode/decode
 /// request bodies"). `ChatRequest` is `Encodable`-only, so the round-trip encodes
 /// it and re-decodes through a wire mirror, asserting the snake_case mapping
-/// (`session_id`, `champions_mode`) AND that the image's `mimeType` stays
-/// camelCase — the exact mixed-convention case the explicit per-type `CodingKeys`
-/// exist to handle.
+/// (`session_id`, `scope_seed`) AND that the image's `mimeType` stays camelCase —
+/// the exact mixed-convention case the explicit per-type `CodingKeys` exist to
+/// handle. It also pins the generation-scope contract: `scope_seed` carries the
+/// `Format` rawValue when a chip pick is set, and the deprecated `champions_mode`
+/// field is NEVER on the wire.
 struct ChatRequestEncodingTests {
 
   private func encodedObject(_ request: ChatRequest) throws -> [String: Any] {
@@ -17,32 +19,35 @@ struct ChatRequestEncodingTests {
     return try #require(object as? [String: Any])
   }
 
-  /// A text-only turn maps to snake_case keys and omits the optional `images` /
-  /// `champions_mode` when nil.
+  /// A text-only turn with no scope pick maps to snake_case keys and omits the
+  /// optional `images` / `scope_seed`. `champions_mode` never appears.
   @Test
   func textOnlyTurnEncodesSnakeCaseAndOmitsNilOptionals() throws {
     let request = ChatRequest(
       sessionId: "sess-123",
       message: "What is Garchomp's typing?",
       images: nil,
-      championsMode: nil
+      scopeSeed: nil
     )
     let object = try encodedObject(request)
 
     #expect(object["session_id"] as? String == "sess-123")
     #expect(object["message"] as? String == "What is Garchomp's typing?")
     // nil optionals are omitted (synthesized encode uses encodeIfPresent).
-    #expect(object["champions_mode"] == nil)
+    #expect(object["scope_seed"] == nil)
     #expect(object["images"] == nil)
+    // The deprecated field is gone entirely — never emitted.
+    #expect(object["champions_mode"] == nil)
     // No camelCase leakage of the renamed keys.
     #expect(object["sessionId"] == nil)
-    #expect(object["championsMode"] == nil)
+    #expect(object["scopeSeed"] == nil)
   }
 
-  /// An image-bearing turn may carry an empty `message`; `champions_mode` is
-  /// present when set; each image keeps the camelCase `mimeType` and raw base64.
+  /// An image-bearing turn may carry an empty `message`; a scope pick encodes as
+  /// its `Format` rawValue under `scope_seed`; each image keeps camelCase `mimeType`
+  /// and raw base64.
   @Test
-  func imageTurnEncodesChampionsModeAndRawBase64Images() throws {
+  func imageTurnEncodesScopeSeedAndRawBase64Images() throws {
     let request = ChatRequest(
       sessionId: "sess-456",
       message: "",
@@ -50,13 +55,15 @@ struct ChatRequestEncodingTests {
         ChatImage(mimeType: "image/jpeg", data: "AQIDBA=="),
         ChatImage(mimeType: "image/png", data: "BQYHCA=="),
       ],
-      championsMode: true
+      scopeSeed: .gen7
     )
     let object = try encodedObject(request)
 
     #expect(object["session_id"] as? String == "sess-456")
     #expect(object["message"] as? String == "")
-    #expect(object["champions_mode"] as? Bool == true)
+    // scope_seed carries the wire rawValue, not a case name.
+    #expect(object["scope_seed"] as? String == "gen-7")
+    #expect(object["champions_mode"] == nil)
 
     let images = try #require(object["images"] as? [[String: Any]])
     #expect(images.count == 2)
@@ -76,14 +83,14 @@ struct ChatRequestEncodingTests {
       sessionId: "sess-789",
       message: "Build me a rain team",
       images: [ChatImage(mimeType: "image/webp", data: "CQoLDA==")],
-      championsMode: false
+      scopeSeed: .champions
     )
     let data = try JSONEncoder().encode(request)
     let mirror = try JSONDecoder().decode(ChatRequestWireMirror.self, from: data)
 
     #expect(mirror.sessionId == request.sessionId)
     #expect(mirror.message == request.message)
-    #expect(mirror.championsMode == false)
+    #expect(mirror.scopeSeed == "champions")
     #expect(mirror.images?.count == 1)
     #expect(mirror.images?.first?.mimeType == "image/webp")
     #expect(mirror.images?.first?.data == "CQoLDA==")
@@ -92,16 +99,18 @@ struct ChatRequestEncodingTests {
 
 /// A `Decodable` mirror of the `ChatRequest` wire frame — the decode half of the
 /// round-trip (the production `ChatRequest` is `Encodable`-only by design).
+/// `scopeSeed` is decoded as the raw wire string so the test asserts the exact
+/// `Format` rawValue mapping.
 private struct ChatRequestWireMirror: Decodable, Equatable {
   let sessionId: String
   let message: String
-  let championsMode: Bool?
+  let scopeSeed: String?
   let images: [ImageMirror]?
 
   enum CodingKeys: String, CodingKey {
     case sessionId = "session_id"
     case message
-    case championsMode = "champions_mode"
+    case scopeSeed = "scope_seed"
     case images
   }
 
