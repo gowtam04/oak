@@ -23,7 +23,13 @@
 
 "use client";
 
-import { useEffect, useImperativeHandle, useState, type Ref } from "react";
+import {
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Ref,
+} from "react";
 import {
   applyTeamPatch,
   type TeamPatch,
@@ -100,11 +106,16 @@ export default function TeamEditor({
   const [members, setMembers] = useState<TeamMember[]>(team.members);
   const [selectedSlot, setSelectedSlot] = useState(0);
 
-  // Out-of-band draft access for the assistant panel (user-click only).
+  // Out-of-band draft access for the assistant panel (user-click only). The
+  // handle is created ONCE and stays valid across renders: getDraft reads the
+  // live values through a ref (so a caller-captured handle can never see a
+  // stale draft), and the mutators use functional updates.
+  const draftRef = useRef({ name, members });
+  draftRef.current = { name, members };
   useImperativeHandle(
     handleRef,
     (): TeamEditorHandle => ({
-      getDraft: () => ({ name, members }),
+      getDraft: () => ({ ...draftRef.current }),
       applyPatch: (patch) => {
         if (patch.name != null) setName(patch.name);
         setMembers((prev) => applyTeamPatch(prev, patch));
@@ -119,7 +130,7 @@ export default function TeamEditor({
         setMembers(draft.members);
       },
     }),
-    [name, members],
+    [],
   );
   // Sprites/types/base-stats resolved for the LIVE members (slug → ref;
   // `undefined` = a resolved miss, so we don't refetch). Reset per opened team.
