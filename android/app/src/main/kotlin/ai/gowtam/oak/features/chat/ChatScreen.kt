@@ -8,6 +8,7 @@ import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.rememberHaptics
 import ai.gowtam.oak.wire.Format
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -58,6 +59,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -101,6 +104,22 @@ fun ChatScreen(
     val oak = LocalOakColors.current
     val listState = rememberLazyListState()
     var showScopePicker by remember { mutableStateOf(false) }
+    val haptics = rememberHaptics()
+
+    // Haptics are always redundant with a visible cue (the new AnswerCard / the error
+    // banner itself) — removing them never removes meaning. The baseline captures the
+    // count as of THIS composable's first composition (which, for a resumed thread, is
+    // already the full loaded history) so opening/resuming a conversation never fires a
+    // spurious "answer arrived" buzz — only a genuine, in-session growth does.
+    var lastAnnouncedTurnCount by remember { mutableStateOf(uiState.turns.size) }
+    LaunchedEffect(uiState.turns.size) {
+        val grew = uiState.turns.size > lastAnnouncedTurnCount
+        lastAnnouncedTurnCount = uiState.turns.size
+        if (grew && uiState.turns.lastOrNull() is ChatTurnItem.Assistant) haptics.success()
+    }
+    LaunchedEffect(uiState.errorBanner != null) {
+        if (uiState.errorBanner != null) haptics.error()
+    }
 
     // The artifact viewer's "Ask about this in chat" (P7) prefills THIS screen's
     // composer; a scope change clears any open artifact stack (D-BR-ART-4) since its
@@ -148,7 +167,7 @@ fun ChatScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Oak") },
+                title = { Text("Oak", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -279,7 +298,9 @@ private fun ScopePickerSheet(current: Format, onSelect: (Format) -> Unit) {
             text = "Answer scope",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color = oak.textStrong,
-            modifier = Modifier.padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
+            modifier = Modifier
+                .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm)
+                .semantics { heading() },
         )
         Text(
             text = "Choose which game or generation answers are based on.",
@@ -462,6 +483,7 @@ private fun EmptyState(onExampleTap: (String) -> Unit) {
             text = "Ask Oak",
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
             color = oak.textStrong,
+            modifier = Modifier.semantics { heading() },
         )
         Spacer(Modifier.height(OakSpacing.xs))
         Text(

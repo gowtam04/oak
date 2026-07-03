@@ -1,6 +1,8 @@
 package ai.gowtam.oak.features.chat.answercard
 
+import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.rememberReduceMotion
 import ai.gowtam.oak.wire.DamageCalc
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.OakAnswer
@@ -8,13 +10,23 @@ import ai.gowtam.oak.wire.ProposedTeam
 import ai.gowtam.oak.wire.SavedTeamRef
 import ai.gowtam.oak.wire.Subject
 import ai.gowtam.oak.wire.TeamWarning
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The top-level renderer for a single finalized [OakAnswer] — the native mirror of the
@@ -46,12 +58,16 @@ fun AnswerCard(
     modifier: Modifier = Modifier,
     actions: AnswerCardActions = AnswerCardActions(),
 ) {
+    val reduceMotion = rememberReduceMotion()
     Column(
         modifier = modifier.fillMaxWidth().testTag(TAG_ANSWER_CARD),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
     ) {
-        for (section in answerSections(answer)) {
-            val sectionModifier = Modifier.fillMaxWidth().testTag(section.testTag)
+        for ((index, section) in answerSections(answer).withIndex()) {
+            val sectionModifier = Modifier
+                .fillMaxWidth()
+                .testTag(section.testTag)
+                .sectionEntrance(index = index, reduceMotion = reduceMotion)
             when (section) {
                 AnswerSection.STATUS -> StatusBadge(answer.status, sectionModifier)
                 AnswerSection.SCOPE -> ScopeTag(answer.generationBasis, sectionModifier)
@@ -175,3 +191,37 @@ internal const val TAG_ANSWER_CARD = "answer-card"
 private fun AnswerBody(markdown: String, modifier: Modifier = Modifier) {
     ai.gowtam.oak.ui.MarkdownBlockView(markdown = markdown, modifier = modifier)
 }
+
+/**
+ * A one-shot fade + slide-up entrance for a section, staggered by [index]
+ * ([OakMotion.STAGGER_STEP_MILLIS] per position) — the Android take on the iOS "cascade"
+ * treatment. Deliberately animates opacity/`translationY` on an always-mounted node
+ * (never [androidx.compose.animation.AnimatedVisibility]'s insert/remove), so the
+ * section's semantics stay in the tree the whole time — the render-order test
+ * (`AnswerCardRenderTest`) walks the tree via `useUnmergedTree`, and a node that briefly
+ * doesn't exist would read as a false negative for "does this section render". `index`
+ * is scoped to one [AnswerCard] instance (a fresh instance per turn, keyed by turn id in
+ * `ChatScreen`), so re-rendering the SAME already-settled card (e.g. during a scroll)
+ * does not restart the animation — [remember] keys only on `index`, not on any
+ * per-recomposition input. No-ops entirely under [reduceMotion].
+ */
+private fun Modifier.sectionEntrance(index: Int, reduceMotion: Boolean): Modifier = composed {
+    if (reduceMotion) {
+        this
+    } else {
+        val density = LocalDensity.current
+        val alpha = remember(index) { Animatable(0f) }
+        val offsetY = remember(index) { Animatable(with(density) { SECTION_ENTRANCE_OFFSET.toPx() }) }
+        LaunchedEffect(index) {
+            delay(index * OakMotion.STAGGER_STEP_MILLIS.toLong())
+            launch { offsetY.animateTo(0f, tween(OakMotion.FADE_MILLIS)) }
+            alpha.animateTo(1f, tween(OakMotion.FADE_MILLIS))
+        }
+        this.graphicsLayer {
+            this.alpha = alpha.value
+            translationY = offsetY.value
+        }
+    }
+}
+
+private val SECTION_ENTRANCE_OFFSET = 6.dp

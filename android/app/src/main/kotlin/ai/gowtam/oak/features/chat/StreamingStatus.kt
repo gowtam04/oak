@@ -3,6 +3,12 @@ package ai.gowtam.oak.features.chat
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.rememberReduceMotion
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,9 +36,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -53,6 +64,27 @@ fun StreamingStatus(
 ) {
     if (phase == StreamingPhase.IDLE) return
     val oak = LocalOakColors.current
+    val reduceMotion = rememberReduceMotion()
+
+    // A slow breathing pulse on the phase icon signals "still working" without
+    // repeating the spinner's motion; disabled outright under reduce-motion (a static
+    // full-opacity icon) rather than swapped for a subtler alternative.
+    val pulseAlpha = if (reduceMotion) {
+        1f
+    } else {
+        val transition = rememberInfiniteTransition(label = "streamingPulse")
+        val animated by transition.animateFloat(
+            initialValue = 1f,
+            targetValue = 0.45f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "streamingPulseAlpha",
+        )
+        animated
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -60,13 +92,17 @@ fun StreamingStatus(
             .padding(OakSpacing.md),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = oak.accent)
             Icon(
                 imageVector = phaseIcon(phase, reconnecting),
                 contentDescription = null,
                 tint = oak.accent,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(16.dp).alpha(pulseAlpha),
             )
             Text(
                 text = phaseLabel(phase, reconnecting),

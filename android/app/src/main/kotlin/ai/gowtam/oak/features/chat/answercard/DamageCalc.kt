@@ -33,6 +33,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,7 +77,7 @@ fun DamageCalcBlock(
                 text = "  Damage",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = oak.textStrong,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).semantics { heading() },
             )
             Text(
                 text = "± ESTIMATE",
@@ -109,7 +114,14 @@ fun DamageCalcBlock(
         if (!breakdown.isNullOrEmpty()) {
             Column {
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { breakdownExpanded = !breakdownExpanded }.padding(vertical = OakSpacing.xs),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { breakdownExpanded = !breakdownExpanded }
+                        .padding(vertical = OakSpacing.xs)
+                        .semantics(mergeDescendants = true) {
+                            role = Role.Button
+                            stateDescription = if (breakdownExpanded) "Expanded" else "Collapsed"
+                        },
                     horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

@@ -38,6 +38,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -73,7 +75,7 @@ fun ShowdownImportDialog(
         Surface(modifier = Modifier.fillMaxSize()) {
             Column {
                 TopAppBar(
-                    title = { Text("Import team") },
+                    title = { Text("Import team", modifier = Modifier.semantics { heading() }) },
                     navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Cancel") } },
                     actions = {
                         when {

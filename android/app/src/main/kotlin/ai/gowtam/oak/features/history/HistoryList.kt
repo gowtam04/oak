@@ -67,6 +67,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -103,7 +105,7 @@ fun HistoryScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Chats") },
+                title = { Text("Chats", modifier = Modifier.semantics { heading() }) },
                 actions = {
                     IconButton(onClick = onNewChat) {
                         Icon(Icons.Filled.Add, contentDescription = "New chat")

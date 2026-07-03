@@ -32,7 +32,9 @@ import androidx.compose.ui.unit.dp
 /**
  * Whether the client currently has a working connection to Oak. [Reconnecting] is the
  * transient state after a transport drop while auto-retrying; [Offline] is the settled
- * no-connection state. Finalized in P11.
+ * no-connection state. The app-wide [Online]/[Offline] signal is produced by
+ * [ai.gowtam.oak.app.rememberConnectionStatus] (P11); [Reconnecting] stays the chat
+ * reducer's own concern and is not currently fed into this shared banner.
  */
 enum class ConnectionStatus { Online, Reconnecting, Offline }
 

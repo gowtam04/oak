@@ -36,7 +36,7 @@ class ByteLineSplitter {
         val lines = mutableListOf<String>()
         for (byte in chunk) {
             if (byte == NEWLINE) {
-                lines.add(buffer.toString(Charsets.UTF_8))
+                lines.add(String(buffer.toByteArray(), Charsets.UTF_8))
                 buffer.reset()
             } else {
                 buffer.write(byte.toInt())
@@ -51,7 +51,7 @@ class ByteLineSplitter {
      */
     fun finish(): String? {
         if (buffer.size() == 0) return null
-        val line = buffer.toString(Charsets.UTF_8)
+        val line = String(buffer.toByteArray(), Charsets.UTF_8)
         buffer.reset()
         return line
     }

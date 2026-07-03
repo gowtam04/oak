@@ -11,10 +11,18 @@ import ai.gowtam.oak.features.history.HistoryScreen
 import ai.gowtam.oak.features.history.HistoryViewModel
 import ai.gowtam.oak.features.teams.TeamsRoute
 import ai.gowtam.oak.services.AuthState
+import ai.gowtam.oak.ui.ConnectionBanner
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.rememberReduceMotion
 import ai.gowtam.oak.wire.ConversationSummary
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -51,10 +59,10 @@ private enum class OakTab(val label: String) {
 
 /**
  * The app's root composable — the 3-tab `NavigationBar` shell (component-design.md
- * "Navigation graph"). Chat and Account are fully wired to their real screens; Teams
- * stays a placeholder until P10. The [ChatViewModel] and [ArtifactViewModel] are owned
- * by the caller (`MainActivity`) and passed in so their stream/back-stack state
- * survives a tab switch away from Chat and back.
+ * "Navigation graph"). Chat, Teams, and Account are all fully wired to their real
+ * screens. The [ChatViewModel] and [ArtifactViewModel] are owned by the caller
+ * (`MainActivity`) and passed in so their stream/back-stack state survives a tab
+ * switch away from Chat and back.
  *
  * **Guest→sign-in import (history-and-teams.md D-HIST-1; mirrors iOS `RootView`).**
  * The single wiring point for the app-wide side effect: whenever [AppState.authState]
@@ -71,6 +79,8 @@ fun OakApp(
 ) {
     var selectedTab by remember { mutableStateOf(OakTab.Chat) }
     val authState by appState.authState.collectAsState()
+    val connectionStatus by rememberConnectionStatus()
+    val reduceMotion = rememberReduceMotion()
 
     LaunchedEffect(appState, services) {
         appState.authState.collect { state ->
@@ -101,19 +111,36 @@ fun OakApp(
         // becoming the primary DI seam (ViewModels still take services as constructor
         // params).
         CompositionLocalProvider(LocalServices provides services) {
-            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                when (selectedTab) {
-                    OakTab.Chat -> ChatTab(
-                        services = services,
-                        appState = appState,
-                        authState = authState,
-                        chatViewModel = chatViewModel,
-                        artifactViewModel = artifactViewModel,
-                    )
-                    OakTab.Teams -> TeamsRoute(services = services, appState = appState)
-                    OakTab.Account -> {
-                        val accountViewModel = remember(services, appState) { AccountViewModel(services.auth, appState) }
-                        AccountScreen(viewModel = accountViewModel)
+            Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                ConnectionBanner(status = connectionStatus)
+                // Tab content crossfades on switch (reduce-motion: an instant swap —
+                // AnimatedContent's default transitionSpec already collapses to
+                // EnterTransition.None/ExitTransition.None-equivalent timing when both
+                // fade specs are zero-duration, so a single shared branch covers both).
+                AnimatedContent(
+                    targetState = selectedTab,
+                    modifier = Modifier.weight(1f),
+                    transitionSpec = {
+                        val millis = if (reduceMotion) 0 else OakMotion.FADE_MILLIS
+                        fadeIn(tween(millis)) togetherWith fadeOut(tween(millis))
+                    },
+                    label = "OakTabContent",
+                ) { tab ->
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        when (tab) {
+                            OakTab.Chat -> ChatTab(
+                                services = services,
+                                appState = appState,
+                                authState = authState,
+                                chatViewModel = chatViewModel,
+                                artifactViewModel = artifactViewModel,
+                            )
+                            OakTab.Teams -> TeamsRoute(services = services, appState = appState)
+                            OakTab.Account -> {
+                                val accountViewModel = remember(services, appState) { AccountViewModel(services.auth, appState) }
+                                AccountScreen(viewModel = accountViewModel)
+                            }
+                        }
                     }
                 }
             }

@@ -54,6 +54,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -163,7 +165,7 @@ private fun TeamsListScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Teams") },
+                title = { Text("Teams", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     Box {
                         IconButton(onClick = { showFilterMenu = true }) { Icon(Icons.Filled.FilterList, contentDescription = "Filter") }

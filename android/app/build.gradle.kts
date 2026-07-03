@@ -27,9 +27,16 @@ android {
             isMinifyEnabled = false
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("String", "BASE_URL", "\"https://oak-gowtam.fly.dev\"")
+            // D-CON-6 / D-OQ-4: v1's release build only needs to be an
+            // emulator/device-installable, verified APK — a production Play
+            // Console signing identity is explicitly deferred. Reusing the
+            // debug keystore keeps `assembleRelease` installable via `adb`
+            // without standing up a real release keystore for this phase.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

@@ -2,6 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Backs ConnectivityObserver (Connectivity.kt, P11) — the app-wide offline
+         banner reads ConnectivityManager.getActiveNetwork()/getNetworkCapabilities(),
+         which throw a SecurityException without this permission (targetSdk 29+
+         requires it explicitly; it is not implied by INTERNET). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -10,7 +15,8 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.Oak"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true">
 
         <activity
             android:name="ai.gowtam.oak.app.MainActivity"

@@ -4,6 +4,7 @@ import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.rememberHaptics
 import ai.gowtam.oak.wire.TeamPatch
 import ai.gowtam.oak.wire.describeTeamPatch
 import androidx.compose.foundation.background
@@ -49,6 +50,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -74,10 +77,15 @@ fun TeamsAssistantSheet(
     val state by viewModel.uiState.collectAsState()
     var input by remember { mutableStateOf("") }
     val oak = LocalOakColors.current
+    val haptics = rememberHaptics()
 
     // A mid-stream dismiss (system back, tap-outside, or Done) cancels the in-flight
     // turn and resets the status so the panel can never get stuck "thinking".
     DisposableEffect(viewModel) { onDispose { viewModel.cancel() } }
+
+    LaunchedEffect(state.errorMessage != null) {
+        if (state.errorMessage != null) haptics.error()
+    }
 
     Column(modifier = modifier.fillMaxWidth().heightIn(min = 420.dp)) {
         Row(
@@ -85,7 +93,11 @@ fun TeamsAssistantSheet(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Team assistant", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+            Text(
+                "Team assistant",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.semantics { heading() },
+            )
             TextButton(onClick = onDone) { Text("Done") }
         }
         HorizontalDivider()
@@ -159,11 +171,12 @@ private fun TurnBlock(turn: AssistantTurn, state: TeamsAssistantUiState, viewMod
             MarkdownBlockView(answer.answerMarkdown)
             val patch = answer.teamPatch
             if (patch != null && hasVisibleChanges(patch)) {
+                val haptics = rememberHaptics()
                 PatchCard(
                     patch = patch,
                     applied = turn.id in state.appliedTurnIds,
                     isLastApplied = state.lastAppliedTurnId == turn.id,
-                    onApply = { viewModel.apply(turn) },
+                    onApply = { haptics.success(); viewModel.apply(turn) },
                     onUndo = viewModel::undo,
                 )
             }
@@ -189,7 +202,11 @@ private fun PatchCard(
             .padding(OakSpacing.md),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
-        Text("Proposed changes", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
+        Text(
+            "Proposed changes",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            modifier = Modifier.semantics { heading() },
+        )
         Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
             for (line in describeTeamPatch(patch)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {

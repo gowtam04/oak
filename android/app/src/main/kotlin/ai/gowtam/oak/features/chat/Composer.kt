@@ -41,6 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -169,6 +170,10 @@ fun Composer(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(2.dp)
+                                // The visual chip stays 20dp; minimumInteractiveComponentSize
+                                // expands only the touch bounds to the 48dp accessibility floor
+                                // (D-UI-4), the same pattern Material's own IconButton uses.
+                                .minimumInteractiveComponentSize()
                                 .size(20.dp)
                                 .clip(CircleShape)
                                 .background(oak.textStrong.copy(alpha = 0.6f))
@@ -225,8 +230,12 @@ fun Composer(
             IconButton(
                 onClick = { if (isStreaming) onStop() else onSend() },
                 enabled = enabled,
+                // 48dp meets the minimum touch target (D-UI-4); Material's IconButton
+                // would otherwise expand a smaller explicit size back up via its own
+                // minimum-interactive-size wrapper, but setting it directly here keeps
+                // the visible circle and the touch bounds the same size.
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .background(if (enabled) oak.accent else oak.accent.copy(alpha = 0.4f)),
             ) {

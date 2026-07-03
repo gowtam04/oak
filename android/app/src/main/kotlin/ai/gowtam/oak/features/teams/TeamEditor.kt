@@ -74,6 +74,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -123,7 +125,12 @@ fun TeamEditor(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(if (state.savedTeam == null) "New team" else "Edit team") },
+                title = {
+                    Text(
+                        if (state.savedTeam == null) "New team" else "Edit team",
+                        modifier = Modifier.semantics { heading() },
+                    )
+                },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
                 actions = {
                     if (state.teamId != null) {
@@ -482,7 +489,7 @@ private fun ExportDialog(paste: String, onDismiss: () -> Unit, onCopy: () -> Uni
         Surface(modifier = Modifier.fillMaxSize()) {
             Column {
                 TopAppBar(
-                    title = { Text("Showdown export") },
+                    title = { Text("Showdown export", modifier = Modifier.semantics { heading() }) },
                     navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Done") } },
                     actions = {
                         TextButton(onClick = onCopy) { Text("Copy") }
