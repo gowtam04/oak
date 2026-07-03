@@ -36,8 +36,6 @@ import { type Format } from "@/data/formats";
 import { fetchLearnset, type LearnsetOption } from "@/lib/api/learnset-client";
 import { guessShowdownAniSpriteUrl } from "@/lib/sprites";
 import EntityPicker from "./EntityPicker";
-import TypeBadge from "@/components/TypeBadge";
-import type { TypeName } from "@/agent/schemas";
 import {
   evBudgetFor,
   NATURE_EFFECTS,
@@ -380,7 +378,7 @@ export default function TeamMemberPanel({
       </div>
 
       <fieldset className="team-member-panel__moves" data-testid={id("moves")}>
-        <legend className="team-member-panel__moves-legend">Moves</legend>
+        <legend className="team-member-panel__moves-legend ilabel">Moves</legend>
         <table className="team-member-panel__moves-table">
           <thead>
             <tr>
@@ -411,7 +409,13 @@ export default function TeamMemberPanel({
                   </td>
                   <td data-testid={id(`move-${i}-type`)}>
                     {meta?.type ? (
-                      <TypeBadge type={meta.type as TypeName} />
+                      <span className="tm-move-type">
+                        <span
+                          className={`tm-move-type__dot type-badge--${meta.type}`}
+                          aria-hidden
+                        />
+                        {meta.type}
+                      </span>
                     ) : (
                       "—"
                     )}
@@ -419,7 +423,10 @@ export default function TeamMemberPanel({
                   <td data-testid={id(`move-${i}-category`)}>
                     {meta?.damage_class ? titleizeSlug(meta.damage_class) : "—"}
                   </td>
-                  <td data-testid={id(`move-${i}-power`)}>
+                  <td
+                    className="mono-num"
+                    data-testid={id(`move-${i}-power`)}
+                  >
                     {meta?.power != null ? meta.power : "—"}
                   </td>
                 </tr>
@@ -429,7 +436,11 @@ export default function TeamMemberPanel({
         </table>
       </fieldset>
 
-      <div className="team-member-panel__meta-grid">
+      <div className="team-member-panel__group">
+        <span className="ilabel team-member-panel__group-label">
+          Nature &amp; Level
+        </span>
+        <div className="team-member-panel__meta-grid">
         <PickerField label="Nature" htmlFor={id("nature")}>
           <EntityPicker
             options={NATURE_OPTIONS}
@@ -477,11 +488,14 @@ export default function TeamMemberPanel({
             onChange={(e) => set({ level: clampInt(e.target.value, 1, 100) })}
           />
         </label>
+        </div>
       </div>
 
       <div className="team-member-panel__stats" data-testid={id("stats")}>
         <div className="team-member-panel__stats-head">
-          <span className="team-member-panel__stats-title">{budget.label}</span>
+          <span className="team-member-panel__stats-title ilabel">
+            {budget.label}
+          </span>
           <span
             className={
               "team-member-panel__ev-total" +

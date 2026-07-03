@@ -1,10 +1,12 @@
 /**
  * RosterStrip — the 6-slot team roster shown above the focused member editor.
  *
- * Each slot is a sprite chip (species sprite + name + type dots) the user clicks
- * to focus that member in the editor below; an empty member renders a neutral
- * "Empty" chip, and a trailing dashed "+ Add" tile appends a new blank slot
- * (until the team is full at six). Sprites/types come from the page's batch
+ * Each slot is a large sprite card (species sprite + name + type dots + a held-
+ * item pip) the user clicks to focus that member in the editor below; an empty
+ * member renders a dashed pokeball "Add a Pokémon" placeholder, and a trailing
+ * dashed pokeball tile appends a new blank slot (until the team is full at six).
+ * The selected card carries the one selection language — a red rail + soft fill.
+ * Sprites/types come from the page's batch
  * `resolveSprites` lookup; an unknown species falls back to a Showdown sprite by
  * slug, then to a pokéball glyph. Pure presentational — selection, add, and the
  * member array all live in {@link TeamEditor}.
@@ -91,7 +93,7 @@ export default function RosterStrip({
             className="roster-slot"
             onClick={() => onSelect(i)}
           >
-            <span className="roster-slot__index">{i + 1}</span>
+            <span className="roster-slot__index mono-num">{i + 1}</span>
             <span className="roster-slot__sprite">
               {species ? (
                 <RosterSprite species={species} staticUrl={ref?.sprite_url ?? null} />
@@ -99,7 +101,9 @@ export default function RosterStrip({
                 <span className="roster-slot__sprite-empty" aria-hidden />
               )}
             </span>
-            <span className="roster-slot__name">{titleizeSlug(species)}</span>
+            <span className="roster-slot__name">
+              {species ? titleizeSlug(species) : "Add a Pokémon"}
+            </span>
             {types.length > 0 && (
               <span className="roster-slot__types" aria-hidden>
                 {types.map((t) => (
@@ -108,6 +112,12 @@ export default function RosterStrip({
                     className={`roster-slot__type-dot type-badge--${t}`}
                   />
                 ))}
+              </span>
+            )}
+            {species && member.item && (
+              <span className="roster-slot__item" title={titleizeSlug(member.item)}>
+                <span className="roster-slot__item-pip" aria-hidden />
+                {titleizeSlug(member.item)}
               </span>
             )}
           </button>
@@ -121,10 +131,10 @@ export default function RosterStrip({
           data-testid="team-add-member"
           onClick={onAdd}
         >
-          <span className="roster-slot__plus" aria-hidden>
-            +
+          <span className="roster-slot__sprite">
+            <span className="roster-slot__sprite-empty" aria-hidden />
           </span>
-          <span className="roster-slot__name">Add Pokémon</span>
+          <span className="roster-slot__name">Add a Pokémon</span>
         </button>
       )}
     </div>

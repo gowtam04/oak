@@ -2941,27 +2941,40 @@ button.scope-chip:focus-visible {
     max(var(--space-6), env(safe-area-inset-left));
 }
 
-/* Shared input baseline for everything inside the body (band is excluded). */
+/* Shared input baseline for everything inside the body (band is excluded).
+   De-CRUDed (UI §3 "inputs invert"): sunken fill, NO border at rest so a field
+   reads as an inset well rather than an admin box; a border + azure focus ring
+   appear only on focus. */
 .teams-page__body input:not([type="range"]),
 .teams-page__body textarea,
 .teams-page__body select {
-  height: var(--space-9);
+  height: var(--space-9, 2.25rem);
   padding: 0 var(--space-3);
-  border: 1px solid var(--border-strong);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--surface-sunken);
   color: var(--text);
   font-family: var(--body);
   font-size: var(--text-input);
   line-height: 1.4;
   transition:
     border-color var(--motion-fast),
-    box-shadow var(--motion-fast);
+    box-shadow var(--motion-fast),
+    background var(--motion-fast);
+}
+.teams-page__body textarea {
+  height: auto;
+}
+.teams-page__body input:not([type="range"]):hover,
+.teams-page__body textarea:hover,
+.teams-page__body select:hover {
+  background: color-mix(in srgb, var(--surface-sunken) 72%, var(--border));
 }
 .teams-page__body input:not([type="range"]):focus-visible,
 .teams-page__body textarea:focus-visible,
 .teams-page__body select:focus-visible {
   outline: none;
+  background: var(--surface);
   border-color: var(--azure);
   box-shadow: 0 0 0 3px var(--azure-soft);
 }
@@ -3087,9 +3100,14 @@ button.scope-chip:focus-visible {
   transform: translateY(-1px);
   box-shadow: var(--shadow-floating);
 }
+/* Selection is ONE language across the workbench — red (UI §3 "one selection
+   color"): the active team card matches the active roster slot (red rail + soft
+   fill), never azure. Azure stays for transient focus rings only. */
 .team-list__row[data-selected="true"] {
-  border-color: var(--azure);
-  box-shadow: 0 0 0 1px var(--azure), var(--shadow-raised);
+  border-color: var(--poke-red);
+  border-left-width: 3px;
+  background: color-mix(in srgb, var(--poke-red-soft) 60%, var(--surface));
+  box-shadow: 0 0 0 1px var(--poke-red), var(--shadow-raised);
 }
 .team-list__open {
   display: flex;
@@ -3162,14 +3180,36 @@ button.scope-chip:focus-visible {
   gap: var(--space-3);
   flex-wrap: wrap;
 }
+/* The team name is an editable TITLE, not the page's biggest input (UI §4
+   screen 07): display face, large, borderless — a faint well appears on hover
+   and a full field on focus. */
 .team-editor__name {
   flex: 1;
   min-width: 180px;
-  height: var(--space-11) !important;
+  height: auto !important;
+  padding: var(--space-1) var(--space-2) !important;
+  margin-left: calc(var(--space-2) * -1);
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-sm);
+  background: transparent !important;
   font-family: var(--display) !important;
   font-weight: 600;
-  font-size: 1.375rem !important;
+  font-size: var(--text-2xl) !important;
+  line-height: 1.2;
   color: var(--text-strong);
+  box-shadow: none !important;
+  transition:
+    background var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast);
+}
+.team-editor__name:hover {
+  background: var(--surface-sunken) !important;
+}
+.team-editor__name:focus-visible {
+  background: var(--surface) !important;
+  border-color: var(--azure) !important;
+  box-shadow: 0 0 0 3px var(--azure-soft) !important;
 }
 .team-editor__format {
   font-family: var(--body);
@@ -3193,50 +3233,131 @@ button.scope-chip:focus-visible {
   border-radius: var(--radius-md);
 }
 
+/* Sticky save bar (UI §4 screen 07): format + count as instrument text, the
+   legality state as a real pill, and a red Save — replaces the old bare-orange
+   "incomplete" text. Sticks to the viewport bottom while the editor scrolls. */
+.team-editor__savebar {
+  position: sticky;
+  bottom: var(--space-3);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-floating);
+}
+.team-editor__savebar-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.team-editor__savebar-dot {
+  color: var(--text-faint);
+}
+.team-editor__savebar-count {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.team-editor__legality {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.team-editor__legality[data-state="legal"] {
+  background: var(--success-soft);
+  color: color-mix(in srgb, var(--success) 68%, var(--text-strong));
+}
+.team-editor__legality[data-state="incomplete"] {
+  background: var(--warning-soft);
+  color: color-mix(in srgb, var(--warning) 58%, var(--text-strong));
+}
+/* Save success flashes the pill to full --success once (feedback, not decor). */
+.team-editor__legality[data-pulse="true"] {
+  animation: tm-legality-pulse 1s var(--motion-base) both;
+}
+@keyframes tm-legality-pulse {
+  30% {
+    background: var(--success);
+    color: var(--neutral-0);
+    transform: scale(1.05);
+    box-shadow: 0 0 0 4px var(--success-soft);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .team-editor__legality[data-pulse="true"] {
+    animation: none;
+  }
+}
+
 /* ----- RosterStrip — 6 sprite slots -------------------------------------- */
+/* The party row is the emotional core (UI §4 screen 07): large slot cards,
+   sprite-forward, with the selected slot carrying the one red selection
+   language. Sized ~2x the old chips. */
 .roster-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--space-3);
 }
 .roster-slot {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
   position: relative;
-  padding: var(--space-2) var(--space-1) var(--space-1);
+  min-height: 148px;
+  padding: var(--space-4) var(--space-2) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-lg);
   background: radial-gradient(
-    120% 80% at 50% 24%,
-    color-mix(in srgb, var(--azure) 5%, var(--surface-sunken)),
-    var(--surface-sunken) 72%
+    120% 80% at 50% 20%,
+    color-mix(in srgb, var(--azure) 4%, var(--surface)),
+    var(--surface) 74%
   );
+  box-shadow: var(--shadow-raised);
   cursor: pointer;
   transition:
     border-color var(--motion-fast),
     box-shadow var(--motion-fast),
+    background var(--motion-fast),
     transform var(--motion-spring);
 }
 .roster-slot:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-raised);
+  box-shadow: var(--shadow-floating);
 }
 .roster-slot[data-selected="true"] {
   border-color: var(--poke-red);
-  box-shadow: 0 0 0 1px var(--poke-red), var(--shadow-raised);
+  border-left-color: var(--poke-red);
+  box-shadow: 0 0 0 1px var(--poke-red), var(--shadow-floating);
   background: radial-gradient(
-    120% 80% at 50% 24%,
+    120% 80% at 50% 20%,
     var(--poke-red-soft),
-    var(--surface) 78%
+    var(--surface) 80%
   );
+  transform: translateY(-2px);
 }
 .roster-slot__index {
   position: absolute;
-  top: 4px;
-  left: 6px;
-  font-family: var(--mono);
+  top: var(--space-2);
+  left: var(--space-2);
   font-size: var(--text-2xs);
   font-weight: 700;
   color: var(--text-faint);
@@ -3245,8 +3366,8 @@ button.scope-chip:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  width: 76px;
+  height: 76px;
 }
 .roster-slot__sprite img {
   max-width: 100%;
@@ -3254,7 +3375,15 @@ button.scope-chip:focus-visible {
   object-fit: contain;
   image-rendering: -webkit-optimize-contrast;
 }
-.roster-slot__sprite-empty,
+/* The ONE legitimate dashed border — an empty slot's "not yet" pokeball. */
+.roster-slot__sprite-empty {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px dashed var(--border-strong);
+  background: var(--icon-pokeball) center / 28px no-repeat;
+  opacity: 0.55;
+}
 .team-member-panel__sprite-empty {
   width: 32px;
   height: 32px;
@@ -3264,8 +3393,8 @@ button.scope-chip:focus-visible {
 }
 .roster-slot__name {
   font-family: var(--body);
-  font-weight: 600;
-  font-size: var(--text-xs);
+  font-weight: 700;
+  font-size: var(--text-sm);
   line-height: 1.2;
   color: var(--text-strong);
   text-align: center;
@@ -3274,34 +3403,60 @@ button.scope-chip:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.roster-slot[data-empty="true"] .roster-slot__name {
+.roster-slot[data-empty="true"] .roster-slot__name,
+.roster-slot--add .roster-slot__name {
   color: var(--text-faint);
-  font-weight: 500;
+  font-weight: 600;
 }
 .roster-slot__types {
   display: inline-flex;
-  gap: 3px;
+  gap: var(--space-1);
 }
 .roster-slot__type-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--type);
+}
+.roster-slot__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roster-slot__item-pip {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--sunflower);
 }
 .roster-slot--add {
   justify-content: center;
   border-style: dashed;
+  border-left-style: dashed;
+  border-left-color: var(--border);
   background: transparent;
+  box-shadow: none;
   color: var(--text-muted);
 }
 .roster-slot--add:hover {
   border-color: var(--poke-red);
   color: var(--poke-red);
+  box-shadow: none;
 }
-.roster-slot__plus {
-  font-size: 1.75rem;
-  line-height: 1;
-  color: inherit;
+.roster-slot--add:hover .roster-slot__sprite-empty {
+  border-color: var(--poke-red);
+  opacity: 0.8;
 }
 
 /* ----- TeamMemberPanel — focused editor ---------------------------------- */
@@ -3454,14 +3609,25 @@ button.scope-chip:focus-visible {
 }
 .team-member-panel__field,
 .team-member-panel__field-label,
-.team-member-panel__moves-legend,
-.team-member-panel__stats-title,
 .team-member-panel__iv-field {
   font-family: var(--body);
   font-weight: 700;
   font-size: var(--text-xs);
   line-height: 1.4;
   color: var(--text-strong);
+}
+/* Grouped surface sections with instrument (mono small-caps) group labels
+   (UI §4 screen 07: MOVES / NATURE & LEVEL / STAT POINTS). The .ilabel utility
+   supplies the type; these just handle layout + the group-label color. */
+.team-member-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.team-member-panel__group-label,
+.team-member-panel__moves-legend,
+.team-member-panel__stats-title {
+  color: var(--text-faint);
 }
 .team-member-panel__level-input {
   width: 100%;
@@ -3484,10 +3650,8 @@ button.scope-chip:focus-visible {
 .team-member-panel__moves-table {
   width: 100%;
   border-collapse: collapse;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  /* Column 1 (the picker) gets the room; the metadata columns stay narrow. */
+  background: transparent;
+  /* No column chrome (UI §4): just a sunken header + hairline row separators. */
   table-layout: fixed;
 }
 .team-member-panel__moves-table thead th {
@@ -3532,6 +3696,20 @@ button.scope-chip:focus-visible {
    so it overlays the rows below it exactly like it overlays any other field. */
 .team-member-panel__moves-table td:first-child {
   overflow: visible;
+}
+/* Type shown as a small colored dot + its name (UI §4) — the machined look,
+   not a full pastel pill. The type-badge--* class supplies `--type`. */
+.tm-move-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tm-move-type__dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--type, var(--text-faint));
 }
 
 /* Stats / EVs */
@@ -4444,6 +4622,41 @@ button.scope-chip:focus-visible {
   line-height: 1.5;
   margin: 0;
 }
+.assistant-panel__intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.assistant-panel__suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.assistant-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.assistant-panel__chip {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-strong);
+  font-family: var(--body);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast),
+    border-color var(--motion-fast),
+    transform var(--motion-spring);
+}
+.assistant-panel__chip:hover {
+  background: var(--poke-red-soft);
+  border-color: var(--poke-red);
+  transform: translateY(-1px);
+}
 
 .assistant-turn {
   display: flex;
@@ -4472,6 +4685,21 @@ button.scope-chip:focus-visible {
 
 .assistant-turn__answer > * + *,
 .assistant-turn__pending > * + * {
+  margin-top: var(--space-2);
+}
+
+/* Assistant reply as a real left bubble on sunken paper (the user bubble sits
+   right); a squared top-left corner points the tail at the speaker. */
+.assistant-turn__bubble {
+  align-self: flex-start;
+  max-width: 92%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  border-top-left-radius: var(--radius-sm);
+}
+.assistant-turn__bubble > * + * {
   margin-top: var(--space-2);
 }
 
@@ -4536,9 +4764,15 @@ button.scope-chip:focus-visible {
   background: var(--surface);
 }
 
+/* Composer matches the chat composer (UI §4 screen 07): a 44px sunken field
+   with a red send. */
 .assistant-panel__input {
   flex: 1;
   min-width: 0;
+  height: 44px !important;
+}
+.assistant-panel__composer .tm-btn {
+  height: 44px;
 }
 
 @media (max-width: 1100px) {

@@ -114,6 +114,40 @@ describe("RosterStrip", () => {
     expect(
       document.querySelector("[data-testid='roster-slot-0'] img"),
     ).toBeNull();
+    // The empty slot invites filling ("not yet"), not a bare "Empty".
+    expect(screen.getByTestId("roster-slot-0")).toHaveTextContent(
+      "Add a Pokémon",
+    );
+  });
+
+  it("renders the trailing add tile as a dashed pokeball placeholder", () => {
+    render(
+      <RosterStrip
+        members={[member("garchomp")]}
+        selectedSlot={0}
+        spriteBySpecies={{}}
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+      />,
+    );
+    const add = screen.getByTestId("team-add-member");
+    expect(add).toHaveTextContent("Add a Pokémon");
+    expect(
+      add.querySelector(".roster-slot__sprite-empty"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a held-item pip for a member holding an item", () => {
+    render(
+      <RosterStrip
+        members={[{ ...member("garchomp"), item: "life-orb" }]}
+        selectedSlot={0}
+        spriteBySpecies={{ garchomp: GARCHOMP_REF }}
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("roster-slot-0")).toHaveTextContent("Life Orb");
   });
 
   it("selecting a slot and adding a member still fire their callbacks", () => {

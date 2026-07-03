@@ -189,6 +189,34 @@ describe("TeamEditor", () => {
     setup({ saving: true });
     expect(screen.getByTestId("team-save")).toBeDisabled();
   });
+
+  it("shows an INCOMPLETE legality pill for a partial team", () => {
+    // The default fixture has 2 of 6 members → incomplete.
+    setup();
+    const pill = screen.getByTestId("team-legality");
+    expect(pill).toHaveAttribute("data-state", "incomplete");
+    expect(pill).toHaveTextContent(/Incomplete/i);
+  });
+
+  it("shows a LEGAL legality pill for a full, complete team", () => {
+    // Six members, each with a species + 4 moves (fullMember) → complete.
+    const six = Array.from({ length: 6 }, (_, i) => fullMember(`p${i}`));
+    setup({ team: detail({ members: six }) });
+    const pill = screen.getByTestId("team-legality");
+    expect(pill).toHaveAttribute("data-state", "legal");
+    expect(pill).toHaveTextContent(/Legal/i);
+  });
+
+  it("drops back to INCOMPLETE live when a slot loses its 4th move", () => {
+    // Full team, but one member has only 3 moves → incomplete.
+    const six = Array.from({ length: 6 }, (_, i) => fullMember(`p${i}`));
+    six[0] = { ...six[0]!, moves: ["a", "b", "c"] };
+    setup({ team: detail({ members: six }) });
+    expect(screen.getByTestId("team-legality")).toHaveAttribute(
+      "data-state",
+      "incomplete",
+    );
+  });
 });
 
 describe("TeamEditor imperative handle (assistant panel seam)", () => {
