@@ -1,0 +1,72 @@
+{
+  "token": "eph_abc123xyz",
+  "expires_at": 1735689600,
+  "session": {
+    "model": "grok-voice-latest",
+    "voice": "rex",
+    "instructions": "You are Oak, a Pokédex voice assistant. Speak your answer directly.",
+    "reasoning_effort": "none",
+    "idle_timeout_ms": 30000,
+    "max_session_ms": 600000,
+    "tools": [
+      {
+        "type": "function",
+        "name": "get_pokemon",
+        "description": "Look up a Pokémon's full profile by resolved id.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" }
+          },
+          "required": ["id"],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "get_move",
+        "description": "Look up a move's full profile by resolved id.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "tags": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "required": ["id"],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "estimate_damage",
+        "description": "Estimate a damage range for an attacking move against a defender.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "attacker": {
+              "type": "object",
+              "properties": {
+                "species": { "type": "string" },
+                "level": { "type": "number" }
+              },
+              "required": ["species"]
+            },
+            "defender": {
+              "type": "object",
+              "properties": {
+                "species": { "type": "string" }
+              },
+              "required": ["species"]
+            },
+            "move": { "type": "string" }
+          },
+          "required": ["attacker", "defender", "move"],
+          "additionalProperties": false
+        }
+      }
+    ]
+  }
+}

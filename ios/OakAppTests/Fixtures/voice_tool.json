@@ -1,0 +1,17 @@
+{
+  "output": {
+    "found": true,
+    "pokemon": {
+      "name": "Garchomp",
+      "national_dex_number": 445,
+      "types": ["dragon", "ground"],
+      "base_stats": { "hp": 108, "atk": 130, "def": 95, "spa": 80, "spd": 85, "spe": 102 },
+      "abilities": ["sand-veil", "rough-skin"],
+      "is_legendary": false,
+      "held_item": null
+    },
+    "citations": [
+      { "source": "pkmn/dex", "endpoint_url": null }
+    ]
+  }
+}
