@@ -60,7 +60,7 @@ export default function AuthMenu({
       <div className="auth-menu" data-testid="auth-menu">
         <button
           type="button"
-          className="auth-pill"
+          className="auth-pill auth-pill--primary"
           data-testid="auth-signin-button"
           onClick={onSignInClick}
         >

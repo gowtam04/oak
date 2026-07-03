@@ -49,10 +49,11 @@ const jetBrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
-// Set the manual theme (if the user picked one) before first paint to avoid a
-// flash of the wrong theme. No stored choice → CSS falls back to the light
-// default. Keep in sync with ThemeToggle's storage key.
-const NO_FLASH_THEME = `(function(){try{var t=localStorage.getItem('oak-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
+// Resolve the theme before first paint to avoid a flash of the wrong theme. A
+// stored explicit choice wins; otherwise we follow the OS `prefers-color-scheme`
+// (system-aware default). Either way `data-theme` is set here so first paint is
+// correct. Keep in sync with ThemeToggle's storage key + resolution.
+const NO_FLASH_THEME = `(function(){try{var t=localStorage.getItem('oak-theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

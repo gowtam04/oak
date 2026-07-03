@@ -7,19 +7,30 @@ import { useEffect, useState } from "react";
  *
  * Writes `data-theme` on <html> and mirrors it to `localStorage` under
  * `oak-theme` (the same key the no-flash inline script in `layout.tsx`
- * reads on load). Light is the default — with no stored choice we stay on
- * light regardless of the system `prefers-color-scheme`; dark is opt-in via
- * the toggle. Single user → no server state (design-system.md).
+ * reads on load). The default is system-aware: with no stored choice we follow
+ * the OS `prefers-color-scheme`; once the user toggles, that explicit choice is
+ * persisted and wins thereafter. Single user → no server state.
  */
 type Theme = "light" | "dark";
 
 const STORAGE_KEY = "oak-theme";
 
+function prefersDark(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
+}
+
 function getInitialTheme(): Theme {
   if (typeof document === "undefined") return "light";
+  // The inline script in layout.tsx sets data-theme before paint (stored choice
+  // or system preference), so this attribute is the resolved theme. Fall back to
+  // the system preference if the script didn't run.
   const attr = document.documentElement.getAttribute("data-theme");
   if (attr === "light" || attr === "dark") return attr;
-  return "light";
+  return prefersDark() ? "dark" : "light";
 }
 
 export default function ThemeToggle() {
