@@ -23,7 +23,7 @@ vi.mock("server-only", () => ({}));
 
 import type { OakDb } from "@/data/db";
 import { reference_cache, searchable_names } from "@/data/schema";
-import { getReference } from "@/data/repos/reference-cache";
+import { getReference, moveSummaries } from "@/data/repos/reference-cache";
 import type {
   MoveDetail,
   TypeMatchupsDetail,
@@ -205,6 +205,40 @@ describe("getReference — pure DB read", () => {
 
     const result = await getReference("move", "fake-out", SV, { db });
     expect(result).toEqual({ found: false, suggestions: [] });
+  });
+});
+
+describe("moveSummaries — batched move-facts hydration (F1 widened)", () => {
+  it("hydrates displayName/type/damageClass/power from the cached MoveDetail", async () => {
+    await seedRef(db, SV, "move/fake-out", "move", FAKE_OUT);
+
+    const out = await moveSummaries(["fake-out"], SV, db);
+
+    expect(out.get("fake-out")).toEqual({
+      displayName: "Fake Out",
+      type: "normal",
+      damageClass: "physical",
+      power: 40,
+    });
+  });
+
+  it("normalizes a status move's null power (not undefined)", async () => {
+    const SPLASH: MoveDetail = { ...FAKE_OUT, display_name: "Splash", damage_class: "status", power: null };
+    await seedRef(db, SV, "move/splash", "move", SPLASH);
+
+    const out = await moveSummaries(["splash"], SV, db);
+
+    expect(out.get("splash")).toEqual({
+      displayName: "Splash",
+      type: "normal",
+      damageClass: "status",
+      power: null,
+    });
+  });
+
+  it("a slug with no cached row is simply absent from the map", async () => {
+    const out = await moveSummaries(["not-a-move"], SV, db);
+    expect(out.has("not-a-move")).toBe(false);
   });
 });
 

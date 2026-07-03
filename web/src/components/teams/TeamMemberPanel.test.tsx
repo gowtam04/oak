@@ -291,6 +291,129 @@ describe("TeamMemberPanel", () => {
     expect(screen.getByTestId("member-0-down")).not.toBeDisabled();
   });
 
+  it("renders move metadata (type/category/power) in the moves table, em-dash for an empty slot", async () => {
+    learnset.fetchLearnset.mockResolvedValue([
+      {
+        slug: "earthquake",
+        display_name: "Earthquake",
+        type: "ground",
+        damage_class: "physical",
+        power: 100,
+      },
+      { slug: "dragon-claw", display_name: "Dragon Claw" }, // no cached metadata
+    ]);
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member({ moves: ["earthquake", "dragon-claw"] })}
+        warnings={[]}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    // Metadata hydrates asynchronously alongside the movepool fetch.
+    expect(await screen.findByTestId("member-0-move-0-type")).toHaveTextContent(
+      "ground",
+    );
+    expect(screen.getByTestId("member-0-move-0-category")).toHaveTextContent(
+      "Physical",
+    );
+    expect(screen.getByTestId("member-0-move-0-power")).toHaveTextContent(
+      "100",
+    );
+    // A move present in the learnset but with no cached reference detail.
+    expect(screen.getByTestId("member-0-move-1-type")).toHaveTextContent("—");
+    expect(screen.getByTestId("member-0-move-1-category")).toHaveTextContent(
+      "—",
+    );
+    expect(screen.getByTestId("member-0-move-1-power")).toHaveTextContent(
+      "—",
+    );
+    // An empty move slot.
+    expect(screen.getByTestId("member-0-move-2-type")).toHaveTextContent("—");
+    // Existing move-picker testids/values are unchanged.
+    expect(screen.getByTestId("member-0-move-0")).toHaveValue("Earthquake");
+  });
+
+  it("prefers the animated Showdown GIF for the identity sprite over a non-.gif DB url", () => {
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member()}
+        warnings={[]}
+        spriteRef={{
+          display_name: "Garchomp",
+          sprite_url: "https://example.test/static/garchomp.png",
+          dex_number: 445,
+          types: ["dragon", "ground"],
+          abilities: ["rough-skin"],
+          required_item: null,
+          base_stats: GARCHOMP_BASE,
+        }}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    const img = document.querySelector(".team-member-panel__sprite img");
+    expect(img).not.toBeNull();
+    expect(img!.getAttribute("src")).toBe(
+      "https://play.pokemonshowdown.com/sprites/ani/garchomp.gif",
+    );
+  });
+
+  it("keeps a DB sprite_url that's already an animated .gif", () => {
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member({ species: "charizard-mega-x" })}
+        warnings={[]}
+        spriteRef={{
+          display_name: "Charizard (Mega X)",
+          sprite_url: "https://play.pokemonshowdown.com/sprites/ani/charizard-megax.gif",
+          dex_number: 6,
+          types: ["fire", "dragon"],
+          abilities: ["tough-claws"],
+          required_item: "charizardite-x",
+          base_stats: GARCHOMP_BASE,
+        }}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    const img = document.querySelector(".team-member-panel__sprite img");
+    expect(img!.getAttribute("src")).toBe(
+      "https://play.pokemonshowdown.com/sprites/ani/charizard-megax.gif",
+    );
+  });
+
+  it("falls back to the static DB sprite_url after the animated guess errors", () => {
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member()}
+        warnings={[]}
+        spriteRef={{
+          display_name: "Garchomp",
+          sprite_url: "https://example.test/static/garchomp.png",
+          dex_number: 445,
+          types: ["dragon", "ground"],
+          abilities: ["rough-skin"],
+          required_item: null,
+          base_stats: GARCHOMP_BASE,
+        }}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    const img = document.querySelector(
+      ".team-member-panel__sprite img",
+    ) as HTMLImageElement;
+    fireEvent.error(img);
+    expect(img.getAttribute("src")).toBe(
+      "https://example.test/static/garchomp.png",
+    );
+  });
+
   it("renders per-slot warnings inline", () => {
     const warnings: TeamWarning[] = [
       {

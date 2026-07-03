@@ -12,10 +12,50 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
+
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { SpriteRef } from "@/lib/api/sprites-client";
-import { showdownAniSprite, showdownSpriteId } from "@/lib/sprites";
+import { guessShowdownAniSpriteUrl } from "@/lib/sprites";
 import { titleizeSlug } from "./display-names";
+
+/**
+ * One roster slot's sprite (F2): PREFERS the animated Showdown GIF (guessed
+ * from the species slug when the DB's `sprite_url` isn't already one) and
+ * falls back to that static DB url on a load error — one-shot, so a second
+ * failure just leaves the broken/placeholder image rather than looping.
+ */
+function RosterSprite({
+  species,
+  staticUrl,
+}: {
+  species: string;
+  staticUrl: string | null;
+}) {
+  const [errored, setErrored] = useState(false);
+  useEffect(() => setErrored(false), [species, staticUrl]);
+
+  const preferred = staticUrl?.endsWith(".gif")
+    ? staticUrl
+    : guessShowdownAniSpriteUrl(species);
+  const src = errored ? staticUrl : preferred;
+
+  if (!src) {
+    return <span className="roster-slot__sprite-empty" aria-hidden />;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      aria-hidden
+      loading="lazy"
+      onError={() => {
+        if (!errored && staticUrl && staticUrl !== src) setErrored(true);
+      }}
+    />
+  );
+}
 
 export interface RosterStripProps {
   members: TeamMember[];
@@ -37,11 +77,6 @@ export default function RosterStrip({
       {members.map((member, i) => {
         const species = member.species;
         const ref = species ? spriteBySpecies[species] : undefined;
-        const spriteUrl =
-          ref?.sprite_url ??
-          (species
-            ? showdownAniSprite(showdownSpriteId(species, null))
-            : null);
         const types = ref?.types ?? [];
         const selected = i === selectedSlot;
         return (
@@ -58,9 +93,8 @@ export default function RosterStrip({
           >
             <span className="roster-slot__index">{i + 1}</span>
             <span className="roster-slot__sprite">
-              {spriteUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={spriteUrl} alt="" aria-hidden loading="lazy" />
+              {species ? (
+                <RosterSprite species={species} staticUrl={ref?.sprite_url ?? null} />
               ) : (
                 <span className="roster-slot__sprite-empty" aria-hidden />
               )}

@@ -26,7 +26,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { searchEntities, type EntityKind } from "@/lib/api/search-client";
 import type { Format } from "@/data/formats";
-import { showdownAniSprite, showdownSpriteId } from "@/lib/sprites";
+import { guessShowdownAniSpriteUrl } from "@/lib/sprites";
 import type { PickerOption } from "./dex-constants";
 import { titleizeSlug } from "./display-names";
 
@@ -61,7 +61,7 @@ function SpriteThumb({ slug }: { slug: string }) {
     // eslint-disable-next-line @next/next/no-img-element -- external CDN sprite, not a static asset
     <img
       className="entity-picker__thumb"
-      src={showdownAniSprite(showdownSpriteId(slug, null))}
+      src={guessShowdownAniSpriteUrl(slug)}
       alt=""
       aria-hidden
       loading="lazy"
