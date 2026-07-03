@@ -1,0 +1,576 @@
+/**
+ * reference.css — styles for `components/reference/*` plus the page-level
+ * scaffolding classes the B4 pages unit builds on top of. Tokens only (colors,
+ * spacing, radii, shadows all read CSS custom properties from
+ * `src/app/globals.css`'s `:root` block) so dark theme (`[data-theme="dark"]`
+ * token overrides) works automatically with zero rules duplicated here.
+ * Imported once by the `(reference)` route group's layout.
+ */
+
+/* ---------------------------------------------------------------------------
+   Page-level scaffolding — used directly by the B4 page files, not by any
+   component here. Documented per class since the pages unit depends on the
+   exact names.
+   ------------------------------------------------------------------------- */
+
+/* The single-column page wrapper every reference route renders into. */
+.ref-page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 var(--space-6) var(--space-16);
+}
+
+/* The detail-page hero: artwork/sprite + title + type badges row. */
+.ref-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ref-hero__art {
+  width: 128px;
+  height: 128px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.ref-hero__title {
+  font-family: var(--display);
+  font-size: var(--text-2xl);
+  color: var(--text-strong);
+  margin: 0 0 var(--space-2);
+}
+
+.ref-hero__badges {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* A block-level section on a detail/index page: consistent vertical rhythm
+   + a shared `<h2>` style. */
+.ref-section {
+  padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ref-section:last-child {
+  border-bottom: none;
+}
+
+.ref-section__title {
+  font-family: var(--display);
+  font-size: var(--text-lg);
+  color: var(--text-strong);
+  margin: 0 0 var(--space-4);
+}
+
+/* A key/value fact table (move/item fact sheets — type, power, PP, etc). */
+.ref-fact-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ref-fact-table th,
+.ref-fact-table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.ref-fact-table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  width: 40%;
+}
+
+.ref-fact-table td {
+  color: var(--text-strong);
+}
+
+/* Breadcrumb trail atop a detail page (Pokédex › Garchomp). */
+.ref-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding-top: var(--space-6);
+}
+
+.ref-breadcrumbs a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.ref-breadcrumbs a:hover {
+  color: var(--poke-red);
+  text-decoration: underline;
+}
+
+.ref-breadcrumbs__sep {
+  color: var(--text-faint);
+}
+
+/* The lead/intro paragraph under a detail-page hero or atop an index page. */
+.ref-intro {
+  font-size: var(--text-md);
+  line-height: 1.6;
+  color: var(--text);
+  max-width: 68ch;
+}
+
+/* ---------------------------------------------------------------------------
+   ReferenceHeader
+   ------------------------------------------------------------------------- */
+
+.ref-header {
+  background: var(--poke-red);
+  color: var(--neutral-0);
+}
+
+.ref-header__inner {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.ref-header__wordmark {
+  font-family: var(--display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--neutral-0);
+  text-decoration: none;
+}
+
+.ref-header__nav {
+  display: flex;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+.ref-header__link {
+  color: var(--neutral-0);
+  opacity: 0.85;
+  text-decoration: none;
+  font-size: var(--text-sm);
+}
+
+.ref-header__link:hover,
+.ref-header__link[aria-current="page"] {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.ref-header__chat-link {
+  color: var(--neutral-0);
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-pill);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ref-header__chat-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ---------------------------------------------------------------------------
+   ReferenceFooter
+   ------------------------------------------------------------------------- */
+
+.ref-footer {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6);
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: var(--text-2xs);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ref-footer__link {
+  color: var(--text-muted);
+}
+
+.ref-footer__sep {
+  color: var(--text-faint);
+}
+
+/* ---------------------------------------------------------------------------
+   StatsTable
+   ------------------------------------------------------------------------- */
+
+.ref-stats {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ref-stats__row td,
+.ref-stats__row th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.ref-stats__label {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  width: 30%;
+}
+
+.ref-stats__value {
+  text-align: right;
+  color: var(--text-strong);
+  width: 15%;
+}
+
+.ref-stats__bar-cell {
+  width: 55%;
+}
+
+.ref-stats__bar-track {
+  display: block;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.ref-stats__bar {
+  --fill: 0%;
+  display: block;
+  height: 100%;
+  width: var(--fill);
+  border-radius: var(--radius-pill);
+}
+
+.ref-stats__bar--danger { background: var(--danger); }
+.ref-stats__bar--warning { background: var(--warning); }
+.ref-stats__bar--success { background: var(--success); }
+.ref-stats__bar--azure { background: var(--azure); }
+
+.ref-stats__row--total th,
+.ref-stats__row--total td {
+  border-bottom: none;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+/* ---------------------------------------------------------------------------
+   MatchupChart
+   ------------------------------------------------------------------------- */
+
+.ref-matchups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ref-matchups__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ref-matchups__label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  width: 12ch;
+  flex-shrink: 0;
+}
+
+.ref-matchups__mult {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  width: 4ch;
+  flex-shrink: 0;
+}
+
+.ref-matchups__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ---------------------------------------------------------------------------
+   LearnsetTable
+   ------------------------------------------------------------------------- */
+
+.ref-learnset__group {
+  margin-bottom: var(--space-6);
+}
+
+.ref-learnset__method {
+  font-family: var(--display);
+  font-size: var(--text-md);
+  color: var(--text-strong);
+  margin: 0 0 var(--space-2);
+}
+
+.ref-learnset__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ref-learnset__row td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.ref-learnset__name a {
+  color: var(--text-strong);
+}
+
+.ref-learnset__power,
+.ref-learnset__class {
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------------------
+   AbilityBlock
+   ------------------------------------------------------------------------- */
+
+.ref-abilities {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ref-abilities__item {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.ref-abilities__item:last-child {
+  border-bottom: none;
+}
+
+.ref-abilities__name {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.ref-abilities__hidden {
+  margin-left: var(--space-2);
+  color: var(--text-faint);
+  font-size: var(--text-2xs);
+}
+
+.ref-abilities__effect {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---------------------------------------------------------------------------
+   EvolutionChain
+   ------------------------------------------------------------------------- */
+
+.ref-evolution {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ref-evolution__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ref-evolution__node {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.ref-evolution__arrow {
+  color: var(--text-faint);
+}
+
+.ref-evolution__condition {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+/* ---------------------------------------------------------------------------
+   FormatChips
+   ------------------------------------------------------------------------- */
+
+.ref-formats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ref-formats__chip {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-2xs);
+}
+
+/* ---------------------------------------------------------------------------
+   UsageBlock
+   ------------------------------------------------------------------------- */
+
+.ref-usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ref-usage__season {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.ref-usage__percent {
+  color: var(--text-strong);
+  font-size: var(--text-md);
+  margin: 0;
+}
+
+.ref-usage__group-title {
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+}
+
+.ref-usage__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ref-usage__item {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+}
+
+.ref-usage__name {
+  color: var(--text-strong);
+}
+
+.ref-usage__pct {
+  color: var(--text-muted);
+}
+
+.ref-usage__attribution {
+  color: var(--text-faint);
+  font-size: var(--text-2xs);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   EntityIndexList
+   ------------------------------------------------------------------------- */
+
+.ref-index__group {
+  margin-bottom: var(--space-8);
+}
+
+.ref-index__heading {
+  font-family: var(--display);
+  font-size: var(--text-lg);
+  color: var(--text-strong);
+  margin: 0 0 var(--space-3);
+}
+
+.ref-index__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ref-index__row {
+  border-bottom: 1px solid var(--border);
+}
+
+.ref-index__entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  color: var(--text-strong);
+  text-decoration: none;
+}
+
+.ref-index__entry:hover {
+  color: var(--poke-red);
+}
+
+.ref-index__primary {
+  font-weight: 500;
+  flex: 1;
+}
+
+.ref-index__secondary {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.ref-index__types {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.ref-index__meta {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+/* ---------------------------------------------------------------------------
+   AskOakCta
+   ------------------------------------------------------------------------- */
+
+.ref-ask-oak {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--poke-red-soft);
+  text-decoration: none;
+  box-shadow: var(--shadow-raised);
+}
+
+.ref-ask-oak:hover {
+  border-color: var(--poke-red);
+}
+
+.ref-ask-oak__label {
+  font-family: var(--display);
+  font-size: var(--text-sm);
+  color: var(--poke-red);
+  font-weight: 600;
+}
+
+.ref-ask-oak__prompt {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
