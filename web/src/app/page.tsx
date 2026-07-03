@@ -483,8 +483,12 @@ export default function Home() {
             disabled={status === "thinking"}
           />
           {/* Collapsible group: inline on desktop, a popover under the gear on
-              mobile (≤640px). The popover panel re-uses the red-band background
-              in CSS so the translucent-white pills keep their contrast. */}
+              mobile (≤640px). Holds the secondary controls AND the auth control
+              (AuthMenu) — the auth pill (guest "Sign in" or the wider signed-in
+              email/"Sign out" cluster) was the element overflowing the 390/360px
+              header, so it collapses into the gear popover on mobile too. Mobile
+              header = logo + scope chip + gear; desktop is unchanged (this group
+              is inline there, in the same visual order as before). */}
           <div
             id="header-controls"
             className={
@@ -501,6 +505,12 @@ export default function Home() {
               </>
             )}
             <ThemeToggle />
+            <AuthMenu
+              signedIn={auth.signedIn}
+              email={auth.email}
+              onSignInClick={() => setAuthDialogOpen(true)}
+              onSignedOut={handleSignedOut}
+            />
           </div>
           {/* Mobile-only trigger for the control popover (CSS hides it ≥640px). */}
           <button
@@ -516,12 +526,6 @@ export default function Home() {
           >
             <SlidersIcon />
           </button>
-          <AuthMenu
-            signedIn={auth.signedIn}
-            email={auth.email}
-            onSignInClick={() => setAuthDialogOpen(true)}
-            onSignedOut={handleSignedOut}
-          />
         </div>
       </header>
 
