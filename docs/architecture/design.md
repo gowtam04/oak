@@ -55,7 +55,9 @@ throughout this doc — recorded here as well so the divergence is explicit:
 4. **The SSE protocol streams the answer.** Beyond `tool_activity` + the terminal
    `answer`, the route emits `answer_start` / `answer_delta` events that stream
    `answer_markdown` token-by-token (extracted from the streaming `submit_answer`
-   input). The request body gained a `champions_mode` boolean.
+   input). The request body gained a `champions_mode` boolean (superseded by
+   `scope_seed`; `champions_mode` is kept only for back-compat — see the
+   generation-scope addendum).
 5. **`learnset` is keyed by `format`, not `version_group`.** Multi-move
    intersection (BR-7) is unchanged (SQL `GROUP BY … HAVING COUNT(DISTINCT)=N`).
    Ingest's "reuse-last-good on upstream failure" path is gone (no upstream).
@@ -209,7 +211,7 @@ code lives and how it's wired_, not _what the agent does_.
 | **Formula functions** (`src/agent/formulas/`)          | Deterministic `compute_stat` / `estimate_damage` (D5) — pure functions, per-step flooring.                                                                                                                                                                                                                             | `computeStat(...)`, `estimateDamage(...)`.                      | none.                              |
 | **Tool layer** (`src/agent/tools/`)                    | The 11 tool implementations (T1–T11) wrapping repos + formulas; each returns the exact structured shape in `tools.md`; Zod input/output schemas → JSON Schema for the SDK.                                                                                                                                             | `tools: ToolDef[]`; `submitAnswerSchema`.                       | repos, formulas, Zod.              |
 | **Agent runtime** (`src/agent/runtime.ts`)             | `runOak`: assemble cached prefix (system + tools + few-shot; a Champions-mode prefix variant) → append history + message → streaming Sonnet tool-loop (max 10, `tool_choice: auto` + adaptive thinking) → drive `submit_answer` via prompt + iteration guard → validate `OakAnswer`, retry ≤2 on schema fail → return payload. Emits progress + answer-delta callbacks; assembles the per-turn log trace. | `runOak(message, history, ctx, onProgress?, onAnswerStart?, onAnswerDelta?): Promise<OakAnswer>`. | Anthropic SDK, tool layer, logger. |
-| **Web API** (`src/app/api/chat/route.ts`)              | `POST /api/chat` SSE handler: input-length cap + per-session rate limit; derive `AgentMode` from the body's `champions_mode`; resolve history from session store; call `runOak` with hooks streaming `tool_activity` then `answer_start`/`answer_delta`; emit the terminal `answer` event; map errors per `integration.md`.                                                                 | HTTP SSE endpoint.                                              | Agent runtime, session store.      |
+| **Web API** (`src/app/api/chat/route.ts`)              | `POST /api/chat` SSE handler: input-length cap + per-session rate limit; derive `AgentMode` via scope resolution (message signal > `scope_seed` > sticky scope > deprecated `champions_mode` > champions default); resolve history from session store; call `runOak` with hooks streaming `tool_activity` then `answer_start`/`answer_delta`; emit the terminal `answer` event; map errors per `integration.md`.                                                                 | HTTP SSE endpoint.                                              | Agent runtime, session store.      |
 | **Session store** (`src/server/session-store.ts`)      | In-memory `Map<session_id, ChatMessage[]>` (DS-5, D9). Append turns; trim oldest when near context budget. No persistence.                                                                                                                                                                                             | `getHistory`, `appendTurn`, `trim`.                             | none.                              |
 | **Logger** (`src/server/logger.ts`)                    | pino instance + helper to assemble the per-turn trace (request_id, session_id, model, tokens, full tool-call trace, latency, status, citation count).                                                                                                                                                                  | `logger`, `logTurn(trace)`.                                     | pino.                              |
 | **Frontend renderer** (`src/app/` + `src/components/`) | Chat shell + `AnswerCard` component tree rendering `OakAnswer` field-by-field; SSE client hook; progress UI. **Visual styling deferred to the `frontend-design` skill.**                                                                                                                                           | React components.                                               | SSE endpoint.                      |
@@ -222,7 +224,7 @@ The HTTP contract (`POST /api/chat`, request/response, error surface) is fixed b
 protocol** the route emits (the architect's seam to nail down):
 
 ```
-POST /api/chat   Body: { session_id: string, message: string, champions_mode?: boolean }
+POST /api/chat   Body: { session_id: string, message: string, scope_seed?: Format, champions_mode?: boolean (deprecated) }
 Response: text/event-stream, events emitted in order:
 
   event: tool_activity
@@ -241,9 +243,15 @@ Response: text/event-stream, events emitted in order:
   data: { "code": "agent_error", "message": "…" }   // → maps to HTTP-level retry affordance
 ```
 
-- `champions_mode: true` scopes the whole turn to the Champions index; omitted /
-  false is standard Gen-9 behavior. It is server-controlled (an `AgentMode` on the
-  context), never a model-visible tool field.
+- `scope_seed` (one of the six `Format`s, set by the header scope chip) seeds a
+  *new* conversation's scope and, as fresh explicit intent, ranks above the
+  conversation's sticky scope. The deprecated `champions_mode` boolean
+  (`true`→champions, `false`→scarlet-violet) is still honored for back-compat
+  but ranks below sticky scope. With no signal, no seed, and no sticky scope,
+  a turn defaults to **champions** (the web toggle that used to gate this is
+  removed). Scope is server-controlled (an `AgentMode` on the context), never a
+  model-visible tool field — see the generation-scope addendum for the full
+  precedence chain.
 - `answer_start` / `answer_delta` stream `answer_markdown` as the model emits the
   `submit_answer` input; a re-emitted answer (after a validation failure) sends a
   fresh `answer_start` so the client replaces rather than appends. The terminal
@@ -340,7 +348,7 @@ oak/
 │   ├── components/                    — AnswerCard tree + chat shell (styled per docs/design-system/)
 │   │   ├── ChatThread.tsx             — message list
 │   │   ├── Composer.tsx               — input box
-│   │   ├── ChampionsToggle.tsx        — Champions-mode switch (sets champions_mode on the POST)
+│   │   ├── ScopeChip.tsx              — interactive scope menu (tap to pick one of six scopes; sets scope_seed on the next POST)
 │   │   ├── ThemeToggle.tsx            — light/dark theme switch
 │   │   ├── Markdown.tsx               — react-markdown + remark-gfm renderer
 │   │   ├── AnswerCard.tsx             — top-level renderer of a OakAnswer

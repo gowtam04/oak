@@ -5,6 +5,7 @@ import type { ChatThreadProps } from "@/components/types";
 import AnswerCard from "@/components/answer-card/AnswerCard";
 import Markdown from "@/components/Markdown";
 import { STARTER_PROMPTS, pickRandomPrompts } from "@/lib/example-prompts";
+import { CHAMPIONS_REGULATION } from "@/data/formats";
 
 /**
  * Heuristic: has the streaming answer begun laying out a markdown table? A table
@@ -146,6 +147,11 @@ export default function ChatThread({
           <p className="chat-empty__invite">
             Ask anything about Pokémon — team-building filters, stat math, damage
             calcs, or a quick Pokédex lookup.
+          </p>
+          <p className="chat-empty__scope-hint" data-testid="chat-empty-scope-hint">
+            Answers default to Pokémon Champions ({CHAMPIONS_REGULATION}). For mainline
+            games, mention one (&ldquo;in Scarlet/Violet&rdquo;, &ldquo;gen 7&rdquo;) or use the scope chip in
+            the header.
           </p>
           <div className="chat-empty__examples">
             {examples.map((query) => (

@@ -145,14 +145,14 @@ export async function deleteConversation(id: string): Promise<boolean> {
  *
  * `format` is the guest thread's RESOLVED scope (GS-C): a thread that switched
  * to gen-7 via an in-message signal must import as gen-7, not as whatever the
- * Champions toggle currently reads. Optional — the route falls back to
- * `champions_mode` for back-compat when it is absent.
+ * scope chip currently reads. Required now that the deprecated
+ * `champions_mode` toggle is gone from the web client. (The server import
+ * route keeps accepting the old `champions_mode` shape for other clients.)
  */
 export async function importConversation(
   sessionId: string,
-  championsMode: boolean,
   turns: ChatTurn[],
-  format?: Format,
+  format: Format,
 ): Promise<string | null> {
   try {
     const res = await fetch("/api/conversations/import", {
@@ -161,8 +161,7 @@ export async function importConversation(
       credentials: "same-origin",
       body: JSON.stringify({
         session_id: sessionId,
-        champions_mode: championsMode,
-        ...(format ? { format } : {}),
+        format,
         turns,
       }),
     });

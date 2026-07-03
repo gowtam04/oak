@@ -4,7 +4,8 @@
  * Reads the move's mechanical details from the read-through reference cache
  * (DS-4). Optionally augments a successful hit with the Gen-9 learner count from
  * the learnset repo (DS-3). Misses / upstream failures pass straight through:
- *   - { found: false, suggestions: [...] }
+ *   - { found: false, suggestions: [...] }  (Champions mode: probed against the
+ *     mainline Gen 9 index and flagged with `exists_in_standard`)
  *   - { error: "upstream_unavailable" }
  */
 
@@ -17,7 +18,7 @@ import {
 } from "@/agent/schemas";
 import { getReference } from "@/data/repos/reference-cache";
 import { gen9LearnerCount } from "@/data/repos/learnset-repo";
-import { formatForMode } from "@/data/formats";
+import { formatForMode, CHAMPIONS_FORMAT, STANDARD_FORMAT } from "@/data/formats";
 import type { OakDb } from "@/data/db";
 
 const description =
@@ -50,6 +51,10 @@ export const getMoveTool: ToolDef = {
 
     const ref = (await getReference("move", name, format, ctx.db)) as GetMoveOutput;
     if (!isFound(ref)) {
+      if (format === CHAMPIONS_FORMAT && "found" in ref && ref.found === false) {
+        const std = await getReference("move", name, STANDARD_FORMAT, ctx.db);
+        return { ...ref, exists_in_standard: "found" in std && std.found === true };
+      }
       return ref;
     }
 

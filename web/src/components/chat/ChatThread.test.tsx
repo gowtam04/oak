@@ -12,6 +12,7 @@ afterEach(() => cleanup());
 import ChatThread from "./ChatThread";
 import type { ChatThreadProps } from "@/components/types";
 import { STARTER_PROMPTS } from "@/lib/example-prompts";
+import { CHAMPIONS_REGULATION } from "@/data/formats";
 import { RESOLUTION_FAILED_ANSWER } from "@/components/test-fixtures";
 
 /** Minimal props with sensible defaults; override per test. */
@@ -83,6 +84,14 @@ describe("ChatThread — empty-state starter chips", () => {
     );
     expect(screen.queryByTestId("chat-empty")).toBeNull();
     expect(screen.queryByTestId("chat-empty-example")).toBeNull();
+    expect(screen.queryByTestId("chat-empty-scope-hint")).toBeNull();
+  });
+
+  it("tells the user answers default to Champions, with the current regulation", () => {
+    render(<ChatThread {...props({ turns: [], status: "idle" })} />);
+    const hint = screen.getByTestId("chat-empty-scope-hint");
+    expect(hint).toHaveTextContent("Pokémon Champions");
+    expect(hint).toHaveTextContent(CHAMPIONS_REGULATION);
   });
 });
 

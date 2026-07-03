@@ -42,6 +42,11 @@ describe("ConversationRow", () => {
     expect(screen.getByTestId("format-badge")).toHaveTextContent("Champions");
   });
 
+  it("shows the Gen 7 badge for a gen-7 conversation", () => {
+    setup({ format: "gen-7" });
+    expect(screen.getByTestId("format-badge")).toHaveTextContent("Gen 7");
+  });
+
   it("opens on title click", () => {
     const h = setup();
     fireEvent.click(screen.getByTitle("What beats Garchomp?"));

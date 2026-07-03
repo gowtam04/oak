@@ -14,6 +14,7 @@ import {
   GROK_CHAMPIONS_SYSTEM_PROMPT,
   grokDomainForMode,
 } from "@/agent/prompts/domain-grok";
+import { CHAMPIONS_SYSTEM_PROMPT } from "@/agent/prompts/champions";
 import { MAINLINE_GEN_INFO } from "@/agent/prompts/gen-info";
 import { CHAMPIONS_REGULATION } from "@/data/formats";
 
@@ -142,6 +143,14 @@ describe("Grok Champions body — XML-sectioned, Champions-correct", () => {
     expect(GROK_CHAMPIONS_FEW_SHOT).toContain(CHAMPIONS_REGULATION);
     const exampleOpens = GROK_CHAMPIONS_FEW_SHOT.match(/<example name="/g) ?? [];
     expect(exampleOpens).toHaveLength(8);
+  });
+
+  it("both Champions bodies carry the exists_in_standard cross-scope hint (parity)", () => {
+    // The Champions-default cross-scope hint (a champions-mode tool miss that
+    // exists in mainline Gen 9) must land in BOTH prompt structures — the
+    // Markdown body (Claude/OpenAI) and this Grok-native XML body.
+    expect(CHAMPIONS_SYSTEM_PROMPT).toContain("exists_in_standard");
+    expect(GROK_CHAMPIONS_SYSTEM_PROMPT).toContain("exists_in_standard");
   });
 });
 

@@ -174,6 +174,9 @@ export const resolveEntityOutputSchema = z.object({
       score: z.number(),
     }),
   ),
+  /** Champions mode only: the entity missed here but exists in the mainline
+   *  Gen 9 (scarlet-violet) index — surface the cross-scope hint. Additive. */
+  exists_in_standard: z.boolean().optional(),
 });
 
 // ===========================================================================
@@ -253,6 +256,9 @@ export const pokemonProfileSchema = z.object({
 export const notFoundSchema = z.object({
   found: z.literal(false),
   suggestions: z.array(z.string()),
+  /** Champions mode only: the entity missed here but exists in the mainline
+   *  Gen 9 (scarlet-violet) index — surface the cross-scope hint. Additive. */
+  exists_in_standard: z.boolean().optional(),
 });
 
 /** PokeAPI-down miss shape for read-through-cache tools. */

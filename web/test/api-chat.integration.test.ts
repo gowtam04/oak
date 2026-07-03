@@ -478,6 +478,114 @@ describe("POST /api/chat — scope resolution", () => {
     expect(call2.mode).toBe("gen-7");
   });
 
+  it("a fresh session with no seed fields defaults to Champions", async () => {
+    mockRunOak.mockResolvedValue(G1_ANSWER);
+
+    const res = await post({
+      session_id: "s-scope-default",
+      message: "what about defensively?",
+    });
+    const events = await readSse(res);
+    expect(scopeOf(events)).toEqual({ format: "champions", source: "default" });
+    const call = vi.mocked(createAgentContext).mock.calls[0]![0] as {
+      mode: string;
+    };
+    expect(call.mode).toBe("champions");
+  });
+
+  it("an explicit scope_seed chip pick seeds a fresh session, then sticks", async () => {
+    mockRunOak.mockResolvedValue(G1_ANSWER);
+    const sid = "s-scope-seed";
+
+    const res1 = await post({
+      session_id: sid,
+      message: "what about defensively?",
+      scope_seed: "gen-6",
+    });
+    const events1 = await readSse(res1);
+    expect(scopeOf(events1)).toEqual({ format: "gen-6", source: "seed" });
+
+    // A follow-up with no scope_seed stays gen-6 via the sticky scope.
+    const res2 = await post({
+      session_id: sid,
+      message: "and offensively?",
+    });
+    const events2 = await readSse(res2);
+    expect(scopeOf(events2)).toEqual({
+      format: "gen-6",
+      source: "conversation",
+    });
+  });
+
+  it("an explicit scope_seed overrides an existing sticky scope, which then re-sticks", async () => {
+    mockRunOak.mockResolvedValue(G1_ANSWER);
+    const sid = "s-scope-seed-override";
+
+    // Turn 1: plain — seeds (and sticks) Champions by default.
+    const res1 = await post({ session_id: sid, message: "hello" });
+    const events1 = await readSse(res1);
+    expect(scopeOf(events1)).toEqual({ format: "champions", source: "default" });
+
+    // Turn 2: an explicit chip pick overrides the sticky Champions scope.
+    const res2 = await post({
+      session_id: sid,
+      message: "what about defensively?",
+      scope_seed: "scarlet-violet",
+    });
+    const events2 = await readSse(res2);
+    expect(scopeOf(events2)).toEqual({
+      format: "scarlet-violet",
+      source: "seed",
+    });
+
+    // Turn 3: plain — the new sticky scope (scarlet-violet) holds.
+    const res3 = await post({ session_id: sid, message: "and offensively?" });
+    const events3 = await readSse(res3);
+    expect(scopeOf(events3)).toEqual({
+      format: "scarlet-violet",
+      source: "conversation",
+    });
+  });
+
+  it("an in-message signal beats an explicit scope_seed on the same turn", async () => {
+    mockRunOak.mockResolvedValue(G1_ANSWER);
+
+    const res = await post({
+      session_id: "s-scope-signal-beats-seed",
+      message: "analyze my gen 7 team",
+      scope_seed: "champions",
+    });
+    const events = await readSse(res);
+    expect(scopeOf(events)).toEqual({ format: "gen-7", source: "message" });
+  });
+
+  it("the legacy champions_mode:false seeds standard on a fresh session (reported as 'seed')", async () => {
+    mockRunOak.mockResolvedValue(G1_ANSWER);
+
+    const res = await post({
+      session_id: "s-scope-legacy-false",
+      message: "what about defensively?",
+      champions_mode: false,
+    });
+    const events = await readSse(res);
+    expect(scopeOf(events)).toEqual({
+      format: "scarlet-violet",
+      source: "seed",
+    });
+  });
+
+  it("a malformed scope_seed is silently dropped, falling through to the champions default", async () => {
+    mockRunOak.mockResolvedValue(G1_ANSWER);
+
+    const res = await post({
+      session_id: "s-scope-seed-malformed",
+      message: "what about defensively?",
+      scope_seed: "gen-3",
+    });
+    const events = await readSse(res);
+    expect(scopeOf(events)).toEqual({ format: "champions", source: "default" });
+  });
+
   it("(c) an unsupported gen (gen 3) short-circuits to an in-domain answer without running the agent", async () => {
     // If the agent WERE run it would resolve G1; assert it is never called.
     mockRunOak.mockResolvedValue(G1_ANSWER);

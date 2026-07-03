@@ -45,6 +45,13 @@ let chatBodies: Array<{
   champions_mode?: boolean;
 }>;
 
+/** Captured /api/conversations/import request bodies (to inspect the imported format). */
+let importBodies: Array<{
+  session_id: string;
+  format?: string;
+  champions_mode?: boolean;
+}>;
+
 /** Stateful /api/auth/me identity — flipped by verify (in) and signout (out). */
 let meState: { signedIn: boolean; email?: string };
 
@@ -84,6 +91,7 @@ function sseAnswerResponse(answer: OakAnswer): Response {
 
 beforeEach(() => {
   chatBodies = [];
+  importBodies = [];
   meState = { signedIn: false };
   vi.stubGlobal(
     "fetch",
@@ -107,6 +115,16 @@ beforeEach(() => {
       if (u.includes("/api/auth/signout")) {
         meState = { signedIn: false };
         return jsonResponse(200, { ok: true });
+      }
+      if (u.includes("/api/conversations/import")) {
+        const body = JSON.parse(init!.body!);
+        importBodies.push(body);
+        return jsonResponse(200, { id: body.session_id });
+      }
+      if (u.includes("/api/conversations")) {
+        // The now-enabled history sidebar lists on sign-in; an empty list keeps
+        // this test focused on the import body, not the sidebar's contents.
+        return jsonResponse(200, { conversations: [] });
       }
       throw new Error(`unexpected fetch: ${u}`);
     }),
@@ -193,6 +211,12 @@ describe("Home — guest → sign-in → sign-out thread continuity (BR-A10)", (
 
     // ── Step 3 — sign in MID-THREAD (request code → enter code → verify) ────────
     await signIn();
+
+    // The guest thread is imported under the champions default (no scope ever
+    // resolved for this default-scoped session), and carries no champions_mode.
+    await waitFor(() => expect(importBodies).toHaveLength(1));
+    expect(importBodies[0]!.format).toBe("champions");
+    expect(importBodies[0]!.champions_mode).toBeUndefined();
 
     // Menu now reflects the signed-in account: email + Sign out, no "Sign in".
     expect(screen.getByTestId("auth-user-email")).toHaveTextContent(EMAIL);

@@ -116,7 +116,7 @@ Fetches a full entity profile for the active format. One endpoint, kind-discrimi
 | --- | --- | --- |
 | `kind` | `"pokemon" \| "move" \| "ability" \| "item" \| "type"` | Always known at the click site (sprite→pokemon, badge→type, citation `kind/slug`→kind). |
 | `q` | string | A display name (`"Charizard"`, `"Mr. Mime"`) **or** a canonical slug (`"armor-tail"`). Resolved server-side. |
-| `format` | `"scarlet-violet" \| "champions"` | **Required** — passed explicitly (snapshot at open; BR-AV-7). Frontend derives it from the Champions toggle at click time. |
+| `format` | `"scarlet-violet" \| "champions"` | **Required** — passed explicitly (snapshot at open; BR-AV-7). Frontend derives it from the resolved conversation scope at click time (the Champions toggle this referred to is deprecated/removed; see the generation-scope addendum). |
 
 **Response — `EntityArtifactResponse`** (200 in all in-domain cases; `4xx` only for malformed params):
 ```ts

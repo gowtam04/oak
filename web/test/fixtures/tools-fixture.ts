@@ -787,6 +787,89 @@ export const REFERENCE_CACHE_SEED_GEN7: ReferenceCacheSeed[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Champions slice (Champions-default cross-scope hint, B-13/exists_in_standard)
+// — a SMALL second row-set under the "champions" format, alongside the
+// scarlet-violet rows above, so the oracle can prove that a champions-mode
+// tool MISS is additionally flagged `exists_in_standard` when the entity is
+// real in the mainline Gen 9 (scarlet-violet) index.
+//
+// Deliberately minimal and single-pointed:
+//   - Garchomp is seeded under BOTH formats (the "shared species" probe).
+//   - Every other scarlet-violet species above (Farigiraf, Ninetales,
+//     Dracovish, the Tauros forms) stays champions-ABSENT — the "SV-only"
+//     miss probe for get_pokemon / resolve_entity.
+//   - `move/dragon-claw` is seeded ONLY under scarlet-violet — the
+//     champions-absent reference-cache probe for get_move.
+//   - `move/earthquake` is seeded under "champions" — a champions-present
+//     reference row, so the format carries reference detail too (parallel to
+//     the gen-7 slice's `move/hidden-power`).
+// ---------------------------------------------------------------------------
+
+const CHAMPIONS = "champions";
+
+/** Garchomp, shared verbatim into the champions format (same real stats). */
+export const POKEMON_SEED_CHAMPIONS: PokemonSeed[] = POKEMON_SEED.filter(
+  (p) => p.id === "garchomp",
+);
+
+/** Names index backing resolve_entity for the champions format. */
+export const SEARCHABLE_NAMES_SEED_CHAMPIONS: SearchableNameSeed[] = [
+  { kind: "pokemon", slug: "garchomp", display_name: "Garchomp" },
+  { kind: "move", slug: "earthquake", display_name: "Earthquake" },
+];
+
+/**
+ * `flamethrower` is real move data seeded ONLY under scarlet-violet (the
+ * champions-absent probe); `earthquake` is seeded under champions (present).
+ * (Deliberately NOT `dragon-claw`/`earthquake`-under-SV — those resource_keys
+ * are already claimed by test/fixtures/entity-refs.ts's `after` hook, which
+ * layers onto this same "tools" seed in other suites; reusing them would
+ * collide on the reference_cache PK.)
+ */
+export const REFERENCE_CACHE_SEED_SV_EXTRA: ReferenceCacheSeed[] = [
+  {
+    resource_key: "move/flamethrower",
+    resource_kind: "move",
+    endpoint_url: "@pkmn/dex (Pokémon Showdown)",
+    payload: {
+      found: true,
+      display_name: "Flamethrower",
+      type: "fire",
+      damage_class: "special",
+      power: 90,
+      accuracy: 100,
+      pp: 15,
+      priority: 0,
+      target: "selected-pokemon",
+      effect_short: "May burn the target.",
+      effect_full: "Inflicts regular damage. Has a 10% chance to burn the target.",
+    },
+  },
+];
+
+export const REFERENCE_CACHE_SEED_CHAMPIONS: ReferenceCacheSeed[] = [
+  {
+    resource_key: "move/earthquake",
+    resource_kind: "move",
+    endpoint_url: "@pkmn/dex (Pokémon Showdown)",
+    payload: {
+      found: true,
+      display_name: "Earthquake",
+      type: "ground",
+      damage_class: "physical",
+      power: 100,
+      accuracy: 100,
+      pp: 10,
+      priority: 0,
+      target: "all-other-pokemon",
+      effect_short: "Hits every other Pokémon on the field.",
+      effect_full:
+        "Inflicts regular damage. Hits every Pokémon on the field other than the user.",
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Seeder
 // ---------------------------------------------------------------------------
 
@@ -850,6 +933,46 @@ export async function seedToolsFixture(db: ToolsFixtureDb): Promise<void> {
       pokemon_count: POKEMON_SEED_GEN7.length,
       learnset_count: LEARNSET_SEED_GEN7.length,
       names_count: SEARCHABLE_NAMES_SEED_GEN7.length,
+      schema_version: "2",
+    });
+
+    // --- Champions slice (exists_in_standard) — a second row-set under -------
+    // "champions", additive: leaves the scarlet-violet rows above untouched
+    // (the extra SV reference row is inserted separately, into the SV format).
+    await tx.insert(reference_cache).values(
+      REFERENCE_CACHE_SEED_SV_EXTRA.map((r) => ({
+        format: SV,
+        resource_key: r.resource_key,
+        resource_kind: r.resource_kind,
+        payload: JSON.stringify(r.payload),
+        endpoint_url: r.endpoint_url,
+        fetched_at: now,
+      })),
+    );
+    await tx
+      .insert(pokemon)
+      .values(POKEMON_SEED_CHAMPIONS.map((p) => ({ ...p, format: CHAMPIONS })));
+    await tx
+      .insert(searchable_names)
+      .values(
+        SEARCHABLE_NAMES_SEED_CHAMPIONS.map((n) => ({ ...n, format: CHAMPIONS })),
+      );
+    await tx.insert(reference_cache).values(
+      REFERENCE_CACHE_SEED_CHAMPIONS.map((r) => ({
+        format: CHAMPIONS,
+        resource_key: r.resource_key,
+        resource_kind: r.resource_kind,
+        payload: JSON.stringify(r.payload),
+        endpoint_url: r.endpoint_url,
+        fetched_at: now,
+      })),
+    );
+    await tx.insert(ingest_meta).values({
+      format: CHAMPIONS,
+      last_success_at: now,
+      pokemon_count: POKEMON_SEED_CHAMPIONS.length,
+      learnset_count: 0,
+      names_count: SEARCHABLE_NAMES_SEED_CHAMPIONS.length,
       schema_version: "2",
     });
   });

@@ -15,6 +15,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { ConversationSummary } from "@/lib/api/history-client";
+import { scopeLabelShort } from "@/lib/scope/scope-label";
+import type { Format } from "@/data/formats";
 
 export interface ConversationRowProps {
   conversation: ConversationSummary;
@@ -23,11 +25,6 @@ export interface ConversationRowProps {
   onRename: (title: string) => void;
   onPin: (pinned: boolean) => void;
   onDelete: () => void;
-}
-
-/** Short, user-facing label for a stored format. */
-function formatLabel(format: string): string {
-  return format === "champions" ? "Champions" : "Gen 9";
 }
 
 /** Compact relative time, e.g. "just now", "5m", "3h", "2d", else a date. */
@@ -102,7 +99,7 @@ export default function ConversationRow({
           <span className="conv-row__title">{conversation.title}</span>
           <span className="conv-row__meta">
             <span data-testid="format-badge" className="conv-row__badge">
-              {formatLabel(conversation.format)}
+              {scopeLabelShort(conversation.format as Format)}
             </span>
             <span>{relativeTime(conversation.updatedAt)}</span>
           </span>

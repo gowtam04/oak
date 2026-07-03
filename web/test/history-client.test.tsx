@@ -131,20 +131,30 @@ describe("deleteConversation", () => {
 describe("importConversation", () => {
   it("returns the id on success", async () => {
     stubFetch(async () => res(200, { id: "sess-1" }));
-    expect(await importConversation("sess-1", false, [
+    expect(await importConversation("sess-1", [
       { id: "t1", role: "user", content: "hi" },
       { id: "t2", role: "assistant", answer: ANSWER },
-    ])).toBe("sess-1");
+    ], "champions")).toBe("sess-1");
+  });
+
+  it("sends the format and no champions_mode", async () => {
+    const fetchMock = vi.fn(async () => res(200, { id: "sess-1" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await importConversation("sess-1", [], "gen-7");
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit?]>;
+    const body = JSON.parse(calls[0][1]!.body as string);
+    expect(body).toEqual({ session_id: "sess-1", format: "gen-7", turns: [] });
+    expect(body.champions_mode).toBeUndefined();
   });
 
   it("returns null when the body id is null / non-ok / throw", async () => {
     stubFetch(async () => res(200, { id: null }));
-    expect(await importConversation("s", false, [])).toBeNull();
+    expect(await importConversation("s", [], "champions")).toBeNull();
     stubFetch(async () => res(401, { code: "unauthorized" }));
-    expect(await importConversation("s", false, [])).toBeNull();
+    expect(await importConversation("s", [], "champions")).toBeNull();
     stubFetch(async () => {
       throw new Error("network");
     });
-    expect(await importConversation("s", false, [])).toBeNull();
+    expect(await importConversation("s", [], "champions")).toBeNull();
   });
 });

@@ -44,15 +44,19 @@ the design intent.
 - **Image input (vision)** — attach up to 4 images per turn ("what is this?",
   "rate this team sheet"); all three models are vision-capable.
 - **Multi-generation scope** — Oak answers from real data across **six scopes**:
-  Gen 9 / Scarlet-Violet, **Pokémon Champions**, and mainline **Gens 5–8**
-  (Sword/Shield, Sun/Moon–USUM, XY/ORAS, Black/White). The scope is **resolved per
-  turn on the server** — an explicit mention ("analyze my **gen 7** team", "in
-  **Scarlet and Violet**…") switches it; otherwise the conversation stays in its
-  current scope. A header **Champions toggle** seeds the scope for new chats, and a
-  header **scope chip** always shows which game a given answer is based on, so a
-  wrong guess is a one-tap correction rather than a silently mis-scoped answer.
-  (Gens 1–4 aren't supported yet — Oak says so plainly instead of answering from
-  the wrong game.)
+  **Pokémon Champions**, Gen 9 / Scarlet-Violet, and mainline **Gens 5–8**
+  (Sword/Shield, Sun/Moon–USUM, XY/ORAS, Black/White). New conversations default to
+  **Champions**. The scope is **resolved per turn on the server** — an explicit
+  mention ("analyze my **gen 7** team", "in **Scarlet and Violet**…") switches it;
+  otherwise the conversation stays in its current scope. There's no separate
+  Champions toggle — the header **scope chip** is interactive: tap it to pick any
+  of the six scopes, which seeds the scope for the next message, and it always
+  shows which game the current answer is based on, so a wrong guess is a one-tap
+  correction rather than a silently mis-scoped answer. The empty-chat home screen
+  also hints that answers default to Champions (Reg M-B) and how to switch to
+  mainline. In Champions scope, if you ask about something that only exists in
+  mainline Gen 9, Oak says so and points you at the scope chip. (Gens 1–4 aren't
+  supported yet — Oak says so plainly instead of answering from the wrong game.)
 - **Admin panel** (operator-only) — a private, **read-only** `/admin` dashboard
   for the single owner: usage/growth, estimated cost by model, error rollups,
   per-turn drill-down, a live view, and read-only account/conversation/team

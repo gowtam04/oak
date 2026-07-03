@@ -54,10 +54,18 @@ export interface ChatRequestBody {
    */
   images?: ChatRequestImage[];
   /**
-   * Champions-mode toggle (server scopes the turn to Pokémon Champions when
-   * true). Optional ⇒ old clients that omit it default to standard / Gen 9.
+   * @deprecated legacy seed; still honored below the sticky scope for old
+   * clients — new clients send `scope_seed`. Champions-mode toggle (server
+   * scopes the turn to Pokémon Champions when true). Optional ⇒ old clients
+   * that omit it fall through to the champions default.
    */
   champions_mode?: boolean;
+  /**
+   * Explicit scope pick from the client's scope chip, applied as this turn's
+   * seed. Ranks ABOVE the conversation's sticky scope (it is explicit user
+   * intent) but BELOW an in-message signal. Optional — omitted means "no pick".
+   */
+  scope_seed?: Format;
 }
 
 /**
@@ -65,13 +73,15 @@ export interface ChatRequestBody {
  * Emitted exactly once, as the FIRST event of the turn, before any
  * `tool_activity`. `format` is the resolved scope the tools/prompt ran under;
  * `source` records how it was resolved: an explicit in-message signal
- * (`"message"`), the conversation's sticky scope (`"conversation"`), or the
- * `champions_mode` toggle seed (`"toggle"`). Additive — old clients that don't
- * listen for `scope` simply ignore it.
+ * (`"message"`), the conversation's sticky scope (`"conversation"`), an
+ * explicit seed (`"seed"` — a `scope_seed` chip pick, or the legacy
+ * `champions_mode` boolean from an old client), or the champions default
+ * (`"default"` — no signal/sticky/seed at all). Additive — old clients that
+ * don't listen for `scope` simply ignore it.
  */
 export interface ScopeEvent {
   format: Format;
-  source: "message" | "conversation" | "toggle";
+  source: "message" | "conversation" | "seed" | "default";
 }
 
 /** `event: tool_activity` payload — progress shown while the loop runs. */

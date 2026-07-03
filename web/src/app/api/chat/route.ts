@@ -54,6 +54,7 @@ import type { Account } from "@/data/repos/accounts-repo";
 import {
   CHAMPIONS_FORMAT,
   formatForMode,
+  isFormat,
   modeForFormat,
   STANDARD_FORMAT,
   type Format,
@@ -173,7 +174,7 @@ function parseBody(
   hasImages: boolean,
 ): ChatRequestBody | null {
   if (typeof value !== "object" || value === null) return null;
-  const { session_id, message, champions_mode } =
+  const { session_id, message, champions_mode, scope_seed } =
     value as Record<string, unknown>;
   if (typeof session_id !== "string" || session_id.length === 0) return null;
   // The message must be a string, but may be EMPTY when one or more images are
@@ -181,8 +182,11 @@ function parseBody(
   // require non-empty text.
   if (typeof message !== "string") return null;
   if (message.length === 0 && !hasImages) return null;
-  // Coerce defensively: anything that is not strictly boolean `true` is
-  // standard mode (old clients omit the field entirely).
+  // Tri-state: `champions_mode` is a DEPRECATED legacy seed (old clients always
+  // send a concrete boolean); keep true/false distinct from omitted so the
+  // seed-precedence chain below can tell "no legacy seed" from "seeded standard".
+  // `scope_seed` is the new explicit chip pick — a malformed/unknown value is
+  // silently dropped (defensive additive field), never a 400.
   // The answering model is NOT taken from the body — it is operator-controlled
   // via the ACTIVE_MODEL secret (resolved server-side below). Any `model` field a
   // client happens to send is ignored. Saved teams are referenced by name in
@@ -190,7 +194,12 @@ function parseBody(
   return {
     session_id,
     message,
-    champions_mode: champions_mode === true,
+    champions_mode:
+      champions_mode === true ? true : champions_mode === false ? false : undefined,
+    scope_seed:
+      typeof scope_seed === "string" && isFormat(scope_seed)
+        ? scope_seed
+        : undefined,
   };
 }
 
@@ -260,14 +269,21 @@ export async function POST(req: Request): Promise<Response> {
     );
   };
 
-  // Server-controlled query scope — never an LLM-visible tool field. The
-  // Champions toggle is only a SEED for a brand-new conversation's scope, not a
-  // lock (GS-D3): the turn's ACTUAL scope is RESOLVED below from (explicit
-  // in-message signal) > (conversation's sticky scope) > (this seed). ON ⇒ seed
-  // Champions; omitted/false ⇒ seed Gen 9 / Scarlet-Violet.
-  const seedFormat: Format = body.champions_mode
-    ? CHAMPIONS_FORMAT
-    : STANDARD_FORMAT;
+  // Server-controlled query scope — never an LLM-visible tool field. The turn's
+  // ACTUAL scope is RESOLVED below from a five-tier precedence chain:
+  //   (explicit in-message signal) > (scope_seed chip pick) >
+  //   (conversation's sticky scope) > (legacy champions_mode seed) >
+  //   (champions default).
+  // Explicit chip pick — ranks above sticky (fresh user intent).
+  const explicitSeed: Format | undefined = body.scope_seed;
+  // DEPRECATED champions_mode — old iOS builds always send a concrete boolean.
+  // Ranks BELOW sticky (preserves BR-H6 resume semantics).
+  const legacySeed: Format | undefined =
+    body.champions_mode === undefined
+      ? undefined
+      : body.champions_mode
+        ? CHAMPIONS_FORMAT
+        : STANDARD_FORMAT;
 
   // 2. Orchestration guardrails — input-length cap + TIERED rate limit
   //    (integration.md § Guardrails; account-creation design.md § API Design
@@ -333,9 +349,10 @@ export async function POST(req: Request): Promise<Response> {
         model: null,
         providerModel: null,
         // The rate-limit gate runs BEFORE scope resolution (it must stay cheap,
-        // pre-history), so record the seed-derived mode — identical to the
-        // pre-generation-scope value for this rejected turn.
-        mode: modeForFormat(seedFormat),
+        // pre-history, before the sticky scope is even loaded), so record the
+        // best seed-derived mode available at this point: explicit chip pick >
+        // legacy champions_mode > the champions default.
+        mode: modeForFormat(explicitSeed ?? legacySeed ?? CHAMPIONS_FORMAT),
         status: "rate_limited",
         inputTokens: 0,
         outputTokens: 0,
@@ -432,15 +449,19 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 3b. Resolve THIS turn's data scope (generation-scope GS-B / §3.4 step 3).
-  //     An explicit, high-precision in-message signal wins over the
-  //     conversation's sticky scope, which wins over the toggle seed. The
-  //     lexicon is DETERMINISTIC — no LLM pre-pass. `mode` then flows downstream
-  //     exactly as before (ctx / formatForMode(mode) at persist / turn_record).
+  //     Five-tier precedence: an explicit, high-precision in-message signal wins
+  //     over an explicit scope_seed chip pick, which wins over the
+  //     conversation's sticky scope, which wins over the legacy champions_mode
+  //     seed, which falls back to the champions default. The lexicon is
+  //     DETERMINISTIC — no LLM pre-pass. `mode` then flows downstream exactly as
+  //     before (ctx / formatForMode(mode) at persist / turn_record).
   const detection = detectScopeSignal(message);
   const format: Format =
     (detection?.kind === "scope" ? detection.format : undefined) ??
+    explicitSeed ??
     stickyFormat ??
-    seedFormat;
+    legacySeed ??
+    CHAMPIONS_FORMAT;
   const mode: AgentMode = modeForFormat(format);
 
   // Observability for tuning the lexicon later (§3.4 step 3): one structured
@@ -452,7 +473,7 @@ export async function POST(req: Request): Promise<Response> {
         request_id: requestId,
         session_id,
         matched: detection.matched,
-        from: stickyFormat ?? seedFormat,
+        from: explicitSeed ?? stickyFormat ?? legacySeed ?? CHAMPIONS_FORMAT,
         to:
           detection.kind === "scope"
             ? detection.format
@@ -607,9 +628,13 @@ export async function POST(req: Request): Promise<Response> {
               format,
               source: detection
                 ? "message"
-                : stickyFormat
-                  ? "conversation"
-                  : "toggle",
+                : explicitSeed
+                  ? "seed"
+                  : stickyFormat
+                    ? "conversation"
+                    : legacySeed
+                      ? "seed"
+                      : "default",
             });
 
             // Dynamic import defers env validation to request time, not build
