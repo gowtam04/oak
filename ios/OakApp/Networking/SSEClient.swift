@@ -27,25 +27,52 @@ struct SSEClient: Sendable {
 
   /// Opens the stream for one chat turn. The returned stream yields events until
   /// the terminal `answer`/`error` (or completion), then finishes.
+  ///
+  /// Chat works for guests too: `requiresAuth` here means "attach the Bearer token
+  /// when signed in" (raises the rate limit + identity); a guest simply sends no
+  /// Authorization header.
   func stream(_ request: ChatRequest) -> AsyncThrowingStream<SSEEvent, Error> {
+    let endpoint = Endpoint(method: .post, path: "/api/chat", body: request, requiresAuth: true)
+    return openEventStream(endpoint) { SSEParser() }
+  }
+
+  /// Opens the stream for one team-builder assistant turn (`POST /api/teams/assistant`).
+  /// A sibling of ``stream(_:)`` over the SAME byte/frame plumbing (``openEventStream``)
+  /// but a different parser: the builder's terminal `answer` carries a `BuilderAnswer`
+  /// (not an `OakAnswer`) and there is no `scope` event. Signed-in only — a guest's
+  /// missing Bearer surfaces as a `401` → `OakError.unauthorized` thrown before any
+  /// event is yielded.
+  func streamBuilder(
+    _ request: TeamsAssistantRequest
+  ) -> AsyncThrowingStream<BuilderSSEEvent, Error> {
+    let endpoint = Endpoint(
+      method: .post, path: "/api/teams/assistant", body: request, requiresAuth: true)
+    return openEventStream(endpoint) { BuilderSSEParser() }
+  }
+
+  /// The shared SSE stream loop, generic over the frame parser (component-design.md
+  /// "Networking layer"). It opens the byte stream, splits bytes into lines OURSELVES
+  /// preserving empty lines (SSE delimits each event with a blank line
+  /// `event: …\ndata: …\n\n`, which `bytes.lines`/`AsyncLineSequence` silently drops —
+  /// collapsing every event's `data:` together and breaking the terminal frame's
+  /// decode), feeds each line through `parser`, and yields decoded events. The error
+  /// contract is uniform across families: a pre-stream HTTP failure throws an
+  /// `OakError` out of `openByteStream` before any event is yielded; a mid-stream drop
+  /// surfaces as `OakError.transportFailure`; a cancellation finishes cleanly.
+  ///
+  /// The work runs in a child `Task` cancelled on stream termination, so a view that
+  /// disappears (or a new turn) tears down the connection.
+  private func openEventStream<Parser: SSELineParser>(
+    _ endpoint: Endpoint,
+    makeParser: @escaping @Sendable () -> Parser
+  ) -> AsyncThrowingStream<Parser.Event, Error> {
     let apiClient = self.apiClient
     return AsyncThrowingStream { continuation in
       let task = Task {
         do {
-          // Chat works for guests too: `requiresAuth` here means "attach the
-          // Bearer token when signed in" (raises the rate limit + identity);
-          // a guest simply sends no Authorization header. A pre-stream HTTP
-          // failure throws an OakError out of `openByteStream` (mapped from the
-          // non-2xx body), finishing the stream before any event is yielded.
-          let endpoint = Endpoint(method: .post, path: "/api/chat", body: request, requiresAuth: true)
           let bytes = try await apiClient.openByteStream(endpoint)
 
-          // Split bytes into lines OURSELVES, preserving empty lines. SSE delimits
-          // each event with a blank line (`event: …\ndata: …\n\n`) and `SSEParser`
-          // dispatches a frame on that blank line — but `bytes.lines`
-          // (`AsyncLineSequence`) silently drops empty lines, which collapses every
-          // event's `data:` together and makes the terminal `answer` fail to decode.
-          var parser = SSEParser()
+          var parser = makeParser()
           var splitter = ByteLineSplitter()
           for try await byte in bytes {
             guard let line = splitter.consume(byte) else { continue }

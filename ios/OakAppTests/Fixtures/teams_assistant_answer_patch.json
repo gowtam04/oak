@@ -1,0 +1,22 @@
+{
+  "answer_markdown": "Slot 3 is bare. I'd run **Great Tusk** with Rapid Spin for hazard control and the speed to outpace the field. Tap Apply to drop it into slot 3.",
+  "team_patch": {
+    "slots": [
+      {
+        "slot": 2,
+        "member": {
+          "species": "great-tusk",
+          "ability": "protosynthesis",
+          "item": "booster-energy",
+          "moves": ["headlong-rush", "close-combat", "rapid-spin", "ice-spinner"],
+          "nature": "jolly",
+          "evs": { "hp": 4, "atk": 252, "def": 0, "spa": 0, "spd": 0, "spe": 252 },
+          "ivs": { "hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31 },
+          "tera_type": "ground",
+          "level": 50,
+          "nickname": null
+        }
+      }
+    ]
+  }
+}

@@ -44,6 +44,11 @@ struct ServiceContainer: Sendable {
   /// in production. Public/read-only — no auth gate.
   let dexLookup: any DexLookupService
 
+  /// The team-builder assistant seam — one turn → a live ``BuilderSSEEvent`` stream,
+  /// read by ``TeamsAssistantViewModel``. Backed by ``LiveTeamsAssistantService`` in
+  /// production (over the same ``SSEClient`` the chat stream borrows). Signed-in only.
+  let teamsAssistant: any TeamsAssistantService
+
   /// The production wiring (real `Live…` services).
   ///
   /// All services share **one** ``TokenStore`` (the Keychain) and **one**
@@ -60,7 +65,8 @@ struct ServiceContainer: Sendable {
       chat: LiveChatService(sseClient: SSEClient(apiClient: api)),
       artifact: LiveArtifactService(apiClient: api),
       teams: LiveTeamService(apiClient: api),
-      dexLookup: LiveDexLookupService(apiClient: api)
+      dexLookup: LiveDexLookupService(apiClient: api),
+      teamsAssistant: LiveTeamsAssistantService(sseClient: SSEClient(apiClient: api))
     )
   }
 
@@ -77,7 +83,8 @@ struct ServiceContainer: Sendable {
       chat: PreviewStubChatService(),
       artifact: PreviewStubArtifactService(),
       teams: PreviewStubTeamService(),
-      dexLookup: EmptyDexLookupService()
+      dexLookup: EmptyDexLookupService(),
+      teamsAssistant: PreviewStubTeamsAssistantService()
     )
     #else
     live()
@@ -222,6 +229,26 @@ struct PreviewStubChatService: ChatService {
     AsyncThrowingStream { continuation in
       continuation.yield(.answerStart)
       continuation.yield(.answerDelta(text: "Preview answer."))
+      continuation.finish()
+    }
+  }
+}
+
+/// No-network ``TeamsAssistantService`` for SwiftUI previews: a tiny scripted stream
+/// that streams one markdown chunk and finishes with an advice-only ``BuilderAnswer``
+/// (no patch), so the panel renders its streaming + answer states without a server.
+struct PreviewStubTeamsAssistantService: TeamsAssistantService {
+  func send(
+    sessionId: String,
+    message: String,
+    draft: TeamsAssistantDraft
+  ) -> AsyncThrowingStream<BuilderSSEEvent, Error> {
+    AsyncThrowingStream { continuation in
+      continuation.yield(.answerStart)
+      continuation.yield(.answerDelta(text: "Here's a thought on your team."))
+      continuation.yield(
+        .answer(
+          BuilderAnswer(answerMarkdown: "Here's a thought on your team.", teamPatch: nil)))
       continuation.finish()
     }
   }

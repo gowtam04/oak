@@ -1,0 +1,17 @@
+: keep-alive
+
+event: tool_activity
+data: {"tool":"get_learnset","label":"📖 Checking Great Tusk's learnset…"}
+
+event: answer_start
+data: {}
+
+event: answer_delta
+data: {"text":"Slot 3 is bare. I'd run "}
+
+event: answer_delta
+data: {"text":"**Great Tusk** for hazard control."}
+
+event: answer
+data: {"answer":{"answer_markdown":"Slot 3 is bare. I'd run **Great Tusk** for hazard control.","team_patch":{"slots":[{"slot":2,"member":{"species":"great-tusk","ability":"protosynthesis","item":"booster-energy","moves":["headlong-rush","close-combat","rapid-spin","ice-spinner"],"nature":"jolly","evs":{"hp":4,"atk":252,"def":0,"spa":0,"spd":0,"spe":252},"ivs":{"hp":31,"atk":31,"def":31,"spa":31,"spd":31,"spe":31},"tera_type":"ground","level":50,"nickname":null}}]}}}
+

@@ -22,6 +22,13 @@ struct TeamEditorView: View {
   @State private var model: TeamEditorViewModel
   @State private var exportedPaste: ExportPayload?
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.services) private var services
+
+  /// The team-builder assistant panel state. The view model is created lazily on first
+  /// open (it needs the injected service + a reference to this editor's live draft), and
+  /// held for the editor's lifetime so its in-memory thread survives sheet dismiss/reopen.
+  @State private var assistant: TeamsAssistantViewModel?
+  @State private var showAssistant = false
 
   /// `true` for a brief window right after a successful save — drives the
   /// transient "Saved" checkmark overlay (self-clearing after ~1s).
@@ -107,6 +114,13 @@ struct TeamEditorView: View {
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
+          Button {
+            openAssistant()
+          } label: {
+            Label("Team assistant", systemImage: "sparkles")
+          }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
           if model.isSaving {
             ProgressView()
           } else {
@@ -145,6 +159,11 @@ struct TeamEditorView: View {
       .sheet(item: $exportedPaste) { payload in
         ExportSheet(text: payload.text)
       }
+      .sheet(isPresented: $showAssistant) {
+        if let assistant {
+          TeamsAssistantSheet(model: assistant)
+        }
+      }
       .task {
         // `load()` (existing-team path) fetches sprites/movepools itself once the members
         // arrive from the server; a new/already-loaded team's members are seeded straight
@@ -157,6 +176,18 @@ struct TeamEditorView: View {
         }
       }
     }
+  }
+
+  // MARK: Team assistant
+
+  /// Opens the assistant sheet, constructing its view model on first use (bound to this
+  /// editor's live draft and the injected service). Reopening reuses the same in-memory
+  /// thread.
+  private func openAssistant() {
+    if assistant == nil {
+      assistant = TeamsAssistantViewModel(service: services.teamsAssistant, editor: model)
+    }
+    showAssistant = true
   }
 
   // MARK: Save confirmation

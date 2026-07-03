@@ -330,6 +330,49 @@ final class TeamEditorViewModel {
     errorMessage = nil
   }
 
+  // MARK: Teams-assistant draft bridge (Apply / Undo — in-memory draft only)
+
+  /// The live, unsaved draft as wire ``TeamMember``s — what rides EVERY assistant turn
+  /// (`TeamsAssistantDraft.members`) and the base ``applyTeamPatch`` operates on. Same
+  /// conversion the Save path uses (empty strings → `nil`, blank moves dropped).
+  func draftWireMembers() -> [TeamMember] {
+    members.map { $0.asTeamMember() }
+  }
+
+  /// An exact snapshot of the editable draft (name + rows), captured before an
+  /// assistant Apply so ``restoreDraft(_:)`` (Undo) can put it back verbatim.
+  func draftSnapshot() -> TeamDraftSnapshot {
+    TeamDraftSnapshot(name: name, members: members)
+  }
+
+  /// Restores a draft snapshot (assistant Undo). Nothing here touches the DB — the
+  /// user still reviews and Saves. Sprites/movepools re-resolve for the restored rows.
+  func restoreDraft(_ snapshot: TeamDraftSnapshot) {
+    name = snapshot.name
+    members = snapshot.members
+    Task {
+      await refreshSprites()
+      await refreshAllMovepools()
+    }
+  }
+
+  /// Applies an assistant ``TeamPatch`` to the in-memory draft (mirrors the web panel's
+  /// Apply: `applyTeamPatch` on the current members + an optional rename). The DB is
+  /// untouched — the patched rows land in the editor's unsaved state and the user still
+  /// hits Save (which is where validation warnings refresh). The slot edits reuse the
+  /// exact pure ``applyTeamPatch`` the server legality-gate ran, so applied ≡ validated.
+  func applyAssistantPatch(_ patch: TeamPatch) {
+    let patched = applyTeamPatch(draftWireMembers(), patch)
+    members = patched.map(EditableMember.init(from:))
+    if let newName = patch.name {
+      name = newName
+    }
+    Task {
+      await refreshSprites()
+      await refreshAllMovepools()
+    }
+  }
+
   // MARK: Internals
 
   /// Adopts a server-returned team as the editor's canonical state — the server may
@@ -382,6 +425,15 @@ final class TeamEditorViewModel {
       return genericMessage
     }
   }
+}
+
+/// An exact, restorable snapshot of the editor draft (name + editable rows) — the
+/// undo target for a Teams-assistant Apply. Captured before Apply mutates the draft;
+/// ``TeamEditorViewModel/restoreDraft(_:)`` puts it back verbatim (preserving each
+/// row's identity, so the form doesn't churn).
+struct TeamDraftSnapshot: Equatable, Sendable {
+  let name: String
+  let members: [EditableMember]
 }
 
 // MARK: - Editable value models (two-way bound by the form)

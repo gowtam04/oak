@@ -1,5 +1,27 @@
 import Foundation
 
+/// A pure, incremental Server-Sent-Events line parser: it is fed `event:`/`data:`
+/// field lines one at a time and emits typed events on each blank-line-terminated
+/// frame. The byte→line splitting (``ByteLineSplitter``) and the stream loop
+/// (``SSEClient``) are shared across event families; this seam is what lets a
+/// SIBLING parser (e.g. the team-builder's ``BuilderSSEParser``, whose terminal
+/// `answer` carries a `BuilderAnswer` not an `OakAnswer`) reuse all of that plumbing
+/// while decoding its own event union.
+///
+/// `Sendable` so the shared stream loop can create one inside its `@Sendable` task.
+protocol SSELineParser: Sendable {
+  /// The event type this parser decodes each frame into.
+  associatedtype Event: Sendable
+
+  /// Feeds one line. Returns the events completed by this line (zero or one for a
+  /// well-formed stream — a blank line that closes a frame).
+  mutating func consume(line: String) throws -> [Event]
+
+  /// Flushes any buffered frame at end-of-stream (a defensive backstop; well-formed
+  /// streams end with a blank line, so the buffer is already empty).
+  mutating func finish() throws -> [Event]
+}
+
 /// A pure, incremental Server-Sent-Events frame parser (component-design.md
 /// "Networking layer"). It accumulates `event:`/`data:` field lines, emits one
 /// ``SSEEvent`` per blank-line-terminated frame, and ignores `:`-prefixed comment
@@ -17,7 +39,7 @@ import Foundation
 ///   * An **unknown** event name is ignored (forward-compatible with new events).
 ///   * Comment lines, unknown fields (`id`/`retry`), and empty/incomplete frames
 ///     (e.g. a trailing blank line) emit nothing.
-struct SSEParser {
+struct SSEParser: SSELineParser {
   private var eventName: String?
   private var dataBuffer = ""
   private var hasData = false
