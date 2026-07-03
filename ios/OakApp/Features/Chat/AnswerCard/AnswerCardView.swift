@@ -8,18 +8,24 @@ import SwiftUI
 /// every field the web renders is represented; nothing is dropped for brevity):
 ///
 ///   1. status badge        ← non-`answered` outcomes only (M-AC-1.3)
-///   2. answer markdown      ← `answer_markdown` (always)
-///   3. subjects             ← `subjects[]`
-///   4. clarify question     ← `question.options[]` — the "stop and ask" CTA
-///   5. candidates           ← `candidates`
-///   6. damage calc          ← `damage_calc`
-///   7. team blocks          ← `proposed_team` / `saved_team` (+ warnings)
-///   8. suggestions          ← `suggestions[]` (+ status)
-///   9. reasoning            ← `reasoning_markdown` (collapsible)
-///  10. citations            ← `citations[]` (collapsible "Sources")
-///  11. inferences           ← `inferences[]`
-///  12. generation basis     ← `generation_basis`
-///  13. uncertainty flags    ← `uncertainty_flags[]`
+///   2. scope tag            ← `generation_basis` — the always-on masthead tag (TOP)
+///   3. caveat strip         ← `uncertainty_flags[]` + `generation_basis.fallback`/note (TOP)
+///   4. answer markdown      ← `answer_markdown` (always)
+///   5. subjects             ← `subjects[]` (+ "Compare in viewer" when ≥2)
+///   6. clarify question     ← `question.options[]` — the "stop and ask" CTA
+///   7. candidates           ← `candidates` (+ "Show all N" when truncated)
+///   8. damage calc          ← `damage_calc` (+ "Open in viewer")
+///   9. team blocks          ← `proposed_team` / `saved_team` (+ warnings)
+///  10. suggestions          ← `suggestions[]` (+ status)
+///  11. reasoning            ← `reasoning_markdown` (collapsible)
+///  12. citations            ← `citations[]` (collapsible "Sources")
+///  13. inferences           ← `inferences[]`
+///
+/// The scope tag and caveat strip are lifted to the TOP to mirror the web
+/// `AnswerCard` (masthead + `CaveatStrip` lead the card): a caveat is read before
+/// the prose it qualifies, and the fallback note + `uncertainty_flags[]` are merged
+/// into ONE `CaveatStripView` (they used to render as two separate blocks near the
+/// bottom).
 ///
 /// The blocks render full-width on the chat background (no outer bubble): user
 /// turns carry the colored bubble, the answer is the open, reasoned content, and
@@ -67,6 +73,18 @@ struct AnswerCardView: View {
   /// ``ArtifactViewModel/openProposedTeam(_:warnings:)``.
   var onOpenProposedTeam: (ProposedTeam, [TeamWarning]) -> Void = { _, _ in }
 
+  /// Opens a side-by-side **comparison** of the answer's subjects in the artifact
+  /// viewer, from the committed payload — no fetch (mirrors web's "Compare in
+  /// viewer", `AnswerCard.tsx` → `openStructured({ kind: "comparison" })`). Wired to
+  /// ``ArtifactViewModel/openComparison(_:)``; no-op default.
+  var onOpenComparison: ([Subject]) -> Void = { _ in }
+
+  /// Opens the answer's damage calculation in the artifact viewer, from the committed
+  /// payload — no fetch (mirrors web's "Open in viewer" on the DamageReadout,
+  /// `openStructured({ kind: "damage-calc" })`). Wired to
+  /// ``ArtifactViewModel/openDamageCalc(_:)``; no-op default.
+  var onOpenDamageCalc: (DamageCalc) -> Void = { _ in }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       ForEach(Array(sections.enumerated()), id: \.element) { index, section in
@@ -91,6 +109,8 @@ struct AnswerCardView: View {
   /// blocks an answer produces without inspecting the SwiftUI hierarchy.
   enum Section: Hashable {
     case status
+    case scope
+    case caveat
     case answer
     case subjects
     case question
@@ -101,8 +121,6 @@ struct AnswerCardView: View {
     case reasoning
     case citations
     case inferences
-    case generationBasis
-    case uncertainty
   }
 
   /// The ordered blocks this card renders for ``answer`` — the single source of
@@ -112,6 +130,8 @@ struct AnswerCardView: View {
   var sections: [Section] {
     var out: [Section] = []
     if hasStatus { out.append(.status) }
+    if hasScope { out.append(.scope) }
+    if hasCaveat { out.append(.caveat) }
     if hasAnswerBody { out.append(.answer) }
     if hasSubjects { out.append(.subjects) }
     if hasQuestion { out.append(.question) }
@@ -122,8 +142,6 @@ struct AnswerCardView: View {
     if hasReasoning { out.append(.reasoning) }
     if hasCitations { out.append(.citations) }
     if hasInferences { out.append(.inferences) }
-    if hasGenerationBasis { out.append(.generationBasis) }
-    if hasUncertainty { out.append(.uncertainty) }
     return out
   }
 
@@ -134,6 +152,13 @@ struct AnswerCardView: View {
     switch section {
     case .status:
       statusBadge
+    case .scope:
+      ScopeTagView(generationBasis: answer.generationBasis)
+    case .caveat:
+      CaveatStripView(
+        uncertaintyFlags: answer.uncertaintyFlags,
+        generationBasis: answer.generationBasis
+      )
     case .answer:
       MarkdownBlockView(answer.answerMarkdown)
         .font(Theme.body(.body))
@@ -144,7 +169,8 @@ struct AnswerCardView: View {
       // (M-ART-US-1 / M-BR-ART-3): wrap each card in a tap that pushes its full
       // Pokémon profile onto the viewer, reusing the exact SubjectCard rendering.
       VStack(alignment: .leading, spacing: 10) {
-        ForEach(Array((answer.subjects ?? []).enumerated()), id: \.offset) { _, subject in
+        let subjects = answer.subjects ?? []
+        ForEach(Array(subjects.enumerated()), id: \.offset) { _, subject in
           Button {
             onOpenEntity(.pokemon, subject.name)
           } label: {
@@ -152,6 +178,20 @@ struct AnswerCardView: View {
           }
           .buttonStyle(OakPressableButtonStyle())
           .accessibilityHint("Opens \(subject.name)'s full profile")
+        }
+        // A side-by-side comparison is offered once there are ≥2 subjects (mirrors
+        // web's "Compare in viewer"); it opens a structured artifact from THIS
+        // committed payload — no fetch (M-AC-A4.1).
+        if subjects.count >= 2 {
+          Button {
+            onOpenComparison(subjects)
+          } label: {
+            Label("Compare in viewer", systemImage: "rectangle.split.2x1")
+              .font(Theme.display(.footnote))
+          }
+          .buttonStyle(.bordered)
+          .tint(Theme.accent)
+          .accessibilityHint("Opens a side-by-side comparison of these Pokémon")
         }
       }
     case .question:
@@ -164,12 +204,32 @@ struct AnswerCardView: View {
         CandidatesTableView(
           candidates: candidates,
           onOpenPokemon: { onOpenEntity(.pokemon, $0) },
-          onOpenType: { onOpenEntity(.type, $0) }
+          onOpenType: { onOpenEntity(.type, $0) },
+          // Truncated sets offer a "Show all N" follow-up, sending the exact
+          // request text the web CandidateTable sends (a plain follow-up turn).
+          onShowAll: {
+            onFollowUp(
+              "Show me all \(candidates.totalCount) of those, not just the top \(candidates.shown.count)."
+            )
+          }
         )
       }
     case .damageCalc:
       if let damageCalc = answer.damageCalc {
-        DamageCalcView(damageCalc: damageCalc)
+        VStack(alignment: .leading, spacing: 10) {
+          DamageCalcView(damageCalc: damageCalc)
+          // Open the worked calc as a focused artifact from its INLINE data — no
+          // fetch (mirrors web's "Open in viewer" on the DamageReadout).
+          Button {
+            onOpenDamageCalc(damageCalc)
+          } label: {
+            Label("Open in viewer", systemImage: "rectangle.portrait.and.arrow.right")
+              .font(Theme.display(.footnote))
+          }
+          .buttonStyle(.bordered)
+          .tint(Theme.accent)
+          .accessibilityHint("Opens the damage calculation as a full artifact")
+        }
       }
     case .teams:
       VStack(alignment: .leading, spacing: 10) {
@@ -206,10 +266,6 @@ struct AnswerCardView: View {
       CitationsView(citations: answer.citations)
     case .inferences:
       InferencesView(inferences: answer.inferences)
-    case .generationBasis:
-      GenerationBasisView(generationBasis: answer.generationBasis)
-    case .uncertainty:
-      UncertaintyFlagsView(uncertaintyFlags: answer.uncertaintyFlags)
     }
   }
 
@@ -277,16 +333,16 @@ struct AnswerCardView: View {
 
   private var hasInferences: Bool { !answer.inferences.isEmpty }
 
-  /// Mirrors ``GenerationBasisView``: it renders nothing only when the generation
-  /// is blank, there is no fallback, and there is no note to explain.
-  private var hasGenerationBasis: Bool {
-    let basis = answer.generationBasis
-    let generation = Self.trimmed(basis.generation)
-    let note = Self.trimmed(basis.note ?? "")
-    return !generation.isEmpty || basis.fallback || !note.isEmpty
-  }
+  /// The always-on scope tag (``ScopeTagView``) shows whenever the generation string
+  /// is non-blank — the fallback/note are carried by the caveat strip, not here.
+  private var hasScope: Bool { !Self.trimmed(answer.generationBasis.generation).isEmpty }
 
-  private var hasUncertainty: Bool { !Self.nonBlank(answer.uncertaintyFlags).isEmpty }
+  /// The caveat strip (``CaveatStripView``) shows when there is a generation fallback
+  /// OR any non-blank uncertainty flag — the exact `hasFallback || hasFlags` guard of
+  /// the web `CaveatStrip`.
+  private var hasCaveat: Bool {
+    answer.generationBasis.fallback || !Self.nonBlank(answer.uncertaintyFlags).isEmpty
+  }
 
   // MARK: Trim helpers
 

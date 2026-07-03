@@ -127,10 +127,14 @@ struct ChatView: View {
     // re-scopes to the active scope (M-BR-ART-4; web scopes the viewer to
     // `displayFormat` too).
     .task(id: model.displayFormat) {
-      artifactModel = ArtifactViewModel(
+      let viewer = ArtifactViewModel(
         service: services.artifact,
         format: model.displayFormat
       )
+      // "Ask about this in chat" prefills the composer (no auto-send) and the sheet
+      // closes itself — mirrors the web viewer's `askInChat`.
+      viewer.onAskInChat = { [weak model] text in model?.prefillComposer(text) }
+      artifactModel = viewer
     }
     // Host the artifact bottom sheet once at the screen level; pushing an entity
     // opens it, an empty back stack closes it (M-AC-A3.3, M-BR-ART-5).
@@ -259,6 +263,12 @@ struct ChatView: View {
         },
         onOpenProposedTeam: { team, warnings in
           artifactModel?.openProposedTeam(team, warnings: warnings)
+        },
+        onOpenComparison: { subjects in
+          artifactModel?.openComparison(subjects)
+        },
+        onOpenDamageCalc: { damageCalc in
+          artifactModel?.openDamageCalc(damageCalc)
         }
       )
     }

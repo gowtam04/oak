@@ -54,6 +54,20 @@ struct ArtifactViewModelTests {
     return true
   }
 
+  private func comparisonSubjects(_ artifact: Artifact?) -> [Subject]? {
+    guard case .comparison(let subjects)? = artifact?.content else { return nil }
+    return subjects
+  }
+
+  private func damageCalc(_ artifact: Artifact?) -> DamageCalc? {
+    guard case .damageCalc(let calc)? = artifact?.content else { return nil }
+    return calc
+  }
+
+  private func subject(_ name: String) -> Subject {
+    Subject(name: name, dexNumber: nil, spriteUrl: "", types: ["dragon"], isFallback: false, sourceGeneration: nil)
+  }
+
   // MARK: Entity push
 
   @Test
@@ -242,5 +256,86 @@ struct ArtifactViewModelTests {
     #expect(vm.isPresented)
     #expect(isTeamUnavailable(vm.current))
     #expect(service.savedTeamCallCount == 1)
+  }
+
+  // MARK: Structured artifacts (comparison / damage-calc — inline, no fetch)
+
+  @Test
+  func openComparisonUsesInlineSubjectsWithNoFetch() {
+    let (vm, service) = makeVM()
+    let subjects = [subject("Garchomp"), subject("Dragapult")]
+
+    vm.openComparison(subjects)
+
+    #expect(vm.stack.count == 1)
+    #expect(vm.isPresented)
+    #expect(vm.current?.title == "Comparison")
+    #expect(comparisonSubjects(vm.current) == subjects)
+    // Inline data → NO service round-trip.
+    #expect(service.entityCallCount == 0)
+    #expect(service.savedTeamCallCount == 0)
+  }
+
+  @Test
+  func openDamageCalcUsesInlinePayloadWithNoFetch() {
+    let (vm, service) = makeVM()
+    let calc = DamageCalc(
+      assumptions: ["level": .int(50)],
+      result: ["min_damage": .int(120), "max_damage": .int(142)],
+      isEstimate: true,
+      breakdown: nil
+    )
+
+    vm.openDamageCalc(calc)
+
+    #expect(vm.stack.count == 1)
+    #expect(vm.isPresented)
+    #expect(vm.current?.title == "Damage calculation")
+    #expect(damageCalc(vm.current) == calc)
+    #expect(service.entityCallCount == 0)
+  }
+
+  @Test
+  func structuredArtifactsPushOntoTheBackStack() async throws {
+    let ok = try Fixtures.decode(EntityArtifact.self, from: "entity_pokemon.json")
+    let (vm, _) = makeVM(entityResult: ok)
+
+    await vm.openEntity(kind: .pokemon, query: "Garchomp")
+    vm.openComparison([subject("Garchomp"), subject("Dragapult")])
+
+    #expect(vm.stack.count == 2)
+    #expect(vm.canGoBack)
+    #expect(comparisonSubjects(vm.current) != nil)
+
+    vm.back()
+    #expect(vm.stack.count == 1)
+    #expect(entityOk(vm.current)?.resolved.displayName == "Garchomp")
+  }
+
+  // MARK: Ask about this in chat (prefill sink + dismiss)
+
+  @Test
+  func askInChatForwardsTextAndDismisses() {
+    let (vm, _) = makeVM()
+    var prefilled: [String] = []
+    vm.onAskInChat = { prefilled.append($0) }
+    vm.openComparison([subject("Garchomp"), subject("Dragapult")])
+
+    vm.askInChat("Tell me more about this comparison.")
+
+    #expect(prefilled == ["Tell me more about this comparison."])
+    // The sheet closes after asking (mirrors web's `askInChat` → close).
+    #expect(vm.stack.isEmpty)
+    #expect(vm.isPresented == false)
+  }
+
+  @Test
+  func askInChatWithoutASinkStillDismisses() {
+    let (vm, _) = makeVM()
+    vm.openComparison([subject("Garchomp"), subject("Dragapult")])
+
+    vm.askInChat("Tell me more about this comparison.")
+
+    #expect(vm.stack.isEmpty)
   }
 }

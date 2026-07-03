@@ -209,31 +209,41 @@ struct AnswerCardViewTests {
     #expect(sections(makeAnswer(inferences: [inference])).contains(.inferences))
   }
 
-  // MARK: Generation basis
+  // MARK: Scope tag (always-on when the generation string is non-blank)
 
   @Test
-  func generationBasisPresentWhenGenerationFallbackOrNoteIsSet() {
-    // Empty generation, no fallback, no note → renders nothing.
-    let empty = GenerationBasis(generation: "  ", fallback: false, note: "  ")
-    #expect(!sections(makeAnswer(generationBasis: empty)).contains(.generationBasis))
+  func scopeTagPresentWhenGenerationNonBlank() {
+    // Blank generation → no scope tag (even if fallback → still a caveat, no tag).
+    let blank = GenerationBasis(generation: "  ", fallback: false, note: nil)
+    #expect(!sections(makeAnswer(generationBasis: blank)).contains(.scope))
 
     let named = GenerationBasis(generation: "Gen 9 (Scarlet/Violet)", fallback: false, note: nil)
-    #expect(sections(makeAnswer(generationBasis: named)).contains(.generationBasis))
+    #expect(sections(makeAnswer(generationBasis: named)).contains(.scope))
 
-    let fallback = GenerationBasis(generation: "", fallback: true, note: nil)
-    #expect(sections(makeAnswer(generationBasis: fallback)).contains(.generationBasis))
+    // A fallback still shows the (neutral) scope tag when the generation is named;
+    // the caveat strip carries the fallback note separately.
+    let fallbackNamed = GenerationBasis(generation: "Gen 8 (Sword/Shield)", fallback: true, note: nil)
+    #expect(sections(makeAnswer(generationBasis: fallbackNamed)).contains(.scope))
 
-    let noted = GenerationBasis(generation: "", fallback: false, note: "Pre-Gen-9 data.")
-    #expect(sections(makeAnswer(generationBasis: noted)).contains(.generationBasis))
+    let fallbackBlank = GenerationBasis(generation: "  ", fallback: true, note: nil)
+    #expect(!sections(makeAnswer(generationBasis: fallbackBlank)).contains(.scope))
   }
 
-  // MARK: Uncertainty flags (blank-only collapses to nothing)
+  // MARK: Caveat strip (fallback OR any non-blank uncertainty flag — the web
+  // `CaveatStrip` `hasFallback || hasFlags` guard, merged into one top block)
 
   @Test
-  func uncertaintyPresentOnlyWhenNonBlank() {
-    #expect(!sections(makeAnswer(uncertaintyFlags: nil)).contains(.uncertainty))
-    #expect(!sections(makeAnswer(uncertaintyFlags: ["", " "])).contains(.uncertainty))
-    #expect(sections(makeAnswer(uncertaintyFlags: ["Estimate only."])).contains(.uncertainty))
+  func caveatPresentWhenFallbackOrNonBlankFlags() {
+    let clean = GenerationBasis(generation: "Gen 9 (Scarlet/Violet)", fallback: false, note: nil)
+    // Clean generation, no flags → no caveat.
+    #expect(!sections(makeAnswer(generationBasis: clean)).contains(.caveat))
+    // Blank-only flags collapse to nothing.
+    #expect(!sections(makeAnswer(generationBasis: clean, uncertaintyFlags: ["", " "])).contains(.caveat))
+    // A genuine flag → caveat.
+    #expect(sections(makeAnswer(generationBasis: clean, uncertaintyFlags: ["Estimate only."])).contains(.caveat))
+    // A fallback alone (no flags) → caveat.
+    let fallback = GenerationBasis(generation: "Gen 8 (Sword/Shield)", fallback: true, note: nil)
+    #expect(sections(makeAnswer(generationBasis: fallback)).contains(.caveat))
   }
 
   // MARK: Full answer — every block, in reading order, composes without crashing
@@ -262,6 +272,8 @@ struct AnswerCardViewTests {
     #expect(
       sections(answer) == [
         .status,
+        .scope,
+        .caveat,
         .answer,
         .subjects,
         .question,
@@ -272,8 +284,6 @@ struct AnswerCardViewTests {
         .reasoning,
         .citations,
         .inferences,
-        .generationBasis,
-        .uncertainty,
       ]
     )
   }
@@ -283,9 +293,12 @@ struct AnswerCardViewTests {
   @Test
   func answeredFullFixtureFansOutEveryBlock() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
-    // `answered` ⇒ no status badge; every other block is populated in the fixture.
+    // `answered` ⇒ no status badge. The fixture carries a named (non-fallback)
+    // generation → scope tag, and one uncertainty flag → caveat; both lifted to top.
     #expect(
       sections(answer) == [
+        .scope,
+        .caveat,
         .answer,
         .subjects,
         .question,
@@ -296,33 +309,33 @@ struct AnswerCardViewTests {
         .reasoning,
         .citations,
         .inferences,
-        .generationBasis,
-        .uncertainty,
       ]
     )
   }
 
   @Test
-  func clarificationFixtureShowsStatusAnswerQuestionReasoningBasis() throws {
+  func clarificationFixtureShowsStatusScopeAnswerQuestionReasoning() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_clarification.json")
+    // Named generation, no fallback, no flags → scope tag but no caveat.
     #expect(
-      sections(answer) == [.status, .answer, .question, .reasoning, .generationBasis]
+      sections(answer) == [.status, .scope, .answer, .question, .reasoning]
     )
   }
 
   @Test
-  func resolutionFailedFixtureShowsStatusAnswerSuggestionsReasoningBasis() throws {
+  func resolutionFailedFixtureShowsStatusScopeAnswerSuggestionsReasoning() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_resolution_failed.json")
     #expect(
-      sections(answer) == [.status, .answer, .suggestions, .reasoning, .generationBasis]
+      sections(answer) == [.status, .scope, .answer, .suggestions, .reasoning]
     )
   }
 
   @Test
-  func insufficientDataFixtureShowsCitationsBasisAndUncertainty() throws {
+  func insufficientDataFixtureShowsStatusScopeCaveatAnswerReasoningCitations() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_insufficient_data.json")
+    // The fixture is a generation fallback with a flag → caveat present at top.
     #expect(
-      sections(answer) == [.status, .answer, .reasoning, .citations, .generationBasis, .uncertainty]
+      sections(answer) == [.status, .scope, .caveat, .answer, .reasoning, .citations]
     )
   }
 

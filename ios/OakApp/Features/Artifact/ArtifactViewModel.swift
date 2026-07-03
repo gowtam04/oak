@@ -34,6 +34,12 @@ final class ArtifactViewModel {
   /// fixed for the viewer's lifetime, so the model has no way to widen scope.
   private let format: Format
 
+  /// Prefills the chat composer with a follow-up about the open artifact (the web
+  /// viewer's "Ask about this in chat"). The chat host installs this to route to
+  /// ``ChatViewModel/prefillComposer(_:)``; unset ⇒ ``askInChat(_:)`` is a plain
+  /// dismiss. Not observed for rendering — a plain closure sink.
+  @ObservationIgnored var onAskInChat: ((String) -> Void)?
+
   init(service: any ArtifactService, format: Format) {
     self.service = service
     self.format = format
@@ -84,6 +90,29 @@ final class ArtifactViewModel {
       savedId: nil
     )
     stack.append(Artifact(title: team.name, content: .team(artifact)))
+  }
+
+  /// Opens a side-by-side **comparison** of the answer's subjects using the INLINE
+  /// data delivered with the answer (no fetch — mirrors web's `comparison` structured
+  /// artifact). Synchronous: the sheet appears instantly.
+  func openComparison(_ subjects: [Subject]) {
+    stack.append(Artifact(title: "Comparison", content: .comparison(subjects: subjects)))
+  }
+
+  /// Opens the answer's **damage calculation** using its INLINE `damage_calc` (no
+  /// fetch — mirrors web's `damage-calc` structured artifact). Synchronous.
+  func openDamageCalc(_ damageCalc: DamageCalc) {
+    stack.append(Artifact(title: "Damage calculation", content: .damageCalc(damageCalc)))
+  }
+
+  // MARK: Ask about this in chat
+
+  /// Prefills the chat composer with `text` (a follow-up about the open artifact) and
+  /// closes the sheet — the web viewer's "Ask about this in chat" (`askInChat`). The
+  /// prefill fills the composer for the user to edit/send; it does NOT auto-send.
+  func askInChat(_ text: String) {
+    onAskInChat?(text)
+    dismiss()
   }
 
   /// Opens a **saved team** by id, fetching its members + warnings fresh (M-AC-A3.2: the
@@ -153,6 +182,12 @@ enum ArtifactContent: Sendable {
   case entity(EntityArtifactOk)
   /// A team sheet — the agent's proposed team (inline) or a fetched saved team.
   case team(TeamArtifact)
+  /// A side-by-side comparison of the answer's subjects — rendered from the answer's
+  /// INLINE payload (no fetch). Mirrors the web `comparison` structured artifact.
+  case comparison(subjects: [Subject])
+  /// A worked damage calculation — rendered from the answer's INLINE `damage_calc`
+  /// (no fetch). Mirrors the web `damage-calc` structured artifact.
+  case damageCalc(DamageCalc)
   /// An entity that couldn't be shown (`not_found` / `unavailable` / transport) — an honest miss
   /// (M-BR-ART-5), carrying the original kind + query for the message.
   case unavailable(kind: EntityKind, query: String)

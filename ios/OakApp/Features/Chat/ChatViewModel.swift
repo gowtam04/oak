@@ -167,6 +167,14 @@ final class ChatViewModel {
 
   // MARK: Composer actions
 
+  /// Prefills the composer with `text` WITHOUT sending — the artifact viewer's "Ask
+  /// about this in chat" affordance (mirrors web's `askInChat`, which fills the
+  /// composer for the user to review, edit, and send). Additive and side-effect-free
+  /// beyond the composer text; it deliberately does not call ``send()``.
+  func prefillComposer(_ text: String) {
+    composerText = text
+  }
+
   /// Sends the composed turn: appends the user message immediately (M-AC-1.1),
   /// resets the streaming state, and starts consuming the event stream. A no-op when
   /// nothing can be sent.

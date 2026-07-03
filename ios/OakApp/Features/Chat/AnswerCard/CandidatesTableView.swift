@@ -34,6 +34,11 @@ struct CandidatesTableView: View {
   /// a type tap never also opens the row's Pokémon. No-op default.
   var onOpenType: (String) -> Void = { _ in }
 
+  /// Sends a "show me all of them" follow-up turn when the set is `truncated`
+  /// (mirrors web's `CandidateTable` "Show all N" control). No-op default; the host
+  /// wires it to send the follow-up. When `nil` the footer shows the count only.
+  var onShowAll: (() -> Void)?
+
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   /// Flips once, on this view instance's first appearance, to drive the one-shot
@@ -260,13 +265,25 @@ struct CandidatesTableView: View {
   // MARK: Footer
 
   private var footer: some View {
-    Label(
-      "Showing \(candidates.shown.count) of \(candidates.totalCount) — refine to narrow.",
-      systemImage: "line.3.horizontal.decrease.circle"
-    )
-    .font(Theme.body(.caption))
-    .foregroundStyle(Theme.textSecondary)
-    .labelStyle(.titleAndIcon)
+    HStack(alignment: .firstTextBaseline, spacing: 10) {
+      Label(
+        "Showing \(candidates.shown.count) of \(candidates.totalCount) — refine to narrow.",
+        systemImage: "line.3.horizontal.decrease.circle"
+      )
+      .font(Theme.body(.caption))
+      .foregroundStyle(Theme.textSecondary)
+      .labelStyle(.titleAndIcon)
+
+      Spacer(minLength: 0)
+
+      if let onShowAll {
+        Button("Show all \(candidates.totalCount)", action: onShowAll)
+          .font(Theme.display(.caption))
+          .buttonStyle(.borderless)
+          .tint(Theme.accent)
+          .accessibilityHint("Asks Oak to list every result")
+      }
+    }
   }
 
   // MARK: Layout helper

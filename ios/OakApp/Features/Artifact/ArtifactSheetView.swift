@@ -60,6 +60,14 @@ struct ArtifactSheetView: View {
           }
         }
       }
+      // "Ask about this in chat" — prefills the composer with a follow-up about the
+      // open artifact and closes the sheet (web viewer's `askInChat`). Pinned to the
+      // bottom so it stays thumb-reachable at either detent.
+      .safeAreaInset(edge: .bottom) {
+        if let artifact = model.current {
+          askInChatBar(for: artifact)
+        }
+      }
     }
     .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
@@ -80,6 +88,46 @@ struct ArtifactSheetView: View {
     )
   }
 
+  // MARK: Ask about this in chat
+
+  /// The pinned bottom bar hosting the "Ask about this in chat" action.
+  private func askInChatBar(for artifact: Artifact) -> some View {
+    Button {
+      model.askInChat(askText(for: artifact))
+    } label: {
+      Label("Ask about this in chat", systemImage: "bubble.and.pencil")
+        .font(Theme.display(.subheadline))
+        .frame(maxWidth: .infinity)
+    }
+    .buttonStyle(.borderedProminent)
+    .tint(Theme.accent)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 10)
+    .background(.thinMaterial)
+    .accessibilityHint("Fills the chat box with a question about this, so you can send it")
+  }
+
+  /// The composer-prefill text for the current artifact — mirrors the web viewer's
+  /// per-kind `headerFor(...).askText` (`ArtifactViewer.tsx`).
+  private func askText(for artifact: Artifact) -> String {
+    switch artifact.content {
+    case .loading:
+      return "Tell me about \(artifact.title)."
+    case .entity(let ok):
+      return "Tell me more about \(ok.resolved.displayName)."
+    case .unavailable(_, let query):
+      return "Tell me about \(query)."
+    case .team(let team):
+      return "Tell me about the team \"\(team.name)\"."
+    case .teamUnavailable:
+      return "Tell me about the team \"\(artifact.title)\"."
+    case .comparison:
+      return "Tell me more about this comparison."
+    case .damageCalc:
+      return "Explain this damage calculation in more detail."
+    }
+  }
+
   // MARK: Content dispatch
 
   @ViewBuilder
@@ -94,6 +142,16 @@ struct ArtifactSheetView: View {
     case .team(let team):
       TeamArtifactDetail(team: team) { species in
         Task { await model.openEntity(kind: .pokemon, query: species) }
+      }
+    case .comparison(let subjects):
+      ComparisonArtifactView(subjects: subjects) { species in
+        Task { await model.openEntity(kind: .pokemon, query: species) }
+      }
+    case .damageCalc(let damageCalc):
+      ScrollView {
+        DamageCalcView(damageCalc: damageCalc)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(16)
       }
     case .unavailable(let kind, let query):
       missView(
