@@ -4,8 +4,15 @@ import UIKit
 /// The full-set team editor (history-and-teams.md M-TEAM-US-1/3; M-UI-US-5): a native
 /// `Form` for naming a team and filling each member's complete competitive set —
 /// species / ability / item / four moves / nature / EVs / IVs / Tera / level — with
-/// pickers, steppers, and search-style text fields so the whole set is editable on a
-/// phone (M-AC-T1.3).
+/// pickers and steppers so the whole set is editable on a phone (M-AC-T1.3).
+///
+/// Species / ability / item / move fields are search-driven ``EntityPickerRow``s (a native
+/// sheet stands in for web's inline `EntityPicker.tsx` dropdown): species and item search
+/// `/api/search` live; ability offers only the resolved species' legal abilities; moves
+/// offer only the species' fetched learnset (`/api/learnset`) — exactly mirroring
+/// `TeamMemberPanel.tsx`'s two suggestion sources. A ``RosterStripView`` up top shows
+/// batch-resolved sprites (`/api/sprites`) and scrolls to a tapped slot; a Mega's stone is
+/// auto-forced onto its held item once resolved (mirrors `TeamEditor.tsx`).
 ///
 /// **Warn-but-allow** (M-AC-T3.1 / M-BR-T3): the server's legality/validity warnings are
 /// rendered inline (per slot and team-level) but **Save is never disabled** — an EV total
@@ -30,88 +37,125 @@ struct TeamEditorView: View {
 
   var body: some View {
     @Bindable var model = model
-    Form {
-      Section("Team") {
-        TextField("Team name", text: $model.name)
-          .textInputAutocapitalization(.words)
-        LabeledContent("Format", value: model.format.displayLabel)
-      }
-
-      ForEach($model.members) { $member in
-        if let index = model.members.firstIndex(where: { $0.id == member.id }) {
-          MemberEditorSection(
-            index: index,
-            member: $member,
-            warnings: model.warnings(forSlot: index),
-            onRemove: { model.removeMember(at: index) }
-          )
-        }
-      }
-
-      if model.canAddMember {
-        Section {
-          Button {
-            model.addMember()
-          } label: {
-            Label("Add Pokémon", systemImage: "plus.circle")
-          }
-        }
-      }
-
-      if !model.teamLevelWarnings.isEmpty {
-        Section("Team legality") {
-          ForEach(Array(model.teamLevelWarnings.enumerated()), id: \.offset) { _, warning in
-            WarningRow(warning: warning)
-              .transition(warningTransition)
-          }
-        }
-      }
-    }
-    .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.warnings)
-    .navigationTitle(model.savedTeam == nil ? "New team" : "Edit team")
-    .navigationBarTitleDisplayMode(.inline)
-    .toolbar {
-      ToolbarItem(placement: .topBarTrailing) {
-        if model.isSaving {
-          ProgressView()
-        } else {
-          Button("Save") {
-            Task { await saveAndConfirm() }
-          }
-          .fontWeight(.semibold)
-        }
-      }
-      if model.teamId != nil {
-        ToolbarItem(placement: .topBarLeading) {
-          Button {
-            Task {
-              if let paste = await model.exportPaste() {
-                exportedPaste = ExportPayload(text: paste)
+    ScrollViewReader { proxy in
+      Form {
+        if !model.members.isEmpty {
+          Section {
+            RosterStripView(
+              members: model.members,
+              spriteRefs: model.spriteRefsBySpecies,
+              onSelect: { index in
+                withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
+                  proxy.scrollTo(model.members[index].id, anchor: .top)
+                }
               }
+            )
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+          }
+        }
+
+        Section("Team") {
+          TextField("Team name", text: $model.name)
+            .textInputAutocapitalization(.words)
+          LabeledContent("Format", value: model.format.displayLabel)
+        }
+
+        ForEach($model.members) { $member in
+          if let index = model.members.firstIndex(where: { $0.id == member.id }) {
+            MemberEditorSection(
+              index: index,
+              member: $member,
+              warnings: model.warnings(forSlot: index),
+              spriteRef: model.spriteRef(for: member.species.wrappedValue),
+              abilityOptions: model.abilityOptions(for: member.species.wrappedValue),
+              movepoolOptions: model.movepoolOptions(for: member.id),
+              search: model.searchEntities,
+              onSpeciesChange: {
+                Task {
+                  await model.refreshSprites()
+                  await model.refreshMovepool(for: member.id)
+                }
+              },
+              onRemove: { model.removeMember(at: index) }
+            )
+            .id(member.id)
+          }
+        }
+
+        if model.canAddMember {
+          Section {
+            Button {
+              model.addMember()
+            } label: {
+              Label("Add Pokémon", systemImage: "plus.circle")
             }
-          } label: {
-            Label("Export", systemImage: "square.and.arrow.up")
+          }
+        }
+
+        if !model.teamLevelWarnings.isEmpty {
+          Section("Team legality") {
+            ForEach(Array(model.teamLevelWarnings.enumerated()), id: \.offset) { _, warning in
+              WarningRow(warning: warning)
+                .transition(warningTransition)
+            }
           }
         }
       }
-    }
-    .overlay(alignment: .bottom) {
-      if let message = model.errorMessage {
-        errorBanner(message)
+      .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.warnings)
+      .navigationTitle(model.savedTeam == nil ? "New team" : "Edit team")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .topBarTrailing) {
+          if model.isSaving {
+            ProgressView()
+          } else {
+            Button("Save") {
+              Task { await saveAndConfirm() }
+            }
+            .fontWeight(.semibold)
+          }
+        }
+        if model.teamId != nil {
+          ToolbarItem(placement: .topBarLeading) {
+            Button {
+              Task {
+                if let paste = await model.exportPaste() {
+                  exportedPaste = ExportPayload(text: paste)
+                }
+              }
+            } label: {
+              Label("Export", systemImage: "square.and.arrow.up")
+            }
+          }
+        }
       }
-    }
-    .overlay(alignment: .top) {
-      if showSaveConfirmation {
-        saveConfirmationBadge
-          .padding(.top, 4)
-          .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+      .overlay(alignment: .bottom) {
+        if let message = model.errorMessage {
+          errorBanner(message)
+        }
       }
-    }
-    .sheet(item: $exportedPaste) { payload in
-      ExportSheet(text: payload.text)
-    }
-    .task {
-      if loadsOnAppear { await model.load() }
+      .overlay(alignment: .top) {
+        if showSaveConfirmation {
+          saveConfirmationBadge
+            .padding(.top, 4)
+            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+        }
+      }
+      .sheet(item: $exportedPaste) { payload in
+        ExportSheet(text: payload.text)
+      }
+      .task {
+        // `load()` (existing-team path) fetches sprites/movepools itself once the members
+        // arrive from the server; a new/already-loaded team's members are seeded straight
+        // away, so refresh those directly instead of duplicating the network round trip.
+        if loadsOnAppear {
+          await model.load()
+        } else {
+          await model.refreshSprites()
+          await model.refreshAllMovepools()
+        }
+      }
     }
   }
 
@@ -215,16 +259,39 @@ private struct MemberEditorSection: View {
   let index: Int
   @Binding var member: EditableMember
   let warnings: [TeamWarning]
+  /// The resolved sprite/type/ability/base-stat ref for this slot's species, or `nil`
+  /// while unresolved/unset — drives the identity header, the Ability picker's options,
+  /// and the Mega item lock.
+  let spriteRef: DexSpriteRef?
+  /// This species' legal ability slugs as picker options (the Ability picker's ONLY
+  /// offered choices) — empty until `spriteRef` resolves.
+  let abilityOptions: [PickerOption]
+  /// This species' legal movepool as picker options (the Move pickers' ONLY offered
+  /// choices) — empty until the learnset fetch resolves.
+  let movepoolOptions: [PickerOption]
+  /// Backs the species/item pickers' network search (routed through the owning
+  /// ``TeamEditorViewModel``, never touching ``DexLookupService`` directly).
+  let search: (EntityKind, String) async -> [PickerOption]
+  /// Fired whenever `member.species` changes, so the owner can re-resolve sprites/
+  /// movepool for the new (or cleared) species.
+  let onSpeciesChange: () -> Void
   let onRemove: () -> Void
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+  /// A Mega (or any form with a required item) locks its held item to that stone —
+  /// mirrors `TeamMemberPanel.tsx`'s `itemLocked`.
+  private var requiredItem: String? {
+    let stone = spriteRef?.requiredItem
+    return (stone?.isEmpty ?? true) ? nil : stone
+  }
+
   var body: some View {
     Section {
       // The whole set renders as one `.oakCard()` unit rather than a stack of
-      // plain Form rows. `EditableMember` carries no per-species type data, so
-      // this is the plain-card degradation the plan calls for — no type tint.
+      // plain Form rows, type-tinted once the species' primary type resolves.
       VStack(alignment: .leading, spacing: 16) {
+        identityHeader
         identityFields
         moveFields
         naturePicker
@@ -258,7 +325,7 @@ private struct MemberEditorSection: View {
         }
       }
       .padding(16)
-      .oakCard(radius: Theme.Radius.md)
+      .oakCard(radius: Theme.Radius.md, tint: spriteRef?.types.first.map(Theme.type))
       .listRowInsets(EdgeInsets())
       .listRowBackground(Color.clear)
     } header: {
@@ -272,6 +339,7 @@ private struct MemberEditorSection: View {
         .accessibilityLabel("Remove Pokémon \(index + 1)")
       }
     }
+    .onChange(of: member.species) { _, _ in onSpeciesChange() }
   }
 
   /// One-shot entrance for a newly-surfaced per-slot legality warning.
@@ -282,20 +350,72 @@ private struct MemberEditorSection: View {
   private var headerTitle: String {
     let species = member.species.trimmingCharacters(in: .whitespacesAndNewlines)
     if species.isEmpty { return "Pokémon \(index + 1)" }
-    return TeamBlocksView.titleizeNonNil(species)
+    return spriteRef?.displayName ?? TeamBlocksView.titleizeNonNil(species)
+  }
+
+  /// Sprite + type badges for the resolved species (mirrors `TeamMemberPanel.tsx`'s
+  /// identity block) — omitted for an empty slot or before the batch sprite fetch resolves.
+  @ViewBuilder
+  private var identityHeader: some View {
+    if !member.species.isEmpty {
+      HStack(spacing: 12) {
+        SpriteImage(urlString: spriteRef?.spriteUrl, name: headerTitle, size: 48)
+        VStack(alignment: .leading, spacing: 4) {
+          Text(headerTitle)
+            .font(Theme.body(.headline))
+          if let types = spriteRef?.types, !types.isEmpty {
+            HStack(spacing: 6) {
+              ForEach(types, id: \.self) { TypeBadge(type: $0) }
+            }
+          }
+        }
+        Spacer(minLength: 0)
+      }
+    }
   }
 
   @ViewBuilder
   private var identityFields: some View {
-    slugField("Species", text: $member.species)
-    slugField("Ability", text: $member.ability)
-    slugField("Item", text: $member.item)
+    EntityPickerRow(
+      title: "Species",
+      value: member.species,
+      source: .search(.pokemon),
+      placeholder: "Search Pokémon…",
+      displayName: { _ in headerTitle },
+      search: search,
+      onChange: { member.species = $0 }
+    )
+    EntityPickerRow(
+      title: "Ability",
+      value: member.ability,
+      source: .options(abilityOptions),
+      placeholder: member.species.isEmpty ? "Select a species first" : "Search abilities…",
+      disabled: member.species.isEmpty,
+      search: search,
+      onChange: { member.ability = $0 }
+    )
+    EntityPickerRow(
+      title: requiredItem != nil ? "Item (Mega stone)" : "Item",
+      value: member.item,
+      source: .search(.item),
+      placeholder: "Search items…",
+      disabled: requiredItem != nil,
+      search: search,
+      onChange: { member.item = $0 }
+    )
   }
 
   @ViewBuilder
   private var moveFields: some View {
     ForEach(0..<4, id: \.self) { moveIndex in
-      slugField("Move \(moveIndex + 1)", text: moveBinding(moveIndex))
+      MoveFieldRow(
+        title: "Move \(moveIndex + 1)",
+        value: moveBinding(moveIndex),
+        movepool: movepoolOptions,
+        disabled: member.species.isEmpty,
+        placeholder: member.species.isEmpty ? "Select a species first" : "Move \(moveIndex + 1)",
+        search: search
+      )
     }
   }
 
@@ -359,6 +479,95 @@ private struct MemberEditorSection: View {
         .textInputAutocapitalization(autocapitalize ? .words : .never)
         .autocorrectionDisabled(!autocapitalize)
     }
+  }
+}
+
+// MARK: - Move field (picker + persistent type/category/power readout)
+
+/// One move field: an ``EntityPickerRow`` scoped to the species' fetched movepool, plus a
+/// persistent metadata line for the currently selected move — mirrors the Type/Category/
+/// Power columns `TeamMemberPanel.tsx`'s moves table renders alongside each picker. The
+/// metadata line is absent when the current value isn't in `movepool` (unset, or an
+/// off-learnset move riding a `move_not_in_learnset` warning) — that move simply isn't
+/// offered as a picker choice, matching web's excluded-not-warned picker semantics.
+private struct MoveFieldRow: View {
+  let title: String
+  @Binding var value: String
+  let movepool: [PickerOption]
+  let disabled: Bool
+  let placeholder: String
+  let search: (EntityKind, String) async -> [PickerOption]
+
+  private var selectedHint: String? {
+    movepool.first { $0.slug == value }?.hint
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 2) {
+      EntityPickerRow(
+        title: title,
+        value: value,
+        source: .options(movepool),
+        placeholder: placeholder,
+        disabled: disabled,
+        search: search,
+        onChange: { value = $0 }
+      )
+      if let selectedHint {
+        Text(selectedHint)
+          .font(.caption)
+          .foregroundStyle(Theme.textSecondary)
+          .padding(.leading, 4)
+      }
+    }
+  }
+}
+
+// MARK: - Roster strip (sprite overview + tap-to-scroll)
+
+/// A horizontal overview of the (up to six) member slots — sprite + name — sitting above
+/// the per-member sections. Tapping a slot scrolls the focused
+/// ``MemberEditorSection`` into view; this is iOS's native stand-in for web's
+/// `RosterStrip.tsx` (which additionally *selects* a single focused panel — this editor
+/// keeps every member's section expanded inline, better suited to a native `Form`, so
+/// "select" here means "scroll to" rather than "show only this one").
+private struct RosterStripView: View {
+  let members: [EditableMember]
+  let spriteRefs: [String: DexSpriteRef]
+  let onSelect: (Int) -> Void
+
+  var body: some View {
+    ScrollView(.horizontal, showsIndicators: false) {
+      HStack(spacing: 10) {
+        ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
+          Button {
+            onSelect(index)
+          } label: {
+            VStack(spacing: 4) {
+              SpriteImage(
+                urlString: member.species.isEmpty ? nil : spriteRefs[member.species]?.spriteUrl,
+                name: slotLabel(member, index),
+                size: 44
+              )
+              Text(slotLabel(member, index))
+                .font(.caption2)
+                .lineLimit(1)
+                .frame(width: 60)
+            }
+          }
+          .buttonStyle(.plain)
+        }
+      }
+      .padding(.horizontal, 4)
+      .padding(.vertical, 2)
+    }
+    .accessibilityLabel("Team roster")
+  }
+
+  private func slotLabel(_ member: EditableMember, _ index: Int) -> String {
+    member.species.isEmpty
+      ? "Slot \(index + 1)"
+      : (spriteRefs[member.species]?.displayName ?? TeamBlocksView.titleizeNonNil(member.species))
   }
 }
 

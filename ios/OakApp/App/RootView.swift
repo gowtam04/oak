@@ -44,7 +44,9 @@ struct RootView: View {
           .symbolEffect(.bounce, value: selection == .chat)
       }
       Tab(value: AppTab.teams) {
-        TeamsListView(model: TeamsListViewModel(teamService: services.teams))
+        TeamsListView(
+          model: TeamsListViewModel(teamService: services.teams, dexLookup: services.dexLookup)
+        )
       } label: {
         Label("Teams", systemImage: "square.grid.2x3.fill")
           .symbolEffect(.bounce, value: selection == .teams)

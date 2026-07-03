@@ -54,16 +54,36 @@ final class TeamEditorViewModel {
   /// A user-facing error message for the last failed operation, or `nil` when clear.
   private(set) var errorMessage: String?
 
+  // MARK: Dex-lookup state (transient — never persisted; feeds the entity pickers)
+
+  /// Batch-resolved sprite/type/ability/base-stat refs, keyed by species slug. Refreshed
+  /// whenever a member's species changes (``refreshSprites()``); an entry is absent for an
+  /// unresolved/unknown species (the picker/header simply shows no sprite).
+  private(set) var spriteRefsBySpecies: [String: DexSpriteRef] = [:]
+
+  /// Each member's fetched legal movepool, keyed by the member's stable `id`. The Move
+  /// pickers offer ONLY these options (excluded, not merely warned) — an already-set move
+  /// outside the movepool (e.g. from an import) still displays via its titleized slug, it
+  /// just isn't offered as a fresh selection (mirrors `TeamMemberPanel.tsx`).
+  private(set) var movepoolByMemberId: [UUID: [LearnsetMove]] = [:]
+
   // MARK: Dependencies
 
   private let teamService: any TeamService
+  private let dexLookup: any DexLookupService
 
   // MARK: Init
 
   /// Opens the editor on a brand-new, unsaved team in `format`, seeded with one empty
   /// member set so the form has something to fill (M-AC-T1.1).
-  init(teamService: any TeamService, format: Format, name: String = "") {
+  init(
+    teamService: any TeamService,
+    dexLookup: any DexLookupService = EmptyDexLookupService(),
+    format: Format,
+    name: String = ""
+  ) {
     self.teamService = teamService
+    self.dexLookup = dexLookup
     self.format = format
     self.name = name
     self.members = [EditableMember()]
@@ -71,8 +91,13 @@ final class TeamEditorViewModel {
 
   /// Opens the editor on an existing team by its list summary; ``load()`` fetches the
   /// full members + warnings.
-  init(teamService: any TeamService, summary: TeamSummary) {
+  init(
+    teamService: any TeamService,
+    dexLookup: any DexLookupService = EmptyDexLookupService(),
+    summary: TeamSummary
+  ) {
     self.teamService = teamService
+    self.dexLookup = dexLookup
     self.teamId = summary.id
     self.format = summary.format
     self.name = summary.name
@@ -81,8 +106,14 @@ final class TeamEditorViewModel {
 
   /// Opens the editor on an already-loaded full team (e.g. straight after create /
   /// duplicate / import / apply), with no extra fetch.
-  init(teamService: any TeamService, team: Team, warnings: [TeamWarning] = []) {
+  init(
+    teamService: any TeamService,
+    dexLookup: any DexLookupService = EmptyDexLookupService(),
+    team: Team,
+    warnings: [TeamWarning] = []
+  ) {
     self.teamService = teamService
+    self.dexLookup = dexLookup
     self.teamId = team.id
     self.format = team.format
     self.name = team.name
@@ -104,11 +135,106 @@ final class TeamEditorViewModel {
     do {
       let (team, validation) = try await teamService.get(id: teamId)
       apply(saved: team, validation: validation)
+      await refreshSprites()
+      await refreshAllMovepools()
     } catch let error as OakError {
       errorMessage = Self.message(for: error)
     } catch {
       errorMessage = Self.genericMessage
     }
+  }
+
+  // MARK: Dex lookups (search / learnset / sprites — never throw)
+
+  /// Live typeahead over `/api/search`, scoped to this editor's fixed format — backs the
+  /// species/item ``EntityPickerSheet``s. An empty/failed lookup just shows no suggestions.
+  func searchEntities(kind: EntityKind, query: String) async -> [PickerOption] {
+    await dexLookup.search(kind: kind, query: query, format: format)
+      .map { PickerOption(slug: $0.slug, displayName: $0.displayName) }
+  }
+
+  /// Re-resolves sprite/type/ability/base-stat refs for every filled species slot in one
+  /// batch call, then applies the Mega required-item auto-force (mirrors `TeamEditor.tsx`'s
+  /// `resolveSprites` + required-item effects). Call after any species change.
+  func refreshSprites() async {
+    let species = Set(members.map(\.species).filter { !$0.isEmpty })
+    guard !species.isEmpty else {
+      spriteRefsBySpecies = [:]
+      return
+    }
+    let refs = await dexLookup.sprites(names: Array(species), format: format)
+    spriteRefsBySpecies = refs
+    applyMegaAutoForce()
+  }
+
+  /// Fetches the legal movepool for one member's species (`GET /api/learnset`), keyed by
+  /// the member's stable id so it survives reordering. An empty/unset species clears the
+  /// cached movepool for that slot.
+  func refreshMovepool(for memberId: UUID) async {
+    guard let member = members.first(where: { $0.id == memberId }), !member.species.isEmpty else {
+      movepoolByMemberId[memberId] = []
+      return
+    }
+    movepoolByMemberId[memberId] = await dexLookup.learnset(pokemon: member.species, format: format)
+  }
+
+  /// Refetches every filled slot's movepool — used after a full team load (M-AC-T1.2),
+  /// since the individual per-species `.onChange` triggers only fire on further edits.
+  func refreshAllMovepools() async {
+    for member in members where !member.species.isEmpty {
+      await refreshMovepool(for: member.id)
+    }
+  }
+
+  /// The resolved sprite/type ref for a member's species, or `nil` when unresolved/unset.
+  func spriteRef(for species: String) -> DexSpriteRef? {
+    species.isEmpty ? nil : spriteRefsBySpecies[species]
+  }
+
+  /// The species' legal ability slugs as picker options (the Ability picker's ONLY
+  /// offered choices) — mirrors `abilityOptions` in `TeamMemberPanel.tsx`. Empty when the
+  /// species is unresolved (the picker then just offers nothing until it resolves).
+  func abilityOptions(for species: String) -> [PickerOption] {
+    (spriteRef(for: species)?.abilities ?? []).map {
+      PickerOption(slug: $0, displayName: TeamBlocksView.titleizeNonNil($0))
+    }
+  }
+
+  /// The species' legal movepool as picker options, sorted by display name — the Move
+  /// pickers' ONLY offered choices. `hint` carries the F1 metadata (type · category ·
+  /// power) shown in the moves table on web.
+  func movepoolOptions(for memberId: UUID) -> [PickerOption] {
+    (movepoolByMemberId[memberId] ?? [])
+      .map { PickerOption(slug: $0.slug, displayName: $0.displayName, hint: Self.moveHint(for: $0)) }
+      .sorted { $0.displayName < $1.displayName }
+  }
+
+  /// A Mega (or any form with a `required_item`) must hold its stone: force every filled
+  /// slot's item to its species' `required_item` once resolved, idempotent (mirrors the
+  /// `TeamEditor.tsx` required-item effect exactly — only forces forward, never clears a
+  /// stone if the species changes away from a Mega).
+  private func applyMegaAutoForce() {
+    for index in members.indices {
+      let species = members[index].species
+      guard !species.isEmpty, let stone = spriteRefsBySpecies[species]?.requiredItem,
+        !stone.isEmpty
+      else { continue }
+      if members[index].item != stone {
+        members[index].item = stone
+      }
+    }
+  }
+
+  /// "Fire · Special · 90" style summary for a learnset move's metadata columns; a `nil`
+  /// field is simply omitted rather than shown as a placeholder.
+  private static func moveHint(for move: LearnsetMove) -> String? {
+    var parts: [String] = []
+    if let type = move.type { parts.append(TeamBlocksView.titleizeNonNil(type)) }
+    if let damageClass = move.damageClass {
+      parts.append(TeamBlocksView.titleizeNonNil(damageClass.rawValue))
+    }
+    if let power = move.power { parts.append("\(power) power") }
+    return parts.isEmpty ? nil : parts.joined(separator: " · ")
   }
 
   // MARK: Member editing
@@ -167,6 +293,8 @@ final class TeamEditorViewModel {
         result = try await teamService.create(format: format, name: namePayload, members: memberPayload)
       }
       apply(saved: result.team, validation: result.validation)
+      await refreshSprites()
+      await refreshAllMovepools()
       return result.team
     } catch let error as OakError {
       errorMessage = Self.message(for: error)

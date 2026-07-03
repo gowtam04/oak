@@ -36,9 +36,11 @@ final class TeamsListViewModel {
   // MARK: Dependencies
 
   private let teamService: any TeamService
+  private let dexLookup: any DexLookupService
 
-  init(teamService: any TeamService) {
+  init(teamService: any TeamService, dexLookup: any DexLookupService = EmptyDexLookupService()) {
     self.teamService = teamService
+    self.dexLookup = dexLookup
   }
 
   // MARK: Loading
@@ -175,19 +177,19 @@ final class TeamsListViewModel {
   /// An editor for a brand-new, unsaved team in `format` (the "+" flow). The editor's
   /// own Save persists it; the list reloads on return.
   func makeEditor(forNewTeam format: Format) -> TeamEditorViewModel {
-    TeamEditorViewModel(teamService: teamService, format: format)
+    TeamEditorViewModel(teamService: teamService, dexLookup: dexLookup, format: format)
   }
 
   /// An editor for an existing team (by summary); the editor's ``TeamEditorViewModel/load()``
   /// fetches the full members + warnings.
   func makeEditor(for summary: TeamSummary) -> TeamEditorViewModel {
-    TeamEditorViewModel(teamService: teamService, summary: summary)
+    TeamEditorViewModel(teamService: teamService, dexLookup: dexLookup, summary: summary)
   }
 
   /// An editor for an already-loaded full team (e.g. a freshly applied/imported team),
   /// with no extra fetch.
   func makeEditor(for team: Team) -> TeamEditorViewModel {
-    TeamEditorViewModel(teamService: teamService, team: team)
+    TeamEditorViewModel(teamService: teamService, dexLookup: dexLookup, team: team)
   }
 
   // MARK: Local list edits

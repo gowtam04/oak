@@ -39,6 +39,11 @@ struct ServiceContainer: Sendable {
   /// was missing — see `RootView`'s Teams tab.)
   let teams: any TeamService
 
+  /// The team-builder entity-picker seam (typeahead search, per-species learnsets, batch
+  /// sprites) read by ``TeamEditorViewModel``'s pickers. Backed by ``LiveDexLookupService``
+  /// in production. Public/read-only — no auth gate.
+  let dexLookup: any DexLookupService
+
   /// The production wiring (real `Live…` services).
   ///
   /// All services share **one** ``TokenStore`` (the Keychain) and **one**
@@ -54,7 +59,8 @@ struct ServiceContainer: Sendable {
       history: LiveHistoryService(apiClient: api),
       chat: LiveChatService(sseClient: SSEClient(apiClient: api)),
       artifact: LiveArtifactService(apiClient: api),
-      teams: LiveTeamService(apiClient: api)
+      teams: LiveTeamService(apiClient: api),
+      dexLookup: LiveDexLookupService(apiClient: api)
     )
   }
 
@@ -70,7 +76,8 @@ struct ServiceContainer: Sendable {
       history: PreviewStubHistoryService(),
       chat: PreviewStubChatService(),
       artifact: PreviewStubArtifactService(),
-      teams: PreviewStubTeamService()
+      teams: PreviewStubTeamService(),
+      dexLookup: EmptyDexLookupService()
     )
     #else
     live()
