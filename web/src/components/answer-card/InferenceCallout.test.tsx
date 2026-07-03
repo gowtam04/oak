@@ -22,11 +22,18 @@ describe("InferenceCallout", () => {
     expect(screen.getByText(INFERENCE_SPEED.claim)).toBeInTheDocument();
   });
 
-  it("renders the confidence level", () => {
+  it("renders the confidence level as a bracket-free pill", () => {
     render(<InferenceCallout inferences={[INFERENCE_SPEED]} />);
-    expect(screen.getByTestId("inference-confidence-0")).toHaveTextContent(
-      "[high]",
-    );
+    const pill = screen.getByTestId("inference-confidence-0");
+    expect(pill).toHaveTextContent("High");
+    expect(pill.textContent).not.toContain("[");
+    expect(pill.textContent).not.toContain("]");
+  });
+
+  it("renders an `.ilabel` title above the callout items", () => {
+    render(<InferenceCallout inferences={[INFERENCE_SPEED]} />);
+    const title = screen.getByText("Inference");
+    expect(title.className).toContain("ilabel");
   });
 
   it("renders the optional note when present", () => {

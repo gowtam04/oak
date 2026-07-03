@@ -661,9 +661,42 @@
   box-shadow: var(--shadow-raised);
 }
 
-/* Answer body — the primary read */
+/* Masthead — the slim status row leading every answer card (UI §4 screen 04):
+   a status indicator (left) + the turn's scope tag (right, `.ilabel`). */
+.answer-masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.answer-masthead__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.answer-masthead__status-symbol {
+  font-size: 0.9375rem;
+  line-height: 1;
+}
+.answer-masthead__status--ok {
+  color: var(--success);
+}
+.answer-masthead__status--partial {
+  color: color-mix(in srgb, var(--warning) 70%, var(--text-strong));
+}
+.answer-masthead__status--insufficient {
+  color: var(--text-faint);
+}
+.answer-masthead__scope {
+  color: var(--text-faint);
+}
+
+/* Answer body — the primary read. Measure capped at the comfortable prose
+   width (UI §3) — the card itself stays wide; only the text is held narrow. */
 .answer-body__content {
-  max-width: 70ch;
+  max-width: var(--measure-prose);
   font-size: 1rem;
   line-height: 1.6;
   color: var(--text);
@@ -676,11 +709,46 @@
   font-weight: 700;
 }
 
-/* subjects[] sprite cards lay out as a wrap-flex row */
+/* Answer lead — the first paragraph of every answer is the verdict line (UI
+   §4 screen 04 hero moment). Nunito 700 22px/1.35, a full step above body
+   text; every following paragraph stays plain body copy. */
+.answer-body__content .markdown-body > p:first-child {
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: var(--text-xl);
+  line-height: 1.35;
+  color: var(--text-strong);
+}
+
+/* Evidence rail — AnswerBody + subjects[] share a row so sprite cards sit
+   beside the prose (media object) instead of stranding whitespace below it.
+   Stacks on narrow viewports. A lone AnswerBody (no subjects) is unaffected:
+   a single flex child just reads as the full-width column it always was. */
+.answer-card__evidence-rail {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+}
+.answer-card__evidence-rail .answer-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* subjects[] sprite cards lay out as a column alongside the prose */
 .answer-card__subjects {
   display: flex;
+  flex: none;
+  flex-direction: column;
   flex-wrap: wrap;
   gap: var(--space-3);
+}
+@media (max-width: 640px) {
+  .answer-card__evidence-rail {
+    flex-direction: column;
+  }
+  .answer-card__subjects {
+    flex-direction: row;
+  }
 }
 
 /* In-answer secondary actions ("Compare in viewer" / "Open in viewer") — were
@@ -1122,6 +1190,8 @@
   width: 100%;
   border-collapse: collapse;
 }
+/* Header cells carry `.ilabel` in markup (CandidateTable.tsx) for the
+   mono/uppercase/tracked instrument voice; this rule is layout-only. */
 .candidate-table__table thead th {
   /* (was position:sticky/top:0 — dead: the scroll container is x-only with no
      bounded height, so the header never actually stuck. Removed to avoid a
@@ -1130,11 +1200,6 @@
   padding: var(--space-2) var(--space-3);
   background: var(--surface-sunken);
   border-bottom: 1px solid var(--border);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
   white-space: nowrap;
 }
 .candidate-table__row {
@@ -1147,9 +1212,11 @@
 .candidate-table__row--clickable {
   cursor: pointer;
 }
-/* Specific enough to win over the :nth-child(even) zebra rule above. */
+/* Specific enough to win over the :nth-child(even) zebra rule above.
+   Hover tint is the sunken surface (UI §3 table rule), not a selection color —
+   red hover reads as "this row is selected", which a candidate row is not. */
 .candidate-table__table tbody tr.candidate-table__row--clickable:hover {
-  background: var(--poke-red-soft);
+  background: var(--surface-sunken);
 }
 .candidate-table__row td {
   padding: var(--space-2) var(--space-3);
@@ -1202,10 +1269,9 @@
   grid-template-columns: repeat(3, max-content);
   gap: var(--space-1) var(--space-3);
 }
+/* Font/tabular-nums come from `.mono-num` in markup; this rule is layout-only. */
 .candidate-table__stat-item {
-  font-family: var(--mono);
   font-size: 0.8125rem;
-  font-variant-numeric: tabular-nums;
   color: var(--text-strong);
   white-space: nowrap;
 }
@@ -1491,6 +1557,38 @@
   color: var(--text-strong);
   border-radius: var(--radius-sm);
 }
+/* Credibility strip (UI §4 screen 04) — Reasoning + Sources demoted from
+   full-width headed sections to a footer row of quiet `.ilabel` tabs. A
+   future "tool trail" chip has room to join this row. Pure-CSS expand: a
+   closed <details> sizes to its label; the opened one claims the full row
+   width (pushing/wrapping its sibling) via `[open]`. */
+.answer-card__credibility {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-5);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-4);
+}
+.answer-card__credibility .reasoning-block,
+.answer-card__credibility .source-list {
+  flex: 0 0 auto;
+  border-top: none;
+  padding-top: 0;
+}
+.answer-card__credibility .reasoning-block[open],
+.answer-card__credibility .source-list[open] {
+  flex: 1 1 100%;
+}
+.reasoning-block__summary,
+.source-list__summary {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
 .reasoning-block__summary::-webkit-details-marker,
 .source-list__summary::-webkit-details-marker,
 .damage-readout__assumptions-summary::-webkit-details-marker {
@@ -1571,6 +1669,9 @@
   border-left: 3px solid var(--warning);
   border-radius: var(--radius-md);
 }
+.caveat-strip__title {
+  color: color-mix(in srgb, var(--warning) 55%, var(--text-strong));
+}
 .caveat-strip__fallback,
 .caveat-strip__flag {
   position: relative;
@@ -1594,7 +1695,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   13. Inference callout — "my deduction, not stated data" (dashed azure)
+   13. Inference callout — "my deduction, not stated data"
    -------------------------------------------------------------------------- */
 .inference-callout {
   display: flex;
@@ -1602,19 +1703,10 @@
   gap: var(--space-2);
   padding: var(--space-4);
   background: var(--azure-soft);
-  border: 1px dashed var(--azure);
+  border: 1px solid color-mix(in srgb, var(--azure) 35%, transparent);
   border-radius: var(--radius-md);
 }
-.inference-callout::before {
-  content: "Inference";
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--body);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.inference-callout__title {
   color: color-mix(in srgb, var(--azure) 55%, var(--text-strong));
 }
 .inference-callout__item {
@@ -1643,17 +1735,16 @@
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  text-transform: lowercase;
   color: var(--neutral-0);
 }
-.inference-callout__item--high .inference-callout__confidence {
+.inference-callout__confidence--high {
   background: var(--success);
 }
-.inference-callout__item--medium .inference-callout__confidence {
+.inference-callout__confidence--medium {
   background: var(--sunflower);
   color: var(--text-strong);
 }
-.inference-callout__item--low .inference-callout__confidence {
+.inference-callout__confidence--low {
   background: var(--text-muted);
 }
 .inference-callout__claim {
@@ -1699,9 +1790,8 @@
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
-.damage-readout__result-key {
-  text-transform: capitalize;
-}
+/* `.ilabel` in markup (DamageReadout.tsx) supplies the mono/uppercase/tracked
+   instrument voice; no key-specific override needed. */
 .damage-readout__result-value {
   font-size: 1.5rem;
   font-weight: 600;

@@ -22,6 +22,7 @@ export default function CaveatStrip({
 
   return (
     <div className="caveat-strip" data-testid="caveat-strip">
+      <span className="caveat-strip__title ilabel">Uncertainty</span>
       {hasFallback && (
         <div className="caveat-strip__fallback" data-testid="caveat-fallback">
           {generationBasis.note ??

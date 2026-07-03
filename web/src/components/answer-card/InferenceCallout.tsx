@@ -1,14 +1,19 @@
 import type { InferenceCalloutProps } from "@/components/types";
+import type { Inference } from "@/agent/schemas";
+
+/** Capitalized, bracket-free confidence word for the pill (never `[high]`). */
+function confidenceLabel(confidence: Inference["confidence"]): string {
+  return confidence[0].toUpperCase() + confidence.slice(1);
+}
 
 /**
  * InferenceCallout — visually distinct callouts for `inferences[]`, clearly
  * separating deductions from stated data (BR-3).
  *
- * Each callout shows the confidence level, the claim, and an optional note on
- * what the inference hinges on.  Returns null when `inferences` is empty.
- *
- * Visual styling (icon, colour-coding per confidence level) deferred to
- * `frontend-design`.
+ * An `.ilabel` "Inference" title heads the box; each item shows its claim, a
+ * confidence PILL (a colored badge — never the literal `[high]` bracket text
+ * a plain string interpolation used to produce), and an optional note on what
+ * the inference hinges on. Returns null when `inferences` is empty.
  */
 export default function InferenceCallout({
   inferences,
@@ -17,6 +22,7 @@ export default function InferenceCallout({
 
   return (
     <div className="inference-callout" data-testid="inference-callout">
+      <span className="inference-callout__title ilabel">Inference</span>
       {inferences.map((inference, i) => (
         <div
           key={i}
@@ -24,10 +30,10 @@ export default function InferenceCallout({
           data-testid={`inference-item-${i}`}
         >
           <span
-            className="inference-callout__confidence"
+            className={`inference-callout__confidence inference-callout__confidence--${inference.confidence}`}
             data-testid={`inference-confidence-${i}`}
           >
-            [{inference.confidence}]
+            {confidenceLabel(inference.confidence)}
           </span>{" "}
           <span className="inference-callout__claim">{inference.claim}</span>
           {inference.note && (

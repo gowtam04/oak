@@ -134,10 +134,12 @@ export default function CandidateTable({
         <table className="candidate-table__table">
           <thead>
             <tr>
-              <th scope="col">Name</th>
-              <th scope="col">Types</th>
-              {hasStats && <th scope="col">Stats</th>}
-              {hasAbilityColumn && <th scope="col">Ability</th>}
+              <th className="ilabel" scope="col">Name</th>
+              <th className="ilabel" scope="col">Types</th>
+              {hasStats && <th className="ilabel" scope="col">Stats</th>}
+              {hasAbilityColumn && (
+                <th className="ilabel" scope="col">Ability</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -233,14 +235,14 @@ function CandidateRow({
             {row.base_stats != null
               ? // Full six stats, always in the fixed competitive order.
                 STAT_ORDER.map((k) => (
-                  <span key={k} className="candidate-table__stat-item">
+                  <span key={k} className="candidate-table__stat-item mono-num">
                     {STAT_LABELS[k]}: {row.base_stats![k]}
                   </span>
                 ))
               : // Fallback for older/edge answers that only carry key_stats.
                 row.key_stats != null &&
                 Object.entries(row.key_stats).map(([k, v]) => (
-                  <span key={k} className="candidate-table__stat-item">
+                  <span key={k} className="candidate-table__stat-item mono-num">
                     {k}: {String(v)}
                   </span>
                 ))}

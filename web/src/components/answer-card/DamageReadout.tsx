@@ -25,9 +25,9 @@ export default function DamageReadout({ damageCalc }: DamageReadoutProps) {
       <div className="damage-readout__result" data-testid="damage-result">
         {Object.entries(result).map(([k, v]) => (
           <span key={k} className="damage-readout__result-item">
-            <span className="damage-readout__result-key">{k}</span>
+            <span className="damage-readout__result-key ilabel">{k}</span>
             {": "}
-            <strong className="damage-readout__result-value">
+            <strong className="damage-readout__result-value mono-num">
               {String(v)}
             </strong>
           </span>

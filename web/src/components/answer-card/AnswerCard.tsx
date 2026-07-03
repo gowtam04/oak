@@ -1,6 +1,7 @@
 "use client";
 
 import type { AnswerCardProps } from "@/components/types";
+import Masthead from "@/components/answer-card/Masthead";
 import AnswerBody from "@/components/answer-card/AnswerBody";
 import ReasoningBlock from "@/components/answer-card/ReasoningBlock";
 import SpriteCard from "@/components/answer-card/SpriteCard";
@@ -36,7 +37,14 @@ import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
  * the chosen name verbatim — a plain follow-up turn for the SAME session
  * (ux-design.md UI → Agent Input Map). A candidate row click instead opens that
  * Pokémon's artifact in the viewer (CandidateTable owns that, no follow-up).
- * Visual styling is deferred to the `frontend-design` skill.
+ *
+ * Visual structure (UI strategy doc §4 screen 04 — "the answer card"):
+ *  - `Masthead` (status + scope tag) leads the card.
+ *  - `AnswerBody` + `subjects[]` share an "evidence rail" row so sprite cards
+ *    sit beside the prose instead of stranding it (media object, stacks on
+ *    narrow viewports).
+ *  - `ReasoningBlock` + `SourceList` are grouped into one footer "credibility
+ *    strip" of quiet expandable tabs.
  */
 export default function AnswerCard({
   answer,
@@ -75,12 +83,40 @@ export default function AnswerCard({
 
   return (
     <div className="answer-card" data-testid="answer-card" data-status={status}>
+      <Masthead status={status} generationBasis={generation_basis} />
+
       <CaveatStrip
         uncertaintyFlags={uncertainty_flags ?? []}
         generationBasis={generation_basis}
       />
 
-      <AnswerBody markdown={answer_markdown} />
+      <div
+        className="answer-card__evidence-rail"
+        data-testid="answer-card-evidence-rail"
+      >
+        <AnswerBody markdown={answer_markdown} />
+
+        {subjects && subjects.length > 0 && (
+          <div
+            className="answer-card__subjects"
+            data-testid="answer-card-subjects"
+          >
+            {subjects.map((subject, i) => (
+              <SpriteCard key={`${subject.name}-${i}`} subject={subject} />
+            ))}
+            {subjects.length >= 2 && (
+              <button
+                type="button"
+                className="answer-card__open-viewer"
+                data-testid="open-comparison"
+                onClick={() => openStructured({ kind: "comparison", subjects })}
+              >
+                Compare in viewer
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {question && question.options.length > 0 && (
         <QuestionOptions
@@ -88,27 +124,6 @@ export default function AnswerCard({
           onSelect={(label) => followUp(label)}
           disabled={disabled}
         />
-      )}
-
-      {subjects && subjects.length > 0 && (
-        <div
-          className="answer-card__subjects"
-          data-testid="answer-card-subjects"
-        >
-          {subjects.map((subject, i) => (
-            <SpriteCard key={`${subject.name}-${i}`} subject={subject} />
-          ))}
-          {subjects.length >= 2 && (
-            <button
-              type="button"
-              className="answer-card__open-viewer"
-              data-testid="open-comparison"
-              onClick={() => openStructured({ kind: "comparison", subjects })}
-            >
-              Compare in viewer
-            </button>
-          )}
-        </div>
       )}
 
       {proposed_team && (
@@ -159,9 +174,14 @@ export default function AnswerCard({
         />
       )}
 
-      <ReasoningBlock markdown={reasoning_markdown} />
+      <div
+        className="answer-card__credibility"
+        data-testid="answer-card-credibility"
+      >
+        <ReasoningBlock markdown={reasoning_markdown} />
 
-      <SourceList citations={citations} />
+        <SourceList citations={citations} />
+      </div>
     </div>
   );
 }

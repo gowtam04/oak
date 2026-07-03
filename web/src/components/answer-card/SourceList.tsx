@@ -37,7 +37,10 @@ export default function SourceList({
         className="source-list__summary"
         data-testid="source-list-summary"
       >
-        Sources ({citations.length})
+        Sources{" "}
+        <span className="source-list__count mono-num">
+          ({citations.length})
+        </span>
       </summary>
       <ul className="source-list__list" data-testid="source-list-items">
         {citations.map((citation, i) => {
