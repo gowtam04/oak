@@ -260,7 +260,7 @@ struct ChatView: View {
     VStack(alignment: .leading, spacing: 12) {
       StreamingStatusView(phase: model.streamingPhase, activities: model.toolActivities)
       if !model.streamingText.isEmpty {
-        MarkdownText(model.streamingText)
+        MarkdownBlockView(model.streamingText)
           .font(Theme.body(.body))
           .foregroundStyle(Theme.textPrimary)
           .frame(maxWidth: .infinity, alignment: .leading)
