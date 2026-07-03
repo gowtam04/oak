@@ -197,9 +197,9 @@ describe("web_search (T20) — invalid input", () => {
   });
 });
 
-describe("web_search is the last tool in the barrel (append-only order)", () => {
-  it("exposes `web_search` as the final ToolDef, appended after get_learnset (T17)", () => {
-    expect(tools[tools.length - 1]?.name).toBe("web_search");
+describe("web_search holds its fixed T20 slot (append-only order)", () => {
+  it("exposes `web_search` at index 17, right after get_learnset (T17) at index 16 — T18+/T19+ tools (e.g. run_sql, search_wiki) append AFTER it", () => {
     expect(tools[16]?.name).toBe("get_learnset");
+    expect(tools[17]?.name).toBe("web_search");
   });
 });
