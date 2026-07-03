@@ -49,6 +49,11 @@ struct ServiceContainer: Sendable {
   /// production (over the same ``SSEClient`` the chat stream borrows). Signed-in only.
   let teamsAssistant: any TeamsAssistantService
 
+  /// The voice-mode HTTP seam — token mint, tool relay, transcript persist
+  /// (`POST /api/voice/*`). Backed by ``LiveVoiceService`` in production.
+  /// Signed-in only.
+  let voice: any VoiceService
+
   /// The production wiring (real `Live…` services).
   ///
   /// All services share **one** ``TokenStore`` (the Keychain) and **one**
@@ -66,7 +71,8 @@ struct ServiceContainer: Sendable {
       artifact: LiveArtifactService(apiClient: api),
       teams: LiveTeamService(apiClient: api),
       dexLookup: LiveDexLookupService(apiClient: api),
-      teamsAssistant: LiveTeamsAssistantService(sseClient: SSEClient(apiClient: api))
+      teamsAssistant: LiveTeamsAssistantService(sseClient: SSEClient(apiClient: api)),
+      voice: LiveVoiceService(apiClient: api)
     )
   }
 
@@ -84,7 +90,8 @@ struct ServiceContainer: Sendable {
       artifact: PreviewStubArtifactService(),
       teams: PreviewStubTeamService(),
       dexLookup: EmptyDexLookupService(),
-      teamsAssistant: PreviewStubTeamsAssistantService()
+      teamsAssistant: PreviewStubTeamsAssistantService(),
+      voice: PreviewStubVoiceService()
     )
     #else
     live()
@@ -252,6 +259,22 @@ struct PreviewStubTeamsAssistantService: TeamsAssistantService {
       continuation.finish()
     }
   }
+}
+
+/// No-network ``VoiceService`` for SwiftUI previews: `fetchToken`/`execTool` fail
+/// honestly (previews never have a real ephemeral token or realtime session to
+/// back them) and `postTranscript` is a no-op, matching its fire-and-forget
+/// contract.
+struct PreviewStubVoiceService: VoiceService {
+  func fetchToken(sessionId: String, format: Format) async throws -> VoiceTokenResponse {
+    throw OakError.http(status: 503, code: "unavailable", message: "Preview stub.")
+  }
+
+  func execTool(sessionId: String, format: Format, name: String, arguments: String) async throws -> JSONValue {
+    throw OakError.http(status: 503, code: "unavailable", message: "Preview stub.")
+  }
+
+  func postTranscript(sessionId: String, format: Format, userText: String, assistantText: String) async {}
 }
 
 #endif
