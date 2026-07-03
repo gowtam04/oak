@@ -11,7 +11,16 @@
  * listing, a ranked match by kind, and never-throws (in-domain results 200).
  */
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -20,6 +29,10 @@ import {
   installAsSingleton,
   type PgFixture,
 } from "../../../../test/support/pg";
+import {
+  PUBLIC_READ_CONFIG,
+  _resetStoreForTests,
+} from "@/server/rate-limit";
 
 type SearchRoute = typeof import("./route");
 
@@ -42,6 +55,12 @@ beforeAll(async () => {
 afterAll(async () => {
   await fix?.cleanup?.();
 });
+
+// The public read routes share a `pub:<ip>` rate-limit bucket (EDGE-02). Reset
+// the in-process store around every case so a burst test can't leak budget into
+// (or starve) the functional cases, and vice versa.
+beforeEach(() => _resetStoreForTests());
+afterEach(() => _resetStoreForTests());
 
 describe("GET /api/search", () => {
   it("400s on an unknown kind", async () => {
@@ -91,5 +110,21 @@ describe("GET /api/search", () => {
     };
     expect(body.matches.every((m) => m.kind === "move")).toBe(true);
     expect(body.matches.some((m) => m.slug === "earthquake")).toBe(true);
+  });
+
+  it("rate-limits a burst past PUBLIC_READ_CONFIG with 429 + Retry-After (EDGE-02)", async () => {
+    const cap = PUBLIC_READ_CONFIG.maxRequestsPerWindow;
+    // The header-less test Request resolves to clientIp "unknown", so every call
+    // lands in the same `pub:unknown` bucket. The first `cap` are allowed…
+    for (let i = 0; i < cap; i++) {
+      const ok = await route.GET(req({ kind: "pokemon", q: "ga", format: SV }));
+      expect(ok.status).toBe(200);
+    }
+    // …the next one trips the limiter.
+    const limited = await route.GET(req({ kind: "pokemon", q: "ga", format: SV }));
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toEqual({ error: "rate_limited" });
+    const retryAfter = Number(limited.headers.get("Retry-After"));
+    expect(retryAfter).toBeGreaterThanOrEqual(1);
   });
 });

@@ -18,8 +18,10 @@
  * `env` (cf. the entity / chat routes).
  */
 
-import { json } from "@/app/api/auth/_lib/http";
+import { json, retryAfterHeader } from "@/app/api/auth/_lib/http";
 import { isFormat, type Format } from "@/data/formats";
+import { checkRateLimit, PUBLIC_READ_CONFIG } from "@/server/rate-limit";
+import { clientIp } from "@/server/client-ip";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +30,19 @@ export const dynamic = "force-dynamic";
 const MAX_NAMES = 24;
 
 export async function GET(req: Request): Promise<Response> {
+  // Rate-limit BEFORE any dynamic import / DB work (EDGE-02) — public,
+  // unauthenticated GET on the shared pool; shares the `pub:<ip>` bucket.
+  const gate = checkRateLimit(`pub:${clientIp(req)}`, "", PUBLIC_READ_CONFIG);
+  if (!gate.allowed) {
+    const retryAfterMs =
+      gate.reason === "rate_limited" ? gate.retryAfterMs : 0;
+    return json(
+      429,
+      { error: "rate_limited" },
+      retryAfterHeader(retryAfterMs),
+    );
+  }
+
   const url = new URL(req.url);
   const formatParam = url.searchParams.get("format")?.trim() ?? "";
   const names = (url.searchParams.get("names") ?? "")

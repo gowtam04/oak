@@ -36,16 +36,18 @@
 
 import "server-only";
 
-import { eq, lte, sql } from "drizzle-orm";
+import { eq, lte, or, sql } from "drizzle-orm";
 
 import { db } from "@/data/db";
 import {
   account,
+  auth_event,
   auth_session,
   conversation,
   conversation_message,
   otp_code,
   team,
+  turn_record,
 } from "@/data/schema";
 
 // ---------------------------------------------------------------------------
@@ -274,12 +276,18 @@ export async function deleteExpiredSessions(now: number): Promise<number> {
  * `ON DELETE CASCADE` — see schema.ts), so every dependent row is removed
  * explicitly inside ONE transaction, in FK-safe (child-before-parent) order:
  *
- *   conversation_message → conversation → team → auth_session   (all by account_id)
- *   → otp_code (by the account's email)  → account              (by id)
+ *   conversation_message → conversation → team → auth_session → turn_record
+ *   (all by account_id) → auth_event (by account_id OR the account's email)
+ *   → otp_code (by the account's email) → account (by id)
  *
- * `otp_code` carries no `account_id` (it is keyed by email and can exist before
- * the account does, BR-A5), so its row is located via the account's email read
- * inside the same transaction.
+ * The account's email is resolved FIRST (before any delete), because both
+ * `otp_code` and `auth_event` are keyed off it: `otp_code` carries no
+ * `account_id` at all (it is keyed by email and can exist before the account
+ * does, BR-A5), and `auth_event` rows recorded at "otp_requested" time carry
+ * the email but a NULL `account_id` (no account existed yet) — so purging
+ * `auth_event` by `account_id` alone would leave those rows behind. `turn_record`
+ * (admin-panel usage recording, retained indefinitely) is scoped by `account_id`
+ * only — it is never written before an account exists.
  *
  * STRICTLY account-scoped (BR-A9 isolation): every delete filters on this
  * `accountId` / its email, so another account's rows are never touched.
@@ -289,6 +297,16 @@ export async function deleteExpiredSessions(now: number): Promise<number> {
  */
 export async function deleteAccount(accountId: string): Promise<void> {
   await db.transaction(async (tx) => {
+    // Resolve the email up front — otp_code and auth_event are keyed (in part)
+    // by email, not account_id. If the account does not exist, email stays
+    // undefined and every subsequent delete is a no-op (idempotent).
+    const rows = await tx
+      .select({ email: account.email })
+      .from(account)
+      .where(eq(account.id, accountId))
+      .limit(1);
+    const email = rows[0]?.email;
+
     await tx
       .delete(conversation_message)
       .where(eq(conversation_message.account_id, accountId));
@@ -299,16 +317,21 @@ export async function deleteAccount(accountId: string): Promise<void> {
     await tx
       .delete(auth_session)
       .where(eq(auth_session.account_id, accountId));
+    await tx
+      .delete(turn_record)
+      .where(eq(turn_record.account_id, accountId));
 
-    // otp_code is keyed by email, not account_id — resolve the email from the
-    // (about-to-be-deleted) account row in the same transaction. If the account
-    // does not exist there is nothing to clear (idempotent no-op).
-    const rows = await tx
-      .select({ email: account.email })
-      .from(account)
-      .where(eq(account.id, accountId))
-      .limit(1);
-    const email = rows[0]?.email;
+    // auth_event: purge by account_id AND (when resolved) by email, since
+    // "otp_requested" events are recorded before an account exists (email set,
+    // account_id null).
+    await tx
+      .delete(auth_event)
+      .where(
+        email !== undefined
+          ? or(eq(auth_event.account_id, accountId), eq(auth_event.email, email))
+          : eq(auth_event.account_id, accountId),
+      );
+
     if (email !== undefined) {
       await tx.delete(otp_code).where(eq(otp_code.email, email));
     }

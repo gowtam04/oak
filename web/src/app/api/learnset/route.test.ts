@@ -11,12 +11,21 @@
  * yields an empty list, and it never throws (in-domain results always 200).
  */
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 vi.mock("server-only", () => ({}));
 
 import { reference_cache } from "@/data/schema";
 import type { MoveDetail } from "@/agent/schemas";
+import { _resetStoreForTests } from "@/server/rate-limit";
 
 import {
   createPgSchema,
@@ -74,6 +83,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await fix?.cleanup?.();
 });
+
+// This route now shares the `pub:<ip>` read rate-limit bucket (EDGE-02); reset
+// it between cases so accumulated calls can't trip the limiter mid-suite.
+beforeEach(() => _resetStoreForTests());
 
 describe("GET /api/learnset", () => {
   it("400s when the pokemon param is missing", async () => {

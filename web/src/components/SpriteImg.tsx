@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { safeHttpUrl } from "@/lib/safe-url";
 
 export interface SpriteImgProps {
   /** Primary sprite URL (for a form, the Showdown `ani/<spriteid>.gif`). */
@@ -25,6 +26,12 @@ export interface SpriteImgProps {
  * change to a fresh, working `src` isn't stuck on the previous fallback; and
  * because we only swap while the errored value still equals `src`, a fallback
  * that also 404s can't loop.
+ *
+ * `src`/`fallbackSrc` are model-composed (subject/candidate `sprite_url`,
+ * `artwork_url`) and pass through `safeHttpUrl` (http/https only) before
+ * reaching the DOM (FE-02). An unsafe `src` falls through to `fallbackSrc`
+ * immediately — there's no real `<img>` to fire a load error on a rejected
+ * scheme; if `fallbackSrc` is also unsafe/absent, nothing renders.
  */
 export default function SpriteImg({
   src,
@@ -35,17 +42,26 @@ export default function SpriteImg({
   height,
 }: SpriteImgProps) {
   const [erroredSrc, setErroredSrc] = useState<string | null>(null);
-  const useFallback = fallbackSrc != null && erroredSrc === src;
+  const safeSrc = safeHttpUrl(src);
+  const safeFallbackSrc = safeHttpUrl(fallbackSrc);
+  const useFallback =
+    safeFallbackSrc != null && (safeSrc == null || erroredSrc === src);
+  const resolvedSrc = useFallback ? safeFallbackSrc : safeSrc;
+
+  if (resolvedSrc == null) return null;
+
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={useFallback ? fallbackSrc : src}
+      src={resolvedSrc}
       alt={alt}
       className={className}
       width={width}
       height={height}
       onError={() => {
-        if (fallbackSrc != null && fallbackSrc !== src) setErroredSrc(src);
+        if (safeFallbackSrc != null && safeFallbackSrc !== safeSrc) {
+          setErroredSrc(src);
+        }
       }}
     />
   );

@@ -9,7 +9,15 @@
  * the fixture is installed via `installAsSingleton` before the first call.
  */
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -19,6 +27,7 @@ import {
   type PgFixture,
 } from "./support/pg";
 import { seedEntityRefs } from "./fixtures/entity-refs";
+import { _resetStoreForTests } from "@/server/rate-limit";
 
 import {
   entityArtifactResponseSchema,
@@ -39,6 +48,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await fix?.cleanup();
 });
+
+// This route now shares the `pub:<ip>` read rate-limit bucket (EDGE-02); reset
+// it between cases so accumulated calls can't trip the limiter mid-suite.
+beforeEach(() => _resetStoreForTests());
 
 function call(params: Record<string, string>): Promise<Response> {
   const qs = new URLSearchParams(params).toString();

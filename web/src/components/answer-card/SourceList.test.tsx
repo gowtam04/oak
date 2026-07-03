@@ -63,4 +63,18 @@ describe("SourceList", () => {
       "Sources (0)",
     );
   });
+
+  it("does not render an anchor for a javascript: endpoint_url (FE-01)", () => {
+    const malicious = [
+      { ...CITATION_GARCHOMP, endpoint_url: "javascript:alert(1)" },
+    ];
+    render(<SourceList citations={malicious} defaultExpanded />);
+    expect(screen.queryByTestId("citation-link-0")).not.toBeInTheDocument();
+  });
+
+  it("renders the anchor with the correct href for a legitimate https endpoint_url", () => {
+    render(<SourceList citations={[CITATION_GARCHOMP]} defaultExpanded />);
+    const link = screen.getByTestId("citation-link-0");
+    expect(link).toHaveAttribute("href", CITATION_GARCHOMP.endpoint_url);
+  });
 });

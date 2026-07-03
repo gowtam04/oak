@@ -22,6 +22,7 @@ import type { TeamMember } from "@/data/teams/team-schema";
 import type { SpriteRef } from "@/data/repos/pokedex-repo";
 import type { TypeName } from "@/agent/schemas";
 import TypeBadge from "@/components/TypeBadge";
+import { safeHttpUrl } from "@/lib/safe-url";
 import { computeMemberStats, STAT_LABELS } from "./team-stats";
 
 /** Title-case a slug-ish id (`great-tusk` → `Great Tusk`); `—` for empty. */
@@ -63,6 +64,7 @@ function MemberCard({
   const isChampions = format === "champions";
   const evMax = isChampions ? 32 : 252;
   const stats = refs ? computeMemberStats(member, refs.base_stats, format) : null;
+  const spriteUrl = safeHttpUrl(refs?.sprite_url);
   // Prefer the canonical display name (e.g. "Swampert (Mega)") over a titleized
   // slug, so Mega / forme members are unambiguous.
   const displayName = refs?.display_name ?? titleize(member.species);
@@ -74,11 +76,11 @@ function MemberCard({
     <div className="team-member" style={cardStyle}>
       <div className="team-member__head">
         <span className="team-member__sprite-chip">
-          {refs?.sprite_url ? (
+          {spriteUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               className="team-member__sprite"
-              src={refs.sprite_url}
+              src={spriteUrl}
               alt={displayName}
               width={72}
               height={72}

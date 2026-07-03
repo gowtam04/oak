@@ -10,9 +10,15 @@
  * then writes one ingest_meta row per format.
  *
  * Build-then-write discipline: ALL formats are built into in-memory arrays
- * first; only then is each table replaced in a single synchronous transaction
- * (DELETE all + chunked INSERT). A rebuild is idempotent. @pkmn is local, so the
- * old "reuse-last-good on PokeAPI outage" path is gone — there is no upstream.
+ * first; only then does `writeIngestData` (below) atomically SWAP the rows for
+ * exactly the formats being built. Every delete is scoped to `data.formats`
+ * (`WHERE format IN (...)`) so `--formats=champions` never touches the other
+ * five formats' rows, and the four table replacements + the ingest_meta row
+ * happen inside ONE Postgres transaction — a crash mid-write rolls back
+ * everything, and a concurrent reader sees either the old index or the new
+ * one, never a table-inconsistent mix. A rebuild is idempotent. @pkmn is
+ * local, so the old "reuse-last-good on PokeAPI outage" path is gone — there
+ * is no upstream.
  *
  * Connection ownership: the ingest CLI runs under tsx as its OWN process and
  * does NOT import the `@/data/db` singleton (that module is `server-only`).
@@ -25,9 +31,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { Pool } from "pg";
+import { inArray } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import type { PgTable } from "drizzle-orm/pg-core";
+import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import {
   ingest_meta,
@@ -59,6 +66,13 @@ import { buildEncounterRows } from "./build-encounters";
 // ---------------------------------------------------------------------------
 
 type IngestDb = NodePgDatabase<typeof schema>;
+/**
+ * The transaction handle `db.transaction(async (tx) => …)` hands its callback.
+ * Extracted structurally (rather than hand-naming `NodePgTransaction<...>`'s
+ * generics) so it always matches whatever `IngestDb["transaction"]` actually
+ * requires.
+ */
+type IngestTx = Parameters<Parameters<IngestDb["transaction"]>[0]>[0];
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(MODULE_DIR, "..", "..");
@@ -106,44 +120,105 @@ const SCHEMA_VERSION = "2";
 const INSERT_CHUNK = 500;
 
 // ---------------------------------------------------------------------------
-// Write helpers
+// Write helpers — each MUST run inside an already-open transaction (`tx`); the
+// caller (writeIngestData, below) owns the one outer `db.transaction(...)`.
 // ---------------------------------------------------------------------------
 
-/** Replace the entire contents of `table` with `rows` in one transaction. */
+/**
+ * Replace `table`'s rows for exactly `formats` with `rows`, inside `tx`.
+ * `formatColumn` is that table's `format` column, passed explicitly because
+ * `PgTable` doesn't statically expose it (all five index tables happen to
+ * have one, but nothing in the `PgTable` type says so). Rows for any format
+ * NOT in `formats` are left untouched — this is what makes
+ * `--formats=champions` safe to run against a multi-format index.
+ */
 async function replaceTable<TTable extends PgTable>(
-  db: IngestDb,
+  tx: IngestTx,
   table: TTable,
+  formatColumn: AnyPgColumn,
+  formats: Format[],
   rows: TTable["$inferInsert"][],
 ): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx.delete(table);
-    // Chunk inserts well under Postgres' 65535 bind-parameter limit (the widest
-    // row, pokemon, has ~22 columns ⇒ ~11k params per 500-row chunk).
-    for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
-      const chunk = rows.slice(i, i + INSERT_CHUNK);
-      if (chunk.length > 0) await tx.insert(table).values(chunk);
-    }
-  });
+  await tx.delete(table).where(inArray(formatColumn, formats));
+  // Chunk inserts well under Postgres' 65535 bind-parameter limit (the widest
+  // row, pokemon, has ~22 columns ⇒ ~11k params per 500-row chunk).
+  for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
+    const chunk = rows.slice(i, i + INSERT_CHUNK);
+    if (chunk.length > 0) await tx.insert(table).values(chunk);
+  }
 }
 
-/** Replace all ingest_meta rows with one row per built format. */
+/** Replace the ingest_meta rows for exactly `formats`, inside `tx`. */
 async function writeIngestMeta(
-  db: IngestDb,
+  tx: IngestTx,
+  formats: Format[],
   reports: FormatReport[],
   at: number,
 ): Promise<void> {
+  await tx.delete(ingest_meta).where(inArray(ingest_meta.format, formats));
+  for (const r of reports) {
+    await tx.insert(ingest_meta).values({
+      format: r.format,
+      last_success_at: at,
+      pokemon_count: r.pokemon,
+      learnset_count: r.learnsets,
+      names_count: r.names,
+      schema_version: SCHEMA_VERSION,
+    });
+  }
+}
+
+/** Everything `writeIngestData` needs to atomically swap in one ingest run. */
+export interface IngestWriteData {
+  /** The formats being (re)written — every delete is scoped to exactly these. */
+  formats: Format[];
+  pokemon: PokemonRow[];
+  learnset: LearnsetRow[];
+  names: NameRow[];
+  references: ReferenceRow[];
+  /** One report per format in `formats`, feeding the ingest_meta rows. */
+  formatReports: FormatReport[];
+  /** Epoch ms recorded as each format's ingest_meta.last_success_at. */
+  finishedAt: number;
+}
+
+/**
+ * Atomically replace the format-scoped contents of pokemon, learnset,
+ * searchable_names, reference_cache, AND ingest_meta for `data.formats`, in
+ * ONE Postgres transaction. Exported standalone (rather than folded into
+ * `runIngest`) so tests can drive the write path directly against a real
+ * (Testcontainers) schema with tiny synthetic rows, without running the full
+ * @pkmn build.
+ */
+export async function writeIngestData(
+  db: IngestDb,
+  data: IngestWriteData,
+  onProgress?: (msg: string) => void,
+): Promise<void> {
+  const report = (msg: string): void => onProgress?.(msg);
   await db.transaction(async (tx) => {
-    await tx.delete(ingest_meta);
-    for (const r of reports) {
-      await tx.insert(ingest_meta).values({
-        format: r.format,
-        last_success_at: at,
-        pokemon_count: r.pokemon,
-        learnset_count: r.learnsets,
-        names_count: r.names,
-        schema_version: SCHEMA_VERSION,
-      });
-    }
+    report("writing pokemon…");
+    await replaceTable(tx, pokemon, pokemon.format, data.formats, data.pokemon);
+    report("writing learnset…");
+    await replaceTable(tx, learnset, learnset.format, data.formats, data.learnset);
+    report("writing searchable_names…");
+    await replaceTable(
+      tx,
+      searchable_names,
+      searchable_names.format,
+      data.formats,
+      data.names,
+    );
+    report("writing reference_cache…");
+    await replaceTable(
+      tx,
+      reference_cache,
+      reference_cache.format,
+      data.formats,
+      data.references,
+    );
+    report("writing ingest_meta…");
+    await writeIngestMeta(tx, data.formats, data.formatReports, data.finishedAt);
   });
 }
 
@@ -228,21 +303,23 @@ export async function runIngest(
     });
   }
 
-  // ----- Write phase -------------------------------------------------------
+  // ----- Write phase (one atomic, format-scoped swap) -----------------------
   const { db, pool } = await openIngestDb();
-  let finishedAt: number;
+  const finishedAt = Date.now();
   try {
-    report("writing pokemon…");
-    await replaceTable(db, pokemon, pokemonRows);
-    report("writing learnset…");
-    await replaceTable(db, learnset, learnsetRows);
-    report("writing searchable_names…");
-    await replaceTable(db, searchable_names, nameRows);
-    report("writing reference_cache…");
-    await replaceTable(db, reference_cache, referenceRows);
-
-    finishedAt = Date.now();
-    await writeIngestMeta(db, formatReports, finishedAt);
+    await writeIngestData(
+      db,
+      {
+        formats,
+        pokemon: pokemonRows,
+        learnset: learnsetRows,
+        names: nameRows,
+        references: referenceRows,
+        formatReports,
+        finishedAt,
+      },
+      report,
+    );
   } finally {
     await pool.end();
   }

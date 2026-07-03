@@ -91,4 +91,14 @@ describe("SpriteCard", () => {
     expect(screen.getByText(/Garchomp/)).toBeInTheDocument();
     expect(screen.queryByText(/#/)).not.toBeInTheDocument();
   });
+
+  it("does not render a javascript: sprite_url as an img src, falling back to the dex-number art (FE-02)", () => {
+    const maliciousSubject = {
+      ...SUBJECT_GARCHOMP,
+      sprite_url: "javascript:alert(1)",
+    };
+    render(<SpriteCard subject={maliciousSubject} />);
+    const img = screen.getByRole("img", { name: "Garchomp" });
+    expect(img.getAttribute("src")).not.toMatch(/^javascript:/);
+  });
 });

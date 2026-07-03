@@ -82,6 +82,25 @@ export const TEAMS_ASSISTANT_CONFIG: RateLimitConfig = {
   windowMs: 60_000,
 };
 
+/**
+ * The public, UNAUTHENTICATED read routes — `/api/entity`, `/api/search`,
+ * `/api/sprites`, `/api/learnset` (EDGE-02). These are GETs that each do DB I/O
+ * on the shared pool with no auth gate, so an anonymous client could hammer them
+ * to exhaust connections. Keyed `pub:<clientIp>`; all four routes share ONE
+ * bucket per IP (intended — a single IP's total read pressure is what we bound).
+ *
+ * 120 / 60 s is deliberately generous: opening one team artifact fires several
+ * of these per click (sprites + per-species learnset lookups), so a real user
+ * browsing quickly stays well under it while a scripted flood is still capped.
+ * The input-length cap is irrelevant for a GET (there is no message body) — it
+ * is kept at 2 000 only for shape consistency; callers pass `message: ""`.
+ */
+export const PUBLIC_READ_CONFIG: RateLimitConfig = {
+  maxInputLength: 2_000,
+  maxRequestsPerWindow: 120,
+  windowMs: 60_000,
+};
+
 // ---------------------------------------------------------------------------
 // Return shape
 // ---------------------------------------------------------------------------

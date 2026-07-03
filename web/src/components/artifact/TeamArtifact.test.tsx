@@ -110,6 +110,22 @@ describe("TeamArtifact", () => {
     expect(screen.getByTestId("team-member-stats")).toHaveTextContent("135");
   });
 
+  it("does not render a javascript: sprite_url as an img src, falling back to the placeholder (FE-02)", () => {
+    render(
+      <TeamArtifact
+        view={view({
+          spriteRefs: {
+            pelipper: { ...REFS.pelipper, sprite_url: "javascript:alert(1)" },
+          },
+        })}
+      />,
+    );
+    expect(screen.queryByAltText("Pelipper")).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("team-artifact-members"),
+    ).toHaveTextContent("?");
+  });
+
   it("shows the canonical display name (e.g. Mega forme) over a titleized slug", () => {
     const mega: TeamMember = { ...MEMBER, species: "swampert-mega" };
     render(
