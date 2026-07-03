@@ -10,6 +10,7 @@ import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberHaptics
 import ai.gowtam.oak.wire.Format
+import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -190,8 +192,17 @@ fun ChatScreen(
             )
         },
     ) { innerPadding ->
+        // Landscape on a phone leaves very little vertical room once the top bar,
+        // composer, and bottom nav (all fixed-height chrome, unchanged from portrait)
+        // are subtracted — the sign-in nudge alone was costing the transcript's
+        // LazyColumn ~190px out of a ~733px content area, squeezing it down to an
+        // unusably (and on some builds, unrenderably) short sliver. It stays available
+        // in portrait and via the Account tab either way, so hiding it here in
+        // landscape trades a non-essential nudge for a transcript that's actually
+        // visible and scrollable.
+        val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            if (signInAction != null) {
+            if (signInAction != null && !isLandscape) {
                 SignInNudge(onSignIn = signInAction)
             }
             Box(modifier = Modifier.weight(1f)) {
