@@ -28,7 +28,10 @@ import type { TeamDetail } from "@/lib/api/teams-client";
 import type { TeamMember } from "@/data/teams/team-schema";
 import { CHAMPIONS_FORMAT, FORMATS, type Format } from "@/data/formats";
 import TeamList from "@/components/teams/TeamList";
-import TeamEditor from "@/components/teams/TeamEditor";
+import TeamEditor, {
+  type TeamEditorHandle,
+} from "@/components/teams/TeamEditor";
+import TeamsAssistantPanel from "@/components/teams/TeamsAssistantPanel";
 import PasteImportDialog from "@/components/teams/PasteImportDialog";
 import ExportDialog from "@/components/teams/ExportDialog";
 import { formatLabel } from "@/components/teams/display-names";
@@ -56,6 +59,10 @@ export default function TeamsPage() {
 
   // Selected team detail (full members + validation), loaded on demand.
   const [selected, setSelected] = useState<TeamDetail | null>(null);
+
+  // Imperative access to the editor's unsaved draft for the assistant panel
+  // (read at send/apply time — never a render-time data flow).
+  const editorRef = useRef<TeamEditorHandle>(null);
   const openTeam = useCallback(
     async (id: string) => {
       const detail = await teams.get(id);
@@ -202,7 +209,9 @@ export default function TeamsPage() {
             </Link>
           </div>
         ) : (
-          <div className="teams-grid">
+          <div
+            className={`teams-grid${selected ? " teams-grid--assistant" : ""}`}
+          >
             <TeamList
               teams={teams.teams}
               selectedId={selected?.id ?? null}
@@ -214,13 +223,30 @@ export default function TeamsPage() {
             />
 
             {selected ? (
-              <TeamEditor
-                team={selected}
-                saving={saving}
-                onSave={(input) => void handleSave(input)}
-                onExport={() => void handleExport()}
-                onClose={() => setSelected(null)}
-              />
+              <>
+                <TeamEditor
+                  team={selected}
+                  saving={saving}
+                  onSave={(input) => void handleSave(input)}
+                  onExport={() => void handleExport()}
+                  onClose={() => setSelected(null)}
+                  handleRef={editorRef}
+                />
+                <TeamsAssistantPanel
+                  teamId={selected.id}
+                  format={selected.format as Format}
+                  getDraft={() =>
+                    editorRef.current?.getDraft() ?? {
+                      name: selected.name,
+                      members: selected.members,
+                    }
+                  }
+                  applyPatch={(patch) => editorRef.current?.applyPatch(patch)}
+                  replaceDraft={(draft) =>
+                    editorRef.current?.replaceDraft(draft)
+                  }
+                />
+              </>
             ) : (
               <div
                 className="teams-page__placeholder"

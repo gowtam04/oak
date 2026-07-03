@@ -1,5 +1,11 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 
 // TeamEditor resolves sprites for its live members; stub it out so tests stay
 // hermetic (the prop seed still drives the live-stat assertions).
@@ -7,7 +13,7 @@ vi.mock("@/lib/api/sprites-client", () => ({
   resolveSprites: vi.fn(async () => ({})),
 }));
 
-import TeamEditor from "./TeamEditor";
+import TeamEditor, { type TeamEditorHandle } from "./TeamEditor";
 import type { TeamDetail } from "@/lib/api/teams-client";
 import type { SpriteRef } from "@/lib/api/sprites-client";
 import type { TeamMember } from "@/data/teams/team-schema";
@@ -182,5 +188,84 @@ describe("TeamEditor", () => {
   it("disables Save while saving", () => {
     setup({ saving: true });
     expect(screen.getByTestId("team-save")).toBeDisabled();
+  });
+});
+
+describe("TeamEditor imperative handle (assistant panel seam)", () => {
+  function setupWithHandle(
+    overrides: Partial<React.ComponentProps<typeof TeamEditor>> = {},
+  ) {
+    const handleRef = { current: null as TeamEditorHandle | null };
+    const utils = setup({ handleRef, ...overrides });
+    expect(handleRef.current).not.toBeNull();
+    return { ...utils, handle: handleRef.current! };
+  }
+
+  it("getDraft returns the live name + members", () => {
+    const { handle } = setupWithHandle();
+    const draft = handle.getDraft();
+    expect(draft.name).toBe("My Team");
+    expect(draft.members.map((m) => m.species)).toEqual([
+      "gyarados",
+      "garchomp",
+    ]);
+  });
+
+  it("applyPatch replaces a slot and renames, and focuses the patched slot", () => {
+    const { handle } = setupWithHandle();
+    act(() => {
+      handle.applyPatch({
+        name: "Renamed",
+        slots: [{ slot: 1, member: fullMember("tyranitar") }],
+      });
+    });
+    expect(screen.getByTestId("team-name")).toHaveValue("Renamed");
+    const draft = handle.getDraft();
+    expect(draft.members[1]!.species).toBe("tyranitar");
+    // The patched slot is focused so the change is visible.
+    expect(screen.getByTestId("member-1-panel")).toBeInTheDocument();
+  });
+
+  it("applyPatch extends past the end (gap padded blank) and removes via null", () => {
+    const { handle } = setupWithHandle();
+    act(() => {
+      handle.applyPatch({
+        slots: [{ slot: 3, member: fullMember("scizor") }],
+      });
+    });
+    let draft = handle.getDraft();
+    expect(draft.members).toHaveLength(4);
+    expect(draft.members[2]!.species).toBeNull(); // padded blank
+    expect(draft.members[3]!.species).toBe("scizor");
+
+    act(() => {
+      handle.applyPatch({ slots: [{ slot: 0, member: null }] });
+    });
+    draft = handle.getDraft();
+    expect(draft.members.map((m) => m.species)).toEqual([
+      "garchomp",
+      null,
+      "scizor",
+    ]);
+  });
+
+  it("replaceDraft restores an exact snapshot (the Undo path)", () => {
+    const { handle } = setupWithHandle();
+    const before = handle.getDraft();
+    act(() => {
+      handle.applyPatch({
+        name: "Changed",
+        slots: [{ slot: 0, member: fullMember("tyranitar") }],
+      });
+    });
+    act(() => {
+      handle.replaceDraft(before);
+    });
+    const draft = handle.getDraft();
+    expect(draft.name).toBe("My Team");
+    expect(draft.members.map((m) => m.species)).toEqual([
+      "gyarados",
+      "garchomp",
+    ]);
   });
 });

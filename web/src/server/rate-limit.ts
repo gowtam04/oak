@@ -69,6 +69,19 @@ export const SIGNED_IN_CONFIG: RateLimitConfig = {
   windowMs: 60_000,
 };
 
+/**
+ * The /teams embedded builder assistant (signed-in only, keyed `acct:<id>` —
+ * there is no guest tier for this route). The request cap is tighter than
+ * SIGNED_IN_CONFIG (builder turns are tool-heavy), and the input cap covers
+ * only the typed message — the draft rides in a separate body field and is
+ * bounded by its own Zod shape (≤ 6 strict members), not this limit.
+ */
+export const TEAMS_ASSISTANT_CONFIG: RateLimitConfig = {
+  maxInputLength: 2_000,
+  maxRequestsPerWindow: 30,
+  windowMs: 60_000,
+};
+
 // ---------------------------------------------------------------------------
 // Return shape
 // ---------------------------------------------------------------------------
