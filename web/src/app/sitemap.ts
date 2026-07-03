@@ -23,6 +23,63 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
       { url: `${SITE_ORIGIN}/privacy`, changeFrequency: "yearly", priority: 0.2 },
     ];
   }
-  // TODO(reference-pages unit): shards 1–4 — entity URLs via dynamic-imported repos.
-  return [];
+
+  // Shards 1–4 read the Postgres index. Both imports are dynamic and stay
+  // INSIDE the function body — never top-level — so `next build`'s static
+  // evaluation never touches @/data/db (server-only + a live DATABASE_URL) or
+  // @/env (throws on a missing XAI_API_KEY); see CLAUDE.md's env-throw gotcha.
+  // We call the *Uncached loaders (the same ones the /pokedex, /moves,
+  // /abilities, /items index pages assemble their rows from) rather than
+  // reimplementing repo calls, so a shard's URL set can never drift from what
+  // its index page actually renders. A missing/unbuilt index is a genuine 500
+  // for these shards, NOT an empty array: the loaders throw `index_unavailable`
+  // in that case and we deliberately let it propagate here so a crawler
+  // retries instead of caching an empty sitemap as "the site has zero
+  // entities."
+  const { db } = await import("@/data/db");
+  const {
+    loadPokedexIndexUncached,
+    loadMovesIndexUncached,
+    loadAbilitiesIndexUncached,
+    loadItemsIndexUncached,
+    referenceLastModifiedUncached,
+  } = await import("@/data/reference-pages");
+
+  const lastModified = (await referenceLastModifiedUncached(db)) ?? undefined;
+
+  if (id === 1) {
+    const { rows, extras } = await loadPokedexIndexUncached(db);
+    return [...rows, ...extras].map((r) => ({
+      url: `${SITE_ORIGIN}/pokedex/${r.slug}`,
+      ...(lastModified ? { lastModified } : {}),
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    }));
+  }
+  if (id === 2) {
+    const { rows } = await loadMovesIndexUncached(db);
+    return rows.map((r) => ({
+      url: `${SITE_ORIGIN}/moves/${r.slug}`,
+      ...(lastModified ? { lastModified } : {}),
+      changeFrequency: "monthly" as const,
+      priority: 0.5,
+    }));
+  }
+  if (id === 3) {
+    const { rows } = await loadAbilitiesIndexUncached(db);
+    return rows.map((r) => ({
+      url: `${SITE_ORIGIN}/abilities/${r.slug}`,
+      ...(lastModified ? { lastModified } : {}),
+      changeFrequency: "monthly" as const,
+      priority: 0.5,
+    }));
+  }
+  // id === 4
+  const { rows } = await loadItemsIndexUncached(db);
+  return rows.map((r) => ({
+    url: `${SITE_ORIGIN}/items/${r.slug}`,
+    ...(lastModified ? { lastModified } : {}),
+    changeFrequency: "monthly" as const,
+    priority: 0.5,
+  }));
 }

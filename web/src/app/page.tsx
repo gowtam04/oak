@@ -129,6 +129,21 @@ export default function Home() {
     }
   }, []);
 
+  // Reference-page CTA prefill (B4): a `?q=` param (from an AskOakCta link)
+  // seeds the composer once, then is stripped from the URL so a reload doesn't
+  // re-prefill and the shared link stays clean. Runs once on mount.
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get("q");
+      if (q) {
+        setPrefill({ text: q });
+        history.replaceState(null, "", window.location.pathname);
+      }
+    } catch {
+      /* URL/history unavailable — no prefill, no harm */
+    }
+  }, []);
+
   // History-sidebar collapsed state. Default expanded so the first render is
   // deterministic (the sidebar + its toggle are both gated on `auth.signedIn`,
   // which only flips after `fetchMe()` resolves post-mount, so no SSR markup
