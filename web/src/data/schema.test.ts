@@ -152,7 +152,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 14 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items)", async () => {
+  it("creates all 19 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
@@ -177,10 +177,17 @@ describe("Drizzle migration — table creation", () => {
         "auth_event",
         // Champions item availability (operator-curated) — added by the 0007 migration.
         "champions_item_exclusion",
+        // Global natdex warehouse (Oak v2, NOT format-scoped) — added by the 0008 migration.
+        "natdex_species",
+        "natdex_machines",
+        "natdex_moves",
+        "classic_encounters",
+        "pmd_recruits",
       ]),
     );
-    // Exactly 14 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items).
-    expect(tables).toHaveLength(14);
+    // Exactly 19 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
+    // + 1 champions-items + 5 natdex warehouse).
+    expect(tables).toHaveLength(19);
   });
 
   it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {
