@@ -11,7 +11,7 @@
  *      `buildSystemSegments`, and the provider-owned opaque transcript (prior
  *      in-session `history` then the current `message`). The provider-neutral
  *      tool defs are built once at module load.
- *   2. Loop ≤ 10 iterations. The provider opens a streaming turn; the loop reads
+ *   2. Loop ≤ MAX_ITERATIONS times. The provider opens a streaming turn; the loop reads
  *      NORMALIZED stream events, feeding the submit_answer arg-JSON into the
  *      AnswerMarkdownExtractor for token-by-token deltas. (Claude uses adaptive
  *      thinking + tool_choice "auto" — the Sonnet-4.6 forced-tool_choice-400
@@ -66,7 +66,7 @@ import type {
 import type { OakDb } from "@/data/db";
 import { basisForFormat, formatForMode } from "@/data/formats";
 import {
-  validateTeam,
+  validateTeamDetailed,
   isHardViolation,
   type TeamWarning,
 } from "@/server/teams/validate-team";
@@ -84,8 +84,17 @@ export type { AnthropicClientLike, MessageStreamLike };
 // prompt).
 // ---------------------------------------------------------------------------
 
-/** Hard cap on model turns per user message (integration.md / D-loop). */
-export const MAX_ITERATIONS = 14;
+/**
+ * Hard cap on model turns per user message (integration.md / D-loop).
+ *
+ * Raised from 14 to 20 for the T17 `get_learnset` tool (B-13): an honest team
+ * build now makes a legitimate per-member learnset read (6 members → ~6 extra
+ * tool calls) on top of normal discovery, and Grok makes ~1 tool call per
+ * iteration — the old cap made a correct build hit the submit nudge mid-gathering
+ * and give up. Ordinary turns terminate at 2–6 iterations on their own, so the
+ * higher ceiling costs nothing for non-build turns; it's only a backstop.
+ */
+export const MAX_ITERATIONS = 20;
 
 /** Re-emit budget when a `submit_answer` payload fails schema validation. */
 export const MAX_SUBMIT_RETRIES = 2;
@@ -142,11 +151,14 @@ const SUBMIT_NUDGE =
   "enough information to answer, call submit_answer NOW with what you have — " +
   "do not gather or recompute more data. If you genuinely cannot answer, call " +
   "submit_answer with an insufficient_data payload explaining what's missing. " +
+  "EXCEPTION: if the user asked you to BUILD something (e.g. a team), do NOT " +
+  "report insufficient_data — submit your best COMPLETE attempt instead; the " +
+  "server will tell you exactly what to fix if anything is illegal. " +
   "Either way, submit_answer on your next turn.";
 
 // ---------------------------------------------------------------------------
-// Provider-neutral tool definitions (T1..T16, including the team tools get_team
-// and list_teams). `name` / `parameters` come straight from the tool layer
+// Provider-neutral tool definitions (T1..T17, including the team tools get_team,
+// list_teams and get_learnset). `name` / `parameters` come straight from the tool layer
 // (schemas.ts is the single source); built once and never reordered between
 // turns (reordering would invalidate the prompt cache). Each provider adapter
 // maps these to its own tool shape (Anthropic input_schema / OpenAI function).
@@ -180,6 +192,7 @@ const PROGRESS_LABELS: Record<string, string> = {
   get_encounters: "🗺️ Checking where to find it…",
   get_usage_stats: "📈 Checking live usage…",
   list_teams: "📋 Finding your teams…",
+  get_learnset: "📖 Checking the learnset…",
 };
 
 /** The generic per-tool label, used as the fallback when args are unusable. */
@@ -319,6 +332,10 @@ export function describeToolCall(tool: string, input: unknown): string {
       if (name && fmt) return `📈 Checking ${name}’s live ${fmt} usage…`;
       if (name) return `📈 Checking ${name}’s live usage…`;
       return base;
+    }
+    case "get_learnset": {
+      const name = titleizeSlug(obj.name);
+      return name ? `📖 Checking ${name}’s learnset…` : base;
     }
     case "submit_answer":
       return "✍️ Composing the answer…";
@@ -936,13 +953,19 @@ export async function runWithProvider(
           // one. Softer per-slot warnings (EV/IV caps, `incomplete`) ride through
           // as badges and never block.
           const pt = parsed.data.proposed_team;
-          const teamWarnings = pt
-            ? await validateTeam(
+          const format = formatForMode(ctx.mode);
+          const validation = pt
+            ? await validateTeamDetailed(
                 pt.members,
-                formatForMode(ctx.mode),
+                format,
                 ctx.db as unknown as OakDb,
               )
-            : [];
+            : {
+                warnings: [] as TeamWarning[],
+                legalMoves: new Map<string, string[]>(),
+                legalAbilities: new Map<string, string[]>(),
+              };
+          const teamWarnings = validation.warnings;
           const hasImages = (ctx.images?.length ?? 0) > 0;
           const hardViolations = teamWarnings.filter(
             (w) =>
@@ -966,16 +989,48 @@ export async function runWithProvider(
               error: "proposed_team_illegal",
             });
             // Each warning message is already specific (names the species, move,
-            // item, or clashing slots). Enumerate them, then a rebuild directive.
+            // item, or clashing slots). Enumerate them, then — so the model stops
+            // swapping one illegal guess for another — tell it what IS legal for
+            // each implicated species (B-13), then a rebuild directive.
             const issues = hardViolations.map((w) => w.message).join(" ");
+            const speciesAt = (slot: number | undefined): string | null =>
+              slot === undefined ? null : pt?.members[slot]?.species ?? null;
+
+            // Distinct species with an illegal MOVE → list their legal moves.
+            const moveSpecies = new Set<string>();
+            for (const w of hardViolations) {
+              if (w.code !== "move_not_in_learnset") continue;
+              const sp = speciesAt(w.slot);
+              if (sp) moveSpecies.add(sp);
+            }
+            const legalMoveLines = [...moveSpecies].map((sp) => {
+              const moves = validation.legalMoves.get(sp) ?? [];
+              return `Legal moves for ${sp} in ${format}: ${moves.join(", ")}.`;
+            });
+
+            // Distinct species with an illegal ABILITY → list their legal abilities.
+            const abilitySpecies = new Set<string>();
+            for (const w of hardViolations) {
+              if (w.code !== "ability_not_for_species") continue;
+              const sp = speciesAt(w.slot);
+              if (sp) abilitySpecies.add(sp);
+            }
+            const legalAbilityLines = [...abilitySpecies].map((sp) => {
+              const abilities = validation.legalAbilities.get(sp) ?? [];
+              return `Legal abilities for ${sp}: ${abilities.join(", ")}.`;
+            });
+
             const content =
-              `Your proposed_team is not legal for ${formatForMode(ctx.mode)} and ` +
-              `was rejected: ${issues} Rebuild it so every member is legal AND ` +
-              `complete — replace the offending moves, abilities, or items; give ` +
-              `every battle-ready member a held item; and make sure no two members ` +
-              `share a species or a held item — then call submit_answer again. If ` +
-              `unsure whether a species, move, or item is legal in this format, ` +
-              `verify it with resolve_entity or the pokedex tools first.`;
+              `Your proposed_team is not legal for ${format} and ` +
+              `was rejected: ${issues}` +
+              [...legalMoveLines, ...legalAbilityLines]
+                .map((line) => ` ${line}`)
+                .join("") +
+              ` Rebuild the team choosing ONLY from the legal moves listed above ` +
+              `(or call get_learnset for any other species), fix the other ` +
+              `violations — give every battle-ready member a held item and make ` +
+              `sure no two members share a species or a held item — and call ` +
+              `submit_answer again.`;
             toolResults.push({
               toolCallId: call.id,
               isError: true,

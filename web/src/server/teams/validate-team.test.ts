@@ -23,7 +23,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { OakDb } from "@/data/db";
 import type { StatSpread, TeamMember } from "@/data/teams/team-schema";
 
-import { validateTeam, type WarningCode } from "./validate-team";
+import {
+  validateTeam,
+  validateTeamDetailed,
+  type WarningCode,
+} from "./validate-team";
 import { createPgSchema, type PgFixture } from "../../../test/support/pg";
 
 const SV = "scarlet-violet" as const;
@@ -354,6 +358,49 @@ describe("validateTeam", () => {
       );
       expect(codes(warnings)).toContain("incomplete");
       expect(codes(warnings)).not.toContain("item_missing");
+    });
+  });
+
+  describe("validateTeamDetailed (B-13) — warnings + per-species legal lists", () => {
+    it("returns warnings identical to validateTeam for the same input", async () => {
+      const team = [
+        legalGarchomp({
+          ability: "intimidate", // illegal ability
+          moves: ["earthquake", "psychic", "fire-fang", "trick-room"], // 2 illegal moves
+        }),
+      ];
+      const flat = await validateTeam(team, SV, db);
+      const detailed = await validateTeamDetailed(team, SV, db);
+      expect(detailed.warnings).toEqual(flat);
+    });
+
+    it("populates legalMoves + legalAbilities for a found species", async () => {
+      const { legalMoves, legalAbilities } = await validateTeamDetailed(
+        [legalGarchomp()],
+        SV,
+        db,
+      );
+      // Slug-sorted move slugs from the learnset Set.
+      expect(legalMoves.get("garchomp")).toEqual([
+        "dragon-claw",
+        "earthquake",
+        "fire-fang",
+      ]);
+      // Non-null ability slots (slot1 + hidden; slot2 is null in the fixture).
+      expect(legalAbilities.get("garchomp")).toEqual([
+        "sand-veil",
+        "rough-skin",
+      ]);
+    });
+
+    it("has no entry for an illegal species", async () => {
+      const { legalMoves, legalAbilities } = await validateTeamDetailed(
+        [legalGarchomp({ species: "missingno" })],
+        SV,
+        db,
+      );
+      expect(legalMoves.has("missingno")).toBe(false);
+      expect(legalAbilities.has("missingno")).toBe(false);
     });
   });
 

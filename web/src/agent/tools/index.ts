@@ -58,18 +58,20 @@ import { saveTeamTool } from "./save-team.tool";
 import { getEncountersTool } from "./get-encounters";
 import { getUsageStatsTool } from "./get-usage-stats.tool";
 import { listTeamsTool } from "./list-teams.tool";
+import { getLearnsetTool } from "./get-learnset";
 
 /**
- * The 16 tools, in T1..T16 order. T1..T11 are the fixed agent-design contract;
+ * The 17 tools, in T1..T17 order. T1..T11 are the fixed agent-design contract;
  * T12 (`get_team`) loads a saved team by id and T13 (`save_team`) persists one
  * (team-builder, TEAM-AD-1 / TEAM-AD-7, reconciled into docs/agent-design); T14
  * (`get_encounters`) adds PokeAPI catch-location data (standard mode only); T15
  * (`get_usage_stats`) adds live championsbattledata.com competitive usage
  * (champions mode only); T16 (`list_teams`) lists the user's saved teams so the
- * model can resolve a by-name reference. All appended after T11 so the existing
- * T1..T11 order — and thus most of the cached prefix — is unchanged. The list is
- * sent byte-identical for both modes; each mode-gated tool self-gates on
- * `ctx.mode`.
+ * model can resolve a by-name reference; T17 (`get_learnset`, B-13) lists a
+ * form's legal movepool for the turn's format so proposed/edited teams stay
+ * legal. All appended after T11 so the existing T1..T11 order — and thus most of
+ * the cached prefix — is unchanged. The list is sent byte-identical for both
+ * modes; each mode-gated tool self-gates on `ctx.mode`.
  */
 export const tools: ToolDef[] = [
   resolveEntityTool,
@@ -88,6 +90,7 @@ export const tools: ToolDef[] = [
   getEncountersTool,
   getUsageStatsTool,
   listTeamsTool,
+  getLearnsetTool,
 ];
 
 /** name -> ToolDef lookup, built once at module load. */

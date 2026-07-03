@@ -100,6 +100,13 @@ reasoning correctly on top of it and being transparent about how you got there.
 - For a single Pokémon's profile, use get_pokemon. For move/ability/type/
   evolution/item details, use the matching get_* tool. Fetch only what the answer
   needs (efficient API use matters).
+- To find every move a SPECIFIC Pokémon can legally learn — "what moves can/does
+  X learn" — call get_learnset({ name }) instead of reverse-checking
+  query_pokedex one move at a time; it returns the complete list with each
+  move's learn method (level-up/machine/tutor) for the active scope, and it's
+  cheaper too. query_pokedex's \`moves\` filter remains the right tool for the
+  OPPOSITE question — which Pokémon learn move X (or the intersection of
+  several moves).
 - For WHERE / HOW to obtain or catch a Pokémon, use get_encounters({ name }) —
   it returns wild encounters (grass/surf/fishing) plus gifts, gift-eggs, static
   and in-game trades, grouped by game. MANDATORY TRANSPARENCY: ${info.encountersNote}
@@ -190,10 +197,26 @@ When the user asks you to BUILD or suggest a team (or changes to one), put the
 result in the \`proposed_team\` field — a name, the format, and the members array.
 EVERY member MUST be legal in the active format: use ONLY Pokémon in THIS format's
 roster, each with an ability/item that species can actually have and moves it can
-learn. If you are not certain a Pokémon (or a specific form/Mega) exists in this
-format, verify it with resolve_entity BEFORE adding it — proposing a Pokémon that
-isn't in the format (e.g. a Pokémon present in Scarlet/Violet but absent from
-Champions) is a hard error the user WILL catch, and the server rejects it. Two
+learn. Build it with EXACTLY this call sequence:
+1. ANCHOR — get_pokemon + get_learnset for the Pokémon the user named (resolve_entity
+   first ONLY if the spelling is uncertain).
+2. POOL — ONE query_pokedex call with filters that capture the archetype you want
+   (type/ability/stat filters, a generous limit): every species it returns IS in
+   this format's roster. That result is your candidate pool. Do NOT confirm
+   candidates one-by-one with resolve_entity — a name your memory suggests may
+   simply not exist in this format, so the pool is the ground truth, not your
+   memory.
+3. PICK — choose the remaining five members from that pool.
+4. LEARNSETS — call get_learnset for those five members; batch several calls in
+   ONE turn where you can.
+5. BUILD — four moves per member chosen ONLY from its get_learnset result, a held
+   item per member, no duplicate species or items, the full EV budget.
+6. SUBMIT the COMPLETE team. If the server rejects it, fix ONLY the flagged slots
+   using the legal move list embedded in the rejection and re-submit immediately.
+This sequence fits comfortably inside your tool-call budget. NEVER end a build
+request in status "insufficient_data" — if you're running low on tool calls at
+any point, skip remaining verification and go straight to step 6 with your best
+judgment. Two
 team-level clauses are equally hard: no two members may be the same species (the
 species clause) and no two members may hold the same item (the item clause) —
 before finalizing, scan your members array for either duplicate and swap one out
@@ -207,7 +230,9 @@ member has an illegal move, ability, or item, if two members share a species
 (matched by Pokédex number — different formes of the SAME species clash, e.g. two
 Basculegion) or a held item, or if a fully-built member (four moves) has no held
 item. Do NOT ship a team you already know is illegal with just a warning note —
-self-correct and re-submit. (An item may stay null ONLY when you're reading a team
+self-correct and re-submit. When a rejection flags an illegal move, it embeds
+that species' legal move list — use it to fix the move on your next submit
+instead of guessing again. (An item may stay null ONLY when you're reading a team
 off an attached image and it's genuinely illegible; flag that as uncertainty.)
 Still write the prose summary in \`answer_markdown\` and your reasoning/citations as usual.
 When the user APPROVES a team you proposed earlier in this conversation — "looks

@@ -30,6 +30,15 @@ model can reason about**, never raw exceptions.
 > The `conversation.active_team_id` column and the `active_team_id` request/PATCH
 > field were dropped with it.
 
+> `get_learnset` (T17, B-13) was added last, after `get_usage_stats` (T15) and
+> `list_teams` (T16), for the same reason `get_encounters` was: forward
+> visibility the agent was missing. The agent kept proposing teams with moves
+> that are illegal in the active format (Champions movesets especially — its
+> curated learnsets genuinely differ from standard VGC) and then burned its
+> iteration budget re-guessing. `get_learnset` gives the model the species'
+> complete legal move list up front, and the server's rejection feedback on an
+> illegal `proposed_team` now embeds that same list — see T17 below.
+
 Conventions:
 
 - Names accepted by detail tools are canonical PokeAPI slugs (`will-o-wisp`,
@@ -832,6 +841,52 @@ per-game model means a future re-crawl auto-absorbs Gen 9 if PokeAPI fills it in
 
 ---
 
+## T17 — `get_learnset`
+
+_(Added by B-13 — fixing illegal proposed teams.)_
+
+**Purpose:** give the agent forward visibility into a Pokémon's COMPLETE legal
+moveset in the active data scope, so it stops proposing teams with moves that
+are illegal in the current format instead of discovering the problem only after
+the server rejects `proposed_team`. This matters most in Champions mode, whose
+curated movesets genuinely differ from standard VGC / other generations (e.g.
+Incineroar has no Knock Off or U-turn in Champions even though it does in
+Scarlet/Violet) — building a team from the model's memory of a species' moveset
+elsewhere WILL produce illegal moves. The prompt (all three bodies — parity is
+non-negotiable) routes "what moves can/does X learn" questions here instead of
+reverse-checking `query_pokedex`'s `moves` filter one move at a time, and directs
+the model to call it for EVERY team member it's giving moves to before finalizing
+a `proposed_team`.
+
+**Input:** `{ name: string }` — a Pokémon form name/slug (resolve_entity first if
+unsure; a Mega uses its own `-mega` slug like any other tool).
+
+**Output (hit):** `{ found: true, pokemon, format, count, moves: [{ slug, method
+}] }` — every move the species can legally learn in the active format, where
+`method` is `"level-up" | "machine" | "tutor"`. `count` is `moves.length`
+(convenience for the model, no separate arithmetic needed).
+
+**Misses:** `{ found: false, suggestions }` (unknown/ambiguous name — offer the
+closest match, same convention as every other detail tool). Never throws
+in-domain.
+
+**Data source:** reads the same `learnset` table (`learnset-repo.ts`
+`movesForPokemon`) the server-side team validator (`validateTeam`,
+`move_not_in_learnset`) reads to compute its rejection warnings — so the tool's
+answer and the validator's verdict agree **by construction**; there is no second
+learnset representation that could drift out of sync. This is also why the
+rejection feedback on an illegal `proposed_team` can now embed the species'
+legal move list directly (read straight from this same table) — the model gets a
+targeted fix instead of a bare "illegal move" flag, so a re-emit converges in one
+round-trip instead of the model re-guessing blind.
+
+**Side effects:** Read-only. Idempotent.
+
+**Cache-prefix note:** appended last (after T15/T16), so the existing T1–T16
+tool order — and thus the prompt-cached prefix — is unchanged.
+
+---
+
 ## Tool-existence status
 
 | Tool                                                                        | Exists? | Build note                                                 |
@@ -846,6 +901,7 @@ per-game model means a future re-crawl auto-absorbs Gen 9 if PokeAPI fills it in
 | list_teams                                                                  | ✅      | Built by team-builder; the by-name pick-list — the account's saved teams (names + Pokémon) for the turn's format. |
 | save_team                                                                   | ✅      | Built by team-builder (TEAM-AD-7); the one write tool — saves server-bound `ctx.proposedTeam` on approval. |
 | get_encounters                                                              | ✅      | Catch-location / obtain-method data from a committed PokeAPI snapshot (standard mode only; Gen 1–8 coverage). |
+| get_learnset                                                                | ✅      | Added by B-13; a species' complete legal moveset in the active scope, reading the same `learnset` table the team validator checks against. |
 
 (The ❌ marks are the original agent-design backlog state; `get_team`,
 `list_teams`, and `save_team` are implemented as part of the team-builder

@@ -841,6 +841,41 @@ export type SaveTeamOutput =
     };
 
 // ===========================================================================
+// T17 — get_learnset (every move a form can legally learn in the active scope)
+// ===========================================================================
+
+// Single required `name` — the Pokémon form slug/name (same convention as
+// get_pokemon). Scope is the turn's format (server-controlled like `mode`), so
+// the model has no parameter to widen it.
+export const getLearnsetInputSchema = z.object({
+  name: z.string(),
+});
+
+export type GetLearnsetInput = z.infer<typeof getLearnsetInputSchema>;
+
+/** One learnable move in the `get_learnset` result: its slug and learn method. */
+export interface LearnsetEntry {
+  slug: string;
+  /** "level-up" | "machine" | "tutor"; null when ingest left it unset. */
+  method: string | null;
+}
+
+/**
+ * Output of `get_learnset`: on a hit, the canonical species slug, active format,
+ * move count and every legal move (slug + method, slug-sorted); else the generic
+ * not-found miss shape (BR-9). Never throws in-domain (tool contract).
+ */
+export type GetLearnsetOutput =
+  | {
+      found: true;
+      pokemon: string;
+      format: string;
+      count: number;
+      moves: LearnsetEntry[];
+    }
+  | { found: false; suggestions: string[] };
+
+// ===========================================================================
 // Inferred TypeScript types
 // ===========================================================================
 
@@ -963,13 +998,15 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   get_usage_stats: toJsonSchema(getUsageStatsInputSchema),
   // T16 — the user's saved teams for the turn's format (the by-name pick-list).
   list_teams: toJsonSchema(listTeamsInputSchema),
+  // T17 — every legal move a form can learn in the turn's format (team legality).
+  get_learnset: toJsonSchema(getLearnsetInputSchema),
 };
 
 /** The generated `submit_answer` (OakAnswer) JSON Schema. */
 export const oakAnswerJsonSchema: JsonSchema =
   toolInputJsonSchemas.submit_answer;
 
-/** Canonical tool name list (T1..T16), in order. */
+/** Canonical tool name list (T1..T17), in order. */
 export const TOOL_NAMES = [
   "resolve_entity",
   "query_pokedex",
@@ -987,6 +1024,7 @@ export const TOOL_NAMES = [
   "get_encounters",
   "get_usage_stats",
   "list_teams",
+  "get_learnset",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

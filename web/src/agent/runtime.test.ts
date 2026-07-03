@@ -51,13 +51,28 @@ vi.mock("@/agent/enrich-answer", () => ({
 }));
 
 // Mock the roster validator so the proposed_team gate is deterministic without a
-// Postgres pool. Returns a single HARD item-clause violation → the runtime keeps
-// rejecting the proposal (proposed_team_illegal) up to its budget.
+// Postgres pool. Returns TWO hard violations — an illegal move on garchomp (slot 1)
+// and an item clause → the runtime keeps rejecting the proposal
+// (proposed_team_illegal) up to its budget. `validateTeamDetailed` also surfaces
+// the per-species legal-choice lists the self-healing feedback quotes back (B-13).
 vi.mock("@/server/teams/validate-team", () => ({
-  validateTeam: vi.fn(async () => [
-    { code: "duplicate_item", message: 'Item clause: "life-orb" in slots 1, 2.' },
-  ]),
-  isHardViolation: (w: { code: string }) => w.code === "duplicate_item",
+  validateTeamDetailed: vi.fn(async () => ({
+    warnings: [
+      {
+        code: "move_not_in_learnset",
+        slot: 1,
+        field: "moves[0]",
+        message: 'Move "thunderbolt" is not in garchomp\'s learnset for this format.',
+      },
+      { code: "duplicate_item", message: 'Item clause: "life-orb" in slots 1, 2.' },
+    ],
+    legalMoves: new Map([
+      ["garchomp", ["dragon-claw", "earthquake", "fire-fang"]],
+    ]),
+    legalAbilities: new Map([["garchomp", ["sand-veil", "rough-skin"]]]),
+  })),
+  isHardViolation: (w: { code: string }) =>
+    w.code === "duplicate_item" || w.code === "move_not_in_learnset",
 }));
 
 import {
@@ -517,6 +532,40 @@ describe("orchestration fallbacks", () => {
     // …and the top-level caveat explains why, replacing the raw give-up code.
     expect(result.uncertainty_flags).toContain("team_may_have_illegal_slots");
     expect(result.uncertainty_flags).not.toContain("max_iterations_reached");
+  });
+
+  it("feeds the rejected build the legal moves for the offending species + points at get_learnset (B-13)", async () => {
+    // First submit builds an illegal team → rejected; the follow-up call carries
+    // the self-healing tool_result. Two more submits exhaust the retry budget so
+    // the run terminates cleanly (accept-with-warnings on the third).
+    const { client, snapshots } = scriptedClient([
+      message([toolUse("submit_answer", teamAnswer, "s1")]),
+      message([toolUse("submit_answer", teamAnswer, "s2")]),
+      message([toolUse("submit_answer", teamAnswer, "s3")]),
+    ]);
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    await runOakWith(client, "build me a doubles team", [], ctx);
+
+    // The rejection rides on the NEXT call's trailing user message as an error
+    // tool_result for the first submit.
+    const secondCallMessages = snapshots[1].messages;
+    const lastUser = secondCallMessages[secondCallMessages.length - 1];
+    expect(lastUser.content[0]).toMatchObject({
+      type: "tool_result",
+      tool_use_id: "s1",
+      is_error: true,
+    });
+    const feedback: string = lastUser.content[0].content;
+    // Enumerates the violation…
+    expect(feedback).toContain("not legal");
+    // …then names what IS legal for the implicated species (the fix for the
+    // "swap one illegal guess for another" loop)…
+    expect(feedback).toContain(
+      "Legal moves for garchomp in scarlet-violet: dragon-claw, earthquake, fire-fang.",
+    );
+    // …and routes further move verification at the new tool.
+    expect(feedback).toContain("get_learnset");
   });
 
   it("nudges the model to submit once, SUBMIT_NUDGE_REMAINING iterations before the cap", async () => {

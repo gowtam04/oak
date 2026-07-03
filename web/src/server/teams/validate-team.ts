@@ -70,15 +70,48 @@ function statSum(spread: StatSpread): number {
 }
 
 /**
+ * Detailed result of {@link validateTeamDetailed}: the same advisory warnings
+ * `validateTeam` returns, plus the per-species legal-choice lists gathered along
+ * the way. `legalMoves` / `legalAbilities` are keyed by species slug and
+ * populated ONLY for species found in the format roster (an illegal species has
+ * no entry). Both are exposed so the runtime can turn a rejected proposed_team
+ * into self-healing feedback ("here is what IS legal") without re-reading the
+ * index (B-13).
+ */
+export interface DetailedTeamValidation {
+  warnings: TeamWarning[];
+  /** species slug -> sorted legal move slugs for the format (from the learnset). */
+  legalMoves: Map<string, string[]>;
+  /** species slug -> legal ability slugs (slot1/slot2/hidden, non-null). */
+  legalAbilities: Map<string, string[]>;
+}
+
+/**
  * Validate a team's members against the active `format`. Never throws; returns
  * `[]` when clean. Per-slot warnings come first (slot order), then team-level
- * clauses.
+ * clauses. Thin wrapper over {@link validateTeamDetailed} — the single
+ * implementation — so existing callers (the save path) keep the flat
+ * `TeamWarning[]` signature unchanged.
  */
 export async function validateTeam(
   members: TeamMember[],
   format: Format,
   db: OakDb,
 ): Promise<TeamWarning[]> {
+  return (await validateTeamDetailed(members, format, db)).warnings;
+}
+
+/**
+ * Validate a team AND surface the per-species legal move / ability lists gathered
+ * during the checks (B-13). Behaviourally identical to {@link validateTeam} for
+ * `warnings`; the added maps let the runtime tell the model what IS legal when it
+ * rejects an illegal proposed_team. Never throws (advisory, like validateTeam).
+ */
+export async function validateTeamDetailed(
+  members: TeamMember[],
+  format: Format,
+  db: OakDb,
+): Promise<DetailedTeamValidation> {
   const warnings: TeamWarning[] = [];
   const { total: EV_TOTAL_MAX, perStat: EV_STAT_MAX } = evCaps(format);
 
@@ -138,6 +171,26 @@ export async function validateTeam(
         learnsets.set(slug, null);
       }
     }
+  }
+
+  // Per-species legal-choice lists for self-healing rejection feedback (B-13),
+  // populated only for species found in the roster. Moves come from the learnset
+  // Set (sorted, deterministic; [] when the read failed); abilities from the
+  // profile's non-null slots.
+  const legalMoves = new Map<string, string[]>();
+  const legalAbilities = new Map<string, string[]>();
+  for (const [slug, profile] of profiles) {
+    if (!profile.found) continue;
+    const learnset = learnsets.get(slug);
+    legalMoves.set(slug, learnset ? [...learnset].sort() : []);
+    legalAbilities.set(
+      slug,
+      [
+        profile.abilities.slot1,
+        profile.abilities.slot2,
+        profile.abilities.hidden,
+      ].filter((a): a is string => Boolean(a)),
+    );
   }
 
   // ---- Per-slot checks ----
@@ -289,7 +342,7 @@ export async function validateTeam(
     });
   }
 
-  return warnings;
+  return { warnings, legalMoves, legalAbilities };
 }
 
 /** A repeated non-null value and the (0-based) slots it occupies. */

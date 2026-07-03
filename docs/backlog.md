@@ -630,10 +630,42 @@ path, the encounters answer/prompt guidance.
 > team, never decline for uncertainty"); (3) **friendly caveat labels**
 > (`answer-card/uncertainty-labels.ts`) so give-up codes read as "Couldn't
 > complete this answer". Verified live: the reported query now returns a complete,
-> fully-legal team. **Remaining (separate follow-up):** the Champions `learnset`
-> is ~99.9% `machine`-method with only 16 `level-up` rows across the whole roster
-> (e.g. Incineroar lacks Knock Off / U-turn it has in SV/gen-7) — verify whether
-> this is intended curation or an ingest gap in `gen-provider.ts` `getLearnset`.
+> fully-legal team.
+>
+> **Follow-up question ANSWERED:** the Champions `learnset` skewing ~99.9%
+> `machine`-method (only 16 `level-up` rows across the whole roster — e.g.
+> Incineroar lacking Knock Off / U-turn it has in SV/gen-7) is **intended
+> curation, faithfully ingested — not an ingest gap.** Probed `@pkmn/mods/champions`
+> directly: Incineroar's Champions learnset genuinely lacks `knockoff`/`uturn`
+> while carrying `fakeout`/`partingshot`/`darkestlariat` (all sourced `9M` —
+> machine, not level-up), matching what the index stores. See B-14 for the full
+> characterization of the gap.
+>
+> **Permanent fix landed:** three complementary pieces so an illegal proposal is
+> rare AND cheap to correct when it happens: (1) **T17 `get_learnset`** — a new
+> read tool giving the agent forward visibility into a species' complete legal
+> moveset in the active format, so it can check BEFORE proposing instead of
+> discovering the problem only on rejection (`docs/agent-design/tools.md` T17);
+> (2) **self-healing rejection feedback** — the server's rejection of an illegal
+> `proposed_team` now embeds the offending species' legal move list, so a
+> re-emit converges in one round-trip instead of the model re-guessing blind;
+> (3) **prompt guidance in all three bodies** (`domain.ts`, `champions.ts`,
+> `domain-grok.ts`, parity verified) — tool-routing awareness of `get_learnset`
+> plus a hard rule to call it for every team member before finalizing moves, with
+> a sharpened Champions-specific warning that its movesets differ substantially
+> from standard VGC / other generations and building from memory WILL produce
+> illegal movesets; and (4) — added after live verification showed honest builds
+> exhausting the old loop budget and giving up with `insufficient_data` — a
+> numbered **team-build playbook** in every body (pool-first discovery via ONE
+> `query_pokedex`, batched `get_learnset` for all members, never end a build in
+> `insufficient_data`) plus runtime headroom: `MAX_ITERATIONS` 14 → 20 (a legal
+> 6-member build legitimately needs ~6 `get_learnset` reads Grok makes one per
+> iteration) and a build-aware `SUBMIT_NUDGE` that steers a low-budget build to
+> a best-effort complete submit instead of the `insufficient_data` escape hatch.
+> Verified live end-to-end: the original repro query now returns a complete team
+> whose 24 moves / 6 items / 6 species all check legal against the index, first
+> submit, no warnings. The earlier salvage fix (commit `cde0451`) remains in
+> place as a backstop for whatever still slips through.
 
 **Why:** When the agent proposes a team via the additive `proposed_team` answer
 field (B-2 / TEAM-US, BR-T8), it **sometimes proposes teams that are illegal** —

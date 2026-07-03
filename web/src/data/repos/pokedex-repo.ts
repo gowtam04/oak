@@ -393,8 +393,13 @@ export async function queryPokedex(
 // getPokemon — T3
 // ===========================================================================
 
-/** Lowercase + trim a user-supplied name into something close to a slug. */
-function normalizeName(name: string): string {
+/**
+ * Lowercase + trim a user-supplied name into something close to a slug. Exported
+ * so callers that need the SAME canonical id `getPokemon` matched on (e.g.
+ * get_learnset keying the learnset table) derive it identically, rather than
+ * re-implementing the rule.
+ */
+export function normalizeName(name: string): string {
   return name.trim().toLowerCase();
 }
 

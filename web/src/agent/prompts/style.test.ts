@@ -117,6 +117,27 @@ describe("Interpreting attached images — present in both modes and all styles"
   }
 });
 
+describe("get_learnset parity guard (B-13) — present in every body", () => {
+  // get_learnset (T17) must never silently drop out of one prompt body while
+  // staying in the others — pins the tool-awareness + team-building guidance
+  // added across the Markdown (Claude/OpenAI) and Grok-native bodies, both modes.
+  const cases: Array<{ label: string; provider: "anthropic" | "xai"; mode: "standard" | "champions" }> = [
+    { label: "standard Markdown body", provider: "anthropic", mode: "standard" },
+    { label: "champions Markdown body", provider: "anthropic", mode: "champions" },
+    { label: "standard Grok body", provider: "xai", mode: "standard" },
+    { label: "champions Grok body", provider: "xai", mode: "champions" },
+  ];
+
+  for (const { label, provider, mode } of cases) {
+    it(`mentions get_learnset in the ${label}`, () => {
+      const text = buildSystemSegments({ provider, mode })
+        .map((s) => s.text)
+        .join("\n");
+      expect(text).toContain("get_learnset");
+    });
+  }
+});
+
 describe("Grok 4.3 style — XML-sectioned native body", () => {
   const text = buildSystemSegments({ provider: "xai", mode: "standard" })
     .map((s) => s.text)
