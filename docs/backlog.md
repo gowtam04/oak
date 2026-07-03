@@ -612,3 +612,51 @@ active scope.
 path, the encounters answer/prompt guidance.
 
 **Depends on:** Generation-scope feature (BUILT).
+
+---
+
+## B-13 — Fix illegal proposed teams
+
+**Why:** When the agent proposes a team via the additive `proposed_team` answer
+field (B-2 / TEAM-US, BR-T8), it **sometimes proposes teams that are illegal** —
+e.g. a Pokémon with a move it can't learn in the active format, an ability/item it
+can't have, an out-of-format species, EV/IV spreads over the legal caps, or a
+species/item-clause violation. Team **validation today is warn-but-allow**
+(`validateTeam` → `TeamWarning[]`, never blocks a save) and runs on the *save* path
+in the Teams builder — it does **not** gate or correct what the **agent proposes**
+in chat. So an illegal proposal reaches the user unflagged, and applying it saves an
+illegal team (only warned about after the fact). This item is to investigate *why*
+the agent produces illegal proposals and fix it so proposals are legal (or at least
+explicitly flagged as illegal at proposal time).
+
+**Scope:**
+- Investigate the failure modes: reproduce illegal proposals and characterize them
+  (learnset vs. ability vs. item vs. EV/IV caps vs. species/item clause vs.
+  wrong-format species), and whether the agent is skipping the legality tools
+  (learnset/resolve) or reasoning past their output.
+- Decide the fix altitude — likely a combination of: (a) **prompt/tooling** guidance
+  so the agent verifies legality (learnset, ability, item, format) before emitting
+  `proposed_team`, in **both** `domain.ts`/`champions.ts` **and** `domain-grok.ts`
+  (parity is non-negotiable); and (b) **validating the proposal server-side** — run
+  the existing `validateTeam` over `proposed_team` in the runtime/route and either
+  surface the warnings inline with the proposal or have the agent self-correct
+  (re-emit) when the proposal is illegal.
+- Keep the contract intact: the agent still only **proposes**; it never writes a
+  team (BR-T8). Any server-side validation is additive and must not throw in-domain.
+
+**Open questions:**
+- Fix at proposal time (make the agent produce legal teams) vs. at render time
+  (surface legality warnings on the proposal so the user sees them before applying),
+  or both?
+- If the runtime validates `proposed_team`, does an illegal result trigger a bounded
+  re-emit (like the `OakAnswer` schema re-emit loop), or just annotate?
+- Are the current `validateTeam` legality checks (learnset/ability/item/clauses)
+  complete enough to trust as the gate, or do they have gaps that let illegal teams
+  through even on save?
+
+**Touches:** `src/agent/prompts/{domain,champions,domain-grok}.ts` (legality
+guidance), `src/agent/runtime.ts` (optional `proposed_team` validation on the
+answer path), `src/data/teams/*` (`validateTeam`), `src/agent/schemas.ts`
+(`proposed_team` shape), team-proposal rendering in `src/components/*`.
+
+**Depends on:** B-2 (team building — the `proposed_team` field and `validateTeam`).
