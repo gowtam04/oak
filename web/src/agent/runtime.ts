@@ -36,6 +36,7 @@
 import { dispatch, tools } from "@/agent/tools";
 import { buildSystemSegments } from "@/agent/prompts";
 import { MAX_TOKENS } from "@/agent/providers/constants";
+import type { ZodType } from "zod";
 import {
   AnthropicProvider,
   type AnthropicClientLike,
@@ -46,6 +47,7 @@ import type {
   LLMProvider,
   NormalizedUsage,
   ProviderToolDef,
+  SystemSegment,
   ToolResult,
 } from "@/agent/providers/types";
 import {
@@ -62,6 +64,8 @@ import type {
   OnAnswerStart,
   OnProgress,
   RunOak,
+  ToolDef,
+  ToolDispatch,
 } from "@/agent/types";
 import type { OakDb } from "@/data/db";
 import { basisForFormat, formatForMode } from "@/data/formats";
@@ -157,18 +161,20 @@ const SUBMIT_NUDGE =
   "Either way, submit_answer on your next turn.";
 
 // ---------------------------------------------------------------------------
-// Provider-neutral tool definitions (T1..T17, including the team tools get_team,
-// list_teams and get_learnset). `name` / `parameters` come straight from the tool layer
-// (schemas.ts is the single source); built once and never reordered between
-// turns (reordering would invalidate the prompt cache). Each provider adapter
-// maps these to its own tool shape (Anthropic input_schema / OpenAI function).
+// Provider-neutral tool definitions. `name` / `parameters` come straight from
+// the tool layer (schemas.ts is the single source); built from the run's hook
+// tool list (default: T1..T17) and never reordered between turns of a run
+// (reordering would invalidate the prompt cache). Each provider adapter maps
+// these to its own tool shape (Anthropic input_schema / OpenAI function).
 // ---------------------------------------------------------------------------
 
-const PROVIDER_TOOL_DEFS: ProviderToolDef[] = tools.map((tool) => ({
-  name: tool.name,
-  description: tool.description,
-  parameters: tool.inputSchema,
-}));
+function toProviderToolDefs(toolDefs: ToolDef[]): ProviderToolDef[] {
+  return toolDefs.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.inputSchema,
+  }));
+}
 
 // ---------------------------------------------------------------------------
 // Progress labels (integration.md § UI Consumer Contract — "stream tool-activity
@@ -193,6 +199,7 @@ const PROGRESS_LABELS: Record<string, string> = {
   get_usage_stats: "📈 Checking live usage…",
   list_teams: "📋 Finding your teams…",
   get_learnset: "📖 Checking the learnset…",
+  submit_builder_answer: "✍️ Composing the answer…",
 };
 
 /** The generic per-tool label, used as the fallback when args are unusable. */
@@ -682,7 +689,7 @@ function sessionIdOf(ctx: AgentContext): string {
 }
 
 /** Mutable accumulator for the per-turn trace, finalized in {@link finalize}. */
-interface TraceState {
+export interface TraceState {
   startedAt: number;
   /** The concrete API model id answering this turn (provider.apiModelId). */
   modelId: string;
@@ -730,6 +737,218 @@ function finalize(
 }
 
 // ---------------------------------------------------------------------------
+// Run hooks — the seam that makes the loop answer-contract-agnostic.
+//
+// The loop mechanics (transcript echo, streaming extraction, retry budgets,
+// nudges, tracing) are generic; everything OakAnswer-specific — the tool list,
+// the submit tool + schema, domain validation (team legality), enrichment, the
+// synthesized fallbacks, and finalization — is injected via AnswerRunHooks.
+// `runWithProvider` defaults to DEFAULT_OAK_HOOKS (the original behavior,
+// byte-for-byte); an alternate agent (e.g. the team-builder assistant) supplies
+// its own complete hooks object.
+// ---------------------------------------------------------------------------
+
+/**
+ * Verdict on a schema-VALID answer from {@link AnswerRunHooks.validateAnswer}.
+ *
+ * `ok: false` feeds `feedback` back to the model as an error tool_result (the
+ * loop counts the rejection and re-asks); `annotateBestEffort` is remembered
+ * with the rejected answer so a later give-up can salvage it (applied after
+ * enrichment). `ok: true` accepts; `annotate` is applied to the enriched answer
+ * before finalization (e.g. stamping server-authoritative team warnings).
+ */
+export type AnswerVerdict<TAnswer> =
+  | { ok: true; annotate?: (enriched: TAnswer) => void }
+  | {
+      ok: false;
+      feedback: string;
+      traceError: string;
+      annotateBestEffort?: (enriched: TAnswer) => void;
+    };
+
+/** Everything answer-contract-specific about one tool-loop run. */
+export interface AnswerRunHooks<TAnswer> {
+  /** Tools advertised to the model (the submit tool must be among them). */
+  tools: ToolDef[];
+  /**
+   * Dispatch for non-submit tool calls. MUST cover only the tools in `tools` —
+   * a dispatch built over a wider set would execute hallucinated calls to
+   * tools the model was never offered.
+   */
+  dispatch: ToolDispatch;
+  /** Name of the terminal answer tool (e.g. "submit_answer"). */
+  submitToolName: string;
+  /** Zod schema the submit payload must satisfy. */
+  answerSchema: ZodType<TAnswer>;
+  /** Provider-tuned system prompt for this run (loop-invariant). */
+  buildSystem: (
+    providerKind: LLMProvider["kind"],
+    ctx: AgentContext,
+  ) => SystemSegment[];
+  /**
+   * Domain validation of a schema-valid answer. `rejectionsSoFar` counts this
+   * run's prior `ok: false` verdicts so the hook owns its own retry budget
+   * (reject while under budget, accept-with-warnings once spent).
+   */
+  validateAnswer: (
+    answer: TAnswer,
+    ctx: AgentContext,
+    rejectionsSoFar: number,
+  ) => Promise<AnswerVerdict<TAnswer>>;
+  /** Post-accept enrichment (sprites/subjects). Omitted ⇒ identity. */
+  enrich?: (
+    answer: TAnswer,
+    ctx: AgentContext,
+    lookedUpProfiles: PokemonProfile[],
+  ) => Promise<TAnswer>;
+  /** Fallback answer when the turn can't complete (loop-max, invalid). */
+  synthesizeInsufficient: (reason: string, ctx: AgentContext) => TAnswer;
+  /** Wrap prose from a no-submit turn into a valid answer. */
+  synthesizeFromProse: (prose: string, ctx: AgentContext) => TAnswer;
+  /** Trace/log finalization. Omitted ⇒ answer returned unchanged. */
+  finalizeAnswer?: (
+    answer: TAnswer,
+    state: TraceState,
+    ctx: AgentContext,
+  ) => TAnswer;
+  /** Corrective user turn after a no-tool-call model turn. */
+  emptyTurnNudge: string;
+  /** One-shot wrap-up nudge near the iteration cap. */
+  submitNudge: string;
+}
+
+/**
+ * Stamp proposed-team warnings server-authoritatively (like saved_team):
+ * overwrite anything the model emitted. Only present when there IS a proposal
+ * with warnings; otherwise the key stays absent (clean proposal).
+ */
+function stampTeamWarnings(answer: OakAnswer, warnings: TeamWarning[]): void {
+  if (answer.proposed_team && warnings.length > 0) {
+    answer.proposed_team_warnings = warnings;
+  } else {
+    delete answer.proposed_team_warnings;
+  }
+}
+
+/**
+ * The OakAnswer domain validation: roster-validate a proposed team against the
+ * turn's ACTUAL format (server-controlled — never the model-emitted
+ * proposed_team.format, so the model can't dodge the check by mislabeling).
+ * validateTeam never throws. HARD format-illegalities (see
+ * HARD_VIOLATION_CODES) — an out-of-format species, an illegal
+ * move/ability/item, and the species (by Dex number) / item clauses — are fed
+ * back verbatim so the model rebuilds legally, up to
+ * MAX_PROPOSED_TEAM_RETRIES, then accept-with-warnings (warn-but-allow). We
+ * ALSO require a held item on every battle-ready member (`item_missing`) — but
+ * only for a BUILT team, not when the user attached an image: an import
+ * honestly reflects an obscured/unset item as null and shouldn't be forced to
+ * fabricate one. Softer per-slot warnings (EV/IV caps, `incomplete`) ride
+ * through as badges and never block.
+ */
+async function validateOakAnswer(
+  answer: OakAnswer,
+  ctx: AgentContext,
+  rejectionsSoFar: number,
+): Promise<AnswerVerdict<OakAnswer>> {
+  const pt = answer.proposed_team;
+  const format = formatForMode(ctx.mode);
+  const validation = pt
+    ? await validateTeamDetailed(pt.members, format, ctx.db as unknown as OakDb)
+    : {
+        warnings: [] as TeamWarning[],
+        legalMoves: new Map<string, string[]>(),
+        legalAbilities: new Map<string, string[]>(),
+      };
+  const teamWarnings = validation.warnings;
+  const hasImages = (ctx.images?.length ?? 0) > 0;
+  const hardViolations = teamWarnings.filter(
+    (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
+  );
+  if (hardViolations.length > 0 && rejectionsSoFar < MAX_PROPOSED_TEAM_RETRIES) {
+    // Each warning message is already specific (names the species, move,
+    // item, or clashing slots). Enumerate them, then — so the model stops
+    // swapping one illegal guess for another — tell it what IS legal for
+    // each implicated species (B-13), then a rebuild directive.
+    const issues = hardViolations.map((w) => w.message).join(" ");
+    const speciesAt = (slot: number | undefined): string | null =>
+      slot === undefined ? null : pt?.members[slot]?.species ?? null;
+
+    // Distinct species with an illegal MOVE → list their legal moves.
+    const moveSpecies = new Set<string>();
+    for (const w of hardViolations) {
+      if (w.code !== "move_not_in_learnset") continue;
+      const sp = speciesAt(w.slot);
+      if (sp) moveSpecies.add(sp);
+    }
+    const legalMoveLines = [...moveSpecies].map((sp) => {
+      const moves = validation.legalMoves.get(sp) ?? [];
+      return `Legal moves for ${sp} in ${format}: ${moves.join(", ")}.`;
+    });
+
+    // Distinct species with an illegal ABILITY → list their legal abilities.
+    const abilitySpecies = new Set<string>();
+    for (const w of hardViolations) {
+      if (w.code !== "ability_not_for_species") continue;
+      const sp = speciesAt(w.slot);
+      if (sp) abilitySpecies.add(sp);
+    }
+    const legalAbilityLines = [...abilitySpecies].map((sp) => {
+      const abilities = validation.legalAbilities.get(sp) ?? [];
+      return `Legal abilities for ${sp}: ${abilities.join(", ")}.`;
+    });
+
+    const feedback =
+      `Your proposed_team is not legal for ${format} and ` +
+      `was rejected: ${issues}` +
+      [...legalMoveLines, ...legalAbilityLines]
+        .map((line) => ` ${line}`)
+        .join("") +
+      ` Rebuild the team choosing ONLY from the legal moves listed above ` +
+      `(or call get_learnset for any other species), fix the other ` +
+      `violations — give every battle-ready member a held item and make ` +
+      `sure no two members share a species or a held item — and call ` +
+      `submit_answer again.`;
+    return {
+      ok: false,
+      feedback,
+      traceError: "proposed_team_illegal",
+      // Salvage stamping mirrors the accept path, plus a top-level caveat so a
+      // confident answer_markdown can't oversell legality: the per-slot badges
+      // explain WHICH slots, this explains WHY. Preserve model-authored flags.
+      annotateBestEffort: (enriched) => {
+        stampTeamWarnings(enriched, teamWarnings);
+        enriched.uncertainty_flags = [
+          ...(enriched.uncertainty_flags ?? []),
+          "team_may_have_illegal_slots",
+        ];
+      },
+    };
+  }
+  return {
+    ok: true,
+    annotate: (enriched) => stampTeamWarnings(enriched, teamWarnings),
+  };
+}
+
+/** The original Oak agent behavior, expressed as hooks (the default run). */
+const DEFAULT_OAK_HOOKS: AnswerRunHooks<OakAnswer> = {
+  tools,
+  dispatch,
+  submitToolName: "submit_answer",
+  answerSchema: oakAnswerSchema,
+  buildSystem: (providerKind, ctx) =>
+    buildSystemSegments({ provider: providerKind, mode: ctx.mode }),
+  validateAnswer: validateOakAnswer,
+  enrich: enrichAnswer,
+  synthesizeInsufficient: (reason, ctx) =>
+    synthesizeInsufficientData(reason, ctx.mode),
+  synthesizeFromProse: (prose, ctx) => synthesizeFromProse(prose, ctx.mode),
+  finalizeAnswer: finalize,
+  emptyTurnNudge: EMPTY_TURN_NUDGE,
+  submitNudge: SUBMIT_NUDGE,
+};
+
+// ---------------------------------------------------------------------------
 // The loop
 // ---------------------------------------------------------------------------
 
@@ -741,7 +960,7 @@ function finalize(
  * normalized stream events, message shaping). Exposed for tests (a fake provider
  * / the OpenAI provider) and used by both entry points below.
  */
-export async function runWithProvider(
+export async function runWithProvider<TAnswer = OakAnswer>(
   provider: LLMProvider,
   message: string,
   history: ChatMessage[],
@@ -749,7 +968,10 @@ export async function runWithProvider(
   onProgress?: OnProgress,
   onAnswerStart?: OnAnswerStart,
   onAnswerDelta?: OnAnswerDelta,
-): Promise<OakAnswer> {
+  // The default hooks ARE the OakAnswer run; the cast only widens the default
+  // to the generic parameter (callers overriding TAnswer must pass hooks).
+  hooks: AnswerRunHooks<TAnswer> = DEFAULT_OAK_HOOKS as unknown as AnswerRunHooks<TAnswer>,
+): Promise<TAnswer> {
   const state: TraceState = {
     startedAt: Date.now(),
     modelId: provider.apiModelId,
@@ -767,28 +989,30 @@ export async function runWithProvider(
   // Server-controlled scope + provider together select the tuned system prompt
   // (loop-invariant). Built once per turn; the same byte-identical segments are
   // sent every iteration, preserving each provider's prompt cache.
-  const systemSegments = buildSystemSegments({
-    provider: provider.kind,
-    mode: ctx.mode,
-  });
+  const systemSegments = hooks.buildSystem(provider.kind, ctx);
+
+  // Provider-neutral tool defs for this run's tool list (loop-invariant).
+  const providerToolDefs = toProviderToolDefs(hooks.tools);
 
   let submitRetries = 0;
   let emptyTurnNudges = 0;
   // Fire the late-iteration submit nudge at most once per turn (see SUBMIT_NUDGE).
   let submitNudged = false;
-  // Dedicated budget for the proposed-team roster re-emit (see
-  // MAX_PROPOSED_TEAM_RETRIES) — separate from the schema-failure budget so an
-  // illegal team never burns the schema retries or trips insufficient_data.
-  let proposedTeamRetries = 0;
-  // The last schema-VALID submit_answer that was rejected ONLY for team legality
-  // (see the proposed_team rejection branch below). If the turn later gives up
-  // without an accepted submit — the model built a team, got it rejected twice,
-  // then burned iterations / went silent / failed schema — we salvage THIS
-  // (enriched, warnings stamped) instead of discarding it for a generic apology.
+  // Dedicated budget for domain-level answer rejections (for Oak: the
+  // proposed-team roster re-emit, see MAX_PROPOSED_TEAM_RETRIES) — separate
+  // from the schema-failure budget so an illegal team never burns the schema
+  // retries or trips insufficient_data. The loop only counts; the
+  // validateAnswer hook owns the budget comparison.
+  let answerRejections = 0;
+  // The last schema-VALID submit that was rejected ONLY by domain validation
+  // (see the rejection branch below). If the turn later gives up without an
+  // accepted submit — the model built a team, got it rejected twice, then
+  // burned iterations / went silent / failed schema — we salvage THIS
+  // (enriched, annotated) instead of discarding it for a generic apology.
   // This just makes the already-sanctioned accept-with-warnings behavior reachable
   // when the model runs out of budget before its 3rd submit (see B-13).
-  let bestEffortAnswer: OakAnswer | null = null;
-  let bestEffortWarnings: TeamWarning[] = [];
+  let bestEffortAnswer: TAnswer | null = null;
+  let bestEffortAnnotate: ((enriched: TAnswer) => void) | null = null;
 
   // get_pokemon profiles fetched this turn — used by answer enrichment to
   // synthesize subjects[] when the model omits it on a single-entity answer.
@@ -798,39 +1022,36 @@ export async function runWithProvider(
   // Grok that stream a long reasoning phase before the answer arrives at once).
   let reasoningNudged = false;
 
-  // Give-up recovery shared by all three fallthroughs. Prefer a best-effort team
-  // (only ever set from a schema-valid, legality-rejected submit → it always
-  // carries a proposed_team + warnings) over a discard; else recovered prose if we
-  // have any (empty-turn case), else the generic insufficient_data apology. Closes
-  // over the mutable locals, read at call time.
+  // Trace/log finalization via the hook (default: pino turn trace + the
+  // onTurnComplete sink); omitted ⇒ the answer passes through unchanged.
+  const doFinalize = (answer: TAnswer): TAnswer =>
+    hooks.finalizeAnswer ? hooks.finalizeAnswer(answer, state, ctx) : answer;
+
+  // Post-accept enrichment via the hook; omitted ⇒ identity.
+  const doEnrich = async (answer: TAnswer): Promise<TAnswer> =>
+    hooks.enrich ? hooks.enrich(answer, ctx, lookedUpProfiles) : answer;
+
+  // Give-up recovery shared by all three fallthroughs. Prefer a best-effort
+  // answer (only ever set from a schema-valid, domain-rejected submit) over a
+  // discard; else recovered prose if we have any (empty-turn case), else the
+  // generic insufficient_data apology. Closes over the mutable locals, read at
+  // call time.
   const finalizeBestEffortOrInsufficient = async (
     reason: string,
     prose?: string,
-  ): Promise<OakAnswer> => {
+  ): Promise<TAnswer> => {
     if (bestEffortAnswer) {
-      const enriched = await enrichAnswer(bestEffortAnswer, ctx, lookedUpProfiles);
-      // Stamp warnings server-authoritatively, mirroring the accept path.
-      if (enriched.proposed_team && bestEffortWarnings.length > 0) {
-        enriched.proposed_team_warnings = bestEffortWarnings;
-      } else {
-        delete enriched.proposed_team_warnings;
-      }
-      // Top-level caveat so a confident answer_markdown can't oversell legality:
-      // the per-slot badges explain WHICH slots, this explains WHY. Preserve any
-      // flags the model authored.
-      enriched.uncertainty_flags = [
-        ...(enriched.uncertainty_flags ?? []),
-        "team_may_have_illegal_slots",
-      ];
-      return finalize(enriched, state, ctx);
+      const enriched = await doEnrich(bestEffortAnswer);
+      // Apply the verdict's salvage annotation (for Oak: stamp warnings
+      // server-authoritatively + the team_may_have_illegal_slots caveat).
+      bestEffortAnnotate?.(enriched);
+      return doFinalize(enriched);
     }
     const trimmed = prose?.trim() ?? "";
-    return finalize(
+    return doFinalize(
       trimmed.length > 0
-        ? synthesizeFromProse(trimmed, ctx.mode)
-        : synthesizeInsufficientData(reason, ctx.mode),
-      state,
-      ctx,
+        ? hooks.synthesizeFromProse(trimmed, ctx)
+        : hooks.synthesizeInsufficient(reason, ctx),
     );
   };
 
@@ -847,7 +1068,7 @@ export async function runWithProvider(
     // is forwarded so an in-flight stream is torn down immediately on Stop.
     const stream = provider.streamTurn({
       system: systemSegments,
-      tools: PROVIDER_TOOL_DEFS,
+      tools: providerToolDefs,
       transcript,
       signal: ctx.signal,
     });
@@ -862,7 +1083,7 @@ export async function runWithProvider(
     let assistantText = "";
     for await (const event of stream) {
       if (event.type === "tool_call_start") {
-        if (event.name === "submit_answer") {
+        if (event.name === hooks.submitToolName) {
           submitIndex = event.index;
           extractor = new AnswerMarkdownExtractor();
           onAnswerStart?.();
@@ -910,7 +1131,7 @@ export async function runWithProvider(
     if (toolCalls.length === 0) {
       if (emptyTurnNudges < MAX_EMPTY_TURN_NUDGES) {
         emptyTurnNudges += 1;
-        transcript.push(provider.buildUserMessage(EMPTY_TURN_NUDGE));
+        transcript.push(provider.buildUserMessage(hooks.emptyTurnNudge));
         continue;
       }
       return finalizeBestEffortOrInsufficient(
@@ -923,11 +1144,12 @@ export async function runWithProvider(
     // provider to shape into the next transcript message(s) (Anthropic: one user
     // message of tool_result blocks; OpenAI: one {role:"tool"} message each).
     const toolResults: ToolResult[] = [];
-    let validAnswer: OakAnswer | null = null;
+    let validAnswer: TAnswer | null = null;
     let submitFailed = false;
-    // Roster warnings for an accepted proposed_team this iteration, stamped onto
-    // the answer below (server-authoritative — the model never authors these).
-    let proposedTeamWarnings: TeamWarning[] = [];
+    // Accept-verdict annotation for this iteration's valid answer, applied to
+    // the enriched answer below (for Oak: stamping server-authoritative
+    // proposed-team warnings — the model never authors these).
+    let acceptAnnotate: ((enriched: TAnswer) => void) | null = null;
 
     for (const call of toolCalls) {
       onProgress?.({
@@ -935,111 +1157,40 @@ export async function runWithProvider(
         label: describeToolCall(call.name, call.input),
       });
 
-      if (call.name === "submit_answer") {
+      if (call.name === hooks.submitToolName) {
         const started = Date.now();
-        const parsed = oakAnswerSchema.safeParse(call.input);
+        const parsed = hooks.answerSchema.safeParse(call.input);
         if (parsed.success) {
-          // Roster-validate a proposed team against the turn's ACTUAL format
-          // (server-controlled — never the model-emitted proposed_team.format, so
-          // the model can't dodge the check by mislabeling). validateTeam never
-          // throws. HARD format-illegalities (see HARD_VIOLATION_CODES) — an
-          // out-of-format species, an illegal move/ability/item, and the species
-          // (by Dex number) / item clauses — are fed back verbatim so the model
-          // rebuilds legally, up to MAX_PROPOSED_TEAM_RETRIES, then
-          // accept-with-warnings (warn-but-allow). We ALSO require a held item on
-          // every battle-ready member (`item_missing`) — but only for a BUILT
-          // team, not when the user attached an image: an import honestly reflects
-          // an obscured/unset item as null and shouldn't be forced to fabricate
-          // one. Softer per-slot warnings (EV/IV caps, `incomplete`) ride through
-          // as badges and never block.
-          const pt = parsed.data.proposed_team;
-          const format = formatForMode(ctx.mode);
-          const validation = pt
-            ? await validateTeamDetailed(
-                pt.members,
-                format,
-                ctx.db as unknown as OakDb,
-              )
-            : {
-                warnings: [] as TeamWarning[],
-                legalMoves: new Map<string, string[]>(),
-                legalAbilities: new Map<string, string[]>(),
-              };
-          const teamWarnings = validation.warnings;
-          const hasImages = (ctx.images?.length ?? 0) > 0;
-          const hardViolations = teamWarnings.filter(
-            (w) =>
-              isHardViolation(w) || (w.code === "item_missing" && !hasImages),
+          // Domain-validate the schema-valid answer via the hook (for Oak:
+          // roster legality of a proposed_team — see validateOakAnswer). The
+          // hook owns its retry budget; the loop just counts rejections.
+          const verdict = await hooks.validateAnswer(
+            parsed.data,
+            ctx,
+            answerRejections,
           );
-          if (
-            hardViolations.length > 0 &&
-            proposedTeamRetries < MAX_PROPOSED_TEAM_RETRIES
-          ) {
-            proposedTeamRetries += 1;
-            // Remember this attempt (schema-valid, carries the proposed_team) so a
-            // later give-up salvages it instead of discarding the model's work.
-            // Keep the FULL warning list (like the accept path) and the LAST attempt.
+          if (!verdict.ok) {
+            answerRejections += 1;
+            // Remember this attempt (schema-valid) so a later give-up salvages
+            // it instead of discarding the model's work. Keep the LAST attempt.
             bestEffortAnswer = parsed.data;
-            bestEffortWarnings = teamWarnings;
+            bestEffortAnnotate = verdict.annotateBestEffort ?? null;
             state.toolTrace.push({
               tool: call.name,
               args: call.input,
               latency_ms: Date.now() - started,
               cache_hit: false,
-              error: "proposed_team_illegal",
+              error: verdict.traceError,
             });
-            // Each warning message is already specific (names the species, move,
-            // item, or clashing slots). Enumerate them, then — so the model stops
-            // swapping one illegal guess for another — tell it what IS legal for
-            // each implicated species (B-13), then a rebuild directive.
-            const issues = hardViolations.map((w) => w.message).join(" ");
-            const speciesAt = (slot: number | undefined): string | null =>
-              slot === undefined ? null : pt?.members[slot]?.species ?? null;
-
-            // Distinct species with an illegal MOVE → list their legal moves.
-            const moveSpecies = new Set<string>();
-            for (const w of hardViolations) {
-              if (w.code !== "move_not_in_learnset") continue;
-              const sp = speciesAt(w.slot);
-              if (sp) moveSpecies.add(sp);
-            }
-            const legalMoveLines = [...moveSpecies].map((sp) => {
-              const moves = validation.legalMoves.get(sp) ?? [];
-              return `Legal moves for ${sp} in ${format}: ${moves.join(", ")}.`;
-            });
-
-            // Distinct species with an illegal ABILITY → list their legal abilities.
-            const abilitySpecies = new Set<string>();
-            for (const w of hardViolations) {
-              if (w.code !== "ability_not_for_species") continue;
-              const sp = speciesAt(w.slot);
-              if (sp) abilitySpecies.add(sp);
-            }
-            const legalAbilityLines = [...abilitySpecies].map((sp) => {
-              const abilities = validation.legalAbilities.get(sp) ?? [];
-              return `Legal abilities for ${sp}: ${abilities.join(", ")}.`;
-            });
-
-            const content =
-              `Your proposed_team is not legal for ${format} and ` +
-              `was rejected: ${issues}` +
-              [...legalMoveLines, ...legalAbilityLines]
-                .map((line) => ` ${line}`)
-                .join("") +
-              ` Rebuild the team choosing ONLY from the legal moves listed above ` +
-              `(or call get_learnset for any other species), fix the other ` +
-              `violations — give every battle-ready member a held item and make ` +
-              `sure no two members share a species or a held item — and call ` +
-              `submit_answer again.`;
             toolResults.push({
               toolCallId: call.id,
               isError: true,
-              content,
+              content: verdict.feedback,
             });
             continue;
           }
           validAnswer = parsed.data;
-          proposedTeamWarnings = teamWarnings;
+          acceptAnnotate = verdict.annotate ?? null;
           state.toolTrace.push({
             tool: call.name,
             args: call.input,
@@ -1066,8 +1217,8 @@ export async function runWithProvider(
             toolCallId: call.id,
             isError: true,
             content:
-              `Your submit_answer payload failed validation: ${detail}. ` +
-              "Call submit_answer again with a corrected payload that matches " +
+              `Your ${hooks.submitToolName} payload failed validation: ${detail}. ` +
+              `Call ${hooks.submitToolName} again with a corrected payload that matches ` +
               "the required schema.",
           });
         }
@@ -1082,7 +1233,7 @@ export async function runWithProvider(
       let result: unknown;
       let errorMessage: string | null = null;
       try {
-        result = await dispatch(call.name, call.input, ctx);
+        result = await hooks.dispatch(call.name, call.input, ctx);
         // Stash successful single-Pokémon profiles for subjects[] enrichment.
         if (
           call.name === "get_pokemon" &&
@@ -1112,20 +1263,15 @@ export async function runWithProvider(
     }
 
     // A valid answer terminates the turn immediately (no further API call, so
-    // the unused tool_results are harmless). Enrich it first — backfill
-    // sprite_url/dex_number/types (and derive subjects[] when absent) so sprites
-    // are model-independent. Enrichment never throws and never weakens the answer.
+    // the unused tool_results are harmless). Enrich it first (for Oak: backfill
+    // sprite_url/dex_number/types and derive subjects[] when absent, so sprites
+    // are model-independent — enrichment never throws and never weakens the
+    // answer), then apply the accept verdict's annotation (for Oak: stamp
+    // proposed-team warnings server-authoritatively).
     if (validAnswer) {
-      const enriched = await enrichAnswer(validAnswer, ctx, lookedUpProfiles);
-      // Stamp proposed-team warnings server-authoritatively (like saved_team):
-      // overwrite anything the model emitted. Only present when there IS a
-      // proposal with warnings; otherwise the key stays absent (clean proposal).
-      if (enriched.proposed_team && proposedTeamWarnings.length > 0) {
-        enriched.proposed_team_warnings = proposedTeamWarnings;
-      } else {
-        delete enriched.proposed_team_warnings;
-      }
-      return finalize(enriched, state, ctx);
+      const enriched = await doEnrich(validAnswer);
+      acceptAnnotate?.(enriched);
+      return doFinalize(enriched);
     }
 
     // submit_answer was emitted but invalid: re-emit up to the budget, then
@@ -1152,7 +1298,7 @@ export async function runWithProvider(
     // messages, Grok/OpenAI treat them as ordinary items). Fired once.
     if (!submitNudged && iteration >= MAX_ITERATIONS - SUBMIT_NUDGE_REMAINING) {
       submitNudged = true;
-      transcript.push(provider.buildUserMessage(SUBMIT_NUDGE));
+      transcript.push(provider.buildUserMessage(hooks.submitNudge));
     }
   }
 
