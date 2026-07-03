@@ -1,0 +1,24 @@
+# Build outputs
+*/build/
+build/
+.cxx/
+.kotlin/
+
+# Local config (machine-specific SDK path)
+local.properties
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+captures/
+.navigation/
+
+# Signing
+*.keystore
+*.jks

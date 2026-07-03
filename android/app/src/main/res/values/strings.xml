@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Oak</string>
+    <string name="tab_chat">Chat</string>
+    <string name="tab_teams">Teams</string>
+    <string name="tab_account">Account</string>
+</resources>
