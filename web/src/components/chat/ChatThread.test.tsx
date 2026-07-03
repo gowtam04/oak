@@ -95,6 +95,34 @@ describe("ChatThread — empty-state starter chips", () => {
   });
 });
 
+describe("ChatThread — empty-state composer promotion (screen 01)", () => {
+  it("renders the composer + scope chip slots inside the hero when provided (desktop)", () => {
+    render(
+      <ChatThread
+        {...props({
+          turns: [],
+          status: "idle",
+          composerSlot: <div data-testid="hero-composer-slot" />,
+          scopeChipSlot: <span data-testid="hero-scope-slot" />,
+        })}
+      />,
+    );
+    const empty = screen.getByTestId("chat-empty");
+    // The hero variant class drives the wider, composer-holding composition.
+    expect(empty.className).toContain("chat-empty--hero");
+    // Both slots render inside the hero cluster.
+    expect(within(empty).getByTestId("hero-composer-slot")).toBeInTheDocument();
+    expect(within(empty).getByTestId("hero-scope-slot")).toBeInTheDocument();
+  });
+
+  it("omits the hero composer (docked mode) when no slot is passed (mobile / non-empty)", () => {
+    render(<ChatThread {...props({ turns: [], status: "idle" })} />);
+    const empty = screen.getByTestId("chat-empty");
+    expect(empty.className).not.toContain("chat-empty--hero");
+    expect(screen.queryByTestId("hero-composer-slot")).toBeNull();
+  });
+});
+
 describe("ChatThread — user-turn image thumbnails", () => {
   it("renders attached-image thumbnails from imagePreviews, keyed by turn id", () => {
     render(

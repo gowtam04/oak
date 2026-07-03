@@ -63,18 +63,27 @@ describe("ConversationList", () => {
     expect(h.onFormatFilterChange).toHaveBeenCalledWith("champions");
   });
 
-  it("shows the empty state when there are no conversations and no filter", () => {
+  it("shows the empty state with a start-your-first-chat CTA when there are no conversations and no filter", () => {
     setup([]);
     expect(screen.getByTestId("history-empty")).toHaveTextContent(
       "No conversations yet",
     );
+    expect(screen.getByTestId("history-empty-cta")).toBeInTheDocument();
   });
 
-  it("shows a no-results state when a search matches nothing", () => {
+  it("the empty-state CTA starts a new chat", () => {
+    const h = setup([]);
+    fireEvent.click(screen.getByTestId("history-empty-cta"));
+    expect(h.onNewChat).toHaveBeenCalled();
+  });
+
+  it("shows a no-results state (no CTA) when a search matches nothing", () => {
     setup([], { query: "zzz" });
     expect(screen.getByTestId("history-empty")).toHaveTextContent(
       "No conversations match",
     );
+    // The CTA is only for the true-empty case, not a filtered no-match.
+    expect(screen.queryByTestId("history-empty-cta")).toBeNull();
   });
 
   it("groups pinned above recent with headings", () => {

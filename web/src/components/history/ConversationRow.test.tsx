@@ -112,4 +112,23 @@ describe("ConversationRow", () => {
     render(<ConversationRow conversation={summary()} active {...h} />);
     expect(screen.getByTestId("conversation-row")).toHaveAttribute("data-active");
   });
+
+  it("hides the scope badge when it matches the active filter (screen 05)", () => {
+    setup(
+      { format: "champions" },
+      { formatFilter: "champions" },
+    );
+    // The filter already implies the scope, so the per-row badge is redundant.
+    expect(screen.queryByTestId("format-badge")).toBeNull();
+  });
+
+  it("shows the scope badge when the row differs from the active filter", () => {
+    setup({ format: "scarlet-violet" }, { formatFilter: "champions" });
+    expect(screen.getByTestId("format-badge")).toHaveTextContent("Gen 9");
+  });
+
+  it("shows the scope badge when no filter is applied", () => {
+    setup({ format: "champions" }, { formatFilter: null });
+    expect(screen.getByTestId("format-badge")).toHaveTextContent("Champions");
+  });
 });

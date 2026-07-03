@@ -1321,9 +1321,21 @@
   transition: border-color var(--motion-fast),
     box-shadow var(--motion-base), transform var(--motion-base);
 }
+/* The PILL owns focus — an azure ring per the foundation. The inner textarea's
+   own focus ring is suppressed below so the two don't fight (screen 11). The
+   border does NOT turn red on focus; red is reserved for the live/streaming
+   state (`--live`). */
 .composer__field:focus-within {
-  border-color: var(--poke-red);
+  border-color: var(--azure);
   transform: translateY(-1px);
+  box-shadow: var(--shadow-floating),
+    0 0 0 4px color-mix(in srgb, var(--azure) 20%, transparent);
+}
+/* Live (streaming) state — red border + glow, matching the red Stop button. The
+   record-light red only appears while a turn is actually in flight. */
+.composer__field--live,
+.composer__field--live:focus-within {
+  border-color: var(--poke-red);
   box-shadow: var(--shadow-floating),
     0 0 0 4px color-mix(in srgb, var(--poke-red) 18%, transparent);
 }
@@ -1451,6 +1463,14 @@
 }
 .composer__input:focus {
   outline: none;
+}
+/* Suppress the textarea's own focus ring — the global `:focus-visible` box-shadow
+   would otherwise draw an azure rectangle INSIDE the pill (the mobile
+   two-focus-indicators bug, screen 11). The pill's :focus-within ring is the
+   single focus signal. */
+.composer__input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 .composer__input::placeholder {
   color: var(--text-faint);
@@ -2186,6 +2206,12 @@
   padding: var(--space-16) var(--space-4);
   text-align: center;
 }
+/* Hero variant: the composer is promoted into the cluster (screen 01), so the
+   composition widens to the composer measure and tightens its rhythm. */
+.chat-empty--hero {
+  max-width: var(--composer-max);
+  gap: var(--space-5);
+}
 .chat-empty__wordmark {
   display: inline-flex;
   align-items: center;
@@ -2213,15 +2239,49 @@
 .chat-empty__scope-hint {
   margin: 0;
   font-size: var(--text-sm);
-  line-height: 1.5;
+  line-height: 1.7;
   color: var(--text-faint);
 }
+/* The inline scope chip reads as part of the sentence, baseline-aligned. */
+.chat-empty__scope-hint .scope-chip-container {
+  margin-inline: 2px;
+}
+
+/* Promoted composer slot: full hero width, its own breathing room. The docked
+   `.composer` styling (sticky, backdrop, gradient) is neutralized here — in the
+   hero it's a static, floating card. */
+.chat-empty__composer {
+  width: 100%;
+  margin-block: var(--space-2);
+}
+.chat-empty__composer .composer {
+  position: static;
+  bottom: auto;
+  z-index: auto;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  transform: none;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+/* Empty-state chip grid — a labeled set, max 2 per row, aligned (screen 01). */
 .chat-empty__examples {
+  width: 100%;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-2);
   margin-top: var(--space-2);
+}
+.chat-empty__examples-label {
+  align-self: center;
+}
+.chat-empty__examples-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
 }
 .chat-empty__chip {
   padding: var(--space-2) var(--space-4);
@@ -2292,6 +2352,14 @@
   .composer {
     transition: none;
   }
+  /* Scope picker: no chip pulse, no menu turn-in (feedback stays via the
+     selection rail + resolved label, which don't rely on motion). */
+  .scope-chip--pulse {
+    animation: none !important;
+  }
+  .scope-chip__menu {
+    animation: none !important;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -2340,12 +2408,23 @@
 }
 
 /* History-row per-row actions (pin / rename / delete). Base gap is tight for the
-   dense desktop sidebar; the coarse-pointer block widens the targets + spacing. */
+   dense desktop sidebar; the coarse-pointer block widens the targets + spacing.
+   Quieted to on-demand: hidden at rest, revealed on row hover / keyboard focus /
+   active (screen 05). Opacity (not display) keeps them focusable so a keyboard
+   user reveals them by tabbing. The coarse-pointer block restores them always
+   (no hover on touch). */
 .conv-row__actions {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
   gap: 2px;
+  opacity: 0;
+  transition: opacity var(--motion-fast);
+}
+.conv-row:hover .conv-row__actions,
+.conv-row:focus-within .conv-row__actions,
+.conv-row[data-active] .conv-row__actions {
+  opacity: 1;
 }
 
 /* --------------------------------------------------------------------------
@@ -2371,6 +2450,11 @@
 /* Interactive scope chip (champions-default) — the header's menu-button variant
    of ScopeChip. The trigger keeps the display-only pill's look (pill, muted
    surface) plus a caret; the popover lists all six formats as radio options. */
+.scope-chip-container {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
 .scope-chip {
   display: inline-flex;
   align-items: center;
@@ -2407,41 +2491,75 @@ button.scope-chip:focus-visible {
   font-size: 0.6em;
   opacity: 0.7;
 }
+/* Pulse the trigger once when the resolved scope changes — feedback that a pick
+   / server override took (screen 02). Reduced-motion drops it below. */
+@keyframes scope-chip-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--poke-red) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--poke-red) 0%, transparent);
+  }
+}
+.scope-chip--pulse {
+  animation: scope-chip-pulse 300ms var(--motion-base);
+}
+/* Popover anchored to the chip — a 4px gap so it reads as the chip unfolding,
+   and a turn-in entrance. */
 .scope-chip__menu {
   position: absolute;
-  top: calc(100% + var(--space-2));
+  top: calc(100% + var(--space-1));
   right: 0;
   z-index: var(--z-popover);
   display: flex;
   flex-direction: column;
-  min-width: 200px;
-  padding: var(--space-1);
+  gap: 1px;
+  min-width: 220px;
+  padding: var(--space-2);
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--surface-raised);
   box-shadow: var(--shadow-floating);
+  animation: turn-in var(--motion-base) both;
 }
+.scope-chip__menu-label {
+  padding: 0 var(--space-2) var(--space-1);
+}
+/* Two-line rows: name + one-line description (screen 02). Selection is the one
+   red language — a soft fill plus a 3px red left rail. */
 .scope-chip__option {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   width: 100%;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   border: none;
+  border-left: 3px solid transparent;
   background: transparent;
-  color: var(--text);
-  font-size: var(--text-sm);
-  font-weight: 500;
   text-align: left;
   cursor: pointer;
   transition: background var(--motion-fast);
+}
+.scope-chip__option-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.scope-chip__option-desc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  line-height: 1.3;
 }
 .scope-chip__option:hover {
   background: var(--surface-sunken);
 }
 .scope-chip__option[aria-checked="true"] {
-  color: var(--poke-red);
-  font-weight: 700;
   background: var(--poke-red-soft);
+  border-left-color: var(--poke-red);
+}
+.scope-chip__option[aria-checked="true"] .scope-chip__option-name {
+  color: var(--poke-red);
 }
 
 /* Auth header control — account email + the translucent sign-in/out pills */
@@ -2528,25 +2646,37 @@ button.scope-chip:focus-visible {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  height: var(--space-10);
+  height: 36px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   background: var(--poke-red);
   color: var(--neutral-0);
   font: inherit;
   font-size: var(--text-md);
   font-weight: 600;
   cursor: pointer;
+  transition: background var(--motion-fast);
 }
+.conv-list__newchat:hover {
+  background: var(--poke-red-hover);
+}
+/* Sunken-borderless search — no border at rest, an azure ring only on focus
+   (foundation: inputs invert). */
 .conv-list__search {
   height: 36px;
   padding: 0 var(--space-3);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border: 1px solid transparent;
+  background: var(--surface-sunken);
   color: var(--text);
   font: inherit;
   font-size: var(--text-input); /* 16px: no iOS focus-zoom */
+  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
+}
+.conv-list__search:focus-visible {
+  outline: none;
+  border-color: var(--azure);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--azure) 18%, transparent);
 }
 .conv-list__filters {
   display: inline-flex;
@@ -2585,25 +2715,55 @@ button.scope-chip:focus-visible {
   color: var(--text-faint);
 }
 .conv-list__empty {
-  padding: var(--space-4) var(--space-3);
-  color: var(--text-faint);
-  font-size: var(--text-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-3);
   text-align: center;
 }
+.conv-list__empty-text {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+/* "Start your first chat" — a quiet chip, not a void (screen 05). */
+.conv-list__empty-cta {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--poke-red);
+  background: var(--poke-red-soft);
+  color: var(--poke-red);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--motion-fast);
+}
+.conv-list__empty-cta:hover {
+  background: color-mix(in srgb, var(--poke-red-soft) 60%, var(--surface));
+}
 
-/* History row — wrapper state via [data-active]; actions keep their own block */
+/* History row — wrapper state via [data-active]; actions keep their own block.
+   A 3px left rail carries the active accent without shifting the row (the border
+   is always 3px, transparent when inactive). */
 .conv-row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  border: 1px solid transparent;
+  border-left: 3px solid transparent;
   background: transparent;
+  transition: background var(--motion-fast);
 }
-.conv-row[data-active] {
+.conv-row:hover {
   background: var(--surface-sunken);
-  border-color: var(--border);
+}
+/* Active row = red left rail + soft red fill (the one selection language). */
+.conv-row[data-active] {
+  background: var(--poke-red-soft);
+  border-left-color: var(--poke-red);
 }
 .conv-row__rename {
   flex: 1;
@@ -2649,6 +2809,9 @@ button.scope-chip:focus-visible {
   gap: var(--space-2);
   font-size: var(--text-xs);
   color: var(--text-faint);
+}
+.conv-row__time {
+  font-size: var(--text-2xs); /* 11px, tabular mono via .mono-num in markup */
 }
 .conv-row__badge {
   padding: 0 6px;
@@ -4586,10 +4749,9 @@ button.scope-chip:focus-visible {
   .candidate-table__ability-cell {
     white-space: normal;
   }
-  /* Stack the welcome example chips full-width. */
-  .chat-empty__examples {
-    flex-direction: column;
-    align-items: stretch;
+  /* Stack the welcome example chips full-width (single column). */
+  .chat-empty__examples-grid {
+    grid-template-columns: 1fr;
   }
   .chat-empty__wordmark {
     font-size: 1.875rem;
@@ -4645,8 +4807,11 @@ button.scope-chip:focus-visible {
     min-width: 44px;
     min-height: 44px;
   }
+  /* No hover on touch — keep the row actions always visible (no overflow menu
+     exists yet; always-on is the accepted mobile fallback, screen 05). */
   .conv-row__actions {
     gap: var(--space-2);
+    opacity: 1;
   }
   /* History sidebar new-chat / search / format-filter controls. */
   .conv-list__newchat,

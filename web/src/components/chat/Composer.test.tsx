@@ -94,6 +94,19 @@ describe("Composer — send / stop button swap", () => {
   });
 });
 
+describe("Composer — focus vs live (streaming) pill state (screen 11)", () => {
+  it("marks the field as live only while streaming (red = live, not focus)", () => {
+    const { container, rerender } = render(<Composer {...props()} />);
+    const field = container.querySelector(".composer__field")!;
+    // Idle: the pill is not in its red live state (red is streaming-only).
+    expect(field.className).not.toContain("composer__field--live");
+    rerender(<Composer {...props({ streaming: true })} />);
+    expect(
+      container.querySelector(".composer__field")!.className,
+    ).toContain("composer__field--live");
+  });
+});
+
 describe("Composer — submit + prefill", () => {
   it("sends a trimmed message (no images) and clears the input on submit", () => {
     const onSend = vi.fn();

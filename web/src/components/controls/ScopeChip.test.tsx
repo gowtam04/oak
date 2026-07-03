@@ -4,7 +4,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 afterEach(() => cleanup());
 import ScopeChip from "./ScopeChip";
 import { FORMATS } from "@/data/formats";
-import { scopeLabel } from "@/lib/scope/scope-label";
+import { scopeLabelShort } from "@/lib/scope/scope-label";
 
 /**
  * jsdom project — fixture props ONLY (never imports db/repos/runtime). Pins the
@@ -50,16 +50,62 @@ describe("ScopeChip", () => {
       expect(chip).toHaveAttribute("aria-expanded", "false");
     });
 
-    it("opens a menu listing all six formats on click", () => {
+    it("opens a menu listing all six formats on click, each as a two-line row", () => {
       render(<ScopeChip format="champions" onSelect={vi.fn()} />);
       fireEvent.click(screen.getByTestId("scope-chip"));
       const menu = screen.getByTestId("scope-chip-menu");
       expect(menu).toBeInTheDocument();
+      // Header instrument label.
+      expect(menu).toHaveTextContent("Answer scope");
       for (const f of FORMATS) {
+        // Row shows the short name…
         expect(screen.getByTestId(`scope-chip-option-${f}`)).toHaveTextContent(
-          scopeLabel(f),
+          scopeLabelShort(f),
         );
       }
+    });
+
+    it("each row carries a one-line description under the name", () => {
+      render(<ScopeChip format="champions" onSelect={vi.fn()} />);
+      fireEvent.click(screen.getByTestId("scope-chip"));
+      // A representative sample of the per-scope descriptions.
+      expect(
+        screen.getByTestId("scope-chip-option-gen-7"),
+      ).toHaveTextContent("Ultra Sun / Ultra Moon");
+      expect(
+        screen.getByTestId("scope-chip-option-gen-8"),
+      ).toHaveTextContent("Sword / Shield");
+      // Champions rides the live regulation constant.
+      expect(
+        screen.getByTestId("scope-chip-option-champions"),
+      ).toHaveTextContent("Regulation");
+    });
+
+    it("marks the current scope's row as checked (the red-rail selection)", () => {
+      render(<ScopeChip format="gen-7" onSelect={vi.fn()} />);
+      fireEvent.click(screen.getByTestId("scope-chip"));
+      expect(screen.getByTestId("scope-chip-option-gen-7")).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+      expect(
+        screen.getByTestId("scope-chip-option-champions"),
+      ).toHaveAttribute("aria-checked", "false");
+    });
+
+    it("honors a custom testId so a second instance stays uniquely queryable", () => {
+      render(
+        <ScopeChip format="champions" onSelect={vi.fn()} testId="scope-chip-hero" />,
+      );
+      const chip = screen.getByTestId("scope-chip-hero");
+      expect(chip.tagName).toBe("BUTTON");
+      fireEvent.click(chip);
+      expect(screen.getByTestId("scope-chip-hero-menu")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("scope-chip-hero-option-gen-5"),
+      ).toBeInTheDocument();
+      // The default testid is NOT present for this instance.
+      expect(screen.queryByTestId("scope-chip")).toBeNull();
     });
 
     it("picking an option fires onSelect and closes the menu", () => {

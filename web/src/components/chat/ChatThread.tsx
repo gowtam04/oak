@@ -86,6 +86,8 @@ export default function ChatThread({
   onRetry,
   onFollowUp,
   imagePreviews,
+  composerSlot,
+  scopeChipSlot,
 }: ChatThreadProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
 
@@ -187,29 +189,55 @@ export default function ChatThread({
   return (
     <div className="chat-thread" data-testid="chat-thread">
       {showEmptyState && (
-        <div className="chat-empty" data-testid="chat-empty">
+        <div
+          className={"chat-empty" + (composerSlot ? " chat-empty--hero" : "")}
+          data-testid="chat-empty"
+        >
           <span className="chat-empty__wordmark">Oak</span>
           <p className="chat-empty__invite">
             Ask anything about Pokémon — team-building filters, stat math, damage
             calcs, or a quick Pokédex lookup.
           </p>
-          <p className="chat-empty__scope-hint" data-testid="chat-empty-scope-hint">
-            Answers default to Pokémon Champions ({CHAMPIONS_REGULATION}). For mainline
-            games, mention one (&ldquo;in Scarlet/Violet&rdquo;, &ldquo;gen 7&rdquo;) or use the scope chip in
-            the header.
-          </p>
+          <div
+            className="chat-empty__scope-hint"
+            data-testid="chat-empty-scope-hint"
+          >
+            Answers default to Pokémon Champions ({CHAMPIONS_REGULATION}).{" "}
+            {scopeChipSlot ? (
+              <>
+                {scopeChipSlot} to change scope, or just mention a game
+                (&ldquo;in Scarlet/Violet&rdquo;, &ldquo;gen 7&rdquo;).
+              </>
+            ) : (
+              <>
+                For mainline games, mention one (&ldquo;in Scarlet/Violet&rdquo;,
+                &ldquo;gen 7&rdquo;) or use the scope chip in the header.
+              </>
+            )}
+          </div>
+
+          {/* Composer promoted to center stage on desktop empty state; on
+              mobile / after the first turn this slot is empty and the composer
+              stays bottom-docked (fable-ui §4 screen 01). */}
+          {composerSlot && (
+            <div className="chat-empty__composer">{composerSlot}</div>
+          )}
+
           <div className="chat-empty__examples">
-            {examples.map((query) => (
-              <button
-                key={query}
-                type="button"
-                className="chat-empty__chip"
-                onClick={() => onFollowUp(query)}
-                data-testid="chat-empty-example"
-              >
-                {query}
-              </button>
-            ))}
+            <span className="ilabel chat-empty__examples-label">Try asking</span>
+            <div className="chat-empty__examples-grid">
+              {examples.map((query) => (
+                <button
+                  key={query}
+                  type="button"
+                  className="chat-empty__chip"
+                  onClick={() => onFollowUp(query)}
+                  data-testid="chat-empty-example"
+                >
+                  {query}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
