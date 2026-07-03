@@ -310,7 +310,7 @@ export default function ArtifactViewer(): React.JSX.Element | null {
           </div>
         </div>
         <span
-          className="artifact-viewer__format-tag"
+          className="artifact-viewer__format-tag ilabel"
           data-testid="artifact-format-tag"
         >
           {formatTag}

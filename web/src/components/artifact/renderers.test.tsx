@@ -61,17 +61,17 @@ describe("PokemonArtifact", () => {
     const hiddenBadge = within(abilities).getByText("Hidden");
     expect(hiddenBadge).toHaveClass("ability-chip__hidden-badge");
 
-    // Combined defensive grid + magnitudes (#12): quad members read x4 / x1/4,
-    // the remainder x2 / x1/2, immunities x0.
+    // Combined defensive grid + magnitudes (#12): quad members read ×4 / ×¼,
+    // the remainder ×2 / ×½, immunities ×0.
     const weak = screen.getByTestId("matchups-weak");
-    expect(weak).toHaveTextContent("x4"); // ice (quad)
-    expect(weak).toHaveTextContent("x2"); // dragon / fairy
+    expect(weak).toHaveTextContent("×4"); // ice (quad)
+    expect(weak).toHaveTextContent("×2"); // dragon / fairy
     const resists = screen.getByTestId("matchups-resists");
-    expect(resists).toHaveTextContent("x1/4"); // fire (quad)
-    expect(resists).toHaveTextContent("x1/2"); // poison / rock
+    expect(resists).toHaveTextContent("×¼"); // fire (quad)
+    expect(resists).toHaveTextContent("×½"); // poison / rock
     const immune = screen.getByTestId("matchups-immune");
     expect(immune).toHaveTextContent("electric");
-    expect(immune).toHaveTextContent("x0");
+    expect(immune).toHaveTextContent("×0");
 
     // Movepool grouped by method; moves are clickable EntityLink buttons.
     expect(screen.getByTestId("movepool-group-Level-up")).toBeInTheDocument();

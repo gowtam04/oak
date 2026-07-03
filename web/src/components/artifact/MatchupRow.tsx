@@ -33,7 +33,7 @@ export default function MatchupRow({
 }: MatchupRowProps): React.JSX.Element {
   return (
     <div className="matchup-row" data-testid={testid}>
-      <span className="matchup-row__label">{label}</span>
+      <span className="matchup-row__label ilabel">{label}</span>
       <span className="matchup-row__badges">
         {types.length === 0 ? (
           <span className="matchup-row__empty">—</span>
@@ -46,7 +46,9 @@ export default function MatchupRow({
                   <TypeBadge type={t as TypeName} />
                 </EntityLink>
                 {multiplier && (
-                  <span className="matchup-row__mult">{multiplier}</span>
+                  <span className="matchup-row__mult mono-num">
+                    {multiplier}
+                  </span>
                 )}
               </span>
             );
