@@ -13,7 +13,8 @@
  *   - guest       → 401
  */
 
-import { json, jsonError, readJsonObject } from "@/app/api/auth/_lib/http";
+import { json, jsonError } from "@/app/api/auth/_lib/http";
+import { readJsonBodyWithLimit } from "@/server/body-limit";
 import { oakAnswerSchema } from "@/agent/schemas";
 import { formatForMode, isFormat, type Format } from "@/data/formats";
 import type { ChatTurn } from "@/components/types";
@@ -23,12 +24,29 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
+ * Byte cap for the imported thread (EDGE-01). Imported turns carry full OakAnswer
+ * JSON, so this is far larger than the 64 KiB auth default — but still bounded,
+ * and enforced by streaming (a chunked body can't slip past it).
+ */
+const MAX_IMPORT_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Hard cap on the number of turns in a single import (EDGE-01). `validateTurns`
+ * iterates + Zod-validates every turn, so an unbounded array is a CPU DoS; a
+ * legitimate on-screen thread is nowhere near this.
+ */
+const MAX_TURNS = 1000;
+
+/**
  * Validate the client-sent turns into a clean ChatTurn[] (dropping any extra
- * fields), or return `null` if any turn is malformed. Assistant answers are
- * validated against the canonical OakAnswer schema (BR-H3).
+ * fields), or return `null` if any turn is malformed OR the array exceeds
+ * MAX_TURNS. Assistant answers are validated against the canonical OakAnswer
+ * schema (BR-H3).
  */
 function validateTurns(raw: unknown): ChatTurn[] | null {
   if (!Array.isArray(raw)) return null;
+  // Reject an oversized array up front, before iterating/validating (EDGE-01).
+  if (raw.length > MAX_TURNS) return null;
   const turns: ChatTurn[] = [];
   for (const item of raw) {
     if (typeof item !== "object" || item === null) return null;
@@ -55,7 +73,20 @@ export async function POST(req: Request): Promise<Response> {
     return jsonError(401, "unauthorized", "You must be signed in.");
   }
 
-  const body = await readJsonObject(req);
+  // Read under a hard streaming byte cap (EDGE-01) — too_large → 413, malformed
+  // → 400. Using the helper directly (not readJsonObject) so an over-cap import
+  // gets a distinct 413 rather than being folded into the 400 path.
+  const bodyResult = await readJsonBodyWithLimit(req, MAX_IMPORT_BYTES);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === "too_large") {
+      return jsonError(413, "payload_too_large", "Request body is too large.");
+    }
+    return jsonError(400, "invalid_request", "Request body must be valid JSON.");
+  }
+  const body =
+    typeof bodyResult.value === "object" && bodyResult.value !== null
+      ? (bodyResult.value as Record<string, unknown>)
+      : null;
   if (
     body === null ||
     typeof body.session_id !== "string" ||

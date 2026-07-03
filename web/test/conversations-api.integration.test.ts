@@ -359,6 +359,19 @@ describe("POST /api/conversations/import", () => {
     expect((await res.json()).code).toBe("invalid_turns");
   });
 
+  it("rejects an oversized turns array with 400 invalid_turns (EDGE-01)", async () => {
+    // > MAX_TURNS (1000) user turns — rejected up front, before any per-turn
+    // iteration/validation, so an unbounded array can't be a CPU DoS.
+    const turns = Array.from({ length: 1001 }, () => ({
+      id: randomUUID(),
+      role: "user",
+      content: "x",
+    }));
+    const res = await importPOST(importBody(randomUUID(), turns));
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe("invalid_turns");
+  });
+
   it("derives champions format from champions_mode", async () => {
     const sid = randomUUID();
     const turns = [{ id: randomUUID(), role: "user", content: "champ thread" }];

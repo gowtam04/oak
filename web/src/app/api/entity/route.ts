@@ -20,19 +20,39 @@
  * build` from evaluating `env` (cf. the chat route).
  */
 
-import { json } from "@/app/api/auth/_lib/http";
+import { json, retryAfterHeader } from "@/app/api/auth/_lib/http";
 import { isFormat, type Format } from "@/data/formats";
 import { ENTITY_KINDS, type EntityKind } from "@/agent/schemas";
+import { checkRateLimit, PUBLIC_READ_CONFIG } from "@/server/rate-limit";
+import { clientIp } from "@/server/client-ip";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const KINDS = new Set<string>(ENTITY_KINDS);
 
+/** Cap the query length — names are short (mirrors /api/search's MAX_Q). This
+ *  bounds the fuzzy-match work an anonymous caller can force per request. */
+const MAX_Q = 64;
+
 export async function GET(req: Request): Promise<Response> {
+  // Rate-limit BEFORE any dynamic import / DB work (EDGE-02) — this route is a
+  // public, unauthenticated GET doing DB I/O on the shared pool. All four public
+  // read routes share the `pub:<ip>` bucket (one per IP).
+  const gate = checkRateLimit(`pub:${clientIp(req)}`, "", PUBLIC_READ_CONFIG);
+  if (!gate.allowed) {
+    const retryAfterMs =
+      gate.reason === "rate_limited" ? gate.retryAfterMs : 0;
+    return json(
+      429,
+      { error: "rate_limited" },
+      retryAfterHeader(retryAfterMs),
+    );
+  }
+
   const url = new URL(req.url);
   const kindParam = url.searchParams.get("kind")?.trim() ?? "";
-  const q = url.searchParams.get("q")?.trim() ?? "";
+  const q = (url.searchParams.get("q")?.trim() ?? "").slice(0, MAX_Q);
   const formatParam = url.searchParams.get("format")?.trim() ?? "";
 
   // --- Param validation (pure; a bad param is a real 4xx, not an envelope) ---

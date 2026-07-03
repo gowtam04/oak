@@ -34,6 +34,7 @@ import {
   TEAMS_ASSISTANT_CONFIG,
 } from "@/server/rate-limit";
 import { appendTurn, getHistory, trim } from "@/server/session-store";
+import { readJsonBodyWithLimit } from "@/server/body-limit";
 import {
   formatTeamsAssistantSseEvent,
   type TeamsAssistantSseEventDataMap,
@@ -131,28 +132,26 @@ function composeMessage(body: TeamsAssistantBody): string {
 export async function POST(req: Request): Promise<Response> {
   const requestId = randomUUID();
 
-  // Cheap pre-parse guard: a declared oversized body never gets read.
-  const declaredLength = Number(req.headers.get("content-length"));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
-    return jsonError(413, "request_too_large", "Request body is too large.");
-  }
-
-  let parsedBody: TeamsAssistantBody;
-  try {
-    const raw: unknown = await req.json();
-    const parsed = requestBodySchema.safeParse(raw);
-    if (!parsed.success) {
-      return jsonError(
-        400,
-        "invalid_request",
-        "Body must be { session_id, message, draft: { name, format, members } }.",
-      );
+  // Read + parse the body under a HARD streaming byte cap (EDGE-01) — this
+  // replaces the old Content-Length-only guard, which a chunked-encoding request
+  // (no Content-Length header) slipped past before `req.json()` buffered it
+  // uncapped. too_large → 413, malformed → 400.
+  const bodyResult = await readJsonBodyWithLimit(req, MAX_REQUEST_BYTES);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === "too_large") {
+      return jsonError(413, "request_too_large", "Request body is too large.");
     }
-    parsedBody = parsed.data;
-  } catch {
     return jsonError(400, "invalid_request", "Body must be valid JSON.");
   }
-  const body = parsedBody;
+  const parsed = requestBodySchema.safeParse(bodyResult.value);
+  if (!parsed.success) {
+    return jsonError(
+      400,
+      "invalid_request",
+      "Body must be { session_id, message, draft: { name, format, members } }.",
+    );
+  }
+  const body = parsed.data;
   const { session_id } = body;
 
   // 1) AUTH — signed-in only, before any state is touched (mirrors /api/teams).

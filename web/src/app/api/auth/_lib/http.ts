@@ -14,6 +14,8 @@
  * it is never treated as a routable segment.
  */
 
+import { readJsonBodyWithLimit } from "@/server/body-limit";
+
 /** Serialize a JSON body with an explicit status + optional extra headers. */
 export function json(
   status: number,
@@ -59,19 +61,29 @@ export function retryAfterHeader(retryAfterMs: number): Record<string, string> {
 export { clientIp } from "@/server/client-ip";
 
 /**
- * Read + shape-check a JSON request body. Returns the parsed object, or `null`
- * for malformed JSON or a non-object body (the caller maps `null` to a 400
+ * Read + shape-check a JSON request body under a HARD streaming byte cap
+ * (EDGE-01). Returns the parsed object, or `null` for malformed JSON, a
+ * non-object body, OR an over-cap body (the caller maps `null` to a 400
  * `invalid_request`). Field-level validation is the caller's.
+ *
+ * `maxBytes` defaults to 64 KiB — auth bodies (email + OTP code) are tiny, so
+ * all existing callers get the cap for free. A caller with a legitimately larger
+ * payload (e.g. `/api/conversations/import`, whose turns carry full OakAnswer
+ * JSON) passes an explicit larger cap. The cap is enforced by streaming the body
+ * and aborting past the limit, so a chunked (no-Content-Length) request can't
+ * buffer an uncapped body — see `readJsonBodyWithLimit`.
+ *
+ * Callers needing to DISTINGUISH an over-cap body (413) from malformed JSON
+ * (400) should call `readJsonBodyWithLimit` directly; this helper collapses both
+ * to `null` for the tiny auth routes where a 400 is acceptable either way.
  */
 export async function readJsonObject(
   req: Request,
+  maxBytes = 64 * 1024,
 ): Promise<Record<string, unknown> | null> {
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return null;
-  }
+  const result = await readJsonBodyWithLimit(req, maxBytes);
+  if (!result.ok) return null;
+  const raw = result.value;
   if (typeof raw !== "object" || raw === null) return null;
   return raw as Record<string, unknown>;
 }

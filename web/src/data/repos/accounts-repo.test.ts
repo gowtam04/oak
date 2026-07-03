@@ -55,10 +55,11 @@ afterAll(async () => {
 
 // One migrated schema for the whole file (the singleton db is captured once);
 // reset the tables between tests so each starts clean. The chat-history + team
-// tables are included because deleteAccount cascades into them.
+// tables are included because deleteAccount cascades into them, as are the
+// admin-panel usage-recording tables (turn_record, auth_event).
 beforeEach(async () => {
   await fix.db.execute(
-    sql`TRUNCATE TABLE account, auth_session, otp_code, conversation, conversation_message, team RESTART IDENTITY`,
+    sql`TRUNCATE TABLE account, auth_session, otp_code, conversation, conversation_message, team, turn_record, auth_event RESTART IDENTITY`,
   );
 });
 
@@ -307,7 +308,7 @@ describe("deleteAccount (cascade)", () => {
     return (res.rows[0] as { n: number }).n;
   }
 
-  /** A full per-account row count across the six cascade tables. */
+  /** A full per-account row count across all cascade tables. */
   async function snapshot(accountId: string, email: string) {
     return {
       account: n(
@@ -340,10 +341,33 @@ describe("deleteAccount (cascade)", () => {
           sql`SELECT count(*)::int AS n FROM team WHERE account_id = ${accountId}`,
         ),
       ),
+      turnRecord: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM turn_record WHERE account_id = ${accountId}`,
+        ),
+      ),
+      // "otp_verified" events carry the account_id.
+      authEventByAccount: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM auth_event WHERE account_id = ${accountId}`,
+        ),
+      ),
+      // "otp_requested" events carry the email but a NULL account_id — the
+      // only way to locate/purge them for this account.
+      authEventByEmail: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM auth_event WHERE email = ${email} AND account_id IS NULL`,
+        ),
+      ),
     };
   }
 
-  /** Seed an account plus one row in every cascade table (2 messages). */
+  /**
+   * Seed an account plus one row in every cascade table (2 messages, 1
+   * turn_record, and 2 auth_event rows: one "otp_requested" recorded BEFORE
+   * the account existed — email set, account_id NULL — and one "otp_verified"
+   * recorded with the account_id set).
+   */
   async function seedFullAccount(email: string) {
     const accountId = randomUUID();
     const t = 1_700_000_000_000;
@@ -379,6 +403,21 @@ describe("deleteAccount (cascade)", () => {
       sql`INSERT INTO conversation_message (id, conversation_id, account_id, seq, role, text_content, answer_json, created_at)
           VALUES (${randomUUID()}, ${convId}, ${accountId}, 1, 'assistant', 'hello', '{}', ${t})`,
     );
+    await fix.db.execute(
+      sql`INSERT INTO turn_record (id, session_id, account_id, model, provider_model, mode, status, created_at)
+          VALUES (${randomUUID()}, ${`sess-${accountId}`}, ${accountId}, 'grok-4.3', 'grok-2', 'champions', 'answered', ${t})`,
+    );
+    // Recorded before the account existed (find-or-create OTP request flow):
+    // email is known, account_id is not yet.
+    await fix.db.execute(
+      sql`INSERT INTO auth_event (id, type, email, account_id, created_at)
+          VALUES (${randomUUID()}, 'otp_requested', ${email}, NULL, ${t})`,
+    );
+    // Recorded once the account exists.
+    await fix.db.execute(
+      sql`INSERT INTO auth_event (id, type, email, account_id, created_flag, created_at)
+          VALUES (${randomUUID()}, 'otp_verified', ${email}, ${accountId}, 0, ${t})`,
+    );
     return { accountId, email };
   }
 
@@ -389,6 +428,9 @@ describe("deleteAccount (cascade)", () => {
     conversation: 1,
     message: 2,
     team: 1,
+    turnRecord: 1,
+    authEventByAccount: 1,
+    authEventByEmail: 1,
   };
   const EMPTY = {
     account: 0,
@@ -397,9 +439,12 @@ describe("deleteAccount (cascade)", () => {
     conversation: 0,
     message: 0,
     team: 0,
+    turnRecord: 0,
+    authEventByAccount: 0,
+    authEventByEmail: 0,
   };
 
-  it("removes EVERY account-scoped row across all six tables", async () => {
+  it("removes EVERY account-scoped row across all eight cascade tables", async () => {
     const { accountId, email } = await seedFullAccount(EMAIL);
     expect(await snapshot(accountId, email)).toEqual(FULL);
 

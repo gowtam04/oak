@@ -8,11 +8,20 @@
  * the `@/data/db` singleton, so the fixture is installed via `installAsSingleton`.
  */
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 vi.mock("server-only", () => ({}));
 
 import { createPgSchema, installAsSingleton, type PgFixture } from "./support/pg";
+import { _resetStoreForTests } from "@/server/rate-limit";
 
 // Route deps (@/data/db etc.) load dynamically at call time, so a static import
 // here does NOT touch @/data/db before installAsSingleton runs.
@@ -29,6 +38,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await fix?.cleanup();
 });
+
+// This route now shares the `pub:<ip>` read rate-limit bucket (EDGE-02); reset
+// it between cases so accumulated calls can't trip the limiter mid-suite.
+beforeEach(() => _resetStoreForTests());
 
 function call(params: Record<string, string>): Promise<Response> {
   const qs = new URLSearchParams(params).toString();

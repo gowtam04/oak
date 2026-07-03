@@ -62,7 +62,25 @@ const globalForDb = globalThis as typeof globalThis & {
 function createBundle(): DbBundle {
   // Lazy pool — no socket is opened until the first query. Nothing here is
   // awaited, so the synchronous `db` export below is safe.
-  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  //
+  // Explicit bounds (EDGE-02): the default `pg.Pool` has `max: 10` but NO
+  // timeouts, so under load a slow/stuck query can hold a connection
+  // indefinitely and a burst can pin all connections while callers wait forever.
+  // We cap the pool, bound how long a caller waits for a connection, reap idle
+  // connections, and cap any single query's server- and client-side duration —
+  // so one misbehaving caller can't exhaust the pool for everyone. (The ingest
+  // CLI opens its OWN pool in src/ingest/run.ts and is intentionally left
+  // uncapped there — its bulk statements are legitimately long.)
+  const pool = new Pool({
+    connectionString: env.DATABASE_URL,
+    max: 10,
+    connectionTimeoutMillis: 5_000,
+    idleTimeoutMillis: 30_000,
+    // Server-side cap: Postgres aborts a statement running longer than this.
+    statement_timeout: 15_000,
+    // Client-side cap: node-postgres rejects the query if no result by then.
+    query_timeout: 15_000,
+  });
   const db = drizzle(pool, { schema });
   return { pool, db };
 }

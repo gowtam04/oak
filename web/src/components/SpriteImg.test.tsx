@@ -36,4 +36,27 @@ describe("SpriteImg", () => {
     fireEvent.error(img);
     expect(img).toHaveAttribute("src", SRC);
   });
+
+  it("does not render a javascript: src as the img src (FE-02)", () => {
+    const { container } = render(
+      <SpriteImg src="javascript:alert(1)" alt="x" />,
+    );
+    expect(container.querySelector("img")).not.toBeInTheDocument();
+  });
+
+  it("falls through to a safe fallbackSrc when the primary src is unsafe", () => {
+    render(<SpriteImg src="javascript:alert(1)" fallbackSrc={FALLBACK} alt="x" />);
+    expect(screen.getByRole("img")).toHaveAttribute("src", FALLBACK);
+  });
+
+  it("renders nothing when both src and fallbackSrc are unsafe", () => {
+    const { container } = render(
+      <SpriteImg
+        src="javascript:alert(1)"
+        fallbackSrc="data:text/html,<script>alert(1)</script>"
+        alt="x"
+      />,
+    );
+    expect(container.querySelector("img")).not.toBeInTheDocument();
+  });
 });

@@ -67,6 +67,7 @@ import {
   SIGNED_IN_CONFIG,
 } from "@/server/rate-limit";
 import { validateImages } from "@/server/image-upload";
+import { readJsonBodyWithLimit } from "@/server/body-limit";
 import { clientIp } from "@/server/client-ip";
 import {
   appendTurn,
@@ -89,10 +90,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Cheap DoS guard: reject by `Content-Length` BEFORE buffering the body. The real
- * per-image/total caps run in `validateImages` on the DECODED bytes; this just
- * stops an absurd payload from being read into memory. Generous headroom over the
- * 10 MiB decoded image total (base64 inflates ~33%, plus JSON + text).
+ * DoS guard: the hard byte cap enforced by `readJsonBodyWithLimit` — it streams
+ * the body and aborts the moment the running byte total exceeds this, so a
+ * chunked (no-Content-Length) payload can't slip past into an uncapped buffer.
+ * The real per-image/total caps run in `validateImages` on the DECODED bytes;
+ * this just stops an absurd payload from being read into memory. Generous
+ * headroom over the 10 MiB decoded image total (base64 inflates ~33%, plus JSON
+ * + text).
  */
 const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 
@@ -210,26 +214,27 @@ function parseBody(
 export async function POST(req: Request): Promise<Response> {
   const requestId = randomUUID();
 
-  // 0. Cheap size guard BEFORE buffering the body — an image-bearing request can
-  //    be several MB of base64; reject an oversized payload by Content-Length so
-  //    we never read it into memory (the precise decoded caps run below).
-  const declaredLength = Number(req.headers.get("content-length"));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) {
-    return jsonError(413, "payload_too_large", "Request body is too large.");
-  }
-
-  // 1. Parse + validate the body (Next 15: await req.json()). A malformed body
-  //    is a client error, surfaced as a plain 400 before any streaming.
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
+  // 0+1. Read + parse the body under a HARD streaming byte cap (EDGE-01). This
+  //    replaces the old Content-Length-only guard, which a chunked-encoding
+  //    request (no Content-Length header) slipped past before `req.json()`
+  //    buffered it uncapped. `readJsonBodyWithLimit` keeps the cheap declared-
+  //    length fast reject but also counts the ACTUAL bytes as it streams, so an
+  //    oversized payload is never read into memory. An image-bearing request can
+  //    be several MB of base64 (the precise per-image/total decoded caps still
+  //    run in `validateImages` below); too_large → 413, malformed → 400, both
+  //    before any streaming.
+  const bodyResult = await readJsonBodyWithLimit(req, MAX_REQUEST_BYTES);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === "too_large") {
+      return jsonError(413, "payload_too_large", "Request body is too large.");
+    }
     return jsonError(
       400,
       "invalid_request",
       "Request body must be valid JSON.",
     );
   }
+  const raw: unknown = bodyResult.value;
 
   // 1a. Validate + canonicalize any attached images (count + size caps, magic-
   //     byte MIME sniff) before opening the stream — a bad attachment is a real
