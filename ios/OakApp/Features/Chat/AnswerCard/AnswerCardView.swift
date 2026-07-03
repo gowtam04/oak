@@ -135,7 +135,7 @@ struct AnswerCardView: View {
     case .status:
       statusBadge
     case .answer:
-      MarkdownText(answer.answerMarkdown)
+      MarkdownBlockView(answer.answerMarkdown)
         .font(Theme.body(.body))
         .foregroundStyle(Theme.textPrimary)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -317,7 +317,7 @@ private struct ReasoningSection: View {
 
   var body: some View {
     DisclosureGroup(isExpanded: $isExpanded) {
-      MarkdownText(markdown)
+      MarkdownBlockView(markdown)
         .font(Theme.body(.footnote))
         .foregroundStyle(Theme.textSecondary)
         .frame(maxWidth: .infinity, alignment: .leading)
