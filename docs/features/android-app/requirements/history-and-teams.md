@@ -75,9 +75,11 @@ draft already on screen.
   storage. The user still reviews and presses the editor's own **Save** to
   persist; Apply and Save are distinct actions.
 - **D-AC-TEAM2.6** — After applying, the card shows "Applied to draft" with
-  **Undo**, which reverts just that application. Undo is offered only for
-  the **most recently applied** proposal — a further edit (manual or
-  another apply) forecloses undoing the earlier one.
+  **Undo**, which restores the **exact pre-apply snapshot**. Undo is offered
+  only for the **most recently applied** proposal — a further apply
+  forecloses undoing the earlier one. A manual edit does **not** hide Undo
+  (parity with shipped web/iOS), but firing Undo discards any manual edits
+  made after the apply, since it restores the snapshot.
 - **D-AC-TEAM2.7** — A failed turn shows an inline error with **Retry**; the
   conversation and draft are not lost or corrupted. The composer is disabled
   mid-reply (no overlapping turns).
