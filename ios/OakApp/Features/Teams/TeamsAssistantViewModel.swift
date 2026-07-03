@@ -154,11 +154,19 @@ final class TeamsAssistantViewModel {
     lastApplied = nil
   }
 
-  /// Tears down any in-flight stream (panel dismissed / view disappeared). The thread
-  /// state is left intact — reopening the panel resumes the same in-memory thread.
+  /// Tears down any in-flight stream (panel dismissed / view disappeared). Committed
+  /// turns are left intact — reopening the panel resumes the same in-memory thread — but
+  /// a half-finished in-flight turn is dropped and the status reset to idle, so a
+  /// mid-stream dismiss can never leave the panel stuck "thinking". The consumer's
+  /// CancellationError path returns silently, so it won't clobber this reset.
   func cancel() {
     streamTask?.cancel()
     streamTask = nil
+    guard status == .thinking else { return }
+    turns.removeAll { $0.answer == nil }
+    status = .idle
+    activity = nil
+    streamingMarkdown = ""
   }
 
   // MARK: Reducer

@@ -109,6 +109,22 @@ struct TeamsAssistantViewModelTests {
     #expect(fake.sendCount == 0)
   }
 
+  @Test
+  func cancelMidStreamDropsTheInFlightTurnAndResetsStatus() {
+    let fake = FakeTeamsAssistantService()
+    fake.scriptedEvents = []  // never delivers a terminal answer → stays "thinking"
+    let vm = makeModel(fake: fake, editor: makeEditor())
+
+    vm.send("thinking forever")
+    // Force the "thinking" state without draining (the task is not awaited here).
+    #expect(vm.turns.count == 1)
+
+    vm.cancel()
+    #expect(vm.status == .idle)
+    #expect(vm.turns.isEmpty)  // the answerless in-flight turn is dropped
+    #expect(vm.streamingMarkdown.isEmpty)
+  }
+
   // MARK: Transport faults + rate limit
 
   @Test
