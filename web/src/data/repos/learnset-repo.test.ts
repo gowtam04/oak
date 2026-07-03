@@ -11,13 +11,18 @@
  * take the active format and must never read across formats.
  */
 
+import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { OakDb } from "@/data/db";
 import { learnset } from "@/data/schema";
 
 import { createPgSchema, type PgFixture } from "../../../test/support/pg";
-import { gen9LearnerCount, pokemonLearningAll } from "./learnset-repo";
+import {
+  gen9LearnerCount,
+  learnersOfMove,
+  pokemonLearningAll,
+} from "./learnset-repo";
 
 const SV = "scarlet-violet";
 const CH = "champions";
@@ -144,4 +149,70 @@ describe("gen9LearnerCount", () => {
   it("returns 0 for a move nobody learns", async () => {
     expect(await gen9LearnerCount("does-not-exist", SV, db)).toBe(0);
   });
+});
+
+// ---------------------------------------------------------------------------
+// learnersOfMove — the reverse roster for a /moves/[slug] page. Driven off the
+// shared "tools" fixture (real learnset in test/fixtures/tools-fixture.ts) so
+// the JOIN + dex-then-slug ordering is asserted against known contents.
+// ---------------------------------------------------------------------------
+
+describe("learnersOfMove (tools fixture)", () => {
+  let toolsFix: PgFixture;
+  let tdb: OakDb;
+
+  beforeAll(async () => {
+    toolsFix = await createPgSchema({ seed: "tools" });
+    tdb = toolsFix.db;
+  }, 60_000);
+
+  afterAll(async () => {
+    await toolsFix?.cleanup();
+  });
+
+  it("joins learners and orders by national-dex then slug", async () => {
+    // will-o-wisp (SV): ninetales (dex 38, level-up) + tauros-paldea-blaze
+    // (dex 128, machine).
+    expect(await learnersOfMove("will-o-wisp", SV, tdb)).toEqual([
+      { slug: "ninetales", displayName: "Ninetales", method: "level-up" },
+      {
+        slug: "tauros-paldea-blaze",
+        displayName: "Tauros (Paldean Blaze)",
+        method: "machine",
+      },
+    ]);
+  });
+
+  it("carries the learn method through the join (single learner)", async () => {
+    // earthquake (SV) is learned only by Garchomp, via machine.
+    expect(await learnersOfMove("earthquake", SV, tdb)).toEqual([
+      { slug: "garchomp", displayName: "Garchomp", method: "machine" },
+    ]);
+  });
+
+  it("is format-scoped: a move not in the format yields []", async () => {
+    // will-o-wisp is a scarlet-violet learnset only; champions holds none.
+    expect(await learnersOfMove("will-o-wisp", CH, tdb)).toEqual([]);
+  });
+
+  it("returns [] for a move nobody learns", async () => {
+    expect(await learnersOfMove("does-not-exist", SV, tdb)).toEqual([]);
+  });
+
+  it("returns exactly one row per learner (no join duplication)", async () => {
+    // trick-room (SV): ninetales (dex 38) + farigiraf (dex 981), each once.
+    const rows = await learnersOfMove("trick-room", SV, tdb);
+    expect(rows.map((r) => r.slug)).toEqual(["ninetales", "farigiraf"]);
+    expect(new Set(rows.map((r) => r.slug)).size).toBe(rows.length);
+  });
+
+  it("returns [] when the learnset table is missing", async () => {
+    const empty = await createPgSchema({ seed: "none" });
+    try {
+      await empty.db.execute(sql`DROP TABLE learnset`);
+      expect(await learnersOfMove("earthquake", SV, empty.db)).toEqual([]);
+    } finally {
+      await empty.cleanup();
+    }
+  }, 60_000);
 });

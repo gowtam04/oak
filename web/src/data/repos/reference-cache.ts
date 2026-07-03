@@ -18,11 +18,15 @@
 
 import "server-only";
 
-import { and, eq, ilike, inArray } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray } from "drizzle-orm";
 
 import type { OakDb } from "@/data/db";
-import type { Format } from "@/data/formats";
+import { FORMATS, type Format } from "@/data/formats";
 import { reference_cache, searchable_names } from "@/data/schema";
+import type {
+  NameRow,
+  ReferenceEntityKind,
+} from "@/lib/reference-pages-types";
 import type {
   MoveDetail,
   AbilityDetail,
@@ -200,6 +204,127 @@ export async function moveSummaries(
         and(
           eq(reference_cache.format, format),
           inArray(reference_cache.resource_key, keys),
+        ),
+      );
+  } catch {
+    // Table missing (migrations not applied) — no summaries rather than throwing.
+    return out;
+  }
+
+  for (const row of rows) {
+    const record = parsePayload(row.payload);
+    if (!record || !("display_name" in record)) continue;
+    const move = record as MoveDetail;
+    // resource_key is "move/<slug>" — strip the prefix back to the slug.
+    const slug = row.resource_key.slice("move/".length);
+    out.set(slug, {
+      displayName: move.display_name,
+      type: move.type,
+      damageClass: move.damage_class ?? null,
+      power: move.power ?? null,
+    });
+  }
+  return out;
+}
+
+// ===========================================================================
+// Reference-page reads (SEO programmatic pages) — read-only, never throw
+// ===========================================================================
+
+/**
+ * Every move / ability / item name in `format`, alphabetical by display name —
+ * the enumeration backing the `/moves`, `/abilities`, `/items` index pages.
+ * Reads `searchable_names` (the resolve_entity name set), ONE query. Returns
+ * `[]` for an unreadable index (never throws).
+ *
+ * @param kind   "move" | "ability" | "item".
+ * @param format the active data scope.
+ * @param db     the Drizzle handle.
+ */
+export async function listNamesByKind(
+  kind: "move" | "ability" | "item",
+  format: Format,
+  db: OakDb,
+): Promise<NameRow[]> {
+  try {
+    const rows = await db
+      .select({
+        slug: searchable_names.slug,
+        displayName: searchable_names.display_name,
+      })
+      .from(searchable_names)
+      .where(
+        and(
+          eq(searchable_names.format, format),
+          eq(searchable_names.kind, kind),
+        ),
+      )
+      .orderBy(asc(searchable_names.display_name));
+    return rows.map((r) => ({ slug: r.slug, displayName: r.displayName }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Which formats' `searchable_names` contain `(kind, slug)`, returned in
+ * {@link FORMATS} order — the cross-format availability chips on a detail page.
+ * Cross-format read (not scoped to one format) in ONE query; the FORMATS-order
+ * sort happens in JS. Returns `[]` for an unreadable index or an unknown entity.
+ *
+ * @param kind "pokemon" | "move" | "ability" | "item".
+ * @param slug canonical slug.
+ * @param db   the Drizzle handle.
+ */
+export async function entityFormats(
+  kind: ReferenceEntityKind,
+  slug: string,
+  db: OakDb,
+): Promise<Format[]> {
+  try {
+    const rows = await db
+      .selectDistinct({ format: searchable_names.format })
+      .from(searchable_names)
+      .where(
+        and(
+          eq(searchable_names.kind, kind),
+          eq(searchable_names.slug, slug),
+        ),
+      );
+    const present = new Set(rows.map((r) => r.format));
+    return FORMATS.filter((f) => present.has(f));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Batched map of EVERY move summary in `format` (slug → {@link MoveSummary}) —
+ * the single read that hydrates the `/moves` index table without an N-per-move
+ * `moveSummaries` fan-out. Reads every `resource_kind = 'move'` row for the
+ * format and parses each normalized `MoveDetail` payload; a corrupt/foreign
+ * payload is skipped. Returns an empty map for an unreadable index.
+ *
+ * @param format the active data scope.
+ * @param db     the Drizzle handle.
+ */
+export async function allMoveSummaries(
+  format: Format,
+  db: OakDb,
+): Promise<Map<string, MoveSummary>> {
+  const out = new Map<string, MoveSummary>();
+  let rows: { resource_key: string; payload: string }[];
+  try {
+    rows = await db
+      .select({
+        resource_key: reference_cache.resource_key,
+        payload: reference_cache.payload,
+      })
+      .from(reference_cache)
+      .where(
+        and(
+          eq(reference_cache.format, format),
+          eq(reference_cache.resource_kind, "move"),
         ),
       );
   } catch {

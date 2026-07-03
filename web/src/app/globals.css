@@ -2230,9 +2230,12 @@
   background: var(--brand-mark) center / cover no-repeat;
   box-shadow: var(--shadow-raised);
 }
+/* This is now the page's single <h1> (SEO); font-weight: 400 neutralizes the
+   UA default h1 bold so the visual size/weight are unchanged from before. */
 .chat-empty__invite {
   margin: 0;
   font-size: 1rem;
+  font-weight: 400;
   line-height: 1.6;
   color: var(--text-muted);
 }
@@ -2303,6 +2306,120 @@
 }
 .chat-empty__chip:active {
   transform: scale(0.98);
+}
+
+/* --------------------------------------------------------------------------
+   17a. Landing section — below-fold SEO copy shown only in the empty state
+   (what Oak is, what it can do, FAQ, site footer). Quiet and visually
+   subordinate to the hero above it: a narrow column, muted body text, and a
+   top border to separate it from `.chat-empty`.
+   -------------------------------------------------------------------------- */
+
+/* The hero (wordmark + h1 + scope hint) is vertically centered via
+   `.chat-empty { margin: auto }` inside the scrolling `.chat-page__main`.
+   Once the landing section adds height below it, that container grows past
+   one viewport and the centering has more room to work with than intended —
+   this floor keeps the hero still effectively owning the first viewport. */
+.chat-page__main:has(.landing) .chat-empty {
+  min-height: calc(100dvh - 220px);
+}
+
+.landing {
+  border-top: 1px solid var(--border);
+  padding: 48px 24px 96px;
+}
+
+.landing__inner {
+  max-width: 640px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.landing__heading {
+  margin: 0 0 var(--space-3);
+  font-family: var(--display);
+  font-size: var(--text-lg);
+  color: var(--text-strong);
+}
+
+.landing__blurb {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+.landing__features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing__feature {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.landing__feature-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.landing__feature-body {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.landing__faq-item {
+  border-bottom: 1px solid var(--border);
+  padding-block: var(--space-3);
+}
+
+.landing__faq-item summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.landing__faq-a {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* The docked composer (`.composer`, `position: sticky; bottom: 0`) also
+   lives inside `.chat-page__main` and, once the empty state grows past a
+   single screen, would otherwise sit flush against — and cover — the tail
+   of the footer while scrolling. Match its resting height with bottom
+   padding so the footer always has clearance above it. */
+.landing__footer {
+  margin-top: var(--space-8);
+  padding-bottom: var(--space-16);
+  text-align: center;
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+}
+
+.landing__footer a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.landing__footer-sep {
+  margin-inline: var(--space-1);
 }
 
 /* --------------------------------------------------------------------------

@@ -13,6 +13,7 @@ import SidebarToggle from "@/components/controls/SidebarToggle";
 import ScopeChip from "@/components/controls/ScopeChip";
 import VoiceOverlay from "@/components/voice/VoiceOverlay";
 import SavedTeamAutoOpen from "@/components/teams/SavedTeamAutoOpen";
+import LandingSection from "@/components/landing/LandingSection";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
@@ -125,6 +126,21 @@ export default function Home() {
       localStorage.removeItem("oak-champions-mode");
     } catch {
       /* storage unavailable (private mode) — nothing to clean up */
+    }
+  }, []);
+
+  // Reference-page CTA prefill (B4): a `?q=` param (from an AskOakCta link)
+  // seeds the composer once, then is stripped from the URL so a reload doesn't
+  // re-prefill and the shared link stays clean. Runs once on mount.
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get("q");
+      if (q) {
+        setPrefill({ text: q });
+        history.replaceState(null, "", window.location.pathname);
+      }
+    } catch {
+      /* URL/history unavailable — no prefill, no harm */
     }
   }, []);
 
@@ -640,6 +656,8 @@ export default function Home() {
                 ) : undefined
               }
             />
+
+            {showEmptyState && <LandingSection />}
 
             {!heroComposer && composer}
           </div>

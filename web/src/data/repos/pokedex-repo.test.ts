@@ -11,12 +11,16 @@
  * isolated schema so the per-format ingest_meta expectations don't collide.
  */
 
+import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { ingest_meta, learnset, pokemon } from "@/data/schema";
 import type { OakDb } from "@/data/db";
 import {
   getPokemon as getPokemonRaw,
+  listAllPokemon,
+  pokemonFormats,
+  pokemonRequiringItem,
   queryPokedex as queryPokedexRaw,
   type PokedexFilters,
 } from "./pokedex-repo";
@@ -528,4 +532,129 @@ describe("format scoping (standard vs champions)", () => {
       await fix.cleanup();
     }
   }, 60_000);
+});
+
+// ---------------------------------------------------------------------------
+// Reference-page reads — driven off the shared "tools" fixture, whose contents
+// are asserted directly (POKEMON_SEED etc. in test/fixtures/tools-fixture.ts).
+// ---------------------------------------------------------------------------
+
+describe("reference-page reads (tools fixture)", () => {
+  let toolsFix: PgFixture;
+  let tdb: OakDb;
+
+  beforeAll(async () => {
+    toolsFix = await createPgSchema({ seed: "tools" });
+    tdb = toolsFix.db;
+  }, 60_000);
+
+  afterAll(async () => {
+    await toolsFix?.cleanup();
+  });
+
+  describe("listAllPokemon", () => {
+    it("returns every scarlet-violet row, dex-then-slug ordered", async () => {
+      const rows = await listAllPokemon(SV, tdb);
+      // POKEMON_SEED has 8 scarlet-violet rows.
+      expect(rows).toHaveLength(8);
+      expect(rows.map((r) => r.slug)).toEqual([
+        "ninetales", // 38
+        "tauros", // 128 (slug order among dex 128)
+        "tauros-paldea-aqua",
+        "tauros-paldea-blaze",
+        "tauros-paldea-combat",
+        "garchomp", // 445
+        "dracovish", // 882
+        "farigiraf", // 981
+      ]);
+    });
+
+    it("maps the index-row shape (Garchomp)", async () => {
+      const rows = await listAllPokemon(SV, tdb);
+      const garchomp = rows.find((r) => r.slug === "garchomp");
+      expect(garchomp).toEqual({
+        slug: "garchomp",
+        displayName: "Garchomp",
+        dexNumber: 445,
+        types: ["dragon", "ground"],
+        baseStatTotal: 600,
+        spriteUrl: "https://img.example/sprite/445.png",
+        isNative: true,
+      });
+    });
+
+    it("surfaces isNative=false for a non-native fallback (Dracovish)", async () => {
+      const rows = await listAllPokemon(SV, tdb);
+      const dracovish = rows.find((r) => r.slug === "dracovish");
+      expect(dracovish?.isNative).toBe(false);
+    });
+
+    it("is format-scoped: champions holds only Garchomp", async () => {
+      const rows = await listAllPokemon("champions", tdb);
+      expect(rows.map((r) => r.slug)).toEqual(["garchomp"]);
+    });
+
+    it("returns [] when the pokemon table is missing", async () => {
+      const empty = await createPgSchema({ seed: "none" });
+      try {
+        await empty.db.execute(sql`DROP TABLE pokemon`);
+        expect(await listAllPokemon(SV, empty.db)).toEqual([]);
+      } finally {
+        await empty.cleanup();
+      }
+    }, 60_000);
+  });
+
+  describe("pokemonFormats", () => {
+    it("lists the formats a slug appears in, in FORMATS order", async () => {
+      // Garchomp is seeded under scarlet-violet, champions AND gen-7.
+      expect(await pokemonFormats("garchomp", tdb)).toEqual([
+        "scarlet-violet",
+        "champions",
+        "gen-7",
+      ]);
+    });
+
+    it("returns a single format for a scarlet-violet-only species", async () => {
+      expect(await pokemonFormats("farigiraf", tdb)).toEqual(["scarlet-violet"]);
+    });
+
+    it("returns [] for an unknown slug", async () => {
+      expect(await pokemonFormats("missingno", tdb)).toEqual([]);
+    });
+  });
+
+  describe("pokemonRequiringItem", () => {
+    it("returns [] when no form requires the item (fixture has no Megas)", async () => {
+      expect(await pokemonRequiringItem("leftovers", SV, tdb)).toEqual([]);
+    });
+
+    it("back-links the forms whose required_item matches", async () => {
+      // The tools fixture seeds no Mega, so add one to prove the match path.
+      const fix = await createPgSchema({ seed: "tools" });
+      try {
+        await insertMon(fix.db, {
+          id: "swampert-mega",
+          species_name: "swampert",
+          display_name: "Swampert (Mega)",
+          national_dex_number: 260,
+          type1: "water",
+          type2: "ground",
+          ability_slot1: "swift-swim",
+          stat_hp: 100,
+          stat_attack: 150,
+          stat_defense: 110,
+          stat_special_attack: 95,
+          stat_special_defense: 110,
+          stat_speed: 70,
+          required_item: "swampertite",
+        });
+        expect(
+          await pokemonRequiringItem("swampertite", SV, fix.db),
+        ).toEqual([{ slug: "swampert-mega", displayName: "Swampert (Mega)" }]);
+      } finally {
+        await fix.cleanup();
+      }
+    }, 60_000);
+  });
 });

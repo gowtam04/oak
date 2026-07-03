@@ -21,6 +21,7 @@
  * be statically prerendered.
  */
 
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import AdminLogin from "@/components/admin/AdminLogin";
@@ -31,6 +32,11 @@ import "./admin.css";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Admin",
+  robots: { index: false, follow: false },
+};
 
 export default async function AdminLayout({
   children,

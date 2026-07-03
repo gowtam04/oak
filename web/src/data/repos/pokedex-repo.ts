@@ -52,8 +52,12 @@ import {
 } from "drizzle-orm";
 
 import type { OakDb } from "@/data/db";
-import type { Format } from "@/data/formats";
+import { FORMATS, type Format } from "@/data/formats";
 import { ingest_meta, learnset, pokemon } from "@/data/schema";
+import type {
+  NameRow,
+  PokemonIndexRow,
+} from "@/lib/reference-pages-types";
 import {
   TYPE_NAMES,
   type GetPokemonOutput,
@@ -691,6 +695,109 @@ export async function pokemonWithAbility(
     return rows.map((r) => ({ slug: r.id, displayName: r.displayName }));
   } catch {
     // Index unreadable (table missing) — no holders rather than throwing.
+    return [];
+  }
+}
+
+// ===========================================================================
+// Reference-page reads (SEO programmatic pages) — read-only, never throw
+// ===========================================================================
+
+/**
+ * Every Pokémon row in `format`, ordered by national-dex number then slug — the
+ * enumeration backing the `/pokedex` index page and any full-roster list. ONE
+ * query. Returns `[]` for an unreadable index (never throws).
+ *
+ * @param format the active data scope.
+ * @param db     the Drizzle handle.
+ */
+export async function listAllPokemon(
+  format: Format,
+  db: OakDb,
+): Promise<PokemonIndexRow[]> {
+  try {
+    const rows = await db
+      .select({
+        id: pokemon.id,
+        display_name: pokemon.display_name,
+        national_dex_number: pokemon.national_dex_number,
+        type1: pokemon.type1,
+        type2: pokemon.type2,
+        base_stat_total: pokemon.base_stat_total,
+        sprite_url: pokemon.sprite_url,
+        is_gen9_native: pokemon.is_gen9_native,
+      })
+      .from(pokemon)
+      .where(eq(pokemon.format, format))
+      .orderBy(asc(pokemon.national_dex_number), asc(pokemon.id));
+    return rows.map((r) => ({
+      slug: r.id,
+      displayName: r.display_name,
+      dexNumber: r.national_dex_number,
+      types: r.type2 ? [r.type1, r.type2] : [r.type1],
+      baseStatTotal: r.base_stat_total,
+      spriteUrl: r.sprite_url,
+      isNative: r.is_gen9_native === 1,
+    }));
+  } catch {
+    // Index unreadable (table missing) — empty list rather than throwing.
+    return [];
+  }
+}
+
+/**
+ * Which formats' `pokemon` tables contain `slug`, returned in {@link FORMATS}
+ * order (the availability chips on a `/pokedex/[slug]` page). Cross-format read
+ * (not scoped to one format) in ONE query; the FORMATS-order sort happens in JS.
+ * Returns `[]` for an unreadable index or an unknown slug.
+ *
+ * @param slug canonical Pokémon slug.
+ * @param db   the Drizzle handle.
+ */
+export async function pokemonFormats(
+  slug: string,
+  db: OakDb,
+): Promise<Format[]> {
+  try {
+    const rows = await db
+      .selectDistinct({ format: pokemon.format })
+      .from(pokemon)
+      .where(eq(pokemon.id, slug));
+    const present = new Set(rows.map((r) => r.format));
+    return FORMATS.filter((f) => present.has(f));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Forms in `format` whose `required_item` equals `itemSlug` — the back-links a
+ * `/items/[slug]` page shows for a Mega stone (e.g. "swampertite" →
+ * Swampert (Mega)). Ordered dex-then-slug. Returns `[]` when nothing requires
+ * the item or the index is unreadable (never throws).
+ *
+ * @param itemSlug canonical item slug (e.g. a Mega stone).
+ * @param format   the active data scope.
+ * @param db       the Drizzle handle.
+ */
+export async function pokemonRequiringItem(
+  itemSlug: string,
+  format: Format,
+  db: OakDb,
+): Promise<NameRow[]> {
+  try {
+    const rows = await db
+      .select({ id: pokemon.id, displayName: pokemon.display_name })
+      .from(pokemon)
+      .where(
+        and(
+          eq(pokemon.format, format),
+          eq(pokemon.required_item, itemSlug),
+        ),
+      )
+      .orderBy(asc(pokemon.national_dex_number), asc(pokemon.id));
+    return rows.map((r) => ({ slug: r.id, displayName: r.displayName }));
+  } catch {
     return [];
   }
 }

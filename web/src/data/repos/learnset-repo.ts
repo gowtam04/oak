@@ -26,11 +26,12 @@
  * Drizzle queries (Promise<string[]> / Promise<number>).
  */
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { OakDb } from "@/data/db";
 import type { Format } from "@/data/formats";
-import { learnset } from "@/data/schema";
+import { learnset, pokemon } from "@/data/schema";
+import type { LearnerRow } from "@/lib/reference-pages-types";
 
 /**
  * Ids of every Pokémon that can learn **all** of `moveIds` within `format`
@@ -147,4 +148,80 @@ export async function movesForPokemon(
     .orderBy(learnset.move_slug);
 
   return rows.map((row) => ({ moveSlug: row.moveSlug, method: row.method }));
+}
+
+// ===========================================================================
+// Reference-page read (SEO): the reverse "who can learn this move?" roster
+// ===========================================================================
+
+/**
+ * Method preference when the same Pokémon appears under more than one learn
+ * method for a move — lower rank wins. Egg moves are out of scope (excluded at
+ * ingest), so only these three appear; an unknown/null method sorts last. NB:
+ * the `learnset` PK is (pokemon_id, move_slug, format), so a Pokémon can appear
+ * at most ONCE per move per format — this dedup is defensive and documents the
+ * chosen precedence rather than resolving a collision the schema can produce.
+ */
+const METHOD_RANK: Record<string, number> = {
+  "level-up": 0,
+  machine: 1,
+  tutor: 2,
+};
+
+function methodRank(method: string | null): number {
+  if (method === null) return 99;
+  return METHOD_RANK[method] ?? 90;
+}
+
+/**
+ * Every Pokémon in `format` that can learn `moveSlug` — the reverse roster that
+ * links a `/moves/[slug]` page back to its learners (the crawl spine). Joins
+ * `learnset` to `pokemon` within the format, ordered by national-dex number then
+ * slug. A Pokémon appearing under multiple methods is collapsed to ONE row,
+ * keeping the highest-precedence method (level-up > machine > tutor > unknown).
+ * Returns `[]` for an unknown move or an unreadable index (never throws).
+ *
+ * @param moveSlug canonical move slug (e.g. "earthquake").
+ * @param format   the active data scope.
+ * @param database the Drizzle handle.
+ */
+export async function learnersOfMove(
+  moveSlug: string,
+  format: Format,
+  database: OakDb,
+): Promise<LearnerRow[]> {
+  try {
+    const rows = await database
+      .select({
+        slug: pokemon.id,
+        displayName: pokemon.display_name,
+        method: learnset.method,
+      })
+      .from(learnset)
+      .innerJoin(
+        pokemon,
+        and(
+          eq(learnset.pokemon_id, pokemon.id),
+          eq(pokemon.format, learnset.format),
+        ),
+      )
+      .where(and(eq(learnset.move_slug, moveSlug), eq(learnset.format, format)))
+      .orderBy(asc(pokemon.national_dex_number), asc(pokemon.id));
+
+    // Dedup by slug (see METHOD_RANK); Map keeps dex-then-slug insertion order.
+    const bySlug = new Map<string, LearnerRow>();
+    for (const r of rows) {
+      const existing = bySlug.get(r.slug);
+      if (!existing || methodRank(r.method) < methodRank(existing.method)) {
+        bySlug.set(r.slug, {
+          slug: r.slug,
+          displayName: r.displayName,
+          method: r.method,
+        });
+      }
+    }
+    return [...bySlug.values()];
+  } catch {
+    return [];
+  }
 }
