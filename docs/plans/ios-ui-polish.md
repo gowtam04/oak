@@ -1,8 +1,10 @@
 # iOS UI Polish — Design Plan
 
-Owner: Fable orchestrator session, 2026-07-03. Implementation branch: `agent/ios-polish`
-(worktree `/Users/gowtam/Documents/Projects/oak-ios-polish`). All paths below are relative
-to `ios/` in that worktree.
+Owner: Fable orchestrator session, 2026-07-03. Integration branch: `agent/ios-polish`
+(orchestrator-owned — implementation agents must NEVER edit, build, or commit in its
+worktree). Each phase runs in its own dedicated worktree/branch named in that phase's
+delegation brief; the brief's paths win over anything here. All `ios/…` paths below are
+relative to the repo root of whichever worktree you were assigned.
 
 ## Goal
 
