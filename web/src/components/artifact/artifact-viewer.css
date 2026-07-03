@@ -6,12 +6,16 @@
  */
 
 /* ---- Panel shell -------------------------------------------------------- */
+/* Docked width scales with the viewport (45%) but is capped at the design
+ * system's artifact-panel token so it doesn't balloon on ultra-wide desktops;
+ * min-width keeps it usable at the low end. The mobile overlay below replaces
+ * all three with a fixed full-screen layout. */
 .artifact-viewer {
   display: flex;
   flex-direction: column;
-  flex: 0 0 45%;
-  width: 45%;
-  max-width: 45%;
+  flex: 0 0 min(45%, var(--artifact-panel-w));
+  width: min(45%, var(--artifact-panel-w));
+  max-width: min(45%, var(--artifact-panel-w));
   min-width: 420px;
   align-self: stretch;
   max-height: 100%;
@@ -59,16 +63,14 @@
   white-space: nowrap;
 }
 
-/* Refined-neutral format/generation badge — full-width row, never wraps. */
+/* Refined-neutral format/generation badge — full-width row, never wraps.
+ * Type voice (mono, uppercase, tracking, muted color) comes from the shared
+ * `.ilabel` instrument-label utility (globals.css), applied alongside this
+ * class in the JSX; this rule only adds the pill chrome. */
 .artifact-viewer__format-tag {
   align-self: flex-start;
   max-width: 100%;
   padding: 2px var(--space-2);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
   background: var(--surface-sunken);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
@@ -199,13 +201,12 @@
 }
 
 /* ---- Shared section bits ------------------------------------------------ */
+/* Every section head (Base stats, Type matchups, Movepool, Abilities, …)
+ * carries `.ilabel` alongside this class (UI strategy §3: "every section
+ * label becomes .ilabel") — that utility supplies the mono/uppercase/tracking
+ * voice; this rule is just spacing. */
 .artifact-section__title {
   margin: 0 0 var(--space-2);
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
 }
 .artifact-text {
   margin: 0;
@@ -278,20 +279,46 @@
   flex-direction: column;
   gap: var(--space-4);
 }
+
+/* Hero header (UI §4 screen 06): sprite in a type-tinted halo + display name +
+ * mono dex number + type badges. The Pokédex readout moment. */
 .pokemon-artifact__head {
   display: flex;
   align-items: center;
   gap: var(--space-4);
 }
+.pokemon-artifact__halo {
+  --halo-type: var(--type-normal);
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 136px;
+  height: 136px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--halo-type) 12%, transparent) 0%,
+    transparent 72%
+  );
+}
 .pokemon-artifact__art {
-  width: 120px;
-  height: 120px;
+  width: 104px;
+  height: 104px;
   object-fit: contain;
-  background: var(--surface-sunken);
-  border-radius: var(--radius-md);
+}
+.pokemon-artifact__id {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.pokemon-artifact__name {
+  font-family: var(--display);
+  font-size: var(--text-2xl);
+  line-height: 1.2;
+  color: var(--text-strong);
 }
 .pokemon-artifact__dex {
-  font-family: var(--mono);
   color: var(--text-muted);
 }
 .pokemon-artifact__types,
@@ -299,56 +326,86 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  margin-top: var(--space-1);
 }
 
-.stat-list {
+/* Stat meters — six 8px pill tracks, fill colored by the shared value ramp
+ * (danger < 60 / warning 60-89 / success 90-119 / azure >= 120; stat-tier.ts),
+ * numerals mono/tabular. The fill animates 0 → value on open via the --fill
+ * custom property carrying the target width into both the resting style and
+ * the keyframe's `to`. */
+.stat-meters {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
-.stat-list__row {
+.stat-meter {
   display: grid;
-  grid-template-columns: 64px 40px 1fr;
+  grid-template-columns: 56px 1fr 32px;
   align-items: center;
   gap: var(--space-2);
   font-size: 0.85rem;
 }
-.stat-list__label {
+.stat-meter__label {
   color: var(--text-muted);
 }
-.stat-list__value {
-  font-family: var(--mono);
+.stat-meter__value {
   text-align: right;
   color: var(--text-strong);
 }
-.stat-list__bar {
+.stat-meter__bar {
   height: 8px;
   background: var(--surface-sunken);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
-.stat-list__bar-fill {
+.stat-meter__fill {
+  --fill: 0%;
   display: block;
   height: 100%;
-  background: var(--azure);
+  width: var(--fill);
   border-radius: var(--radius-pill);
+  animation: stat-fill-in 400ms ease-out both;
 }
-/* Color the fill by value tier so strong/weak stats read at a glance (#9). */
-.stat-list__bar-fill--low {
-  background: color-mix(in srgb, var(--danger) 72%, var(--azure));
+@keyframes stat-fill-in {
+  from {
+    width: 0%;
+  }
+  to {
+    width: var(--fill);
+  }
 }
-.stat-list__bar-fill--mid {
-  background: var(--azure);
+.stat-meter__fill--danger {
+  background: var(--danger);
 }
-.stat-list__bar-fill--high {
+.stat-meter__fill--warning {
+  background: var(--warning);
+}
+.stat-meter__fill--success {
   background: var(--success);
 }
-.stat-list__row--total .stat-list__value {
-  font-weight: 700;
+.stat-meter__fill--azure {
+  background: var(--azure);
+}
+
+/* BST summary row, set off from the meters by a hairline. */
+.stat-meters__bst {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-1);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-meter__fill,
+  .team-stat__bar-fill {
+    animation: none;
+  }
 }
 
 .ability-chips,
@@ -386,10 +443,9 @@
   align-items: center;
   gap: var(--space-2);
 }
-.matchup-row__label {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
+/* Group label (Weak to / Resists / Immune to / Super effective vs …) carries
+ * `.ilabel` in the JSX for the mono/uppercase instrument voice; no local type
+ * override needed here. */
 .matchup-row__empty {
   color: var(--text-faint);
 }
@@ -437,10 +493,9 @@
   flex-direction: column;
   gap: var(--space-3);
 }
+/* Method head (Level-up / TM/HM / Egg / Tutor) carries `.ilabel` in the JSX. */
 .movepool__method {
   margin: 0 0 var(--space-2);
-  font-size: 0.8rem;
-  color: var(--text-muted);
 }
 .movepool__moves {
   list-style: none;
@@ -449,6 +504,17 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+/* A move chip is its name + a small type dot (no repeated "Normal"-style
+ * category pill) — the type name still surfaces on hover via the chip's
+ * `title`. */
+.movepool__type-dot {
+  --dot-type: var(--type-normal);
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot-type);
 }
 
 /* ---- Item held-by ------------------------------------------------------- */
@@ -661,19 +727,36 @@
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
+/* Fill color follows the same value ramp as PokemonArtifact's base stats
+ * (stat-tier.ts) — "one value rule" (UI strategy §3 Color) instead of a
+ * species-tinted fill; animates in the same way as the artifact's meters. */
 .team-stat__bar-fill {
+  --fill: 0%;
   display: block;
   height: 100%;
+  width: var(--fill);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--member-type) 55%, var(--azure));
+  animation: stat-fill-in 400ms ease-out both;
+}
+.team-stat__bar-fill--danger {
+  background: var(--danger);
+}
+.team-stat__bar-fill--warning {
+  background: var(--warning);
+}
+.team-stat__bar-fill--success {
+  background: var(--success);
+}
+.team-stat__bar-fill--azure {
+  background: var(--azure);
 }
 .team-stat__ev {
-  font-family: var(--mono);
   font-size: 0.66rem;
   text-align: right;
   color: var(--text-faint);
 }
-/* Nature shading: boosted stat reads positive, hindered reads negative. */
+/* Nature shading: boosted stat reads positive, hindered reads negative —
+ * layered on top of (and overriding) the value-ramp fill color above. */
 .team-stat--boosted .team-stat__label,
 .team-stat--boosted .team-stat__value {
   color: var(--success);

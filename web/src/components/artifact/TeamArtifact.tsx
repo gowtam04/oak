@@ -24,6 +24,7 @@ import type { TypeName } from "@/agent/schemas";
 import TypeBadge from "@/components/TypeBadge";
 import { safeHttpUrl } from "@/lib/safe-url";
 import { computeMemberStats, STAT_LABELS } from "./team-stats";
+import { statValueTier } from "./stat-tier";
 
 /** Title-case a slug-ish id (`great-tusk` → `Great Tusk`); `—` for empty. */
 function titleize(value: string | null | undefined): string {
@@ -147,6 +148,13 @@ function MemberCard({
               Math.min(100, Math.round((value / STAT_BAR_MAX) * 100)),
             );
             const inv = Math.min(evMax, s.ev);
+            // The bar fill color follows the same value-ramp every stat meter
+            // in the app uses (PokemonArtifact's base stats included) — "one
+            // value rule" (UI strategy §3 Color) instead of a species-tinted
+            // fill. Nature still gets its own signal via the arrow + label/
+            // value color, so boosted/hindered reads on top of magnitude
+            // rather than instead of it.
+            const tier = value ? statValueTier(value) : "danger";
             return (
               <li
                 key={s.key}
@@ -165,15 +173,17 @@ function MemberCard({
                     </span>
                   )}
                 </span>
-                <span className="team-stat__value">{s.value ?? "—"}</span>
+                <span className="team-stat__value mono-num">
+                  {s.value ?? "—"}
+                </span>
                 <span className="team-stat__bar">
                   <span
-                    className="team-stat__bar-fill"
-                    // eslint-disable-next-line react/forbid-dom-props -- runtime-computed bar width
-                    style={{ width: `${width}%` }}
+                    className={`team-stat__bar-fill team-stat__bar-fill--${tier}`}
+                    // eslint-disable-next-line react/forbid-dom-props -- runtime-computed fill width, animated via the --fill custom property
+                    style={{ "--fill": `${width}%` } as CssVars}
                   />
                 </span>
-                <span className="team-stat__ev">
+                <span className="team-stat__ev mono-num">
                   {inv > 0 ? `${inv}${isChampions ? " SP" : ""}` : ""}
                 </span>
               </li>

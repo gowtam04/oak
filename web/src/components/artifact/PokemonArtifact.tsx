@@ -15,6 +15,7 @@ import { pokeApiArtwork } from "@/lib/sprites";
 
 import EntityLink from "./EntityLink";
 import MatchupRow from "./MatchupRow";
+import { statValueTier } from "./stat-tier";
 
 const STAT_ROWS: { key: keyof PokemonArtifactData["base_stats"]; label: string }[] =
   [
@@ -27,22 +28,18 @@ const STAT_ROWS: { key: keyof PokemonArtifactData["base_stats"]; label: string }
   ];
 
 /**
- * Stat bars normalize against a legible single-stat ceiling (well under the
+ * Stat meters normalize against a legible single-stat ceiling (well under the
  * theoretical 255 max) so typical base stats span the track instead of all
  * hugging the left rail (#9).
  */
 const STAT_BAR_CEILING = 200;
 
-function statPct(value: number): string {
-  return `${Math.min(100, Math.round((value / STAT_BAR_CEILING) * 100))}%`;
+function statPct(value: number): number {
+  return Math.min(100, Math.round((value / STAT_BAR_CEILING) * 100));
 }
 
-/** Coarse value tier used to color the bar fill (low / mid / high) (#9). */
-function statTier(value: number): string {
-  if (value >= 110) return "stat-list__bar-fill--high";
-  if (value >= 75) return "stat-list__bar-fill--mid";
-  return "stat-list__bar-fill--low";
-}
+/** Inline `--x` custom properties (React's CSSProperties rejects them by type). */
+type CssVars = React.CSSProperties & Record<`--${string}`, string>;
 
 /**
  * Title-case a slug-ish id (`cud-chew` → `Cud Chew`) for display. Mirrors the
@@ -116,20 +113,32 @@ export default function PokemonArtifact({
   const orderTypes = (types: readonly string[]): string[] =>
     [...types].sort((a, b) => typeDisplayIndex(a) - typeDisplayIndex(b));
 
+  // The halo (UI §4 screen 06) tints by the primary type at low opacity; a
+  // Pokémon always has at least one type, but fall back to normal defensively.
+  const primaryType = (data.types[0] ?? "normal") as TypeName;
+  const haloStyle: CssVars = { "--halo-type": `var(--type-${primaryType})` };
+
   return (
     <div className="pokemon-artifact" data-testid="pokemon-artifact">
       <div className="pokemon-artifact__head">
-        <SpriteImg
-          className="pokemon-artifact__art"
-          src={data.artwork_url || data.sprite_url}
-          fallbackSrc={pokeApiArtwork(data.national_dex_number)}
-          alt={data.display_name}
-          width={160}
-          height={160}
-        />
+        <span
+          className="pokemon-artifact__halo"
+          // eslint-disable-next-line react/forbid-dom-props -- dynamic --halo-type CSS var bound per species' primary type
+          style={haloStyle}
+        >
+          <SpriteImg
+            className="pokemon-artifact__art"
+            src={data.artwork_url || data.sprite_url}
+            fallbackSrc={pokeApiArtwork(data.national_dex_number)}
+            alt={data.display_name}
+            width={104}
+            height={104}
+          />
+        </span>
         <div className="pokemon-artifact__id">
-          <span className="pokemon-artifact__dex">
-            #{data.national_dex_number}
+          <span className="pokemon-artifact__name">{data.display_name}</span>
+          <span className="pokemon-artifact__dex mono-num">
+            #{String(data.national_dex_number).padStart(3, "0")}
           </span>
           <div className="pokemon-artifact__types">
             {data.types.map((t) => (
@@ -147,32 +156,38 @@ export default function PokemonArtifact({
       </div>
 
       <section className="pokemon-artifact__section">
-        <h3 className="artifact-section__title">Base stats</h3>
-        <ul className="stat-list" data-testid="pokemon-stats">
-          {STAT_ROWS.map(({ key, label }) => (
-            <li key={key} className="stat-list__row">
-              <span className="stat-list__label">{label}</span>
-              <span className="stat-list__value">{data.base_stats[key]}</span>
-              <span className="stat-list__bar">
-                <span
-                  className={`stat-list__bar-fill ${statTier(
-                    data.base_stats[key],
-                  )}`}
-                  // eslint-disable-next-line react/forbid-dom-props -- runtime-computed bar width
-                  style={{ width: statPct(data.base_stats[key]) }}
-                />
-              </span>
-            </li>
-          ))}
-          <li className="stat-list__row stat-list__row--total">
-            <span className="stat-list__label">Total</span>
-            <span className="stat-list__value">{data.base_stat_total}</span>
-          </li>
-        </ul>
+        <h3 className="artifact-section__title ilabel">Base stats</h3>
+        <div data-testid="pokemon-stats">
+          <ul className="stat-meters">
+            {STAT_ROWS.map(({ key, label }) => {
+              const value = data.base_stats[key];
+              const fillStyle: CssVars = { "--fill": `${statPct(value)}%` };
+              return (
+                <li key={key} className="stat-meter">
+                  <span className="stat-meter__label">{label}</span>
+                  <span className="stat-meter__bar">
+                    <span
+                      className={`stat-meter__fill stat-meter__fill--${statValueTier(
+                        value,
+                      )}`}
+                      // eslint-disable-next-line react/forbid-dom-props -- runtime-computed fill width, animated via the --fill custom property
+                      style={fillStyle}
+                    />
+                  </span>
+                  <span className="stat-meter__value mono-num">{value}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="stat-meters__bst">
+            <span className="ilabel">BST</span>
+            <span className="mono-num">{data.base_stat_total}</span>
+          </div>
+        </div>
       </section>
 
       <section className="pokemon-artifact__section">
-        <h3 className="artifact-section__title">Abilities</h3>
+        <h3 className="artifact-section__title ilabel">Abilities</h3>
         <div className="ability-chips" data-testid="pokemon-abilities">
           {abilityEntries.map((a) => (
             <EntityLink
@@ -191,31 +206,31 @@ export default function PokemonArtifact({
       </section>
 
       <section className="pokemon-artifact__section">
-        <h3 className="artifact-section__title">Type matchups</h3>
+        <h3 className="artifact-section__title ilabel">Type matchups</h3>
         <div className="matchup-grid" data-testid="pokemon-matchups">
           <MatchupRow
             label="Weak to"
             types={orderTypes(matchups.weak_to)}
             testid="matchups-weak"
-            multiplierFor={(t) => (quadWeakTo.includes(t) ? "x4" : "x2")}
+            multiplierFor={(t) => (quadWeakTo.includes(t) ? "×4" : "×2")}
           />
           <MatchupRow
             label="Resists"
             types={orderTypes(matchups.resists)}
             testid="matchups-resists"
-            multiplierFor={(t) => (quadResists.includes(t) ? "x1/4" : "x1/2")}
+            multiplierFor={(t) => (quadResists.includes(t) ? "×¼" : "×½")}
           />
           <MatchupRow
             label="Immune to"
             types={orderTypes(matchups.immune_to)}
             testid="matchups-immune"
-            multiplierFor={() => "x0"}
+            multiplierFor={() => "×0"}
           />
         </div>
       </section>
 
       <section className="pokemon-artifact__section">
-        <h3 className="artifact-section__title">Movepool</h3>
+        <h3 className="artifact-section__title ilabel">Movepool</h3>
         {data.movepool.length === 0 ? (
           <p className="artifact-empty" data-testid="movepool-empty">
             No moves recorded for this format.
@@ -228,23 +243,35 @@ export default function PokemonArtifact({
                 className="movepool__group"
                 data-testid={`movepool-group-${group.method}`}
               >
-                <h4 className="movepool__method">{group.method}</h4>
+                <h4 className="movepool__method ilabel">{group.method}</h4>
                 <ul className="movepool__moves">
-                  {sortMovesByType(group.moves).map((move) => (
-                    <li key={move.slug} className="movepool__move">
-                      <EntityLink
-                        kind="move"
-                        q={move.slug}
-                        className="entity-link--move"
-                        testid={`movepool-move-${move.slug}`}
-                      >
-                        {move.display_name}
-                        {move.type && (
-                          <TypeBadge type={move.type as TypeName} />
-                        )}
-                      </EntityLink>
-                    </li>
-                  ))}
+                  {sortMovesByType(group.moves).map((move) => {
+                    const moveType = (move.type || "normal") as TypeName;
+                    const dotStyle: CssVars = {
+                      "--dot-type": `var(--type-${moveType})`,
+                    };
+                    return (
+                      <li key={move.slug} className="movepool__move">
+                        <EntityLink
+                          kind="move"
+                          q={move.slug}
+                          className="entity-link--move"
+                          testid={`movepool-move-${move.slug}`}
+                          title={move.type ? `${titleize(move.type)}-type move` : undefined}
+                        >
+                          {move.type && (
+                            <span
+                              className="movepool__type-dot"
+                              // eslint-disable-next-line react/forbid-dom-props -- dynamic --dot-type CSS var bound per move's type
+                              style={dotStyle}
+                              aria-hidden
+                            />
+                          )}
+                          {move.display_name}
+                        </EntityLink>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}

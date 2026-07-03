@@ -21,44 +21,50 @@ export default function TypeMatchupsArtifact({
     <div className="type-artifact" data-testid="type-artifact">
       {data.offensive && (
         <section className="type-artifact__section">
-          <h3 className="artifact-section__title">Offensive</h3>
+          <h3 className="artifact-section__title ilabel">Offensive</h3>
           <div className="matchup-grid" data-testid="type-offensive">
             <MatchupRow
               label="Super effective vs"
               types={data.offensive.super_effective_against}
               testid="offensive-super"
+              multiplierFor={() => "×2"}
             />
             <MatchupRow
               label="Not very effective vs"
               types={data.offensive.not_very_effective_against}
               testid="offensive-nve"
+              multiplierFor={() => "×½"}
             />
             <MatchupRow
               label="No effect vs"
               types={data.offensive.no_effect_against}
               testid="offensive-immune"
+              multiplierFor={() => "×0"}
             />
           </div>
         </section>
       )}
 
       <section className="type-artifact__section">
-        <h3 className="artifact-section__title">Defensive</h3>
+        <h3 className="artifact-section__title ilabel">Defensive</h3>
         <div className="matchup-grid" data-testid="type-defensive">
           <MatchupRow
             label="Weak to"
             types={data.defensive.weak_to}
             testid="defensive-weak"
+            multiplierFor={() => "×2"}
           />
           <MatchupRow
             label="Resists"
             types={data.defensive.resists}
             testid="defensive-resists"
+            multiplierFor={() => "×½"}
           />
           <MatchupRow
             label="Immune to"
             types={data.defensive.immune_to}
             testid="defensive-immune"
+            multiplierFor={() => "×0"}
           />
         </div>
       </section>

@@ -20,6 +20,8 @@ export interface EntityLinkProps {
   q: string;
   className?: string;
   testid?: string;
+  /** Optional hover tooltip (e.g. a movepool chip surfacing its type on hover). */
+  title?: string;
   children: ReactNode;
 }
 
@@ -28,6 +30,7 @@ export default function EntityLink({
   q,
   className,
   testid,
+  title,
   children,
 }: EntityLinkProps): React.JSX.Element {
   const { openEntity } = useArtifactViewer();
@@ -37,6 +40,7 @@ export default function EntityLink({
       className={className ? `entity-link ${className}` : "entity-link"}
       data-testid={testid}
       data-entity-kind={kind}
+      title={title}
       onClick={(e) => {
         // Opening an entity is terminal — never also trigger a parent handler
         // (e.g. a CandidateTable row's follow-up onClick).
