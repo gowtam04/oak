@@ -50,6 +50,12 @@ struct FixtureDecodingTests {
       _ = try Fixtures.decode(MeResponse.self, from: name)
     case "api_error.json":
       _ = try Fixtures.decode(APIErrorBody.self, from: name)
+    case "search_response.json":
+      _ = try Fixtures.decode(SearchEnvelope.self, from: name)
+    case "learnset_response.json":
+      _ = try Fixtures.decode(LearnsetEnvelope.self, from: name)
+    case "sprites_response.json":
+      _ = try Fixtures.decode(SpritesEnvelope.self, from: name)
     default:
       Issue.record("Unhandled JSON fixture \"\(name)\" — add a decode arm.")
     }
@@ -360,6 +366,21 @@ private struct TeamEnvelope: Decodable {
   let validation: TeamValidationResult
 }
 
+/// `GET /api/search` → `{ matches: SearchMatch[] }` (Phase 4 — entity pickers).
+private struct SearchEnvelope: Decodable {
+  let matches: [SearchMatch]
+}
+
+/// `GET /api/learnset` → `{ moves: LearnsetMove[] }` (Phase 4 — entity pickers).
+private struct LearnsetEnvelope: Decodable {
+  let moves: [LearnsetMove]
+}
+
+/// `GET /api/sprites` → `{ refs: { [name]: DexSpriteRef } }` (Phase 4 — entity pickers).
+private struct SpritesEnvelope: Decodable {
+  let refs: [String: DexSpriteRef]
+}
+
 // MARK: - Fixture name catalogs (file-scope so the @Test macros can reference them)
 
 /// Every committed `.json` fixture, each decoded into its DTO above.
@@ -383,6 +404,9 @@ private let jsonFixtures: [String] = [
   "me.json",
   "me_guest.json",
   "api_error.json",
+  "search_response.json",
+  "learnset_response.json",
+  "sprites_response.json",
 ]
 
 /// The four `OakAnswer` status fixtures that additionally round-trip losslessly.

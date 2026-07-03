@@ -67,8 +67,8 @@ struct TeamEditorView: View {
               index: index,
               member: $member,
               warnings: model.warnings(forSlot: index),
-              spriteRef: model.spriteRef(for: member.species.wrappedValue),
-              abilityOptions: model.abilityOptions(for: member.species.wrappedValue),
+              spriteRef: model.spriteRef(for: member.species),
+              abilityOptions: model.abilityOptions(for: member.species),
               movepoolOptions: model.movepoolOptions(for: member.id),
               search: model.searchEntities,
               onSpeciesChange: {
