@@ -1,5 +1,18 @@
 # Generation Scope — Implementation Plan
 
+> **Superseded in part (2026-07-02, Champions-default pass):** the web
+> Champions toggle described below is removed and **champions is now the
+> default scope** for a new conversation (was `scarlet-violet`/standard). The
+> seed input changed from the `champions_mode` boolean to a new
+> `scope_seed?: Format` field (set by the header scope chip, now interactive —
+> tap to pick any of the six scopes); `scope_seed` ranks **above** the
+> conversation's sticky scope (fresh explicit intent), while the deprecated
+> `champions_mode` boolean is still honored but ranks **below** sticky scope
+> for back-compat. The `scope` SSE event's `source` union gained `"seed"` and
+> `"default"` (replacing `"toggle"`). See `docs/agent-design/generation-scope-addendum.md`
+> for the amended precedence chain and event shape. The body text below is left
+> as originally written and does not reflect this pass.
+
 **Status:** ready to implement (not started)
 **Written:** 2026-07-02
 **Problem:** Oak currently understands exactly two data scopes — Gen 9 (`scarlet-violet`) and

@@ -139,7 +139,8 @@ describe("signed-in persistence", () => {
     expect(conv).toMatchObject({
       id: sid,
       title: "What beats Garchomp?",
-      format: "scarlet-violet",
+      // A plain post with no seed now defaults to Champions (the new default).
+      format: "champions",
       pinned: false,
     });
     const stored = await repo.getMessages(ACCT.id, sid);
@@ -231,6 +232,61 @@ describe("signed-in persistence", () => {
       source: string;
     };
     expect(scopeData).toEqual({ format: "scarlet-violet", source: "message" });
+
+    // The tools ran under standard (Gen 9), not the stored champions scope.
+    expect(capturedModes[0]).toBe("standard");
+
+    // The stored conversation.format was UPDATED (fire-and-forget), so a later
+    // resume sticks to scarlet-violet. Poll until the async write lands.
+    let conv = await repo.getConversation(ACCT.id, sid);
+    for (let i = 0; i < 50 && conv?.format !== "scarlet-violet"; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+      conv = await repo.getConversation(ACCT.id, sid);
+    }
+    expect(conv?.format).toBe("scarlet-violet");
+  });
+
+  it("switches a resumed conversation's scope on an explicit scope_seed chip pick, and persists it", async () => {
+    const sid = randomUUID();
+    // Seed a champions conversation directly.
+    await repo.appendTurnPair({
+      accountId: ACCT.id,
+      conversationId: sid,
+      format: "champions",
+      userTurnId: repo.newTurnId(),
+      userMessage: "champ q",
+      assistantTurnId: repo.newTurnId(),
+      answer: makeAnswer("champ a"),
+      now: 1000,
+    });
+
+    // Resume it with an explicit scope_seed chip pick (no in-message signal).
+    // The seed ranks above the sticky champions scope, and — like the
+    // in-message-signal switch above — the conversation's stored format is
+    // UPDATED to follow the new scope.
+    const res = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sid,
+          message: "what beats garchomp?",
+          scope_seed: "scarlet-violet",
+        }),
+      }),
+    );
+    const text = await res.text();
+
+    // The `scope` event reports the switch to scarlet-violet, seed-sourced.
+    const scopeFrame = text
+      .split("\n\n")
+      .find((f) => f.startsWith("event: scope"));
+    expect(scopeFrame, "a scope event was emitted").toBeTruthy();
+    const scopeData = JSON.parse(scopeFrame!.split("\ndata: ")[1]!) as {
+      format: string;
+      source: string;
+    };
+    expect(scopeData).toEqual({ format: "scarlet-violet", source: "seed" });
 
     // The tools ran under standard (Gen 9), not the stored champions scope.
     expect(capturedModes[0]).toBe("standard");

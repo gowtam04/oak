@@ -404,7 +404,9 @@ Phase 2 (if pursued) — schema/runtime/repo/test identifiers across ~85 files; 
 ## B-8 — Image upload
 
 **Why:** Chat input is **text-only** today — the request body is
-`{ session_id, message, champions_mode }` and the runtime assembles a single text
+`{ session_id, message, champions_mode }` (as of this writing; the body has
+since gained `scope_seed` and `images`, and `champions_mode` is now deprecated
+— see the generation-scope addendum) and the runtime assembles a single text
 message. A lot of real Pokémon questions arrive as pictures: a team-preview or
 battle screenshot, a Showdown/box screenshot, a damage-roll the user wants
 checked, or "what is this Pokémon?" Letting the user attach an image and having

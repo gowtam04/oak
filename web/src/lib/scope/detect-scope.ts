@@ -113,6 +113,18 @@ const RULES: readonly Rule[] = [
   scope("scarlet-violet", on(/\bsv\b/i)), // own token only ("csv"/"svg" excluded by \b)
   scope("scarlet-violet", on(/\bpaldea\b/i)), // \b excludes the "paldean" form adjective
   scope("scarlet-violet", on(/\btera(?:stal|stallize|stallization|type)?\b/i)),
+  // SV box legendaries + DLC legendary — Illegal in the Champions mod
+  // (FormatsData isNonstandard "Past"), so they are unambiguous Gen 9 signals.
+  scope("scarlet-violet", on(/\bkoraidon\b/i)),
+  scope("scarlet-violet", on(/\bmiraidon\b/i)),
+  scope("scarlet-violet", on(/\bterapagos\b/i)),
+  scope("scarlet-violet", on(/\barea\s+zero\b/i)),
+  // Official VGC runs on Scarlet/Violet. Ordering guards: explicit "gen N"
+  // (section 2) beats this ("gen 8 vgc" stays gen-8); "champions"/reg-letter
+  // (section 1) beats it too.
+  scope("scarlet-violet", on(/\bvgc\b/i)),
+  // Users echoing the cross-scope hint ("…exists in mainline Gen 9").
+  scope("scarlet-violet", on(/\bmainline\b/i)),
 
   // ── 3b. Gen 8 / Sword-Shield (+ BDSP, Legends: Arceus) ──────────────────
   scope("gen-8", on(/\bswsh\b/i)),

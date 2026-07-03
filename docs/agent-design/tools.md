@@ -44,7 +44,14 @@ Conventions:
 - Names accepted by detail tools are canonical PokeAPI slugs (`will-o-wisp`,
   `flash-fire`). Use `resolve_entity` first if unsure.
 - Every detail tool's miss returns `{ found: false, suggestions: [...] }` rather
-  than throwing, so the agent can resolve-or-clarify (BR-9).
+  than throwing, so the agent can resolve-or-clarify (BR-9). In **champions**
+  scope only, `resolve_entity`, `get_pokemon`, `get_move`, `get_ability`, and
+  `get_item` add an additive `exists_in_standard: boolean` on a miss — true
+  when the entity exists in mainline Gen 9 (`scarlet-violet`) — so the agent
+  can tell the user the entity isn't in Champions but is in mainline, rather
+  than just reporting "not found." `get_type_matchups` deliberately omits it:
+  the 18-type set is format-invariant, so there's never a cross-scope miss to
+  flag.
 - Generation context defaults to Gen 9; tools surface `is_gen9_native` /
   `source_generation` so the agent can flag fallback (BR-1).
 
@@ -98,7 +105,8 @@ their canonical slugs.
 
 **Side effects:** Read-only. Idempotent. **Failure modes:** none fatal — returns
 `{ "matches": [] }` when nothing is close (agent then says it can't resolve and
-asks). **Auth:** none.
+asks); in **champions** scope, also adds `exists_in_standard: boolean` when the
+miss is because the entity only exists in mainline Gen 9. **Auth:** none.
 
 ---
 
@@ -271,7 +279,9 @@ data is from. Use for single-Pokémon lookups (US-4) and to ground reasoning.
 ```
 
 **Side effects:** Read-only (DS-2). Idempotent. **Failure modes:**
-`{ "found": false, "suggestions": ["farigiraf"] }`. **Auth:** none.
+`{ "found": false, "suggestions": ["farigiraf"] }` — in **champions** scope,
+also `exists_in_standard: boolean` when the miss is because the Pokémon only
+exists in mainline Gen 9. **Auth:** none.
 
 ---
 
@@ -320,8 +330,9 @@ learn it in Gen 9.
 
 **Side effects:** Read-only (DS-4, with DS-3 for the count). Idempotent.
 **Failure modes:** `{ "found": false, "suggestions": [...] }`;
-`{ "error": "upstream_unavailable" }` on a cache miss while PokeAPI is down.
-**Auth:** none.
+`{ "error": "upstream_unavailable" }` on a cache miss while PokeAPI is down —
+in **champions** scope, a miss also adds `exists_in_standard: boolean` when the
+move only exists in mainline Gen 9. **Auth:** none.
 
 ---
 
@@ -358,8 +369,9 @@ negating priority moves, Flash Fire's Fire immunity).
 ```
 
 **Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
-`{ "found": false, "suggestions": [...] }`; `{ "error": "upstream_unavailable" }`.
-**Auth:** none.
+`{ "found": false, "suggestions": [...] }`; `{ "error": "upstream_unavailable" }`
+— in **champions** scope, a miss also adds `exists_in_standard: boolean` when
+the ability only exists in mainline Gen 9. **Auth:** none.
 
 ---
 
@@ -410,7 +422,9 @@ Immunities are 0× and must be treated as immunities, not resistances.
 
 **Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
 `{ "found": false, "suggestions": [...] }` for an unknown type;
-`{ "error": "upstream_unavailable" }`. **Auth:** none.
+`{ "error": "upstream_unavailable" }`. **Auth:** none. **Deliberately omits**
+`exists_in_standard` (unlike the other detail-tool misses) — the 18-type set
+is format-invariant, so a type can never exist in one scope and not another.
 
 ---
 
@@ -496,8 +510,9 @@ which Pokémon are found holding it in the wild. Use for item questions (US-8).
 ```
 
 **Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
-`{ "found": false, "suggestions": [...] }`; `{ "error": "upstream_unavailable" }`.
-**Auth:** none.
+`{ "found": false, "suggestions": [...] }`; `{ "error": "upstream_unavailable" }`
+— in **champions** scope, a miss also adds `exists_in_standard: boolean` when
+the item only exists in mainline Gen 9. **Auth:** none.
 
 ---
 

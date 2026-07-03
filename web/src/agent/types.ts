@@ -19,8 +19,9 @@ import type { TurnTrace } from "@/server/logger";
 
 /**
  * Query scope for a turn. Server-controlled — resolved per turn on the server
- * (explicit in-message signal → sticky conversation scope → the `champions_mode`
- * toggle seed; see `@/lib/scope`), bound onto {@link AgentContext}, and read by
+ * (explicit in-message signal → explicit `scope_seed` chip pick → sticky
+ * conversation scope → the legacy `champions_mode` seed → the champions
+ * default; see `@/lib/scope`), bound onto {@link AgentContext}, and read by
  * repos/tools and the runtime — NEVER an LLM-visible tool input. This guarantees
  * the model has no parameter to widen the scope; it only ever sees a
  * scope-specific system prompt + scope-filtered tool results.

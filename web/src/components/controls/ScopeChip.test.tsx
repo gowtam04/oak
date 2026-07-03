@@ -1,8 +1,10 @@
-import { afterEach, describe, it, expect } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 afterEach(() => cleanup());
 import ScopeChip from "./ScopeChip";
+import { FORMATS } from "@/data/formats";
+import { scopeLabel } from "@/lib/scope/scope-label";
 
 /**
  * jsdom project — fixture props ONLY (never imports db/repos/runtime). Pins the
@@ -37,5 +39,52 @@ describe("ScopeChip", () => {
       "title",
       "Answers are scoped to Gen 5 · Black/White",
     );
+  });
+
+  describe("interactive (onSelect provided)", () => {
+    it("renders a button rather than the plain display-only span", () => {
+      render(<ScopeChip format="champions" onSelect={vi.fn()} />);
+      const chip = screen.getByTestId("scope-chip");
+      expect(chip.tagName).toBe("BUTTON");
+      expect(chip).toHaveAttribute("aria-haspopup", "menu");
+      expect(chip).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("opens a menu listing all six formats on click", () => {
+      render(<ScopeChip format="champions" onSelect={vi.fn()} />);
+      fireEvent.click(screen.getByTestId("scope-chip"));
+      const menu = screen.getByTestId("scope-chip-menu");
+      expect(menu).toBeInTheDocument();
+      for (const f of FORMATS) {
+        expect(screen.getByTestId(`scope-chip-option-${f}`)).toHaveTextContent(
+          scopeLabel(f),
+        );
+      }
+    });
+
+    it("picking an option fires onSelect and closes the menu", () => {
+      const onSelect = vi.fn();
+      render(<ScopeChip format="champions" onSelect={onSelect} />);
+      fireEvent.click(screen.getByTestId("scope-chip"));
+      fireEvent.click(screen.getByTestId("scope-chip-option-gen-5"));
+      expect(onSelect).toHaveBeenCalledWith("gen-5");
+      expect(screen.queryByTestId("scope-chip-menu")).not.toBeInTheDocument();
+    });
+
+    it("disabled prevents opening the menu", () => {
+      render(<ScopeChip format="champions" onSelect={vi.fn()} disabled />);
+      const chip = screen.getByTestId("scope-chip");
+      expect(chip).toBeDisabled();
+      fireEvent.click(chip);
+      expect(screen.queryByTestId("scope-chip-menu")).not.toBeInTheDocument();
+    });
+
+    it("Escape closes the menu", () => {
+      render(<ScopeChip format="champions" onSelect={vi.fn()} />);
+      fireEvent.click(screen.getByTestId("scope-chip"));
+      expect(screen.getByTestId("scope-chip-menu")).toBeInTheDocument();
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByTestId("scope-chip-menu")).not.toBeInTheDocument();
+    });
   });
 });

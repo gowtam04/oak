@@ -188,3 +188,79 @@ describe("resolve_entity is per-format (resolve-index Gotcha)", () => {
     expect(matches[0]?.slug).toBe("incineroar");
   });
 });
+
+describe("champions cross-scope hint (exists_in_standard)", () => {
+  it("champions get_pokemon on an SV-only species misses with exists_in_standard: true", async () => {
+    ensureLoaded();
+    const ctx = await ctxFor("champions");
+    // Dracovish is seeded under scarlet-violet only (not copied into champions).
+    const out = await dispatch("get_pokemon", { name: "dracovish" }, ctx);
+    expect(getPokemonOutputSchema.safeParse(out).success).toBe(true);
+    expect(out).toMatchObject({ found: false, exists_in_standard: true });
+  });
+
+  it("champions get_pokemon on a nonsense name misses with exists_in_standard: false", async () => {
+    ensureLoaded();
+    const ctx = await ctxFor("champions");
+    const out = await dispatch(
+      "get_pokemon",
+      { name: "definitely-not-a-pokemon" },
+      ctx,
+    );
+    expect(getPokemonOutputSchema.safeParse(out).success).toBe(true);
+    expect(out).toMatchObject({ found: false, exists_in_standard: false });
+  });
+
+  it("champions get_move on the SV-seeded champions-absent slug misses with exists_in_standard: true", async () => {
+    ensureLoaded();
+    const ctx = await ctxFor("champions");
+    // flamethrower is seeded ONLY under scarlet-violet (REFERENCE_CACHE_SEED_SV_EXTRA).
+    const out = await dispatch("get_move", { name: "flamethrower" }, ctx);
+    expect(out).toMatchObject({ found: false, exists_in_standard: true });
+  });
+
+  it("champions resolve_entity on an SV-resolvable name returns {matches: [], exists_in_standard: true}", async () => {
+    ensureLoaded();
+    const ctx = await ctxFor("champions");
+    // Farigiraf resolves under scarlet-violet but has no champions searchable_names row.
+    const out = await dispatch("resolve_entity", { query: "Farigiraf" }, ctx);
+    expect(resolveEntityOutputSchema.safeParse(out).success).toBe(true);
+    expect(out).toEqual({ matches: [], exists_in_standard: true });
+  });
+
+  it("the same misses under standard mode carry NO exists_in_standard key", async () => {
+    ensureLoaded();
+    const ctx = await ctxFor("standard");
+    const pokemonOut = await dispatch(
+      "get_pokemon",
+      { name: "definitely-not-a-pokemon" },
+      ctx,
+    );
+    expect(pokemonOut).not.toHaveProperty("exists_in_standard");
+
+    const moveOut = await dispatch(
+      "get_move",
+      { name: "definitely-not-a-move" },
+      ctx,
+    );
+    expect(moveOut).not.toHaveProperty("exists_in_standard");
+
+    const resolveOut = await dispatch(
+      "resolve_entity",
+      { query: "zzzznonexistent" },
+      ctx,
+    );
+    expect(resolveOut).not.toHaveProperty("exists_in_standard");
+  });
+
+  it("the same misses under gen-7 mode carry NO exists_in_standard key", async () => {
+    ensureLoaded();
+    const ctx = await ctxFor("gen-7");
+    const pokemonOut = await dispatch(
+      "get_pokemon",
+      { name: "definitely-not-a-pokemon" },
+      ctx,
+    );
+    expect(pokemonOut).not.toHaveProperty("exists_in_standard");
+  });
+});

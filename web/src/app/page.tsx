@@ -26,9 +26,6 @@ import type {
   SavedTeam,
 } from "@/components/types";
 
-/** localStorage key for the persisted Champions-mode choice. */
-const CHAMPIONS_STORAGE_KEY = "oak-champions-mode";
-
 /** localStorage key for the persisted history-sidebar collapsed choice. */
 const SIDEBAR_STORAGE_KEY = "oak-sidebar-collapsed";
 
@@ -94,8 +91,20 @@ export default function Home() {
   // below). This drives the header scope chip + the artifact viewer's data scope,
   // so a server override of the toggle (e.g. a "gen 7" message) is made visible.
   const [resolvedScope, setResolvedScope] = useState<Format | null>(null);
+  // An explicit chip pick, sent as `scope_seed` on the NEXT turn only. Cleared
+  // on every scope event: once the server has acknowledged a turn (any turn),
+  // the seed's job is done — the conversation's scope is now sticky server-side,
+  // which outranks a stale seed on the FOLLOWING turn (scope_seed > sticky).
+  // Leaving a stale seed set would silently re-assert an old pick over the now-
+  // current sticky scope. (Known edge: an unsupported-gen turn emits no scope
+  // event at all, so a pending seed survives it and rides the next message —
+  // benign, since that's still the user's most recent explicit intent.)
+  const [scopeSeed, setScopeSeed] = useState<Format | null>(null);
   useEffect(() => {
-    if (scope) setResolvedScope(scope.format);
+    if (scope) {
+      setResolvedScope(scope.format);
+      setScopeSeed(null);
+    }
   }, [scope]);
 
   // Track the active request so Stop can decide between a quick-stop reset and a
@@ -106,32 +115,15 @@ export default function Home() {
   // stop (identity change is what triggers the reload).
   const [prefill, setPrefill] = useState<{ text: string } | null>(null);
 
-  // Champions mode: server-controlled scope sent on every request as
-  // `champions_mode`. Defaults to ON (Champions) — most first-time visitors now
-  // arrive for Champions, so that's the scope they expect. Resolve from
-  // localStorage only AFTER mount so the SSR markup stays stable (mirrors
-  // ThemeToggle's `getInitialTheme` + mounted guard) and we avoid a hydration
-  // mismatch. A never-set value (null) means the user hasn't chosen, so default
-  // to on; an explicit "false" (the user turned it off) is honored.
-  // `useState(true)` already matches the default, so there's no post-mount flip
-  // for new users.
-  const [championsMode, setChampionsMode] = useState(true);
+  // One-time cleanup: the Champions toggle (and its localStorage-persisted
+  // choice) is gone — the header scope chip is now the sole scope control, and
+  // the server defaults a seedless fresh conversation to Champions itself. Clear
+  // any stale value left by a previous build so it can't linger unread forever.
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(CHAMPIONS_STORAGE_KEY);
-      setChampionsMode(stored === null ? true : stored === "true");
+      localStorage.removeItem("oak-champions-mode");
     } catch {
-      /* storage unavailable (private mode) — fall back to the default (on) */
-      setChampionsMode(true);
-    }
-  }, []);
-
-  const setChampionsModePersisted = useCallback((next: boolean) => {
-    setChampionsMode(next);
-    try {
-      localStorage.setItem(CHAMPIONS_STORAGE_KEY, String(next));
-    } catch {
-      /* storage unavailable (private mode) — fall back to in-session only */
+      /* storage unavailable (private mode) — nothing to clean up */
     }
   }, []);
 
@@ -218,19 +210,16 @@ export default function Home() {
       if (me.signedIn && turns.length > 0) {
         // Import the guest thread under its RESOLVED scope (GS-C): a thread that
         // switched to e.g. gen-7 via an in-message signal must import as gen-7,
-        // not as whatever the Champions toggle currently reads. Fall back to the
-        // toggle-derived seed when no turn has resolved a scope yet.
-        const importFormat: Format =
-          resolvedScope ?? (championsMode ? "champions" : "scarlet-violet");
-        void importConversation(
-          sessionId,
-          championsMode,
-          turns,
-          importFormat,
-        ).then(() => refreshConversations());
+        // not as whatever the header chip currently shows. Fall back to the
+        // champions default when no turn has resolved a scope yet. A pending
+        // `scopeSeed` is deliberately excluded — no turn ran under it yet.
+        const importFormat: Format = resolvedScope ?? "champions";
+        void importConversation(sessionId, turns, importFormat).then(() =>
+          refreshConversations(),
+        );
       }
     });
-  }, [sessionId, championsMode, turns, refreshConversations, resolvedScope]);
+  }, [sessionId, turns, refreshConversations, resolvedScope]);
 
   // Sign-out completed (current device only — AC-5.2). Revert to the guest tier
   // WITHOUT resetting `sessionId` or clearing `turns[]`: the thread persists
@@ -290,7 +279,9 @@ export default function Home() {
       const body = {
         session_id: sessionId,
         message,
-        champions_mode: championsMode,
+        // An explicit chip pick rides as this turn's seed; omitted once the
+        // server has acknowledged a turn (the `scope` effect above clears it).
+        ...(scopeSeed ? { scope_seed: scopeSeed } : {}),
         // Wire-only image fields (mimeType + raw base64); the preview URLs stay
         // client-side. Omitted entirely for a text-only turn.
         ...(images.length > 0
@@ -299,18 +290,21 @@ export default function Home() {
       };
       send(body);
     },
-    [send, sessionId, championsMode, status],
+    [send, sessionId, scopeSeed, status],
   );
 
   // Start a brand-new conversation (AC-6.1): a fresh session id + empty thread.
   // No DB row is created until the first successful turn. The previous
-  // conversation remains saved + unchanged.
+  // conversation remains saved + unchanged; the scope resets to the champions
+  // default so the fresh thread displays it until a turn resolves otherwise.
   const handleNewChat = useCallback(() => {
     reset();
     committedAnswerRef.current = null;
     setSessionId(makeId());
     setTurns([]);
     setImagePreviews({});
+    setResolvedScope(null);
+    setScopeSeed(null);
   }, [reset]);
 
   // Open a saved conversation (HIST-US-4): load its full-fidelity turns, make it
@@ -325,13 +319,13 @@ export default function Home() {
         setSessionId(detail.id);
         setTurns(detail.turns);
         setImagePreviews({}); // session-only thumbnails don't survive a reload
-        setChampionsModePersisted(detail.format === "champions");
         // Follow the conversation's stored scope so the chip + artifact scope
         // reflect it immediately, before the first resumed turn re-emits `scope`.
         setResolvedScope(detail.format as Format);
+        setScopeSeed(null);
       });
     },
-    [reset, setChampionsModePersisted],
+    [reset],
   );
 
   // Delete a conversation (HIST-US-8). If it is the one currently on screen,
@@ -361,34 +355,24 @@ export default function Home() {
     }
   }, [reset]);
 
-  // Champions toggle from the header. Switching format changes the data scope for
-  // every subsequent turn (including which saved teams `list_teams` can see).
-  const handleChampionsToggle = useCallback(
-    (next: boolean) => {
-      setChampionsModePersisted(next);
-    },
-    [setChampionsModePersisted],
-  );
-
   const chatStatus: ChatStatus =
     status === "thinking" ? "streaming" : status === "error" ? "error" : "idle";
 
-  // The scope in effect for the conversation: the server-resolved scope once a
-  // turn has run (GS-C), else the Champions-toggle seed. Drives BOTH the header
-  // scope chip and the artifact viewer (B-4) — the viewer snapshots this onto
-  // each artifact at open (BR-AV-7). "Ask about this in chat" pre-fills the
-  // composer (TD-7) via the existing prefill channel — a fresh object so the same
-  // text can be re-applied on its next use.
-  const artifactFormat: Format =
-    resolvedScope ?? (championsMode ? "champions" : "scarlet-violet");
+  // The scope in effect for the conversation: an explicit chip pick, else the
+  // server-resolved scope once a turn has run (GS-C), else the champions
+  // default. Drives BOTH the header scope chip and the artifact viewer (B-4) —
+  // the viewer snapshots this onto each artifact at open (BR-AV-7). "Ask about
+  // this in chat" pre-fills the composer (TD-7) via the existing prefill
+  // channel — a fresh object so the same text can be re-applied on its next use.
+  const displayFormat: Format = scopeSeed ?? resolvedScope ?? "champions";
   const handleAskInChat = useCallback((text: string) => {
     setPrefill({ text });
   }, []);
 
-  // Header overflow menu (mobile): below 640px the secondary controls (champions
-  // / theme + the signed-in team controls) collapse behind a single gear button
-  // so they stop overflowing the red band off-screen. Desktop renders them inline
-  // and never shows the gear. Close on outside-tap / Escape.
+  // Header overflow menu (mobile): below 640px the secondary controls (theme +
+  // the signed-in team controls) collapse behind a single gear button so they
+  // stop overflowing the red band off-screen. Desktop renders them inline and
+  // never shows the gear. Close on outside-tap / Escape.
   const [menuOpen, setMenuOpen] = useState(false);
   const headerClusterRef = useRef<HTMLDivElement>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
@@ -454,11 +438,15 @@ export default function Home() {
           </button>
         </div>
         <div className="chat-page__header-cluster" ref={headerClusterRef}>
-          {/* Server-resolved scope for the current turn (GS-C). Rendered OUTSIDE
-              the collapsible controls so it stays visible on mobile — a scope the
-              server inferred (e.g. a "gen 7" message overriding the toggle) must
-              be surfaced, not hidden behind the gear. */}
-          <ScopeChip format={artifactFormat} />
+          {/* The scope control (GS-C). Rendered OUTSIDE the collapsible controls
+              so it stays visible on mobile — both the server's resolved scope
+              (e.g. a "gen 7" message overriding a chip pick) and the control to
+              change it must be surfaced, not hidden behind the gear. */}
+          <ScopeChip
+            format={displayFormat}
+            onSelect={setScopeSeed}
+            disabled={status === "thinking"}
+          />
           {/* Collapsible group: inline on desktop, a popover under the gear on
               mobile (≤640px). The popover panel re-uses the red-band background
               in CSS so the translucent-white pills keep their contrast. */}
@@ -504,7 +492,7 @@ export default function Home() {
 
       <div className="chat-page__body">
         <ArtifactViewerProvider
-          format={artifactFormat}
+          format={displayFormat}
           onAskInChat={handleAskInChat}
         >
           {/* History sidebar — signed-in only (guests have no server history).
@@ -570,20 +558,12 @@ export default function Home() {
               imagePreviews={imagePreviews}
             />
 
-            {/* The Champions toggle scopes the whole conversation, so it only
-                belongs on an empty thread — passing the props only when `turns`
-                is empty hides it once the first message is sent (it returns when
-                a new conversation resets `turns`). */}
             <Composer
               onSend={handleSend}
               disabled={status === "thinking"}
               streaming={status === "thinking"}
               onStop={handleStop}
               prefill={prefill}
-              championsMode={turns.length === 0 ? championsMode : undefined}
-              onChampionsChange={
-                turns.length === 0 ? handleChampionsToggle : undefined
-              }
             />
           </div>
 

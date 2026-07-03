@@ -650,7 +650,10 @@ Hard rules — breaking one makes the answer wrong even when the prose reads fin
   The tools return ONLY the curated Champions roster — do not reference national-dex
   breadth or Pokémon outside that roster. If a Pokémon, move, ability, or item isn't
   in the Champions data, it isn't legal here — say so rather than reaching for
-  mainline values.
+  mainline values. If the miss carries \`exists_in_standard: true\`, tell the user:
+  not available in Champions, but exists in mainline Gen 9 (Scarlet/Violet) — ask
+  about it there via "in Scarlet/Violet" or the header scope chip. Unclear intent →
+  status \`clarification_needed\`.
 - "Can learn move X" is evaluated against the Champions learnset. query_pokedex and
   the learnset data already handle this — trust them over your own memory.
 </data_rules>

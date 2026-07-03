@@ -13,7 +13,7 @@ import type {
  * admin turns explorer (ADMIN-AC-5.1).
  *
  * CONTROLLED + STATELESS, mirroring the existing control components
- * (`ChampionsToggle`, `SidebarToggle`): the parent page owns the current filter
+ * (`ScopeChip`, `SidebarToggle`): the parent page owns the current filter
  * object and its persistence; this component only renders the controls for the
  * given `value` and reports intent by emitting the FULL next filter object via
  * `onChange`. It holds no internal state.

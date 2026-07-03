@@ -117,14 +117,15 @@ describe("GET /api/entity — miss + unavailable", () => {
   });
 
   it("returns unavailable when the requested format's index is unbuilt", async () => {
-    // The "tools" seed builds only scarlet-violet — champions has no index.
+    // The "tools" seed builds scarlet-violet, gen-7, and champions — gen-8 has
+    // no index.
     const env = await envelope(
-      await call({ kind: "pokemon", q: "garchomp", format: "champions" }),
+      await call({ kind: "pokemon", q: "garchomp", format: "gen-8" }),
     );
     expect(env).toEqual({
       status: "unavailable",
       kind: "pokemon",
-      format: "champions",
+      format: "gen-8",
     });
   });
 });

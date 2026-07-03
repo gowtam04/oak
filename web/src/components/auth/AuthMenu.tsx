@@ -9,7 +9,7 @@ import { signOut } from "@/lib/api/auth-client";
  * / p6).
  *
  * Two states, both rendered in the Pokédex-red header band (translucent-white
- * look, matching `ChampionsToggle`):
+ * look, matching `ScopeChip`):
  *
  *   - Guest → a single non-blocking "Sign in" control (AC-1.2) that asks the
  *     parent to open `AuthDialog` via `onSignInClick`. It never gates the chat.

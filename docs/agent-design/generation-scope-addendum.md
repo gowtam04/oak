@@ -127,8 +127,20 @@ between body-parse and `createAgentContext`, using a **deterministic lexicon —
 LLM pre-pass** (`src/lib/scope/detect-scope.ts`, a pure/portable module). Precedence:
 
 ```
-explicit in-message signal  >  conversation's sticky scope  >  Champions-toggle seed
+explicit in-message signal  >  scope_seed (chip pick)  >  conversation's sticky scope  >  legacy champions_mode  >  default (champions)
 ```
+
+> **Amended 2026-07-02** (web Champions-default pass): the web Champions toggle is
+> removed and the default scope for a new conversation is now **champions** (was
+> `scarlet-violet`). The seed input is no longer the `champions_mode` boolean —
+> it's the new `scope_seed?: Format` field, set by the header's now-interactive
+> scope chip (tap → pick any of the six scopes). Because a chip pick is fresh,
+> explicit user intent, **`scope_seed` ranks above the conversation's sticky
+> scope**, not below it. The deprecated `champions_mode` boolean is still
+> honored (old iOS builds send it) but now ranks **below** sticky scope, same as
+> before, so a resumed conversation is never silently reverted by a stale
+> client default. See the precedence chain above and §6 for the widened `scope`
+> event `source` union.
 
 - **Signal** — `detectScopeSignal(message)` scans for high-precision game/region/
   mechanic keywords and explicit "gen N" numbers (Champions rules first). It favors
@@ -139,11 +151,21 @@ explicit in-message signal  >  conversation's sticky scope  >  Champions-toggle 
 - **Sticky scope** — the conversation's stored `format` (signed-in) or the guest
   session's remembered scope (`getSessionScope`, an in-memory store parallel to
   guest history with the same TTL/LRU). New conversations have no sticky scope.
-- **Seed** — the `champions_mode` request flag now seeds the format for a *new*
-  conversation only; it is no longer a per-turn lock.
+- **Seed** — `scope_seed` (a `Format`, set by the header scope chip) seeds the
+  format for a *new* conversation, and — because it reflects the user's most
+  recent explicit pick — ranks **above** sticky scope too: picking a scope in
+  the chip and then sending a message re-seeds/switches the conversation's
+  scope, the same as an in-message signal would. The deprecated `champions_mode`
+  boolean is still accepted (old iOS builds send it) but ranks **below** sticky
+  scope, matching its original seed-only semantics, and only matters when there
+  is no `scope_seed` and no sticky scope yet.
+- **Default** — with no signal, no seed, and no sticky scope, the turn defaults
+  to **champions** (amended 2026-07-02; was `scarlet-violet`/standard).
 
-The toggle flag stays in the request body (`champions_mode`) with **seed**
-semantics; no request field is added for the gen scopes.
+`scope_seed?: Format` is the new request field (set by the header scope chip);
+the legacy `champions_mode?: boolean` stays in the request body for back-compat
+(`true` → champions, `false` → scarlet-violet) but is superseded by `scope_seed`
+wherever both are present.
 
 ### BR-H6 amended → **BR-H6′** (amends chat-history behavior)
 
@@ -173,8 +195,16 @@ A new SSE event **`scope`** is emitted **once per turn, first** (before any
 `tool_activity`), carrying the resolved format and where it came from:
 
 ```ts
-event: scope   data: { format: Format, source: "message" | "conversation" | "toggle" }
+event: scope   data: { format: Format, source: "message" | "conversation" | "seed" | "default" }
 ```
+
+> **Amended 2026-07-02:** the `source` union changed from
+> `"message" | "conversation" | "toggle"` to
+> `"message" | "conversation" | "seed" | "default"`. `"seed"` covers both the
+> new `scope_seed` chip pick and the deprecated `champions_mode` boolean —
+> either one deciding the scope reports as `"seed"`. `"default"` is new: it
+> reports when nothing decided the scope and it fell through to the champions
+> default.
 
 Additive to the SSE protocol (`src/lib/sse/sse-types.ts`) — old clients that don't
 listen for `scope` ignore it. The client renders it as a header **scope chip**

@@ -34,3 +34,29 @@ export function scopeLabel(format: Format): string {
       return String(format);
   }
 }
+
+/**
+ * A compact badge label for a resolved scope — shorter than {@link scopeLabel}
+ * (no regulation/game-pair suffix), for tight spaces like the history sidebar's
+ * per-row format badge.
+ */
+export function scopeLabelShort(format: Format): string {
+  switch (format) {
+    case "champions":
+      return "Champions";
+    case "scarlet-violet":
+      return "Gen 9";
+    case "gen-8":
+      return "Gen 8";
+    case "gen-7":
+      return "Gen 7";
+    case "gen-6":
+      return "Gen 6";
+    case "gen-5":
+      return "Gen 5";
+    default:
+      // Unreachable given the closed `Format` union; echo the raw value
+      // defensively so a newly-added format never renders as `undefined`.
+      return String(format);
+  }
+}

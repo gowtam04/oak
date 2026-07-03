@@ -25,6 +25,10 @@ describe("detectScopeSignal — supported scopes", () => {
     ["how does the Champions format work", "champions"],
     ["team for reg m-b", "champions"],
     ["give me a Regulation H core", "champions"],
+    // Precedence guards: Champions rules (section 1) fire before the newer
+    // Gen 9 signals (koraidon/vgc live in section 3a).
+    ["is koraidon legal in champions", "champions"],
+    ["vgc reg h team", "champions"], // reg-letter rule wins — documents the existing tradeoff
     // Gen 9 / Scarlet-Violet
     ["best team in scarlet and violet", "scarlet-violet"],
     ["my Violet playthrough", "scarlet-violet"],
@@ -34,6 +38,12 @@ describe("detectScopeSignal — supported scopes", () => {
     ["exploring the paldea region", "scarlet-violet"],
     ["is tera blast good", "scarlet-violet"],
     ["should i terastallize my dragonite", "scarlet-violet"],
+    ["can koraidon ohko incineroar", "scarlet-violet"],
+    ["miraidon speed tier", "scarlet-violet"],
+    ["terapagos stellar form", "scarlet-violet"],
+    ["what's in area zero", "scarlet-violet"],
+    ["my vgc team", "scarlet-violet"],
+    ["how does it work in the mainline games", "scarlet-violet"],
     // Gen 8 / Sword-Shield (+ BDSP, Legends: Arceus)
     ["gen 8 vgc", "gen-8"],
     ["sword and shield team", "gen-8"],

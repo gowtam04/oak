@@ -5,10 +5,12 @@
  * mechanics reasoning, type matchups, stat/damage math, lookups, ability/item
  * effects, evolution, and conditional inference.
  *
- * Phrasing is deliberately **mode-agnostic** (valid in both Standard and
- * Champions) and avoids out-of-scope topics (egg moves, catch locations) so a
- * chip never leads to a dead-end decline. Drawn from the eval golden cases and
- * few-shot examples. Categories below are for authoring only — the array is flat.
+ * Phrasing is **mostly mode-agnostic** (valid in both Standard and Champions),
+ * plus a handful of Champions-flavored prompts — Champions is Oak's default
+ * scope, so the empty state should reflect that. All prompts avoid out-of-scope
+ * topics (egg moves, catch locations) so a chip never leads to a dead-end
+ * decline. Drawn from the eval golden cases and few-shot examples. Categories
+ * below are for authoring only — the array is flat.
  *
  * The "Teams" chips double as discoverability for referring to a saved team by
  * name in chat ("how's my rain team?"): a build chip always produces a team, and
@@ -69,6 +71,11 @@ export const STARTER_PROMPTS: string[] = [
   "Build me a rain team",
   "Build me a Trick Room team",
   "How does my team look?",
+  // Champions
+  "Build me a Champions team around Mega Swampert",
+  "Best Stat Point spread for Incineroar in Champions",
+  "Who has the highest usage in Champions right now?",
+  "Is Dragapult legal in Champions?",
 ];
 
 /**

@@ -242,7 +242,7 @@ describe("POST /api/chat — turn recording", () => {
     expect(input).toMatchObject({
       sessionId: "rec1",
       accountId: ACCT_A,
-      mode: "standard",
+      mode: "champions",
       status: "answered",
       // From the captured TurnTrace.
       providerModel: FAKE_TRACE.model,
