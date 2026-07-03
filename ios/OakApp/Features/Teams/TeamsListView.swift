@@ -12,6 +12,7 @@ import SwiftUI
 /// the editor in new mode and the list reloads on return.
 struct TeamsListView: View {
   @Environment(AppState.self) private var appState
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var model: TeamsListViewModel
 
   /// The team being edited / created (drives the editor navigation).
@@ -66,7 +67,7 @@ struct TeamsListView: View {
   private var listContent: some View {
     if model.teams.isEmpty {
       if model.isLoading {
-        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        skeletonList
       } else {
         emptyState
       }
@@ -92,6 +93,7 @@ struct TeamsListView: View {
         }
       }
       .listStyle(.plain)
+      .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.teams)
       .refreshable { await model.reload() }
       .overlay(alignment: .bottom) {
         if let message = model.errorMessage {
@@ -99,6 +101,17 @@ struct TeamsListView: View {
         }
       }
     }
+  }
+
+  /// Six skeleton rows shown while the first page is loading, replacing the
+  /// centered spinner.
+  private var skeletonList: some View {
+    List {
+      ForEach(0..<6, id: \.self) { _ in
+        SkeletonListRow()
+      }
+    }
+    .listStyle(.plain)
   }
 
   @ViewBuilder
@@ -189,19 +202,31 @@ struct TeamsListView: View {
   // MARK: Empty / guest / error states
 
   private var guestState: some View {
-    ContentUnavailableView {
-      Label("Sign in for teams", systemImage: "person.3")
-    } description: {
+    VStack(spacing: 12) {
+      OakBrandMark(size: 64)
+      Text("Sign in for teams")
+        .font(Theme.display(.title3))
       Text("Sign in to build, save, and reuse your competitive teams across devices.")
+        .font(Theme.body(.subheadline))
+        .foregroundStyle(Theme.textSecondary)
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 32)
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   private var emptyState: some View {
-    ContentUnavailableView {
-      Label(model.formatFilter == nil ? "No teams yet" : "No teams in this format", systemImage: "person.3")
-    } description: {
+    VStack(spacing: 12) {
+      OakBrandMark(size: 64)
+      Text(model.formatFilter == nil ? "No teams yet" : "No teams in this format")
+        .font(Theme.display(.title3))
       Text("Create a team with the + button, or import one from Showdown.")
+        .font(Theme.body(.subheadline))
+        .foregroundStyle(Theme.textSecondary)
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 32)
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   private func errorBanner(_ message: String) -> some View {
@@ -244,13 +269,15 @@ private enum EditorTarget: Identifiable, Hashable {
 
 // MARK: - Row
 
-/// One team row: name, a format tag, and a glanceable composition summary. Color is
-/// never the sole signal — the format is shown as text (M-AC-UI9.3).
+/// One team row: a six-slot roster indicator, name, a format tag, and a glanceable
+/// composition summary. Color is never the sole signal — the format is shown as
+/// text (M-AC-UI9.3).
 private struct TeamRow: View {
   let team: TeamSummary
 
   var body: some View {
     HStack(spacing: 12) {
+      slotIndicator
       VStack(alignment: .leading, spacing: 4) {
         HStack(spacing: 6) {
           Text(team.name)
@@ -272,6 +299,28 @@ private struct TeamRow: View {
     .contentShape(Rectangle())
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
+  }
+
+  /// Six mini roster slots — filled = a solid accent-tinted dot, empty = a dashed
+  /// outline. `TeamSummary` (Services/TeamService.swift) carries no per-member
+  /// sprite data, so this is the degraded treatment (filled-count only, not
+  /// per-species artwork) rather than the ideal 28pt `SpriteImage` slots.
+  /// Decorative — `accessibilityLabel` above already states the composition.
+  private var slotIndicator: some View {
+    HStack(spacing: 3) {
+      ForEach(0..<6, id: \.self) { slot in
+        if slot < team.memberCount {
+          Circle()
+            .fill(Theme.accent.opacity(0.3))
+            .frame(width: 8, height: 8)
+        } else {
+          Circle()
+            .strokeBorder(Theme.textMuted, style: StrokeStyle(lineWidth: 1, dash: [3]))
+            .frame(width: 8, height: 8)
+        }
+      }
+    }
+    .accessibilityHidden(true)
   }
 
   private var formatLabel: String {

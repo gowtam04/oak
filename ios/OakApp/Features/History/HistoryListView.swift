@@ -13,6 +13,7 @@ import SwiftUI
 /// ``onSelect``, which pushes the thread route (load detail + resume into chat).
 struct ConversationListView: View {
   @State private var model: HistoryListViewModel
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   /// Called when a conversation row is tapped — the Chat tab pushes the thread
   /// route, which loads the detail and resumes it into chat (M-AC-H3.1).
@@ -64,61 +65,25 @@ struct ConversationListView: View {
   private var listContent: some View {
     if model.conversations.isEmpty {
       if model.isLoading {
-        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        skeletonList
       } else {
         emptyState
       }
     } else {
       List {
-        ForEach(model.conversations) { conversation in
-          Button {
-            onSelect(conversation)
-          } label: {
-            ConversationRow(conversation: conversation)
-          }
-          .buttonStyle(.plain)
-          .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-              Task { await model.delete(conversation) }
-            } label: {
-              Label("Delete", systemImage: "trash")
-            }
-          }
-          .swipeActions(edge: .leading) {
-            Button {
-              Task { await model.togglePin(conversation) }
-            } label: {
-              Label(
-                conversation.pinned ? "Unpin" : "Pin",
-                systemImage: conversation.pinned ? "pin.slash" : "pin"
-              )
-            }
-            .tint(Theme.accent)
-          }
-          .contextMenu {
-            Button {
-              renameText = conversation.title
-              renameTarget = conversation
-            } label: {
-              Label("Rename", systemImage: "pencil")
-            }
-            Button {
-              Task { await model.togglePin(conversation) }
-            } label: {
-              Label(
-                conversation.pinned ? "Unpin" : "Pin",
-                systemImage: conversation.pinned ? "pin.slash" : "pin"
-              )
-            }
-            Button(role: .destructive) {
-              Task { await model.delete(conversation) }
-            } label: {
-              Label("Delete", systemImage: "trash")
+        if !pinnedConversations.isEmpty {
+          Section("Pinned") {
+            ForEach(pinnedConversations) { conversation in
+              conversationRow(conversation)
             }
           }
         }
+        ForEach(otherConversations) { conversation in
+          conversationRow(conversation)
+        }
       }
       .listStyle(.plain)
+      .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.conversations)
       .refreshable { await model.reload() }
       .overlay(alignment: .bottom) {
         if let message = model.errorMessage {
@@ -126,6 +91,79 @@ struct ConversationListView: View {
         }
       }
     }
+  }
+
+  /// The already-loaded array split into pinned/unpinned for the "Pinned" section
+  /// grouping — a pure presentation reshape, no view-model change.
+  private var pinnedConversations: [ConversationSummary] {
+    model.conversations.filter(\.pinned)
+  }
+
+  private var otherConversations: [ConversationSummary] {
+    model.conversations.filter { !$0.pinned }
+  }
+
+  /// One row's full interaction surface (tap, swipe actions, context menu),
+  /// factored out so both the "Pinned" section and the main list share it.
+  @ViewBuilder
+  private func conversationRow(_ conversation: ConversationSummary) -> some View {
+    Button {
+      onSelect(conversation)
+    } label: {
+      ConversationRow(conversation: conversation)
+    }
+    .buttonStyle(.plain)
+    .listRowBackground(conversation.pinned ? Theme.accent.opacity(0.05) : nil)
+    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+      Button(role: .destructive) {
+        Task { await model.delete(conversation) }
+      } label: {
+        Label("Delete", systemImage: "trash")
+      }
+    }
+    .swipeActions(edge: .leading) {
+      Button {
+        Task { await model.togglePin(conversation) }
+      } label: {
+        Label(
+          conversation.pinned ? "Unpin" : "Pin",
+          systemImage: conversation.pinned ? "pin.slash" : "pin"
+        )
+      }
+      .tint(Theme.accent)
+    }
+    .contextMenu {
+      Button {
+        renameText = conversation.title
+        renameTarget = conversation
+      } label: {
+        Label("Rename", systemImage: "pencil")
+      }
+      Button {
+        Task { await model.togglePin(conversation) }
+      } label: {
+        Label(
+          conversation.pinned ? "Unpin" : "Pin",
+          systemImage: conversation.pinned ? "pin.slash" : "pin"
+        )
+      }
+      Button(role: .destructive) {
+        Task { await model.delete(conversation) }
+      } label: {
+        Label("Delete", systemImage: "trash")
+      }
+    }
+  }
+
+  /// Six skeleton rows shown while the first page is loading, replacing the
+  /// centered spinner (loading state communicates row shape, not just activity).
+  private var skeletonList: some View {
+    List {
+      ForEach(0..<6, id: \.self) { _ in
+        SkeletonListRow()
+      }
+    }
+    .listStyle(.plain)
   }
 
   private var formatFilterMenu: some View {
@@ -154,15 +192,21 @@ struct ConversationListView: View {
   // MARK: Empty / error states
 
   private var emptyState: some View {
-    ContentUnavailableView {
-      Label(searchActive ? "No matches" : "No conversations yet", systemImage: "bubble.left.and.bubble.right")
-    } description: {
+    VStack(spacing: 12) {
+      OakBrandMark(size: 64)
+      Text(searchActive ? "No matches" : "No conversations yet")
+        .font(Theme.display(.title3))
       Text(
         searchActive
           ? "No saved conversations match your search."
           : "Conversations you have with Oak are saved here automatically."
       )
+      .font(Theme.body(.subheadline))
+      .foregroundStyle(Theme.textSecondary)
+      .multilineTextAlignment(.center)
+      .padding(.horizontal, 32)
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   private var searchActive: Bool {
@@ -197,23 +241,27 @@ struct ConversationListView: View {
   }
 }
 
-/// One conversation row: title, a format tag, and the last-active time. Color is
-/// never the sole signal — the format is shown as text (M-AC-UI9.3 / conventions.md).
+/// One conversation row: a leading format medallion, title, a format tag, and the
+/// last-active time. Color is never the sole signal — the format is also shown as
+/// text (M-AC-UI9.3 / conventions.md).
 private struct ConversationRow: View {
   let conversation: ConversationSummary
 
   var body: some View {
     HStack(spacing: 12) {
-      if conversation.pinned {
-        Image(systemName: "pin.fill")
-          .font(.caption)
-          .foregroundStyle(Theme.accent)
-          .accessibilityLabel("Pinned")
-      }
+      FormatMedallion(format: conversation.format)
       VStack(alignment: .leading, spacing: 4) {
-        Text(conversation.title)
-          .font(.body)
-          .lineLimit(1)
+        HStack(spacing: 6) {
+          if conversation.pinned {
+            Image(systemName: "pin.fill")
+              .font(.caption)
+              .foregroundStyle(Theme.accent)
+              .accessibilityLabel("Pinned")
+          }
+          Text(conversation.title)
+            .font(Theme.body(.body).weight(.medium))
+            .lineLimit(1)
+        }
         HStack(spacing: 6) {
           Text(formatLabel)
           Text("·")
@@ -237,6 +285,41 @@ private struct ConversationRow: View {
 
   private var updatedAt: Date {
     Date(timeIntervalSince1970: Double(conversation.updatedAt) / 1000)
+  }
+}
+
+/// The leading 34pt format medallion: Champions reads as a sunflower `crown.fill`
+/// on a sunflower-tinted disc, Standard as an azure `leaf.fill` on an azure-tinted
+/// disc — deliberately not a ball motif (constraint 1). Decorative only; the
+/// format text label alongside it carries the actual meaning (M-AC-UI9.3), so this
+/// is hidden from VoiceOver.
+private struct FormatMedallion: View {
+  let format: Format
+
+  var body: some View {
+    Circle()
+      .fill(tint.opacity(0.12))
+      .frame(width: 34, height: 34)
+      .overlay {
+        Image(systemName: iconName)
+          .font(.system(size: 14, weight: .semibold))
+          .foregroundStyle(tint)
+      }
+      .accessibilityHidden(true)
+  }
+
+  private var iconName: String {
+    switch format {
+    case .champions: return "crown.fill"
+    case .scarletViolet: return "leaf.fill"
+    }
+  }
+
+  private var tint: Color {
+    switch format {
+    case .champions: return Theme.sunflower
+    case .scarletViolet: return Theme.azure
+    }
   }
 }
 

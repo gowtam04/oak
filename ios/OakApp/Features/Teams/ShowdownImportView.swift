@@ -17,6 +17,7 @@ struct ShowdownImportView: View {
   @State private var paste: String = ""
   @State private var notes: [ImportNote] = []
   @State private var importedTeamName: String?
+  @State private var importedMembers: [TeamMember] = []
   @State private var isImporting: Bool = false
 
   init(model: TeamsListViewModel) {
@@ -53,6 +54,14 @@ struct ShowdownImportView: View {
           Section {
             Label("Imported \"\(importedTeamName)\" into your Teams.", systemImage: "checkmark.seal.fill")
               .foregroundStyle(Theme.success)
+          }
+        }
+
+        if !importedMembers.isEmpty {
+          Section("Parsed team") {
+            ForEach(Array(importedMembers.enumerated()), id: \.offset) { index, member in
+              ParsedMemberRow(member: member, index: index)
+            }
           }
         }
 
@@ -102,6 +111,7 @@ struct ShowdownImportView: View {
     guard let result = await model.importPaste(paste, format: format) else { return }
     notes = result.notes
     importedTeamName = result.team.name
+    importedMembers = result.team.members
     if result.notes.isEmpty {
       dismiss()
     }
@@ -120,6 +130,46 @@ struct ShowdownImportView: View {
     .padding(12)
     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
     .padding()
+  }
+}
+
+/// One parsed-team preview row: the resolved species name, staggered in on first
+/// appear once the import succeeds (Theme.Motion.staggered) so the roster reveals
+/// itself one slot at a time rather than popping in all at once.
+private struct ParsedMemberRow: View {
+  let member: TeamMember
+  let index: Int
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var hasAppeared = false
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Circle()
+        .fill(Theme.accent.opacity(0.4))
+        .frame(width: 6, height: 6)
+        .accessibilityHidden(true)
+      Text(displayName)
+        .font(.footnote)
+      Spacer(minLength: 0)
+    }
+    .opacity(hasAppeared ? 1 : 0)
+    .offset(y: hasAppeared ? 0 : 6)
+    .onAppear {
+      guard !hasAppeared else { return }
+      if reduceMotion {
+        hasAppeared = true
+      } else {
+        withAnimation(Theme.Motion.staggered(index)) {
+          hasAppeared = true
+        }
+      }
+    }
+  }
+
+  private var displayName: String {
+    guard let species = member.species, !species.isEmpty else { return "Unknown" }
+    return TeamBlocksView.titleizeNonNil(species)
   }
 }
 
