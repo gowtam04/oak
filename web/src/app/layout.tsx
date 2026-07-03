@@ -19,17 +19,15 @@ export const metadata: Metadata = {
 // non-zero (the header/composer pad themselves with it). `viewportFit: "cover"`
 // is the prerequisite for any safe-area handling. We deliberately do NOT cap
 // zoom (no maximumScale/userScalable) — that would break WCAG 1.4.4. themeColor
-// tints the browser chrome to match each theme's app background — the header
-// is paper now (UI §3), not a red band, so the chrome tint follows suit and
-// switches with the OS/media-query theme instead of staying fixed red.
+// tints the browser chrome to match the app background; it's a static light
+// value (not a `prefers-color-scheme` media pair) since light is the
+// unconditional default regardless of OS preference — dark is opt-in only via
+// the in-app toggle, which a static viewport export can't react to anyway.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbf7f4" },
-    { media: "(prefers-color-scheme: dark)", color: "#161311" },
-  ],
+  themeColor: "#fbf7f4",
 };
 
 // Display / body / mono — exposed as CSS variables consumed by globals.css.
@@ -53,10 +51,11 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 // Resolve the theme before first paint to avoid a flash of the wrong theme. A
-// stored explicit choice wins; otherwise we follow the OS `prefers-color-scheme`
-// (system-aware default). Either way `data-theme` is set here so first paint is
-// correct. Keep in sync with ThemeToggle's storage key + resolution.
-const NO_FLASH_THEME = `(function(){try{var t=localStorage.getItem('oak-theme');if(t!=='light'&&t!=='dark'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`;
+// stored explicit choice wins; otherwise light is the unconditional default
+// (no OS `prefers-color-scheme` fallback) — dark is opt-in only, via the
+// toggle. Either way `data-theme` is set here so first paint is correct. Keep
+// in sync with ThemeToggle's storage key + resolution.
+const NO_FLASH_THEME = `(function(){try{var t=localStorage.getItem('oak-theme');if(t!=='light'&&t!=='dark'){t='light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

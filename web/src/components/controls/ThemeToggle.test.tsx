@@ -49,18 +49,17 @@ afterEach(() => {
   document.documentElement.removeAttribute("data-theme");
 });
 
-describe("ThemeToggle — system-aware default", () => {
-  it("follows the OS dark preference when there is no stored choice", () => {
+describe("ThemeToggle — light-by-default", () => {
+  it("defaults to light regardless of an OS dark preference when there is no stored choice", () => {
     mockPrefersColorScheme(true);
     render(<ThemeToggle />);
-    // isDark ⇒ the control offers to switch to light.
     expect(screen.getByTestId("theme-toggle")).toHaveAttribute(
       "aria-label",
-      "Switch to light theme",
+      "Switch to dark theme",
     );
   });
 
-  it("follows the OS light preference when there is no stored choice", () => {
+  it("defaults to light when there is no OS preference either", () => {
     mockPrefersColorScheme(false);
     render(<ThemeToggle />);
     expect(screen.getByTestId("theme-toggle")).toHaveAttribute(
@@ -69,15 +68,14 @@ describe("ThemeToggle — system-aware default", () => {
     );
   });
 
-  it("prefers the resolved data-theme attribute over the OS preference", () => {
-    // Mirrors the no-flash inline script: a stored 'light' choice is stamped on
-    // <html> before paint and must win over an OS dark preference.
-    mockPrefersColorScheme(true);
-    document.documentElement.setAttribute("data-theme", "light");
+  it("honors a stored dark choice stamped onto data-theme before paint", () => {
+    // Mirrors the no-flash inline script: a stored 'dark' choice is stamped on
+    // <html> before paint and resolves as-is.
+    document.documentElement.setAttribute("data-theme", "dark");
     render(<ThemeToggle />);
     expect(screen.getByTestId("theme-toggle")).toHaveAttribute(
       "aria-label",
-      "Switch to dark theme",
+      "Switch to light theme",
     );
   });
 });
