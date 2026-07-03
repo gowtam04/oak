@@ -1,4 +1,5 @@
 import type { CaveatStripProps } from "@/components/types";
+import { labelForUncertaintyFlag } from "@/components/answer-card/uncertainty-labels";
 
 /**
  * CaveatStrip — prominent banner combining `uncertainty_flags[]` and the
@@ -33,7 +34,7 @@ export default function CaveatStrip({
           className="caveat-strip__flag"
           data-testid={`caveat-flag-${i}`}
         >
-          {flag}
+          {labelForUncertaintyFlag(flag)}
         </div>
       ))}
     </div>

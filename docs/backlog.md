@@ -617,6 +617,24 @@ path, the encounters answer/prompt guidance.
 
 ## B-13 — Fix illegal proposed teams
 
+> **Status: ADDRESSED** — root-caused from local logs (team builds died with
+> `max_iterations_reached`): the runtime already roster-validates `proposed_team`
+> and re-emits illegal ones (fix (b) predated this), but the model burned its
+> iteration budget re-guessing and the built team was then **discarded** for a
+> generic apology. Fixed three ways: (1) **runtime salvage** (`runtime.ts`
+> `finalizeBestEffortOrInsufficient`) — at any give-up exit, surface the last
+> schema-valid team with its legality warnings instead of discarding it (reuses
+> accept-with-warnings); (2) **prompt legality guidance** in BOTH `champions.ts`
+> and `domain-grok.ts` (item-clause parity for Grok + "Champions movesets differ
+> from standard VGC — verify moves with the tools, but always deliver a complete
+> team, never decline for uncertainty"); (3) **friendly caveat labels**
+> (`answer-card/uncertainty-labels.ts`) so give-up codes read as "Couldn't
+> complete this answer". Verified live: the reported query now returns a complete,
+> fully-legal team. **Remaining (separate follow-up):** the Champions `learnset`
+> is ~99.9% `machine`-method with only 16 `level-up` rows across the whole roster
+> (e.g. Incineroar lacks Knock Off / U-turn it has in SV/gen-7) — verify whether
+> this is intended curation or an ingest gap in `gen-provider.ts` `getLearnset`.
+
 **Why:** When the agent proposes a team via the additive `proposed_team` answer
 field (B-2 / TEAM-US, BR-T8), it **sometimes proposes teams that are illegal** —
 e.g. a Pokémon with a move it can't learn in the active format, an ability/item it

@@ -59,6 +59,41 @@ describe("CaveatStrip", () => {
     expect(screen.getByTestId("caveat-flag-1")).toHaveTextContent(flags[1]);
   });
 
+  it("maps internal give-up flag codes to friendly text (not the raw code)", () => {
+    render(
+      <CaveatStrip
+        uncertaintyFlags={["max_iterations_reached"]}
+        generationBasis={GENERATION_BASIS_GEN9}
+      />,
+    );
+    const flag = screen.getByTestId("caveat-flag-0");
+    expect(flag).toHaveTextContent("Couldn't complete this answer");
+    expect(flag).not.toHaveTextContent("max_iterations_reached");
+  });
+
+  it("maps the best-effort-team salvage flag to a slot-legality caveat", () => {
+    render(
+      <CaveatStrip
+        uncertaintyFlags={["team_may_have_illegal_slots"]}
+        generationBasis={GENERATION_BASIS_GEN9}
+      />,
+    );
+    expect(screen.getByTestId("caveat-flag-0")).toHaveTextContent(
+      "Some team slots may not be fully legal",
+    );
+  });
+
+  it("renders an unknown (model-authored) flag verbatim", () => {
+    const custom = "Assumed Gen 9 mechanics for this matchup";
+    render(
+      <CaveatStrip
+        uncertaintyFlags={[custom]}
+        generationBasis={GENERATION_BASIS_GEN9}
+      />,
+    );
+    expect(screen.getByTestId("caveat-flag-0")).toHaveTextContent(custom);
+  });
+
   it("renders the strip when there are flags but fallback=false", () => {
     render(
       <CaveatStrip

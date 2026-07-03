@@ -446,6 +446,52 @@ describe("active-team-agent-e2e — proposed_team roster gate", () => {
     ).toBe(true);
     expect(oakAnswerSchema.safeParse(result).success).toBe(true);
   });
+
+  it("salvages the built team when the turn gives up before an accepted submit (B-13)", async () => {
+    const ctx = await buildCtx("standard", undefined);
+    const illegalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "Still bad",
+        format: SV,
+        members: [heatranMember(), garchompMember()],
+      },
+    };
+    // Two schema-valid-but-illegal submits capture the best-effort team; then the
+    // model fails SCHEMA validation until MAX_SUBMIT_RETRIES is spent → give up.
+    // Instead of a bare insufficient_data apology, the runtime salvages the last
+    // built team with its legality warnings (accept-with-warnings reused).
+    const invalid = () =>
+      message([toolUse("submit_answer", { status: "answered" }, "tx")]);
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", illegalAnswer, "t1")]),
+      message([toolUse("submit_answer", illegalAnswer, "t2")]),
+      invalid(),
+      invalid(),
+      invalid(),
+    ]);
+
+    const result = await runtime.runOakWith(
+      client,
+      "build me a team",
+      [] as ChatMessage[],
+      ctx,
+    );
+
+    // 2 legality re-emits + 3 schema re-emits (last trips the budget) = 5 calls.
+    expect(stream).toHaveBeenCalledTimes(5);
+    // The built team survives — NOT discarded for a bare insufficient_data.
+    expect(result.proposed_team?.members[0]?.species).toBe("heatran");
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "species_illegal",
+      ),
+    ).toBe(true);
+    expect(result.status).toBe("answered");
+    expect(result.status).not.toBe("insufficient_data");
+    expect(result.uncertainty_flags).toContain("team_may_have_illegal_slots");
+    expect(oakAnswerSchema.safeParse(result).success).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

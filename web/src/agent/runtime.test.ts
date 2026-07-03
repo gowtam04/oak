@@ -50,6 +50,16 @@ vi.mock("@/agent/enrich-answer", () => ({
   enrichAnswer: async (answer: unknown) => answer,
 }));
 
+// Mock the roster validator so the proposed_team gate is deterministic without a
+// Postgres pool. Returns a single HARD item-clause violation → the runtime keeps
+// rejecting the proposal (proposed_team_illegal) up to its budget.
+vi.mock("@/server/teams/validate-team", () => ({
+  validateTeam: vi.fn(async () => [
+    { code: "duplicate_item", message: 'Item clause: "life-orb" in slots 1, 2.' },
+  ]),
+  isHardViolation: (w: { code: string }) => w.code === "duplicate_item",
+}));
+
 import {
   AnswerMarkdownExtractor,
   describeToolCall,
@@ -69,6 +79,33 @@ const validAnswer: OakAnswer = {
   inferences: [],
   generation_basis: { generation: "gen-9", fallback: false },
 };
+
+/** A schema-valid team member (content is irrelevant — validateTeam is mocked). */
+function teamMember(species: string, item: string): unknown {
+  const spread = { hp: 4, atk: 0, def: 0, spa: 252, spd: 0, spe: 252 };
+  return {
+    species,
+    ability: "levitate",
+    item,
+    moves: ["thunderbolt", "hydro-pump", "protect", "nasty-plot"],
+    nature: "modest",
+    evs: spread,
+    ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
+    tera_type: "water",
+    level: 50,
+  };
+}
+
+/** A valid OakAnswer that BUILDS a team (drives the proposed_team gate). */
+const teamAnswer: OakAnswer = {
+  ...validAnswer,
+  answer_markdown: "Here's a team built around Rotom-Wash.",
+  proposed_team: {
+    name: "Rain",
+    format: "scarlet-violet",
+    members: [teamMember("rotom-wash", "life-orb"), teamMember("garchomp", "life-orb")],
+  },
+} as OakAnswer;
 
 const info = vi.fn();
 const ctx = {
@@ -449,6 +486,37 @@ describe("orchestration fallbacks", () => {
     expect(result.status).toBe("insufficient_data");
     expect(result.uncertainty_flags).toContain("max_iterations_reached");
     expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
+  });
+
+  it("salvages the best-effort team (with warnings) when a build turn hits the iteration cap", async () => {
+    // The model builds a schema-valid but format-illegal team, gets it rejected
+    // twice (proposed_team_illegal), then keeps gathering until the cap. Instead
+    // of discarding it for a generic apology, the runtime surfaces that team with
+    // the legality warnings stamped (accept-with-warnings, B-13).
+    const responses = [
+      message([toolUse("submit_answer", teamAnswer, "s1")]),
+      message([toolUse("submit_answer", teamAnswer, "s2")]),
+      ...Array.from({ length: MAX_ITERATIONS - 2 }, () =>
+        message([toolUse("query_pokedex", {}, "q")]),
+      ),
+    ];
+    const { client, stream } = scriptedClient(responses);
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    const result = await runOakWith(client, "build me a doubles team", [], ctx);
+
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
+    // The built team survives — not a bare insufficient_data discard.
+    expect(result.status).toBe("answered");
+    expect(result.status).not.toBe("insufficient_data");
+    expect(result.proposed_team?.members).toHaveLength(2);
+    // Legality warnings are stamped server-authoritatively…
+    expect(
+      (result.proposed_team_warnings ?? []).some((w) => w.code === "duplicate_item"),
+    ).toBe(true);
+    // …and the top-level caveat explains why, replacing the raw give-up code.
+    expect(result.uncertainty_flags).toContain("team_may_have_illegal_slots");
+    expect(result.uncertainty_flags).not.toContain("max_iterations_reached");
   });
 
   it("nudges the model to submit once, SUBMIT_NUDGE_REMAINING iterations before the cap", async () => {

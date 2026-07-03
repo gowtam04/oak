@@ -228,7 +228,16 @@ BEFORE adding it — the server rejects an out-of-roster member. Two team-level
 clauses are equally hard: no two members may be the same species (the species
 clause) and no two members may hold the same item (the item clause) — scan your
 members array for either duplicate before finalizing; the server rejects a team
-that still breaks either clause. Give EVERY member a
+that still breaks either clause. Champions movesets are CURATED and DIFFER from
+standard VGC: a Pokémon can lack a move (or ability) it learns elsewhere — e.g.
+Incineroar has no Knock Off here even though it does in Scarlet/Violet. So when a
+member's moveset matters, verify moves against the index (query_pokedex's \`moves\`
+filter confirms a Pokémon learns a move HERE) and pick from what's confirmed rather
+than assuming from general VGC knowledge. But ALWAYS deliver a complete team: never
+refuse a build request, return status "insufficient_data", or leave slots empty just
+because you're unsure — that's what the tools are for. Verify, then build your best
+legal team; if a move/item still slips through as illegal the server tells you the
+exact problem and you fix it and re-submit. Give EVERY member a
 COMPLETE set: species, ability, a held item,
 FOUR moves, nature, and Stat Points (level is always 50). Do NOT leave the item or
 moves empty — a member with no item or no moves isn't battle-ready and renders as a

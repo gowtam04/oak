@@ -763,6 +763,15 @@ export async function runWithProvider(
   // MAX_PROPOSED_TEAM_RETRIES) — separate from the schema-failure budget so an
   // illegal team never burns the schema retries or trips insufficient_data.
   let proposedTeamRetries = 0;
+  // The last schema-VALID submit_answer that was rejected ONLY for team legality
+  // (see the proposed_team rejection branch below). If the turn later gives up
+  // without an accepted submit — the model built a team, got it rejected twice,
+  // then burned iterations / went silent / failed schema — we salvage THIS
+  // (enriched, warnings stamped) instead of discarding it for a generic apology.
+  // This just makes the already-sanctioned accept-with-warnings behavior reachable
+  // when the model runs out of budget before its 3rd submit (see B-13).
+  let bestEffortAnswer: OakAnswer | null = null;
+  let bestEffortWarnings: TeamWarning[] = [];
 
   // get_pokemon profiles fetched this turn — used by answer enrichment to
   // synthesize subjects[] when the model omits it on a single-entity answer.
@@ -771,6 +780,42 @@ export async function runWithProvider(
   // Emit the "reasoning…" progress tick at most once per turn (UX for models like
   // Grok that stream a long reasoning phase before the answer arrives at once).
   let reasoningNudged = false;
+
+  // Give-up recovery shared by all three fallthroughs. Prefer a best-effort team
+  // (only ever set from a schema-valid, legality-rejected submit → it always
+  // carries a proposed_team + warnings) over a discard; else recovered prose if we
+  // have any (empty-turn case), else the generic insufficient_data apology. Closes
+  // over the mutable locals, read at call time.
+  const finalizeBestEffortOrInsufficient = async (
+    reason: string,
+    prose?: string,
+  ): Promise<OakAnswer> => {
+    if (bestEffortAnswer) {
+      const enriched = await enrichAnswer(bestEffortAnswer, ctx, lookedUpProfiles);
+      // Stamp warnings server-authoritatively, mirroring the accept path.
+      if (enriched.proposed_team && bestEffortWarnings.length > 0) {
+        enriched.proposed_team_warnings = bestEffortWarnings;
+      } else {
+        delete enriched.proposed_team_warnings;
+      }
+      // Top-level caveat so a confident answer_markdown can't oversell legality:
+      // the per-slot badges explain WHICH slots, this explains WHY. Preserve any
+      // flags the model authored.
+      enriched.uncertainty_flags = [
+        ...(enriched.uncertainty_flags ?? []),
+        "team_may_have_illegal_slots",
+      ];
+      return finalize(enriched, state, ctx);
+    }
+    const trimmed = prose?.trim() ?? "";
+    return finalize(
+      trimmed.length > 0
+        ? synthesizeFromProse(trimmed, ctx.mode)
+        : synthesizeInsufficientData(reason, ctx.mode),
+      state,
+      ctx,
+    );
+  };
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     // Bail if the client disconnected (user pressed Stop) during the prior tool
@@ -851,16 +896,9 @@ export async function runWithProvider(
         transcript.push(provider.buildUserMessage(EMPTY_TURN_NUDGE));
         continue;
       }
-      const prose = assistantText.trim();
-      return finalize(
-        prose.length > 0
-          ? synthesizeFromProse(prose, ctx.mode)
-          : synthesizeInsufficientData(
-              "model_ended_turn_without_submit_answer",
-              ctx.mode,
-            ),
-        state,
-        ctx,
+      return finalizeBestEffortOrInsufficient(
+        "model_ended_turn_without_submit_answer",
+        assistantText,
       );
     }
 
@@ -915,6 +953,11 @@ export async function runWithProvider(
             proposedTeamRetries < MAX_PROPOSED_TEAM_RETRIES
           ) {
             proposedTeamRetries += 1;
+            // Remember this attempt (schema-valid, carries the proposed_team) so a
+            // later give-up salvages it instead of discarding the model's work.
+            // Keep the FULL warning list (like the accept path) and the LAST attempt.
+            bestEffortAnswer = parsed.data;
+            bestEffortWarnings = teamWarnings;
             state.toolTrace.push({
               tool: call.name,
               args: call.input,
@@ -1035,13 +1078,8 @@ export async function runWithProvider(
     if (submitFailed) {
       submitRetries += 1;
       if (submitRetries > MAX_SUBMIT_RETRIES) {
-        return finalize(
-          synthesizeInsufficientData(
-            "submit_answer_invalid_after_retries",
-            ctx.mode,
-          ),
-          state,
-          ctx,
+        return finalizeBestEffortOrInsufficient(
+          "submit_answer_invalid_after_retries",
         );
       }
     }
@@ -1064,11 +1102,7 @@ export async function runWithProvider(
   }
 
   // Iteration cap reached without a valid submit_answer.
-  return finalize(
-    synthesizeInsufficientData("max_iterations_reached", ctx.mode),
-    state,
-    ctx,
-  );
+  return finalizeBestEffortOrInsufficient("max_iterations_reached");
 }
 
 /**
