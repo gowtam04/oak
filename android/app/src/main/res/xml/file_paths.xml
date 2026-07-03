@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Exposes the app's cache dir to the FileProvider so the composer's camera-capture
+  path (Composer.kt `launchCamera`) can hand a content:// URI to the system camera
+  app for `ActivityResultContracts.TakePicture()`. Matches the temp-file location
+  used by `File.createTempFile("oak_capture_", ".jpg", context.cacheDir)`.
+-->
+<paths>
+    <cache-path name="captured_images" path="." />
+</paths>
