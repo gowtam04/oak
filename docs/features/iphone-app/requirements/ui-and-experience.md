@@ -1,5 +1,13 @@
 # Oak for iPhone — UI & Experience
 
+> **⚠️ Updated — the Champions-mode toggle was replaced by the six-scope chip
+> (web change, 2026-06/07).** References below to a "Champions-mode toggle" in the
+> navigation/chat surface and to a mode default now mean the interactive **scope
+> chip**, which covers all **six** scopes (Champions — the default —
+> Scarlet/Violet, and mainline Gens 5–8) rather than a binary on/off. See
+> `docs/features/generation-scope/` for the full design. Inline mentions of "the
+> Champions-mode toggle" below are superseded by this note.
+
 > Design direction, information architecture/navigation, key screens, interaction
 > patterns, and accessibility for the native iPhone app. Product-level only — no
 > implementation. IDs scoped `M-`. Append; never renumber.

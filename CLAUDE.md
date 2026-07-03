@@ -35,7 +35,7 @@ Never commit straight to a shared `develop` working copy while other agents may 
 
 ## Repository layout
 
-The app lives in **`web/`** — the Next.js app plus all of its config (`package.json`, `tsconfig.json`, `next.config.ts`, `vitest.config.ts`, `drizzle.config.ts`), `src/`, `test/`, `eval/`, `drizzle/`, `scripts/`, and deployment files (`Dockerfile*`, `docker-compose.dev.yml`, `fly.toml`, `migrate.mjs`). A future mobile client gets a sibling folder (e.g. `mobile/`). Only `docs/`, `README.md`, `CLAUDE.md`, and `.git/` stay at the repo root. **All `src/…`, `test/…`, `eval/…`, and `drizzle/` paths in this document are relative to `web/`**, and the `@/` alias resolves to `web/src/`.
+The app lives in **`web/`** — the Next.js app plus all of its config (`package.json`, `tsconfig.json`, `next.config.ts`, `vitest.config.ts`, `drizzle.config.ts`), `src/`, `test/`, `eval/`, `drizzle/`, `scripts/`, and deployment files (`Dockerfile*`, `docker-compose.dev.yml`, `fly.toml`, `migrate.mjs`). The native mobile clients live in sibling folders: **`ios/`** (Swift 6 / SwiftUI) and **`android/`** (Kotlin 2.1 / Jetpack Compose) — both pure clients of `web/`'s HTTP/SSE API, holding no LLM keys or DB access of their own. Only `docs/`, `README.md`, `CLAUDE.md`, `ios/`, `android/`, and `.git/` stay at the repo root. **All `src/…`, `test/…`, `eval/…`, and `drizzle/` paths in this document are relative to `web/`**, and the `@/` alias resolves to `web/src/`.
 
 ## Commands
 
@@ -221,3 +221,48 @@ xcodebuild -exportArchive \
 ```
 
 `destination: upload` makes `-exportArchive` upload straight to App Store Connect in the same step — there's no separate `altool`/`xcrun` upload command to run. Find `<TEAM ID>` (a 10-char alphanumeric, e.g. `6HXCPT677B`) via `security find-certificate -c "Apple Development: <your name>" -p | openssl x509 -noout -subject` (the `OU=` field), or Xcode → Settings → Accounts → select the team. The build appears in App Store Connect → TestFlight after Apple finishes processing it (a few minutes) — no manual "distribute" step required once `destination: upload` is set.
+
+## Android app
+
+The native client lives in **`android/`** (Kotlin 2.1 / Jetpack Compose, single `:app`
+Gradle module, package `ai.gowtam.oak`, minSdk 26 / target 36; the Gradle 8.13 wrapper is
+committed — no system Gradle, no project-generation step. See `android/README.md` for the
+full build/test walkthrough).
+
+- **Parity rule.** Android mirrors the web/iOS feature set exactly (chat, answer card,
+  artifact viewer, auth OTP, account deletion, history, teams, Teams Assistant, the
+  six-scope model, guest + signed-in, image input) — it is a structural, class-for-class
+  port of `ios/OakApp/`, not an independent design. The wire contract it speaks is the
+  same one iOS speaks, derived from the **portable web modules** listed above
+  (`src/lib/sse/sse-types.ts`, `src/agent/schemas.ts`, `src/data/teams/team-schema.ts`,
+  `src/data/formats.ts`); no backend changes were needed for Android (the account-deletion
+  and Bearer-auth enablers already shipped for iOS). Requirements/architecture:
+  `docs/features/android-app/`.
+- **Build/test commands** (from `android/`, `JAVA_HOME` exported, `--no-daemon`
+  recommended — the Gradle daemon hangs in sandboxed shells):
+
+  ```bash
+  cd android
+  export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+
+  ./gradlew --no-daemon :app:compileDebugKotlin          # typecheck-equivalent
+  ./gradlew --no-daemon :app:testDebugUnitTest            # JVM unit suite (337 tests, no emulator)
+  ./gradlew --no-daemon :app:lint
+  ./gradlew --no-daemon :app:assembleDebug                # or :app:assembleRelease (R8-minified, debug-keystore signed)
+  ```
+
+- **Instrumentation** (`:app:connectedDebugAndroidTest`, 16 tests) needs a booted AVD —
+  boot the committed `OakPixel` (Pixel 7, android-35) config headless before running:
+
+  ```bash
+  ~/Library/Android/sdk/emulator/emulator -avd OakPixel \
+    -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect &
+  ~/Library/Android/sdk/platform-tools/adb wait-for-device
+  ./gradlew --no-daemon :app:connectedDebugAndroidTest
+  ```
+
+- **BASE_URL** is a `BuildConfig` field pointed at production (`https://oak-gowtam.fly.dev`)
+  for both build types — no dedicated staging Fly app exists yet (same gap as iOS).
+- **Not in v1:** no admin-panel access, no Play Store listing/signing (debug-keystore
+  signed release APK only — see `android/README.md` and
+  `docs/features/android-app/architecture/deployment.md` for what's deferred).

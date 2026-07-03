@@ -1,0 +1,14 @@
+event: scope
+data: {"format":"gen-7","source":"message"}
+
+event: tool_activity
+data: {"tool":"resolve_entity","label":"Resolving \"Garchomp\""}
+
+event: answer_start
+data: {}
+
+event: answer_delta
+data: {"text":"In Gen 7, Garchomp keeps its Dragon/Ground typing."}
+
+event: answer
+data: {"answer":{"status":"answered","answer_markdown":"In Gen 7, Garchomp keeps its Dragon/Ground typing.","reasoning_markdown":"Resolved Garchomp under the gen-7 scope and read its typing.","citations":[{"source":"get_pokemon/garchomp","detail":"Typing."}],"inferences":[],"generation_basis":{"generation":"Gen 7 (USUM)","fallback":false},"subjects":[{"name":"Garchomp","dex_number":445,"sprite_url":"https://example.test/sprites/garchomp.png","types":["dragon","ground"],"is_fallback":false}]}}

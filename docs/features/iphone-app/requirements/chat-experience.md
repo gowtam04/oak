@@ -1,5 +1,15 @@
 # Oak for iPhone — Chat Experience
 
+> **⚠️ Updated — the Champions-mode toggle was replaced by the six-scope chip
+> (web change, 2026-06/07).** The web app removed the standalone
+> standard/Champions on-off toggle described in "Champions mode" below; scope is
+> now chosen via an interactive **scope chip** covering all **six** scopes
+> (Champions — the default — Scarlet/Violet, and mainline Gens 5–8), resolved per
+> turn, with an explicit in-message mention able to switch it. See
+> `docs/features/generation-scope/` for the full design. Inline mentions of
+> "Champions mode," "the toggle," and "standard vs. Champions" below are
+> superseded by this note.
+
 > The core of the app: the reasoned-answer chat, native streaming, multi-turn
 > context, image input via camera/photo library, and the Champions-mode toggle.
 > Behavior mirrors the web app (`docs/agent-design/ux-design.md`,

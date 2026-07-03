@@ -1,0 +1,22 @@
+{
+  "moves": [
+    {
+      "slug": "earthquake",
+      "display_name": "Earthquake",
+      "type": "ground",
+      "damage_class": "physical",
+      "power": 100
+    },
+    {
+      "slug": "protect",
+      "display_name": "Protect",
+      "type": "normal",
+      "damage_class": "status",
+      "power": null
+    },
+    {
+      "slug": "stealth-rock",
+      "display_name": "Stealth Rock"
+    }
+  ]
+}

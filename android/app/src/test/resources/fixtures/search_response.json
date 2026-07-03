@@ -1,0 +1,6 @@
+{
+  "matches": [
+    { "slug": "swampert", "display_name": "Swampert", "kind": "pokemon" },
+    { "slug": "swampert-mega", "display_name": "Swampert (Mega)", "kind": "pokemon" }
+  ]
+}

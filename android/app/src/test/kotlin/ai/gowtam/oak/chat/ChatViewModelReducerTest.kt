@@ -1,0 +1,219 @@
+package ai.gowtam.oak.chat
+
+import ai.gowtam.oak.app.AppState
+import ai.gowtam.oak.app.GuestTurn
+import ai.gowtam.oak.features.chat.ChatViewModel
+import ai.gowtam.oak.services.AuthState
+import ai.gowtam.oak.support.FakeChatService
+import ai.gowtam.oak.support.MainDispatcherRule
+import ai.gowtam.oak.wire.Format
+import ai.gowtam.oak.wire.GenerationBasis
+import ai.gowtam.oak.wire.OakAnswer
+import ai.gowtam.oak.wire.ScopeSource
+import ai.gowtam.oak.wire.SseEvent
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+
+/**
+ * Exercises [ChatViewModel]'s SSE reducer (implementation-plan.md P6 acceptance
+ * checks 1–2; mirrors iOS `ChatViewModelTests`' reducer section): `tool_activity`
+ * appends, `answer_start` resets the buffer but keeps tool history, `answer_delta`
+ * appends, the terminal `answer` commits and stops, a non-`answered` status renders
+ * as a normal answer (never an error), an `error` event becomes a recoverable banner,
+ * and `scope` adoption clears a pending seed. Most cases drive [ChatViewModel.apply]
+ * directly (it is synchronous — no coroutine involved); the full-loop cases go
+ * through [ChatViewModel.send] against [FakeChatService] and need the
+ * [MainDispatcherRule] because `send` launches on `viewModelScope`.
+ */
+class ChatViewModelReducerTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
+    private fun answer(
+        markdown: String = "Garchomp is a Dragon/Ground pseudo-legendary.",
+        status: OakAnswer.Status = OakAnswer.Status.ANSWERED,
+        generation: String = "champions",
+    ) = OakAnswer(
+        status = status,
+        answerMarkdown = markdown,
+        reasoningMarkdown = "Resolved Garchomp and read its base stats.",
+        citations = emptyList(),
+        inferences = emptyList(),
+        generationBasis = GenerationBasis(generation = generation, fallback = false),
+    )
+
+    private fun newModel(chat: FakeChatService = FakeChatService()) =
+        ChatViewModel(chat = chat, appState = AppState())
+
+    // -------------------------------------------------------------------
+    // Direct apply() transitions (acceptance check 1)
+    // -------------------------------------------------------------------
+
+    @Test
+    fun toolActivityAppendsToTheListInOrder() {
+        val vm = newModel()
+        vm.apply(SseEvent.ToolActivity("resolve_entity", "Resolving \"Garchomp\""))
+        vm.apply(SseEvent.ToolActivity("get_pokemon", "Reading Garchomp"))
+
+        val activities = vm.uiState.value.toolActivities
+        assertEquals(2, activities.size)
+        assertEquals("resolve_entity", activities[0].tool)
+        assertEquals("get_pokemon", activities[1].tool)
+    }
+
+    @Test
+    fun answerStartClearsTheStreamedBufferButKeepsToolActivityHistory() {
+        val vm = newModel()
+        vm.apply(SseEvent.ToolActivity("resolve_entity", "Resolving \"Garchomp\""))
+        vm.apply(SseEvent.AnswerDelta("partial answer that should be discarded"))
+
+        vm.apply(SseEvent.AnswerStart)
+
+        assertEquals("", vm.uiState.value.streamingText)
+        assertEquals(1, vm.uiState.value.toolActivities.size)
+    }
+
+    @Test
+    fun answerDeltaAppendsOntoTheStreamedBuffer() {
+        val vm = newModel()
+        vm.apply(SseEvent.AnswerStart)
+        vm.apply(SseEvent.AnswerDelta("Garchomp is "))
+        vm.apply(SseEvent.AnswerDelta("a Dragon/Ground type."))
+
+        assertEquals("Garchomp is a Dragon/Ground type.", vm.uiState.value.streamingText)
+    }
+
+    @Test
+    fun terminalAnswerCommitsTheAuthoritativeAnswerAndStopsTheTurn() {
+        val vm = newModel()
+        vm.apply(SseEvent.AnswerStart)
+        vm.apply(SseEvent.AnswerDelta("draft text"))
+
+        val final = answer(markdown = "The authoritative answer.")
+        vm.apply(SseEvent.Answer(final))
+
+        val state = vm.uiState.value
+        assertEquals(1, state.turns.size)
+        val committed = state.turns.single() as ChatTurnItemAssistant
+        assertEquals(final, committed.answer)
+        assertEquals("", state.streamingText)
+        assertTrue(state.toolActivities.isEmpty())
+        assertFalse(state.isStreaming)
+    }
+
+    @Test
+    fun aNonAnsweredStatusRendersAsANormalAnswerNeverAnError() {
+        val vm = newModel()
+        val clarification = answer(status = OakAnswer.Status.CLARIFICATION_NEEDED)
+
+        vm.apply(SseEvent.Answer(clarification))
+
+        val state = vm.uiState.value
+        assertEquals(1, state.turns.size)
+        assertNull(state.errorBanner)
+    }
+
+    @Test
+    fun anErrorEventBecomesARecoverableBannerAndClearsAnyPartialAnswer() {
+        val vm = newModel()
+        vm.apply(SseEvent.AnswerStart)
+        vm.apply(SseEvent.AnswerDelta("half-written"))
+
+        vm.apply(SseEvent.Error(code = "model_unavailable", message = "ignored", status = 503))
+
+        val state = vm.uiState.value
+        assertEquals(ChatViewModel.bannerMessage("model_unavailable", "ignored"), state.errorBanner?.message)
+        assertTrue(state.errorBanner!!.isRetryable)
+        assertEquals("", state.streamingText)
+        assertFalse(state.isStreaming)
+        // The turn stays absent — an in-band error never leaves a half-rendered answer.
+        assertTrue(state.turns.isEmpty())
+    }
+
+    @Test
+    fun scopeAdoptionSetsResolvedScopeAndClearsAPendingSeed() {
+        val vm = newModel()
+        vm.selectScope(Format.Gen7)
+        assertEquals(Format.Gen7, vm.uiState.value.displayFormat)
+
+        vm.apply(SseEvent.Scope(Format.ScarletViolet, ScopeSource.Message))
+
+        val state = vm.uiState.value
+        assertEquals(Format.ScarletViolet, state.resolvedScope)
+        assertNull(state.scopeSeed)
+        // scope_seed is retired — the resolved scope now drives the displayed chip.
+        assertEquals(Format.ScarletViolet, state.displayFormat)
+    }
+
+    @Test
+    fun displayFormatFallsBackToChampionsWithNoSeedOrResolvedScope() {
+        val vm = newModel()
+        assertEquals(Format.Champions, vm.uiState.value.displayFormat)
+    }
+
+    // -------------------------------------------------------------------
+    // Full-loop cases via send() (acceptance checks 1–2)
+    // -------------------------------------------------------------------
+
+    @Test
+    fun theSingleDeltaGrokStreamRendersFullyThroughSend() = runTest(mainDispatcherRule.dispatcher) {
+        val finalAnswer = answer(markdown = "Garchomp's best set runs Choice Scarf.")
+        val chat = FakeChatService(
+            scriptedEvents = listOf(
+                SseEvent.Scope(Format.Champions, ScopeSource.Default),
+                SseEvent.ToolActivity("resolve_entity", "Resolving \"Garchomp\""),
+                SseEvent.AnswerStart,
+                // Grok delivers the whole answer in ONE delta — the reducer must not
+                // assume many chunks arrive.
+                SseEvent.AnswerDelta(finalAnswer.answerMarkdown),
+                SseEvent.Answer(finalAnswer),
+            ),
+        )
+        val vm = newModel(chat)
+        vm.setComposerText("What's Garchomp's best moveset?")
+
+        vm.send()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(2, state.turns.size) // the user turn + the committed answer
+        assertFalse(state.isStreaming)
+        assertEquals(Format.Champions, state.resolvedScope)
+        assertEquals("", state.composerText)
+        assertEquals(1, chat.sendWithImagesCalls.size)
+    }
+
+    @Test
+    fun aCompletedTurnMirrorsIntoTheGuestThreadWithItsResolvedScope() = runTest(mainDispatcherRule.dispatcher) {
+        val finalAnswer = answer()
+        val chat = FakeChatService(
+            scriptedEvents = listOf(
+                SseEvent.Scope(Format.Gen5, ScopeSource.Conversation),
+                SseEvent.AnswerStart,
+                SseEvent.AnswerDelta(finalAnswer.answerMarkdown),
+                SseEvent.Answer(finalAnswer),
+            ),
+        )
+        val appState = AppState()
+        val vm = ChatViewModel(chat = chat, appState = appState)
+        vm.setComposerText("hello")
+
+        vm.send()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(AuthState.Guest, appState.authState.value)
+        assertEquals(2, appState.guestThread.value.size)
+        assertTrue(appState.guestThread.value[0].content is GuestTurn.Content.User)
+        assertTrue(appState.guestThread.value[1].content is GuestTurn.Content.Assistant)
+        assertEquals(Format.Gen5, appState.guestThreadScope.value)
+    }
+}
+
+/** Local alias so the test reads naturally without importing the sealed type's cases individually. */
+private typealias ChatTurnItemAssistant = ai.gowtam.oak.features.chat.ChatTurnItem.Assistant
