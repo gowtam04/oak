@@ -58,6 +58,18 @@ class AppState {
      */
     val guestThreadScope: StateFlow<Format> = _guestThreadScope.asStateFlow()
 
+    /**
+     * Binds the active conversation id — the Chat tab's resume / New Chat navigation
+     * (history-and-teams.md D-HIST-1): resuming a saved conversation sets it to that
+     * conversation's id (so a relaunch would seed a fresh `ChatViewModel` under the
+     * same thread); starting a new conversation or a quick-stop clears it to `null`.
+     * Mirrors iOS's plain `appState.activeConversationId = …` assignment, exposed as
+     * a method here since [activeConversationId] is otherwise read-only.
+     */
+    fun setActiveConversationId(id: String?) {
+        _activeConversationId.value = id
+    }
+
     // -------------------------------------------------------------------
     // Guest thread mutation
     // -------------------------------------------------------------------

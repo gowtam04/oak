@@ -19,6 +19,7 @@ import ai.gowtam.oak.services.LiveTeamsAssistantService
 import ai.gowtam.oak.services.TeamService
 import ai.gowtam.oak.services.TeamsAssistantService
 import android.content.Context
+import androidx.compose.runtime.staticCompositionLocalOf
 
 /**
  * The app's **composition root** (component-design.md "App / session state"; mirrors
@@ -66,3 +67,15 @@ data class ServiceContainer(
         }
     }
 }
+
+/**
+ * Ambient access to the composition root, for the rare leaf composable that can't have
+ * [ServiceContainer] threaded through its call chain — e.g.
+ * [ai.gowtam.oak.features.chat.answercard.TeamBlocks]'s "Apply" action lives several
+ * call sites below [ai.gowtam.oak.app.OakApp] (through `ChatScreen` → `AnswerCard`),
+ * which are owned by a different build phase and out of scope to re-plumb a parameter
+ * through. Provided once at the top of [ai.gowtam.oak.app.OakApp]; `null` when
+ * unprovided (a preview or a component test rendered without a container), in which
+ * case a dependent composable degrades to a local-only affordance rather than crashing.
+ */
+val LocalServices = staticCompositionLocalOf<ServiceContainer?> { null }

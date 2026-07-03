@@ -27,8 +27,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.WarningAmber
@@ -84,6 +86,16 @@ fun ChatScreen(
     artifactViewModel: ArtifactViewModel,
     modifier: Modifier = Modifier,
     showsNewConversationButton: Boolean = true,
+    /** When non-null, renders the guest "Sign in to save your conversations" nudge
+     * above the thread; the "Sign in" button calls this (it presents the sign-in
+     * sheet). `null` for a signed-in thread — mirrors iOS `ChatView.signInAction`. */
+    signInAction: (() -> Unit)? = null,
+    /** When non-null, the top bar shows a back arrow calling this instead of the
+     * app title alone — used for a pushed/resumed signed-in thread so there is an
+     * explicit affordance back to the conversation list (history-and-teams.md
+     * D-HIST-1) alongside system/predictive back. `null` for the guest single
+     * thread and the list's own "New Chat" push. */
+    onBack: (() -> Unit)? = null,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val oak = LocalOakColors.current
@@ -137,6 +149,13 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Oak") },
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to conversations")
+                        }
+                    }
+                },
                 actions = {
                     ScopeChip(
                         format = uiState.displayFormat,
@@ -153,6 +172,9 @@ fun ChatScreen(
         },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            if (signInAction != null) {
+                SignInNudge(onSignIn = signInAction)
+            }
             Box(modifier = Modifier.weight(1f)) {
                 LazyColumn(
                     state = listState,
@@ -346,6 +368,39 @@ private fun InProgressRow(
         if (streamingText.isNotEmpty()) {
             MarkdownBlockView(markdown = streamingText, modifier = Modifier.fillMaxWidth())
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Guest sign-in nudge
+// ---------------------------------------------------------------------------
+
+/**
+ * A slim banner inviting a guest to sign in so their conversations persist
+ * (accounts-and-access.md M-ACCT-US-1; history-and-teams.md D-HIST-1 — the guest's
+ * "history affordance" for a surface that, once signed in, becomes the saved-
+ * conversation list). Icon + text so meaning is never carried by color alone.
+ * Mirrors iOS `ChatView.signInNudge`.
+ */
+@Composable
+private fun SignInNudge(onSignIn: () -> Unit) {
+    val oak = LocalOakColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(oak.accent.copy(alpha = 0.10f))
+            .padding(OakSpacing.md),
+        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.CloudUpload, contentDescription = null, tint = oak.accent, modifier = Modifier.height(18.dp))
+        Text(
+            text = "Sign in to save your conversations",
+            style = MaterialTheme.typography.bodySmall,
+            color = oak.textStrong,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onSignIn) { Text("Sign in", color = oak.accent) }
     }
 }
 

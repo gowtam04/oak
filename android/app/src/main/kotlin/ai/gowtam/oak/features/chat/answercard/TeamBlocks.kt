@@ -1,5 +1,6 @@
 package ai.gowtam.oak.features.chat.answercard
 
+import ai.gowtam.oak.app.LocalServices
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -33,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,17 +45,26 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 /**
  * Renders an answer's team-builder blocks — the agent's `proposed_team` (with its
  * server-stamped `proposed_team_warnings`) and/or the `saved_team` reference for a team
  * persisted this turn. Mirrors the iOS `TeamBlocksView`:
  *  - **Proposed team** — member sets, warn-but-allow advisories (never blocking), an
- *    "Apply" button that calls [onApply] and swaps to an in-place "Saved" confirmation,
- *    and an "Open team in viewer" action.
+ *    "Apply" button that calls [onApply] AND persists the team as a new saved team via
+ *    [ai.gowtam.oak.app.LocalServices] (`TeamService.create`, P10 — ambient since this
+ *    card renders several layers below the composition root, through files this phase
+ *    doesn't own), swapping to an in-place "Saved"/"Saving…"/retry-on-failure
+ *    confirmation, and an "Open team in viewer" action.
  *  - **Saved team** — the "Saved ✓" confirmation with "Open in viewer".
  * The caller gates it on `proposedTeam != null || savedTeam != null`.
  */
+/** The "Apply" button's local save lifecycle (P10): [IDLE] shows the button, [SAVING]
+ * shows a spinner while [ai.gowtam.oak.services.TeamService.create] is in flight,
+ * [SAVED] shows the confirmation, [FAILED] shows an inline retry. */
+private enum class ApplyState { IDLE, SAVING, SAVED, FAILED }
+
 @Composable
 fun TeamBlocks(
     proposedTeam: ProposedTeam?,
@@ -81,7 +93,9 @@ private fun ProposedCard(
     onOpenProposedTeam: (ProposedTeam) -> Unit,
 ) {
     val oak = LocalOakColors.current
-    var didApply by remember { mutableStateOf(false) }
+    val teamService = LocalServices.current?.teams
+    val scope = rememberCoroutineScope()
+    var applyState by remember { mutableStateOf(ApplyState.IDLE) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -117,22 +131,57 @@ private fun ProposedCard(
             WarningsSection(warnings)
         }
 
-        if (didApply) {
-            Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = oak.success, modifier = Modifier.size(18.dp))
-                Text(
-                    text = "Saved to your Teams",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = oak.success,
-                )
+        when (applyState) {
+            ApplyState.SAVED -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = oak.success, modifier = Modifier.size(18.dp))
+                    Text(
+                        text = "Saved to your Teams",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = oak.success,
+                    )
+                }
             }
-        } else {
-            Button(
-                onClick = { onApply(team); didApply = true },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = oak.accent),
-            ) {
-                Text("Apply")
+            ApplyState.SAVING -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = oak.accent)
+                    Text("Saving…", style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
+                }
+            }
+            ApplyState.IDLE, ApplyState.FAILED -> {
+                Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+                    if (applyState == ApplyState.FAILED) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = oak.warning, modifier = Modifier.size(14.dp))
+                            Text("Couldn't save — try again.", style = MaterialTheme.typography.bodySmall, color = oak.warning)
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            onApply(team)
+                            val service = teamService
+                            if (service == null) {
+                                // No composition-root access (e.g. a preview/test host) — fall
+                                // back to a local-only confirmation rather than crashing.
+                                applyState = ApplyState.SAVED
+                                return@Button
+                            }
+                            applyState = ApplyState.SAVING
+                            scope.launch {
+                                applyState = try {
+                                    service.create(team.format, team.name, team.members)
+                                    ApplyState.SAVED
+                                } catch (e: Exception) {
+                                    ApplyState.FAILED
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = oak.accent),
+                    ) {
+                        Text(if (applyState == ApplyState.FAILED) "Retry" else "Apply")
+                    }
+                }
             }
         }
 

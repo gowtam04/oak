@@ -281,8 +281,7 @@ class ChatViewModel(
         lastRequest = null
         turnStartedAt = null
         sessionId = UUID.randomUUID().toString()
-        // NOTE: iOS also clears appState.activeConversationId here; AppState exposes no
-        // setter for it, so that reset is skipped (a guest thread's id is already null).
+        appState.setActiveConversationId(null)
         if (appState.authState.value is AuthState.Guest) {
             appState.clearGuestThread()
         }
@@ -341,6 +340,7 @@ class ChatViewModel(
         lastRequest = null
         turnStartedAt = null
         sessionId = UUID.randomUUID().toString()
+        appState.setActiveConversationId(null)
         resolvedScope = null
         resolvedScopeSource = null
         scopeSeed = null
@@ -355,11 +355,14 @@ class ChatViewModel(
      * session to its id, so earlier answers re-render through the normal answer-card
      * tree and follow-ups continue the saved thread under the same `session_id`. [format]
      * seeds [resolvedScope] so the chip + viewer reflect the saved scope immediately.
-     * (P9 wires the history affordance that calls this.)
+     * Also binds [AppState.activeConversationId] to [conversationId] (mirrors iOS's
+     * `HistoryDetailViewModel.resume()`). Called by the Chat tab's history affordance
+     * once it has loaded the conversation's full detail.
      */
     fun loadResumed(conversationId: String, format: Format, turns: List<ChatTurn>) {
         cancelStreaming()
         sessionId = conversationId
+        appState.setActiveConversationId(conversationId)
         this.turns = turns.map { turn ->
             when (turn) {
                 is ChatTurn.User -> ChatTurnItem.User(text = turn.content, imageCount = 0)
