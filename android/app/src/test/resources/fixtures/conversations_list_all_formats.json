@@ -1,0 +1,53 @@
+{
+  "conversations": [
+    {
+      "id": "conv_sv",
+      "title": "Scarlet/Violet dragons",
+      "format": "scarlet-violet",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    },
+    {
+      "id": "conv_champions",
+      "title": "Champions team ideas",
+      "format": "champions",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    },
+    {
+      "id": "conv_gen5",
+      "title": "Gen 5 UU staples",
+      "format": "gen-5",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    },
+    {
+      "id": "conv_gen6",
+      "title": "Gen 6 sand teams",
+      "format": "gen-6",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    },
+    {
+      "id": "conv_gen7",
+      "title": "Gen 7 USUM tera",
+      "format": "gen-7",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    },
+    {
+      "id": "conv_gen8",
+      "title": "Gen 8 dynamax cores",
+      "format": "gen-8",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    },
+    {
+      "id": "conv_unknown",
+      "title": "A future format this app doesn't know about yet",
+      "format": "gen-99-mystery",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    }
+  ]
+}

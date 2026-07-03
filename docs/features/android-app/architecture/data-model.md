@@ -322,8 +322,9 @@ data class TeamSummary(           // GET /api/teams → { teams: [...] } (repo p
 @Serializable
 data class ImportNote(            // POST /api/teams/import → { notes: [...] }
   val slot: Int, val kind: Kind, val raw: String,
-  @SerialName("resolved_to") val resolvedTo: String? = null, val message: String,
-) { @Serializable enum class Kind { pokemon, move, ability, item, nature, tera } }
+  val resolvedTo: String? = null, val message: String,  // camelCase on the wire (flat JSON.stringify envelope)
+) { @Serializable enum class Kind { pokemon, move, ability, item, nature, tera, level } }
+// Verified vs web/src/server/teams/import-export.ts: 7 kinds (incl. "level"), resolvedTo NOT snake_cased.
 ```
 
 `ChatTurn` decodes with a custom serializer that switches on the `role` key (`user` →
