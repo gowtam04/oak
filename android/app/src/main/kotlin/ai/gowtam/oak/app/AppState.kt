@@ -1,0 +1,246 @@
+package ai.gowtam.oak.app
+
+import ai.gowtam.oak.services.AuthService
+import ai.gowtam.oak.services.AuthState
+import ai.gowtam.oak.services.HistoryService
+import ai.gowtam.oak.wire.ChatTurn
+import ai.gowtam.oak.wire.Format
+import ai.gowtam.oak.wire.OakAnswer
+import android.util.Log
+import androidx.compose.runtime.Stable
+import java.util.UUID
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+
+private const val TAG = "Oak.AppState"
+
+/**
+ * Root session/app state (component-design.md "App / session state"; mirrors iOS
+ * `AppState`). Holds the cross-cutting state that outlives any single screen: the
+ * current auth state, the active conversation id, the in-memory guest thread, and
+ * that thread's resolved data scope (for the sign-in import).
+ *
+ * [Stable] (not `@Observable`/Compose `State`) so Compose can skip recomposition
+ * intelligently while the class itself stays UI-framework-light — `StateFlow`
+ * throughout, no composables — so it is plain JVM-testable. ViewModels/composables
+ * `collectAsState()` the flows they need.
+ */
+@Stable
+class AppState {
+    private val _authState = MutableStateFlow<AuthState>(AuthState.Guest)
+
+    /** Whether the user is a guest or signed in. */
+    val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    private val _activeConversationId = MutableStateFlow<String?>(null)
+
+    /** The active conversation id. `null` means a fresh, unsaved thread. */
+    val activeConversationId: StateFlow<String?> = _activeConversationId.asStateFlow()
+
+    private val _guestThread = MutableStateFlow<List<GuestTurn>>(emptyList())
+
+    /**
+     * The in-memory guest thread: turns kept only for the session and never
+     * persisted. On sign-in these are mapped to the import payload ([onSignedIn]).
+     * Appended to as the chat reducer streams turns.
+     */
+    val guestThread: StateFlow<List<GuestTurn>> = _guestThread.asStateFlow()
+
+    private val _guestThreadScope = MutableStateFlow<Format>(Format.Champions)
+
+    /**
+     * The guest thread's resolved data scope, mirrored from the chat reducer's
+     * `scope` events so the guest→sign-in import can persist the thread under the
+     * scope it actually ran in. Defaults to champions (the server default) until a
+     * turn resolves otherwise; reset with the guest thread.
+     */
+    val guestThreadScope: StateFlow<Format> = _guestThreadScope.asStateFlow()
+
+    // -------------------------------------------------------------------
+    // Guest thread mutation
+    // -------------------------------------------------------------------
+
+    /** Appends one turn to the in-memory guest thread. */
+    fun appendGuestTurn(turn: GuestTurn) {
+        _guestThread.update { it + turn }
+    }
+
+    /** Records the scope a guest turn resolved to (mirrored from the `scope` SSE event). */
+    fun setGuestThreadScope(format: Format) {
+        _guestThreadScope.value = format
+    }
+
+    /** Clears the in-memory guest thread back to its defaults (e.g. on quick-stop). */
+    fun clearGuestThread() {
+        _guestThread.value = emptyList()
+        _guestThreadScope.value = Format.Champions
+    }
+
+    // -------------------------------------------------------------------
+    // Auth transitions
+    // -------------------------------------------------------------------
+
+    /**
+     * Restores the session on launch: ask the backend who we are. The client attaches
+     * the stored Bearer token (if any), so a valid token resolves to
+     * [AuthState.SignedIn], an absent/expired token to [AuthState.Guest] (the `me`
+     * route returns guest as a first-class 200). A transport failure leaves the state
+     * as the launch default (guest) rather than throwing — the next authed call will
+     * surface connectivity if it persists.
+     */
+    suspend fun restoreSession(auth: AuthService) {
+        try {
+            _authState.value = auth.me()
+        } catch (e: Exception) {
+            Log.e(TAG, "session restore failed; remaining a guest (${e::class.simpleName})")
+        }
+    }
+
+    /**
+     * Applies a completed verification: flips the whole app to signed-in. The token
+     * was already persisted by the service. The on-screen guest thread is preserved;
+     * importing it into durable history is the separate, non-fatal [importGuestThread]
+     * step invoked by [onSignedIn].
+     */
+    fun completeSignIn(email: String) {
+        _authState.value = AuthState.SignedIn(email)
+    }
+
+    /**
+     * The full sign-in transition: flips to signed-in AND triggers the guest→sign-in
+     * import when a guest thread exists (non-fatal — see [importGuestThread]). Returns
+     * the imported conversation id, or `null` when there was nothing to import or the
+     * import failed.
+     */
+    suspend fun onSignedIn(email: String, history: HistoryService): String? {
+        completeSignIn(email)
+        return importGuestThread(history)
+    }
+
+    /**
+     * Signs out: best-effort server revoke + local token clear via the service, then
+     * return to guest. Never throws — sign-out must always succeed in returning the
+     * device to guest. The on-screen thread is preserved (only auth/session state
+     * resets).
+     */
+    suspend fun onSignedOut(auth: AuthService) {
+        try {
+            auth.signOut()
+        } catch (e: Exception) {
+            Log.e(TAG, "sign-out failed; clearing local session anyway (${e::class.simpleName})")
+        }
+        resetToGuest()
+    }
+
+    /**
+     * Handles a `401` on a previously-authed call: the session expired or was
+     * revoked, so drop the token and return to guest — the on-screen thread is kept.
+     * The revoke endpoint is idempotent, so reusing sign-out to clear the now-orphaned
+     * token is safe.
+     */
+    suspend fun onUnauthorized(auth: AuthService) {
+        Log.i(TAG, "received 401 on an authed call; returning to guest")
+        try {
+            auth.signOut()
+        } catch (e: Exception) {
+            Log.e(TAG, "token drop after 401 failed (${e::class.simpleName})")
+        }
+        resetToGuest()
+    }
+
+    /**
+     * Deletes the account and its server data, then returns to guest. A real backend
+     * failure propagates so the UI doesn't falsely report deletion; only a confirmed
+     * deletion reaches the guest reset.
+     */
+    suspend fun deleteAccount(auth: AuthService) {
+        auth.deleteAccount()
+        onAccountDeleted()
+    }
+
+    /** Applies the post-deletion reset (split out so a caller that already confirmed
+     * deletion server-side, e.g. a 401-during-delete path, can reset without re-calling
+     * the service). */
+    fun onAccountDeleted() {
+        resetToGuest()
+    }
+
+    /** Clears all session-scoped state back to the guest baseline. The on-screen guest
+     * thread is intentionally left untouched — only auth/session identifiers reset. */
+    private fun resetToGuest() {
+        _authState.value = AuthState.Guest
+        _activeConversationId.value = null
+    }
+
+    // -------------------------------------------------------------------
+    // Guest → sign-in thread import
+    // -------------------------------------------------------------------
+
+    /**
+     * Persists the in-memory guest thread to durable history right after sign-in.
+     * Maps the session-only [GuestTurn]s into the wire [ChatTurn]s the import endpoint
+     * expects and uploads them under a stable session id; the returned conversation id
+     * becomes the active conversation so follow-ups continue the same thread.
+     *
+     * **Non-fatal by design:** an empty thread imports nothing (returns `null`), and
+     * any failure is logged and swallowed — the on-screen thread is preserved either
+     * way, so a transient backend problem never costs the user their visible
+     * conversation.
+     */
+    suspend fun importGuestThread(history: HistoryService): String? {
+        val turns = _guestThread.value
+        if (turns.isEmpty()) return null
+
+        // Reuse the active conversation id when one exists; otherwise mint a fresh
+        // session id (the import route creates the conversation under this id and
+        // echoes it back as the returned id).
+        val sessionId = _activeConversationId.value ?: UUID.randomUUID().toString()
+
+        return try {
+            val id = history.importGuestThread(
+                sessionId = sessionId,
+                format = _guestThreadScope.value,
+                turns = turns.map { it.asChatTurn() },
+            )
+            if (id != null) _activeConversationId.value = id
+            id
+        } catch (e: Exception) {
+            Log.e(TAG, "guest thread import failed; keeping the on-screen thread (${e::class.simpleName})")
+            null
+        }
+    }
+}
+
+/**
+ * One turn of the in-memory guest thread (session-only, never persisted). A user turn
+ * carries its raw text; an assistant turn carries the COMPLETE [OakAnswer] (not just
+ * its prose) so the guest→sign-in import preserves full fidelity — reasoning,
+ * citations, inferences, and every structured block survive sign-in.
+ */
+data class GuestTurn(val id: String = UUID.randomUUID().toString(), val content: Content) {
+    /** A guest turn's payload, discriminated by role. */
+    sealed interface Content {
+        /** A user message — its raw text. */
+        data class User(val text: String) : Content
+
+        /** A finalized assistant answer — the full [OakAnswer] the reducer had at finalize time. */
+        data class Assistant(val answer: OakAnswer) : Content
+    }
+
+    /** The turn's role, kept first-class so call sites can branch without a `when` on [content]. */
+    enum class Role { USER, ASSISTANT }
+
+    val role: Role
+        get() = when (content) {
+            is Content.User -> Role.USER
+            is Content.Assistant -> Role.ASSISTANT
+        }
+}
+
+/** Maps a session-only guest turn into the wire [ChatTurn] the import endpoint validates. */
+private fun GuestTurn.asChatTurn(): ChatTurn = when (val c = content) {
+    is GuestTurn.Content.User -> ChatTurn.User(id = id, content = c.text)
+    is GuestTurn.Content.Assistant -> ChatTurn.Assistant(id = id, answer = c.answer)
+}
