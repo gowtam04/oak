@@ -13,20 +13,43 @@ import SwiftUI
 ///
 /// Both side-effects are non-fatal — they swallow their own errors — so a transient
 /// backend problem never blocks the UI or costs the user their on-screen thread.
+///
+/// Chrome (UI-polish P6): the tab bar tracks a `selection` so a switch fires a
+/// light `Haptics.tap()` and the selected tab's icon plays a one-shot
+/// `.symbolEffect(.bounce)`. The bounce is a decorative enhancement layered over
+/// the label text (which always carries the meaning), so no Reduce Motion gate is
+/// needed — SwiftUI's symbol effects already no-op under that setting.
 struct RootView: View {
   @Environment(\.services) private var services
   @Environment(AppState.self) private var appState
 
+  /// The selected tab, tracked so tab changes can fire haptics + a symbol bounce.
+  @State private var selection: AppTab = .chat
+
+  /// The two root destinations. Named `AppTab` to avoid colliding with SwiftUI's
+  /// `Tab`; `Hashable` so it can back the `TabView(selection:)`.
+  private enum AppTab: Hashable {
+    case chat
+    case account
+  }
+
   var body: some View {
-    TabView {
-      Tab("Chat", systemImage: "bubble.left.and.text.bubble.right") {
+    TabView(selection: $selection) {
+      Tab(value: AppTab.chat) {
         ChatTabView()
+      } label: {
+        Label("Chat", systemImage: "bubble.left.and.text.bubble.right")
+          .symbolEffect(.bounce, value: selection == .chat)
       }
-      Tab("Account", systemImage: "person.crop.circle") {
+      Tab(value: AppTab.account) {
         AccountView(model: AccountViewModel(auth: services.auth, appState: appState))
+      } label: {
+        Label("Account", systemImage: "person.crop.circle")
+          .symbolEffect(.bounce, value: selection == .account)
       }
     }
     .tint(Theme.accent)
+    .onChange(of: selection) { _, _ in Haptics.tap() }
     .task { await appState.restoreSession(using: services.auth) }
     .onChange(of: appState.authState) { _, newValue in
       if case .signedIn = newValue {

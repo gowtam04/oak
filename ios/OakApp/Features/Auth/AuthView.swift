@@ -10,11 +10,30 @@ import SwiftUI
 /// system semantic colors so it adapts to light/dark and text size; error text is
 /// paired with an icon so color is never the sole signal (M-AC-UI9.3).
 ///
-/// Presentation (where this surfaces in the app) is wired by the Account feature in
-/// a later phase; the view is presenter-agnostic and self-contained.
+/// Chrome (UI-polish P6): a custom `ScrollView` layout replaces the `Form` — a brand
+/// header (`OakBrandMark`), a floating email field, a filled-capsule CTA with an
+/// in-button spinner, and a six-box code entry. The **code boxes** are a purely
+/// visual layer over a single, near-invisible real `TextField` that keeps
+/// `.textContentType(.oneTimeCode)` + `.keyboardType(.numberPad)`, so system OTP
+/// autofill and the number pad keep working exactly as before; the boxes just render
+/// `model.code`'s characters and route taps to focus that hidden field. VoiceOver
+/// reads the whole code entry as ONE element ("Enter 6 digit code, N of 6 entered").
+///
+/// **Accessibility (constraint 2):** every animation is gated on
+/// `@Environment(\.accessibilityReduceMotion)` — the step slide and error shake fall
+/// back to no movement, the success checkmark draws instantly, and the focus/digit
+/// springs are dropped.
+///
+/// Presentation (where this surfaces in the app) is wired by the Account feature; the
+/// view is presenter-agnostic and self-contained. On success ``AppState`` flips to
+/// signed-in and the presenting sheet auto-dismisses (AccountView owns that).
 struct AuthView: View {
   @State private var model: AuthViewModel
   @FocusState private var focusedField: Field?
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// Bumped to fire the code-row shake keyframe animation on an error.
+  @State private var shakeTrigger = 0
 
   private enum Field: Hashable {
     case email
@@ -28,51 +47,105 @@ struct AuthView: View {
   var body: some View {
     @Bindable var model = model
     NavigationStack {
-      Form {
-        if let email = model.signedInEmail {
-          signedInSection(email: email)
-        } else {
-          switch model.step {
-          case .email:
-            emailStep(emailText: $model.email)
-          case .code:
-            codeStep(codeText: $model.code)
+      ScrollView {
+        VStack(spacing: 28) {
+          header
+          if let email = model.signedInEmail {
+            successView(email: email)
+              .transition(.opacity)
+          } else {
+            stepContent(emailText: $model.email, codeText: $model.code)
+              .transition(.opacity)
           }
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 24)
+        .padding(.bottom, 40)
+        .frame(maxWidth: .infinity)
       }
+      .scrollDismissesKeyboard(.interactively)
+      .background(Theme.background)
       .navigationTitle("Sign in")
       .navigationBarTitleDisplayMode(.inline)
+      // Success ↔ flow crossfade (checkmark draw handled inside successView).
+      .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.signedInEmail)
+      // An error during the code step shakes the boxes + fires an error haptic.
+      .onChange(of: model.errorMessage) { _, newValue in
+        guard model.step == .code, newValue != nil else { return }
+        Haptics.error()
+        if !reduceMotion { shakeTrigger += 1 }
+      }
     }
+  }
+
+  // MARK: Header
+
+  private var header: some View {
+    VStack(spacing: 12) {
+      OakBrandMark(size: 72)
+      Text("Sign in to Oak")
+        .font(Theme.display(.title2))
+      Text("Save your conversations and teams")
+        .font(Theme.body(.subheadline))
+        .foregroundStyle(Theme.textSecondary)
+        .multilineTextAlignment(.center)
+    }
+    .frame(maxWidth: .infinity)
+  }
+
+  // MARK: Step container (email ↔ code directional slide)
+
+  @ViewBuilder
+  private func stepContent(emailText: Binding<String>, codeText: Binding<String>) -> some View {
+    Group {
+      switch model.step {
+      case .email:
+        emailStep(emailText: emailText)
+          .transition(stepTransition)
+      case .code:
+        codeStep(codeText: codeText)
+          .transition(stepTransition)
+      }
+    }
+    .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.step)
+  }
+
+  /// Email→code slides in from the trailing edge, back slides from leading. Reduce
+  /// Motion collapses both to a plain crossfade.
+  private var stepTransition: AnyTransition {
+    if reduceMotion { return .opacity }
+    return .asymmetric(
+      insertion: .move(edge: .trailing).combined(with: .opacity),
+      removal: .move(edge: .leading).combined(with: .opacity)
+    )
   }
 
   // MARK: Email step
 
   @ViewBuilder
   private func emailStep(emailText: Binding<String>) -> some View {
-    Section {
+    VStack(spacing: 16) {
       TextField("you@example.com", text: emailText)
         .textContentType(.emailAddress)
         .keyboardType(.emailAddress)
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
         .submitLabel(.send)
+        .font(Theme.body(.body))
         .focused($focusedField, equals: .email)
         .onSubmit { Task { await model.submitEmail() } }
-    } header: {
-      Text("Email")
-    } footer: {
+        .modifier(FloatingFieldChrome(focused: focusedField == .email, reduceMotion: reduceMotion))
+
       Text("We'll email you a 6-digit code. No password needed.")
-    }
+        .font(Theme.body(.footnote))
+        .foregroundStyle(Theme.textSecondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
 
-    messageRows
+      messageBlock
 
-    Section {
-      Button {
+      primaryButton(title: "Send code", enabled: model.canSubmitEmail) {
         Task { await model.submitEmail() }
-      } label: {
-        submitButtonContent(title: "Send code")
       }
-      .disabled(!model.canSubmitEmail)
     }
     .onAppear { focusedField = .email }
   }
@@ -81,32 +154,109 @@ struct AuthView: View {
 
   @ViewBuilder
   private func codeStep(codeText: Binding<String>) -> some View {
-    Section {
-      TextField("123456", text: codeText)
+    VStack(spacing: 20) {
+      Text("Enter the 6-digit code we sent to \(model.normalizedEmail).")
+        .font(Theme.body(.subheadline))
+        .foregroundStyle(Theme.textSecondary)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+
+      codeBoxes(codeText: codeText)
+
+      messageBlock
+
+      primaryButton(title: "Verify", enabled: model.canSubmitCode) {
+        Task { await model.submitCode() }
+      }
+
+      resendControls
+    }
+    .onAppear { focusedField = .code }
+  }
+
+  /// The six-box code entry. A single real `TextField` (near-invisible, kept in the
+  /// hierarchy so it stays focusable + autofillable) is the actual input; the six
+  /// boxes are a display layer showing `model.code`'s digits. Reads as one VoiceOver
+  /// element; tapping anywhere focuses the hidden field.
+  private func codeBoxes(codeText: Binding<String>) -> some View {
+    ZStack {
+      // The real input. Opacity ~0 (not 0 — a fully transparent field can be treated
+      // as non-interactive) and 1×1 so no caret shows; the boxes render the state.
+      // Hidden from VoiceOver so the boxes below are the single code element.
+      TextField("", text: codeText)
         .textContentType(.oneTimeCode)
         .keyboardType(.numberPad)
-        .font(Theme.mono(.title2))
         .focused($focusedField, equals: .code)
-        // OTP autofill drops all six digits at once — verify automatically.
+        .frame(width: 1, height: 1)
+        .opacity(0.02)
+        .accessibilityHidden(true)
+        // OTP autofill drops all six digits at once — verify automatically (same
+        // behavior as before the redesign).
         .onChange(of: model.code) { _, newValue in
           if newValue.count == 6 { Task { await model.submitCode() } }
         }
-    } header: {
-      Text("Enter code")
-    } footer: {
-      Text("Enter the 6-digit code we sent to \(model.normalizedEmail).")
-    }
 
-    messageRows
-
-    Section {
-      Button {
-        Task { await model.submitCode() }
-      } label: {
-        submitButtonContent(title: "Verify")
+      HStack(spacing: 10) {
+        ForEach(0..<6, id: \.self) { index in
+          digitBox(index: index)
+        }
       }
-      .disabled(!model.canSubmitCode)
+      // Error shake: ±8pt over 3 oscillations, driven by shakeTrigger (never bumped
+      // under Reduce Motion, so this stays still there).
+      .keyframeAnimator(initialValue: CGFloat(0), trigger: shakeTrigger) { view, offset in
+        view.offset(x: offset)
+      } keyframes: { _ in
+        KeyframeTrack {
+          CubicKeyframe(-8, duration: 0.06)
+          CubicKeyframe(8, duration: 0.10)
+          CubicKeyframe(-8, duration: 0.10)
+          CubicKeyframe(8, duration: 0.10)
+          CubicKeyframe(0, duration: 0.06)
+        }
+      }
+    }
+    .contentShape(Rectangle())
+    .onTapGesture { focusedField = .code }
+    // One combined VoiceOver element for the whole code entry (M-AC-UI9.1).
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Enter 6 digit code")
+    .accessibilityValue("\(min(model.code.count, 6)) of 6 entered")
+    .accessibilityHint("Double tap to enter the code")
+    .accessibilityAddTraits(.isKeyboardKey)
+  }
 
+  /// One digit cell. Renders `model.code`'s character at `index` (display capped at 6
+  /// defensively); the active cell (next empty slot while focused) gets an accent
+  /// border + soft glow; digits pop in with a scale spring.
+  private func digitBox(index: Int) -> some View {
+    let digits = Array(model.code.prefix(6))
+    let hasDigit = index < digits.count
+    let isActive = focusedField == .code && index == digits.count && digits.count < 6
+    return RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+      .fill(Theme.surface)
+      .frame(width: 44, height: 56)
+      .overlay {
+        RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+          .strokeBorder(isActive ? Theme.accent : Theme.separator, lineWidth: isActive ? 2 : 1)
+      }
+      .overlay {
+        if hasDigit {
+          Text(String(digits[index]))
+            .font(Theme.mono(.title2))
+            .foregroundStyle(Theme.textPrimary)
+            .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
+        }
+      }
+      .shadow(color: isActive && !reduceMotion ? Theme.accent.opacity(0.30) : .clear, radius: 6)
+      .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.code)
+      .animation(reduceMotion ? nil : Theme.Motion.snappy, value: isActive)
+      .accessibilityHidden(true)
+  }
+
+  // MARK: Resend + change-email controls
+
+  private var resendControls: some View {
+    VStack(spacing: 12) {
       // The cooldown ticks via TimelineView so the countdown updates each second
       // without the view model holding a timer.
       TimelineView(.periodic(from: .now, by: 1)) { _ in
@@ -114,81 +264,167 @@ struct AuthView: View {
           Button("Resend code") {
             Task { await model.resendCode() }
           }
+          .font(Theme.body(.subheadline))
+          .foregroundStyle(Theme.accent)
         } else {
           Text("Resend available in \(model.resendSecondsRemaining)s")
+            .font(Theme.body(.subheadline))
             .foregroundStyle(Theme.textSecondary)
+            .contentTransition(.numericText())
+            .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.resendSecondsRemaining)
         }
       }
 
       Button("Use a different email") {
         model.editEmail()
       }
+      .font(Theme.body(.subheadline))
       .foregroundStyle(Theme.textSecondary)
     }
-    .onAppear { focusedField = .code }
   }
 
-  // MARK: Signed-in confirmation
+  // MARK: Success (drawn checkmark)
 
-  @ViewBuilder
-  private func signedInSection(email: String) -> some View {
-    Section {
-      Label {
-        VStack(alignment: .leading, spacing: 2) {
-          Text("Signed in")
-            .font(Theme.display(.headline))
-          Text(email)
-            .font(Theme.body(.subheadline))
-            .foregroundStyle(Theme.textSecondary)
-        }
-      } icon: {
-        Image(systemName: "checkmark.seal.fill")
-          .foregroundStyle(Theme.success)
-      }
+  private func successView(email: String) -> some View {
+    VStack(spacing: 16) {
+      DrawnCheckmark(animate: !reduceMotion)
+        .frame(width: 72, height: 72)
+      Text("Signed in")
+        .font(Theme.display(.title3))
+      Text(email)
+        .font(Theme.body(.subheadline))
+        .foregroundStyle(Theme.textSecondary)
     }
+    .frame(maxWidth: .infinity)
+    .padding(.top, 8)
+    .onAppear { Haptics.success() }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("Signed in as \(email)")
   }
 
   // MARK: Shared pieces
 
-  /// A submit-button label that shows a spinner while a request is in flight.
-  @ViewBuilder
-  private func submitButtonContent(title: String) -> some View {
-    HStack {
-      Text(title)
-      if model.isBusy {
-        Spacer()
-        ProgressView()
+  /// A full-width filled-accent capsule CTA. Shows an in-button spinner while a
+  /// request is in flight; dims (but stays lit while busy) when disabled. Press
+  /// feedback + Reduce-Motion handling come from `OakPressableButtonStyle`.
+  private func primaryButton(
+    title: String, enabled: Bool, action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      ZStack {
+        Text(title)
+          .font(Theme.display(.headline))
+          .opacity(model.isBusy ? 0 : 1)
+        if model.isBusy {
+          ProgressView()
+            .tint(.white)
+        }
       }
+      .foregroundStyle(.white)
+      .frame(maxWidth: .infinity)
+      .padding(.vertical, 14)
+      .background(Theme.accent, in: Capsule())
+      .opacity(enabled || model.isBusy ? 1 : 0.4)
     }
+    .buttonStyle(OakPressableButtonStyle())
+    .disabled(!enabled)
   }
 
   /// Error (with a warning icon) and neutral notice rows; rendered only when set.
   @ViewBuilder
-  private var messageRows: some View {
+  private var messageBlock: some View {
     if let errorMessage = model.errorMessage {
-      Section {
-        Label {
-          Text(errorMessage)
-            .foregroundStyle(Theme.danger)
-        } icon: {
-          Image(systemName: "exclamationmark.triangle.fill")
-            .foregroundStyle(Theme.danger)
-        }
-        .font(Theme.body(.footnote))
+      Label {
+        Text(errorMessage)
+          .foregroundStyle(Theme.danger)
+      } icon: {
+        Image(systemName: "exclamationmark.triangle.fill")
+          .foregroundStyle(Theme.danger)
       }
+      .font(Theme.body(.footnote))
+      .frame(maxWidth: .infinity, alignment: .leading)
     }
     if let noticeMessage = model.noticeMessage {
-      Section {
-        Label {
-          Text(noticeMessage)
-            .foregroundStyle(Theme.textSecondary)
-        } icon: {
-          Image(systemName: "envelope.fill")
-            .foregroundStyle(Theme.info)
-        }
-        .font(Theme.body(.footnote))
+      Label {
+        Text(noticeMessage)
+          .foregroundStyle(Theme.textSecondary)
+      } icon: {
+        Image(systemName: "envelope.fill")
+          .foregroundStyle(Theme.info)
+      }
+      .font(Theme.body(.footnote))
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+}
+
+// MARK: - Floating field chrome
+
+/// The rounded, filled text-field chrome with an animated focus border — accent when
+/// focused, separator otherwise (mirrors the composer's focus treatment). The border
+/// transition is dropped under Reduce Motion.
+private struct FloatingFieldChrome: ViewModifier {
+  let focused: Bool
+  let reduceMotion: Bool
+
+  func body(content: Content) -> some View {
+    content
+      .padding(.horizontal, 16)
+      .padding(.vertical, 14)
+      .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+          .strokeBorder(
+            focused ? Theme.accent.opacity(0.4) : Theme.separator,
+            lineWidth: focused ? 1.5 : 1
+          )
+      }
+      .animation(reduceMotion ? nil : Theme.Motion.snappy, value: focused)
+  }
+}
+
+// MARK: - Drawn checkmark
+
+/// A success mark that draws itself in: a trimmed ring stroke plus a trimmed
+/// checkmark, both animating their `trim(to:)` from 0→1. Draws instantly under
+/// Reduce Motion. Decorative — the surrounding view carries the "Signed in" meaning,
+/// so it's hidden from VoiceOver (M-AC-UI9.3).
+private struct DrawnCheckmark: View {
+  let animate: Bool
+  @State private var progress: CGFloat = 0
+
+  var body: some View {
+    ZStack {
+      Circle()
+        .stroke(Theme.success.opacity(0.25), lineWidth: 3)
+      Circle()
+        .trim(from: 0, to: progress)
+        .stroke(Theme.success, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+        .rotationEffect(.degrees(-90))
+      CheckmarkShape()
+        .trim(from: 0, to: progress)
+        .stroke(Theme.success, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+        .padding(20)
+    }
+    .onAppear {
+      if animate {
+        withAnimation(.easeInOut(duration: 0.5)) { progress = 1 }
+      } else {
+        progress = 1
       }
     }
+    .accessibilityHidden(true)
+  }
+}
+
+/// The checkmark tick, drawn in the unit rect so `trim` animates it as one stroke.
+private struct CheckmarkShape: Shape {
+  func path(in rect: CGRect) -> Path {
+    var path = Path()
+    path.move(to: CGPoint(x: rect.minX, y: rect.midY + rect.height * 0.05))
+    path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.38, y: rect.maxY))
+    path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+    return path
   }
 }
 
