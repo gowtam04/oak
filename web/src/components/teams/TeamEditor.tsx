@@ -23,7 +23,11 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useImperativeHandle, useState, type Ref } from "react";
+import {
+  applyTeamPatch,
+  type TeamPatch,
+} from "@/agent/teams-assistant/schemas";
 
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { TeamDetail } from "@/lib/api/teams-client";
@@ -50,6 +54,22 @@ export function blankMember(): TeamMember {
   };
 }
 
+/**
+ * Imperative handle for out-of-band draft access (the /teams assistant panel).
+ * `applyPatch`/`replaceDraft` only ever fire from a user-initiated click
+ * (Apply/Undo) — never from an effect — so they cannot race the `team.id`
+ * re-seed effect below (which remains the sole authority for "opened a
+ * different team").
+ */
+export interface TeamEditorHandle {
+  /** The live, unsaved draft (name + members, in slot order). */
+  getDraft(): { name: string; members: TeamMember[] };
+  /** Apply an assistant team_patch to the draft (applyTeamPatch semantics). */
+  applyPatch(patch: TeamPatch): void;
+  /** Replace the whole draft (the Undo path — exact snapshot restore). */
+  replaceDraft(draft: { name: string; members: TeamMember[] }): void;
+}
+
 export interface TeamEditorProps {
   team: TeamDetail;
   /**
@@ -63,6 +83,8 @@ export interface TeamEditorProps {
   onSave: (input: { name: string; members: TeamMember[] }) => void;
   onExport: () => void;
   onClose?: () => void;
+  /** Optional imperative handle (see {@link TeamEditorHandle}). */
+  handleRef?: Ref<TeamEditorHandle>;
 }
 
 export default function TeamEditor({
@@ -72,10 +94,33 @@ export default function TeamEditor({
   onSave,
   onExport,
   onClose,
+  handleRef,
 }: TeamEditorProps) {
   const [name, setName] = useState(team.name);
   const [members, setMembers] = useState<TeamMember[]>(team.members);
   const [selectedSlot, setSelectedSlot] = useState(0);
+
+  // Out-of-band draft access for the assistant panel (user-click only).
+  useImperativeHandle(
+    handleRef,
+    (): TeamEditorHandle => ({
+      getDraft: () => ({ name, members }),
+      applyPatch: (patch) => {
+        if (patch.name != null) setName(patch.name);
+        setMembers((prev) => applyTeamPatch(prev, patch));
+        // Focus the first patched slot so the change is visible immediately.
+        const first = patch.slots.length
+          ? Math.min(...patch.slots.map((s) => s.slot))
+          : null;
+        if (first !== null) setSelectedSlot(first);
+      },
+      replaceDraft: (draft) => {
+        setName(draft.name);
+        setMembers(draft.members);
+      },
+    }),
+    [name, members],
+  );
   // Sprites/types/base-stats resolved for the LIVE members (slug → ref;
   // `undefined` = a resolved miss, so we don't refetch). Reset per opened team.
   const [resolved, setResolved] = useState<
