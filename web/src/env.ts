@@ -56,7 +56,7 @@ const EnvSchema = z
       emptyToUndefined,
       z.string().min(1).optional(),
     ),
-    ANTHROPIC_MODEL: z.string().min(1).default("claude-sonnet-4-6"),
+    ANTHROPIC_MODEL: z.string().min(1).default("claude-sonnet-5"),
     OPENAI_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     // Base URLs. xAI is OpenAI-SDK-compatible; its API lives behind a different
     // host, so it has a sensible default. OpenAI uses the SDK default when unset.

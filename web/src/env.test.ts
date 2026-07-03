@@ -13,7 +13,7 @@ describe("env", () => {
   it("applies defaults when only the key is supplied", () => {
     const parsed = parseEnv({ XAI_API_KEY: "xai-test" });
     expect(parsed.XAI_API_KEY).toBe("xai-test");
-    expect(parsed.ANTHROPIC_MODEL).toBe("claude-sonnet-4-6");
+    expect(parsed.ANTHROPIC_MODEL).toBe("claude-sonnet-5");
     expect(parsed.ACTIVE_MODEL).toBe("grok-4.3");
     expect(parsed.DATABASE_URL).toBe(
       "postgres://oak:oak@localhost:5432/oak",

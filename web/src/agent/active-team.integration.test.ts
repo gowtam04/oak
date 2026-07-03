@@ -108,7 +108,7 @@ function message(content: Block[]): any {
     id: "msg",
     type: "message",
     role: "assistant",
-    model: "claude-sonnet-4-6",
+    model: "claude-sonnet-5",
     content,
     stop_reason: "tool_use",
     stop_sequence: null,

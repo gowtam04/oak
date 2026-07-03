@@ -6,7 +6,7 @@ function makeTrace(): TurnTrace {
   return {
     request_id: "req_123",
     session_id: "sess_abc",
-    model: "claude-sonnet-4-6",
+    model: "claude-sonnet-5",
     input_tokens: 1200,
     output_tokens: 340,
     thinking_tokens: 80,
@@ -43,7 +43,7 @@ describe("logTurn", () => {
     expect(record.event).toBe("turn");
     expect(record.request_id).toBe("req_123");
     expect(record.session_id).toBe("sess_abc");
-    expect(record.model).toBe("claude-sonnet-4-6");
+    expect(record.model).toBe("claude-sonnet-5");
     expect(record.input_tokens).toBe(1200);
     expect(record.output_tokens).toBe(340);
     expect(record.thinking_tokens).toBe(80);

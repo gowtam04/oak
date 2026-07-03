@@ -37,7 +37,7 @@ describe("model registry", () => {
   });
 
   it("modelLabel returns the display label", () => {
-    expect(modelLabel("claude")).toBe("Claude Sonnet 4.6");
+    expect(modelLabel("claude")).toBe("Claude Sonnet 5");
     expect(modelLabel("gpt-5.5")).toBe("OpenAI GPT-5.5");
     expect(modelLabel("grok-4.3")).toBe("xAI Grok 4.3");
   });
@@ -56,7 +56,7 @@ describe("resolveModel", () => {
     expect(resolveModel("claude")).toMatchObject({
       key: "claude",
       provider: "anthropic",
-      apiModelId: "claude-sonnet-4-6",
+      apiModelId: "claude-sonnet-5",
     });
     expect(resolveModel("gpt-5.5")).toMatchObject({
       key: "gpt-5.5",
@@ -95,7 +95,7 @@ describe("providerFor / isModelConfigured (validate-on-use)", () => {
     expect(isModelConfigured("claude")).toBe(true);
     const provider = providerFor("claude");
     expect(provider.kind).toBe("anthropic");
-    expect(provider.apiModelId).toBe("claude-sonnet-4-6");
+    expect(provider.apiModelId).toBe("claude-sonnet-5");
   });
 
   it("providerFor agrees with isModelConfigured for every provider", () => {
@@ -107,7 +107,7 @@ describe("providerFor / isModelConfigured (validate-on-use)", () => {
         const provider = providerFor(key);
         expect(["anthropic", "openai", "xai"]).toContain(provider.kind);
         expect(provider.apiModelId).toBe(
-          key === "claude" ? "claude-sonnet-4-6" : key,
+          key === "claude" ? "claude-sonnet-5" : key,
         );
       } else {
         expect(() => providerFor(key)).toThrow(ProviderNotConfiguredError);

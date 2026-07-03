@@ -153,7 +153,7 @@ function message(content: Block[], stopReason = "tool_use"): unknown {
     id: "msg",
     type: "message",
     role: "assistant",
-    model: "claude-sonnet-4-6",
+    model: "claude-sonnet-5",
     content,
     stop_reason: stopReason,
     stop_sequence: null,
@@ -266,7 +266,7 @@ describe("request shape (RISK DIRECTIVE: no forced tool_choice on Sonnet 4.6)", 
     expect(params.tool_choice).toEqual({ type: "auto" });
     // Must NOT force submit_answer (that would 400 alongside thinking).
     expect(params.tool_choice.type).not.toBe("tool");
-    expect(params.model).toBe("claude-sonnet-4-6");
+    expect(params.model).toBe("claude-sonnet-5");
   });
 
   it("places exactly one ephemeral cache breakpoint on the last system block", async () => {

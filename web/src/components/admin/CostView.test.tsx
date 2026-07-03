@@ -117,7 +117,7 @@ describe("CostView", () => {
       "xAI Grok 4.3",
     );
     expect(table.getByTestId("cost-model-claude")).toHaveTextContent(
-      "Claude Sonnet 4.6",
+      "Claude Sonnet 5",
     );
     // An unknown stored model value falls back to its raw key.
     expect(table.getByTestId("cost-model-mystery-model")).toHaveTextContent(

@@ -42,7 +42,7 @@ export interface ModelPrice {
 export const MODEL_PRICING: Record<ModelKey, ModelPrice> = {
   // xAI Grok 4.3 (primary/default).
   "grok-4.3": { inputPer1M: 3, outputPer1M: 15, thinkingPer1M: 15 },
-  // Anthropic Claude Sonnet 4.6.
+  // Anthropic Claude Sonnet 5.
   claude: { inputPer1M: 3, outputPer1M: 15, thinkingPer1M: 15 },
   // OpenAI GPT-5.5.
   "gpt-5.5": { inputPer1M: 1.25, outputPer1M: 10, thinkingPer1M: 10 },

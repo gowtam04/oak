@@ -39,7 +39,7 @@ export interface ModelOption {
  */
 export const MODELS: readonly ModelOption[] = [
   { key: "grok-4.3", label: "xAI Grok 4.3", provider: "xai" },
-  { key: "claude", label: "Claude Sonnet 4.6", provider: "anthropic" },
+  { key: "claude", label: "Claude Sonnet 5", provider: "anthropic" },
   { key: "gpt-5.5", label: "OpenAI GPT-5.5", provider: "openai" },
 ] as const;
 

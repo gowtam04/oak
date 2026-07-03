@@ -57,7 +57,7 @@ function usage(extra: Record<string, unknown> = {}) {
 describe("AnthropicProvider — request mapping", () => {
   it("maps segments to text blocks with exactly one ephemeral breakpoint on the last", () => {
     const { client, captured } = fakeClient({ content: [], usage: usage() });
-    const provider = new AnthropicProvider({ apiModelId: "claude-sonnet-4-6" }, client);
+    const provider = new AnthropicProvider({ apiModelId: "claude-sonnet-5" }, client);
     provider.streamTurn({
       system: SYSTEM,
       tools: TOOLS,
@@ -76,7 +76,7 @@ describe("AnthropicProvider — request mapping", () => {
 
   it("sends adaptive thinking + tool_choice auto (never forced), and the model id", () => {
     const { client, captured } = fakeClient({ content: [], usage: usage() });
-    const provider = new AnthropicProvider({ apiModelId: "claude-sonnet-4-6" }, client);
+    const provider = new AnthropicProvider({ apiModelId: "claude-sonnet-5" }, client);
     provider.streamTurn({
       system: SYSTEM,
       tools: TOOLS,
@@ -85,7 +85,7 @@ describe("AnthropicProvider — request mapping", () => {
     });
     expect(captured.params.thinking).toEqual({ type: "adaptive" });
     expect(captured.params.tool_choice).toEqual({ type: "auto" });
-    expect(captured.params.model).toBe("claude-sonnet-4-6");
+    expect(captured.params.model).toBe("claude-sonnet-5");
     expect(captured.params.tools[0]).toEqual({
       name: "submit_answer",
       description: "submit",
@@ -112,7 +112,7 @@ describe("AnthropicProvider — request mapping", () => {
   it("kind is anthropic and apiModelId defaults from env", () => {
     const provider = new AnthropicProvider({}, fakeClient({ content: [], usage: usage() }).client);
     expect(provider.kind).toBe("anthropic");
-    expect(provider.apiModelId).toBe("claude-sonnet-4-6");
+    expect(provider.apiModelId).toBe("claude-sonnet-5");
   });
 });
 
