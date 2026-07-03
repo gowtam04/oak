@@ -30,10 +30,10 @@ struct ShowdownImportView: View {
       Form {
         Section("Format") {
           Picker("Format", selection: $format) {
-            Text("Standard").tag(Format.scarletViolet)
-            Text("Champions").tag(Format.champions)
+            ForEach(Format.knownCases, id: \.self) { format in
+              Text(format.shortLabel).tag(format)
+            }
           }
-          .pickerStyle(.segmented)
         }
 
         Section("Showdown paste") {

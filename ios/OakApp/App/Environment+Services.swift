@@ -32,9 +32,16 @@ struct ServiceContainer: Sendable {
   /// ``ArtifactViewModel``. Backed by ``LiveArtifactService`` in production.
   let artifact: any ArtifactService
 
+  /// The team-builder seam (list/create/update/delete/duplicate/import/export)
+  /// read by ``TeamsListViewModel``/``TeamEditorViewModel``. Backed by
+  /// ``LiveTeamService`` in production. (The protocol + live implementation have
+  /// existed since the Teams feature was built; this is the container wiring that
+  /// was missing — see `RootView`'s Teams tab.)
+  let teams: any TeamService
+
   /// The production wiring (real `Live…` services).
   ///
-  /// All three services share **one** ``TokenStore`` (the Keychain) and **one**
+  /// All services share **one** ``TokenStore`` (the Keychain) and **one**
   /// ``OakAPIClient`` (the `URLSession`, base URL, and Bearer-header policy), so a
   /// token written on `verify` is read identically by every authed request and the
   /// chat byte stream alike. ``SSEClient`` borrows the same client for the chat
@@ -46,7 +53,8 @@ struct ServiceContainer: Sendable {
       auth: LiveAuthService(apiClient: api, tokenStore: tokenStore),
       history: LiveHistoryService(apiClient: api),
       chat: LiveChatService(sseClient: SSEClient(apiClient: api)),
-      artifact: LiveArtifactService(apiClient: api)
+      artifact: LiveArtifactService(apiClient: api),
+      teams: LiveTeamService(apiClient: api)
     )
   }
 
@@ -61,7 +69,8 @@ struct ServiceContainer: Sendable {
       auth: PreviewStubAuthService(),
       history: PreviewStubHistoryService(),
       chat: PreviewStubChatService(),
-      artifact: PreviewStubArtifactService()
+      artifact: PreviewStubArtifactService(),
+      teams: PreviewStubTeamService()
     )
     #else
     live()
@@ -147,6 +156,50 @@ struct PreviewStubArtifactService: ArtifactService {
   func entity(kind: EntityKind, q: String, format: Format) async -> EntityArtifact? { nil }
 
   func savedTeam(id: String) async -> (team: Team, validation: TeamValidationResult)? { nil }
+}
+
+/// No-network ``TeamService`` for SwiftUI previews: an empty library, and every
+/// mutation throws `.http(404)` (previews never drive Teams mutations, but a
+/// stray call fails loudly rather than fabricating a fake saved team).
+struct PreviewStubTeamService: TeamService {
+  private var notFound: OakError { .http(status: 404, code: "not_found", message: "Preview stub.") }
+
+  func list(format: Format?) async throws -> [TeamSummary] { [] }
+
+  func get(id: String) async throws -> (team: Team, validation: TeamValidationResult) {
+    throw notFound
+  }
+
+  func create(
+    format: Format,
+    name: String?,
+    members: [TeamMember]?
+  ) async throws -> (team: Team, validation: TeamValidationResult) {
+    throw notFound
+  }
+
+  func update(
+    id: String,
+    name: String?,
+    members: [TeamMember]?
+  ) async throws -> (team: Team, validation: TeamValidationResult) {
+    throw notFound
+  }
+
+  func delete(id: String) async throws { throw notFound }
+
+  func duplicate(id: String) async throws -> (team: Team, validation: TeamValidationResult) {
+    throw notFound
+  }
+
+  func importPaste(
+    format: Format,
+    paste: String
+  ) async throws -> (team: Team, validation: TeamValidationResult, notes: [ImportNote]) {
+    throw notFound
+  }
+
+  func exportPaste(id: String) async throws -> String { throw notFound }
 }
 
 /// No-network ``ChatService`` for SwiftUI previews: a tiny scripted stream that

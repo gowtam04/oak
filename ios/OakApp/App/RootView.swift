@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Top-level navigation shell: a two-tab `TabView` (Chat / Account). Chat is the
-/// default surface on launch (M-AC-UI2.1); conversation history is folded into the
-/// Chat tab WhatsApp-style (the list appears once signed in), so there is no
-/// separate History or Teams tab in phase 1.
+/// Top-level navigation shell: a three-tab `TabView` (Chat / Teams / Account). Chat is
+/// the default surface on launch (M-AC-UI2.1); conversation history is folded into the
+/// Chat tab WhatsApp-style (the list appears once signed in), so there is no separate
+/// History tab. Teams hosts the team-builder library (``TeamsListView``, which already
+/// owns its own `NavigationStack` and guest-vs-signed-in branching internally).
 ///
 /// This view is the single wiring point for launch behavior:
 ///   * on appear it restores the session (a stored Bearer token resolves to
@@ -26,10 +27,11 @@ struct RootView: View {
   /// The selected tab, tracked so tab changes can fire haptics + a symbol bounce.
   @State private var selection: AppTab = .chat
 
-  /// The two root destinations. Named `AppTab` to avoid colliding with SwiftUI's
+  /// The three root destinations. Named `AppTab` to avoid colliding with SwiftUI's
   /// `Tab`; `Hashable` so it can back the `TabView(selection:)`.
   private enum AppTab: Hashable {
     case chat
+    case teams
     case account
   }
 
@@ -40,6 +42,12 @@ struct RootView: View {
       } label: {
         Label("Chat", systemImage: "bubble.left.and.text.bubble.right")
           .symbolEffect(.bounce, value: selection == .chat)
+      }
+      Tab(value: AppTab.teams) {
+        TeamsListView(model: TeamsListViewModel(teamService: services.teams))
+      } label: {
+        Label("Teams", systemImage: "square.grid.2x3.fill")
+          .symbolEffect(.bounce, value: selection == .teams)
       }
       Tab(value: AppTab.account) {
         AccountView(model: AccountViewModel(auth: services.auth, appState: appState))

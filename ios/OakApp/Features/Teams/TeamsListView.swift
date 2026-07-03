@@ -12,6 +12,7 @@ import SwiftUI
 /// the editor in new mode and the list reloads on return.
 struct TeamsListView: View {
   @Environment(AppState.self) private var appState
+  @Environment(\.services) private var services
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var model: TeamsListViewModel
 
@@ -19,6 +20,9 @@ struct TeamsListView: View {
   @State private var editorTarget: EditorTarget?
   /// `true` while the Showdown import sheet is presented.
   @State private var isImporting: Bool = false
+  /// `true` while the guest sign-in sheet is presented (mirrors `ChatTabView`'s
+  /// guest-nudge pattern — web's `/teams` gate offers the same sign-in action).
+  @State private var showSignIn = false
 
   init(model: TeamsListViewModel) {
     _model = State(initialValue: model)
@@ -55,9 +59,19 @@ struct TeamsListView: View {
       .sheet(isPresented: $isImporting, onDismiss: { Task { await model.reload() } }) {
         ShowdownImportView(model: model)
       }
+      .sheet(isPresented: $showSignIn) {
+        AuthView(model: AuthViewModel(auth: services.auth, appState: appState))
+      }
     }
     .task(id: isSignedIn) {
       if isSignedIn { await model.reload() }
+    }
+    // A completed sign-in flips `isSignedIn`, which switches the body out of
+    // `guestState` on its own — this just drops the now-redundant sheet.
+    .onChange(of: appState.authState) { _, newValue in
+      if case .signedIn = newValue {
+        showSignIn = false
+      }
     }
   }
 
@@ -139,11 +153,15 @@ struct TeamsListView: View {
 
   // MARK: Toolbar menus
 
+  /// All six formats (mirrors the web `/teams` page's format selector, which
+  /// spans `FORMATS` in full) — unlike the history list's 3-way filter, teams
+  /// exist in any of the six scopes so the library filter must too.
   private var formatFilterMenu: some View {
     Menu {
       filterButton(title: "All formats", format: nil)
-      filterButton(title: "Standard", format: .scarletViolet)
-      filterButton(title: "Champions", format: .champions)
+      ForEach(Format.knownCases, id: \.self) { format in
+        filterButton(title: format.shortLabel, format: format)
+      }
     } label: {
       Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
     }
@@ -164,15 +182,12 @@ struct TeamsListView: View {
 
   private var addMenu: some View {
     Menu {
-      Button {
-        editorTarget = .new(.scarletViolet)
-      } label: {
-        Label("New Standard team", systemImage: "plus")
-      }
-      Button {
-        editorTarget = .new(.champions)
-      } label: {
-        Label("New Champions team", systemImage: "plus")
+      ForEach(Format.knownCases, id: \.self) { format in
+        Button {
+          editorTarget = .new(format)
+        } label: {
+          Label("New \(format.shortLabel) team", systemImage: "plus")
+        }
       }
       Divider()
       Button {
@@ -201,16 +216,24 @@ struct TeamsListView: View {
 
   // MARK: Empty / guest / error states
 
+  /// Mirrors the web `/teams` gate copy (`teams-page__guest`): saved teams, the
+  /// builder, and Showdown import/export all unlock with a free account.
   private var guestState: some View {
     VStack(spacing: 12) {
       OakBrandMark(size: 64)
-      Text("Sign in for teams")
+      Text("Sign in to build teams")
         .font(Theme.display(.title3))
-      Text("Sign in to build, save, and reuse your competitive teams across devices.")
-        .font(Theme.body(.subheadline))
-        .foregroundStyle(Theme.textSecondary)
-        .multilineTextAlignment(.center)
-        .padding(.horizontal, 32)
+      Text(
+        "Saved teams, the team builder, and Showdown import/export unlock with a free account."
+      )
+      .font(Theme.body(.subheadline))
+      .foregroundStyle(Theme.textSecondary)
+      .multilineTextAlignment(.center)
+      .padding(.horizontal, 32)
+      Button("Sign in") { showSignIn = true }
+        .buttonStyle(.borderedProminent)
+        .tint(Theme.accent)
+        .padding(.top, 4)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
@@ -324,10 +347,7 @@ private struct TeamRow: View {
   }
 
   private var formatLabel: String {
-    switch team.format {
-    case .scarletViolet: return "Standard"
-    case .champions: return "Champions"
-    }
+    team.format.shortLabel
   }
 
   /// Either the filled-slot species (titleized) or a "n/6 Pokémon" count when empty.

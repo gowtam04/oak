@@ -14,11 +14,106 @@
 /// global `.convertFromSnakeCase` (payloads mix conventions).
 
 /// Data-scope format — the discriminator that scopes the index to a game
-/// (`formats.ts`). `scarletViolet` is standard mode; `champions` is the Pokémon
-/// Champions regulation scope.
-enum Format: String, Codable, Sendable, CaseIterable {
-  case scarletViolet = "scarlet-violet"
+/// (`web/src/data/formats.ts` `FORMATS`). `scarletViolet` is Gen 9 / standard
+/// mode; `champions` is the Pokémon Champions regulation scope; `gen5`…`gen8`
+/// are the mainline generation-scope formats.
+///
+/// **Tolerant decoding (`.unknown`):** the wire can widen this set independently
+/// of when this app ships (it already has: `gen-5`…`gen-8` postdate the app's
+/// original 2-case `Format`, and a web-created conversation/team in one of those
+/// formats would otherwise fail to decode — silently breaking the whole list for
+/// that user). `.unknown(rawValue)` absorbs any string this enum doesn't
+/// recognize so a single unrecognized `format` value can never fail a parent
+/// `Decodable` (`ConversationSummary`/`ConversationDetail`/`Team`/`TeamSummary`/
+/// `EntityArtifactOk`/…) — decoding always succeeds. It carries the original raw
+/// string so it re-encodes byte-identically if it is ever sent back (see
+/// `encode(to:)` below), and every known case round-trips through `rawValue`
+/// unchanged.
+enum Format: Sendable, Hashable {
+  case scarletViolet
   case champions
+  case gen5
+  case gen6
+  case gen7
+  case gen8
+  /// A format string not in the known six — preserves the original wire value.
+  case unknown(String)
+
+  /// The known, orderable formats — mirrors `FORMATS` in `formats.ts`. Backs the
+  /// six-way format pickers/filters; `.unknown` is deliberately excluded (it has
+  /// no fixed identity to list).
+  static let knownCases: [Format] = [.scarletViolet, .champions, .gen5, .gen6, .gen7, .gen8]
+
+  /// The wire string for a known case, or the original raw string for `.unknown`.
+  var rawValue: String {
+    switch self {
+    case .scarletViolet: return "scarlet-violet"
+    case .champions: return "champions"
+    case .gen5: return "gen-5"
+    case .gen6: return "gen-6"
+    case .gen7: return "gen-7"
+    case .gen8: return "gen-8"
+    case let .unknown(raw): return raw
+    }
+  }
+
+  /// Maps a wire string to its case, falling back to `.unknown` for anything
+  /// outside the known six.
+  init(rawValue: String) {
+    switch rawValue {
+    case "scarlet-violet": self = .scarletViolet
+    case "champions": self = .champions
+    case "gen-5": self = .gen5
+    case "gen-6": self = .gen6
+    case "gen-7": self = .gen7
+    case "gen-8": self = .gen8
+    default: self = .unknown(rawValue)
+    }
+  }
+
+  /// A short display label, e.g. for a compact list-row badge or filter chip —
+  /// mirrors `scopeLabelShort` in `web/src/lib/scope/scope-label.ts` exactly.
+  /// `.unknown` echoes its raw value (never renders as blank/"undefined").
+  var shortLabel: String {
+    switch self {
+    case .champions: return "Champions"
+    case .scarletViolet: return "Gen 9"
+    case .gen8: return "Gen 8"
+    case .gen7: return "Gen 7"
+    case .gen6: return "Gen 6"
+    case .gen5: return "Gen 5"
+    case let .unknown(raw): return raw
+    }
+  }
+
+  /// A fuller display label with the game-pair/regulation suffix — mirrors
+  /// `scopeLabel` in `web/src/lib/scope/scope-label.ts` exactly. The Champions
+  /// regulation string is duplicated from web's `CHAMPIONS_REGULATION` (no
+  /// shared module between the two clients); update it here when that rotates.
+  /// `.unknown` echoes its raw value.
+  var displayLabel: String {
+    switch self {
+    case .champions: return "Champions · Reg M-B"
+    case .scarletViolet: return "Gen 9 · Scarlet/Violet"
+    case .gen8: return "Gen 8 · Sword/Shield"
+    case .gen7: return "Gen 7 · USUM"
+    case .gen6: return "Gen 6 · XY/ORAS"
+    case .gen5: return "Gen 5 · Black/White"
+    case let .unknown(raw): return raw
+    }
+  }
+}
+
+extension Format: Codable {
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    self.init(rawValue: try container.decode(String.self))
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
 }
 
 /// One EV or IV spread. Raw `0..255` per stat on the wire (Showdown permits the

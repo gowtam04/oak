@@ -34,7 +34,7 @@ struct TeamEditorView: View {
       Section("Team") {
         TextField("Team name", text: $model.name)
           .textInputAutocapitalization(.words)
-        LabeledContent("Format", value: formatLabel)
+        LabeledContent("Format", value: model.format.displayLabel)
       }
 
       ForEach($model.members) { $member in
@@ -146,13 +146,6 @@ struct TeamEditorView: View {
   }
 
   // MARK: Details
-
-  private var formatLabel: String {
-    switch model.format {
-    case .scarletViolet: return "Standard (Scarlet/Violet)"
-    case .champions: return "Champions"
-    }
-  }
 
   // MARK: Error banner
 

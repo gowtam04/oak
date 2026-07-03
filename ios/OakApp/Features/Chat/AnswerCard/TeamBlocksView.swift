@@ -316,9 +316,9 @@ struct TeamBlocksView: View {
 
   // MARK: Shared bits
 
-  /// A muted format pill (e.g. "Champions" / "Scarlet/Violet").
+  /// A muted format pill (e.g. "Champions" / "Gen 9").
   private func formatBadge(_ format: Format) -> some View {
-    Text(format.displayLabel)
+    Text(format.shortLabel)
       .font(Theme.body(.caption2).weight(.semibold))
       .lineLimit(1)
       .padding(.horizontal, 8)
@@ -342,19 +342,6 @@ struct TeamBlocksView: View {
       .split(whereSeparator: { $0 == "-" || $0 == " " || $0 == "_" })
       .map { $0.prefix(1).uppercased() + $0.dropFirst() }
       .joined(separator: " ")
-  }
-}
-
-// MARK: - Format display label (file-scoped to avoid cross-phase collisions)
-
-private extension Format {
-  /// Human-friendly format name for the header badge — mirrors the web
-  /// `formatLabel` (`champions` → "Champions", `scarlet-violet` → "Scarlet/Violet").
-  var displayLabel: String {
-    switch self {
-    case .scarletViolet: return "Scarlet/Violet"
-    case .champions: return "Champions"
-    }
   }
 }
 
