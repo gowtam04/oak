@@ -12,6 +12,9 @@ struct StreamingStatusView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let phase: ChatViewModel.StreamingPhase
   let activities: [ChatViewModel.ToolActivity]
+  /// When true, an auto-reconnect is pending/in flight after a backgrounding drop — the
+  /// status line shows "Reconnecting…" instead of the phase, matching web's UI.
+  var reconnecting: Bool = false
 
   var body: some View {
     if phase != .idle {
@@ -92,6 +95,7 @@ struct StreamingStatusView: View {
   }
 
   private var phaseLabel: String {
+    if reconnecting { return "Reconnecting…" }
     switch phase {
     case .idle: return ""
     case .thinking: return "Thinking…"
@@ -101,6 +105,7 @@ struct StreamingStatusView: View {
   }
 
   private var phaseIcon: String {
+    if reconnecting { return "arrow.clockwise" }
     switch phase {
     case .idle, .thinking: return "brain"
     case .usingTools: return "magnifyingglass"

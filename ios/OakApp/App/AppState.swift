@@ -148,45 +148,18 @@ extension AppState {
 
 private extension GuestTurn {
   /// Maps a session-only guest turn into the wire ``ChatTurn`` the import endpoint
-  /// validates. A user turn carries its text verbatim; an assistant turn — which the
-  /// guest thread stores only as markdown (``GuestTurn`` is intentionally lossy) —
-  /// is wrapped in a minimal, schema-valid ``OakAnswer`` so the upload preserves the
-  /// prose. The stored turn id (a UUID) keys the import's idempotent upsert.
+  /// validates. A user turn carries its text verbatim; an assistant turn carries its
+  /// COMPLETE ``OakAnswer`` (reasoning, citations, inferences, subjects, …), so the
+  /// guest→sign-in import is **non-lossy** — the server re-validates it against
+  /// `oakAnswerSchema` and stores the full turn. The stored turn id (a UUID) keys the
+  /// import's idempotent upsert.
   var asChatTurn: ChatTurn {
-    switch role {
-    case .user:
+    switch content {
+    case let .user(text):
       return .user(id: id.uuidString, content: text)
-    case .assistant:
-      return .assistant(id: id.uuidString, answer: .guestImportPlaceholder(markdown: text))
+    case let .assistant(answer):
+      return .assistant(id: id.uuidString, answer: answer)
     }
-  }
-}
-
-private extension OakAnswer {
-  /// A minimal ``OakAnswer`` synthesized from a guest assistant turn's plain text.
-  /// `oakAnswerSchema` (the import route's validator) requires only `status`, the two
-  /// markdown fields, the citation/inference arrays (which may be empty), and
-  /// `generation_basis`; every other block is optional. The guest thread carries
-  /// only the answer markdown, so the structured blocks are intentionally empty —
-  /// the prose round-trips, the (unavailable) reasoning/citations do not.
-  static func guestImportPlaceholder(markdown: String) -> OakAnswer {
-    OakAnswer(
-      status: .answered,
-      answerMarkdown: markdown,
-      reasoningMarkdown: "",
-      citations: [],
-      inferences: [],
-      generationBasis: GenerationBasis(generation: "", fallback: false, note: nil),
-      subjects: nil,
-      candidates: nil,
-      damageCalc: nil,
-      suggestions: nil,
-      question: nil,
-      uncertaintyFlags: nil,
-      proposedTeam: nil,
-      savedTeam: nil,
-      proposedTeamWarnings: nil
-    )
   }
 }
 
@@ -201,21 +174,40 @@ enum AuthState: Equatable, Sendable {
 
 /// One turn of the in-memory guest thread (session-only, never persisted).
 ///
-/// Intentionally minimal in P1. P6/P9 reconcile this with the wire `ChatTurn`
-/// when mapping the guest thread into the sign-in import payload.
+/// A user turn carries its raw text; an assistant turn carries the COMPLETE
+/// ``OakAnswer`` (not just its prose) so the guest→sign-in import preserves full
+/// fidelity — reasoning, citations, inferences, and every structured block survive
+/// sign-in, matching web's full-turn import.
 struct GuestTurn: Identifiable, Sendable, Equatable {
+  /// A guest turn's payload, discriminated by role.
+  enum Content: Sendable, Equatable {
+    /// A user message — its raw text.
+    case user(text: String)
+    /// A finalized assistant answer — the full ``OakAnswer`` the reducer had at
+    /// finalize time (imported verbatim, re-validated server-side).
+    case assistant(answer: OakAnswer)
+  }
+
+  /// The turn's role. Kept as a first-class type so call sites (and tests) can branch
+  /// on the role without pattern-matching the payload.
   enum Role: String, Sendable, Equatable {
     case user
     case assistant
   }
 
   let id: UUID
-  let role: Role
-  let text: String
+  let content: Content
 
-  init(id: UUID = UUID(), role: Role, text: String) {
+  init(id: UUID = UUID(), content: Content) {
     self.id = id
-    self.role = role
-    self.text = text
+    self.content = content
+  }
+
+  /// The turn's role, derived from its content.
+  var role: Role {
+    switch content {
+    case .user: return .user
+    case .assistant: return .assistant
+    }
   }
 }

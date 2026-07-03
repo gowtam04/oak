@@ -357,6 +357,180 @@ struct ChatViewModelTests {
     #expect(vm.scopeSeed == nil)              // ignored while a turn streams
   }
 
+  // MARK: Stop / quick-stop (mirrors web `handleStop`)
+
+  @Test
+  func quickStopWipesThreadAndRestoresComposer() {
+    // A stop within the quick-stop window discards the just-sent turn and restores its
+    // message for a redo (web `handleStop`: wipes ALL turns + rotates the session).
+    let fake = FakeChatService()
+    fake.scriptedEvents = []                 // stream stays "in flight" (never awaited)
+    let appState = AppState()                // guest
+    let vm = makeViewModel(fake: fake, appState: appState)
+    let firstSession = vm.sessionId
+
+    vm.composerText = "Garchomp moveset?"
+    vm.send()                                 // isStreaming → true; task NOT awaited
+    #expect(vm.isStreaming)
+    #expect(vm.turns.count == 1)              // just the user turn
+    #expect(appState.guestThread.count == 1)  // mirrored
+
+    vm.performStop(now: Date())               // within quickStopThreshold
+
+    #expect(vm.isStreaming == false)
+    #expect(vm.turns.isEmpty)                 // whole thread wiped
+    #expect(vm.sessionId != firstSession)     // session rotated
+    #expect(vm.composerText == "Garchomp moveset?")  // text restored for redo
+    #expect(vm.errorBanner == nil)            // a user-initiated stop is NOT an error
+    #expect(appState.guestThread.isEmpty)     // guest mirror cleared with the thread
+    #expect(appState.activeConversationId == nil)
+  }
+
+  @Test
+  func lateStopKeepsAnswerlessUserTurnAndDoesNotRestore() {
+    // A stop AFTER the quick-stop window leaves the (now answer-less) user turn in place
+    // and does not restore the composer.
+    let fake = FakeChatService()
+    fake.scriptedEvents = []
+    let vm = makeViewModel(fake: fake)
+
+    vm.composerText = "Garchomp moveset?"
+    vm.send()
+    #expect(vm.turns.count == 1)
+
+    // Stop well past the window (inject a later clock so the test needn't wait).
+    vm.performStop(now: Date().addingTimeInterval(ChatViewModel.quickStopThreshold + 5))
+
+    #expect(vm.isStreaming == false)
+    #expect(vm.turns.count == 1)              // answer-less user turn stays
+    #expect(vm.composerText == "")            // NOT restored on a late stop
+    #expect(vm.errorBanner == nil)            // still not an error
+  }
+
+  @Test
+  func stopWhenNotStreamingIsANoOp() {
+    let fake = FakeChatService()
+    let vm = makeViewModel(fake: fake)
+    vm.composerText = "draft, not yet sent"
+
+    vm.stopStreaming()                        // nothing in flight
+
+    #expect(vm.composerText == "draft, not yet sent")  // untouched
+    #expect(vm.turns.isEmpty)
+  }
+
+  // MARK: Stream resilience — auto-reconnect after a backgrounding drop
+  // (mirrors web `sse-client.ts`: MAX_RETRIES=1, only a drop while backgrounded)
+
+  @Test
+  func transportDropWhileBackgroundedAutoRetriesOnceThenSucceeds() async throws {
+    let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
+    let fake = FakeChatService()
+    fake.attemptScripts = [
+      (events: [], error: .transport(underlying: "URLError.-1005")),  // attempt 1: drop
+      (events: [.answer(answer)], error: nil),                        // attempt 2: recovers
+    ]
+    let vm = makeViewModel(fake: fake)
+
+    vm.composerText = "q"
+    vm.send()
+    vm.sceneDidEnterBackground()              // arm the screen-off gate (turn in flight)
+    vm.sceneWillEnterForeground()             // back in foreground before the drop lands
+    await vm.streamTask?.value                // attempt 1 drops → fires the retry
+    await vm.streamTask?.value                // attempt 2 (the retry) succeeds
+
+    #expect(fake.sendCount == 2)              // exactly ONE auto-retry
+    #expect(vm.turns.count == 2)              // user + recovered answer
+    #expect(vm.errorBanner == nil)            // recovered, no error surfaced
+    #expect(vm.reconnecting == false)         // cleared once output resumed
+    #expect(vm.isStreaming == false)
+  }
+
+  @Test
+  func transportDropStillBackgroundedDefersRetryUntilForeground() async throws {
+    let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
+    let fake = FakeChatService()
+    fake.attemptScripts = [
+      (events: [], error: .transport(underlying: "URLError.-1005")),
+      (events: [.answer(answer)], error: nil),
+    ]
+    let vm = makeViewModel(fake: fake)
+
+    vm.composerText = "q"
+    vm.send()
+    vm.sceneDidEnterBackground()              // STILL backgrounded when the drop is seen
+    await vm.streamTask?.value                // attempt 1 drops → retry DEFERRED
+
+    #expect(fake.sendCount == 1)              // not retried yet (still backgrounded)
+    #expect(vm.reconnecting == true)          // "Reconnecting…" shown
+    #expect(vm.isStreaming == true)           // turn kept in flight
+    #expect(vm.errorBanner == nil)            // no dead-end error
+
+    vm.sceneWillEnterForeground()             // resume → fire the deferred retry
+    await vm.streamTask?.value                // attempt 2 succeeds
+
+    #expect(fake.sendCount == 2)
+    #expect(vm.turns.count == 2)
+    #expect(vm.reconnecting == false)
+    #expect(vm.errorBanner == nil)
+  }
+
+  @Test
+  func transportDropWhileForegroundedIsNotRetried() async {
+    // A connection drop that never coincided with backgrounding is a plain failure —
+    // it surfaces a banner and is NOT auto-retried.
+    let fake = FakeChatService()
+    fake.thrownError = .transport(underlying: "URLError.-1005")
+    let vm = makeViewModel(fake: fake)
+
+    vm.composerText = "q"
+    vm.send()                                 // no background transition
+    await vm.streamTask?.value
+
+    #expect(fake.sendCount == 1)              // NOT retried
+    #expect(vm.errorBanner?.message == ChatViewModel.connectionMessage)
+    #expect(vm.reconnecting == false)
+    #expect(vm.isStreaming == false)
+  }
+
+  @Test
+  func cleanServerErrorIsNeverAutoRetriedEvenWhenBackgrounded() async {
+    // A clean server fault (rate limit / HTTP status) is never a "drop": it surfaces
+    // immediately and is never auto-retried, even if the app was backgrounded.
+    let fake = FakeChatService()
+    fake.thrownError = .rateLimited(retryAfter: 5)
+    let vm = makeViewModel(fake: fake)
+
+    vm.composerText = "q"
+    vm.send()
+    vm.sceneDidEnterBackground()
+    vm.sceneWillEnterForeground()
+    await vm.streamTask?.value
+
+    #expect(fake.sendCount == 1)              // NOT retried — a clean server fault
+    #expect(vm.errorBanner != nil)            // surfaced instead
+    #expect(vm.reconnecting == false)
+  }
+
+  @Test
+  func inBandErrorEventIsNeverAutoRetried() async throws {
+    // An in-band SSE `error` frame is a real model/agent fault, delivered over a healthy
+    // connection — it becomes a banner and is never auto-retried, even if backgrounded.
+    let fake = FakeChatService()
+    fake.scriptedEvents = [.error(code: "model_unavailable", message: "down", status: 503)]
+    let vm = makeViewModel(fake: fake)
+
+    vm.composerText = "q"
+    vm.send()
+    vm.sceneDidEnterBackground()
+    vm.sceneWillEnterForeground()
+    await vm.streamTask?.value
+
+    #expect(fake.sendCount == 1)              // never retried
+    #expect(vm.errorBanner != nil)
+    #expect(vm.reconnecting == false)
+  }
+
   // MARK: Composer + conversation lifecycle
 
   @Test
