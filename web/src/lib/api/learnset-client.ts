@@ -11,11 +11,28 @@
 
 import type { Format } from "@/data/formats";
 
-/** One legal move as the picker consumes it (structurally a PickerOption). */
+/** The three move damage classes (mirrors `MoveDetail.damage_class`). */
+export type MoveDamageClass = "physical" | "special" | "status";
+
+/**
+ * One legal move as the picker consumes it (structurally a PickerOption, plus
+ * the F1 metadata columns — type/damage class/power — the moves table renders
+ * alongside each picker). The metadata fields are OPTIONAL/nullable: a move
+ * with no cached reference detail rides without them.
+ */
 export interface LearnsetOption {
   slug: string;
   display_name: string;
+  type?: string;
+  damage_class?: MoveDamageClass | null;
+  power?: number | null;
 }
+
+const DAMAGE_CLASSES: ReadonlySet<string> = new Set([
+  "physical",
+  "special",
+  "status",
+]);
 
 /** Best-effort narrowing of one move from the JSON body; null if malformed. */
 function toOption(value: unknown): LearnsetOption | null {
@@ -24,7 +41,15 @@ function toOption(value: unknown): LearnsetOption | null {
   if (typeof m.slug !== "string" || typeof m.display_name !== "string") {
     return null;
   }
-  return { slug: m.slug, display_name: m.display_name };
+  const option: LearnsetOption = { slug: m.slug, display_name: m.display_name };
+  if (typeof m.type === "string") option.type = m.type;
+  if (m.damage_class === null || DAMAGE_CLASSES.has(m.damage_class as string)) {
+    option.damage_class = (m.damage_class as MoveDamageClass | null) ?? null;
+  }
+  if (m.power === null || typeof m.power === "number") {
+    option.power = m.power as number | null;
+  }
+  return option;
 }
 
 /**

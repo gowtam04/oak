@@ -152,19 +152,27 @@ export async function getReference(
   };
 }
 
-/** Minimal move facts for hydrating a movepool list (B-4). */
+/**
+ * Move facts for hydrating a movepool list (B-4), widened (F1) to the extra
+ * battle-facing columns the team-builder's moves table renders alongside each
+ * picker: type, damage class, and power. `damageClass`/`power` mirror
+ * `MoveDetail.damage_class`/`.power` verbatim (a status move's `power` is
+ * `null`); absent only if the stored payload is missing that field.
+ */
 export interface MoveSummary {
   displayName: string;
   type: string;
+  damageClass: MoveDetail["damage_class"] | null;
+  power: number | null;
 }
 
 /**
- * Batched read of `{ displayName, type }` for a set of move slugs in `format`,
- * to hydrate a Pokémon's movepool (B-4) without N per-move `getReference` calls.
- * Reads the pre-built `move/<slug>` reference rows and pulls the two display
- * fields off each normalized `MoveDetail` payload. Slugs with no reference row
- * (or a corrupt payload) are simply absent from the map — the caller falls back
- * to the slug. Returns an empty map for an empty input or an unreadable index.
+ * Batched read of move facts for a set of move slugs in `format`, to hydrate a
+ * Pokémon's movepool (B-4) without N per-move `getReference` calls. Reads the
+ * pre-built `move/<slug>` reference rows and pulls the display fields off each
+ * normalized `MoveDetail` payload. Slugs with no reference row (or a corrupt
+ * payload) are simply absent from the map — the caller falls back to the slug.
+ * Returns an empty map for an empty input or an unreadable index.
  *
  * @param moveSlugs canonical move slugs to hydrate.
  * @param format    the active data scope ("scarlet-violet" | "champions").
@@ -205,7 +213,12 @@ export async function moveSummaries(
     const move = record as MoveDetail;
     // resource_key is "move/<slug>" — strip the prefix back to the slug.
     const slug = row.resource_key.slice("move/".length);
-    out.set(slug, { displayName: move.display_name, type: move.type });
+    out.set(slug, {
+      displayName: move.display_name,
+      type: move.type,
+      damageClass: move.damage_class ?? null,
+      power: move.power ?? null,
+    });
   }
   return out;
 }

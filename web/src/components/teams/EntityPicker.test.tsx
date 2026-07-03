@@ -146,4 +146,26 @@ describe("EntityPicker", () => {
     });
     expect(await screen.findByText("Leftovers")).toBeInTheDocument();
   });
+
+  it("guesses the animated Showdown sprite src for a suggestion thumbnail (F2)", async () => {
+    search.searchEntities.mockResolvedValue([
+      { slug: "charizard-mega-x", display_name: "Charizard (Mega X)", kind: "pokemon" },
+    ]);
+    render(
+      <EntityPicker
+        kind="pokemon"
+        format="scarlet-violet"
+        value=""
+        onChange={vi.fn()}
+        testid="member-0-species"
+        withSprite
+      />,
+    );
+    fireEvent.focus(screen.getByTestId("member-0-species"));
+    await screen.findByText("Charizard (Mega X)");
+    const thumb = document.querySelector(".entity-picker__thumb") as HTMLImageElement;
+    expect(thumb.getAttribute("src")).toBe(
+      "https://play.pokemonshowdown.com/sprites/ani/charizard-megax.gif",
+    );
+  });
 });
