@@ -57,6 +57,13 @@
       "when": 1782877670795,
       "tag": "0007_tiny_wildside",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783115623129,
+      "tag": "0008_equal_rattler",
+      "breakpoints": true
     }
   ]
 }

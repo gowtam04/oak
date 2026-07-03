@@ -584,3 +584,166 @@ export const champions_item_exclusion = pgTable("champions_item_exclusion", {
   /** Admin email that made the change; null if unknown. Audit only. */
   excluded_by: text("excluded_by"),
 });
+
+// ===========================================================================
+// Natdex warehouse — global Pokédex-wide tables (Oak v2, design §4.1)
+//
+// Five GLOBAL tables built OFFLINE from the PokeAPI CSV dump + the Pokémon
+// Mystery Dungeon dataset (scripts/fetch-pokeapi-natdex.ts → committed JSON
+// snapshots → the build-natdex/machines/classic-encounters/pmd builders). They
+// give the agent (via the later `run_sql` tool) whole-franchise facts the
+// per-format @pkmn index can't express: colors, shapes, catch rates, national
+// dex numbers, evolution parents, TM/HM machines, Gens 1–4 moves, classic wild
+// encounters, and PMD recruit data.
+//
+// Unlike the pokemon/learnset/reference_cache index tables these carry NO
+// `format` column — they are not format-partitioned (keyed by species /
+// version-group / move slug). Following the schema's conventions: snake_case
+// columns, no physical FK constraints (species / move slugs are logical joins
+// resolved in SQL), no native booleans, epoch-ms would be `bigint` (none here).
+// Built ONCE per ingest run (not per format) via a replace-all delete+insert
+// inside the same atomic ingest transaction.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// natdex_species — one row per national-dex species
+// ---------------------------------------------------------------------------
+export const natdex_species = pgTable(
+  "natdex_species",
+  {
+    /** PokeAPI species slug, e.g. "pikachu". PK. */
+    species: text("species").primaryKey(),
+    /** National Pokédex number (= PokeAPI species id). */
+    national_dex_number: integer("national_dex_number").notNull(),
+    /** Generation introduced (1–9). */
+    generation: integer("generation").notNull(),
+    /** Pokédex color slug, e.g. "yellow"; null if unset. */
+    color: text("color"),
+    /** Body-shape slug, e.g. "quadruped"; null if unset. */
+    shape: text("shape"),
+    /** Catch rate (0–255); null if unknown. */
+    capture_rate: integer("capture_rate"),
+    /** Sum of the six base stats of the species' default form. */
+    base_stat_total: integer("base_stat_total").notNull(),
+    /** Pre-evolution species slug (logical FK → natdex_species.species); null if none. */
+    evolves_from: text("evolves_from"),
+    /** Primary type slug of the default form. */
+    type1: text("type1").notNull(),
+    /** Secondary type slug; null for mono-type species. */
+    type2: text("type2"),
+  },
+  (t) => [
+    index("natdex_species_national_dex_number_idx").on(t.national_dex_number),
+    index("natdex_species_generation_idx").on(t.generation),
+    index("natdex_species_color_idx").on(t.color),
+    index("natdex_species_shape_idx").on(t.shape),
+    index("natdex_species_type1_idx").on(t.type1),
+    index("natdex_species_type2_idx").on(t.type2),
+    index("natdex_species_evolves_from_idx").on(t.evolves_from),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// natdex_machines — TM/HM/TR machines per version group
+// ---------------------------------------------------------------------------
+export const natdex_machines = pgTable(
+  "natdex_machines",
+  {
+    /** Version-group slug, e.g. "heartgold-soulsilver". Part of the PK. */
+    version_group: text("version_group").notNull(),
+    /** Machine label, e.g. "HM02" / "TM24" / "TR50". Part of the PK. */
+    machine: text("machine").notNull(),
+    /** Canonical move slug the machine teaches, e.g. "fly". */
+    move_slug: text("move_slug").notNull(),
+    /** Canonical item slug of the machine itself, e.g. "hm02". */
+    item_slug: text("item_slug").notNull(),
+  },
+  (t) => [
+    // A machine label is unique within a version group.
+    primaryKey({ columns: [t.version_group, t.machine] }),
+    // "which machine teaches move X (and where)?"
+    index("natdex_machines_move_slug_idx").on(t.move_slug),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// natdex_moves — every move's generation / type / damage class
+// ---------------------------------------------------------------------------
+export const natdex_moves = pgTable(
+  "natdex_moves",
+  {
+    /** Canonical move slug, e.g. "fire-fang". PK. */
+    move_slug: text("move_slug").primaryKey(),
+    /** Generation introduced (1–9). */
+    generation: integer("generation").notNull(),
+    /** Type slug, e.g. "fire"; null if unset. */
+    type: text("type"),
+    /** "physical" | "special" | "status"; null if unset. */
+    damage_class: text("damage_class"),
+  },
+  (t) => [
+    index("natdex_moves_generation_idx").on(t.generation),
+    index("natdex_moves_type_idx").on(t.type),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// classic_encounters — wild-encounter tables, Gens 1–7 ONLY (best-effort)
+//
+// PokeAPI has NO Gen 8–9 encounter data and known Gen 1–7 holes, so every answer
+// sourced from this table must be flaggable as partial. `id` is a synthetic
+// sequential key assigned by the builder (there is no natural PK after the
+// per-version/slot rows are deduped).
+// ---------------------------------------------------------------------------
+export const classic_encounters = pgTable(
+  "classic_encounters",
+  {
+    /** Synthetic sequential id (builder-assigned). PK. */
+    id: integer("id").primaryKey(),
+    /** Game version slug, e.g. "gold". */
+    version: text("version").notNull(),
+    /** Location slug, e.g. "johto-route-29". */
+    location: text("location").notNull(),
+    /** Sub-area slug within the location; null when PokeAPI records none. */
+    area: text("area"),
+    /** Encounter method slug, e.g. "walk" / "surf" / "old-rod". */
+    method: text("method").notNull(),
+    /** Species slug encountered, e.g. "pidgey". */
+    species: text("species").notNull(),
+    /** Encounter-slot rarity weight; null if unknown. */
+    rarity: integer("rarity"),
+    /** Minimum wild level; null if unknown. */
+    min_level: integer("min_level"),
+    /** Maximum wild level; null if unknown. */
+    max_level: integer("max_level"),
+  },
+  (t) => [
+    index("classic_encounters_species_idx").on(t.species),
+    index("classic_encounters_version_idx").on(t.version),
+    index("classic_encounters_location_idx").on(t.location),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// pmd_recruits — Pokémon Mystery Dungeon recruit locations + rates
+// ---------------------------------------------------------------------------
+export const pmd_recruits = pgTable(
+  "pmd_recruits",
+  {
+    /** Game slug: "red-blue-rescue-team" | "explorers-of-sky". Part of the PK. */
+    game: text("game").notNull(),
+    /** Species slug, e.g. "bulbasaur". Part of the PK. */
+    species: text("species").notNull(),
+    /** Recruit location description (free text, as scraped). */
+    location: text("location").notNull(),
+    /** Recruit rate as a display string, e.g. "12.5%"; null if unknown. */
+    recruit_rate: text("recruit_rate"),
+    /** Friend-area name (Rescue Team mechanic); null if unset. */
+    friend_area: text("friend_area"),
+  },
+  (t) => [
+    // One row per species per game.
+    primaryKey({ columns: [t.game, t.species] }),
+    index("pmd_recruits_species_idx").on(t.species),
+  ],
+);

@@ -39,8 +39,13 @@ import { inArray } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import {
+  classic_encounters,
   ingest_meta,
   learnset,
+  natdex_machines,
+  natdex_moves,
+  natdex_species,
+  pmd_recruits,
   pokemon,
   reference_cache,
   searchable_names,
@@ -62,6 +67,18 @@ import { buildLearnsetRows, type LearnsetRow } from "./build-learnsets";
 import { buildNames, type NameRow } from "./build-names";
 import { buildReferenceRows, type ReferenceRow } from "./build-reference";
 import { buildEncounterRows } from "./build-encounters";
+import {
+  buildNatdexSpeciesRows,
+  buildNatdexMoveRows,
+  type NatdexSpeciesRow,
+  type NatdexMoveRow,
+} from "./build-natdex";
+import { buildMachineRows, type NatdexMachineRow } from "./build-machines";
+import {
+  buildClassicEncounterRows,
+  type ClassicEncounterRow,
+} from "./build-classic-encounters";
+import { buildPmdRows, type PmdRecruitRow } from "./build-pmd";
 
 // ---------------------------------------------------------------------------
 // Connection (own handle — db.ts is server-only and unusable under tsx)
@@ -103,6 +120,8 @@ export interface IngestReport {
   learnsets: number;
   names: number;
   references: number;
+  /** Row counts for the global natdex warehouse tables (built once per run). */
+  global: GlobalReport;
   startedAt: number;
   finishedAt: number;
 }
@@ -114,12 +133,37 @@ export interface RunIngestOptions {
   onProgress?: (msg: string) => void;
 }
 
-/** The built rows for every table `writeIndex` swaps in, one atomic call. */
+/** The built rows for the GLOBAL natdex warehouse tables (built once per run). */
+export interface GlobalRows {
+  natdexSpecies: NatdexSpeciesRow[];
+  natdexMoves: NatdexMoveRow[];
+  machines: NatdexMachineRow[];
+  classicEncounters: ClassicEncounterRow[];
+  pmd: PmdRecruitRow[];
+}
+
+/**
+ * The built rows for every table `writeIndex` swaps in, one atomic call. The
+ * `global` rows (natdex warehouse) are OPTIONAL: they are format-independent and
+ * built ONCE per run, so a caller (e.g. the run.test.ts write-phase regression)
+ * that only exercises the per-format tables omits them and leaves the global
+ * tables untouched.
+ */
 export interface IndexRows {
   pokemon: PokemonRow[];
   learnsets: LearnsetRow[];
   names: NameRow[];
   references: ReferenceRow[];
+  global?: GlobalRows;
+}
+
+/** Row counts for the global natdex warehouse tables (evidence / bookkeeping). */
+export interface GlobalReport {
+  natdexSpecies: number;
+  natdexMoves: number;
+  machines: number;
+  classicEncounters: number;
+  pmd: number;
 }
 
 const SCHEMA_VERSION = "2";
@@ -141,6 +185,25 @@ async function replaceTable<TTable extends PgTable & { format: AnyPgColumn }>(
   await tx.delete(table).where(inArray(table.format, formats));
   // Chunk inserts well under Postgres' 65535 bind-parameter limit (the widest
   // row, pokemon, has ~22 columns ⇒ ~11k params per 500-row chunk).
+  for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
+    const chunk = rows.slice(i, i + INSERT_CHUNK);
+    if (chunk.length > 0) await tx.insert(table).values(chunk);
+  }
+}
+
+/**
+ * Replace ALL rows in a GLOBAL (non-format-partitioned) table — delete
+ * everything, then chunked insert. Runs inside writeIndex's transaction, so it
+ * commits/rolls back atomically with the per-format swaps. Unlike replaceTable
+ * the delete is unscoped: these tables have no `format` column (natdex
+ * warehouse), so each ingest run rebuilds them wholesale.
+ */
+async function replaceGlobalTable<TTable extends PgTable>(
+  tx: IngestTx,
+  table: TTable,
+  rows: TTable["$inferInsert"][],
+): Promise<void> {
+  await tx.delete(table);
   for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
     const chunk = rows.slice(i, i + INSERT_CHUNK);
     if (chunk.length > 0) await tx.insert(table).values(chunk);
@@ -193,6 +256,24 @@ export async function writeIndex(
     report("writing reference_cache…");
     await replaceTable(tx, reference_cache, rows.references, formats);
     await writeIngestMeta(tx, reports, formats, finishedAt);
+
+    // Global natdex warehouse tables — built once per run, replaced wholesale.
+    if (rows.global) {
+      report("writing natdex_species…");
+      await replaceGlobalTable(tx, natdex_species, rows.global.natdexSpecies);
+      report("writing natdex_moves…");
+      await replaceGlobalTable(tx, natdex_moves, rows.global.natdexMoves);
+      report("writing natdex_machines…");
+      await replaceGlobalTable(tx, natdex_machines, rows.global.machines);
+      report("writing classic_encounters…");
+      await replaceGlobalTable(
+        tx,
+        classic_encounters,
+        rows.global.classicEncounters,
+      );
+      report("writing pmd_recruits…");
+      await replaceGlobalTable(tx, pmd_recruits, rows.global.pmd);
+    }
   });
 }
 
@@ -277,13 +358,45 @@ export async function runIngest(
     });
   }
 
+  // ----- Build the GLOBAL natdex warehouse tables ONCE (not per format) -----
+  // These read the committed PokeAPI/PMD snapshots (src/ingest/data/*) via fs and
+  // are format-independent, so they are built a single time per run and replaced
+  // wholesale inside the same atomic transaction as the per-format tables.
+  const global: GlobalRows = {
+    natdexSpecies: buildNatdexSpeciesRows(),
+    natdexMoves: buildNatdexMoveRows(),
+    machines: buildMachineRows(),
+    classicEncounters: buildClassicEncounterRows(),
+    pmd: buildPmdRows(),
+  };
+  const globalReport: GlobalReport = {
+    natdexSpecies: global.natdexSpecies.length,
+    natdexMoves: global.natdexMoves.length,
+    machines: global.machines.length,
+    classicEncounters: global.classicEncounters.length,
+    pmd: global.pmd.length,
+  };
+  report(
+    `[global] natdex_species: ${globalReport.natdexSpecies}, ` +
+      `natdex_moves: ${globalReport.natdexMoves}, ` +
+      `machines: ${globalReport.machines}, ` +
+      `classic_encounters: ${globalReport.classicEncounters}, ` +
+      `pmd_recruits: ${globalReport.pmd}`,
+  );
+
   // ----- Write phase (one atomic transaction — see writeIndex) -------------
   const { db, pool } = await openIngestDb();
   const finishedAt = Date.now();
   try {
     await writeIndex(
       db,
-      { pokemon: pokemonRows, learnsets: learnsetRows, names: nameRows, references: referenceRows },
+      {
+        pokemon: pokemonRows,
+        learnsets: learnsetRows,
+        names: nameRows,
+        references: referenceRows,
+        global,
+      },
       formatReports,
       formats,
       finishedAt,
@@ -299,6 +412,7 @@ export async function runIngest(
     learnsets: learnsetRows.length,
     names: nameRows.length,
     references: referenceRows.length,
+    global: globalReport,
     startedAt,
     finishedAt,
   };
