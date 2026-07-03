@@ -147,3 +147,139 @@ private extension UIColor {
     )
   }
 }
+
+// MARK: - Elevation (Theme.Shadow)
+
+extension Theme {
+  /// A two-layer drop shadow — a tight, dark **key** layer plus a soft, wide
+  /// **ambient** layer — the recipe first-class iOS surfaces use to read as
+  /// physically raised rather than outlined. Apply with `View.oakShadow(_:)`
+  /// (see `OakCard.swift`); the `oakCard` modifier folds the `card` token in
+  /// automatically and drops it entirely in dark mode (constraint 6 — dark keeps
+  /// a stroke instead).
+  ///
+  /// Radii are the SwiftUI blur radius (≈ the CSS blur value halved), so the
+  /// tokens read the same as the web design system while landing at the right
+  /// visual weight natively. Shadow is decorative only — it never carries
+  /// meaning, so there is no accessibility concern (M-AC-UI9.3).
+  struct Shadow {
+    /// One shadow pass: a color (pre-multiplied opacity), a blur radius, and an
+    /// offset. `x` defaults to 0 — Oak's elevation is straight-down light.
+    struct Layer {
+      var color: Color
+      var radius: CGFloat
+      var x: CGFloat = 0
+      var y: CGFloat
+    }
+
+    /// The tight, near-opaque contact shadow.
+    var key: Layer
+    /// The soft, wide cast shadow.
+    var ambient: Layer
+
+    /// Resting card elevation (key y=1 blur=2 @ black 8%; ambient y=8 blur=24 @ black 6%).
+    static let card = Shadow(
+      key: Layer(color: .black.opacity(0.08), radius: 1, y: 1),
+      ambient: Layer(color: .black.opacity(0.06), radius: 12, y: 8)
+    )
+
+    /// Lifted elevation for pressed/floating surfaces (key y=2 blur=6 @ 10%; ambient y=12 blur=32 @ 8%).
+    static let raised = Shadow(
+      key: Layer(color: .black.opacity(0.10), radius: 3, y: 2),
+      ambient: Layer(color: .black.opacity(0.08), radius: 16, y: 12)
+    )
+
+    /// A single-layer accent-tinted glow (y=2 blur=8 @ 25% of `color`) — for
+    /// emphasis moments like the user's own chat bubble. Both layers share the
+    /// same tinted pass so `oakShadow` renders one soft colored halo.
+    static func glow(_ color: Color) -> Shadow {
+      let layer = Layer(color: color.opacity(0.25), radius: 4, y: 2)
+      return Shadow(key: layer, ambient: layer)
+    }
+  }
+}
+
+// MARK: - Motion (Theme.Motion)
+
+extension Theme {
+  /// The shared animation vocabulary. Two springs cover almost everything —
+  /// `snappy` for direct-manipulation feedback (presses, focus, toggles) and
+  /// `smooth` for content settling in (bubbles, cards, list reflow) — plus a
+  /// `staggered` helper for cascade-in sequences.
+  ///
+  /// Callers gate every use behind `@Environment(\.accessibilityReduceMotion)`
+  /// (constraint 2): with Reduce Motion on, movement/scale becomes an opacity
+  /// crossfade or is dropped. These tokens are the *what*; the *whether* stays
+  /// the calling view's decision.
+  enum Motion {
+    /// Direct-feedback spring — fast, lightly damped. Presses, focus, toggles.
+    static let snappy: Animation = .spring(response: 0.28, dampingFraction: 0.8)
+
+    /// Content-settling spring — slower, well damped. Bubbles, cards, reflow.
+    static let smooth: Animation = .spring(response: 0.45, dampingFraction: 0.85)
+
+    /// `base` delayed by `step × index` — the per-item offset that turns a batch
+    /// appearance into a cascade. Index 0 plays immediately.
+    static func staggered(_ index: Int, base: Animation = smooth, step: Double = 0.04) -> Animation {
+      base.delay(step * Double(index))
+    }
+  }
+}
+
+// MARK: - Type gradients
+
+extension Theme {
+  /// A diagonal (top-leading → bottom-trailing) wash of a Pokémon type's brand
+  /// color, faint enough (12% → 4%; dark 18% → 6%) to tint a hero header or
+  /// subject card without competing with its text. Pair with the type's label —
+  /// the gradient is enhancement, never the sole carrier of the type (M-AC-UI9.3).
+  ///
+  /// Pass `scheme` to bake in a fixed appearance; omit it (`nil`) for a wash that
+  /// re-resolves live as the system toggles light/dark.
+  static func typeGradient(_ name: String, in scheme: ColorScheme? = nil) -> LinearGradient {
+    let base = type(name)
+    return LinearGradient(
+      colors: [
+        washColor(base, light: 0.12, dark: 0.18, scheme: scheme),
+        washColor(base, light: 0.04, dark: 0.06, scheme: scheme),
+      ],
+      startPoint: .topLeading,
+      endPoint: .bottomTrailing
+    )
+  }
+
+  /// A two-type diagonal wash — `primary` anchored at the top-leading corner,
+  /// `secondary` at the bottom-trailing — for dual-type subjects. Falls back to
+  /// the single-type wash when `secondary` is nil/blank. The washes track the
+  /// active appearance automatically.
+  static func typeGradient(primary: String, secondary: String?) -> LinearGradient {
+    guard let secondary, !secondary.trimmingCharacters(in: .whitespaces).isEmpty else {
+      return typeGradient(primary)
+    }
+    return LinearGradient(
+      colors: [
+        washColor(type(primary), light: 0.12, dark: 0.18, scheme: nil),
+        washColor(type(secondary), light: 0.08, dark: 0.12, scheme: nil),
+      ],
+      startPoint: .topLeading,
+      endPoint: .bottomTrailing
+    )
+  }
+
+  /// `base` at a scheme-dependent opacity. With an explicit `scheme` the alpha is
+  /// baked; with `nil` it returns a dynamic color that re-resolves per trait
+  /// collection so a single gradient value adapts to appearance changes.
+  private static func washColor(
+    _ base: Color, light: Double, dark: Double, scheme: ColorScheme?
+  ) -> Color {
+    if let scheme {
+      return base.opacity(scheme == .dark ? dark : light)
+    }
+    return Color(
+      uiColor: UIColor { traits in
+        let alpha = traits.userInterfaceStyle == .dark ? dark : light
+        return UIColor(base).resolvedColor(with: traits).withAlphaComponent(alpha)
+      }
+    )
+  }
+}
