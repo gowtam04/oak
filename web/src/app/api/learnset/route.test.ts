@@ -15,6 +15,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import { reference_cache } from "@/data/schema";
+import type { MoveDetail } from "@/agent/schemas";
+
 import {
   createPgSchema,
   installAsSingleton,
@@ -33,8 +36,37 @@ function req(params: Record<string, string>): Request {
   return new Request(`http://test.local/api/learnset?${qs}`);
 }
 
+// Garchomp's fixture learnset includes Earthquake — seed its reference-cache
+// detail so the F1 metadata columns (type/damage_class/power) have something
+// real to hydrate from.
+const EARTHQUAKE: MoveDetail = {
+  found: true,
+  display_name: "Earthquake",
+  type: "ground",
+  damage_class: "physical",
+  power: 100,
+  accuracy: 100,
+  pp: 10,
+  priority: 0,
+  target: "all-other-pokemon",
+  effect_short: "Hits every other Pokémon on the field.",
+  effect_full: "Inflicts regular damage on every other active Pokémon.",
+};
+
 beforeAll(async () => {
-  fix = await createPgSchema({ seed: "tools" });
+  fix = await createPgSchema({
+    seed: "tools",
+    after: async (db) => {
+      await db.insert(reference_cache).values({
+        format: SV,
+        resource_key: "move/earthquake",
+        resource_kind: "move",
+        payload: JSON.stringify(EARTHQUAKE),
+        endpoint_url: "@pkmn/dex (Pokémon Showdown)",
+        fetched_at: 0,
+      });
+    },
+  });
   await installAsSingleton(fix);
   route = await import("./route");
 });
@@ -79,5 +111,34 @@ describe("GET /api/learnset", () => {
     const res = await route.GET(req({ pokemon: "not-a-mon", format: SV }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ moves: [] });
+  });
+
+  it("carries type/damage_class/power (F1) for a move with cached detail", async () => {
+    const res = await route.GET(req({ pokemon: "garchomp", format: SV }));
+    const body = (await res.json()) as {
+      moves: {
+        slug: string;
+        type?: string;
+        damage_class?: string;
+        power?: number | null;
+      }[];
+    };
+    const earthquake = body.moves.find((m) => m.slug === "earthquake");
+    expect(earthquake).toMatchObject({
+      type: "ground",
+      damage_class: "physical",
+      power: 100,
+    });
+  });
+
+  it("omits the F1 metadata fields for a move with no cached detail", async () => {
+    const res = await route.GET(req({ pokemon: "garchomp", format: SV }));
+    const body = (await res.json()) as { moves: Record<string, unknown>[] };
+    // dragon-claw is in the fixture learnset but has no reference_cache row.
+    const dragonClaw = body.moves.find((m) => m.slug === "dragon-claw");
+    expect(dragonClaw).toBeDefined();
+    expect(dragonClaw).not.toHaveProperty("type");
+    expect(dragonClaw).not.toHaveProperty("damage_class");
+    expect(dragonClaw).not.toHaveProperty("power");
   });
 });

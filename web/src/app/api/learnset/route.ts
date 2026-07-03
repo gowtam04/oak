@@ -10,7 +10,9 @@
  *   ?format=scarlet-violet|champions        (snapshot at open time, BR-AV-7)
  *
  * Response (always a 200 for in-domain results, mirroring /api/sprites):
- *   - 200 { moves: { slug, display_name }[] }   (unknown species ⇒ empty list)
+ *   - 200 { moves: { slug, display_name, type?, damage_class?, power? }[] }
+ *     (unknown species ⇒ empty list; the F1 metadata fields ride along from the
+ *     reference cache and are simply absent for a move with no cached detail)
  *   - 400 { error } for a malformed/missing param
  *
  * No auth gate — public Pokédex data; works for guests. Never throws for
@@ -47,13 +49,23 @@ export async function GET(req: Request): Promise<Response> {
       format,
       db,
     );
-    // Hydrate display names (fall back to the slug), then sort by display name
-    // for a stable, friendly dropdown order.
+    // Hydrate display names (fall back to the slug) + the F1 metadata fields
+    // (type/damage_class/power, absent when the move has no cached detail),
+    // then sort by display name for a stable, friendly dropdown order.
     const moves = learned
-      .map((m) => ({
-        slug: m.moveSlug,
-        display_name: summaries.get(m.moveSlug)?.displayName ?? m.moveSlug,
-      }))
+      .map((m) => {
+        const summary = summaries.get(m.moveSlug);
+        return {
+          slug: m.moveSlug,
+          display_name: summary?.displayName ?? m.moveSlug,
+          // summary is either absent (field truly unknown ⇒ undefined, drops
+          // out of the JSON body) or present with damageClass/power already
+          // normalized to `null` (never undefined) by moveSummaries.
+          type: summary?.type,
+          damage_class: summary?.damageClass,
+          power: summary?.power,
+        };
+      })
       .sort((a, b) => a.display_name.localeCompare(b.display_name));
 
     return json(200, { moves });

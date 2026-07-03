@@ -33,8 +33,11 @@ import type { TeamMember } from "@/data/teams/team-schema";
 import type { TeamWarning } from "@/lib/api/teams-client";
 import type { SpriteRef } from "@/lib/api/sprites-client";
 import { type Format } from "@/data/formats";
-import { fetchLearnset } from "@/lib/api/learnset-client";
+import { fetchLearnset, type LearnsetOption } from "@/lib/api/learnset-client";
+import { guessShowdownAniSpriteUrl } from "@/lib/sprites";
 import EntityPicker from "./EntityPicker";
+import TypeBadge from "@/components/TypeBadge";
+import type { TypeName } from "@/agent/schemas";
 import {
   evBudgetFor,
   NATURE_EFFECTS,
@@ -167,7 +170,8 @@ export default function TeamMemberPanel({
 
   // Legal movepool for the focused species — the Move pickers offer ONLY these
   // (a species' learnset), not the whole move index. Refetched per species.
-  const [movepool, setMovepool] = useState<PickerOption[]>([]);
+  // Carries the F1 metadata (type/damage_class/power) alongside slug/name.
+  const [movepool, setMovepool] = useState<LearnsetOption[]>([]);
   useEffect(() => {
     const species = member.species;
     if (!species) {
@@ -195,6 +199,12 @@ export default function TeamMemberPanel({
     });
   };
 
+  // Metadata (type/damage_class/power) per move slug, for the moves table's
+  // read-only columns. Rebuilt from `movepool` on every fetch.
+  const moveMeta = new Map<string, LearnsetOption>(
+    movepool.map((m) => [m.slug, m]),
+  );
+
   // Moves are edited as four boxes; emit the non-empty slugs in order.
   const moveInputs = [0, 1, 2, 3].map((i) => member.moves[i] ?? "");
   const setMove = (index: number, value: string) => {
@@ -211,7 +221,20 @@ export default function TeamMemberPanel({
 
   const evTotal = STAT_ROWS.reduce((sum, r) => sum + member.evs[r.spread], 0);
   const evOver = evTotal > budget.total;
-  const spriteUrl = spriteRef?.sprite_url ?? null;
+  // F2: prefer the animated Showdown GIF (guessed from the slug when the DB's
+  // static sprite_url isn't already one) and fall back to that static url on a
+  // load error — one-shot, reset whenever the focused species/sprite changes.
+  const staticSpriteUrl = spriteRef?.sprite_url ?? null;
+  const preferredSpriteUrl = member.species
+    ? staticSpriteUrl?.endsWith(".gif")
+      ? staticSpriteUrl
+      : guessShowdownAniSpriteUrl(member.species)
+    : null;
+  const [spriteErrored, setSpriteErrored] = useState(false);
+  useEffect(() => {
+    setSpriteErrored(false);
+  }, [member.species, staticSpriteUrl]);
+  const spriteUrl = spriteErrored ? staticSpriteUrl : preferredSpriteUrl;
   const types = spriteRef?.types ?? [];
   // A Mega must hold its stone — auto-filled by the editor and locked here.
   const requiredItem = spriteRef?.required_item ?? null;
@@ -270,7 +293,21 @@ export default function TeamMemberPanel({
           <span className="team-member-panel__sprite">
             {spriteUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={spriteUrl} alt="" aria-hidden loading="lazy" />
+              <img
+                src={spriteUrl}
+                alt=""
+                aria-hidden
+                loading="lazy"
+                onError={() => {
+                  if (
+                    !spriteErrored &&
+                    staticSpriteUrl &&
+                    staticSpriteUrl !== spriteUrl
+                  ) {
+                    setSpriteErrored(true);
+                  }
+                }}
+              />
             ) : (
               <span className="team-member-panel__sprite-empty" aria-hidden />
             )}
@@ -344,23 +381,52 @@ export default function TeamMemberPanel({
 
       <fieldset className="team-member-panel__moves" data-testid={id("moves")}>
         <legend className="team-member-panel__moves-legend">Moves</legend>
-        <div className="team-member-panel__moves-grid">
-          {[0, 1, 2, 3].map((i) => (
-            <EntityPicker
-              key={i}
-              options={movepool}
-              format={format}
-              value={moveInputs[i]!}
-              onChange={(v) => setMove(i, v)}
-              testid={id(`move-${i}`)}
-              ariaLabel={`Move ${i + 1}`}
-              placeholder={
-                member.species ? `Move ${i + 1}` : "Select a species first"
-              }
-              disabled={!member.species}
-            />
-          ))}
-        </div>
+        <table className="team-member-panel__moves-table">
+          <thead>
+            <tr>
+              <th>Move</th>
+              <th>Type</th>
+              <th>Category</th>
+              <th>Power</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[0, 1, 2, 3].map((i) => {
+              const meta = moveMeta.get(moveInputs[i]!);
+              return (
+                <tr key={i}>
+                  <td>
+                    <EntityPicker
+                      options={movepool}
+                      format={format}
+                      value={moveInputs[i]!}
+                      onChange={(v) => setMove(i, v)}
+                      testid={id(`move-${i}`)}
+                      ariaLabel={`Move ${i + 1}`}
+                      placeholder={
+                        member.species ? `Move ${i + 1}` : "Select a species first"
+                      }
+                      disabled={!member.species}
+                    />
+                  </td>
+                  <td data-testid={id(`move-${i}-type`)}>
+                    {meta?.type ? (
+                      <TypeBadge type={meta.type as TypeName} />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td data-testid={id(`move-${i}-category`)}>
+                    {meta?.damage_class ? titleizeSlug(meta.damage_class) : "—"}
+                  </td>
+                  <td data-testid={id(`move-${i}-power`)}>
+                    {meta?.power != null ? meta.power : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </fieldset>
 
       <div className="team-member-panel__meta-grid">
