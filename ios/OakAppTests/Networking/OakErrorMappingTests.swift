@@ -12,7 +12,7 @@ struct OakErrorMappingTests {
 
   private func response(_ status: Int, headers: [String: String] = [:]) -> HTTPURLResponse {
     HTTPURLResponse(
-      url: URL(string: "https://oak-gowtam.fly.dev/api/test")!,
+      url: URL(string: "https://oak.gowtam.ai/api/test")!,
       statusCode: status,
       httpVersion: "HTTP/1.1",
       headerFields: headers

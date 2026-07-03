@@ -131,9 +131,10 @@ The backend base URL is selected by build configuration in
   the Debug config by `project.yml`).
 - **Release** scheme → **production**.
 
-There is no dedicated staging Fly app yet, so `staging` currently points at the
-production host (`oak-gowtam.fly.dev`). Point `BaseURL.staging` at a real staging app
-before submission if one is created (see `BaseURL.swift` TODO and
+The public/canonical host is **oak.gowtam.ai**; the app runs on Fly.io as the
+internal host `oak-gowtam.fly.dev`. There is no dedicated staging Fly app yet, so
+`staging` currently points at production. Point `BaseURL.staging` at a real staging
+app before submission if one is created (see
 `docs/features/iphone-app/architecture/deployment.md`).
 
 ## Deferred human checkpoints

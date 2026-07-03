@@ -194,10 +194,10 @@ export default function ChatThread({
           data-testid="chat-empty"
         >
           <span className="chat-empty__wordmark">Oak</span>
-          <p className="chat-empty__invite">
+          <h1 className="chat-empty__invite">
             Ask anything about Pokémon — team-building filters, stat math, damage
             calcs, or a quick Pokédex lookup.
-          </p>
+          </h1>
           <div
             className="chat-empty__scope-hint"
             data-testid="chat-empty-scope-hint"

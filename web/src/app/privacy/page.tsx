@@ -5,8 +5,11 @@ import { OPERATOR_ACCESS_DISCLOSURE_MARKDOWN } from "@/components/admin/operator
 import Markdown from "@/components/Markdown";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Oak",
+  title: "Privacy Policy",
   description: "How Oak collects, uses, and protects your data.",
+  alternates: {
+    canonical: "/privacy",
+  },
 };
 
 /**

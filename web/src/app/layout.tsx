@@ -4,10 +4,29 @@ import { Fredoka, Nunito_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import "../components/artifact/artifact-viewer.css";
 
+import { SITE_DESCRIPTION, SITE_NAME, SITE_ORIGIN, SITE_TITLE, WEB_APP_JSONLD } from "@/lib/site";
+
 export const metadata: Metadata = {
-  title: "Oak",
-  description:
-    "Ask anything about Pokémon — answers backed by reasoning, battle math, and cited sources.",
+  metadataBase: new URL(SITE_ORIGIN),
+  title: {
+    default: SITE_TITLE,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    siteName: SITE_NAME,
+    type: "website",
+    url: "/",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
   icons: {
     icon: "/icon.svg",
     apple: "/apple-icon.png",
@@ -67,7 +86,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH_THEME }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: WEB_APP_JSONLD }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

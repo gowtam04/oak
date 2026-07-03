@@ -6,11 +6,10 @@ import Foundation
 /// (deployment.md "Environments"). The switch is the `OAK_STAGING` compilation
 /// condition, set only in the Debug config by `project.yml`.
 ///
-/// Placeholders: the backend runs on Fly.io as the app `oak-gowtam`, whose default
-/// hostname is `oak-gowtam.fly.dev`. The hobby tier has no dedicated staging app
-/// yet, so staging points at production for now.
-/// TODO(P1): confirm the production host and point staging at a Fly staging app if
-/// one is created before App Store submission.
+/// The canonical public host is **oak.gowtam.ai**. The internal Fly host
+/// (`oak-gowtam.fly.dev`) remains live and serves /api/* for older builds.
+/// Staging == production for now; point staging at a dedicated Fly staging app if one
+/// is created before App Store submission.
 enum BaseURL {
   /// The base URL for the active build configuration.
   static let current: URL = {
@@ -21,9 +20,9 @@ enum BaseURL {
     #endif
   }()
 
-  /// Production backend (Fly.io app `oak-gowtam`).
-  static let production = URL(string: "https://oak-gowtam.fly.dev")!
+  /// Production backend (oak.gowtam.ai).
+  static let production = URL(string: "https://oak.gowtam.ai")!
 
   /// Staging backend (currently the same host as production — see note above).
-  static let staging = URL(string: "https://oak-gowtam.fly.dev")!
+  static let staging = URL(string: "https://oak.gowtam.ai")!
 }

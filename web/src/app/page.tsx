@@ -13,6 +13,7 @@ import SidebarToggle from "@/components/controls/SidebarToggle";
 import ScopeChip from "@/components/controls/ScopeChip";
 import VoiceOverlay from "@/components/voice/VoiceOverlay";
 import SavedTeamAutoOpen from "@/components/teams/SavedTeamAutoOpen";
+import LandingSection from "@/components/landing/LandingSection";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
@@ -640,6 +641,8 @@ export default function Home() {
                 ) : undefined
               }
             />
+
+            {showEmptyState && <LandingSection />}
 
             {!heroComposer && composer}
           </div>

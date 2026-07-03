@@ -14,7 +14,16 @@
  */
 
 import { sql } from "drizzle-orm";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  it,
+  expect,
+  vi,
+} from "vitest";
 
 // reference-cache.ts statically `import "server-only"` (it throws under the node
 // test env). Neutralize it; we inject our own DB handle so @/data/db is never
@@ -23,7 +32,13 @@ vi.mock("server-only", () => ({}));
 
 import type { OakDb } from "@/data/db";
 import { reference_cache, searchable_names } from "@/data/schema";
-import { getReference, moveSummaries } from "@/data/repos/reference-cache";
+import {
+  allMoveSummaries,
+  entityFormats,
+  getReference,
+  listNamesByKind,
+  moveSummaries,
+} from "@/data/repos/reference-cache";
 import type {
   MoveDetail,
   TypeMatchupsDetail,
@@ -273,5 +288,128 @@ describe("getReference — format scoping", () => {
     const sv = await getReference("move", "fake", SV, { db });
     // Only the SV row matches; the champions-only "fakeout-champ" must not appear.
     expect(sv).toEqual({ found: false, suggestions: ["fake-out"] });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reference-page reads — driven off the shared "tools" fixture (real
+// searchable_names + reference_cache in test/fixtures/tools-fixture.ts).
+// ---------------------------------------------------------------------------
+
+describe("reference-page reads (tools fixture)", () => {
+  let toolsFix: PgFixture;
+  let tdb: OakDb;
+
+  beforeAll(async () => {
+    toolsFix = await createPgSchema({ seed: "tools" });
+    tdb = toolsFix.db;
+  }, 60_000);
+
+  afterAll(async () => {
+    await toolsFix?.cleanup();
+  });
+
+  describe("listNamesByKind", () => {
+    it("lists moves alphabetical by display name", async () => {
+      const rows = await listNamesByKind("move", SV, tdb);
+      expect(rows.map((r) => r.slug)).toEqual([
+        "earthquake", // Earthquake
+        "fake-out", // Fake Out
+        "flamethrower", // Flamethrower
+        "trick-room", // Trick Room
+        "will-o-wisp", // Will-O-Wisp
+        "wish", // Wish
+      ]);
+    });
+
+    it("lists abilities alphabetical by display name", async () => {
+      const rows = await listNamesByKind("ability", SV, tdb);
+      expect(rows.map((r) => r.slug)).toEqual([
+        "armor-tail", // Armor Tail
+        "flash-fire", // Flash Fire
+        "intimidate", // Intimidate
+        "rough-skin", // Rough Skin
+        "sand-veil", // Sand Veil
+      ]);
+    });
+
+    it("lists items and carries the display name", async () => {
+      const rows = await listNamesByKind("item", SV, tdb);
+      expect(rows).toEqual([
+        { slug: "leftovers", displayName: "Leftovers" },
+        { slug: "life-orb", displayName: "Life Orb" },
+      ]);
+    });
+
+    it("is format-scoped: champions has only its one move", async () => {
+      const rows = await listNamesByKind("move", CH, tdb);
+      expect(rows.map((r) => r.slug)).toEqual(["earthquake"]);
+    });
+  });
+
+  describe("entityFormats", () => {
+    it("returns the single format for an SV-only move (flamethrower)", async () => {
+      expect(await entityFormats("move", "flamethrower", tdb)).toEqual([
+        "scarlet-violet",
+      ]);
+    });
+
+    it("returns FORMATS-ordered formats for a move in several scopes", async () => {
+      // earthquake is in searchable_names under BOTH scarlet-violet AND champions
+      // in the tools fixture (the plan's "champions-only" note does not hold here).
+      expect(await entityFormats("move", "earthquake", tdb)).toEqual([
+        "scarlet-violet",
+        "champions",
+      ]);
+    });
+
+    it("returns [gen-7] for the gen-7-only move (hidden-power)", async () => {
+      expect(await entityFormats("move", "hidden-power", tdb)).toEqual([
+        "gen-7",
+      ]);
+    });
+
+    it("covers pokemon across every scope it appears in (garchomp)", async () => {
+      expect(await entityFormats("pokemon", "garchomp", tdb)).toEqual([
+        "scarlet-violet",
+        "champions",
+        "gen-7",
+      ]);
+    });
+
+    it("returns [] for an unknown entity", async () => {
+      expect(await entityFormats("ability", "no-such-ability", tdb)).toEqual([]);
+    });
+  });
+
+  describe("allMoveSummaries", () => {
+    it("batches every move summary for the format", async () => {
+      // The SV reference_cache holds exactly one move row: move/flamethrower.
+      const map = await allMoveSummaries(SV, tdb);
+      expect(map.size).toBe(1);
+      expect(map.get("flamethrower")).toEqual({
+        displayName: "Flamethrower",
+        type: "fire",
+        damageClass: "special",
+        power: 90,
+      });
+    });
+
+    it("is format-scoped (champions holds move/earthquake)", async () => {
+      const map = await allMoveSummaries(CH, tdb);
+      expect(map.size).toBe(1);
+      expect(map.get("earthquake")?.displayName).toBe("Earthquake");
+    });
+
+    it("returns an empty map when the table is missing", async () => {
+      const empty = await createPgSchema({ seed: "none" });
+      try {
+        await empty.db.execute(sql`DROP TABLE reference_cache`);
+        const map = await allMoveSummaries(SV, empty.db);
+        expect(map.size).toBe(0);
+      } finally {
+        await empty.cleanup();
+      }
+    }, 60_000);
   });
 });
