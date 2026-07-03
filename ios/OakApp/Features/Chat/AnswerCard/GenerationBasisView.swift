@@ -39,11 +39,12 @@ struct GenerationBasisView: View {
 
   // MARK: Tag chip
 
+  @ViewBuilder
   private func tag(generation: String) -> some View {
     let isFallback = generationBasis.fallback
     let tint = isFallback ? Theme.warning : Theme.textSecondary
 
-    return Label {
+    let label = Label {
       Text(labelText(generation: generation))
         .fixedSize(horizontal: false, vertical: true)
     } icon: {
@@ -54,10 +55,19 @@ struct GenerationBasisView: View {
     .foregroundStyle(tint)
     .padding(.horizontal, 8)
     .padding(.vertical, 4)
-    .background(
-      RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
-        .fill(isFallback ? Theme.warning.opacity(0.15) : Theme.surface)
-    )
+
+    // A fallback keeps its warning-tinted fill (the caution the chip exists to
+    // carry); a normal tag adopts oakCard's raised-surface chrome instead of a
+    // flat `Theme.surface` fill, so it reads consistently with the rest of the
+    // card tree.
+    if isFallback {
+      label.background(
+        RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+          .fill(Theme.warning.opacity(0.15))
+      )
+    } else {
+      label.oakCard(radius: Theme.Radius.sm)
+    }
   }
 
   // MARK: Text

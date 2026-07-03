@@ -41,10 +41,7 @@ struct UncertaintyFlagsView: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(12)
-      .background(
-        Theme.warning.opacity(0.10),
-        in: RoundedRectangle(cornerRadius: Theme.Radius.md)
-      )
+      .oakCard(radius: Theme.Radius.md, tint: Theme.warning)
       // SOLID border (vs. the inferences' dashed edge) — the visual tell that
       // these are caveats, not deductions.
       .overlay(

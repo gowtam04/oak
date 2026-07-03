@@ -96,10 +96,7 @@ struct TeamBlocksView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(14)
-    .background(
-      Theme.surface,
-      in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-    )
+    .oakCard(radius: Theme.Radius.lg, tint: Theme.accent)
     .overlay(
       RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
         .strokeBorder(Theme.accent.opacity(0.25))
@@ -310,10 +307,7 @@ struct TeamBlocksView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(14)
-    .background(
-      Theme.success.opacity(0.10),
-      in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-    )
+    .oakCard(radius: Theme.Radius.lg, tint: Theme.success)
     .overlay(
       RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
         .strokeBorder(Theme.success.opacity(0.35))
