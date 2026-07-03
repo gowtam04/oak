@@ -142,6 +142,9 @@ export default function AuthDialog({
   const [feedback, setFeedback] = useState<Feedback>({ kind: "none" });
   // Remaining resend-cooldown seconds; 0 ⇒ resend available (AC-3.1).
   const [cooldown, setCooldown] = useState(0);
+  // Drives which OTP cell shows the focus ring — the real input owns focus and
+  // keyboard/paste handling; this only affects the segmented visual overlay.
+  const [codeFocused, setCodeFocused] = useState(false);
 
   const titleId = useId();
   const emailRef = useRef<HTMLInputElement>(null);
@@ -156,6 +159,7 @@ export default function AuthDialog({
       setSubmitting(false);
       setFeedback({ kind: "none" });
       setCooldown(0);
+      setCodeFocused(false);
     }
   }, [open]);
 
@@ -261,13 +265,16 @@ export default function AuthDialog({
         }}
       >
         <div className="auth-dialog__header">
-          <h2
-            id={titleId}
-            data-testid="auth-dialog-title"
-            className="auth-dialog__title"
-          >
-            {step === "email" ? "Sign in to Oak" : "Enter your code"}
-          </h2>
+          <div className="auth-dialog__heading">
+            <span className="auth-dialog__mark" aria-hidden="true" />
+            <h2
+              id={titleId}
+              data-testid="auth-dialog-title"
+              className="auth-dialog__title"
+            >
+              {step === "email" ? "Sign in to Oak" : "Enter your code"}
+            </h2>
+          </div>
           <button
             type="button"
             data-testid="auth-close"
@@ -333,21 +340,53 @@ export default function AuthDialog({
           >
             <label className="auth-dialog__label">
               6-digit code
-              <input
-                ref={codeRef}
-                data-testid="auth-code-input"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                value={code}
-                onChange={(e) =>
-                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                }
-                placeholder="123456"
-                aria-label="One-time code"
-                className="auth-dialog__input auth-dialog__input--code"
-              />
+              {/* A single real input owns all keyboard/paste/backspace behavior
+                  (native semantics for autofill + one-time-code paste); the six
+                  mono cells behind it are a purely visual overlay driven off
+                  `code`, not six separate fields. */}
+              <div className="auth-dialog__otp">
+                <input
+                  ref={codeRef}
+                  data-testid="auth-code-input"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) =>
+                    setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  onFocus={() => setCodeFocused(true)}
+                  onBlur={() => setCodeFocused(false)}
+                  aria-label="One-time code"
+                  className="auth-dialog__otp-input"
+                />
+                <div
+                  className="auth-dialog__otp-cells"
+                  data-testid="auth-otp-cells"
+                  aria-hidden="true"
+                >
+                  {Array.from({ length: 6 }, (_, i) => {
+                    const filled = i < code.length;
+                    const active = codeFocused && i === code.length;
+                    return (
+                      <span
+                        key={i}
+                        data-testid={`auth-otp-cell-${i}`}
+                        className={[
+                          "auth-dialog__otp-cell",
+                          filled && "auth-dialog__otp-cell--filled",
+                          active && "auth-dialog__otp-cell--active",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        <span className="mono-num">{code[i] ?? ""}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
             </label>
             <button
               type="submit"

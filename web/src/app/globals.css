@@ -2718,6 +2718,27 @@ button.scope-chip:focus-visible {
   gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
+/* Centered title stack (mark atop title) — the close button stays pinned
+   top-right via the header's space-between. */
+.auth-dialog__heading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+/* Same pokeball-mask recipe as the teams gate icon (`.teams-page__guest-icon`),
+   scaled down for the modal. */
+.auth-dialog__mark {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  background: color-mix(in srgb, var(--poke-red) 70%, var(--text-faint));
+  -webkit-mask: var(--icon-pokeball) center / contain no-repeat;
+  mask: var(--icon-pokeball) center / contain no-repeat;
+  opacity: 0.9;
+}
 .auth-dialog__title {
   margin: 0;
   font-family: var(--display);
@@ -2776,23 +2797,90 @@ button.scope-chip:focus-visible {
   line-height: 1.5;
   color: var(--text-strong);
 }
+/* Sunken-borderless (UI §3 "inputs invert"): sunken fill, no border at rest —
+   a border + focus ring appear only on focus, same recipe as the teams-page
+   inputs. */
 .auth-dialog__input {
   width: 100%;
   box-sizing: border-box;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
+  border: 1px solid transparent;
+  background: var(--surface-sunken);
   color: var(--text);
   font-family: var(--body);
   font-weight: 400;
   /* var(--text-input) is 16px so iOS Safari doesn't auto-zoom on focus. */
   font-size: var(--text-input);
   line-height: 1.55;
+  transition: border-color var(--motion-fast), box-shadow var(--motion-fast),
+    background var(--motion-fast);
 }
-.auth-dialog__input--code {
-  font-family: var(--mono);
+.auth-dialog__input:hover {
+  background: color-mix(in srgb, var(--surface-sunken) 72%, var(--border));
+}
+.auth-dialog__input:focus-visible {
+  outline: none;
+  background: var(--surface);
+  border-color: var(--azure);
+  box-shadow: var(--focus-ring);
+}
+
+/* ----- OTP segmented input (code step) -----------------------------------
+   ONE real <input> handles focus/typing/paste/backspace (native
+   one-time-code semantics); the six mono cells behind it are a read-only
+   visual overlay driven off `code`, not six separate fields. */
+.auth-dialog__otp {
+  position: relative;
+}
+.auth-dialog__otp-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  /* Real text stays present for screen readers / selection, just invisible —
+     the cells render the value instead. */
+  color: transparent;
+  caret-color: transparent;
+  /* >=16px keeps iOS Safari from auto-zooming on focus even though the glyphs
+     themselves are invisible. */
+  font-size: var(--text-input);
   letter-spacing: 0.3em;
+}
+.auth-dialog__otp-input:focus {
+  outline: none;
+}
+.auth-dialog__otp-cells {
+  display: flex;
+  gap: var(--space-2);
+  /* Clicks/taps pass through to the real input beneath. */
+  pointer-events: none;
+}
+.auth-dialog__otp-cell {
+  flex: 1;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: var(--surface-sunken);
+  font-size: 1.25rem;
+  color: var(--text-strong);
+  transition: border-color var(--motion-fast), box-shadow var(--motion-fast),
+    background var(--motion-fast);
+}
+.auth-dialog__otp-cell--filled {
+  background: color-mix(in srgb, var(--surface-sunken) 55%, var(--surface));
+  border-color: var(--border);
+}
+.auth-dialog__otp-cell--active {
+  border-color: var(--azure);
+  box-shadow: var(--focus-ring);
 }
 .auth-dialog__submit {
   height: 38px;
@@ -3143,6 +3231,24 @@ button.scope-chip:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-raised);
+}
+/* Guest gate specifically: true viewport centering (UI §4 screen 09) rather
+   than the shared top-margin clamp — the body becomes the flex container so
+   the card centers in the space actually left under the sticky header. */
+.teams-page__body:has(.teams-page__guest) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.teams-page__guest {
+  margin: 0;
+}
+/* The gate CTA: a standard touch-target button, not the shrunk `.tm-btn`
+   pill (its height falls back to `auto` — `--space-9`/`--space-7` are never
+   defined, so the button was sized by padding/line-height alone). */
+.teams-page__guest-cta {
+  height: var(--control-touch);
+  padding-inline: var(--space-6);
 }
 .teams-page__guest-icon,
 .teams-page__placeholder-icon,

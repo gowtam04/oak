@@ -366,6 +366,96 @@ describe("AuthDialog — change email + resend (AC-2.7, AC-3.1)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// OTP segmented cells (UI §4 screen 08) — ONE real input drives six visual
+// cells; paste/backspace are exercised through that single input exactly like
+// native browser behavior (a paste delivers the whole new value in one
+// change event, same as typing).
+// ---------------------------------------------------------------------------
+
+describe("AuthDialog — OTP segmented cells", () => {
+  it("renders six empty cells with the first cell active once the code step is focused", async () => {
+    renderDialog();
+    await gotoCodeStep();
+    const input = screen.getByTestId("auth-code-input");
+    await waitFor(() => expect(input).toHaveFocus());
+
+    for (let i = 0; i < 6; i++) {
+      expect(screen.getByTestId(`auth-otp-cell-${i}`)).toHaveTextContent("");
+    }
+    expect(screen.getByTestId("auth-otp-cell-0")).toHaveClass(
+      "auth-dialog__otp-cell--active",
+    );
+    expect(screen.getByTestId("auth-otp-cell-1")).not.toHaveClass(
+      "auth-dialog__otp-cell--active",
+    );
+  });
+
+  it("reflects typed digits into filled cells and advances the active cell", async () => {
+    renderDialog();
+    await gotoCodeStep();
+    const input = screen.getByTestId("auth-code-input");
+    await waitFor(() => expect(input).toHaveFocus());
+
+    fireEvent.change(input, { target: { value: "12" } });
+    expect(screen.getByTestId("auth-otp-cell-0")).toHaveTextContent("1");
+    expect(screen.getByTestId("auth-otp-cell-1")).toHaveTextContent("2");
+    expect(screen.getByTestId("auth-otp-cell-2")).toHaveTextContent("");
+    expect(screen.getByTestId("auth-otp-cell-0")).toHaveClass(
+      "auth-dialog__otp-cell--filled",
+    );
+    // The active ring follows the next empty slot, not a filled one.
+    expect(screen.getByTestId("auth-otp-cell-2")).toHaveClass(
+      "auth-dialog__otp-cell--active",
+    );
+    expect(screen.getByTestId("auth-otp-cell-1")).not.toHaveClass(
+      "auth-dialog__otp-cell--active",
+    );
+  });
+
+  it("fills all six cells from a single paste-shaped change event, non-digits stripped", async () => {
+    renderDialog();
+    await gotoCodeStep();
+    const input = screen.getByTestId("auth-code-input");
+
+    // A real paste delivers the whole new value in one change event — same
+    // shape as this synthetic one — so this exercises the paste path.
+    fireEvent.change(input, { target: { value: "12-345 6" } });
+    expect((input as HTMLInputElement).value).toBe("123456");
+    for (const [i, digit] of ["1", "2", "3", "4", "5", "6"].entries()) {
+      expect(screen.getByTestId(`auth-otp-cell-${i}`)).toHaveTextContent(
+        digit,
+      );
+      expect(screen.getByTestId(`auth-otp-cell-${i}`)).toHaveClass(
+        "auth-dialog__otp-cell--filled",
+      );
+    }
+    // No cell index matches a full 6-digit code, so none shows the active ring.
+    for (let i = 0; i < 6; i++) {
+      expect(screen.getByTestId(`auth-otp-cell-${i}`)).not.toHaveClass(
+        "auth-dialog__otp-cell--active",
+      );
+    }
+  });
+
+  it("backspacing shrinks the value and the active cell steps back with it", async () => {
+    renderDialog();
+    await gotoCodeStep();
+    const input = screen.getByTestId("auth-code-input");
+    await waitFor(() => expect(input).toHaveFocus());
+
+    fireEvent.change(input, { target: { value: "123456" } });
+    // Backspace removes the last character — browsers deliver this as a
+    // change event with the shortened value.
+    fireEvent.change(input, { target: { value: "12345" } });
+    expect(screen.getByTestId("auth-otp-cell-5")).toHaveTextContent("");
+    expect(screen.getByTestId("auth-otp-cell-5")).toHaveClass(
+      "auth-dialog__otp-cell--active",
+    );
+    expect(screen.getByTestId("auth-otp-cell-4")).toHaveTextContent("5");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Dismissal
 // ---------------------------------------------------------------------------
 
