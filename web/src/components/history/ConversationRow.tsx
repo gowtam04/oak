@@ -25,6 +25,12 @@ export interface ConversationRowProps {
   onRename: (title: string) => void;
   onPin: (pinned: boolean) => void;
   onDelete: () => void;
+  /**
+   * The active format filter, if any. The per-row scope badge is shown only
+   * when it adds information — i.e. no filter is applied, or the row's scope
+   * differs from the filter (fable-ui §4 screen 05). Absent ⇒ show it.
+   */
+  formatFilter?: string | null;
 }
 
 /** Compact relative time, e.g. "just now", "5m", "3h", "2d", else a date. */
@@ -47,11 +53,16 @@ export default function ConversationRow({
   onRename,
   onPin,
   onDelete,
+  formatFilter = null,
 }: ConversationRowProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(conversation.title);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Show the scope badge only when it carries information the filter doesn't
+  // already imply (no filter, or a mismatched row) — quiets the sidebar.
+  const showBadge = formatFilter === null || conversation.format !== formatFilter;
 
   useEffect(() => {
     if (editing) {
@@ -98,10 +109,14 @@ export default function ConversationRow({
         >
           <span className="conv-row__title">{conversation.title}</span>
           <span className="conv-row__meta">
-            <span data-testid="format-badge" className="conv-row__badge">
-              {scopeLabelShort(conversation.format as Format)}
+            {showBadge && (
+              <span data-testid="format-badge" className="conv-row__badge">
+                {scopeLabelShort(conversation.format as Format)}
+              </span>
+            )}
+            <span className="mono-num conv-row__time">
+              {relativeTime(conversation.updatedAt)}
             </span>
-            <span>{relativeTime(conversation.updatedAt)}</span>
           </span>
         </button>
       )}

@@ -164,6 +164,22 @@ export default function Home() {
     }
   }, []);
 
+  // Narrow-viewport flag (fable-ui §4 screen 01). On desktop the empty-state
+  // composer is promoted into the centered hero; on a phone (≤640px) it stays
+  // bottom-docked for thumb reach. Default `false` (desktop-first) so the SSR /
+  // first-client render places the empty composer in the hero with no hydration
+  // mismatch and no flash for the common (desktop) case; a phone corrects to
+  // docked once this resolves post-mount. Kept in sync on resize.
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia?.("(max-width: 640px)");
+    if (!mq) return;
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
   // Auth identity (account-creation design.md § API "/api/auth/me"; AUTH-US-1 /
   // AC-1.2). Auth is a SEPARATE concern from the conversation: it lives in a
   // cookie/account, never in `sessionId`/`turns[]`, so signing in or out must
@@ -358,6 +374,13 @@ export default function Home() {
   const chatStatus: ChatStatus =
     status === "thinking" ? "streaming" : status === "error" ? "error" : "idle";
 
+  // Empty state = no committed turns and nothing in flight. On desktop the
+  // composer is promoted into the hero then (screen 01); on mobile, or once a
+  // turn exists, it stays bottom-docked. `heroComposer` decides which of the two
+  // DOM slots renders the SINGLE composer instance.
+  const showEmptyState = turns.length === 0 && chatStatus === "idle";
+  const heroComposer = showEmptyState && !narrow;
+
   // The scope in effect for the conversation: an explicit chip pick, else the
   // server-resolved scope once a turn has run (GS-C), else the champions
   // default. Drives BOTH the header scope chip and the artifact viewer (B-4) —
@@ -368,6 +391,18 @@ export default function Home() {
   const handleAskInChat = useCallback((text: string) => {
     setPrefill({ text });
   }, []);
+
+  // The single composer element, placed in either the hero slot or the bottom
+  // dock (never both) — see `heroComposer` at the render site.
+  const composer = (
+    <Composer
+      onSend={handleSend}
+      disabled={status === "thinking"}
+      streaming={status === "thinking"}
+      onStop={handleStop}
+      prefill={prefill}
+    />
+  );
 
   // Header overflow menu (mobile): below 640px the secondary controls (theme +
   // the signed-in team controls) collapse behind a single gear button so they
@@ -556,15 +591,23 @@ export default function Home() {
               onRetry={retry}
               onFollowUp={handleSend}
               imagePreviews={imagePreviews}
+              // The composer is a single instance rendered in exactly one of two
+              // slots: the empty-state hero (desktop) here, or bottom-docked
+              // below. `heroComposer` is the sole switch, so it never mounts twice.
+              composerSlot={heroComposer ? composer : undefined}
+              scopeChipSlot={
+                heroComposer ? (
+                  <ScopeChip
+                    format={displayFormat}
+                    onSelect={setScopeSeed}
+                    disabled={status === "thinking"}
+                    testId="scope-chip-hero"
+                  />
+                ) : undefined
+              }
             />
 
-            <Composer
-              onSend={handleSend}
-              disabled={status === "thinking"}
-              streaming={status === "thinking"}
-              onStop={handleStop}
-              prefill={prefill}
-            />
+            {!heroComposer && composer}
           </div>
 
           {/* Headless: auto-opens a just-saved team in the viewer on arrival. */}

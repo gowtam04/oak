@@ -40,6 +40,7 @@ import type {
   QuestionOption,
   TypeName,
 } from "@/agent/schemas";
+import type { ReactNode } from "react";
 import type {
   ToolActivityEvent,
   ErrorEvent,
@@ -333,6 +334,18 @@ export interface ChatThreadProps {
    * Absent/empty ⇒ a text-only turn.
    */
   imagePreviews?: Record<string, string[]>;
+  /**
+   * The composer, promoted into the empty-state hero (fable-ui §4 screen 01).
+   * When present, the empty state renders it centered between the invite line
+   * and the starter chips. Absent ⇒ the composer stays bottom-docked (its
+   * default), which is always the case on mobile and after the first turn.
+   */
+  composerSlot?: ReactNode;
+  /**
+   * The interactive scope chip, rendered inline in the empty-state scope hint
+   * (fable-ui §4 screen 01) so the concept is explained next to its control.
+   */
+  scopeChipSlot?: ReactNode;
 }
 
 /** Props for the `Composer` input box. */

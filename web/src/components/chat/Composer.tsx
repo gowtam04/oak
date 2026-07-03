@@ -205,7 +205,9 @@ export default function Composer({
           {attachError}
         </div>
       )}
-      <div className="composer__field">
+      <div
+        className={"composer__field" + (streaming ? " composer__field--live" : "")}
+      >
         <button
           className="composer__attach"
           data-testid="composer-attach"

@@ -55,6 +55,7 @@ export default function ConversationList({
       key={c.id}
       conversation={c}
       active={c.id === activeId}
+      formatFilter={formatFilter}
       onOpen={() => onOpen(c.id)}
       onRename={(title) => onRename(c.id, title)}
       onPin={(p) => onPin(c.id, p)}
@@ -109,11 +110,25 @@ export default function ConversationList({
 
       <div className="conv-list__scroll">
         {conversations.length === 0 ? (
-          <p data-testid="history-empty" className="conv-list__empty">
-            {filtersActive
-              ? "No conversations match your search."
-              : "No conversations yet. Start chatting to build your history."}
-          </p>
+          <div data-testid="history-empty" className="conv-list__empty">
+            {filtersActive ? (
+              <p className="conv-list__empty-text">
+                No conversations match your search.
+              </p>
+            ) : (
+              <>
+                <p className="conv-list__empty-text">No conversations yet.</p>
+                <button
+                  type="button"
+                  className="conv-list__empty-cta"
+                  data-testid="history-empty-cta"
+                  onClick={onNewChat}
+                >
+                  Start your first chat
+                </button>
+              </>
+            )}
+          </div>
         ) : (
           <>
             {pinned.length > 0 && (
