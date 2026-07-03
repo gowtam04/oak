@@ -12,7 +12,16 @@ export async function generateSitemaps() {
 }
 
 export default async function sitemap({ id }: { id: number }): Promise<MetadataRoute.Sitemap> {
-  if (id === 0) {
+  // Next's own route layer (the generated `/sitemap/[__metadata_id__]` handler)
+  // passes `id` through as a STRING (e.g. "1"), not the number `generateSitemaps`
+  // returned — only direct in-process calls (like this file's unit test) get a
+  // real number. Coerce once up front so every branch below is reachable; a
+  // strict `id === 1` etc. against the string form silently falls through to
+  // whichever branch happens to be last (it always "worked" in tests because
+  // the test calls this function directly with numbers).
+  const shardId = Number(id);
+
+  if (shardId === 0) {
     return [
       { url: `${SITE_ORIGIN}/`, changeFrequency: "weekly", priority: 1 },
       { url: `${SITE_ORIGIN}/pokedex`, changeFrequency: "weekly", priority: 0.8 },
@@ -47,7 +56,7 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
 
   const lastModified = (await referenceLastModifiedUncached(db)) ?? undefined;
 
-  if (id === 1) {
+  if (shardId === 1) {
     const { rows, extras } = await loadPokedexIndexUncached(db);
     return [...rows, ...extras].map((r) => ({
       url: `${SITE_ORIGIN}/pokedex/${r.slug}`,
@@ -56,7 +65,7 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
       priority: 0.6,
     }));
   }
-  if (id === 2) {
+  if (shardId === 2) {
     const { rows } = await loadMovesIndexUncached(db);
     return rows.map((r) => ({
       url: `${SITE_ORIGIN}/moves/${r.slug}`,
@@ -65,7 +74,7 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
       priority: 0.5,
     }));
   }
-  if (id === 3) {
+  if (shardId === 3) {
     const { rows } = await loadAbilitiesIndexUncached(db);
     return rows.map((r) => ({
       url: `${SITE_ORIGIN}/abilities/${r.slug}`,
@@ -74,12 +83,15 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
       priority: 0.5,
     }));
   }
-  // id === 4
-  const { rows } = await loadItemsIndexUncached(db);
-  return rows.map((r) => ({
-    url: `${SITE_ORIGIN}/items/${r.slug}`,
-    ...(lastModified ? { lastModified } : {}),
-    changeFrequency: "monthly" as const,
-    priority: 0.5,
-  }));
+  if (shardId === 4) {
+    const { rows } = await loadItemsIndexUncached(db);
+    return rows.map((r) => ({
+      url: `${SITE_ORIGIN}/items/${r.slug}`,
+      ...(lastModified ? { lastModified } : {}),
+      changeFrequency: "monthly" as const,
+      priority: 0.5,
+    }));
+  }
+
+  throw new Error(`unknown sitemap shard: ${id}`);
 }
