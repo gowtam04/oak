@@ -965,6 +965,41 @@ export const runSqlOutputSchema = z.union([
 ]);
 
 // ===========================================================================
+// T19 — search_wiki (hybrid-lexical retrieval over the Fandom prose corpus;
+// Oak v2 §4.2/§5). Answers anime/movie/character/PMD/lore/glitch/trivia
+// questions Oak's structured @pkmn + natdex data can't. Backed by wiki-repo.ts
+// (the sole reader of wiki_page/wiki_chunk), Postgres built-in full-text search
+// (websearch_to_tsquery + ts_rank_cd, ts_headline snippets). NEVER an error:
+// an empty corpus OR no match both return `{ results: [] }` — this tool has no
+// upstream to fail. Results are community-sourced (CC BY-SA) prose excerpts, so
+// the model MUST cite them by URL and treat them as non-authoritative.
+// ===========================================================================
+
+export const searchWikiInputSchema = z.object({
+  /** Natural-language search query (1–300 chars). */
+  query: z.string().min(1).max(300),
+  /** Max results to return (1–8, default 5). */
+  limit: z.number().int().min(1).max(8).optional(),
+});
+
+export const wikiResultSchema = z.object({
+  /** Page title, e.g. "Ash Ketchum". */
+  title: z.string(),
+  /** Section heading the snippet came from. */
+  section: z.string(),
+  /** Highlighted prose excerpt (ts_headline), best-matching fragments. */
+  snippet: z.string(),
+  /** Canonical page URL — cite this. */
+  url: z.string(),
+  /** Epoch ms of the page's last wiki revision; null if unknown. */
+  revised_at: z.number().nullable(),
+});
+
+export const searchWikiOutputSchema = z.object({
+  results: z.array(wikiResultSchema),
+});
+
+// ===========================================================================
 // Inferred TypeScript types
 // ===========================================================================
 
@@ -1036,6 +1071,10 @@ export type RunSqlRows = z.infer<typeof runSqlRowsSchema>;
 export type RunSqlError = z.infer<typeof runSqlErrorSchema>;
 export type RunSqlOutput = z.infer<typeof runSqlOutputSchema>;
 
+export type SearchWikiInput = z.infer<typeof searchWikiInputSchema>;
+export type WikiResult = z.infer<typeof wikiResultSchema>;
+export type SearchWikiOutput = z.infer<typeof searchWikiOutputSchema>;
+
 /** The single structured output the agent emits per turn (T11). */
 export type OakAnswer = z.infer<typeof oakAnswerSchema>;
 
@@ -1103,6 +1142,8 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   web_search: toJsonSchema(webSearchInputSchema),
   // T18 — guarded read-only SQL over Oak's offline warehouse (aggregations).
   run_sql: toJsonSchema(runSqlInputSchema),
+  // T19 — full-text retrieval over the self-built Fandom prose corpus (lore/anime).
+  search_wiki: toJsonSchema(searchWikiInputSchema),
 };
 
 /** The generated `submit_answer` (OakAnswer) JSON Schema. */
@@ -1130,6 +1171,7 @@ export const TOOL_NAMES = [
   "get_learnset",
   "web_search",
   "run_sql",
+  "search_wiki",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

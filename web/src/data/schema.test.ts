@@ -183,11 +183,14 @@ describe("Drizzle migration — table creation", () => {
         "natdex_moves",
         "classic_encounters",
         "pmd_recruits",
+        // Fandom wiki corpus (Oak v2, NOT format-scoped) — added by the 0010 migration.
+        "wiki_page",
+        "wiki_chunk",
       ]),
     );
-    // Exactly 19 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
-    // + 1 champions-items + 5 natdex warehouse).
-    expect(tables).toHaveLength(19);
+    // Exactly 21 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
+    // + 1 champions-items + 5 natdex warehouse + 2 wiki corpus).
+    expect(tables).toHaveLength(21);
   });
 
   it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {

@@ -61,6 +61,7 @@ import { listTeamsTool } from "./list-teams.tool";
 import { getLearnsetTool } from "./get-learnset";
 import { webSearchTool } from "./web-search";
 import { runSqlTool } from "./run-sql";
+import { searchWikiTool } from "./search-wiki";
 
 /**
  * The 17 tools, in T1..T17 order. T1..T11 are the fixed agent-design contract;
@@ -76,7 +77,10 @@ import { runSqlTool } from "./run-sql";
  * runs guarded read-only SQL over Oak's offline warehouse for whole-Pokédex
  * aggregations the typed tools can't express (appended AFTER web_search — the
  * barrel order is append-only, not T-id order — so the cached prefix stays
- * stable). Both new tools are gated OUT of voice mode via `VOICE_EXCLUDED_TOOLS`
+ * stable); T19 (`search_wiki`, oak-v2 P4) does full-text retrieval over the
+ * self-built Fandom prose corpus for anime/lore/spin-off/trivia questions
+ * (appended after run_sql). These new tools are gated OUT of voice mode via
+ * `VOICE_EXCLUDED_TOOLS`
  * (`@/agent/tools/voice-gating`), not this barrel. All appended after T11 so the
  * existing T1..T11 order — and thus most of the cached prefix — is unchanged.
  * The list is sent byte-identical for both modes; each mode-gated tool self-
@@ -102,6 +106,7 @@ export const tools: ToolDef[] = [
   getLearnsetTool,
   webSearchTool,
   runSqlTool,
+  searchWikiTool,
 ];
 
 /** name -> ToolDef lookup, built once at module load. */

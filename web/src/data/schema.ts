@@ -31,8 +31,10 @@
  * Import only from here — never duplicate column defs elsewhere.
  */
 
+import { sql } from "drizzle-orm";
 import {
   bigint,
+  customType,
   index,
   integer,
   pgTable,
@@ -40,6 +42,19 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+/**
+ * Postgres `tsvector` — the full-text search type. Drizzle pg-core has no
+ * built-in column type for it, so it's declared here as a `customType`. Only the
+ * wiki full-text search (T19 `search_wiki`, Oak v2 §4.2/§5) uses it; the column
+ * is a STORED GENERATED column (see `wiki_chunk.tsv`), so nothing ever writes it
+ * directly — Postgres derives it from `section || ' ' || content` on insert.
+ */
+const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 // ---------------------------------------------------------------------------
 // pokemon — DS-2 Pokédex index (one row per (format, battle-relevant form), D8)
@@ -745,5 +760,77 @@ export const pmd_recruits = pgTable(
     // One row per species per game.
     primaryKey({ columns: [t.game, t.species] }),
     index("pmd_recruits_species_idx").on(t.species),
+  ],
+);
+
+// ===========================================================================
+// Fandom wiki corpus — global prose retrieval tables (Oak v2, design §4.2/§5)
+//
+// Two GLOBAL tables backing T19 `search_wiki`: a self-built, hybrid-lexical
+// retrieval corpus crawled from pokemon.fandom.com (CC BY-SA 4.0 —
+// commercial-safe, unlike the CC BY-NC-SA Bulbapedia which is NEVER ingested).
+// They answer anime/movie/character/PMD/lore/trivia questions Oak's structured
+// @pkmn + natdex data can't. Like the natdex warehouse these carry NO `format`
+// column — the wiki is franchise-wide. Built ONCE per ingest run from the
+// gitignored `web/.wiki-cache/` (fetched by `npm run fetch:wiki`), replaced
+// wholesale inside the same atomic transaction as every other table.
+//
+// v1 retrieval is Postgres BUILT-IN full-text search only (tsvector + GIN) — NO
+// pgvector (unavailable on prod Fly Postgres; hybrid/embeddings is a documented
+// later follow-up). The `tsv` column on `wiki_chunk` is a STORED GENERATED
+// column so the index is always in lock-step with the content and no writer has
+// to maintain it. Attribution (license + canonical url + revision timestamp) is
+// stored per page so every wiki-sourced answer can cite it as required.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// wiki_page — one row per crawled Fandom page (attribution + provenance)
+// ---------------------------------------------------------------------------
+export const wiki_page = pgTable(
+  "wiki_page",
+  {
+    /** Stable page id — the slugified canonical title, e.g. "ash-ketchum". PK. */
+    id: text("id").primaryKey(),
+    /** Display title as shown on the wiki, e.g. "Ash Ketchum". */
+    title: text("title").notNull(),
+    /** Canonical page URL (surfaced in citations). */
+    url: text("url").notNull(),
+    /** Epoch ms of the page's last wiki revision; null if the crawl lacked it. */
+    revised_at: bigint("revised_at", { mode: "number" }),
+    /** License string, e.g. "CC BY-SA 4.0" (attribution requirement). */
+    license: text("license").notNull(),
+  },
+  (t) => [index("wiki_page_title_idx").on(t.title)],
+);
+
+// ---------------------------------------------------------------------------
+// wiki_chunk — one row per (page, section) prose chunk, full-text indexed
+// ---------------------------------------------------------------------------
+export const wiki_chunk = pgTable(
+  "wiki_chunk",
+  {
+    /** Stable chunk id — `${page_id}#${section_index}`. PK. */
+    id: text("id").primaryKey(),
+    /** Owning page (logical FK → wiki_page.id; no physical constraint). */
+    page_id: text("page_id").notNull(),
+    /** Section heading this chunk came from, e.g. "Biography". */
+    section: text("section").notNull(),
+    /** The stripped plain-prose text of the section. */
+    content: text("content").notNull(),
+    /**
+     * Full-text search vector — a STORED GENERATED column derived from
+     * section + content. Never written directly; Postgres computes it on
+     * insert/update. Referenced by column NAME (not the Drizzle column, to avoid
+     * a self-reference in this table definition) — matches the hand-verified
+     * migration SQL exactly.
+     */
+    tsv: tsvector("tsv").generatedAlwaysAs(
+      sql`to_tsvector('english', coalesce(section, '') || ' ' || coalesce(content, ''))`,
+    ),
+  },
+  (t) => [
+    index("wiki_chunk_page_id_idx").on(t.page_id),
+    // GIN index over the generated tsvector — the retrieval hot path.
+    index("wiki_chunk_tsv_idx").using("gin", t.tsv),
   ],
 );
