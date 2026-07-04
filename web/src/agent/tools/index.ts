@@ -60,6 +60,7 @@ import { getUsageStatsTool } from "./get-usage-stats.tool";
 import { listTeamsTool } from "./list-teams.tool";
 import { getLearnsetTool } from "./get-learnset";
 import { webSearchTool } from "./web-search";
+import { runSqlTool } from "./run-sql";
 
 /**
  * The 17 tools, in T1..T17 order. T1..T11 are the fixed agent-design contract;
@@ -71,11 +72,15 @@ import { webSearchTool } from "./web-search";
  * model can resolve a by-name reference; T17 (`get_learnset`, B-13) lists a
  * form's legal movepool for the turn's format so proposed/edited teams stay
  * legal; T20 (`web_search`, oak-v2 P5) is Oak's first live web tool (Tavily),
- * for time-sensitive facts outside Oak's own data — gated OUT of voice mode via
- * `VOICE_EXCLUDED_TOOLS` (`@/agent/tools/voice-gating`), not this barrel. All
- * appended after T11 so the existing T1..T11 order — and thus most of the
- * cached prefix — is unchanged. The list is sent byte-identical for both modes;
- * each mode-gated tool self-gates on `ctx.mode`.
+ * for time-sensitive facts outside Oak's own data; T18 (`run_sql`, oak-v2 P2)
+ * runs guarded read-only SQL over Oak's offline warehouse for whole-Pokédex
+ * aggregations the typed tools can't express (appended AFTER web_search — the
+ * barrel order is append-only, not T-id order — so the cached prefix stays
+ * stable). Both new tools are gated OUT of voice mode via `VOICE_EXCLUDED_TOOLS`
+ * (`@/agent/tools/voice-gating`), not this barrel. All appended after T11 so the
+ * existing T1..T11 order — and thus most of the cached prefix — is unchanged.
+ * The list is sent byte-identical for both modes; each mode-gated tool self-
+ * gates on `ctx.mode`.
  */
 export const tools: ToolDef[] = [
   resolveEntityTool,
@@ -96,6 +101,7 @@ export const tools: ToolDef[] = [
   listTeamsTool,
   getLearnsetTool,
   webSearchTool,
+  runSqlTool,
 ];
 
 /** name -> ToolDef lookup, built once at module load. */
