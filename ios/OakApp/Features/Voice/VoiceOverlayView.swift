@@ -88,18 +88,18 @@ struct VoiceOverlayView: View {
 
   private var toolTicker: some View {
     ScrollView(.horizontal, showsIndicators: false) {
-      HStack(spacing: 8) {
+      HStack(spacing: Theme.Spacing.sm) {
         ForEach(session.toolActivities) { activity in
-          Text(activity.label)
-            .font(Theme.body(.footnote))
+          Text(VoiceOverlayHelpers.stripLeadingEmoji(activity.label))
+            .instrumentLabel()
             .foregroundStyle(Theme.textSecondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, Theme.Spacing.sm)
+            .padding(.vertical, Theme.Spacing.xs)
             .background(Theme.surface, in: Capsule())
             .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
         }
       }
-      .padding(.horizontal, 24)
+      .padding(.horizontal, Theme.Spacing.xl)
       .animation(reduceMotion ? nil : Theme.Motion.snappy, value: session.toolActivities.count)
     }
     .accessibilityElement(children: .combine)
@@ -169,5 +169,19 @@ enum VoiceOverlayHelpers {
     let minutes = total / 60
     let seconds = total % 60
     return String(format: "%d:%02d", minutes, seconds)
+  }
+
+  /// Strips one or more leading emoji/pictograph Unicode scalars from `text` so the
+  /// server's web-oriented labels (`"🤔 Reasoning…"`) render as clean instrument caps
+  /// without the double-icon clash of emoji beside an SF symbol. Whitespace between
+  /// the stripped emoji and the remaining text is trimmed. Non-emoji strings are
+  /// returned unchanged.
+  static func stripLeadingEmoji(_ text: String) -> String {
+    var result = text[...]
+    while let first = result.unicodeScalars.first,
+          first.properties.isEmoji && first.value > 0x007E {
+      result = result[result.index(after: result.startIndex)...]
+    }
+    return result.trimmingCharacters(in: .whitespaces)
   }
 }

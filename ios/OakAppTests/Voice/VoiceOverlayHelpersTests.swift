@@ -57,4 +57,34 @@ struct VoiceOverlayHelpersTests {
   func formatElapsedClampsAClockSkewToZeroRatherThanGoingNegative() {
     #expect(VoiceOverlayHelpers.formatElapsed(-4) == "0:00")
   }
+
+  // MARK: stripLeadingEmoji
+
+  @Test
+  func stripLeadingEmojiRemovesSingleLeadingEmoji() {
+    // The server sends labels like "🤔 Reasoning…" — strip the emoji and whitespace.
+    #expect(VoiceOverlayHelpers.stripLeadingEmoji("🤔 Reasoning…") == "Reasoning…")
+  }
+
+  @Test
+  func stripLeadingEmojiRemovesMultipleLeadingEmoji() {
+    #expect(VoiceOverlayHelpers.stripLeadingEmoji("🔍🗂 Lookup") == "Lookup")
+  }
+
+  @Test
+  func stripLeadingEmojiLeavesPlainTextUnchanged() {
+    // Non-emoji labels (e.g. already-clean server output) pass through verbatim.
+    #expect(VoiceOverlayHelpers.stripLeadingEmoji("GET_POKEMON · GARCHOMP") == "GET_POKEMON · GARCHOMP")
+  }
+
+  @Test
+  func stripLeadingEmojiHandlesEmptyString() {
+    #expect(VoiceOverlayHelpers.stripLeadingEmoji("") == "")
+  }
+
+  @Test
+  func stripLeadingEmojiLeavesTrailingEmojiIntact() {
+    // Only leading emoji are stripped; interior/trailing emoji stay.
+    #expect(VoiceOverlayHelpers.stripLeadingEmoji("Thinking 🧠") == "Thinking 🧠")
+  }
 }
