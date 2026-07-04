@@ -238,10 +238,7 @@ struct CandidatesTableView: View {
 
   private func headerLabel(_ text: String) -> some View {
     Text(text)
-      .font(Theme.body(.caption2))
-      .fontWeight(.semibold)
-      .textCase(.uppercase)
-      .tracking(0.5)
+      .instrumentLabel()
       .foregroundStyle(Theme.textSecondary)
   }
 
@@ -255,10 +252,8 @@ struct CandidatesTableView: View {
           .imageScale(.small)
       }
     }
-    .font(Theme.body(.caption2))
+    .instrumentLabel()
     .fontWeight(isSorted ? .bold : .semibold)
-    .textCase(.uppercase)
-    .tracking(0.5)
     .foregroundStyle(isSorted ? Theme.textPrimary : Theme.textSecondary)
   }
 
@@ -301,8 +296,8 @@ struct CandidatesTableView: View {
     @ViewBuilder content: () -> Content
   ) -> some View {
     content()
-      .padding(.horizontal, 12)
-      .padding(.vertical, 8)
+      .padding(.horizontal, Theme.Spacing.md)
+      .padding(.vertical, Theme.Spacing.sm)
       .frame(maxWidth: .infinity, alignment: alignment)
       .background {
         ZStack {

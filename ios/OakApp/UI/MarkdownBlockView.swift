@@ -18,14 +18,23 @@ import SwiftUI
 /// flow through; only headings, code, and table chrome set their own type/wash.
 struct MarkdownBlockView: View {
   private let markdown: String
+  private let precomputedBlocks: [MarkdownBlock]?
 
   /// Text-like, unlabeled initializer mirroring ``MarkdownText``.
   init(_ markdown: String) {
     self.markdown = markdown
+    self.precomputedBlocks = nil
+  }
+
+  /// Renders a pre-parsed block slice. Used by ``AnswerCardView`` to render
+  /// the blocks after the lead paragraph without re-parsing the full source.
+  init(blocks: [MarkdownBlock]) {
+    self.markdown = ""
+    self.precomputedBlocks = blocks
   }
 
   var body: some View {
-    let blocks = MarkdownBlocks.parse(markdown)
+    let blocks = precomputedBlocks ?? MarkdownBlocks.parse(markdown)
     VStack(alignment: .leading, spacing: 8) {
       ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
         view(for: block)

@@ -69,20 +69,13 @@ struct ScopeTagView: View {
       EmptyView()
     } else {
       let display = ScopeTag.label(for: generation)
-      Label {
-        Text(display)
-          .fixedSize(horizontal: false, vertical: true)
-      } icon: {
-        Image(systemName: "tag.fill")
-          .accessibilityHidden(true)
-      }
-      .font(Theme.body(.footnote).weight(.medium))
-      .foregroundStyle(Theme.textSecondary)
-      .padding(.horizontal, 8)
-      .padding(.vertical, 4)
-      .oakCard(radius: Theme.Radius.sm)
-      .accessibilityElement(children: .combine)
-      .accessibilityLabel("Answer scope: \(display)")
+      Text(display)
+        .instrumentLabel()
+        .foregroundStyle(Theme.textSecondary)
+        .padding(.horizontal, Theme.Spacing.sm)
+        .padding(.vertical, Theme.Spacing.xs)
+        .background(Theme.surfaceSunken, in: Capsule())
+        .accessibilityLabel("Answer scope: \(display)")
     }
   }
 }

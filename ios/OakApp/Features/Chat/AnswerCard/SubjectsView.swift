@@ -46,15 +46,15 @@ private struct SubjectCard: View {
   private var secondaryType: String? { subject.types.count > 1 ? subject.types[1] : nil }
 
   var body: some View {
-    HStack(alignment: .top, spacing: 12) {
+    HStack(alignment: .top, spacing: Theme.Spacing.md) {
       SpriteImage(url: URL(string: subject.spriteUrl), name: subject.name, size: spriteSize)
-        .padding(6)
+        .padding(Theme.Spacing.sm)
         .background(
           Theme.type(primaryType).opacity(0.12),
           in: RoundedRectangle(cornerRadius: Theme.Radius.md)
         )
 
-      VStack(alignment: .leading, spacing: 6) {
+      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
         nameRow
         if subject.isFallback {
           fallbackPill
@@ -63,7 +63,7 @@ private struct SubjectCard: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .padding(12)
+    .padding(Theme.Spacing.md)
     .frame(maxWidth: .infinity, alignment: .leading)
     // The dual-type wash sits behind oakCard's own raised fill; passing it as a
     // background (rather than oakCard's single-color `tint:`) lets a dual-type
@@ -81,13 +81,13 @@ private struct SubjectCard: View {
   // MARK: Name + dex
 
   private var nameRow: some View {
-    HStack(alignment: .firstTextBaseline, spacing: 6) {
+    HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.sm) {
       Text(subject.name)
         .font(Theme.display(.headline))
         .foregroundStyle(Theme.textPrimary)
       if let dex = subject.dexNumber {
         Text(dexLabel(dex))
-          .font(Theme.mono(.subheadline))
+          .instrumentLabel(.caption2)
           .foregroundStyle(Theme.textMuted)
       }
     }
@@ -100,8 +100,8 @@ private struct SubjectCard: View {
     Label(fallbackText, systemImage: "clock.arrow.circlepath")
       .font(Theme.display(.caption2))
       .foregroundStyle(Theme.warning)
-      .padding(.horizontal, 8)
-      .padding(.vertical, 3)
+      .padding(.horizontal, Theme.Spacing.sm)
+      .padding(.vertical, Theme.Spacing.xs)
       .background(
         Theme.warning.opacity(0.14),
         in: Capsule()
@@ -111,7 +111,7 @@ private struct SubjectCard: View {
   // MARK: Type badges (primary type first)
 
   private var typeBadges: some View {
-    HStack(spacing: 6) {
+    HStack(spacing: Theme.Spacing.sm) {
       ForEach(subject.types, id: \.self) { type in
         TypeBadge(type: type)
       }

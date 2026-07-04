@@ -18,9 +18,9 @@ struct InferencesView: View {
 
   var body: some View {
     if !inferences.isEmpty {
-      VStack(alignment: .leading, spacing: 10) {
-        Label("Inferred", systemImage: "lightbulb")
-          .font(Theme.display(.subheadline))
+      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+        Text(inferenceHeader)
+          .instrumentLabel()
           .foregroundStyle(Theme.azure)
           .accessibilityLabel("Inferred — deductions, not cited")
 
@@ -29,18 +29,24 @@ struct InferencesView: View {
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(12)
+      .padding(Theme.Spacing.md)
       .oakCard(radius: Theme.Radius.md, tint: Theme.azure)
-      // The DASHED edge is the visual tell for "inferred, not cited" — kept on top
-      // of oakCard's own chrome so it stays legible in both modes.
+      // A solid hairline distinguishes "inferred, not cited" from cited blocks —
+      // dashed replaced with a solid azure hairline (strategy §4.04 item 7).
       .overlay(
         RoundedRectangle(cornerRadius: Theme.Radius.md)
-          .strokeBorder(
-            Theme.azure.opacity(0.5),
-            style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-          )
+          .strokeBorder(Theme.azure.opacity(0.35), lineWidth: 1)
       )
     }
+  }
+
+  /// Header label — "INFERENCE · HIGH" when there is exactly one inference with
+  /// a known confidence level; "INFERENCE" otherwise.
+  private var inferenceHeader: String {
+    if inferences.count == 1, let first = inferences.first {
+      return "INFERENCE · \(first.confidence.label.uppercased())"
+    }
+    return "INFERENCE"
   }
 
   /// One inference: a leading confidence badge, the claim, and an optional note.
@@ -48,10 +54,10 @@ struct InferencesView: View {
   private func row(_ inference: Inference) -> some View {
     let confidence = inference.confidence
 
-    HStack(alignment: .top, spacing: 8) {
+    HStack(alignment: .top, spacing: Theme.Spacing.sm) {
       confidenceBadge(confidence)
 
-      VStack(alignment: .leading, spacing: 2) {
+      VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
         Text(inference.claim)
           .font(Theme.body(.subheadline))
           .foregroundStyle(Theme.textPrimary)
@@ -82,8 +88,8 @@ struct InferencesView: View {
         .imageScale(.small)
     }
     .foregroundStyle(confidence.tint)
-    .padding(.horizontal, 8)
-    .padding(.vertical, 3)
+    .padding(.horizontal, Theme.Spacing.sm)
+    .padding(.vertical, Theme.Spacing.xs)
     .background(confidence.tint.opacity(0.15), in: Capsule())
   }
 
