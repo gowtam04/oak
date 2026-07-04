@@ -30,10 +30,13 @@ export default defineConfig({
             "eval/**/*.test.ts",
           ],
           exclude: ["src/components/**", "node_modules/**"],
-          // One shared Postgres container for the whole node run (Testcontainers
-          // → needs a Docker daemon). The jsdom project below has none, so
-          // component tests still run without Docker.
-          globalSetup: ["./test/support/pg-global-setup.ts"],
+          // One shared Postgres container AND one shared Redis container for the
+          // whole node run (Testcontainers → needs a Docker daemon). The jsdom
+          // project below has none, so component tests still run without Docker.
+          globalSetup: [
+            "./test/support/pg-global-setup.ts",
+            "./test/support/redis-global-setup.ts",
+          ],
           // Placeholder so `@/env` validates in workers; the @/data/db singleton
           // is injected by the test harness and never connects with this value.
           env: {

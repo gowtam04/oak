@@ -16,8 +16,9 @@ const nextConfig: NextConfig = {
   //   - `drizzle-orm`: must be a real on-disk module (not webpack-bundled) so the
   //     plain-ESM `migrate.mjs` (the Fly release_command, NOT part of the Next
   //     bundle) can `import "drizzle-orm/node-postgres/migrator"` at runtime.
+  //   - `ioredis`: same CommonJS-with-optional-native-bits shape as `pg`.
   // Must be TOP-LEVEL (not under experimental.*) on Next 15.
-  serverExternalPackages: ["pg", "drizzle-orm"],
+  serverExternalPackages: ["pg", "drizzle-orm", "ioredis"],
 };
 
 export default nextConfig;

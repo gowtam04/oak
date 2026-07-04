@@ -117,6 +117,18 @@ const EnvSchema = z
     // env-touching imports and lets tests re-stub the list per case (vi.stubEnv).
     // This entry exists only to validate/document the variable's shape.
     ADMIN_EMAILS: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+
+    // --- Redis (scaling-plan.md Phase 1 — externalize per-process state) ---
+    // Connection string for the shared Redis instance backing session-store,
+    // rate-limit, and otp-throttle once they grow a Redis-backed second mode.
+    // OPTIONAL and documentation-only here, same as ADMIN_EMAILS above: it is
+    // NOT read through this memoized `env` object — `src/server/redis.ts`
+    // reads `process.env.REDIS_URL` AT CALL TIME so tests can `vi.stubEnv` it
+    // per case. Unset ⇒ every store falls back to its in-process
+    // implementation (single-machine only); an empty value
+    // (`REDIS_URL=` in a compose env_file) is treated as absent. This entry
+    // exists only to validate/document the variable's shape.
+    REDIS_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
   })
   .superRefine((value, ctx) => {
     // AUTH_SECRET must be an explicit, non-default secret in production.
