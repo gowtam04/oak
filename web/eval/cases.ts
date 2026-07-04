@@ -1,5 +1,5 @@
 /**
- * eval/cases.ts — G1..G24 golden test cases (evaluation.md).
+ * eval/cases.ts — G1..G54 golden test cases (evaluation.md + Oak v2 §7).
  *
  * Owned by: phase "Eval" / track "cases". Do NOT edit from other phases.
  *
@@ -16,6 +16,27 @@
  * Citation source string format mirrors tools.md output shapes:
  *   "pokemon/<slug>", "move/<slug>", "ability/<slug>", "type/<slug>",
  *   "item/<slug>", "evolution-chain/<slug>", "learnset/<slug>".
+ *
+ * G26..G54 (Oak v2 §7) turn the 29 whole-franchise benchmark questions
+ * (docs/features/oak-v2/benchmark-questions.md, "BQ-1".."BQ-29" in `covers`)
+ * into golden cases, one case per question, covering the three new tools
+ * (T18 `run_sql`, T19 `search_wiki`, T20 `web_search`) plus prompt-policy-only
+ * answers (false-premise rejection, opinion framing, off-domain decline).
+ * `covers` also carries the answer layer tag ("SQL" | "WIKI" | "WEB" |
+ * "POLICY") from the benchmark table. Five of these (the pure run_sql
+ * aggregations design.md §5 T18 calls out as the offline-answerable
+ * candidates) are ALSO `deterministic: true`, with plans registered in
+ * eval/deterministic.ts and fixture rows in
+ * eval/fixtures/seed-fixture-db.ts: G26 (natdex==BST), G32 (purple count),
+ * G35 (Fire-Fang-is-Gen-4 false-premise verification), G44 (catch rate >
+ * pre-evolution), G47 (dual-type -> monotype on evolution). Their
+ * `mustInclude`/`mustCite` are deliberately loose (or omitted) where the
+ * underlying fixture rows are illustrative/contrived rather than real
+ * Pokédex facts — see the per-case notes — because the SAME case also runs
+ * in the live judged suite against the real warehouse (deterministic:true
+ * does not exempt a case from `ALL_CASES`). WIKI/WEB cases are judged-only
+ * (no deterministic plan is attempted for them — search_wiki/web_search need
+ * a live corpus/network, per Oak v2 §7).
  */
 
 // GoldenCase is defined once in ./judge (the single source of truth) and
@@ -24,7 +45,7 @@ import type { GoldenCase } from "./judge";
 export type { GoldenCase };
 
 // ---------------------------------------------------------------------------
-// G1 – G24 Golden Cases
+// G1 – G25 Golden Cases (evaluation.md — pre-Oak-v2)
 // ---------------------------------------------------------------------------
 
 export const cases: GoldenCase[] = [
@@ -451,6 +472,436 @@ export const cases: GoldenCase[] = [
     },
     covers: ["mechanics_precision", "inference_flagging", "BR-3"],
   },
+
+  // =========================================================================
+  // G26 – G54 Oak v2 whole-franchise benchmark cases (Oak v2 §7,
+  // docs/features/oak-v2/benchmark-questions.md BQ-1..BQ-29).
+  // =========================================================================
+
+  // G26 — BQ-1 (SQL, deterministic): natdex number == base-stat total.
+  // The fixture row satisfying this is illustrative (not a real Pokédex
+  // match) — the assertion checks the AGGREGATION MECHANISM (run_sql used,
+  // no brute-force), not a specific species name, since the real warehouse's
+  // actual match (if any) differs from the small eval fixture.
+  {
+    id: "G26",
+    input: "Which pokemon has the same natdex number as its base stat total?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "run_sql", maxPerPokemonFetches: 0 },
+      deterministic: true,
+      rubricNote:
+        "Correct answer runs a single natdex_species aggregation (WHERE national_dex_number = base_stat_total) rather than checking species one at a time.",
+    },
+    covers: ["BQ-1", "SQL"],
+  },
+
+  // G27 — BQ-2 (SQL+WIKI, judged): Route 1 birds, game-ambiguous.
+  {
+    id: "G27",
+    input: "Name all the Route 1 birds",
+    expect: {
+      status: "answered",
+      rubricNote:
+        "Route 1's Pokémon differ by game/generation. Correct answer either names the game(s) it's answering for or asks which game, then lists Flying-type Route 1 encounters (classic_encounters) with wiki-sourced species/route names — not a single game silently assumed as universal.",
+    },
+    covers: ["BQ-2", "SQL", "WIKI"],
+  },
+
+  // G28 — BQ-3 (SQL, judged): type combos unique to one evolutionary line.
+  {
+    id: "G28",
+    input:
+      "How many type combinations are unique to a specific Pokémon evolutionary line?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "run_sql", maxPerPokemonFetches: 0 },
+      rubricNote:
+        "Correct answer aggregates (type1, type2) combos across natdex_species joined by evolves_from and counts combos that appear in exactly one line — a warehouse aggregation, not a per-species scan.",
+    },
+    covers: ["BQ-3", "SQL"],
+  },
+
+  // G29 — BQ-4 (SQL+WIKI, judged): Pikachu's signature moves.
+  // "Signature move" has no single canonical definition — the agent must
+  // state its own definition (e.g. "learnable by no other species") as an
+  // explicit inference, not present it as an unqualified fact.
+  {
+    id: "G29",
+    input: "How many signature moves does Pikachu have?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "run_sql", maxPerPokemonFetches: 5 },
+      rubricNote:
+        "'Signature move' is undefined by the games themselves — the agent must state its own working definition (e.g. moves only Pikachu's line can learn) as a flagged inference, then count via a learnset-exclusivity aggregation, not guesswork.",
+    },
+    covers: ["BQ-4", "SQL", "WIKI"],
+  },
+
+  // G30 — BQ-5 (SQL+WIKI, judged): HM Fly location in HeartGold.
+  {
+    id: "G30",
+    input: "Where do I get HM Fly in HeartGold?",
+    expect: {
+      status: "answered",
+      mustCite: ["https://pokemon.fandom.com"],
+      rubricNote:
+        "Correct answer joins natdex_machines (version_group='heartgold-soulsilver') to confirm HM02 teaches Fly, then cites wiki prose for the in-game location (Route 36's Cerulean Cave forward, per HGSS) — not a guessed location.",
+    },
+    covers: ["BQ-5", "SQL", "WIKI"],
+  },
+
+  // G31 — BQ-6 (WEB, judged): best-selling Pokémon game.
+  {
+    id: "G31",
+    input: "Which Pokémon game sold the most copies?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "web_search", maxPerPokemonFetches: 0 },
+      rubricNote:
+        "Sales figures change and are contested by source — a correct answer cites a specific source (e.g. Nintendo IR data) and dates the figure ('as of <date>'), rather than stating a number as timeless fact.",
+    },
+    covers: ["BQ-6", "WEB"],
+  },
+
+  // G32 — BQ-7 (SQL, deterministic): count of purple Pokémon.
+  // Fixture rows use REAL PokeAPI color='purple' species (Gengar, Koffing,
+  // Weezing, Grimer) so the underlying fact holds in both the small fixture
+  // and the real warehouse — only the exact COUNT differs (fixture: a
+  // curated few; live: the full purple roster), so the count itself is
+  // deliberately not asserted.
+  {
+    id: "G32",
+    input: "How many Pokémon are purple?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "run_sql", maxPerPokemonFetches: 0 },
+      deterministic: true,
+      rubricNote:
+        "Correct answer runs a single natdex_species aggregation (WHERE color = 'purple') and gives an honest count + list, not a guessed/remembered figure.",
+    },
+    covers: ["BQ-7", "SQL"],
+  },
+
+  // G33 — BQ-8 (WIKI, judged): cat-based Pokémon design inspiration.
+  {
+    id: "G33",
+    input: "Which Pokémon are based off cats?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
+      mustCite: ["https://pokemon.fandom.com"],
+      rubricNote:
+        "Design inspiration is not a game-data fact — the agent must flag this as a design/origin INFERENCE sourced from wiki prose (e.g. Meowth, Espurr, Litten line), not present it as verified game data.",
+    },
+    covers: ["BQ-8", "WIKI"],
+  },
+
+  // G34 — BQ-9 (WIKI, judged): count of Fire-type gym leaders.
+  {
+    id: "G34",
+    input: "How many gym leaders are Fire type?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
+      rubricNote:
+        "Gym leaders differ per game/region — a correct answer states which game(s)/region(s) it's counting (e.g. per mainline generation) rather than presenting one silently-assumed scope as the total across all games.",
+    },
+    covers: ["BQ-9", "WIKI"],
+  },
+
+  // G35 — BQ-10 (POLICY false-premise rejection via SQL, deterministic):
+  // Fire Fang was introduced in Gen 4 (Diamond/Pearl/Platinum) — a real,
+  // well-established fact — so it did not exist in Gen 3 at all; there is
+  // no "Fire Fang bug in Gen 3" to describe. natdex_moves is the ONLY
+  // move-generation source covering Gens 1-4 (design.md §5 T18).
+  {
+    id: "G35",
+    input: "What was the Fire Fang bug in Gen 3?",
+    expect: {
+      status: "answered",
+      mustInclude: ["Generation 4"],
+      toolEfficiency: { usedTool: "run_sql", maxPerPokemonFetches: 0 },
+      deterministic: true,
+      rubricNote:
+        "False premise: Fire Fang was introduced in Generation 4, so it could not have had a Generation 3 bug. Correct answer REJECTS the premise (verified via natdex_moves) rather than inventing a bug to satisfy the question.",
+    },
+    covers: ["BQ-10", "POLICY"],
+  },
+
+  // G36 — BQ-11 (WIKI, judged): PMD guild leaders.
+  {
+    id: "G36",
+    input: "Which Pokémon have led the guild in Pokémon Mystery Dungeon?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
+      mustInclude: ["Wigglytuff"],
+      mustCite: ["https://pokemon.fandom.com"],
+      rubricNote:
+        "Spin-off (Mystery Dungeon) trivia is in scope via search_wiki. Wigglytuff's Guild (Explorers series) is the canonical answer; other PMD titles' guilds/leaders may also be named.",
+    },
+    covers: ["BQ-11", "WIKI"],
+  },
+
+  // G37 — BQ-12 (TYPED, judged): existing competitive path, unchanged by
+  // Oak v2 — Speed vs. Attack nature tradeoff for Garchomp in Champions.
+  {
+    id: "G37",
+    input:
+      "Should I run a Speed-boosting or Attack-boosting nature on Garchomp in Champions?",
+    expect: {
+      status: "answered",
+      mustCite: ["pokemon/garchomp"],
+      rubricNote:
+        "In-scope competitive reasoning via the existing typed tools (unaffected by the Oak v2 tool additions) — must state the tradeoff (Jolly's Speed tiers vs. Adamant's power) with base stats/usage context, not a bare opinion.",
+    },
+    covers: ["BQ-12", "TYPED"],
+  },
+
+  // G38 — BQ-13 (WIKI, judged): Ash's total anime catches.
+  {
+    id: "G38",
+    input: "How many Pokémon has Ash caught in the anime?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
+      mustCite: ["https://pokemon.fandom.com"],
+      rubricNote:
+        "Counting ambiguities (releases, temporary catches, gifted Pokémon) are real — a correct answer flags them as an inference/assumption rather than presenting one silent count as an undisputed fact.",
+    },
+    covers: ["BQ-13", "WIKI"],
+  },
+
+  // G39 — BQ-14 (WEB, judged): current anime season, time-sensitive.
+  {
+    id: "G39",
+    input: "Which season of the anime are we on right now?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "web_search", maxPerPokemonFetches: 0 },
+      rubricNote:
+        "Time-sensitive — the answer must be sourced live (web_search) and dated ('as of <date>'), never answered from the agent's own training-time knowledge as if it were current.",
+    },
+    covers: ["BQ-14", "WEB"],
+  },
+
+  // G40 — BQ-15 (WIKI, judged): fuzzy-recall movie lookup (Iron-Masked
+  // Marauder -> Pokémon 4Ever).
+  {
+    id: "G40",
+    input: "What movie has an Iron Masked Marauder in it?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
+      mustInclude: ["4Ever"],
+      mustCite: ["https://pokemon.fandom.com"],
+      rubricNote:
+        "Fuzzy recall via search_wiki (reformulate the query if the first pass misses) — the correct film is Pokémon 4Ever.",
+    },
+    covers: ["BQ-15", "WIKI"],
+  },
+
+  // G41 — BQ-16 (WIKI, judged): "Island of the Giant Pokémon" episode.
+  {
+    id: "G41",
+    input: "Which anime episode is about an island of giant Pokémon?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
+      mustInclude: ["Giant Pok"],
+      mustCite: ["https://pokemon.fandom.com"],
+      rubricNote:
+        "The correct episode is EP017, \"Island of the Giant Pokémon\" (original series).",
+    },
+    covers: ["BQ-16", "WIKI"],
+  },
+
+  // G42 — BQ-17 (WIKI, judged): most populous in-game cities.
+  {
+    id: "G42",
+    input: "What are the most populous cities in the mainline games?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
+      rubricNote:
+        "In-game 'population' is flavor text, not a modeled/comparable stat — the agent must flag this as an ill-defined premise (inference) before offering the best available wiki-sourced answer, not present a ranked list as precise data.",
+    },
+    covers: ["BQ-17", "WIKI"],
+  },
+
+  // G43 — BQ-18 (POLICY opinion, judged): "best" legendary.
+  {
+    id: "G43",
+    input: "Which legendary Pokémon is the best?",
+    expect: {
+      status: "answered",
+      rubricNote:
+        "A bare opinion is wrong; a criteria-framed answer (e.g. by BST, competitive usage/format legality, or lore significance — stated explicitly) is correct. Must not present a single Pokémon as objectively 'the best' with no stated criteria.",
+    },
+    covers: ["BQ-18", "POLICY"],
+  },
+
+  // G44 — BQ-19 (SQL, deterministic): catch rate higher than pre-evolution.
+  // Fixture pair (lowcatch -> highcatch) is a contrived demonstration of the
+  // self-join pattern, not a real species pair (this exception is rare and
+  // the real matching set differs live vs. fixture) — so no species name is
+  // asserted, only that the aggregation mechanism runs correctly.
+  {
+    id: "G44",
+    input:
+      "Are there any Pokémon with a higher catch rate than their pre-evolution?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "run_sql", maxPerPokemonFetches: 0 },
+      deterministic: true,
+      rubricNote:
+        "Correct answer self-joins natdex_species on evolves_from and filters capture_rate > parent's capture_rate — a warehouse aggregation, not per-species memory.",
+    },
+    covers: ["BQ-19", "SQL"],
+  },
+
+  // G45 — BQ-20 (WIKI/WEB, judged) — DEVIATION from benchmark-questions.md's
+  // "TYPED/SQL" layer: Oak's data model (pokemon / natdex_species) carries no
+  // weight column at all (checked: no `weight` field anywhere in schema.ts or
+  // schemas.ts), so this is NOT typed/SQL-answerable as designed. Routed to
+  // WIKI (community pages carry per-species weight) with WEB as a fallback.
+  {
+    id: "G45",
+    input: "What's the combined weight of Wailord and Skitty?",
+    expect: {
+      status: "answered",
+      mustInclude: ["+"],
+      rubricNote:
+        "Oak's structured data has no weight field (a real gap vs. the benchmark's expected SQL/typed path) — the agent must source each species' weight via search_wiki/web_search, then show the addition explicitly (trivial math shown, not just a final number).",
+    },
+    covers: ["BQ-20", "WIKI", "WEB"],
+  },
+
+  // G46 — BQ-21 (WEB, judged): Pokémon Winds and Waves release date.
+  {
+    id: "G46",
+    input: "When will Pokémon Winds and Waves release?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "web_search", maxPerPokemonFetches: 0 },
+      mustInclude: ["2027"],
+      rubricNote:
+        "Must come from a live, dated search — Winds and Waves (Gen 10) was announced 2026-02-27 for a 2027 release. Do not answer this from static/training-time knowledge.",
+    },
+    covers: ["BQ-21", "WEB"],
+  },
+
+  // G47 — BQ-22 (SQL, deterministic): dual-type -> monotype on evolution.
+  // Fixture pair (duoform -> monoform) is a contrived demonstration; real
+  // examples of type SIMPLIFICATION on evolution are rare/contested, so no
+  // species name is asserted — only the join mechanism.
+  {
+    id: "G47",
+    input:
+      "Which Pokémon go from dual type to monotype when they evolve?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "run_sql", maxPerPokemonFetches: 0 },
+      deterministic: true,
+      rubricNote:
+        "Correct answer self-joins natdex_species on evolves_from, filtering pre-evolution type2 IS NOT NULL and evolution type2 IS NULL — a warehouse aggregation, not per-line memory.",
+    },
+    covers: ["BQ-22", "SQL"],
+  },
+
+  // G48 — BQ-23 (WIKI lore, judged): fan-theory framing, light tone OK.
+  {
+    id: "G48",
+    input: "Is Professor Oak dating Ash's mom?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
+      rubricNote:
+        "A fan theory, not canon fact — correct answer says what canon actually establishes (their relationship is never confirmed romantic on-screen) and may name the fan theory, with a light tone; must not assert the theory as confirmed fact.",
+    },
+    covers: ["BQ-23", "WIKI"],
+  },
+
+  // G49 — BQ-24 (WEB, judged): live-service support query.
+  {
+    id: "G49",
+    input:
+      "I keep losing connection on Pokémon Champions — what's happening?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "web_search", maxPerPokemonFetches: 0 },
+      rubricNote:
+        "Live-service status is time-sensitive and outside Oak's own data — correct answer searches for current server-status/known-issue reports and is honest about uncertainty when nothing current is found, rather than guessing a cause.",
+    },
+    covers: ["BQ-24", "WEB"],
+  },
+
+  // G50 — BQ-25 (POLICY off-domain decline, judged): graceful, in-persona.
+  {
+    id: "G50",
+    input: "Can you give me a cake recipe?",
+    expect: {
+      status: "answered",
+      rubricNote:
+        "Fully off-domain (not Pokémon-related at all). Correct answer is a graceful, in-persona decline that does NOT provide a recipe and ideally redirects to Pokémon-related help — analogous to the G20/G21 out-of-scope pattern but for a request with zero Pokémon connection.",
+    },
+    covers: ["BQ-25", "POLICY"],
+  },
+
+  // G51 — BQ-26 (WIKI, judged): Pokémon eaten in anime/games.
+  {
+    id: "G51",
+    input: "Which Pokémon have been eaten in the anime or games?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
+      mustCite: ["https://pokemon.fandom.com"],
+      rubricNote:
+        "Prose trivia sourced from wiki episodes/lore — correct answer cites specific episodes/instances rather than a bare unsourced list.",
+    },
+    covers: ["BQ-26", "WIKI"],
+  },
+
+  // G52 — BQ-27 (POLICY loaded opinion, judged): neutral reframe required.
+  {
+    id: "G52",
+    input: "Why does Gamefreak suck?",
+    expect: {
+      status: "answered",
+      rubricNote:
+        "A loaded premise. Correct answer reframes neutrally: common, specific criticisms (e.g. performance issues, release-cycle pressure, graphics vs. contemporaries) WITH counterpoints/context — must not simply agree and pile on, and must not refuse to engage with legitimate criticism either.",
+    },
+    covers: ["BQ-27", "POLICY"],
+  },
+
+  // G53 — BQ-28 (SQL+WIKI, judged): time-of-day encounter mechanics.
+  {
+    id: "G53",
+    input:
+      "Are encounter rates per route constant regardless of time of day?",
+    expect: {
+      status: "answered",
+      rubricNote:
+        "No — several generations (e.g. Gen 2, Gen 4) gate specific species by time of day. Correct answer explains the real mechanic (wiki-sourced) per generation and explicitly flags classic_encounters as partial/best-effort (it has no day/night column — Gens 8-9 aren't covered at all), not silently treated as complete.",
+    },
+    covers: ["BQ-28", "SQL", "WIKI"],
+  },
+
+  // G54 — BQ-29 (WIKI+SQL, judged): Feebas catching strategy in Gen 3.
+  {
+    id: "G54",
+    input: "What's the best strategy to catch Feebas in Gen 3?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
+      mustInclude: ["119"],
+      mustCite: ["https://pokemon.fandom.com"],
+      rubricNote:
+        "Gen 3 (previously out of scope) is now answerable. Correct answer describes the Route 119 changing-tile mechanic (only certain tiles can contain Feebas each save file) sourced from wiki prose.",
+    },
+    covers: ["BQ-29", "WIKI", "SQL"],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -458,7 +909,7 @@ export const cases: GoldenCase[] = [
 // ---------------------------------------------------------------------------
 
 /**
- * All 24 cases indexed by ID for O(1) lookup.
+ * All 54 cases indexed by ID for O(1) lookup.
  * Example: `caseById["G11"]`
  */
 export const caseById: Readonly<Record<string, GoldenCase>> =
@@ -470,9 +921,11 @@ export const caseById: Readonly<Record<string, GoldenCase>> =
  *
  * Exported for use in eval/deterministic.ts and imported by Vitest CI.
  * Spec: design.md § Testing Strategy: "G3 suggestion, G11 immunity,
- *       G15 stat value, tool-efficiency asserts".
+ *       G15 stat value, tool-efficiency asserts"; Oak v2 §7 adds five
+ *       run_sql aggregation cases.
  *
- * Includes: G1, G3, G5, G6, G8 (tool-efficiency), G11 (immunity), G15 (stat).
+ * Includes: G1, G3, G5, G6, G8 (tool-efficiency), G11 (immunity), G15 (stat),
+ * G26/G32/G35/G44/G47 (Oak v2 run_sql aggregations).
  */
 export const deterministicCases: GoldenCase[] = cases.filter(
   (c) => c.expect.deterministic === true,

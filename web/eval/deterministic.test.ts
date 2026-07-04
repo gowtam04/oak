@@ -17,10 +17,12 @@
  * here rather than slipping past CI.
  *
  * Asserts:
- *   1. Every deterministic case (G1/G3/G5/G6/G8/G11/G15) passes its structural
- *      checks against the real tools + fixture data, under EACH provider.
- *   2. The subset is exactly the one design.md specifies (a guard against the
- *      subset silently drifting), and every such case has a registered plan.
+ *   1. Every deterministic case (G1/G3/G5/G6/G8/G11/G15/G26/G32/G35/G44/G47)
+ *      passes its structural checks against the real tools + fixture data,
+ *      under EACH provider.
+ *   2. The subset is exactly the one design.md + Oak v2 §7 specifies (a guard
+ *      against the subset silently drifting), and every such case has a
+ *      registered plan.
  *   3. Spot-checks on the load-bearing values: G15 = 169, G11 says "immune",
  *      G3 suggests "Will-O-Wisp", and G1 cites both learnsets — under each
  *      provider (the composed answer is derived from identical tool output).
@@ -41,8 +43,21 @@ import { createPgSchema, installAsSingleton, type PgFixture } from "../test/supp
 import type { AssertResult } from "./judge";
 import type { DeterministicProvider } from "./deterministic";
 
-/** IDs design.md pins to the deterministic CI subset. */
-const EXPECTED_IDS = ["G1", "G3", "G5", "G6", "G8", "G11", "G15"];
+/** IDs design.md + Oak v2 §7 pin to the deterministic CI subset. */
+const EXPECTED_IDS = [
+  "G1",
+  "G3",
+  "G5",
+  "G6",
+  "G8",
+  "G11",
+  "G15",
+  "G26",
+  "G32",
+  "G35",
+  "G44",
+  "G47",
+];
 
 /** Both scripted transports are gated — Anthropic content-blocks AND native Grok. */
 const PROVIDERS: readonly DeterministicProvider[] = ["anthropic", "grok"];
@@ -65,6 +80,12 @@ beforeAll(async () => {
   fix = await createPgSchema({ seed: "eval" });
   await installAsSingleton(fix);
 
+  // run_sql (G26/G32/G35/G44/G47) reads its OWN sandbox pool
+  // (src/data/sql-sandbox.ts), not ctx.db/the singleton above — install the
+  // same fixture pool there too, mirroring run-sql.oracle.test.ts.
+  const { installSandboxPool } = await import("@/data/sql-sandbox");
+  installSandboxPool(fix.bundle.pool);
+
   const { PLANNED_CASE_IDS, runDeterministic } = await import(
     "./deterministic"
   );
@@ -84,6 +105,8 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
+  const { resetSandboxPool } = await import("@/data/sql-sandbox");
+  resetSandboxPool();
   await fix?.cleanup();
 });
 
@@ -147,6 +170,17 @@ for (const provider of PROVIDERS) {
       expect(sources.some((s) => s.startsWith("learnset/will-o-wisp"))).toBe(
         true,
       );
+    });
+
+    it("G35 rejects the Fire-Fang-Gen-3-bug premise: Fire Fang is Generation 4 (BQ-10)", () => {
+      const md = byProvider[provider].byId.G35.answer.answer_markdown;
+      expect(md).toContain("Generation 4");
+    });
+
+    it("G32 finds the fixture's real purple species (gengar/koffing/weezing/grimer) (BQ-7)", () => {
+      const md = byProvider[provider].byId.G32.answer.answer_markdown;
+      expect(md).toContain("gengar");
+      expect(md).toMatch(/^\*\*4\*\*/);
     });
   });
 }

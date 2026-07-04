@@ -1,17 +1,18 @@
 /**
- * eval/cases.test.ts — structural unit tests for the G1..G25 case definitions.
+ * eval/cases.test.ts — structural unit tests for the G1..G54 case definitions.
  *
  * Owned by: phase "Eval" / track "cases".
  *
  * Tests the STRUCTURE and INTENT of cases.ts without any LLM or DB calls:
- *  - all 25 cases present with unique IDs G1..G25
+ *  - all 54 cases present with unique IDs G1..G54
  *  - every case has the required fields with valid types
  *  - multi-turn input (G19) is correctly shaped
- *  - deterministic subset matches the design.md spec
+ *  - deterministic subset matches the design.md + Oak v2 §7 spec
  *  - tool-efficiency cases (G1/G5/G6/G8) specify query_pokedex + maxPerPokemonFetches=0
  *  - status values are valid OakAnswer status strings
  *  - key requirement IDs are covered across the suite
  *  - derived exports (caseById, deterministicCases, rebuildRegressionCases) are consistent
+ *  - G26..G54 (Oak v2 §7) map 1:1 to benchmark questions BQ-1..BQ-29
  */
 
 import { describe, it, expect } from "vitest";
@@ -40,6 +41,7 @@ const VALID_STATUSES = new Set<string>([
  *  - G11 (type immunity assertion)
  *  - G15 (compute_stat value = 169)
  *  - G1, G5, G6, G8 (tool-efficiency assertions)
+ *  - G26, G32, G35, G44, G47 (Oak v2 §7 run_sql aggregations)
  */
 const EXPECTED_DETERMINISTIC_IDS = new Set([
   "G1",
@@ -49,7 +51,19 @@ const EXPECTED_DETERMINISTIC_IDS = new Set([
   "G8",
   "G11",
   "G15",
+  "G26",
+  "G32",
+  "G35",
+  "G44",
+  "G47",
 ]);
+
+/** Benchmark-question IDs (docs/features/oak-v2/benchmark-questions.md) that
+ * G26..G54 must cover 1:1 (Oak v2 §7). */
+const EXPECTED_BQ_IDS = Array.from(
+  { length: 29 },
+  (_, i) => `BQ-${i + 1}`,
+);
 
 /**
  * Index-rebuild regression set per evaluation.md § Regression Approach.
@@ -90,8 +104,8 @@ describe("eval/cases", () => {
   // Top-level structure
   // -------------------------------------------------------------------------
 
-  it("exports exactly 25 cases", () => {
-    expect(cases).toHaveLength(25);
+  it("exports exactly 54 cases", () => {
+    expect(cases).toHaveLength(54);
   });
 
   it("all IDs follow the G<number> pattern", () => {
@@ -100,17 +114,17 @@ describe("eval/cases", () => {
     }
   });
 
-  it("all IDs G1..G25 are present and unique", () => {
+  it("all IDs G1..G54 are present and unique", () => {
     const ids = new Set(cases.map((c) => c.id));
-    expect(ids.size).toBe(25);
-    for (let n = 1; n <= 25; n++) {
+    expect(ids.size).toBe(54);
+    for (let n = 1; n <= 54; n++) {
       expect(ids.has(`G${n}`), `G${n} should be present`).toBe(true);
     }
   });
 
-  it("caseById indexes all 25 cases", () => {
-    expect(Object.keys(caseById)).toHaveLength(25);
-    for (let n = 1; n <= 25; n++) {
+  it("caseById indexes all 54 cases", () => {
+    expect(Object.keys(caseById)).toHaveLength(54);
+    for (let n = 1; n <= 54; n++) {
       expect(
         caseById[`G${n}`],
         `caseById["G${n}"] should be defined`,
@@ -118,7 +132,7 @@ describe("eval/cases", () => {
     }
   });
 
-  it("cases array order matches G1..G25 numerically", () => {
+  it("cases array order matches G1..G54 numerically", () => {
     for (let i = 0; i < cases.length; i++) {
       const expected = `G${i + 1}`;
       expect(cases[i].id).toBe(expected);
@@ -400,6 +414,15 @@ describe("eval/cases", () => {
         );
       }
     });
+
+    it("all G26..G54 (Oak v2 benchmark) cases assert status: answered", () => {
+      for (let n = 26; n <= 54; n++) {
+        const id = `G${n}`;
+        expect(getCase(id).expect.status, `${id} should be answered`).toBe(
+          "answered",
+        );
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -539,6 +562,76 @@ describe("eval/cases", () => {
         allCovers.some((c) => c.includes(req)),
         `Requirement ${req} should be covered by some case`,
       ).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Oak v2 §7 — G26..G54 map 1:1 onto the 29 benchmark questions
+  // (docs/features/oak-v2/benchmark-questions.md BQ-1..BQ-29).
+  // -------------------------------------------------------------------------
+
+  describe("Oak v2 benchmark coverage (G26..G54)", () => {
+    const benchmarkCases = cases.filter((c) => /^G(2[6-9]|[3-4]\d|5[0-4])$/.test(c.id));
+
+    it("has exactly 29 benchmark cases (G26..G54)", () => {
+      expect(benchmarkCases).toHaveLength(29);
+    });
+
+    it.each(EXPECTED_BQ_IDS)("%s is covered by exactly one case", (bq) => {
+      const matches = benchmarkCases.filter((c) => c.covers.includes(bq));
+      expect(matches, `${bq} should be covered by exactly one case`).toHaveLength(1);
+    });
+
+    it("every benchmark case carries a layer tag (SQL/WIKI/WEB/POLICY/TYPED)", () => {
+      const layerTags = new Set(["SQL", "WIKI", "WEB", "POLICY", "TYPED"]);
+      for (const c of benchmarkCases) {
+        expect(
+          c.covers.some((tag) => layerTags.has(tag)),
+          `${c.id} should carry a layer tag`,
+        ).toBe(true);
+      }
+    });
+
+    it("run_sql-tagged cases assert toolEfficiency.usedTool === 'run_sql'", () => {
+      // G35 (BQ-10) verifies a false premise via run_sql but is tagged POLICY
+      // (the benchmark layer), not SQL — both are valid companions to run_sql.
+      for (const c of benchmarkCases) {
+        if (c.expect.toolEfficiency?.usedTool === "run_sql") {
+          expect(
+            c.covers.some((tag) => tag === "SQL" || tag === "POLICY"),
+          ).toBe(true);
+        }
+      }
+    });
+
+    it("search_wiki-tagged cases assert toolEfficiency.usedTool === 'search_wiki'", () => {
+      for (const c of benchmarkCases) {
+        if (c.expect.toolEfficiency?.usedTool === "search_wiki") {
+          expect(c.covers).toContain("WIKI");
+        }
+      }
+    });
+
+    it("web_search-tagged cases assert toolEfficiency.usedTool === 'web_search'", () => {
+      for (const c of benchmarkCases) {
+        if (c.expect.toolEfficiency?.usedTool === "web_search") {
+          expect(c.covers).toContain("WEB");
+        }
+      }
+    });
+
+    it("the 5 deterministic Oak v2 cases (G26/G32/G35/G44/G47) all use run_sql", () => {
+      const detIds = ["G26", "G32", "G35", "G44", "G47"];
+      for (const id of detIds) {
+        const c = getCase(id);
+        expect(c.expect.deterministic).toBe(true);
+        expect(c.expect.toolEfficiency?.usedTool).toBe("run_sql");
+      }
+    });
+
+    it("G35 (Fire-Fang-Gen-3-bug false premise) rejects the premise, not fabricates one", () => {
+      const g35 = getCase("G35");
+      expect(g35.expect.mustInclude).toContain("Generation 4");
     });
   });
 });

@@ -60,6 +60,7 @@ import type {
   OakAnswer,
   QueryPokedexResult,
   ResolveEntityOutput,
+  RunSqlRows,
   TypeMatchupsDetail,
   TypeName,
 } from "@/agent/schemas";
@@ -470,6 +471,13 @@ function totalOf(o: unknown): number {
   return isQueryResult(o) ? o.total_count : 0;
 }
 
+/** Is this a successful run_sql result (vs. a query_failed/query_timeout shape)? */
+function isRunSqlRows(o: unknown): o is RunSqlRows {
+  return (
+    typeof o === "object" && o !== null && Array.isArray((o as { rows?: unknown }).rows)
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Per-case deterministic plans (only the `deterministic: true` cases)
 // ---------------------------------------------------------------------------
@@ -688,6 +696,172 @@ const PLANS: Record<string, DeterministicPlan> = {
           breakdown: c?.breakdown ?? "",
         },
         citations: [{ source: "pokemon/garchomp", detail: "base Speed 102" }],
+        inferences: [],
+        generation_basis: GEN9_BASIS,
+      };
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // Oak v2 §7 — run_sql aggregation plans (G26/G32/G35/G44/G47). Each issues
+  // ONE run_sql read against the fixture's natdex_species/natdex_moves rows
+  // (eval/fixtures/seed-fixture-db.ts) and composes from the REAL rows the
+  // sandboxed query returns — same "compose from live tool output" contract
+  // as every other plan in this file. See cases.ts for which assertions are
+  // real facts (hold live too) vs. illustrative-fixture-only.
+  // -------------------------------------------------------------------------
+
+  // G26 — natdex number == base-stat total (illustrative fixture row).
+  G26: {
+    reads: [
+      {
+        name: "run_sql",
+        input: {
+          query:
+            "SELECT species, national_dex_number, base_stat_total FROM natdex_species WHERE national_dex_number = base_stat_total ORDER BY species",
+          purpose: "find species whose National Dex number equals its base stat total",
+        },
+      },
+    ],
+    compose: (o) => {
+      const r = o.run_sql;
+      const rows = isRunSqlRows(r) ? r.rows : [];
+      const names = rows.map((row) => String(row[0]));
+      return {
+        status: "answered",
+        answer_markdown:
+          names.length > 0
+            ? `**${names.join(", ")}** — National Dex number equals base stat total, per a warehouse aggregation over the whole Pokédex.`
+            : "No species in the warehouse has a National Dex number equal to its base stat total.",
+        reasoning_markdown:
+          "Ran one natdex_species aggregation (WHERE national_dex_number = base_stat_total) instead of checking species one at a time.",
+        citations: [
+          { source: "natdex_species", detail: "national_dex_number = base_stat_total" },
+        ],
+        inferences: [],
+        generation_basis: GEN9_BASIS,
+      };
+    },
+  },
+
+  // G32 — count + list of color='purple' species (real PokeAPI fact).
+  G32: {
+    reads: [
+      {
+        name: "run_sql",
+        input: {
+          query:
+            "SELECT species, national_dex_number FROM natdex_species WHERE color = 'purple' ORDER BY national_dex_number",
+          purpose: "count and list purple-colored species",
+        },
+      },
+    ],
+    compose: (o) => {
+      const r = o.run_sql;
+      const rows = isRunSqlRows(r) ? r.rows : [];
+      const names = rows.map((row) => String(row[0]));
+      return {
+        status: "answered",
+        answer_markdown: `**${rows.length}** Pokémon are classified color="purple" in the warehouse: ${names.join(", ") || "(none)"}.`,
+        reasoning_markdown:
+          "Ran one natdex_species aggregation (WHERE color = 'purple') over the whole Pokédex.",
+        citations: [{ source: "natdex_species", detail: "color = 'purple'" }],
+        inferences: [],
+        generation_basis: GEN9_BASIS,
+      };
+    },
+  },
+
+  // G35 — Fire Fang's generation, verifying it postdates Gen 3 (real fact).
+  G35: {
+    reads: [
+      {
+        name: "run_sql",
+        input: {
+          query: "SELECT move_slug, generation FROM natdex_moves WHERE move_slug = 'fire-fang'",
+          purpose: "verify which generation Fire Fang was introduced in",
+        },
+      },
+    ],
+    compose: (o) => {
+      const r = o.run_sql;
+      const rows = isRunSqlRows(r) ? r.rows : [];
+      const gen = rows[0]?.[1];
+      return {
+        status: "answered",
+        answer_markdown:
+          gen === 4
+            ? "There's no Fire Fang bug from Generation 3 — Fire Fang wasn't introduced until **Generation 4** (Diamond/Pearl/Platinum), so it didn't exist in Gen 3 at all."
+            : `Fire Fang's recorded introduction generation is ${String(gen)}, not Generation 3 — no Gen-3 bug is possible for a move that didn't exist yet.`,
+        reasoning_markdown:
+          "natdex_moves is the only move-generation source covering Gens 1-4; it shows Fire Fang was introduced in Gen 4, which rejects the premise directly rather than inventing a Gen-3 bug.",
+        citations: [{ source: "natdex_moves", detail: "move_slug = 'fire-fang'" }],
+        inferences: [],
+        generation_basis: GEN9_BASIS,
+      };
+    },
+  },
+
+  // G44 — catch rate higher than pre-evolution (contrived fixture pair).
+  G44: {
+    reads: [
+      {
+        name: "run_sql",
+        input: {
+          query:
+            "SELECT s.species, s.capture_rate, p.species AS pre_evo, p.capture_rate AS pre_capture_rate " +
+            "FROM natdex_species s JOIN natdex_species p ON s.evolves_from = p.species " +
+            "WHERE s.capture_rate > p.capture_rate ORDER BY s.species",
+          purpose: "find species with a higher catch rate than their pre-evolution",
+        },
+      },
+    ],
+    compose: (o) => {
+      const r = o.run_sql;
+      const rows = isRunSqlRows(r) ? r.rows : [];
+      const names = rows.map((row) => String(row[0]));
+      return {
+        status: "answered",
+        answer_markdown:
+          names.length > 0
+            ? `Yes — **${names.join(", ")}** has a higher catch rate than its pre-evolution, per a self-join over the whole Pokédex.`
+            : "No species in the warehouse has a higher catch rate than its pre-evolution.",
+        reasoning_markdown:
+          "Self-joined natdex_species on evolves_from and filtered capture_rate > the pre-evolution's capture_rate.",
+        citations: [{ source: "natdex_species", detail: "capture_rate self-join on evolves_from" }],
+        inferences: [],
+        generation_basis: GEN9_BASIS,
+      };
+    },
+  },
+
+  // G47 — dual-type -> monotype on evolution (contrived fixture pair).
+  G47: {
+    reads: [
+      {
+        name: "run_sql",
+        input: {
+          query:
+            "SELECT s.species, p.species AS pre_evo FROM natdex_species s " +
+            "JOIN natdex_species p ON s.evolves_from = p.species " +
+            "WHERE p.type2 IS NOT NULL AND s.type2 IS NULL ORDER BY s.species",
+          purpose: "find dual-type species that become monotype on evolution",
+        },
+      },
+    ],
+    compose: (o) => {
+      const r = o.run_sql;
+      const rows = isRunSqlRows(r) ? r.rows : [];
+      const names = rows.map((row) => String(row[0]));
+      return {
+        status: "answered",
+        answer_markdown:
+          names.length > 0
+            ? `**${names.join(", ")}** evolve from a dual-type pre-evolution into a monotype form, per a self-join over the whole Pokédex.`
+            : "No species in the warehouse evolves from dual-type into monotype.",
+        reasoning_markdown:
+          "Self-joined natdex_species on evolves_from, filtering pre-evolution type2 IS NOT NULL and evolution type2 IS NULL.",
+        citations: [{ source: "natdex_species", detail: "type2 self-join on evolves_from" }],
         inferences: [],
         generation_basis: GEN9_BASIS,
       };

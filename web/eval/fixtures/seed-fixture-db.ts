@@ -31,6 +31,13 @@
  *   - All abilities carried by the fixture Pokémon
  *   - All 18 type slugs
  *
+ * natdex_species / natdex_moves rows (GLOBAL, no `format` column — Oak v2
+ * §4.1) back the five run_sql deterministic plans (eval/deterministic.ts
+ * PLANS, Oak v2 §7): G26/G32/G44/G47 use illustrative/contrived rows (see
+ * their per-row comments below); G32 (purple count) and G35 (Fire Fang is
+ * Gen 4) use real, verified PokeAPI facts so those assertions hold against
+ * the real warehouse too, not just this fixture.
+ *
  * Exports:
  *   - seedFixtureDb(db)   — seed an already-migrated Drizzle handle (async)
  *
@@ -50,6 +57,8 @@ import * as schema from "@/data/schema";
 import {
   ingest_meta,
   learnset,
+  natdex_moves,
+  natdex_species,
   pokemon,
   reference_cache,
   searchable_names,
@@ -815,7 +824,155 @@ const SEARCHABLE_NAME_ROWS: Omit<SearchableRow, "format">[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// 5. Ingest meta — ingest_meta table (index availability sentinel)
+// 5. Natdex warehouse rows — natdex_species / natdex_moves (Oak v2 §4.1,
+//    GLOBAL tables, no `format` column). Backs the five G26/G32/G35/G44/G47
+//    deterministic run_sql plans (eval/deterministic.ts PLANS).
+// ---------------------------------------------------------------------------
+
+type NatdexSpeciesRow = typeof natdex_species.$inferInsert;
+type NatdexMoveRow = typeof natdex_moves.$inferInsert;
+
+const NATDEX_SPECIES_ROWS: NatdexSpeciesRow[] = [
+  // G26 (BQ-1, natdex==BST): an illustrative fixture row, not a real Pokédex
+  // match — the deterministic assertion checks that the aggregation runs
+  // correctly, not a specific species name (see cases.ts G26 note).
+  {
+    species: "fixturemon-bst-match",
+    national_dex_number: 400,
+    generation: 9,
+    color: null,
+    shape: null,
+    capture_rate: 45,
+    base_stat_total: 400,
+    evolves_from: null,
+    type1: "normal",
+    type2: null,
+  },
+
+  // G32 (BQ-7, purple count): REAL PokeAPI color="purple" species, so this
+  // holds against both the fixture and the real warehouse (only the exact
+  // count differs — see cases.ts G32 note, which deliberately omits it).
+  {
+    species: "gengar",
+    national_dex_number: 94,
+    generation: 1,
+    color: "purple",
+    shape: "humanoid",
+    capture_rate: 45,
+    base_stat_total: 500,
+    evolves_from: "haunter",
+    type1: "ghost",
+    type2: "poison",
+  },
+  {
+    species: "koffing",
+    national_dex_number: 109,
+    generation: 1,
+    color: "purple",
+    shape: "orb",
+    capture_rate: 190,
+    base_stat_total: 340,
+    evolves_from: null,
+    type1: "poison",
+    type2: null,
+  },
+  {
+    species: "weezing",
+    national_dex_number: 110,
+    generation: 1,
+    color: "purple",
+    shape: "orb",
+    capture_rate: 60,
+    base_stat_total: 490,
+    evolves_from: "koffing",
+    type1: "poison",
+    type2: null,
+  },
+  {
+    species: "grimer",
+    national_dex_number: 88,
+    generation: 1,
+    color: "purple",
+    shape: "blob",
+    capture_rate: 190,
+    base_stat_total: 325,
+    evolves_from: null,
+    type1: "poison",
+    type2: null,
+  },
+
+  // G44 (BQ-19, catch rate > pre-evolution): a contrived self-join pair
+  // (mirrors the same pattern used in run-sql.oracle.test.ts) — the real
+  // exception set differs live vs. fixture, so no species name is asserted.
+  {
+    species: "lowcatch",
+    national_dex_number: 900,
+    generation: 9,
+    color: "gray",
+    shape: "upright",
+    capture_rate: 30,
+    base_stat_total: 400,
+    evolves_from: null,
+    type1: "rock",
+    type2: null,
+  },
+  {
+    species: "highcatch",
+    national_dex_number: 901,
+    generation: 9,
+    color: "gray",
+    shape: "upright",
+    capture_rate: 60,
+    base_stat_total: 500,
+    evolves_from: "lowcatch",
+    type1: "rock",
+    type2: null,
+  },
+
+  // G47 (BQ-22, dual-type -> monotype on evolution): a contrived pair
+  // demonstrating the join; real examples are rare/contested, so no species
+  // name is asserted (see cases.ts G47 note).
+  {
+    species: "duoform",
+    national_dex_number: 902,
+    generation: 9,
+    color: "blue",
+    shape: "upright",
+    capture_rate: 45,
+    base_stat_total: 400,
+    evolves_from: null,
+    type1: "fire",
+    type2: "flying",
+  },
+  {
+    species: "monoform",
+    national_dex_number: 903,
+    generation: 9,
+    color: "red",
+    shape: "upright",
+    capture_rate: 45,
+    base_stat_total: 500,
+    evolves_from: "duoform",
+    type1: "fire",
+    type2: null,
+  },
+];
+
+const NATDEX_MOVES_ROWS: NatdexMoveRow[] = [
+  // G35 (BQ-10, Fire-Fang-is-Gen-4 false-premise verification): Fire Fang was
+  // introduced in Generation 4 (Diamond/Pearl/Platinum) — a real, verified
+  // fact, so this row (and the "Generation 4" assertion in cases.ts G35)
+  // holds against both the fixture and the real warehouse.
+  {
+    move_slug: "fire-fang",
+    generation: 4,
+    type: "fire",
+    damage_class: "physical",
+  },
+];
+
+// ---------------------------------------------------------------------------
+// 6. Ingest meta — ingest_meta table (index availability sentinel)
 // ---------------------------------------------------------------------------
 
 const INGEST_META_ROW: typeof ingest_meta.$inferInsert = {
@@ -851,6 +1008,8 @@ export async function seedFixtureDb(db: FixtureDb): Promise<void> {
     await tx
       .insert(searchable_names)
       .values(SEARCHABLE_NAME_ROWS.map((r) => ({ ...r, format: SV })));
+    await tx.insert(natdex_species).values(NATDEX_SPECIES_ROWS);
+    await tx.insert(natdex_moves).values(NATDEX_MOVES_ROWS);
     await tx.insert(ingest_meta).values(INGEST_META_ROW);
   });
 }
