@@ -55,6 +55,12 @@ struct ChatView: View {
   /// the eye lands where the action is (§4.01). Skipped under Reduce Motion.
   @State private var sendPulse = false
 
+  /// The empty state's four example chips, resampled from ``ExamplePrompts/pool``
+  /// each time the empty state (re)appears (fresh load, or a new chat after turns
+  /// existed) — never mid-appearance, so chips don't shuffle under the user's
+  /// finger. Mirrors web's `pickRandomPrompts` call in `ChatThread`'s effect.
+  @State private var exampleQuestions: [String] = []
+
   /// The thread's artifact bottom-sheet viewer (artifact-viewer.md M-ART-US-1/2/3).
   /// One per chat thread, hosted once via ``artifactViewerHost(_:)``. Built lazily in
   /// `.task(id:)` (the environment isn't available in `init`) and rebuilt when the
@@ -390,18 +396,11 @@ struct ChatView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  /// The seed prompts offered on an empty thread; a tap sends the text verbatim
-  /// as the first user turn (same path as a suggestion chip). Games-wide since
-  /// oak-v2 — mirrors the web starter prompts (at least one non-competitive).
-  private static let exampleQuestions = [
-    "What's Garchomp's best moveset?",
-    "Who outspeeds Dragapult?",
-    "Where do I get HM Fly in HeartGold?",
-    "Who leads the guild in Pokémon Mystery Dungeon Explorers?",
-  ]
-
   /// A branded empty state: the ``OakBrandMark`` hero, a title + description, and the
   /// example-question chips (styled like ``SuggestionsView`` chips) that cascade in.
+  /// Sends its text verbatim as the first user turn on tap (same path as a
+  /// suggestion chip). Games-wide since oak-v2 — the four chips are resampled from
+  /// ``ExamplePrompts/pool`` on each appearance, mirroring the web starter prompts.
   private var emptyState: some View {
     VStack(spacing: Theme.Spacing.xl) {
       OakBrandMark()
@@ -422,7 +421,7 @@ struct ChatView: View {
           .foregroundStyle(Theme.textSecondary)
           .frame(maxWidth: Self.chipMaxWidth, alignment: .leading)
           .accessibilityAddTraits(.isHeader)
-        ForEach(Array(Self.exampleQuestions.enumerated()), id: \.offset) { index, question in
+        ForEach(Array(exampleQuestions.enumerated()), id: \.offset) { index, question in
           exampleChip(question, index: index)
         }
       }
@@ -432,7 +431,10 @@ struct ChatView: View {
     // No top offset: the thread centers this composition in the viewport (§3 —
     // empty states are centered, not top- or bottom-anchored).
     .padding(.horizontal, Theme.Spacing.sm)
-    .onAppear { emptyStateAppeared = true }
+    .onAppear {
+      exampleQuestions = ExamplePrompts.pick(4)
+      emptyStateAppeared = true
+    }
   }
 
   /// The shared max-width the `TRY ASKING` label and every example chip snap to, so
