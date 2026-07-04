@@ -19,12 +19,17 @@
  *     the executor falls back to READ ONLY + a defense-in-depth deny-list regex
  *     that blocks the sensitive user/auth tables from being named. The pool
  *     probes its capability once at init and picks the configuration.
- *   - The query is wrapped as `SELECT * FROM ( <query> ) oak_sub LIMIT 200`,
- *     which both caps the result and forces a SELECT-shaped statement (DDL/DML/
- *     EXPLAIN won't parse inside a subquery), and is executed through the
- *     EXTENDED query protocol (a values array is always passed) so a
- *     multi-command string (`SELECT 1; DROP TABLE pokemon`) is rejected by
- *     Postgres itself.
+ *   - The query is wrapped as `SELECT * FROM ( <query> ) oak_sub LIMIT $1`,
+ *     which caps the result and forces a SELECT-shaped statement (DDL/DML/
+ *     EXPLAIN won't parse inside a subquery). The `$1` bind parameter is the
+ *     load-bearing safety detail: a real parameter makes node-postgres use the
+ *     EXTENDED query protocol (Parse/Bind — `requiresPreparation()` is true only
+ *     when `values.length > 0`, so an EMPTY array would silently fall back to
+ *     the simple protocol and run multiple `;`-separated commands). Under the
+ *     extended protocol Postgres rejects ANY multi-command string outright
+ *     ("cannot insert multiple commands into a prepared statement"), which also
+ *     defeats a paren-escape that breaks out of the subquery wrap
+ *     (`1) oak_sub LIMIT 1; RESET ROLE; SELECT …`).
  *
  * Never throws in-domain: bad SQL / permission errors become
  * `{ error: "query_failed", hint }`, a statement_timeout becomes
@@ -226,7 +231,7 @@ export async function runSandboxedQuery(query: string): Promise<RunSqlOutput> {
   const bundle = getBundle();
   await bundle.ready;
 
-  const wrapped = `SELECT * FROM (${inner}) oak_sub LIMIT ${ROW_LIMIT}`;
+  const wrapped = `SELECT * FROM (${inner}) oak_sub LIMIT $1`;
 
   // A failure to even acquire a connection is a genuine infrastructure fault —
   // let it propagate (not an in-domain miss).
@@ -238,10 +243,12 @@ export async function runSandboxedQuery(query: string): Promise<RunSqlOutput> {
     if (bundle.useRole) {
       await client.query(`SET LOCAL ROLE ${READONLY_ROLE}`);
     }
-    // Passing a (possibly empty) values array forces the EXTENDED protocol, so a
-    // multi-command string is rejected by Postgres ("cannot insert multiple
-    // commands into a prepared statement").
-    const res = await client.query({ text: wrapped, values: [] });
+    // The `$1` bind (ROW_LIMIT) forces the EXTENDED protocol — node-postgres
+    // only prepares when values.length > 0. That rejects any multi-command
+    // string ("cannot insert multiple commands into a prepared statement"),
+    // including a paren-escape out of the subquery wrap. An empty array here
+    // would drop to the SIMPLE protocol and execute `;`-separated commands.
+    const res = await client.query({ text: wrapped, values: [ROW_LIMIT] });
     const columns = res.fields.map((f) => f.name);
     const rows = res.rows.map((row) =>
       columns.map((col) => coerceCell((row as Record<string, unknown>)[col])),

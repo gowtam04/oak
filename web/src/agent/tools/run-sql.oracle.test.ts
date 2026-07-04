@@ -219,6 +219,18 @@ for (const cfg of CONFIGS) {
       expect(check.rows[0][0]).toBeGreaterThan(0);
     });
 
+    it("rejects a paren-escape that breaks out of the subquery wrap (RESET ROLE injection)", async () => {
+      // The `$1` bind forces the extended protocol, so this multi-statement
+      // escape — which would otherwise close the wrap, RESET ROLE (dropping the
+      // oak_readonly restriction), then run more commands — is rejected outright
+      // by Postgres. It must NOT return rows under EITHER configuration.
+      const out = await runSql("1) oak_sub LIMIT 1; RESET ROLE; SELECT 1 --");
+      expect(isRows(out)).toBe(false);
+      if (isRows(out)) return;
+      expect(out.error).toBe("query_failed");
+      expect(out.hint ?? "").toMatch(/multiple commands|syntax/i);
+    });
+
     it("rejects reading a restricted user table (account)", async () => {
       const out = await runSql("SELECT * FROM account");
       expect(isRows(out)).toBe(false);
