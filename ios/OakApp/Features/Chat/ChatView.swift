@@ -46,6 +46,15 @@ struct ChatView: View {
   /// once (staggered fade), rather than snapping in with the hero.
   @State private var emptyStateAppeared = false
 
+  /// When the current in-flight turn began, for the field-notes trail's elapsed timer
+  /// (§4.03). Set the first frame streaming becomes active, cleared when it ends —
+  /// pure view-layer presentation, so the elapsed reads live without touching the VM.
+  @State private var streamStartedAt: Date?
+
+  /// A single scale pulse on the send button, fired when an example chip is tapped so
+  /// the eye lands where the action is (§4.01). Skipped under Reduce Motion.
+  @State private var sendPulse = false
+
   /// The thread's artifact bottom-sheet viewer (artifact-viewer.md M-ART-US-1/2/3).
   /// One per chat thread, hosted once via ``artifactViewerHost(_:)``. Built lazily in
   /// `.task(id:)` (the environment isn't available in `init`) and rebuilt when the
@@ -94,7 +103,8 @@ struct ChatView: View {
         model: model,
         onVoice: { isVoicePresented = true },
         voiceReady: voiceReady,
-        onSignInNudge: signInAction
+        onSignInNudge: signInAction,
+        sendPulse: sendPulse
       )
     }
     // The error banner slides up from the composer seam as it appears/clears.
@@ -103,6 +113,11 @@ struct ChatView: View {
     // (M-AC-UI9.3). Fires only when the newest turn is an assistant answer.
     .onChange(of: model.turns.count) { _, _ in
       if case .assistant = model.turns.last?.content { Haptics.success() }
+    }
+    // Stamp/clear the trail's elapsed-timer origin as a turn starts/ends — view-layer
+    // only, so the timer never reaches into the VM's private `turnStartedAt`.
+    .onChange(of: model.isStreaming) { _, streaming in
+      streamStartedAt = streaming ? Date() : nil
     }
     .navigationTitle("Oak")
     .navigationBarTitleDisplayMode(.inline)
@@ -235,61 +250,73 @@ struct ChatView: View {
 
   // MARK: Sign-in nudge (guest)
 
-  /// A slim banner inviting a guest to sign in so their conversations persist
+  /// A quiet one-line card inviting a guest to sign in so their conversations persist
   /// (accounts-and-access.md M-ACCT-US-1). Shown only in the guest single-thread
   /// context; the "Sign in" button presents the sign-in sheet via ``signInAction``.
-  /// Styled like the error banner — an icon paired with text so meaning is never
-  /// carried by color alone (M-AC-UI9.3).
+  /// De-pinked per §4.01 — a `surface` card with the icon + text in `textSecondary`,
+  /// red reserved for the "Sign in" action alone. An icon paired with text so meaning
+  /// is never carried by color alone (M-AC-UI9.3).
   @ViewBuilder
   private func signInNudge(action: @escaping () -> Void) -> some View {
-    HStack(spacing: 8) {
+    HStack(spacing: Theme.Spacing.sm) {
       Image(systemName: "icloud.and.arrow.up")
-        .foregroundStyle(Theme.accent)
+        .foregroundStyle(Theme.textSecondary)
       Text("Sign in to save your conversations")
         .font(Theme.body(.footnote))
-        .foregroundStyle(Theme.textPrimary)
+        .foregroundStyle(Theme.textSecondary)
         .frame(maxWidth: .infinity, alignment: .leading)
       Button("Sign in", action: action)
         .font(Theme.display(.footnote))
         .buttonStyle(.borderless)
         .tint(Theme.accent)
     }
-    .padding(12)
+    .padding(Theme.Spacing.md)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Theme.accent.opacity(0.10))
+    .background(Theme.surface)
   }
 
   // MARK: Thread
 
   private var thread: some View {
     ScrollViewReader { proxy in
-      ScrollView {
-        LazyVStack(alignment: .leading, spacing: 16) {
-          if model.turns.isEmpty && !model.isStreaming {
-            emptyState
-          }
+      GeometryReader { geo in
+        ScrollView {
+          // Conversation gravity is bottom-anchored (§3 composition rule, §4.04): a
+          // greedy top Spacer pushes a short thread down against the composer instead
+          // of stranding it at the top with a void beneath. The content is pinned to
+          // at least the viewport height so the Spacer has room to grow; once the
+          // thread outgrows the viewport it scrolls normally.
+          VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            LazyVStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+              if model.turns.isEmpty && !model.isStreaming {
+                emptyState
+              }
 
-          ForEach(model.turns) { turn in
-            turnView(turn)
-              .id(turn.id)
-          }
-          // Turn insertion animates so the user bubble's entrance transition fires
-          // (Reduce Motion: the transition itself degrades to opacity-only).
-          .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.turns.count)
+              ForEach(model.turns) { turn in
+                turnView(turn)
+                  .id(turn.id)
+              }
+              // Turn insertion animates so the user bubble's entrance transition fires
+              // (Reduce Motion: the transition itself degrades to opacity-only).
+              .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.turns.count)
 
-          // The in-flight turn: live status + streamed prose as it arrives.
-          if model.isStreaming || !model.streamingText.isEmpty {
-            inProgressView
-              .id(Self.inProgressAnchor)
+              // The in-flight turn: live status + streamed prose as it arrives.
+              if model.isStreaming || !model.streamingText.isEmpty {
+                inProgressView
+                  .id(Self.inProgressAnchor)
+              }
+            }
           }
+          .padding(Theme.Spacing.lg)
+          .frame(minHeight: geo.size.height, alignment: .bottom)
         }
-        .padding(16)
+        .scrollDismissesKeyboard(.interactively)
+        // Keep the newest content in view as turns/tokens arrive (M-AC-2.2).
+        .onChange(of: model.turns.count) { _, _ in scrollToBottom(proxy) }
+        .onChange(of: model.streamingText) { _, _ in scrollToBottom(proxy) }
+        .onChange(of: model.toolActivities.count) { _, _ in scrollToBottom(proxy) }
       }
-      .scrollDismissesKeyboard(.interactively)
-      // Keep the newest content in view as turns/tokens arrive (M-AC-2.2).
-      .onChange(of: model.turns.count) { _, _ in scrollToBottom(proxy) }
-      .onChange(of: model.streamingText) { _, _ in scrollToBottom(proxy) }
-      .onChange(of: model.toolActivities.count) { _, _ in scrollToBottom(proxy) }
     }
   }
 
@@ -331,20 +358,30 @@ struct ChatView: View {
     model.send()
   }
 
-  /// The live streaming section: the status ticker, then the streamed prose (which
-  /// the terminal answer later replaces, authoritatively).
+  /// The live streaming section: the field-notes trail (with its elapsed timer), then
+  /// either the answer skeleton holding the landing zone (§4.03) or, once prose
+  /// arrives, the streamed markdown (which the terminal answer later replaces,
+  /// authoritatively). A `TimelineView` ticks the trail's elapsed seconds each second
+  /// without a stored counter.
   private var inProgressView: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      StreamingStatusView(
-        phase: model.streamingPhase,
-        activities: model.toolActivities,
-        reconnecting: model.reconnecting
-      )
-      if !model.streamingText.isEmpty {
-        MarkdownBlockView(model.streamingText)
-          .font(Theme.body(.body))
-          .foregroundStyle(Theme.textPrimary)
-          .frame(maxWidth: .infinity, alignment: .leading)
+    TimelineView(.periodic(from: .now, by: 1)) { context in
+      let elapsed = streamStartedAt.map { max(0, Int(context.date.timeIntervalSince($0))) }
+      VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+        StreamingStatusView(
+          phase: model.streamingPhase,
+          activities: model.toolActivities,
+          reconnecting: model.reconnecting,
+          elapsedSeconds: elapsed
+        )
+        if !model.streamingText.isEmpty {
+          MarkdownBlockView(model.streamingText)
+            .font(Theme.body(.body))
+            .foregroundStyle(Theme.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+          // Hold the answer's landing zone until the first token arrives (§4.03).
+          AnswerSkeleton()
+        }
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -363,10 +400,10 @@ struct ChatView: View {
   /// A branded empty state: the ``OakBrandMark`` hero, a title + description, and the
   /// example-question chips (styled like ``SuggestionsView`` chips) that cascade in.
   private var emptyState: some View {
-    VStack(spacing: 20) {
+    VStack(spacing: Theme.Spacing.xl) {
       OakBrandMark()
 
-      VStack(spacing: 6) {
+      VStack(spacing: Theme.Spacing.sm) {
         Text("Ask Oak")
           .font(Theme.display(.title))
           .foregroundStyle(Theme.textPrimary)
@@ -376,37 +413,53 @@ struct ChatView: View {
           .multilineTextAlignment(.center)
       }
 
-      VStack(spacing: 8) {
+      VStack(spacing: Theme.Spacing.sm) {
+        Text("Try asking")
+          .instrumentLabel()
+          .foregroundStyle(Theme.textSecondary)
+          .frame(maxWidth: Self.chipMaxWidth, alignment: .leading)
+          .accessibilityAddTraits(.isHeader)
         ForEach(Array(Self.exampleQuestions.enumerated()), id: \.offset) { index, question in
           exampleChip(question, index: index)
         }
       }
-      .padding(.top, 4)
+      .padding(.top, Theme.Spacing.xs)
     }
     .frame(maxWidth: .infinity)
-    .padding(.top, 48)
-    .padding(.horizontal, 8)
+    .padding(.top, Theme.Spacing.xxl + Theme.Spacing.lg)
+    .padding(.horizontal, Theme.Spacing.sm)
     .onAppear { emptyStateAppeared = true }
   }
 
-  /// One example-question chip. Accent-tinted bordered capsule (mirrors the suggestion
-  /// chips); tapping sends it as the next user turn. Cascades in with a per-index
-  /// stagger, collapsing to an instant appearance under Reduce Motion.
+  /// The shared max-width the `TRY ASKING` label and every example chip snap to, so
+  /// the chip set reads as one aligned column and none wraps ragged (§4.01).
+  private static let chipMaxWidth: CGFloat = 320
+
+  /// One example-question chip. Neutral `surfaceSunken` capsule with a hairline
+  /// separator border and `textPrimary` label (§4.01 — red is reserved for the
+  /// composer); tapping sends it as the next user turn and pulses the send button
+  /// once. Cascades in with a per-index stagger, collapsing to an instant appearance
+  /// under Reduce Motion.
   private func exampleChip(_ text: String, index: Int) -> some View {
     let shown = reduceMotion || emptyStateAppeared
     return Button {
       Haptics.tap()
+      if !reduceMotion {
+        // A single pulse: bump the toggle so the composer's send button scales once.
+        sendPulse.toggle()
+      }
       sendFollowUp(text)
     } label: {
       Text(text)
         .font(Theme.body(.subheadline).weight(.medium))
-        .foregroundStyle(Theme.accent)
+        .foregroundStyle(Theme.textPrimary)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(Theme.accent.opacity(0.12), in: Capsule())
-        .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1))
+        .frame(maxWidth: Self.chipMaxWidth)
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(Theme.surfaceSunken, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.separator, lineWidth: 1))
         .contentShape(Capsule())
     }
     .buttonStyle(OakPressableButtonStyle())
@@ -427,7 +480,7 @@ struct ChatView: View {
 
   @ViewBuilder
   private func errorBannerView(_ banner: ChatViewModel.ErrorBanner) -> some View {
-    HStack(alignment: .top, spacing: 8) {
+    HStack(alignment: .top, spacing: Theme.Spacing.sm) {
       Image(systemName: "exclamationmark.triangle.fill")
         .foregroundStyle(Theme.danger)
         .symbolEffect(.pulse, options: .nonRepeating, isActive: !reduceMotion)
@@ -442,7 +495,7 @@ struct ChatView: View {
           .tint(Theme.accent)
       }
     }
-    .padding(12)
+    .padding(Theme.Spacing.md)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(Theme.danger.opacity(0.12))
   }
@@ -474,23 +527,16 @@ private struct UserMessageView: View {
   var body: some View {
     HStack {
       Spacer(minLength: 32)
-      VStack(alignment: .trailing, spacing: 4) {
+      VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
         if !text.isEmpty {
           Text(text)
             .font(Theme.body(.body))
             .foregroundStyle(Color.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-              LinearGradient(
-                colors: [Theme.accent, Theme.accentActive],
-                startPoint: .top,
-                endPoint: .bottom
-              ),
-              in: bubbleShape
-            )
-            // A small tinted halo to lift the user's own bubble off the thread.
-            .oakShadow(Theme.Shadow.glow(Theme.accent))
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.vertical, Theme.Spacing.md)
+            // Flat accent fill, no gradient and no glow (§4.02): the bubble stays
+            // clearly "yours" without outshouting Oak's answer.
+            .background(Theme.accent, in: bubbleShape)
         }
         if imageCount > 0 {
           Label("\(imageCount) image(s) attached", systemImage: "photo")

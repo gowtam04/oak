@@ -43,11 +43,35 @@ struct ChatThreadScreen: View {
           }
         }
       } else {
-        ProgressView()
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        loadingSkeleton
       }
     }
     .task { await prepare() }
+  }
+
+  /// The conversation-load placeholder (§4.08): skeleton message rows standing in for
+  /// the thread while the saved detail loads, instead of the app's only bare
+  /// `ProgressView`. A trailing bubble-shaped block (a user message) and a leading
+  /// group (an answer), both on the ``SkeletonBlock`` shimmer. Decorative and hidden
+  /// from VoiceOver — the screen announces the loading state (M-AC-UI9.3).
+  private var loadingSkeleton: some View {
+    VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+      // A user message: a trailing, bubble-shaped block.
+      HStack {
+        Spacer(minLength: Theme.Spacing.xxl)
+        SkeletonBlock(width: 160, height: 40)
+      }
+      // An answer: a leading masthead bar + two prose lines.
+      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+        SkeletonBlock(width: 220, height: 20)
+        SkeletonBlock(height: 12)
+        SkeletonBlock(width: 180, height: 12)
+      }
+    }
+    .padding(Theme.Spacing.lg)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .accessibilityHidden(true)
+    .accessibilityLabel("Loading conversation")
   }
 
   /// Builds the thread's view model for ``source``. Idempotent: once a model exists

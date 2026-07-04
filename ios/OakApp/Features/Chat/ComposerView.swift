@@ -28,8 +28,16 @@ struct ComposerView: View {
   /// `nil` (a pushed signed-in thread, where `voiceReady` is always true and this
   /// path is unreachable) collapses the nudge alert to a single "OK".
   var onSignInNudge: (() -> Void)? = nil
+  /// A toggle whose *change* fires one send-button scale pulse — bumped by an
+  /// example-chip tap so the eye lands on the action (§4.01). Ignored under Reduce
+  /// Motion (the caller only toggles it when motion is allowed).
+  var sendPulse: Bool = false
 
   @FocusState private var isInputFocused: Bool
+
+  /// Drives the one-shot send-button scale pulse, flipped on for a beat when
+  /// ``sendPulse`` changes and released by ``Theme/Motion/snappy``.
+  @State private var isPulsing = false
 
   /// Drives the light-mode-only upward lift shadow (dark mode leans on the divider).
   @Environment(\.colorScheme) private var colorScheme
@@ -80,9 +88,9 @@ struct ComposerView: View {
           .lineLimit(1...5)
           .textFieldStyle(.plain)
           .focused($isInputFocused)
-          .padding(.horizontal, 12)
-          .padding(.vertical, 8)
-          .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
+          .padding(.horizontal, Theme.Spacing.md)
+          .padding(.vertical, Theme.Spacing.sm)
+          .background(Theme.surfaceSunken, in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
           // The border brightens to accent while focused (a color change, so it's kept
           // under Reduce Motion) — a subtle "you're typing here" cue.
           .overlay {
@@ -229,7 +237,10 @@ struct ComposerView: View {
         .font(Theme.body(.title3))
         .symbolRenderingMode(.hierarchical)
     }
-    .tint(Theme.accent)
+    // At rest the mic is quiet `textSecondary` — red is reserved for *live* recording,
+    // which happens in the voice overlay, not here (§4.02: red = live, not "audio
+    // exists").
+    .tint(Theme.textSecondary)
     .disabled(model.isStreaming)
     .accessibilityLabel(voiceReady ? "Start voice mode" : "Sign in to use voice mode")
   }
@@ -332,10 +343,20 @@ struct ComposerView: View {
         .background(Theme.accent, in: Circle())
         .contentTransition(.symbolEffect(.replace))
         .opacity(model.isStreaming || model.canSend ? 1 : 0.4)
+        // One-shot pulse when an example chip fills the composer (§4.01).
+        .scaleEffect(isPulsing ? 1.18 : 1)
     }
     .buttonStyle(OakPressableButtonStyle())
     .disabled(!model.isStreaming && !model.canSend)
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.isStreaming)
+    .animation(reduceMotion ? nil : Theme.Motion.snappy, value: isPulsing)
+    // A chip tap toggles `sendPulse`; bump the scale on, then release it a beat later
+    // so the button springs once. Skipped entirely under Reduce Motion.
+    .onChange(of: sendPulse) { _, _ in
+      guard !reduceMotion else { return }
+      isPulsing = true
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { isPulsing = false }
+    }
     .accessibilityLabel(model.isStreaming ? "Stop" : "Send")
   }
 
