@@ -14,6 +14,7 @@ describe("env", () => {
     const parsed = parseEnv({ XAI_API_KEY: "xai-test" });
     expect(parsed.XAI_API_KEY).toBe("xai-test");
     expect(parsed.ANTHROPIC_MODEL).toBe("claude-sonnet-5");
+    expect(parsed.OPENAI_MODEL).toBe("gpt-5.5");
     expect(parsed.ACTIVE_MODEL).toBe("grok-4.3");
     expect(parsed.DATABASE_URL).toBe(
       "postgres://oak:oak@localhost:5432/oak",
@@ -89,5 +90,13 @@ describe("env", () => {
     expect(parsed.OPENAI_API_KEY).toBe("sk-openai");
     expect(parsed.XAI_API_KEY).toBe("xai-key");
     expect(parsed.XAI_BASE_URL).toBe("https://example.test/v1");
+  });
+
+  it("lets OPENAI_MODEL override the default gpt-5.5 (operator points the gpt-5.5 slot at another OpenAI model)", () => {
+    const parsed = parseEnv({
+      XAI_API_KEY: "xai-test",
+      OPENAI_MODEL: "gpt-5.4",
+    });
+    expect(parsed.OPENAI_MODEL).toBe("gpt-5.4");
   });
 });
