@@ -1,10 +1,24 @@
 # Oak — Scaling Plan for 10,000 Concurrent Users
 
-**Status: ANALYSIS ONLY — nothing in this document is implemented yet.**
-Written 2026-07-04 from a live inspection of the Fly deployment (`fly status` /
-`fly machine list` on both apps) plus the deployment-relevant source. If you are
-picking this up in a later session, re-verify the "Current deployment" section
-first — machine sizes and `fly.toml` may have changed since.
+**Status: Phase 1 implemented 2026-07-04.** Phases 2–5 below are still analysis
+only. Written 2026-07-04 from a live inspection of the Fly deployment (`fly
+status` / `fly machine list` on both apps) plus the deployment-relevant
+source. If you are picking this up in a later session, re-verify the "Current
+deployment" section first — machine sizes and `fly.toml` may have changed
+since.
+
+**Phase 1 (this session):** the guest session store, chat rate limiter, and
+OTP throttle are now dual-backend (`web/src/server/redis.ts` + the three store
+modules) — in-process `BoundedStore` fallback when `REDIS_URL` is unset
+(unchanged single-machine behavior, used in dev/tests), Redis when it's set.
+Provider: a self-run Fly Redis machine (`oak-gowtam-redis`, `iad`,
+shared-cpu-1x/256MB, no volume, no public IP — private 6PN networking only;
+see `web/deploy/redis/`). Per-module failure policy for a reachable-then-down
+Redis: rate limiter **fail-open** (an outage must not block chat), session
+store **fail-soft** (`getHistory` degrades to `[]`, writes log-and-continue),
+OTP throttle **fail-CLOSED** (a security control — an outage blocks sign-ins,
+by design). See `README.md` (Redis runbook) and `CLAUDE.md` (state-tier
+architecture note) for details.
 
 ---
 
@@ -111,8 +125,8 @@ design input.
 
 ## 3. Target design (phased; order matters)
 
-### Phase 1 — Externalize state → stateless app tier *(highest leverage, do first)*
-Add Redis (Upstash, or a Fly Redis machine in `iad`) and move:
+### Phase 1 — Externalize state → stateless app tier *(highest leverage, do first)* — ✅ IMPLEMENTED 2026-07-04
+Added Redis (a self-run Fly machine, `oak-gowtam-redis`, in `iad`) and moved:
 - **Guest session history + sticky scope**: keyed by `session_id`, keep the 2h
   TTL (Redis `EXPIRE` replaces `BoundedStore` TTL; the LRU cap becomes
   unnecessary — Redis maxmemory-policy is the backstop). The store already sits
@@ -218,10 +232,9 @@ provider contract is the long-lead item to start immediately.
 
 ## 5. Suggested implementation order (for a future session)
 
-1. Phase 1 (Redis state) — small, self-contained, unlocks everything.
-   Touch: `session-store.ts`, `rate-limit.ts`, `otp-throttle.ts`, env/`env.ts`
-   (add `REDIS_URL`), tests (the stores' test helpers `_resetStoreForTests`
-   need a Redis test double or Testcontainers Redis).
+1. ✅ Phase 1 (Redis state) — DONE 2026-07-04. Touched: `session-store.ts`,
+   `rate-limit.ts`, `otp-throttle.ts`, `env.ts` (`REDIS_URL`), tests (Redis
+   Testcontainers, per-module `*.redis.test.ts` suites).
 2. Phase 3a (dex read cache) — also small, independent of Phase 1, big PG win.
 3. Phase 2 (`fly.toml` + machine scale-out) — config-only once Phase 1 lands.
 4. Phase 3b (managed PG + PgBouncer + `turn_record` partitioning).

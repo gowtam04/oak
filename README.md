@@ -136,6 +136,10 @@ keys are optional and validated on use:
 - `ADMIN_EMAILS` — comma-separated allowlist of admin emails for the `/admin`
   panel. Unset ⇒ zero admins ⇒ the panel is dark (the safe default). See
   [Admin panel](#admin-panel).
+- `REDIS_URL` — backs the guest session store, chat rate limiter, and OTP
+  throttle. **Unset ⇒ in-process stores, single-machine only** (fine for local
+  dev and tests); set ⇒ those three stores run on Redis instead, so any
+  machine can serve any request. See [Redis (state tier)](#redis-state-tier).
 
 To run the Next dev server directly against a local Postgres instead of in Docker:
 
@@ -221,10 +225,32 @@ Full requirements and design live in
 Deployed to Fly from `web/` (`cd web && fly deploy`) via the production
 `Dockerfile` (`output: "standalone"`). The
 release command runs `migrate.mjs` (a plain-ESM migration runner) before the new
-version takes traffic, so migrations apply atomically on each deploy. A single
-always-on machine backs the in-memory guest session store, rate limiter, and OTP
-throttle; `/api/health` is a DB-free liveness probe. See [`docs/`](docs/) and the
-deployment notes for details.
+version takes traffic, so migrations apply atomically on each deploy. With
+`REDIS_URL` set, the guest session store, rate limiter, and OTP throttle all
+live in Redis and the app machine(s) are stateless (safe to scale out or
+recycle); with it unset, a single always-on machine backs those stores
+in-process instead. `/api/health` is a DB-free (and Redis-free) liveness probe.
+See [`docs/`](docs/) and the deployment notes for details.
+
+### Redis (state tier)
+
+Guest session history/scope, the chat rate limiter, and the OTP throttle are
+dual-backend (`web/src/server/redis.ts`): in-process when `REDIS_URL` is unset,
+Redis when it's set. Production runs a small self-run Fly Redis machine
+(`web/deploy/redis/`, its own `fly.toml` + `Dockerfile`) reachable only over
+Fly's private 6PN networking — no public IP, no volume (all stored state is
+TTL'd/ephemeral, same as today's in-process behavior on a restart).
+
+```bash
+fly apps create oak-gowtam-redis
+fly secrets set REDIS_PASSWORD='<strong-random>' -a oak-gowtam-redis
+cd web/deploy/redis && fly deploy -a oak-gowtam-redis
+fly secrets set REDIS_URL='redis://default:<pw>@oak-gowtam-redis.internal:6379' -a oak-gowtam
+```
+
+The password must be URL-encoded in `REDIS_URL` if it contains special
+characters. `/api/health` and `migrate.mjs` stay Redis-free — neither depends
+on Redis being up.
 
 ## Documentation
 

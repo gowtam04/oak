@@ -16,6 +16,18 @@ services:
       timeout: 3s
       retries: 20
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"        # exposed to the host for redis-cli / local debugging
+    healthcheck:
+      # web waits for this so the stores don't race Redis's boot
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    # No named volume — state is TTL'd/ephemeral by design (matches prod).
+
   web:
     build:
       context: .
@@ -24,6 +36,8 @@ services:
     init: true                 # clean SIGINT/SIGTERM shutdown of next dev
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "3000:3000"
@@ -34,6 +48,9 @@ services:
       # The app + ingest connect here; `db` is the compose service hostname.
       # (Set in `environment` so it always wins over any stale value in .env.local.)
       - DATABASE_URL=postgres://oak:oak@db:5432/oak
+      # session-store/rate-limit/otp-throttle dual-backend switch; `redis` is the
+      # compose service hostname. Unset in prod ⇒ in-process fallback.
+      - REDIS_URL=redis://redis:6379
     env_file:
       # Feeds vars to BOTH next dev AND the tsx ingest/eval scripts (tsx does not
       # auto-load .env). XAI_API_KEY (required — Grok is primary; boot throws
