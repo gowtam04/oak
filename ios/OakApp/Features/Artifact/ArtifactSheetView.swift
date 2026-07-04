@@ -30,7 +30,7 @@ struct ArtifactSheetView: View {
         if let artifact = model.current {
           content(for: artifact)
         } else {
-          Color.clear
+          loadingView
         }
       }
       // Keying on the artifact id makes SwiftUI treat each drill as a remove+insert so the
@@ -101,8 +101,8 @@ struct ArtifactSheetView: View {
     }
     .buttonStyle(.borderedProminent)
     .tint(Theme.accent)
-    .padding(.horizontal, 16)
-    .padding(.vertical, 10)
+    .padding(.horizontal, Theme.Spacing.lg)
+    .padding(.vertical, Theme.Spacing.md)
     .background(.thinMaterial)
     .accessibilityHint("Fills the chat box with a question about this, so you can send it")
   }
@@ -172,22 +172,24 @@ struct ArtifactSheetView: View {
   /// at a steady 60% under Reduce Motion). The blocks are decorative and VoiceOver-hidden, so the
   /// whole placeholder announces itself as one "Loading" element (M-AC-UI9.3).
   private var loadingView: some View {
-    VStack(alignment: .leading, spacing: 18) {
-      HStack(alignment: .top, spacing: 14) {
+    VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+      // Hero band: sprite tile + name bar + dex bar + two type-chip bars.
+      HStack(alignment: .top, spacing: Theme.Spacing.md + 2) {
         SkeletonBlock(width: 96, height: 96)
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
           SkeletonBlock(width: 150, height: 22)
           SkeletonBlock(width: 80, height: 13)
-          HStack(spacing: 6) {
+          HStack(spacing: Theme.Spacing.xs + 2) {
             SkeletonBlock(width: 54, height: 20)
             SkeletonBlock(width: 54, height: 20)
           }
         }
         Spacer(minLength: 0)
       }
-      VStack(alignment: .leading, spacing: 12) {
+      // Six meter-shaped rows mirroring the stat-bar layout.
+      VStack(alignment: .leading, spacing: Theme.Spacing.md) {
         ForEach(0..<6, id: \.self) { _ in
-          HStack(spacing: 10) {
+          HStack(spacing: Theme.Spacing.sm) {
             SkeletonBlock(width: 40, height: 12)
             SkeletonBlock(width: 32, height: 12)
             SkeletonBlock(height: 8)
@@ -196,7 +198,7 @@ struct ArtifactSheetView: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(16)
+    .padding(Theme.Spacing.lg)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Loading")
   }

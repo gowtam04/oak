@@ -24,12 +24,12 @@ struct EntityDetailView: View {
 
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 18) {
+      VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
         kindBody
         groundingSection
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(16)
+      .padding(Theme.Spacing.lg)
     }
   }
 
@@ -102,7 +102,7 @@ struct EntityDetailView: View {
           .foregroundStyle(Theme.textPrimary)
           .multilineTextAlignment(.center)
         Text(Self.dexLabel(data.nationalDexNumber))
-          .font(Theme.mono(.subheadline))
+          .instrumentLabel(.caption)
           .foregroundStyle(Theme.textMuted)
         typeChips(data.types)
       }
@@ -167,12 +167,24 @@ struct EntityDetailView: View {
       ("HP", stats.hp), ("Atk", stats.atk), ("Def", stats.def),
       ("SpA", stats.spa), ("SpD", stats.spd), ("Spe", stats.spe),
     ]
-    return VStack(alignment: .leading, spacing: 8) {
+    return VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
       sectionHeader("Base stats", systemImage: "chart.bar")
       ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
         StatBar(label: row.0, value: row.1, index: index)
       }
-      infoRow(label: "Total", value: String(total))
+      // BST summary in the instrument/mono voice — reinforces the data register.
+      HStack(alignment: .firstTextBaseline) {
+        Text("BST")
+          .font(Theme.mono(.caption).weight(.semibold))
+          .foregroundStyle(Theme.textSecondary)
+        Spacer(minLength: Theme.Spacing.md)
+        Text(String(total))
+          .font(Theme.mono(.caption).weight(.semibold))
+          .monospacedDigit()
+          .foregroundStyle(Theme.textPrimary)
+      }
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel("Base stat total \(total)")
     }
   }
 
@@ -406,10 +418,13 @@ struct EntityDetailView: View {
 
   // MARK: Shared building blocks
 
+  /// Section label in the instrument voice — `BASE STATS`, `MATCHUPS`, `MOVEPOOL`, etc.
+  /// Rendered as mono semibold caps so data-section heads read as engraved instrument
+  /// output across every entity kind (strategy §4.09, item 3).
   private func sectionHeader(_ title: String, systemImage: String) -> some View {
     Label(title, systemImage: systemImage)
-      .font(Theme.display(.subheadline))
-      .foregroundStyle(Theme.textPrimary)
+      .instrumentLabel()
+      .foregroundStyle(Theme.textSecondary)
   }
 
   private func infoRow(label: String, value: String) -> some View {
@@ -573,20 +588,24 @@ private struct StatBar: View {
   }
 
   var body: some View {
-    HStack(spacing: 10) {
+    HStack(spacing: Theme.Spacing.sm) {
       Text(label)
         .font(Theme.body(.caption).weight(.semibold))
         .foregroundStyle(Theme.textSecondary)
         .frame(width: 40, alignment: .leading)
+      // Numeral right-aligned in mono footnote; `.monospacedDigit()` locks width so
+      // numerals never jump between 1-digit and 3-digit values (M-AC-UI9.3).
       Text(String(displayValue))
-        .font(Theme.mono(.caption))
+        .font(Theme.mono(.footnote))
         .monospacedDigit()
         .contentTransition(.numericText())
         .foregroundStyle(Theme.textPrimary)
         .frame(width: 36, alignment: .trailing)
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
-          Capsule().fill(Theme.textPrimary.opacity(0.10))
+          // Track in surfaceSunken — recessed well reads as the empty channel.
+          Capsule().fill(Theme.surfaceSunken)
+          // Fill color by value ramp (reinforcement only — numeral is truth).
           Capsule()
             .fill(barColor)
             .frame(width: proxy.size.width * fillFraction)
