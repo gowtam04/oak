@@ -43,6 +43,7 @@ struct TeamsListView: View {
         }
       }
       .navigationTitle("Teams")
+      .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         if isSignedIn {
           ToolbarItem(placement: .topBarLeading) {
@@ -111,7 +112,9 @@ struct TeamsListView: View {
       .refreshable { await model.reload() }
       .overlay(alignment: .bottom) {
         if let message = model.errorMessage {
-          errorBanner(message)
+          ErrorBanner(message: message, onDismiss: { model.dismissError() })
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.bottom, Theme.Spacing.sm)
         }
       }
     }
@@ -252,20 +255,6 @@ struct TeamsListView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
-  private func errorBanner(_ message: String) -> some View {
-    HStack(spacing: 8) {
-      Image(systemName: "exclamationmark.triangle.fill")
-        .foregroundStyle(.orange)
-      Text(message)
-        .font(.footnote)
-      Spacer(minLength: 0)
-      Button("Dismiss") { model.dismissError() }
-        .font(.footnote)
-    }
-    .padding(12)
-    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-    .padding()
-  }
 }
 
 // MARK: - Editor routing target
@@ -307,7 +296,7 @@ private struct TeamRow: View {
       VStack(alignment: .leading, spacing: 4) {
         HStack(spacing: 6) {
           Text(team.name)
-            .font(.body)
+            .font(Theme.body(.body))
             .lineLimit(1)
         }
         HStack(spacing: 6) {
@@ -315,8 +304,8 @@ private struct TeamRow: View {
           Text("·")
           Text(compositionLabel)
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        .font(Theme.body(.caption))
+        .foregroundStyle(Theme.textSecondary)
         .lineLimit(1)
       }
       Spacer(minLength: 0)

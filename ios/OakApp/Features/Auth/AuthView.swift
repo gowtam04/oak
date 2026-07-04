@@ -132,6 +132,8 @@ struct AuthView: View {
         .autocorrectionDisabled()
         .submitLabel(.send)
         .font(Theme.body(.body))
+        .foregroundStyle(Theme.textPrimary)
+        .tint(Theme.accent)
         .focused($focusedField, equals: .email)
         .onSubmit { Task { await model.submitEmail() } }
         .modifier(FloatingFieldChrome(focused: focusedField == .email, reduceMotion: reduceMotion))
@@ -321,7 +323,8 @@ struct AuthView: View {
   private func primaryButton(
     title: String, enabled: Bool, action: @escaping () -> Void
   ) -> some View {
-    Button(action: action) {
+    let isActive = enabled || model.isBusy
+    return Button(action: action) {
       ZStack {
         Text(title)
           .font(Theme.display(.headline))
@@ -331,11 +334,10 @@ struct AuthView: View {
             .tint(.white)
         }
       }
-      .foregroundStyle(.white)
+      .foregroundStyle(isActive ? .white : Theme.textMuted)
       .frame(maxWidth: .infinity)
       .padding(.vertical, 14)
-      .background(Theme.accent, in: Capsule())
-      .opacity(enabled || model.isBusy ? 1 : 0.4)
+      .background(isActive ? Theme.accent : Theme.surfaceSunken, in: Capsule())
     }
     .buttonStyle(OakPressableButtonStyle())
     .disabled(!enabled)
