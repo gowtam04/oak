@@ -17,11 +17,13 @@
  *   "pokemon/<slug>", "move/<slug>", "ability/<slug>", "type/<slug>",
  *   "item/<slug>", "evolution-chain/<slug>", "learnset/<slug>".
  *
- * G26..G54 (Oak v2 §7) turn the 29 whole-franchise benchmark questions
+ * G26..G54 (Oak v2 §7) turn the 29 GAMES-scope benchmark questions
  * (docs/features/oak-v2/benchmark-questions.md, "BQ-1".."BQ-29" in `covers`)
  * into golden cases, one case per question, covering the three new tools
  * (T18 `run_sql`, T19 `search_wiki`, T20 `web_search`) plus prompt-policy-only
- * answers (false-premise rejection, opinion framing, off-domain decline).
+ * answers (false-premise rejection, opinion framing, off-domain decline, and —
+ * per the games-only pivot, design.md §9b — graceful DECLINE of franchise MEDIA
+ * questions: anime/movies/TV/manga, e.g. G38/G39/G40/G41/G48/G51).
  * `covers` also carries the answer layer tag ("SQL" | "WIKI" | "WEB" |
  * "POLICY") from the benchmark table. Five of these (the pure run_sql
  * aggregations design.md §5 T18 calls out as the offline-answerable
@@ -474,8 +476,8 @@ export const cases: GoldenCase[] = [
   },
 
   // =========================================================================
-  // G26 – G54 Oak v2 whole-franchise benchmark cases (Oak v2 §7,
-  // docs/features/oak-v2/benchmark-questions.md BQ-1..BQ-29).
+  // G26 – G54 Oak v2 GAMES-scope benchmark cases (Oak v2 §7 + games-only pivot
+  // §9b, docs/features/oak-v2/benchmark-questions.md BQ-1..BQ-29).
   // =========================================================================
 
   // G26 — BQ-1 (SQL, deterministic): natdex number == base-stat total.
@@ -659,62 +661,57 @@ export const cases: GoldenCase[] = [
     covers: ["BQ-12", "TYPED"],
   },
 
-  // G38 — BQ-13 (WIKI, judged): Ash's total anime catches.
+  // G38 — BQ-13 (POLICY media-decline, judged): Ash's anime catches. Games-only
+  // pivot (design.md §9b) — the anime is OUT of scope; Oak declines it.
   {
     id: "G38",
     input: "How many Pokémon has Ash caught in the anime?",
     expect: {
       status: "answered",
-      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
-      mustCite: ["https://pokemon.fandom.com"],
       rubricNote:
-        "Counting ambiguities (releases, temporary catches, gifted Pokémon) are real — a correct answer flags them as an inference/assumption rather than presenting one silent count as an undisputed fact.",
+        "Out of scope (anime): Oak is a GAMES assistant. Correct answer gracefully DECLINES in persona (focuses on the games), does NOT search or fabricate a count, and offers games-side help instead; empty citations[] is correct.",
     },
-    covers: ["BQ-13", "WIKI"],
+    covers: ["BQ-13", "POLICY"],
   },
 
-  // G39 — BQ-14 (WEB, judged): current anime season, time-sensitive.
+  // G39 — BQ-14 (POLICY media-decline, judged): current anime season. Games-only
+  // pivot (design.md §9b) — the anime is OUT of scope; Oak declines it.
   {
     id: "G39",
     input: "Which season of the anime are we on right now?",
     expect: {
       status: "answered",
-      toolEfficiency: { usedTool: "web_search", maxPerPokemonFetches: 0 },
       rubricNote:
-        "Time-sensitive — the answer must be sourced live (web_search) and dated ('as of <date>'), never answered from the agent's own training-time knowledge as if it were current.",
+        "Out of scope (anime): Oak is a GAMES assistant. Correct answer gracefully DECLINES in persona (focuses on the games), does NOT web_search for the anime season, and offers games-side help instead; empty citations[] is correct.",
     },
-    covers: ["BQ-14", "WEB"],
+    covers: ["BQ-14", "POLICY"],
   },
 
-  // G40 — BQ-15 (WIKI, judged): fuzzy-recall movie lookup (Iron-Masked
-  // Marauder -> Pokémon 4Ever).
+  // G40 — BQ-15 (POLICY media-decline, judged): a movie lookup. Games-only pivot
+  // (design.md §9b) — movies/films are OUT of scope; Oak declines it.
   {
     id: "G40",
     input: "What movie has an Iron Masked Marauder in it?",
     expect: {
       status: "answered",
-      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
-      mustInclude: ["4Ever"],
-      mustCite: ["https://pokemon.fandom.com"],
       rubricNote:
-        "Fuzzy recall via search_wiki (reformulate the query if the first pass misses) — the correct film is Pokémon 4Ever.",
+        "Out of scope (movie/film): Oak is a GAMES assistant. Correct answer gracefully DECLINES in persona (focuses on the games), does NOT search or name the film, and offers games-side help instead; empty citations[] is correct.",
     },
-    covers: ["BQ-15", "WIKI"],
+    covers: ["BQ-15", "POLICY"],
   },
 
-  // G41 — BQ-16 (WIKI, judged): "Island of the Giant Pokémon" episode.
+  // G41 — BQ-16 (POLICY media-decline, judged): an anime episode lookup.
+  // Games-only pivot (design.md §9b) — anime episodes are OUT of scope; Oak
+  // declines it.
   {
     id: "G41",
     input: "Which anime episode is about an island of giant Pokémon?",
     expect: {
       status: "answered",
-      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
-      mustInclude: ["Giant Pok"],
-      mustCite: ["https://pokemon.fandom.com"],
       rubricNote:
-        "The correct episode is EP017, \"Island of the Giant Pokémon\" (original series).",
+        "Out of scope (anime episode): Oak is a GAMES assistant. Correct answer gracefully DECLINES in persona (focuses on the games), does NOT search or name the episode, and offers games-side help instead; empty citations[] is correct.",
     },
-    covers: ["BQ-16", "WIKI"],
+    covers: ["BQ-16", "POLICY"],
   },
 
   // G42 — BQ-17 (WIKI, judged): most populous in-game cities.
@@ -810,17 +807,18 @@ export const cases: GoldenCase[] = [
     covers: ["BQ-22", "SQL"],
   },
 
-  // G48 — BQ-23 (WIKI lore, judged): fan-theory framing, light tone OK.
+  // G48 — BQ-23 (POLICY media-decline, judged): an anime-character relationship
+  // question (Ash's mom). Games-only pivot (design.md §9b) — anime characters and
+  // their relationships are OUT of scope; Oak declines it.
   {
     id: "G48",
     input: "Is Professor Oak dating Ash's mom?",
     expect: {
       status: "answered",
-      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
       rubricNote:
-        "A fan theory, not canon fact — correct answer says what canon actually establishes (their relationship is never confirmed romantic on-screen) and may name the fan theory, with a light tone; must not assert the theory as confirmed fact.",
+        "Out of scope (anime characters/lore): Ash and his mom are anime characters and Oak is a GAMES assistant. Correct answer gracefully DECLINES in persona (focuses on the games), does NOT engage the fan theory, and offers games-side help instead; empty citations[] is correct. A light tone is fine.",
     },
-    covers: ["BQ-23", "WIKI"],
+    covers: ["BQ-23", "POLICY"],
   },
 
   // G49 — BQ-24 (WEB, judged): live-service support query.
@@ -849,18 +847,18 @@ export const cases: GoldenCase[] = [
     covers: ["BQ-25", "POLICY"],
   },
 
-  // G51 — BQ-26 (WIKI, judged): Pokémon eaten in anime/games.
+  // G51 — BQ-26 (POLICY media-decline, judged): Pokémon "eaten" trivia, framed
+  // around the anime. Games-only pivot (design.md §9b) — this is anime/media
+  // trivia (no structured game-data source exists for it); Oak declines it.
   {
     id: "G51",
     input: "Which Pokémon have been eaten in the anime or games?",
     expect: {
       status: "answered",
-      toolEfficiency: { usedTool: "search_wiki", maxPerPokemonFetches: 0 },
-      mustCite: ["https://pokemon.fandom.com"],
       rubricNote:
-        "Prose trivia sourced from wiki episodes/lore — correct answer cites specific episodes/instances rather than a bare unsourced list.",
+        "Out of scope (anime/media trivia): Oak is a GAMES assistant and the anime is out of scope; there is also no structured game-data source for this. Correct answer gracefully DECLINES the media-trivia framing in persona and offers games-side help instead; empty citations[] is correct.",
     },
-    covers: ["BQ-26", "WIKI"],
+    covers: ["BQ-26", "POLICY"],
   },
 
   // G52 — BQ-27 (POLICY loaded opinion, judged): neutral reframe required.
