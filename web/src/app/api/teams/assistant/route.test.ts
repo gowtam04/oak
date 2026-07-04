@@ -110,12 +110,12 @@ beforeEach(async () => {
   mockBuildBuilderHooks.mockClear();
 
   resetRateLimit();
-  resetSessionStore();
+  await resetSessionStore();
 });
 
-afterEach(() => {
+afterEach(async () => {
   resetRateLimit();
-  resetSessionStore();
+  await resetSessionStore();
 });
 
 // --- Helpers ---------------------------------------------------------------
@@ -285,10 +285,10 @@ describe("POST /api/teams/assistant — history isolation", () => {
       ),
     );
 
-    expect(getHistory("teams-assistant:hist-1")).toEqual([
+    expect(await getHistory("teams-assistant:hist-1")).toEqual([
       { role: "user", content: "help me build a team" },
       { role: "assistant", content: BUILDER_ANSWER.answer_markdown },
     ]);
-    expect(getHistory("hist-1")).toEqual([]);
+    expect(await getHistory("hist-1")).toEqual([]);
   });
 });

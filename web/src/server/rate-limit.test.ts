@@ -545,9 +545,9 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
     vi.mocked(checkRateLimit).mockClear();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const id of ["s-guest", "s-signed", "s-cap", "s-thread", "s-champ", "s-fresh"]) {
-      clearSession(id);
+      await clearSession(id);
     }
   });
 
