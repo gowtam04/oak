@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -169,5 +171,7 @@ private fun toolIcon(tool: String): ImageVector = when (tool) {
     "get_learnset" -> Icons.AutoMirrored.Filled.List
     "get_team", "save_team", "list_teams" -> Icons.Filled.Group
     "get_encounters" -> Icons.Filled.Map
+    "run_sql" -> Icons.Filled.Storage
+    "search_wiki" -> Icons.Filled.AutoStories
     else -> if (tool.startsWith("list_")) Icons.AutoMirrored.Filled.List else Icons.Filled.Build
 }

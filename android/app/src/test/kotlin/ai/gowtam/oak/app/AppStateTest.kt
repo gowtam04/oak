@@ -23,7 +23,7 @@ import org.junit.Test
 class AppStateTest {
 
     private fun answer(text: String) = OakAnswer(
-        status = OakAnswer.Status.ANSWERED,
+        status = OakAnswer.Status.Answered,
         answerMarkdown = text,
         reasoningMarkdown = "",
         citations = emptyList(),

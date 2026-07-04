@@ -143,7 +143,7 @@ backtick-quoted code span and the comment terminator.
 ## BaseURL
 
 The backend base URL is a `BuildConfig` field (`BASE_URL`), currently set to production
-(`https://oak-gowtam.fly.dev`) for **both** debug and release build types —
+(`https://oak.gowtam.ai`) for **both** debug and release build types —
 `app/build.gradle.kts` `defaultConfig`/`release`. There is no dedicated staging Fly app
 yet (same situation as iOS); point a build type at a real staging host there if one is
 stood up.

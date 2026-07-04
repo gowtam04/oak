@@ -3,8 +3,9 @@ package ai.gowtam.oak.wire
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
@@ -30,6 +31,16 @@ sealed interface EntityArtifact {
     data class Ok(val v: EntityArtifactOk) : EntityArtifact
     data class NotFound(val v: EntityArtifactNotFound) : EntityArtifact
     data class Unavailable(val v: EntityArtifactUnavailable) : EntityArtifact
+
+    /**
+     * A frame this client can't render — an unknown top-level `status`, or an `ok`
+     * frame whose `kind` is outside the known five. Preserved verbatim ([rawStatus]/
+     * [rawKind]) so the viewer can show a graceful "can't display this yet" state
+     * instead of hard-failing the whole decode. Mirrors the tolerant-degrade intent
+     * of [Format]/[OakAnswer.Status]; the wire can add a status/kind independently of
+     * when this app ships.
+     */
+    data class Unsupported(val rawStatus: String?, val rawKind: String? = null) : EntityArtifact
 }
 
 object EntityArtifactSerializer : KSerializer<EntityArtifact> {
@@ -44,16 +55,28 @@ object EntityArtifactSerializer : KSerializer<EntityArtifact> {
         check(decoder is JsonDecoder) { "EntityArtifact can only be decoded from JSON" }
         val json = decoder.json
         val element = decoder.decodeJsonElement()
-        val status = element.jsonObject["status"]?.jsonPrimitive?.content
+        val obj = element.jsonObject
+        val status = obj["status"]?.jsonPrimitive?.content
         return when (status) {
-            "ok" -> EntityArtifact.Ok(json.decodeFromJsonElement(EntityArtifactOkSerializer, element))
+            "ok" -> {
+                // An `ok` frame with a kind outside the known five can't build a
+                // kind-specific payload — degrade to Unsupported rather than throw.
+                val rawKind = obj["kind"]?.jsonPrimitive?.content
+                if (rawKind != null && EntityKind.fromRaw(rawKind) is EntityKind.Unknown) {
+                    EntityArtifact.Unsupported(rawStatus = status, rawKind = rawKind)
+                } else {
+                    EntityArtifact.Ok(json.decodeFromJsonElement(EntityArtifactOkSerializer, element))
+                }
+            }
             "not_found" -> EntityArtifact.NotFound(
                 json.decodeFromJsonElement(EntityArtifactNotFound.serializer(), element),
             )
             "unavailable" -> EntityArtifact.Unavailable(
                 json.decodeFromJsonElement(EntityArtifactUnavailable.serializer(), element),
             )
-            else -> throw SerializationException("Unknown EntityArtifact status \"$status\"")
+            // An unknown status (the wire added a new artifact outcome) degrades to a
+            // graceful "unsupported" arm instead of failing the parent's decode.
+            else -> EntityArtifact.Unsupported(rawStatus = status)
         }
     }
 }
@@ -61,14 +84,57 @@ object EntityArtifactSerializer : KSerializer<EntityArtifact> {
 /**
  * The five entity kinds an artifact can describe — mirrors `entityKindSchema`
  * (`ENTITY_KINDS`) in `web/src/agent/schemas.ts`.
+ *
+ * **Tolerant decoding** mirrors [Format]: a `kind` outside the known five degrades
+ * to [Unknown] rather than failing the containing frame's decode; the enclosing
+ * [EntityArtifact] routes such a frame to [EntityArtifact.Unsupported].
  */
-@Serializable
-enum class EntityKind {
-    @SerialName("pokemon") POKEMON,
-    @SerialName("move") MOVE,
-    @SerialName("ability") ABILITY,
-    @SerialName("item") ITEM,
-    @SerialName("type") TYPE,
+@Serializable(with = EntityKindSerializer::class)
+sealed interface EntityKind {
+    data object POKEMON : EntityKind
+    data object MOVE : EntityKind
+    data object ABILITY : EntityKind
+    data object ITEM : EntityKind
+    data object TYPE : EntityKind
+
+    /** A kind string outside the known five — preserves the original wire value. */
+    data class Unknown(val raw: String) : EntityKind
+
+    /** The wire string for a known case, or the original raw string for [Unknown]. */
+    val rawValue: String
+        get() = when (this) {
+            POKEMON -> "pokemon"
+            MOVE -> "move"
+            ABILITY -> "ability"
+            ITEM -> "item"
+            TYPE -> "type"
+            is Unknown -> raw
+        }
+
+    companion object {
+        /** Maps a wire string to its case, falling back to [Unknown] otherwise. */
+        fun fromRaw(raw: String): EntityKind = when (raw) {
+            "pokemon" -> POKEMON
+            "move" -> MOVE
+            "ability" -> ABILITY
+            "item" -> ITEM
+            "type" -> TYPE
+            else -> Unknown(raw)
+        }
+    }
+}
+
+object EntityKindSerializer : KSerializer<EntityKind> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("ai.gowtam.oak.wire.EntityKind", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: EntityKind) {
+        encoder.encodeString(value.rawValue)
+    }
+
+    override fun deserialize(decoder: Decoder): EntityKind {
+        return EntityKind.fromRaw(decoder.decodeString())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +187,11 @@ object EntityArtifactOkSerializer : KSerializer<EntityArtifactOk> {
             )
             EntityKind.TYPE -> EntityData.Type(
                 json.decodeFromJsonElement(TypeArtifactData.serializer(), dataElement),
+            )
+            // Unreachable: the enclosing EntityArtifactSerializer routes an unknown
+            // kind to EntityArtifact.Unsupported before this ok-body decode runs.
+            is EntityKind.Unknown -> throw kotlinx.serialization.SerializationException(
+                "Unknown EntityArtifact kind \"${kind.raw}\"",
             )
         }
 

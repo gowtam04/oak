@@ -37,7 +37,7 @@ class ChatViewModelReducerTest {
 
     private fun answer(
         markdown: String = "Garchomp is a Dragon/Ground pseudo-legendary.",
-        status: OakAnswer.Status = OakAnswer.Status.ANSWERED,
+        status: OakAnswer.Status = OakAnswer.Status.Answered,
         generation: String = "champions",
     ) = OakAnswer(
         status = status,
@@ -110,7 +110,7 @@ class ChatViewModelReducerTest {
     @Test
     fun aNonAnsweredStatusRendersAsANormalAnswerNeverAnError() {
         val vm = newModel()
-        val clarification = answer(status = OakAnswer.Status.CLARIFICATION_NEEDED)
+        val clarification = answer(status = OakAnswer.Status.ClarificationNeeded)
 
         vm.apply(SseEvent.Answer(clarification))
 

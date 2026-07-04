@@ -1,7 +1,13 @@
 package ai.gowtam.oak.wire
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 
 /**
  * The single structured answer the agent emits per turn — the field-by-field
@@ -33,13 +39,58 @@ data class OakAnswer(
     @SerialName("saved_team") val savedTeam: SavedTeamRef? = null,
     @SerialName("proposed_team_warnings") val proposedTeamWarnings: List<TeamWarning>? = null,
 ) {
-    /** The outcome of the turn. Drives which optional blocks the UI expects. */
-    @Serializable
-    enum class Status {
-        @SerialName("answered") ANSWERED,
-        @SerialName("clarification_needed") CLARIFICATION_NEEDED,
-        @SerialName("resolution_failed") RESOLUTION_FAILED,
-        @SerialName("insufficient_data") INSUFFICIENT_DATA,
+    /**
+     * The outcome of the turn. Drives which optional blocks the UI expects.
+     *
+     * **Tolerant decoding is load-bearing** (mirrors [Format]): the server can add
+     * a new terminal status independently of when this app ships, so an
+     * unrecognized value degrades to [Unknown] rather than failing the whole
+     * `OakAnswer` decode (which would lose the answer to an error banner). Render
+     * sites treat [Unknown] as a neutral generic outcome.
+     */
+    @Serializable(with = StatusSerializer::class)
+    sealed interface Status {
+        data object Answered : Status
+        data object ClarificationNeeded : Status
+        data object ResolutionFailed : Status
+        data object InsufficientData : Status
+
+        /** A status string outside the known four — preserves the original wire value. */
+        data class Unknown(val raw: String) : Status
+
+        /** The wire string for a known case, or the original raw string for [Unknown]. */
+        val rawValue: String
+            get() = when (this) {
+                Answered -> "answered"
+                ClarificationNeeded -> "clarification_needed"
+                ResolutionFailed -> "resolution_failed"
+                InsufficientData -> "insufficient_data"
+                is Unknown -> raw
+            }
+
+        companion object {
+            /** Maps a wire string to its case, falling back to [Unknown] otherwise. */
+            fun fromRaw(raw: String): Status = when (raw) {
+                "answered" -> Answered
+                "clarification_needed" -> ClarificationNeeded
+                "resolution_failed" -> ResolutionFailed
+                "insufficient_data" -> InsufficientData
+                else -> Unknown(raw)
+            }
+        }
+    }
+}
+
+object StatusSerializer : KSerializer<OakAnswer.Status> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("ai.gowtam.oak.wire.OakAnswer.Status", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: OakAnswer.Status) {
+        encoder.encodeString(value.rawValue)
+    }
+
+    override fun deserialize(decoder: Decoder): OakAnswer.Status {
+        return OakAnswer.Status.fromRaw(decoder.decodeString())
     }
 }
 
@@ -58,11 +109,52 @@ data class Inference(
     val confidence: Confidence,
     val note: String? = null,
 ) {
-    @Serializable
-    enum class Confidence {
-        @SerialName("high") HIGH,
-        @SerialName("medium") MEDIUM,
-        @SerialName("low") LOW,
+    /**
+     * How sure Oak is of an inferred claim. **Tolerant decoding** mirrors
+     * [Format]/[OakAnswer.Status]: an unrecognized confidence value degrades to
+     * [Unknown] (rendered as its raw string) rather than failing the answer's
+     * decode.
+     */
+    @Serializable(with = ConfidenceSerializer::class)
+    sealed interface Confidence {
+        data object High : Confidence
+        data object Medium : Confidence
+        data object Low : Confidence
+
+        /** A confidence string outside the known three — preserves the original wire value. */
+        data class Unknown(val raw: String) : Confidence
+
+        /** The wire string for a known case, or the original raw string for [Unknown]. */
+        val rawValue: String
+            get() = when (this) {
+                High -> "high"
+                Medium -> "medium"
+                Low -> "low"
+                is Unknown -> raw
+            }
+
+        companion object {
+            /** Maps a wire string to its case, falling back to [Unknown] otherwise. */
+            fun fromRaw(raw: String): Confidence = when (raw) {
+                "high" -> High
+                "medium" -> Medium
+                "low" -> Low
+                else -> Unknown(raw)
+            }
+        }
+    }
+}
+
+object ConfidenceSerializer : KSerializer<Inference.Confidence> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("ai.gowtam.oak.wire.Inference.Confidence", PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: Inference.Confidence) {
+        encoder.encodeString(value.rawValue)
+    }
+
+    override fun deserialize(decoder: Decoder): Inference.Confidence {
+        return Inference.Confidence.fromRaw(decoder.decodeString())
     }
 }
 

@@ -149,7 +149,7 @@ class HistoryServiceTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"id":"new-conv"}"""))
 
         val answer = OakAnswer(
-            status = OakAnswer.Status.ANSWERED,
+            status = OakAnswer.Status.Answered,
             answerMarkdown = "**Hi**",
             reasoningMarkdown = "",
             citations = emptyList(),

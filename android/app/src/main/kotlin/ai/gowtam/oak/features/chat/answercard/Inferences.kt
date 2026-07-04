@@ -95,7 +95,10 @@ private fun confidencePresentation(
     sunflower: Color,
     muted: Color,
 ): Triple<ImageVector, String, Color> = when (confidence) {
-    Inference.Confidence.HIGH -> Triple(Icons.Filled.Circle, "High", success)
-    Inference.Confidence.MEDIUM -> Triple(Icons.Filled.Circle, "Medium", sunflower)
-    Inference.Confidence.LOW -> Triple(Icons.Outlined.Circle, "Low", muted)
+    Inference.Confidence.High -> Triple(Icons.Filled.Circle, "High", success)
+    Inference.Confidence.Medium -> Triple(Icons.Filled.Circle, "Medium", sunflower)
+    Inference.Confidence.Low -> Triple(Icons.Outlined.Circle, "Low", muted)
+    // A confidence value the wire added after this app shipped: render its raw
+    // string with neutral styling rather than hard-failing the answer's decode.
+    is Inference.Confidence.Unknown -> Triple(Icons.Outlined.Circle, confidence.raw, muted)
 }

@@ -88,4 +88,31 @@ class EntityArtifactDecodeTest {
         assertEquals(EntityKind.MOVE, unavailable.v.kind)
         assertEquals(Format.Champions, unavailable.v.format)
     }
+
+    // An `ok` frame whose `kind` is outside the known five degrades to the graceful
+    // Unsupported arm (the viewer shows "can't display this yet") rather than
+    // hard-failing the decode.
+    @Test
+    fun unknownKindDegradesToUnsupported() {
+        val json = """
+            {"status":"ok","kind":"ribbon","format":"champions",
+             "resolved":{"slug":"x","display_name":"X"},"generation":"Gen 9",
+             "is_fallback":false,"fallback_note":null,"citations":[],
+             "data":{"anything":true}}
+        """.trimIndent()
+        val artifact = OakJson.decodeFromString<EntityArtifact>(json)
+        val unsupported = artifact as EntityArtifact.Unsupported
+        assertEquals("ok", unsupported.rawStatus)
+        assertEquals("ribbon", unsupported.rawKind)
+    }
+
+    // Likewise a top-level `status` the wire adds later degrades to Unsupported.
+    @Test
+    fun unknownArtifactStatusDegradesToUnsupported() {
+        val json = """{"status":"deprecated","kind":"pokemon","format":"champions"}"""
+        val artifact = OakJson.decodeFromString<EntityArtifact>(json)
+        val unsupported = artifact as EntityArtifact.Unsupported
+        assertEquals("deprecated", unsupported.rawStatus)
+        assertNull(unsupported.rawKind)
+    }
 }

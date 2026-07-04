@@ -44,7 +44,7 @@ fun Suggestions(
     val items = nonBlank(suggestions)
     if (items.isEmpty()) return
     val oak = LocalOakColors.current
-    val isResolutionMiss = status == OakAnswer.Status.RESOLUTION_FAILED
+    val isResolutionMiss = status == OakAnswer.Status.ResolutionFailed
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
         Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs), verticalAlignment = Alignment.CenterVertically) {
             Icon(

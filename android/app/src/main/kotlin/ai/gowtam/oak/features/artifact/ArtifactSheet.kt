@@ -225,7 +225,7 @@ private fun ArtifactContentDispatch(content: ArtifactContent, onOpen: (EntityKin
         is ArtifactContent.DamageCalcContent -> DamageCalcViewport(content.v)
         is ArtifactContent.Unavailable -> MissView(
             title = "Couldn't open ${content.query}",
-            message = "Oak doesn't have a ${content.kind.name.lowercase()} profile for “${content.query}” in this format.",
+            message = "Oak doesn't have a ${content.kind.rawValue} profile for “${content.query}” in this format.",
         )
         ArtifactContent.TeamUnavailable -> MissView(
             title = "Couldn't load this team",
