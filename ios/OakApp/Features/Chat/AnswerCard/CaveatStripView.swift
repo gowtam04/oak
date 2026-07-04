@@ -32,14 +32,15 @@ struct CaveatStripView: View {
   private var hasFlags: Bool { !flags.isEmpty }
 
   /// The fallback line: the model's `note` when present, else the web default
-  /// message (`CaveatStrip.tsx`: `note ?? \`Based on ${generation} data — this
-  /// Pokémon is not in Gen 9.\``).
+  /// message (`CaveatStrip.tsx`: `note ?? \`Based on ${generation} data — outside
+  /// the selected scope.\``). Scope-neutral since oak-v2 — fallbacks aren't always
+  /// about Gen 9 (e.g. the Champions evolution fallback answers from mainline data).
   private var fallbackLine: String {
     let note = generationBasis.note?.trimmingCharacters(in: .whitespacesAndNewlines)
     if let note, !note.isEmpty { return note }
     let generation = generationBasis.generation.trimmingCharacters(in: .whitespacesAndNewlines)
     let base = generation.isEmpty ? "an earlier generation" : generation
-    return "Based on \(base) data — this Pokémon is not in Gen 9."
+    return "Based on \(base) data — outside the selected scope."
   }
 
   var body: some View {
