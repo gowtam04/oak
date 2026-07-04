@@ -1,10 +1,17 @@
 /**
- * Tests for the provider-tuned prompt styles + the buildSystemSegments
- * dispatcher. Verifies each style emits exactly one cache breakpoint (on the
- * last segment), the Claude path stays byte-identical to the shared domain body
- * (zero-regression baseline), and each tuned style carries its provider-specific
- * scaffolding (GPT-5.5 Markdown + stop-condition directives; Grok XML-tagged
- * sections).
+ * Tests for the provider style wrappers + the buildSystemSegments dispatcher.
+ *
+ * Since Oak v2 P3 (prompt collapse) there is ONE canonical Markdown domain body
+ * (`./domain`) for a turn's scope, wrapped by a thin per-provider style. These
+ * pins guard the collapse invariants:
+ *  - exactly ONE cache breakpoint, on the LAST segment, for every provider;
+ *  - Claude AND Grok are byte-identical pass-throughs of `[systemPrompt, fewShot]`;
+ *  - OpenAI still injects its AGENT_CONTRACT / OUTPUT_CONTRACT (Markdown/stop);
+ *  - the single body front-loads submit_answer-terminates-the-turn + GFM;
+ *  - the body teaches the three new tools (run_sql / search_wiki / web_search) and
+ *    embeds the run_sql warehouse DDL in the cached prefix;
+ *  - the per-scope generation facts (label + basis tag) ride in the assembled body
+ *    and a gen-7 build never leaks "Generation 9".
  */
 
 import { describe, expect, it } from "vitest";
@@ -14,16 +21,26 @@ import { domainForMode } from "@/agent/prompts/domain";
 import { MAINLINE_GEN_INFO } from "@/agent/prompts/gen-info";
 import type { SystemSegment } from "@/agent/providers/types";
 
+const PROVIDERS = ["anthropic", "openai", "xai"] as const;
+
 function oneBreakpointOnLast(segments: SystemSegment[]): void {
   const flagged = segments.filter((s) => s.cacheBreakpoint);
   expect(flagged).toHaveLength(1);
   expect(segments[segments.length - 1].cacheBreakpoint).toBe(true);
-  // No earlier segment is flagged.
   for (const s of segments.slice(0, -1)) expect(s.cacheBreakpoint).toBeFalsy();
 }
 
+function bodyText(
+  provider: (typeof PROVIDERS)[number],
+  mode: Parameters<typeof buildSystemSegments>[0]["mode"],
+): string {
+  return buildSystemSegments({ provider, mode })
+    .map((s) => s.text)
+    .join("\n");
+}
+
 describe("buildSystemSegments — cache breakpoint invariant", () => {
-  for (const provider of ["anthropic", "openai", "xai"] as const) {
+  for (const provider of PROVIDERS) {
     it(`places exactly one breakpoint on the last segment (${provider})`, () => {
       oneBreakpointOnLast(buildSystemSegments({ provider, mode: "standard" }));
       oneBreakpointOnLast(buildSystemSegments({ provider, mode: "champions" }));
@@ -33,38 +50,77 @@ describe("buildSystemSegments — cache breakpoint invariant", () => {
   }
 });
 
-describe("Claude style — byte-identical to the domain body (no regression)", () => {
-  // The standard consts became per-scope builders (`domainForMode`); the Claude
-  // path must still be exactly [systemPrompt, fewShot] for EACH scope it serves.
-  for (const mode of ["standard", "gen-7"] as const) {
-    it(`is exactly [systemPrompt, fewShot] for ${mode} mode`, () => {
-      const domain = domainForMode(mode);
-      const segs = buildSystemSegments({ provider: "anthropic", mode });
-      expect(segs).toEqual([
-        { text: domain.systemPrompt },
-        { text: domain.fewShot, cacheBreakpoint: true },
-      ]);
+describe("Claude + Grok styles — byte-identical pass-throughs of the one body", () => {
+  // Both plain-wrap providers must be exactly [systemPrompt, fewShot(breakpoint)]
+  // for EVERY scope they serve — the collapse means Grok is no longer a separate
+  // XML body, so it matches Claude byte-for-byte.
+  for (const provider of ["anthropic", "xai"] as const) {
+    for (const mode of ["standard", "gen-7", "champions"] as const) {
+      it(`is exactly [systemPrompt, fewShot] for ${provider} / ${mode}`, () => {
+        const domain = domainForMode(mode);
+        expect(buildSystemSegments({ provider, mode })).toEqual([
+          { text: domain.systemPrompt },
+          { text: domain.fewShot, cacheBreakpoint: true },
+        ]);
+      });
+    }
+  }
+
+  it("Claude and Grok produce the SAME segments (no per-provider fork)", () => {
+    for (const mode of ["standard", "gen-7", "champions"] as const) {
+      expect(buildSystemSegments({ provider: "xai", mode })).toEqual(
+        buildSystemSegments({ provider: "anthropic", mode }),
+      );
+    }
+  });
+});
+
+describe("The one body — front-loaded contract + GFM (all plain-wrap providers)", () => {
+  for (const provider of ["anthropic", "xai"] as const) {
+    const text = bodyText(provider, "standard");
+    it(`states submit_answer ends the turn, once (${provider})`, () => {
+      expect(text).toContain("submit_answer");
+      expect(text).toContain("exactly once");
+      expect(text).toContain("ENDS the turn");
+    });
+    it(`directs GitHub-Flavored Markdown output (${provider})`, () => {
+      expect(text).toContain("GitHub-Flavored Markdown");
     });
   }
 });
 
+describe("The one body — the three new tools + warehouse DDL", () => {
+  for (const provider of PROVIDERS) {
+    for (const mode of ["standard", "champions", "gen-7"] as const) {
+      it(`routes run_sql / search_wiki / web_search (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        expect(text).toContain("run_sql");
+        expect(text).toContain("search_wiki");
+        expect(text).toContain("web_search");
+      });
+      it(`embeds the run_sql warehouse DDL in the cached prefix (${provider}, ${mode})`, () => {
+        // The DDL lands in the systemPrompt (the cached prefix before the
+        // breakpoint), not the few-shot segment.
+        const prefix = buildSystemSegments({ provider, mode })
+          .slice(0, -1)
+          .map((s) => s.text)
+          .join("\n");
+        expect(prefix).toContain("CREATE TABLE natdex_species");
+        expect(prefix).toContain("CREATE TABLE natdex_moves");
+      });
+    }
+  }
+});
+
 describe("Generation-scope facts — per-scope label/basis tag in the assembled body", () => {
-  // Both the Markdown (anthropic/openai) and Grok-XML (xai) assembled bodies must
-  // carry the RESOLVED scope's label + basis tag, and a gen-7 build must never
-  // leak "Generation 9" — the semantic tripwire the generation-scope feature adds.
-  for (const provider of ["anthropic", "openai", "xai"] as const) {
+  for (const provider of PROVIDERS) {
     it(`carries the standard (Gen 9) label + basis tag (${provider})`, () => {
-      const text = buildSystemSegments({ provider, mode: "standard" })
-        .map((s) => s.text)
-        .join("\n");
+      const text = bodyText(provider, "standard");
       expect(text).toContain(MAINLINE_GEN_INFO.standard.label);
       expect(text).toContain(MAINLINE_GEN_INFO.standard.basisTag);
     });
-
     it(`carries the gen-7 label + basis tag and drops "Generation 9" (${provider})`, () => {
-      const text = buildSystemSegments({ provider, mode: "gen-7" })
-        .map((s) => s.text)
-        .join("\n");
+      const text = bodyText(provider, "gen-7");
       expect(text).toContain(MAINLINE_GEN_INFO["gen-7"].label);
       expect(text).toContain(MAINLINE_GEN_INFO["gen-7"].basisTag);
       expect(text).not.toContain("Generation 9");
@@ -72,10 +128,8 @@ describe("Generation-scope facts — per-scope label/basis tag in the assembled 
   }
 });
 
-describe("GPT-5.5 style — tuned scaffolding", () => {
-  const text = buildSystemSegments({ provider: "openai", mode: "standard" })
-    .map((s) => s.text)
-    .join("\n");
+describe("GPT-5.5 style — tuned scaffolding wraps the same body", () => {
+  const text = bodyText("openai", "standard");
 
   it("includes the explicit agent contract + single stop condition", () => {
     expect(text).toContain("<agent_contract>");
@@ -89,82 +143,29 @@ describe("GPT-5.5 style — tuned scaffolding", () => {
 
   it("still carries the shared domain body", () => {
     expect(text).toContain("You are Oak");
-    expect(text).toContain("# How to use your tools");
+    expect(text).toContain("# Tool routing");
   });
 });
 
-describe("Interpreting attached images — present in both modes and all styles", () => {
-  for (const provider of ["anthropic", "openai", "xai"] as const) {
+describe("Interpreting attached images — present in every scope + provider", () => {
+  for (const provider of PROVIDERS) {
     for (const mode of ["standard", "champions"] as const) {
-      it(`carries the image-interpreting section + few-shot (${provider}, ${mode})`, () => {
-        const text = buildSystemSegments({ provider, mode })
-          .map((s) => s.text)
-          .join("\n");
-        // The image-interpreting section: a Markdown heading on the shared body,
-        // an XML section on the Grok-native body.
-        expect(text).toContain(
-          provider === "xai"
-            ? "<image_input>"
-            : "# Interpreting attached images",
-        );
-        // The general-not-just-teams guarantee + the uncertainty discipline cue.
+      it(`carries the image-interpreting section (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        expect(text).toContain("# Interpreting attached images");
         expect(text).toContain("general, not just teams");
         expect(text).toContain("uncertainty_flags");
-        // The image few-shot example rides in the examples/few-shot segment.
-        expect(text).toContain("attached screenshot");
       });
     }
   }
 });
 
-describe("get_learnset parity guard (B-13) — present in every body", () => {
-  // get_learnset (T17) must never silently drop out of one prompt body while
-  // staying in the others — pins the tool-awareness + team-building guidance
-  // added across the Markdown (Claude/OpenAI) and Grok-native bodies, both modes.
-  const cases: Array<{ label: string; provider: "anthropic" | "xai"; mode: "standard" | "champions" }> = [
-    { label: "standard Markdown body", provider: "anthropic", mode: "standard" },
-    { label: "champions Markdown body", provider: "anthropic", mode: "champions" },
-    { label: "standard Grok body", provider: "xai", mode: "standard" },
-    { label: "champions Grok body", provider: "xai", mode: "champions" },
-  ];
-
-  for (const { label, provider, mode } of cases) {
-    it(`mentions get_learnset in the ${label}`, () => {
-      const text = buildSystemSegments({ provider, mode })
-        .map((s) => s.text)
-        .join("\n");
-      expect(text).toContain("get_learnset");
-    });
+describe("get_learnset parity guard (B-13) — present in every scope + provider", () => {
+  for (const provider of PROVIDERS) {
+    for (const mode of ["standard", "champions"] as const) {
+      it(`mentions get_learnset (${provider}, ${mode})`, () => {
+        expect(bodyText(provider, mode)).toContain("get_learnset");
+      });
+    }
   }
-});
-
-describe("Grok 4.3 style — XML-sectioned native body", () => {
-  const text = buildSystemSegments({ provider: "xai", mode: "standard" })
-    .map((s) => s.text)
-    .join("\n");
-
-  it("authors the whole body as labeled XML sections (no wrapper)", () => {
-    expect(text).toContain("<role>");
-    expect(text).toContain("<data_rules>");
-    expect(text).toContain("<tool_routing>");
-    expect(text).toContain("<reasoning>");
-    expect(text).toContain("<examples>");
-    // The wrapper-era tags are gone — the body IS Grok-native now, not the
-    // shared Markdown body wrapped in a <playbook>.
-    expect(text).not.toContain("<playbook>");
-    expect(text).not.toContain("<grok_directives>");
-  });
-
-  it("includes the explicit stop condition and the Oak identity", () => {
-    expect(text).toContain("<stop_condition>");
-    expect(text).toContain("You are Oak");
-  });
-
-  it("front-loads the brittle output rules as a top-level <output_contract>", () => {
-    expect(text).toContain("<output_contract>");
-    // The three brittle structured-output rules a structured agent tends to drop.
-    expect(text).toContain("truncated:false"); // complete-lists rule
-    expect(text).toContain("national_dex_number"); // candidates-copied-verbatim rule
-    expect(text).toContain("subjects[]"); // sprite rule
-  });
 });

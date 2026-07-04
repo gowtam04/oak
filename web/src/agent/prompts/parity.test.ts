@@ -1,44 +1,45 @@
 /**
- * PARITY guard — the semantic-drift tripwire the build gate enforces.
+ * Scope-fact guard for the ONE canonical body.
  *
- * The two prompt bodies (`./domain` for Claude/OpenAI, `./domain-grok` for the
- * default Grok model) carry the SAME Pokémon domain facts in two different prompt
- * structures. For the generation-scope feature the per-gen facts live in ONE
- * place — `MAINLINE_GEN_INFO` (`./gen-info`) — and BOTH bodies template from it,
- * so parity holds by construction. This test pins that: for every mainline scope,
- * the assembled system body + few-shot of EACH model contains that scope's
- * `label` and `basisTag`. If either author edits one body and forgets the other —
- * or hardcodes a generation string instead of sourcing it from `gen-info` — a
- * scope's fact will be missing from one body and this test fails.
+ * Since Oak v2 P3 (prompt collapse) there is a SINGLE Markdown body for all three
+ * providers; the old cross-body ("Markdown vs Grok-XML") parity rule is dead.
+ * "Parity" now means the one body, built for each scope, carries that scope's
+ * facts sourced from the single fact tables — `MAINLINE_GEN_INFO` (`./gen-info`)
+ * for the mainline gens and `CHAMPIONS_PROFILE` (`./champions`) for Champions.
  *
- * It also pins the cross-module invariant the gen-info table depends on:
- * `MAINLINE_GEN_INFO[mode].basisTag` MUST equal
- * `basisForFormat(formatForMode(mode))`, keeping the prompt's basis tag in
- * lock-step with `formats.ts` (the value the runtime's synthesized fallbacks use).
- *
- * `style.test.ts` + `domain-grok.test.ts` pin each body's STRUCTURE; this file
- * pins the SEMANTIC parity between them across every gen scope.
+ * This test pins:
+ *  - for every mainline scope, the built body contains that scope's `label` +
+ *    `basisTag`, and the basisTag stays in lock-step with `formats.ts`;
+ *  - a gen-7 build never leaks the Gen 9 label;
+ *  - the Champions body carries the regulation, Stat Points, and the
+ *    no-Terastallization rule;
+ *  - the body mentions all six data-scope formats (via the injected warehouse
+ *    DDL) so run_sql knows the whole `format` partition set.
  */
 
 import { describe, expect, it } from "vitest";
 
 import { domainForMode } from "@/agent/prompts/domain";
-import { grokDomainForMode } from "@/agent/prompts/domain-grok";
 import {
   MAINLINE_GEN_INFO,
   type MainlineMode,
 } from "@/agent/prompts/gen-info";
-import { basisForFormat, formatForMode } from "@/data/formats";
+import {
+  basisForFormat,
+  CHAMPIONS_REGULATION,
+  formatForMode,
+  FORMATS,
+} from "@/data/formats";
 
-/**
- * Every mainline scope, derived from the fact table itself so a newly-supported
- * generation (e.g. a future gen-4 entry) is automatically parity-checked.
- */
 const MAINLINE_MODES = Object.keys(MAINLINE_GEN_INFO) as MainlineMode[];
 
-describe("prompt parity — the fact table backs every mainline scope", () => {
+function fullBody(mode: Parameters<typeof domainForMode>[0]): string {
+  const d = domainForMode(mode);
+  return `${d.systemPrompt}\n${d.fewShot}`;
+}
+
+describe("scope facts — the fact table backs every mainline scope", () => {
   it("covers exactly the expected mainline scopes (standard + gen-5…gen-8)", () => {
-    // Pins the named GS-D1 set so removing/renaming a scope trips the gate.
     expect([...MAINLINE_MODES].sort()).toEqual([
       "gen-5",
       "gen-6",
@@ -51,37 +52,50 @@ describe("prompt parity — the fact table backs every mainline scope", () => {
   for (const mode of MAINLINE_MODES) {
     const info = MAINLINE_GEN_INFO[mode];
 
-    it(`both bodies carry ${mode}'s label + basis tag (parity by construction)`, () => {
-      const claude = domainForMode(mode);
-      const grok = grokDomainForMode(mode);
-      const claudeText = `${claude.systemPrompt}\n${claude.fewShot}`;
-      const grokText = `${grok.systemPrompt}\n${grok.fewShot}`;
-
-      // The Markdown (Claude/OpenAI) body.
-      expect(claudeText).toContain(info.label);
-      expect(claudeText).toContain(info.basisTag);
-      // The Grok-native XML body — same facts, different structure.
-      expect(grokText).toContain(info.label);
-      expect(grokText).toContain(info.basisTag);
+    it(`the built body carries ${mode}'s label + basis tag`, () => {
+      const text = fullBody(mode);
+      expect(text).toContain(info.label);
+      expect(text).toContain(info.basisTag);
     });
 
     it(`${mode}'s basisTag stays in lock-step with formats.ts`, () => {
-      // The gen-info INVARIANT: the prompt's basis tag == the format's basis tag.
       expect(info.basisTag).toBe(basisForFormat(formatForMode(mode)));
     });
   }
 });
 
-describe("prompt parity — a gen-7 build never leaks the Gen 9 label", () => {
-  it("neither body emits 'Generation 9' when built for gen-7", () => {
-    const claude = domainForMode("gen-7");
-    const grok = grokDomainForMode("gen-7");
-    const claudeText = `${claude.systemPrompt}\n${claude.fewShot}`;
-    const grokText = `${grok.systemPrompt}\n${grok.fewShot}`;
+describe("scope facts — a gen-7 build never leaks the Gen 9 label", () => {
+  it("does not emit 'Generation 9' when built for gen-7", () => {
+    expect(fullBody("gen-7")).not.toContain("Generation 9");
+  });
+});
 
-    // "Generation 9" lives only in the `standard` gen-info entry; a gen-7 build
-    // must not carry it in EITHER prompt structure.
-    expect(claudeText).not.toContain("Generation 9");
-    expect(grokText).not.toContain("Generation 9");
+describe("scope facts — the Champions body is Champions-correct", () => {
+  const text = fullBody("champions");
+
+  it("carries the current regulation and the champions basis tag", () => {
+    expect(text).toContain(CHAMPIONS_REGULATION);
+    expect(text).toContain('generation: "champions"');
+  });
+
+  it("uses Stat Points and forbids Terastallization", () => {
+    expect(text).toContain("Stat Points");
+    expect(text).toContain("NO Terastallization");
+  });
+
+  it("carries the exists_in_standard cross-scope hint", () => {
+    expect(text).toContain("exists_in_standard");
+  });
+});
+
+describe("scope facts — the body names all six data-scope formats", () => {
+  // The injected warehouse DDL documents the `format` partition set, so run_sql
+  // knows every scope. This is the single place all six format strings must
+  // appear together — a new/renamed format trips this.
+  it("mentions every format from formats.ts", () => {
+    const text = fullBody("standard");
+    for (const format of FORMATS) {
+      expect(text).toContain(`'${format}'`);
+    }
   });
 });

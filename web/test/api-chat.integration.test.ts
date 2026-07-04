@@ -586,31 +586,33 @@ describe("POST /api/chat — scope resolution", () => {
     expect(scopeOf(events)).toEqual({ format: "champions", source: "default" });
   });
 
-  it("(c) an unsupported gen (gen 3) short-circuits to an in-domain answer without running the agent", async () => {
-    // If the agent WERE run it would resolve G1; assert it is never called.
+  it("(c) a named-but-unindexed gen (gen 3) runs the agent at the STANDARD data scope (no short-circuit)", async () => {
+    // Oak v2 §3 removed the honest-decline short-circuit: Gens 1–4 are now
+    // answerable via the whole-franchise tools. The in-message signal resolves
+    // to the broad STANDARD (scarlet-violet) data scope, and the agent runs.
     mockRunOak.mockResolvedValue(G1_ANSWER);
 
     const res = await post({
       session_id: "s-scope-unsupported",
-      message: "analyze my gen 3 team",
+      message: "best strategy to catch feebas in gen 3",
     });
     const events = await readSse(res);
 
-    // No agent run, no scope/tool/error events — just the one terminal answer.
-    expect(mockRunOak).not.toHaveBeenCalled();
-    expect(scopeOf(events)).toBeUndefined();
-    expect(events.filter((e) => e.event === "tool_activity")).toHaveLength(0);
+    // The agent DID run and the scope was reported as a message-sourced standard.
+    expect(mockRunOak).toHaveBeenCalledTimes(1);
+    expect(scopeOf(events)).toEqual({
+      format: "scarlet-violet",
+      source: "message",
+    });
+    // The context threaded to the agent carries the standard mode.
+    const ctxArg = vi.mocked(createAgentContext).mock.calls.at(-1)?.[0];
+    expect(ctxArg?.mode).toBe("standard");
     expect(events.filter((e) => e.event === "error")).toHaveLength(0);
 
     const answers = events.filter((e) => e.event === "answer");
     expect(answers).toHaveLength(1);
     const answer = (answers[0]!.data as { answer: OakAnswer }).answer;
     expect(oakAnswerSchema.safeParse(answer).success).toBe(true);
-    expect(answer.status).toBe("insufficient_data");
-    expect(answer.uncertainty_flags).toEqual([
-      "unsupported_generation_requested",
-    ]);
-    expect(answer.generation_basis.generation).toBe("unsupported");
   });
 });
 
