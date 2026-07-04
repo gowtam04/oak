@@ -102,3 +102,9 @@ Each phase: own worktree off develop (`git worktree add ../oak-<phase> -b agent/
 - `fly secrets set TAVILY_API_KEY=…` ; `ACTIVE_MODEL=claude-sonnet-5` for the test period (cost was the reason for the July 2 revert — final model decided after the bake-off).
 - Prod re-ingest (`npm run docker:ingest` locally; release ingest for prod) — new tables empty until then read as documented miss shapes, not crashes.
 - Privacy page: no change needed (wiki/web content is public data; no new user-data collection).
+
+## 10. Deferred follow-ups (not blocking the redesign)
+
+- **wiki_page/wiki_chunk not yet exposed to run_sql.** §5 T18 listed "wiki_page metadata" as a run_sql-exposed table, but P4 (correctly, being outside its fence) did NOT add it to the `oak_readonly` grant (migration 0009) or the sql-sandbox allowlist + WAREHOUSE_DDL. `search_wiki` already covers full-text retrieval over the corpus; run_sql over wiki metadata (e.g. "count episodes") is a nice-to-have, not required for any benchmark question. If wanted later: add wiki_page/wiki_chunk to a new grant migration + WAREHOUSE_ALLOWLIST + WAREHOUSE_DDL. Deliberately NOT folded into P3 (keeps the delicate prompt phase off the migration/sandbox surface).
+- **Fandom crawl category list is best-guess.** The v1 `fetch:wiki` category names are unverified against the live API (`Category:Episodes` returned 0; SEED_TITLES + graceful empty-skip keep a real crawl useful). Tuning needs live-API iteration at prod ingest time; not code- or test-blocking (tests seed rows directly).
+- **pgvector hybrid retrieval** for search_wiki (design §4.2) — lexical-only v1 shipped; embeddings deferred until prod Postgres ships pgvector.
