@@ -590,6 +590,32 @@ export const REFERENCE_CACHE_SEED: ReferenceCacheSeed[] = [
         "by evolution, breeding, in-game trade, or events.",
     },
   },
+  // --- T7 get_evolution_chain: an evolution HIT under scarlet-violet only ------
+  // Eevee is NOT seeded under the champions format, so a champions-mode
+  // get_evolution_chain misses the roster and falls back to THIS row — the
+  // source_format-flagged mainline chain (GS evolution fallback).
+  {
+    resource_key: "evolution-chain/eevee",
+    resource_kind: "evolution",
+    endpoint_url: "https://pokeapi.co/api/v2/evolution-chain/67",
+    payload: {
+      found: true,
+      chain: [
+        {
+          from: "eevee",
+          to: "vaporeon",
+          conditions: [{ trigger: "use-item", item: "water-stone" }],
+        },
+        {
+          from: "eevee",
+          to: "sylveon",
+          conditions: [
+            { trigger: "level-up", known_move_type: "fairy", min_affection: 2 },
+          ],
+        },
+      ],
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------

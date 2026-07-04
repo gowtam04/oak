@@ -960,10 +960,13 @@ export async function runDeterministic(
     }
 
     const toolCalls: string[] = [];
+    // Per-case scope override (parity with the judged harness): a case that needs
+    // a non-default scope sets gc.mode; input text does not drive scope here.
+    const caseCtx: AgentContext = { ...ctx, mode: gc.mode ?? ctx.mode };
     const answer = await driveCase(
       plan,
       primaryInput(gc),
-      ctx,
+      caseCtx,
       provider,
       (tool) => toolCalls.push(tool),
     );

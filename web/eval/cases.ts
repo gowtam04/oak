@@ -1,5 +1,5 @@
 /**
- * eval/cases.ts — G1..G54 golden test cases (evaluation.md + Oak v2 §7).
+ * eval/cases.ts — G1..G55 golden test cases (evaluation.md + Oak v2 §7).
  *
  * Owned by: phase "Eval" / track "cases". Do NOT edit from other phases.
  *
@@ -905,6 +905,27 @@ export const cases: GoldenCase[] = [
     },
     covers: ["BQ-29", "WIKI", "SQL"],
   },
+
+  // =========================================================================
+  // G55 — Champions-scope off-roster dex question (TYPED, judged). Eevee is NOT
+  // on the Champions roster, but "how does Eevee evolve" is a whole-GAME fact
+  // Oak must still answer — get_evolution_chain falls back to the mainline chain
+  // (source_format), NOT a scope redirect. Regression for the prod incident where
+  // the champions miss-rule caused Oak to refuse and tell the user to switch
+  // scope. Companion to G10 (the standard-scope Eevee case).
+  // =========================================================================
+  {
+    id: "G55",
+    mode: "champions",
+    input: "How does Eevee evolve?",
+    expect: {
+      status: "answered",
+      mustInclude: ["Vaporeon", "Sylveon"],
+      rubricNote:
+        "Champions scope; Eevee is NOT in the Champions roster. A correct answer still explains Eevee's evolutions (the eight evolutions and/or their methods) from mainline/game data — via get_evolution_chain's flagged mainline fallback or the natdex warehouse — while noting Eevee isn't available in Champions and stamping a non-champions generation_basis (fallback flagged). An answer that only redirects the user to switch scope, asks them to re-ask 'in Scarlet/Violet', or declines, FAILS answer_correctness and scope_adherence.",
+    },
+    covers: ["AC-5.1", "TYPED"],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -912,7 +933,7 @@ export const cases: GoldenCase[] = [
 // ---------------------------------------------------------------------------
 
 /**
- * All 54 cases indexed by ID for O(1) lookup.
+ * All 55 cases indexed by ID for O(1) lookup.
  * Example: `caseById["G11"]`
  */
 export const caseById: Readonly<Record<string, GoldenCase>> =

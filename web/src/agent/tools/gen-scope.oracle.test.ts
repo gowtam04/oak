@@ -30,6 +30,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import {
+  getEvolutionChainOutputSchema,
   getPokemonOutputSchema,
   queryPokedexOutputSchema,
   queryPokedexResultSchema,
@@ -226,6 +227,17 @@ describe("champions cross-scope hint (exists_in_standard)", () => {
     const out = await dispatch("resolve_entity", { query: "Farigiraf" }, ctx);
     expect(resolveEntityOutputSchema.safeParse(out).success).toBe(true);
     expect(out).toEqual({ matches: [], exists_in_standard: true });
+  });
+
+  it("champions get_evolution_chain on an SV-seeded roster-absent species returns the mainline chain with source_format", async () => {
+    ensureLoaded();
+    const ctx = await ctxFor("champions");
+    // Eevee's evolution chain is seeded under scarlet-violet only, and Eevee is
+    // absent from the champions roster — so the tool falls back to the mainline
+    // chain and stamps source_format rather than declining.
+    const out = await dispatch("get_evolution_chain", { species: "eevee" }, ctx);
+    expect(getEvolutionChainOutputSchema.safeParse(out).success).toBe(true);
+    expect(out).toMatchObject({ found: true, source_format: "scarlet-violet" });
   });
 
   it("the same misses under standard mode carry NO exists_in_standard key", async () => {

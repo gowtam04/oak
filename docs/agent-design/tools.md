@@ -473,6 +473,12 @@ as provided by PokeAPI. Use for evolution questions (US-5).
 
 **Side effects:** Read-only (DS-4). Idempotent. **Failure modes:**
 `{ "found": false, "suggestions": [...] }`; `{ "error": "upstream_unavailable" }`.
+In **champions** scope, evolution is a whole-GAME fact the Champions roster
+doesn't gate, so a roster miss falls back to the mainline Gen 9 (scarlet-violet)
+chain rather than surfacing `exists_in_standard`: the standard chain is returned
+marked `source_format: "scarlet-violet"` (additive; the same STANDARD_FORMAT
+fallback `get_encounters` uses, GS-D4). Only when the species is missing under
+mainline too does the miss carry `exists_in_standard: false`.
 **Auth:** none.
 
 ---

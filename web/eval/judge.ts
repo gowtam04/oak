@@ -30,7 +30,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 import { env } from "@/env";
 import { runOak as defaultRunOak } from "@/agent/runtime";
-import type { AgentContext, ChatMessage } from "@/agent/types";
+import type { AgentContext, AgentMode, ChatMessage } from "@/agent/types";
 import type { OakAnswer } from "@/agent/schemas";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -49,6 +49,12 @@ export interface GoldenCase {
    * cases where each element is one user message in sequence (e.g. G19 follow-up).
    */
   input: string | string[];
+  /**
+   * AgentContext.mode for this case; defaults to the harness default (standard).
+   * Champions cases must set it — the input text does NOT drive scope in the eval
+   * harness (scope resolution runs in the chat route, not runOak).
+   */
+  mode?: AgentMode;
   expect: {
     /** Expected OakAnswer.status value. */
     status?: OakAnswer["status"];
@@ -553,13 +559,18 @@ async function runOneCase(
   const toolCalls: string[] = [];
   const inputs = Array.isArray(gc.input) ? gc.input : [gc.input];
 
+  // Per-case scope override: `ctx` is built once (buildContext) and reused, so a
+  // case that needs a non-default scope (e.g. a champions case) sets gc.mode —
+  // the input text does NOT drive scope in the harness.
+  const caseCtx: AgentContext = { ...ctx, mode: gc.mode ?? ctx.mode };
+
   // ── 1. Run the agent (supports multi-turn via sequential calls) ──────────
   const agentStart = Date.now();
   let history: ChatMessage[] = [];
   let lastAnswer: OakAnswer = notStartedAnswer();
 
   for (const message of inputs) {
-    lastAnswer = await runOak(message, history, ctx, (event) => {
+    lastAnswer = await runOak(message, history, caseCtx, (event) => {
       toolCalls.push(event.tool);
     });
     // Build history for the next turn (multi-turn: each assistant reply is the
