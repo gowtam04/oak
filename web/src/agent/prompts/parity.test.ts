@@ -86,6 +86,14 @@ describe("scope facts — the Champions body is Champions-correct", () => {
   it("carries the exists_in_standard cross-scope hint", () => {
     expect(text).toContain("exists_in_standard");
   });
+
+  it("carries the get_evolution_chain source_format fallback flag", () => {
+    expect(text).toContain("source_format");
+  });
+
+  it("tells the model a roster miss never blocks a non-competitive games answer", () => {
+    expect(text).toContain("a roster miss NEVER means");
+  });
 });
 
 describe("scope facts — the body names all six data-scope formats", () => {
