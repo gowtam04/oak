@@ -223,9 +223,13 @@ function memResetStoreForTests(): void {
  * `sessionId` — the caller treats an empty history as a fresh conversation
  * (DS-5 failure behavior).
  *
- * The returned array is always a fresh copy — mutate via `appendTurn` so
- * future `getHistory` calls stay consistent. Reading also refreshes the
- * session's idle timer (keeps an active conversation resident).
+ * Treat the returned array as READ-ONLY — do not mutate it directly; use
+ * `appendTurn` instead. Its underlying identity is backend-dependent: on the
+ * memory backend it may be the LIVE internal array (so an earlier snapshot
+ * can pick up later appends, same as before), while on the Redis backend it
+ * is a fresh copy decoded from Redis on every call. Callers must never rely
+ * on the reference staying live. Reading also refreshes the session's idle
+ * timer (keeps an active conversation resident).
  *
  * `now` is injectable for the memory backend's deterministic tests; the Redis
  * backend ignores it (server-time TTLs). Defaults to `Date.now()`.
