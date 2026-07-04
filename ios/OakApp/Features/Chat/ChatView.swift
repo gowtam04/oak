@@ -281,35 +281,38 @@ struct ChatView: View {
     ScrollViewReader { proxy in
       GeometryReader { geo in
         ScrollView {
-          // Conversation gravity is bottom-anchored (§3 composition rule, §4.04): a
-          // greedy top Spacer pushes a short thread down against the composer instead
-          // of stranding it at the top with a void beneath. The content is pinned to
-          // at least the viewport height so the Spacer has room to grow; once the
-          // thread outgrows the viewport it scrolls normally.
-          VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            LazyVStack(alignment: .leading, spacing: Theme.Spacing.lg) {
-              if model.turns.isEmpty && !model.isStreaming {
-                emptyState
-              }
+          // Two compositions per §3's rule: the EMPTY state is a CENTERED
+          // composition (the brand cluster + chips sit mid-viewport), while a
+          // conversation is bottom-anchored — a greedy top Spacer pushes a short
+          // thread down against the composer instead of stranding it at the top
+          // with a void beneath. Both pin content to at least the viewport height;
+          // once a thread outgrows the viewport it scrolls normally.
+          if model.turns.isEmpty && !model.isStreaming {
+            emptyState
+              .padding(Theme.Spacing.lg)
+              .frame(minHeight: geo.size.height, alignment: .center)
+          } else {
+            VStack(spacing: 0) {
+              Spacer(minLength: 0)
+              LazyVStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+                ForEach(model.turns) { turn in
+                  turnView(turn)
+                    .id(turn.id)
+                }
+                // Turn insertion animates so the user bubble's entrance transition fires
+                // (Reduce Motion: the transition itself degrades to opacity-only).
+                .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.turns.count)
 
-              ForEach(model.turns) { turn in
-                turnView(turn)
-                  .id(turn.id)
-              }
-              // Turn insertion animates so the user bubble's entrance transition fires
-              // (Reduce Motion: the transition itself degrades to opacity-only).
-              .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.turns.count)
-
-              // The in-flight turn: live status + streamed prose as it arrives.
-              if model.isStreaming || !model.streamingText.isEmpty {
-                inProgressView
-                  .id(Self.inProgressAnchor)
+                // The in-flight turn: live status + streamed prose as it arrives.
+                if model.isStreaming || !model.streamingText.isEmpty {
+                  inProgressView
+                    .id(Self.inProgressAnchor)
+                }
               }
             }
+            .padding(Theme.Spacing.lg)
+            .frame(minHeight: geo.size.height, alignment: .bottom)
           }
-          .padding(Theme.Spacing.lg)
-          .frame(minHeight: geo.size.height, alignment: .bottom)
         }
         .scrollDismissesKeyboard(.interactively)
         // Keep the newest content in view as turns/tokens arrive (M-AC-2.2).
@@ -426,7 +429,8 @@ struct ChatView: View {
       .padding(.top, Theme.Spacing.xs)
     }
     .frame(maxWidth: .infinity)
-    .padding(.top, Theme.Spacing.xxl + Theme.Spacing.lg)
+    // No top offset: the thread centers this composition in the viewport (§3 —
+    // empty states are centered, not top- or bottom-anchored).
     .padding(.horizontal, Theme.Spacing.sm)
     .onAppear { emptyStateAppeared = true }
   }
