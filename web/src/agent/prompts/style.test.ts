@@ -8,8 +8,9 @@
  *  - Claude AND Grok are byte-identical pass-throughs of `[systemPrompt, fewShot]`;
  *  - OpenAI still injects its AGENT_CONTRACT / OUTPUT_CONTRACT (Markdown/stop);
  *  - the single body front-loads submit_answer-terminates-the-turn + GFM;
- *  - the body teaches the three new tools (run_sql / search_wiki / web_search) and
- *    embeds the run_sql warehouse DDL in the cached prefix;
+ *  - the body teaches the two new tools (run_sql / search_wiki), embeds the
+ *    run_sql warehouse DDL in the cached prefix, and teaches honest degradation
+ *    in place of the removed T20 web_search (no fabricated live/current facts);
  *  - the per-scope generation facts (label + basis tag) ride in the assembled body
  *    and a gen-7 build never leaks "Generation 9".
  */
@@ -89,14 +90,19 @@ describe("The one body — front-loaded contract + GFM (all plain-wrap providers
   }
 });
 
-describe("The one body — the three new tools + warehouse DDL", () => {
+describe("The one body — the two new tools + warehouse DDL + no-live-web policy", () => {
   for (const provider of PROVIDERS) {
     for (const mode of ["standard", "champions", "gen-7"] as const) {
-      it(`routes run_sql / search_wiki / web_search (${provider}, ${mode})`, () => {
+      it(`routes run_sql / search_wiki, and does NOT mention web_search (${provider}, ${mode})`, () => {
         const text = bodyText(provider, mode);
         expect(text).toContain("run_sql");
         expect(text).toContain("search_wiki");
-        expect(text).toContain("web_search");
+        expect(text).not.toContain("web_search");
+      });
+      it(`teaches honest degradation instead of live web (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        expect(text).toContain("No live web access");
+        expect(text).toContain("cannot check live/current information");
       });
       it(`embeds the run_sql warehouse DDL in the cached prefix (${provider}, ${mode})`, () => {
         // The DDL lands in the systemPrompt (the cached prefix before the

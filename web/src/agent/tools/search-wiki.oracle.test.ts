@@ -165,11 +165,10 @@ async function search(
 }
 
 describe("search_wiki holds its fixed T19 slot (append-only order)", () => {
-  it("exposes `search_wiki` at index 19, after run_sql (18) and web_search (17)", () => {
+  it("exposes `search_wiki` at index 18, after run_sql (17)", () => {
     ensureLoaded();
-    expect(tools[17]?.name).toBe("web_search");
-    expect(tools[18]?.name).toBe("run_sql");
-    expect(tools[19]?.name).toBe("search_wiki");
+    expect(tools[17]?.name).toBe("run_sql");
+    expect(tools[18]?.name).toBe("search_wiki");
   });
 });
 

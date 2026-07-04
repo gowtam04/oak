@@ -57,7 +57,7 @@ describe("voiceToolDefs", () => {
     const defs = voiceToolDefs();
     expect(defs).toHaveLength(EXPECTED_VOICE_TOOL_COUNT);
     expect(defs.some((d) => d.name === "submit_answer")).toBe(false);
-    expect(defs.some((d) => d.name === "web_search")).toBe(false);
+    expect(defs.some((d) => d.name === "run_sql")).toBe(false);
     // A few known tools are present.
     for (const name of ["get_move", "get_pokemon", "resolve_entity"]) {
       expect(defs.some((d) => d.name === name)).toBe(true);

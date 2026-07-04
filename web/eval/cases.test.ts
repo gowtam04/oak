@@ -582,8 +582,8 @@ describe("eval/cases", () => {
       expect(matches, `${bq} should be covered by exactly one case`).toHaveLength(1);
     });
 
-    it("every benchmark case carries a layer tag (SQL/WIKI/WEB/POLICY/TYPED)", () => {
-      const layerTags = new Set(["SQL", "WIKI", "WEB", "POLICY", "TYPED"]);
+    it("every benchmark case carries a layer tag (SQL/WIKI/POLICY/TYPED)", () => {
+      const layerTags = new Set(["SQL", "WIKI", "POLICY", "TYPED"]);
       for (const c of benchmarkCases) {
         expect(
           c.covers.some((tag) => layerTags.has(tag)),
@@ -608,14 +608,6 @@ describe("eval/cases", () => {
       for (const c of benchmarkCases) {
         if (c.expect.toolEfficiency?.usedTool === "search_wiki") {
           expect(c.covers).toContain("WIKI");
-        }
-      }
-    });
-
-    it("web_search-tagged cases assert toolEfficiency.usedTool === 'web_search'", () => {
-      for (const c of benchmarkCases) {
-        if (c.expect.toolEfficiency?.usedTool === "web_search") {
-          expect(c.covers).toContain("WEB");
         }
       }
     });

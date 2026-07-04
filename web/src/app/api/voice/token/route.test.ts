@@ -132,7 +132,7 @@ describe("POST /api/voice/token", () => {
     expect(json.expires_at).toBe(1_700_000_600);
     expect(json.session.tools).toHaveLength(EXPECTED_VOICE_TOOL_COUNT);
     expect(json.session.tools.some((t) => t.name === "submit_answer")).toBe(false);
-    expect(json.session.tools.some((t) => t.name === "web_search")).toBe(false);
+    expect(json.session.tools.some((t) => t.name === "run_sql")).toBe(false);
     expect(json.session.model).toBe("grok-voice-latest");
     expect(json.session.voice).toBe("rex");
     expect(json.session.reasoning_effort).toBe("none");

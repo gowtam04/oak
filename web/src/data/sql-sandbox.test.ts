@@ -110,9 +110,9 @@ describe("run_sql tool — invalid input", () => {
 });
 
 describe("run_sql holds its fixed T18 slot (append-only order)", () => {
-  it("exposes run_sql at index 18, right after web_search at index 17", () => {
-    expect(tools[17]?.name).toBe("web_search");
-    expect(tools[18]?.name).toBe("run_sql");
+  it("exposes run_sql at index 17, right after get_learnset at index 16", () => {
+    expect(tools[16]?.name).toBe("get_learnset");
+    expect(tools[17]?.name).toBe("run_sql");
     expect(runSqlTool.name).toBe("run_sql");
   });
 });

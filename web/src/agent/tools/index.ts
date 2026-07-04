@@ -59,27 +59,25 @@ import { getEncountersTool } from "./get-encounters";
 import { getUsageStatsTool } from "./get-usage-stats.tool";
 import { listTeamsTool } from "./list-teams.tool";
 import { getLearnsetTool } from "./get-learnset";
-import { webSearchTool } from "./web-search";
 import { runSqlTool } from "./run-sql";
 import { searchWikiTool } from "./search-wiki";
 
 /**
- * The 17 tools, in T1..T17 order. T1..T11 are the fixed agent-design contract;
- * T12 (`get_team`) loads a saved team by id and T13 (`save_team`) persists one
- * (team-builder, TEAM-AD-1 / TEAM-AD-7, reconciled into docs/agent-design); T14
- * (`get_encounters`) adds PokeAPI catch-location data (standard mode only); T15
- * (`get_usage_stats`) adds live championsbattledata.com competitive usage
- * (champions mode only); T16 (`list_teams`) lists the user's saved teams so the
- * model can resolve a by-name reference; T17 (`get_learnset`, B-13) lists a
- * form's legal movepool for the turn's format so proposed/edited teams stay
- * legal; T20 (`web_search`, oak-v2 P5) is Oak's first live web tool (Tavily),
- * for time-sensitive facts outside Oak's own data; T18 (`run_sql`, oak-v2 P2)
- * runs guarded read-only SQL over Oak's offline warehouse for whole-Pokédex
- * aggregations the typed tools can't express (appended AFTER web_search — the
- * barrel order is append-only, not T-id order — so the cached prefix stays
- * stable); T19 (`search_wiki`, oak-v2 P4) does full-text retrieval over the
- * self-built Fandom prose corpus for anime/lore/spin-off/trivia questions
- * (appended after run_sql). These new tools are gated OUT of voice mode via
+ * The 19 tools, in T1..T19 order (T20 `web_search` was removed 2026-07-03 —
+ * cost vs. marginal value; see CLAUDE.md). T1..T11 are the fixed agent-design
+ * contract; T12 (`get_team`) loads a saved team by id and T13 (`save_team`)
+ * persists one (team-builder, TEAM-AD-1 / TEAM-AD-7, reconciled into
+ * docs/agent-design); T14 (`get_encounters`) adds PokeAPI catch-location data
+ * (standard mode only); T15 (`get_usage_stats`) adds live
+ * championsbattledata.com competitive usage (champions mode only); T16
+ * (`list_teams`) lists the user's saved teams so the model can resolve a
+ * by-name reference; T17 (`get_learnset`, B-13) lists a form's legal movepool
+ * for the turn's format so proposed/edited teams stay legal; T18 (`run_sql`,
+ * oak-v2 P2) runs guarded read-only SQL over Oak's offline warehouse for
+ * whole-Pokédex aggregations the typed tools can't express; T19
+ * (`search_wiki`, oak-v2 P4) does full-text retrieval over the self-built
+ * Fandom prose corpus for in-game/lore/spin-off/trivia questions (appended
+ * after run_sql). These tools are gated OUT of voice mode via
  * `VOICE_EXCLUDED_TOOLS`
  * (`@/agent/tools/voice-gating`), not this barrel. All appended after T11 so the
  * existing T1..T11 order — and thus most of the cached prefix — is unchanged.
@@ -104,7 +102,6 @@ export const tools: ToolDef[] = [
   getUsageStatsTool,
   listTeamsTool,
   getLearnsetTool,
-  webSearchTool,
   runSqlTool,
   searchWikiTool,
 ];

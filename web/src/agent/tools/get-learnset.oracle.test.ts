@@ -76,7 +76,7 @@ function ctxFor(mode: AgentMode): Promise<AgentContext> {
 }
 
 describe("get_learnset holds its fixed T17 slot (append-only order)", () => {
-  it("exposes `get_learnset` at index 16 — T18+ tools (e.g. web_search) append AFTER it", () => {
+  it("exposes `get_learnset` at index 16 — T18+ tools (e.g. run_sql) append AFTER it", () => {
     ensureLoaded();
     expect(tools[16]?.name).toBe("get_learnset");
   });

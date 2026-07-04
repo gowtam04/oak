@@ -9,15 +9,14 @@
  * tools with no place on a client-driven realtime socket: `submit_answer`
  * (voice speaks its answer — there is no OakAnswer output contract) and
  * network/warehouse tools that are either irrelevant to a spoken turn or too
- * slow/broad for the realtime loop. `web_search`, `run_sql`, and
- * `search_wiki` are named here now, ahead of run_sql/search_wiki landing
- * (oak-v2 P2/P4), so their addition never has to touch voice code again.
+ * slow/broad for the realtime loop. `run_sql` and `search_wiki` are named
+ * here so their addition never has to touch voice code again. (T20
+ * `web_search` was named here too until it was removed 2026-07-03.)
  *
  * Both voice sites import THIS set instead of hand-rolling the filter.
  */
 export const VOICE_EXCLUDED_TOOLS: ReadonlySet<string> = new Set([
   "submit_answer",
-  "web_search",
   "run_sql",
   "search_wiki",
 ]);

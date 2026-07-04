@@ -19,26 +19,28 @@
  *
  * G26..G54 (Oak v2 §7) turn the 29 GAMES-scope benchmark questions
  * (docs/features/oak-v2/benchmark-questions.md, "BQ-1".."BQ-29" in `covers`)
- * into golden cases, one case per question, covering the three new tools
- * (T18 `run_sql`, T19 `search_wiki`, T20 `web_search`) plus prompt-policy-only
- * answers (false-premise rejection, opinion framing, off-domain decline, and —
- * per the games-only pivot, design.md §9b — graceful DECLINE of franchise MEDIA
- * questions: anime/movies/TV/manga, e.g. G38/G39/G40/G41/G48/G51).
- * `covers` also carries the answer layer tag ("SQL" | "WIKI" | "WEB" |
- * "POLICY") from the benchmark table. Five of these (the pure run_sql
- * aggregations design.md §5 T18 calls out as the offline-answerable
- * candidates) are ALSO `deterministic: true`, with plans registered in
- * eval/deterministic.ts and fixture rows in
- * eval/fixtures/seed-fixture-db.ts: G26 (natdex==BST), G32 (purple count),
- * G35 (Fire-Fang-is-Gen-4 false-premise verification), G44 (catch rate >
- * pre-evolution), G47 (dual-type -> monotype on evolution). Their
- * `mustInclude`/`mustCite` are deliberately loose (or omitted) where the
+ * into golden cases, one case per question, covering the two new tools (T18
+ * `run_sql`, T19 `search_wiki`) plus prompt-policy-only answers (false-premise
+ * rejection, opinion framing, off-domain decline, honest degradation for
+ * time-sensitive facts now that T20 `web_search` has been removed — 2026-07-03,
+ * cost vs. marginal value — and, per the games-only pivot, design.md §9b,
+ * graceful DECLINE of franchise MEDIA questions: anime/movies/TV/manga, e.g.
+ * G38/G39/G40/G41/G48/G51).
+ * `covers` also carries the answer layer tag ("SQL" | "WIKI" |
+ * "POLICY") from the benchmark table (the historical "WEB" tag was retired
+ * with T20). Five of these (the pure run_sql aggregations design.md §5 T18
+ * calls out as the offline-answerable candidates) are ALSO
+ * `deterministic: true`, with plans registered in eval/deterministic.ts and
+ * fixture rows in eval/fixtures/seed-fixture-db.ts: G26 (natdex==BST), G32
+ * (purple count), G35 (Fire-Fang-is-Gen-4 false-premise verification), G44
+ * (catch rate > pre-evolution), G47 (dual-type -> monotype on evolution).
+ * Their `mustInclude`/`mustCite` are deliberately loose (or omitted) where the
  * underlying fixture rows are illustrative/contrived rather than real
  * Pokédex facts — see the per-case notes — because the SAME case also runs
  * in the live judged suite against the real warehouse (deterministic:true
- * does not exempt a case from `ALL_CASES`). WIKI/WEB cases are judged-only
- * (no deterministic plan is attempted for them — search_wiki/web_search need
- * a live corpus/network, per Oak v2 §7).
+ * does not exempt a case from `ALL_CASES`). WIKI cases are judged-only (no
+ * deterministic plan is attempted for them — search_wiki needs a live corpus,
+ * per Oak v2 §7).
  */
 
 // GoldenCase is defined once in ./judge (the single source of truth) and
@@ -553,17 +555,18 @@ export const cases: GoldenCase[] = [
     covers: ["BQ-5", "SQL", "WIKI"],
   },
 
-  // G31 — BQ-6 (WEB, judged): best-selling Pokémon game.
+  // G31 — BQ-6 (POLICY, judged): best-selling Pokémon game. T20 web_search was
+  // removed (2026-07-03, cost/value) — Oak now has no live web tool, so this
+  // pins honest degradation instead of a live-searched figure.
   {
     id: "G31",
     input: "Which Pokémon game sold the most copies?",
     expect: {
       status: "answered",
-      toolEfficiency: { usedTool: "web_search", maxPerPokemonFetches: 0 },
       rubricNote:
-        "Sales figures change and are contested by source — a correct answer cites a specific source (e.g. Nintendo IR data) and dates the figure ('as of <date>'), rather than stating a number as timeless fact.",
+        "Oak has no live web tool. A correct answer gives a figure ONLY with an explicit source and date ('as of <date>'), and acknowledges the figure may be stale since Oak can't check current sales data; a confident, timeless, unsourced number is a failure.",
     },
-    covers: ["BQ-6", "WEB"],
+    covers: ["BQ-6", "POLICY"],
   },
 
   // G32 — BQ-7 (SQL, deterministic): count of purple Pokémon.
@@ -682,7 +685,7 @@ export const cases: GoldenCase[] = [
     expect: {
       status: "answered",
       rubricNote:
-        "Out of scope (anime): Oak is a GAMES assistant. Correct answer gracefully DECLINES in persona (focuses on the games), does NOT web_search for the anime season, and offers games-side help instead; empty citations[] is correct.",
+        "Out of scope (anime): Oak is a GAMES assistant. Correct answer gracefully DECLINES in persona (focuses on the games), does NOT search for or fabricate the anime season, and offers games-side help instead; empty citations[] is correct.",
     },
     covers: ["BQ-14", "POLICY"],
   },
@@ -770,23 +773,24 @@ export const cases: GoldenCase[] = [
       status: "answered",
       mustInclude: ["+"],
       rubricNote:
-        "Oak's structured data has no weight field (a real gap vs. the benchmark's expected SQL/typed path) — the agent must source each species' weight via search_wiki/web_search, then show the addition explicitly (trivial math shown, not just a final number).",
+        "Oak's structured data has no weight field (a real gap vs. the benchmark's expected SQL/typed path) — the agent must source each species' weight via search_wiki, then show the addition explicitly (trivial math shown, not just a final number).",
     },
-    covers: ["BQ-20", "WIKI", "WEB"],
+    covers: ["BQ-20", "WIKI"],
   },
 
-  // G46 — BQ-21 (WEB, judged): Pokémon Winds and Waves release date.
+  // G46 — BQ-21 (POLICY, judged): Pokémon Winds and Waves release date. T20
+  // web_search was removed (2026-07-03, cost/value) — Oak now has no live web
+  // tool, so this pins honest degradation (cited wiki fact or plain
+  // uncertainty) instead of a live-searched date.
   {
     id: "G46",
     input: "When will Pokémon Winds and Waves release?",
     expect: {
       status: "answered",
-      toolEfficiency: { usedTool: "web_search", maxPerPokemonFetches: 0 },
-      mustInclude: ["2027"],
       rubricNote:
-        "Must come from a live, dated search — Winds and Waves (Gen 10) was announced 2026-02-27 for a 2027 release. Do not answer this from static/training-time knowledge.",
+        "Oak has no live web tool. A correct answer EITHER sources the release date from search_wiki WITH a citation, OR plainly says it cannot verify current/upcoming release info and flags the uncertainty; a confident, uncited date is a failure.",
     },
-    covers: ["BQ-21", "WEB"],
+    covers: ["BQ-21", "POLICY"],
   },
 
   // G47 — BQ-22 (SQL, deterministic): dual-type -> monotype on evolution.
@@ -821,18 +825,19 @@ export const cases: GoldenCase[] = [
     covers: ["BQ-23", "POLICY"],
   },
 
-  // G49 — BQ-24 (WEB, judged): live-service support query.
+  // G49 — BQ-24 (POLICY, judged): live-service support query. T20 web_search
+  // was removed (2026-07-03, cost/value) — Oak now has no live web tool, so
+  // this pins honest degradation (troubleshooting + no invented outage).
   {
     id: "G49",
     input:
       "I keep losing connection on Pokémon Champions — what's happening?",
     expect: {
       status: "answered",
-      toolEfficiency: { usedTool: "web_search", maxPerPokemonFetches: 0 },
       rubricNote:
-        "Live-service status is time-sensitive and outside Oak's own data — correct answer searches for current server-status/known-issue reports and is honest about uncertainty when nothing current is found, rather than guessing a cause.",
+        "Live-service status is time-sensitive and outside Oak's own data, and Oak has no live web tool — correct answer is honest that it cannot check current server status, offers general connectivity troubleshooting, and does NOT invent a current outage or cause.",
     },
-    covers: ["BQ-24", "WEB"],
+    covers: ["BQ-24", "POLICY"],
   },
 
   // G50 — BQ-25 (POLICY off-domain decline, judged): graceful, in-persona.

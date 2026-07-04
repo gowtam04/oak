@@ -424,8 +424,8 @@ export async function POST(req: Request): Promise<Response> {
   //     broad STANDARD (national-dex) data scope — the honest-decline
   //     short-circuit is GONE (oak-v2 §3). Gens 1–4 are now answerable: the typed
   //     tools default to the broad Gen 9 index while the answer leans on the
-  //     whole-franchise tools (run_sql over natdex_*, search_wiki, web_search),
-  //     which the single canonical prompt body routes to.
+  //     whole-games tools (run_sql over natdex_*, search_wiki), which the single
+  //     canonical prompt body routes to.
   const detection = detectScopeSignal(message);
   const messageFormat: Format | undefined =
     detection?.kind === "scope"
