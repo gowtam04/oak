@@ -284,7 +284,7 @@ beforeEach(async () => {
   await fix.db.execute(
     sql`TRUNCATE TABLE account, auth_session, otp_code RESTART IDENTITY`,
   );
-  throttle._resetForTests();
+  await throttle._resetForTests();
   consoleTransport.clearSentOtpEmails();
   browser.clear();
   vi.restoreAllMocks();

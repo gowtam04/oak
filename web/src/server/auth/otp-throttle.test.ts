@@ -18,9 +18,16 @@ const IP_HOURLY_CAP = 20;
 const VERIFY_WINDOW_MS = 10 * 60_000;
 const IP_VERIFY_CAP = 20;
 
-// Each case starts from a clean in-memory state.
-beforeEach(() => _resetForTests());
-afterEach(() => _resetForTests());
+// Each case starts from a clean in-memory state. REDIS_URL is left unset, so
+// these all exercise the MEMORY backend (the async signatures still honor the
+// injected `now`). The Redis backend has its own suite in
+// otp-throttle.redis.test.ts.
+beforeEach(async () => {
+  await _resetForTests();
+});
+afterEach(async () => {
+  await _resetForTests();
+});
 
 // ---------------------------------------------------------------------------
 // Resend cooldown (BR-A5) — exclusive boundary at 59_999 vs 60_000 ms
@@ -30,31 +37,31 @@ describe("checkRequestThrottle — resend cooldown (BR-A5)", () => {
   const email = "cooldown@example.com";
   const ip = "10.0.0.1";
 
-  it("allows the first request for an email", () => {
-    const r = checkRequestThrottle(email, ip, 0);
+  it("allows the first request for an email", async () => {
+    const r = await checkRequestThrottle(email, ip, 0);
     expect(r.allowed).toBe(true);
     expect(r.retryAfterMs).toBe(0);
   });
 
-  it("refuses a second request at 59_999 ms (still inside the cooldown)", () => {
-    expect(checkRequestThrottle(email, ip, 0).allowed).toBe(true);
-    const r = checkRequestThrottle(email, ip, COOLDOWN_MS - 1);
+  it("refuses a second request at 59_999 ms (still inside the cooldown)", async () => {
+    expect((await checkRequestThrottle(email, ip, 0)).allowed).toBe(true);
+    const r = await checkRequestThrottle(email, ip, COOLDOWN_MS - 1);
     expect(r.allowed).toBe(false);
     expect(r.retryAfterMs).toBe(1); // 60_000 - 59_999
   });
 
-  it("allows a second request at exactly 60_000 ms (cooldown elapsed)", () => {
-    expect(checkRequestThrottle(email, ip, 0).allowed).toBe(true);
-    const r = checkRequestThrottle(email, ip, COOLDOWN_MS);
+  it("allows a second request at exactly 60_000 ms (cooldown elapsed)", async () => {
+    expect((await checkRequestThrottle(email, ip, 0)).allowed).toBe(true);
+    const r = await checkRequestThrottle(email, ip, COOLDOWN_MS);
     expect(r.allowed).toBe(true);
     expect(r.retryAfterMs).toBe(0);
   });
 
-  it("reports a decaying retryAfterMs across the cooldown window", () => {
-    expect(checkRequestThrottle(email, ip, 0).allowed).toBe(true);
+  it("reports a decaying retryAfterMs across the cooldown window", async () => {
+    expect((await checkRequestThrottle(email, ip, 0)).allowed).toBe(true);
 
-    const early = checkRequestThrottle(email, ip, 10_000);
-    const late = checkRequestThrottle(email, ip, 50_000);
+    const early = await checkRequestThrottle(email, ip, 10_000);
+    const late = await checkRequestThrottle(email, ip, 50_000);
     expect(early.allowed).toBe(false);
     expect(late.allowed).toBe(false);
     expect(early.retryAfterMs).toBe(50_000); // 60_000 - 10_000
@@ -62,20 +69,24 @@ describe("checkRequestThrottle — resend cooldown (BR-A5)", () => {
     expect(late.retryAfterMs).toBeLessThan(early.retryAfterMs);
   });
 
-  it("does not consume quota on a cooldown-refused request", () => {
+  it("does not consume quota on a cooldown-refused request", async () => {
     // Accept at t=0, refuse at t=30_000. If the refused call had (wrongly)
     // updated the last-request timestamp, the t=60_000 call would still be
     // inside a fresh 60s cooldown and be refused. It must be allowed.
-    expect(checkRequestThrottle(email, ip, 0).allowed).toBe(true);
-    expect(checkRequestThrottle(email, ip, 30_000).allowed).toBe(false);
-    const r = checkRequestThrottle(email, ip, COOLDOWN_MS);
+    expect((await checkRequestThrottle(email, ip, 0)).allowed).toBe(true);
+    expect((await checkRequestThrottle(email, ip, 30_000)).allowed).toBe(false);
+    const r = await checkRequestThrottle(email, ip, COOLDOWN_MS);
     expect(r.allowed).toBe(true);
   });
 
-  it("tracks cooldown independently per email", () => {
-    expect(checkRequestThrottle("a@example.com", ip, 0).allowed).toBe(true);
+  it("tracks cooldown independently per email", async () => {
+    expect((await checkRequestThrottle("a@example.com", ip, 0)).allowed).toBe(
+      true,
+    );
     // A different email is not subject to a@'s cooldown.
-    expect(checkRequestThrottle("b@example.com", ip, 1_000).allowed).toBe(true);
+    expect(
+      (await checkRequestThrottle("b@example.com", ip, 1_000)).allowed,
+    ).toBe(true);
   });
 });
 
@@ -93,36 +104,37 @@ describe("checkRequestThrottle — per-email hourly cap (BR-A6)", () => {
     return checkRequestThrottle(email, ip, slot * COOLDOWN_MS);
   }
 
-  it("allows exactly 5 requests within the hour", () => {
+  it("allows exactly 5 requests within the hour", async () => {
     for (let i = 0; i < EMAIL_HOURLY_CAP; i++) {
-      const r = requestAtSlot(i);
+      const r = await requestAtSlot(i);
       expect(r.allowed).toBe(true);
     }
   });
 
-  it("refuses the 6th request inside the same hour window", () => {
+  it("refuses the 6th request inside the same hour window", async () => {
     for (let i = 0; i < EMAIL_HOURLY_CAP; i++) {
-      expect(requestAtSlot(i).allowed).toBe(true);
+      expect((await requestAtSlot(i)).allowed).toBe(true);
     }
     // 6th request: cooldown is satisfied (one slot later), so the refusal is
     // the hourly cap — retryAfterMs is the remainder of the hour, far larger
     // than any cooldown value.
     const sixthAt = EMAIL_HOURLY_CAP * COOLDOWN_MS; // slot 5 → 300_000 ms
-    const r = checkRequestThrottle(email, ip, sixthAt);
+    const r = await checkRequestThrottle(email, ip, sixthAt);
     expect(r.allowed).toBe(false);
     expect(r.retryAfterMs).toBe(HOUR_MS - sixthAt); // 3_600_000 - 300_000
     expect(r.retryAfterMs).toBeGreaterThan(COOLDOWN_MS);
   });
 
-  it("permits a fresh batch once the hour window rolls over", () => {
+  it("permits a fresh batch once the hour window rolls over", async () => {
     for (let i = 0; i < EMAIL_HOURLY_CAP; i++) {
-      expect(requestAtSlot(i).allowed).toBe(true);
+      expect((await requestAtSlot(i)).allowed).toBe(true);
     }
     expect(
-      checkRequestThrottle(email, ip, EMAIL_HOURLY_CAP * COOLDOWN_MS).allowed,
+      (await checkRequestThrottle(email, ip, EMAIL_HOURLY_CAP * COOLDOWN_MS))
+        .allowed,
     ).toBe(false);
     // Past the hour boundary → new window, cooldown also long elapsed.
-    const r = checkRequestThrottle(email, ip, HOUR_MS + 1);
+    const r = await checkRequestThrottle(email, ip, HOUR_MS + 1);
     expect(r.allowed).toBe(true);
     expect(r.retryAfterMs).toBe(0);
   });
@@ -135,37 +147,43 @@ describe("checkRequestThrottle — per-email hourly cap (BR-A6)", () => {
 describe("checkRequestThrottle — per-IP hourly cap (BR-A6)", () => {
   const ip = "203.0.113.7";
 
-  it("allows 20 requests across distinct emails from one IP", () => {
+  it("allows 20 requests across distinct emails from one IP", async () => {
     for (let i = 0; i < IP_HOURLY_CAP; i++) {
       // Distinct email each time → neither the per-email cooldown nor the
       // per-email cap ever binds; the only shared gate is the per-IP cap.
-      const r = checkRequestThrottle(`user${i}@example.com`, ip, 0);
+      const r = await checkRequestThrottle(`user${i}@example.com`, ip, 0);
       expect(r.allowed).toBe(true);
     }
   });
 
-  it("refuses the 21st request from the same IP within the hour", () => {
+  it("refuses the 21st request from the same IP within the hour", async () => {
     for (let i = 0; i < IP_HOURLY_CAP; i++) {
       expect(
-        checkRequestThrottle(`user${i}@example.com`, ip, 0).allowed,
+        (await checkRequestThrottle(`user${i}@example.com`, ip, 0)).allowed,
       ).toBe(true);
     }
-    const r = checkRequestThrottle(`user${IP_HOURLY_CAP}@example.com`, ip, 0);
+    const r = await checkRequestThrottle(
+      `user${IP_HOURLY_CAP}@example.com`,
+      ip,
+      0,
+    );
     expect(r.allowed).toBe(false);
     expect(r.retryAfterMs).toBe(HOUR_MS); // full hour remaining (windowStart=0)
   });
 
-  it("isolates the per-IP cap between source IPs", () => {
+  it("isolates the per-IP cap between source IPs", async () => {
     for (let i = 0; i < IP_HOURLY_CAP; i++) {
-      checkRequestThrottle(`user${i}@example.com`, "198.51.100.1", 0);
+      await checkRequestThrottle(`user${i}@example.com`, "198.51.100.1", 0);
     }
     // The first IP is now exhausted...
     expect(
-      checkRequestThrottle("late@example.com", "198.51.100.1", 0).allowed,
+      (await checkRequestThrottle("late@example.com", "198.51.100.1", 0))
+        .allowed,
     ).toBe(false);
     // ...but a different IP is unaffected.
     expect(
-      checkRequestThrottle("fresh@example.com", "198.51.100.2", 0).allowed,
+      (await checkRequestThrottle("fresh@example.com", "198.51.100.2", 0))
+        .allowed,
     ).toBe(true);
   });
 });
@@ -177,43 +195,43 @@ describe("checkRequestThrottle — per-IP hourly cap (BR-A6)", () => {
 describe("checkVerifyThrottle — per-IP verify cap", () => {
   const ip = "192.0.2.50";
 
-  it("allows the first verify attempt", () => {
-    const r = checkVerifyThrottle(ip, 0);
+  it("allows the first verify attempt", async () => {
+    const r = await checkVerifyThrottle(ip, 0);
     expect(r.allowed).toBe(true);
     expect(r.retryAfterMs).toBe(0);
   });
 
-  it("allows exactly 20 attempts in the 10-minute window", () => {
+  it("allows exactly 20 attempts in the 10-minute window", async () => {
     for (let i = 0; i < IP_VERIFY_CAP; i++) {
-      expect(checkVerifyThrottle(ip, i).allowed).toBe(true);
+      expect((await checkVerifyThrottle(ip, i)).allowed).toBe(true);
     }
   });
 
-  it("refuses the 21st attempt within the window", () => {
+  it("refuses the 21st attempt within the window", async () => {
     for (let i = 0; i < IP_VERIFY_CAP; i++) {
-      expect(checkVerifyThrottle(ip, 0).allowed).toBe(true);
+      expect((await checkVerifyThrottle(ip, 0)).allowed).toBe(true);
     }
-    const r = checkVerifyThrottle(ip, 0);
+    const r = await checkVerifyThrottle(ip, 0);
     expect(r.allowed).toBe(false);
     expect(r.retryAfterMs).toBe(VERIFY_WINDOW_MS); // full window remaining
   });
 
-  it("resets after the 10-minute window elapses", () => {
+  it("resets after the 10-minute window elapses", async () => {
     for (let i = 0; i < IP_VERIFY_CAP; i++) {
-      checkVerifyThrottle(ip, 0);
+      await checkVerifyThrottle(ip, 0);
     }
-    expect(checkVerifyThrottle(ip, 0).allowed).toBe(false);
-    const r = checkVerifyThrottle(ip, VERIFY_WINDOW_MS); // boundary → new window
+    expect((await checkVerifyThrottle(ip, 0)).allowed).toBe(false);
+    const r = await checkVerifyThrottle(ip, VERIFY_WINDOW_MS); // boundary → new window
     expect(r.allowed).toBe(true);
     expect(r.retryAfterMs).toBe(0);
   });
 
-  it("isolates the verify cap between source IPs", () => {
+  it("isolates the verify cap between source IPs", async () => {
     for (let i = 0; i < IP_VERIFY_CAP; i++) {
-      checkVerifyThrottle("a-ip", 0);
+      await checkVerifyThrottle("a-ip", 0);
     }
-    expect(checkVerifyThrottle("a-ip", 0).allowed).toBe(false);
-    expect(checkVerifyThrottle("b-ip", 0).allowed).toBe(true);
+    expect((await checkVerifyThrottle("a-ip", 0)).allowed).toBe(false);
+    expect((await checkVerifyThrottle("b-ip", 0)).allowed).toBe(true);
   });
 });
 
@@ -222,42 +240,45 @@ describe("checkVerifyThrottle — per-IP verify cap", () => {
 // ---------------------------------------------------------------------------
 
 describe("pool independence and reset", () => {
-  it("verify exhaustion does not block code requests for the same IP", () => {
+  it("verify exhaustion does not block code requests for the same IP", async () => {
     const ip = "172.16.0.9";
     for (let i = 0; i < IP_VERIFY_CAP; i++) {
-      checkVerifyThrottle(ip, 0);
+      await checkVerifyThrottle(ip, 0);
     }
-    expect(checkVerifyThrottle(ip, 0).allowed).toBe(false);
+    expect((await checkVerifyThrottle(ip, 0)).allowed).toBe(false);
     // The request throttle keys on a separate counter set.
-    expect(checkRequestThrottle("someone@example.com", ip, 0).allowed).toBe(
-      true,
-    );
+    expect(
+      (await checkRequestThrottle("someone@example.com", ip, 0)).allowed,
+    ).toBe(true);
   });
 
-  it("request exhaustion does not block verify attempts for the same IP", () => {
+  it("request exhaustion does not block verify attempts for the same IP", async () => {
     const ip = "172.16.0.10";
     for (let i = 0; i < IP_HOURLY_CAP; i++) {
-      checkRequestThrottle(`user${i}@example.com`, ip, 0);
+      await checkRequestThrottle(`user${i}@example.com`, ip, 0);
     }
     expect(
-      checkRequestThrottle("overflow@example.com", ip, 0).allowed,
+      (await checkRequestThrottle("overflow@example.com", ip, 0)).allowed,
     ).toBe(false);
-    expect(checkVerifyThrottle(ip, 0).allowed).toBe(true);
+    expect((await checkVerifyThrottle(ip, 0)).allowed).toBe(true);
   });
 
-  it("_resetForTests clears all counters", () => {
+  it("_resetForTests clears all counters", async () => {
     const email = "reset@example.com";
     const ip = "10.1.1.1";
-    expect(checkRequestThrottle(email, ip, 0).allowed).toBe(true);
+    expect((await checkRequestThrottle(email, ip, 0)).allowed).toBe(true);
     // Still inside cooldown → would be refused without a reset.
-    expect(checkRequestThrottle(email, ip, 1_000).allowed).toBe(false);
-    _resetForTests();
+    expect((await checkRequestThrottle(email, ip, 1_000)).allowed).toBe(false);
+    await _resetForTests();
     // After reset the email/ip are unknown again → allowed even at the same now.
-    expect(checkRequestThrottle(email, ip, 1_000).allowed).toBe(true);
+    expect((await checkRequestThrottle(email, ip, 1_000)).allowed).toBe(true);
   });
 
-  it("defaults now to Date.now() when omitted", () => {
-    const r = checkRequestThrottle("default-clock@example.com", "10.2.2.2");
+  it("defaults now to Date.now() when omitted", async () => {
+    const r = await checkRequestThrottle(
+      "default-clock@example.com",
+      "10.2.2.2",
+    );
     expect(r.allowed).toBe(true);
   });
 });
@@ -269,17 +290,18 @@ describe("pool independence and reset", () => {
 // ---------------------------------------------------------------------------
 
 describe("bounded stores (C1)", () => {
-  it("LRU-evicts an idle email so its throttle state does not persist forever", () => {
+  it("LRU-evicts an idle email so its throttle state does not persist forever", async () => {
     // Victim requests once at t=0 → now under a 60s resend cooldown.
     expect(
-      checkRequestThrottle("victim@example.com", "victim-ip", 0).allowed,
+      (await checkRequestThrottle("victim@example.com", "victim-ip", 0))
+        .allowed,
     ).toBe(true);
 
     // Push the request-side stores one over their cap with DISTINCT emails+IPs
     // (distinct so neither the per-email nor the per-IP cap binds), all at t=0 so
     // the victim — inserted first and never re-touched — is least-recently-used.
     for (let i = 0; i < _OTP_MAX_ENTRIES; i++) {
-      checkRequestThrottle(`bulk${i}@example.com`, `bulk-ip-${i}`, 0);
+      await checkRequestThrottle(`bulk${i}@example.com`, `bulk-ip-${i}`, 0);
     }
 
     // The victim's cooldown/counter entries were evicted, so a request still
@@ -287,16 +309,18 @@ describe("bounded stores (C1)", () => {
     // bounded rather than retaining the victim forever. (Without eviction this
     // would be refused with a positive retryAfterMs.)
     expect(
-      checkRequestThrottle("victim@example.com", "victim-ip", 1_000).allowed,
+      (await checkRequestThrottle("victim@example.com", "victim-ip", 1_000))
+        .allowed,
     ).toBe(true);
   });
 
-  it("does not throw when far more than the cap of distinct emails/IPs are seen", () => {
-    expect(() => {
-      for (let i = 0; i < _OTP_MAX_ENTRIES + 500; i++) {
-        checkRequestThrottle(`e${i}@example.com`, `ip-${i}`, 0);
-        checkVerifyThrottle(`v-ip-${i}`, 0);
-      }
-    }).not.toThrow();
+  it("does not throw when far more than the cap of distinct emails/IPs are seen", async () => {
+    // Reaching the end without a throw is the assertion (bounded stores never
+    // OOM or error on unbounded distinct keys).
+    for (let i = 0; i < _OTP_MAX_ENTRIES + 500; i++) {
+      await checkRequestThrottle(`e${i}@example.com`, `ip-${i}`, 0);
+      await checkVerifyThrottle(`v-ip-${i}`, 0);
+    }
+    expect(true).toBe(true);
   });
 });

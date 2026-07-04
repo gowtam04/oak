@@ -155,7 +155,7 @@ export async function requestCode(
     return { ok: false, reason: "invalid_email" };
   }
 
-  const throttle = checkRequestThrottle(normalized, ip);
+  const throttle = await checkRequestThrottle(normalized, ip);
   if (!throttle.allowed) {
     return { ok: false, reason: "throttled", retryAfterMs: throttle.retryAfterMs };
   }
@@ -220,7 +220,7 @@ export async function verifyCode(
 ): Promise<VerifyResult> {
   const normalized = normalizeEmail(email);
 
-  const throttle = checkVerifyThrottle(ip);
+  const throttle = await checkVerifyThrottle(ip);
   if (!throttle.allowed) {
     return { ok: false, reason: "throttled", retryAfterMs: throttle.retryAfterMs };
   }

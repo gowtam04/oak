@@ -94,7 +94,7 @@ beforeEach(async () => {
   await fix.db.execute(
     sql`TRUNCATE TABLE account, auth_session, otp_code, auth_event RESTART IDENTITY`,
   );
-  _resetForTests();
+  await _resetForTests();
   emailMock.sendOtpEmail.mockReset();
   emailMock.sendOtpEmail.mockResolvedValue(undefined);
 });
@@ -115,7 +115,7 @@ function lastSentCode(): string {
  * the 60s cooldown (the cooldown itself is asserted in its own test).
  */
 async function issueAndCapture(email: string, ip = IP): Promise<string> {
-  _resetForTests();
+  await _resetForTests();
   const r = await auth.requestCode(email, ip);
   expect(r).toEqual({ ok: true });
   return lastSentCode();
@@ -406,7 +406,7 @@ describe("verifyCode — per-IP verify throttle", () => {
     const ip = "203.0.113.99";
     // Exhaust the 20/10-min verify budget for this IP (shared module state).
     for (let i = 0; i < 20; i++) {
-      expect(checkVerifyThrottle(ip).allowed).toBe(true);
+      expect((await checkVerifyThrottle(ip)).allowed).toBe(true);
     }
 
     const r = await auth.verifyCode("any@test.com", "000000", ip);
