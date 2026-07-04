@@ -4,9 +4,14 @@ import UIKit
 /// Oak's brand expression over iOS.
 ///
 /// Colors are sourced from the web design system (`web/src/app/globals.css`) and
-/// re-expressed natively. Brand/semantic/type colors adapt to light & dark via a
-/// dynamic `UIColor` provider; surfaces and text use the system semantic colors so
-/// they inherit Dynamic Type contrast, increased-contrast, and dark-mode behavior
+/// re-expressed natively. Brand/semantic colors adapt to light & dark via a
+/// dynamic `UIColor` provider. Surfaces use the **warm neutral ramp** — a brand
+/// paper identity (`canvas` #FBF9F7 / #171412, `surface` #FFFFFF / #211D1A,
+/// `surfaceSunken` #F4F0EC / #121009) — rather than raw system semantics, so
+/// light mode carries Oak's paper warmth and dark mode avoids the temperature
+/// seam that appeared when the warm header band sat against a pure-black canvas.
+/// Text and separator remain on system semantics so they continue to inherit
+/// Dynamic Type contrast, increased-contrast, and dark-mode behaviour
 /// automatically (M-AC-UI1.2, M-AC-UI1.3, M-AC-UI1.4).
 ///
 /// Color is never the sole carrier of meaning (M-AC-UI9.3) — that pairing with
@@ -29,11 +34,30 @@ enum Theme {
   static let danger = adaptive(light: 0xE0394A, dark: 0xFF5C6B)
   static let info = adaptive(light: 0x3AA0E3, dark: 0x5BB4EF)
 
-  // MARK: Surfaces & text (system semantics — adapt for free)
+  // MARK: Surfaces (warm neutral ramp — brand paper identity)
 
-  static let background = Color(uiColor: .systemBackground)
-  static let surface = Color(uiColor: .secondarySystemBackground)
-  static let surfaceRaised = Color(uiColor: .tertiarySystemBackground)
+  /// The screen/chat canvas — the base layer every screen sits on.
+  /// Light: #FBF9F7 (warm paper); dark: #171412 (warm near-black).
+  static let canvas = adaptive(light: 0xFBF9F7, dark: 0x171412)
+
+  /// Legacy alias for `canvas` — kept so existing call sites resolve without edits.
+  /// Prefer `canvas` for new call sites.
+  static let background = canvas
+
+  /// Card / modal surface — lifts one level above `canvas`.
+  /// Light: #FFFFFF; dark: #211D1A.
+  static let surface = adaptive(light: 0xFFFFFF, dark: 0x211D1A)
+
+  /// Floating / tooltip surface — lifts above `surface`.
+  /// Light: #FFFFFF; dark: #26211D.
+  static let surfaceRaised = adaptive(light: 0xFFFFFF, dark: 0x26211D)
+
+  /// Recessed well — inputs, search bars, inner wells.
+  /// Light: #F4F0EC; dark: #121009.
+  static let surfaceSunken = adaptive(light: 0xF4F0EC, dark: 0x121009)
+
+  // MARK: Text & separator (system semantics — Dynamic Type & contrast for free)
+
   static let separator = Color(uiColor: .separator)
   static let textPrimary = Color(uiColor: .label)
   static let textSecondary = Color(uiColor: .secondaryLabel)
@@ -47,6 +71,28 @@ enum Theme {
     static let lg: CGFloat = 16
     static let xl: CGFloat = 24
     static let pill: CGFloat = 999
+  }
+
+  // MARK: Spacing scale
+
+  /// A six-stop spacing scale. Adopt these tokens as magic padding/gap literals
+  /// are touched — never add new raw literals.
+  ///
+  /// | Token | pt | Typical use |
+  /// |-------|----|-------------|
+  /// | `xs`  |  4 | Icon–label gap, tight chip padding |
+  /// | `sm`  |  8 | Row internal gap, compact cell padding |
+  /// | `md`  | 12 | Card internal padding (dense), banner padding |
+  /// | `lg`  | 16 | Standard screen gutter, card padding |
+  /// | `xl`  | 24 | Section gap between card groups |
+  /// | `xxl` | 32 | Hero / large-section spacing |
+  enum Spacing {
+    static let xs: CGFloat = 4
+    static let sm: CGFloat = 8
+    static let md: CGFloat = 12
+    static let lg: CGFloat = 16   // standard screen gutter & card padding
+    static let xl: CGFloat = 24   // section gap
+    static let xxl: CGFloat = 32
   }
 
   // MARK: Typography (Dynamic Type styles only — no fixed point sizes)
@@ -64,6 +110,23 @@ enum Theme {
   /// Monospaced face — for "precise data" (stats, dex numbers, damage rolls).
   static func mono(_ style: Font.TextStyle = .body) -> Font {
     .system(style, design: .monospaced)
+  }
+
+  /// Answer-lead role — the verdict at the top of every answer card.
+  /// SF Pro semibold `.title3` (20 pt base, scales with Dynamic Type).
+  /// Apply to the first paragraph of Oak's answer — it is the largest text
+  /// element in any conversation and should land as the editorial masthead.
+  static func answerLead() -> Font {
+    .system(.title3).weight(.semibold)
+  }
+
+  /// Instrument voice — mono semibold, typically `.caption2` (11 pt base).
+  /// Uppercase with 0.8pt tracking (see `instrumentLabel` View extension) for
+  /// scope tags (`CHAMPIONS · REG M-B`), tool-trail labels (`GET_POKEMON ·
+  /// GARCHOMP`), section heads (`BASE STATS`, `SOURCES · 1`), and dex-number
+  /// captions. Pass a wider `style` when the context needs more breathing room.
+  static func instrument(_ style: Font.TextStyle = .caption2) -> Font {
+    .system(style, design: .monospaced).weight(.semibold)
   }
 
   // MARK: Pokémon type colors (theme-stable, mirrors the 18 web type solids)
@@ -281,5 +344,27 @@ extension Theme {
         return UIColor(base).resolvedColor(with: traits).withAlphaComponent(alpha)
       }
     )
+  }
+}
+
+// MARK: - Instrument voice (View extension)
+
+extension View {
+  /// Applies the "instrument" typographic voice: `Theme.instrument(style)` +
+  /// 0.8 pt letter-spacing + uppercase transform.
+  ///
+  /// Use for scope tags (`CHAMPIONS · REG M-B`), tool-trail labels
+  /// (`GET_POKEMON · GARCHOMP`), section heads (`BASE STATS`, `SOURCES · 1`),
+  /// and dex-number captions. The mono + caps + tight tracking combination
+  /// reads as engraved instrument output, tying data labels across every surface
+  /// into one recognisable voice.
+  ///
+  /// - Parameter style: The Dynamic Type style to pass through to
+  ///   `Theme.instrument`. Defaults to `.caption2` (11 pt base).
+  func instrumentLabel(_ style: Font.TextStyle = .caption2) -> some View {
+    self
+      .font(Theme.instrument(style))
+      .tracking(0.8)
+      .textCase(.uppercase)
   }
 }

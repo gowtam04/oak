@@ -85,4 +85,95 @@ struct ThemeFoundationTests {
     _ = OakPressableButtonStyle()
     #expect(Bool(true))
   }
+
+  // MARK: Warm neutral ramp (canvas + surfaceSunken)
+
+  /// `canvas` and `background` are the same value (legacy alias).
+  /// Structural check: both are non-nil Color instances that compile.
+  @Test
+  func canvasAndBackgroundAliasResolve() {
+    // Construction must not trap; Color equality isn't available without
+    // UIKit/UIColor introspection — the compile guard is the test.
+    _ = Theme.canvas
+    _ = Theme.background
+    _ = Theme.surface
+    _ = Theme.surfaceRaised
+    _ = Theme.surfaceSunken
+    #expect(Bool(true))
+  }
+
+  // MARK: Spacing scale
+
+  @Test
+  func spacingScaleValuesMatchSpec() {
+    #expect(Theme.Spacing.xs == 4)
+    #expect(Theme.Spacing.sm == 8)
+    #expect(Theme.Spacing.md == 12)
+    #expect(Theme.Spacing.lg == 16)
+    #expect(Theme.Spacing.xl == 24)
+    #expect(Theme.Spacing.xxl == 32)
+  }
+
+  @Test
+  func spacingScaleIsStrictlyAscending() {
+    let stops: [CGFloat] = [
+      Theme.Spacing.xs,
+      Theme.Spacing.sm,
+      Theme.Spacing.md,
+      Theme.Spacing.lg,
+      Theme.Spacing.xl,
+      Theme.Spacing.xxl,
+    ]
+    for i in stops.indices.dropLast() {
+      #expect(stops[i] < stops[i + 1])
+    }
+  }
+
+  // MARK: Typography roles
+
+  @Test
+  func answerLeadFontConstructsWithNoArgs() {
+    // Non-optional return; compilation + non-trap is the contract.
+    _ = Theme.answerLead()
+    #expect(Bool(true))
+  }
+
+  @Test
+  func instrumentFontConstructsWithDefaultAndExplicitStyle() {
+    _ = Theme.instrument()
+    _ = Theme.instrument(.caption)
+    _ = Theme.instrument(.footnote)
+    #expect(Bool(true))
+  }
+
+  // MARK: Instrument label View extension
+
+  @Test
+  func instrumentLabelModifierCompiles() {
+    // The `.instrumentLabel()` modifier must apply without error.
+    _ = Text("CHAMPIONS · REG M-B").instrumentLabel()
+    _ = Text("SOURCES · 1").instrumentLabel(.caption)
+    #expect(Bool(true))
+  }
+
+  // MARK: ErrorBanner component
+
+  @Test
+  func errorBannerConstructsWithAllCombinations() {
+    // All four parameter combinations must construct without trapping.
+    _ = ErrorBanner(message: "Something went wrong.")
+    _ = ErrorBanner(message: "Something went wrong.", onDismiss: {})
+    _ = ErrorBanner(
+      message: "Something went wrong.",
+      retryTitle: "Retry",
+      onRetry: {}
+    )
+    _ = ErrorBanner(
+      message: "Something went wrong.",
+      retryTitle: "Try again",
+      onRetry: {},
+      onDismiss: {}
+    )
+    #expect(Bool(true))
+  }
 }
