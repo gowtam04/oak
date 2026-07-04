@@ -394,6 +394,9 @@ export const evolutionChainDetailSchema = z.object({
       conditions: z.array(evolutionConditionSchema),
     }),
   ),
+  /** Champions scope only: the species missed the Champions roster, so this is
+   *  the mainline Gen 9 chain — additive, mirrors `exists_in_standard`. */
+  source_format: z.literal("scarlet-violet").optional(),
 });
 
 export const getEvolutionChainOutputSchema = z.union([
