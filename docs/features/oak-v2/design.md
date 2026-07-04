@@ -103,6 +103,21 @@ Each phase: own worktree off develop (`git worktree add ../oak-<phase> -b agent/
 - Prod re-ingest (`npm run docker:ingest` locally; release ingest for prod) — new tables empty until then read as documented miss shapes, not crashes.
 - Privacy page: no change needed (wiki/web content is public data; no new user-data collection).
 
+## 9b. Games-only pivot (2026-07-04 — supersedes the "whole franchise" framing)
+
+Product decision: **Oak is a GAMES assistant.** It answers about the *games* — mainline titles, Pokémon Champions (competitive), and spin-off games (Pokémon Mystery Dungeon). It does NOT answer about anime episodes, movies/films, TV, manga, or other franchise **media**. This narrows §2/§6's "any Pokémon question / whole franchise" framing.
+
+What changes (NO schema/migration change — `wiki_page`/`wiki_chunk` and `search_wiki`/T19 STAY; the corpus is re-scoped, not removed):
+
+1. **Crawler re-scope** (`web/scripts/fetch-fandom-wiki.ts`): curate GAME-only Fandom categories — in-game locations/routes/towns, glitches, in-game mechanics/events, items, Mystery Dungeon (games + its game NPCs/locations). DROP all anime/media categories: Episodes, Movies/Films, Ash's Pokémon, Anime characters, and the generic anime-dominated "Characters". Re-scope `SEED_TITLES` the same way (keep game glitches like MissingNo, in-game location hubs, PMD; drop Ash/Misty/Team-Rocket-as-anime/movie seeds). Validate category names against the live API (some are fuzzy) with a bounded crawl. The corpus is prose about the GAMES only.
+2. **`search_wiki` tool description** (`web/src/agent/tools/search-wiki.ts`): re-scope to in-game guides, locations, mechanics, glitches, walkthroughs, and Mystery Dungeon — explicitly NOT anime/movies/characters.
+3. **Prompt** (`web/src/agent/prompts/domain.ts`): flip Oak's identity/scope to "the games." (a) `search_wiki` routing → in-game prose only. (b) Answer policy: gracefully DECLINE anime/movie/TV/manga/media questions (same persona-preserving decline as non-Pokémon requests, but specifically for franchise media — e.g. "who did Ash catch", "what movie had the Iron-Masked Marauder", "current anime season" → decline, redirect to games). (c) Replace the anime worked example P3 added (Iron-Masked Marauder → Pokémon 4Ever) with a GAME-prose example (e.g. an in-game HM/TM location or a catch-strategy question answered via search_wiki). Keep PMD in scope (it's a game — answered via `run_sql` over `pmd_recruits` and the game-only wiki slice).
+4. **web_search** stays but is games-scoped in the prompt (release dates, patch notes, competitive-meta news — NOT anime air dates/seasons).
+5. **Eval** (`web/eval/cases.ts` + judge scope in `web/eval/judge.ts`): the anime/media benchmark cases flip from "answer" to "decline / out-of-scope" (Ash's catches, current anime season, the Iron-Marauder movie, the giant-Pokémon episode, Oak-dating-Ash's-mom, eaten-in-anime). Game cases stay (PMD guild, Feebas strategy, HM Fly location, gym-leader types, glitches). The judge's `scope_adherence` text: GAMES are in scope (mainline/Champions/PMD, all generations); anime/movies/TV/manga/media are OUT of scope and should be declined.
+6. **Docs**: update `CLAUDE.md` (Oak's one-line identity: a games assistant), this doc, and `benchmark-questions.md` (mark the media questions as expected-decline).
+
+Ops after code merges: re-crawl game-only → re-ingest dev, verify anime pages are gone → re-ingest prod (replaces the wiki corpus) → redeploy the code changes.
+
 ## 10. Deferred follow-ups (not blocking the redesign)
 
 - **wiki_page/wiki_chunk not yet exposed to run_sql.** §5 T18 listed "wiki_page metadata" as a run_sql-exposed table, but P4 (correctly, being outside its fence) did NOT add it to the `oak_readonly` grant (migration 0009) or the sql-sandbox allowlist + WAREHOUSE_DDL. `search_wiki` already covers full-text retrieval over the corpus; run_sql over wiki metadata (e.g. "count episodes") is a nice-to-have, not required for any benchmark question. If wanted later: add wiki_page/wiki_chunk to a new grant migration + WAREHOUSE_ALLOWLIST + WAREHOUSE_DDL. Deliberately NOT folded into P3 (keeps the delicate prompt phase off the migration/sandbox surface).
