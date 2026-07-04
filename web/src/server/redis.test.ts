@@ -16,14 +16,9 @@ import {
   getRedisClient,
 } from "@/server/redis";
 
-// The connection URI for the shared container is published by the globalSetup
-// via Vitest's `provide`; declare its type for `inject` (mirrors PG_CONN_URI in
-// test/support/pg.ts).
-declare module "vitest" {
-  interface ProvidedContext {
-    REDIS_CONN_URI: string;
-  }
-}
+// `REDIS_CONN_URI`'s ProvidedContext augmentation lives in
+// test/support/redis-global-setup.ts (a support module, not this test file —
+// see that file's header for why).
 
 afterEach(async () => {
   vi.unstubAllEnvs();

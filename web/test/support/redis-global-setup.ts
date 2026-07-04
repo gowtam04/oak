@@ -20,11 +20,21 @@ import {
   type StartedRedisContainer,
 } from "@testcontainers/redis";
 
+// The connection URI for the shared container is published via Vitest's
+// `provide`; declare its type here for `inject` (mirrors PG_CONN_URI's
+// augmentation living in test/support/pg.ts, a support module, rather than in
+// any one consuming test file — so a redis-backend suite typechecks
+// regardless of which other suites exist alongside it).
+declare module "vitest" {
+  interface ProvidedContext {
+    REDIS_CONN_URI: string;
+  }
+}
+
 let container: StartedRedisContainer | undefined;
 
 // Vitest's globalSetup context exposes `provide`; type it inline (the named
-// GlobalSetupContext isn't re-exported in this Vitest version). `REDIS_CONN_URI`
-// is augmented onto ProvidedContext in src/server/redis.test.ts.
+// GlobalSetupContext isn't re-exported in this Vitest version).
 type SetupContext = { provide: (key: "REDIS_CONN_URI", value: string) => void };
 
 export async function setup({ provide }: SetupContext): Promise<void> {
