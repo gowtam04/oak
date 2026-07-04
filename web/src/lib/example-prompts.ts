@@ -3,14 +3,15 @@
  * curated pool spanning *all* of Oak's capabilities so that, across repeated
  * visits, a user discovers the full range of help on offer — filters, learnsets,
  * mechanics reasoning, type matchups, stat/damage math, lookups, ability/item
- * effects, evolution, and conditional inference.
+ * effects, evolution, catch locations, in-game events/progression, glitches,
+ * spin-off games like Mystery Dungeon, and competitive Champions content.
  *
  * Phrasing is **mostly mode-agnostic** (valid in both Standard and Champions),
  * plus a handful of Champions-flavored prompts — Champions is Oak's default
  * scope, so the empty state should reflect that. All prompts avoid out-of-scope
- * topics (egg moves, catch locations) so a chip never leads to a dead-end
- * decline. Drawn from the eval golden cases and few-shot examples. Categories
- * below are for authoring only — the array is flat.
+ * topics (franchise MEDIA: anime, movies, TV, manga) so a chip never leads to a
+ * dead-end decline. Drawn from the eval golden cases and benchmark questions.
+ * Categories below are for authoring only — the array is flat.
  *
  * The "Teams" chips double as discoverability for referring to a saved team by
  * name in chat ("how's my rain team?"): a build chip always produces a team, and
@@ -76,6 +77,15 @@ export const STARTER_PROMPTS: string[] = [
   "Best Stat Point spread for Incineroar in Champions",
   "Who has the highest usage in Champions right now?",
   "Is Dragapult legal in Champions?",
+  // Whole-games (oak-v2): locations, progression, glitches, spin-offs
+  "Where do I get HM Fly in HeartGold?",
+  "What's the best strategy to catch Feebas in Gen 3?",
+  "How many gym leaders are Fire type?",
+  "Who leads the guild in Pokémon Mystery Dungeon Explorers?",
+  "Do encounter rates change by time of day?",
+  "How many Pokémon are purple?",
+  "What are the most populous cities in the mainline games?",
+  "Name all the Route 1 birds",
 ];
 
 /**
