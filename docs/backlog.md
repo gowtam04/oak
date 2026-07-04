@@ -744,3 +744,39 @@ sources and dropping level-up/egg/etc.).
 under `src/ingest/*`, the `learnset` table (`src/data/schema.ts`), and re-ingest.
 
 **Depends on:** (surfaced by) B-13 (illegal proposed teams).
+
+---
+
+## B-15 — Track whether a conversation used voice mode (admin conversations list)
+
+**Why:** The admin panel's conversations browser has no way to tell which conversations
+included a voice turn. Neither the `conversation` table nor `turn_record` currently
+distinguishes voice from text chat: `/api/voice/transcript` (`src/app/api/voice/transcript/route.ts`)
+calls `appendTurnPair` (`src/data/repos/conversation-repo.ts`) — the exact same
+signed-in write path `/api/chat` uses, with no channel/source argument — so a
+voice-originated message row is indistinguishable from a text-chat row once written.
+Compounding this, none of the three voice routes (`token`/`tool`/`transcript`) ever call
+`recordTurn` (`src/data/repos/usage-repo.ts`), so `turn_record` has no per-turn voice
+signal to join against either. This needs new persisted state, not a derived query.
+
+**Scope:**
+- Add a `used_voice` (or similarly named) column — likely on `conversation`
+  (`src/data/schema.ts`), set/upserted when `appendTurnPair` is invoked from the voice
+  transcript route — since the admin list already reads `conversation` directly via
+  `listAllConversations()` (`src/data/repos/admin-content-repo.ts`).
+- Decide granularity: per-conversation (simpler, fits the current admin table) vs.
+  per-turn (a `source` column on `conversation_message`, if the panel later wants to
+  show which turns within a conversation were spoken).
+- Surface it in `ConversationSummary`/`ConversationListOpts` (`src/lib/admin/admin-types.ts`)
+  and add a "Voice" column/filter to `ConversationsBrowser.tsx`
+  (`src/components/admin/ConversationsBrowser.tsx`, rendered by `src/app/admin/conversations/page.tsx`).
+- Consider whether voice turns should also start writing `turn_record` rows (fixes the
+  broader gap that voice usage is invisible to the admin analytics views, not just the
+  conversations list) — that's a larger change than this item strictly needs, so scope
+  it separately if pursued.
+
+**Touches:** `src/data/schema.ts` (new column + migration), `src/data/repos/conversation-repo.ts`
+(`appendTurnPair`), `src/app/api/voice/transcript/route.ts`, `src/data/repos/admin-content-repo.ts`,
+`src/lib/admin/admin-types.ts`, `src/components/admin/ConversationsBrowser.tsx`.
+
+**Depends on:** Voice mode (shipped) and the admin panel (shipped) — both already merged.

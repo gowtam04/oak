@@ -14,12 +14,13 @@
  * flagged `estimated: true` and an unknown/unpriced model contributes $0 (the
  * caller surfaces it as un-priced). Prices are updated by a code edit + deploy.
  *
- * NOTE: the per-1M-token prices below are reasonable PLACEHOLDERS for the three
- * models in the registry (src/agent/models.ts). They are list-style USD per 1M
- * tokens and should be reconciled against the providers' current public pricing
- * when accuracy matters; until then they yield order-of-magnitude estimates.
+ * Prices below are reconciled against each provider's public list pricing as of
+ * 2026-07-03 (source: xAI docs, OpenAI pricing page, Anthropic model catalog).
  * `thinkingPer1M` prices reasoning/thinking tokens (billed like output tokens on
  * all three providers today, hence equal to `outputPer1M`).
+ *
+ * Claude Sonnet 5 is priced at its introductory rate ($2/$10 per 1M), active
+ * through 2026-08-31; bump to the standard $3/$15 after that date.
  *
  * No `server-only` import: this is a pure constant + pure function (no DB/SDK),
  * but it lives under server/admin alongside the analytics repo that consumes it.
@@ -36,16 +37,16 @@ export interface ModelPrice {
 
 /**
  * Static price table keyed by {@link ModelKey}. A model absent from this map is
- * treated as unpriced (estimate → $0; the caller flags it). Placeholder list
- * prices — see the file header.
+ * treated as unpriced (estimate → $0; the caller flags it). List prices — see
+ * the file header for reconciliation date/sources.
  */
 export const MODEL_PRICING: Record<ModelKey, ModelPrice> = {
   // xAI Grok 4.3 (primary/default).
-  "grok-4.3": { inputPer1M: 3, outputPer1M: 15, thinkingPer1M: 15 },
-  // Anthropic Claude Sonnet 5.
-  claude: { inputPer1M: 3, outputPer1M: 15, thinkingPer1M: 15 },
+  "grok-4.3": { inputPer1M: 1.25, outputPer1M: 2.5, thinkingPer1M: 2.5 },
+  // Anthropic Claude Sonnet 5 (introductory rate through 2026-08-31).
+  claude: { inputPer1M: 2, outputPer1M: 10, thinkingPer1M: 10 },
   // OpenAI GPT-5.5.
-  "gpt-5.5": { inputPer1M: 1.25, outputPer1M: 10, thinkingPer1M: 10 },
+  "gpt-5.5": { inputPer1M: 5, outputPer1M: 30, thinkingPer1M: 30 },
 };
 
 /**
