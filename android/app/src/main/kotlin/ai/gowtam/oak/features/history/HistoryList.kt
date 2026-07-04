@@ -19,22 +19,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
@@ -302,8 +298,6 @@ private fun ConversationRow(
                 .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            FormatMedallion(format = conversation.format)
-            Spacer(Modifier.width(OakSpacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (conversation.pinned) {
@@ -372,30 +366,6 @@ private fun RenameDialog(initialTitle: String, onConfirm: (String) -> Unit, onDi
         confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
-}
-
-/**
- * The leading format medallion — mirrors iOS `FormatMedallion`: Champions reads as a
- * sunflower-tinted premium/crown glyph; every other scope shares an azure leaf glyph
- * (deliberately one shared "standard" treatment; the format label alongside it carries
- * which generation it actually is). Decorative only.
- */
-@Composable
-private fun FormatMedallion(format: Format) {
-    val oak = LocalOakColors.current
-    val isChampions = format == Format.Champions
-    val tint = if (isChampions) oak.sunflower else oak.azure
-    Box(
-        modifier = Modifier.size(34.dp).clip(CircleShape).background(tint.copy(alpha = 0.12f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = if (isChampions) Icons.Filled.WorkspacePremium else Icons.Filled.Eco,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(16.dp),
-        )
-    }
 }
 
 @Composable

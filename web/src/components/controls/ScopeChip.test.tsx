@@ -3,7 +3,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 afterEach(() => cleanup());
 import ScopeChip from "./ScopeChip";
-import { FORMATS } from "@/data/formats";
+import { SCOPE_PICKER_ORDER } from "@/data/formats";
 import { scopeLabelShort } from "@/lib/scope/scope-label";
 
 /**
@@ -57,12 +57,17 @@ describe("ScopeChip", () => {
       expect(menu).toBeInTheDocument();
       // Header instrument label.
       expect(menu).toHaveTextContent("Answer scope");
-      for (const f of FORMATS) {
+      for (const f of SCOPE_PICKER_ORDER) {
         // Row shows the short name…
         expect(screen.getByTestId(`scope-chip-option-${f}`)).toHaveTextContent(
           scopeLabelShort(f),
         );
       }
+      // Champions appears first (default scope, display-order first).
+      const options = screen
+        .getAllByRole("menuitemradio")
+        .map((el) => el.getAttribute("data-testid")?.replace("scope-chip-option-", ""));
+      expect(options[0]).toBe("champions");
     });
 
     it("each row carries a one-line description under the name", () => {

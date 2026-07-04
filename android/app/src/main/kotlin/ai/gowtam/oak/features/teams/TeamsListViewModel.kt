@@ -4,6 +4,7 @@ import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.services.DexLookupService
 import ai.gowtam.oak.services.EmptyDexLookupService
 import ai.gowtam.oak.services.TeamService
+import ai.gowtam.oak.wire.DexSpriteRef
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.ImportNote
 import ai.gowtam.oak.wire.Team
@@ -11,6 +12,9 @@ import ai.gowtam.oak.wire.TeamSummary
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +30,8 @@ data class TeamsListUiState(
     val errorMessage: String? = null,
     /** The active format filter; `null` = all formats. Applied server-side. */
     val formatFilter: Format? = null,
+    /** Sprite refs keyed by species slug, populated after each reload. */
+    val spriteRefs: Map<String, DexSpriteRef> = emptyMap(),
 )
 
 /**
@@ -51,13 +57,16 @@ class TeamsListViewModel(
 
     /** (Re)loads the team list with the current filter — the initial load,
      * pull-to-refresh, and the re-fetch after a filter change all route through here.
-     * Never throws: a failure surfaces as `errorMessage` and leaves the prior list. */
+     * Never throws: a failure surfaces as `errorMessage` and leaves the prior list.
+     * After a successful teams fetch, sprite refs are batch-fetched per format and
+     * merged; a sprite fetch failure degrades silently to dots. */
     fun reload() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             try {
                 val teams = teamService.list(uiState.value.formatFilter)
-                _uiState.update { it.copy(teams = teams) }
+                val spriteRefs = fetchSpriteRefs(teams)
+                _uiState.update { it.copy(teams = teams, spriteRefs = spriteRefs) }
             } catch (e: OakError) {
                 _uiState.update { it.copy(errorMessage = TeamEditorViewModel.message(e)) }
             } catch (e: Exception) {
@@ -65,6 +74,25 @@ class TeamsListViewModel(
             } finally {
                 _uiState.update { it.copy(isLoading = false) }
             }
+        }
+    }
+
+    /** Batch-fetches sprite refs for all species in [teams], grouped by format.
+     * Returns an empty map on any failure (degrade silently). */
+    private suspend fun fetchSpriteRefs(teams: List<TeamSummary>): Map<String, DexSpriteRef> {
+        val byFormat = teams.groupBy { it.format }
+        return try {
+            coroutineScope {
+                byFormat.map { (format, formatTeams) ->
+                    async {
+                        val slugs = formatTeams.flatMap { it.species }.distinct()
+                        if (slugs.isEmpty()) emptyMap()
+                        else dexLookup.sprites(slugs, format)
+                    }
+                }.awaitAll().fold(emptyMap<String, DexSpriteRef>()) { acc, map -> acc + map }
+            }
+        } catch (e: Exception) {
+            emptyMap()
         }
     }
 

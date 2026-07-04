@@ -39,10 +39,14 @@ enum Format: Sendable, Hashable {
   /// A format string not in the known six — preserves the original wire value.
   case unknown(String)
 
-  /// The known, orderable formats — mirrors `FORMATS` in `formats.ts`. Backs the
-  /// six-way format pickers/filters; `.unknown` is deliberately excluded (it has
-  /// no fixed identity to list).
-  static let knownCases: [Format] = [.scarletViolet, .champions, .gen5, .gen6, .gen7, .gen8]
+  /// The known, orderable formats in scope-picker DISPLAY order — the default
+  /// (Champions) first, then by release date descending (Gen 9 → Gen 5). This no
+  /// longer mirrors the `FORMATS` array in `formats.ts` (which stays in its own
+  /// order to feed ingest/prompt lock-steps); web exposes the same display order
+  /// via a separate `SCOPE_PICKER_ORDER` constant. Backs the six-way format
+  /// pickers/filters; `.unknown` is deliberately excluded (it has no fixed
+  /// identity to list).
+  static let knownCases: [Format] = [.champions, .scarletViolet, .gen8, .gen7, .gen6, .gen5]
 
   /// The wire string for a known case, or the original raw string for `.unknown`.
   var rawValue: String {

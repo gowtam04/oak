@@ -7,6 +7,8 @@ import ai.gowtam.oak.features.auth.AuthViewModel
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.SpriteImage
+import ai.gowtam.oak.wire.DexSpriteRef
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.Team
 import ai.gowtam.oak.wire.TeamSummary
@@ -216,6 +218,7 @@ private fun TeamsListScreen(
                     items(state.teams, key = { it.id }) { team ->
                         TeamRow(
                             team = team,
+                            spriteRefs = state.spriteRefs,
                             onClick = { onOpenExisting(team) },
                             onDuplicate = { viewModel.duplicate(team) { created -> onOpenCreated(created) } },
                             onDelete = { viewModel.delete(team) },
@@ -266,7 +269,13 @@ private fun EmptyState(formatFilter: Format?) {
 /** One team row: a six-slot roster indicator, name, a format tag, and a glanceable
  * composition summary. Color is never the sole signal — the format is shown as text. */
 @Composable
-private fun TeamRow(team: TeamSummary, onClick: () -> Unit, onDuplicate: () -> Unit, onDelete: () -> Unit) {
+private fun TeamRow(
+    team: TeamSummary,
+    spriteRefs: Map<String, DexSpriteRef>,
+    onClick: () -> Unit,
+    onDuplicate: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val oak = LocalOakColors.current
     var showMenu by remember { mutableStateOf(false) }
 
@@ -279,7 +288,7 @@ private fun TeamRow(team: TeamSummary, onClick: () -> Unit, onDuplicate: () -> U
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(OakSpacing.md),
         ) {
-            SlotIndicator(team.memberCount)
+            SlotIndicator(species = team.species, spriteRefs = spriteRefs, memberCount = team.memberCount)
             Column(modifier = Modifier.weight(1f)) {
                 Text(team.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
                 Text(
@@ -303,18 +312,25 @@ private fun TeamRow(team: TeamSummary, onClick: () -> Unit, onDuplicate: () -> U
 }
 
 @Composable
-private fun SlotIndicator(memberCount: Int) {
+private fun SlotIndicator(species: List<String>, spriteRefs: Map<String, DexSpriteRef>, memberCount: Int) {
     val oak = LocalOakColors.current
-    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
         for (slot in 0 until 6) {
-            val filled = slot < memberCount
-            Box(
-                modifier = if (filled) {
-                    Modifier.size(8.dp).background(oak.accent.copy(alpha = 0.4f), CircleShape)
-                } else {
-                    Modifier.size(8.dp).border(1.dp, oak.textMuted, CircleShape)
-                },
-            )
+            val slug = species.getOrNull(slot)
+            val ref = if (slug != null) spriteRefs[slug] else null
+            when {
+                ref != null -> SpriteImage(
+                    url = ref.spriteUrl,
+                    name = titleizeTeamSlug(slug!!),
+                    size = 26.dp,
+                )
+                slot < memberCount -> Box(
+                    modifier = Modifier.size(8.dp).background(oak.accent.copy(alpha = 0.4f), CircleShape),
+                )
+                else -> Box(
+                    modifier = Modifier.size(8.dp).border(1.dp, oak.textMuted, CircleShape),
+                )
+            }
         }
     }
 }

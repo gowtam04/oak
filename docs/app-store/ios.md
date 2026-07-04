@@ -7,7 +7,7 @@ Category: **Reference**. Age rating: **4+**. Price: **Free, no in-app purchases.
 ```
 Oak – AI Battle Coach
 ```
-**21 / 30 chars.** The bare name "Oak" was unavailable in the App Store, so a short descriptor was appended to make the store name unique. The bundle id (`us.optiwise.oak`), the `oak.optiwise.us` domain, and the in-app "Oak" assistant persona are all unchanged — only the *store display name* carries the descriptor, so no code change is required. "AI Battle Coach" also pulls double duty for ASO: it puts `ai`, `battle`, and `coach` into Apple's most heavily-weighted field (the bare "Oak" wasted it on 3 characters) and names Oak's category-defining wedge — it *coaches*: it reasons and explains, rather than just computing like the manual-tool competitors (ChampDex, VGC Helper). Separator is an en dash; swap for `:` or `|` to taste (all stay ≤30). (App Store name availability is only confirmed at name-reservation time in App Store Connect — "Battle Coach" is a generic phrase, so collision risk is low.)
+**21 / 30 chars.** The bare name "Oak" was unavailable in the App Store, so a short descriptor was appended to make the store name unique. The bundle id (`us.optiwise.oak`), the `oak.gowtam.ai` domain, and the in-app "Oak" assistant persona are all unchanged — only the *store display name* carries the descriptor, so no code change is required. "AI Battle Coach" also pulls double duty for ASO: it puts `ai`, `battle`, and `coach` into Apple's most heavily-weighted field (the bare "Oak" wasted it on 3 characters) and names Oak's category-defining wedge — it *coaches*: it reasons and explains, rather than just computing like the manual-tool competitors (ChampDex, VGC Helper). Separator is an en dash; swap for `:` or `|` to taste (all stay ≤30). (App Store name availability is only confirmed at name-reservation time in App Store Connect — "Battle Coach" is a generic phrase, so collision risk is low.)
 
 ## Subtitle (30 chars max)
 
@@ -66,6 +66,6 @@ Welcome to Oak for iPhone — chat-based team reasoning, a full competitive team
 
 ## Submission checklist (not produced by this listing — flagged for the user)
 
-- **Privacy Policy URL** — `AccountView` already links to `oak.optiwise.us/privacy`, but no policy exists yet. Apple requires a live URL at submission; this must go live first.
+- **Privacy Policy URL** — `AccountView` already links to `oak.gowtam.ai/privacy`. Apple requires a live URL at submission; confirm it resolves before submitting.
 - **Support URL** — points to `www.gowtam.ai/#contact` (an existing, live page), referenced above in the Description's contact line. Confirm the `#contact` section is reachable before submission.
 - **App Icon** — still a placeholder in `Assets.xcassets/AppIcon.appiconset`; needs a final design before screenshots/marketing assets that show the icon can be finalized.

@@ -30,8 +30,18 @@ final class AuthViewModel {
 
   /// The email being entered (two-way bound from the email step).
   var email: String = ""
-  /// The one-time code being entered (two-way bound; filled by OTP autofill).
-  var code: String = ""
+  /// The one-time code being entered (two-way bound; filled by OTP autofill or a
+  /// paste). Sanitized on every set: non-digit characters are stripped and the value
+  /// is truncated to six digits, so a pasted `"123 456"` / `"123-456"` / `"123456ab"`
+  /// all land as `"123456"` (the system Paste menu offers no way to pre-clean it).
+  var code: String = "" {
+    didSet {
+      let sanitized = String(code.filter(\.isNumber).prefix(6))
+      // Guard against re-entrancy: only write back (re-triggering `didSet`) when the
+      // sanitized form actually differs from what was just set.
+      if sanitized != code { code = sanitized }
+    }
+  }
 
   // MARK: Observed flow state
 

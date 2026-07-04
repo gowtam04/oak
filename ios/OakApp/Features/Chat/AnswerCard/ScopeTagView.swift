@@ -18,7 +18,7 @@ import SwiftUI
 enum ScopeTag {
   /// Current Champions regulation, duplicated from web's `CHAMPIONS_REGULATION`
   /// (`src/data/formats.ts`, `"Regulation M-B"`). Update this alongside
-  /// `ChatView.championsRegulation` and `Format.displayLabel` when it rotates.
+  /// `Format.displayLabel` when it rotates.
   static let championsRegulation = "Regulation M-B"
 
   /// Map a raw `generation` code to its display tag (see the type doc).

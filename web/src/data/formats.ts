@@ -43,6 +43,23 @@ export const FORMATS = [
 /** Default set of formats `runIngest` builds when none are specified. */
 export const DEFAULT_FORMATS: readonly Format[] = FORMATS;
 
+/**
+ * Display order for scope pickers (chat header chip, team menus, etc.).
+ * Champions first (the default scope), then mainline generations in
+ * release-date descending order. Does NOT reorder {@link FORMATS} — that
+ * array feeds ingest/prompt/test lock-steps and must stay stable.
+ *
+ * iOS/Android `Format.knownCases` should match this order.
+ */
+export const SCOPE_PICKER_ORDER: readonly Format[] = [
+  "champions",
+  "scarlet-violet",
+  "gen-8",
+  "gen-7",
+  "gen-6",
+  "gen-5",
+] as const;
+
 /** The standard (non-Champions) format — today's Gen 9 scope. */
 export const STANDARD_FORMAT: Format = "scarlet-violet";
 

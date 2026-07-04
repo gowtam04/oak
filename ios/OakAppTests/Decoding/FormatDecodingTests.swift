@@ -36,8 +36,14 @@ struct FormatDecodingTests {
       let roundTripped = try JSONDecoder().decode(FormatBox.self, from: reencoded).value
       #expect(roundTripped == expected)
     }
-    // `Format.knownCases` is exactly the six known cases, in `FORMATS` order.
-    #expect(Format.knownCases.map(\.rawValue) == cases.map(\.raw))
+    // `Format.knownCases` is exactly the six known cases, in scope-picker DISPLAY
+    // order: the default (Champions) first, then release-date descending (Gen 9 →
+    // Gen 5). This no longer mirrors the `FORMATS` array order — web exposes the
+    // same order via a separate `SCOPE_PICKER_ORDER` constant.
+    #expect(
+      Format.knownCases.map(\.rawValue) == [
+        "champions", "scarlet-violet", "gen-8", "gen-7", "gen-6", "gen-5",
+      ])
   }
 
   // MARK: Unknown format — tolerant decode

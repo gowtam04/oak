@@ -188,6 +188,42 @@ struct AuthViewModelTests {
     #expect(vm.canSubmitCode == true)
   }
 
+  // MARK: Code sanitization (paste)
+
+  @Test
+  func codeSanitizesPastedSpace() {
+    let fake = FakeAuthService()
+    let vm = makeViewModel(fake: fake)
+
+    vm.code = "123 456"  // a pasted, space-separated code
+
+    #expect(vm.code == "123456")
+    #expect(vm.canSubmitCode == true)
+  }
+
+  @Test
+  func codeSanitizesHyphenAndLetters() {
+    let fake = FakeAuthService()
+    let vm = makeViewModel(fake: fake)
+
+    vm.code = "12-3a4b56"  // hyphen + stray letters mixed in
+
+    #expect(vm.code == "123456")
+  }
+
+  @Test
+  func codeTruncatesToSixDigits() {
+    let fake = FakeAuthService()
+    let vm = makeViewModel(fake: fake)
+
+    vm.code = "1234567890"  // pasted longer than six digits
+
+    #expect(vm.code == "123456")
+    #expect(vm.canSubmitCode == true)
+  }
+
+  // MARK: Validation + navigation
+
   @Test
   func emailValidationRejectsMalformed() {
     let fake = FakeAuthService()

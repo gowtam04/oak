@@ -6,7 +6,6 @@ import type { ToolActivityEvent } from "@/lib/sse/sse-types";
 import AnswerCard from "@/components/answer-card/AnswerCard";
 import Markdown from "@/components/Markdown";
 import { STARTER_PROMPTS, pickRandomPrompts } from "@/lib/example-prompts";
-import { CHAMPIONS_REGULATION } from "@/data/formats";
 
 /**
  * The tool_activity label carries a leading status emoji (🔍/📊/…) as its own
@@ -198,27 +197,14 @@ export default function ChatThread({
             Ask anything about Pokémon — team-building filters, stat math, damage
             calcs, or a quick Pokédex lookup.
           </h1>
-          <div
-            className="chat-empty__scope-hint"
-            data-testid="chat-empty-scope-hint"
-          >
-            Answers default to Pokémon Champions ({CHAMPIONS_REGULATION}).{" "}
-            {scopeChipSlot ? (
-              <>
-                For any other game &mdash; a mainline generation or a spin-off
-                like Mystery Dungeon &mdash; just mention it (&ldquo;in
-                HeartGold&rdquo;, &ldquo;gen 7&rdquo;), or{" "}
-                {scopeChipSlot} to pick a scope.
-              </>
-            ) : (
-              <>
-                For any other game &mdash; a mainline generation or a spin-off
-                like Mystery Dungeon &mdash; just mention it (&ldquo;in
-                HeartGold&rdquo;, &ldquo;gen 7&rdquo;), or pick a scope with
-                the chip in the header.
-              </>
-            )}
-          </div>
+          {scopeChipSlot && (
+            <div
+              className="chat-empty__scope-hint"
+              data-testid="chat-empty-scope-hint"
+            >
+              {scopeChipSlot}
+            </div>
+          )}
 
           {/* Composer promoted to center stage on desktop empty state; on
               mobile / after the first turn this slot is empty and the composer

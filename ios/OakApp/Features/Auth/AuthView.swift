@@ -174,55 +174,66 @@ struct AuthView: View {
     .onAppear { focusedField = .code }
   }
 
-  /// The six-box code entry. A single real `TextField` (near-invisible, kept in the
-  /// hierarchy so it stays focusable + autofillable) is the actual input; the six
-  /// boxes are a display layer showing `model.code`'s digits. Reads as one VoiceOver
-  /// element; tapping anywhere focuses the hidden field.
+  /// The six-box code entry. The six boxes are a purely decorative display layer
+  /// (`.allowsHitTesting(false)`) showing `model.code`'s digits; a single real
+  /// `TextField` is overlaid on TOP, stretched transparently across the whole box
+  /// area, so it — not the boxes — receives every touch. That's what lets a
+  /// long-press summon the system Paste menu (the old 1×1 field + a tap-gesture on
+  /// the box layer swallowed long-presses, so Paste never appeared). The field
+  /// keeps `.textContentType(.oneTimeCode)` + `.keyboardType(.numberPad)` so OTP
+  /// autofill and the number pad work exactly as before; its caret/text are made
+  /// invisible (`.foregroundStyle(.clear)` + `.tint(.clear)` + a low opacity) so no
+  /// artifacts leak over the rendered digits. The TextField is the accessible
+  /// element (VoiceOver reads the whole entry as one), the boxes are decorative.
   private func codeBoxes(codeText: Binding<String>) -> some View {
-    ZStack {
-      // The real input. Opacity ~0 (not 0 — a fully transparent field can be treated
-      // as non-interactive) and 1×1 so no caret shows; the boxes render the state.
-      // Hidden from VoiceOver so the boxes below are the single code element.
+    // The visual digit boxes — decorative, non-interactive so touches fall through
+    // to the real field layered above.
+    HStack(spacing: 10) {
+      ForEach(0..<6, id: \.self) { index in
+        digitBox(index: index)
+      }
+    }
+    // Error shake: ±8pt over 3 oscillations, driven by shakeTrigger (never bumped
+    // under Reduce Motion, so this stays still there).
+    .keyframeAnimator(initialValue: CGFloat(0), trigger: shakeTrigger) { view, offset in
+      view.offset(x: offset)
+    } keyframes: { _ in
+      KeyframeTrack {
+        CubicKeyframe(-8, duration: 0.06)
+        CubicKeyframe(8, duration: 0.10)
+        CubicKeyframe(-8, duration: 0.10)
+        CubicKeyframe(8, duration: 0.10)
+        CubicKeyframe(0, duration: 0.06)
+      }
+    }
+    .allowsHitTesting(false)
+    .overlay {
+      // The real input, stretched over the entire boxes area so a long-press
+      // anywhere on the row can raise the Paste menu. Text + caret are clear so the
+      // boxes below stay the only visible digits; a low (non-zero) opacity keeps the
+      // field interactive (a fully transparent field can be treated as inert).
       TextField("", text: codeText)
         .textContentType(.oneTimeCode)
         .keyboardType(.numberPad)
         .focused($focusedField, equals: .code)
-        .frame(width: 1, height: 1)
+        .multilineTextAlignment(.center)
+        .foregroundStyle(.clear)
+        .tint(.clear)
         .opacity(0.02)
-        .accessibilityHidden(true)
-        // OTP autofill drops all six digits at once — verify automatically (same
-        // behavior as before the redesign).
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        // OTP autofill (and a paste) can drop all six digits at once — verify
+        // automatically once six are present (same behavior as before the redesign;
+        // the VM sanitizes a pasted value down to six digits first).
         .onChange(of: model.code) { _, newValue in
           if newValue.count == 6 { Task { await model.submitCode() } }
         }
-
-      HStack(spacing: 10) {
-        ForEach(0..<6, id: \.self) { index in
-          digitBox(index: index)
-        }
-      }
-      // Error shake: ±8pt over 3 oscillations, driven by shakeTrigger (never bumped
-      // under Reduce Motion, so this stays still there).
-      .keyframeAnimator(initialValue: CGFloat(0), trigger: shakeTrigger) { view, offset in
-        view.offset(x: offset)
-      } keyframes: { _ in
-        KeyframeTrack {
-          CubicKeyframe(-8, duration: 0.06)
-          CubicKeyframe(8, duration: 0.10)
-          CubicKeyframe(-8, duration: 0.10)
-          CubicKeyframe(8, duration: 0.10)
-          CubicKeyframe(0, duration: 0.06)
-        }
-      }
+        // The field is the single VoiceOver element for the whole code entry
+        // (M-AC-UI9.1); the boxes above are decorative.
+        .accessibilityLabel("Enter 6 digit code")
+        .accessibilityValue("\(min(model.code.count, 6)) of 6 entered")
     }
-    .contentShape(Rectangle())
-    .onTapGesture { focusedField = .code }
-    // One combined VoiceOver element for the whole code entry (M-AC-UI9.1).
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel("Enter 6 digit code")
-    .accessibilityValue("\(min(model.code.count, 6)) of 6 entered")
-    .accessibilityHint("Double tap to enter the code")
-    .accessibilityAddTraits(.isKeyboardKey)
+    .frame(height: 56)
   }
 
   /// One digit cell. Renders `model.code`'s character at `index` (display capped at 6

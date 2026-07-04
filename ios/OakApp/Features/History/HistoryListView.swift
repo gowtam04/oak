@@ -245,15 +245,13 @@ struct ConversationListView: View {
   }
 }
 
-/// One conversation row: a leading format medallion, title, a format tag, and the
-/// last-active time. Color is never the sole signal — the format is also shown as
-/// text (M-AC-UI9.3 / conventions.md).
+/// One conversation row: the title, a format tag, and the last-active time. Color is
+/// never the sole signal — the format is shown as text (M-AC-UI9.3 / conventions.md).
 private struct ConversationRow: View {
   let conversation: ConversationSummary
 
   var body: some View {
     HStack(spacing: 12) {
-      FormatMedallion(format: conversation.format)
       VStack(alignment: .leading, spacing: 4) {
         HStack(spacing: 6) {
           if conversation.pinned {
@@ -286,44 +284,6 @@ private struct ConversationRow: View {
 
   private var updatedAt: Date {
     Date(timeIntervalSince1970: Double(conversation.updatedAt) / 1000)
-  }
-}
-
-/// The leading 34pt format medallion: Champions reads as a sunflower `crown.fill`
-/// on a sunflower-tinted disc; every other scope (Gen 9 and the mainline
-/// gen-scope formats, plus an unrecognized future format) shares an azure
-/// `leaf.fill` disc — deliberately not a ball motif (constraint 1), and
-/// deliberately one shared "standard" treatment rather than a bespoke icon per
-/// generation (the format text label alongside it, not the icon, carries which
-/// generation it actually is). Decorative only (M-AC-UI9.3), so hidden from
-/// VoiceOver.
-private struct FormatMedallion: View {
-  let format: Format
-
-  var body: some View {
-    Circle()
-      .fill(tint.opacity(0.12))
-      .frame(width: 34, height: 34)
-      .overlay {
-        Image(systemName: iconName)
-          .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(tint)
-      }
-      .accessibilityHidden(true)
-  }
-
-  private var iconName: String {
-    switch format {
-    case .champions: return "crown.fill"
-    case .scarletViolet, .gen5, .gen6, .gen7, .gen8, .unknown: return "leaf.fill"
-    }
-  }
-
-  private var tint: Color {
-    switch format {
-    case .champions: return Theme.sunflower
-    case .scarletViolet, .gen5, .gen6, .gen7, .gen8, .unknown: return Theme.azure
-    }
   }
 }
 

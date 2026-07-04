@@ -42,11 +42,11 @@ class FormatDecodeTest {
     }
 
     @Test
-    fun knownCasesExcludesUnknownAndMatchesFormatsTs() {
+    fun knownCasesExcludesUnknownAndUsesDisplayOrder() {
         assertEquals(
             listOf(
-                Format.ScarletViolet, Format.Champions,
-                Format.Gen5, Format.Gen6, Format.Gen7, Format.Gen8,
+                Format.Champions, Format.ScarletViolet,
+                Format.Gen8, Format.Gen7, Format.Gen6, Format.Gen5,
             ),
             Format.knownCases,
         )

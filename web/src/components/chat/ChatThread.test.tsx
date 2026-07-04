@@ -12,7 +12,7 @@ afterEach(() => cleanup());
 import ChatThread from "./ChatThread";
 import type { ChatThreadProps } from "@/components/types";
 import { STARTER_PROMPTS } from "@/lib/example-prompts";
-import { CHAMPIONS_REGULATION } from "@/data/formats";
+
 import { RESOLUTION_FAILED_ANSWER } from "@/components/test-fixtures";
 
 /** Minimal props with sensible defaults; override per test. */
@@ -87,11 +87,27 @@ describe("ChatThread — empty-state starter chips", () => {
     expect(screen.queryByTestId("chat-empty-scope-hint")).toBeNull();
   });
 
-  it("tells the user answers default to Champions, with the current regulation", () => {
+  it("does not render the scope-hint text when no scopeChipSlot is provided", () => {
     render(<ChatThread {...props({ turns: [], status: "idle" })} />);
+    expect(screen.queryByTestId("chat-empty-scope-hint")).toBeNull();
+  });
+
+  it("renders the scope-hint area with just the chip when scopeChipSlot is provided", () => {
+    render(
+      <ChatThread
+        {...props({
+          turns: [],
+          status: "idle",
+          scopeChipSlot: <span data-testid="scope-chip-slot" />,
+        })}
+      />,
+    );
     const hint = screen.getByTestId("chat-empty-scope-hint");
-    expect(hint).toHaveTextContent("Pokémon Champions");
-    expect(hint).toHaveTextContent(CHAMPIONS_REGULATION);
+    expect(hint).toBeInTheDocument();
+    // No "Answers default to" text — only the chip renders.
+    expect(hint).not.toHaveTextContent("Answers default to");
+    expect(hint).not.toHaveTextContent("Champions");
+    expect(within(hint).getByTestId("scope-chip-slot")).toBeInTheDocument();
   });
 });
 

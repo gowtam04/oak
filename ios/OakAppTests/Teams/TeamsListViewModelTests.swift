@@ -46,6 +46,22 @@ struct TeamsListViewModelTests {
     return (vm, teamService)
   }
 
+  private func makeVM(
+    seed: [Team],
+    dex: FakeDexLookupService
+  ) -> (TeamsListViewModel, FakeTeamService) {
+    let teamService = FakeTeamService(seed: seed)
+    let vm = TeamsListViewModel(teamService: teamService, dexLookup: dex)
+    return (vm, teamService)
+  }
+
+  /// Decodes the `swampert-mega` ref from `Fixtures/sprites_response.json` (the shared
+  /// sprite-batch fixture) for the hydration tests.
+  private func swampertRef() throws -> DexSpriteRef {
+    let envelope = try Fixtures.decode(SpritesFixtureEnvelope.self, from: "sprites_response.json")
+    return envelope.refs["swampert-mega"]!
+  }
+
   // MARK: Loading
 
   @Test
@@ -92,6 +108,63 @@ struct TeamsListViewModelTests {
     await vm.setFormatFilter(nil)  // already nil ("all")
 
     #expect(fake.listCount == 0)
+  }
+
+  // MARK: Sprite hydration
+
+  @Test
+  func reloadHydratesSpriteRefs() async throws {
+    let ref = try swampertRef()
+    let dex = FakeDexLookupService()
+    // Keyed by the sorted, comma-joined name batch (FakeDexLookupService's convention).
+    dex.spriteResults["swampert-mega"] = ["swampert-mega": ref]
+    let (vm, _) = makeVM(
+      seed: [team(id: "a", format: .scarletViolet, members: [member(species: "swampert-mega")])],
+      dex: dex)
+
+    await vm.reload()
+
+    #expect(vm.spriteRef(for: "swampert-mega") == ref)
+    // Batched with the loaded team's format.
+    #expect(dex.spriteCalls.last?.format == .scarletViolet)
+  }
+
+  @Test
+  func reloadDegradesToEmptyRefsOnFetchFailure() async throws {
+    // The fake returns `[:]` for any unseeded batch — mirrors the live service folding a
+    // transport/decode fault to an empty map (never throwing). The list still loads.
+    let dex = FakeDexLookupService()
+    let (vm, _) = makeVM(
+      seed: [team(id: "a", format: .scarletViolet, members: [member(species: "swampert-mega")])],
+      dex: dex)
+
+    await vm.reload()
+
+    #expect(vm.teams.map(\.id) == ["a"])  // list unaffected
+    #expect(vm.errorMessage == nil)
+    #expect(vm.spriteRef(for: "swampert-mega") == nil)  // fell back — dot in the row
+  }
+
+  @Test
+  func reloadLeavesUnresolvedSpeciesWithoutARef() async throws {
+    let ref = try swampertRef()
+    let dex = FakeDexLookupService()
+    // The batch response only carries one of the two requested species.
+    dex.spriteResults[["pikachu", "swampert-mega"].sorted().joined(separator: ",")] = [
+      "swampert-mega": ref
+    ]
+    let (vm, _) = makeVM(
+      seed: [
+        team(
+          id: "a", format: .scarletViolet,
+          members: [member(species: "swampert-mega"), member(species: "pikachu")])
+      ],
+      dex: dex)
+
+    await vm.reload()
+
+    #expect(vm.spriteRef(for: "swampert-mega") == ref)
+    #expect(vm.spriteRef(for: "pikachu") == nil)  // absent from the response → no ref
   }
 
   // MARK: Create / duplicate / delete
@@ -201,4 +274,10 @@ struct TeamsListViewModelTests {
 extension StatSpread {
   /// An all-zero spread for terse member fixtures.
   static let zero = StatSpread(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0)
+}
+
+/// `GET /api/sprites` → `{ refs: { [name]: DexSpriteRef } }`, for decoding the shared
+/// `sprites_response.json` fixture into `DexSpriteRef`s the hydration tests script.
+private struct SpritesFixtureEnvelope: Decodable {
+  let refs: [String: DexSpriteRef]
 }

@@ -28,6 +28,14 @@ final class TeamsListViewModel {
   /// A user-facing error message for the last failed operation, or `nil` when clear.
   private(set) var errorMessage: String?
 
+  /// Batch-resolved sprite refs for the loaded teams' filled slots, keyed by species
+  /// slug (flattened across formats — the rows only need each slug's sprite URL). Feeds
+  /// the row's mini roster so it shows Pokémon artwork instead of plain dots; an absent
+  /// entry (unknown species, or a failed/degraded fetch) simply falls back to a dot. The
+  /// hydration is fire-and-forget after each ``reload()`` and never blocks or errors the
+  /// list (mirrors ``TeamEditorViewModel/refreshSprites()``'s never-throw policy).
+  private(set) var spriteRefsBySpecies: [String: DexSpriteRef] = [:]
+
   // MARK: Filter state
 
   /// The active format filter (M-TEAM-US-6); `nil` = all formats. Applied server-side.
@@ -59,6 +67,39 @@ final class TeamsListViewModel {
     } catch {
       errorMessage = Self.genericMessage
     }
+    await hydrateSprites()
+  }
+
+  /// Batch-resolves sprite refs for every distinct species across the loaded teams so
+  /// the rows can render Pokémon artwork instead of dots. Batches one call per distinct
+  /// format (teams can span any of the six scopes) and merges the results, keyed by
+  /// species slug. `dexLookup.sprites` never throws — a transport/decode fault folds to
+  /// an empty map — so a miss just leaves those slots on the dot fallback; this never
+  /// blocks or errors the list (M-AC-1.4). Replaces the map wholesale each load so refs
+  /// for teams no longer in the list are dropped.
+  private func hydrateSprites() async {
+    var byFormat: [Format: Set<String>] = [:]
+    for team in teams {
+      for species in team.species where !species.isEmpty {
+        byFormat[team.format, default: []].insert(species)
+      }
+    }
+    guard !byFormat.isEmpty else {
+      spriteRefsBySpecies = [:]
+      return
+    }
+    var merged: [String: DexSpriteRef] = [:]
+    for (format, species) in byFormat {
+      let refs = await dexLookup.sprites(names: Array(species), format: format)
+      merged.merge(refs) { _, new in new }
+    }
+    spriteRefsBySpecies = merged
+  }
+
+  /// The resolved sprite ref for a species slug, or `nil` when unresolved (the row then
+  /// shows its dot fallback for that slot).
+  func spriteRef(for species: String) -> DexSpriteRef? {
+    species.isEmpty ? nil : spriteRefsBySpecies[species]
   }
 
   /// Switches the format filter and re-fetches (M-TEAM-US-6). A no-op when unchanged.

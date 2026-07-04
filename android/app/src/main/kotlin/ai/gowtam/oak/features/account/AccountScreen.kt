@@ -323,5 +323,5 @@ private fun versionString(): String = "${BuildConfig.VERSION_NAME} (${BuildConfi
 
 // Legal/support links + backend account-deletion endpoint reuse (D-AC-ACCT2.3 —
 // no new backend work; the iPhone app added the same DELETE route).
-private const val PRIVACY_URL = "https://oak-gowtam.fly.dev/privacy"
+private const val PRIVACY_URL = "https://oak.gowtam.ai/privacy"
 private const val SUPPORT_URL = "https://www.gowtam.ai/#contact"

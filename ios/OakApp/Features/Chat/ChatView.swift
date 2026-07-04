@@ -360,11 +360,6 @@ struct ChatView: View {
     "Who leads the guild in Pokémon Mystery Dungeon Explorers?",
   ]
 
-  /// The current Champions regulation, duplicated from web's `CHAMPIONS_REGULATION`
-  /// (`web/src/data/formats.ts` — no shared module between the two clients). Update
-  /// it here when that rotates, alongside `Format.displayLabel`'s "Reg M-B".
-  private static let championsRegulation = "Regulation M-B"
-
   /// A branded empty state: the ``OakBrandMark`` hero, a title + description, and the
   /// example-question chips (styled like ``SuggestionsView`` chips) that cascade in.
   private var emptyState: some View {
@@ -379,13 +374,6 @@ struct ChatView: View {
           .font(Theme.body(.subheadline))
           .foregroundStyle(Theme.textSecondary)
           .multilineTextAlignment(.center)
-        // Scope hint parity with web's `ChatThread.tsx` empty state — the chip
-        // (top of the screen) is the interactive counterpart named here.
-        Text("Answers default to Pokémon Champions (\(Self.championsRegulation)). For any other game — a mainline generation or a spin-off like Mystery Dungeon — just mention it (“in HeartGold”, “gen 7”), or pick a scope with the chip at the top.")
-          .font(Theme.body(.caption))
-          .foregroundStyle(Theme.textMuted)
-          .multilineTextAlignment(.center)
-          .padding(.top, 2)
       }
 
       VStack(spacing: 8) {

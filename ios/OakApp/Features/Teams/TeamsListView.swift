@@ -91,7 +91,7 @@ struct TeamsListView: View {
           Button {
             editorTarget = .existing(team)
           } label: {
-            TeamRow(team: team)
+            TeamRow(team: team, model: model)
           }
           .buttonStyle(.plain)
           .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -297,6 +297,9 @@ private enum EditorTarget: Identifiable, Hashable {
 /// text (M-AC-UI9.3).
 private struct TeamRow: View {
   let team: TeamSummary
+  /// The list view model, read for the batch-resolved sprite refs (keyed by species
+  /// slug) so filled slots can show Pokémon artwork.
+  let model: TeamsListViewModel
 
   var body: some View {
     HStack(spacing: 12) {
@@ -324,18 +327,23 @@ private struct TeamRow: View {
     .accessibilityLabel(accessibilityLabel)
   }
 
-  /// Six mini roster slots — filled = a solid accent-tinted dot, empty = a dashed
-  /// outline. `TeamSummary` (Services/TeamService.swift) carries no per-member
-  /// sprite data, so this is the degraded treatment (filled-count only, not
-  /// per-species artwork) rather than the ideal 28pt `SpriteImage` slots.
-  /// Decorative — `accessibilityLabel` above already states the composition.
+  /// Six mini roster slots. A filled slot whose species resolved to a sprite ref (via
+  /// the VM's batch `GET /api/sprites` hydration) shows the Pokémon's 24pt artwork; a
+  /// filled slot with no resolved ref (unknown species, or a failed/degraded sprite
+  /// fetch — which folds silently to an empty map, never erroring the list) falls back
+  /// to a solid accent-tinted dot; an empty slot is a dashed outline. Decorative —
+  /// `accessibilityLabel` above already states the composition.
   private var slotIndicator: some View {
     HStack(spacing: 3) {
       ForEach(0..<6, id: \.self) { slot in
         if slot < team.memberCount {
-          Circle()
-            .fill(Theme.accent.opacity(0.3))
-            .frame(width: 8, height: 8)
+          if let species = species(at: slot), let ref = model.spriteRef(for: species) {
+            SpriteImage(urlString: ref.spriteUrl, name: ref.displayName, size: 24)
+          } else {
+            Circle()
+              .fill(Theme.accent.opacity(0.3))
+              .frame(width: 8, height: 8)
+          }
         } else {
           Circle()
             .strokeBorder(Theme.textMuted, style: StrokeStyle(lineWidth: 1, dash: [3]))
@@ -344,6 +352,12 @@ private struct TeamRow: View {
       }
     }
     .accessibilityHidden(true)
+  }
+
+  /// The species slug at a filled `slot`. `TeamSummary.species` lists only filled slots
+  /// in slot order, so it indexes 1:1 with the leading filled slots.
+  private func species(at slot: Int) -> String? {
+    slot < team.species.count ? team.species[slot] : nil
   }
 
   private var formatLabel: String {

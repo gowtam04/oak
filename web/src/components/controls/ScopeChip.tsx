@@ -16,7 +16,7 @@
  *   - ABSENT: today's plain, read-only pill (unchanged markup/attrs/styling —
  *     pinned by the existing display-only tests).
  *   - PRESENT: a menu button that opens a popover listing all six formats
- *     (`FORMATS`) as `menuitemradio` options — each a two-line row (name +
+ *     (`SCOPE_PICKER_ORDER`) as `menuitemradio` options — each a two-line row (name +
  *     one-line description, fable-ui §4 screen 02); picking one reports the new
  *     format via `onSelect` and closes the menu. Closes on Escape (refocusing
  *     the trigger) and on an outside pointerdown, mirroring the header's
@@ -34,7 +34,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   CHAMPIONS_REGULATION,
-  FORMATS,
+  SCOPE_PICKER_ORDER,
   type Format,
 } from "@/data/formats";
 import { scopeLabel, scopeLabelShort } from "@/lib/scope/scope-label";
@@ -199,7 +199,7 @@ function InteractiveScopeChip({
           data-testid={`${testId}-menu`}
         >
           <span className="ilabel scope-chip__menu-label">Answer scope</span>
-          {FORMATS.map((f) => (
+          {SCOPE_PICKER_ORDER.map((f) => (
             <button
               key={f}
               type="button"

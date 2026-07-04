@@ -15,6 +15,7 @@ import {
   DEFAULT_FORMATS,
   STANDARD_FORMAT,
   CHAMPIONS_FORMAT,
+  SCOPE_PICKER_ORDER,
   formatForMode,
   modeForFormat,
   genNumberForFormat,
@@ -112,6 +113,28 @@ describe("basisForFormat", () => {
   ];
   it.each(CASES)("%s → basis %s", (format, expected) => {
     expect(basisForFormat(format)).toBe(expected);
+  });
+});
+
+describe("SCOPE_PICKER_ORDER", () => {
+  it("contains exactly the same members as FORMATS (no additions or omissions)", () => {
+    expect([...SCOPE_PICKER_ORDER].sort()).toEqual([...FORMATS].sort());
+  });
+
+  it("starts with champions (the default scope)", () => {
+    expect(SCOPE_PICKER_ORDER[0]).toBe("champions");
+  });
+
+  it("lists mainline gens in release-date descending order after champions", () => {
+    // Expected: champions, scarlet-violet, gen-8, gen-7, gen-6, gen-5
+    expect([...SCOPE_PICKER_ORDER]).toEqual([
+      "champions",
+      "scarlet-violet",
+      "gen-8",
+      "gen-7",
+      "gen-6",
+      "gen-5",
+    ]);
   });
 });
 

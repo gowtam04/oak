@@ -476,9 +476,6 @@ private val exampleQuestions = listOf(
     "Who leads the guild in Pokémon Mystery Dungeon Explorers?",
 )
 
-/** Champions regulation, duplicated from web's `CHAMPIONS_REGULATION` (`formats.ts`). */
-private const val CHAMPIONS_REGULATION = "Regulation M-B"
-
 /**
  * A branded empty state: a title + description and three example-question chips (a tap
  * sends the text verbatim as the first user turn), plus a scope hint naming the header
@@ -503,16 +500,6 @@ private fun EmptyState(onExampleTap: (String) -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = oak.textMuted,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
-        Spacer(Modifier.height(OakSpacing.xs))
-        Text(
-            text = "Answers default to Pokémon Champions ($CHAMPIONS_REGULATION). For any other game — " +
-                "a mainline generation or a spin-off like Mystery Dungeon — just mention it " +
-                "(“in HeartGold”, “gen 7”), or pick a scope with the chip at the top.",
-            style = MaterialTheme.typography.bodySmall,
-            color = oak.textFaint,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            modifier = Modifier.padding(horizontal = OakSpacing.lg),
         )
         Spacer(Modifier.height(OakSpacing.lg))
         Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {

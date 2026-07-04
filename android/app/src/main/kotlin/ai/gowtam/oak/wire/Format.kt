@@ -78,12 +78,12 @@ sealed interface Format {
 
     companion object {
         /**
-         * The known, orderable formats — mirrors `FORMATS` in `formats.ts`. Backs
-         * the six-way scope chip/filter; [Unknown] is deliberately excluded (it
-         * has no fixed identity to list).
+         * The known, orderable formats — display order: default first, then
+         * release-date descending. Backs the six-way scope chip/filter; [Unknown]
+         * is deliberately excluded (it has no fixed identity to list).
          */
         val knownCases: List<Format> =
-            listOf(ScarletViolet, Champions, Gen5, Gen6, Gen7, Gen8)
+            listOf(Champions, ScarletViolet, Gen8, Gen7, Gen6, Gen5)
 
         /** Maps a wire string to its case, falling back to [Unknown] otherwise. */
         fun fromRaw(raw: String): Format = when (raw) {
