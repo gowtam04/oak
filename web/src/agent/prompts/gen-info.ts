@@ -1,11 +1,12 @@
 /**
  * Per-generation prompt facts — the SINGLE source of the mainline (non-Champions)
- * scope text consumed by BOTH prompt bodies. `domain.ts` (Claude/OpenAI Markdown)
- * and `domain-grok.ts` (Grok XML) each read `MAINLINE_GEN_INFO[mode]` and
- * template the SAME strings into their own structure. That is what makes PARITY
- * hold by construction: there is exactly one place the generation label, basis
- * tag, mechanics guard, and encounter caveat live, so the two bodies can never
- * disagree on the domain facts (only on prompt structure, which is per-model).
+ * scope text the ONE canonical prompt body (`./domain`) templates in. Since Oak v2
+ * P3 (prompt collapse) there is a single Markdown body shared by all three
+ * providers; `domain.ts` reads `MAINLINE_GEN_INFO[mode]` and injects these strings
+ * (label, basis tag, mechanics guard, encounter caveat) as the mainline
+ * {@link import("./domain").ScopeProfile}. Champions supplies the sibling profile
+ * from `./champions`. There is exactly one place each generation fact lives, so a
+ * scope's body can never disagree with `formats.ts` on the basis tag.
  *
  * PURITY: this module is on the portable-modules list — the ONLY import is the
  * type-only `AgentMode`, so there is no `server-only`, no `@/env`, and no SDK/DB
@@ -57,8 +58,8 @@ export interface MainlineGenInfo {
    * The gen-defining mechanics the model MUST respect — the ONLY guard against
    * recommending off-gen mechanics (Tera in gen 7, Z-Moves in gen 8, a Fairy
    * matchup in gen 5, …). Authored as a lead sentence plus `- ` sub-points so it
-   * drops cleanly in as one numbered rule in the Markdown body and as plain text
-   * in the Grok XML body. Covers, per gen: which battle gimmick exists (and which
+   * drops cleanly in as one numbered rule in the canonical Markdown body's
+   * mechanics section. Covers, per gen: which battle gimmick exists (and which
    * do NOT), whether the Fairy type exists, and that "can learn move X" is judged
    * against THIS gen's learnset — always deferring to the tools over memory.
    */
@@ -67,7 +68,7 @@ export interface MainlineGenInfo {
    * One line on catch/location coverage for this scope. `get_encounters` draws on
    * PokeAPI encounter data spanning Gen 1 through Sword/Shield (Gen 8) + Let's Go,
    * so gens 5–8 have NATIVE catch data for their games — unlike Gen 9, whose
-   * games have none. Templated into the encounters section of both bodies.
+   * games have none. Templated into the encounters section of the canonical body.
    */
   encountersNote: string;
 }
