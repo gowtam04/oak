@@ -62,7 +62,7 @@ const MODEL_CONFIG: Record<
   // submit_answer into invalid JSON), and DISABLE parallel tool calls so
   // submit_answer can't be returned in the same batch as a data tool.
   "gpt-5.5": {
-    apiModelId: () => "gpt-5.5",
+    apiModelId: () => env.OPENAI_MODEL,
     effort: "medium",
     temperature: 0.2,
     maxOutputTokens: 32000,
