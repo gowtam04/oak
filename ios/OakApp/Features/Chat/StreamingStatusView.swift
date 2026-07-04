@@ -187,19 +187,31 @@ struct StreamingStatusView: View {
 /// text (fable-ui-strategy-ios.md §4.03). Pure and namespaced so it can be unit-tested
 /// without constructing a view.
 enum ToolTrail {
-  /// Maps a tool name to its representative SF Symbol. Reasoning and the two oak-v2
-  /// tools get their own glyphs; usage stats reads as a chart; every `get_*`/lookup
-  /// falls through to the magnifying glass; unknown tools get the generic wrench. The
-  /// label text always carries the meaning (M-AC-UI9.3).
+  /// Maps a tool name to its representative SF Symbol — the per-tool distinctions
+  /// (move→bolt, item→bag, encounters→map, teams→person.3, …) merged with the
+  /// instrument-trail additions (reasoning→brain, run_sql→tablecells,
+  /// search_wiki→text.book.closed). Unmatched lookups (`list_*` then
+  /// `get_*`/`resolve_*`/`query_*`) fall through to generic glyphs; unknown tools get
+  /// the wrench. The label text always carries the meaning (M-AC-UI9.3).
   static func symbol(for tool: String) -> String {
     switch tool {
     case "reasoning": return "brain"
+    case "resolve_entity": return "magnifyingglass"
+    case "get_pokemon": return "book"
+    case "get_move": return "bolt"
+    case "get_ability": return "sparkles"
+    case "get_item": return "bag"
+    case "type_matchup", "get_type_chart": return "shield.lefthalf.filled"
+    case "compute_stat", "get_usage_stats": return "chart.bar"
+    case "estimate_damage": return "function"
+    case "get_learnset": return "list.bullet"
+    case "get_team", "save_team", "list_teams": return "person.3"
+    case "get_encounters": return "map"
     case "run_sql": return "tablecells"
     case "search_wiki": return "text.book.closed"
-    case "get_usage_stats": return "chart.bar"
     default:
-      if tool.hasPrefix("get_") || tool.hasPrefix("resolve_")
-        || tool.hasPrefix("query_") || tool.hasPrefix("list_") {
+      if tool.hasPrefix("list_") { return "list.bullet" }
+      if tool.hasPrefix("get_") || tool.hasPrefix("resolve_") || tool.hasPrefix("query_") {
         return "magnifyingglass"
       }
       return "wrench.and.screwdriver"

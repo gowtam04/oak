@@ -17,12 +17,21 @@ struct ToolTrailTests {
   }
 
   @Test
-  func lookupToolsMapToMagnifyingGlass() {
-    #expect(ToolTrail.symbol(for: "get_pokemon") == "magnifyingglass")
-    #expect(ToolTrail.symbol(for: "get_move") == "magnifyingglass")
-    #expect(ToolTrail.symbol(for: "resolve_entity") == "magnifyingglass")
-    #expect(ToolTrail.symbol(for: "query_pokedex") == "magnifyingglass")
-    #expect(ToolTrail.symbol(for: "list_teams") == "magnifyingglass")
+  func perToolGlyphsAreDistinct() {
+    // The restored per-tool map: each data domain keeps its own glyph.
+    #expect(ToolTrail.symbol(for: "get_pokemon") == "book")
+    #expect(ToolTrail.symbol(for: "get_move") == "bolt")
+    #expect(ToolTrail.symbol(for: "get_ability") == "sparkles")
+    #expect(ToolTrail.symbol(for: "get_item") == "bag")
+    #expect(ToolTrail.symbol(for: "type_matchup") == "shield.lefthalf.filled")
+    #expect(ToolTrail.symbol(for: "get_type_chart") == "shield.lefthalf.filled")
+    #expect(ToolTrail.symbol(for: "compute_stat") == "chart.bar")
+    #expect(ToolTrail.symbol(for: "estimate_damage") == "function")
+    #expect(ToolTrail.symbol(for: "get_learnset") == "list.bullet")
+    #expect(ToolTrail.symbol(for: "get_team") == "person.3")
+    #expect(ToolTrail.symbol(for: "save_team") == "person.3")
+    #expect(ToolTrail.symbol(for: "list_teams") == "person.3")
+    #expect(ToolTrail.symbol(for: "get_encounters") == "map")
   }
 
   @Test
@@ -30,6 +39,15 @@ struct ToolTrailTests {
     #expect(ToolTrail.symbol(for: "run_sql") == "tablecells")
     #expect(ToolTrail.symbol(for: "search_wiki") == "text.book.closed")
     #expect(ToolTrail.symbol(for: "get_usage_stats") == "chart.bar")
+  }
+
+  @Test
+  func prefixFallbacksCoverUnmatchedLookups() {
+    // list_* → list glyph; other unmatched lookups → magnifying glass.
+    #expect(ToolTrail.symbol(for: "resolve_entity") == "magnifyingglass")
+    #expect(ToolTrail.symbol(for: "query_pokedex") == "magnifyingglass")
+    #expect(ToolTrail.symbol(for: "get_evolution_chain") == "magnifyingglass")
+    #expect(ToolTrail.symbol(for: "list_formats") == "list.bullet")
   }
 
   @Test
