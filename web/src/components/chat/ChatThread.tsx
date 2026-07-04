@@ -205,13 +205,17 @@ export default function ChatThread({
             Answers default to Pokémon Champions ({CHAMPIONS_REGULATION}).{" "}
             {scopeChipSlot ? (
               <>
-                {scopeChipSlot} to change scope, or just mention a game
-                (&ldquo;in Scarlet/Violet&rdquo;, &ldquo;gen 7&rdquo;).
+                For any other game &mdash; a mainline generation or a spin-off
+                like Mystery Dungeon &mdash; just mention it (&ldquo;in
+                HeartGold&rdquo;, &ldquo;gen 7&rdquo;), or{" "}
+                {scopeChipSlot} to pick a scope.
               </>
             ) : (
               <>
-                For mainline games, mention one (&ldquo;in Scarlet/Violet&rdquo;,
-                &ldquo;gen 7&rdquo;) or use the scope chip in the header.
+                For any other game &mdash; a mainline generation or a spin-off
+                like Mystery Dungeon &mdash; just mention it (&ldquo;in
+                HeartGold&rdquo;, &ldquo;gen 7&rdquo;), or pick a scope with
+                the chip in the header.
               </>
             )}
           </div>

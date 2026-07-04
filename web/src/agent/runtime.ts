@@ -200,6 +200,8 @@ const PROGRESS_LABELS: Record<string, string> = {
   list_teams: "📋 Finding your teams…",
   get_learnset: "📖 Checking the learnset…",
   submit_builder_answer: "✍️ Composing the answer…",
+  run_sql: "🗄️ Querying the dex database…",
+  search_wiki: "📖 Searching the wiki…",
 };
 
 /** The generic per-tool label, used as the fallback when args are unusable. */
@@ -343,6 +345,19 @@ export function describeToolCall(tool: string, input: unknown): string {
     case "get_learnset": {
       const name = titleizeSlug(obj.name);
       return name ? `📖 Checking ${name}’s learnset…` : base;
+    }
+    case "run_sql": {
+      const purpose =
+        typeof obj.purpose === "string" ? obj.purpose.trim() : "";
+      return purpose
+        ? `🗄️ Querying the dex database — ${purpose.slice(0, 120)}…`
+        : base;
+    }
+    case "search_wiki": {
+      const query = typeof obj.query === "string" ? obj.query.trim() : "";
+      return query
+        ? `📖 Searching the wiki for "${query.slice(0, 60)}"…`
+        : base;
     }
     case "submit_answer":
       return "✍️ Composing the answer…";

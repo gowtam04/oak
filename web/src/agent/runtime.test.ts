@@ -984,4 +984,42 @@ describe("describeToolCall — context-rich progress labels", () => {
     );
     expect(describeToolCall("unknown_tool", null)).toEqual(expect.any(String));
   });
+
+  it("gives run_sql a purpose-enriched label when purpose is present", () => {
+    const withPurpose = describeToolCall("run_sql", {
+      query: "SELECT ...",
+      purpose: "find Pokémon with BST equal to their natdex number",
+    });
+    expect(withPurpose).toContain("Querying the dex database");
+    expect(withPurpose).toContain("find Pokémon with BST");
+    expect(withPurpose).not.toContain("run_sql");
+  });
+
+  it("gives run_sql a generic database label when purpose is absent", () => {
+    const noPurpose = describeToolCall("run_sql", { query: "SELECT ..." });
+    expect(noPurpose).toMatch(/Querying the dex database/);
+    expect(noPurpose).not.toContain("run_sql");
+
+    const emptyPurpose = describeToolCall("run_sql", {
+      query: "SELECT ...",
+      purpose: "",
+    });
+    expect(emptyPurpose).toMatch(/Querying the dex database/);
+    expect(emptyPurpose).not.toContain("run_sql");
+  });
+
+  it("gives search_wiki a query-enriched label when query is present", () => {
+    const withQuery = describeToolCall("search_wiki", {
+      query: "Wigglytuff Guild Mystery Dungeon",
+    });
+    expect(withQuery).toContain("Searching the wiki for");
+    expect(withQuery).toContain("Wigglytuff Guild");
+    expect(withQuery).not.toContain("search_wiki");
+  });
+
+  it("gives search_wiki a generic wiki label when query is absent", () => {
+    const noQuery = describeToolCall("search_wiki", {});
+    expect(noQuery).toMatch(/Searching the wiki/);
+    expect(noQuery).not.toContain("search_wiki");
+  });
 });
