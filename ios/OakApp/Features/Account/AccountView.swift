@@ -47,6 +47,7 @@ struct AccountView: View {
         aboutSection
       }
       .navigationTitle("Account")
+      .navigationBarTitleDisplayMode(.inline)
     }
     .sheet(isPresented: $showingSignIn) {
       AuthView(model: model.makeAuthViewModel())
@@ -188,8 +189,7 @@ struct AccountView: View {
         showingDeleteConfirm = true
       } label: {
         HStack {
-          actionLabel(title: "Delete account", systemImage: "trash")
-            .foregroundStyle(Theme.danger)
+          actionLabel(title: "Delete account", systemImage: "trash", tint: Theme.danger)
           if model.isBusy {
             Spacer()
             ProgressView()
@@ -250,10 +250,17 @@ struct AccountView: View {
   // MARK: Helpers
 
   /// A label that scales with Dynamic Type (no fixed sizing) and reads as one
-  /// element to VoiceOver.
-  private func actionLabel(title: String, systemImage: String) -> some View {
-    Label(title, systemImage: systemImage)
-      .font(Theme.body(.body))
+  /// element to VoiceOver. Icon tints `Theme.accent` for normal rows; both text
+  /// and icon take the `tint` color for destructive/override rows.
+  private func actionLabel(title: String, systemImage: String, tint: Color = Theme.textPrimary) -> some View {
+    Label {
+      Text(title)
+        .foregroundStyle(tint)
+    } icon: {
+      Image(systemName: systemImage)
+        .foregroundStyle(tint == Theme.textPrimary ? Theme.accent : tint)
+    }
+    .font(Theme.body(.body))
   }
 
   // MARK: Legal/support links + version

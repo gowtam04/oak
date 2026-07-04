@@ -46,65 +46,76 @@ struct TeamEditorView: View {
     @Bindable var model = model
     ScrollViewReader { proxy in
       Form {
-        if !model.members.isEmpty {
+        if loadsOnAppear && model.isLoading && model.members.isEmpty {
           Section {
-            RosterStripView(
-              members: model.members,
-              spriteRefs: model.spriteRefsBySpecies,
-              onSelect: { index in
-                withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
-                  proxy.scrollTo(model.members[index].id, anchor: .top)
-                }
-              }
-            )
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
-          }
-        }
-
-        Section("Team") {
-          TextField("Team name", text: $model.name)
-            .textInputAutocapitalization(.words)
-          LabeledContent("Format", value: model.format.displayLabel)
-        }
-
-        ForEach($model.members) { $member in
-          if let index = model.members.firstIndex(where: { $0.id == member.id }) {
-            MemberEditorSection(
-              index: index,
-              member: $member,
-              warnings: model.warnings(forSlot: index),
-              spriteRef: model.spriteRef(for: member.species),
-              abilityOptions: model.abilityOptions(for: member.species),
-              movepoolOptions: model.movepoolOptions(for: member.id),
-              search: model.searchEntities,
-              onSpeciesChange: {
-                Task {
-                  await model.refreshSprites()
-                  await model.refreshMovepool(for: member.id)
-                }
-              },
-              onRemove: { model.removeMember(at: index) }
-            )
-            .id(member.id)
-          }
-        }
-
-        if model.canAddMember {
-          Section {
-            Button {
-              model.addMember()
-            } label: {
-              Label("Add Pokémon", systemImage: "plus.circle")
+            ForEach(0..<4, id: \.self) { i in
+              SkeletonListRow()
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .id("skeleton-\(i)")
             }
           }
-        }
+        } else {
+          if !model.members.isEmpty {
+            Section {
+              RosterStripView(
+                members: model.members,
+                spriteRefs: model.spriteRefsBySpecies,
+                onSelect: { index in
+                  withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
+                    proxy.scrollTo(model.members[index].id, anchor: .top)
+                  }
+                }
+              )
+              .listRowInsets(EdgeInsets())
+              .listRowBackground(Color.clear)
+            }
+          }
 
-        if !model.teamLevelWarnings.isEmpty {
-          Section("Team legality") {
-            ForEach(Array(model.teamLevelWarnings.enumerated()), id: \.offset) { _, warning in
-              WarningRow(warning: warning)
-                .transition(warningTransition)
+          Section("Team") {
+            TextField("Team name", text: $model.name)
+              .textInputAutocapitalization(.words)
+            LabeledContent("Format", value: model.format.displayLabel)
+          }
+
+          ForEach($model.members) { $member in
+            if let index = model.members.firstIndex(where: { $0.id == member.id }) {
+              MemberEditorSection(
+                index: index,
+                member: $member,
+                warnings: model.warnings(forSlot: index),
+                spriteRef: model.spriteRef(for: member.species),
+                abilityOptions: model.abilityOptions(for: member.species),
+                movepoolOptions: model.movepoolOptions(for: member.id),
+                search: model.searchEntities,
+                onSpeciesChange: {
+                  Task {
+                    await model.refreshSprites()
+                    await model.refreshMovepool(for: member.id)
+                  }
+                },
+                onRemove: { model.removeMember(at: index) }
+              )
+              .id(member.id)
+            }
+          }
+
+          if model.canAddMember {
+            Section {
+              Button {
+                model.addMember()
+              } label: {
+                Label("Add Pokémon", systemImage: "plus.circle")
+              }
+            }
+          }
+
+          if !model.teamLevelWarnings.isEmpty {
+            Section("Team legality") {
+              ForEach(Array(model.teamLevelWarnings.enumerated()), id: \.offset) { _, warning in
+                WarningRow(warning: warning)
+                  .transition(warningTransition)
+              }
             }
           }
         }
@@ -146,7 +157,9 @@ struct TeamEditorView: View {
       }
       .overlay(alignment: .bottom) {
         if let message = model.errorMessage {
-          errorBanner(message)
+          ErrorBanner(message: message, onDismiss: { model.dismissError() })
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.bottom, Theme.Spacing.sm)
         }
       }
       .overlay(alignment: .top) {
@@ -220,24 +233,6 @@ struct TeamEditorView: View {
     reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
   }
 
-  // MARK: Details
-
-  // MARK: Error banner
-
-  private func errorBanner(_ message: String) -> some View {
-    HStack(spacing: 8) {
-      Image(systemName: "exclamationmark.triangle.fill")
-        .foregroundStyle(.orange)
-      Text(message)
-        .font(.footnote)
-      Spacer(minLength: 0)
-      Button("Dismiss") { model.dismissError() }
-        .font(.footnote)
-    }
-    .padding(12)
-    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-    .padding()
-  }
 }
 
 // MARK: - Export payload + sheet
@@ -546,7 +541,7 @@ private struct MoveFieldRow: View {
       )
       if let selectedHint {
         Text(selectedHint)
-          .font(.caption)
+          .font(Theme.body(.caption))
           .foregroundStyle(Theme.textSecondary)
           .padding(.leading, 4)
       }
@@ -581,7 +576,7 @@ private struct RosterStripView: View {
                 size: 44
               )
               Text(slotLabel(member, index))
-                .font(.caption2)
+                .font(Theme.body(.caption2))
                 .lineLimit(1)
                 .frame(width: 60)
             }
@@ -623,8 +618,8 @@ private struct StatStepperGrid: View {
       statRow("Speed", value: $spread.spe)
       if let footnote {
         Text(footnote)
-          .font(.footnote)
-          .foregroundStyle(.secondary)
+          .font(Theme.body(.footnote))
+          .foregroundStyle(Theme.textSecondary)
       }
     }
   }
@@ -650,7 +645,7 @@ private struct WarningRow: View {
   var body: some View {
     Label {
       Text(warning.message)
-        .font(.footnote)
+        .font(Theme.body(.footnote))
         .foregroundStyle(Theme.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
     } icon: {

@@ -59,8 +59,12 @@ struct TeamsAssistantSheet: View {
           }
 
           if let errorMessage = model.errorMessage {
-            errorRow(errorMessage)
-              .id(errorAnchor)
+            ErrorBanner(
+              message: errorMessage,
+              retryTitle: "Retry",
+              onRetry: { model.retry() }
+            )
+            .id(errorAnchor)
           }
         }
         .padding(16)
@@ -104,9 +108,8 @@ struct TeamsAssistantSheet: View {
       .foregroundStyle(Theme.textSecondary)
 
       Text("Try asking")
-        .font(.caption)
+        .instrumentLabel()
         .foregroundStyle(Theme.textSecondary)
-        .textCase(.uppercase)
 
       FlexibleChips(items: TeamsAssistantViewModel.suggestions) { suggestion in
         Button(suggestion) { model.send(suggestion) }
@@ -134,10 +137,19 @@ struct TeamsAssistantSheet: View {
       Spacer(minLength: 32)
       Text(text)
         .font(Theme.body(.subheadline))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Theme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 14))
-        .frame(alignment: .trailing)
+        .foregroundStyle(.white)
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(
+          Theme.accent,
+          in: UnevenRoundedRectangle(
+            topLeadingRadius: Theme.Radius.lg,
+            bottomLeadingRadius: Theme.Radius.lg,
+            bottomTrailingRadius: Theme.Radius.sm,
+            topTrailingRadius: Theme.Radius.lg,
+            style: .continuous
+          )
+        )
     }
   }
 
@@ -181,7 +193,7 @@ struct TeamsAssistantSheet: View {
               .foregroundStyle(Theme.textSecondary)
               .accessibilityHidden(true)
             Text(line)
-              .font(.footnote)
+              .font(Theme.body(.footnote))
               .fixedSize(horizontal: false, vertical: true)
           }
         }
@@ -190,7 +202,7 @@ struct TeamsAssistantSheet: View {
       HStack(spacing: 12) {
         if model.appliedTurnIds.contains(turn.id) {
           Label("Applied to draft", systemImage: "checkmark.circle.fill")
-            .font(.footnote.weight(.medium))
+            .font(Theme.body(.footnote).weight(.medium))
             .foregroundStyle(Theme.success)
           if model.lastApplied?.turnId == turn.id {
             Button("Undo") { model.undo() }
@@ -226,23 +238,6 @@ struct TeamsAssistantSheet: View {
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  private func errorRow(_ message: String) -> some View {
-    HStack(spacing: 10) {
-      Image(systemName: "exclamationmark.triangle.fill")
-        .foregroundStyle(Theme.warning)
-      Text(message)
-        .font(.footnote)
-        .fixedSize(horizontal: false, vertical: true)
-      Spacer(minLength: 0)
-      Button("Retry") { model.retry() }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-    }
-    .padding(12)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-  }
-
   // MARK: Composer
 
   private var composer: some View {
@@ -257,9 +252,14 @@ struct TeamsAssistantSheet: View {
         .disabled(model.status == .thinking)
 
       Button(action: submit) {
-        Image(systemName: "arrow.up.circle.fill")
-          .font(.system(size: 30))
-          .foregroundStyle(model.canSend(input) ? Theme.accent : Theme.textSecondary)
+        ZStack {
+          Circle()
+            .fill(model.canSend(input) ? Theme.accent : Theme.surfaceSunken)
+            .frame(width: 38, height: 38)
+          Image(systemName: "arrow.up")
+            .font(Theme.body(.subheadline).weight(.semibold))
+            .foregroundStyle(model.canSend(input) ? .white : Theme.textMuted)
+        }
       }
       .disabled(!model.canSend(input))
       .accessibilityLabel("Send")

@@ -45,8 +45,8 @@ struct ShowdownImportView: View {
             .accessibilityLabel("Showdown paste")
           if paste.isEmpty {
             Text("Paste a team exported from Pokémon Showdown.")
-              .font(.footnote)
-              .foregroundStyle(.secondary)
+              .font(Theme.body(.footnote))
+              .foregroundStyle(Theme.textSecondary)
           }
         }
 
@@ -96,7 +96,9 @@ struct ShowdownImportView: View {
       }
       .overlay(alignment: .bottom) {
         if let message = model.errorMessage {
-          errorBanner(message)
+          ErrorBanner(message: message, onDismiss: { model.dismissError() })
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.bottom, Theme.Spacing.sm)
         }
       }
     }
@@ -117,20 +119,6 @@ struct ShowdownImportView: View {
     }
   }
 
-  private func errorBanner(_ message: String) -> some View {
-    HStack(spacing: 8) {
-      Image(systemName: "exclamationmark.triangle.fill")
-        .foregroundStyle(.orange)
-      Text(message)
-        .font(.footnote)
-      Spacer(minLength: 0)
-      Button("Dismiss") { model.dismissError() }
-        .font(.footnote)
-    }
-    .padding(12)
-    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-    .padding()
-  }
 }
 
 /// One parsed-team preview row: the resolved species name, staggered in on first
@@ -150,7 +138,7 @@ private struct ParsedMemberRow: View {
         .frame(width: 6, height: 6)
         .accessibilityHidden(true)
       Text(displayName)
-        .font(.footnote)
+        .font(Theme.body(.footnote))
       Spacer(minLength: 0)
     }
     .opacity(hasAppeared ? 1 : 0)
@@ -182,7 +170,7 @@ private struct ImportNoteRow: View {
     Label {
       VStack(alignment: .leading, spacing: 2) {
         Text(note.message)
-          .font(.footnote)
+          .font(Theme.body(.footnote))
           .foregroundStyle(Theme.textPrimary)
           .fixedSize(horizontal: false, vertical: true)
       }

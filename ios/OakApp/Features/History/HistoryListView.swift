@@ -87,7 +87,9 @@ struct ConversationListView: View {
       .refreshable { await model.reload() }
       .overlay(alignment: .bottom) {
         if let message = model.errorMessage {
-          errorBanner(message)
+          ErrorBanner(message: message, onDismiss: { model.dismissError() })
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.bottom, Theme.Spacing.sm)
         }
       }
     }
@@ -166,15 +168,15 @@ struct ConversationListView: View {
     .listStyle(.plain)
   }
 
-  /// Exactly the web history sidebar's three filter chips (`ConversationList.tsx`
-  /// `FILTERS`) — **not** a six-way format filter (that's the Teams list's job;
-  /// see `TeamsListView`). Conversation history stays scoped to the two most
-  /// common formats for now.
+  /// Format filter spanning all six scopes (`Format.knownCases`) — mirrors the
+  /// Teams list's filter and `FORMATS` in full so every conversation scope is
+  /// reachable from the history list.
   private var formatFilterMenu: some View {
     Menu {
       filterButton(title: "All", format: nil)
-      filterButton(title: "Gen 9", format: .scarletViolet)
-      filterButton(title: "Champions", format: .champions)
+      ForEach(Format.knownCases, id: \.self) { format in
+        filterButton(title: format.shortLabel, format: format)
+      }
     } label: {
       Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
     }
@@ -218,21 +220,6 @@ struct ConversationListView: View {
       || model.formatFilter != nil
   }
 
-  private func errorBanner(_ message: String) -> some View {
-    HStack(spacing: 8) {
-      Image(systemName: "exclamationmark.triangle.fill")
-        .foregroundStyle(.orange)
-      Text(message)
-        .font(.footnote)
-      Spacer(minLength: 0)
-      Button("Dismiss") { model.dismissError() }
-        .font(.footnote)
-    }
-    .padding(12)
-    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-    .padding()
-  }
-
   // MARK: Rename alert binding
 
   /// A bool binding that mirrors `renameTarget != nil` so the alert presents while a
@@ -269,8 +256,8 @@ private struct ConversationRow: View {
           Text("·")
           Text(updatedAt, format: .relative(presentation: .named))
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        .font(Theme.body(.caption))
+        .foregroundStyle(Theme.textSecondary)
       }
       Spacer(minLength: 0)
     }
