@@ -50,6 +50,8 @@ beforeAll(async () => {
         machines: buildMachineRows(),
         classicEncounters: buildClassicEncounterRows(),
         pmd: buildPmdRows(),
+        wikiPages: [],
+        wikiChunks: [],
       },
     },
     [],

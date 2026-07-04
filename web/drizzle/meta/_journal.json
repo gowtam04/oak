@@ -71,6 +71,13 @@
       "when": 1783120000000,
       "tag": "0009_oak_readonly_role",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1783125701467,
+      "tag": "0010_good_toxin",
+      "breakpoints": true
     }
   ]
 }

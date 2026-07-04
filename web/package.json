@@ -21,6 +21,7 @@
     "ingest": "tsx src/ingest/run.ts",
     "fetch:encounters": "tsx scripts/fetch-pokeapi-encounters.ts",
     "fetch:natdex": "tsx scripts/fetch-pokeapi-natdex.ts",
+    "fetch:wiki": "tsx scripts/fetch-fandom-wiki.ts",
     "eval": "tsx eval/run.ts",
     "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
     "docker:down": "docker compose -f docker-compose.dev.yml down",

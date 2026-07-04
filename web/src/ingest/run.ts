@@ -49,6 +49,8 @@ import {
   pokemon,
   reference_cache,
   searchable_names,
+  wiki_chunk,
+  wiki_page,
 } from "@/data/schema";
 import * as schema from "@/data/schema";
 import {
@@ -79,6 +81,11 @@ import {
   type ClassicEncounterRow,
 } from "./build-classic-encounters";
 import { buildPmdRows, type PmdRecruitRow } from "./build-pmd";
+import {
+  buildWikiRows,
+  type WikiChunkRow,
+  type WikiPageRow,
+} from "./build-wiki";
 
 // ---------------------------------------------------------------------------
 // Connection (own handle — db.ts is server-only and unusable under tsx)
@@ -140,6 +147,9 @@ export interface GlobalRows {
   machines: NatdexMachineRow[];
   classicEncounters: ClassicEncounterRow[];
   pmd: PmdRecruitRow[];
+  /** Fandom wiki corpus (empty unless `.wiki-cache/` was fetched). */
+  wikiPages: WikiPageRow[];
+  wikiChunks: WikiChunkRow[];
 }
 
 /**
@@ -164,6 +174,8 @@ export interface GlobalReport {
   machines: number;
   classicEncounters: number;
   pmd: number;
+  wikiPages: number;
+  wikiChunks: number;
 }
 
 const SCHEMA_VERSION = "2";
@@ -273,6 +285,11 @@ export async function writeIndex(
       );
       report("writing pmd_recruits…");
       await replaceGlobalTable(tx, pmd_recruits, rows.global.pmd);
+      // Fandom wiki corpus — pages before chunks (logical FK, no constraint).
+      report("writing wiki_page…");
+      await replaceGlobalTable(tx, wiki_page, rows.global.wikiPages);
+      report("writing wiki_chunk…");
+      await replaceGlobalTable(tx, wiki_chunk, rows.global.wikiChunks);
     }
   });
 }
@@ -362,12 +379,15 @@ export async function runIngest(
   // These read the committed PokeAPI/PMD snapshots (src/ingest/data/*) via fs and
   // are format-independent, so they are built a single time per run and replaced
   // wholesale inside the same atomic transaction as the per-format tables.
+  const wiki = buildWikiRows();
   const global: GlobalRows = {
     natdexSpecies: buildNatdexSpeciesRows(),
     natdexMoves: buildNatdexMoveRows(),
     machines: buildMachineRows(),
     classicEncounters: buildClassicEncounterRows(),
     pmd: buildPmdRows(),
+    wikiPages: wiki.pages,
+    wikiChunks: wiki.chunks,
   };
   const globalReport: GlobalReport = {
     natdexSpecies: global.natdexSpecies.length,
@@ -375,13 +395,17 @@ export async function runIngest(
     machines: global.machines.length,
     classicEncounters: global.classicEncounters.length,
     pmd: global.pmd.length,
+    wikiPages: global.wikiPages.length,
+    wikiChunks: global.wikiChunks.length,
   };
   report(
     `[global] natdex_species: ${globalReport.natdexSpecies}, ` +
       `natdex_moves: ${globalReport.natdexMoves}, ` +
       `machines: ${globalReport.machines}, ` +
       `classic_encounters: ${globalReport.classicEncounters}, ` +
-      `pmd_recruits: ${globalReport.pmd}`,
+      `pmd_recruits: ${globalReport.pmd}, ` +
+      `wiki_page: ${globalReport.wikiPages}, ` +
+      `wiki_chunk: ${globalReport.wikiChunks}`,
   );
 
   // ----- Write phase (one atomic transaction — see writeIndex) -------------

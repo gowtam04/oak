@@ -16,6 +16,10 @@ next-env.d.ts
 # Runtime data artifacts (built by `npm run ingest`)
 # Anchored so it does NOT also ignore the web/src/data/ source dir.
 web/data/
+# Fandom wiki crawl cache (fetched by `npm run fetch:wiki`, NOT committed —
+# multi-MB community prose; ingest reads it to build the wiki_page/wiki_chunk
+# corpus). Regenerated on demand; absence just means an empty search_wiki.
+web/.wiki-cache/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
