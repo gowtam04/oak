@@ -1,5 +1,11 @@
 /**
- * Unit tests for src/server/session-store.ts (DS-5, D9).
+ * Unit tests for src/server/session-store.ts (DS-5, D9) — MEMORY BACKEND.
+ *
+ * `REDIS_URL` is left unset throughout this file (the default for every suite
+ * except the opt-in `session-store.redis.test.ts`), so every seam call below
+ * exercises the in-process BoundedStore path. The public API is async
+ * (uniform across backends), so every seam call is awaited even though the
+ * memory backend itself does no I/O.
  *
  * Covers: getHistory, appendTurn, estimateTokens, trim, clearSession,
  * activeSessionCount, getSessionScope/setSessionScope. No external I/O — pure
@@ -40,9 +46,9 @@ function msg(role: "user" | "assistant", content: string): ChatMessage {
 // independent without coupling to implementation internals.
 // ---------------------------------------------------------------------------
 
-beforeEach(() => {
-  clearSession(SESSION_A);
-  clearSession(SESSION_B);
+beforeEach(async () => {
+  await clearSession(SESSION_A);
+  await clearSession(SESSION_B);
 });
 
 // ---------------------------------------------------------------------------
@@ -50,30 +56,31 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("getHistory", () => {
-  it("returns an empty array for an unknown session id", () => {
-    expect(getHistory("does-not-exist-" + Math.random())).toEqual([]);
+  it("returns an empty array for an unknown session id", async () => {
+    expect(await getHistory("does-not-exist-" + Math.random())).toEqual([]);
   });
 
-  it("returns [] for a session that was created then cleared", () => {
-    appendTurn(SESSION_A, msg("user", "hi"));
-    clearSession(SESSION_A);
-    expect(getHistory(SESSION_A)).toEqual([]);
+  it("returns [] for a session that was created then cleared", async () => {
+    await appendTurn(SESSION_A, msg("user", "hi"));
+    await clearSession(SESSION_A);
+    expect(await getHistory(SESSION_A)).toEqual([]);
   });
 
-  it("returns the accumulated turns in insertion order", () => {
-    appendTurn(SESSION_A, msg("user", "Hello"));
-    appendTurn(SESSION_A, msg("assistant", "Hi there!"));
-    expect(getHistory(SESSION_A)).toEqual([
+  it("returns the accumulated turns in insertion order", async () => {
+    await appendTurn(SESSION_A, msg("user", "Hello"));
+    await appendTurn(SESSION_A, msg("assistant", "Hi there!"));
+    expect(await getHistory(SESSION_A)).toEqual([
       { role: "user", content: "Hello" },
       { role: "assistant", content: "Hi there!" },
     ]);
   });
 
-  it("reflects subsequent appends without needing to call getHistory again", () => {
-    appendTurn(SESSION_A, msg("user", "ping"));
-    const snapshot = getHistory(SESSION_A);
-    appendTurn(SESSION_A, msg("assistant", "pong"));
-    // The returned array is the live internal array — new turns are visible.
+  it("reflects subsequent appends without needing to call getHistory again", async () => {
+    await appendTurn(SESSION_A, msg("user", "ping"));
+    const snapshot = await getHistory(SESSION_A);
+    await appendTurn(SESSION_A, msg("assistant", "pong"));
+    // The memory backend's internals are unchanged (still the live internal
+    // array) — new turns pushed onto it remain visible on an earlier read.
     expect(snapshot).toHaveLength(2);
     expect(snapshot[1]).toEqual({ role: "assistant", content: "pong" });
   });
@@ -84,45 +91,45 @@ describe("getHistory", () => {
 // ---------------------------------------------------------------------------
 
 describe("appendTurn", () => {
-  it("creates the session entry on the first call", () => {
-    expect(getHistory(SESSION_A)).toEqual([]);
-    appendTurn(SESSION_A, msg("user", "first turn"));
-    expect(getHistory(SESSION_A)).toHaveLength(1);
+  it("creates the session entry on the first call", async () => {
+    expect(await getHistory(SESSION_A)).toEqual([]);
+    await appendTurn(SESSION_A, msg("user", "first turn"));
+    expect(await getHistory(SESSION_A)).toHaveLength(1);
   });
 
-  it("preserves insertion order across many turns", () => {
+  it("preserves insertion order across many turns", async () => {
     const turns: ChatMessage[] = [
       msg("user", "a"),
       msg("assistant", "b"),
       msg("user", "c"),
       msg("assistant", "d"),
     ];
-    for (const t of turns) appendTurn(SESSION_A, t);
-    expect(getHistory(SESSION_A)).toEqual(turns);
+    for (const t of turns) await appendTurn(SESSION_A, t);
+    expect(await getHistory(SESSION_A)).toEqual(turns);
   });
 
-  it("sessions are fully isolated from each other", () => {
-    appendTurn(SESSION_A, msg("user", "from A"));
-    appendTurn(SESSION_B, msg("user", "from B"));
+  it("sessions are fully isolated from each other", async () => {
+    await appendTurn(SESSION_A, msg("user", "from A"));
+    await appendTurn(SESSION_B, msg("user", "from B"));
 
-    expect(getHistory(SESSION_A)).toHaveLength(1);
-    expect(getHistory(SESSION_B)).toHaveLength(1);
-    expect(getHistory(SESSION_A)[0].content).toBe("from A");
-    expect(getHistory(SESSION_B)[0].content).toBe("from B");
+    expect(await getHistory(SESSION_A)).toHaveLength(1);
+    expect(await getHistory(SESSION_B)).toHaveLength(1);
+    expect((await getHistory(SESSION_A))[0].content).toBe("from A");
+    expect((await getHistory(SESSION_B))[0].content).toBe("from B");
   });
 
-  it("appending to one session does not affect another", () => {
-    appendTurn(SESSION_A, msg("user", "turn 1"));
-    appendTurn(SESSION_B, msg("user", "turn 1"));
-    appendTurn(SESSION_A, msg("assistant", "turn 2"));
+  it("appending to one session does not affect another", async () => {
+    await appendTurn(SESSION_A, msg("user", "turn 1"));
+    await appendTurn(SESSION_B, msg("user", "turn 1"));
+    await appendTurn(SESSION_A, msg("assistant", "turn 2"));
 
-    expect(getHistory(SESSION_A)).toHaveLength(2);
-    expect(getHistory(SESSION_B)).toHaveLength(1);
+    expect(await getHistory(SESSION_A)).toHaveLength(2);
+    expect(await getHistory(SESSION_B)).toHaveLength(1);
   });
 });
 
 // ---------------------------------------------------------------------------
-// estimateTokens
+// estimateTokens (pure, sync — unchanged)
 // ---------------------------------------------------------------------------
 
 describe("estimateTokens", () => {
@@ -171,93 +178,94 @@ describe("estimateTokens", () => {
 // ---------------------------------------------------------------------------
 
 describe("trim", () => {
-  it("is a no-op for a non-existent session (does not throw)", () => {
-    expect(() => trim("no-such-session-" + Math.random(), 100)).not.toThrow();
+  it("is a no-op for a non-existent session (does not reject)", async () => {
+    await expect(
+      trim("no-such-session-" + Math.random(), 100),
+    ).resolves.toBeUndefined();
   });
 
-  it("is a no-op for an empty session", () => {
-    // clearSession has deleted SESSION_A; append nothing; trim should not throw.
-    // Ensure SESSION_A exists with length 0 (it doesn't exist at all, which is fine).
-    expect(() => trim(SESSION_A, 10)).not.toThrow();
+  it("is a no-op for an empty session", async () => {
+    // clearSession has deleted SESSION_A; append nothing; trim should not reject.
+    await expect(trim(SESSION_A, 10)).resolves.toBeUndefined();
   });
 
-  it("is a no-op when history is already within budget", () => {
-    appendTurn(SESSION_A, msg("user", "short"));
-    appendTurn(SESSION_A, msg("assistant", "reply"));
-    const lengthBefore = getHistory(SESSION_A).length;
+  it("is a no-op when history is already within budget", async () => {
+    await appendTurn(SESSION_A, msg("user", "short"));
+    await appendTurn(SESSION_A, msg("assistant", "reply"));
+    const lengthBefore = (await getHistory(SESSION_A)).length;
 
-    trim(SESSION_A, DEFAULT_HISTORY_TOKEN_BUDGET);
+    await trim(SESSION_A, DEFAULT_HISTORY_TOKEN_BUDGET);
 
-    expect(getHistory(SESSION_A)).toHaveLength(lengthBefore);
+    expect(await getHistory(SESSION_A)).toHaveLength(lengthBefore);
   });
 
-  it("removes oldest turns until estimateTokens is within budget", () => {
+  it("removes oldest turns until estimateTokens is within budget", async () => {
     // 10 large messages (5 user + 5 assistant), each ~400 chars ≈ 100+ tokens.
     for (let i = 0; i < 5; i++) {
-      appendTurn(SESSION_A, msg("user", "x".repeat(400)));
-      appendTurn(SESSION_A, msg("assistant", "y".repeat(400)));
+      await appendTurn(SESSION_A, msg("user", "x".repeat(400)));
+      await appendTurn(SESSION_A, msg("assistant", "y".repeat(400)));
     }
-    expect(getHistory(SESSION_A)).toHaveLength(10);
+    expect(await getHistory(SESSION_A)).toHaveLength(10);
 
     // Budget = 200 tokens → forces removal; each message is ~100+ tokens.
-    trim(SESSION_A, 200);
+    await trim(SESSION_A, 200);
 
-    const after = getHistory(SESSION_A);
+    const after = await getHistory(SESSION_A);
     expect(estimateTokens(after)).toBeLessThanOrEqual(200);
     // At least some messages were removed.
     expect(after.length).toBeLessThan(10);
   });
 
-  it("removes from the front (oldest), preserving the most recent turns", () => {
-    appendTurn(SESSION_A, msg("user", "first"));
-    appendTurn(SESSION_A, msg("assistant", "second"));
-    appendTurn(SESSION_A, msg("user", "third"));
-    appendTurn(SESSION_A, msg("assistant", "fourth"));
+  it("removes from the front (oldest), preserving the most recent turns", async () => {
+    await appendTurn(SESSION_A, msg("user", "first"));
+    await appendTurn(SESSION_A, msg("assistant", "second"));
+    await appendTurn(SESSION_A, msg("user", "third"));
+    await appendTurn(SESSION_A, msg("assistant", "fourth"));
 
     // Budget of 5 tokens:
     // "fourth" + "assistant" = 6 + 9 = 15 chars → ceil(15/4) = 4 tokens ≤ 5 → survives.
     // Earlier messages will be evicted to get the total ≤ 5.
-    trim(SESSION_A, 5);
+    await trim(SESSION_A, 5);
 
-    const contents = getHistory(SESSION_A).map((m) => m.content);
+    const contents = (await getHistory(SESSION_A)).map((m) => m.content);
     expect(contents).toContain("fourth"); // most recent survives
     expect(contents).not.toContain("first"); // oldest is gone
   });
 
-  it("removes all messages if even a single message exceeds the budget", () => {
+  it("removes all messages if even a single message exceeds the budget", async () => {
     // One very large message that alone exceeds the budget.
-    appendTurn(SESSION_A, msg("user", "x".repeat(1000))); // ~251 tokens
-    trim(SESSION_A, 10); // budget far below a single message
+    await appendTurn(SESSION_A, msg("user", "x".repeat(1000))); // ~251 tokens
+    await trim(SESSION_A, 10); // budget far below a single message
 
-    expect(getHistory(SESSION_A)).toEqual([]);
+    expect(await getHistory(SESSION_A)).toEqual([]);
     // estimateTokens of [] is 0 ≤ 10.
-    expect(estimateTokens(getHistory(SESSION_A))).toBeLessThanOrEqual(10);
+    expect(estimateTokens(await getHistory(SESSION_A))).toBeLessThanOrEqual(10);
   });
 
-  it("uses DEFAULT_HISTORY_TOKEN_BUDGET when called without a budget argument", () => {
-    appendTurn(SESSION_A, msg("user", "a small message"));
-    appendTurn(SESSION_A, msg("assistant", "a small reply"));
-    expect(() => trim(SESSION_A)).not.toThrow();
+  it("uses DEFAULT_HISTORY_TOKEN_BUDGET when called without a budget argument", async () => {
+    await appendTurn(SESSION_A, msg("user", "a small message"));
+    await appendTurn(SESSION_A, msg("assistant", "a small reply"));
+    await expect(trim(SESSION_A)).resolves.toBeUndefined();
     // Short messages are well within the default budget — nothing trimmed.
-    expect(getHistory(SESSION_A)).toHaveLength(2);
+    expect(await getHistory(SESSION_A)).toHaveLength(2);
   });
 
-  it("does not affect other sessions when trimming one session", () => {
+  it("does not affect other sessions when trimming one session", async () => {
     for (let i = 0; i < 5; i++) {
-      appendTurn(SESSION_A, msg("user", "x".repeat(400)));
-      appendTurn(SESSION_A, msg("assistant", "y".repeat(400)));
+      await appendTurn(SESSION_A, msg("user", "x".repeat(400)));
+      await appendTurn(SESSION_A, msg("assistant", "y".repeat(400)));
     }
-    appendTurn(SESSION_B, msg("user", "untouched"));
+    await appendTurn(SESSION_B, msg("user", "untouched"));
 
-    trim(SESSION_A, 200);
+    await trim(SESSION_A, 200);
 
-    expect(getHistory(SESSION_B)).toHaveLength(1);
-    expect(getHistory(SESSION_B)[0].content).toBe("untouched");
+    expect(await getHistory(SESSION_B)).toHaveLength(1);
+    expect((await getHistory(SESSION_B))[0].content).toBe("untouched");
   });
 });
 
 // ---------------------------------------------------------------------------
-// trimMessages (pure — shared by the guest in-memory path and the signed-in DB
+// trimMessages (pure — shared by both guest backends and the signed-in DB
 // path; trim() delegates to it)
 // ---------------------------------------------------------------------------
 
@@ -306,18 +314,18 @@ describe("trimMessages", () => {
     expect(trimMessages(messages)).toEqual(messages);
   });
 
-  it("matches what trim() applies to the live store (parity)", () => {
+  it("matches what trim() applies to the live store (parity)", async () => {
     const built: ChatMessage[] = [];
     for (let i = 0; i < 5; i++) {
       const u = msg("user", "x".repeat(400));
       const a = msg("assistant", "y".repeat(400));
       built.push(u, a);
-      appendTurn(SESSION_A, u);
-      appendTurn(SESSION_A, a);
+      await appendTurn(SESSION_A, u);
+      await appendTurn(SESSION_A, a);
     }
     const expected = trimMessages(built, 200);
-    trim(SESSION_A, 200);
-    expect(getHistory(SESSION_A)).toEqual(expected);
+    await trim(SESSION_A, 200);
+    expect(await getHistory(SESSION_A)).toEqual(expected);
   });
 });
 
@@ -326,33 +334,35 @@ describe("trimMessages", () => {
 // ---------------------------------------------------------------------------
 
 describe("clearSession", () => {
-  it("removes all history for the cleared session", () => {
-    appendTurn(SESSION_A, msg("user", "to be removed"));
-    appendTurn(SESSION_A, msg("assistant", "also removed"));
-    clearSession(SESSION_A);
-    expect(getHistory(SESSION_A)).toEqual([]);
+  it("removes all history for the cleared session", async () => {
+    await appendTurn(SESSION_A, msg("user", "to be removed"));
+    await appendTurn(SESSION_A, msg("assistant", "also removed"));
+    await clearSession(SESSION_A);
+    expect(await getHistory(SESSION_A)).toEqual([]);
   });
 
-  it("does not throw when clearing a session that does not exist", () => {
-    expect(() => clearSession("nonexistent-session-xyz")).not.toThrow();
+  it("does not reject when clearing a session that does not exist", async () => {
+    await expect(
+      clearSession("nonexistent-session-xyz"),
+    ).resolves.toBeUndefined();
   });
 
-  it("does not affect other sessions", () => {
-    appendTurn(SESSION_A, msg("user", "stay A"));
-    appendTurn(SESSION_B, msg("user", "stay B"));
-    clearSession(SESSION_A);
+  it("does not affect other sessions", async () => {
+    await appendTurn(SESSION_A, msg("user", "stay A"));
+    await appendTurn(SESSION_B, msg("user", "stay B"));
+    await clearSession(SESSION_A);
 
-    expect(getHistory(SESSION_A)).toEqual([]);
-    expect(getHistory(SESSION_B)).toHaveLength(1);
-    expect(getHistory(SESSION_B)[0].content).toBe("stay B");
+    expect(await getHistory(SESSION_A)).toEqual([]);
+    expect(await getHistory(SESSION_B)).toHaveLength(1);
+    expect((await getHistory(SESSION_B))[0].content).toBe("stay B");
   });
 
-  it("allows new turns to be appended after clearing", () => {
-    appendTurn(SESSION_A, msg("user", "old turn"));
-    clearSession(SESSION_A);
-    appendTurn(SESSION_A, msg("user", "fresh start"));
+  it("allows new turns to be appended after clearing", async () => {
+    await appendTurn(SESSION_A, msg("user", "old turn"));
+    await clearSession(SESSION_A);
+    await appendTurn(SESSION_A, msg("user", "fresh start"));
 
-    expect(getHistory(SESSION_A)).toEqual([
+    expect(await getHistory(SESSION_A)).toEqual([
       { role: "user", content: "fresh start" },
     ]);
   });
@@ -363,25 +373,25 @@ describe("clearSession", () => {
 // ---------------------------------------------------------------------------
 
 describe("activeSessionCount", () => {
-  it("increases when a new session is created via appendTurn", () => {
-    const before = activeSessionCount();
-    appendTurn(SESSION_A, msg("user", "hello"));
-    expect(activeSessionCount()).toBe(before + 1);
+  it("increases when a new session is created via appendTurn", async () => {
+    const before = await activeSessionCount();
+    await appendTurn(SESSION_A, msg("user", "hello"));
+    expect(await activeSessionCount()).toBe(before + 1);
   });
 
-  it("decreases when a session is cleared", () => {
-    appendTurn(SESSION_A, msg("user", "hello"));
-    const after = activeSessionCount();
-    clearSession(SESSION_A);
-    expect(activeSessionCount()).toBe(after - 1);
+  it("decreases when a session is cleared", async () => {
+    await appendTurn(SESSION_A, msg("user", "hello"));
+    const after = await activeSessionCount();
+    await clearSession(SESSION_A);
+    expect(await activeSessionCount()).toBe(after - 1);
   });
 
-  it("is not changed by trim (trim doesn't delete the session entry)", () => {
-    appendTurn(SESSION_A, msg("user", "x".repeat(1000)));
-    const before = activeSessionCount();
-    trim(SESSION_A, 10); // trims all messages but keeps the session key
+  it("is not changed by trim (trim doesn't delete the session entry)", async () => {
+    await appendTurn(SESSION_A, msg("user", "x".repeat(1000)));
+    const before = await activeSessionCount();
+    await trim(SESSION_A, 10); // trims all messages but keeps the session key
     // The store entry still exists (empty array), so count is unchanged.
-    expect(activeSessionCount()).toBe(before);
+    expect(await activeSessionCount()).toBe(before);
   });
 });
 
@@ -392,70 +402,78 @@ describe("activeSessionCount", () => {
 // ---------------------------------------------------------------------------
 
 describe("bounded store (C1)", () => {
-  beforeEach(() => _resetStoreForTests());
-  afterEach(() => _resetStoreForTests());
+  beforeEach(async () => {
+    await _resetStoreForTests();
+  });
+  afterEach(async () => {
+    await _resetStoreForTests();
+  });
 
-  it("caps resident sessions at SESSION_MAX_ENTRIES and evicts the least-recently-used", () => {
+  it("caps resident sessions at SESSION_MAX_ENTRIES and evicts the least-recently-used", async () => {
     const overflow = 50;
     // Increasing `now` keeps LRU order deterministic; all within one TTL so the
     // cap (not the TTL) is the evictor.
     for (let i = 0; i < SESSION_MAX_ENTRIES + overflow; i++) {
-      appendTurn(`s${i}`, msg("user", `turn ${i}`), i + 1);
+      await appendTurn(`s${i}`, msg("user", `turn ${i}`), i + 1);
     }
 
-    expect(activeSessionCount()).toBe(SESSION_MAX_ENTRIES);
+    expect(await activeSessionCount()).toBe(SESSION_MAX_ENTRIES);
     // The oldest (never re-touched) sessions were evicted...
-    expect(getHistory("s0", SESSION_MAX_ENTRIES + overflow + 1)).toEqual([]);
-    expect(getHistory(`s${overflow - 1}`, SESSION_MAX_ENTRIES + overflow + 1)).toEqual([]);
+    expect(await getHistory("s0", SESSION_MAX_ENTRIES + overflow + 1)).toEqual([]);
+    expect(
+      await getHistory(`s${overflow - 1}`, SESSION_MAX_ENTRIES + overflow + 1),
+    ).toEqual([]);
     // ...and the most recent survive.
     const newest = `s${SESSION_MAX_ENTRIES + overflow - 1}`;
-    expect(getHistory(newest, SESSION_MAX_ENTRIES + overflow + 1)).toHaveLength(1);
+    expect(
+      await getHistory(newest, SESSION_MAX_ENTRIES + overflow + 1),
+    ).toHaveLength(1);
   });
 
-  it("expires a session after SESSION_TTL_MS of inactivity", () => {
-    appendTurn(SESSION_A, msg("user", "hi"), 0);
+  it("expires a session after SESSION_TTL_MS of inactivity", async () => {
+    await appendTurn(SESSION_A, msg("user", "hi"), 0);
     // Exactly TTL elapsed → expired (>= semantics).
-    expect(getHistory(SESSION_A, SESSION_TTL_MS)).toEqual([]);
-    expect(activeSessionCount()).toBe(0);
+    expect(await getHistory(SESSION_A, SESSION_TTL_MS)).toEqual([]);
+    expect(await activeSessionCount()).toBe(0);
   });
 
-  it("keeps a session just under the idle TTL", () => {
-    appendTurn(SESSION_A, msg("user", "hi"), 0);
-    expect(getHistory(SESSION_A, SESSION_TTL_MS - 1)).toHaveLength(1);
+  it("keeps a session just under the idle TTL", async () => {
+    await appendTurn(SESSION_A, msg("user", "hi"), 0);
+    expect(await getHistory(SESSION_A, SESSION_TTL_MS - 1)).toHaveLength(1);
   });
 
-  it("a read refreshes the idle timer (active conversation stays resident)", () => {
-    appendTurn(SESSION_A, msg("user", "hi"), 0);
+  it("a read refreshes the idle timer (active conversation stays resident)", async () => {
+    await appendTurn(SESSION_A, msg("user", "hi"), 0);
     // Read just before expiry refreshes lastAccess...
-    expect(getHistory(SESSION_A, SESSION_TTL_MS - 1)).toHaveLength(1);
+    expect(await getHistory(SESSION_A, SESSION_TTL_MS - 1)).toHaveLength(1);
     // ...so a read one tick later (well within a fresh TTL window) still hits.
-    expect(getHistory(SESSION_A, SESSION_TTL_MS)).toHaveLength(1);
+    expect(await getHistory(SESSION_A, SESSION_TTL_MS)).toHaveLength(1);
   });
 
-  it("an actively-touched session survives cap eviction while an idle one is evicted", () => {
+  it("an actively-touched session survives cap eviction while an idle one is evicted", async () => {
     const HOT = "hot-session";
-    appendTurn(HOT, msg("user", "keep me"), 0);
+    await appendTurn(HOT, msg("user", "keep me"), 0);
     // Fill exactly to the cap with fresh sessions, touching HOT right before each
     // new session so it never becomes the least-recently-used.
     for (let i = 1; i <= SESSION_MAX_ENTRIES; i++) {
-      getHistory(HOT, i * 2 - 1); // refresh HOT
-      appendTurn(`s${i}`, msg("user", `turn ${i}`), i * 2); // new session → 1 over cap
+      await getHistory(HOT, i * 2 - 1); // refresh HOT
+      await appendTurn(`s${i}`, msg("user", `turn ${i}`), i * 2); // new session → 1 over cap
     }
 
     // HOT survived; the oldest never-re-touched session (s1) was evicted.
-    expect(getHistory(HOT, SESSION_MAX_ENTRIES * 2 + 1)).toHaveLength(1);
-    expect(getHistory("s1", SESSION_MAX_ENTRIES * 2 + 1)).toEqual([]);
-    expect(activeSessionCount()).toBe(SESSION_MAX_ENTRIES);
+    expect(await getHistory(HOT, SESSION_MAX_ENTRIES * 2 + 1)).toHaveLength(1);
+    expect(await getHistory("s1", SESSION_MAX_ENTRIES * 2 + 1)).toEqual([]);
+    expect(await activeSessionCount()).toBe(SESSION_MAX_ENTRIES);
   });
 
-  it("preserves the live history array reference across reordering", () => {
-    appendTurn(SESSION_A, msg("user", "one"), 1);
-    const live = getHistory(SESSION_A, 2); // capture the live array
-    appendTurn(SESSION_B, msg("user", "other"), 3); // touch another session (reorders)
-    appendTurn(SESSION_A, msg("assistant", "two"), 4); // get reorders A, then pushes
+  it("preserves the live history array reference across reordering (memory backend)", async () => {
+    await appendTurn(SESSION_A, msg("user", "one"), 1);
+    const live = await getHistory(SESSION_A, 2); // capture the live array
+    await appendTurn(SESSION_B, msg("user", "other"), 3); // touch another session (reorders)
+    await appendTurn(SESSION_A, msg("assistant", "two"), 4); // get reorders A, then pushes
 
     // Same underlying array reference; the new turn is visible on the captured one.
-    expect(getHistory(SESSION_A, 5)).toBe(live);
+    expect(await getHistory(SESSION_A, 5)).toBe(live);
     expect(live).toHaveLength(2);
   });
 });
@@ -467,56 +485,60 @@ describe("bounded store (C1)", () => {
 // ---------------------------------------------------------------------------
 
 describe("getSessionScope / setSessionScope", () => {
-  beforeEach(() => _resetStoreForTests());
-  afterEach(() => _resetStoreForTests());
-
-  it("returns undefined for a session with no stored scope", () => {
-    expect(getSessionScope(SESSION_A)).toBeUndefined();
+  beforeEach(async () => {
+    await _resetStoreForTests();
+  });
+  afterEach(async () => {
+    await _resetStoreForTests();
   });
 
-  it("round-trips a set scope back out of get", () => {
-    setSessionScope(SESSION_A, "gen-7");
-    expect(getSessionScope(SESSION_A)).toBe("gen-7");
+  it("returns undefined for a session with no stored scope", async () => {
+    expect(await getSessionScope(SESSION_A)).toBeUndefined();
   });
 
-  it("overwrites (switches) the sticky scope on a later set", () => {
-    setSessionScope(SESSION_A, "gen-7");
-    setSessionScope(SESSION_A, "scarlet-violet");
-    expect(getSessionScope(SESSION_A)).toBe("scarlet-violet");
+  it("round-trips a set scope back out of get", async () => {
+    await setSessionScope(SESSION_A, "gen-7");
+    expect(await getSessionScope(SESSION_A)).toBe("gen-7");
   });
 
-  it("keeps each session's scope isolated from the others", () => {
-    setSessionScope(SESSION_A, "gen-7");
-    setSessionScope(SESSION_B, "champions");
-
-    expect(getSessionScope(SESSION_A)).toBe("gen-7");
-    expect(getSessionScope(SESSION_B)).toBe("champions");
+  it("overwrites (switches) the sticky scope on a later set", async () => {
+    await setSessionScope(SESSION_A, "gen-7");
+    await setSessionScope(SESSION_A, "scarlet-violet");
+    expect(await getSessionScope(SESSION_A)).toBe("scarlet-violet");
   });
 
-  it("expires a stored scope after SESSION_TTL_MS of inactivity", () => {
-    setSessionScope(SESSION_A, "gen-8", 0);
+  it("keeps each session's scope isolated from the others", async () => {
+    await setSessionScope(SESSION_A, "gen-7");
+    await setSessionScope(SESSION_B, "champions");
+
+    expect(await getSessionScope(SESSION_A)).toBe("gen-7");
+    expect(await getSessionScope(SESSION_B)).toBe("champions");
+  });
+
+  it("expires a stored scope after SESSION_TTL_MS of inactivity", async () => {
+    await setSessionScope(SESSION_A, "gen-8", 0);
     // Exactly TTL elapsed → expired (>= semantics), same as the history store.
-    expect(getSessionScope(SESSION_A, SESSION_TTL_MS)).toBeUndefined();
+    expect(await getSessionScope(SESSION_A, SESSION_TTL_MS)).toBeUndefined();
   });
 
-  it("keeps a stored scope just under the idle TTL", () => {
-    setSessionScope(SESSION_A, "gen-8", 0);
-    expect(getSessionScope(SESSION_A, SESSION_TTL_MS - 1)).toBe("gen-8");
+  it("keeps a stored scope just under the idle TTL", async () => {
+    await setSessionScope(SESSION_A, "gen-8", 0);
+    expect(await getSessionScope(SESSION_A, SESSION_TTL_MS - 1)).toBe("gen-8");
   });
 
-  it("_resetStoreForTests clears stored scopes", () => {
-    setSessionScope(SESSION_A, "gen-6");
-    _resetStoreForTests();
-    expect(getSessionScope(SESSION_A)).toBeUndefined();
+  it("_resetStoreForTests clears stored scopes", async () => {
+    await setSessionScope(SESSION_A, "gen-6");
+    await _resetStoreForTests();
+    expect(await getSessionScope(SESSION_A)).toBeUndefined();
   });
 
-  it("is stored separately from message history (clearing history keeps scope)", () => {
-    setSessionScope(SESSION_A, "gen-5");
-    appendTurn(SESSION_A, msg("user", "hi"));
-    clearSession(SESSION_A);
+  it("is stored separately from message history (clearing history keeps scope)", async () => {
+    await setSessionScope(SESSION_A, "gen-5");
+    await appendTurn(SESSION_A, msg("user", "hi"));
+    await clearSession(SESSION_A);
 
     // clearSession wipes the message history only; the sticky scope survives.
-    expect(getHistory(SESSION_A)).toEqual([]);
-    expect(getSessionScope(SESSION_A)).toBe("gen-5");
+    expect(await getHistory(SESSION_A)).toEqual([]);
+    expect(await getSessionScope(SESSION_A)).toBe("gen-5");
   });
 });

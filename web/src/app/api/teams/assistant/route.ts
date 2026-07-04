@@ -205,8 +205,8 @@ export async function POST(req: Request): Promise<Response> {
   // 4) HISTORY — in-memory, namespaced, trimmed to the context budget. The
   //    current message is passed to the loop separately (never in history).
   const historyKey = storeKey(session_id);
-  trim(historyKey);
-  const history = [...getHistory(historyKey)];
+  await trim(historyKey);
+  const history = [...(await getHistory(historyKey))];
 
   const mode = modeForFormat(body.draft.format);
   const composedMessage = composeMessage(body);
@@ -298,8 +298,8 @@ export async function POST(req: Request): Promise<Response> {
           // fault leaves the session clean for a retry). Store the TYPED
           // message, not the draft preamble — the next turn attaches its own
           // live draft.
-          appendTurn(historyKey, { role: "user", content: body.message });
-          appendTurn(historyKey, {
+          await appendTurn(historyKey, { role: "user", content: body.message });
+          await appendTurn(historyKey, {
             role: "assistant",
             content: answer.answer_markdown,
           });

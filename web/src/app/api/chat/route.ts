@@ -407,9 +407,9 @@ export async function POST(req: Request): Promise<Response> {
       history = [];
     }
   } else {
-    trim(session_id);
-    history = [...getHistory(session_id)];
-    stickyFormat = getSessionScope(session_id); // guest sticky scope (GS-D3)
+    await trim(session_id);
+    history = [...(await getHistory(session_id))];
+    stickyFormat = await getSessionScope(session_id); // guest sticky scope (GS-D3)
   }
 
   // 3b. Resolve THIS turn's data scope (generation-scope GS-B / §3.4 step 3).
@@ -492,7 +492,23 @@ export async function POST(req: Request): Promise<Response> {
       }
     }
   } else {
-    setSessionScope(session_id, format);
+    // Guest → refresh the session's sticky scope every turn (cheap +
+    // idempotent). Fire-and-forget, same non-blocking discipline as the
+    // signed-in branch above — never on the user's critical path; a Redis
+    // write fault only logs (session-store's own fail-soft policy already
+    // covers the memory-backend case, where this never rejects).
+    const logScopePersistFailure = (err: unknown): void => {
+      logger.error(
+        {
+          event: "session_scope_persist_failed",
+          request_id: requestId,
+          session_id,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "oak_session_scope_persist_failed",
+      );
+    };
+    void setSessionScope(session_id, format).catch(logScopePersistFailure);
   }
 
   // 3c. Resolve the operator-selected active model (the ACTIVE_MODEL secret) and
@@ -729,8 +745,8 @@ export async function POST(req: Request): Promise<Response> {
           } else {
             // GUEST: in-memory session store, exactly as before (byte-identical
             // for text-only turns; image-only turns store the marker text).
-            appendTurn(session_id, { role: "user", content: userTurnText });
-            appendTurn(session_id, {
+            await appendTurn(session_id, { role: "user", content: userTurnText });
+            await appendTurn(session_id, {
               role: "assistant",
               content: answer.answer_markdown,
             });
