@@ -140,7 +140,7 @@ beforeEach(async () => {
   usage.recordTurn.mockResolvedValue(undefined);
   usage.recordAuthEvent.mockReset();
   usage.recordAuthEvent.mockResolvedValue(undefined);
-  _resetStoreForTests();
+  await _resetStoreForTests();
 });
 
 // --- Helpers ---------------------------------------------------------------
@@ -286,7 +286,7 @@ describe("POST /api/chat — turn recording", () => {
     // Guest (no account) → keyed by `ip:unknown`. Prime the window to the cap so
     // the next request trips the rate limit.
     for (let i = 0; i < GUEST_CONFIG.maxRequestsPerWindow; i++) {
-      checkRateLimit("ip:unknown", "x", GUEST_CONFIG);
+      await checkRateLimit("ip:unknown", "x", GUEST_CONFIG);
     }
 
     const limited = await post({ session_id: "rl1", message: "hi" });

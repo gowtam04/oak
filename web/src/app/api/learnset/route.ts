@@ -33,7 +33,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request): Promise<Response> {
   // Rate-limit BEFORE any dynamic import / DB work (EDGE-02) — public,
   // unauthenticated GET on the shared pool; shares the `pub:<ip>` bucket.
-  const gate = checkRateLimit(`pub:${clientIp(req)}`, "", PUBLIC_READ_CONFIG);
+  const gate = await checkRateLimit(`pub:${clientIp(req)}`, "", PUBLIC_READ_CONFIG);
   if (!gate.allowed) {
     const retryAfterMs =
       gate.reason === "rate_limited" ? gate.retryAfterMs : 0;

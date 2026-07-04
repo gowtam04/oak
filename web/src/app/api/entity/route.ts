@@ -39,7 +39,7 @@ export async function GET(req: Request): Promise<Response> {
   // Rate-limit BEFORE any dynamic import / DB work (EDGE-02) — this route is a
   // public, unauthenticated GET doing DB I/O on the shared pool. All four public
   // read routes share the `pub:<ip>` bucket (one per IP).
-  const gate = checkRateLimit(`pub:${clientIp(req)}`, "", PUBLIC_READ_CONFIG);
+  const gate = await checkRateLimit(`pub:${clientIp(req)}`, "", PUBLIC_READ_CONFIG);
   if (!gate.allowed) {
     const retryAfterMs =
       gate.reason === "rate_limited" ? gate.retryAfterMs : 0;

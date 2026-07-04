@@ -167,7 +167,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 2) RATE LIMIT — one signed-in tier, keyed by account (no guest branch).
-  const gate = checkRateLimit(
+  const gate = await checkRateLimit(
     `acct:${account.id}`,
     body.message,
     TEAMS_ASSISTANT_CONFIG,
