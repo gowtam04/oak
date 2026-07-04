@@ -61,7 +61,7 @@ beforeEach(async () => {
   cu.getCurrentAccount.mockReset();
   repo.getMessages.mockReset();
   repo.getMessages.mockResolvedValue([]);
-  resetRateLimit();
+  await resetRateLimit();
   vi.stubGlobal(
     "fetch",
     vi.fn(
@@ -74,8 +74,8 @@ beforeEach(async () => {
   );
 });
 
-afterEach(() => {
-  resetRateLimit();
+afterEach(async () => {
+  await resetRateLimit();
   vi.unstubAllGlobals();
 });
 
@@ -156,7 +156,7 @@ describe("POST /api/voice/token", () => {
   it("returns 429 once the per-account token window is exhausted", async () => {
     signedIn(ACCT);
     for (let i = 0; i < TOKEN_RL.maxRequestsPerWindow; i++) {
-      checkRateLimit(`acct:${ACCT}`, "", TOKEN_RL);
+      await checkRateLimit(`acct:${ACCT}`, "", TOKEN_RL);
     }
     const res = await post(body());
     expect(res.status).toBe(429);

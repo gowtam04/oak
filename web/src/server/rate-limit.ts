@@ -8,18 +8,38 @@
  *  2. Per-key fixed-window counter — reject requests that exceed
  *     maxRequestsPerWindow within the current windowMs window.
  *
- * The state lives in-process (a Map keyed by an opaque string).  Callers choose
- * the key namespace: the chat route keys signed-in users by `acct:<id>` and
- * guests by `ip:<addr>` so the two tiers count independently (BR-A8 — guest
- * sessions cannot pool into the account allowance).  A server restart resets all
- * counters — intentional for a single-instance hobby app.  Entries are evicted
- * lazily whenever their window resets, keeping the map small.
+ * Callers choose the key namespace: the chat route keys signed-in users by
+ * `acct:<id>` and guests by `ip:<addr>` so the two tiers count independently
+ * (BR-A8 — guest sessions cannot pool into the account allowance).
  *
- * There is no I/O and no async — call checkRateLimit synchronously at the top
- * of the request handler before any awaits.
+ * ## Dual backend (scaling-plan.md Phase 1)
+ *
+ * The per-key window counter lives in ONE of two backends, chosen per call by
+ * {@link getRedisClient}:
+ *
+ *  - **Memory** (`REDIS_URL` unset → `getRedisClient()` returns `null`): the
+ *    original process-local {@link BoundedStore} fixed-window logic, still
+ *    honoring an injected `now`. A restart resets all counters (fine for a
+ *    single-instance deploy); entries are evicted lazily as windows reset.
+ *  - **Redis** (`REDIS_URL` set): one atomic `INCR` + conditional `PEXPIRE` +
+ *    `PTTL` Lua script over the shared instance, so the window count is correct
+ *    across N machines. The Redis backend ignores the injected `now` (it relies
+ *    on the key's server-side TTL).
+ *
+ * The **input-length gate is synchronous and runs BEFORE any backend dispatch**
+ * — an oversized message never costs a Redis round-trip or creates a key.
+ *
+ * **Failure policy — fail OPEN.** Any Redis error returns `{ allowed: true }`.
+ * This is DELIBERATE: a soft abuse limiter must not take down all chat on a
+ * Redis blip, and the synchronous input-length gate still enforces regardless.
+ * (Contrast the OTP throttle, a security control, which fails CLOSED.)
  */
 
+import Redis from "ioredis";
+
 import { BoundedStore } from "@/server/bounded-store";
+import { logger } from "@/server/logger";
+import { deletePrefix, getRedisClient, RL_PREFIX } from "@/server/redis";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -165,25 +185,27 @@ const store = new BoundedStore<WindowState>({
  * Check whether the request keyed by `key` carrying `message` should be
  * allowed through.
  *
- * Checks are applied in order: input-length first (cheap string check), then
- * the rate-window counter.
+ * Checks are applied in order: input-length first (cheap synchronous string
+ * check, evaluated before any backend I/O), then the rate-window counter (memory
+ * or Redis backend per {@link getRedisClient}).
  *
  * @param key        The rate-limit bucket key.  The chat route passes an
  *                   auth-derived namespace (`acct:<id>` for signed-in users,
  *                   `ip:<addr>` for guests) so the tiers count independently.
  * @param message    The raw user message string from the POST body.
  * @param config     Optional overrides; defaults to DEFAULT_CONFIG.
- * @param now        Injectable clock (epoch ms) for deterministic testing.
- *                   Defaults to Date.now() in production.
+ * @param now        Injectable clock (epoch ms). Honored by the memory backend
+ *                   only; the Redis backend relies on server-side key TTLs.
  */
-export function checkRateLimit(
+export async function checkRateLimit(
   key: string,
   message: string,
   config: RateLimitConfig = DEFAULT_CONFIG,
   now: number = Date.now(),
-): RateLimitResult {
+): Promise<RateLimitResult> {
   // ------------------------------------------------------------------
-  // 1. Input-length cap
+  // 1. Input-length cap — synchronous, BEFORE any backend dispatch so an
+  //    oversized message never costs a Redis round-trip or creates a key.
   // ------------------------------------------------------------------
   if (message.length > config.maxInputLength) {
     return {
@@ -195,8 +217,25 @@ export function checkRateLimit(
   }
 
   // ------------------------------------------------------------------
-  // 2. Per-key fixed-window counter
+  // 2. Per-key fixed-window counter — memory or Redis backend.
   // ------------------------------------------------------------------
+  const client = getRedisClient();
+  if (client === null) {
+    return checkWindowMemory(key, config, now);
+  }
+  return checkWindowRedis(client, key, config);
+}
+
+/**
+ * Memory-backend fixed-window counter (honors the injected `now`). A missing or
+ * expired window starts fresh; an open window rejects at `count >= max` (so
+ * exactly `max` requests are admitted per window) and otherwise increments.
+ */
+function checkWindowMemory(
+  key: string,
+  config: RateLimitConfig,
+  now: number,
+): RateLimitResult {
   const state = store.get(key, now);
 
   // No prior state, or the window has expired → fresh window.
@@ -221,15 +260,94 @@ export function checkRateLimit(
 }
 
 // ---------------------------------------------------------------------------
+// Redis backend — one atomic INCR + conditional PEXPIRE + PTTL Lua script
+// ---------------------------------------------------------------------------
+
+/**
+ * Window counter. KEYS = [rlKey]; ARGV = [windowMs]. INCR the counter, set the
+ * window TTL on the FIRST hit only (so the window never slides), and report the
+ * new count plus the remaining TTL.
+ *
+ * Parity with the memory backend: the memory store rejects pre-increment at
+ * `count >= max` while this INCRs first and admits while `c <= max` — the SAME
+ * number of requests (`max`) is admitted per window. Unlike memory, a rejected
+ * request still INCRs the counter past `max`; that is harmless because PEXPIRE
+ * fires only on `c == 1`, so an over-cap INCR never extends the window.
+ */
+const WINDOW_LUA = `
+local c = redis.call('INCR', KEYS[1])
+if c == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
+local ttl = redis.call('PTTL', KEYS[1])
+return {c, ttl}
+`;
+
+/** ioredis client with the rate-limit window script attached via defineCommand. */
+interface RlRedis extends Redis {
+  rlWindow(rlKey: string, windowMs: string): Promise<[number, number]>;
+}
+
+// The client is a globalThis-memoized singleton that `_resetClientForTests` can
+// recreate; `defineCommand` throws if a command is redefined on the same
+// instance, so guard registration per-instance (a WeakSet forgets an old client
+// automatically once it's GC'd) — same idiom as the OTP throttle.
+const commandsRegistered = new WeakSet<Redis>();
+
+function withRlCommand(client: Redis): RlRedis {
+  if (!commandsRegistered.has(client)) {
+    client.defineCommand("rlWindow", { numberOfKeys: 1, lua: WINDOW_LUA });
+    commandsRegistered.add(client);
+  }
+  return client as RlRedis;
+}
+
+async function checkWindowRedis(
+  client: Redis,
+  key: string,
+  config: RateLimitConfig,
+): Promise<RateLimitResult> {
+  try {
+    const rl = withRlCommand(client);
+    const [count, ttl] = await rl.rlWindow(
+      `${RL_PREFIX}${key}`,
+      String(config.windowMs),
+    );
+    if (count <= config.maxRequestsPerWindow) {
+      return { allowed: true };
+    }
+    // PTTL is -1/-2 only in a narrow race (key expired between INCR and PTTL);
+    // fall back to the full window as the safe retry-after.
+    return {
+      allowed: false,
+      reason: "rate_limited",
+      retryAfterMs: ttl > 0 ? ttl : config.windowMs,
+    };
+  } catch (err) {
+    // Fail OPEN — deliberate: a soft abuse limiter must not take down all chat
+    // on a Redis blip. The synchronous input-length gate above still enforces.
+    // Never log the key or message content — only that an error occurred.
+    logger.error(
+      { event: "rate_limit_redis_error", err: err instanceof Error ? err.message : String(err) },
+      "oak_rate_limit_redis_error",
+    );
+    return { allowed: true };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Test helper (not part of the public surface — test files only)
 // ---------------------------------------------------------------------------
 
 /**
- * Wipe all per-session window state.  Call this in `beforeEach` / `afterEach`
- * to isolate test cases from each other.
+ * Wipe all per-session window state on BOTH backends. Call in `beforeEach` /
+ * `afterEach` to isolate cases: always clears the in-process store, and — when
+ * Redis is configured — additionally deletes every `oak:rl:*` key.
  *
  * @internal
  */
-export function _resetStoreForTests(): void {
+export async function _resetStoreForTests(): Promise<void> {
   store.clear();
+  const client = getRedisClient();
+  if (client) {
+    await deletePrefix(client, RL_PREFIX);
+  }
 }

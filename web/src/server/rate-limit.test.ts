@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // mirroring test/api-chat.integration.test.ts. `checkRateLimit` itself is left
 // REAL but wrapped in a recording spy, so the route's (key, config) arguments
 // can be asserted while the genuine fixed-window logic still runs (the direct
-// unit suites in this file exercise that same real implementation).
+// unit suites in this file exercise that same real implementation). The spy now
+// wraps an ASYNC fn (the dual-backend seam) — the route awaits it and the arg
+// assertions are recorded synchronously on call, so they stay valid.
 const {
   mockRunOak,
   mockCreateAgentContext,
@@ -67,6 +69,9 @@ const SMALL_CONFIG: RateLimitConfig = {
 };
 
 // Convenience: call checkRateLimit with SMALL_CONFIG and an injectable clock.
+// Returns the Promise<RateLimitResult> — callers `await` it. REDIS_URL is unset
+// in this suite, so every call routes through the MEMORY backend (which honors
+// the injected `now`).
 function check(
   sessionId: string,
   message: string,
@@ -91,51 +96,51 @@ afterEach(() => _resetStoreForTests());
 // ---------------------------------------------------------------------------
 
 describe("bounded store (C1)", () => {
-  it("LRU-evicts a stale key once the store exceeds its cap, resetting its window", () => {
+  it("LRU-evicts a stale key once the store exceeds its cap, resetting its window", async () => {
     // Drive k0 to its per-window cap so it is currently rate-limited.
     for (let i = 0; i < SMALL_CONFIG.maxRequestsPerWindow; i++) {
-      expect(check("k0", SHORT_MSG, 0).allowed).toBe(true);
+      expect((await check("k0", SHORT_MSG, 0)).allowed).toBe(true);
     }
-    expect(check("k0", SHORT_MSG, 0).allowed).toBe(false); // at cap → rejected
+    expect((await check("k0", SHORT_MSG, 0)).allowed).toBe(false); // at cap → rejected
 
     // Insert RL_MAX_ENTRIES distinct fresh keys (all at the same instant, so the
     // least-recently-used entry is k0). This pushes the store one over its cap
     // and evicts k0.
     for (let i = 0; i < RL_MAX_ENTRIES; i++) {
-      check(`bulk-${i}`, SHORT_MSG, 0);
+      await check(`bulk-${i}`, SHORT_MSG, 0);
     }
 
     // k0 was evicted → its counter is gone → a fresh window (allowed again),
     // proving the store is bounded rather than retaining k0 forever.
-    expect(check("k0", SHORT_MSG, 0).allowed).toBe(true);
+    expect((await check("k0", SHORT_MSG, 0)).allowed).toBe(true);
   });
 
-  it("does not throw when far more than the cap of distinct keys are seen", () => {
-    expect(() => {
-      for (let i = 0; i < RL_MAX_ENTRIES + 500; i++) {
-        check(`k-${i}`, SHORT_MSG, 0);
-      }
-    }).not.toThrow();
-  });
-
-  it("a key idle past the window/TTL starts a fresh window", () => {
-    for (let i = 0; i < SMALL_CONFIG.maxRequestsPerWindow; i++) {
-      check("k0", SHORT_MSG, 0);
+  it("does not throw when far more than the cap of distinct keys are seen", async () => {
+    // Reaching the end without a throw is the assertion.
+    for (let i = 0; i < RL_MAX_ENTRIES + 500; i++) {
+      await check(`k-${i}`, SHORT_MSG, 0);
     }
-    expect(check("k0", SHORT_MSG, 0).allowed).toBe(false); // at cap within window
+    expect(true).toBe(true);
+  });
+
+  it("a key idle past the window/TTL starts a fresh window", async () => {
+    for (let i = 0; i < SMALL_CONFIG.maxRequestsPerWindow; i++) {
+      await check("k0", SHORT_MSG, 0);
+    }
+    expect((await check("k0", SHORT_MSG, 0)).allowed).toBe(false); // at cap within window
     // After RL_TTL_MS of inactivity the key is idle-evicted; the next call sees
     // no prior state → fresh window.
-    expect(check("k0", SHORT_MSG, RL_TTL_MS).allowed).toBe(true);
+    expect((await check("k0", SHORT_MSG, RL_TTL_MS)).allowed).toBe(true);
   });
 
-  it("keeps a rejected key resident mid-window (not evicted between attempts)", () => {
+  it("keeps a rejected key resident mid-window (not evicted between attempts)", async () => {
     for (let i = 0; i < SMALL_CONFIG.maxRequestsPerWindow; i++) {
-      check("k0", SHORT_MSG, 0);
+      await check("k0", SHORT_MSG, 0);
     }
     // Repeated attempts still inside the 10s window keep returning rate_limited —
     // the entry is refreshed on each read, never dropped mid-window.
-    expect(check("k0", SHORT_MSG, 1_000).allowed).toBe(false);
-    expect(check("k0", SHORT_MSG, 5_000).allowed).toBe(false);
+    expect((await check("k0", SHORT_MSG, 1_000)).allowed).toBe(false);
+    expect((await check("k0", SHORT_MSG, 5_000)).allowed).toBe(false);
   });
 });
 
@@ -144,15 +149,15 @@ describe("bounded store (C1)", () => {
 // ---------------------------------------------------------------------------
 
 describe("input-length cap", () => {
-  it("allows a message exactly at the limit", () => {
+  it("allows a message exactly at the limit", async () => {
     const msg = "a".repeat(SMALL_CONFIG.maxInputLength);
-    const result = check("sess-1", msg, 0);
+    const result = await check("sess-1", msg, 0);
     expect(result.allowed).toBe(true);
   });
 
-  it("rejects a message one character over the limit", () => {
+  it("rejects a message one character over the limit", async () => {
     const msg = "a".repeat(SMALL_CONFIG.maxInputLength + 1);
-    const result = check("sess-1", msg, 0);
+    const result = await check("sess-1", msg, 0);
     expect(result.allowed).toBe(false);
     if (!result.allowed && result.reason === "input_too_long") {
       expect(result.maxLength).toBe(SMALL_CONFIG.maxInputLength);
@@ -164,9 +169,9 @@ describe("input-length cap", () => {
     }
   });
 
-  it("rejects a very long message and reports correct lengths", () => {
+  it("rejects a very long message and reports correct lengths", async () => {
     const msg = "x".repeat(5_000);
-    const result = check("sess-1", msg, 0);
+    const result = await check("sess-1", msg, 0);
     expect(result.allowed).toBe(false);
     if (!result.allowed && result.reason === "input_too_long") {
       expect(result.actualLength).toBe(5_000);
@@ -175,8 +180,8 @@ describe("input-length cap", () => {
     }
   });
 
-  it("allows an empty message (length 0)", () => {
-    const result = check("sess-1", "", 0);
+  it("allows an empty message (length 0)", async () => {
+    const result = await check("sess-1", "", 0);
     expect(result.allowed).toBe(true);
   });
 });
@@ -186,41 +191,41 @@ describe("input-length cap", () => {
 // ---------------------------------------------------------------------------
 
 describe("per-session fixed-window counter", () => {
-  it("allows the first request", () => {
-    expect(check("sess-1", SHORT_MSG, 0).allowed).toBe(true);
+  it("allows the first request", async () => {
+    expect((await check("sess-1", SHORT_MSG, 0)).allowed).toBe(true);
   });
 
-  it("allows requests up to the limit within the window", () => {
+  it("allows requests up to the limit within the window", async () => {
     const limit = SMALL_CONFIG.maxRequestsPerWindow;
     for (let i = 0; i < limit; i++) {
-      expect(check("sess-1", SHORT_MSG, i * 100).allowed).toBe(true);
+      expect((await check("sess-1", SHORT_MSG, i * 100)).allowed).toBe(true);
     }
   });
 
-  it("blocks the request immediately after hitting the limit", () => {
+  it("blocks the request immediately after hitting the limit", async () => {
     const limit = SMALL_CONFIG.maxRequestsPerWindow;
     for (let i = 0; i < limit; i++) {
-      check("sess-1", SHORT_MSG, i * 100);
+      await check("sess-1", SHORT_MSG, i * 100);
     }
-    const result = check("sess-1", SHORT_MSG, limit * 100);
+    const result = await check("sess-1", SHORT_MSG, limit * 100);
     expect(result.allowed).toBe(false);
     if (!result.allowed) {
       expect(result.reason).toBe("rate_limited");
     }
   });
 
-  it("reports a positive retryAfterMs that decays toward zero", () => {
+  it("reports a positive retryAfterMs that decays toward zero", async () => {
     const { maxRequestsPerWindow, windowMs } = SMALL_CONFIG;
     const windowStart = 0;
 
     // Fill the window.
     for (let i = 0; i < maxRequestsPerWindow; i++) {
-      check("sess-1", SHORT_MSG, windowStart + i * 100);
+      await check("sess-1", SHORT_MSG, windowStart + i * 100);
     }
 
     // Query 1 s into the window.
     const t1 = 1_000;
-    const r1 = check("sess-1", SHORT_MSG, t1);
+    const r1 = await check("sess-1", SHORT_MSG, t1);
     expect(r1.allowed).toBe(false);
     if (!r1.allowed && r1.reason === "rate_limited") {
       expect(r1.retryAfterMs).toBe(windowMs - t1);
@@ -228,7 +233,7 @@ describe("per-session fixed-window counter", () => {
 
     // Query 5 s into the window — retryAfterMs should be smaller.
     const t2 = 5_000;
-    const r2 = check("sess-1", SHORT_MSG, t2);
+    const r2 = await check("sess-1", SHORT_MSG, t2);
     expect(r2.allowed).toBe(false);
     if (!r2.allowed && r2.reason === "rate_limited") {
       expect(r2.retryAfterMs).toBe(windowMs - t2);
@@ -245,28 +250,28 @@ describe("per-session fixed-window counter", () => {
     }
   });
 
-  it("resets the counter after the window expires", () => {
+  it("resets the counter after the window expires", async () => {
     const { maxRequestsPerWindow, windowMs } = SMALL_CONFIG;
 
     // Fill window starting at t=0.
     for (let i = 0; i < maxRequestsPerWindow; i++) {
-      check("sess-1", SHORT_MSG, i * 100);
+      await check("sess-1", SHORT_MSG, i * 100);
     }
-    expect(check("sess-1", SHORT_MSG, 500).allowed).toBe(false);
+    expect((await check("sess-1", SHORT_MSG, 500)).allowed).toBe(false);
 
     // Advance past the window boundary.
     const afterWindow = windowMs + 1;
-    expect(check("sess-1", SHORT_MSG, afterWindow).allowed).toBe(true);
+    expect((await check("sess-1", SHORT_MSG, afterWindow)).allowed).toBe(true);
 
     // The fresh window allows up to the limit again.
     for (let i = 1; i < maxRequestsPerWindow; i++) {
-      expect(check("sess-1", SHORT_MSG, afterWindow + i * 100).allowed).toBe(
-        true,
-      );
+      expect(
+        (await check("sess-1", SHORT_MSG, afterWindow + i * 100)).allowed,
+      ).toBe(true);
     }
     // One beyond the new limit is blocked.
     expect(
-      check("sess-1", SHORT_MSG, afterWindow + maxRequestsPerWindow * 100)
+      (await check("sess-1", SHORT_MSG, afterWindow + maxRequestsPerWindow * 100))
         .allowed,
     ).toBe(false);
   });
@@ -277,36 +282,36 @@ describe("per-session fixed-window counter", () => {
 // ---------------------------------------------------------------------------
 
 describe("session isolation", () => {
-  it("tracks separate counters for different session IDs", () => {
+  it("tracks separate counters for different session IDs", async () => {
     const { maxRequestsPerWindow } = SMALL_CONFIG;
 
     // Fill session A.
     for (let i = 0; i < maxRequestsPerWindow; i++) {
-      check("sess-A", SHORT_MSG, i * 100);
+      await check("sess-A", SHORT_MSG, i * 100);
     }
     // Session A is now rate-limited.
-    expect(check("sess-A", SHORT_MSG, maxRequestsPerWindow * 100).allowed).toBe(
-      false,
-    );
+    expect(
+      (await check("sess-A", SHORT_MSG, maxRequestsPerWindow * 100)).allowed,
+    ).toBe(false);
     // Session B is unaffected.
-    expect(check("sess-B", SHORT_MSG, maxRequestsPerWindow * 100).allowed).toBe(
-      true,
-    );
+    expect(
+      (await check("sess-B", SHORT_MSG, maxRequestsPerWindow * 100)).allowed,
+    ).toBe(true);
   });
 
-  it("two sessions can both exhaust their own limits independently", () => {
+  it("two sessions can both exhaust their own limits independently", async () => {
     const { maxRequestsPerWindow } = SMALL_CONFIG;
 
     for (let i = 0; i < maxRequestsPerWindow; i++) {
-      check("sess-X", SHORT_MSG, i * 10);
-      check("sess-Y", SHORT_MSG, i * 10);
+      await check("sess-X", SHORT_MSG, i * 10);
+      await check("sess-Y", SHORT_MSG, i * 10);
     }
-    expect(check("sess-X", SHORT_MSG, maxRequestsPerWindow * 10).allowed).toBe(
-      false,
-    );
-    expect(check("sess-Y", SHORT_MSG, maxRequestsPerWindow * 10).allowed).toBe(
-      false,
-    );
+    expect(
+      (await check("sess-X", SHORT_MSG, maxRequestsPerWindow * 10)).allowed,
+    ).toBe(false);
+    expect(
+      (await check("sess-Y", SHORT_MSG, maxRequestsPerWindow * 10)).allowed,
+    ).toBe(false);
   });
 });
 
@@ -321,13 +326,13 @@ describe("DEFAULT_CONFIG", () => {
     expect(DEFAULT_CONFIG.windowMs).toBeGreaterThanOrEqual(10_000);
   });
 
-  it("allows a typical short Pokémon question with the default config", () => {
-    const result = checkRateLimit(
+  it("allows a typical short Pokémon question with the default config", async () => {
+    const result = await checkRateLimit(
       "sess-default",
       "What are all the Water-type Pokemon with speed above 100?",
     );
     expect(result.allowed).toBe(true);
-    _resetStoreForTests();
+    await _resetStoreForTests();
   });
 });
 
@@ -336,32 +341,32 @@ describe("DEFAULT_CONFIG", () => {
 // ---------------------------------------------------------------------------
 
 describe("edge cases", () => {
-  it("retryAfterMs is clamped to 0 when called at the exact window boundary", () => {
+  it("retryAfterMs is clamped to 0 when called at the exact window boundary", async () => {
     const { maxRequestsPerWindow, windowMs } = SMALL_CONFIG;
 
     // Fill the window starting at t=0.
     for (let i = 0; i < maxRequestsPerWindow; i++) {
-      check("sess-edge", SHORT_MSG, 0);
+      await check("sess-edge", SHORT_MSG, 0);
     }
 
     // Call exactly at the window end — should start a new window.
     const atBoundary = windowMs;
-    const result = check("sess-edge", SHORT_MSG, atBoundary);
+    const result = await check("sess-edge", SHORT_MSG, atBoundary);
     // The window has expired (now - windowStart === windowMs), so a new
     // window starts and the request is allowed.
     expect(result.allowed).toBe(true);
   });
 
-  it("input-length check precedes the rate-limit check", () => {
+  it("input-length check precedes the rate-limit check", async () => {
     // Exhaust the rate limit first.
     const { maxRequestsPerWindow } = SMALL_CONFIG;
     for (let i = 0; i < maxRequestsPerWindow; i++) {
-      check("sess-order", SHORT_MSG, i * 10);
+      await check("sess-order", SHORT_MSG, i * 10);
     }
 
     // Now send an oversized message — should fail on length, not rate limit.
     const oversized = "z".repeat(SMALL_CONFIG.maxInputLength + 100);
-    const result = check("sess-order", oversized, maxRequestsPerWindow * 10);
+    const result = await check("sess-order", oversized, maxRequestsPerWindow * 10);
     expect(result.allowed).toBe(false);
     if (!result.allowed) {
       expect(result.reason).toBe("input_too_long");
@@ -407,34 +412,34 @@ describe("tiered chat configs", () => {
 describe("independent per-key counters across tiers", () => {
   const MSG = "Which Pokemon learn earthquake?"; // well under either input cap
 
-  it("enforces the guest cap exactly: 20 allowed, then blocked (AC-1.3)", () => {
+  it("enforces the guest cap exactly: 20 allowed, then blocked (AC-1.3)", async () => {
     for (let i = 0; i < GUEST_CONFIG.maxRequestsPerWindow; i++) {
-      expect(checkRateLimit("ip:1.1.1.1", MSG, GUEST_CONFIG, i).allowed).toBe(
-        true,
-      );
-    }
-    const blocked = checkRateLimit("ip:1.1.1.1", MSG, GUEST_CONFIG, 500);
-    expect(blocked.allowed).toBe(false);
-    if (!blocked.allowed) expect(blocked.reason).toBe("rate_limited");
-  });
-
-  it("enforces the higher signed-in cap exactly: 60 allowed, then blocked (AC-7.1)", () => {
-    for (let i = 0; i < SIGNED_IN_CONFIG.maxRequestsPerWindow; i++) {
       expect(
-        checkRateLimit("acct:a1", MSG, SIGNED_IN_CONFIG, i).allowed,
+        (await checkRateLimit("ip:1.1.1.1", MSG, GUEST_CONFIG, i)).allowed,
       ).toBe(true);
     }
-    const blocked = checkRateLimit("acct:a1", MSG, SIGNED_IN_CONFIG, 9_999);
+    const blocked = await checkRateLimit("ip:1.1.1.1", MSG, GUEST_CONFIG, 500);
     expect(blocked.allowed).toBe(false);
     if (!blocked.allowed) expect(blocked.reason).toBe("rate_limited");
   });
 
-  it("a guest bucket cannot pool into the account tier — exhausting ip:<x> leaves acct:<y> fully available (AC-7.3, BR-A8)", () => {
+  it("enforces the higher signed-in cap exactly: 60 allowed, then blocked (AC-7.1)", async () => {
+    for (let i = 0; i < SIGNED_IN_CONFIG.maxRequestsPerWindow; i++) {
+      expect(
+        (await checkRateLimit("acct:a1", MSG, SIGNED_IN_CONFIG, i)).allowed,
+      ).toBe(true);
+    }
+    const blocked = await checkRateLimit("acct:a1", MSG, SIGNED_IN_CONFIG, 9_999);
+    expect(blocked.allowed).toBe(false);
+    if (!blocked.allowed) expect(blocked.reason).toBe("rate_limited");
+  });
+
+  it("a guest bucket cannot pool into the account tier — exhausting ip:<x> leaves acct:<y> fully available (AC-7.3, BR-A8)", async () => {
     // Exhaust the guest IP bucket completely.
     for (let i = 0; i < GUEST_CONFIG.maxRequestsPerWindow; i++) {
-      checkRateLimit("ip:9.9.9.9", MSG, GUEST_CONFIG, i);
+      await checkRateLimit("ip:9.9.9.9", MSG, GUEST_CONFIG, i);
     }
-    const guestBlocked = checkRateLimit("ip:9.9.9.9", MSG, GUEST_CONFIG, 500);
+    const guestBlocked = await checkRateLimit("ip:9.9.9.9", MSG, GUEST_CONFIG, 500);
     expect(guestBlocked.allowed).toBe(false);
     if (!guestBlocked.allowed) expect(guestBlocked.reason).toBe("rate_limited");
 
@@ -442,10 +447,11 @@ describe("independent per-key counters across tiers", () => {
     // still good for its full, higher allowance.
     for (let i = 0; i < SIGNED_IN_CONFIG.maxRequestsPerWindow; i++) {
       expect(
-        checkRateLimit("acct:owner", MSG, SIGNED_IN_CONFIG, 600 + i).allowed,
+        (await checkRateLimit("acct:owner", MSG, SIGNED_IN_CONFIG, 600 + i))
+          .allowed,
       ).toBe(true);
     }
-    const acctBlocked = checkRateLimit(
+    const acctBlocked = await checkRateLimit(
       "acct:owner",
       MSG,
       SIGNED_IN_CONFIG,
@@ -455,18 +461,18 @@ describe("independent per-key counters across tiers", () => {
     if (!acctBlocked.allowed) expect(acctBlocked.reason).toBe("rate_limited");
   });
 
-  it("two distinct guest IPs are limited independently — spawning guest sessions does not borrow allowance (AC-7.3)", () => {
+  it("two distinct guest IPs are limited independently — spawning guest sessions does not borrow allowance (AC-7.3)", async () => {
     for (let i = 0; i < GUEST_CONFIG.maxRequestsPerWindow; i++) {
-      checkRateLimit("ip:2.2.2.2", MSG, GUEST_CONFIG, i);
+      await checkRateLimit("ip:2.2.2.2", MSG, GUEST_CONFIG, i);
     }
     // ip:2.2.2.2 is exhausted...
-    const exhausted = checkRateLimit("ip:2.2.2.2", MSG, GUEST_CONFIG, 500);
+    const exhausted = await checkRateLimit("ip:2.2.2.2", MSG, GUEST_CONFIG, 500);
     expect(exhausted.allowed).toBe(false);
     if (!exhausted.allowed) expect(exhausted.reason).toBe("rate_limited");
     // ...but a different guest IP starts fresh (independent counter).
-    expect(checkRateLimit("ip:3.3.3.3", MSG, GUEST_CONFIG, 500).allowed).toBe(
-      true,
-    );
+    expect(
+      (await checkRateLimit("ip:3.3.3.3", MSG, GUEST_CONFIG, 500)).allowed,
+    ).toBe(true);
   });
 });
 

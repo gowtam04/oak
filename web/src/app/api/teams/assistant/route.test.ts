@@ -109,12 +109,12 @@ beforeEach(async () => {
 
   mockBuildBuilderHooks.mockClear();
 
-  resetRateLimit();
+  await resetRateLimit();
   await resetSessionStore();
 });
 
 afterEach(async () => {
-  resetRateLimit();
+  await resetRateLimit();
   await resetSessionStore();
 });
 
@@ -203,7 +203,7 @@ describe("POST /api/teams/assistant — rate limiting (signed-in only, keyed acc
   it("returns 429 after the request window is exhausted", async () => {
     signedIn(ACCT_A);
     for (let i = 0; i < TEAMS_ASSISTANT_CONFIG.maxRequestsPerWindow; i++) {
-      checkRateLimit(`acct:${ACCT_A}`, "x", TEAMS_ASSISTANT_CONFIG);
+      await checkRateLimit(`acct:${ACCT_A}`, "x", TEAMS_ASSISTANT_CONFIG);
     }
     const res = await post(body());
     expect(res.status).toBe(429);

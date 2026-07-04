@@ -151,9 +151,9 @@ function rawOf(events: SseEvent[]): string {
   return JSON.stringify(events);
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   mockRunOak.mockReset();
-  _resetStoreForTests();
+  await _resetStoreForTests();
   process.env.ANTHROPIC_API_KEY = SECRET;
 });
 

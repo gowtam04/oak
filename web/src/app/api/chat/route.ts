@@ -288,7 +288,7 @@ export async function POST(req: Request): Promise<Response> {
     : `ip:${clientIp(req)}`;
   const rateLimitConfig = account ? SIGNED_IN_CONFIG : GUEST_CONFIG;
 
-  const gate = checkRateLimit(rateLimitKey, message, rateLimitConfig);
+  const gate = await checkRateLimit(rateLimitKey, message, rateLimitConfig);
   if (!gate.allowed) {
     if (gate.reason === "input_too_long") {
       return jsonError(

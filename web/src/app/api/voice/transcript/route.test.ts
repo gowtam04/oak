@@ -48,9 +48,9 @@ afterAll(async () => {
   await fix?.cleanup();
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   cu.getCurrentAccount.mockReset();
-  resetRateLimit();
+  await resetRateLimit();
 });
 afterEach(() => resetRateLimit());
 

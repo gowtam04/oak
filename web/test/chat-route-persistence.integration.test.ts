@@ -90,7 +90,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  _resetStoreForTests();
+  await _resetStoreForTests();
   capturedHistories.length = 0;
   capturedModes.length = 0;
   nextAnswer = makeAnswer("default answer");

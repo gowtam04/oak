@@ -116,7 +116,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 2) RATE LIMIT — one signed-in tier, keyed by account.
-  const gate = checkRateLimit(
+  const gate = await checkRateLimit(
     `acct:${account.id}`,
     "",
     VOICE_TRANSCRIPT_RATE_LIMIT,
