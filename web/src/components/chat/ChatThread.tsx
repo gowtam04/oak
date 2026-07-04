@@ -90,17 +90,17 @@ export default function ChatThread({
 }: ChatThreadProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
 
-  // Empty-state starter chips: show a fresh random 4 each time the empty state
+  // Empty-state starter chips: show a fresh random 6 each time the empty state
   // appears (page load, or returning to it after a "new chat" resets `turns`),
   // so a user discovers Oak's full range over repeated visits. The initial value
-  // is the deterministic first-4 so the server render and first client render
+  // is the deterministic first-6 so the server render and first client render
   // match (this is a Client Component — `Math.random()` at render time would
   // hydration-mismatch); the post-mount effect then swaps in the random set.
   const [examples, setExamples] = useState<string[]>(() =>
-    STARTER_PROMPTS.slice(0, 4),
+    STARTER_PROMPTS.slice(0, 6),
   );
   useEffect(() => {
-    if (showEmptyState) setExamples(pickRandomPrompts(4));
+    if (showEmptyState) setExamples(pickRandomPrompts(6));
   }, [showEmptyState]);
 
   // Auto-scroll to the newest content (new turn / streamed token) — important on

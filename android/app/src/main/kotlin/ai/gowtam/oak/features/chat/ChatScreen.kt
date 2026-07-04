@@ -468,22 +468,18 @@ private fun ErrorBannerRow(banner: ErrorBanner, onRetry: () -> Unit) {
 // Empty state
 // ---------------------------------------------------------------------------
 
-/** The four seed prompts offered on an empty thread — mirrors iOS's `exampleQuestions`. */
-private val exampleQuestions = listOf(
-    "What's Garchomp's best moveset?",
-    "Who outspeeds Dragapult?",
-    "Where do I get HM Fly in HeartGold?",
-    "Who leads the guild in Pokémon Mystery Dungeon Explorers?",
-)
-
 /**
- * A branded empty state: a title + description and three example-question chips (a tap
+ * A branded empty state: a title + description and four example-question chips (a tap
  * sends the text verbatim as the first user turn), plus a scope hint naming the header
- * chip as the interactive scope control. Mirrors iOS `ChatView.emptyState`.
+ * chip as the interactive scope control. The four chips are sampled fresh from
+ * [ExamplePrompts.pool] each time this composable enters composition — a new chat or
+ * app relaunch reshuffles them; `remember` keeps them stable while the empty state
+ * stays on screen. Mirrors iOS `ChatView.emptyState`.
  */
 @Composable
 private fun EmptyState(onExampleTap: (String) -> Unit) {
     val oak = LocalOakColors.current
+    val examples = remember { ExamplePrompts.pick(4) }
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = OakSpacing.xxl, bottom = OakSpacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -503,7 +499,7 @@ private fun EmptyState(onExampleTap: (String) -> Unit) {
         )
         Spacer(Modifier.height(OakSpacing.lg))
         Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
-            for (question in exampleQuestions) {
+            for (question in examples) {
                 Text(
                     text = question,
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),

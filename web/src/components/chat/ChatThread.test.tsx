@@ -63,17 +63,17 @@ describe("ChatThread — in-flight streaming bubble", () => {
 });
 
 describe("ChatThread — empty-state starter chips", () => {
-  it("renders exactly 4 starter chips, each drawn from the prompt pool", () => {
+  it("renders exactly 6 starter chips, each drawn from the prompt pool", () => {
     render(<ChatThread {...props({ turns: [], status: "idle" })} />);
     const chips = screen.getAllByTestId("chat-empty-example");
-    // After mount the effect swaps the deterministic first-4 for a random 4.
-    expect(chips).toHaveLength(4);
+    // After mount the effect swaps the deterministic first-6 for a random 6.
+    expect(chips).toHaveLength(6);
     for (const chip of chips) {
       expect(STARTER_PROMPTS).toContain(chip.textContent);
     }
     // No duplicates within the shown set (sampled without replacement).
     const shown = chips.map((c) => c.textContent);
-    expect(new Set(shown).size).toBe(4);
+    expect(new Set(shown).size).toBe(6);
   });
 
   it("shows no starter chips once the conversation has turns", () => {

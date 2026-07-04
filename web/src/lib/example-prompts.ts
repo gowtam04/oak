@@ -17,6 +17,12 @@
  * name in chat ("how's my rain team?"): a build chip always produces a team, and
  * "how does my team look?" leads Oak to read the user's saved teams (or, with
  * none / for a guest, offer to build one) — an on-scope reply, never a decline.
+ *
+ * This pool is the single canonical source — iOS
+ * (`ios/OakApp/Features/Chat/ExamplePrompts.swift`) and Android
+ * (`android/app/src/main/kotlin/ai/gowtam/oak/features/chat/ExamplePrompts.kt`)
+ * each mirror it verbatim (same entries, same order) since there is no shared
+ * package between the three clients. Keep all three in sync when editing.
  */
 export const STARTER_PROMPTS: string[] = [
   // Lookups / profiles
@@ -86,6 +92,26 @@ export const STARTER_PROMPTS: string[] = [
   "How many Pokémon are purple?",
   "What are the most populous cities in the mainline games?",
   "Name all the Route 1 birds",
+  // Generation scopes (gen 5–8 are fully indexed formats)
+  "Was Excadrill good in Gen 5?",
+  "What could Aegislash learn in Gen 6?",
+  "Best Steel types in Gen 7?",
+  "Did Garchomp get Scale Shot in Gen 8?",
+  // In-game progression / version exclusives
+  "Which Pokémon are exclusive to Violet?",
+  "How do I get the Shiny Charm in Scarlet and Violet?",
+  "How do I evolve Gimmighoul?",
+  // Glitches
+  "How does the MissingNo glitch work?",
+  "What is the Mew glitch in Red and Blue?",
+  // Spin-offs
+  "What starters can you play as in Mystery Dungeon: Explorers of Sky?",
+  "How does recruiting work in Pokémon Mystery Dungeon?",
+  // Warehouse aggregations
+  "Which type combination has the most Pokémon?",
+  "What's the average base Speed of Electric types?",
+  // Mechanics history
+  "How does the Physical/Special split work?",
 ];
 
 /**
