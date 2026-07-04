@@ -3,11 +3,18 @@
  * corpus (Oak v2 §4.2/§5), backing T19 `search_wiki`.
  *
  * Run MANUALLY (`npm run fetch:wiki`), NEVER by `npm run ingest`. It politely
- * crawls the pokemon.fandom.com MediaWiki API for a curated set of categories
- * (anime episodes, films, main characters incl. Ash + Ash's Pokémon, Mystery
- * Dungeon, notable locations/routes, glitches, lore/trivia hubs), strips each
+ * crawls the pokemon.fandom.com MediaWiki API for a curated set of GAME-only
+ * categories (in-game locations/routes/towns, glitches, in-game mechanics and
+ * events, items, and Mystery Dungeon incl. its game NPCs/locations), strips each
  * page's wikitext to plain prose, section-splits it, and writes one JSON file
- * per page to the GITIGNORED cache `web/.wiki-cache/pages/`:
+ * per page to the GITIGNORED cache `web/.wiki-cache/pages/`.
+ *
+ * Oak is a GAMES assistant (design.md §9b): the corpus is prose about the GAMES
+ * only. Anime episodes, movies/films, TV, manga, and other franchise MEDIA are
+ * OUT of scope and are NOT crawled — no Episodes/Movies/Ash's-Pokémon/anime-
+ * character categories.
+ *
+ * Record shape:
  *
  *   { id, title, url, revised_at (epoch ms), license: "CC BY-SA 4.0",
  *     chunks: [{ section, text }, …] }
@@ -52,38 +59,46 @@ const CACHE_ROOT = path.resolve(PROJECT_ROOT, ".wiki-cache");
 const PAGES_DIR = path.resolve(CACHE_ROOT, "pages");
 
 /**
- * Curated category list v1. Fandom category names vary; the crawl is defensive
- * — a category that enumerates to nothing is logged and skipped, so tuning this
- * list never breaks the run. `cmtype=page` excludes sub-categories/files.
+ * Curated GAME-only category list v1 (design.md §9b — Oak is a games assistant).
+ * In-game locations/routes/towns, glitches, in-game mechanics and events, items,
+ * and Mystery Dungeon (games + their NPCs/locations). NO anime/media categories
+ * (Episodes, Movies, Ash's Pokémon, generic anime-dominated "Characters").
+ *
+ * Fandom category names vary and are fuzzy — the crawl is defensive: a category
+ * that enumerates to nothing is logged and skipped, so tuning this list never
+ * breaks the run. Final names are verified against the live API at prod-crawl
+ * time (see report). `cmtype=page` excludes sub-categories/files.
  */
 const CATEGORIES: string[] = [
-  "Episodes",
-  "Movies",
-  "Characters",
-  "Ash's Pokémon",
-  "Anime characters",
-  "Pokémon Mystery Dungeon",
-  "Mystery Dungeon characters",
   "Locations",
   "Routes",
+  "Towns",
+  "Cities",
+  "Items",
   "Glitches",
-  "Lore",
+  "Game mechanics",
+  "Events",
+  "Pokémon Mystery Dungeon",
+  "Mystery Dungeon characters",
+  "Mystery Dungeon locations",
 ];
 
 /**
- * Explicit seed titles crawled in addition to the categories — high-value hub
- * pages that anchor the corpus even if a category name is off. Keeps a small
- * bounded `--limit` run useful (it always pulls these real pages first).
+ * Explicit seed titles crawled in addition to the categories — high-value GAME
+ * hub pages that anchor the corpus even if a category name is off. Keeps a small
+ * bounded `--limit` run useful (it always pulls these real pages first). GAME
+ * content only — glitches, in-game location hubs, and Mystery Dungeon; NO
+ * Ash/anime/movie seeds (design.md §9b).
  */
 const SEED_TITLES: string[] = [
-  "Ash Ketchum",
-  "Pikachu (Ash's)",
-  "Misty",
-  "Brock",
-  "Team Rocket",
-  "Mewtwo Strikes Back",
-  "Pokémon Mystery Dungeon: Red Rescue Team and Blue Rescue Team",
   "MissingNo.",
+  "Glitch City",
+  "Pokémon Mystery Dungeon: Red Rescue Team and Blue Rescue Team",
+  "Wigglytuff's Guild",
+  "Cerulean City",
+  "Viridian Forest",
+  "Route 119",
+  "Safari Zone",
 ];
 
 // ---------------------------------------------------------------------------
