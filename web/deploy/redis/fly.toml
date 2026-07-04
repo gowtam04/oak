@@ -1,0 +1,19 @@
+app = "oak-gowtam-redis"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+# No [http_service] block and no allocated IPs on purpose: this Redis is
+# reachable ONLY over Fly's private 6PN networking, at
+# oak-gowtam-redis.internal:6379, from the oak-gowtam app in the same org.
+# It is never exposed on the public internet.
+#
+# No volume, on purpose: everything stored here (guest session history/scope,
+# rate-limit counters, OTP throttle counters) is TTL'd/ephemeral by design —
+# a Redis restart is equivalent to today's deploy behavior (guest state loss),
+# not a data-loss regression.
