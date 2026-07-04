@@ -105,6 +105,9 @@ private extension Inference.Confidence {
     case .high: return "High"
     case .medium: return "Medium"
     case .low: return "Low"
+    // An unrecognized confidence value (the wire can widen): render the raw string
+    // verbatim rather than failing the decode or hiding the inference.
+    case let .unknown(raw): return raw
     }
   }
 
@@ -113,6 +116,7 @@ private extension Inference.Confidence {
     case .high: return "circle.fill"
     case .medium: return "circle.bottomhalf.filled"
     case .low: return "circle"
+    case .unknown: return "circle.dotted"
     }
   }
 
@@ -121,6 +125,7 @@ private extension Inference.Confidence {
     case .high: return Theme.success
     case .medium: return Theme.sunflower
     case .low: return Theme.textMuted
+    case .unknown: return Theme.textMuted
     }
   }
 }

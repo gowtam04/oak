@@ -77,7 +77,6 @@ enum OakUITest {
     static let navigationTitle = "Oak"
     static let composerPlaceholder = "Ask Oak a Pokémon question…"
     static let sendButton = "Send"
-    static let championsToggle = "Champions mode"
     static let newConversation = "New conversation"
     static let emptyState = "Ask Oak"
     static let attachImage = "Attach image"

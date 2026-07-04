@@ -287,6 +287,9 @@ struct AnswerCardView: View {
     case .clarificationNeeded: return "Needs clarification"
     case .resolutionFailed: return "Couldn't find that"
     case .insufficientData: return "Not enough data"
+    // A status this app build doesn't recognize (the wire can widen): show a neutral
+    // badge labeled with the humanized raw value rather than dropping the answer.
+    case let .unknown(raw): return Self.humanize(raw)
     }
   }
 
@@ -296,6 +299,7 @@ struct AnswerCardView: View {
     case .clarificationNeeded: return "questionmark.circle"
     case .resolutionFailed: return "magnifyingglass"
     case .insufficientData: return "exclamationmark.circle"
+    case .unknown: return "info.circle"
     }
   }
 
@@ -305,7 +309,18 @@ struct AnswerCardView: View {
     case .clarificationNeeded: return Theme.info
     case .resolutionFailed: return Theme.warning
     case .insufficientData: return Theme.warning
+    case .unknown: return Theme.textMuted
     }
+  }
+
+  /// Humanizes a raw wire status string (e.g. `"needs_review"` → `"Needs review"`)
+  /// for a neutral, forward-compatible badge label.
+  private static func humanize(_ raw: String) -> String {
+    let words = raw.split(whereSeparator: { $0 == "_" || $0 == "-" })
+    guard let first = words.first else { return raw }
+    let rest = words.dropFirst().map { $0.lowercased() }
+    return ([first.prefix(1).uppercased() + first.dropFirst().lowercased()] + rest)
+      .joined(separator: " ")
   }
 
   // MARK: Presence predicates (mirror each subview's own render-if-present guard)

@@ -128,6 +128,8 @@ struct StreamingStatusView: View {
     case "get_learnset": return "list.bullet"
     case "get_team", "save_team": return "person.3"
     case "get_encounters": return "map"
+    case "run_sql": return "cylinder.split.1x2"
+    case "search_wiki": return "text.magnifyingglass"
     case let name where name.hasPrefix("list_"): return "list.bullet"
     default: return "wrench.and.screwdriver"
     }

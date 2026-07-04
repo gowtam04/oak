@@ -1,0 +1,15 @@
+event: tool_activity
+data: {"tool":"run_sql","label":"🗄️ Querying the dex database…"}
+
+event: tool_activity
+data: {"tool":"search_wiki","label":"📖 Searching the wiki…"}
+
+event: answer_start
+data: {}
+
+event: answer_delta
+data: {"text":"In **HeartGold/SoulSilver**, Larvitar is found on Mt. Silver."}
+
+event: answer
+data: {"answer":{"status":"answered","answer_markdown":"In **HeartGold/SoulSilver**, Larvitar is found on Mt. Silver.","reasoning_markdown":"I queried the national-dex warehouse for the encounter and confirmed it against the wiki.","citations":[{"source":"run_sql","detail":"Encounter aggregation over the national-dex warehouse."},{"source":"search_wiki","detail":"Mt. Silver encounter table."}],"inferences":[],"generation_basis":{"generation":"Gen 4 (HeartGold/SoulSilver)","fallback":false}}}
+
