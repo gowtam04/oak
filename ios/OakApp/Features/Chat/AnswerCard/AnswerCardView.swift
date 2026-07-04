@@ -10,16 +10,15 @@ import SwiftUI
 ///   1. status badge        ← non-`answered` outcomes only (M-AC-1.3)
 ///   2. scope tag            ← `generation_basis` — the always-on masthead tag (TOP)
 ///   3. caveat strip         ← `uncertainty_flags[]` + `generation_basis.fallback`/note (TOP)
-///   4. answer markdown      ← `answer_markdown` (always)
+///   4. answer markdown      ← `answer_markdown` (always; first paragraph as answerLead)
 ///   5. subjects             ← `subjects[]` (+ "Compare in viewer" when ≥2)
 ///   6. clarify question     ← `question.options[]` — the "stop and ask" CTA
 ///   7. candidates           ← `candidates` (+ "Show all N" when truncated)
 ///   8. damage calc          ← `damage_calc` (+ "Open in viewer")
 ///   9. team blocks          ← `proposed_team` / `saved_team` (+ warnings)
 ///  10. suggestions          ← `suggestions[]` (+ status)
-///  11. reasoning            ← `reasoning_markdown` (collapsible)
-///  12. citations            ← `citations[]` (collapsible "Sources")
-///  13. inferences           ← `inferences[]`
+///  11. credibility strip    ← `reasoning_markdown` + `citations[]` — chip strip + inline wells
+///  12. inferences           ← `inferences[]`
 ///
 /// The scope tag and caveat strip are lifted to the TOP to mirror the web
 /// `AnswerCard` (masthead + `CaveatStrip` lead the card): a caveat is read before
@@ -118,8 +117,11 @@ struct AnswerCardView: View {
     case damageCalc
     case teams
     case suggestions
-    case reasoning
-    case citations
+    /// Unified credibility strip: replaces the former separate `.reasoning` and
+    /// `.citations` sections. A horizontal chip strip expands inline into a
+    /// `surfaceSunken` well — one section is present when EITHER reasoning OR
+    /// citations (or both) is non-empty.
+    case credibility
     case inferences
   }
 
@@ -139,8 +141,7 @@ struct AnswerCardView: View {
     if hasDamageCalc { out.append(.damageCalc) }
     if hasTeams { out.append(.teams) }
     if hasSuggestions { out.append(.suggestions) }
-    if hasReasoning { out.append(.reasoning) }
-    if hasCitations { out.append(.citations) }
+    if hasCredibility { out.append(.credibility) }
     if hasInferences { out.append(.inferences) }
     return out
   }
@@ -160,10 +161,7 @@ struct AnswerCardView: View {
         generationBasis: answer.generationBasis
       )
     case .answer:
-      MarkdownBlockView(answer.answerMarkdown)
-        .font(Theme.body(.body))
-        .foregroundStyle(Theme.textPrimary)
-        .frame(maxWidth: .infinity, alignment: .leading)
+      answerContent
     case .subjects:
       // Each subject is an openable entity in a structured part of the answer
       // (M-ART-US-1 / M-BR-ART-3): wrap each card in a tap that pushes its full
@@ -260,25 +258,67 @@ struct AnswerCardView: View {
         status: answer.status,
         onSelect: onFollowUp
       )
-    case .reasoning:
-      ReasoningSection(markdown: answer.reasoningMarkdown)
-    case .citations:
-      CitationsView(citations: answer.citations)
+    case .credibility:
+      CredibilityStripView(
+        reasoningMarkdown: answer.reasoningMarkdown,
+        citations: answer.citations
+      )
     case .inferences:
       InferencesView(inferences: answer.inferences)
     }
   }
 
+  // MARK: Answer body (verdict + trailing blocks)
+
+  /// Renders `answer_markdown` with the first block styled as `answerLead` when it
+  /// is a plain paragraph — the editorial verdict at title3 semibold — and all
+  /// subsequent (or non-paragraph first) blocks in the standard body voice. Only a
+  /// leading plain paragraph is promoted; headings, tables, and lists are never
+  /// upgraded (design §4.04 "first paragraph lead" judgment call).
+  @ViewBuilder
+  private var answerContent: some View {
+    let blocks = MarkdownBlocks.parse(answer.answerMarkdown)
+    if case let .paragraph(leadText) = blocks.first {
+      // Lead paragraph → answerLead; remainder (if any) falls back to body.
+      VStack(alignment: .leading, spacing: 8) {
+        MarkdownText(leadText)
+          .font(Theme.answerLead())
+          .foregroundStyle(Theme.textPrimary)
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(maxWidth: .infinity, alignment: .leading)
+        let tail = Array(blocks.dropFirst())
+        if !tail.isEmpty {
+          MarkdownBlockView(blocks: tail)
+            .font(Theme.body(.body))
+            .foregroundStyle(Theme.textPrimary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+      }
+    } else {
+      // First block is not a plain paragraph — render everything at body size.
+      MarkdownBlockView(answer.answerMarkdown)
+        .font(Theme.body(.body))
+        .foregroundStyle(Theme.textPrimary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
   // MARK: Status badge (non-`answered` outcomes)
 
-  /// A labeled status chip for non-`answered` outcomes — an icon + word so the
-  /// outcome never rests on color alone (M-AC-UI9.3). Mirrors the chip the P6
-  /// minimal view carried, now owned by the full card.
+  /// A compact labeled capsule for non-`answered` outcomes: SF symbol + instrument-
+  /// voice label so the outcome is never conveyed by color alone (M-AC-UI9.3).
+  /// When status is `answered` the verdict speaks — no badge is shown (`hasStatus`
+  /// returns false). The capsule background reinforces the semantic color visually
+  /// without requiring color to carry the full signal.
   private var statusBadge: some View {
     Label(statusText, systemImage: statusIcon)
-      .font(Theme.display(.caption))
+      .instrumentLabel()
       .foregroundStyle(statusColor)
       .labelStyle(.titleAndIcon)
+      .padding(.horizontal, Theme.Spacing.sm)
+      .padding(.vertical, Theme.Spacing.xs)
+      .background(statusColor.opacity(0.12), in: Capsule())
+      .accessibilityLabel("Status: \(statusText)")
   }
 
   private var statusText: String {
@@ -342,9 +382,11 @@ struct AnswerCardView: View {
 
   private var hasSuggestions: Bool { !Self.nonBlank(answer.suggestions).isEmpty }
 
-  private var hasReasoning: Bool { !Self.trimmed(answer.reasoningMarkdown).isEmpty }
-
-  private var hasCitations: Bool { !answer.citations.isEmpty }
+  /// The credibility strip shows when EITHER reasoning or citations is non-empty —
+  /// the two chips share one section and one entrance animation slot.
+  private var hasCredibility: Bool {
+    !Self.trimmed(answer.reasoningMarkdown).isEmpty || !answer.citations.isEmpty
+  }
 
   private var hasInferences: Bool { !answer.inferences.isEmpty }
 
@@ -374,34 +416,172 @@ struct AnswerCardView: View {
   }
 }
 
-// MARK: - Reasoning ("why") disclosure
+// MARK: - Credibility strip (Reasoning + Sources chips)
 
-/// The collapsible "Reasoning" section — native mirror of the web `ReasoningBlock`
-/// (`reasoning_markdown`), closed by default. Kept file-scoped (one disclosure with
-/// its own expansion `@State`) since the orchestrator only needs it here; the rest
-/// of the AnswerCard tree has no reasoning leaf of its own.
-private struct ReasoningSection: View {
-  let markdown: String
+/// A horizontal strip of two capsule chips — `REASONING` and `SOURCES · N` — that
+/// sit directly under the answer prose. Tapping a chip expands its content INLINE
+/// into a `surfaceSunken` rounded well, animated with `Theme.Motion.smooth`. Only
+/// one panel may be open at a time (opening one closes the other). Replaces the
+/// former stacked `DisclosureGroup` pair (design §4.04 "Credibility strip").
+///
+/// Accessibility: each chip is a `Button` with `.isToggle` trait + an
+/// `accessibilityValue` reporting "expanded"/"collapsed", and a descriptive hint.
+/// The card-level `accessibilityElement(children: .contain)` on `AnswerCardView`
+/// ensures the strip reads in document order.
+private struct CredibilityStripView: View {
+  let reasoningMarkdown: String
+  let citations: [Citation]
 
-  @State private var isExpanded = false
+  /// Which panel (if any) is currently expanded. Nil → both closed.
+  @State private var expanded: Panel? = nil
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+  enum Panel { case reasoning, sources }
+
+  private var hasReasoning: Bool {
+    !reasoningMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
+
   var body: some View {
-    DisclosureGroup(isExpanded: $isExpanded) {
-      MarkdownBlockView(markdown)
-        .font(Theme.body(.footnote))
-        .foregroundStyle(Theme.textSecondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.top, 8)
-    } label: {
-      Label("Reasoning", systemImage: "brain")
-        .font(Theme.display(.subheadline))
-        .foregroundStyle(Theme.textPrimary)
+    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+      // Chip strip
+      HStack(spacing: Theme.Spacing.sm) {
+        if hasReasoning {
+          chipButton(
+            label: "REASONING",
+            panel: .reasoning,
+            hint: "Shows how Oak reached this answer"
+          )
+        }
+        if !citations.isEmpty {
+          chipButton(
+            label: "SOURCES · \(citations.count)",
+            panel: .sources,
+            hint: "Shows the \(citations.count) source\(citations.count == 1 ? "" : "s") cited"
+          )
+        }
+        Spacer(minLength: 0)
+      }
+
+      // Expanded inline well — animated in/out with smooth spring; Reduce Motion
+      // uses a plain opacity crossfade with no height animation (M-AC-UI9.2).
+      if let panel = expanded {
+        expandedWell(panel)
+          .transition(
+            reduceMotion
+              ? .opacity
+              : .asymmetric(
+                  insertion: .opacity.combined(with: .move(edge: .top)),
+                  removal: .opacity
+                )
+          )
+      }
     }
-    .tint(Theme.textSecondary)
-    .animation(reduceMotion ? nil : Theme.Motion.smooth, value: isExpanded)
-    .accessibilityHint("Shows how Oak reached this answer")
+    .animation(reduceMotion ? .default : Theme.Motion.smooth, value: expanded)
+    .accessibilityElement(children: .contain)
+  }
+
+  // MARK: Chip button
+
+  private func chipButton(label: String, panel: Panel, hint: String) -> some View {
+    let isOpen = expanded == panel
+    return Button {
+      expanded = (isOpen ? nil : panel)
+    } label: {
+      Text(label)
+        .instrumentLabel()
+        .foregroundStyle(Theme.textSecondary)
+        .padding(.horizontal, Theme.Spacing.sm)
+        .padding(.vertical, Theme.Spacing.xs)
+        .background(Theme.surfaceSunken, in: Capsule())
+    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits([.isButton, .isToggle])
+    .accessibilityHint(hint)
+    .accessibilityValue(isOpen ? "expanded" : "collapsed")
+  }
+
+  // MARK: Expanded well
+
+  @ViewBuilder
+  private func expandedWell(_ panel: Panel) -> some View {
+    Group {
+      switch panel {
+      case .reasoning:
+        MarkdownBlockView(reasoningMarkdown)
+          .font(Theme.body(.footnote))
+          .foregroundStyle(Theme.textSecondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .fixedSize(horizontal: false, vertical: true)
+      case .sources:
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+          ForEach(Array(citations.enumerated()), id: \.offset) { _, citation in
+            citationRow(citation)
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+    }
+    .padding(Theme.Spacing.md)
+    .background(
+      Theme.surfaceSunken,
+      in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+    )
+  }
+
+  // MARK: Citation row (inline — mirrors CitationsView's row rendering)
+
+  private func citationRow(_ citation: Citation) -> some View {
+    HStack(alignment: .top, spacing: Theme.Spacing.sm) {
+      Image(systemName: sourceGlyph(citation))
+        .font(Theme.body(.footnote))
+        .foregroundStyle(Theme.textMuted)
+        .accessibilityHidden(true)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(citation.source)
+          .font(Theme.body(.footnote))
+          .fontWeight(.semibold)
+          .foregroundStyle(Theme.textPrimary)
+        Text(citation.detail)
+          .font(Theme.body(.footnote))
+          .foregroundStyle(Theme.textSecondary)
+        if let endpointUrl = citation.endpointUrl, !endpointUrl.isEmpty {
+          endpointLink(endpointUrl)
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  @ViewBuilder
+  private func endpointLink(_ endpointUrl: String) -> some View {
+    if let url = URL(string: endpointUrl) {
+      Link(destination: url) {
+        Label {
+          Text(endpointUrl)
+            .underline()
+            .lineLimit(1)
+            .truncationMode(.middle)
+        } icon: {
+          Image(systemName: "link")
+        }
+        .font(Theme.body(.footnote))
+      }
+      .foregroundStyle(Theme.azure)
+      .accessibilityLabel("Open source link")
+      .accessibilityHint(endpointUrl)
+    } else {
+      Text(endpointUrl)
+        .font(Theme.body(.footnote))
+        .foregroundStyle(Theme.textMuted)
+    }
+  }
+
+  private func sourceGlyph(_ citation: Citation) -> String {
+    guard let u = citation.endpointUrl, !u.isEmpty, URL(string: u) != nil else {
+      return "books.vertical"
+    }
+    return "link"
   }
 }
 
