@@ -30,22 +30,27 @@ enum EntityArtifact: Decodable, Sendable {
     case status
   }
 
-  /// The `status` literal that selects the envelope arm.
-  private enum Status: String, Decodable {
-    case ok
-    case notFound = "not_found"
-    case unavailable
-  }
-
   init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: StatusKey.self)
-    switch try container.decode(Status.self, forKey: .status) {
-    case .ok:
+    // Tolerant status decode (mirrors the `Format` idiom): an unrecognized envelope
+    // status must not throw. Known arms decode their payload; any other status
+    // degrades to the honest `.unavailable` miss (the viewer's graceful state) rather
+    // than failing the whole `/api/entity` response.
+    let status = try container.decode(String.self, forKey: .status)
+    switch status {
+    case "ok":
       self = .ok(try EntityArtifactOk(from: decoder))
-    case .notFound:
+    case "not_found":
       self = .notFound(try EntityArtifactNotFound(from: decoder))
-    case .unavailable:
-      self = .unavailable(try EntityArtifactUnavailable(from: decoder))
+    default:
+      // "unavailable" and any unknown status both resolve to the honest miss. Decode
+      // the minimal unavailable envelope (kind/format) tolerantly; if even that fails
+      // (a widened miss shape), synthesize an unavailable with an unsupported kind.
+      if let unavailable = try? EntityArtifactUnavailable(from: decoder) {
+        self = .unavailable(unavailable)
+      } else {
+        self = .unavailable(EntityArtifactUnavailable(kind: .unsupported(status), format: .unknown(status)))
+      }
     }
   }
 }
@@ -54,12 +59,59 @@ enum EntityArtifact: Decodable, Sendable {
 /// (`ENTITY_KINDS`) in `web/src/agent/schemas.ts`. Serves as the `ok` arm's
 /// discriminant and as the `kind` on the `not_found`/`unavailable` misses, and is
 /// the input kind for `ArtifactService.entity(kind:q:format:)`.
-enum EntityKind: String, Codable, Sendable, CaseIterable {
+///
+/// **Tolerant decoding (`.unsupported`)** mirrors the `Format` idiom in `Team.swift`:
+/// the backend can add an entity kind independently of when this app ships, and an
+/// unknown `kind` must never throw and break the whole artifact decode. An `ok`
+/// envelope with an unrecognized kind decodes to a graceful "unsupported" data arm
+/// (`EntityData.unsupported`); a miss envelope carries the raw kind. `.unsupported`
+/// preserves the raw wire string and re-encodes byte-identically. The known five are
+/// the only ones this client ever *constructs* as a fetch input.
+enum EntityKind: Sendable, Hashable {
   case pokemon
   case move
   case ability
   case item
   case type
+  /// An entity kind not in the known five — preserves the raw wire value.
+  case unsupported(String)
+
+  /// The known, constructible kinds — excludes `.unsupported` (no fixed identity).
+  static let knownCases: [EntityKind] = [.pokemon, .move, .ability, .item, .type]
+
+  var rawValue: String {
+    switch self {
+    case .pokemon: return "pokemon"
+    case .move: return "move"
+    case .ability: return "ability"
+    case .item: return "item"
+    case .type: return "type"
+    case let .unsupported(raw): return raw
+    }
+  }
+
+  init(rawValue: String) {
+    switch rawValue {
+    case "pokemon": self = .pokemon
+    case "move": self = .move
+    case "ability": self = .ability
+    case "item": self = .item
+    case "type": self = .type
+    default: self = .unsupported(rawValue)
+    }
+  }
+}
+
+extension EntityKind: Codable {
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    self.init(rawValue: try container.decode(String.self))
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +166,11 @@ struct EntityArtifactOk: Decodable, Sendable {
       self.data = .item(try container.decode(ItemArtifactData.self, forKey: .data))
     case .type:
       self.data = .type(try container.decode(TypeArtifactData.self, forKey: .data))
+    case .unsupported:
+      // An entity kind this app build doesn't recognize: decode gracefully to an
+      // "unsupported" arm (the viewer shows a "can't display this yet" state) instead
+      // of throwing on the unknown `data` shape and breaking the whole response.
+      self.data = .unsupported
     }
   }
 }
@@ -136,6 +193,10 @@ enum EntityData: Sendable {
   case ability(AbilityArtifactData)
   case item(ItemArtifactData)
   case type(TypeArtifactData)
+  /// The `ok` envelope described an entity kind this app build doesn't recognize —
+  /// there's no known `data` shape to decode, so the viewer shows a graceful
+  /// "can't display this yet" state (forward-compatible with a widened wire).
+  case unsupported
 }
 
 // ---------------------------------------------------------------------------

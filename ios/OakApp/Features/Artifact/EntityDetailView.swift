@@ -48,7 +48,32 @@ struct EntityDetailView: View {
       itemBody(data)
     case .type(let data):
       typeBody(data)
+    case .unsupported:
+      unsupportedBody
     }
+  }
+
+  /// Graceful state for an entity kind this app build doesn't recognize yet (a widened
+  /// wire). Mirrors the honest-miss styling — a symbol, a title, and a plain-language
+  /// note — so the sheet stays open instead of showing an empty or broken profile.
+  @ViewBuilder
+  private var unsupportedBody: some View {
+    VStack(spacing: 12) {
+      Image(systemName: "questionmark.square.dashed")
+        .font(.system(size: 40))
+        .foregroundStyle(Theme.textMuted)
+      Text(artifact.resolved.displayName)
+        .font(Theme.display(.title3))
+        .foregroundStyle(Theme.textPrimary)
+        .multilineTextAlignment(.center)
+      Text("Oak can't display this kind of entity in the app yet. Ask about it in chat instead.")
+        .font(Theme.body(.footnote))
+        .foregroundStyle(Theme.textSecondary)
+        .multilineTextAlignment(.center)
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 24)
+    .padding(.horizontal, 16)
   }
 
   // MARK: Pokémon

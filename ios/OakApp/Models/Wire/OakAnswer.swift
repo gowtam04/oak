@@ -22,11 +22,42 @@ import Foundation
 /// in the UI, never thrown.
 struct OakAnswer: Codable, Sendable, Equatable {
   /// The outcome of the turn. Drives which optional blocks the UI expects.
-  enum Status: String, Codable, Sendable, Equatable {
+  ///
+  /// **Tolerant decoding (`.unknown`)** mirrors the `Format` idiom in `Team.swift`:
+  /// the backend can widen this vocabulary independently of when this app ships, and
+  /// a single unrecognized `status` string must never fail the whole `OakAnswer`
+  /// decode (which would lose the user's answer). `.unknown(raw)` absorbs any string
+  /// this enum doesn't recognize, preserving the original wire value so it re-encodes
+  /// byte-identically; every known case round-trips through `rawValue` unchanged.
+  enum Status: Sendable, Hashable {
     case answered
-    case clarificationNeeded = "clarification_needed"
-    case resolutionFailed = "resolution_failed"
-    case insufficientData = "insufficient_data"
+    case clarificationNeeded
+    case resolutionFailed
+    case insufficientData
+    /// A status string not in the known four — preserves the original wire value.
+    case unknown(String)
+
+    /// The wire string for a known case, or the original raw string for `.unknown`.
+    var rawValue: String {
+      switch self {
+      case .answered: return "answered"
+      case .clarificationNeeded: return "clarification_needed"
+      case .resolutionFailed: return "resolution_failed"
+      case .insufficientData: return "insufficient_data"
+      case let .unknown(raw): return raw
+      }
+    }
+
+    /// Maps a wire string to its case, falling back to `.unknown` for anything else.
+    init(rawValue: String) {
+      switch rawValue {
+      case "answered": self = .answered
+      case "clarification_needed": self = .clarificationNeeded
+      case "resolution_failed": self = .resolutionFailed
+      case "insufficient_data": self = .insufficientData
+      default: self = .unknown(rawValue)
+      }
+    }
   }
 
   let status: Status
@@ -69,6 +100,18 @@ struct OakAnswer: Codable, Sendable, Equatable {
   }
 }
 
+extension OakAnswer.Status: Codable {
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    self.init(rawValue: try container.decode(String.self))
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
+}
+
 /// A cited source backing the answer (mirrors `citationSchema`).
 struct Citation: Codable, Sendable, Equatable {
   let source: String
@@ -84,15 +127,51 @@ struct Citation: Codable, Sendable, Equatable {
 
 /// A claim the agent deduced rather than read directly (mirrors `inferenceSchema`).
 struct Inference: Codable, Sendable, Equatable {
-  enum Confidence: String, Codable, Sendable, Equatable {
+  /// The agent's confidence in a deduced claim. **Tolerant decoding (`.unknown`)**
+  /// mirrors the `Format` idiom: a widened confidence vocabulary must never fail the
+  /// parent `OakAnswer` decode. `.unknown(raw)` preserves the original wire string
+  /// (rendered verbatim) and re-encodes byte-identically.
+  enum Confidence: Sendable, Hashable {
     case high
     case medium
     case low
+    /// A confidence string not in the known three — preserves the raw wire value.
+    case unknown(String)
+
+    var rawValue: String {
+      switch self {
+      case .high: return "high"
+      case .medium: return "medium"
+      case .low: return "low"
+      case let .unknown(raw): return raw
+      }
+    }
+
+    init(rawValue: String) {
+      switch rawValue {
+      case "high": self = .high
+      case "medium": self = .medium
+      case "low": self = .low
+      default: self = .unknown(rawValue)
+      }
+    }
   }
 
   let claim: String
   let confidence: Confidence
   let note: String?
+}
+
+extension Inference.Confidence: Codable {
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    self.init(rawValue: try container.decode(String.self))
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(rawValue)
+  }
 }
 
 /// The generation/format the answer is based on (mirrors `generationBasisSchema`).

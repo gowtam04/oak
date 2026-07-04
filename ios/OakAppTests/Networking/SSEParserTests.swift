@@ -66,6 +66,34 @@ struct SSEParserTests {
     #expect(answer.subjects?.first?.dexNumber == 445)
   }
 
+  /// The oak-v2 tool stream: the two new backend tools (`run_sql`, `search_wiki`)
+  /// surface as ordinary `.toolActivity` events — the parser is name-agnostic, so it
+  /// reconstructs their exact tool names ahead of the terminal answer.
+  @Test
+  func oakV2ToolStreamCarriesNewToolNames() throws {
+    let events = try parseEvents(in: "chat_oakv2_tools.sse")
+
+    guard case let .toolActivity(tool0, label0) = events[0] else {
+      Issue.record("event 0 was not tool_activity: \(events[0])")
+      return
+    }
+    #expect(tool0 == "run_sql")
+    #expect(label0.isEmpty == false)
+
+    guard case let .toolActivity(tool1, label1) = events[1] else {
+      Issue.record("event 1 was not tool_activity: \(events[1])")
+      return
+    }
+    #expect(tool1 == "search_wiki")
+    #expect(label1.isEmpty == false)
+
+    guard case let .answer(answer) = try #require(events.last) else {
+      Issue.record("terminal event was not answer: \(String(describing: events.last))")
+      return
+    }
+    #expect(answer.status == .answered)
+  }
+
   /// The generation-scope stream: the first event is a `.scope` carrying the
   /// resolved format + source, followed by the usual activity → reset → delta →
   /// answer (GS-C).

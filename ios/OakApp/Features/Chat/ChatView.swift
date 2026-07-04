@@ -350,12 +350,14 @@ struct ChatView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  /// The three seed prompts offered on an empty thread; a tap sends the text verbatim
-  /// as the first user turn (same path as a suggestion chip).
+  /// The seed prompts offered on an empty thread; a tap sends the text verbatim
+  /// as the first user turn (same path as a suggestion chip). Games-wide since
+  /// oak-v2 — mirrors the web starter prompts (at least one non-competitive).
   private static let exampleQuestions = [
     "What's Garchomp's best moveset?",
     "Who outspeeds Dragapult?",
-    "Explain Intimidate vs Defiant",
+    "Where do I get HM Fly in HeartGold?",
+    "Who leads the guild in Pokémon Mystery Dungeon Explorers?",
   ]
 
   /// The current Champions regulation, duplicated from web's `CHAMPIONS_REGULATION`
@@ -363,7 +365,7 @@ struct ChatView: View {
   /// it here when that rotates, alongside `Format.displayLabel`'s "Reg M-B".
   private static let championsRegulation = "Regulation M-B"
 
-  /// A branded empty state: the ``OakBrandMark`` hero, a title + description, and three
+  /// A branded empty state: the ``OakBrandMark`` hero, a title + description, and the
   /// example-question chips (styled like ``SuggestionsView`` chips) that cascade in.
   private var emptyState: some View {
     VStack(spacing: 20) {
@@ -379,7 +381,7 @@ struct ChatView: View {
           .multilineTextAlignment(.center)
         // Scope hint parity with web's `ChatThread.tsx` empty state — the chip
         // (top of the screen) is the interactive counterpart named here.
-        Text("Answers default to Pokémon Champions (\(Self.championsRegulation)). For mainline games, mention one (“in Scarlet/Violet”, “gen 7”) or use the scope chip at the top.")
+        Text("Answers default to Pokémon Champions (\(Self.championsRegulation)). For any other game — a mainline generation or a spin-off like Mystery Dungeon — just mention it (“in HeartGold”, “gen 7”), or pick a scope with the chip at the top.")
           .font(Theme.body(.caption))
           .foregroundStyle(Theme.textMuted)
           .multilineTextAlignment(.center)

@@ -170,4 +170,5 @@ private let sseFixtures: [String] = [
   "chat_error.sse",
   "chat_heartbeat.sse",
   "chat_scope_gen7.sse",
+  "chat_oakv2_tools.sse",
 ]
