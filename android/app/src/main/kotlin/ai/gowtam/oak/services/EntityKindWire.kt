@@ -10,10 +10,4 @@ import ai.gowtam.oak.wire.EntityKind
  * [ArtifactService] and [DexLookupService].
  */
 internal val EntityKind.wireValue: String
-    get() = when (this) {
-        EntityKind.POKEMON -> "pokemon"
-        EntityKind.MOVE -> "move"
-        EntityKind.ABILITY -> "ability"
-        EntityKind.ITEM -> "item"
-        EntityKind.TYPE -> "type"
-    }
+    get() = rawValue

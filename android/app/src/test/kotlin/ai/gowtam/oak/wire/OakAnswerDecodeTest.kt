@@ -1,6 +1,7 @@
 package ai.gowtam.oak.wire
 
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -13,13 +14,13 @@ class OakAnswerDecodeTest {
     fun answeredFullDecodesEveryOptionalField() {
         val answer = OakJson.decodeFromString<OakAnswer>(Fixtures.string("oakanswer_answered_full.json"))
 
-        assertEquals(OakAnswer.Status.ANSWERED, answer.status)
+        assertEquals(OakAnswer.Status.Answered, answer.status)
         assertTrue(answer.answerMarkdown.contains("Garchomp"))
         assertEquals(2, answer.citations.size)
         assertEquals("https://pokeapi.co/api/v2/pokemon/garchomp", answer.citations[0].endpointUrl)
         assertNull(answer.citations[1].endpointUrl)
         assertEquals(2, answer.inferences.size)
-        assertEquals(Inference.Confidence.HIGH, answer.inferences[0].confidence)
+        assertEquals(Inference.Confidence.High, answer.inferences[0].confidence)
         assertEquals("Standard mode, current Scarlet/Violet index.", answer.generationBasis.note)
 
         val subjects = requireNotNull(answer.subjects)
@@ -78,7 +79,7 @@ class OakAnswerDecodeTest {
     @Test
     fun clarificationNeededDecodesQuestionOnly() {
         val answer = OakJson.decodeFromString<OakAnswer>(Fixtures.string("oakanswer_clarification.json"))
-        assertEquals(OakAnswer.Status.CLARIFICATION_NEEDED, answer.status)
+        assertEquals(OakAnswer.Status.ClarificationNeeded, answer.status)
         assertTrue(answer.citations.isEmpty())
         assertNull(answer.subjects)
         assertNull(answer.candidates)
@@ -91,7 +92,7 @@ class OakAnswerDecodeTest {
     @Test
     fun resolutionFailedDecodesSuggestions() {
         val answer = OakJson.decodeFromString<OakAnswer>(Fixtures.string("oakanswer_resolution_failed.json"))
-        assertEquals(OakAnswer.Status.RESOLUTION_FAILED, answer.status)
+        assertEquals(OakAnswer.Status.ResolutionFailed, answer.status)
         assertEquals(listOf("Garchomp", "Gabite", "Gible"), answer.suggestions)
         assertNull(answer.question)
     }
@@ -99,9 +100,45 @@ class OakAnswerDecodeTest {
     @Test
     fun insufficientDataDecodesFallbackBasisAndUncertainty() {
         val answer = OakJson.decodeFromString<OakAnswer>(Fixtures.string("oakanswer_insufficient_data.json"))
-        assertEquals(OakAnswer.Status.INSUFFICIENT_DATA, answer.status)
+        assertEquals(OakAnswer.Status.InsufficientData, answer.status)
         assertTrue(answer.generationBasis.fallback)
         assertEquals(1, answer.citations.size)
         assertEquals(1, answer.uncertaintyFlags?.size)
+    }
+
+    // A status the wire adds after this app ships must NOT fail the whole answer's
+    // decode (which would lose the answer to an error banner) — it degrades to
+    // Status.Unknown, preserving the raw string and round-tripping on re-encode.
+    @Test
+    fun unknownStatusDecodesToUnknownTolerantly() {
+        val json = """
+            {"status":"partial_answer","answer_markdown":"Here's what I can say.",
+             "reasoning_markdown":"","citations":[],"inferences":[],
+             "generation_basis":{"generation":"Gen 9","fallback":false}}
+        """.trimIndent()
+        val answer = OakJson.decodeFromString<OakAnswer>(json)
+
+        val status = answer.status as OakAnswer.Status.Unknown
+        assertEquals("partial_answer", status.raw)
+        assertEquals("partial_answer", answer.status.rawValue)
+        // Round-trips: the raw string re-encodes verbatim.
+        assertTrue(OakJson.encodeToString(answer).contains("\"partial_answer\""))
+    }
+
+    // Likewise an unknown inference confidence degrades to Confidence.Unknown rather
+    // than failing the decode; the raw string is preserved for display.
+    @Test
+    fun unknownConfidenceDecodesToUnknownTolerantly() {
+        val json = """
+            {"status":"answered","answer_markdown":"x","reasoning_markdown":"",
+             "citations":[],
+             "inferences":[{"claim":"Probably faster.","confidence":"very_high"}],
+             "generation_basis":{"generation":"Gen 9","fallback":false}}
+        """.trimIndent()
+        val answer = OakJson.decodeFromString<OakAnswer>(json)
+
+        val confidence = answer.inferences.single().confidence as Inference.Confidence.Unknown
+        assertEquals("very_high", confidence.raw)
+        assertEquals("very_high", answer.inferences.single().confidence.rawValue)
     }
 }

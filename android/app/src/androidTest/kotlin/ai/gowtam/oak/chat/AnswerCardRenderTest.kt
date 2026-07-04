@@ -87,7 +87,7 @@ class AnswerCardRenderTest {
 
     @Test
     fun aMinimalAnsweredCardShowsOnlyTheAlwaysOnScopeTagAndTheAnswerBody() {
-        val answer = minimalAnswer(OakAnswer.Status.ANSWERED)
+        val answer = minimalAnswer(OakAnswer.Status.Answered)
 
         composeTestRule.setContent {
             OakTheme { AnswerCard(answer = answer) }
@@ -107,7 +107,7 @@ class AnswerCardRenderTest {
 
     @Test
     fun aClarificationNeededAnswerRendersTheStatusBadgeAndTheQuestion() {
-        val answer = minimalAnswer(OakAnswer.Status.CLARIFICATION_NEEDED).copy(
+        val answer = minimalAnswer(OakAnswer.Status.ClarificationNeeded).copy(
             question = ClarifyQuestion(
                 options = listOf(
                     ClarifyOption(label = "Mega Charizard X", description = "Fire/Dragon"),
@@ -126,7 +126,7 @@ class AnswerCardRenderTest {
 
     @Test
     fun aResolutionFailedAnswerRendersTheStatusBadgeAndSuggestions() {
-        val answer = minimalAnswer(OakAnswer.Status.RESOLUTION_FAILED).copy(
+        val answer = minimalAnswer(OakAnswer.Status.ResolutionFailed).copy(
             suggestions = listOf("Charizard", "Charmeleon"),
         )
 
@@ -140,7 +140,7 @@ class AnswerCardRenderTest {
 
     @Test
     fun anInsufficientDataAnswerRendersTheStatusBadgeAndTheCaveatStrip() {
-        val answer = minimalAnswer(OakAnswer.Status.INSUFFICIENT_DATA).copy(
+        val answer = minimalAnswer(OakAnswer.Status.InsufficientData).copy(
             uncertaintyFlags = listOf("max_iterations_reached"),
         )
 
@@ -166,14 +166,14 @@ class AnswerCardRenderTest {
     )
 
     private fun fullyPopulatedAnswer(): OakAnswer = OakAnswer(
-        status = OakAnswer.Status.CLARIFICATION_NEEDED, // non-answered => the status badge renders too
+        status = OakAnswer.Status.ClarificationNeeded, // non-answered => the status badge renders too
         answerMarkdown = "Which Charizard did you mean?",
         reasoningMarkdown = "Charizard has two Mega forms with different types and roles.",
         citations = listOf(
             Citation(source = "PokéAPI", detail = "Species + Mega form data", endpointUrl = "https://pokeapi.co/api/v2/pokemon/6"),
         ),
         inferences = listOf(
-            Inference(claim = "Mega Charizard Y is the stronger special attacker of the two.", confidence = Inference.Confidence.MEDIUM, note = "Based on base stats alone."),
+            Inference(claim = "Mega Charizard Y is the stronger special attacker of the two.", confidence = Inference.Confidence.Medium, note = "Based on base stats alone."),
         ),
         generationBasis = GenerationBasis(generation = "champions", fallback = true, note = "Falling back to Gen 9 data."),
         subjects = listOf(

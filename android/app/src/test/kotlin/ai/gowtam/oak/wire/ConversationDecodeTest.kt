@@ -21,7 +21,7 @@ class ConversationDecodeTest {
 
         val assistant = detail.turns[1] as ChatTurn.Assistant
         assertEquals("msg_2", assistant.id)
-        assertEquals(OakAnswer.Status.ANSWERED, assistant.answer.status)
+        assertEquals(OakAnswer.Status.Answered, assistant.answer.status)
         assertEquals("Dragapult", assistant.answer.subjects?.first()?.name)
     }
 }

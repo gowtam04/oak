@@ -95,7 +95,7 @@ private fun fallbackLine(basis: GenerationBasis): String {
     if (!note.isNullOrEmpty()) return note
     val generation = basis.generation.trim()
     val base = generation.ifEmpty { "an earlier generation" }
-    return "Based on $base data — this Pokémon is not in Gen 9."
+    return "Based on $base data — outside the selected scope."
 }
 
 /**

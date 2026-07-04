@@ -46,9 +46,30 @@ class SseParserTest {
             events[4],
         )
         val answer = (events[5] as SseEvent.Answer).answer
-        assertEquals(OakAnswer.Status.ANSWERED, answer.status)
+        assertEquals(OakAnswer.Status.Answered, answer.status)
         assertEquals(1, answer.citations.size)
         assertEquals("Garchomp", answer.subjects?.single()?.name)
+    }
+
+    @Test
+    fun oakV2ToolActivitiesParseRunSqlAndSearchWiki() {
+        // oak-v2 added two tools (T18 run_sql, T19 search_wiki) that appear in
+        // tool_activity frames; the parser must surface them like any other tool so
+        // the streaming ticker can icon/label them.
+        val events = parseFixture("chat_oakv2_tools.sse")
+
+        assertEquals(5, events.size)
+        assertEquals(
+            SseEvent.ToolActivity("run_sql", "Querying the dex database — count Water types by generation"),
+            events[0],
+        )
+        assertEquals(
+            SseEvent.ToolActivity("search_wiki", "Searching the wiki for \"Cerulean Cave\""),
+            events[1],
+        )
+        assertEquals(SseEvent.AnswerStart, events[2])
+        assertTrue(events[3] is SseEvent.AnswerDelta)
+        assertEquals(OakAnswer.Status.Answered, (events[4] as SseEvent.Answer).answer.status)
     }
 
     @Test
@@ -62,7 +83,7 @@ class SseParserTest {
         assertTrue(events[1] is SseEvent.AnswerDelta)
         assertTrue((events[1] as SseEvent.AnswerDelta).text.contains("Dragapult"))
         val answer = (events[2] as SseEvent.Answer).answer
-        assertEquals(OakAnswer.Status.ANSWERED, answer.status)
+        assertEquals(OakAnswer.Status.Answered, answer.status)
     }
 
     @Test

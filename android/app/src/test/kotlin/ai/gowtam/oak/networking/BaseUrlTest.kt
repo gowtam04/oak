@@ -17,15 +17,15 @@ class BaseUrlTest {
 
     @Test
     fun resolvesValidHttpsUrl() {
-        val url = BaseUrl.resolve("https://oak-gowtam.fly.dev")
+        val url = BaseUrl.resolve("https://oak.gowtam.ai")
         assertEquals("https", url.scheme)
-        assertEquals("oak-gowtam.fly.dev", url.host)
+        assertEquals("oak.gowtam.ai", url.host)
     }
 
     @Test
     fun rejectsNonHttpsScheme() {
         try {
-            BaseUrl.resolve("http://oak-gowtam.fly.dev")
+            BaseUrl.resolve("http://oak.gowtam.ai")
             fail("expected OakError.Transport")
         } catch (e: OakError.Transport) {
             assertEquals("insecure_scheme", e.underlying)

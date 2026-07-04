@@ -18,7 +18,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "BASE_URL", "\"https://oak-gowtam.fly.dev\"")
+        buildConfigField("String", "BASE_URL", "\"https://oak.gowtam.ai\"")
     }
 
     buildTypes {
@@ -30,7 +30,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            buildConfigField("String", "BASE_URL", "\"https://oak-gowtam.fly.dev\"")
+            buildConfigField("String", "BASE_URL", "\"https://oak.gowtam.ai\"")
             // D-CON-6 / D-OQ-4: v1's release build only needs to be an
             // emulator/device-installable, verified APK — a production Play
             // Console signing identity is explicitly deferred. Reusing the

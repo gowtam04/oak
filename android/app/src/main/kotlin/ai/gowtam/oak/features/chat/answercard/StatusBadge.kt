@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Icon
@@ -51,8 +52,11 @@ private fun statusPresentation(
     info: Color,
     warning: Color,
 ): Triple<ImageVector, String, Color> = when (status) {
-    OakAnswer.Status.ANSWERED -> Triple(Icons.Filled.CheckCircle, "Answered", success)
-    OakAnswer.Status.CLARIFICATION_NEEDED -> Triple(Icons.Filled.HelpOutline, "Needs clarification", info)
-    OakAnswer.Status.RESOLUTION_FAILED -> Triple(Icons.Filled.Search, "Couldn't find that", warning)
-    OakAnswer.Status.INSUFFICIENT_DATA -> Triple(Icons.Filled.WarningAmber, "Not enough data", warning)
+    OakAnswer.Status.Answered -> Triple(Icons.Filled.CheckCircle, "Answered", success)
+    OakAnswer.Status.ClarificationNeeded -> Triple(Icons.Filled.HelpOutline, "Needs clarification", info)
+    OakAnswer.Status.ResolutionFailed -> Triple(Icons.Filled.Search, "Couldn't find that", warning)
+    OakAnswer.Status.InsufficientData -> Triple(Icons.Filled.WarningAmber, "Not enough data", warning)
+    // A status the wire added after this app shipped: a neutral, humanized badge
+    // rather than a hard-failed decode.
+    is OakAnswer.Status.Unknown -> Triple(Icons.Filled.Info, titleizeNonNull(status.raw), info)
 }

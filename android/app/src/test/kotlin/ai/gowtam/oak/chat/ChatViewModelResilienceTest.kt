@@ -48,7 +48,7 @@ class ChatViewModelResilienceTest {
     private fun advanceUntilIdle() = mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
 
     private fun answer(markdown: String = "An answer.") = OakAnswer(
-        status = OakAnswer.Status.ANSWERED,
+        status = OakAnswer.Status.Answered,
         answerMarkdown = markdown,
         reasoningMarkdown = "",
         citations = emptyList(),

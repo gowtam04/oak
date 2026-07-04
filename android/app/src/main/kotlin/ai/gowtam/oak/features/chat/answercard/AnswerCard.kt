@@ -163,7 +163,7 @@ enum class AnswerSection(val testTag: String) {
  * Pure and side-effect-free; mirrors the iOS `sections` predicate set exactly.
  */
 fun answerSections(answer: OakAnswer): List<AnswerSection> = buildList {
-    if (answer.status != OakAnswer.Status.ANSWERED) add(AnswerSection.STATUS)
+    if (answer.status != OakAnswer.Status.Answered) add(AnswerSection.STATUS)
     if (answer.generationBasis.generation.isNotBlank()) add(AnswerSection.SCOPE)
     if (answer.generationBasis.fallback || nonBlank(answer.uncertaintyFlags).isNotEmpty()) {
         add(AnswerSection.CAVEAT)

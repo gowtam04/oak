@@ -468,11 +468,12 @@ private fun ErrorBannerRow(banner: ErrorBanner, onRetry: () -> Unit) {
 // Empty state
 // ---------------------------------------------------------------------------
 
-/** The three seed prompts offered on an empty thread — mirrors iOS's `exampleQuestions`. */
+/** The four seed prompts offered on an empty thread — mirrors iOS's `exampleQuestions`. */
 private val exampleQuestions = listOf(
     "What's Garchomp's best moveset?",
     "Who outspeeds Dragapult?",
-    "Explain Intimidate vs Defiant",
+    "Where do I get HM Fly in HeartGold?",
+    "Who leads the guild in Pokémon Mystery Dungeon Explorers?",
 )
 
 /** Champions regulation, duplicated from web's `CHAMPIONS_REGULATION` (`formats.ts`). */
@@ -505,8 +506,9 @@ private fun EmptyState(onExampleTap: (String) -> Unit) {
         )
         Spacer(Modifier.height(OakSpacing.xs))
         Text(
-            text = "Answers default to Pokémon Champions ($CHAMPIONS_REGULATION). For mainline games, " +
-                "mention one (“in Scarlet/Violet”, “gen 7”) or use the scope chip at the top.",
+            text = "Answers default to Pokémon Champions ($CHAMPIONS_REGULATION). For any other game — " +
+                "a mainline generation or a spin-off like Mystery Dungeon — just mention it " +
+                "(“in HeartGold”, “gen 7”), or pick a scope with the chip at the top.",
             style = MaterialTheme.typography.bodySmall,
             color = oak.textFaint,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
