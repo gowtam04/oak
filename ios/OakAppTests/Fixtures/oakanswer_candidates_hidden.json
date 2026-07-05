@@ -1,0 +1,85 @@
+{
+  "status": "answered",
+  "answer_markdown": "Here are the fastest Steel-types — showing the top 2 of 4; expand to see the rest.",
+  "reasoning_markdown": "Filtered the Pokédex to Steel-types and sorted by Speed descending; the full set is small enough to ship inline.",
+  "citations": [
+    {
+      "source": "query_pokedex",
+      "detail": "Steel-type, sorted by speed desc."
+    }
+  ],
+  "inferences": [],
+  "generation_basis": {
+    "generation": "Gen 9 (Scarlet/Violet)",
+    "fallback": false
+  },
+  "candidates": {
+    "total_count": 4,
+    "truncated": true,
+    "sort": "speed desc",
+    "shown": [
+      {
+        "name": "Kartana",
+        "dex_number": 798,
+        "sprite_url": "https://example.test/sprites/kartana.png",
+        "types": ["grass", "steel"],
+        "base_stats": {
+          "hp": 59,
+          "attack": 181,
+          "defense": 131,
+          "special_attack": 59,
+          "special_defense": 31,
+          "speed": 109
+        },
+        "ability": "beast-boost"
+      },
+      {
+        "name": "Bisharp",
+        "dex_number": 625,
+        "sprite_url": "https://example.test/sprites/bisharp.png",
+        "types": ["dark", "steel"],
+        "base_stats": {
+          "hp": 65,
+          "attack": 125,
+          "defense": 100,
+          "special_attack": 60,
+          "special_defense": 70,
+          "speed": 70
+        },
+        "ability": "defiant"
+      }
+    ],
+    "hidden_rows": [
+      {
+        "name": "Excadrill",
+        "dex_number": 530,
+        "sprite_url": "https://example.test/sprites/excadrill.png",
+        "types": ["ground", "steel"],
+        "base_stats": {
+          "hp": 110,
+          "attack": 135,
+          "defense": 60,
+          "special_attack": 50,
+          "special_defense": 65,
+          "speed": 88
+        },
+        "ability": "mold-breaker"
+      },
+      {
+        "name": "Metagross",
+        "dex_number": 376,
+        "sprite_url": "https://example.test/sprites/metagross.png",
+        "types": ["steel", "psychic"],
+        "base_stats": {
+          "hp": 80,
+          "attack": 135,
+          "defense": 130,
+          "special_attack": 95,
+          "special_defense": 90,
+          "speed": 70
+        },
+        "ability": "clear-body"
+      }
+    ]
+  }
+}

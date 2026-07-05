@@ -34,9 +34,12 @@ struct CandidatesTableView: View {
   /// a type tap never also opens the row's Pokémon. No-op default.
   var onOpenType: (String) -> Void = { _ in }
 
-  /// Sends a "show me all of them" follow-up turn when the set is `truncated`
-  /// (mirrors web's `CandidateTable` "Show all N" control). No-op default; the host
-  /// wires it to send the follow-up. When `nil` the footer shows the count only.
+  /// Sends a "show me all of them" follow-up turn when the set is `truncated` and
+  /// the server did NOT ship the hidden rows (mirrors web's `CandidateTable` "Show
+  /// all N" follow-up fallback). No-op default; the host wires it to send the
+  /// follow-up. Ignored when `candidates.hiddenRows` is present — those expand
+  /// locally with no new turn. When `nil` (and no hidden rows) the footer shows the
+  /// count only.
   var onShowAll: (() -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -44,6 +47,25 @@ struct CandidatesTableView: View {
   /// Flips once, on this view instance's first appearance, to drive the one-shot
   /// row-stagger below.
   @State private var hasAppeared = false
+
+  /// Set when the user taps "Show all N" and the server shipped the remaining rows
+  /// in `candidates.hiddenRows` — the table then appends them in place with no
+  /// follow-up turn (M-AC "Show all" local expansion).
+  @State private var expanded = false
+
+  /// Whether local expansion is even possible for this payload (the server shipped
+  /// the withheld rows inline). Delegates to the pure model helper so the decision
+  /// is unit-testable off the view.
+  private var hasHiddenRows: Bool { candidates.canExpandLocally }
+
+  /// The rows currently on screen: `shown`, plus the hidden rows once expanded.
+  private var displayedRows: [CandidateRow] {
+    expanded && hasHiddenRows ? candidates.allRows : candidates.shown
+  }
+
+  /// True once every row of the set is on screen (locally expanded), so the footer
+  /// drops the "refine" nudge and the "Show all" control.
+  private var isFullyShown: Bool { displayedRows.count >= candidates.totalCount }
 
   var body: some View {
     if candidates.shown.isEmpty {
@@ -86,7 +108,7 @@ struct CandidatesTableView: View {
       Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
         headerRow
         separatorRow
-        ForEach(Array(candidates.shown.enumerated()), id: \.offset) { index, row in
+        ForEach(Array(displayedRows.enumerated()), id: \.offset) { index, row in
           dataRow(row, index: index)
         }
       }
@@ -261,23 +283,50 @@ struct CandidatesTableView: View {
 
   private var footer: some View {
     HStack(alignment: .firstTextBaseline, spacing: 10) {
-      Label(
-        "Showing \(candidates.shown.count) of \(candidates.totalCount) — refine to narrow.",
-        systemImage: "line.3.horizontal.decrease.circle"
-      )
-      .font(Theme.body(.caption))
-      .foregroundStyle(Theme.textSecondary)
-      .labelStyle(.titleAndIcon)
+      Label(footerCountText, systemImage: "line.3.horizontal.decrease.circle")
+        .font(Theme.body(.caption))
+        .foregroundStyle(Theme.textSecondary)
+        .labelStyle(.titleAndIcon)
 
       Spacer(minLength: 0)
 
-      if let onShowAll {
-        Button("Show all \(candidates.totalCount)", action: onShowAll)
-          .font(Theme.display(.caption))
-          .buttonStyle(.borderless)
-          .tint(Theme.accent)
-          .accessibilityHint("Asks Oak to list every result")
+      showAllButton
+    }
+  }
+
+  /// "Showing N of M — refine to narrow." while the set is still capped; flips to
+  /// "Showing all M." once the hidden rows have been expanded in place.
+  private var footerCountText: String {
+    if isFullyShown {
+      return "Showing all \(candidates.totalCount)."
+    }
+    return "Showing \(displayedRows.count) of \(candidates.totalCount) — refine to narrow."
+  }
+
+  /// The trailing control. Two distinct behaviours, decided by the payload:
+  /// - **Hidden rows shipped** (`candidates.hiddenRows` non-empty): "Show all N"
+  ///   appends them in place — pure local `@State`, no follow-up turn — and the
+  ///   button then disappears (nothing left to reveal).
+  /// - **Hidden rows absent** (old answers in history, >200-row sets): fall back to
+  ///   today's behaviour — `onShowAll` sends the "list every result" follow-up turn.
+  @ViewBuilder
+  private var showAllButton: some View {
+    if hasHiddenRows {
+      if !expanded {
+        Button("Show all \(candidates.totalCount)") {
+          withAnimation(reduceMotion ? nil : Theme.Motion.smooth) { expanded = true }
+        }
+        .font(Theme.display(.caption))
+        .buttonStyle(.borderless)
+        .tint(Theme.accent)
+        .accessibilityHint("Shows every result here")
       }
+    } else if let onShowAll {
+      Button("Show all \(candidates.totalCount)", action: onShowAll)
+        .font(Theme.display(.caption))
+        .buttonStyle(.borderless)
+        .tint(Theme.accent)
+        .accessibilityHint("Asks Oak to list every result")
     }
   }
 
@@ -314,7 +363,7 @@ struct CandidatesTableView: View {
   /// The stat columns to render: the fixed six base stats when any row carries
   /// `base_stats`, otherwise the alphabetical union of `key_stats` keys.
   private var statColumns: [StatColumn] {
-    if candidates.shown.contains(where: { $0.baseStats != nil }) {
+    if displayedRows.contains(where: { $0.baseStats != nil }) {
       return [
         StatColumn(id: "hp", label: "HP") { formatStat($0.baseStats?.hp) },
         StatColumn(id: "attack", label: "Atk") { formatStat($0.baseStats?.atk) },
@@ -326,7 +375,7 @@ struct CandidatesTableView: View {
     }
 
     var keys = Set<String>()
-    for row in candidates.shown {
+    for row in displayedRows {
       if let keyStats = row.keyStats {
         keys.formUnion(keyStats.keys)
       }
@@ -339,7 +388,7 @@ struct CandidatesTableView: View {
   }
 
   private var showsAbility: Bool {
-    candidates.shown.contains { !($0.ability ?? "").isEmpty }
+    displayedRows.contains { !($0.ability ?? "").isEmpty }
   }
 
   private var columnCount: Int {
@@ -474,6 +523,62 @@ private func prettyKey(_ key: String) -> String {
           ),
         ]
       )
+    )
+    .padding(16)
+  }
+}
+
+#Preview("Candidates — hidden rows, local expand") {
+  ScrollView {
+    CandidatesTableView(
+      candidates: Candidates(
+        totalCount: 4,
+        truncated: true,
+        sort: "speed desc",
+        shown: [
+          CandidateRow(
+            name: "Kartana",
+            dexNumber: 798,
+            spriteUrl: nil,
+            types: ["grass", "steel"],
+            baseStats: BaseStats(hp: 59, atk: 181, def: 131, spa: 59, spd: 31, spe: 109),
+            keyStats: nil,
+            ability: "Beast Boost"
+          ),
+          CandidateRow(
+            name: "Bisharp",
+            dexNumber: 625,
+            spriteUrl: nil,
+            types: ["dark", "steel"],
+            baseStats: BaseStats(hp: 65, atk: 125, def: 100, spa: 60, spd: 70, spe: 70),
+            keyStats: nil,
+            ability: "Defiant"
+          ),
+        ],
+        hiddenRows: [
+          CandidateRow(
+            name: "Excadrill",
+            dexNumber: 530,
+            spriteUrl: nil,
+            types: ["ground", "steel"],
+            baseStats: BaseStats(hp: 110, atk: 135, def: 60, spa: 50, spd: 65, spe: 88),
+            keyStats: nil,
+            ability: "Mold Breaker"
+          ),
+          CandidateRow(
+            name: "Metagross",
+            dexNumber: 376,
+            spriteUrl: nil,
+            types: ["steel", "psychic"],
+            baseStats: BaseStats(hp: 80, atk: 135, def: 130, spa: 95, spd: 90, spe: 70),
+            keyStats: nil,
+            ability: "Clear Body"
+          ),
+        ]
+      ),
+      // A no-op follow-up: with hidden rows present the button expands locally and
+      // never calls this.
+      onShowAll: {}
     )
     .padding(16)
   }

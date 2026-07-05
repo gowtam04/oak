@@ -26,7 +26,8 @@ struct FixtureDecodingTests {
     case "oakanswer_answered_full.json",
       "oakanswer_clarification.json",
       "oakanswer_resolution_failed.json",
-      "oakanswer_insufficient_data.json":
+      "oakanswer_insufficient_data.json",
+      "oakanswer_candidates_hidden.json":
       _ = try Fixtures.decode(OakAnswer.self, from: name)
     case "conversations_list.json":
       _ = try Fixtures.decode(ConversationsListEnvelope.self, from: name)
@@ -149,6 +150,30 @@ struct FixtureDecodingTests {
     #expect(warnings[1].code == .abilityNotForSpecies)
     #expect(warnings[1].slot == 1)
     #expect(warnings[1].field == "ability")
+  }
+
+  /// The additive `candidates.hidden_rows` field decodes when present (server
+  /// shipped the full set for local expansion) and is `nil` when absent (older
+  /// payloads / >200-row sets), proving the field is backward-compatible.
+  @Test
+  func candidatesHiddenRowsDecodePresentAndAbsent() throws {
+    // Present: a truncated set with the remaining rows shipped inline.
+    let withHidden = try Fixtures.decode(OakAnswer.self, from: "oakanswer_candidates_hidden.json")
+    let hiddenCandidates = try #require(withHidden.candidates)
+    #expect(hiddenCandidates.truncated == true)
+    #expect(hiddenCandidates.totalCount == 4)
+    #expect(hiddenCandidates.shown.count == 2)
+    let hiddenRows = try #require(hiddenCandidates.hiddenRows)
+    #expect(hiddenRows.count == 2)
+    #expect(hiddenRows[0].name == "Excadrill")
+    #expect(hiddenRows[1].name == "Metagross")
+    // shown + hidden reconstruct the full set.
+    #expect(hiddenCandidates.shown.count + hiddenRows.count == hiddenCandidates.totalCount)
+
+    // Absent: the existing full fixture omits `hidden_rows` → nil (no follow-up
+    // change for old answers).
+    let noHidden = try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
+    #expect(noHidden.candidates?.hiddenRows == nil)
   }
 
   /// The clarification answer carries a 2–4 option question (one option without
@@ -389,6 +414,7 @@ private let jsonFixtures: [String] = [
   "oakanswer_clarification.json",
   "oakanswer_resolution_failed.json",
   "oakanswer_insufficient_data.json",
+  "oakanswer_candidates_hidden.json",
   "conversations_list.json",
   "conversation_detail.json",
   "team.json",
@@ -415,4 +441,5 @@ private let oakAnswerFixtures: [String] = [
   "oakanswer_clarification.json",
   "oakanswer_resolution_failed.json",
   "oakanswer_insufficient_data.json",
+  "oakanswer_candidates_hidden.json",
 ]

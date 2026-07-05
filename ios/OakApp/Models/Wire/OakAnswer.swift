@@ -208,13 +208,38 @@ struct Candidates: Codable, Sendable, Equatable {
   /// Present-or-null on the wire (`z.string().nullable().optional()`); both map to nil.
   let sort: String?
   let shown: [CandidateRow]
+  /// The rows BEYOND `shown`, populated server-side (never model-emitted) when the
+  /// full set was fetchable (≤200 rows). Optional + additive: missing field decodes
+  /// to nil, so older payloads are unaffected. When present and non-empty, the
+  /// "Show all N" control expands the table locally instead of sending a follow-up
+  /// turn (mirrors `candidatesSchema.hidden_rows` in `web/src/agent/schemas.ts`).
+  let hiddenRows: [CandidateRow]?
 
   enum CodingKeys: String, CodingKey {
     case totalCount = "total_count"
     case truncated
     case sort
     case shown
+    case hiddenRows = "hidden_rows"
   }
+
+  /// `hiddenRows` defaults to nil so existing call sites (and Decodable payloads
+  /// without the additive field) stay source- and wire-compatible.
+  init(totalCount: Int, truncated: Bool, sort: String?, shown: [CandidateRow], hiddenRows: [CandidateRow]? = nil) {
+    self.totalCount = totalCount
+    self.truncated = truncated
+    self.sort = sort
+    self.shown = shown
+    self.hiddenRows = hiddenRows
+  }
+
+  /// True when the server shipped the withheld rows inline (`hiddenRows` non-empty),
+  /// so the "Show all N" control can expand the table in place with no follow-up
+  /// turn. False for older answers / >200-row sets, which keep the follow-up path.
+  var canExpandLocally: Bool { !(hiddenRows ?? []).isEmpty }
+
+  /// `shown` followed by any hidden rows — the full result set once expanded.
+  var allRows: [CandidateRow] { shown + (hiddenRows ?? []) }
 }
 
 /// One row in a `candidates` table (mirrors `candidateRowSchema`).
