@@ -545,15 +545,15 @@ private struct CredibilityStripView: View {
           Button {
             onOpenEntity(parsed.kind, parsed.query)
           } label: {
-            Text(citation.source)
+            Text(displayCitationSource(citation.source))
               .font(Theme.body(.footnote, weight: .semibold))
               .foregroundStyle(Theme.azure)
           }
           .buttonStyle(OakPressableButtonStyle())
-          .accessibilityLabel("Open \(citation.source) in viewer")
+          .accessibilityLabel("Open \(displayCitationSource(citation.source)) in viewer")
           .accessibilityHint("Opens this source's entity in the artifact viewer")
         } else {
-          Text(citation.source)
+          Text(displayCitationSource(citation.source))
             .font(Theme.body(.footnote, weight: .semibold))
             .foregroundStyle(Theme.textPrimary)
         }

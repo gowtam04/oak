@@ -44,6 +44,13 @@ describe("buildVoiceInstructions", () => {
     expect(instructions).not.toContain("submit_answer");
   });
 
+  it("forbids speaking internal tool/table/database names aloud", () => {
+    const instructions = buildVoiceInstructions({ format: "champions" });
+    expect(instructions).toMatch(
+      /Never speak the name of a tool, table, database/i,
+    );
+  });
+
   it("includes two example exchanges: a tool-backed answer and a miss", () => {
     const instructions = buildVoiceInstructions({ format: "champions" });
 

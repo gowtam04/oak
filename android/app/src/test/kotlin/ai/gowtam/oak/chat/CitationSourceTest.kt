@@ -1,5 +1,6 @@
 package ai.gowtam.oak.chat
 
+import ai.gowtam.oak.features.chat.answercard.displayCitationSource
 import ai.gowtam.oak.features.chat.answercard.parseCitationSource
 import ai.gowtam.oak.wire.EntityKind
 import org.junit.Assert.assertEquals
@@ -70,5 +71,64 @@ class CitationSourceTest {
     @Test
     fun emptySlugAfterStrippingParentheticalReturnsNull() {
         assertNull(parseCitationSource("move/ (gen-9)"))
+    }
+
+    // -------------------------------------------------------------------
+    // displayCitationSource — copy-tables.md §2 case matrix
+    // -------------------------------------------------------------------
+
+    @Test
+    fun displaysPokemonSourceAsTitleizedEntity() {
+        assertEquals("Pokémon — Garchomp", displayCitationSource("pokemon/garchomp"))
+    }
+
+    @Test
+    fun displaysMoveSourceAsTitleizedEntity() {
+        assertEquals("Move — Fake Out", displayCitationSource("move/fake-out"))
+    }
+
+    @Test
+    fun displaysAbilitySourceAsTitleizedEntity() {
+        assertEquals("Ability — Armor Tail", displayCitationSource("ability/armor-tail"))
+    }
+
+    @Test
+    fun displaysItemSourceAsTitleizedEntity() {
+        assertEquals("Item — Leftovers", displayCitationSource("item/leftovers"))
+    }
+
+    @Test
+    fun displaysTypeSourceAsTitleizedEntity() {
+        assertEquals("Type — Ground", displayCitationSource("type/ground"))
+    }
+
+    @Test
+    fun displaysLearnsetSourceAsMovepoolWithGenQualifierStripped() {
+        assertEquals("Movepool — Trick Room", displayCitationSource("learnset/trick-room (gen-9)"))
+    }
+
+    @Test
+    fun displaysRunSqlSourceAsGameDatabase() {
+        assertEquals("Oak's game database", displayCitationSource("run_sql/natdex_species"))
+    }
+
+    @Test
+    fun displaysWikiSourceAsCommunityWikiWithPageAsIs() {
+        assertEquals("Community wiki — Mt. Coronet", displayCitationSource("wiki/Mt. Coronet"))
+    }
+
+    @Test
+    fun displaysMetaUsageGen9ouWithFormatLabel() {
+        assertEquals("Competitive usage stats (Gen 9 OU)", displayCitationSource("get_meta_usage/gen9ou"))
+    }
+
+    @Test
+    fun displaysOtherMetaUsageWithoutFormatLabel() {
+        assertEquals("Competitive usage stats", displayCitationSource("get_meta_usage/gen8ou"))
+    }
+
+    @Test
+    fun displaysUnrecognizedSourceVerbatim() {
+        assertEquals("PokéAPI", displayCitationSource("PokéAPI"))
     }
 }

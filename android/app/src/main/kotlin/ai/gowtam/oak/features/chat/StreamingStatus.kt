@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.ChangeCircle
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Inventory2
@@ -166,6 +167,7 @@ private fun toolIcon(tool: String): ImageVector = when (tool) {
     "get_ability" -> Icons.Filled.Psychology
     "get_item" -> Icons.Filled.Inventory2
     "type_matchup", "get_type_chart" -> Icons.Filled.Shield
+    "get_evolution_chain" -> Icons.Filled.ChangeCircle
     "compute_stat", "get_usage_stats" -> Icons.Filled.QueryStats
     "estimate_damage" -> Icons.Filled.Bolt
     "get_learnset" -> Icons.AutoMirrored.Filled.List

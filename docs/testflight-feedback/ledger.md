@@ -141,3 +141,80 @@ sync script greps these to dedupe against ASC's response.
 > Could not paste login code
 
 **Assets:** [screenshot-1.jpg](assets/AHZJACvRWRlR8GF37Xoz-to/screenshot-1.jpg)
+
+### AH1b0N09K-sbKo-EGciWhBg
+
+- **Date:** 2026-07-05T14:22:45.815Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (249c9e7 agent / 40373d5 web / d397ccf ios / d76cdce android — ships in the next TestFlight build, 16)
+
+  Root cause was the prompt itself: the few-shot examples modeled naming
+  internal tables/tools in user-facing answer fields and no rule forbade it.
+  The system prompt now carries an explicit anti-leak rule + rewritten
+  examples (plain-English provenance like "Oak's complete Pokédex records"),
+  the server scrubs leaky run_sql progress labels, and all three clients stop
+  rendering raw tool names / citation refs (friendly instrument words +
+  display names instead).
+
+> Don’t reply with technical information. Replace technical details with simple understandable language. For example, pmd_results table means nothing to users, so use better way to represent it.
+
+**Assets:** [screenshot-1.jpg](assets/AH1b0N09K-sbKo-EGciWhBg/screenshot-1.jpg)
+
+### AAkh1mmXiqwAlxc4hB9zlsk
+
+- **Date:** 2026-07-05T14:12:49.126Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (d397ccf ios / d76cdce android — ships in the next TestFlight build, 16)
+
+  Signed-in launch now opens on a fresh chat with the history list one Back
+  away (the list-as-root design was intentional but reversed per this
+  feedback; guests already opened on a new chat).
+
+> When I open iOS app, it automatically takes me to chat history instead of a new message
+
+**Assets:** 
+
+### AAhvrDM1epykAXEVB0Q6fLY
+
+- **Date:** 2026-07-05T01:27:05.745Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (40373d5 web / d397ccf ios / d76cdce android — ships in the next TestFlight build, 16)
+
+  Went with clearer wording rather than provenance labels: the section is now
+  "Oak's deductions" with Solid / Likely / Unsure badges on web, iOS, and
+  Android (display-only; the wire high/medium/low enum is unchanged). The
+  "ask questions and think through" part was expressly waived by the owner.
+
+> Update the reasoning to also include the labels how it is in the web UI (high, medium, low)
+>
+> But also think through updating it so it’s not just high, medium, low but something more meaningful.
+>
+> Maybe like instead of high say database source. Medium is called model reasoning. Like have more meaningful labels (a few custom labels not too many). Ask questions and think through this with the user.
+
+**Assets:** [screenshot-1.jpg](assets/AAhvrDM1epykAXEVB0Q6fLY/screenshot-1.jpg)
+
+### AGGcchFC6_5VtW53PR7-DXo
+
+- **Date:** 2026-07-05T01:20:28.396Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (20a9abb, build 13)
+
+  Already implemented before this feedback synced: entity citation sources
+  are tappable into the artifact viewer on web/iOS/Android since 20a9abb
+  (first shipped in build 13; this report came from build 12).
+
+> Include an update to have the sources clickable into an artifact viewer so I can see more info
+
+**Assets:** [screenshot-1.jpg](assets/AGGcchFC6_5VtW53PR7-DXo/screenshot-1.jpg)

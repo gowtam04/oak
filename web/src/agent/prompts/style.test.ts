@@ -176,6 +176,23 @@ describe("get_learnset parity guard (B-13) — present in every scope + provider
   }
 });
 
+describe("Anti-leak — no internal machinery in user-visible fields", () => {
+  for (const provider of PROVIDERS) {
+    for (const mode of ["standard", "champions", "gen-7"] as const) {
+      it(`states the anti-leak rule in the body (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        expect(text).toContain("NEVER expose Oak's internal machinery");
+      });
+      it(`few-shot no longer models leaking internals (${provider}, ${mode})`, () => {
+        const fewShot = domainForMode(mode).fewShot;
+        expect(fewShot).not.toContain("offline warehouse");
+        expect(fewShot).not.toContain("ran one read-only SQL");
+        expect(fewShot).not.toContain("meta_usage warehouse");
+      });
+    }
+  }
+});
+
 describe("get_meta_usage routing (B-5) — present + DDL in the cached prefix", () => {
   for (const provider of PROVIDERS) {
     for (const mode of ["standard", "champions", "gen-7"] as const) {

@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 
 afterEach(() => cleanup());
-import ChatThread from "./ChatThread";
+import ChatThread, { instrumentToken } from "./ChatThread";
 import type { ChatThreadProps } from "@/components/types";
 import { STARTER_PROMPTS } from "@/lib/example-prompts";
 
@@ -243,9 +243,10 @@ describe("ChatThread — streaming field-notes trail", () => {
     );
     const notes = screen.getAllByTestId("field-note");
     expect(notes).toHaveLength(2);
-    // The mono tool token is derived from the payload's `tool` field, uppercased.
-    expect(notes[0]).toHaveTextContent("RESOLVE_ENTITY");
-    expect(notes[1]).toHaveTextContent("GET_POKEMON");
+    // The mono tool token is a friendly instrument word derived from the
+    // payload's `tool` field — never the raw wire tool name (AH1b0N09K).
+    expect(notes[0]).toHaveTextContent("Dex lookup");
+    expect(notes[1]).toHaveTextContent("Pokémon");
     // The leading status emoji is stripped; the subject text remains.
     expect(notes[1]).toHaveTextContent("Fetching Garchomp");
     expect(notes[1].textContent).not.toContain("📊");
@@ -254,6 +255,28 @@ describe("ChatThread — streaming field-notes trail", () => {
     expect(notes[1].className).toContain("chat-thread__note--active");
     // No generic thinking placeholder once a tool has run.
     expect(screen.queryByTestId("progress-thinking")).toBeNull();
+  });
+
+  it("falls back to a generic 'Lookup' token for an unrecognized tool", () => {
+    render(
+      <ChatThread
+        {...props({
+          status: "streaming",
+          activity: [{ tool: "some_future_tool", label: "Doing a thing…" }],
+        })}
+      />,
+    );
+    const note = screen.getByTestId("field-note");
+    expect(note).toHaveTextContent("Lookup");
+    expect(note.textContent).not.toContain("SOME_FUTURE_TOOL");
+  });
+
+  it("exposes instrumentToken with the full copy-table mapping", () => {
+    expect(instrumentToken("run_sql")).toBe("Game data");
+    expect(instrumentToken("search_wiki")).toBe("Wiki");
+    expect(instrumentToken("get_meta_usage")).toBe("Usage");
+    expect(instrumentToken("submit_builder_answer")).toBe("Teams");
+    expect(instrumentToken("totally_unknown")).toBe("Lookup");
   });
 
   it("shows the answer skeleton while working, before prose streams", () => {

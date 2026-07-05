@@ -401,7 +401,7 @@ struct EntityDetailView: View {
       if !artifact.citations.isEmpty {
         ForEach(Array(artifact.citations.enumerated()), id: \.offset) { _, citation in
           Label {
-            Text("\(citation.source) — \(citation.detail)")
+            Text("\(displayCitationSource(citation.source)) — \(citation.detail)")
               .font(Theme.body(.caption2))
               .foregroundStyle(Theme.textMuted)
               .fixedSize(horizontal: false, vertical: true)

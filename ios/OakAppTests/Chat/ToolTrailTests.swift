@@ -76,14 +76,46 @@ struct ToolTrailTests {
     #expect(out == "Searching the wiki")
   }
 
-  // MARK: Row label — tool · subject
+  // MARK: Friendly noun mapping (copy-tables.md §1) — a raw tool id must never render
+
+  @Test
+  func friendlyNounCoversEveryDocumentedTool() {
+    #expect(ToolTrail.friendlyNoun("resolve_entity") == "Dex lookup")
+    #expect(ToolTrail.friendlyNoun("query_pokedex") == "Pokédex search")
+    #expect(ToolTrail.friendlyNoun("get_pokemon") == "Pokémon")
+    #expect(ToolTrail.friendlyNoun("get_move") == "Move")
+    #expect(ToolTrail.friendlyNoun("get_ability") == "Ability")
+    #expect(ToolTrail.friendlyNoun("get_item") == "Item")
+    #expect(ToolTrail.friendlyNoun("get_type_matchups") == "Type matchups")
+    #expect(ToolTrail.friendlyNoun("get_evolution_chain") == "Evolution")
+    #expect(ToolTrail.friendlyNoun("compute_stat") == "Stats")
+    #expect(ToolTrail.friendlyNoun("estimate_damage") == "Damage calc")
+    #expect(ToolTrail.friendlyNoun("get_usage_stats") == "Usage")
+    #expect(ToolTrail.friendlyNoun("get_meta_usage") == "Usage")
+    #expect(ToolTrail.friendlyNoun("get_encounters") == "Locations")
+    #expect(ToolTrail.friendlyNoun("get_learnset") == "Movepool")
+    #expect(ToolTrail.friendlyNoun("get_team") == "Teams")
+    #expect(ToolTrail.friendlyNoun("list_teams") == "Teams")
+    #expect(ToolTrail.friendlyNoun("save_team") == "Teams")
+    #expect(ToolTrail.friendlyNoun("run_sql") == "Game data")
+    #expect(ToolTrail.friendlyNoun("search_wiki") == "Wiki")
+    #expect(ToolTrail.friendlyNoun("submit_answer") == "Answer")
+    #expect(ToolTrail.friendlyNoun("submit_builder_answer") == "Teams")
+  }
+
+  @Test
+  func friendlyNounFallsBackToLookupForUnknownTools() {
+    #expect(ToolTrail.friendlyNoun("totally_new_tool") == "Lookup")
+  }
+
+  // MARK: Row label — noun · subject
 
   @Test
   func parsesQuotedSubjectIntoToolAndSubject() {
     // resolve_entity's label carries a curly-quoted query.
     #expect(
       ToolTrail.rowLabel(tool: "resolve_entity", label: "🔍 Resolving “Garchomp”…")
-        == "resolve_entity · Garchomp"
+        == "Dex lookup · Garchomp"
     )
   }
 
@@ -91,7 +123,7 @@ struct ToolTrailTests {
   func parsesTrailingCapitalisedSubject() {
     #expect(
       ToolTrail.rowLabel(tool: "get_pokemon", label: "📇 Looking up Garchomp…")
-        == "get_pokemon · Garchomp"
+        == "Pokémon · Garchomp"
     )
   }
 
@@ -102,8 +134,15 @@ struct ToolTrailTests {
   }
 
   @Test
-  func fallsBackToToolWhenLabelEmpty() {
-    #expect(ToolTrail.rowLabel(tool: "run_sql", label: "") == "run_sql")
+  func fallsBackToFriendlyNounWhenLabelEmpty() {
+    // A raw tool id must never render — the empty-label path falls back to the
+    // friendly noun, not the wire tool id.
+    #expect(ToolTrail.rowLabel(tool: "run_sql", label: "") == "Game data")
+  }
+
+  @Test
+  func fallsBackToFriendlyNounForUnknownToolWithEmptyLabel() {
+    #expect(ToolTrail.rowLabel(tool: "totally_new_tool", label: "") == "Lookup")
   }
 
   // MARK: Summary chip

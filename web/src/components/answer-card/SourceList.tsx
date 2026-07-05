@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { SourceListProps } from "@/components/types";
 import EntityLink from "@/components/artifact/EntityLink";
 import { parseCitationSource } from "@/components/artifact/parse-citation";
+import { displayCitationSource } from "@/components/artifact/citation-display";
 import { safeHttpUrl } from "@/lib/safe-url";
 
 /**
@@ -46,6 +47,7 @@ export default function SourceList({
         {citations.map((citation, i) => {
           const parsed = parseCitationSource(citation.source);
           const href = safeHttpUrl(citation.endpoint_url);
+          const displaySource = displayCitationSource(citation.source);
           return (
             <li
               key={i}
@@ -59,10 +61,10 @@ export default function SourceList({
                   className="source-list__source-link"
                   testid={`citation-entity-${i}`}
                 >
-                  {citation.source}
+                  {displaySource}
                 </EntityLink>
               ) : (
-                <span className="source-list__source">{citation.source}</span>
+                <span className="source-list__source">{displaySource}</span>
               )}
               <span className="source-list__detail"> — {citation.detail}</span>
               {href && (
