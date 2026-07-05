@@ -246,6 +246,57 @@ struct SSEParserTests {
     }
   }
 
+  /// The `turn` frame (background-turns/design.md §4) decodes to `.turn(turnId:)` — the
+  /// FIRST frame of both the POST and resume streams, carrying the server-minted id.
+  @Test
+  func turnFrameDecodesTheServerMintedId() throws {
+    var parser = SSEParser()
+    var out: [SSEEvent] = []
+    out += try parser.consume(line: "event: turn")
+    out += try parser.consume(line: "data: {\"turn_id\":\"3f9a-uuid\"}")
+    out += try parser.consume(line: "")
+
+    #expect(out == [.turn(turnId: "3f9a-uuid")])
+  }
+
+  /// The `stopped` frame (BT-4) decodes to the terminal `.stopped`; its `data: {}`
+  /// carries no payload.
+  @Test
+  func stoppedFrameDecodesToTerminalStopped() throws {
+    var parser = SSEParser()
+    var out: [SSEEvent] = []
+    out += try parser.consume(line: "event: stopped")
+    out += try parser.consume(line: "data: {}")
+    out += try parser.consume(line: "")
+
+    #expect(out == [.stopped])
+  }
+
+  /// A full reattach-shaped stream: `turn` first, then scope → activity → reset →
+  /// delta → terminal answer, reconstructed in order (the resume replay contract).
+  @Test
+  func turnLedStreamReconstructsInOrder() throws {
+    var parser = SSEParser()
+    var out: [SSEEvent] = []
+    let lines = [
+      "event: turn",
+      "data: {\"turn_id\":\"t-1\"}",
+      "",
+      "event: answer_start",
+      "data: {}",
+      "",
+      "event: answer_delta",
+      "data: {\"text\":\"Hello\"}",
+      "",
+    ]
+    for line in lines { out += try parser.consume(line: line) }
+
+    #expect(out.count == 3)
+    #expect(out[0] == .turn(turnId: "t-1"))
+    #expect(out[1] == .answerStart)
+    #expect(out[2] == .answerDelta(text: "Hello"))
+  }
+
   /// An unknown event name is ignored (forward-compatible with new server events).
   @Test
   func unknownEventNameIsIgnored() throws {

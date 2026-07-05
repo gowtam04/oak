@@ -4,6 +4,8 @@ import ai.gowtam.oak.wire.OakJson
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import okhttp3.Call
 import okhttp3.Callback
@@ -15,6 +17,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -45,6 +48,18 @@ class OakApiClient(
     private val tokenStore: TokenStore,
     private val client: OkHttpClient = OkHttpClient(),
 ) {
+    /**
+     * A dedicated client for the long-lived SSE byte streams (chat / assistant /
+     * turn resume). Derived from [client] so it inherits any test configuration
+     * (e.g. a plain-http `MockWebServer` client), but with the read/call timeouts
+     * DISABLED: an SSE stream is quiet for long stretches (the agent thinking or
+     * running tools) with only a `: keep-alive` comment every 15s, so OkHttp's
+     * default 10s read timeout — shorter than that heartbeat — would abort a live
+     * turn (background-turns/design.md §6.3, the latent-timeout fix). The connect
+     * timeout stays bounded (a stream that never opens should still fail fast).
+     * Non-streaming JSON calls keep [client]'s normal timeouts.
+     */
+    private val streamingClient: OkHttpClient = streamingClientFrom(client)
     /** Performs [endpoint] and decodes its 2xx body with [deserializer]. */
     @OptIn(ExperimentalSerializationApi::class)
     suspend fun <T> send(endpoint: Endpoint, deserializer: DeserializationStrategy<T>): T {
@@ -78,15 +93,21 @@ class OakApiClient(
     suspend fun openByteStream(endpoint: Endpoint): Response {
         val request = buildRequest(endpoint, accept = "text/event-stream")
         val response = try {
-            client.newCall(request).await()
+            streamingClient.newCall(request).await()
         } catch (e: IOException) {
             throw OakError.transportFailure(e)
         }
         if (response.isSuccessful) return response
         val body = response.body?.bytes() ?: ByteArray(0)
+        val code = response.code
         response.close()
-        val mapped = OakError.validate(response.code, response.headers, body).exceptionOrNull()
-        throw (mapped as? OakError) ?: OakError.Transport("unexpected_status_${response.code}")
+        // A `409 turn_in_progress` carries the running turn's id so the client can
+        // reattach instead of erroring (background-turns/design.md §4 / BT-5).
+        if (code == 409) {
+            decodeTurnInProgress(body)?.let { throw TurnInProgressSignal(it) }
+        }
+        val mapped = OakError.validate(code, response.headers, body).exceptionOrNull()
+        throw (mapped as? OakError) ?: OakError.Transport("unexpected_status_$code")
     }
 
     /**
@@ -140,6 +161,53 @@ class OakApiClient(
         endpoint.queryItems.forEach { (name, value) -> builder.addQueryParameter(name, value) }
         return builder.build()
     }
+
+    companion object {
+        /**
+         * Builds the SSE streaming client from [base]: read + call timeouts set to
+         * 0 (disabled) so a long, heartbeat-punctuated turn is never aborted, while
+         * the connect timeout stays bounded (default 10s if [base] didn't set one).
+         * `internal` so the timeout policy is unit-testable directly.
+         */
+        internal fun streamingClientFrom(base: OkHttpClient): OkHttpClient =
+            base.newBuilder()
+                .readTimeout(0, TimeUnit.MILLISECONDS)
+                .callTimeout(0, TimeUnit.MILLISECONDS)
+                .build()
+    }
+}
+
+/**
+ * A chat control signal (NOT an [OakError] — deliberately outside that sealed
+ * hierarchy so it doesn't force an exhaustive-`when` branch on every generic
+ * error-to-banner mapping): `POST /api/chat` answered `409 turn_in_progress`
+ * because a durable turn is already generating for this conversation
+ * (background-turns/design.md §4 / BT-5). [turnId] is the running turn's id; the
+ * chat reducer catches this on the stream-consume path and reattaches to it
+ * instead of surfacing an error. Any other consumer treats it as a generic drop.
+ */
+class TurnInProgressSignal(val turnId: String) : Exception()
+
+/** The `409` body shape when a chat turn is already generating for the conversation
+ * (`{ code, message, turn_id }`) — only the discriminating [code] and [turnId] matter. */
+@Serializable
+private data class TurnInProgressBody(
+    val code: String,
+    @SerialName("turn_id") val turnId: String? = null,
+)
+
+/**
+ * Extracts the running turn's id from a `409` body iff it is the
+ * `turn_in_progress` envelope carrying a `turn_id`; `null` for any other `409`
+ * (which then falls through to the ordinary HTTP error mapping).
+ */
+private fun decodeTurnInProgress(body: ByteArray): String? = try {
+    val decoded = OakJson.decodeFromString(TurnInProgressBody.serializer(), body.decodeToString())
+    if (decoded.code == "turn_in_progress") decoded.turnId else null
+} catch (e: SerializationException) {
+    null
+} catch (e: IllegalArgumentException) {
+    null
 }
 
 /**

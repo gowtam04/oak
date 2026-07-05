@@ -28,6 +28,14 @@ export interface ConversationDetail {
   format: string;
   pinned: boolean;
   turns: ChatTurn[];
+  /**
+   * The conversation's live durable turn, if one is still generating server-side
+   * (background-turns/design.md §5.4 / §6.1). A live registry lookup by
+   * conversation id + account, so reopening a thread mid-generation knows to
+   * reattach (`resume`) even after an app relaunch (when the client's own
+   * pending-turn pointer is gone). `null`/absent ⇒ no running turn.
+   */
+  active_turn?: { turn_id: string } | null;
 }
 
 const JSON_HEADERS: Record<string, string> = {

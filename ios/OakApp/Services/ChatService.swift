@@ -33,6 +33,30 @@ protocol ChatService: Sendable {
     images: [UIImage],
     scopeSeed: Format?
   ) -> AsyncThrowingStream<SSEEvent, Error>
+
+  /// Reattaches to a durable turn's live stream (`GET /api/chat/turns/:id/stream`,
+  /// background-turns/design.md §6.2). Yields the SAME `SSEEvent` sequence a fresh
+  /// `send` would — opening with the `turn` frame, replaying the buffered events,
+  /// then tailing live to the terminal `answer`/`error`/`stopped`. Used when a
+  /// thread is reopened (or the app foregrounded) with a turn still generating, and
+  /// to heal a mid-stream connection drop for a known `turnId`.
+  ///
+  /// - `turnId`: the server-minted id captured from the `turn` frame (or the
+  ///   conversation's `active_turn`).
+  /// - `sessionId`: the client thread UUID, sent as `?session_id=` for guest
+  ///   ownership (ignored for a signed-in caller, whose Bearer identifies them).
+  ///
+  /// A 404 (unknown/expired turn) is thrown as `OakError.http(status: 404, …)`
+  /// before any event is yielded — the caller clears the pending turn and offers a
+  /// manual retry.
+  func resumeStream(turnId: String, sessionId: String) -> AsyncThrowingStream<SSEEvent, Error>
+
+  /// Explicitly stops a running turn (`POST /api/chat/turns/:id/stop`,
+  /// background-turns/design.md §6.2 / BT-4). The turn is discarded server-side
+  /// (nothing persisted) and subscribers receive a terminal `stopped` event. Used
+  /// by the composer's Stop affordance. Stopping an already-terminal turn is a
+  /// no-op; the caller tears down its local stream regardless of the result.
+  func stop(turnId: String, sessionId: String) async throws
 }
 
 /// Production ``ChatService`` over ``SSEClient`` (which borrows ``OakAPIClient`` for
@@ -75,5 +99,13 @@ struct LiveChatService: ChatService {
       scopeSeed: scopeSeed
     )
     return sseClient.stream(request)
+  }
+
+  func resumeStream(turnId: String, sessionId: String) -> AsyncThrowingStream<SSEEvent, Error> {
+    sseClient.resume(turnId: turnId, sessionId: sessionId)
+  }
+
+  func stop(turnId: String, sessionId: String) async throws {
+    try await sseClient.stop(turnId: turnId, sessionId: sessionId)
   }
 }

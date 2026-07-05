@@ -621,16 +621,29 @@ export const estimateDamageOutputSchema = z.union([
 export const citationSchema = z
   .object({
     source: z.string(),
-    detail: z.string(),
+    detail: z
+      .string()
+      .describe(
+        "User-visible, plain player language describing the fact relied on. No internal tool, table, or column names and no SQL — say where it came from in plain English (e.g. 'Oak's complete Pokédex records').",
+      ),
     endpoint_url: z.string().optional(),
   })
   .strict();
 
 export const inferenceSchema = z
   .object({
-    claim: z.string(),
+    claim: z
+      .string()
+      .describe(
+        "User-visible, plain player language stating the deduction. No internal tool, table, or column names.",
+      ),
     confidence: z.enum(["high", "medium", "low"]),
-    note: z.string().optional(),
+    note: z
+      .string()
+      .optional()
+      .describe(
+        "User-visible, plain player language explaining the deduction. No internal tool, table, or column names.",
+      ),
   })
   .strict();
 
@@ -638,7 +651,12 @@ export const generationBasisSchema = z
   .object({
     generation: z.string(),
     fallback: z.boolean(),
-    note: z.string().optional(),
+    note: z
+      .string()
+      .optional()
+      .describe(
+        "User-visible, plain player language on what the answer is based on. No internal tool, table, or column names — describe provenance in plain English (e.g. 'stored monthly Smogon usage statistics').",
+      ),
   })
   .strict();
 
@@ -745,7 +763,11 @@ export const oakAnswerSchema = z
       "insufficient_data",
     ]),
     answer_markdown: z.string(),
-    reasoning_markdown: z.string(),
+    reasoning_markdown: z
+      .string()
+      .describe(
+        "User-visible, plain player language explaining how you reached the answer. No internal tool, table, or column names, no SQL — describe where facts came from in plain English.",
+      ),
     citations: z.array(citationSchema),
     inferences: z.array(inferenceSchema),
     generation_basis: generationBasisSchema,
@@ -754,7 +776,12 @@ export const oakAnswerSchema = z
     damage_calc: damageCalcSchema.optional(),
     suggestions: z.array(z.string()).optional(),
     question: questionSchema.optional(),
-    uncertainty_flags: z.array(z.string()).optional(),
+    uncertainty_flags: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "User-visible, plain player language caveats. No internal tool, table, or column names — describe any source or limitation in plain English (e.g. 'from the community Pokémon wiki, not authoritative game data').",
+      ),
     // The agent's proposed team (TEAM-AD-6). ADDITIVE optional field: previously
     // stored answer_json (no `proposed_team` key) stays valid under `.strict()`,
     // and a new answer carries a buildable team the user can Apply (save-new /
@@ -916,7 +943,13 @@ export const runSqlInputSchema = z.object({
   /** A single read-only SELECT/CTE query against the warehouse. */
   query: z.string().min(1).max(5000),
   /** A short natural-language note on what the query is for (audit/log only). */
-  purpose: z.string().min(1).max(200),
+  purpose: z
+    .string()
+    .min(1)
+    .max(200)
+    .describe(
+      "User-visible: a short, plain-English reason for the search, written for a non-technical player (it can appear as a progress label). NO table or column names, NO SQL, NO tool names — e.g. 'species whose Dex number equals their base-stat total', not a query description.",
+    ),
 });
 
 /** One returned cell — always coerced to a JSON primitive by the executor. */

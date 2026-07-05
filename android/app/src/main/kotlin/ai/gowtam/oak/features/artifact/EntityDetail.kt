@@ -3,6 +3,7 @@
 package ai.gowtam.oak.features.artifact
 
 import ai.gowtam.oak.features.chat.answercard.dexLabel
+import ai.gowtam.oak.features.chat.answercard.displayCitationSource
 import ai.gowtam.oak.features.chat.answercard.titleizeNonNull
 import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
@@ -419,7 +420,7 @@ private fun GroundingSection(artifact: EntityArtifactOk) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
                 Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = oak.textFaint, modifier = Modifier.height(14.dp))
                 Text(
-                    text = "${citation.source} — ${citation.detail}",
+                    text = "${displayCitationSource(citation.source)} — ${citation.detail}",
                     style = MaterialTheme.typography.labelSmall,
                     color = oak.textFaint,
                 )

@@ -101,6 +101,9 @@ struct SSEParser: SSELineParser {
     let decoder = JSONDecoder()
     do {
       switch name {
+      case "turn":
+        let data = try decoder.decode(SSEEvent.TurnData.self, from: json)
+        return [.turn(turnId: data.turnId)]
       case "scope":
         let data = try decoder.decode(SSEEvent.ScopeData.self, from: json)
         return [.scope(format: data.format, source: data.source)]
@@ -118,6 +121,8 @@ struct SSEParser: SSELineParser {
       case "error":
         let data = try decoder.decode(SSEEvent.ErrorData.self, from: json)
         return [.error(code: data.code, message: data.message, status: data.status)]
+      case "stopped":
+        return [.stopped]  // terminal; `data: {}` carries no payload
       default:
         return []  // unknown event name → forward-compatible no-op
       }

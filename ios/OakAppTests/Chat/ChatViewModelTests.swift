@@ -23,7 +23,9 @@ struct ChatViewModelTests {
     fake: FakeChatService,
     appState: AppState = AppState()
   ) -> ChatViewModel {
-    ChatViewModel(chat: fake, appState: appState)
+    // Disable the UIKit background-task grace so the detach/reattach logic is exercised
+    // deterministically without touching real `beginBackgroundTask` machinery.
+    ChatViewModel(chat: fake, appState: appState, usesBackgroundGrace: false)
   }
 
   /// Parse a committed `.sse` fixture into events through the PRODUCTION parser, so
@@ -419,116 +421,312 @@ struct ChatViewModelTests {
     #expect(vm.turns.isEmpty)
   }
 
-  // MARK: Stream resilience — auto-reconnect after a backgrounding drop
-  // (mirrors web `sse-client.ts`: MAX_RETRIES=1, only a drop while backgrounded)
+  // MARK: Background turns — pending-turn id, detach vs stop, reattach (design §6.2)
+
+  private func fullAnswer() throws -> OakAnswer {
+    try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
+  }
 
   @Test
-  func transportDropWhileBackgroundedAutoRetriesOnceThenSucceeds() async throws {
-    let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
+  func turnFrameRecordsPendingTurnIdLocallyAndInAppState() {
+    let appState = AppState()
+    let vm = makeViewModel(fake: FakeChatService(), appState: appState)
+
+    vm.apply(.turn(turnId: "turn-1"))
+
+    #expect(vm.currentTurnId == "turn-1")
+    #expect(appState.pendingTurn(for: vm.sessionId) == "turn-1")  // survives view teardown
+    #expect(vm.isStreaming == true)
+  }
+
+  @Test
+  func terminalAnswerClearsThePendingTurn() throws {
+    let appState = AppState()
+    let vm = makeViewModel(fake: FakeChatService(), appState: appState)
+
+    vm.apply(.turn(turnId: "turn-1"))
+    vm.apply(.answer(try fullAnswer()))
+
+    #expect(vm.currentTurnId == nil)                              // cleared on terminal
+    #expect(appState.pendingTurn(for: vm.sessionId) == nil)
+  }
+
+  @Test
+  func turnFrameResetsInFlightBufferForReattachReplay() {
+    // On a reattach the replay opens with `turn`; the buffer + tool history must reset
+    // so the replayed events repopulate them without duplication.
+    let vm = makeViewModel(fake: FakeChatService())
+    vm.apply(.toolActivity(tool: "t", label: "stale"))
+    vm.apply(.answerDelta(text: "stale half-answer"))
+
+    vm.apply(.turn(turnId: "turn-1"))
+
+    #expect(vm.streamingText == "")
+    #expect(vm.toolActivities.isEmpty)
+  }
+
+  @Test
+  func detachClosesTheSocketButKeepsThePendingTurnAndNeverStops() {
+    // Navigating away / backgrounding UNSUBSCRIBES — the turn keeps generating
+    // server-side. `detach` must NOT call the stop endpoint and must keep the pending
+    // id. The test body is synchronous, so `send`'s consume Task never runs (no
+    // suspension point) — `streamTask` stays as beginStreaming left it until detach.
     let fake = FakeChatService()
-    fake.attemptScripts = [
-      (events: [], error: .transport(underlying: "URLError.-1005")),  // attempt 1: drop
-      (events: [.answer(answer)], error: nil),                        // attempt 2: recovers
-    ]
-    let vm = makeViewModel(fake: fake)
+    fake.scriptedEvents = [.turn(turnId: "turn-1")]  // no terminal → "in flight"
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState)
 
     vm.composerText = "q"
     vm.send()
-    vm.sceneDidEnterBackground()              // arm the screen-off gate (turn in flight)
-    vm.sceneWillEnterForeground()             // back in foreground before the drop lands
-    await vm.streamTask?.value                // attempt 1 drops → fires the retry
-    await vm.streamTask?.value                // attempt 2 (the retry) succeeds
+    vm.apply(.turn(turnId: "turn-1"))                // record the turn id deterministically
 
-    #expect(fake.sendCount == 2)              // exactly ONE auto-retry
-    #expect(vm.turns.count == 2)              // user + recovered answer
-    #expect(vm.errorBanner == nil)            // recovered, no error surfaced
-    #expect(vm.reconnecting == false)         // cleared once output resumed
+    vm.detach()
+
+    #expect(vm.streamTask == nil)                    // socket closed
+    #expect(fake.stopCount == 0)                     // NEVER calls the server (BT-7)
+    #expect(vm.currentTurnId == "turn-1")            // pending id kept
+    #expect(appState.pendingTurn(for: vm.sessionId) == "turn-1")
+  }
+
+  @Test
+  func stopCallsTheServerStopEndpointAndClearsThePendingTurn() async {
+    // The Stop affordance is now an EXPLICIT server call (BT-4), then local teardown.
+    let fake = FakeChatService()
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState)
+
+    // Put a turn in flight without a live consume task, so the only Task to schedule is
+    // the fire-and-forget stop call the assertions are about.
+    vm.apply(.turn(turnId: "turn-1"))                // isStreaming + a known turn id
+
+    // A late stop (past the quick-stop window) so the assertions are about the stop
+    // call + teardown, not the quick-stop thread wipe.
+    vm.performStop(now: Date().addingTimeInterval(ChatViewModel.quickStopThreshold + 5))
+    // Let the fire-and-forget stop task run.
+    for _ in 0..<20 where fake.stopCount == 0 { await Task.yield() }
+
+    #expect(fake.stopCount == 1)                      // stopped server-side
+    #expect(fake.lastStopTurnId == "turn-1")          // stopped the right turn
+    #expect(fake.lastStopSessionId == vm.sessionId)
+    #expect(vm.isStreaming == false)                  // local teardown ran
+    #expect(vm.currentTurnId == nil)                  // pending id cleared (turn discarded)
+    #expect(appState.pendingTurn(for: vm.sessionId) == nil)
+    #expect(vm.errorBanner == nil)                    // a stop is not a failure
+  }
+
+  @Test
+  func stopBeforeTurnFrameDefersTheStopUntilTheIdArrives() async {
+    // The pre-`turn`-frame stop race (design §6.2): a Stop before `turn { turn_id }`
+    // must NOT tear down locally and leave the server turn running (a ghost answer).
+    // It arms a pending stop, finalizes the UI, keeps the read alive to capture the id,
+    // then fires the stop endpoint against the ORIGINAL session.
+    let fake = FakeChatService()
+    fake.scriptedEvents = []  // stays "in flight"; the consume task never runs (no await)
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState)
+    let originalSession = vm.sessionId
+
+    vm.composerText = "q"
+    vm.send()
+    #expect(vm.currentTurnId == nil)   // no id yet — the race window
+
+    // Stop inside the quick-stop window (no id): the UI finalizes now (quick stop wipes
+    // + rotates the session), but the stop endpoint is NOT called yet.
+    vm.performStop(now: Date())
+    #expect(vm.isStreaming == false)   // UI finalized immediately
+    #expect(fake.stopCount == 0)       // deferred — no id to POST to yet
+    #expect(vm.sessionId != originalSession)  // quick stop rotated the session
+
+    // The `turn` frame finally arrives (delivered by the still-alive read): now the stop
+    // fires with the captured id, against the ORIGINAL session (guest authorization).
+    vm.apply(.turn(turnId: "turn-late"))
+    for _ in 0..<20 where fake.stopCount == 0 { await Task.yield() }
+
+    #expect(fake.stopCount == 1)
+    #expect(fake.lastStopTurnId == "turn-late")
+    #expect(fake.lastStopSessionId == originalSession)  // NOT the rotated session
+    #expect(vm.streamTask == nil)      // connection torn down after the deferred stop
+  }
+
+  @Test
+  func stopBeforeTurnFrameStaysSilentlyIdleIfTheConnectionDiesFirst() async {
+    // If the connection dies before the `turn` frame arrives, there is nothing to stop —
+    // stay silently idle (no stop call, no error banner).
+    let fake = FakeChatService()
+    fake.thrownError = .transport(underlying: "URLError.-1005")  // the send stream dies
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState)
+
+    vm.composerText = "q"
+    vm.send()
+    vm.performStop(now: Date())        // arm the deferred stop (no id yet)
+    await vm.streamTask?.value         // the read dies before any `turn` frame
+
+    #expect(fake.stopCount == 0)       // nothing to stop
+    #expect(vm.errorBanner == nil)     // silent — not surfaced as a failure
     #expect(vm.isStreaming == false)
   }
 
   @Test
-  func transportDropStillBackgroundedDefersRetryUntilForeground() async throws {
-    let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
-    let fake = FakeChatService()
-    fake.attemptScripts = [
-      (events: [], error: .transport(underlying: "URLError.-1005")),
-      (events: [.answer(answer)], error: nil),
-    ]
-    let vm = makeViewModel(fake: fake)
+  func stoppedEventDiscardsTheTurnWithNoBanner() {
+    let appState = AppState()
+    let vm = makeViewModel(fake: FakeChatService(), appState: appState)
+    vm.apply(.turn(turnId: "turn-1"))
+    vm.apply(.answerDelta(text: "partial"))
 
-    vm.composerText = "q"
-    vm.send()
-    vm.sceneDidEnterBackground()              // STILL backgrounded when the drop is seen
-    await vm.streamTask?.value                // attempt 1 drops → retry DEFERRED
+    vm.apply(.stopped)
 
-    #expect(fake.sendCount == 1)              // not retried yet (still backgrounded)
-    #expect(vm.reconnecting == true)          // "Reconnecting…" shown
-    #expect(vm.isStreaming == true)           // turn kept in flight
-    #expect(vm.errorBanner == nil)            // no dead-end error
-
-    vm.sceneWillEnterForeground()             // resume → fire the deferred retry
-    await vm.streamTask?.value                // attempt 2 succeeds
-
-    #expect(fake.sendCount == 2)
-    #expect(vm.turns.count == 2)
-    #expect(vm.reconnecting == false)
-    #expect(vm.errorBanner == nil)
+    #expect(vm.isStreaming == false)
+    #expect(vm.streamingText == "")
+    #expect(vm.errorBanner == nil)                    // stopped is intentional, not an error
+    #expect(vm.currentTurnId == nil)
+    #expect(appState.pendingTurn(for: vm.sessionId) == nil)
   }
 
   @Test
-  func transportDropWhileForegroundedIsNotRetried() async {
-    // A connection drop that never coincided with backgrounding is a plain failure —
-    // it surfaces a banner and is NOT auto-retried.
+  func reattachIfNeededResumesARunningTurnFromThePendingPointer() async throws {
+    // A thread reopened (or app foregrounded) with a pending turn reattaches to its
+    // live stream and rebuilds the in-flight UI from the replay.
     let fake = FakeChatService()
-    fake.thrownError = .transport(underlying: "URLError.-1005")
-    let vm = makeViewModel(fake: fake)
+    fake.resumeEvents = [.turn(turnId: "turn-1"), .answer(try fullAnswer())]
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState)
+    appState.setPendingTurn(conversationId: vm.sessionId, turnId: "turn-1")
 
-    vm.composerText = "q"
-    vm.send()                                 // no background transition
+    vm.reattachIfNeeded()
     await vm.streamTask?.value
 
-    #expect(fake.sendCount == 1)              // NOT retried
-    #expect(vm.errorBanner?.message == ChatViewModel.connectionMessage)
-    #expect(vm.reconnecting == false)
+    #expect(fake.resumeCount == 1)                    // reattached, not re-sent
+    #expect(fake.sendCount == 0)
+    #expect(fake.lastResumeTurnId == "turn-1")
+    #expect(fake.lastResumeSessionId == vm.sessionId)
+    if case let .assistant(answer) = vm.turns.last?.content {
+      #expect(answer.status == .answered)             // resumed answer rendered
+    } else {
+      Issue.record("expected the resumed answer to render")
+    }
+    #expect(vm.isStreaming == false)
+    #expect(appState.pendingTurn(for: vm.sessionId) == nil)  // terminal cleared it
+  }
+
+  @Test
+  func reattachIfNeededIsANoOpWithNoPendingTurn() {
+    let fake = FakeChatService()
+    let vm = makeViewModel(fake: fake)
+
+    vm.reattachIfNeeded()
+
+    #expect(fake.resumeCount == 0)                    // nothing to reattach to
+    #expect(vm.streamTask == nil)
+  }
+
+  @Test
+  func reattachIfNeededDoesNotDoubleAttachWhileAStreamIsLive() {
+    let fake = FakeChatService()
+    fake.scriptedEvents = []                          // stays in flight
+    let vm = makeViewModel(fake: fake)
+    vm.composerText = "q"
+    vm.send()                                         // a live stream is attached
+    vm.apply(.turn(turnId: "turn-1"))
+
+    vm.reattachIfNeeded()                             // must not open a second stream
+
+    #expect(fake.resumeCount == 0)
+  }
+
+  @Test
+  func resumeNotFoundClearsPendingAndShowsInterruptedRetryBanner() async {
+    // A reattach whose turn is gone (resume 404) clears the pending pointer and surfaces
+    // the interrupted/Retry affordance.
+    let fake = FakeChatService()
+    fake.resumeThrownError = .http(status: 404, code: "not_found", message: "Turn not found.")
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState)
+    appState.setPendingTurn(conversationId: vm.sessionId, turnId: "turn-gone")
+
+    vm.reattachIfNeeded()
+    await vm.streamTask?.value
+
+    #expect(appState.pendingTurn(for: vm.sessionId) == nil)   // pending cleared
+    #expect(vm.currentTurnId == nil)
+    #expect(vm.isStreaming == false)
+    #expect(vm.errorBanner?.message == ChatViewModel.interruptedMessage)
+    #expect(vm.errorBanner?.isRetryable == true)
+  }
+
+  @Test
+  func sendReattachesInsteadOfErroringOn409TurnInProgress() async throws {
+    // A send that collides with a turn already generating (409 `turn_in_progress`)
+    // reattaches to the returned turn id instead of surfacing an error (BT-5).
+    let fake = FakeChatService()
+    fake.thrownError = .turnInProgress(turnId: "turn-running")
+    fake.resumeEvents = [.turn(turnId: "turn-running"), .answer(try fullAnswer())]
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState)
+
+    vm.composerText = "q"
+    vm.send()
+    await vm.streamTask?.value                         // send → 409 → handleTurnInProgress
+    await vm.streamTask?.value                         // the reattach resume completes
+
+    #expect(fake.lastResumeTurnId == "turn-running")   // reattached to the running turn
+    #expect(vm.errorBanner == nil)                     // no error surfaced
+    if case let .assistant(answer) = vm.turns.last?.content {
+      #expect(answer.status == .answered)
+    } else {
+      Issue.record("expected the running turn's answer to render")
+    }
     #expect(vm.isStreaming == false)
   }
 
   @Test
-  func cleanServerErrorIsNeverAutoRetriedEvenWhenBackgrounded() async {
-    // A clean server fault (rate limit / HTTP status) is never a "drop": it surfaces
-    // immediately and is never auto-retried, even if the app was backgrounded.
+  func loadResumedReattachesToTheConversationActiveTurn() async throws {
+    // Opening a saved conversation whose `active_turn` is still generating reattaches
+    // to its live stream (design §5.4).
     let fake = FakeChatService()
-    fake.thrownError = .rateLimited(retryAfter: 5)
-    let vm = makeViewModel(fake: fake)
+    fake.resumeEvents = [.turn(turnId: "active-1"), .answer(try fullAnswer())]
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState)
 
-    vm.composerText = "q"
-    vm.send()
-    vm.sceneDidEnterBackground()
-    vm.sceneWillEnterForeground()
+    vm.loadResumed(
+      conversationId: "conv-9",
+      format: .champions,
+      turns: [.user(id: "u1", content: "Tell me about Garchomp")],
+      activeTurnId: "active-1"
+    )
     await vm.streamTask?.value
 
-    #expect(fake.sendCount == 1)              // NOT retried — a clean server fault
-    #expect(vm.errorBanner != nil)            // surfaced instead
-    #expect(vm.reconnecting == false)
+    #expect(fake.lastResumeTurnId == "active-1")
+    #expect(fake.lastResumeSessionId == "conv-9")
+    #expect(vm.turns.count == 2)                        // resumed user turn + streamed answer
+    #expect(appState.pendingTurn(for: "conv-9") == nil) // terminal cleared it
   }
 
   @Test
-  func inBandErrorEventIsNeverAutoRetried() async throws {
-    // An in-band SSE `error` frame is a real model/agent fault, delivered over a healthy
-    // connection — it becomes a banner and is never auto-retried, even if backgrounded.
+  func loadResumedWithNoActiveTurnDoesNotReattach() {
     let fake = FakeChatService()
-    fake.scriptedEvents = [.error(code: "model_unavailable", message: "down", status: 503)]
     let vm = makeViewModel(fake: fake)
 
-    vm.composerText = "q"
-    vm.send()
-    vm.sceneDidEnterBackground()
-    vm.sceneWillEnterForeground()
-    await vm.streamTask?.value
+    vm.loadResumed(conversationId: "conv-9", format: .champions, turns: [], activeTurnId: nil)
 
-    #expect(fake.sendCount == 1)              // never retried
+    #expect(fake.resumeCount == 0)
+    #expect(vm.streamTask == nil)
+  }
+
+  @Test
+  func inBandErrorEventClearsPendingAndIsNeverReattached() throws {
+    // An in-band SSE `error` frame is a real model/agent fault over a healthy connection
+    // — it becomes a banner, clears the pending turn, and is never reattached.
+    let appState = AppState()
+    let vm = makeViewModel(fake: FakeChatService(), appState: appState)
+
+    vm.apply(.turn(turnId: "turn-1"))
+    vm.apply(.error(code: "model_unavailable", message: "down", status: 503))
+
     #expect(vm.errorBanner != nil)
     #expect(vm.reconnecting == false)
+    #expect(vm.currentTurnId == nil)
+    #expect(appState.pendingTurn(for: vm.sessionId) == nil)
   }
 
   // MARK: Composer + conversation lifecycle

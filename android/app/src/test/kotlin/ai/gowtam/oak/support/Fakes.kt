@@ -95,9 +95,15 @@ class FakeAuthService(
 class FakeChatService(
     var scriptedEvents: List<ai.gowtam.oak.wire.SseEvent> = emptyList(),
     var error: OakError? = null,
+    /** Events replayed by [resume] (the reattach path); defaults to [scriptedEvents]. */
+    var resumeEvents: List<ai.gowtam.oak.wire.SseEvent>? = null,
+    /** A pre-stream failure thrown by [resume] (e.g. `OakError.Http(404, …)` for a dead turn). */
+    var resumeError: OakError? = null,
 ) : ChatService {
     val sendWithImagesCalls = mutableListOf<Quadruple>()
     val sendRequestCalls = mutableListOf<ChatRequest>()
+    val resumeCalls = mutableListOf<Pair<String, String>>()
+    val stopCalls = mutableListOf<Pair<String, String>>()
 
     data class Quadruple(val sessionId: String, val message: String, val images: List<SourceImage>, val scopeSeed: Format?)
 
@@ -114,6 +120,18 @@ class FakeChatService(
     override fun send(request: ChatRequest): Flow<ai.gowtam.oak.wire.SseEvent> {
         sendRequestCalls += request
         return scriptedFlow()
+    }
+
+    override fun resume(turnId: String, sessionId: String): Flow<ai.gowtam.oak.wire.SseEvent> {
+        resumeCalls += turnId to sessionId
+        return flow {
+            resumeError?.let { throw it }
+            (resumeEvents ?: scriptedEvents).forEach { emit(it) }
+        }
+    }
+
+    override suspend fun stop(turnId: String, sessionId: String) {
+        stopCalls += turnId to sessionId
     }
 
     private fun scriptedFlow(): Flow<ai.gowtam.oak.wire.SseEvent> = flow {

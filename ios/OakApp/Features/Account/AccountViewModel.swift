@@ -145,7 +145,7 @@ final class AccountViewModel {
     switch error {
     case .transport:
       return connectionMessage
-    case .rateLimited, .unauthorized, .http, .decoding, .imageRejected:
+    case .rateLimited, .unauthorized, .http, .decoding, .imageRejected, .turnInProgress:
       return deletionFailedMessage
     }
   }

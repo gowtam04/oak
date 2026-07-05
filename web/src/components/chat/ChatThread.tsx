@@ -20,10 +20,47 @@ function noteDescription(label: string): string {
 }
 
 /**
- * One "field note" chip in the streaming trail: the mono instrument token derived
- * from the tool name (`GET_POKEMON`) beside the human-readable subject, with a
- * pokeball micro-spinner while in flight (the latest, unfinished call) or a tick
- * once the loop has moved on. Presentation only — data comes straight from the
+ * Tool -> friendly instrument word (TestFlight feedback AH1b0N09K — raw wire
+ * tool names like `GET_EVOLUTION_CHAIN`/`RUN_SQL` leaked into the streaming
+ * chips). Pinned by the canonical cross-platform copy table (§1) — iOS/Android
+ * mirror this vocabulary exactly. `.ilabel` uppercases visually via CSS
+ * (`text-transform: uppercase`), so the map stores natural case.
+ */
+const INSTRUMENT_TOKENS: Record<string, string> = {
+  resolve_entity: "Dex lookup",
+  query_pokedex: "Pokédex search",
+  get_pokemon: "Pokémon",
+  get_move: "Move",
+  get_ability: "Ability",
+  get_item: "Item",
+  get_type_matchups: "Type matchups",
+  get_evolution_chain: "Evolution",
+  compute_stat: "Stats",
+  estimate_damage: "Damage calc",
+  get_usage_stats: "Usage",
+  get_meta_usage: "Usage",
+  get_encounters: "Locations",
+  get_learnset: "Movepool",
+  get_team: "Teams",
+  list_teams: "Teams",
+  save_team: "Teams",
+  run_sql: "Game data",
+  search_wiki: "Wiki",
+  submit_answer: "Answer",
+  submit_builder_answer: "Teams",
+};
+const UNKNOWN_INSTRUMENT_TOKEN = "Lookup";
+
+export function instrumentToken(tool: string): string {
+  return INSTRUMENT_TOKENS[tool] ?? UNKNOWN_INSTRUMENT_TOKEN;
+}
+
+/**
+ * One "field note" chip in the streaming trail: the mono instrument word
+ * mapped from the tool name (e.g. `get_pokemon` -> "Pokémon", via
+ * `instrumentToken`) beside the human-readable subject, with a pokeball
+ * micro-spinner while in flight (the latest, unfinished call) or a tick once
+ * the loop has moved on. Presentation only — data comes straight from the
  * `tool_activity` SSE payload the client already accumulates.
  */
 function FieldNote({
@@ -44,7 +81,7 @@ function FieldNote({
         aria-hidden="true"
       />
       <span className="ilabel chat-thread__note-tool">
-        {activity.tool.toUpperCase()}
+        {instrumentToken(activity.tool)}
       </span>
       <span className="chat-thread__note-desc">
         {noteDescription(activity.label)}

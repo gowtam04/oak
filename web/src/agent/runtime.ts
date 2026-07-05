@@ -206,7 +206,7 @@ const PROGRESS_LABELS: Record<string, string> = {
 
 /** The generic per-tool label, used as the fallback when args are unusable. */
 function progressLabel(tool: string): string {
-  return PROGRESS_LABELS[tool] ?? `Running ${tool}…`;
+  return PROGRESS_LABELS[tool] ?? "⚙️ Working…";
 }
 
 /**
@@ -349,7 +349,10 @@ export function describeToolCall(tool: string, input: unknown): string {
     case "run_sql": {
       const purpose =
         typeof obj.purpose === "string" ? obj.purpose.trim() : "";
-      return purpose
+      // Defensive scrub: if the model leaks internal names/SQL into `purpose`,
+      // fall back to the generic label rather than surfacing them to the user.
+      const leaks = /natdex_|meta_(usage|snapshot)|pmd_|\bsql\b|\bselect\b|\bjoin\b|_table\b/i;
+      return purpose && !leaks.test(purpose)
         ? `🗄️ Querying the dex database — ${purpose.slice(0, 120)}…`
         : base;
     }

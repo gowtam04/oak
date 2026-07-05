@@ -50,15 +50,28 @@ data class ChatImage(
 
 /**
  * One decoded server-sent event from the chat stream (mirrors `SseEventName` in
- * `sse-types.ts`). Emission order: `scope` (once, first) → `tool_activity`* →
+ * `sse-types.ts`). Emission order (background-turns/design.md §4): `turn` (once,
+ * FIRST — the server-minted turn id) → `scope` (once) → `tool_activity`* →
  * `answer_start` (zero or more) / `answer_delta` (zero or more) → exactly one
- * terminal `answer`. An [Error]
- * event is reserved for transport/API faults ONLY — every in-domain failure
- * rides a normal [Answer] event whose `OakAnswer.status` carries it. Decoding a
- * frame's `data:` JSON into one of these variants is the `SseParser`'s job (P3);
- * this type only models the event shapes.
+ * terminal event: [Answer], [Error], or [Stopped]. An [Error] event is reserved
+ * for transport/API faults ONLY — every in-domain failure rides a normal [Answer]
+ * event whose `OakAnswer.status` carries it. [Stopped] is the terminal alternative
+ * for a turn cancelled via the stop endpoint (nothing persisted). Decoding a
+ * frame's `data:` JSON into one of these variants is the `SseParser`'s job; this
+ * type only models the event shapes.
+ *
+ * The `turn` and `stopped` events are additive (background-turns): older parsers
+ * dropped them as unknown, and the resume stream replays the same union.
  */
 sealed interface SseEvent {
+    /**
+     * `turn` — the server-minted turn id, emitted once as the FIRST frame of both
+     * the POST stream and the resume stream. The client records it as its
+     * conversation's pending turn so it can later reattach/stop the durable turn
+     * (background-turns/design.md §4 / BT-2).
+     */
+    data class Turn(val turnId: String) : SseEvent
+
     /** `scope` — the server-resolved game scope for this turn, emitted once, first. */
     data class Scope(val format: Format, val source: ScopeSource) : SseEvent
 
@@ -76,6 +89,14 @@ sealed interface SseEvent {
 
     /** `error` — transport/API fault only (never an in-domain failure). */
     data class Error(val code: String, val message: String, val status: Int?) : SseEvent
+
+    /**
+     * `stopped` — the terminal event for a turn explicitly cancelled via the stop
+     * endpoint (background-turns/design.md §4 / BT-4). Nothing is persisted or
+     * recorded; it is a terminal ALTERNATIVE to [Answer]/[Error]. Seen when a
+     * client reattaches to a turn that was stopped (its own or another device's).
+     */
+    data object Stopped : SseEvent
 }
 
 /**

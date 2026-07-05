@@ -148,6 +148,12 @@ fun ChatScreen(
         )
     }
 
+    // Entering the thread (first composition, or re-entry after a tab switch) reattaches
+    // to any durable turn still generating for this conversation, rebuilding the
+    // in-flight UI from the resume replay (background-turns/design.md §6.3). A no-op when
+    // nothing is pending or a live subscription is already running.
+    LaunchedEffect(viewModel) { viewModel.reattachIfPending() }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
@@ -160,9 +166,10 @@ fun ChatScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            // Tear down any in-flight stream when the screen leaves composition — this
-            // also releases the keep-screen-on hold so it can never get stuck on.
-            viewModel.cancelStreaming()
+            // Leaving composition UNSUBSCRIBES from the stream but leaves the durable turn
+            // running server-side (it is reattached on return) — never a cancel. Releases
+            // the keep-screen-on hold so it can't get stuck on.
+            viewModel.detach()
         }
     }
 

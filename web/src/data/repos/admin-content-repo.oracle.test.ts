@@ -594,12 +594,12 @@ describe("listAccounts", () => {
       (await repo.listAccounts({ limit: 50, sort: "errors" })).rows.map((r) => r.id),
     ).toEqual([ACCOUNTS.B.id, ACCOUNTS.A.id, ACCOUNTS.C.id]);
 
-    // cost: ash (grok-heavy) > brock (claude) > misty (gpt).
+    // cost: misty (gpt-5.5) > ash (grok-4.3) > brock (claude).
     const byCost = await repo.listAccounts({ limit: 50, sort: "cost" });
     expect(byCost.rows.map((r) => r.id)).toEqual([
+      ACCOUNTS.B.id,
       ACCOUNTS.A.id,
       ACCOUNTS.C.id,
-      ACCOUNTS.B.id,
     ]);
     expect(byCost.rows[0].estUsd).toBeGreaterThan(byCost.rows[1].estUsd);
     expect(byCost.rows[1].estUsd).toBeGreaterThan(byCost.rows[2].estUsd);

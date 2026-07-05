@@ -22,7 +22,7 @@ struct InferencesView: View {
         Text(inferenceHeader)
           .instrumentLabel()
           .foregroundStyle(Theme.azure)
-          .accessibilityLabel("Inferred — deductions, not cited")
+          .accessibilityLabel("Oak's deductions — not directly cited")
 
         ForEach(Array(inferences.enumerated()), id: \.offset) { _, inference in
           row(inference)
@@ -40,13 +40,14 @@ struct InferencesView: View {
     }
   }
 
-  /// Header label — "INFERENCE · HIGH" when there is exactly one inference with
-  /// a known confidence level; "INFERENCE" otherwise.
+  /// Header label — "OAK'S DEDUCTIONS · SOLID" when there is exactly one inference
+  /// with a known confidence level; "OAK'S DEDUCTIONS" otherwise. (`.instrumentLabel()`
+  /// uppercases the rendered text; this returns natural case.)
   private var inferenceHeader: String {
     if inferences.count == 1, let first = inferences.first {
-      return "INFERENCE · \(first.confidence.label.uppercased())"
+      return "Oak's deductions · \(first.confidence.label)"
     }
-    return "INFERENCE"
+    return "Oak's deductions"
   }
 
   /// One inference: a leading confidence badge, the claim, and an optional note.
@@ -108,9 +109,9 @@ struct InferencesView: View {
 private extension Inference.Confidence {
   var label: String {
     switch self {
-    case .high: return "High"
-    case .medium: return "Medium"
-    case .low: return "Low"
+    case .high: return "Solid"
+    case .medium: return "Likely"
+    case .low: return "Unsure"
     // An unrecognized confidence value (the wire can widen): render the raw string
     // verbatim rather than failing the decode or hiding the inference.
     case let .unknown(raw): return raw

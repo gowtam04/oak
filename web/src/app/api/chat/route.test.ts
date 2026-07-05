@@ -60,6 +60,7 @@ import {
   checkRateLimit,
   GUEST_CONFIG,
 } from "@/server/rate-limit";
+import { _resetStoreForTests as resetTurnStore } from "@/server/turn-store";
 
 const ACCT_A = "acct-a";
 
@@ -141,6 +142,7 @@ beforeEach(async () => {
   usage.recordAuthEvent.mockReset();
   usage.recordAuthEvent.mockResolvedValue(undefined);
   await _resetStoreForTests();
+  await resetTurnStore();
 });
 
 // --- Helpers ---------------------------------------------------------------
@@ -211,19 +213,23 @@ describe("POST /api/chat — no active-team seam", () => {
     expect((captured.options as Record<string, unknown>).accountId).toBe(ACCT_A);
   });
 
-  it("an aborted turn persists nothing (existing guard)", async () => {
+  // BACKGROUND TURNS (design §5.2): a client disconnect NO LONGER cancels or
+  // discards the turn. The request signal is not wired to the turn — only an
+  // explicit stop aborts it (BT-4) — so a turn whose request signal is already
+  // aborted still runs to completion and persists (BT-1/BT-7). This reverses the
+  // old "aborted turn persists nothing" guard.
+  it("a client disconnect (aborted request signal) still persists the turn (BT-1/BT-7)", async () => {
     signedIn(ACCT_A);
     const res = await post({ session_id: "c3", message: "hi" }, AbortSignal.abort());
     await drain(res);
-    expect(await convRepo.getConversation(ACCT_A, "c3")).toBeNull();
+    expect(await convRepo.getConversation(ACCT_A, "c3")).not.toBeNull();
   });
 
-  // An interrupted turn must not record either — recording lives after the
-  // abort guard, on the same non-blocking post-answer path as persistence.
-  it("an aborted turn records no turn_record", async () => {
+  // Recording is likewise no longer gated on a live connection.
+  it("a client disconnect still records the turn", async () => {
     signedIn(ACCT_A);
     await drain(await post({ session_id: "c3b", message: "hi" }, AbortSignal.abort()));
-    expect(usage.recordTurn).not.toHaveBeenCalled();
+    expect(usage.recordTurn).toHaveBeenCalledTimes(1);
   });
 });
 

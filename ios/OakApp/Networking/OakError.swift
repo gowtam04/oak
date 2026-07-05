@@ -29,6 +29,11 @@ enum OakError: Error, Equatable, Sendable {
   case decoding(String)
   /// An attached image failed the client-side caps before the request opened.
   case imageRejected(reason: ImageRejectReason)
+  /// `409 turn_in_progress` on `POST /api/chat`: a response is already generating
+  /// for this conversation (background-turns/design.md §4 / BT-5). Carries the
+  /// running turn's id so the client reattaches to it instead of surfacing an
+  /// error. Distinct from `.http` so the `turn_id` survives the mapping.
+  case turnInProgress(turnId: String)
 }
 
 /// Why the client rejected an attached image before sending (mirrors the server's
@@ -64,6 +69,16 @@ extension OakError {
       return .failure(.unauthorized)
     case 429:
       return .failure(.rateLimited(retryAfter: retryAfterSeconds(from: response)))
+    case 409:
+      // A 409 `turn_in_progress` carries the running turn's id — surface it as the
+      // dedicated case so the client can reattach. Any other 409 falls back to the
+      // generic `.http` mapping.
+      if let body = try? JSONDecoder().decode(TurnInProgressBody.self, from: data),
+        body.code == "turn_in_progress"
+      {
+        return .failure(.turnInProgress(turnId: body.turnId))
+      }
+      return .failure(httpError(status: status, data: data))
     default:
       return .failure(httpError(status: status, data: data))
     }
@@ -86,6 +101,19 @@ extension OakError {
       return .http(status: status, code: body.code, message: body.message)
     }
     return .http(status: status, code: "unknown", message: "")
+  }
+
+  /// The `409 turn_in_progress` body (`{ code, message, turn_id }` — the chat route
+  /// adds `turn_id` to the standard envelope). Only `code`/`turn_id` are needed to
+  /// route the client to a reattach.
+  private struct TurnInProgressBody: Decodable {
+    let code: String
+    let turnId: String
+
+    enum CodingKeys: String, CodingKey {
+      case code
+      case turnId = "turn_id"
+    }
   }
 
   /// Parses the `Retry-After` header into seconds. Accepts a numeric

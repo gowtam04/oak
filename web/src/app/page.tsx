@@ -69,6 +69,7 @@ export default function Home() {
   );
   const {
     status,
+    turnId,
     scope,
     activities,
     answer,
@@ -76,6 +77,8 @@ export default function Home() {
     error,
     reconnecting,
     send,
+    resume,
+    stop,
     reset,
     retry,
   } = useSseClient();
@@ -114,6 +117,30 @@ export default function Home() {
   // plain stop, and restore the stopped message into the composer.
   const requestStartRef = useRef<number>(0);
   const inFlightMessageRef = useRef<string>("");
+
+  // Pending durable turn per conversation (background-turns/design.md §6.1:
+  // "keep pending turn id per session"). A conversation whose turn keeps running
+  // server-side after we detach (switched away, or backgrounded) records its
+  // turn id here, keyed by session id, so reopening it can reattach. A ref (not
+  // state) — it never drives render, only the reopen decision. The authoritative
+  // reopen path for a signed-in thread is `active_turn` from the conversation
+  // GET (server-side, survives an app relaunch); this map is the same-session
+  // hint that complements it.
+  const pendingTurnsRef = useRef<Map<string, string>>(new Map());
+  // Record the current turn's id against its conversation once the `turn` frame
+  // lands (§6.1). Only ADDS — a detach (reset on switch) must NOT drop another
+  // conversation's pending pointer, so removal is handled on terminal only.
+  useEffect(() => {
+    if (turnId) pendingTurnsRef.current.set(sessionId, turnId);
+  }, [turnId, sessionId]);
+  // Clear the pending pointer when the ACTIVE conversation's turn reaches a
+  // terminal state (the hook only streams the active thread, so a `done`/`error`
+  // here belongs to `sessionId`). A stopped turn is cleared in `handleStop`.
+  useEffect(() => {
+    if (status === "done" || status === "error") {
+      pendingTurnsRef.current.delete(sessionId);
+    }
+  }, [status, sessionId]);
   // A fresh object pushed into the Composer to reload its input after a quick
   // stop (identity change is what triggers the reload).
   const [prefill, setPrefill] = useState<{ text: string } | null>(null);
@@ -358,6 +385,9 @@ export default function Home() {
     (id: string) => {
       void getConversation(id).then((detail) => {
         if (!detail) return;
+        // Detach from whatever thread was on screen — a pure unsubscribe now
+        // (durable turns keep generating server-side; §6.1). Its pending pointer
+        // survives in `pendingTurnsRef` so it can be reattached later.
         reset();
         committedAnswerRef.current = null;
         setSessionId(detail.id);
@@ -367,9 +397,18 @@ export default function Home() {
         // reflect it immediately, before the first resumed turn re-emits `scope`.
         setResolvedScope(detail.format as Format);
         setScopeSeed(null);
+        // Reopening mid-generation: reattach to the still-running turn and
+        // rebuild the in-flight UI from the server's replay (§6.1). `active_turn`
+        // from the conversation GET is authoritative (survives an app relaunch);
+        // fall back to the same-session pending pointer if the GET didn't carry
+        // one. A finished turn is already in `detail.turns`, and the server
+        // returns `active_turn: null` for it — so there is no double-render.
+        const resumeTurnId =
+          detail.active_turn?.turn_id ?? pendingTurnsRef.current.get(detail.id);
+        if (resumeTurnId) resume(resumeTurnId, detail.id);
       });
     },
-    [reset],
+    [reset, resume],
   );
 
   // Delete a conversation (HIST-US-8). If it is the one currently on screen,
@@ -382,14 +421,17 @@ export default function Home() {
     [removeConversation, sessionId, handleNewChat],
   );
 
-  // Stop the in-flight turn. `reset()` aborts the fetch (which propagates to the
-  // server, halting generation) and returns the SSE hook to idle. If the request
-  // was stopped within QUICK_STOP_MS, wipe the conversation to a brand-new
-  // session and restore the message into the composer for an easy redo;
-  // otherwise leave the (now answer-less) turn in the thread.
+  // Stop the in-flight turn. With durable turns, stopping is an EXPLICIT API call
+  // (background-turns/design.md §6/BT-4): `stop()` POSTs the stop endpoint and
+  // tears down the local stream to idle (a disconnect no longer halts generation
+  // — only this does). Clear the conversation's pending pointer since the turn is
+  // discarded server-side. If stopped within QUICK_STOP_MS, wipe the conversation
+  // to a brand-new session and restore the message into the composer for an easy
+  // redo; otherwise leave the (now answer-less) turn in the thread.
   const handleStop = useCallback(() => {
     const elapsed = Date.now() - requestStartRef.current;
-    reset();
+    stop();
+    pendingTurnsRef.current.delete(sessionId);
     committedAnswerRef.current = null;
     if (elapsed < QUICK_STOP_MS) {
       setTurns([]);
@@ -397,7 +439,7 @@ export default function Home() {
       setSessionId(makeId());
       setPrefill({ text: inFlightMessageRef.current });
     }
-  }, [reset]);
+  }, [stop, sessionId]);
 
   const chatStatus: ChatStatus =
     status === "thinking" ? "streaming" : status === "error" ? "error" : "idle";

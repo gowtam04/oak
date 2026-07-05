@@ -32,7 +32,32 @@ final class AppState {
   /// default) until a turn resolves otherwise; reset with the guest thread.
   var guestThreadScope: Format = .champions
 
+  /// Pending server-side turns keyed by conversation id (`session_id`) → the
+  /// server-minted `turn_id` still generating for that thread
+  /// (background-turns/design.md §6 / §6.2). It lives here — not on the chat view
+  /// model — so it **survives view teardown**: navigating away from a thread
+  /// closes its stream (`ChatViewModel.detach()`) without cancelling the turn, and
+  /// the pointer kept here lets the thread reattach when reopened. Set on the `turn`
+  /// frame; cleared on any terminal event (answer/error/stopped) or a resume 404.
+  private(set) var pendingTurns: [String: String] = [:]
+
   init() {}
+
+  /// Records the turn generating for `conversationId` (the `turn` SSE frame).
+  func setPendingTurn(conversationId: String, turnId: String) {
+    pendingTurns[conversationId] = turnId
+  }
+
+  /// Clears the pending-turn pointer for `conversationId` (a terminal event, an
+  /// explicit stop, or a resume 404). A no-op when none is recorded.
+  func clearPendingTurn(conversationId: String) {
+    pendingTurns[conversationId] = nil
+  }
+
+  /// The turn id still generating for `conversationId`, if any.
+  func pendingTurn(for conversationId: String) -> String? {
+    pendingTurns[conversationId]
+  }
 }
 
 // MARK: - Auth transitions (P5)
@@ -100,6 +125,9 @@ extension AppState {
   private func resetToGuest() {
     authState = .guest
     activeConversationId = nil
+    // Drop any pending-turn pointers — they belonged to the now-signed-out account
+    // (or the prior guest session) and must not drive a reattach after the reset.
+    pendingTurns.removeAll()
   }
 }
 

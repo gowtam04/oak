@@ -5,17 +5,31 @@
  * SSE stream using a **manual TextDecoder + ReadableStream reader** (NOT
  * EventSource — per the risk directive). Frames are split on `\n\n`.
  *
- * Wire format emitted by the route (design.md § API Design):
+ * Wire format emitted by the route (design.md § API Design; background-turns
+ * §4 adds the `turn` and `stopped` frames):
+ *   event: turn            data: { turn_id }          (exactly one; FIRST frame
+ *                                                      of both the POST stream and
+ *                                                      the resume stream — BT-2)
+ *   event: scope           data: { format, source }   (exactly one; GS-C)
  *   event: tool_activity   data: { tool, label }     (zero or more; progress)
  *   event: answer_start    data: {}                  (zero or more; buffer reset)
  *   event: answer_delta    data: { text }            (zero or more; prose chunk)
- *   event: answer          data: { answer }           (exactly one; terminal)
- *   event: error           data: { code, message }    (transport faults only)
+ *   event: answer          data: { answer }           (terminal)
+ *   event: error           data: { code, message }    (terminal — transport only)
+ *   event: stopped         data: {}                  (terminal — explicit stop)
  *
  * IMPORTANT: every in-domain failure (resolution_failed, clarification_needed,
  * insufficient_data) arrives as a normal `answer` event — it is NEVER surfaced
  * as an `error` event. Check `answer.status` to distinguish success from an
  * in-domain failure.
+ *
+ * Background turns (background-turns/design.md §6.1): a turn is a durable
+ * SERVER object, so the SSE connection is a droppable/reattachable SUBSCRIPTION,
+ * not the turn's lifetime. The hook captures the `turn_id` (first frame), can
+ * `resume(turnId)` a running turn's live stream through the SAME consume loop
+ * (the server replays the full buffer, then tails), and `stop()`s a turn via an
+ * explicit endpoint call. The old whole-turn auto-re-POST retry machinery is
+ * GONE — reattach (idempotent by construction) replaces it.
  *
  * Exports for unit tests:
  *   parseFrame(frame)    — pure frame → SseEvent parser
@@ -37,7 +51,9 @@ import type {
   ScopeEvent,
   SseEvent,
   SseEventName,
+  StoppedEvent,
   ToolActivityEvent,
+  TurnEvent,
 } from "@/lib/sse/sse-types";
 
 // ---------------------------------------------------------------------------
@@ -84,6 +100,8 @@ export function parseFrame(frame: string): SseEvent | null {
 
   // Only the event names this endpoint emits are accepted.
   switch (eventName as SseEventName) {
+    case "turn":
+      return { event: "turn", data: data as TurnEvent };
     case "scope":
       return { event: "scope", data: data as ScopeEvent };
     case "tool_activity":
@@ -96,6 +114,8 @@ export function parseFrame(frame: string): SseEvent | null {
       return { event: "answer", data: data as AnswerEvent };
     case "error":
       return { event: "error", data: data as ErrorEvent };
+    case "stopped":
+      return { event: "stopped", data: data as StoppedEvent };
     default:
       return null;
   }
@@ -166,6 +186,15 @@ export interface SseClientState {
   /** Lifecycle status of the current turn. */
   status: SseClientStatus;
   /**
+   * The server-minted turn id for the current turn (background-turns/design.md
+   * §4 / BT-2), captured from the `turn` event — the FIRST frame of both the
+   * POST stream and a resume stream. `null` before that frame lands, and after a
+   * terminal `stopped` / a `reset` / a fresh `send` (until the next turn frame).
+   * The hosting component records this as the conversation's PENDING turn so it
+   * can reattach (`resume`) after navigating away and back, and target `stop`.
+   */
+  turnId: string | null;
+  /**
    * The server-resolved game scope for the current turn, from the single
    * `scope` event the route emits first (before any tool activity). `null`
    * until that frame lands (and on a fresh `send`, or a transport error that
@@ -201,17 +230,20 @@ export interface SseClientState {
    */
   error: ErrorEvent | null;
   /**
-   * True only while an automatic reconnect is in progress after a
-   * backgrounding-induced connection drop (phone screen turned off mid-turn).
-   * The turn stays in-flight (`status === "thinking"`); the UI shows a
-   * "Reconnecting…" affordance instead of a dead-end error. Cleared as soon as
-   * the re-sent turn produces output again, or on a terminal answer/error.
+   * True only while an automatic REATTACH is in progress after a mid-stream
+   * connection drop (phone screen turned off / suspended tab). The turn stays
+   * in-flight server-side; the UI shows a "Reconnecting…" affordance instead of
+   * a dead-end error. Cleared as soon as the reattached stream produces output
+   * again (the server replays the buffer), or on a terminal answer/error/stopped.
+   * A deliberate `resume` (host reopening a thread) does NOT set this — it is a
+   * normal reattach, not a blip.
    */
   reconnecting: boolean;
 }
 
 const INITIAL_STATE: SseClientState = {
   status: "idle",
+  turnId: null,
   scope: null,
   activities: [],
   answer: null,
@@ -226,19 +258,49 @@ const INITIAL_STATE: SseClientState = {
 
 export interface UseSseClientReturn extends SseClientState {
   /**
-   * Send a new question to `POST /api/chat`. Any in-flight request is aborted
-   * first so only one stream is ever open at a time.
+   * Send a new question to `POST /api/chat`. Any in-flight subscription is
+   * dropped first (unsubscribe — the server keeps generating; see `reset`), so
+   * only one stream is ever consumed at a time. The FIRST frame is the durable
+   * turn's `turn_id` (captured into `turnId`). A 409 `turn_in_progress` response
+   * (a turn already runs for this conversation) transparently REATTACHES to the
+   * returned turn instead of surfacing an error (background-turns §6 / BT-5).
    *
    * Suggestion-chip and candidate-row follow-ups are plain `send` calls with the
    * same `session_id` — there is no special protocol (ux-design.md).
    */
   send: (body: ChatRequestBody) => void;
-  /** Reset to `idle` state, discarding the current answer, activities, and error. */
+  /**
+   * Reattach to a durable turn's live stream via
+   * `GET /api/chat/turns/:id/stream` (background-turns §6.1). The server replays
+   * the full buffered event list from the start, then tails live until a
+   * terminal event — so "reattach mid-flight" and "reattach after completion"
+   * are one code path (a completed turn's replay simply ends with its terminal
+   * `answer`). Runs the SAME consume loop as `send`. `sessionId` is the guest
+   * ownership key (`?session_id=`); harmless to include when signed-in. Used by
+   * the host to resume a conversation's pending turn on reopen, and internally
+   * on `visibilitychange`→visible / a mid-stream drop.
+   */
+  resume: (turnId: string, sessionId?: string) => void;
+  /**
+   * Explicitly STOP the current turn (background-turns §6 / BT-4): `POST
+   * /api/chat/turns/:id/stop`, then tear down the local stream. Stopping is now
+   * an explicit API call, no longer implied by a disconnect — a stopped turn is
+   * discarded server-side (nothing persisted). The local teardown stands even if
+   * the endpoint call fails.
+   */
+  stop: () => void;
+  /**
+   * Reset to `idle`, DROPPING the current subscription. With durable turns this
+   * is a pure UNSUBSCRIBE — aborting the fetch no longer cancels the server-side
+   * turn (only `stop` does), so `reset` is how the host detaches when switching
+   * conversations / starting a new chat while a turn keeps running server-side.
+   */
   reset: () => void;
   /**
    * Re-send the most recent turn (same message + images). A no-op once a turn
-   * has succeeded (the retained body is released on a terminal answer); used by
-   * the manual "Retry" affordance shown on a surfaced transport error.
+   * has succeeded/stopped (the retained body is released then); used by the
+   * manual "Retry" affordance shown on a surfaced transport error or an
+   * interrupted (resume-404) turn.
    */
   retry: () => void;
 }
@@ -246,7 +308,8 @@ export interface UseSseClientReturn extends SseClientState {
 /**
  * useSseClient
  *
- * Client hook for `POST /api/chat`. Orchestrates fetch → manual SSE stream
+ * Client hook for `POST /api/chat` + the durable-turn reattach/stop protocol
+ * (background-turns/design.md §6.1). Orchestrates fetch → manual SSE stream
  * parsing → React state updates.
  *
  * Usage:
@@ -262,103 +325,264 @@ export interface UseSseClientReturn extends SseClientState {
  * ```
  */
 /**
- * Max automatic re-sends after a backgrounding-induced connection drop.
- *
- * Capped at 1 deliberately: there is a narrow server window where a turn can be
- * persisted just before the suspended client loses the answer frame, so an
- * unbounded auto-retry could double-persist / double-charge. One attempt heals
- * the dominant case (screen off during the long silent reasoning phase, which
- * aborts BEFORE persistence) while bounding that blast radius. A fully
- * idempotent fix would need a per-turn key the server dedupes on (server-side).
+ * Bounded reattach attempts after a MID-STREAM connection drop (a clean EOF or
+ * read throw with no terminal event, while a `turnId` is known). Small on
+ * purpose: reattach is idempotent (the server replays the buffer), so a couple
+ * of tries with a short backoff heals a transient blip; past that we surface the
+ * interrupted affordance rather than hammer a genuinely dead turn. A `visible`
+ * transition (screen back on) also fires an unconditional reattach — that path
+ * is not budget-bounded because it is user-driven, not a retry loop.
  */
-const MAX_RETRIES = 1;
+const MAX_REATTACHES = 2;
+/** Base backoff between bounded mid-stream reattach attempts (×attempt number). */
+const REATTACH_BACKOFF_MS = 500;
 
 export function useSseClient(): UseSseClientReturn {
   const [state, setState] = useState<SseClientState>(INITIAL_STATE);
 
-  // AbortController ref: lets `send` cancel the previous in-flight request
-  // before starting a new one, preventing stale state updates.
+  // AbortController for the CURRENTLY-consumed stream. Aborting it unsubscribes
+  // (drops the socket) — with durable turns that no longer cancels the server
+  // turn, so it is safe to abort on send/resume/reset/stop.
   const abortRef = useRef<AbortController | null>(null);
 
-  // ── Screen-off recovery bookkeeping (all refs so the long-lived
-  // visibilitychange listener never reads stale values) ─────────────────────
-  // The body of the most recent turn, retained so we can re-send it (auto on
-  // resume, or via the manual Retry button). Released on a terminal answer.
+  // ── Durable-turn bookkeeping (all refs so the mounted-once visibility
+  // listener and the stable consume loop never read stale values) ───────────
+  // The body of the most recent turn, retained for the manual Retry affordance.
+  // Released on a terminal answer/stopped (nothing to retry then).
   const lastBodyRef = useRef<ChatRequestBody | null>(null);
-  // Set true when the page is hidden (screen locked) DURING the current
-  // attempt. Gates auto-retry so only a real suspension — not any error —
-  // triggers a re-send. Reset at the start of every attempt.
-  const hiddenDuringTurnRef = useRef(false);
-  // Auto-retries already spent on the current turn (bounded by MAX_RETRIES).
-  const retryCountRef = useRef(0);
-  // A recoverable failure happened while still hidden; fire the retry once the
-  // page returns to the foreground (we can't re-fetch/acquire a wake lock while
-  // suspended).
-  const pendingRetryRef = useRef(false);
-  // Indirection so the stable `runRequest` and the mounted-once visibility
-  // listener always call the latest `fireRetry` without a dependency cycle.
-  const fireRetryRef = useRef<() => void>(() => {});
+  // The current turn's server-minted id (captured from the `turn` frame). Read
+  // by the visibility listener + the drop-reattach path to know what to resume.
+  const turnIdRef = useRef<string | null>(null);
+  // The conversation/session id the current turn belongs to — the guest resume/
+  // stop ownership key. Set on send (from the body) and on resume (from arg).
+  const sessionIdRef = useRef<string | null>(null);
+  // True once the current turn reached a terminal event (answer/error/stopped),
+  // so neither the visibility listener nor a drop reattaches a finished turn.
+  const terminalRef = useRef(false);
+  // Set when `stop()` is pressed BEFORE the `turn` frame has landed (quick-stop
+  // during connection setup + the server's pre-stream work — body parse, rate
+  // limit, history load, scope resolve, startTurn — a 100–500ms window). We have
+  // no id to stop yet, so we keep the stream reading ONLY to capture the `turn`
+  // frame, then fire the stop endpoint from the consume loop. Without this the
+  // server turn keeps generating (and, for signed-in users, persists a ghost
+  // answer) — a regression vs. the old abort-cancels-the-turn behavior.
+  const pendingStopRef = useRef(false);
+  // Bounded mid-stream reattach attempts spent on the current turn (reset on
+  // real progress — any content frame — and on a fresh send/resume).
+  const reattachCountRef = useRef(0);
 
-  // One request attempt: fetch → consume the SSE stream → drive state. Stable
-  // (no deps — reads only refs + the stable `setState`), so the retry path and
-  // the visibility listener can call it with zero stale-closure risk. Each call
-  // owns its `controller`, so the `signal.aborted` guards are correctly scoped
-  // to that attempt. Connection-drop failures route to a shared retry path;
-  // clean server faults (HTTP errors, in-band `error` frames) surface as before.
-  const runRequest = useCallback(
+  // Cross-references between the mutually-recursive stream helpers, held in refs
+  // to break the useCallback dependency cycle (consume → reattach → resume →
+  // consume). Each is kept in sync by a small effect below; all read only refs +
+  // the stable `setState`, so their identities never need to change.
+  const maybeReattachRef = useRef<(controller: AbortController) => boolean>(
+    () => false,
+  );
+  const runResumeRef =
+    useRef<
+      (turnId: string, sessionId: string | null, c: AbortController) => void
+    >(() => {});
+
+  // Consume ONE open SSE stream (from a POST or a resume GET) into React state.
+  // Shared by `runRequest` and `runResume` — the `turn` frame resets the
+  // in-flight view so a resume rebuilds the UI from the replay exactly like a
+  // live stream (background-turns §6.1). Stable (reads only refs + setState).
+  const consumeStream = useCallback(
     async (
-      body: ChatRequestBody,
+      response: Response,
       controller: AbortController,
     ): Promise<void> => {
-      // Only a FRESH hide during THIS attempt should arm a retry (prevents
-      // looping on a genuine, visible failure).
-      hiddenDuringTurnRef.current = false;
+      let sawTerminal = false;
+      try {
+        for await (const event of readSseStream(
+          response.body as ReadableStream<Uint8Array>,
+          controller.signal,
+        )) {
+          // Abort may fire mid-iteration; check before each state update.
+          if (controller.signal.aborted) return;
+          // Any CONTENT frame is real progress → refresh the drop-reattach
+          // budget (a long stream with an occasional blip keeps recovering). The
+          // bare `turn` id echo is not progress, so a turn that only ever
+          // replays its id still exhausts the budget → interrupted.
+          if (event.event !== "turn") reattachCountRef.current = 0;
 
-      // Decide whether a connection-drop failure should be auto-recovered.
-      // Returns true if it took ownership (retry fired or armed); false means
-      // the caller should surface the error as a normal transport fault.
-      const handleRecoverableFailure = (): boolean => {
-        if (
-          !hiddenDuringTurnRef.current ||
-          retryCountRef.current >= MAX_RETRIES
-        ) {
-          return false;
+          if (event.event === "turn") {
+            if (pendingStopRef.current) {
+              // A stop was requested before this id existed (quick-stop during
+              // pre-stream setup). Now that we have it, fire the stop endpoint
+              // and abandon this stream SILENTLY — the UI is already idle. This
+              // is what prevents a ghost turn that keeps generating (and persists
+              // for signed-in users). §6 / BT-4. `turn` is always the first
+              // frame, so no content frame can slip past this guard.
+              pendingStopRef.current = false;
+              const sid = sessionIdRef.current;
+              void fetch(
+                `/api/chat/turns/${encodeURIComponent(event.data.turn_id)}/stop`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(sid ? { session_id: sid } : {}),
+                },
+              ).catch(() => {
+                /* local teardown already stands (design §6) */
+              });
+              controller.abort();
+              return;
+            }
+            // FIRST frame of both the POST and resume streams (BT-2). Capture the
+            // id and RESET the in-flight view: on a fresh POST the buffers are
+            // already empty; on a resume this discards the pre-drop partial so
+            // the replay rebuilds it cleanly.
+            turnIdRef.current = event.data.turn_id;
+            terminalRef.current = false;
+            setState((prev) => ({
+              ...prev,
+              turnId: event.data.turn_id,
+              reconnecting: false,
+              activities: [],
+              streamingMarkdown: "",
+            }));
+          } else if (event.event === "scope") {
+            // The turn's server-resolved game scope — always the first content
+            // frame. Output has resumed → clear any "Reconnecting…" state too.
+            setState((prev) => ({
+              ...prev,
+              reconnecting: false,
+              scope: event.data,
+            }));
+          } else if (event.event === "tool_activity") {
+            setState((prev) => ({
+              ...prev,
+              reconnecting: false,
+              activities: [...prev.activities, event.data],
+            }));
+          } else if (event.event === "answer_start") {
+            // A fresh submit_answer began streaming — reset the in-flight buffer
+            // (drops a prior attempt that failed validation and is re-emitting).
+            setState((prev) => ({
+              ...prev,
+              reconnecting: false,
+              streamingMarkdown: "",
+            }));
+          } else if (event.event === "answer_delta") {
+            setState((prev) => ({
+              ...prev,
+              reconnecting: false,
+              streamingMarkdown: prev.streamingMarkdown + event.data.text,
+            }));
+          } else if (event.event === "answer") {
+            // Terminal success (any answer.status — in-domain failures ride here).
+            sawTerminal = true;
+            terminalRef.current = true;
+            lastBodyRef.current = null;
+            setState((prev) => ({
+              ...prev,
+              status: "done",
+              reconnecting: false,
+              answer: event.data.answer,
+              streamingMarkdown: "",
+            }));
+          } else if (event.event === "error") {
+            // In-band transport fault — the connection was healthy enough to
+            // deliver it, so it is a real model/agent fault; surface it. The
+            // retained body stays so the manual Retry affordance can re-send.
+            sawTerminal = true;
+            terminalRef.current = true;
+            setState((prev) => ({
+              ...prev,
+              status: "error",
+              reconnecting: false,
+              error: event.data,
+            }));
+          } else if (event.event === "stopped") {
+            // Terminal stop (BT-4): the turn was explicitly stopped (by this
+            // client or another subscriber). Discard the in-flight prose and
+            // return to a clean idle — matching today's Stop semantics. Nothing
+            // was persisted, so drop the retained body + turn id too.
+            sawTerminal = true;
+            terminalRef.current = true;
+            lastBodyRef.current = null;
+            turnIdRef.current = null;
+            setState((prev) => ({
+              ...prev,
+              status: "idle",
+              reconnecting: false,
+              activities: [],
+              streamingMarkdown: "",
+              turnId: null,
+            }));
+          }
         }
-        if (
-          typeof document !== "undefined" &&
-          document.visibilityState === "visible"
-        ) {
-          // Already back in the foreground — re-send immediately.
-          fireRetryRef.current();
-        } else {
-          // Still suspended — show "Reconnecting…" and fire on resume.
-          pendingRetryRef.current = true;
-          setState((prev) => ({
-            ...prev,
-            status: "thinking",
-            reconnecting: true,
-            activities: [],
-            streamingMarkdown: "",
-            error: null,
-          }));
-        }
-        return true;
-      };
 
-      // ── Step 1: open the connection ────────────────────────────────────────
+        // The stream ended. A conformant server always emits a terminal event;
+        // its absence means the socket closed (a dropped connection can return a
+        // clean EOF instead of throwing). Reattach if we know the turn id;
+        // otherwise fall back to `done` (defensive, pre-existing behavior).
+        if (controller.signal.aborted) return;
+        // A pending-stop stream that ended before the `turn` frame has nothing to
+        // stop — stay silently idle (no reattach, no done fallback).
+        if (pendingStopRef.current) {
+          pendingStopRef.current = false;
+          return;
+        }
+        if (!sawTerminal) {
+          if (maybeReattachRef.current(controller)) return;
+          setState((prev) =>
+            prev.status === "thinking"
+              ? { ...prev, status: "done", reconnecting: false }
+              : prev,
+          );
+        }
+      } catch (streamError) {
+        if (controller.signal.aborted) return;
+        // A pending-stop stream that died before the `turn` frame: nothing to
+        // stop and the UI is already idle — swallow the error silently.
+        if (pendingStopRef.current) {
+          pendingStopRef.current = false;
+          return;
+        }
+        // A mid-stream read throw is a connection drop — reattach if we can.
+        if (maybeReattachRef.current(controller)) return;
+        setState((prev) => ({
+          ...prev,
+          status: "error",
+          reconnecting: false,
+          error: {
+            code: "stream_error",
+            message:
+              streamError instanceof Error
+                ? streamError.message
+                : "Stream read failed",
+          },
+        }));
+      }
+    },
+    [],
+  );
+
+  // Reattach to `turnId`'s live stream (design §6.1). Fetch the resume endpoint,
+  // then hand the body to the shared consume loop. A 404 means the turn is
+  // unknown/expired → surface the interrupted affordance (manual Retry stays).
+  const runResume = useCallback(
+    async (
+      turnId: string,
+      sessionId: string | null,
+      controller: AbortController,
+    ): Promise<void> => {
+      turnIdRef.current = turnId;
+      sessionIdRef.current = sessionId;
+      const qs = sessionId
+        ? `?session_id=${encodeURIComponent(sessionId)}`
+        : "";
       let response: Response;
       try {
-        response = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        });
+        response = await fetch(
+          `/api/chat/turns/${encodeURIComponent(turnId)}/stream${qs}`,
+          { method: "GET", signal: controller.signal },
+        );
       } catch (fetchError) {
-        // An AbortError is expected when `send`/`reset` fires — ignore it.
         if (controller.signal.aborted) return;
-        // A pre-stream fetch throw is a connection drop — recover if backgrounded.
-        if (handleRecoverableFailure()) return;
+        if (maybeReattachRef.current(controller)) return;
         setState((prev) => ({
           ...prev,
           status: "error",
@@ -374,14 +598,174 @@ export function useSseClient(): UseSseClientReturn {
         return;
       }
 
-      // ── Step 2: check HTTP-level errors (e.g. 413 / 429 / 503 pre-stream) ──
-      // A clean server response — NEVER auto-retried (several of these, e.g.
-      // model_unavailable, drive the host's model auto-revert on `status:error`).
+      if (response.status === 404) {
+        // Unknown/expired turn — the turn is gone (process restart, retention
+        // sweep, or never existed). Surface the interrupted affordance; the
+        // retained body (if any) still backs the manual Retry re-send (§6).
+        terminalRef.current = true;
+        turnIdRef.current = null;
+        setState((prev) => ({
+          ...prev,
+          status: "error",
+          reconnecting: false,
+          turnId: null,
+          error: {
+            code: "turn_not_found",
+            message: "This response was interrupted. Retry to ask again.",
+            status: 404,
+          },
+        }));
+        return;
+      }
+
       if (!response.ok || !response.body) {
-        // Prefer the server's JSON `{ code, message }` (e.g. 503
-        // model_unavailable) so the UI shows a meaningful, actionable error and
-        // can react to the code (e.g. auto-revert the model). Fall back to the
-        // raw HTTP status for a non-JSON body.
+        // Other pre-stream error (e.g. 403 ownership). Surface the server's
+        // JSON `{ code, message }` when present, else the raw HTTP status.
+        let errorEvent = {
+          code: `http_${response.status}`,
+          message: `HTTP ${response.status} ${response.statusText}`,
+        } as { code: string; message: string; status?: number };
+        try {
+          const data = (await response.json()) as {
+            code?: unknown;
+            message?: unknown;
+          };
+          if (
+            typeof data?.code === "string" &&
+            typeof data?.message === "string"
+          ) {
+            errorEvent = {
+              code: data.code,
+              message: data.message,
+              status: response.status,
+            };
+          }
+        } catch {
+          /* non-JSON body — keep the http_<status> fallback */
+        }
+        setState((prev) => ({
+          ...prev,
+          status: "error",
+          reconnecting: false,
+          error: errorEvent,
+        }));
+        return;
+      }
+
+      await consumeStream(response, controller);
+    },
+    [consumeStream],
+  );
+  useEffect(() => {
+    runResumeRef.current = (turnId, sessionId, controller) =>
+      void runResume(turnId, sessionId, controller);
+  }, [runResume]);
+
+  // A mid-stream drop happened. If we still have an unresolved turn and budget,
+  // fire a bounded, backed-off REATTACH (reconnecting: true → "Reconnecting…").
+  // Returns true iff it took ownership (so the caller does not surface an error).
+  const maybeReattach = useCallback(
+    (currentController: AbortController): boolean => {
+      const turnId = turnIdRef.current;
+      if (
+        turnId === null ||
+        terminalRef.current ||
+        currentController.signal.aborted ||
+        reattachCountRef.current >= MAX_REATTACHES
+      ) {
+        return false;
+      }
+      reattachCountRef.current += 1;
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const sessionId = sessionIdRef.current;
+      const backoff = REATTACH_BACKOFF_MS * reattachCountRef.current;
+      setState((prev) => ({
+        ...prev,
+        status: "thinking",
+        reconnecting: true,
+      }));
+      window.setTimeout(() => {
+        if (controller.signal.aborted) return;
+        runResumeRef.current(turnId, sessionId, controller);
+      }, backoff);
+      return true;
+    },
+    [],
+  );
+  useEffect(() => {
+    maybeReattachRef.current = maybeReattach;
+  }, [maybeReattach]);
+
+  // One POST attempt: fetch → 409-reattach / HTTP errors → consume the stream.
+  const runRequest = useCallback(
+    async (
+      body: ChatRequestBody,
+      controller: AbortController,
+    ): Promise<void> => {
+      sessionIdRef.current = body.session_id;
+
+      // ── Step 1: open the connection ────────────────────────────────────────
+      let response: Response;
+      try {
+        response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch (fetchError) {
+        // An AbortError is expected when send/reset/stop fires — ignore it. A
+        // pre-stream throw before any turn id means there is nothing to reattach
+        // to (the server may or may not have started a turn — a manual retry
+        // will 409→reattach if it did); surface a network error.
+        if (controller.signal.aborted) return;
+        setState((prev) => ({
+          ...prev,
+          status: "error",
+          reconnecting: false,
+          error: {
+            code: "network_error",
+            message:
+              fetchError instanceof Error
+                ? fetchError.message
+                : "Network request failed",
+          },
+        }));
+        return;
+      }
+
+      // ── Step 2a: 409 turn_in_progress → REATTACH (background-turns §6/BT-5) ─
+      // A turn already runs for this conversation; the server hands back its id
+      // so we subscribe to it instead of double-generating.
+      if (response.status === 409) {
+        let turnId: string | null = null;
+        try {
+          const data = (await response.json()) as {
+            code?: unknown;
+            turn_id?: unknown;
+          };
+          if (
+            data?.code === "turn_in_progress" &&
+            typeof data.turn_id === "string"
+          ) {
+            turnId = data.turn_id;
+          }
+        } catch {
+          /* non-JSON 409 — fall through to the generic error path below */
+        }
+        if (turnId !== null) {
+          reattachCountRef.current = 0;
+          await runResume(turnId, body.session_id, controller);
+          return;
+        }
+      }
+
+      // ── Step 2b: other HTTP errors (413 / 429 too_many_turns / 503) ────────
+      if (!response.ok || !response.body) {
+        // Prefer the server's JSON `{ code, message }` so the UI shows a
+        // meaningful, actionable error and can react to the code (e.g. auto-
+        // revert the model). Fall back to the raw HTTP status for a non-JSON body.
         let errorEvent = {
           code: `http_${response.status}`,
           message: `HTTP ${response.status} ${response.statusText}`,
@@ -414,176 +798,54 @@ export function useSseClient(): UseSseClientReturn {
       }
 
       // ── Step 3: consume the SSE stream ─────────────────────────────────────
-      let sawTerminal = false; // an `answer` or `error` frame landed
-      try {
-        for await (const event of readSseStream(
-          response.body,
-          controller.signal,
-        )) {
-          // Abort may fire mid-iteration; check before each state update.
-          if (controller.signal.aborted) return;
-
-          if (event.event === "scope") {
-            // The turn's server-resolved game scope — always the FIRST frame,
-            // before any tool activity. Record it so the scope chip reflects
-            // the scope actually used (which may differ from the toggle when an
-            // in-message signal or the conversation's sticky scope overrode it).
-            // Output has resumed, so clear any "Reconnecting…" state too.
-            setState((prev) => ({
-              ...prev,
-              reconnecting: false,
-              scope: event.data,
-            }));
-          } else if (event.event === "tool_activity") {
-            // Output resumed → clear any "Reconnecting…" state. Accumulate the
-            // progress event for the progress UI.
-            setState((prev) => ({
-              ...prev,
-              reconnecting: false,
-              activities: [...prev.activities, event.data],
-            }));
-          } else if (event.event === "answer_start") {
-            // A fresh submit_answer began streaming — reset the in-flight buffer
-            // (drops a prior attempt that failed validation and is re-emitting).
-            setState((prev) => ({
-              ...prev,
-              reconnecting: false,
-              streamingMarkdown: "",
-            }));
-          } else if (event.event === "answer_delta") {
-            // Append the newly-decoded answer_markdown fragment.
-            setState((prev) => ({
-              ...prev,
-              reconnecting: false,
-              streamingMarkdown: prev.streamingMarkdown + event.data.text,
-            }));
-          } else if (event.event === "answer") {
-            // Terminal success (any answer.status — in-domain failures ride here).
-            // Release the retained body (turn succeeded → no retry needed) and
-            // clear the streaming buffer so the committed AnswerCard is the
-            // single source of truth (no double render of the prose).
-            sawTerminal = true;
-            lastBodyRef.current = null;
-            retryCountRef.current = 0;
-            pendingRetryRef.current = false;
-            setState((prev) => ({
-              ...prev,
-              status: "done",
-              reconnecting: false,
-              answer: event.data.answer,
-              streamingMarkdown: "",
-            }));
-          } else if (event.event === "error") {
-            // In-band transport fault (integration.md § Error Surface): the
-            // connection was healthy enough to deliver it, so it's a real
-            // model/agent fault — surface it, never auto-retry.
-            sawTerminal = true;
-            setState((prev) => ({
-              ...prev,
-              status: "error",
-              reconnecting: false,
-              error: event.data,
-            }));
-          }
-        }
-
-        // The stream ended. A conformant server always emits a terminal event;
-        // its absence means the connection closed (a dropped socket can return a
-        // clean EOF instead of throwing). Recover if the screen went off,
-        // otherwise fall back to `done` (defensive, pre-existing behavior).
-        if (controller.signal.aborted) return;
-        if (!sawTerminal) {
-          if (handleRecoverableFailure()) return;
-          setState((prev) =>
-            prev.status === "thinking"
-              ? { ...prev, status: "done", reconnecting: false }
-              : prev,
-          );
-        }
-      } catch (streamError) {
-        if (controller.signal.aborted) return;
-        // A mid-stream read throw is a connection drop — recover if backgrounded.
-        if (handleRecoverableFailure()) return;
-        setState((prev) => ({
-          ...prev,
-          status: "error",
-          reconnecting: false,
-          error: {
-            code: "stream_error",
-            message:
-              streamError instanceof Error
-                ? streamError.message
-                : "Stream read failed",
-          },
-        }));
-      }
+      await consumeStream(response, controller);
     },
-    [],
+    [consumeStream, runResume],
   );
 
-  // Re-send the retained body as an automatic recovery attempt. Keeps the turn
-  // in-flight (status stays "thinking") and shows the reconnecting state.
-  const fireRetry = useCallback((): void => {
-    const body = lastBodyRef.current;
-    if (!body) return;
-    pendingRetryRef.current = false;
-    retryCountRef.current += 1;
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setState((prev) => ({
-      ...prev,
-      status: "thinking",
-      reconnecting: true,
-      activities: [],
-      streamingMarkdown: "",
-      error: null,
-    }));
-    void runRequest(body, controller);
-  }, [runRequest]);
-
-  // Keep the ref pointing at the current `fireRetry` (stable, so this runs once)
-  // so `runRequest` and the visibility listener call the live implementation.
-  useEffect(() => {
-    fireRetryRef.current = fireRetry;
-  }, [fireRetry]);
-
-  // Single page-visibility listener (mounted once). On hide DURING a turn, arm
-  // the screen-off gate; on return to the foreground, fire any deferred retry.
-  // Handles the iOS resume race either way: if `visible` fires before the frozen
-  // read rejects, the later failure sees `visible` and retries immediately;
-  // if the read rejects first, it arms `pendingRetryRef` and this fires it.
+  // Single page-visibility listener (mounted once). On return to the foreground
+  // with an UNRESOLVED turn, reattach: abort any frozen read and start a clean
+  // resume. The server replays the buffer, so this is idempotent even if the old
+  // socket was actually still alive (background-turns §6.1). Screen-off no longer
+  // arms an auto re-POST — reattach replaces the whole retry machinery.
   useEffect(() => {
     if (typeof document === "undefined") return;
     const onVisibilityChange = (): void => {
-      const inFlight =
-        abortRef.current !== null && !abortRef.current.signal.aborted;
-      if (document.visibilityState === "hidden") {
-        if (inFlight) hiddenDuringTurnRef.current = true;
-      } else if (document.visibilityState === "visible") {
-        if (pendingRetryRef.current) fireRetryRef.current();
-      }
+      if (document.visibilityState !== "visible") return;
+      const turnId = turnIdRef.current;
+      if (turnId === null || terminalRef.current) return;
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      reattachCountRef.current = 0;
+      setState((prev) => ({ ...prev, status: "thinking", reconnecting: true }));
+      void runResume(turnId, sessionIdRef.current, controller);
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () =>
       document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, []);
+  }, [runResume]);
 
   const send = useCallback(
     (body: ChatRequestBody): void => {
-      // Cancel the previous request if still running.
+      // Drop the previous subscription if still open (unsubscribe — the server
+      // keeps any prior turn running; only `stop` cancels).
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
 
-      // New turn → reset recovery bookkeeping (supersedes any pending retry).
+      // New turn → reset per-turn bookkeeping.
       lastBodyRef.current = body;
-      hiddenDuringTurnRef.current = false;
-      retryCountRef.current = 0;
-      pendingRetryRef.current = false;
+      sessionIdRef.current = body.session_id;
+      turnIdRef.current = null;
+      terminalRef.current = false;
+      pendingStopRef.current = false;
+      reattachCountRef.current = 0;
 
       // Immediately transition to "thinking" and clear previous turn state.
       setState({
         status: "thinking",
+        turnId: null,
         scope: null,
         activities: [],
         answer: null,
@@ -597,21 +859,110 @@ export function useSseClient(): UseSseClientReturn {
     [runRequest],
   );
 
-  const reset = useCallback((): void => {
+  const resume = useCallback(
+    (turnId: string, sessionId?: string): void => {
+      // Drop any current subscription, then reattach to `turnId`. A deliberate
+      // reattach (host reopening a thread) — status "thinking", not the
+      // "Reconnecting…" blip state.
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      turnIdRef.current = turnId;
+      sessionIdRef.current = sessionId ?? null;
+      terminalRef.current = false;
+      pendingStopRef.current = false;
+      reattachCountRef.current = 0;
+
+      setState((prev) => ({
+        ...prev,
+        status: "thinking",
+        turnId,
+        scope: null,
+        activities: [],
+        answer: null,
+        streamingMarkdown: "",
+        error: null,
+        reconnecting: false,
+      }));
+
+      void runResume(turnId, sessionId ?? null, controller);
+    },
+    [runResume],
+  );
+
+  const stop = useCallback((): void => {
+    const turnId = turnIdRef.current;
+    const sessionId = sessionIdRef.current;
+    const controller = abortRef.current;
+    const inFlight = controller !== null && !controller.signal.aborted;
+
+    // Finalize the UI to idle immediately in every case — this stands even if
+    // the endpoint call below fails (design §6).
+    const finalizeIdle = () =>
+      setState((prev) => ({
+        ...prev,
+        status: "idle",
+        reconnecting: false,
+        activities: [],
+        streamingMarkdown: "",
+        turnId: null,
+      }));
+
+    if (turnId === null && inFlight) {
+      // Stop pressed BEFORE the `turn` frame landed. We have no id to stop yet,
+      // so DON'T abort (that would lose the id and leak a ghost turn). Arm a
+      // pending stop and keep this stream reading solely to capture the `turn`
+      // frame; the consume loop then fires the stop endpoint with that id.
+      pendingStopRef.current = true;
+      terminalRef.current = true;
+      reattachCountRef.current = 0;
+      lastBodyRef.current = null;
+      finalizeIdle();
+      return;
+    }
+
+    // Tear down the local subscription and finalize to idle.
     abortRef.current?.abort();
     abortRef.current = null;
-    // Cancel any pending/auto retry and drop the retained body.
+    pendingStopRef.current = false;
+    terminalRef.current = true;
+    reattachCountRef.current = 0;
     lastBodyRef.current = null;
-    hiddenDuringTurnRef.current = false;
-    retryCountRef.current = 0;
-    pendingRetryRef.current = false;
+    turnIdRef.current = null;
+    finalizeIdle();
+
+    if (turnId === null) return;
+    // Explicit stop (BT-4): fire-and-forget. Include the guest session id so the
+    // ownership check passes; harmless when signed-in (cookie/Bearer wins).
+    void fetch(`/api/chat/turns/${encodeURIComponent(turnId)}/stop`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(sessionId ? { session_id: sessionId } : {}),
+    }).catch(() => {
+      /* local teardown already stands (design §6) */
+    });
+  }, []);
+
+  const reset = useCallback((): void => {
+    // Unsubscribe from the current stream (the server keeps the turn running —
+    // reattachable later via `resume`) and drop all per-turn bookkeeping.
+    abortRef.current?.abort();
+    abortRef.current = null;
+    lastBodyRef.current = null;
+    turnIdRef.current = null;
+    sessionIdRef.current = null;
+    terminalRef.current = false;
+    pendingStopRef.current = false;
+    reattachCountRef.current = 0;
     setState(INITIAL_STATE);
   }, []);
 
-  // Manual re-send of the last turn (the Retry affordance on a surfaced error).
+  // Manual re-send of the last turn (the Retry affordance on a surfaced error /
+  // interrupted turn). `send` drops the stale subscription first.
   const retry = useCallback((): void => {
     if (lastBodyRef.current) send(lastBodyRef.current);
   }, [send]);
 
-  return { ...state, send, reset, retry };
+  return { ...state, send, resume, stop, reset, retry };
 }

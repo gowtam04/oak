@@ -145,7 +145,7 @@ User: how fast is Garchomp with max Speed Stat Points and a Jolly nature in Cham
     reasoning_markdown: "Garchomp's base Speed is 102. Champions uses Stat Points (1 SP = +1 stat at Level 50) in place of EVs, with IVs locked at 31, so 32 Speed Stat Points plus a Jolly (+Speed) nature gives 169.",
     damage_calc: { assumptions: { level: 50, stat_points: 32, iv: 31, nature: "Jolly (+Spe)" }, result: { stat: "speed", value: 169 }, is_estimate: true, breakdown: "floor((102 + 32 + 20) * 1.1) = 169" },
     subjects: [{ name: "Garchomp", dex_number: 445, sprite_url: "...", types: ["dragon","ground"], is_fallback: false }],
-    citations: [{ source: "pokemon/garchomp", detail: "base speed: 102 (Champions roster)" }],
+    citations: [{ source: "pokemon/garchomp", detail: "Garchomp's base Speed is 102 (Champions roster)." }],
     inferences: [],
     generation_basis: { generation: "champions", fallback: false, note: "${CHAMPIONS_REGULATION}" }
   })`,

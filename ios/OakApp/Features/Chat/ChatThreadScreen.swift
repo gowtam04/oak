@@ -97,7 +97,16 @@ struct ChatThreadScreen: View {
         // Bind the active conversation, then seed a thread with its rehydrated turns.
         detailVM.resume()
         let vm = ChatViewModel(chat: services.chat, appState: appState)
-        vm.loadResumed(conversationId: detail.id, format: detail.format, turns: detail.turns)
+        // Honor the conversation's `active_turn` (design §5.4): if a turn is still
+        // generating for this thread, `loadResumed` records it and reattaches to its
+        // live stream — so reopening a mid-generation conversation (even after an app
+        // relaunch, when the device-local pending pointer is gone) resumes the answer.
+        vm.loadResumed(
+          conversationId: detail.id,
+          format: detail.format,
+          turns: detail.turns,
+          activeTurnId: detail.activeTurn?.turnId
+        )
         model = vm
       } else {
         loadError = detailVM.errorMessage ?? HistoryDetailViewModel.genericMessage

@@ -178,9 +178,12 @@ private fun OakTab.icon() = when (this) {
  * history-and-teams.md M-HIST-US-2/3) — the Kotlin/Compose expression of iOS
  * `ChatTabView`, mirrored as closely as Compose's lack of a `NavigationStack`
  * allows:
- *   - **Signed in:** the saved-conversation list ([HistoryScreen]) is the tab's
- *     root; selecting a row or tapping New Chat pushes a local route that resolves
- *     to [ChatScreen], so Back returns to the list.
+ *   - **Signed in:** the tab opens directly into a fresh, unsaved thread
+ *     ([ChatScreen]); the saved-conversation list ([HistoryScreen]) is one Back
+ *     away rather than the root, so returning users land in a new chat instead
+ *     of history. Selecting a row from the list pushes a local route that
+ *     resolves back to [ChatScreen], and Back from any pushed route returns to
+ *     the list.
  *   - **Guest:** the tab opens directly into the single in-memory thread
  *     ([ChatScreen]) with the "Sign in to save your conversations" nudge; tapping
  *     it presents the email-OTP dialog ([AuthDialog]). Completing sign-in flips
@@ -209,10 +212,11 @@ private fun ChatTab(
 
 /** A navigation route within the signed-in Chat tab (mirrors iOS `ChatRoute`). */
 private sealed interface ChatTabRoute {
-    /** The saved-conversation list (the tab's root). */
+    /** The saved-conversation list — one Back away from a new thread, not the tab's
+     * initial route (a returning user should land in a fresh chat, not history). */
     data object ConversationList : ChatTabRoute
 
-    /** Start a brand-new, unsaved thread. */
+    /** Start a brand-new, unsaved thread — the tab's initial route. */
     data object New : ChatTabRoute
 
     /** Open and resume an existing saved conversation. */
@@ -226,7 +230,7 @@ private fun SignedInChatHome(
     chatViewModel: ChatViewModel,
     artifactViewModel: ArtifactViewModel,
 ) {
-    var route by remember { mutableStateOf<ChatTabRoute>(ChatTabRoute.ConversationList) }
+    var route by remember { mutableStateOf<ChatTabRoute>(ChatTabRoute.New) }
     // The last conversation the user opened from the list, remembered in-memory so the
     // list can mark that row on return (survives the list⟷thread navigation because this
     // state lives above the route `when`). Not persisted across process death by design.
@@ -298,7 +302,14 @@ private fun ExistingConversationThread(
         loadError = null
         try {
             val detail = services.history.get(summary.id)
-            chatViewModel.loadResumed(conversationId = detail.id, format = detail.format, turns = detail.turns)
+            chatViewModel.loadResumed(
+                conversationId = detail.id,
+                format = detail.format,
+                turns = detail.turns,
+                // A durable turn still generating server-side (survives an app relaunch,
+                // when the client's own pending pointer is gone) — reattach on open.
+                activeTurnId = detail.activeTurn?.turnId,
+            )
             isLoaded = true
         } catch (e: Exception) {
             loadError = "This conversation is no longer available."

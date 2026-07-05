@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 
 afterEach(() => cleanup());
-import InferenceCallout from "./InferenceCallout";
+import InferenceCallout, { CONFIDENCE_LABELS } from "./InferenceCallout";
 import { INFERENCE_SPEED, INFERENCE_LOW_CONFIDENCE } from "@/components/test-fixtures";
 import type { Inference } from "@/components/types";
 
@@ -22,17 +22,31 @@ describe("InferenceCallout", () => {
     expect(screen.getByText(INFERENCE_SPEED.claim)).toBeInTheDocument();
   });
 
-  it("renders the confidence level as a bracket-free pill", () => {
+  it("renders the confidence level as a bracket-free pill using the friendly label (TestFlight AAhvrDM1)", () => {
     render(<InferenceCallout inferences={[INFERENCE_SPEED]} />);
     const pill = screen.getByTestId("inference-confidence-0");
-    expect(pill).toHaveTextContent("High");
+    expect(pill).toHaveTextContent(CONFIDENCE_LABELS.high);
+    expect(pill).toHaveTextContent("Solid");
     expect(pill.textContent).not.toContain("[");
     expect(pill.textContent).not.toContain("]");
   });
 
+  it("renders the medium and low confidence labels as Likely/Unsure", () => {
+    const medium: Inference = { ...INFERENCE_SPEED, confidence: "medium" };
+    render(
+      <InferenceCallout inferences={[medium, INFERENCE_LOW_CONFIDENCE]} />,
+    );
+    expect(screen.getByTestId("inference-confidence-0")).toHaveTextContent(
+      CONFIDENCE_LABELS.medium,
+    );
+    expect(screen.getByTestId("inference-confidence-1")).toHaveTextContent(
+      CONFIDENCE_LABELS.low,
+    );
+  });
+
   it("renders an `.ilabel` title above the callout items", () => {
     render(<InferenceCallout inferences={[INFERENCE_SPEED]} />);
-    const title = screen.getByText("Inference");
+    const title = screen.getByText("Oak's deductions");
     expect(title.className).toContain("ilabel");
   });
 

@@ -49,7 +49,7 @@ fun Inferences(inferences: List<Inference>, modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Lightbulb, contentDescription = null, tint = oak.azure, modifier = Modifier.size(16.dp))
             Text(
-                text = "Inferred",
+                text = "Oak's deductions",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = oak.azure,
             )
@@ -95,9 +95,9 @@ private fun confidencePresentation(
     sunflower: Color,
     muted: Color,
 ): Triple<ImageVector, String, Color> = when (confidence) {
-    Inference.Confidence.High -> Triple(Icons.Filled.Circle, "High", success)
-    Inference.Confidence.Medium -> Triple(Icons.Filled.Circle, "Medium", sunflower)
-    Inference.Confidence.Low -> Triple(Icons.Outlined.Circle, "Low", muted)
+    Inference.Confidence.High -> Triple(Icons.Filled.Circle, "Solid", success)
+    Inference.Confidence.Medium -> Triple(Icons.Filled.Circle, "Likely", sunflower)
+    Inference.Confidence.Low -> Triple(Icons.Outlined.Circle, "Unsure", muted)
     // A confidence value the wire added after this app shipped: render its raw
     // string with neutral styling rather than hard-failing the answer's decode.
     is Inference.Confidence.Unknown -> Triple(Icons.Outlined.Circle, confidence.raw, muted)

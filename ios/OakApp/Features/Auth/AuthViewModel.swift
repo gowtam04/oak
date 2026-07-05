@@ -214,7 +214,7 @@ final class AuthViewModel {
       case "email_failed": return "We couldn't send your code right now. Please try again."
       default: return genericErrorMessage
       }
-    case .unauthorized, .decoding, .imageRejected:
+    case .unauthorized, .decoding, .imageRejected, .turnInProgress:
       return genericErrorMessage
     }
   }
@@ -233,7 +233,7 @@ final class AuthViewModel {
       case "too_many_attempts": return "Too many incorrect attempts. Request a new code."
       default: return genericErrorMessage
       }
-    case .unauthorized, .decoding, .imageRejected:
+    case .unauthorized, .decoding, .imageRejected, .turnInProgress:
       return genericErrorMessage
     }
   }

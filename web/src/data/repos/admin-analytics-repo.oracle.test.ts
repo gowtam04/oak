@@ -286,11 +286,11 @@ describe("getHeavyUsers", () => {
 
   it("ranks by estimated cost", async () => {
     const { rows } = await repo.getHeavyUsers(ADMIN_RANGE, "cost", 3);
-    // ash (grok-heavy) > brock (claude) > misty (gpt) by estUsd.
+    // misty (gpt-5.5) > ash (grok-4.3) > brock (claude) by estUsd.
     expect(rows.map((r) => r.accountId)).toEqual([
+      ACCOUNTS.B.id,
       ACCOUNTS.A.id,
       ACCOUNTS.C.id,
-      ACCOUNTS.B.id,
     ]);
     // Strictly descending estimated cost.
     expect(rows[0].estUsd).toBeGreaterThan(rows[1].estUsd);

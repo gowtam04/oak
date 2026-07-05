@@ -34,29 +34,19 @@
 
 import { randomUUID } from "node:crypto";
 
-import { createAgentContext } from "@/agent/context";
 import { proposedTeamSchema, type ProposedTeam } from "@/agent/schemas";
 import { modelLabel } from "@/agent/models";
-import { ProviderTransportError } from "@/agent/providers/errors";
-import type {
-  AgentMode,
-  ChatMessage,
-  ImageAttachment,
-  OnAnswerDelta,
-  OnAnswerStart,
-  OnProgress,
-} from "@/agent/types";
+import type { AgentMode, ChatMessage, ImageAttachment } from "@/agent/types";
 import type { Account } from "@/data/repos/accounts-repo";
 import {
   CHAMPIONS_FORMAT,
-  formatForMode,
   isFormat,
   modeForFormat,
   STANDARD_FORMAT,
   type Format,
 } from "@/data/formats";
 import { detectScopeSignal } from "@/lib/scope/detect-scope";
-import { logger, type TurnTrace } from "@/server/logger";
+import { logger } from "@/server/logger";
 import {
   checkRateLimit,
   GUEST_CONFIG,
@@ -66,19 +56,16 @@ import { validateImages } from "@/server/image-upload";
 import { readJsonBodyWithLimit } from "@/server/body-limit";
 import { clientIp } from "@/server/client-ip";
 import {
-  appendTurn,
   getHistory,
   getSessionScope,
   setSessionScope,
   trim,
   trimMessages,
 } from "@/server/session-store";
-import {
-  formatSseEvent,
-  type ChatRequestBody,
-  type SseEventDataMap,
-  type SseEventName,
-} from "@/lib/sse/sse-types";
+import { runTurn } from "@/server/run-turn";
+import { startTurn } from "@/server/turn-store";
+import { streamTurnResponse } from "@/server/turn-stream";
+import type { ChatRequestBody, ScopeEvent } from "@/lib/sse/sse-types";
 
 // Node runtime (node-postgres + the Anthropic SDK need it) and never cached /
 // statically optimized — this is a live streaming handler.
@@ -95,18 +82,6 @@ export const dynamic = "force-dynamic";
  * + text).
  */
 const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
-
-// ---------------------------------------------------------------------------
-// SSE response headers (RISK DIRECTIVE — SSE route)
-// ---------------------------------------------------------------------------
-
-const SSE_HEADERS: Record<string, string> = {
-  "Content-Type": "text/event-stream; charset=utf-8",
-  "Cache-Control": "no-cache, no-transform",
-  Connection: "keep-alive",
-  // Disable proxy buffering (nginx etc.) so events flush immediately.
-  "X-Accel-Buffering": "no",
-};
 
 // ---------------------------------------------------------------------------
 // Small JSON-error helper for the pre-stream rejection paths
@@ -532,315 +507,84 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  // 4. Build the SSE stream. Return the Response SYNCHRONOUSLY; emit from the
-  //    async task inside start() (never await the whole loop first).
-  const encoder = new TextEncoder();
-
-  // SSE lifecycle state shared by `start` (the producer) AND `cancel` (fired when
-  // the client disconnects). `closed` makes every subsequent write a no-op once
-  // the turn finishes OR the connection is abandoned; `heartbeat` keeps a long,
-  // quiet turn alive (see below). Hoisted here so `cancel()` can reach them.
-  let closed = false;
-  let heartbeat: ReturnType<typeof setInterval> | null = null;
-  const stopHeartbeat = (): void => {
-    if (heartbeat !== null) {
-      clearInterval(heartbeat);
-      heartbeat = null;
-    }
-  };
-
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      // Single guarded write path: once the client disconnects, the controller is
-      // dead and enqueue throws "Invalid state: Controller is already closed". We
-      // catch that, flip `closed`, and stop — never letting it become an
-      // unhandledRejection out of the detached task below.
-      const enqueue = (chunk: string): void => {
-        if (closed) return;
-        try {
-          controller.enqueue(encoder.encode(chunk));
-        } catch {
-          closed = true;
-          stopHeartbeat();
-        }
-      };
-
-      const send = <K extends SseEventName>(
-        event: K,
-        data: SseEventDataMap[K],
-      ): void => {
-        enqueue(formatSseEvent(event, data));
-      };
-
-      const close = (): void => {
-        if (closed) return;
-        closed = true;
-        stopHeartbeat();
-        try {
-          controller.close();
-        } catch {
-          // Already closed by a client disconnect — nothing to do.
-        }
-      };
-
-      // Keep-alive heartbeat. A turn can spend 60s+ in silent reasoning before
-      // the first tool/answer byte (image turns especially — large input + long
-      // thinking, often with NO tool calls), during which no SSE traffic flows.
-      // An idle connection gets dropped by the proxy/browser, which surfaces as a
-      // `stream_error` and strands the finished answer. An SSE comment every 15s
-      // keeps it warm; comment frames are ignored by the client's frame parser.
-      heartbeat = setInterval(() => {
-        enqueue(": keep-alive\n\n");
-      }, 15_000);
-
-      // Detached async task — drives the agent loop and streams events.
-      void (async () => {
-        try {
-          // This turn's answer + its trace. Every turn now runs the agent path —
-          // the old Gen 1–4 "unsupported generation" short-circuit is gone
-          // (oak-v2 §3: those questions are answerable via the whole-franchise
-          // tools). The trace holder is set POST-CONSTRUCTION on ctx via the
-          // onTurnComplete sink.
-          const traceRef: { current: TurnTrace | null } = { current: null };
-
-          // Emit the resolved scope FIRST, before any tool activity, so the
-          // client can render the scope chip immediately (GS-C). `source` records
-          // how the scope was resolved (a named-but-unindexed gen resolves to a
-          // STANDARD data scope via an in-message signal → "message").
-          send("scope", {
-            format,
-            source: detection
-              ? "message"
-              : explicitSeed
-                ? "seed"
-                : stickyFormat
-                  ? "conversation"
-                  : legacySeed
-                    ? "seed"
-                    : "default",
-          });
-
-          // Dynamic import defers env validation to request time, not build time
-          // (runtime.ts evaluates env at module load; a static import at the top
-          // of this file would trigger parseEnv() during `next build` even though
-          // the route is force-dynamic).
-          const { runOak } = await import("@/agent/runtime");
-
-          const ctx = await createAgentContext({
-            requestId,
-            sessionId: session_id,
-            mode,
-            // Which LLM answers this turn — the operator-selected active model
-            // (ACTIVE_MODEL), resolved above. Server-controlled like `mode`;
-            // never taken from the body. History is plain text, so the model in
-            // effect can change between turns without correctness risk.
-            model: activeModel,
-            // Signed-in account id + the conversation's pending proposed team —
-            // both server-bound. The account id lets the team tools
-            // (list_teams/get_team/save_team) read+write account-scoped teams;
-            // the proposed team lets an approval ("save it") persist the EXACT
-            // set the user saw.
-            accountId: account?.id,
-            proposedTeam,
-            // Images attached to THIS turn (validated + mime-sniffed above).
-            // Consume-on-turn: handed straight to the model in the current user
-            // message, never stored in history. `undefined` ⇒ a text-only turn.
-            images: images.length > 0 ? images : undefined,
-            // Forward the inbound abort signal so a client disconnect (the user
-            // pressed Stop) tears down the Anthropic stream immediately and the
-            // loop bails between iterations — no wasted tokens.
-            signal: req.signal,
-          });
-
-          // Capture the per-turn trace the runtime assembles in finalize() via
-          // the onTurnComplete sink (admin-panel recording, AD-2).
-          // createAgentContext does not take this field, so it is set
-          // POST-CONSTRUCTION on the ctx — the same way the route owns the other
-          // server-controlled ctx fields.
-          ctx.onTurnComplete = (trace) => {
-            traceRef.current = trace;
-          };
-
-          // Stream one tool_activity event per tool call as the loop runs.
-          const onProgress: OnProgress = (e) => {
-            send("tool_activity", { tool: e.tool, label: e.label });
-          };
-
-          // Stream the answer_markdown prose token-by-token. answer_start resets
-          // the client's in-flight buffer (handles a re-emitted answer); the
-          // terminal `answer` event below stays authoritative.
-          const onAnswerStart: OnAnswerStart = () => {
-            send("answer_start", {});
-          };
-          const onAnswerDelta: OnAnswerDelta = (text) => {
-            send("answer_delta", { text });
-          };
-
-          const answer = await runOak(
-            message,
-            history,
-            ctx,
-            onProgress,
-            onAnswerStart,
-            onAnswerDelta,
-          );
-
-          // If the client disconnected mid-flight (user pressed Stop) the turn
-          // is interrupted: do NOT persist it (keeps the session store consistent
-          // with the wiped/undone UI) and do NOT emit — the connection is gone.
-          if (req.signal.aborted) {
-            return;
-          }
-
-          // In-domain success (any status). If `save_team` (T13) persisted a team
-          // this turn, stamp the answer authoritatively from the server-owned
-          // result (the model never copies the UUID). This drives the persistent
-          // "Saved ✓" card + viewer open, and the active-team persistence below.
-          if (ctx.savedTeam) {
-            answer.saved_team = ctx.savedTeam;
-          }
-
-          // What to store as the user turn's text for FUTURE turns (history) and
-          // the conversation title. The current turn already got the real image
-          // via ctx.images (consume-on-turn); the raw image is not persisted, so
-          // an image-only message (empty text) records a marker instead of a
-          // blank turn.
-          const userTurnText =
-            message.length > 0
-              ? message
-              : `[image attached${images.length > 1 ? ` ×${images.length}` : ""}]`;
-
-          if (account) {
-            // SIGNED IN: durable, account-scoped persistence (chat-history
-            // HIST-AD-3/BR-H2). Deliver the answer FIRST, then write — keeping
-            // the DB round-trip off the SSE critical path. The write carries no
-            // client turn ids (the chat body has none), so we mint fresh server
-            // UUIDs. A persistence failure is LOGGED but never surfaces as an SSE
-            // error: the answer is already delivered (BR-H2, off critical path).
-            send("answer", { answer });
-            try {
-              const repo = await import("@/data/repos/conversation-repo");
-              await repo.appendTurnPair({
-                accountId: account.id,
-                conversationId: session_id,
-                format: formatForMode(mode),
-                userTurnId: repo.newTurnId(),
-                userMessage: userTurnText,
-                assistantTurnId: repo.newTurnId(),
-                answer,
-                now: Date.now(),
-              });
-            } catch (err) {
-              logger.error(
-                {
-                  event: "chat_persist_failed",
-                  request_id: requestId,
-                  account_id: account.id,
-                  session_id,
-                  err: err instanceof Error ? err.message : String(err),
-                },
-                "oak_chat_persist_failed",
-              );
-            }
-          } else {
-            // GUEST: in-memory session store, exactly as before (byte-identical
-            // for text-only turns; image-only turns store the marker text).
-            await appendTurn(session_id, { role: "user", content: userTurnText });
-            await appendTurn(session_id, {
-              role: "assistant",
-              content: answer.answer_markdown,
-            });
-            send("answer", { answer });
-          }
-
-          // Non-blocking admin recording (ADMIN-BR-3, AD-2/AD-3): persist ONE
-          // turn_record per turn (guest + signed-in) from the captured trace
-          // (tokens / tool_trace / latency) plus this turn's own message / images
-          // / answer / account / mode. The answer was already delivered above, so
-          // this never blocks or delays the user; the recordTurn promise is NEVER
-          // awaited (only the cheap, cached module import is) and a write fault
-          // only logs. An interrupted (client-aborted) turn returns before here,
-          // so it is intentionally not recorded.
-          try {
-            const { recordTurn } = await import("@/data/repos/usage-repo");
-            void recordTurn({
-              id: requestId,
-              sessionId: session_id,
-              accountId: account?.id ?? null,
-              model: activeModel,
-              providerModel: traceRef.current?.model ?? null,
-              mode,
-              status: answer.status,
-              inputTokens: traceRef.current?.input_tokens ?? 0,
-              outputTokens: traceRef.current?.output_tokens ?? 0,
-              thinkingTokens: traceRef.current?.thinking_tokens ?? 0,
-              toolTrace: traceRef.current?.tool_trace ?? [],
-              citationCount:
-                traceRef.current?.citation_count ?? answer.citations.length,
-              turnLatencyMs: traceRef.current?.turn_latency_ms ?? 0,
-              imagesCount: images.length,
-              promptText: message,
-              answerText: answer.answer_markdown,
-              answer,
-              createdAt: Date.now(),
-            }).catch(logRecordFailure);
-          } catch (err) {
-            logRecordFailure(err);
-          }
-        } catch (err) {
-          // A client abort (user pressed Stop) surfaces as an AbortError out of
-          // the runtime; it is not a transport fault, and the SSE connection is
-          // already closed — swallow it quietly and just close the stream.
-          if (req.signal.aborted) {
-            return;
-          }
-
-          // Transport/API fault ONLY (runOak never throws for in-domain
-          // conditions — those return a OakAnswer with a status). Map to the
-          // `error` SSE event per integration.md § Error Surface (last two rows).
-          const detail = err instanceof Error ? err.message : String(err);
-          logger.error(
-            {
-              event: "chat_transport_error",
-              request_id: requestId,
-              session_id,
-              model: activeModel,
-              err: detail,
-            },
-            "oak_chat_transport_error",
-          );
-          // A typed provider fault (xAI/OpenAI 4xx/5xx — bad key, unsupported
-          // param, rate limit, unknown model) gets a MODEL-SCOPED message naming
-          // the active model + the upstream status. The generic Anthropic/unknown
-          // fault keeps the neutral retry message.
-          if (err instanceof ProviderTransportError) {
-            const statusPart = err.status ? ` (HTTP ${err.status})` : "";
-            send("error", {
-              code: "model_provider_error",
-              message: `${modelLabel(activeModel)} is unavailable right now${statusPart} — please try again, or check the provider key.`,
-              ...(err.status !== undefined ? { status: err.status } : {}),
-            });
-          } else {
-            send("error", {
-              code: "agent_error",
-              message: "The assistant hit a transport error. Please try again.",
-            });
-          }
-        } finally {
-          close();
-        }
-      })();
-    },
-    cancel() {
-      // The client went away (closed the tab, navigated, lost network). Mark the
-      // stream closed so the still-running detached task's send()/close() become
-      // no-ops instead of enqueuing on a dead controller (the
-      // "Controller is already closed" crash). The agent loop independently sees
-      // req.signal abort and bails between iterations.
-      closed = true;
-      stopHeartbeat();
-    },
+  // 4. Register the turn (background-turns/design.md §5.2 step 1). The three
+  //    concurrency caps (BT-5) are checked atomically; a clash is a pre-stream
+  //    JSON error, never an opened stream:
+  //      - per-conversation (1 running turn per session_id) → 409
+  //        `turn_in_progress` WITH the running turn's id, so the client reattaches
+  //        instead of double-generating;
+  //      - per-owner (3 running turns per account id / guest IP) → 429
+  //        `too_many_turns`;
+  //      - global in-process safety cap → 503 `server_busy`.
+  //    The owner key is the SAME identity the rate limiter uses (`acct:<id>` /
+  //    `ip:<clientIp>`), so the two spend controls stay aligned.
+  const started = startTurn({
+    sessionId: session_id,
+    accountId: account?.id ?? null,
+    ownerKey: rateLimitKey,
   });
+  if ("conflict" in started) {
+    if (started.conflict === "conversation") {
+      // Include the existing turn's id so the client reattaches (§4 / BT-5).
+      return new Response(
+        JSON.stringify({
+          code: "turn_in_progress",
+          message:
+            "A response is already generating for this conversation. Reattach to it.",
+          turn_id: started.turnId,
+        }),
+        { status: 409, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    if (started.conflict === "owner") {
+      return jsonError(
+        429,
+        "too_many_turns",
+        "You have too many responses generating at once. Wait for one to finish, then try again.",
+      );
+    }
+    return jsonError(
+      503,
+      "server_busy",
+      "The server is at capacity. Please try again in a moment.",
+    );
+  }
+  const turn = started;
 
-  return new Response(stream, { status: 200, headers: SSE_HEADERS });
+  // How the scope was resolved — surfaced on the `scope` event (GS-C). A
+  // named-but-unindexed gen resolves to a STANDARD data scope via an in-message
+  // signal, so `detection` present ⇒ "message".
+  const scopeSource: ScopeEvent["source"] = detection
+    ? "message"
+    : explicitSeed
+      ? "seed"
+      : stickyFormat
+        ? "conversation"
+        : legacySeed
+          ? "seed"
+          : "default";
+
+  // 5. Build the subscriber response FIRST — its ReadableStream.start() runs
+  //    synchronously, emitting the `turn` frame and registering with the turn's
+  //    fan-out — THEN detach the turn task (design §5.2 step 3: "the task starts
+  //    after subscription", so the buffer replay is trivially empty). The task is
+  //    NEVER awaited: it runs to completion even if this subscriber disconnects
+  //    (BT-1). The response stream's cancel() only unsubscribes; it never touches
+  //    the turn (BT-7).
+  const response = streamTurnResponse(turn);
+  void runTurn({
+    turn,
+    requestId,
+    sessionId: session_id,
+    account,
+    mode,
+    format,
+    scopeSource,
+    message,
+    history,
+    proposedTeam,
+    images,
+    activeModel,
+  });
+  return response;
 }
