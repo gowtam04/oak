@@ -73,14 +73,24 @@ function sseResponse(frames: string[], init?: ResponseInit): Response {
   });
 }
 
-/** Build a `Response` whose body streams `frames` then ERRORS the stream (a
- * dropped connection — the read rejects). Models a screen-off mid-turn drop. */
+/**
+ * Build a `Response` whose body delivers `frames` (one per read) and THEN errors
+ * the stream — a dropped connection mid-turn. PULL-based on purpose: calling
+ * `controller.error()` discards any still-queued chunks (Streams spec resets the
+ * queue), so an enqueue-all-then-error stream would drop the frames too. Pulling
+ * one frame per read guarantees each is consumed before the error surfaces.
+ */
 function erroringResponse(frames: string[]): Response {
   const encoder = new TextEncoder();
+  let i = 0;
   const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const frame of frames) controller.enqueue(encoder.encode(frame));
-      controller.error(new Error("network gone"));
+    pull(controller) {
+      if (i < frames.length) {
+        controller.enqueue(encoder.encode(frames[i]!));
+        i += 1;
+      } else {
+        controller.error(new Error("network gone"));
+      }
     },
   });
   return new Response(body, {
@@ -89,25 +99,20 @@ function erroringResponse(frames: string[]): Response {
   });
 }
 
-/** Like `erroringResponse`, but the drop is triggered on demand via `fail()` —
- * lets a test interleave visibility events around the exact moment of failure. */
-function deferredErrorResponse(frames: string[]): {
-  response: Response;
-  fail: () => void;
-} {
+/** An SSE `Response` whose body stays OPEN (never closes) — models a turn still
+ * generating server-side, so the consume loop suspends awaiting the next chunk. */
+function openResponse(frames: string[]): Response {
   const encoder = new TextEncoder();
-  let ctrl!: ReadableStreamDefaultController<Uint8Array>;
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
-      ctrl = controller;
       for (const frame of frames) controller.enqueue(encoder.encode(frame));
+      // Deliberately no close() / error().
     },
   });
-  const response = new Response(body, {
+  return new Response(body, {
     status: 200,
     headers: { "Content-Type": "text/event-stream" },
   });
-  return { response, fail: () => ctrl.error(new Error("network gone")) };
 }
 
 /** A non-OK HTTP response with a JSON `{ code, message }` body (e.g. 503). */
@@ -131,25 +136,34 @@ function stubFetch(response: Response): { calls: unknown[] } {
   return { calls };
 }
 
-/** Stub global.fetch to return one fresh `Response` per call from `factories`
- * (a `ReadableStream` body is single-use, so a retry needs a new one). A factory
- * may THROW to model a pre-stream fetch failure (`network_error`). The last
- * factory is reused if more calls arrive than provided. */
-function stubFetchSequence(factories: Array<() => Response>): {
-  calls: unknown[];
-} {
-  const calls: unknown[] = [];
-  let i = 0;
+interface RouterCall {
+  url: string;
+  method: string;
+  body: unknown;
+}
+
+/**
+ * Stub global.fetch with a URL/method router — the durable-turn client hits
+ * distinct endpoints (`POST /api/chat`, `GET /api/chat/turns/:id/stream`,
+ * `POST /api/chat/turns/:id/stop`), so tests route by URL and assert on the
+ * captured calls. Each `handler` call returns a FRESH `Response` (a
+ * `ReadableStream` body is single-use, so a reattach needs a new one).
+ */
+function stubRouter(
+  handler: (url: string, method: string) => Response,
+): RouterCall[] {
+  const calls: RouterCall[] = [];
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (_url: string, init?: RequestInit) => {
-      calls.push(init?.body);
-      const factory = factories[Math.min(i, factories.length - 1)]!;
-      i += 1;
-      return factory();
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ url, method, body });
+      return handler(url, method);
     }),
   );
-  return { calls };
+  return calls;
 }
 
 // Page-visibility control: `document.hidden` / `visibilityState` are prototype
@@ -179,6 +193,7 @@ function setHidden(hidden: boolean): void {
 
 const TURN = { session_id: "s-bg", message: "what is this image" };
 const ANSWER_FRAME = formatSseEvent("answer", { answer: ANSWERED });
+const TURN_FRAME = formatSseEvent("turn", { turn_id: "turn-bg" });
 const TOOL_FRAME = formatSseEvent("tool_activity", {
   tool: "resolve_entity",
   label: "🔍 Resolving…",
@@ -333,242 +348,175 @@ describe("useSseClient — full-stack SSE consumption", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Screen-off recovery: the phone screen turns off mid-turn, the page suspends,
-// the connection drops. The hook should auto-retry once on resume (and only for
-// connection drops while backgrounded), keeping the turn in-flight rather than
-// surfacing a dead-end error.
+// Durable-turn reattach (background-turns/design.md §6.1): a turn is a
+// first-class SERVER object, so a dropped/suspended connection UNSUBSCRIBES
+// rather than cancels. The hook reattaches — via `GET /api/chat/turns/:id/stream`
+// — on foreground and on a mid-stream drop (the server replays the buffer, then
+// tails). The old whole-turn auto-re-POST retry machinery is GONE.
 // ---------------------------------------------------------------------------
 
-describe("useSseClient — screen-off recovery", () => {
+describe("useSseClient — durable-turn reattach", () => {
   beforeEach(() => installVisibilityControl());
   afterEach(() => restoreVisibilityControl());
 
-  it("auto-retries once on resume after a backgrounded mid-stream drop", async () => {
-    const { calls } = stubFetchSequence([
-      () => erroringResponse([TOOL_FRAME]), // 1st attempt drops mid-stream
-      () => sseResponse([ANSWER_FRAME]), // retry succeeds
-    ]);
+  it("reattaches to the running turn when the tab returns to the foreground", async () => {
+    const calls = stubRouter((url, method) => {
+      if (url === "/api/chat" && method === "POST") {
+        // Turn starts and keeps generating (open stream, no terminal).
+        return openResponse([TURN_FRAME, TOOL_FRAME]);
+      }
+      if (url.includes("/api/chat/turns/turn-bg/stream")) {
+        return sseResponse([TURN_FRAME, ANSWER_FRAME]);
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
     const { result } = renderHook(() => useSseClient());
 
-    // Send, then the screen turns off (same tick) → the in-flight drop is armed.
-    act(() => {
-      result.current.send(TURN);
-      setHidden(true);
-    });
+    act(() => result.current.send(TURN));
+    // The turn id is captured from the first frame; the turn is unresolved.
+    await waitFor(() => expect(result.current.turnId).toBe("turn-bg"));
 
-    // The drop is detected while hidden → deferred, "Reconnecting…" shown.
-    await waitFor(() => expect(result.current.reconnecting).toBe(true));
-    expect(result.current.status).toBe("thinking");
-    expect(result.current.error).toBeNull();
-
-    // Screen comes back on → the deferred retry fires.
+    // Tab hidden (unsubscribe — server keeps generating), then visible → reattach.
+    act(() => setHidden(true));
     act(() => setHidden(false));
 
     await waitFor(() => expect(result.current.status).toBe("done"));
+    expect(result.current.answer).toEqual(ANSWERED);
+
+    // The reattach hit the resume endpoint (GET) with the guest session id.
+    const resume = calls.find((c) => c.url.includes("/stream"));
+    expect(resume?.method).toBe("GET");
+    expect(resume?.url).toContain("session_id=s-bg");
+  });
+
+  it("auto-reattaches after a mid-stream drop (Reconnecting…) and recovers", async () => {
+    const calls = stubRouter((url) => {
+      if (url === "/api/chat") {
+        // Delivers the turn id + a tool frame, then the socket drops.
+        return erroringResponse([TURN_FRAME, TOOL_FRAME]);
+      }
+      if (url.includes("/api/chat/turns/turn-bg/stream")) {
+        return sseResponse([TURN_FRAME, ANSWER_FRAME]);
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    const { result } = renderHook(() => useSseClient());
+
+    act(() => result.current.send(TURN));
+
+    // The drop triggers a bounded reattach → "Reconnecting…".
+    await waitFor(() => expect(result.current.reconnecting).toBe(true));
+    expect(result.current.error).toBeNull();
+
+    // The backed-off resume completes the turn.
+    await waitFor(() => expect(result.current.status).toBe("done"), {
+      timeout: 2000,
+    });
     expect(result.current.answer).toEqual(ANSWERED);
     expect(result.current.reconnecting).toBe(false);
-    expect(result.current.error).toBeNull();
-
-    // Exactly two POSTs, identical bodies (same message + images re-sent).
-    expect(calls).toHaveLength(2);
-    expect(calls[0]).toBe(calls[1]);
+    expect(calls.some((c) => c.url.includes("/stream"))).toBe(true);
   });
 
-  it("recovers when resume arrives BEFORE the read rejects (iOS event-order race)", async () => {
-    const first = deferredErrorResponse([TOOL_FRAME]);
-    const { calls } = stubFetchSequence([
-      () => first.response,
-      () => sseResponse([ANSWER_FRAME]),
-    ]);
+  it("surfaces a drop that happened before any turn id (nothing to reattach to)", async () => {
+    const calls = stubRouter(() => erroringResponse([])); // errors before the turn frame
     const { result } = renderHook(() => useSseClient());
 
-    act(() => {
-      result.current.send(TURN);
-      setHidden(true);
-    });
-    // First tool frame consumed; the read is now pending.
-    await waitFor(() => expect(result.current.activities).toHaveLength(1));
-
-    // Resume FIRST (no failure yet → nothing to fire), THEN the drop lands.
-    act(() => setHidden(false));
-    act(() => first.fail());
-
-    // The failure sees we're already visible and retries immediately.
-    await waitFor(() => expect(result.current.status).toBe("done"));
-    expect(result.current.answer).toEqual(ANSWERED);
-    expect(calls).toHaveLength(2);
-  });
-
-  it("recovers a pre-stream fetch failure (network_error) while backgrounded", async () => {
-    const { calls } = stubFetchSequence([
-      () => {
-        throw new Error("fetch failed");
-      },
-      () => sseResponse([ANSWER_FRAME]),
-    ]);
-    const { result } = renderHook(() => useSseClient());
-
-    act(() => {
-      result.current.send(TURN);
-      setHidden(true);
-    });
-    await waitFor(() => expect(result.current.reconnecting).toBe(true));
-    act(() => setHidden(false));
-
-    await waitFor(() => expect(result.current.status).toBe("done"));
-    expect(result.current.answer).toEqual(ANSWERED);
-    expect(calls).toHaveLength(2);
-  });
-
-  it("recovers a clean EOF with no answer while backgrounded", async () => {
-    const { calls } = stubFetchSequence([
-      () => sseResponse([TOOL_FRAME]), // closes cleanly, NO terminal answer
-      () => sseResponse([ANSWER_FRAME]),
-    ]);
-    const { result } = renderHook(() => useSseClient());
-
-    act(() => {
-      result.current.send(TURN);
-      setHidden(true);
-    });
-    await waitFor(() => expect(result.current.reconnecting).toBe(true));
-    act(() => setHidden(false));
-
-    await waitFor(() => expect(result.current.status).toBe("done"));
-    expect(result.current.answer).toEqual(ANSWERED);
-    expect(calls).toHaveLength(2);
-  });
-
-  it("does NOT auto-retry a drop that happened while visible (no backgrounding)", async () => {
-    const { calls } = stubFetchSequence([() => erroringResponse([TOOL_FRAME])]);
-    const { result } = renderHook(() => useSseClient());
-
-    // No setHidden — the page stays visible the whole time.
     act(() => result.current.send(TURN));
 
     await waitFor(() => expect(result.current.status).toBe("error"));
     expect(result.current.error?.code).toBe("stream_error");
-    expect(calls).toHaveLength(1); // surfaced, not retried
+    expect(calls).toHaveLength(1); // no reattach — the turn id was never seen
   });
 
-  it("does NOT auto-retry a clean HTTP error, even while backgrounded", async () => {
-    const { calls } = stubFetchSequence([
-      () =>
-        jsonResponse(503, {
-          code: "model_unavailable",
-          message: "Grok is down",
-        }),
-    ]);
+  it("stops reattaching after the bounded budget and surfaces the error", async () => {
+    const calls = stubRouter((url) => {
+      // Every attempt delivers only the turn id (no content → the budget is not
+      // refreshed) then drops, so the bounded reattach budget is exhausted.
+      if (url === "/api/chat") return erroringResponse([TURN_FRAME]);
+      if (url.includes("/api/chat/turns/turn-bg/stream")) {
+        return erroringResponse([TURN_FRAME]);
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
     const { result } = renderHook(() => useSseClient());
 
-    act(() => {
-      result.current.send(TURN);
-      setHidden(true);
+    act(() => result.current.send(TURN));
+
+    await waitFor(() => expect(result.current.status).toBe("error"), {
+      timeout: 4000,
     });
+    expect(result.current.error?.code).toBe("stream_error");
+    // POST + exactly MAX_REATTACHES (2) resume attempts, then it gives up.
+    const resumeCalls = calls.filter((c) => c.url.includes("/stream"));
+    expect(resumeCalls).toHaveLength(2);
+  });
+
+  it("surfaces a clean HTTP error without reattaching", async () => {
+    const calls = stubRouter(() =>
+      jsonResponse(503, { code: "model_unavailable", message: "Grok is down" }),
+    );
+    const { result } = renderHook(() => useSseClient());
+
+    act(() => result.current.send(TURN));
 
     await waitFor(() => expect(result.current.status).toBe("error"));
     expect(result.current.error?.code).toBe("model_unavailable");
-    expect(calls).toHaveLength(1); // a clean response → never retried
+    expect(calls).toHaveLength(1); // a clean response → never reattached
   });
 
-  it("does NOT auto-retry an in-band error frame, even while backgrounded", async () => {
-    const { calls } = stubFetchSequence([
-      () =>
-        sseResponse([
-          formatSseEvent("error", {
-            code: "model_provider_error",
-            message: "xAI 429",
-          }),
-        ]),
-    ]);
+  it("routes an in-band error frame to the error state (terminal, no reattach)", async () => {
+    const calls = stubRouter(() =>
+      sseResponse([
+        TURN_FRAME,
+        formatSseEvent("error", { code: "model_provider_error", message: "xAI 429" }),
+      ]),
+    );
     const { result } = renderHook(() => useSseClient());
 
-    act(() => {
-      result.current.send(TURN);
-      setHidden(true);
-    });
+    act(() => result.current.send(TURN));
 
     await waitFor(() => expect(result.current.status).toBe("error"));
     expect(result.current.error?.code).toBe("model_provider_error");
     expect(calls).toHaveLength(1);
   });
 
-  it("retries at most once (cap), then surfaces the error", async () => {
-    const { calls } = stubFetchSequence([
-      () => erroringResponse([]), // attempt 1 drops
-      () => erroringResponse([]), // retry also drops
-    ]);
+  it("reset() unsubscribes without calling the stop endpoint (turn keeps running)", async () => {
+    const calls = stubRouter((url) => {
+      if (url === "/api/chat") return openResponse([TURN_FRAME, TOOL_FRAME]);
+      throw new Error(`unexpected fetch ${url}`);
+    });
     const { result } = renderHook(() => useSseClient());
 
-    act(() => {
-      result.current.send(TURN);
-      setHidden(true);
-    });
-    await waitFor(() => expect(result.current.reconnecting).toBe(true));
-    act(() => setHidden(false)); // fires the single retry, which also drops
-
-    await waitFor(() => expect(result.current.status).toBe("error"));
-    expect(result.current.error?.code).toBe("stream_error");
-    expect(calls).toHaveLength(2); // original + exactly one retry
-  });
-
-  it("a new send supersedes a pending retry (no stale re-send)", async () => {
-    const bodyB = { session_id: "s-bg", message: "different question" };
-    const { calls } = stubFetchSequence([
-      () => erroringResponse([]), // A drops while hidden → arms a pending retry
-      () => sseResponse([ANSWER_FRAME]), // B succeeds
-    ]);
-    const { result } = renderHook(() => useSseClient());
-
-    act(() => {
-      result.current.send(TURN);
-      setHidden(true);
-    });
-    await waitFor(() => expect(result.current.reconnecting).toBe(true));
-
-    // A new turn arrives before resume — it must cancel A's pending retry.
-    act(() => result.current.send(bodyB));
-    await waitFor(() => expect(result.current.status).toBe("done"));
-
-    // Resuming now must NOT fire a stale retry of A.
-    act(() => setHidden(false));
-
-    expect(calls).toHaveLength(2);
-    expect(JSON.parse(calls[1] as string).message).toBe("different question");
-  });
-
-  it("reset() cancels a pending retry", async () => {
-    const { calls } = stubFetchSequence([() => erroringResponse([])]);
-    const { result } = renderHook(() => useSseClient());
-
-    act(() => {
-      result.current.send(TURN);
-      setHidden(true);
-    });
-    await waitFor(() => expect(result.current.reconnecting).toBe(true));
+    act(() => result.current.send(TURN));
+    await waitFor(() => expect(result.current.turnId).toBe("turn-bg"));
 
     act(() => result.current.reset());
     expect(result.current.status).toBe("idle");
-
-    act(() => setHidden(false)); // would fire a pending retry — but it's cleared
-    expect(calls).toHaveLength(1);
+    // A detach must NOT hit /stop — only an explicit stop() cancels the turn.
+    expect(calls.every((c) => !c.url.includes("/stop"))).toBe(true);
+    expect(calls).toHaveLength(1); // only the POST
   });
 
-  it("retry() manually re-sends after a surfaced (visible) error", async () => {
-    const { calls } = stubFetchSequence([
-      () => erroringResponse([]), // visible drop → surfaces
-      () => sseResponse([ANSWER_FRAME]), // manual retry succeeds
-    ]);
+  it("retry() manually re-sends after a surfaced error", async () => {
+    let n = 0;
+    const calls = stubRouter((url) => {
+      if (url === "/api/chat") {
+        n += 1;
+        return n === 1
+          ? erroringResponse([]) // first send drops before any turn id → surfaces
+          : sseResponse([TURN_FRAME, ANSWER_FRAME]); // manual retry succeeds
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
     const { result } = renderHook(() => useSseClient());
 
     act(() => result.current.send(TURN));
     await waitFor(() => expect(result.current.status).toBe("error"));
-    expect(calls).toHaveLength(1);
 
     // The body was retained on error → manual Retry reuses it.
     act(() => result.current.retry());
     await waitFor(() => expect(result.current.status).toBe("done"));
     expect(result.current.answer).toEqual(ANSWERED);
-    expect(calls).toHaveLength(2);
+    expect(calls.filter((c) => c.url === "/api/chat")).toHaveLength(2);
   });
 });
