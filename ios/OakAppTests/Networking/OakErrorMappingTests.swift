@@ -78,6 +78,24 @@ struct OakErrorMappingTests {
   }
 
   @Test
+  func turnInProgress409CapturesTheTurnId() {
+    // The chat route's 409 body adds `turn_id` to the envelope; the client must keep it
+    // so it can reattach instead of surfacing an error (background-turns §4 / BT-5).
+    let body = Data(
+      "{\"code\":\"turn_in_progress\",\"message\":\"Already generating.\",\"turn_id\":\"turn-77\"}".utf8)
+    let result = OakError.validate(response(409), data: body)
+    #expect(result == .failure(.turnInProgress(turnId: "turn-77")))
+  }
+
+  @Test
+  func other409FallsBackToGenericHttp() {
+    // A 409 that is NOT `turn_in_progress` maps to the generic `.http` case.
+    let body = Data("{\"code\":\"conflict\",\"message\":\"Nope\"}".utf8)
+    let result = OakError.validate(response(409), data: body)
+    #expect(result == .failure(.http(status: 409, code: "conflict", message: "Nope")))
+  }
+
+  @Test
   func transportFailureWrapsURLError() {
     let mapped = OakError.transportFailure(URLError(.notConnectedToInternet))
     guard case .transport = mapped else {

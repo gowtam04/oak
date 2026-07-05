@@ -212,6 +212,35 @@ struct FixtureDecodingTests {
     #expect(assistantId == "msg_2")
     #expect(answer.status == .answered)
     #expect(answer.subjects?.first?.name == "Dragapult")
+    // The fixture omits `active_turn` — an older/no-running-turn response decodes it as
+    // nil (the field is additive + optional, background-turns/design.md §5.4).
+    #expect(detail.activeTurn == nil)
+  }
+
+  /// `ConversationDetail.active_turn` (background-turns/design.md §5.4) decodes into the
+  /// optional `activeTurn` when the server reports a turn still generating for the
+  /// thread, so a reopened conversation can reattach to its live stream.
+  @Test
+  func conversationDetailDecodesActiveTurnWhenPresent() throws {
+    let json = Data(
+      """
+      { "id": "conv_1", "title": "T", "format": "champions", "pinned": false,
+        "turns": [], "active_turn": { "turn_id": "turn-42" } }
+      """.utf8)
+    let detail = try JSONDecoder().decode(ConversationDetail.self, from: json)
+    #expect(detail.activeTurn?.turnId == "turn-42")
+  }
+
+  /// An explicit `"active_turn": null` decodes as nil (no running turn).
+  @Test
+  func conversationDetailDecodesNullActiveTurnAsNil() throws {
+    let json = Data(
+      """
+      { "id": "conv_1", "title": "T", "format": "champions", "pinned": false,
+        "turns": [], "active_turn": null }
+      """.utf8)
+    let detail = try JSONDecoder().decode(ConversationDetail.self, from: json)
+    #expect(detail.activeTurn == nil)
   }
 
   /// The `{ team, validation }` envelope decodes the full members and the flat
