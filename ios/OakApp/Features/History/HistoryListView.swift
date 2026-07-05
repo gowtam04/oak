@@ -117,7 +117,17 @@ struct ConversationListView: View {
       ConversationRow(conversation: conversation)
     }
     .buttonStyle(.plain)
-    .listRowBackground(conversation.pinned ? Theme.accentSoft : Theme.surface)
+    // A 3pt red rail marks the pinned/active row (never color alone — the pin
+    // glyph in the row states it too, §5.4). The rail overlays the row background
+    // so nothing shifts when it appears.
+    .listRowBackground(
+      ZStack(alignment: .leading) {
+        conversation.pinned ? Theme.accentSoft : Theme.surface
+        if conversation.pinned {
+          Rectangle().fill(Theme.accent).frame(width: 3)
+        }
+      }
+    )
     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
       Button(role: .destructive) {
         Task { await model.delete(conversation) }

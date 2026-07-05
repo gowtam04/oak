@@ -63,7 +63,8 @@ struct ArtifactSheetView: View {
     }
     .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
-    .presentationBackground(.thinMaterial)
+    // The sheet container sits on Oak's paper, not a system material (§5.8).
+    .presentationBackground(Theme.surface)
     .presentationCornerRadius(24)
   }
 

@@ -239,18 +239,19 @@ struct AuthView: View {
   }
 
   /// One digit cell. Renders `model.code`'s character at `index` (display capped at 6
-  /// defensively); the active cell (next empty slot while focused) gets an accent
-  /// border + soft glow; digits pop in with a scale spring.
+  /// defensively); the active cell (next empty slot while focused) gets an **azure**
+  /// focus border + soft azure glow (interaction, §5.5); digits pop in with a scale
+  /// spring.
   private func digitBox(index: Int) -> some View {
     let digits = Array(model.code.prefix(6))
     let hasDigit = index < digits.count
     let isActive = focusedField == .code && index == digits.count && digits.count < 6
     return RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-      .fill(Theme.surface)
+      .fill(Theme.surfaceSunken)
       .frame(width: 44, height: 56)
       .overlay {
         RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-          .strokeBorder(isActive ? Theme.accent : Theme.separator, lineWidth: isActive ? 2 : 1)
+          .strokeBorder(isActive ? Theme.azure : Theme.separator, lineWidth: isActive ? 2 : 1)
       }
       .overlay {
         if hasDigit {
@@ -260,7 +261,7 @@ struct AuthView: View {
             .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
         }
       }
-      .shadow(color: isActive && !reduceMotion ? Theme.accent.opacity(0.30) : .clear, radius: 6)
+      .shadow(color: isActive && !reduceMotion ? Theme.azure.opacity(0.30) : .clear, radius: 6)
       .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.code)
       .animation(reduceMotion ? nil : Theme.Motion.snappy, value: isActive)
       .accessibilityHidden(true)
@@ -347,15 +348,22 @@ struct AuthView: View {
   @ViewBuilder
   private var messageBlock: some View {
     if let errorMessage = model.errorMessage {
+      // A dangerSoft callout strip with a 3pt danger rail (web callout recipe, §5.5).
       Label {
         Text(errorMessage)
-          .foregroundStyle(Theme.danger)
+          .foregroundStyle(Theme.textPrimary)
       } icon: {
         Image(systemName: "exclamationmark.triangle.fill")
           .foregroundStyle(Theme.danger)
       }
       .font(Theme.body(.footnote))
       .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(Theme.Spacing.md)
+      .background(Theme.dangerSoft, in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
+      .overlay(alignment: .leading) {
+        Rectangle().fill(Theme.danger).frame(width: 3)
+      }
+      .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
     }
     if let noticeMessage = model.noticeMessage {
       Label {
@@ -373,9 +381,9 @@ struct AuthView: View {
 
 // MARK: - Floating field chrome
 
-/// The rounded, filled text-field chrome with an animated focus border — accent when
-/// focused, separator otherwise (mirrors the composer's focus treatment). The border
-/// transition is dropped under Reduce Motion.
+/// The rounded, filled text-field chrome with an animated focus border — **azure**
+/// when focused (interaction, §5.5), separator otherwise; mirrors the composer's
+/// focus treatment. The border transition is dropped under Reduce Motion.
 private struct FloatingFieldChrome: ViewModifier {
   let focused: Bool
   let reduceMotion: Bool
@@ -388,10 +396,11 @@ private struct FloatingFieldChrome: ViewModifier {
       .overlay {
         RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
           .strokeBorder(
-            focused ? Theme.accent.opacity(0.4) : Theme.separator,
+            focused ? Theme.azure : Theme.separator,
             lineWidth: focused ? 1.5 : 1
           )
       }
+      .shadow(color: focused ? Theme.azure.opacity(0.28) : .clear, radius: 6)
       .animation(reduceMotion ? nil : Theme.Motion.snappy, value: focused)
   }
 }

@@ -202,7 +202,10 @@ struct AccountView: View {
         }
       }
       .disabled(model.isBusy)
+      .listRowBackground(Theme.dangerSoft)
       .accessibilityHint("Permanently deletes your account, history, and teams. This can't be undone.")
+    } header: {
+      Text("Danger zone").instrumentLabel().foregroundStyle(Theme.textSecondary)
     } footer: {
       Text("Permanently removes your account and all of its data from Oak.")
     }
@@ -227,7 +230,7 @@ struct AccountView: View {
         Label("Version", systemImage: "info.circle")
       }
     } header: {
-      Text("About")
+      Text("About").instrumentLabel().foregroundStyle(Theme.textSecondary)
     }
   }
 

@@ -651,14 +651,24 @@ private struct WarningRow: View {
         .font(Theme.body(.footnote))
         .foregroundStyle(Theme.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
     } icon: {
       Image(systemName: isInfo ? "info.circle" : "exclamationmark.triangle.fill")
-        .foregroundStyle(isInfo ? Theme.info : Theme.warning)
+        .foregroundStyle(accent)
         .accessibilityHidden(true)
     }
+    // A soft legality callout with a severity rail (§5.6) — never color alone; the
+    // icon + accessibility label state severity too.
+    .padding(Theme.Spacing.sm)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(softFill, in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
+    .overlay(alignment: .leading) { Rectangle().fill(accent).frame(width: 3) }
+    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("\(isInfo ? "Note" : "Caution"): \(warning.message)")
   }
 
   private var isInfo: Bool { warning.code == .incomplete }
+  private var accent: Color { isInfo ? Theme.azure : Theme.warning }
+  private var softFill: Color { isInfo ? Theme.azureSoft : Theme.warningSoft }
 }

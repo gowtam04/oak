@@ -76,12 +76,18 @@ extension View {
 /// the Chat root's leading nav item (§4.1). Decorative tile + text; exposed to
 /// VoiceOver as the single label "Oak".
 struct OakWordmarkLockup: View {
-  /// The tile edge length; the wordmark scales from `.title3`.
+  /// The tile edge length. Defaults to the nav-header size; the empty-state hero
+  /// passes ~48.
   var tileSize: CGFloat = 24
+  /// The wordmark's Dynamic Type anchor — `.title3` in the header, `.largeTitle`
+  /// (Fredoka 34) for the hero.
+  var titleStyle: Font.TextStyle = .title3
+  /// Whether the tile carries a raised shadow (the hero lifts off the canvas).
+  var elevated: Bool = false
 
   var body: some View {
-    HStack(spacing: 6) {
-      RoundedRectangle(cornerRadius: tileSize * 0.28, style: .continuous)
+    HStack(spacing: tileSize * 0.28) {
+      RoundedRectangle(cornerRadius: tileSize * 0.25, style: .continuous)
         .fill(Theme.accent)
         .frame(width: tileSize, height: tileSize)
         .overlay(
@@ -89,13 +95,27 @@ struct OakWordmarkLockup: View {
             .strokeBorder(.white, lineWidth: tileSize * 0.13)
             .frame(width: tileSize * 0.52, height: tileSize * 0.52)
         )
+        .modifier(OptionalRaisedShadow(active: elevated))
       Text("Oak")
-        .font(Theme.display(.title3))
+        .font(Theme.display(titleStyle))
         .foregroundStyle(Theme.textStrong)
     }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Oak")
     .accessibilityAddTraits(.isHeader)
+  }
+}
+
+/// Applies `Theme.Shadow.raised` only when `active` — used so the wordmark tile
+/// lifts off the canvas in the empty-state hero but stays flat in the nav header.
+private struct OptionalRaisedShadow: ViewModifier {
+  let active: Bool
+  func body(content: Content) -> some View {
+    if active {
+      content.oakShadow(.raised)
+    } else {
+      content
+    }
   }
 }
 

@@ -409,28 +409,30 @@ struct ChatView: View {
   /// ``ExamplePrompts/pool`` on each appearance, mirroring the web starter prompts.
   private var emptyState: some View {
     VStack(spacing: Theme.Spacing.xl) {
-      OakBrandMark()
+      // The wordmark lockup hero (§5.1): the brand tile + Fredoka "Oak", the web
+      // landing page in the hand.
+      OakWordmarkLockup(tileSize: 48, titleStyle: .largeTitle, elevated: true)
 
       VStack(spacing: Theme.Spacing.sm) {
-        Text("Ask Oak")
-          .font(Theme.display(.title))
-          .foregroundStyle(Theme.textPrimary)
         Text("Every answer carries its reasoning, sources, and the generation it's based on.")
           .font(Theme.body(.subheadline))
           .foregroundStyle(Theme.textSecondary)
           .multilineTextAlignment(.center)
       }
 
-      VStack(spacing: Theme.Spacing.sm) {
+      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
         Text("Try asking")
           .instrumentLabel()
           .foregroundStyle(Theme.textSecondary)
-          .frame(maxWidth: Self.chipMaxWidth, alignment: .leading)
           .accessibilityAddTraits(.isHeader)
-        ForEach(Array(exampleQuestions.enumerated()), id: \.offset) { index, question in
-          exampleChip(question, index: index)
+        // A 2-column chip grid (web parity, §5.1).
+        LazyVGrid(columns: Self.chipColumns, spacing: Theme.Spacing.sm) {
+          ForEach(Array(exampleQuestions.enumerated()), id: \.offset) { index, question in
+            exampleChip(question, index: index)
+          }
         }
       }
+      .frame(maxWidth: Self.chipMaxWidth)
       .padding(.top, Theme.Spacing.xs)
     }
     .frame(maxWidth: .infinity)
@@ -443,9 +445,15 @@ struct ChatView: View {
     }
   }
 
-  /// The shared max-width the `TRY ASKING` label and every example chip snap to, so
-  /// the chip set reads as one aligned column and none wraps ragged (§4.01).
-  private static let chipMaxWidth: CGFloat = 320
+  /// The max-width the `TRY ASKING` label + chip grid snap to, so the 2-column
+  /// grid reads as one aligned cluster (§5.1).
+  private static let chipMaxWidth: CGFloat = 340
+
+  /// Two flexible columns for the empty-state example-chip grid.
+  private static let chipColumns = [
+    GridItem(.flexible(), spacing: Theme.Spacing.sm),
+    GridItem(.flexible(), spacing: Theme.Spacing.sm),
+  ]
 
   /// One example-question chip, styled with the Oak chip grammar (§4.6). Empty
   /// state, so it presses **red-soft** (brand); tapping sends it as the next user
@@ -464,7 +472,7 @@ struct ChatView: View {
       Text(text)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: Self.chipMaxWidth)
+        .frame(maxWidth: .infinity)
     }
     .buttonStyle(.oakChip(.accent))
     .opacity(shown ? 1 : 0)
