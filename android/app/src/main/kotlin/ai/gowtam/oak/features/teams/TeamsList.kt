@@ -6,6 +6,7 @@ import ai.gowtam.oak.features.auth.AuthDialog
 import ai.gowtam.oak.features.auth.AuthViewModel
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.SpriteImage
 import ai.gowtam.oak.wire.DexSpriteRef
@@ -45,7 +46,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import ai.gowtam.oak.ui.OakTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -137,7 +138,7 @@ private fun TeamsSignInPrompt(services: ServiceContainer, appState: AppState, mo
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = OakSpacing.xl),
             )
-            Button(onClick = { showSignIn = true }) { Text("Sign in") }
+            OakButton(onClick = { showSignIn = true }) { Text("Sign in") }
         }
     }
 
@@ -166,7 +167,7 @@ private fun TeamsListScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            OakTopBar(
                 title = { Text("Teams", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     Box {
@@ -211,7 +212,7 @@ private fun TeamsListScreen(
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
                 state.teams.isEmpty() && state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(color = LocalOakColors.current.accent)
                 }
                 state.teams.isEmpty() -> EmptyState(formatFilter = state.formatFilter)
                 else -> LazyColumn {

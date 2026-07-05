@@ -1,6 +1,8 @@
 package ai.gowtam.oak.features.teams
 
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.ImportNote
@@ -79,7 +81,7 @@ fun ShowdownImportDialog(
                     navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Cancel") } },
                     actions = {
                         when {
-                            isImporting -> CircularProgressIndicator(modifier = Modifier.padding(end = OakSpacing.md), strokeWidth = 2.dp)
+                            isImporting -> CircularProgressIndicator(modifier = Modifier.padding(end = OakSpacing.md), strokeWidth = 2.dp, color = LocalOakColors.current.accent)
                             importedTeam == null -> TextButton(
                                 enabled = paste.isNotBlank(),
                                 onClick = {
@@ -99,7 +101,7 @@ fun ShowdownImportDialog(
                 LazyColumn(modifier = Modifier.padding(OakSpacing.lg), verticalArrangement = Arrangement.spacedBy(OakSpacing.md)) {
                     item {
                         Box {
-                            OutlinedButton(onClick = { formatMenuOpen = true }) { Text(format.shortLabel) }
+                            OakButton(onClick = { formatMenuOpen = true }, style = OakButtonStyle.Secondary) { Text(format.shortLabel) }
                             DropdownMenu(expanded = formatMenuOpen, onDismissRequest = { formatMenuOpen = false }) {
                                 Format.knownCases.forEach { candidate ->
                                     DropdownMenuItem(

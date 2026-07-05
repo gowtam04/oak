@@ -11,6 +11,8 @@ import ai.gowtam.oak.features.more.MoreRoute
 import ai.gowtam.oak.features.teams.TeamsRoute
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.ConnectionBanner
+import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakSpacing
@@ -32,10 +34,12 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 
 private enum class OakTab(val label: String) {
     Chat("Chat"),
@@ -90,16 +95,29 @@ fun OakApp(
         }
     }
 
+    val oak = LocalOakColors.current
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                OakTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = selectedTab == tab,
-                        onClick = { selectedTab = tab },
-                        icon = { Icon(imageVector = tab.icon(), contentDescription = tab.label) },
-                        label = { Text(tab.label) },
-                    )
+            Column {
+                // Hairline that separates the nav band from the canvas above it —
+                // the branded stand-in for Material's tonal-elevation shadow.
+                HorizontalDivider(color = oak.border, thickness = 1.dp)
+                NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
+                    OakTab.entries.forEach { tab ->
+                        NavigationBarItem(
+                            selected = selectedTab == tab,
+                            onClick = { selectedTab = tab },
+                            icon = { Icon(imageVector = tab.icon(), contentDescription = tab.label) },
+                            label = { Text(tab.label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = oak.accent,
+                                selectedTextColor = oak.accent,
+                                indicatorColor = oak.accentSoft,
+                                unselectedIconColor = oak.textMuted,
+                                unselectedTextColor = oak.textMuted,
+                            ),
+                        )
+                    }
                 }
             }
         },
@@ -314,8 +332,8 @@ private fun LoadErrorState(message: String, onRetry: () -> Unit, onBack: () -> U
                 color = oak.textMuted,
                 modifier = Modifier.padding(top = OakSpacing.xs, bottom = OakSpacing.lg),
             )
-            Button(onClick = onRetry) { Text("Retry") }
-            TextButton(onClick = onBack) { Text("Back to conversations") }
+            OakButton(onClick = onRetry) { Text("Retry") }
+            OakButton(onClick = onBack, style = OakButtonStyle.Ghost) { Text("Back to conversations") }
         }
     }
 }

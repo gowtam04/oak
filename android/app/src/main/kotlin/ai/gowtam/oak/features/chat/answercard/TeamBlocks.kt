@@ -1,6 +1,9 @@
 package ai.gowtam.oak.features.chat.answercard
 
 import ai.gowtam.oak.app.LocalServices
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
+import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -156,7 +159,7 @@ private fun ProposedCard(
                             Text("Couldn't save — try again.", style = MaterialTheme.typography.bodySmall, color = oak.warning)
                         }
                     }
-                    Button(
+                    OakButton(
                         onClick = {
                             onApply(team)
                             val service = teamService
@@ -164,7 +167,7 @@ private fun ProposedCard(
                                 // No composition-root access (e.g. a preview/test host) — fall
                                 // back to a local-only confirmation rather than crashing.
                                 applyState = ApplyState.SAVED
-                                return@Button
+                                return@OakButton
                             }
                             applyState = ApplyState.SAVING
                             scope.launch {
@@ -177,7 +180,6 @@ private fun ProposedCard(
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = oak.accent),
                     ) {
                         Text(if (applyState == ApplyState.FAILED) "Retry" else "Apply")
                     }
@@ -185,9 +187,9 @@ private fun ProposedCard(
             }
         }
 
-        OutlinedButton(onClick = { onOpenProposedTeam(team) }) {
-            Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text(text = "  Open team in viewer", color = oak.accent)
+        OakButton(onClick = { onOpenProposedTeam(team) }, style = OakButtonStyle.Secondary) {
+            Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp), tint = oak.accent)
+            Text(text = "Open team in viewer", color = oak.accent)
         }
     }
 }
@@ -202,7 +204,7 @@ private fun MemberRow(index: Int, member: TeamMember) {
             text = "${index + 1}",
             style = MaterialTheme.typography.labelSmall,
             color = oak.textMuted,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = JetBrainsMonoFamily,
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             val item = member.item?.trim()
@@ -285,9 +287,9 @@ private fun SavedCard(team: SavedTeamRef, onOpenSavedTeam: (SavedTeamRef) -> Uni
             )
             FormatBadge(team.format)
         }
-        OutlinedButton(onClick = { onOpenSavedTeam(team) }) {
-            Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text(text = "  Open in viewer", color = oak.accent)
+        OakButton(onClick = { onOpenSavedTeam(team) }, style = OakButtonStyle.Secondary) {
+            Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp), tint = oak.accent)
+            Text(text = "Open in viewer", color = oak.accent)
         }
     }
 }

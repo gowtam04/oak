@@ -2,6 +2,7 @@ package ai.gowtam.oak.features.artifact
 
 import ai.gowtam.oak.features.chat.answercard.DamageCalcBlock
 import ai.gowtam.oak.features.chat.answercard.titleizeNonNull
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -125,6 +126,9 @@ fun ArtifactSheet(viewModel: ArtifactViewModel, modifier: Modifier = Modifier) {
         onDismissRequest = viewModel::dismiss,
         modifier = modifier,
         sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        scrimColor = LocalOakColors.current.scrim,
+        shape = RoundedCornerShape(topStart = OakRadius.xl, topEnd = OakRadius.xl),
         dragHandle = { BottomSheetDefaults.DragHandle() },
         properties = ModalBottomSheetDefaults.properties(shouldDismissOnBackPress = false),
     ) {
@@ -322,7 +326,7 @@ private fun TeamMemberRow(index: Int, member: TeamMember, onOpenSpecies: (String
             text = "${index + 1}",
             style = MaterialTheme.typography.labelSmall,
             color = oak.textMuted,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = JetBrainsMonoFamily,
             modifier = Modifier.width(16.dp),
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

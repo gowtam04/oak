@@ -7,7 +7,10 @@ import ai.gowtam.oak.features.account.AccountViewModel
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.OakRadius
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ChevronRight
@@ -25,7 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import ai.gowtam.oak.ui.OakTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,7 +39,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 
@@ -90,16 +96,28 @@ private fun MoreListScreen(appState: AppState, onSelect: (MoreDestination) -> Un
 
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text("More", modifier = Modifier.semantics { heading() }) }) },
+        topBar = { OakTopBar(title = { Text("More", modifier = Modifier.semantics { heading() }) }) },
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            MoreDestination.entries.forEach { destination ->
-                MoreRow(
-                    destination = destination,
-                    subtitle = if (destination == MoreDestination.Account) accountSubtitle else null,
-                    onClick = { onSelect(destination) },
-                )
-                HorizontalDivider(color = LocalOakColors.current.border)
+        val oak = LocalOakColors.current
+        val cardShape = RoundedCornerShape(OakRadius.lg)
+        Column(modifier = Modifier.fillMaxSize().padding(padding).padding(OakSpacing.lg)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(cardShape)
+                    .background(oak.surfaceRaised)
+                    .border(1.dp, oak.border, cardShape),
+            ) {
+                MoreDestination.entries.forEachIndexed { index, destination ->
+                    MoreRow(
+                        destination = destination,
+                        subtitle = if (destination == MoreDestination.Account) accountSubtitle else null,
+                        onClick = { onSelect(destination) },
+                    )
+                    if (index < MoreDestination.entries.lastIndex) {
+                        HorizontalDivider(color = oak.border)
+                    }
+                }
             }
         }
     }

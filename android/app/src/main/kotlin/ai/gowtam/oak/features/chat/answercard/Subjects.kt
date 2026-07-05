@@ -1,5 +1,8 @@
 package ai.gowtam.oak.features.chat.answercard
 
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
+import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -53,9 +56,9 @@ fun Subjects(
             SubjectCard(subject, onClick = { onOpenEntity(EntityKind.POKEMON, subject.name) })
         }
         if (subjects.size >= 2) {
-            OutlinedButton(onClick = { onOpenComparison(subjects) }) {
-                Icon(Icons.Filled.ViewColumn, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text(text = "  Compare in viewer", color = oak.accent)
+            OakButton(onClick = { onOpenComparison(subjects) }, style = OakButtonStyle.Secondary) {
+                Icon(Icons.Filled.ViewColumn, contentDescription = null, modifier = Modifier.size(18.dp), tint = oak.accent)
+                Text(text = "Compare in viewer", color = oak.accent)
             }
         }
     }
@@ -93,7 +96,7 @@ internal fun SubjectCard(subject: Subject, onClick: () -> Unit) {
                         text = dexLabel(dex),
                         style = MaterialTheme.typography.bodySmall,
                         color = oak.textMuted,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = JetBrainsMonoFamily,
                     )
                 }
             }

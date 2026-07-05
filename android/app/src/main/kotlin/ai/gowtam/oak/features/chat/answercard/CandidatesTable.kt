@@ -1,5 +1,6 @@
 package ai.gowtam.oak.features.chat.answercard
 
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -123,7 +124,7 @@ fun CandidatesTable(
                                     color = oak.textStrong,
                                 )
                                 row.dexNumber?.let {
-                                    Text(text = dexLabel(it), style = MaterialTheme.typography.labelSmall, color = oak.textMuted, fontFamily = FontFamily.Monospace)
+                                    Text(text = dexLabel(it), style = MaterialTheme.typography.labelSmall, color = oak.textMuted, fontFamily = JetBrainsMonoFamily)
                                 }
                             }
                         }
@@ -151,7 +152,7 @@ fun CandidatesTable(
                             Text(
                                 text = column.value(row),
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (sorted) FontWeight.SemiBold else FontWeight.Normal),
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = JetBrainsMonoFamily,
                                 color = if (sorted) oak.textStrong else oak.textMuted,
                             )
                         }

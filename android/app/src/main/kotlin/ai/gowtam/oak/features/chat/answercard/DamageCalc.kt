@@ -1,5 +1,8 @@
 package ai.gowtam.oak.features.chat.answercard
 
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
+import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -143,7 +146,7 @@ fun DamageCalcBlock(
                     Text(
                         text = breakdown,
                         style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = JetBrainsMonoFamily,
                         color = oak.textMuted,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -155,7 +158,7 @@ fun DamageCalcBlock(
         }
 
         if (showOpenInViewerButton) {
-            OutlinedButton(onClick = onOpenInViewer) {
+            OakButton(onClick = onOpenInViewer, style = OakButtonStyle.Secondary) {
                 Text(text = "Open in viewer", color = oak.accent)
             }
         }
@@ -175,7 +178,7 @@ private fun ScalarRow(label: String, value: String, emphasized: Boolean) {
             text = value,
             style = (if (emphasized) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodySmall)
                 .copy(fontWeight = if (emphasized) FontWeight.SemiBold else FontWeight.Normal),
-            fontFamily = FontFamily.Monospace,
+            fontFamily = JetBrainsMonoFamily,
             color = oak.textStrong,
         )
     }

@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
@@ -45,7 +47,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import ai.gowtam.oak.ui.OakTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -118,13 +120,14 @@ fun AccountScreen(
         modifier = modifier,
         topBar = {
             if (onBack != null) {
-                TopAppBar(
+                OakTopBar(
                     title = { Text("Account") },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
+                    redThread = false,
                 )
             }
         },
@@ -170,7 +173,7 @@ fun AccountScreen(
 
             if (authState is AuthState.SignedIn) {
                 Spacer(Modifier.height(OakSpacing.lg))
-                SectionCard {
+                SectionCard(danger = true) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -186,7 +189,7 @@ fun AccountScreen(
                             style = MaterialTheme.typography.bodyLarge,
                         )
                         if (actionState.isBusy) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = colors.danger)
                         } else {
                             TextButton(enabled = !actionState.isBusy, onClick = { showingDeleteConfirm = true }) {
                                 Text("Delete", color = colors.danger)
@@ -245,8 +248,12 @@ fun AccountScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showingDeleteConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showingDeleteConfirm = false }) { Text("Cancel", color = colors.textMuted) }
             },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(OakRadius.lg),
+            titleContentColor = colors.textStrong,
+            textContentColor = colors.text,
         )
     }
 }
@@ -280,12 +287,16 @@ private fun ProfileHeader(isSignedIn: Boolean, email: String?, tierTitle: String
 }
 
 @Composable
-private fun SectionCard(content: @Composable () -> Unit) {
+private fun SectionCard(danger: Boolean = false, content: @Composable () -> Unit) {
+    val oak = LocalOakColors.current
+    val shape = RoundedCornerShape(OakRadius.lg)
+    val fill = if (danger) oak.dangerSoft else oak.surfaceRaised
+    val stroke = if (danger) oak.danger.copy(alpha = 0.35f) else oak.border
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(LocalOakColors.current.surfaceRaised, RoundedCornerShape(OakRadius.lg))
-            .border(1.dp, LocalOakColors.current.border, RoundedCornerShape(OakRadius.lg)),
+            .background(fill, shape)
+            .border(1.dp, stroke, shape),
     ) {
         content()
     }
@@ -328,17 +339,25 @@ private fun LinkRow(title: String, onClick: () -> Unit) {
 @Composable
 private fun ErrorRow(message: String, onDismiss: () -> Unit) {
     val colors = LocalOakColors.current
+    val shape = RoundedCornerShape(OakRadius.md)
+    val dangerColor = colors.danger
+    // The web callout recipe: a dangerSoft strip led by a 3dp danger rail (color is
+    // paired with the warning icon + text, never the sole signal).
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colors.danger.copy(alpha = 0.10f), RoundedCornerShape(OakRadius.md))
+            .clip(shape)
+            .background(colors.dangerSoft)
+            .drawBehind {
+                drawRect(color = dangerColor, size = size.copy(width = 3.dp.toPx()))
+            }
             .padding(OakSpacing.md),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs),
     ) {
         Icon(Icons.Filled.Warning, contentDescription = null, tint = colors.danger)
         Text(message, modifier = Modifier.weight(1f), color = colors.textStrong, style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = onDismiss) { Text("Dismiss") }
+        TextButton(onClick = onDismiss) { Text("Dismiss", color = colors.danger) }
     }
 }
 

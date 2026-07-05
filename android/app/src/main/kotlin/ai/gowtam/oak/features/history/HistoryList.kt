@@ -39,16 +39,18 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import ai.gowtam.oak.ui.OakTopBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -62,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -100,7 +103,7 @@ fun HistoryScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            OakTopBar(
                 title = { Text("Chats", modifier = Modifier.semantics { heading() }) },
                 actions = {
                     IconButton(onClick = onNewChat) {
@@ -164,6 +167,18 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch
             }
         },
         shape = RoundedCornerShape(OakRadius.pill),
+        // Borderless sunken pill; the azure ring appears only on focus (§5.4).
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = oak.surfaceSunken,
+            unfocusedContainerColor = oak.surfaceSunken,
+            focusedBorderColor = oak.azure,
+            unfocusedBorderColor = Color.Transparent,
+            cursorColor = oak.azure,
+            focusedTextColor = oak.text,
+            unfocusedTextColor = oak.text,
+            focusedPlaceholderColor = oak.textFaint,
+            unfocusedPlaceholderColor = oak.textFaint,
+        ),
     )
 }
 
@@ -172,20 +187,32 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch
  * common formats for now (mirrors `ConversationListView.formatFilterMenu`). */
 @Composable
 private fun FormatFilterRow(current: Format?, onSelect: (Format?) -> Unit) {
+    val oak = LocalOakColors.current
+    val chipShape = RoundedCornerShape(OakRadius.pill)
+    val chipColors = FilterChipDefaults.filterChipColors(
+        containerColor = oak.surfaceSunken,
+        labelColor = oak.textMuted,
+        selectedContainerColor = oak.azureSoft,
+        selectedLabelColor = oak.azure,
+    )
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = OakSpacing.lg, vertical = OakSpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
-        FilterChip(selected = current == null, onClick = { onSelect(null) }, label = { Text("All") })
+        FilterChip(selected = current == null, onClick = { onSelect(null) }, label = { Text("All") }, shape = chipShape, colors = chipColors)
         FilterChip(
             selected = current == Format.ScarletViolet,
             onClick = { onSelect(Format.ScarletViolet) },
             label = { Text("Gen 9") },
+            shape = chipShape,
+            colors = chipColors,
         )
         FilterChip(
             selected = current == Format.Champions,
             onClick = { onSelect(Format.Champions) },
             label = { Text("Champions") },
+            shape = chipShape,
+            colors = chipColors,
         )
     }
 }
@@ -290,10 +317,17 @@ private fun ConversationRow(
         },
     ) {
         var showMenu by remember { mutableStateOf(false) }
+        val pinned = conversation.pinned
+        val railColor = oak.accent
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(if (conversation.pinned) oak.accentSoft.copy(alpha = 0.4f) else Color.Transparent)
+                // Pinned/active rows carry the brand's red 3dp left rail over a faint
+                // accent wash; unpinned rows sit flush on the canvas (no width shift).
+                .background(if (pinned) oak.accentSoft.copy(alpha = 0.35f) else Color.Transparent)
+                .drawBehind {
+                    if (pinned) drawRect(color = railColor, size = size.copy(width = 3.dp.toPx()))
+                }
                 .clickable { onSelect(conversation) }
                 .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
@@ -357,14 +391,19 @@ private fun ConversationRow(
 @Composable
 private fun RenameDialog(initialTitle: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initialTitle) }
+    val oak = LocalOakColors.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Rename conversation") },
         text = {
             OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true, label = { Text("Title") })
         },
-        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save", color = oak.accent) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = oak.textMuted) } },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(OakRadius.lg),
+        titleContentColor = oak.textStrong,
+        textContentColor = oak.text,
     )
 }
 
