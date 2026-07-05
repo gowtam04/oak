@@ -780,3 +780,189 @@ signal to join against either. This needs new persisted state, not a derived que
 `src/lib/admin/admin-types.ts`, `src/components/admin/ConversationsBrowser.tsx`.
 
 **Depends on:** Voice mode (shipped) and the admin panel (shipped) — both already merged.
+
+---
+
+## B-16 — Interactive damage calculator page
+
+**Why:** The battle-math core (`src/agent/formulas/` — `compute-stat`, `estimate-damage`,
+`natures`, `type-chart`) is pure, deterministic, test-guarded, and already listed as a
+portable module — but it's only reachable through a chat turn. A dedicated calculator
+page (attacker/defender set, move, field state) exposes that trusted code directly,
+answers the highest-frequency competitive question with zero LLM latency/cost, and pairs
+naturally with chat (an "explain this calc" affordance seeds a turn with the configured
+scenario).
+
+**Scope:**
+- A calculator page: pick attacker/defender (species + full set: ability, item, nature,
+  EVs/IVs, Tera), move, and field modifiers; render damage rolls/percentages and KO
+  chances against common defensive spreads.
+- Formulas run client-side where possible (they're portable); species/move picker data
+  comes from the existing repos via a thin read API (or reuses the artifact-viewer
+  entity-read path).
+- Format-aware via the six scopes (a Champions calc reads Champions data); prefill a
+  side from a saved team slot (B-2); later, a calc result can open as an artifact (B-4)
+  or seed a chat turn for "explain why".
+- Gens 5–9 only until B-10 lands the old-gen formula variants.
+
+**Open questions:**
+- Full Smogon-calc modifier parity (weather, screens, every ability/item) vs. the subset
+  `estimate-damage` models today — extend the formulas or scope the UI to what exists?
+- Where picker data loads from: a new read endpoint vs. the artifact-viewer entity reads
+  vs. a static per-format bundle.
+- Does a calc become a defined artifact type so chat answers can open one pre-filled?
+
+**Touches:** new `src/app/calc/` page + components, `src/agent/formulas/*` (possible
+modifier gaps), a read endpoint over `src/data/repos/`, optionally
+`src/components/answer-card/` (open-in-calc affordance); iOS/Android parity screens.
+
+**Depends on:** Nothing hard; B-2 (team prefill) and B-4 (calc artifact) are enrichers.
+
+---
+
+## B-17 — Team analysis dashboard (coverage, speed tiers, threats)
+
+**Why:** Saved teams (B-2) store full competitive sets, and the index + usage stats
+(T15) hold everything needed to judge one — but the Teams page is a filing cabinet: it
+renders and validates sets without evaluating them. A per-team analysis view
+(type-coverage matrix, speed tiers vs. the meta, threat list) turns saved teams into an
+ongoing workflow and gives the agent's in-chat team analysis a persistent, glanceable
+counterpart.
+
+**Scope:**
+- A per-team analysis tab on the Teams page: defensive/offensive type-coverage matrix;
+  speed-tier chart (nature/EV/item-adjusted, via the existing formulas) vs. common meta
+  threats; a threat list (what beats this team, what it beats).
+- Deterministic and computed from existing data — type chart + stats from repos,
+  `compute-stat` for effective speed, usage data for "common threats" where it exists
+  (Champions via T15 today; other formats once B-5 lands metagame data). No LLM in the
+  loop; an "ask Oak about this" affordance seeds a chat turn for the reasoning layer.
+- The agent's `proposed_team` render could gain the same analysis inline before the user
+  applies it.
+
+**Open questions:**
+- Threat-modeling depth: static type/stat heuristics vs. usage-weighted matchup scoring
+  (the latter wants B-5's metagame ingest).
+- Where it computes: a server endpoint (favors three-client parity) vs. client-side from
+  the portable modules.
+- Is the analysis a B-4 artifact type (team sheet was already a candidate)?
+
+**Touches:** Teams page components, a new analysis module (candidate:
+`src/data/teams/analyze-team.ts` beside `validateTeam`), possibly
+`/api/teams/:id/analysis`; iOS/Android parity screens.
+
+**Depends on:** B-2 (BUILT). Usage-weighted threat scoring benefits from B-5.
+
+---
+
+## B-18 — Showdown replay analysis
+
+**Why:** Oak's defining trait is reasoning on top of data, and nothing exercises it
+harder than a real battle: paste a Pokémon Showdown replay URL (or raw battle log) and
+have Oak narrate the turning points — damage-roll luck, missed lines, set inferences
+from observed damage ("the Turn 6 Earthquake did 61%, which only a 252 Atk spread
+reaches"). Showdown is already the upstream ecosystem (`@pkmn`), and the battle-log
+protocol is stable and machine-readable (`@pkmn/protocol` / `@pkmn/client` exist for
+exactly this).
+
+**Scope:**
+- Accept a replay URL or a pasted log in chat; fetch/parse server-side into a structured
+  battle timeline (turns, moves, damage, switches, KOs).
+- Surface the parsed timeline to the agent — as a new tool or a server pre-pass — which
+  then reasons over it with the existing tools (sets, learnsets, formulas), so the
+  analysis stays grounded, cited, and uncertainty-flagged like every other answer.
+- Render as a rich answer; a per-turn drill-down on the B-4 artifact surface is the
+  natural deep-dive.
+
+**Open questions:**
+- Fetching a user-supplied URL is a live network call (Oak currently has none —
+  T20 `web_search` was removed): SSRF/allowlist guardrails, or ship paste-the-log-only
+  first and avoid fetching entirely?
+- Tool vs. context: a new read tool returning the parsed timeline, or an
+  `AgentContext`-bound consume-on-turn input like `images` (server-controlled, never
+  stored in history)?
+- Token budget: full battle timelines are large — summarization/windowing before the
+  model sees it, and how partial/old-protocol parses degrade honestly.
+- Which gens/formats parse reliably first (current-gen singles/doubles are the safe
+  start).
+
+**Touches:** a new parser module (candidate `src/data/replays/`), a tool or
+`AgentContext` binding + `route.ts` body field, prompt routing in
+`src/agent/prompts/domain.ts`, answer/artifact rendering.
+
+**Depends on:** Nothing hard; B-4 enriches rendering; B-5's metagame data would sharpen
+set-inference claims.
+
+---
+
+## B-19 — Shareable answers (public read-only links)
+
+**Why:** Answers carry reasoning, citations, and uncertainty flags — genuinely good
+content — but they die in a private scroll (or a guest's in-memory session). A "share"
+action that snapshots a single answer to a public read-only URL is the product's only
+organic-growth-loop candidate, doubles as an SEO surface, and revives the export idea
+B-3 explicitly deferred, in a lighter per-answer form.
+
+**Scope:**
+- Share one turn (question + full `OakAnswer`) as an immutable snapshot at a public
+  unguessable URL (`/a/<id>`), rendered by the same AnswerCard tree; no live data reads
+  on view, no auth required to view.
+- Snapshot at share time into a new table; sharer can revoke/delete (signed-in);
+  OG/meta tags so links unfurl well.
+- Explicitly NOT whole-conversation sharing in v1 (that's B-3-export scope creep).
+
+**Open questions:**
+- Guest sharing: allowed (but then no revocation identity) or signed-in only?
+- Abuse/moderation: public URLs render user-authored question text — include it or
+  answer-only? Does `app/privacy/page.tsx` need updating (the admin-panel disclosure
+  precedent suggests yes)?
+- Retention: indefinite like history, or expiring links?
+- Does a shared `proposed_team` include an "open in Oak" deep link that imports the
+  team / seeds a new chat?
+
+**Touches:** a new `shared_answer` table + repo, a public `/a/[id]` route + OG tags, a
+share affordance in the answer UI, privacy-page copy; iOS/Android share sheets.
+
+**Depends on:** Nothing hard (the snapshot model avoids B-3 coupling); B-1 for revocable
+ownership.
+
+---
+
+## B-20 — Playthrough companion / catch tracker
+
+**Why:** oak-v2 built the whole-games data surface (all-gen scopes, `search_wiki`
+walkthrough/location content, `get_encounters`) but the product framing is still
+competitive-first. A lightweight per-account playthrough tracker — which game I'm
+playing, story progress, which Pokémon I've caught, current party — lets the agent
+answer the questions a mid-playthrough player actually has ("what should I do next",
+"what can I catch on this route that I don't already have", "is my team ready for the
+next gym") against *their* save state instead of generically.
+
+**Scope:**
+- A per-account playthrough record: game/version, story checkpoint, caught/owned species
+  checklist, current party (reusing the team data model where it fits — levels and
+  mid-game movesets, not competitive spreads).
+- Manual entry/upsert UI in v1 (no save-file import); the caught checklist
+  cross-references per-game encounter data (a Living Dex tracker falls out of this
+  nearly for free).
+- Agent read access mirrors the active-team pattern: server-bound context or a no-arg
+  read tool — never an LLM-writable surface; the agent suggests, the user records.
+- Nuzlocke ruleset support (per-route first-encounter tracking, faint-is-gone) as a v2
+  nicety — a beloved community use case that fits the games-only scope.
+
+**Open questions:**
+- One active playthrough per game vs. many named runs (mirroring teams)?
+- Tool surface: a new no-arg read tool (append-only barrel, cached-prefix rules) vs. an
+  `AgentContext` binding like `activeTeam` — and should the active playthrough's game
+  drive scope resolution automatically (interplay with `detect-scope.ts` + sticky
+  scope)?
+- How encounter-data gaps degrade (Gen 9/Champions have no encounter coverage; Gens 1–4
+  unsupported until B-10).
+- Three-client parity cost — this is a whole new surface on web, iOS, and Android.
+
+**Touches:** new tables + repo (`playthrough`), `/api/playthroughs/*` routes, a frontend
+section, `AgentContext` or a new tool + prompt routing in `domain.ts`, scope-resolution
+interplay; iOS/Android parity screens.
+
+**Depends on:** B-1 (per-account). B-10 broadens gen coverage; B-12 sharpens encounter
+answers.
