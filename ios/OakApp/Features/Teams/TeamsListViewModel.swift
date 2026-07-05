@@ -260,7 +260,7 @@ final class TeamsListViewModel {
       return sessionExpiredMessage
     case let .http(_, _, message):
       return message.isEmpty ? genericMessage : message
-    case .decoding, .imageRejected:
+    case .decoding, .imageRejected, .turnInProgress:
       return genericMessage
     }
   }

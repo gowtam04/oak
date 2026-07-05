@@ -30,6 +30,16 @@ final class FakeChatService: ChatService, @unchecked Sendable {
   /// path deterministically. Falls back to `scriptedEvents`/`thrownError` once exhausted.
   var attemptScripts: [(events: [SSEEvent], error: OakError?)] = []
 
+  /// Events yielded (in order) by ``resumeStream`` before it finishes — the reattach
+  /// replay (opens with a `turn` frame, then buffered events, then the terminal). When
+  /// set, ``resumeThrownError`` finishes the resume by throwing (e.g. a 404 → an
+  /// interrupted turn) after these events.
+  var resumeEvents: [SSEEvent] = []
+
+  /// When set, ``resumeStream`` finishes by THROWING this after yielding
+  /// ``resumeEvents`` — e.g. `OakError.http(status: 404, …)` to model a gone turn.
+  var resumeThrownError: OakError?
+
   // MARK: Recording
 
   private(set) var sendCount = 0
@@ -37,6 +47,14 @@ final class FakeChatService: ChatService, @unchecked Sendable {
   private(set) var lastMessage: String?
   private(set) var lastScopeSeed: Format?
   private(set) var lastImageCount: Int?
+
+  private(set) var resumeCount = 0
+  private(set) var lastResumeTurnId: String?
+  private(set) var lastResumeSessionId: String?
+
+  private(set) var stopCount = 0
+  private(set) var lastStopTurnId: String?
+  private(set) var lastStopSessionId: String?
 
   func send(
     sessionId: String,
@@ -70,5 +88,29 @@ final class FakeChatService: ChatService, @unchecked Sendable {
         continuation.finish()
       }
     }
+  }
+
+  func resumeStream(turnId: String, sessionId: String) -> AsyncThrowingStream<SSEEvent, Error> {
+    resumeCount += 1
+    lastResumeTurnId = turnId
+    lastResumeSessionId = sessionId
+    let events = resumeEvents
+    let error = resumeThrownError
+    return AsyncThrowingStream { continuation in
+      for event in events {
+        continuation.yield(event)
+      }
+      if let error {
+        continuation.finish(throwing: error)
+      } else {
+        continuation.finish()
+      }
+    }
+  }
+
+  func stop(turnId: String, sessionId: String) async throws {
+    stopCount += 1
+    lastStopTurnId = turnId
+    lastStopSessionId = sessionId
   }
 }

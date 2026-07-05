@@ -239,6 +239,12 @@ struct PreviewStubChatService: ChatService {
       continuation.finish()
     }
   }
+
+  func resumeStream(turnId: String, sessionId: String) -> AsyncThrowingStream<SSEEvent, Error> {
+    AsyncThrowingStream { $0.finish() }
+  }
+
+  func stop(turnId: String, sessionId: String) async throws {}
 }
 
 /// No-network ``TeamsAssistantService`` for SwiftUI previews: a tiny scripted stream

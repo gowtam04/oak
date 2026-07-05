@@ -36,6 +36,43 @@ struct SSEClient: Sendable {
     return openEventStream(endpoint) { SSEParser() }
   }
 
+  /// Reattaches to a running (or just-finished) turn's live stream
+  /// (`GET /api/chat/turns/:id/stream?session_id=…`, background-turns/design.md §4).
+  /// It reuses the SAME byte/frame plumbing and ``SSEParser`` as ``stream(_:)`` —
+  /// the resume stream is byte-identical to the POST stream except it replays the
+  /// buffered events first (opening with the `turn` frame), so the reducer rebuilds
+  /// the in-flight UI and then tails live to the terminal event. A guest supplies
+  /// its `sessionId` (`?session_id=`) for ownership; a signed-in caller's Bearer is
+  /// attached and the param is ignored server-side. A 404 (unknown/expired turn) is
+  /// a pre-stream JSON error thrown as `OakError.http(status: 404, …)` before any
+  /// event is yielded.
+  func resume(turnId: String, sessionId: String) -> AsyncThrowingStream<SSEEvent, Error> {
+    let endpoint = Endpoint(
+      method: .get,
+      path: "/api/chat/turns/\(turnId)/stream",
+      queryItems: [URLQueryItem(name: "session_id", value: sessionId)],
+      requiresAuth: true
+    )
+    return openEventStream(endpoint) { SSEParser() }
+  }
+
+  /// Explicitly stops a running turn (`POST /api/chat/turns/:id/stop`,
+  /// background-turns/design.md §4 / BT-4): the turn transitions to `stopped`,
+  /// subscribers get a terminal `stopped` event, and nothing is persisted. Guests
+  /// pass their `sessionId` (`?session_id=`) for ownership; a signed-in caller's
+  /// Bearer identifies them. Stopping an already-terminal turn is a 200 no-op. The
+  /// 200 body (`{ turn_id, status }`) is ignored — the client tears down locally
+  /// regardless of the outcome.
+  func stop(turnId: String, sessionId: String) async throws {
+    let endpoint = Endpoint(
+      method: .post,
+      path: "/api/chat/turns/\(turnId)/stop",
+      queryItems: [URLQueryItem(name: "session_id", value: sessionId)],
+      requiresAuth: true
+    )
+    try await apiClient.sendNoContent(endpoint)
+  }
+
   /// Opens the stream for one team-builder assistant turn (`POST /api/teams/assistant`).
   /// A sibling of ``stream(_:)`` over the SAME byte/frame plumbing (``openEventStream``)
   /// but a different parser: the builder's terminal `answer` carries a `BuilderAnswer`

@@ -155,10 +155,16 @@ struct ChatView: View {
         }
       }
     }
-    // Tear down the stream when the screen goes away (conventions.md "Concurrency").
-    // cancelStreaming also releases the screen-wake hold, so it can't stick on.
-    .onDisappear { model.cancelStreaming() }
-    // Screen-off auto-reconnect: arm on background, fire any deferred retry on resume.
+    // Navigating away UNSUBSCRIBES — it never cancels generation (background-turns
+    // design §6.2). `detach` closes the socket, keeps the pending-turn pointer, and
+    // releases the screen-wake hold; the server turn keeps running and is reattached
+    // on return.
+    .onDisappear { model.detach() }
+    // Returning to the thread: if a turn is still generating for it but the socket has
+    // dropped, reattach to its live stream and rebuild the in-flight UI from the replay.
+    .onAppear { model.reattachIfNeeded() }
+    // Background: take a short grace window so a nearly-done turn finishes streaming.
+    // Foreground: reattach to a still-running turn whose socket dropped.
     .onChange(of: scenePhase) { _, newPhase in
       switch newPhase {
       case .background:
@@ -648,6 +654,12 @@ struct PreviewChatService: ChatService {
       continuation.finish()
     }
   }
+
+  func resumeStream(turnId: String, sessionId: String) -> AsyncThrowingStream<SSEEvent, Error> {
+    AsyncThrowingStream { $0.finish() }
+  }
+
+  func stop(turnId: String, sessionId: String) async throws {}
 }
 
 #Preview("Chat") {
