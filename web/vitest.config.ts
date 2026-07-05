@@ -53,7 +53,15 @@ export default defineConfig({
           // db/repos/runtime (native better-sqlite3 fails under jsdom).
           // `test/**/*.test.tsx` is the full-stack-e2e AnswerCard checkpoint
           // (test/answercard.fullstack.test.tsx) — same jsdom constraints.
-          include: ["src/components/**/*.test.tsx", "test/**/*.test.tsx"],
+          // `src/lib/**/*.test.tsx` covers hook tests colocated with pure client
+          // modules (e.g. the useSseClient durable-turn hook) that render a hook
+          // but likewise never import db/repos/runtime — the node project globs
+          // only `*.test.ts`, so there is no overlap.
+          include: [
+            "src/components/**/*.test.tsx",
+            "src/lib/**/*.test.tsx",
+            "test/**/*.test.tsx",
+          ],
           setupFiles: ["@testing-library/jest-dom/vitest"],
         },
       },
