@@ -42,6 +42,9 @@ struct TeamsListView: View {
           listContent
         }
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(Theme.canvas)
+      .oakRedThread()
       .navigationTitle("Teams")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -105,9 +108,12 @@ struct TeamsListView: View {
           .contextMenu {
             rowMenu(for: team)
           }
+          .listRowBackground(Theme.surface)
         }
       }
       .listStyle(.plain)
+      .scrollContentBackground(.hidden)
+      .background(Theme.canvas)
       .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.teams)
       .refreshable { await model.reload() }
       .overlay(alignment: .bottom) {
@@ -126,9 +132,12 @@ struct TeamsListView: View {
     List {
       ForEach(0..<6, id: \.self) { _ in
         SkeletonListRow()
+          .listRowBackground(Theme.surface)
       }
     }
     .listStyle(.plain)
+    .scrollContentBackground(.hidden)
+    .background(Theme.canvas)
   }
 
   @ViewBuilder

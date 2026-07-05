@@ -128,6 +128,14 @@ struct ChatView: View {
     .navigationTitle("Oak")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
+      // The wordmark lockup (§4.1): the brand tile + Fredoka "Oak" leading, so the
+      // Chat root reads as Oak the instant it opens. Only on the root (guest single
+      // thread); a pushed signed-in thread keeps the system back button leading.
+      if showsNewConversationButton {
+        ToolbarItem(placement: .topBarLeading) {
+          OakWordmarkLockup()
+        }
+      }
       // The scope control (GS-C): the header's visible counterpart to the `scope`
       // SSE event and the ONLY interactive scope control (the Champions pill +
       // Account toggle are gone). Centered so it reads as the thread's scope, not
@@ -210,7 +218,7 @@ struct ChatView: View {
     } label: {
       HStack(spacing: 3) {
         Text(model.displayFormat.shortLabel)
-          .font(Theme.body(.footnote).weight(.semibold))
+          .font(Theme.body(.footnote, weight: .semibold))
         Image(systemName: "chevron.down")
           .font(.system(size: 9, weight: .bold))
       }
@@ -317,6 +325,7 @@ struct ChatView: View {
             .frame(minHeight: geo.size.height, alignment: .bottom)
           }
         }
+        .background(Theme.canvas)
         .scrollDismissesKeyboard(.interactively)
         // Keep the newest content in view as turns/tokens arrive (M-AC-2.2).
         .onChange(of: model.turns.count) { _, _ in scrollToBottom(proxy) }
@@ -454,7 +463,7 @@ struct ChatView: View {
       sendFollowUp(text)
     } label: {
       Text(text)
-        .font(Theme.body(.subheadline).weight(.medium))
+        .font(Theme.body(.subheadline, weight: .medium))
         .foregroundStyle(Theme.textPrimary)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)

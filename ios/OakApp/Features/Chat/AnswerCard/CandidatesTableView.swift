@@ -193,8 +193,7 @@ struct CandidatesTableView: View {
         let isSorted = column.id == sortedColumnID
         cell(background: background, accentWash: isSorted, alignment: .trailing) {
           Text(column.value(row))
-            .font(Theme.mono(.subheadline))
-            .fontWeight(isSorted ? .semibold : .regular)
+            .font(Theme.mono(.subheadline, weight: isSorted ? .semibold : .medium))
             .monospacedDigit()
             .foregroundStyle(isSorted ? Theme.textPrimary : Theme.textSecondary)
         }
@@ -221,8 +220,7 @@ struct CandidatesTableView: View {
       SpriteImage(urlString: row.spriteUrl, name: row.name, size: 32)
       VStack(alignment: .leading, spacing: 1) {
         Text(row.name)
-          .font(Theme.body(.subheadline))
-          .fontWeight(.semibold)
+          .font(Theme.body(.subheadline, weight: .semibold))
           .foregroundStyle(Theme.textPrimary)
           .fixedSize(horizontal: false, vertical: true)
         if let dexNumber = row.dexNumber {
@@ -274,8 +272,9 @@ struct CandidatesTableView: View {
           .imageScale(.small)
       }
     }
+    // instrumentLabel is JBM SemiBold; the caret + ink color carry the sort
+    // (custom mono doesn't take an extra weight bump).
     .instrumentLabel()
-    .fontWeight(isSorted ? .bold : .semibold)
     .foregroundStyle(isSorted ? Theme.textPrimary : Theme.textSecondary)
   }
 

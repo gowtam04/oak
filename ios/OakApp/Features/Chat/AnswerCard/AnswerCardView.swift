@@ -549,8 +549,7 @@ private struct CredibilityStripView: View {
             onOpenEntity(parsed.kind, parsed.query)
           } label: {
             Text(citation.source)
-              .font(Theme.body(.footnote))
-              .fontWeight(.semibold)
+              .font(Theme.body(.footnote, weight: .semibold))
               .foregroundStyle(Theme.azure)
           }
           .buttonStyle(OakPressableButtonStyle())
@@ -558,8 +557,7 @@ private struct CredibilityStripView: View {
           .accessibilityHint("Opens this source's entity in the artifact viewer")
         } else {
           Text(citation.source)
-            .font(Theme.body(.footnote))
-            .fontWeight(.semibold)
+            .font(Theme.body(.footnote, weight: .semibold))
             .foregroundStyle(Theme.textPrimary)
         }
         Text(citation.detail)

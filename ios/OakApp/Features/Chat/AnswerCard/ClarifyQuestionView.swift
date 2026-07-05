@@ -60,7 +60,7 @@ struct ClarifyQuestionView: View {
       HStack(alignment: .top, spacing: 10) {
         VStack(alignment: .leading, spacing: 2) {
           Text(option.label)
-            .font(Theme.body(.subheadline).weight(.semibold))
+            .font(Theme.body(.subheadline, weight: .semibold))
             .foregroundStyle(Theme.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
 
@@ -78,7 +78,7 @@ struct ClarifyQuestionView: View {
         Spacer(minLength: 8)
 
         Image(systemName: "chevron.right")
-          .font(Theme.body(.footnote).weight(.semibold))
+          .font(Theme.body(.footnote, weight: .semibold))
           .foregroundStyle(Theme.info)
           .accessibilityHidden(true)
       }

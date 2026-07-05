@@ -120,6 +120,9 @@ struct TeamEditorView: View {
           }
         }
       }
+      .scrollContentBackground(.hidden)
+      .background(Theme.canvas)
+      .listRowBackground(Theme.surface)
       .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.warnings)
       .navigationTitle(model.savedTeam == nil ? "New team" : "Edit team")
       .navigationBarTitleDisplayMode(.inline)
@@ -221,7 +224,7 @@ struct TeamEditorView: View {
 
   private var saveConfirmationBadge: some View {
     Label("Saved", systemImage: "checkmark.circle.fill")
-      .font(Theme.body(.subheadline).weight(.semibold))
+      .font(Theme.body(.subheadline, weight: .semibold))
       .foregroundStyle(Theme.success)
       .padding(.horizontal, 14)
       .padding(.vertical, 8)

@@ -228,7 +228,7 @@ private struct TeamArtifactDetail: View {
     HStack(alignment: .firstTextBaseline, spacing: 8) {
       VStack(alignment: .leading, spacing: 2) {
         Text(team.savedId == nil ? "Proposed team" : "Saved team")
-          .font(Theme.body(.caption).weight(.semibold))
+          .font(Theme.body(.caption, weight: .semibold))
           .foregroundStyle(Theme.accent)
         Text(team.name)
           .font(Theme.display(.title3))
@@ -237,7 +237,7 @@ private struct TeamArtifactDetail: View {
       }
       Spacer(minLength: 8)
       Text(team.format.shortLabel)
-        .font(Theme.body(.caption2).weight(.semibold))
+        .font(Theme.body(.caption2, weight: .semibold))
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .foregroundStyle(Theme.textSecondary)
@@ -249,7 +249,7 @@ private struct TeamArtifactDetail: View {
   private var warningsSection: some View {
     VStack(alignment: .leading, spacing: 6) {
       Label("Legality", systemImage: "checklist")
-        .font(Theme.body(.caption).weight(.semibold))
+        .font(Theme.body(.caption, weight: .semibold))
         .foregroundStyle(Theme.textSecondary)
       ForEach(Array(team.warnings.enumerated()), id: \.offset) { _, warning in
         Label {
@@ -282,7 +282,7 @@ private struct TeamArtifactDetail: View {
       VStack(alignment: .leading, spacing: 3) {
         if isEmpty {
           Text("Empty slot")
-            .font(Theme.body(.subheadline).weight(.semibold))
+            .font(Theme.body(.subheadline, weight: .semibold))
             .foregroundStyle(Theme.textMuted)
         } else {
           Button {
@@ -290,7 +290,7 @@ private struct TeamArtifactDetail: View {
           } label: {
             HStack(spacing: 6) {
               Text(titleize(species) + itemSuffix(member.item))
-                .font(Theme.body(.subheadline).weight(.semibold))
+                .font(Theme.body(.subheadline, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
                 .multilineTextAlignment(.leading)
               Image(systemName: "chevron.right")

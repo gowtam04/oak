@@ -49,6 +49,9 @@ struct AccountView: View {
       }
       aboutSection
     }
+    .scrollContentBackground(.hidden)
+    .background(Theme.canvas)
+    .listRowBackground(Theme.surface)
     .navigationTitle("Account")
     .navigationBarTitleDisplayMode(.inline)
     .sheet(isPresented: $showingSignIn) {

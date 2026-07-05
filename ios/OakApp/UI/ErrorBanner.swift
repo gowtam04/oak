@@ -51,7 +51,7 @@ struct ErrorBanner: View {
 
       if let retryTitle, let onRetry {
         Button(retryTitle, action: onRetry)
-          .font(Theme.body(.footnote).weight(.semibold))
+          .font(Theme.body(.footnote, weight: .semibold))
           .foregroundStyle(Theme.accent)
       }
 

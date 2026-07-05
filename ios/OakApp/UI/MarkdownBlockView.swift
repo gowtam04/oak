@@ -67,7 +67,7 @@ struct MarkdownBlockView: View {
   }
 
   /// Heading type ramp, scaled to chat-card sizing (h1 is a section title, not a
-  /// hero). `display(_:)` is rounded + semibold — Oak's heading voice. Color is
+  /// hero). `display(_:)` is Fredoka SemiBold — Oak's heading voice. Color is
   /// left to inherit so a heading inside muted reasoning text stays muted.
   private func headingFont(_ level: Int) -> Font {
     switch level {
@@ -123,7 +123,7 @@ private struct MarkdownTableView: View {
           ForEach(Array(table.header.enumerated()), id: \.offset) { index, heading in
             cell(background: headerBackground, alignment: alignment(index)) {
               MarkdownText(heading)
-                .font(Theme.body(.caption).weight(.semibold))
+                .font(Theme.body(.caption, weight: .semibold))
                 .fixedSize(horizontal: false, vertical: true)
             }
           }

@@ -79,7 +79,7 @@ struct SuggestionsView: View {
       onSelect(text)
     } label: {
       Text(text)
-        .font(Theme.body(.subheadline).weight(.medium))
+        .font(Theme.body(.subheadline, weight: .medium))
         .foregroundStyle(Theme.accent)
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)

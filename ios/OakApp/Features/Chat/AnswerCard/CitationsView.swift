@@ -72,8 +72,7 @@ struct CitationsView: View {
 
       VStack(alignment: .leading, spacing: 2) {
         Text(citation.source)
-          .font(Theme.body(.footnote))
-          .fontWeight(.semibold)
+          .font(Theme.body(.footnote, weight: .semibold))
           .foregroundStyle(Theme.textPrimary)
         Text(citation.detail)
           .font(Theme.body(.footnote))

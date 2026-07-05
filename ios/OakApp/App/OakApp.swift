@@ -10,6 +10,12 @@ struct OakApp: App {
   @State private var appState = AppState()
   private let services = ServiceContainer.live()
 
+  init() {
+    // Paint the nav/tab bars onto Oak's canvas paper (not Apple's system
+    // material) before the first frame renders.
+    OakChrome.applyBarAppearance()
+  }
+
   var body: some Scene {
     WindowGroup {
       RootView()

@@ -175,11 +175,11 @@ struct EntityDetailView: View {
       // BST summary in the instrument/mono voice — reinforces the data register.
       HStack(alignment: .firstTextBaseline) {
         Text("BST")
-          .font(Theme.mono(.caption).weight(.semibold))
+          .font(Theme.mono(.caption, weight: .semibold))
           .foregroundStyle(Theme.textSecondary)
         Spacer(minLength: Theme.Spacing.md)
         Text(String(total))
-          .font(Theme.mono(.caption).weight(.semibold))
+          .font(Theme.mono(.caption, weight: .semibold))
           .monospacedDigit()
           .foregroundStyle(Theme.textPrimary)
       }
@@ -207,7 +207,7 @@ struct EntityDetailView: View {
     if !types.isEmpty {
       VStack(alignment: .leading, spacing: 4) {
         Text(label)
-          .font(Theme.body(.caption).weight(.semibold))
+          .font(Theme.body(.caption, weight: .semibold))
           .foregroundStyle(Theme.textSecondary)
         flow {
           ForEach(types, id: \.self) { type in
@@ -227,7 +227,7 @@ struct EntityDetailView: View {
           if !group.moves.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
               Text(Self.titleize(group.method))
-                .font(Theme.body(.caption).weight(.semibold))
+                .font(Theme.body(.caption, weight: .semibold))
                 .foregroundStyle(Theme.textSecondary)
               ForEach(Array(Self.sortMovesByType(group.moves).enumerated()), id: \.offset) { _, move in
                 Button {
@@ -304,7 +304,7 @@ struct EntityDetailView: View {
                 onOpen(.pokemon, holder.slug)
               } label: {
                 Text(holder.displayName)
-                  .font(Theme.body(.caption).weight(.semibold))
+                  .font(Theme.body(.caption, weight: .semibold))
                   .padding(.horizontal, 10)
                   .padding(.vertical, 4)
                   .foregroundStyle(Theme.textPrimary)
@@ -434,7 +434,7 @@ struct EntityDetailView: View {
         .foregroundStyle(Theme.textSecondary)
       Spacer(minLength: 12)
       Text(value)
-        .font(Theme.body(.subheadline).weight(.semibold))
+        .font(Theme.body(.subheadline, weight: .semibold))
         .foregroundStyle(Theme.textPrimary)
         .multilineTextAlignment(.trailing)
         .fixedSize(horizontal: false, vertical: true)
@@ -445,7 +445,7 @@ struct EntityDetailView: View {
     VStack(alignment: .leading, spacing: 6) {
       if !short.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         MarkdownText(short)
-          .font(Theme.body(.body).weight(.medium))
+          .font(Theme.body(.body, weight: .medium))
           .foregroundStyle(Theme.textPrimary)
           .frame(maxWidth: .infinity, alignment: .leading)
       }
@@ -478,7 +478,7 @@ struct EntityDetailView: View {
         TypeBadge(type: type)
         if let quadMark {
           Text(quadMark)
-            .font(Theme.body(.caption2).weight(.bold))
+            .font(Theme.body(.caption2, weight: .bold))
             .foregroundStyle(Theme.textSecondary)
         }
       }
@@ -489,7 +489,7 @@ struct EntityDetailView: View {
 
   private func damageClassBadge(_ damageClass: DamageClass) -> some View {
     Text(damageClass.rawValue.capitalized)
-      .font(Theme.body(.caption2).weight(.semibold))
+      .font(Theme.body(.caption2, weight: .semibold))
       .padding(.horizontal, 10)
       .padding(.vertical, 3)
       .foregroundStyle(Theme.textSecondary)
@@ -498,7 +498,7 @@ struct EntityDetailView: View {
 
   private func formatBadge(_ format: Format) -> some View {
     Text(format.shortLabel)
-      .font(Theme.body(.caption2).weight(.semibold))
+      .font(Theme.body(.caption2, weight: .semibold))
       .padding(.horizontal, 8)
       .padding(.vertical, 3)
       .foregroundStyle(Theme.textSecondary)
@@ -590,7 +590,7 @@ private struct StatBar: View {
   var body: some View {
     HStack(spacing: Theme.Spacing.sm) {
       Text(label)
-        .font(Theme.body(.caption).weight(.semibold))
+        .font(Theme.body(.caption, weight: .semibold))
         .foregroundStyle(Theme.textSecondary)
         .frame(width: 40, alignment: .leading)
       // Numeral right-aligned in mono footnote; `.monospacedDigit()` locks width so
