@@ -187,8 +187,7 @@ struct AnswerCardView: View {
             Label("Compare in viewer", systemImage: "rectangle.split.2x1")
               .font(Theme.display(.footnote))
           }
-          .buttonStyle(.bordered)
-          .tint(Theme.accent)
+          .buttonStyle(.oakSecondary)
           .accessibilityHint("Opens a side-by-side comparison of these Pokémon")
         }
       }
@@ -224,8 +223,7 @@ struct AnswerCardView: View {
             Label("Open in viewer", systemImage: "rectangle.portrait.and.arrow.right")
               .font(Theme.display(.footnote))
           }
-          .buttonStyle(.bordered)
-          .tint(Theme.accent)
+          .buttonStyle(.oakSecondary)
           .accessibilityHint("Opens the damage calculation as a full artifact")
         }
       }
@@ -247,8 +245,7 @@ struct AnswerCardView: View {
             Label("Open team in viewer", systemImage: "rectangle.portrait.and.arrow.right")
               .font(Theme.display(.footnote))
           }
-          .buttonStyle(.bordered)
-          .tint(Theme.accent)
+          .buttonStyle(.oakSecondary)
           .accessibilityHint("Opens the proposed team as a full artifact")
         }
       }

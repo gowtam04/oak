@@ -243,8 +243,7 @@ struct TeamsListView: View {
       .multilineTextAlignment(.center)
       .padding(.horizontal, 32)
       Button("Sign in") { showSignIn = true }
-        .buttonStyle(.borderedProminent)
-        .tint(Theme.accent)
+        .buttonStyle(.oakPrimary)
         .padding(.top, 4)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)

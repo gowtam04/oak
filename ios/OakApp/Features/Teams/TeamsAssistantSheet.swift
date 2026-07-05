@@ -113,8 +113,7 @@ struct TeamsAssistantSheet: View {
 
       FlexibleChips(items: TeamsAssistantViewModel.suggestions) { suggestion in
         Button(suggestion) { model.send(suggestion) }
-          .buttonStyle(.bordered)
-          .controlSize(.small)
+          .buttonStyle(.oakChip(.azure))
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -206,13 +205,11 @@ struct TeamsAssistantSheet: View {
             .foregroundStyle(Theme.success)
           if model.lastApplied?.turnId == turn.id {
             Button("Undo") { model.undo() }
-              .buttonStyle(.bordered)
-              .controlSize(.small)
+              .buttonStyle(.oakSecondary)
           }
         } else {
           Button("Apply to draft") { model.apply(turn) }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            .buttonStyle(.oakPrimary)
         }
       }
     }

@@ -40,8 +40,7 @@ struct ConnectionStateView: View {
         } label: {
           Label("Try Again", systemImage: "arrow.clockwise")
         }
-        .buttonStyle(.borderedProminent)
-        .tint(Theme.accent)
+        .buttonStyle(.oakPrimary)
         .accessibilityHint("Retries the last action that needed a connection.")
       }
     }

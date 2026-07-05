@@ -447,11 +447,10 @@ struct ChatView: View {
   /// the chip set reads as one aligned column and none wraps ragged (§4.01).
   private static let chipMaxWidth: CGFloat = 320
 
-  /// One example-question chip. Neutral `surfaceSunken` capsule with a hairline
-  /// separator border and `textPrimary` label (§4.01 — red is reserved for the
-  /// composer); tapping sends it as the next user turn and pulses the send button
-  /// once. Cascades in with a per-index stagger, collapsing to an instant appearance
-  /// under Reduce Motion.
+  /// One example-question chip, styled with the Oak chip grammar (§4.6). Empty
+  /// state, so it presses **red-soft** (brand); tapping sends it as the next user
+  /// turn and pulses the send button once. Cascades in with a per-index stagger,
+  /// collapsing to an instant appearance under Reduce Motion.
   private func exampleChip(_ text: String, index: Int) -> some View {
     let shown = reduceMotion || emptyStateAppeared
     return Button {
@@ -463,18 +462,11 @@ struct ChatView: View {
       sendFollowUp(text)
     } label: {
       Text(text)
-        .font(Theme.body(.subheadline, weight: .medium))
-        .foregroundStyle(Theme.textPrimary)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: Self.chipMaxWidth)
-        .padding(.horizontal, Theme.Spacing.lg)
-        .padding(.vertical, Theme.Spacing.sm)
-        .background(Theme.surfaceSunken, in: Capsule())
-        .overlay(Capsule().strokeBorder(Theme.separator, lineWidth: 1))
-        .contentShape(Capsule())
     }
-    .buttonStyle(OakPressableButtonStyle())
+    .buttonStyle(.oakChip(.accent))
     .opacity(shown ? 1 : 0)
     .offset(y: shown ? 0 : 8)
     .animation(reduceMotion ? nil : Theme.Motion.staggered(index), value: emptyStateAppeared)
@@ -543,12 +535,17 @@ private struct UserMessageView: View {
         if !text.isEmpty {
           Text(text)
             .font(Theme.body(.body))
-            .foregroundStyle(Color.white)
+            .foregroundStyle(Theme.textPrimary)
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.vertical, Theme.Spacing.md)
-            // Flat accent fill, no gradient and no glow (§4.02): the bubble stays
-            // clearly "yours" without outshouting Oak's answer.
-            .background(Theme.accent, in: bubbleShape)
+            // The paper bubble (§4.3): a soft accent-tinted fill with an
+            // accent-tinted hairline and dark ink — clearly "yours" without
+            // outshouting Oak's answer, and paper-like to match the web recipe.
+            .background(Theme.userBubble, in: bubbleShape)
+            .overlay {
+              bubbleShape.strokeBorder(Theme.accent.opacity(0.28), lineWidth: 1)
+            }
+            .oakShadow(.card)
         }
         if imageCount > 0 {
           Label("\(imageCount) image(s) attached", systemImage: "photo")

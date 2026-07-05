@@ -124,8 +124,7 @@ struct TeamBlocksView: View {
           .font(Theme.display(.subheadline))
           .frame(maxWidth: .infinity)
       }
-      .buttonStyle(.borderedProminent)
-      .tint(Theme.accent)
+      .buttonStyle(.oakPrimary)
       .accessibilityHint("Save this proposed team to your Teams")
     }
   }
@@ -303,8 +302,7 @@ struct TeamBlocksView: View {
         Label("Open in viewer", systemImage: "rectangle.portrait.and.arrow.right")
           .font(Theme.display(.footnote))
       }
-      .buttonStyle(.bordered)
-      .tint(Theme.accent)
+      .buttonStyle(.oakSecondary)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(14)

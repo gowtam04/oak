@@ -52,6 +52,11 @@ enum Theme {
   static let warningSoft = adaptive(light: 0xFDEFD9, dark: 0x3A2A0F)
   static let dangerSoft = adaptive(light: 0xFCE8EA, dark: 0x3A1518)
 
+  /// The user chat bubble's paper fill — the web's `color-mix(accent-soft 55%,
+  /// surface)` precomputed per theme (§4.3). Softer and more paper-like than a
+  /// flat accent fill; paired with an accent-tinted hairline and `textPrimary` ink.
+  static let userBubble = adaptive(light: 0xFDF2F1, dark: 0x2E1D1B)
+
   // MARK: Surfaces (warm neutral ramp — brand paper identity)
 
   /// The screen/chat canvas — the base layer every screen sits on.

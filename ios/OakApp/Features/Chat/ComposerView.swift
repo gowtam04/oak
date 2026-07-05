@@ -94,16 +94,17 @@ struct ComposerView: View {
           .padding(.horizontal, Theme.Spacing.md)
           .padding(.vertical, Theme.Spacing.sm)
           .background(Theme.surfaceSunken, in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
-          // The border brightens to accent while focused (a color change, so it's kept
-          // under Reduce Motion) — a subtle "you're typing here" cue.
+          // Focus grammar (§4.2): the border + soft glow turn **azure** while
+          // focused (interaction), and **red** while a turn streams (the live
+          // state) — so red stays meaningful. Color changes, kept under Reduce
+          // Motion.
           .overlay {
             RoundedRectangle(cornerRadius: Theme.Radius.lg)
-              .strokeBorder(
-                isInputFocused ? Theme.accent.opacity(0.4) : Theme.separator,
-                lineWidth: 1
-              )
+              .strokeBorder(fieldBorderColor, lineWidth: fieldBorderWidth)
           }
+          .shadow(color: fieldGlowColor, radius: 6)
           .animation(Theme.Motion.snappy, value: isInputFocused)
+          .animation(Theme.Motion.snappy, value: model.isStreaming)
 
         sendButton
       }
@@ -167,6 +168,27 @@ struct ComposerView: View {
     } message: {
       Text("Sign in to use voice mode.")
     }
+  }
+
+  // MARK: Composer field focus grammar (§4.2)
+
+  /// Red while streaming (the live state), azure while focused (interaction),
+  /// hairline otherwise. Red is never the focus color.
+  private var fieldBorderColor: Color {
+    if model.isStreaming { return Theme.accent }
+    if isInputFocused { return Theme.azure }
+    return Theme.separator
+  }
+
+  private var fieldBorderWidth: CGFloat {
+    model.isStreaming || isInputFocused ? 1.5 : 1
+  }
+
+  /// The soft focus/live glow — azure when focused, red when streaming, none at rest.
+  private var fieldGlowColor: Color {
+    if model.isStreaming { return Theme.accent.opacity(0.28) }
+    if isInputFocused { return Theme.azure.opacity(0.28) }
+    return .clear
   }
 
   // MARK: Derived attach state
@@ -318,6 +340,12 @@ struct ComposerView: View {
 
   // MARK: Send
 
+  /// Whether the send disc is in its filled-coral active state: a turn is
+  /// streaming (tap = stop) or there's something to send.
+  private var discActive: Bool {
+    model.isStreaming || model.canSend
+  }
+
   @ViewBuilder
   private var sendButton: some View {
     Button {
@@ -332,21 +360,24 @@ struct ComposerView: View {
         model.send()
       }
     } label: {
-      // A filled accent disc. The glyph morphs to `stop.fill` while a turn streams; the
-      // button is active then so tapping it cancels the stream (web's Stop parity).
+      // The 44pt send disc (§4.2). Active (has text, or streaming so a tap stops
+      // the turn) → coral fill, white glyph, full size. Empty → the disc shrinks
+      // to 0.85 and fills `surfaceSunken` with a faint glyph, reading as "nothing
+      // to send yet." The glyph morphs to `stop.fill` while a turn streams.
       Image(systemName: model.isStreaming ? "stop.fill" : "arrow.up")
         .font(.system(.headline, design: .rounded).weight(.semibold))
-        .foregroundStyle(.white)
-        .frame(width: 38, height: 38)
-        .background(Theme.accent, in: Circle())
+        .foregroundStyle(discActive ? Color.white : Theme.textMuted)
+        .frame(width: 44, height: 44)
+        .background(discActive ? Theme.accent : Theme.surfaceSunken, in: Circle())
         .contentTransition(.symbolEffect(.replace))
-        .opacity(model.isStreaming || model.canSend ? 1 : 0.4)
-        // One-shot pulse when an example chip fills the composer (§4.01).
-        .scaleEffect(isPulsing ? 1.18 : 1)
+        // One-shot pulse when an example chip fills the composer (§4.01); otherwise
+        // full size when active, 0.85 when empty.
+        .scaleEffect(isPulsing ? 1.18 : (discActive ? 1 : 0.85))
     }
     .buttonStyle(OakPressableButtonStyle())
     .disabled(!model.isStreaming && !model.canSend)
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.isStreaming)
+    .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.canSend)
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: isPulsing)
     // A chip tap toggles `sendPulse`; bump the scale on, then release it a beat later
     // so the button springs once. Skipped entirely under Reduce Motion.
