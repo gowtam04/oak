@@ -547,7 +547,9 @@ export const REFERENCE_CACHE_SEED: ReferenceCacheSeed[] = [
   },
   // --- T14 get_encounters: a grouped HIT + an explicit known-but-empty -------
   {
-    // Forward hit: Garchomp has grouped, multi-game-shaped encounter data.
+    // Forward hit: Garchomp has grouped, multi-game-shaped encounter data
+    // spanning two generations (gen-8 sword-shield + gen-7 sun-moon), so a
+    // gen-scoped B-12 test can observe the stable-partition/foreground order.
     resource_key: "encounters/garchomp",
     resource_kind: "encounters",
     endpoint_url: "https://pokeapi.co",
@@ -566,6 +568,22 @@ export const REFERENCE_CACHE_SEED: ReferenceCacheSeed[] = [
               method: "walk",
               min_level: 55,
               max_level: 60,
+              chance: 5,
+              conditions: [],
+            },
+          ],
+        },
+        {
+          version_group: "sun-moon",
+          generation: 7,
+          versions: ["sun", "moon"],
+          locations: [
+            {
+              location_display: "Haina Desert",
+              region: "Alola",
+              method: "walk",
+              min_level: 46,
+              max_level: 50,
               chance: 5,
               conditions: [],
             },

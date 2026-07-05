@@ -227,7 +227,11 @@ formulas (`compute-stat`, `estimate-damage`) are reused as-is for Gens 5–8 (GS
 known small per-gen inaccuracies are handled in the prompt notes + `is_estimate`,
 not in code. Encounter/catch data stays stored under `scarlet-violet` only and is
 read via `STANDARD_FORMAT` in any mainline scope (GS-D4); the Champions gate is
-unchanged.
+unchanged. **B-12** (landed): a mainline gen-scoped turn now additively
+annotates and foregrounds that same shared result per the active generation —
+`get_encounters` stable-partitions the groups (active-gen groups first),
+flags every group `in_active_scope`, and sets `scope_note` on a zero-match hit
+— never filtering/dropping a group. Standard and Champions stay byte-identical.
 
 ---
 

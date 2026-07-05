@@ -847,6 +847,18 @@ coverage_note: string | null }`, where each `EncounterGroup` is
 method, min_level, max_level, chance, conditions[] }] }`. `coverage_note` is set
 (and `encounters` empty) when the species has no recorded catch data.
 
+**B-12 (gen-scope annotate+foreground):** on a mainline gen-scoped turn
+(`ctx.mode` one of `"gen-5"`…`"gen-8"`), the tool additively annotates the same
+grouped result rather than filtering it — no group is ever dropped. Every group
+gains `in_active_scope: boolean` (true when its `generation` matches the active
+scope's generation number), and `encounters` is stable-partitioned so matching
+groups sort first, non-matching groups following in their original relative
+order. If NO group matches the active generation, `scope_note: string` explains
+the gap (e.g. "No Generation 7 catch locations are recorded for this Pokémon;
+the locations below are from other generations' games."); it stays null/absent
+whenever at least one group matches. Both fields are absent entirely on a
+standard or Champions turn — that output is byte-identical to pre-B-12 behavior.
+
 **Misses / modes:** `{ found: false, suggestions }` (unknown name);
 `{ error: "index_unavailable" }` (index not built);
 `{ error: "not_available_in_champions" }` (Champions turn — encounters are

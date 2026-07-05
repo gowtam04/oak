@@ -467,6 +467,10 @@ export const encounterGroupSchema = z.object({
   generation: z.number().int(),
   versions: z.array(z.string()),
   locations: z.array(encounterLocationSchema),
+  // Present ONLY on a gen-scoped turn (mode "gen-5".."gen-8"): true when this
+  // group's generation matches the active scope (B-12 annotate+foreground).
+  // Absent on standard/champions turns — byte-identical to pre-B-12 output.
+  in_active_scope: z.boolean().optional(),
 });
 
 export const encounterDetailSchema = z.object({
@@ -477,6 +481,11 @@ export const encounterDetailSchema = z.object({
   // catch data for this species (obtain via evolution/breeding/trade/event, or it
   // exists only in a PokeAPI-uncovered game — Gen 9 / Legends: Arceus / BDSP).
   coverage_note: z.string().nullish(),
+  // Set ONLY on a gen-scoped turn (mode "gen-5".."gen-8") when NO encounter
+  // group matches the active generation — every group is still returned, just
+  // none flagged in_active_scope (B-12). Null/absent on standard/champions
+  // turns and whenever at least one group matches.
+  scope_note: z.string().nullish(),
 });
 
 export const getEncountersOutputSchema = z.union([

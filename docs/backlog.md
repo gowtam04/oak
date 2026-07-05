@@ -584,6 +584,19 @@ practice.
 
 ## B-12 — Per-generation encounter (catch-location) filtering
 
+> **Status: ADDRESSED** — shipped as **annotate + foreground, never drop**
+> (the "Open questions" filter-vs-annotate call resolved in favor of honesty
+> over hard-filtering). `get_encounters` (T14) now branches on `ctx.mode`: on a
+> gen-scoped turn ("gen-5".."gen-8") it stable-partitions the same grouped
+> result so the active generation's groups sort first, flags every group with
+> an additive `in_active_scope: boolean`, and — only when zero groups match —
+> sets an additive `scope_note: string` explaining the gap. Standard and
+> Champions turns are untouched (byte-identical output, no new fields). Purely
+> a tool-layer change: no new tool input, no repo/stored-data change, scope
+> stays server-side-only via `ctx.mode` (never LLM-visible). Prompt guidance
+> (`gen-info.ts`'s per-gen `encountersNote`) was extended to tell the model to
+> lead with the active gen's foregrounded games and read `scope_note` honestly.
+
 **Why:** Encounter/catch-location data is inherently cross-game (Gen 1 →
 Sword/Shield + Let's Go) and is stored under the **`scarlet-violet` format only**;
 in any mainline scope `get_encounters` reads `STANDARD_FORMAT` and returns the full

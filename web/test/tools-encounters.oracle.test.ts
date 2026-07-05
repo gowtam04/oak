@@ -10,6 +10,10 @@
  *   - an unknown name returns { found:false, suggestions } and NEVER throws
  *   - a CHAMPIONS-mode turn short-circuits to not_available_in_champions
  *     (encounters are standard-only) without reading the DB
+ *   - B-12: a gen-scoped turn (mode "gen-5".."gen-8") stable-partitions the
+ *     groups (active gen first), flags every group `in_active_scope`, and sets
+ *     `scope_note` when nothing matches — nothing is ever dropped, and a
+ *     "standard" turn stays byte-identical to pre-B-12 output (no new keys)
  *
  * Wiring mirrors tools-pokedex.oracle.test.ts: migrate + seed an isolated schema,
  * install it as the @/data/db singleton, then dynamic-import the tool surface.
@@ -141,5 +145,65 @@ describe("get_encounters oracle (T14)", () => {
     const out = await dispatch("get_encounters", { name: "garchomp" }, champCtx);
     parse(out);
     expect(out).toEqual({ error: "not_available_in_champions" });
+  });
+
+  it("standard mode → byte-identical to pre-B-12 shape (no in_active_scope/scope_note keys)", async () => {
+    ensureLoaded();
+    const out = await dispatch("get_encounters", { name: "garchomp" }, ctx);
+    parse(out);
+    const detail = out as {
+      found: true;
+      name: string;
+      encounters: Record<string, unknown>[];
+      coverage_note: string | null;
+    };
+    expect(detail.encounters.length).toBe(2);
+    for (const group of detail.encounters) {
+      expect(group).not.toHaveProperty("in_active_scope");
+    }
+    expect(out).not.toHaveProperty("scope_note");
+  });
+
+  it("gen-7 scope → active-gen group foregrounded, all groups flagged, nothing dropped", async () => {
+    ensureLoaded();
+    const gen7Ctx = { ...ctx, mode: "gen-7" } as AgentContext;
+    const out = await dispatch("get_encounters", { name: "garchomp" }, gen7Ctx);
+    parse(out);
+    const detail = out as {
+      found: true;
+      encounters: {
+        version_group: string;
+        generation: number;
+        in_active_scope?: boolean;
+      }[];
+      scope_note?: string | null;
+    };
+    expect(detail.encounters.length).toBe(2);
+    // Gen-7 (sun-moon) group sorts first; gen-8 (sword-shield) follows.
+    expect(detail.encounters[0]?.version_group).toBe("sun-moon");
+    expect(detail.encounters[0]?.in_active_scope).toBe(true);
+    expect(detail.encounters[1]?.version_group).toBe("sword-shield");
+    expect(detail.encounters[1]?.in_active_scope).toBe(false);
+    expect(detail.scope_note ?? null).toBeNull();
+  });
+
+  it("gen-5 scope, species with no gen-5 groups → scope_note set, all groups kept and flagged false", async () => {
+    ensureLoaded();
+    const gen5Ctx = { ...ctx, mode: "gen-5" } as AgentContext;
+    const out = await dispatch("get_encounters", { name: "garchomp" }, gen5Ctx);
+    parse(out);
+    const detail = out as {
+      found: true;
+      encounters: { in_active_scope?: boolean }[];
+      scope_note?: string | null;
+    };
+    expect(detail.encounters.length).toBe(2);
+    for (const group of detail.encounters) {
+      expect(group.in_active_scope).toBe(false);
+    }
+    expect(detail.scope_note).toBe(
+      "No Generation 5 catch locations are recorded for this Pokémon; the " +
+        "locations below are from other generations' games.",
+    );
   });
 });

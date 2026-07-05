@@ -116,8 +116,11 @@ recommend any of them.
   modern 1.5×), so present crit figures as approximate and set is_estimate: true.`,
     encountersNote: `get_encounters HAS native catch/location data for this
 generation's games (Black/White and Black 2/White 2 — Gen 5 falls inside the Gen
-1–8 coverage). Answer where/how-to-catch questions from it: present the results
-grouped by game with the method and level range.`,
+1–8 coverage). Results arrive with this generation's game groups sorted first and
+every group flagged \`in_active_scope\` (B-12) — lead the answer with the
+Black/White/B2W2 locations and mention other games' locations only secondarily.
+If \`scope_note\` is set, say plainly that there's no catch data for this
+Pokémon in Gen 5's games before covering the other-gen locations returned.`,
   },
   "gen-6": {
     basisTag: "gen-6",
@@ -134,8 +137,11 @@ recommend them.
   memory.`,
     encountersNote: `get_encounters HAS native catch/location data for this
 generation's games (X/Y and Omega Ruby/Alpha Sapphire — inside the Gen 1–8
-coverage). Answer where/how-to-catch questions from it, grouped by game with the
-method and level range.`,
+coverage). Results arrive with this generation's game groups sorted first and
+every group flagged \`in_active_scope\` (B-12) — lead the answer with the X/Y/
+ORAS locations and mention other games' locations only secondarily. If
+\`scope_note\` is set, say plainly that there's no catch data for this Pokémon
+in Gen 6's games before covering the other-gen locations returned.`,
   },
   "gen-7": {
     basisTag: "gen-7",
@@ -150,8 +156,11 @@ Tera types or Dynamax here.
   memory.`,
     encountersNote: `get_encounters HAS native catch/location data for this
 generation's games (Sun/Moon and Ultra Sun/Ultra Moon — inside the Gen 1–8
-coverage). Answer where/how-to-catch questions from it, grouped by game with the
-method and level range.`,
+coverage). Results arrive with this generation's game groups sorted first and
+every group flagged \`in_active_scope\` (B-12) — lead the answer with the
+Sun/Moon/USUM locations and mention other games' locations only secondarily. If
+\`scope_note\` is set, say plainly that there's no catch data for this Pokémon
+in Gen 7's games before covering the other-gen locations returned.`,
   },
   "gen-8": {
     basisTag: "gen-8",
@@ -166,7 +175,10 @@ there is NO Terastallization — never recommend Megas, Z-Moves, or Tera types.
   memory.`,
     encountersNote: `get_encounters HAS native catch/location data for this
 generation's games (Sword/Shield — the edge of the Gen 1–8 coverage, and fully
-covered). Answer where/how-to-catch questions from it, grouped by game with the
-method and level range.`,
+covered). Results arrive with this generation's game groups sorted first and
+every group flagged \`in_active_scope\` (B-12) — lead the answer with the
+Sword/Shield locations and mention other games' locations only secondarily. If
+\`scope_note\` is set, say plainly that there's no catch data for this Pokémon
+in Gen 8's games before covering the other-gen locations returned.`,
   },
 };
