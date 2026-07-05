@@ -50,17 +50,25 @@ struct ChatTabView: View {
     NavigationStack(path: $path) {
       ConversationListView(
         model: HistoryListViewModel(history: services.history),
-        onSelect: { path.append(.existing($0)) }
+        onSelect: { path.append(.existing($0)) },
+        // The New-Chat toolbar button moved to the list's floating action disc
+        // (one-handed reach); this is its action.
+        onNewChat: { path.append(.new) }
       )
       .oakRedThread()
+      // Inline title with a custom Fredoka principal view. Root cause of the old
+      // phantom band: the screen used the default (large) title display mode, and
+      // our global largeTitleTextAttributes custom Fredoka UIFont doesn't render on
+      // iOS 26's large-title band — it reserved the tall band but drew nothing.
+      // Inline mode removes the band; the principal view guarantees the Fredoka face.
       .navigationTitle("Chats")
+      .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button {
-            path.append(.new)
-          } label: {
-            Label("New Chat", systemImage: "square.and.pencil")
-          }
+        ToolbarItem(placement: .principal) {
+          Text("Chats")
+            .font(Theme.display(.headline))
+            .foregroundStyle(Theme.textStrong)
+            .accessibilityAddTraits(.isHeader)
         }
       }
       .navigationDestination(for: ChatRoute.self) { route in
