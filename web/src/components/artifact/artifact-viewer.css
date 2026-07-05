@@ -96,11 +96,6 @@
   border-radius: var(--radius-pill);
   line-height: 1;
 }
-.artifact-viewer__ask {
-  white-space: nowrap;
-  color: var(--azure);
-  font-weight: 600;
-}
 
 .artifact-viewer__body {
   flex: 1 1 auto;

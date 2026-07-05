@@ -114,6 +114,4 @@ export interface ArtifactViewerApi {
   back: () => void;
   /** Close the viewer and clear the stack. */
   close: () => void;
-  /** Pre-fill the chat composer with a follow-up about the open artifact (TD-7). */
-  askInChat: (text: string) => void;
 }

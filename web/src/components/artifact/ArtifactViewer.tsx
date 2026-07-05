@@ -1,8 +1,8 @@
 /**
  * ArtifactViewer — the panel shell (B-4, Phase 5). Renders the open artifact
- * (top of the back-stack): a header (title, format/generation tag, back, close,
- * "ask about this in chat") and a body that dispatches by view type and load
- * state. Hidden when nothing is open (the chat reflows to full width, AV-US-7).
+ * (top of the back-stack): a header (title, format/generation tag, back,
+ * close) and a body that dispatches by view type and load state. Hidden when
+ * nothing is open (the chat reflows to full width, AV-US-7).
  *
  * Honest states throughout (BR-AV-5, AV-US-11): loading, transport error,
  * `not_found` (+ suggestions), and `unavailable` each render a clear message
@@ -35,7 +35,6 @@ function formatLabel(format: string): string {
 interface HeaderInfo {
   title: string;
   formatTag: string;
-  askText: string;
 }
 
 function headerFor(view: ArtifactView): HeaderInfo {
@@ -44,7 +43,6 @@ function headerFor(view: ArtifactView): HeaderInfo {
     return {
       title: name,
       formatTag: formatLabel(view.format),
-      askText: `Tell me about the team "${name}".`,
     };
   }
   if (view.type === "structured") {
@@ -52,13 +50,11 @@ function headerFor(view: ArtifactView): HeaderInfo {
       return {
         title: "Comparison",
         formatTag: formatLabel(view.artifact.format),
-        askText: "Tell me more about this comparison.",
       };
     }
     return {
       title: "Damage calculation",
       formatTag: formatLabel(view.artifact.format),
-      askText: "Explain this damage calculation in more detail.",
     };
   }
   // Entity view.
@@ -66,13 +62,11 @@ function headerFor(view: ArtifactView): HeaderInfo {
     return {
       title: view.response.resolved.display_name,
       formatTag: view.response.generation,
-      askText: `Tell me more about ${view.response.resolved.display_name}.`,
     };
   }
   return {
     title: view.request.q,
     formatTag: formatLabel(view.request.format),
-    askText: `Tell me about ${view.request.q}.`,
   };
 }
 
@@ -183,8 +177,7 @@ function ArtifactBody({ view }: { view: ArtifactView }): React.JSX.Element {
 }
 
 export default function ArtifactViewer(): React.JSX.Element | null {
-  const { isOpen, current, canGoBack, back, close, askInChat } =
-    useArtifactViewer();
+  const { isOpen, current, canGoBack, back, close } = useArtifactViewer();
   const panelRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -262,7 +255,7 @@ export default function ArtifactViewer(): React.JSX.Element | null {
 
   if (!isOpen || !current) return null;
 
-  const { title, formatTag, askText } = headerFor(current);
+  const { title, formatTag } = headerFor(current);
 
   return (
     <aside
@@ -290,14 +283,6 @@ export default function ArtifactViewer(): React.JSX.Element | null {
             {title}
           </h2>
           <div className="artifact-viewer__control-actions">
-            <button
-              type="button"
-              className="artifact-viewer__btn artifact-viewer__ask"
-              data-testid="artifact-ask"
-              onClick={() => askInChat(askText)}
-            >
-              Ask about this in chat
-            </button>
             <button
               type="button"
               className="artifact-viewer__btn artifact-viewer__close"

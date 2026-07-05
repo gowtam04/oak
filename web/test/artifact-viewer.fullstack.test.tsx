@@ -5,9 +5,8 @@
  * clicking a subject / citation / movepool move fetches `/api/entity` and the
  * panel renders the right profile; a citation parses to the right kind/slug; a
  * per-section button opens a structured artifact from the payload (no fetch);
- * drill-down + back navigate; "ask about this in chat" fires the page handler;
- * the external ↗ link survives; and the chat stays present with the panel open
- * (BR-AV-10).
+ * drill-down + back navigate; the external ↗ link survives; and the chat stays
+ * present with the panel open (BR-AV-10).
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -39,9 +38,9 @@ function byKind(kind: EntityKind) {
   }
 }
 
-function renderChat(onAskInChat: (t: string) => void = vi.fn()) {
+function renderChat() {
   return render(
-    <ArtifactViewerProvider format="scarlet-violet" onAskInChat={onAskInChat}>
+    <ArtifactViewerProvider format="scarlet-violet">
       <AnswerCard answer={CANONICAL_ANSWER} />
       <ArtifactViewer />
     </ArtifactViewerProvider>,
@@ -128,19 +127,5 @@ describe("Artifact viewer wire-up", () => {
     await waitFor(() =>
       expect(screen.getByTestId("pokemon-artifact")).toBeInTheDocument(),
     );
-  });
-
-  it("ask-in-chat fires the page handler with a follow-up about the open artifact", async () => {
-    const onAskInChat = vi.fn();
-    vi.mocked(fetchEntityArtifact).mockImplementation(async (kind) =>
-      byKind(kind),
-    );
-    renderChat(onAskInChat);
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("sprite-card-link"));
-    });
-    fireEvent.click(screen.getByTestId("artifact-ask"));
-    expect(onAskInChat).toHaveBeenCalledWith("Tell me more about Garchomp.");
   });
 });

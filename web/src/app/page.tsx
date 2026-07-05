@@ -405,13 +405,8 @@ export default function Home() {
   // The scope in effect for the conversation: an explicit chip pick, else the
   // server-resolved scope once a turn has run (GS-C), else the champions
   // default. Drives BOTH the header scope chip and the artifact viewer (B-4) —
-  // the viewer snapshots this onto each artifact at open (BR-AV-7). "Ask about
-  // this in chat" pre-fills the composer (TD-7) via the existing prefill
-  // channel — a fresh object so the same text can be re-applied on its next use.
+  // the viewer snapshots this onto each artifact at open (BR-AV-7).
   const displayFormat: Format = scopeSeed ?? resolvedScope ?? "champions";
-  const handleAskInChat = useCallback((text: string) => {
-    setPrefill({ text });
-  }, []);
 
   // Mic button tapped. Signed in → open the voice overlay at the current
   // display scope; guest → the sign-in dialog (the existing signed-in gate).
@@ -576,10 +571,7 @@ export default function Home() {
       </header>
 
       <div className="chat-page__body">
-        <ArtifactViewerProvider
-          format={displayFormat}
-          onAskInChat={handleAskInChat}
-        >
+        <ArtifactViewerProvider format={displayFormat}>
           {/* History sidebar — signed-in only (guests have no server history).
               Collapses to width 0 via the toggle; the inner wrapper keeps its
               fixed width so content doesn't reflow mid-slide, and goes `inert`

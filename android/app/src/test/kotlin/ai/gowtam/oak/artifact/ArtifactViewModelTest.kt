@@ -2,7 +2,6 @@ package ai.gowtam.oak.artifact
 
 import ai.gowtam.oak.features.artifact.ArtifactContent
 import ai.gowtam.oak.features.artifact.ArtifactViewModel
-import ai.gowtam.oak.features.artifact.askInChatText
 import ai.gowtam.oak.support.FakeArtifactService
 import ai.gowtam.oak.support.MainDispatcherRule
 import ai.gowtam.oak.support.fakeTeam
@@ -294,59 +293,5 @@ class ArtifactViewModelTest {
 
         assertTrue(vm.isPresented)
         assertEquals(1, vm.stack.value.size)
-    }
-
-    // -------------------------------------------------------------------
-    // "Ask about this in chat" prefill callback (acceptance check 4)
-    // -------------------------------------------------------------------
-
-    @Test
-    fun askInChatInvokesTheInstalledCallbackWithTheComputedTextAndDismisses() {
-        val vm = newModel()
-        vm.openComparison(listOf(Subject(name = "Garchomp", spriteUrl = "", types = listOf("dragon"), isFallback = false)))
-        var captured: String? = null
-        vm.onAskInChat = { captured = it }
-
-        vm.askInChat(askInChatText(vm.current!!))
-
-        assertEquals("Tell me more about this comparison.", captured)
-        assertTrue(vm.stack.value.isEmpty())
-    }
-
-    @Test
-    fun askInChatIsAPlainDismissWhenNoCallbackIsInstalled() {
-        val vm = newModel()
-        vm.openComparison(listOf(Subject(name = "Garchomp", spriteUrl = "", types = listOf("dragon"), isFallback = false)))
-
-        vm.askInChat("some text") // onAskInChat left unset
-
-        assertTrue(vm.stack.value.isEmpty())
-    }
-
-    @Test
-    fun askInChatTextCoversEveryArtifactContentKind() = runTest(mainDispatcherRule.dispatcher) {
-        val entityOk = EntityArtifact.Ok(pokemonOk())
-        val vmEntity = newModel(FakeArtifactService(entityResult = entityOk))
-        vmEntity.openEntity(EntityKind.POKEMON, "Garchomp")
-        advanceUntilIdle()
-        assertEquals("Tell me more about Garchomp.", askInChatText(vmEntity.current!!))
-
-        val vmMiss = newModel(FakeArtifactService(entityResult = null))
-        vmMiss.openEntity(EntityKind.MOVE, "made-up-move")
-        advanceUntilIdle()
-        assertEquals("Tell me about made-up-move.", askInChatText(vmMiss.current!!))
-
-        val vmTeam = newModel()
-        vmTeam.openProposedTeam(ProposedTeam(name = "Sun Team", format = Format.Champions, members = emptyList()), warnings = emptyList())
-        assertEquals("Tell me about the team \"Sun Team\".", askInChatText(vmTeam.current!!))
-
-        val vmSavedMiss = newModel(FakeArtifactService(savedTeamResult = null))
-        vmSavedMiss.openSavedTeam(SavedTeamRef(id = "t1", name = "Rain Team", format = Format.Champions))
-        advanceUntilIdle()
-        assertEquals("Tell me about the team \"Rain Team\".", askInChatText(vmSavedMiss.current!!))
-
-        val vmDamage = newModel()
-        vmDamage.openDamageCalc(DamageCalc(assumptions = emptyMap(), result = emptyMap(), isEstimate = true))
-        assertEquals("Explain this damage calculation in more detail.", askInChatText(vmDamage.current!!))
     }
 }

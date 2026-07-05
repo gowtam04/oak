@@ -168,9 +168,6 @@ struct ChatView: View {
         service: services.artifact,
         format: model.displayFormat
       )
-      // "Ask about this in chat" prefills the composer (no auto-send) and the sheet
-      // closes itself — mirrors the web viewer's `askInChat`.
-      viewer.onAskInChat = { [weak model] text in model?.prefillComposer(text) }
       artifactModel = viewer
     }
     // Host the artifact bottom sheet once at the screen level; pushing an entity

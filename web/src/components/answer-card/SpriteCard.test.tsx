@@ -13,7 +13,6 @@ vi.mock("@/components/artifact/useArtifactViewer", () => ({
     openTeam: () => {},
     back: () => {},
     close: () => {},
-    askInChat: () => {},
   }),
 }));
 

@@ -34,12 +34,6 @@ final class ArtifactViewModel {
   /// fixed for the viewer's lifetime, so the model has no way to widen scope.
   private let format: Format
 
-  /// Prefills the chat composer with a follow-up about the open artifact (the web
-  /// viewer's "Ask about this in chat"). The chat host installs this to route to
-  /// ``ChatViewModel/prefillComposer(_:)``; unset ⇒ ``askInChat(_:)`` is a plain
-  /// dismiss. Not observed for rendering — a plain closure sink.
-  @ObservationIgnored var onAskInChat: ((String) -> Void)?
-
   init(service: any ArtifactService, format: Format) {
     self.service = service
     self.format = format
@@ -103,16 +97,6 @@ final class ArtifactViewModel {
   /// fetch — mirrors web's `damage-calc` structured artifact). Synchronous.
   func openDamageCalc(_ damageCalc: DamageCalc) {
     stack.append(Artifact(title: "Damage calculation", content: .damageCalc(damageCalc)))
-  }
-
-  // MARK: Ask about this in chat
-
-  /// Prefills the chat composer with `text` (a follow-up about the open artifact) and
-  /// closes the sheet — the web viewer's "Ask about this in chat" (`askInChat`). The
-  /// prefill fills the composer for the user to edit/send; it does NOT auto-send.
-  func askInChat(_ text: String) {
-    onAskInChat?(text)
-    dismiss()
   }
 
   /// Opens a **saved team** by id, fetching its members + warnings fresh (M-AC-A3.2: the

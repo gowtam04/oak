@@ -47,7 +47,6 @@ const NOOP_API: ArtifactViewerApi = {
   openTeam: () => {},
   back: () => {},
   close: () => {},
-  askInChat: () => {},
 };
 
 export const ArtifactViewerContext = createContext<ArtifactViewerApi>(NOOP_API);
@@ -59,14 +58,11 @@ function cacheKey(format: string, kind: string, q: string): string {
 export interface ArtifactViewerProviderProps {
   /** Current data scope; snapshotted onto each artifact at open (BR-AV-7). */
   format: ArtifactFormat;
-  /** Pre-fill the chat composer with a follow-up (TD-7); lifted to the page. */
-  onAskInChat?: (text: string) => void;
   children: ReactNode;
 }
 
 export function ArtifactViewerProvider({
   format,
-  onAskInChat,
   children,
 }: ArtifactViewerProviderProps): React.JSX.Element {
   const [stack, setStack] = useState<ArtifactView[]>([]);
@@ -199,13 +195,6 @@ export function ArtifactViewerProvider({
     setStack([]);
   }, []);
 
-  const askInChat = useCallback(
-    (text: string) => {
-      onAskInChat?.(text);
-    },
-    [onAskInChat],
-  );
-
   const api = useMemo<ArtifactViewerApi>(() => {
     const current = stack.length > 0 ? stack[stack.length - 1]! : null;
     return {
@@ -217,9 +206,8 @@ export function ArtifactViewerProvider({
       openTeam,
       back,
       close,
-      askInChat,
     };
-  }, [stack, openEntity, openStructured, openTeam, back, close, askInChat]);
+  }, [stack, openEntity, openStructured, openTeam, back, close]);
 
   return (
     <ArtifactViewerContext.Provider value={api}>

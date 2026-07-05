@@ -311,31 +311,4 @@ struct ArtifactViewModelTests {
     #expect(vm.stack.count == 1)
     #expect(entityOk(vm.current)?.resolved.displayName == "Garchomp")
   }
-
-  // MARK: Ask about this in chat (prefill sink + dismiss)
-
-  @Test
-  func askInChatForwardsTextAndDismisses() {
-    let (vm, _) = makeVM()
-    var prefilled: [String] = []
-    vm.onAskInChat = { prefilled.append($0) }
-    vm.openComparison([subject("Garchomp"), subject("Dragapult")])
-
-    vm.askInChat("Tell me more about this comparison.")
-
-    #expect(prefilled == ["Tell me more about this comparison."])
-    // The sheet closes after asking (mirrors web's `askInChat` → close).
-    #expect(vm.stack.isEmpty)
-    #expect(vm.isPresented == false)
-  }
-
-  @Test
-  func askInChatWithoutASinkStillDismisses() {
-    let (vm, _) = makeVM()
-    vm.openComparison([subject("Garchomp"), subject("Dragapult")])
-
-    vm.askInChat("Tell me more about this comparison.")
-
-    #expect(vm.stack.isEmpty)
-  }
 }

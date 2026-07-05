@@ -59,13 +59,6 @@ class ArtifactViewModel(
      */
     private var format: Format = initialFormat
 
-    /**
-     * Prefills the chat composer with a follow-up about the open artifact (the web
-     * viewer's "Ask about this in chat"). The chat host installs this to route to
-     * `ChatViewModel.prefillComposer`; unset ⇒ [askInChat] is a plain dismiss.
-     */
-    var onAskInChat: ((String) -> Unit)? = null
-
     /** The currently visible artifact (top of the stack), or `null` when closed. */
     val current: Artifact? get() = _stack.value.lastOrNull()
 
@@ -183,16 +176,6 @@ class ArtifactViewModel(
     }
 
     /**
-     * Prefills the chat composer with [text] (a follow-up about the open artifact) and
-     * closes the sheet — the web viewer's "Ask about this in chat" (`askInChat`). The
-     * prefill fills the composer for the user to edit/send; it does NOT auto-send.
-     */
-    fun askInChat(text: String) {
-        onAskInChat?.invoke(text)
-        dismiss()
-    }
-
-    /**
      * Rebuilds the viewer for a newly active scope (M-BR-ART-4): entity artifacts
      * already on the stack were fetched under the OLD format and may not apply to the
      * new one, so a scope change clears the stack outright rather than leaving
@@ -284,22 +267,3 @@ data class TeamArtifact(
     /** The team's id when it is a persisted saved team; `null` for an ephemeral proposed team. */
     val savedId: String?,
 )
-
-// ---------------------------------------------------------------------------
-// Ask-in-chat copy
-// ---------------------------------------------------------------------------
-
-/**
- * The composer-prefill text for [artifact] — mirrors the web viewer's per-kind
- * `headerFor(...).askText` (`ArtifactViewer.tsx`) and iOS `ArtifactSheetView.askText`.
- * A pure, top-level function so it is directly unit-testable without a Compose host.
- */
-fun askInChatText(artifact: Artifact): String = when (val content = artifact.content) {
-    ArtifactContent.Loading -> "Tell me about ${artifact.title}."
-    is ArtifactContent.Entity -> "Tell me more about ${content.v.resolved.displayName}."
-    is ArtifactContent.Unavailable -> "Tell me about ${content.query}."
-    is ArtifactContent.TeamSheet -> "Tell me about the team \"${content.v.name}\"."
-    ArtifactContent.TeamUnavailable -> "Tell me about the team \"${artifact.title}\"."
-    is ArtifactContent.Comparison -> "Tell me more about this comparison."
-    is ArtifactContent.DamageCalcContent -> "Explain this damage calculation in more detail."
-}

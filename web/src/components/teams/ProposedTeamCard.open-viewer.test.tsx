@@ -14,7 +14,6 @@ vi.mock("@/components/artifact/useArtifactViewer", () => ({
     openStructured: () => {},
     back: () => {},
     close: () => {},
-    askInChat: () => {},
     isOpen: false,
     current: null,
     canGoBack: false,

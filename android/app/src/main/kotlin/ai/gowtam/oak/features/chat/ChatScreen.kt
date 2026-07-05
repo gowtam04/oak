@@ -50,7 +50,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -123,10 +122,8 @@ fun ChatScreen(
         if (uiState.errorBanner != null) haptics.error()
     }
 
-    // The artifact viewer's "Ask about this in chat" (P7) prefills THIS screen's
-    // composer; a scope change clears any open artifact stack (D-BR-ART-4) since its
-    // entries were fetched under the old format.
-    SideEffect { artifactViewModel.onAskInChat = viewModel::prefillComposer }
+    // A scope change clears any open artifact stack (D-BR-ART-4) since its entries were
+    // fetched under the old format.
     LaunchedEffect(uiState.displayFormat) { artifactViewModel.updateFormat(uiState.displayFormat) }
 
     val cardActions = remember(viewModel, artifactViewModel) {

@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,15 +35,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -157,8 +153,6 @@ fun ArtifactSheet(viewModel: ArtifactViewModel, modifier: Modifier = Modifier) {
                 ArtifactContentDispatch(content = artifact.content, onOpen = viewModel::openEntity)
             }
         }
-
-        AskInChatBar(onClick = { viewModel.askInChat(askInChatText(current)) })
     }
 }
 
@@ -192,22 +186,6 @@ private fun ArtifactTopBar(title: String, canGoBack: Boolean, onBack: () -> Unit
         IconButton(onClick = onClose) {
             Icon(Icons.Filled.Close, contentDescription = "Close", tint = oak.textStrong)
         }
-    }
-}
-
-@Composable
-private fun AskInChatBar(onClick: () -> Unit) {
-    val oak = LocalOakColors.current
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm)
-            .navigationBarsPadding(),
-        colors = ButtonDefaults.buttonColors(containerColor = oak.accent),
-    ) {
-        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
-        Text(text = "  Ask about this in chat")
     }
 }
 

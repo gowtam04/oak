@@ -59,25 +59,17 @@ const UNAVAILABLE: EntityArtifactResponse = {
   format: "scarlet-violet",
 };
 
-function wrapperWith(
-  format: ArtifactFormat,
-  onAskInChat?: (text: string) => void,
-) {
+function wrapperWith(format: ArtifactFormat) {
   const Wrapper = ({ children }: { children: ReactNode }) => (
-    <ArtifactViewerProvider format={format} onAskInChat={onAskInChat}>
-      {children}
-    </ArtifactViewerProvider>
+    <ArtifactViewerProvider format={format}>{children}</ArtifactViewerProvider>
   );
   Wrapper.displayName = "ArtifactViewerTestWrapper";
   return Wrapper;
 }
 
-function renderViewer(
-  format: ArtifactFormat = "scarlet-violet",
-  onAskInChat?: (text: string) => void,
-) {
+function renderViewer(format: ArtifactFormat = "scarlet-violet") {
   return renderHook(() => useArtifactViewer(), {
-    wrapper: wrapperWith(format, onAskInChat),
+    wrapper: wrapperWith(format),
   });
 }
 
@@ -176,7 +168,7 @@ describe("ArtifactViewerProvider — stack navigation", () => {
   });
 });
 
-describe("ArtifactViewerProvider — structured opens + cache + format + askInChat", () => {
+describe("ArtifactViewerProvider — structured opens + cache + format", () => {
   it("opens a structured artifact from payload without fetching", () => {
     const { result } = renderViewer();
     act(() =>
@@ -240,12 +232,5 @@ describe("ArtifactViewerProvider — structured opens + cache + format + askInCh
     if (result.current.current?.type !== "entity") throw new Error("entity");
     expect(result.current.current.phase).toBe("done");
     expect(result.current.current.response).toEqual(OK_MOVE);
-  });
-
-  it("delegates askInChat to the provider's onAskInChat handler", () => {
-    const onAskInChat = vi.fn();
-    const { result } = renderViewer("scarlet-violet", onAskInChat);
-    act(() => result.current.askInChat("Tell me more about Garchomp"));
-    expect(onAskInChat).toHaveBeenCalledWith("Tell me more about Garchomp");
   });
 });

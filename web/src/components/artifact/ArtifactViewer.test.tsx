@@ -31,9 +31,9 @@ function Capture() {
   return null;
 }
 
-function mount(onAskInChat?: (t: string) => void) {
+function mount() {
   return render(
-    <ArtifactViewerProvider format="scarlet-violet" onAskInChat={onAskInChat}>
+    <ArtifactViewerProvider format="scarlet-violet">
       <Capture />
       <ArtifactViewer />
     </ArtifactViewerProvider>,
@@ -149,16 +149,13 @@ describe("ArtifactViewer — structured + controls", () => {
     );
   });
 
-  it("close dismisses the viewer; Esc also closes; ask-in-chat fires the handler", async () => {
-    const onAskInChat = vi.fn();
+  it("close dismisses the viewer; Esc also closes", async () => {
     vi.mocked(fetchEntityArtifact).mockResolvedValue(POKEMON_ARTIFACT);
-    mount(onAskInChat);
+    mount();
 
     await act(async () => {
       api.openEntity({ kind: "pokemon", q: "garchomp" });
     });
-    fireEvent.click(screen.getByTestId("artifact-ask"));
-    expect(onAskInChat).toHaveBeenCalledWith("Tell me more about Garchomp.");
 
     fireEvent.click(screen.getByTestId("artifact-close"));
     expect(screen.queryByTestId("artifact-viewer")).toBeNull();

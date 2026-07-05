@@ -171,12 +171,6 @@ class ChatViewModel(
     }
 
     /**
-     * Prefills the composer with [text] WITHOUT sending — the artifact viewer's "Ask
-     * about this in chat" affordance (mirrors web's `askInChat`).
-     */
-    fun prefillComposer(text: String) = setComposerText(text)
-
-    /**
      * Stages images for the next turn, capped at [MAX_ATTACHED_IMAGES]. Returns the
      * number actually added so the composer can note when some were dropped at the cap.
      */
