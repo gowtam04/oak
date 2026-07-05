@@ -15,6 +15,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -45,6 +46,18 @@ class OakApiClient(
     private val tokenStore: TokenStore,
     private val client: OkHttpClient = OkHttpClient(),
 ) {
+    /**
+     * A dedicated client for the long-lived SSE byte streams (chat / assistant /
+     * turn resume). Derived from [client] so it inherits any test configuration
+     * (e.g. a plain-http `MockWebServer` client), but with the read/call timeouts
+     * DISABLED: an SSE stream is quiet for long stretches (the agent thinking or
+     * running tools) with only a `: keep-alive` comment every 15s, so OkHttp's
+     * default 10s read timeout — shorter than that heartbeat — would abort a live
+     * turn (background-turns/design.md §6.3, the latent-timeout fix). The connect
+     * timeout stays bounded (a stream that never opens should still fail fast).
+     * Non-streaming JSON calls keep [client]'s normal timeouts.
+     */
+    private val streamingClient: OkHttpClient = streamingClientFrom(client)
     /** Performs [endpoint] and decodes its 2xx body with [deserializer]. */
     @OptIn(ExperimentalSerializationApi::class)
     suspend fun <T> send(endpoint: Endpoint, deserializer: DeserializationStrategy<T>): T {
@@ -78,7 +91,7 @@ class OakApiClient(
     suspend fun openByteStream(endpoint: Endpoint): Response {
         val request = buildRequest(endpoint, accept = "text/event-stream")
         val response = try {
-            client.newCall(request).await()
+            streamingClient.newCall(request).await()
         } catch (e: IOException) {
             throw OakError.transportFailure(e)
         }
@@ -139,6 +152,20 @@ class OakApiClient(
         val builder = resolved.newBuilder()
         endpoint.queryItems.forEach { (name, value) -> builder.addQueryParameter(name, value) }
         return builder.build()
+    }
+
+    companion object {
+        /**
+         * Builds the SSE streaming client from [base]: read + call timeouts set to
+         * 0 (disabled) so a long, heartbeat-punctuated turn is never aborted, while
+         * the connect timeout stays bounded (default 10s if [base] didn't set one).
+         * `internal` so the timeout policy is unit-testable directly.
+         */
+        internal fun streamingClientFrom(base: OkHttpClient): OkHttpClient =
+            base.newBuilder()
+                .readTimeout(0, TimeUnit.MILLISECONDS)
+                .callTimeout(0, TimeUnit.MILLISECONDS)
+                .build()
     }
 }
 

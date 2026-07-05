@@ -197,4 +197,26 @@ class OakApiClientTest {
             assertTrue(e.underlying.isNotBlank())
         }
     }
+
+    // -------------------------------------------------------------------
+    // SSE streaming client timeouts (background-turns/design.md §6.3)
+    // -------------------------------------------------------------------
+
+    @Test
+    fun streamingClientDisablesReadAndCallTimeouts() {
+        // A default OkHttpClient has a 10s read timeout — shorter than the server's
+        // 15s SSE heartbeat, so a quiet-but-live turn would be aborted. The streaming
+        // client must disable the read + call timeouts entirely.
+        val streaming = OakApiClient.streamingClientFrom(OkHttpClient())
+        assertEquals(0, streaming.readTimeoutMillis)
+        assertEquals(0, streaming.callTimeoutMillis)
+    }
+
+    @Test
+    fun streamingClientKeepsABoundedConnectTimeout() {
+        // The connect timeout stays bounded — a stream that never opens should still
+        // fail fast rather than hang forever.
+        val streaming = OakApiClient.streamingClientFrom(OkHttpClient())
+        assertTrue(streaming.connectTimeoutMillis > 0)
+    }
 }
