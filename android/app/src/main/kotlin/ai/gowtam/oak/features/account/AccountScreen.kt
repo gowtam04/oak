@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
@@ -34,14 +35,17 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -64,6 +68,10 @@ import kotlinx.coroutines.launch
  * deletion** flow, and about/legal links. Mirrors iOS `AccountView` in
  * structure, re-expressed for Compose/Material 3.
  *
+ * Pushed from the More tab ([ai.gowtam.oak.features.more.MoreRoute]) rather than
+ * being a tab root itself; [onBack] renders the back affordance for that pushed
+ * context.
+ *
  * **Deletion confirmation (D-AC-ACCT2.2 — "requires explicit confirmation"):**
  * a destructive button opens an [AlertDialog] naming exactly what is deleted
  * (account, history, teams) with Cancel/Delete buttons — the same mechanic as
@@ -73,8 +81,15 @@ import kotlinx.coroutines.launch
  * flow, including the backend `DELETE /api/auth/account` call, stays in-app —
  * no external site or support contact is required.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AccountScreen(viewModel: AccountViewModel, modifier: Modifier = Modifier) {
+fun AccountScreen(
+    viewModel: AccountViewModel,
+    modifier: Modifier = Modifier,
+    /** When non-null, the top bar shows a back arrow calling this — used when this
+     * screen is pushed from the More tab list. `null` for a top-level presentation. */
+    onBack: (() -> Unit)? = null,
+) {
     val authState by viewModel.authState.collectAsState()
     val actionState by viewModel.actionState.collectAsState()
     val context = LocalContext.current
@@ -101,6 +116,18 @@ fun AccountScreen(viewModel: AccountViewModel, modifier: Modifier = Modifier) {
 
     Scaffold(
         modifier = modifier,
+        topBar = {
+            if (onBack != null) {
+                TopAppBar(
+                    title = { Text("Account") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                )
+            }
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         Column(

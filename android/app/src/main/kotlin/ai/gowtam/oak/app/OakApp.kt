@@ -1,7 +1,5 @@
 package ai.gowtam.oak.app
 
-import ai.gowtam.oak.features.account.AccountScreen
-import ai.gowtam.oak.features.account.AccountViewModel
 import ai.gowtam.oak.features.artifact.ArtifactViewModel
 import ai.gowtam.oak.features.auth.AuthDialog
 import ai.gowtam.oak.features.auth.AuthViewModel
@@ -9,6 +7,7 @@ import ai.gowtam.oak.features.chat.ChatScreen
 import ai.gowtam.oak.features.chat.ChatViewModel
 import ai.gowtam.oak.features.history.HistoryScreen
 import ai.gowtam.oak.features.history.HistoryViewModel
+import ai.gowtam.oak.features.more.MoreRoute
 import ai.gowtam.oak.features.teams.TeamsRoute
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.ConnectionBanner
@@ -29,8 +28,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -54,13 +53,14 @@ import androidx.compose.ui.Modifier
 private enum class OakTab(val label: String) {
     Chat("Chat"),
     Teams("Teams"),
-    Account("Account"),
+    More("More"),
 }
 
 /**
  * The app's root composable — the 3-tab `NavigationBar` shell (component-design.md
- * "Navigation graph"). Chat, Teams, and Account are all fully wired to their real
- * screens. The [ChatViewModel] and [ArtifactViewModel] are owned by the caller
+ * "Navigation graph"). Chat, Teams, and More are all fully wired to their real
+ * screens (More's own list ⟷ Account push is owned by [MoreRoute]). The
+ * [ChatViewModel] and [ArtifactViewModel] are owned by the caller
  * (`MainActivity`) and passed in so their stream/back-stack state survives a tab
  * switch away from Chat and back.
  *
@@ -136,10 +136,7 @@ fun OakApp(
                                 artifactViewModel = artifactViewModel,
                             )
                             OakTab.Teams -> TeamsRoute(services = services, appState = appState)
-                            OakTab.Account -> {
-                                val accountViewModel = remember(services, appState) { AccountViewModel(services.auth, appState) }
-                                AccountScreen(viewModel = accountViewModel)
-                            }
+                            OakTab.More -> MoreRoute(services = services, appState = appState)
                         }
                     }
                 }
@@ -151,7 +148,7 @@ fun OakApp(
 private fun OakTab.icon() = when (this) {
     OakTab.Chat -> Icons.AutoMirrored.Filled.Chat
     OakTab.Teams -> Icons.Filled.Groups
-    OakTab.Account -> Icons.Filled.AccountCircle
+    OakTab.More -> Icons.Filled.MoreHoriz
 }
 
 // ---------------------------------------------------------------------------
