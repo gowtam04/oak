@@ -1,10 +1,13 @@
 import SwiftUI
 
-/// Top-level navigation shell: a three-tab `TabView` (Chat / Teams / Account). Chat is
+/// Top-level navigation shell: a three-tab `TabView` (Chat / Teams / More). Chat is
 /// the default surface on launch (M-AC-UI2.1); conversation history is folded into the
 /// Chat tab WhatsApp-style (the list appears once signed in), so there is no separate
 /// History tab. Teams hosts the team-builder library (``TeamsListView``, which already
-/// owns its own `NavigationStack` and guest-vs-signed-in branching internally).
+/// owns its own `NavigationStack` and guest-vs-signed-in branching internally). More is
+/// a list screen (``MoreView``, also owning its own `NavigationStack`) whose first row
+/// pushes ``AccountView`` — a scalable home for future destinations that slot in as
+/// rows rather than new tabs.
 ///
 /// This view is the single wiring point for launch behavior:
 ///   * on appear it restores the session (a stored Bearer token resolves to
@@ -32,7 +35,7 @@ struct RootView: View {
   private enum AppTab: Hashable {
     case chat
     case teams
-    case account
+    case more
   }
 
   var body: some View {
@@ -51,11 +54,11 @@ struct RootView: View {
         Label("Teams", systemImage: "square.grid.3x2.fill")
           .symbolEffect(.bounce, value: selection == .teams)
       }
-      Tab(value: AppTab.account) {
-        AccountView(model: AccountViewModel(auth: services.auth, appState: appState))
+      Tab(value: AppTab.more) {
+        MoreView()
       } label: {
-        Label("Account", systemImage: "person.crop.circle")
-          .symbolEffect(.bounce, value: selection == .account)
+        Label("More", systemImage: "ellipsis")
+          .symbolEffect(.bounce, value: selection == .more)
       }
     }
     .tint(Theme.accent)

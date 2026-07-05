@@ -6,6 +6,10 @@ import SwiftUI
 /// was removed — scope is chosen per conversation via the header scope chip
 /// (`ChatView`), matching web (which also dropped its default toggle).
 ///
+/// Pushed from the More tab's list (nav restructure: Chat / Teams / More), so this
+/// view no longer owns a `NavigationStack` — it supplies the `Form` and title, and
+/// ``MoreView`` supplies the stack.
+///
 /// The view owns its ``AccountViewModel`` (`@State`) and drives it from `Task`s;
 /// all logic and copy live in the view model. Layout uses Dynamic-Type styles and
 /// system semantic colors so it adapts to light/dark and text size (M-AC-UI1.3/4);
@@ -34,21 +38,19 @@ struct AccountView: View {
   }
 
   var body: some View {
-    NavigationStack {
-      Form {
-        profileHeaderSection
-        accountSection
-        if let message = model.errorMessage {
-          errorSection(message)
-        }
-        if model.isSignedIn {
-          dangerSection
-        }
-        aboutSection
+    Form {
+      profileHeaderSection
+      accountSection
+      if let message = model.errorMessage {
+        errorSection(message)
       }
-      .navigationTitle("Account")
-      .navigationBarTitleDisplayMode(.inline)
+      if model.isSignedIn {
+        dangerSection
+      }
+      aboutSection
     }
+    .navigationTitle("Account")
+    .navigationBarTitleDisplayMode(.inline)
     .sheet(isPresented: $showingSignIn) {
       AuthView(model: model.makeAuthViewModel())
     }
@@ -294,14 +296,18 @@ private struct PreviewAccountAuthService: AuthService {
 
 #Preview("Guest") {
   let state = AppState()
-  return AccountView(model: AccountViewModel(auth: PreviewAccountAuthService(), appState: state))
-    .environment(state)
+  return NavigationStack {
+    AccountView(model: AccountViewModel(auth: PreviewAccountAuthService(), appState: state))
+  }
+  .environment(state)
 }
 
 #Preview("Signed in") {
   let state = AppState()
   state.completeSignIn(email: "ash@pallet.town")
-  return AccountView(model: AccountViewModel(auth: PreviewAccountAuthService(), appState: state))
-    .environment(state)
+  return NavigationStack {
+    AccountView(model: AccountViewModel(auth: PreviewAccountAuthService(), appState: state))
+  }
+  .environment(state)
 }
 #endif

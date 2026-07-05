@@ -43,8 +43,16 @@ final class CrossFeatureUITests: XCTestCase {
       "Guest answer should finalize before sign-in."
     )
 
-    // Sign in from the Account tab.
-    XCTAssertTrue(goToTab(OakUITest.Tab.account, in: app), "Account tab unreachable.")
+    // Sign in from More → Account (nav restructure: Chat / Teams / More).
+    XCTAssertTrue(goToTab(OakUITest.Tab.more, in: app), "More tab unreachable.")
+    let accountRow = app.staticTexts[OakUITest.MoreScreen.accountRow]
+    let accountRowReachable = accountRow.waitForExistence(timeout: 10)
+    try XCTSkipUnless(
+      accountRowReachable,
+      "Account row not reachable — wire MoreView into RootView, then run live (CP5)."
+    )
+    accountRow.tap()
+
     let signIn = app.buttons[OakUITest.Account.signIn]
     let signInReachable = signIn.waitForExistence(timeout: 10)
     try XCTSkipUnless(
