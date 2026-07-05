@@ -124,6 +124,26 @@ class SseParserTest {
     }
 
     @Test
+    fun turnFrameDecodesToTurnEvent() {
+        // The `turn` frame is the FIRST frame of both the POST and resume streams
+        // (background-turns/design.md §4) — the server-minted durable turn id.
+        val events = parseText(
+            "event: turn\ndata: {\"turn_id\":\"9f2c1e00-1111-2222-3333-444455556666\"}\n\n" +
+                "event: answer_start\ndata: {}\n\n",
+        )
+        assertEquals(2, events.size)
+        assertEquals(SseEvent.Turn("9f2c1e00-1111-2222-3333-444455556666"), events[0])
+        assertEquals(SseEvent.AnswerStart, events[1])
+    }
+
+    @Test
+    fun stoppedFrameDecodesToStoppedEvent() {
+        // The terminal `stopped` event (empty object) for an explicitly cancelled turn.
+        val events = parseText("event: stopped\ndata: {}\n\n")
+        assertEquals(listOf(SseEvent.Stopped), events)
+    }
+
+    @Test
     fun unknownEventNameIsASilentNoOp() {
         val events = parseText("event: some_future_event\ndata: {\"whatever\":true}\n\n")
         assertEquals(emptyList<SseEvent>(), events)

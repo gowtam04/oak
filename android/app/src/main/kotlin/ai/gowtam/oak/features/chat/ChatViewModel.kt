@@ -406,6 +406,12 @@ class ChatViewModel(
         // Any event means the stream is producing output again → clear "Reconnecting…".
         reconnecting = false
         when (event) {
+            // `turn`/`stopped` reducer handling lands with the reattach orchestration
+            // (background-turns/design.md §6.3); until then the events are parsed but
+            // inert (as before, when the parser dropped them as unknown).
+            is SseEvent.Turn -> Unit
+            SseEvent.Stopped -> Unit
+
             is SseEvent.Scope -> {
                 // Adopt this turn's scope and retire any pending chip pick — the
                 // conversation's scope is now sticky server-side and outranks a stale

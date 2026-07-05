@@ -134,4 +134,75 @@ class ChatServiceTest {
 
         assertEquals(0, server.requestCount)
     }
+
+    // -------------------------------------------------------------------
+    // Reattach + stop (background-turns/design.md §4)
+    // -------------------------------------------------------------------
+
+    @Test
+    fun resumeGetsTheTurnStreamEndpointWithSessionIdAndReplaysEvents() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody(
+                    "event: turn\ndata: {\"turn_id\":\"turn-1\"}\n\n" +
+                        "event: answer_start\ndata: {}\n\n",
+                ),
+        )
+        val service = LiveChatService(sseClient)
+
+        val events = service.resume(turnId = "turn-1", sessionId = "session-1").toList()
+        assertEquals(listOf(SseEvent.Turn("turn-1"), SseEvent.AnswerStart), events)
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertEquals("/api/chat/turns/turn-1/stream?session_id=session-1", recorded.path)
+    }
+
+    @Test
+    fun resumeOfAnUnknownTurnSurfacesA404BeforeAnyEvent() = runBlocking {
+        server.enqueue(
+            MockResponse().setResponseCode(404).setBody("""{"code":"not_found","message":"Turn not found."}"""),
+        )
+        val service = LiveChatService(sseClient)
+
+        try {
+            service.resume(turnId = "gone", sessionId = "session-1").toList()
+            fail("expected OakError.Http(404)")
+        } catch (e: OakError.Http) {
+            assertEquals(404, e.status)
+        }
+    }
+
+    @Test
+    fun a409TurnInProgressSurfacesTheRunningTurnIdForReattach() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(409)
+                .setBody("""{"code":"turn_in_progress","message":"A response is already generating.","turn_id":"turn-9"}"""),
+        )
+        val service = LiveChatService(sseClient)
+
+        try {
+            service.send(ChatRequest(sessionId = "session-1", message = "hi")).toList()
+            fail("expected TurnInProgressSignal")
+        } catch (e: ai.gowtam.oak.networking.TurnInProgressSignal) {
+            assertEquals("turn-9", e.turnId)
+        }
+    }
+
+    @Test
+    fun stopPostsToTheStopEndpointWithSessionIdBody() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"turn_id":"turn-1","status":"stopped"}"""))
+        val service = LiveChatService(sseClient)
+
+        service.stop(turnId = "turn-1", sessionId = "session-1")
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/api/chat/turns/turn-1/stop", recorded.path)
+        val body = OakJson.parseToJsonElement(recorded.body.readUtf8()).jsonObject
+        assertEquals("session-1", body["session_id"]?.jsonPrimitive?.content)
+    }
 }

@@ -51,6 +51,30 @@ interface ChatService {
      * image encode step (e.g. a resend/retry that carries no new attachments).
      */
     fun send(request: ChatRequest): Flow<SseEvent>
+
+    /**
+     * Reattaches to a durable turn's live stream
+     * (`GET /api/chat/turns/:id/stream`; background-turns/design.md §4). The stream
+     * replays the turn's buffered events (the client rebuilds its in-flight UI on the
+     * `turn` frame) then tails live until a terminal [SseEvent]; a turn that is
+     * already terminal replays through its terminal event and closes. An unknown or
+     * expired turn is a pre-stream `404` → [OakError.Http] thrown before any event
+     * (the caller treats it as a dead turn).
+     *
+     * - [turnId]: the server-minted turn id captured from the `turn` event / the
+     *   conversation's `active_turn`.
+     * - [sessionId]: the conversation id, the guest ownership proof (ignored for a
+     *   signed-in caller, identified by the Bearer token).
+     */
+    fun resume(turnId: String, sessionId: String): Flow<SseEvent>
+
+    /**
+     * Explicitly stops a durable turn (`POST /api/chat/turns/:id/stop`; BT-4): the
+     * server aborts generation and discards it (nothing persisted). Stopping an
+     * unknown or already-terminal turn is a no-op. A failure surfaces as an
+     * [OakError]; callers tear down their local stream regardless.
+     */
+    suspend fun stop(turnId: String, sessionId: String)
 }
 
 /**
@@ -89,4 +113,9 @@ class LiveChatService(
     }
 
     override fun send(request: ChatRequest): Flow<SseEvent> = sseClient.stream(request)
+
+    override fun resume(turnId: String, sessionId: String): Flow<SseEvent> =
+        sseClient.resume(turnId, sessionId)
+
+    override suspend fun stop(turnId: String, sessionId: String) = sseClient.stop(turnId, sessionId)
 }

@@ -245,6 +245,10 @@ private class NeverCompletingChatService : ChatService {
     }
 
     override fun send(request: ChatRequest): Flow<SseEvent> = throw NotImplementedError("not used by ChatViewModel")
+
+    override fun resume(turnId: String, sessionId: String): Flow<SseEvent> = flow { awaitCancellation() }
+
+    override suspend fun stop(turnId: String, sessionId: String) = Unit
 }
 
 /** First attempt runs [onFirstAttempt] (to simulate backgrounding mid-stream) then
@@ -271,4 +275,8 @@ private class BackgroundingThenSucceedingChatService(
     }
 
     override fun send(request: ChatRequest): Flow<SseEvent> = throw NotImplementedError("not used by ChatViewModel")
+
+    override fun resume(turnId: String, sessionId: String): Flow<SseEvent> = throw NotImplementedError("not used by ChatViewModel")
+
+    override suspend fun stop(turnId: String, sessionId: String) = Unit
 }
