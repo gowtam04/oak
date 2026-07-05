@@ -4,6 +4,7 @@ import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.wire.Citation
+import ai.gowtam.oak.wire.EntityKind
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -45,7 +46,11 @@ import androidx.compose.ui.unit.dp
  * (when present) as a link line. The caller gates it on non-empty citations.
  */
 @Composable
-fun Citations(citations: List<Citation>, modifier: Modifier = Modifier) {
+fun Citations(
+    citations: List<Citation>,
+    modifier: Modifier = Modifier,
+    onOpenEntity: (EntityKind, String) -> Unit = { _, _ -> },
+) {
     val oak = LocalOakColors.current
     var expanded by remember { mutableStateOf(false) }
     Column(modifier = modifier.fillMaxWidth()) {
@@ -95,7 +100,7 @@ fun Citations(citations: List<Citation>, modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
             ) {
                 for (citation in citations) {
-                    CitationRow(citation)
+                    CitationRow(citation, onOpenEntity)
                 }
             }
         }
@@ -103,8 +108,9 @@ fun Citations(citations: List<Citation>, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun CitationRow(citation: Citation) {
+private fun CitationRow(citation: Citation, onOpenEntity: (EntityKind, String) -> Unit) {
     val oak = LocalOakColors.current
+    val parsed = parseCitationSource(citation.source)
     Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.Top) {
         Icon(
             imageVector = if (!citation.endpointUrl.isNullOrEmpty()) Icons.Filled.Link else Icons.AutoMirrored.Filled.MenuBook,
@@ -116,7 +122,13 @@ private fun CitationRow(citation: Citation) {
             Text(
                 text = citation.source,
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                color = oak.textStrong,
+                color = if (parsed != null) oak.azure else oak.textStrong,
+                modifier = if (parsed != null) {
+                    val (kind, query) = parsed
+                    Modifier.clickable { onOpenEntity(kind, query) }
+                } else {
+                    Modifier
+                },
             )
             Text(text = citation.detail, style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
             val url = citation.endpointUrl

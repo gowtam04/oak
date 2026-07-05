@@ -261,7 +261,8 @@ struct AnswerCardView: View {
     case .credibility:
       CredibilityStripView(
         reasoningMarkdown: answer.reasoningMarkdown,
-        citations: answer.citations
+        citations: answer.citations,
+        onOpenEntity: onOpenEntity
       )
     case .inferences:
       InferencesView(inferences: answer.inferences)
@@ -432,6 +433,11 @@ private struct CredibilityStripView: View {
   let reasoningMarkdown: String
   let citations: [Citation]
 
+  /// Opens a citation's source entity (e.g. `move/outrage`) in the artifact
+  /// viewer, mirroring web's clickable Sources entries (`SourceList.tsx` +
+  /// `parseCitationSource`). Defaults to a no-op so the strip renders in isolation.
+  var onOpenEntity: (EntityKind, String) -> Void = { _, _ in }
+
   /// Which panel (if any) is currently expanded. Nil → both closed.
   @State private var expanded: Panel? = nil
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -538,10 +544,24 @@ private struct CredibilityStripView: View {
         .foregroundStyle(Theme.textMuted)
         .accessibilityHidden(true)
       VStack(alignment: .leading, spacing: 2) {
-        Text(citation.source)
-          .font(Theme.body(.footnote))
-          .fontWeight(.semibold)
-          .foregroundStyle(Theme.textPrimary)
+        if let parsed = parseCitationSource(citation.source) {
+          Button {
+            onOpenEntity(parsed.kind, parsed.query)
+          } label: {
+            Text(citation.source)
+              .font(Theme.body(.footnote))
+              .fontWeight(.semibold)
+              .foregroundStyle(Theme.azure)
+          }
+          .buttonStyle(OakPressableButtonStyle())
+          .accessibilityLabel("Open \(citation.source) in viewer")
+          .accessibilityHint("Opens this source's entity in the artifact viewer")
+        } else {
+          Text(citation.source)
+            .font(Theme.body(.footnote))
+            .fontWeight(.semibold)
+            .foregroundStyle(Theme.textPrimary)
+        }
         Text(citation.detail)
           .font(Theme.body(.footnote))
           .foregroundStyle(Theme.textSecondary)

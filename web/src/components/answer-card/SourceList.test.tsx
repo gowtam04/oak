@@ -77,4 +77,17 @@ describe("SourceList", () => {
     const link = screen.getByTestId("citation-link-0");
     expect(link).toHaveAttribute("href", CITATION_GARCHOMP.endpoint_url);
   });
+
+  it("renders a parseable citation as a clickable entity link, and an unparseable one as plain text", () => {
+    const mixed = [
+      CITATION_EARTHQUAKE,
+      { source: "run_sql/natdex_species", detail: "aggregation" },
+    ];
+    render(<SourceList citations={mixed} defaultExpanded />);
+    expect(screen.getByTestId("citation-entity-0").tagName).toBe("BUTTON");
+    expect(screen.queryByTestId("citation-entity-1")).not.toBeInTheDocument();
+    const plain = screen.getByText("run_sql/natdex_species");
+    expect(plain.tagName).toBe("SPAN");
+    expect(plain).toHaveClass("source-list__source");
+  });
 });

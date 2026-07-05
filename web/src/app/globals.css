@@ -1668,6 +1668,17 @@
   font-weight: 700;
   color: var(--text-strong);
 }
+.source-list__source-link {
+  font-weight: 700;
+  color: var(--azure);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--azure) 40%, transparent);
+  text-underline-offset: 3px;
+}
+.source-list__source-link:hover,
+.source-list__source-link:focus-visible {
+  text-decoration-color: var(--azure);
+}
 .source-list__detail {
   color: var(--text-muted);
 }

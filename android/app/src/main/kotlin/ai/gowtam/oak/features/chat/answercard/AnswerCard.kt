@@ -113,7 +113,11 @@ fun AnswerCard(
                     modifier = sectionModifier,
                 )
                 AnswerSection.REASONING -> Reasoning(answer.reasoningMarkdown, sectionModifier)
-                AnswerSection.CITATIONS -> Citations(answer.citations, sectionModifier)
+                AnswerSection.CITATIONS -> Citations(
+                    citations = answer.citations,
+                    modifier = sectionModifier,
+                    onOpenEntity = actions.onOpenEntity,
+                )
                 AnswerSection.INFERENCES -> Inferences(answer.inferences, sectionModifier)
             }
         }
