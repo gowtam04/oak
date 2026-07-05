@@ -1,11 +1,15 @@
 /**
  * /teams — the manual team builder (Phase 9; TEAM-US-1..5, 10, 11).
  *
- * A signed-in account's team workbench: a Pokédex-red header band (clickable Oak
- * wordmark + a prominent "Back to chat" control, both returning to the chat page)
- * over a {@link TeamList} rail (create / import / duplicate / delete-with-confirm)
- * beside a {@link TeamEditor} — a roster strip + focused member editor — for the
- * selected team. All team data flows through the Wave-4 client layer — `useTeams`
+ * A signed-in account's team workbench: a Pokédex-red header band (just the
+ * clickable Oak wordmark + the format select — navigation now lives in the
+ * {@link AppNav} rail below it, not the band) over a `teams-page__shell` that
+ * puts the shared app rail (nav refactor Part 1 WP3) beside the existing
+ * {@link TeamList} rail (create / import / duplicate / delete-with-confirm)
+ * and {@link TeamEditor} — a roster strip + focused member editor — for the
+ * selected team. The app rail renders for guests too (its "New chat" link and
+ * Reference/Privacy footer need no auth); the guest soft-gate below is
+ * unchanged. All team data flows through the Wave-4 client layer — `useTeams`
  * for the list + mutations and the teams-client for one-off detail/export — never
  * a raw `/api/teams` call. Guests get a sign-in prompt (BR-T2): no list, no
  * requests.
@@ -22,6 +26,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
+import AppNav from "@/components/nav/AppNav";
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useTeams } from "@/lib/hooks/use-teams";
 import type { TeamDetail } from "@/lib/api/teams-client";
@@ -159,10 +164,6 @@ export default function TeamsPage() {
           >
             Oak
           </Link>
-          <span className="teams-page__crumb" aria-hidden>
-            ›
-          </span>
-          <span className="teams-page__crumb-current">Team Builder</span>
         </div>
         <div className="teams-page__band-controls">
           <label className="teams-page__format">
@@ -186,83 +187,84 @@ export default function TeamsPage() {
               <span className="pill-caret" aria-hidden />
             </span>
           </label>
-          <Link href="/" className="teams-page__back" data-testid="teams-back">
-            <span className="teams-page__back-icon" aria-hidden>
-              ←
-            </span>
-            Back to chat
-          </Link>
         </div>
       </header>
 
-      <div className="teams-page__body">
-        {!auth.signedIn ? (
-          <div className="teams-page__guest" data-testid="teams-guest">
-            <span className="teams-page__guest-icon" aria-hidden />
-            <h2 className="teams-page__guest-title">Sign in to build teams</h2>
-            <p className="teams-page__guest-text">
-              Saved teams, the team builder, and Showdown import/export unlock
-              with a free account — sign in from the chat page to get started.
-            </p>
-            <Link
-              href="/"
-              className="tm-btn tm-btn--primary teams-page__guest-cta"
-            >
-              Go to chat to sign in
-            </Link>
-          </div>
-        ) : (
-          <div
-            className={`teams-grid${selected ? " teams-grid--assistant" : ""}`}
-          >
-            <TeamList
-              teams={teams.teams}
-              selectedId={selected?.id ?? null}
-              onSelect={(id) => void openTeam(id)}
-              onNew={() => void handleNew()}
-              onImport={() => setImportOpen(true)}
-              onDuplicate={(id) => void handleDuplicate(id)}
-              onDelete={(id) => void handleDelete(id)}
-            />
-
-            {selected ? (
-              <>
-                <TeamEditor
-                  team={selected}
-                  saving={saving}
-                  onSave={(input) => void handleSave(input)}
-                  onExport={() => void handleExport()}
-                  onClose={() => setSelected(null)}
-                  handleRef={editorRef}
-                />
-                <TeamsAssistantPanel
-                  teamId={selected.id}
-                  format={selected.format as Format}
-                  getDraft={() =>
-                    editorRef.current?.getDraft() ?? {
-                      name: selected.name,
-                      members: selected.members,
-                    }
-                  }
-                  applyPatch={(patch) => editorRef.current?.applyPatch(patch)}
-                  replaceDraft={(draft) =>
-                    editorRef.current?.replaceDraft(draft)
-                  }
-                />
-              </>
-            ) : (
-              <div
-                className="teams-page__placeholder"
-                data-testid="teams-no-selection"
+      <div className="teams-page__shell">
+        <aside className="teams-page__rail" data-testid="teams-rail">
+          <AppNav pathname="/teams" />
+        </aside>
+        <div className="teams-page__body">
+          {!auth.signedIn ? (
+            <div className="teams-page__guest" data-testid="teams-guest">
+              <span className="teams-page__guest-icon" aria-hidden />
+              <h2 className="teams-page__guest-title">
+                Sign in to build teams
+              </h2>
+              <p className="teams-page__guest-text">
+                Saved teams, the team builder, and Showdown import/export unlock
+                with a free account — sign in from the chat page to get started.
+              </p>
+              <Link
+                href="/"
+                className="tm-btn tm-btn--primary teams-page__guest-cta"
               >
-                <span className="teams-page__placeholder-icon" aria-hidden />
-                <p className="teams-page__placeholder-text">
-                  Select a team to edit, or create a new one.
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+                Go to chat to sign in
+              </Link>
+            </div>
+          ) : (
+            <div
+              className={`teams-grid${selected ? " teams-grid--assistant" : ""}`}
+            >
+              <TeamList
+                teams={teams.teams}
+                selectedId={selected?.id ?? null}
+                onSelect={(id) => void openTeam(id)}
+                onNew={() => void handleNew()}
+                onImport={() => setImportOpen(true)}
+                onDuplicate={(id) => void handleDuplicate(id)}
+                onDelete={(id) => void handleDelete(id)}
+              />
+
+              {selected ? (
+                <>
+                  <TeamEditor
+                    team={selected}
+                    saving={saving}
+                    onSave={(input) => void handleSave(input)}
+                    onExport={() => void handleExport()}
+                    onClose={() => setSelected(null)}
+                    handleRef={editorRef}
+                  />
+                  <TeamsAssistantPanel
+                    teamId={selected.id}
+                    format={selected.format as Format}
+                    getDraft={() =>
+                      editorRef.current?.getDraft() ?? {
+                        name: selected.name,
+                        members: selected.members,
+                      }
+                    }
+                    applyPatch={(patch) => editorRef.current?.applyPatch(patch)}
+                    replaceDraft={(draft) =>
+                      editorRef.current?.replaceDraft(draft)
+                    }
+                  />
+                </>
+              ) : (
+                <div
+                  className="teams-page__placeholder"
+                  data-testid="teams-no-selection"
+                >
+                  <span className="teams-page__placeholder-icon" aria-hidden />
+                  <p className="teams-page__placeholder-text">
+                    Select a team to edit, or create a new one.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <PasteImportDialog
