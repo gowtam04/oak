@@ -185,6 +185,12 @@ data class Candidates(
     /** Present-or-null on the wire (`z.string().nullable().optional()`); both map to `null`. */
     val sort: String? = null,
     val shown: List<CandidateRow>,
+    /**
+     * The rows beyond [shown], server-populated only when the full set (≤200 rows)
+     * could be fetched. Absent/null on older answers or when the server couldn't
+     * enrich — the UI falls back to the follow-up-message "Show all" behavior.
+     */
+    @SerialName("hidden_rows") val hiddenRows: List<CandidateRow>? = null,
 )
 
 /** One row in a `candidates` table (mirrors `candidateRowSchema`). */

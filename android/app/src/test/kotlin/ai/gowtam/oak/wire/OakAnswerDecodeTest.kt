@@ -44,6 +44,9 @@ class OakAnswerDecodeTest {
         // Second candidate has no sprite_url / base_stats — both must decode as null, not throw.
         assertNull(candidates.shown[1].spriteUrl)
         assertNull(candidates.shown[1].baseStats)
+        // This fixture predates hidden_rows (server-populated only when the full set
+        // could be fetched) — absent must decode as null, not throw.
+        assertNull(candidates.hiddenRows)
 
         val damageCalc = requireNotNull(answer.damageCalc)
         assertTrue(damageCalc.isEstimate)
@@ -140,5 +143,33 @@ class OakAnswerDecodeTest {
         val confidence = answer.inferences.single().confidence as Inference.Confidence.Unknown
         assertEquals("very_high", confidence.raw)
         assertEquals("very_high", answer.inferences.single().confidence.rawValue)
+    }
+
+    // `candidates.hidden_rows` is server-populated only when the server could fetch the
+    // full set (≤200 rows) — when present, it carries the same row shape as `shown` and
+    // lets the client expand a truncated list locally instead of firing a follow-up turn.
+    @Test
+    fun candidatesDecodesHiddenRowsWhenPresent() {
+        val json = """
+            {"status":"answered","answer_markdown":"x","reasoning_markdown":"",
+             "citations":[],"inferences":[],
+             "generation_basis":{"generation":"Gen 9","fallback":false},
+             "candidates":{
+               "total_count":3,"truncated":true,"sort":null,
+               "shown":[{"name":"Dragapult","types":["dragon","ghost"]}],
+               "hidden_rows":[
+                 {"name":"Garchomp","types":["dragon","ground"]},
+                 {"name":"Flutter Mane","types":["ghost","fairy"]}
+               ]
+             }}
+        """.trimIndent()
+        val answer = OakJson.decodeFromString<OakAnswer>(json)
+
+        val candidates = requireNotNull(answer.candidates)
+        assertTrue(candidates.truncated)
+        val hiddenRows = requireNotNull(candidates.hiddenRows)
+        assertEquals(2, hiddenRows.size)
+        assertEquals("Garchomp", hiddenRows[0].name)
+        assertEquals("Flutter Mane", hiddenRows[1].name)
     }
 }

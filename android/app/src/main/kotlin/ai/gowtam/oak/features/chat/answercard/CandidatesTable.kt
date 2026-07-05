@@ -30,6 +30,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -43,8 +48,12 @@ import androidx.compose.ui.unit.dp
  * Pokémon (sprite + name + dex) · Types (badges) · the six base stats (or the union of
  * `key_stats` keys when no row carries `base_stats`) · Ability. The wire `sort` column is
  * highlighted with a directional caret **and** bolder figures (never color alone). A
- * `truncated` set shows "Showing N of total" and a "Show all N" control. Rows open the
- * Pokémon; type chips open the type. The caller gates it on non-empty rows.
+ * `truncated` set shows "Showing N of total" and a "Show all N" control. When the server
+ * populated `candidates.hidden_rows` (the full remainder, ≤200 rows total), tapping "Show
+ * all" expands the table LOCALLY — no follow-up chat message is sent — and the footer
+ * disappears just as it does for an already-complete set. Otherwise it falls back to
+ * [onShowAll], which sends a follow-up asking for the full set. Rows open the Pokémon;
+ * type chips open the type. The caller gates it on non-empty rows.
  */
 @Composable
 fun CandidatesTable(
@@ -55,8 +64,15 @@ fun CandidatesTable(
     modifier: Modifier = Modifier,
 ) {
     val oak = LocalOakColors.current
-    val statColumns = statColumns(candidates)
-    val showsAbility = candidates.shown.any { !it.ability.isNullOrEmpty() }
+    var expandedLocally by rememberSaveable { mutableStateOf(false) }
+    val canExpandLocally = !candidates.hiddenRows.isNullOrEmpty()
+    val displayedRows = if (expandedLocally && canExpandLocally) {
+        candidates.shown + candidates.hiddenRows.orEmpty()
+    } else {
+        candidates.shown
+    }
+    val statColumns = statColumns(displayedRows)
+    val showsAbility = displayedRows.any { !it.ability.isNullOrEmpty() }
     val sortedId = sortedColumnId(candidates, statColumns)
     val ascending = candidates.sort?.lowercase()?.contains("asc") == true
 
@@ -88,7 +104,7 @@ fun CandidatesTable(
                 if (showsAbility) HeaderCell("Ability", COL_ABILITY, TextAlign.Start)
             }
             // Rows
-            candidates.shown.forEachIndexed { index, row ->
+            displayedRows.forEachIndexed { index, row ->
                 val rowBackground = if (index % 2 == 0) androidx.compose.ui.graphics.Color.Transparent else oak.textStrong.copy(alpha = 0.04f)
                 Row(modifier = Modifier.background(rowBackground)) {
                     // Pokémon cell (tappable)
@@ -156,15 +172,18 @@ fun CandidatesTable(
             }
         }
 
-        if (candidates.truncated) {
+        // A local expansion behaves like an already-complete set: no footer at all,
+        // matching the wording (or lack of it) the component uses when `truncated`
+        // is false — the button disappears along with it.
+        if (candidates.truncated && !(expandedLocally && canExpandLocally)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Showing ${candidates.shown.size} of ${candidates.totalCount} — refine to narrow.",
+                    text = "Showing ${displayedRows.size} of ${candidates.totalCount} — refine to narrow.",
                     style = MaterialTheme.typography.bodySmall,
                     color = oak.textMuted,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(onClick = onShowAll) {
+                TextButton(onClick = { if (canExpandLocally) expandedLocally = true else onShowAll() }) {
                     Text(text = "Show all ${candidates.totalCount}", color = oak.accent)
                 }
             }
@@ -213,8 +232,8 @@ private fun StatHeaderCell(label: String, sorted: Boolean, ascending: Boolean) {
 private class StatColumn(val id: String, val label: String, val value: (CandidateRow) -> String)
 
 /** The fixed six base stats when any row carries them, else the alphabetical key_stats union. */
-private fun statColumns(candidates: Candidates): List<StatColumn> {
-    if (candidates.shown.any { it.baseStats != null }) {
+private fun statColumns(rows: List<CandidateRow>): List<StatColumn> {
+    if (rows.any { it.baseStats != null }) {
         return listOf(
             StatColumn("hp", "HP") { it.baseStats?.hp?.toString() ?: "—" },
             StatColumn("attack", "Atk") { it.baseStats?.atk?.toString() ?: "—" },
@@ -225,7 +244,7 @@ private fun statColumns(candidates: Candidates): List<StatColumn> {
         )
     }
     val keys = sortedSetOf<String>()
-    for (row in candidates.shown) row.keyStats?.keys?.let { keys.addAll(it) }
+    for (row in rows) row.keyStats?.keys?.let { keys.addAll(it) }
     return keys.map { key ->
         StatColumn(key.lowercase(), prettyKey(key)) { row -> row.keyStats?.get(key)?.let { scalarDisplayText(it) } ?: "—" }
     }
