@@ -227,6 +227,10 @@ private fun SignedInChatHome(
     artifactViewModel: ArtifactViewModel,
 ) {
     var route by remember { mutableStateOf<ChatTabRoute>(ChatTabRoute.ConversationList) }
+    // The last conversation the user opened from the list, remembered in-memory so the
+    // list can mark that row on return (survives the list⟷thread navigation because this
+    // state lives above the route `when`). Not persisted across process death by design.
+    var lastOpenedConversationId by remember { mutableStateOf<String?>(null) }
     // System/predictive back pops a pushed thread back to the conversation list,
     // mirroring iOS's NavigationStack pop (Back returns to "Chats").
     BackHandler(enabled = route != ChatTabRoute.ConversationList) {
@@ -238,8 +242,12 @@ private fun SignedInChatHome(
             val historyViewModel = remember(services) { HistoryViewModel(services.history) }
             HistoryScreen(
                 viewModel = historyViewModel,
-                onSelect = { route = ChatTabRoute.Existing(it) },
+                onSelect = {
+                    lastOpenedConversationId = it.id
+                    route = ChatTabRoute.Existing(it)
+                },
                 onNewChat = { route = ChatTabRoute.New },
+                activeConversationId = lastOpenedConversationId,
             )
         }
 

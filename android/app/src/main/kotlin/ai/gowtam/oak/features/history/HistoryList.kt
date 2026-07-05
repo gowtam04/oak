@@ -1,13 +1,21 @@
 package ai.gowtam.oak.features.history
 
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.rememberReduceMotion
 import ai.gowtam.oak.wire.ConversationSummary
 import ai.gowtam.oak.wire.Format
 import android.text.format.DateUtils
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,12 +29,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
@@ -38,8 +48,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -65,11 +73,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
@@ -91,6 +103,9 @@ fun HistoryScreen(
     onSelect: (ConversationSummary) -> Unit,
     onNewChat: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The conversation last opened from this list, marked with the active rail on return.
+     * In-memory only; the caller owns it so it survives the list⟷thread navigation. */
+    activeConversationId: String? = null,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
@@ -105,13 +120,17 @@ fun HistoryScreen(
         topBar = {
             OakTopBar(
                 title = { Text("Chats", modifier = Modifier.semantics { heading() }) },
+                // New-chat moved to the floating disc for one-handed reach; the format
+                // filter stays a top-bar affordance and tints accent while a filter is on.
                 actions = {
-                    IconButton(onClick = onNewChat) {
-                        Icon(Icons.Filled.Add, contentDescription = "New chat")
-                    }
+                    FilterAction(
+                        current = uiState.formatFilter,
+                        onSelect = { format -> scope.launch { viewModel.setFormatFilter(format) } },
+                    )
                 },
             )
         },
+        floatingActionButton = { NewChatFab(onClick = onNewChat) },
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             SearchField(
@@ -119,13 +138,16 @@ fun HistoryScreen(
                 onQueryChange = viewModel::onSearchQueryChange,
                 onSearch = { scope.launch { viewModel.search() } },
             )
-            FormatFilterRow(
-                current = uiState.formatFilter,
-                onSelect = { format -> scope.launch { viewModel.setFormatFilter(format) } },
-            )
+            uiState.formatFilter?.let { active ->
+                ActiveFilterPill(
+                    format = active,
+                    onClear = { scope.launch { viewModel.setFormatFilter(null) } },
+                )
+            }
             Box(modifier = Modifier.weight(1f)) {
                 HistoryListContent(
                     uiState = uiState,
+                    activeConversationId = activeConversationId,
                     onSelect = onSelect,
                     onTogglePin = { scope.launch { viewModel.togglePin(it) } },
                     onRequestRename = { renameTarget = it },
@@ -152,10 +174,24 @@ fun HistoryScreen(
 @Composable
 private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch: () -> Unit) {
     val oak = LocalOakColors.current
+    // Sunken borderless pill (§5.4): no outline at rest, an azure ring + soft azure glow
+    // only while focused. The glow's tinted shadow is API 28+; older devices simply skip it.
+    var focused by remember { mutableStateOf(false) }
+    val pillShape = RoundedCornerShape(OakRadius.pill)
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm)
+            .onFocusChanged { focused = it.isFocused }
+            .then(
+                if (focused) {
+                    Modifier.shadow(elevation = 6.dp, shape = pillShape, ambientColor = oak.azure, spotColor = oak.azure)
+                } else {
+                    Modifier
+                },
+            ),
         placeholder = { Text("Search conversations") },
         singleLine = true,
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = oak.textMuted) },
@@ -166,8 +202,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch
                 }
             }
         },
-        shape = RoundedCornerShape(OakRadius.pill),
-        // Borderless sunken pill; the azure ring appears only on focus (§5.4).
+        shape = pillShape,
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = oak.surfaceSunken,
             unfocusedContainerColor = oak.surfaceSunken,
@@ -182,37 +217,122 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch
     )
 }
 
-/** iOS parity: exactly three chips (All / Gen 9 / Champions) — NOT a six-way filter
- * (that is the Teams list's job). Conversation history stays scoped to the two most
- * common formats for now (mirrors `ConversationListView.formatFilterMenu`). */
+/**
+ * The top-bar filter affordance (iOS parity: All / Gen 9 / Champions — NOT a six-way
+ * filter; that is the Teams list's job). A filter icon that tints **accent** while a
+ * filter is active, opening a menu of the three scopes with a check on the current one.
+ */
 @Composable
-private fun FormatFilterRow(current: Format?, onSelect: (Format?) -> Unit) {
+private fun FilterAction(current: Format?, onSelect: (Format?) -> Unit) {
     val oak = LocalOakColors.current
-    val chipShape = RoundedCornerShape(OakRadius.pill)
-    val chipColors = FilterChipDefaults.filterChipColors(
-        containerColor = oak.surfaceSunken,
-        labelColor = oak.textMuted,
-        selectedContainerColor = oak.azureSoft,
-        selectedLabelColor = oak.azure,
+    var expanded by remember { mutableStateOf(false) }
+    val active = current != null
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                Icons.Filled.FilterList,
+                contentDescription = if (active) "Filter (active)" else "Filter",
+                tint = if (active) oak.accent else oak.textMuted,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            FilterMenuItem("All", current == null) { onSelect(null); expanded = false }
+            FilterMenuItem("Gen 9", current == Format.ScarletViolet) { onSelect(Format.ScarletViolet); expanded = false }
+            FilterMenuItem("Champions", current == Format.Champions) { onSelect(Format.Champions); expanded = false }
+        }
+    }
+}
+
+@Composable
+private fun FilterMenuItem(label: String, selected: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        onClick = onClick,
+        leadingIcon = if (selected) {
+            { Icon(Icons.Filled.Check, contentDescription = null, tint = LocalOakColors.current.accent) }
+        } else {
+            null
+        },
     )
+}
+
+/**
+ * The active-filter cue by the search field: a sunken pill naming the current scope with
+ * an ✕ that clears it. Shown only while a format filter is on (mirrors iOS's active-filter
+ * token). The scope label is the existing [Format.shortLabel], never a new name.
+ */
+@Composable
+private fun ActiveFilterPill(format: Format, onClear: () -> Unit) {
+    val oak = LocalOakColors.current
+    val shape = RoundedCornerShape(OakRadius.pill)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = OakSpacing.lg, vertical = OakSpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+        modifier = Modifier.padding(horizontal = OakSpacing.lg, vertical = OakSpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        FilterChip(selected = current == null, onClick = { onSelect(null) }, label = { Text("All") }, shape = chipShape, colors = chipColors)
-        FilterChip(
-            selected = current == Format.ScarletViolet,
-            onClick = { onSelect(Format.ScarletViolet) },
-            label = { Text("Gen 9") },
-            shape = chipShape,
-            colors = chipColors,
-        )
-        FilterChip(
-            selected = current == Format.Champions,
-            onClick = { onSelect(Format.Champions) },
-            label = { Text("Champions") },
-            shape = chipShape,
-            colors = chipColors,
+        Row(
+            modifier = Modifier
+                .clip(shape)
+                .background(oak.accentSoft)
+                .clickable(onClickLabel = "Clear filter", onClick = onClear)
+                .padding(start = OakSpacing.md, end = OakSpacing.sm, top = 6.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = format.shortLabel,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = oak.accent,
+            )
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = "Clear filter",
+                tint = oak.accent,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The new-chat floating disc (moved off the top bar for one-handed reach): a 56dp accent
+ * circle with a white compose glyph, floating shadow in light / hairline border in dark,
+ * dipping to 0.94 on press (snappy; instant under reduce-motion). Keeps the "New chat"
+ * contentDescription the top-bar button carried.
+ */
+@Composable
+private fun NewChatFab(onClick: () -> Unit) {
+    val oak = LocalOakColors.current
+    val dark = isSystemInDarkTheme()
+    val reduceMotion = rememberReduceMotion()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.94f else 1f,
+        animationSpec = if (reduceMotion) snap() else OakMotion.snappy,
+        label = "newChatFabScale",
+    )
+    Box(
+        modifier = Modifier
+            .size(56.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .then(if (dark) Modifier else Modifier.shadow(6.dp, CircleShape))
+            .clip(CircleShape)
+            .background(oak.accent)
+            .then(if (dark) Modifier.border(1.dp, oak.borderStrong, CircleShape) else Modifier)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClickLabel = "New chat",
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Filled.Edit,
+            contentDescription = "New chat",
+            tint = Color.White,
+            modifier = Modifier.size(22.dp),
         )
     }
 }
@@ -221,6 +341,7 @@ private fun FormatFilterRow(current: Format?, onSelect: (Format?) -> Unit) {
 @Composable
 private fun HistoryListContent(
     uiState: HistoryViewModel.UiState,
+    activeConversationId: String?,
     onSelect: (ConversationSummary) -> Unit,
     onTogglePin: (ConversationSummary) -> Unit,
     onRequestRename: (ConversationSummary) -> Unit,
@@ -240,16 +361,17 @@ private fun HistoryListContent(
             val others = uiState.conversations.filterNot { it.pinned }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = OakSpacing.xxl),
+                // Leave room below the last row for the floating new-chat disc.
+                contentPadding = PaddingValues(bottom = 88.dp),
             ) {
                 if (pinned.isNotEmpty()) {
                     item(key = "pinned-header") { SectionHeader("Pinned") }
                     items(pinned, key = { it.id }) { conversation ->
-                        ConversationRow(conversation, onSelect, onTogglePin, onRequestRename, onDelete)
+                        ConversationRow(conversation, conversation.id == activeConversationId, onSelect, onTogglePin, onRequestRename, onDelete)
                     }
                 }
                 items(others, key = { it.id }) { conversation ->
-                    ConversationRow(conversation, onSelect, onTogglePin, onRequestRename, onDelete)
+                    ConversationRow(conversation, conversation.id == activeConversationId, onSelect, onTogglePin, onRequestRename, onDelete)
                 }
             }
         }
@@ -282,6 +404,7 @@ private fun SectionHeader(title: String) {
 @Composable
 private fun ConversationRow(
     conversation: ConversationSummary,
+    active: Boolean,
     onSelect: (ConversationSummary) -> Unit,
     onTogglePin: (ConversationSummary) -> Unit,
     onRequestRename: (ConversationSummary) -> Unit,
@@ -317,19 +440,20 @@ private fun ConversationRow(
         },
     ) {
         var showMenu by remember { mutableStateOf(false) }
-        val pinned = conversation.pinned
+        // Pinned OR last-opened rows carry the brand's red 3dp start-edge rail over a
+        // faint accent wash; other rows sit flush on the canvas (transparent rail — no
+        // width shift on either state).
+        val highlighted = conversation.pinned || active
         val railColor = oak.accent
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // Pinned/active rows carry the brand's red 3dp left rail over a faint
-                // accent wash; unpinned rows sit flush on the canvas (no width shift).
-                .background(if (pinned) oak.accentSoft.copy(alpha = 0.35f) else Color.Transparent)
+                .background(if (highlighted) oak.accentSoft.copy(alpha = 0.35f) else Color.Transparent)
                 .drawBehind {
-                    if (pinned) drawRect(color = railColor, size = size.copy(width = 3.dp.toPx()))
+                    if (highlighted) drawRect(color = railColor, size = size.copy(width = 3.dp.toPx()))
                 }
                 .clickable { onSelect(conversation) }
-                .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
+                .padding(horizontal = OakSpacing.lg, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -344,16 +468,20 @@ private fun ConversationRow(
                     }
                     Text(
                         text = conversation.title,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                         color = oak.textStrong,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(conversation.format.shortLabel, style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
-                    Text("·", style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
-                    Text(relativeTime(conversation.updatedAt), style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
-                }
+                // Meta line in the instrument voice: "GEN 9 · 19H AGO" (existing scope
+                // label uppercased + compact relative time).
+                Text(
+                    text = "${conversation.format.shortLabel.uppercase()} · ${compactRelativeTime(conversation.updatedAt)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = oak.textMuted,
+                    maxLines = 1,
+                )
             }
             IconButton(onClick = { onTogglePin(conversation) }) {
                 Icon(
@@ -465,9 +593,21 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
     }
 }
 
-private fun relativeTime(updatedAtMillis: Long): String =
-    DateUtils.getRelativeTimeSpanString(
-        updatedAtMillis,
-        System.currentTimeMillis(),
-        DateUtils.MINUTE_IN_MILLIS,
-    ).toString()
+/**
+ * A compact, uppercase relative time for the instrument meta line — "NOW", "19M AGO",
+ * "19H AGO", "3D AGO", "2W AGO". Abbreviates the buckets [DateUtils] would spell out.
+ */
+private fun compactRelativeTime(updatedAtMillis: Long): String {
+    val diff = (System.currentTimeMillis() - updatedAtMillis).coerceAtLeast(0L)
+    val minute = DateUtils.MINUTE_IN_MILLIS
+    val hour = DateUtils.HOUR_IN_MILLIS
+    val day = DateUtils.DAY_IN_MILLIS
+    val week = DateUtils.WEEK_IN_MILLIS
+    return when {
+        diff < minute -> "NOW"
+        diff < hour -> "${diff / minute}M AGO"
+        diff < day -> "${diff / hour}H AGO"
+        diff < week -> "${diff / day}D AGO"
+        else -> "${diff / week}W AGO"
+    }
+}
