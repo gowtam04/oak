@@ -1,19 +1,31 @@
 import type { InferenceCalloutProps } from "@/components/types";
 import type { Inference } from "@/agent/schemas";
 
-/** Capitalized, bracket-free confidence word for the pill (never `[high]`). */
+/**
+ * Display labels for the wire `confidence` enum (TestFlight feedback AAhvrDM1 —
+ * "Inference [high]" reads as meaningless to non-technical users). The wire
+ * value itself, and the CSS modifier classes keyed on it, are unchanged; an
+ * unrecognized value falls back to the raw string verbatim.
+ */
+export const CONFIDENCE_LABELS: Record<Inference["confidence"], string> = {
+  high: "Solid",
+  medium: "Likely",
+  low: "Unsure",
+};
+
 function confidenceLabel(confidence: Inference["confidence"]): string {
-  return confidence[0].toUpperCase() + confidence.slice(1);
+  return CONFIDENCE_LABELS[confidence] ?? confidence;
 }
 
 /**
  * InferenceCallout — visually distinct callouts for `inferences[]`, clearly
  * separating deductions from stated data (BR-3).
  *
- * An `.ilabel` "Inference" title heads the box; each item shows its claim, a
- * confidence PILL (a colored badge — never the literal `[high]` bracket text
- * a plain string interpolation used to produce), and an optional note on what
- * the inference hinges on. Returns null when `inferences` is empty.
+ * An `.ilabel` "Oak's deductions" title heads the box; each item shows its
+ * claim, a confidence PILL (a colored badge — never the literal `[high]`
+ * bracket text a plain string interpolation used to produce), and an optional
+ * note on what the inference hinges on. Returns null when `inferences` is
+ * empty.
  */
 export default function InferenceCallout({
   inferences,
@@ -22,7 +34,9 @@ export default function InferenceCallout({
 
   return (
     <div className="inference-callout" data-testid="inference-callout">
-      <span className="inference-callout__title ilabel">Inference</span>
+      <span className="inference-callout__title ilabel">
+        Oak&apos;s deductions
+      </span>
       {inferences.map((inference, i) => (
         <div
           key={i}

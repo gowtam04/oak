@@ -22,6 +22,7 @@ import {
 } from "@testing-library/react";
 
 import AnswerCard from "@/components/answer-card/AnswerCard";
+import { displayCitationSource } from "@/components/artifact/citation-display";
 import {
   CANONICAL_ANSWER,
   MINIMAL_ANSWER,
@@ -96,7 +97,7 @@ describe("AnswerCard — canonical answered payload (all fields)", () => {
       "Sources (2)",
     );
     expect(screen.getByTestId("citation-0")).toHaveTextContent(
-      "pokemon/garchomp",
+      displayCitationSource(CANONICAL_ANSWER.citations[0]!.source),
     );
   });
 

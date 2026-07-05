@@ -37,11 +37,12 @@ describe("SourceList", () => {
     expect(details.open).toBe(true);
   });
 
-  it("renders each citation's source and detail", () => {
+  it("renders each citation's display source and detail", () => {
     render(<SourceList citations={citations} defaultExpanded />);
-    expect(screen.getByText(CITATION_GARCHOMP.source)).toBeInTheDocument();
+    // Display text is the friendly mapping, not the raw wire source string.
+    expect(screen.getByText("Pokémon — Garchomp")).toBeInTheDocument();
     expect(screen.getByText(/base speed: 102/)).toBeInTheDocument();
-    expect(screen.getByText(CITATION_EARTHQUAKE.source)).toBeInTheDocument();
+    expect(screen.getByText("Move — Earthquake")).toBeInTheDocument();
     expect(screen.getByText(/power: 100/)).toBeInTheDocument();
   });
 
@@ -78,16 +79,41 @@ describe("SourceList", () => {
     expect(link).toHaveAttribute("href", CITATION_GARCHOMP.endpoint_url);
   });
 
-  it("renders a parseable citation as a clickable entity link, and an unparseable one as plain text", () => {
+  it("renders a parseable citation as a clickable entity link, with the friendly display text, and an unparseable one as friendly plain text (TestFlight AH1b0N09K)", () => {
     const mixed = [
       CITATION_EARTHQUAKE,
       { source: "run_sql/natdex_species", detail: "aggregation" },
     ];
     render(<SourceList citations={mixed} defaultExpanded />);
-    expect(screen.getByTestId("citation-entity-0").tagName).toBe("BUTTON");
+    const entity = screen.getByTestId("citation-entity-0");
+    expect(entity.tagName).toBe("BUTTON");
+    expect(entity).toHaveTextContent("Move — Earthquake");
     expect(screen.queryByTestId("citation-entity-1")).not.toBeInTheDocument();
-    const plain = screen.getByText("run_sql/natdex_species");
+    // The raw wire source never leaks into the visible text.
+    expect(screen.queryByText("run_sql/natdex_species")).not.toBeInTheDocument();
+    const plain = screen.getByText("Oak's game database");
     expect(plain.tagName).toBe("SPAN");
     expect(plain).toHaveClass("source-list__source");
+  });
+
+  it("maps citation sources to their friendly display text (copy-table §2)", () => {
+    const mixed = [
+      { source: "wiki/Team_Rocket_Hideout", detail: "walkthrough" },
+      { source: "get_meta_usage/gen9ou", detail: "usage %" },
+      { source: "get_meta_usage/gen8ou", detail: "usage %" },
+      { source: "learnset/will-o-wisp (gen-9)", detail: "level-up" },
+      { source: "some_unrecognized_thing", detail: "n/a" },
+    ];
+    render(<SourceList citations={mixed} defaultExpanded />);
+    expect(
+      screen.getByText("Community wiki — Team_Rocket_Hideout"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Competitive usage stats (Gen 9 OU)"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Competitive usage stats")).toBeInTheDocument();
+    expect(screen.getByText("Movepool — Will O Wisp")).toBeInTheDocument();
+    // Unrecognized sources fall back to the raw string, unchanged.
+    expect(screen.getByText("some_unrecognized_thing")).toBeInTheDocument();
   });
 });
