@@ -71,7 +71,7 @@ struct CitationsView: View {
         .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 2) {
-        Text(citation.source)
+        Text(displayCitationSource(citation.source))
           .font(Theme.body(.footnote, weight: .semibold))
           .foregroundStyle(Theme.textPrimary)
         Text(citation.detail)

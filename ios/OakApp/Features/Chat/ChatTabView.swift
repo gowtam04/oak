@@ -1,18 +1,20 @@
 import SwiftUI
 
-/// The Chat tab's auth-adaptive root — the WhatsApp-style restructure of the chat
-/// experience (chat-experience.md M-CHAT-US-2/3; history-and-teams.md M-HIST-US-2/3).
+/// The Chat tab's auth-adaptive root — launches straight into a fresh chat, with
+/// history one Back away (chat-experience.md M-CHAT-US-2/3; history-and-teams.md
+/// M-HIST-US-2/3).
 ///
 /// It branches on ``AppState/authState``:
-///   - **Signed in:** a `NavigationStack` whose root is the saved-conversation list
-///     (``ConversationListView``) titled "Chats", with a **New Chat** toolbar button.
-///     Selecting a row pushes ``ChatRoute/existing(_:)``; New Chat pushes
-///     ``ChatRoute/new`` — both resolve to a ``ChatThreadScreen`` that seeds and
-///     renders the thread, so Back returns to the list (M-AC-H3.1).
+///   - **Signed in:** a `NavigationStack` seeded on ``ChatRoute/new`` — launch and a
+///     freshly completed sign-in both land directly on a new, unsaved thread; Back
+///     pops to the saved-conversation list (``ConversationListView``, titled
+///     "Chats"), reachable via the list's own New Chat action too. Selecting a row
+///     pushes ``ChatRoute/existing(_:)`` — both routes resolve to a
+///     ``ChatThreadScreen`` that seeds and renders the thread (M-AC-H3.1).
 ///   - **Guest:** the tab opens directly into a single in-memory chat thread
 ///     (``ChatView``) with the "Sign in to save your conversations" nudge; tapping it
 ///     presents the email-OTP sheet (``AuthView``). Completing sign-in flips
-///     ``AppState/authState`` and this view re-renders into the signed-in list.
+///     ``AppState/authState`` and this view re-renders into the signed-in stack.
 ///
 /// It is a no-argument view: it reads the service container and ``AppState`` from the
 /// environment itself, so `RootView` constructs it as `ChatTabView()`.
@@ -23,8 +25,9 @@ struct ChatTabView: View {
   /// Drives the guest sign-in sheet.
   @State private var showSignIn = false
 
-  /// The signed-in conversation stack's path (the list root + pushed threads).
-  @State private var path: [ChatRoute] = []
+  /// The signed-in conversation stack's path. Seeded on `.new` so launch opens
+  /// directly on a fresh thread, with the "Chats" list one Back away.
+  @State private var path: [ChatRoute] = [.new]
 
   var body: some View {
     Group {
@@ -34,12 +37,13 @@ struct ChatTabView: View {
         guestHome
       }
     }
-    // A completed sign-in flips the whole tab into the conversation list: drop the
-    // sign-in sheet and reset the navigation path so it opens at the list root.
+    // A completed sign-in flips the whole tab into the signed-in stack: drop the
+    // sign-in sheet and reset the navigation path so it opens on a fresh chat,
+    // matching the cold-launch behavior above.
     .onChange(of: appState.authState) { _, newValue in
       if case .signedIn = newValue {
         showSignIn = false
-        path = []
+        path = [.new]
       }
     }
   }

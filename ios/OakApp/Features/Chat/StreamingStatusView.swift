@@ -218,17 +218,45 @@ enum ToolTrail {
     }
   }
 
+  /// Maps a raw tool id to the friendly, non-technical noun users see (the same
+  /// vocabulary as web's `instrumentToken` — copy-tables.md §1). A raw tool id must
+  /// never reach the screen: every caller in this file routes through here,
+  /// including both bare fallback paths in ``rowLabel(tool:label:)``.
+  static func friendlyNoun(_ tool: String) -> String {
+    switch tool {
+    case "resolve_entity": return "Dex lookup"
+    case "query_pokedex": return "Pokédex search"
+    case "get_pokemon": return "Pokémon"
+    case "get_move": return "Move"
+    case "get_ability": return "Ability"
+    case "get_item": return "Item"
+    case "get_type_matchups": return "Type matchups"
+    case "get_evolution_chain": return "Evolution"
+    case "compute_stat": return "Stats"
+    case "estimate_damage": return "Damage calc"
+    case "get_usage_stats", "get_meta_usage": return "Usage"
+    case "get_encounters": return "Locations"
+    case "get_learnset": return "Movepool"
+    case "get_team", "list_teams", "save_team": return "Teams"
+    case "run_sql": return "Game data"
+    case "search_wiki": return "Wiki"
+    case "submit_answer": return "Answer"
+    case "submit_builder_answer": return "Teams"
+    default: return "Lookup"
+    }
+  }
+
   /// The instrument-voice row text. When the label parses into a tool + subject —
-  /// e.g. `get_pokemon` + a resolvable "Garchomp" — it renders `GET_POKEMON ·
-  /// GARCHOMP`; otherwise it falls back to the cleaned (emoji-stripped) label. The
-  /// `.instrumentLabel()` modifier applies the uppercasing + tracking, so this
-  /// returns natural-case text.
+  /// e.g. `get_pokemon` + a resolvable "Garchomp" — it renders `Pokémon ·
+  /// Garchomp`; otherwise it falls back to the cleaned (emoji-stripped) label, or
+  /// the friendly noun when there's no usable label at all. The `.instrumentLabel()`
+  /// modifier applies the uppercasing + tracking, so this returns natural-case text.
   static func rowLabel(tool: String, label: String) -> String {
     let cleaned = strippingLeadingEmoji(label)
     if let subject = subject(from: cleaned) {
-      return "\(tool) · \(subject)"
+      return "\(friendlyNoun(tool)) · \(subject)"
     }
-    return cleaned.isEmpty ? tool : cleaned
+    return cleaned.isEmpty ? friendlyNoun(tool) : cleaned
   }
 
   /// The collapse-to-chip summary text: `N LOOKUPS · Xs` (`.instrumentLabel()` caps
