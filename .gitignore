@@ -34,6 +34,8 @@ web/.wiki-cache/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+# TestFlight crash-log assets are committed on purpose (docs/testflight-feedback/)
+!docs/testflight-feedback/assets/**/*.log
 
 # Test / coverage
 coverage/

@@ -270,3 +270,18 @@ full build/test walkthrough).
 - **Not in v1:** no admin-panel access, no Play Store listing/signing (debug-keystore
   signed release APK only — see `android/README.md` and
   `docs/features/android-app/architecture/deployment.md` for what's deferred).
+
+## TestFlight feedback tracking
+
+TestFlight beta feedback (screenshots + crashes) is tracked in
+`docs/testflight-feedback/ledger.md`, one entry per App Store Connect
+submission ID, with downloaded assets alongside it under
+`docs/testflight-feedback/assets/<submission-id>/`. Pull in new feedback with
+`node ios/scripts/asc-feedback.mjs` (needs the `APP_STORE_CONNECT_API_KEY_*`
+env vars set; see the script header). It's idempotent — existing entries are
+never modified or re-downloaded.
+
+A commit that fixes a feedback item **must** flip that item's ledger row to
+`fixed (<commit>, build N)` in the same commit. Run the sync script promptly
+when new feedback arrives — ASC's screenshot/crash-log asset URLs expire
+(~30 days), so unsynced feedback loses its assets permanently.
