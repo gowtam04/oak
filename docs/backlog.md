@@ -1108,3 +1108,45 @@ exist and feed both directions' set-prediction/scouting work. This is a **new su
 outside the chat agent's fixed tool contract** (`docs/agent-design/tools.md`), not an
 extension of it — it does not touch the 20-tool chat contract and is free to define its
 own tools/schema.
+
+---
+
+## B-22 — Fix the two failing admin cost-sorting oracle tests on `develop`
+
+**Why:** Two admin read-repo tests fail on `develop` and have for a while — every full
+`npm test` run reports 2904/2906 with these two as the standing failures:
+
+- `src/data/repos/admin-analytics-repo.oracle.test.ts` → "ranks by estimated cost"
+- `src/data/repos/admin-content-repo.oracle.test.ts` → "sorts by the heavy-user metrics
+  (turns, errors, cost)"
+
+Both seed three fixture accounts ("ash" grok-heavy, "brock" claude, "misty" gpt) and pin
+the order the admin dashboard ranks them in when sorted by **estimated cost**; the actual
+ranking comes back different. The failures predate B-5 (verified identical on clean
+`develop` during that merge gate, 2026-07-05) and were first noted during the Redis
+state-tier work. **Likely root cause:** commit `732171d` ("admin: reconcile model pricing
+to real provider rates") changed `MODEL_PRICING` (`src/server/admin/pricing.ts`) without
+re-deriving the tests' expected orderings — the relative estimated cost of the
+grok-heavy vs. claude fixture accounts plausibly flipped.
+
+**Scope:**
+- Root-cause which side is stale: recompute the three fixture accounts' estimated costs
+  by hand from the current `MODEL_PRICING` table and the fixtures' token counts.
+- If the pricing table is correct (it was just reconciled to real rates), fix the two
+  test pins to the correctly-derived order — with the arithmetic shown in a comment so
+  the next pricing change updates them consciously.
+- If instead the pricing reconciliation itself is wrong (units, per-1M vs per-1K, or a
+  swapped input/output rate), fix `pricing.ts` — that would mean the admin cost
+  dashboard is currently showing wrong estimates, which is the actually-important
+  outcome to rule out (ADMIN-BR-5 says cost is an estimate, not that it's mis-scaled).
+- Get `npm test` to a true 2906/2906 so future merge gates don't need a
+  "known-failures" carve-out.
+
+**Open questions:**
+- None of substance — this is a bounded diagnose-and-fix.
+
+**Touches:** `src/data/repos/admin-analytics-repo.oracle.test.ts`,
+`src/data/repos/admin-content-repo.oracle.test.ts`, possibly
+`src/server/admin/pricing.ts` (only if the reconciliation itself is wrong).
+
+**Depends on:** Nothing.
