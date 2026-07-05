@@ -63,6 +63,30 @@ function openStream(...frames: string[]): ReadableStream<Uint8Array> {
   });
 }
 
+/**
+ * A ReadableStream whose frames are pushed on demand (and closed on demand) —
+ * lets a test hold the stream open, drive `stop()`, then deliver the `turn`
+ * frame afterwards.
+ */
+function controllableStream(): {
+  body: ReadableStream<Uint8Array>;
+  push: (frame: string) => void;
+  close: () => void;
+} {
+  const encoder = new TextEncoder();
+  let ctrl!: ReadableStreamDefaultController<Uint8Array>;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      ctrl = controller;
+    },
+  });
+  return {
+    body,
+    push: (frame) => ctrl.enqueue(encoder.encode(frame)),
+    close: () => ctrl.close(),
+  };
+}
+
 /** A Response-like object carrying an SSE body. */
 function sseResponse(body: ReadableStream<Uint8Array>): Response {
   return {
@@ -357,6 +381,52 @@ describe("useSseClient — explicit stop()", () => {
     expect(result.current.status).toBe("idle");
     expect(result.current.turnId).toBeNull();
     expect(result.current.streamingMarkdown).toBe("");
+  });
+
+  it("stops a turn even when Stop is pressed BEFORE the turn frame lands", async () => {
+    // The pre-`turn`-frame race: quick-stop during connection setup + the
+    // server's pre-stream work. We have no id yet, so the hook must keep the
+    // stream reading to capture the `turn` frame, then fire the stop endpoint —
+    // otherwise the server turn keeps generating (ghost turn).
+    const live = controllableStream();
+    const calls = stubFetch((url, method) => {
+      if (url === "/api/chat" && method === "POST") return sseResponse(live.body);
+      if (url.includes("/turns/turn-late/stop")) {
+        return jsonResponse(200, { turn_id: "turn-late", status: "stopped" });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+
+    const { result } = renderHook(() => useSseClient());
+    await act(async () => {
+      result.current.send(BODY);
+      await drain();
+    });
+    // No turn frame yet — the id is still unknown.
+    expect(result.current.turnId).toBeNull();
+    expect(result.current.status).toBe("thinking");
+
+    // Stop now, before any id exists → UI goes idle, but no /stop call yet.
+    await act(async () => {
+      result.current.stop();
+      await drain();
+    });
+    expect(result.current.status).toBe("idle");
+    expect(calls.some((c) => c.url.includes("/stop"))).toBe(false);
+
+    // The turn frame finally arrives → the deferred stop fires with its id.
+    await act(async () => {
+      live.push('event: turn\ndata: {"turn_id":"turn-late"}\n\n');
+      await drain();
+    });
+
+    const stopCall = calls.find((c) => c.url.includes("/turns/turn-late/stop"));
+    expect(stopCall).toBeDefined();
+    expect(stopCall?.method).toBe("POST");
+    expect(stopCall?.body).toEqual({ session_id: "sess-1" });
+    // Still idle — the captured turn id never drove any UI state.
+    expect(result.current.status).toBe("idle");
+    expect(result.current.turnId).toBeNull();
   });
 
   it("keeps the local teardown even if the stop endpoint call fails", async () => {

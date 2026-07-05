@@ -359,6 +359,14 @@ export function useSseClient(): UseSseClientReturn {
   // True once the current turn reached a terminal event (answer/error/stopped),
   // so neither the visibility listener nor a drop reattaches a finished turn.
   const terminalRef = useRef(false);
+  // Set when `stop()` is pressed BEFORE the `turn` frame has landed (quick-stop
+  // during connection setup + the server's pre-stream work — body parse, rate
+  // limit, history load, scope resolve, startTurn — a 100–500ms window). We have
+  // no id to stop yet, so we keep the stream reading ONLY to capture the `turn`
+  // frame, then fire the stop endpoint from the consume loop. Without this the
+  // server turn keeps generating (and, for signed-in users, persists a ghost
+  // answer) — a regression vs. the old abort-cancels-the-turn behavior.
+  const pendingStopRef = useRef(false);
   // Bounded mid-stream reattach attempts spent on the current turn (reset on
   // real progress — any content frame — and on a fresh send/resume).
   const reattachCountRef = useRef(0);
@@ -399,6 +407,28 @@ export function useSseClient(): UseSseClientReturn {
           if (event.event !== "turn") reattachCountRef.current = 0;
 
           if (event.event === "turn") {
+            if (pendingStopRef.current) {
+              // A stop was requested before this id existed (quick-stop during
+              // pre-stream setup). Now that we have it, fire the stop endpoint
+              // and abandon this stream SILENTLY — the UI is already idle. This
+              // is what prevents a ghost turn that keeps generating (and persists
+              // for signed-in users). §6 / BT-4. `turn` is always the first
+              // frame, so no content frame can slip past this guard.
+              pendingStopRef.current = false;
+              const sid = sessionIdRef.current;
+              void fetch(
+                `/api/chat/turns/${encodeURIComponent(event.data.turn_id)}/stop`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(sid ? { session_id: sid } : {}),
+                },
+              ).catch(() => {
+                /* local teardown already stands (design §6) */
+              });
+              controller.abort();
+              return;
+            }
             // FIRST frame of both the POST and resume streams (BT-2). Capture the
             // id and RESET the in-flight view: on a fresh POST the buffers are
             // already empty; on a resume this discards the pre-drop partial so
@@ -489,6 +519,12 @@ export function useSseClient(): UseSseClientReturn {
         // clean EOF instead of throwing). Reattach if we know the turn id;
         // otherwise fall back to `done` (defensive, pre-existing behavior).
         if (controller.signal.aborted) return;
+        // A pending-stop stream that ended before the `turn` frame has nothing to
+        // stop — stay silently idle (no reattach, no done fallback).
+        if (pendingStopRef.current) {
+          pendingStopRef.current = false;
+          return;
+        }
         if (!sawTerminal) {
           if (maybeReattachRef.current(controller)) return;
           setState((prev) =>
@@ -499,6 +535,12 @@ export function useSseClient(): UseSseClientReturn {
         }
       } catch (streamError) {
         if (controller.signal.aborted) return;
+        // A pending-stop stream that died before the `turn` frame: nothing to
+        // stop and the UI is already idle — swallow the error silently.
+        if (pendingStopRef.current) {
+          pendingStopRef.current = false;
+          return;
+        }
         // A mid-stream read throw is a connection drop — reattach if we can.
         if (maybeReattachRef.current(controller)) return;
         setState((prev) => ({
@@ -797,6 +839,7 @@ export function useSseClient(): UseSseClientReturn {
       sessionIdRef.current = body.session_id;
       turnIdRef.current = null;
       terminalRef.current = false;
+      pendingStopRef.current = false;
       reattachCountRef.current = 0;
 
       // Immediately transition to "thinking" and clear previous turn state.
@@ -828,6 +871,7 @@ export function useSseClient(): UseSseClientReturn {
       turnIdRef.current = turnId;
       sessionIdRef.current = sessionId ?? null;
       terminalRef.current = false;
+      pendingStopRef.current = false;
       reattachCountRef.current = 0;
 
       setState((prev) => ({
@@ -850,23 +894,43 @@ export function useSseClient(): UseSseClientReturn {
   const stop = useCallback((): void => {
     const turnId = turnIdRef.current;
     const sessionId = sessionIdRef.current;
+    const controller = abortRef.current;
+    const inFlight = controller !== null && !controller.signal.aborted;
 
-    // Tear down the local subscription and finalize to idle immediately — this
-    // stands even if the endpoint call below fails (design §6).
+    // Finalize the UI to idle immediately in every case — this stands even if
+    // the endpoint call below fails (design §6).
+    const finalizeIdle = () =>
+      setState((prev) => ({
+        ...prev,
+        status: "idle",
+        reconnecting: false,
+        activities: [],
+        streamingMarkdown: "",
+        turnId: null,
+      }));
+
+    if (turnId === null && inFlight) {
+      // Stop pressed BEFORE the `turn` frame landed. We have no id to stop yet,
+      // so DON'T abort (that would lose the id and leak a ghost turn). Arm a
+      // pending stop and keep this stream reading solely to capture the `turn`
+      // frame; the consume loop then fires the stop endpoint with that id.
+      pendingStopRef.current = true;
+      terminalRef.current = true;
+      reattachCountRef.current = 0;
+      lastBodyRef.current = null;
+      finalizeIdle();
+      return;
+    }
+
+    // Tear down the local subscription and finalize to idle.
     abortRef.current?.abort();
     abortRef.current = null;
+    pendingStopRef.current = false;
     terminalRef.current = true;
     reattachCountRef.current = 0;
     lastBodyRef.current = null;
     turnIdRef.current = null;
-    setState((prev) => ({
-      ...prev,
-      status: "idle",
-      reconnecting: false,
-      activities: [],
-      streamingMarkdown: "",
-      turnId: null,
-    }));
+    finalizeIdle();
 
     if (turnId === null) return;
     // Explicit stop (BT-4): fire-and-forget. Include the guest session id so the
@@ -889,6 +953,7 @@ export function useSseClient(): UseSseClientReturn {
     turnIdRef.current = null;
     sessionIdRef.current = null;
     terminalRef.current = false;
+    pendingStopRef.current = false;
     reattachCountRef.current = 0;
     setState(INITIAL_STATE);
   }, []);
