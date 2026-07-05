@@ -82,7 +82,7 @@ struct InferencesView: View {
   private func confidenceBadge(_ confidence: Inference.Confidence) -> some View {
     Label {
       Text(confidence.label.uppercased())
-        .font(Theme.body(.caption2).weight(.semibold))
+        .font(Theme.body(.caption2, weight: .semibold))
     } icon: {
       Image(systemName: confidence.systemImage)
         .imageScale(.small)

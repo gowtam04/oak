@@ -73,6 +73,9 @@ struct ShowdownImportView: View {
           }
         }
       }
+      .scrollContentBackground(.hidden)
+      .background(Theme.canvas)
+      .listRowBackground(Theme.surface)
       .navigationTitle("Import team")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {

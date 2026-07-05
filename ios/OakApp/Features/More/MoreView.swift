@@ -35,7 +35,11 @@ struct MoreView: View {
         NavigationLink(value: destination) {
           row(for: destination)
         }
+        .listRowBackground(Theme.surface)
       }
+      .scrollContentBackground(.hidden)
+      .background(Theme.canvas)
+      .oakRedThread()
       .navigationTitle("More")
       .navigationDestination(for: MoreDestination.self) { destination in
         switch destination {

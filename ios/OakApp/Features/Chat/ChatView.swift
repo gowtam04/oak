@@ -128,6 +128,16 @@ struct ChatView: View {
     .navigationTitle("Oak")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
+      // The brand tile (§4.1) leading, so the Chat root reads as Oak the instant it
+      // opens. Tile-only: iOS 26 crops a wide toolbar item to a circular glass
+      // chip, so the full "Oak" wordmark lives in the empty-state hero instead.
+      // Only on the root (guest single thread); a pushed signed-in thread keeps the
+      // system back button leading.
+      if showsNewConversationButton {
+        ToolbarItem(placement: .topBarLeading) {
+          OakWordmarkLockup(showsWordmark: false)
+        }
+      }
       // The scope control (GS-C): the header's visible counterpart to the `scope`
       // SSE event and the ONLY interactive scope control (the Champions pill +
       // Account toggle are gone). Centered so it reads as the thread's scope, not
@@ -210,7 +220,7 @@ struct ChatView: View {
     } label: {
       HStack(spacing: 3) {
         Text(model.displayFormat.shortLabel)
-          .font(Theme.body(.footnote).weight(.semibold))
+          .font(Theme.body(.footnote, weight: .semibold))
         Image(systemName: "chevron.down")
           .font(.system(size: 9, weight: .bold))
       }
@@ -317,6 +327,7 @@ struct ChatView: View {
             .frame(minHeight: geo.size.height, alignment: .bottom)
           }
         }
+        .background(Theme.canvas)
         .scrollDismissesKeyboard(.interactively)
         // Keep the newest content in view as turns/tokens arrive (M-AC-2.2).
         .onChange(of: model.turns.count) { _, _ in scrollToBottom(proxy) }
@@ -400,28 +411,30 @@ struct ChatView: View {
   /// ``ExamplePrompts/pool`` on each appearance, mirroring the web starter prompts.
   private var emptyState: some View {
     VStack(spacing: Theme.Spacing.xl) {
-      OakBrandMark()
+      // The wordmark lockup hero (§5.1): the brand tile + Fredoka "Oak", the web
+      // landing page in the hand.
+      OakWordmarkLockup(tileSize: 48, titleStyle: .largeTitle, elevated: true)
 
       VStack(spacing: Theme.Spacing.sm) {
-        Text("Ask Oak")
-          .font(Theme.display(.title))
-          .foregroundStyle(Theme.textPrimary)
         Text("Every answer carries its reasoning, sources, and the generation it's based on.")
           .font(Theme.body(.subheadline))
           .foregroundStyle(Theme.textSecondary)
           .multilineTextAlignment(.center)
       }
 
-      VStack(spacing: Theme.Spacing.sm) {
+      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
         Text("Try asking")
           .instrumentLabel()
           .foregroundStyle(Theme.textSecondary)
-          .frame(maxWidth: Self.chipMaxWidth, alignment: .leading)
           .accessibilityAddTraits(.isHeader)
-        ForEach(Array(exampleQuestions.enumerated()), id: \.offset) { index, question in
-          exampleChip(question, index: index)
+        // A 2-column chip grid (web parity, §5.1).
+        LazyVGrid(columns: Self.chipColumns, spacing: Theme.Spacing.sm) {
+          ForEach(Array(exampleQuestions.enumerated()), id: \.offset) { index, question in
+            exampleChip(question, index: index)
+          }
         }
       }
+      .frame(maxWidth: Self.chipMaxWidth)
       .padding(.top, Theme.Spacing.xs)
     }
     .frame(maxWidth: .infinity)
@@ -434,15 +447,20 @@ struct ChatView: View {
     }
   }
 
-  /// The shared max-width the `TRY ASKING` label and every example chip snap to, so
-  /// the chip set reads as one aligned column and none wraps ragged (§4.01).
-  private static let chipMaxWidth: CGFloat = 320
+  /// The max-width the `TRY ASKING` label + chip grid snap to, so the 2-column
+  /// grid reads as one aligned cluster (§5.1).
+  private static let chipMaxWidth: CGFloat = 340
 
-  /// One example-question chip. Neutral `surfaceSunken` capsule with a hairline
-  /// separator border and `textPrimary` label (§4.01 — red is reserved for the
-  /// composer); tapping sends it as the next user turn and pulses the send button
-  /// once. Cascades in with a per-index stagger, collapsing to an instant appearance
-  /// under Reduce Motion.
+  /// Two flexible columns for the empty-state example-chip grid.
+  private static let chipColumns = [
+    GridItem(.flexible(), spacing: Theme.Spacing.sm),
+    GridItem(.flexible(), spacing: Theme.Spacing.sm),
+  ]
+
+  /// One example-question chip, styled with the Oak chip grammar (§4.6). Empty
+  /// state, so it presses **red-soft** (brand); tapping sends it as the next user
+  /// turn and pulses the send button once. Cascades in with a per-index stagger,
+  /// collapsing to an instant appearance under Reduce Motion.
   private func exampleChip(_ text: String, index: Int) -> some View {
     let shown = reduceMotion || emptyStateAppeared
     return Button {
@@ -454,18 +472,11 @@ struct ChatView: View {
       sendFollowUp(text)
     } label: {
       Text(text)
-        .font(Theme.body(.subheadline).weight(.medium))
-        .foregroundStyle(Theme.textPrimary)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: Self.chipMaxWidth)
-        .padding(.horizontal, Theme.Spacing.lg)
-        .padding(.vertical, Theme.Spacing.sm)
-        .background(Theme.surfaceSunken, in: Capsule())
-        .overlay(Capsule().strokeBorder(Theme.separator, lineWidth: 1))
-        .contentShape(Capsule())
+        .frame(maxWidth: .infinity)
     }
-    .buttonStyle(OakPressableButtonStyle())
+    .buttonStyle(.oakChip(.accent))
     .opacity(shown ? 1 : 0)
     .offset(y: shown ? 0 : 8)
     .animation(reduceMotion ? nil : Theme.Motion.staggered(index), value: emptyStateAppeared)
@@ -534,12 +545,17 @@ private struct UserMessageView: View {
         if !text.isEmpty {
           Text(text)
             .font(Theme.body(.body))
-            .foregroundStyle(Color.white)
+            .foregroundStyle(Theme.textPrimary)
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.vertical, Theme.Spacing.md)
-            // Flat accent fill, no gradient and no glow (§4.02): the bubble stays
-            // clearly "yours" without outshouting Oak's answer.
-            .background(Theme.accent, in: bubbleShape)
+            // The paper bubble (§4.3): a soft accent-tinted fill with an
+            // accent-tinted hairline and dark ink — clearly "yours" without
+            // outshouting Oak's answer, and paper-like to match the web recipe.
+            .background(Theme.userBubble, in: bubbleShape)
+            .overlay {
+              bubbleShape.strokeBorder(Theme.accent.opacity(0.28), lineWidth: 1)
+            }
+            .oakShadow(.card)
         }
         if imageCount > 0 {
           Label("\(imageCount) image(s) attached", systemImage: "photo")

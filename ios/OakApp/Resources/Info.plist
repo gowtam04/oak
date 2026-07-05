@@ -24,6 +24,20 @@
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<!-- Brand typefaces (Google Fonts, OFL) bundled under Resources/Fonts/ and
+	     registered here so `Font.custom` can resolve them by PostScript name:
+	     Fredoka (display), Nunito Sans (body), JetBrains Mono (instrument). -->
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fredoka-Medium.ttf</string>
+		<string>Fredoka-SemiBold.ttf</string>
+		<string>NunitoSans-Regular.ttf</string>
+		<string>NunitoSans-Medium.ttf</string>
+		<string>NunitoSans-SemiBold.ttf</string>
+		<string>NunitoSans-Bold.ttf</string>
+		<string>JetBrainsMono-Medium.ttf</string>
+		<string>JetBrainsMono-SemiBold.ttf</string>
+	</array>
 	<!-- Portrait-only (iPhone, M-CON-2): a chat/team-builder UI that matches the
 	     portrait App Store screenshots. -->
 	<key>UISupportedInterfaceOrientations</key>

@@ -187,8 +187,7 @@ struct AnswerCardView: View {
             Label("Compare in viewer", systemImage: "rectangle.split.2x1")
               .font(Theme.display(.footnote))
           }
-          .buttonStyle(.bordered)
-          .tint(Theme.accent)
+          .buttonStyle(.oakSecondary)
           .accessibilityHint("Opens a side-by-side comparison of these Pokémon")
         }
       }
@@ -224,8 +223,7 @@ struct AnswerCardView: View {
             Label("Open in viewer", systemImage: "rectangle.portrait.and.arrow.right")
               .font(Theme.display(.footnote))
           }
-          .buttonStyle(.bordered)
-          .tint(Theme.accent)
+          .buttonStyle(.oakSecondary)
           .accessibilityHint("Opens the damage calculation as a full artifact")
         }
       }
@@ -247,8 +245,7 @@ struct AnswerCardView: View {
             Label("Open team in viewer", systemImage: "rectangle.portrait.and.arrow.right")
               .font(Theme.display(.footnote))
           }
-          .buttonStyle(.bordered)
-          .tint(Theme.accent)
+          .buttonStyle(.oakSecondary)
           .accessibilityHint("Opens the proposed team as a full artifact")
         }
       }
@@ -549,8 +546,7 @@ private struct CredibilityStripView: View {
             onOpenEntity(parsed.kind, parsed.query)
           } label: {
             Text(citation.source)
-              .font(Theme.body(.footnote))
-              .fontWeight(.semibold)
+              .font(Theme.body(.footnote, weight: .semibold))
               .foregroundStyle(Theme.azure)
           }
           .buttonStyle(OakPressableButtonStyle())
@@ -558,8 +554,7 @@ private struct CredibilityStripView: View {
           .accessibilityHint("Opens this source's entity in the artifact viewer")
         } else {
           Text(citation.source)
-            .font(Theme.body(.footnote))
-            .fontWeight(.semibold)
+            .font(Theme.body(.footnote, weight: .semibold))
             .foregroundStyle(Theme.textPrimary)
         }
         Text(citation.detail)

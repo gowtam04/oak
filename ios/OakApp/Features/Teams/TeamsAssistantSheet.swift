@@ -113,8 +113,7 @@ struct TeamsAssistantSheet: View {
 
       FlexibleChips(items: TeamsAssistantViewModel.suggestions) { suggestion in
         Button(suggestion) { model.send(suggestion) }
-          .buttonStyle(.bordered)
-          .controlSize(.small)
+          .buttonStyle(.oakChip(.azure))
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -183,7 +182,7 @@ struct TeamsAssistantSheet: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: 10) {
       Text("Proposed changes")
-        .font(Theme.body(.subheadline).weight(.semibold))
+        .font(Theme.body(.subheadline, weight: .semibold))
 
       VStack(alignment: .leading, spacing: 6) {
         ForEach(Array(describeTeamPatch(patch).enumerated()), id: \.offset) { _, line in
@@ -202,17 +201,15 @@ struct TeamsAssistantSheet: View {
       HStack(spacing: 12) {
         if model.appliedTurnIds.contains(turn.id) {
           Label("Applied to draft", systemImage: "checkmark.circle.fill")
-            .font(Theme.body(.footnote).weight(.medium))
+            .font(Theme.body(.footnote, weight: .medium))
             .foregroundStyle(Theme.success)
           if model.lastApplied?.turnId == turn.id {
             Button("Undo") { model.undo() }
-              .buttonStyle(.bordered)
-              .controlSize(.small)
+              .buttonStyle(.oakSecondary)
           }
         } else {
           Button("Apply to draft") { model.apply(turn) }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            .buttonStyle(.oakPrimary)
         }
       }
     }
@@ -257,7 +254,7 @@ struct TeamsAssistantSheet: View {
             .fill(model.canSend(input) ? Theme.accent : Theme.surfaceSunken)
             .frame(width: 38, height: 38)
           Image(systemName: "arrow.up")
-            .font(Theme.body(.subheadline).weight(.semibold))
+            .font(Theme.body(.subheadline, weight: .semibold))
             .foregroundStyle(model.canSend(input) ? .white : Theme.textMuted)
         }
       }

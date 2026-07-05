@@ -52,6 +52,7 @@ struct ChatTabView: View {
         model: HistoryListViewModel(history: services.history),
         onSelect: { path.append(.existing($0)) }
       )
+      .oakRedThread()
       .navigationTitle("Chats")
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
@@ -77,6 +78,7 @@ struct ChatTabView: View {
         showsNewConversationButton: true,
         signInAction: { showSignIn = true }
       )
+      .oakRedThread()
     }
     .sheet(isPresented: $showSignIn) {
       AuthView(model: AuthViewModel(auth: services.auth, appState: appState))

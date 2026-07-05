@@ -6,13 +6,20 @@ import UIKit
 /// Colors are sourced from the web design system (`web/src/app/globals.css`) and
 /// re-expressed natively. Brand/semantic colors adapt to light & dark via a
 /// dynamic `UIColor` provider. Surfaces use the **warm neutral ramp** — a brand
-/// paper identity (`canvas` #FBF9F7 / #171412, `surface` #FFFFFF / #211D1A,
-/// `surfaceSunken` #F4F0EC / #121009) — rather than raw system semantics, so
-/// light mode carries Oak's paper warmth and dark mode avoids the temperature
-/// seam that appeared when the warm header band sat against a pure-black canvas.
-/// Text and separator remain on system semantics so they continue to inherit
-/// Dynamic Type contrast, increased-contrast, and dark-mode behaviour
-/// automatically (M-AC-UI1.2, M-AC-UI1.3, M-AC-UI1.4).
+/// paper identity (`canvas` #FBF7F4 / #161311, `surface` #FFFFFF / #211C19,
+/// `surfaceSunken` #F7F1EB / #12100E) reconciled 1:1 with the web tokens.
+///
+/// Text and separator now use the web's **warm ink ramp** (adaptive themed
+/// colors, e.g. `textPrimary` #3D362F / #E4DAD0, `separator` #E9E0D8 / #3A332E)
+/// rather than Apple's cool-gray system semantics — the temperature match is
+/// part of "feels like Oak." Contrast was designed into the ramp; Dynamic Type
+/// still scales via the custom-font `relativeTo:` anchors (M-AC-UI1.2–1.4).
+///
+/// Typography is the loudest brand carrier: `display()` is **Fredoka**,
+/// `body()` is **Nunito Sans**, `mono()`/`instrument()` are **JetBrains Mono**,
+/// each `Font.custom(_:size:relativeTo:)` so Dynamic Type keeps scaling. Custom
+/// fonts don't synthesize weights reliably, so the weight-aware overloads switch
+/// the PostScript face per weight rather than calling `.weight()`.
 ///
 /// Color is never the sole carrier of meaning (M-AC-UI9.3) — that pairing with
 /// text/icon is the calling view's responsibility; `Theme` only supplies the
@@ -34,34 +41,70 @@ enum Theme {
   static let danger = adaptive(light: 0xE0394A, dark: 0xFF5C6B)
   static let info = adaptive(light: 0x3AA0E3, dark: 0x5BB4EF)
 
+  // MARK: Soft tints (faint fills for chips, callouts, selection washes)
+
+  /// Faint accent fill — empty-state chip press, red callouts.
+  static let accentSoft = adaptive(light: 0xFCEBEB, dark: 0x3A1E1E)
+  static let sunflowerSoft = adaptive(light: 0xFDF1DC, dark: 0x3A2E14)
+  /// Faint azure fill — interaction focus glow, in-thread chip press, links.
+  static let azureSoft = adaptive(light: 0xE6F2FB, dark: 0x16263A)
+  static let successSoft = adaptive(light: 0xE3F6EC, dark: 0x10301F)
+  static let warningSoft = adaptive(light: 0xFDEFD9, dark: 0x3A2A0F)
+  static let dangerSoft = adaptive(light: 0xFCE8EA, dark: 0x3A1518)
+
+  /// The user chat bubble's paper fill — the web's `color-mix(accent-soft 55%,
+  /// surface)` precomputed per theme (§4.3). Softer and more paper-like than a
+  /// flat accent fill; paired with an accent-tinted hairline and `textPrimary` ink.
+  static let userBubble = adaptive(light: 0xFDF2F1, dark: 0x2E1D1B)
+
   // MARK: Surfaces (warm neutral ramp — brand paper identity)
 
   /// The screen/chat canvas — the base layer every screen sits on.
-  /// Light: #FBF9F7 (warm paper); dark: #171412 (warm near-black).
-  static let canvas = adaptive(light: 0xFBF9F7, dark: 0x171412)
+  /// Light: #FBF7F4 (warm paper); dark: #161311 (warm near-black).
+  static let canvas = adaptive(light: 0xFBF7F4, dark: 0x161311)
 
   /// Legacy alias for `canvas` — kept so existing call sites resolve without edits.
   /// Prefer `canvas` for new call sites.
   static let background = canvas
 
   /// Card / modal surface — lifts one level above `canvas`.
-  /// Light: #FFFFFF; dark: #211D1A.
-  static let surface = adaptive(light: 0xFFFFFF, dark: 0x211D1A)
+  /// Light: #FFFFFF; dark: #211C19.
+  static let surface = adaptive(light: 0xFFFFFF, dark: 0x211C19)
 
   /// Floating / tooltip surface — lifts above `surface`.
-  /// Light: #FFFFFF; dark: #26211D.
-  static let surfaceRaised = adaptive(light: 0xFFFFFF, dark: 0x26211D)
+  /// Light: #FFFFFF; dark: #2A2420.
+  static let surfaceRaised = adaptive(light: 0xFFFFFF, dark: 0x2A2420)
 
   /// Recessed well — inputs, search bars, inner wells.
-  /// Light: #F4F0EC; dark: #121009.
-  static let surfaceSunken = adaptive(light: 0xF4F0EC, dark: 0x121009)
+  /// Light: #F7F1EB; dark: #12100E.
+  static let surfaceSunken = adaptive(light: 0xF7F1EB, dark: 0x12100E)
 
-  // MARK: Text & separator (system semantics — Dynamic Type & contrast for free)
+  // MARK: Text & separator (warm ink ramp — mirrors the web tokens)
 
-  static let separator = Color(uiColor: .separator)
-  static let textPrimary = Color(uiColor: .label)
-  static let textSecondary = Color(uiColor: .secondaryLabel)
-  static let textMuted = Color(uiColor: .tertiaryLabel)
+  /// Hairline dividers, card borders. Web `--border`.
+  static let separator = adaptive(light: 0xE9E0D8, dark: 0x3A332E)
+  /// Alias of `separator` for call sites that read a "border" role.
+  static let border = separator
+  /// A stronger hairline — button/composer outlines, emphasized edges.
+  static let borderStrong = adaptive(light: 0xD8CCC1, dark: 0x4E453F)
+
+  /// Emphasized ink — headings, wordmark, verdict. Web `--text-strong`.
+  static let textStrong = adaptive(light: 0x2A2521, dark: 0xF5EFE9)
+  /// Default body ink. Web `--text`.
+  static let textPrimary = adaptive(light: 0x3D362F, dark: 0xE4DAD0)
+  /// Secondary rows / captions. Web `--text-muted`.
+  static let textSecondary = adaptive(light: 0x6E625A, dark: 0xB7A99C)
+  /// Faint labels / disabled ink. Web `--text-faint`.
+  static let textMuted = adaptive(light: 0x94867A, dark: 0x8A7D72)
+
+  /// Overlay scrim behind sheets/dialogs — warm, semi-opaque.
+  static let scrim = Color(
+    uiColor: UIColor { traits in
+      traits.userInterfaceStyle == .dark
+        ? UIColor(red: 8 / 255, green: 6 / 255, blue: 5 / 255, alpha: 0.6)
+        : UIColor(red: 42 / 255, green: 37 / 255, blue: 33 / 255, alpha: 0.4)
+    }
+  )
 
   // MARK: Corner radii (brand favors generous rounding)
 
@@ -95,38 +138,78 @@ enum Theme {
     static let xxl: CGFloat = 32
   }
 
-  // MARK: Typography (Dynamic Type styles only — no fixed point sizes)
+  // MARK: Typography (brand faces via Font.custom; Dynamic Type via relativeTo)
 
-  /// Display face — rounded + semibold to echo Oak's "playful chrome".
+  /// A body/mono weight, resolved to a concrete PostScript face. Custom fonts
+  /// don't synthesize `.weight()` reliably, so weight is a *face switch*.
+  enum Weight {
+    case regular, medium, semibold, bold
+  }
+
+  /// The point size iOS assigns each Dynamic Type text style at the standard
+  /// content size — used as the `Font.custom` base so `relativeTo:` scales from
+  /// the correct anchor.
+  static func pointSize(for style: Font.TextStyle) -> CGFloat {
+    switch style {
+    case .largeTitle: 34
+    case .title: 28
+    case .title2: 22
+    case .title3: 20
+    case .headline: 17
+    case .body: 17
+    case .callout: 16
+    case .subheadline: 15
+    case .footnote: 13
+    case .caption: 12
+    case .caption2: 11
+    @unknown default: 17
+    }
+  }
+
+  /// Display face — **Fredoka SemiBold** for the "playful chrome": wordmark,
+  /// screen titles, markdown headings, entity names.
   static func display(_ style: Font.TextStyle = .title) -> Font {
-    .system(style, design: .rounded).weight(.semibold)
+    .custom("Fredoka-SemiBold", size: pointSize(for: style), relativeTo: style)
   }
 
-  /// Body face — the system default at the given text style.
-  static func body(_ style: Font.TextStyle = .body) -> Font {
-    .system(style)
+  /// Body face — **Nunito Sans**. `weight` switches the static face (regular /
+  /// medium / semibold / bold) since custom fonts don't take `.weight()`.
+  static func body(_ style: Font.TextStyle = .body, weight: Weight = .regular) -> Font {
+    .custom(nunitoFace(weight), size: pointSize(for: style), relativeTo: style)
   }
 
-  /// Monospaced face — for "precise data" (stats, dex numbers, damage rolls).
-  static func mono(_ style: Font.TextStyle = .body) -> Font {
-    .system(style, design: .monospaced)
+  /// Monospaced face — **JetBrains Mono** for "precise data" (stats, dex
+  /// numbers, damage rolls). `weight` switches Medium ↔ SemiBold.
+  static func mono(_ style: Font.TextStyle = .body, weight: Weight = .medium) -> Font {
+    let face = (weight == .semibold || weight == .bold)
+      ? "JetBrainsMono-SemiBold" : "JetBrainsMono-Medium"
+    return .custom(face, size: pointSize(for: style), relativeTo: style)
   }
 
   /// Answer-lead role — the verdict at the top of every answer card.
-  /// SF Pro semibold `.title3` (20 pt base, scales with Dynamic Type).
-  /// Apply to the first paragraph of Oak's answer — it is the largest text
-  /// element in any conversation and should land as the editorial masthead.
+  /// **Nunito Sans Bold 22** relative to `.title3`, so it scales with Dynamic
+  /// Type. It is the largest text in any conversation — the editorial masthead.
   static func answerLead() -> Font {
-    .system(.title3).weight(.semibold)
+    .custom("NunitoSans-Bold", size: 22, relativeTo: .title3)
   }
 
-  /// Instrument voice — mono semibold, typically `.caption2` (11 pt base).
-  /// Uppercase with 0.8pt tracking (see `instrumentLabel` View extension) for
-  /// scope tags (`CHAMPIONS · REG M-B`), tool-trail labels (`GET_POKEMON ·
-  /// GARCHOMP`), section heads (`BASE STATS`, `SOURCES · 1`), and dex-number
-  /// captions. Pass a wider `style` when the context needs more breathing room.
+  /// Instrument voice — **JetBrains Mono SemiBold**, typically `.caption2`
+  /// (11 pt base). Uppercase with 0.8pt tracking (see `instrumentLabel` View
+  /// extension) for scope tags (`CHAMPIONS · REG M-B`), tool-trail labels
+  /// (`GET_POKEMON · GARCHOMP`), section heads (`BASE STATS`, `SOURCES · 1`),
+  /// and dex-number captions. Pass a wider `style` for more breathing room.
   static func instrument(_ style: Font.TextStyle = .caption2) -> Font {
-    .system(style, design: .monospaced).weight(.semibold)
+    .custom("JetBrainsMono-SemiBold", size: pointSize(for: style), relativeTo: style)
+  }
+
+  /// Nunito Sans PostScript face for a `Weight`.
+  private static func nunitoFace(_ weight: Weight) -> String {
+    switch weight {
+    case .regular: "NunitoSans-Regular"
+    case .medium: "NunitoSans-Medium"
+    case .semibold: "NunitoSans-SemiBold"
+    case .bold: "NunitoSans-Bold"
+    }
   }
 
   // MARK: Pokémon type colors (theme-stable, mirrors the 18 web type solids)
@@ -196,6 +279,23 @@ enum Theme {
   /// A theme-stable color from a 0xRRGGBB value.
   private static func solid(_ rgb: UInt32) -> Color {
     Color(uiColor: UIColor(rgb: rgb))
+  }
+
+  // MARK: UIKit bridges (for UIBarAppearance — nav/tab bars)
+
+  /// Dynamic `UIColor` versions of the tokens the UIKit bar appearance needs
+  /// (`configureWithOpaqueBackground` takes `UIColor`, not SwiftUI `Color`).
+  /// Kept in lock-step with the SwiftUI tokens above.
+  static let uiCanvas = uiAdaptive(light: 0xFBF7F4, dark: 0x161311)
+  static let uiSeparator = uiAdaptive(light: 0xE9E0D8, dark: 0x3A332E)
+  static let uiAccent = uiAdaptive(light: 0xEE5A5A, dark: 0xFF6B6B)
+  static let uiTextSecondary = uiAdaptive(light: 0x6E625A, dark: 0xB7A99C)
+  static let uiTextStrong = uiAdaptive(light: 0x2A2521, dark: 0xF5EFE9)
+
+  private static func uiAdaptive(light: UInt32, dark: UInt32) -> UIColor {
+    UIColor { traits in
+      traits.userInterfaceStyle == .dark ? UIColor(rgb: dark) : UIColor(rgb: light)
+    }
   }
 }
 

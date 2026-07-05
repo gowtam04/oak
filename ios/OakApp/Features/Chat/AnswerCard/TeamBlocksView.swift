@@ -124,8 +124,7 @@ struct TeamBlocksView: View {
           .font(Theme.display(.subheadline))
           .frame(maxWidth: .infinity)
       }
-      .buttonStyle(.borderedProminent)
-      .tint(Theme.accent)
+      .buttonStyle(.oakPrimary)
       .accessibilityHint("Save this proposed team to your Teams")
     }
   }
@@ -136,7 +135,7 @@ struct TeamBlocksView: View {
       VStack(alignment: .leading, spacing: 2) {
         Label("Proposed team", systemImage: "person.3.sequence.fill")
           .labelStyle(.titleAndIcon)
-          .font(Theme.body(.caption).weight(.semibold))
+          .font(Theme.body(.caption, weight: .semibold))
           .foregroundStyle(Theme.accent)
         Text(team.name)
           .font(Theme.display(.headline))
@@ -166,7 +165,7 @@ struct TeamBlocksView: View {
       VStack(alignment: .leading, spacing: 2) {
         // Species @ item (the headline line of the set).
         (Text(isEmpty ? "Empty slot" : species)
-          .font(Theme.body(.subheadline).weight(.semibold))
+          .font(Theme.body(.subheadline, weight: .semibold))
           .foregroundStyle(isEmpty ? Theme.textMuted : Theme.textPrimary)
           + itemSuffix(member.item))
           .fixedSize(horizontal: false, vertical: true)
@@ -240,7 +239,7 @@ struct TeamBlocksView: View {
   private func warningsSection(_ warnings: [TeamWarning]) -> some View {
     VStack(alignment: .leading, spacing: 6) {
       Label("Legality", systemImage: "checklist")
-        .font(Theme.body(.caption).weight(.semibold))
+        .font(Theme.body(.caption, weight: .semibold))
         .foregroundStyle(Theme.textSecondary)
 
       ForEach(Array(warnings.enumerated()), id: \.offset) { _, warning in
@@ -286,7 +285,8 @@ struct TeamBlocksView: View {
           .accessibilityHidden(true)
         (Text("Saved to your Teams: ")
           .foregroundStyle(Theme.textSecondary)
-          + Text(team.name).fontWeight(.semibold).foregroundStyle(Theme.textPrimary))
+          + Text(team.name).font(Theme.body(.subheadline, weight: .semibold))
+          .foregroundStyle(Theme.textPrimary))
           .font(Theme.body(.subheadline))
           .fixedSize(horizontal: false, vertical: true)
         Spacer(minLength: 8)
@@ -302,8 +302,7 @@ struct TeamBlocksView: View {
         Label("Open in viewer", systemImage: "rectangle.portrait.and.arrow.right")
           .font(Theme.display(.footnote))
       }
-      .buttonStyle(.bordered)
-      .tint(Theme.accent)
+      .buttonStyle(.oakSecondary)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(14)
@@ -319,7 +318,7 @@ struct TeamBlocksView: View {
   /// A muted format pill (e.g. "Champions" / "Gen 9").
   private func formatBadge(_ format: Format) -> some View {
     Text(format.shortLabel)
-      .font(Theme.body(.caption2).weight(.semibold))
+      .font(Theme.body(.caption2, weight: .semibold))
       .lineLimit(1)
       .padding(.horizontal, 8)
       .padding(.vertical, 3)

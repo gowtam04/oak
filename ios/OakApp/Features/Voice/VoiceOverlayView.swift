@@ -74,7 +74,7 @@ struct VoiceOverlayView: View {
   private func captionRow(who: String, text: String, isPrimary: Bool) -> some View {
     VStack(alignment: .leading, spacing: 2) {
       Text(who)
-        .font(Theme.body(.caption).weight(.semibold))
+        .font(Theme.body(.caption, weight: .semibold))
         .foregroundStyle(Theme.textMuted)
       Text(text)
         .font(Theme.body(.body))

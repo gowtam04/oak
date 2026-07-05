@@ -71,25 +71,19 @@ struct SuggestionsView: View {
 
   // MARK: Chip
 
-  /// One suggestion as an accent-tinted, bordered capsule button. The text wraps
-  /// (never truncates) so a long suggestion grows the chip instead of clipping.
+  /// One suggestion as an Oak chip (§4.6). In-thread, so it presses **azure**
+  /// (interaction). The text wraps (never truncates) so a long suggestion grows
+  /// the chip instead of clipping.
   private func chip(_ text: String) -> some View {
     Button {
       Haptics.tap()
       onSelect(text)
     } label: {
       Text(text)
-        .font(Theme.body(.subheadline).weight(.medium))
-        .foregroundStyle(Theme.accent)
         .multilineTextAlignment(.leading)
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(Theme.accent.opacity(0.12), in: Capsule())
-        .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1))
-        .contentShape(Capsule())
     }
-    .buttonStyle(OakPressableButtonStyle())
+    .buttonStyle(.oakChip(.azure))
     .accessibilityLabel("Ask: \(text)")
     .accessibilityHint("Sends this as your next message")
   }

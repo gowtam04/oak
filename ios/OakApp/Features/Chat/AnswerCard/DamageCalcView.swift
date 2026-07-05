@@ -74,7 +74,7 @@ struct DamageCalcView: View {
   private var estimateBadge: some View {
     Label {
       Text("ESTIMATE")
-        .font(Theme.body(.caption2).weight(.bold))
+        .font(Theme.body(.caption2, weight: .bold))
     } icon: {
       Image(systemName: "plusminus")
         .imageScale(.small)
@@ -116,7 +116,7 @@ struct DamageCalcView: View {
         .multilineTextAlignment(.trailing)
     } else {
       Text(value.displayText)
-        .font(Theme.mono(.body).weight(.semibold))
+        .font(Theme.mono(.body, weight: .semibold))
         .foregroundStyle(Theme.textPrimary)
         .multilineTextAlignment(.trailing)
         .fixedSize(horizontal: false, vertical: true)
@@ -130,7 +130,7 @@ struct DamageCalcView: View {
   private var assumptionsSection: some View {
     VStack(alignment: .leading, spacing: 4) {
       Text("Assumptions")
-        .font(Theme.body(.caption).weight(.semibold))
+        .font(Theme.body(.caption, weight: .semibold))
         .foregroundStyle(Theme.textSecondary)
 
       ForEach(sortedEntries(damageCalc.assumptions), id: \.key) { entry in
@@ -172,7 +172,7 @@ struct DamageCalcView: View {
         .padding(.top, 6)
     } label: {
       Label("Show the math", systemImage: "function")
-        .font(Theme.body(.footnote).weight(.medium))
+        .font(Theme.body(.footnote, weight: .medium))
         .foregroundStyle(Theme.textSecondary)
     }
     .tint(Theme.textSecondary)
@@ -214,7 +214,7 @@ private struct CountUpIntText: View {
 
   var body: some View {
     Text("\(displayed)")
-      .font(Theme.mono(.title3).weight(.semibold))
+      .font(Theme.mono(.title3, weight: .semibold))
       .foregroundStyle(Theme.textPrimary)
       .contentTransition(.numericText())
       .fixedSize(horizontal: false, vertical: true)

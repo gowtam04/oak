@@ -83,6 +83,8 @@ struct ConversationListView: View {
         }
       }
       .listStyle(.plain)
+      .scrollContentBackground(.hidden)
+      .background(Theme.canvas)
       .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.conversations)
       .refreshable { await model.reload() }
       .overlay(alignment: .bottom) {
@@ -115,7 +117,17 @@ struct ConversationListView: View {
       ConversationRow(conversation: conversation)
     }
     .buttonStyle(.plain)
-    .listRowBackground(conversation.pinned ? Theme.accent.opacity(0.05) : nil)
+    // A 3pt red rail marks the pinned/active row (never color alone — the pin
+    // glyph in the row states it too, §5.4). The rail overlays the row background
+    // so nothing shifts when it appears.
+    .listRowBackground(
+      ZStack(alignment: .leading) {
+        conversation.pinned ? Theme.accentSoft : Theme.surface
+        if conversation.pinned {
+          Rectangle().fill(Theme.accent).frame(width: 3)
+        }
+      }
+    )
     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
       Button(role: .destructive) {
         Task { await model.delete(conversation) }
@@ -163,9 +175,12 @@ struct ConversationListView: View {
     List {
       ForEach(0..<6, id: \.self) { _ in
         SkeletonListRow()
+          .listRowBackground(Theme.surface)
       }
     }
     .listStyle(.plain)
+    .scrollContentBackground(.hidden)
+    .background(Theme.canvas)
   }
 
   /// Format filter spanning all six scopes (`Format.knownCases`) — mirrors the
@@ -213,6 +228,7 @@ struct ConversationListView: View {
       .padding(.horizontal, 32)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(Theme.canvas)
   }
 
   private var searchActive: Bool {
@@ -248,7 +264,7 @@ private struct ConversationRow: View {
               .accessibilityLabel("Pinned")
           }
           Text(conversation.title)
-            .font(Theme.body(.body).weight(.medium))
+            .font(Theme.body(.body, weight: .medium))
             .lineLimit(1)
         }
         HStack(spacing: 6) {
