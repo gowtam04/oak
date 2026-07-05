@@ -70,8 +70,6 @@ struct ComposerView: View {
   var body: some View {
     @Bindable var model = model
     VStack(spacing: 8) {
-      controlsRow(model: model)
-
       if let attachNote {
         Text(attachNote)
           .font(Theme.body(.caption))
@@ -83,6 +81,11 @@ struct ComposerView: View {
       thumbnailRow(model: model)
 
       HStack(alignment: .bottom, spacing: 8) {
+        attachControls(model: model)
+        if Self.showsVoiceControl {
+          voiceControl(model: model)
+        }
+
         TextField("Ask Oak a Pokémon question…", text: $model.composerText, axis: .vertical)
           .font(Theme.body(.body))
           .lineLimit(1...5)
@@ -177,17 +180,11 @@ struct ComposerView: View {
     remainingSlots > 0 && !model.isStreaming
   }
 
-  // MARK: Controls row — image attach
-
-  @ViewBuilder
-  private func controlsRow(model: ChatViewModel) -> some View {
-    HStack(spacing: 12) {
-      Spacer(minLength: 0)
-
-      attachControls(model: model)
-      voiceControl(model: model)
-    }
-  }
+  /// Voice mode is temporarily hidden from the composer (kept implemented); flip to
+  /// re-show. Everything downstream (``voiceControl(model:)``, ``handleMicTap()``,
+  /// the mic/sign-in alerts, `onVoice`/`voiceReady`/`onSignInNudge`) stays wired and
+  /// compiled — this is the single gate.
+  private static let showsVoiceControl = false
 
   // MARK: Image attach control (one menu → photo library / camera)
 
@@ -216,6 +213,7 @@ struct ComposerView: View {
       Image(systemName: "paperclip")
         .font(Theme.body(.title3))
         .symbolRenderingMode(.hierarchical)
+        .frame(width: 38, height: 38)
     }
     .tint(Theme.accent)
     .disabled(!canAttachMore)
