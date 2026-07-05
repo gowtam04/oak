@@ -10,8 +10,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import EntityIndexList from "@/components/reference/EntityIndexList";
-import type { EntityIndexGroup } from "@/components/reference/EntityIndexList";
+import RefRosterList from "@/components/reference/RefRosterList";
+import type { RefRosterGroup } from "@/components/reference/RefRosterList";
 import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
 import {
@@ -24,7 +24,7 @@ export const runtime = "nodejs";
 export const revalidate = 86400;
 
 /** The "learned by" roster as a single sorted index group. */
-function holderGroups(data: AbilityPageData): EntityIndexGroup[] {
+function holderGroups(data: AbilityPageData): RefRosterGroup[] {
   if (data.learnedBy.length === 0) return [];
   const entries = [...data.learnedBy]
     .sort((a, b) => a.displayName.localeCompare(b.displayName))
@@ -70,30 +70,30 @@ export default async function AbilityDetailPage({
         <span>{data.displayName}</span>
       </nav>
 
-      <div className="ref-hero">
-        <div>
-          <h1 className="ref-hero__title">{data.displayName}</h1>
+      <div className="ref-card ref-detail-hero">
+        <div className="ref-detail-hero__meta">
+          <h1 className="ref-detail-hero__title">{data.displayName}</h1>
         </div>
       </div>
 
       {effect && (
-        <section className="ref-section">
-          <h2 className="ref-section__title">Effect</h2>
+        <section className="ref-card ref-detail-section">
+          <h2 className="ref-detail-section__title">Effect</h2>
           <p className="ref-intro">{effect}</p>
         </section>
       )}
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">Availability</h2>
+      <section className="ref-card ref-detail-section">
+        <h2 className="ref-detail-section__title">Availability</h2>
         <FormatChips formats={data.availability} />
       </section>
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">
+      <section className="ref-card ref-detail-section">
+        <h2 className="ref-detail-section__title">
           Pokémon with {data.displayName} ({data.learnedBy.length})
         </h2>
         {data.learnedBy.length > 0 ? (
-          <EntityIndexList groups={holderGroups(data)} />
+          <RefRosterList groups={holderGroups(data)} />
         ) : (
           <p className="ref-intro">
             No Pokémon in this scope have {data.displayName}.
@@ -101,9 +101,7 @@ export default async function AbilityDetailPage({
         )}
       </section>
 
-      <section className="ref-section">
-        <AskOakCta prompt={`Tell me about ${data.displayName}`} />
-      </section>
+      <AskOakCta prompt={`Tell me about ${data.displayName}`} />
     </main>
   );
 }

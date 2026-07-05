@@ -23,7 +23,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import type { OakDb } from "@/data/db";
 import { STANDARD_FORMAT } from "@/data/formats";
 import type { MetaFormat } from "@/data/meta-formats";
-import { meta_snapshot, meta_usage, searchable_names } from "@/data/schema";
+import { meta_snapshot, meta_usage, pokemon, searchable_names } from "@/data/schema";
 import type {
   MetaCounterUsage,
   MetaMoveUsage,
@@ -256,4 +256,26 @@ export async function speciesWithDexPage(
       ),
     );
   return new Set(rows.map((r) => r.slug));
+}
+
+/**
+ * Sprite URLs for `species` slugs, read off the `scarlet-violet` `pokemon`
+ * table (same format {@link speciesWithDexPage} checks) — a sibling lookup,
+ * not a join with that function, since a leaderboard species can have art
+ * (`pokemon` row) without a resolvable dex PAGE (`searchable_names` row) or
+ * vice versa. Absent species are simply omitted from the returned Map, not
+ * mapped to `null` — callers do the `?? null` at the call site.
+ */
+export async function speciesSpriteUrls(
+  db: OakDb,
+  species: string[],
+): Promise<Map<string, string>> {
+  if (species.length === 0) return new Map();
+  const rows = await db
+    .select({ id: pokemon.id, sprite_url: pokemon.sprite_url })
+    .from(pokemon)
+    .where(
+      and(eq(pokemon.format, STANDARD_FORMAT), inArray(pokemon.id, species)),
+    );
+  return new Map(rows.map((r) => [r.id, r.sprite_url]));
 }

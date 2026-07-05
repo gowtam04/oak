@@ -598,8 +598,6 @@ export default function Home() {
                     activeId={sessionId}
                     query={conversations.query}
                     onQueryChange={conversations.setQuery}
-                    formatFilter={conversations.formatFilter}
-                    onFormatFilterChange={conversations.setFormatFilter}
                     onNewChat={handleNewChat}
                     onOpen={handleOpenConversation}
                     onRename={conversations.rename}

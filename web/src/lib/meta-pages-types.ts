@@ -73,6 +73,8 @@ export interface MetaLeaderboardRow {
   deltaPct: number | null;
   /** True when this species resolves a `/pokedex/<slug>` page (scarlet-violet). */
   hasDexPage: boolean;
+  /** The `scarlet-violet` `pokemon` row's sprite, or null when none resolves. */
+  spriteUrl: string | null;
 }
 
 /**

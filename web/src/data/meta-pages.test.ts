@@ -76,6 +76,11 @@ describe("meta-pages loaders (gen9ou fixture)", () => {
       expect(kingambit.hasDexPage).toBe(false);
       const garchomp = view.rows.find((r) => r.species === "garchomp")!;
       expect(garchomp.hasDexPage).toBe(true);
+
+      // spriteUrl: garchomp has a scarlet-violet `pokemon` row (tools fixture);
+      // the other fixture species (only seeded into meta_usage) don't.
+      expect(kingambit.spriteUrl).toBeNull();
+      expect(garchomp.spriteUrl).toBe("https://img.example/sprite/445.png");
     });
 
     it("an explicit synced month is honored verbatim", async () => {

@@ -18,6 +18,7 @@ import {
   metaSnapshot,
   metaSpeciesDetail,
   metaSpeciesTrend,
+  speciesSpriteUrls,
   speciesWithDexPage,
 } from "./meta-repo";
 
@@ -199,6 +200,18 @@ describe("meta-repo (gen9ou fixture)", () => {
 
     it("returns an empty set for []", async () => {
       expect(await speciesWithDexPage(db, [])).toEqual(new Set());
+    });
+  });
+
+  describe("speciesSpriteUrls", () => {
+    it("resolves a sprite for a species with a scarlet-violet pokemon row (garchomp, tools fixture)", async () => {
+      const urls = await speciesSpriteUrls(db, ["garchomp", "kingambit"]);
+      expect(urls.get("garchomp")).toBe("https://img.example/sprite/445.png");
+      expect(urls.has("kingambit")).toBe(false);
+    });
+
+    it("returns an empty map for []", async () => {
+      expect(await speciesSpriteUrls(db, [])).toEqual(new Map());
     });
   });
 });

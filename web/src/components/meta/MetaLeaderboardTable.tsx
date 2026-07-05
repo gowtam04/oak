@@ -1,11 +1,16 @@
 /**
- * MetaLeaderboardTable — the `/meta/[format]` ranked usage table: rank, name
- * (linked to its Pokédex entry when a slug resolved, plain text otherwise —
- * B-5 species names don't always map onto the indexed roster), a proportional
- * usage bar (width % of the highest `usagePct` in THIS table, unlike
- * `StatsTable`'s fixed 255 ceiling — a leaderboard's scale is relative to
- * its own top row, not an absolute max), and a month-over-month delta cell.
+ * MetaLeaderboardTable — the `/meta/[format]` ranked usage table: rank, a
+ * sprite (server-joined `spriteUrl`, animated-Showdown-guess fallback, a
+ * neutral placeholder when neither resolves — B-5 species don't all have art
+ * in the `scarlet-violet` index), name (linked to its Pokédex entry when a
+ * slug resolved, plain text otherwise), a proportional usage bar (width % of
+ * the highest `usagePct` in THIS table, unlike `StatsTable`'s fixed 255
+ * ceiling — a leaderboard's scale is relative to its own top row, not an
+ * absolute max), and a month-over-month delta cell.
  */
+
+import SpriteImg from "@/components/SpriteImg";
+import { guessShowdownAniSpriteUrl } from "@/lib/sprites";
 
 export interface MetaLeaderboardRow {
   rank: number;
@@ -13,6 +18,10 @@ export interface MetaLeaderboardRow {
   href: string | null;
   usagePct: number;
   deltaPct: number | null;
+  /** The species slug — used only to compute the Showdown-guess sprite fallback. */
+  species: string;
+  /** The `scarlet-violet` `pokemon` row's sprite, or null when none resolves. */
+  spriteUrl: string | null;
 }
 
 export interface MetaLeaderboardTableProps {
@@ -84,11 +93,28 @@ export default function MetaLeaderboardTable({
             >
               <td className="ref-meta-table__rank mono-num">{row.rank}</td>
               <td className="ref-meta-table__name">
-                {row.href ? (
-                  <a href={row.href}>{row.name}</a>
-                ) : (
-                  <span>{row.name}</span>
-                )}
+                <span className="ref-meta-table__name-inner">
+                  {row.spriteUrl ? (
+                    <SpriteImg
+                      src={row.spriteUrl}
+                      fallbackSrc={guessShowdownAniSpriteUrl(row.species)}
+                      alt={row.name}
+                      width={32}
+                      height={32}
+                      className="ref-meta-table__sprite"
+                    />
+                  ) : (
+                    <span
+                      className="ref-meta-table__sprite-placeholder"
+                      aria-hidden="true"
+                    />
+                  )}
+                  {row.href ? (
+                    <a href={row.href}>{row.name}</a>
+                  ) : (
+                    <span>{row.name}</span>
+                  )}
+                </span>
               </td>
               <td className="ref-meta-table__usage-cell">
                 <span className="ref-meta-table__bar-track">

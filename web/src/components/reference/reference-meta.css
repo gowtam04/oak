@@ -1,0 +1,371 @@
+/**
+ * reference-meta.css — styles for the `/meta` competitive-metagame reference
+ * pages (B-5): the leaderboard/detail card scaffolding (composed on the
+ * shared `.ref-card` primitive from `reference.css`) plus MetaFormatTabs,
+ * MetaMonthPicker, MetaLeaderboardTable, MetaUsageLists, MetaTrendSparkline,
+ * and CopyShowdownSet. Split out of `reference.css` (chrome + scaffolding) so
+ * the meta redesign task owns one file. Tokens only (colors/spacing/radii/
+ * shadows all read CSS custom properties from `src/app/globals.css`) so dark
+ * theme works automatically. Imported once by the `(reference)` route layout.
+ *
+ * Field-guide language (UI §4 screen 05): the leaderboard and each detail
+ * section is a Level-1 card (`.ref-card` in markup); the snapshot/summary
+ * lines are "instrument labels" (mono 600, uppercase, tracked, muted); rank +
+ * usage numerals are tabular mono; the usage bar stays azure (informational,
+ * per the color law) and delta up/down keep `--success`/`--danger`; format
+ * tabs are machined pill chips; the month picker is a sunken select mirroring
+ * `.conv-list__search`. CopyShowdownSet's button stays red-soft (a
+ * primary-ish action, not a filter/selection control).
+ */
+
+/* ---------------------------------------------------------------------------
+   Card scaffolding shared by the leaderboard page and the species drill-in —
+   `.ref-card .ref-meta-card` in markup, mirroring `.ref-detail-section`'s
+   recipe (its own copy here so this file stays independently redesignable).
+   ------------------------------------------------------------------------- */
+
+.ref-meta-card {
+  margin-top: var(--space-6);
+  padding: var(--space-6);
+}
+
+.ref-meta-card__title {
+  margin: 0 0 var(--space-4);
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* The leaderboard card's header strip: snapshot instrument label (left) +
+   month picker (right), wrapping on narrow screens. */
+.ref-meta-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+/* The month/cutoff/battles/attribution instrument label. */
+.ref-meta-snapshot {
+  margin: 0;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.ref-meta-snapshot a {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ref-meta-snapshot a:hover {
+  color: var(--poke-red);
+}
+
+/* ---------------------------------------------------------------------------
+   MetaFormatTabs — machined pill chips (foundation §3): quiet at rest, sunken
+   on hover, red-on-red-soft for the active ladder via `aria-current`.
+   ------------------------------------------------------------------------- */
+
+.ref-meta-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+}
+
+.ref-meta-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+
+.ref-meta-tabs__tab:hover {
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+}
+
+.ref-meta-tabs__tab[aria-current="page"] {
+  color: var(--poke-red);
+  background: var(--poke-red-soft);
+}
+
+/* ---------------------------------------------------------------------------
+   MetaMonthPicker — a sunken select, mirroring `.conv-list__search`'s input
+   treatment (no border at rest, azure focus ring).
+   ------------------------------------------------------------------------- */
+
+.ref-meta-month {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ref-meta-month__label {
+  color: var(--text-faint);
+}
+
+.ref-meta-month__select {
+  height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
+}
+
+.ref-meta-month__select:focus-visible {
+  outline: none;
+  border-color: var(--azure);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--azure) 18%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+   MetaLeaderboardTable — hairline separators, a row-hover tint (the sunken
+   surface, not a selection color), tabular mono rank/usage numerals, and a
+   sprite well per row (server-joined art, Showdown-guess fallback, a neutral
+   placeholder when neither resolves).
+   ------------------------------------------------------------------------- */
+
+.ref-meta-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ref-meta-table th,
+.ref-meta-table td {
+  text-align: left;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.ref-meta-table__row:hover td {
+  background: var(--surface-sunken);
+}
+
+.ref-meta-table__rank {
+  color: var(--text-muted);
+  width: 4ch;
+}
+
+.ref-meta-table__name-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ref-meta-table__sprite,
+.ref-meta-table__sprite-placeholder {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+}
+
+.ref-meta-table__sprite {
+  background: var(--surface-sunken);
+  object-fit: contain;
+}
+
+.ref-meta-table__sprite-placeholder {
+  display: block;
+  background: var(--surface-sunken);
+}
+
+.ref-meta-table__name a {
+  color: var(--text-strong);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ref-meta-table__name a:hover {
+  color: var(--poke-red);
+}
+
+.ref-meta-table__name span {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.ref-meta-table__usage-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 40%;
+}
+
+.ref-meta-table__bar-track {
+  display: block;
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.ref-meta-table__bar {
+  --fill: 0%;
+  display: block;
+  height: 100%;
+  width: var(--fill);
+  border-radius: var(--radius-pill);
+  background: var(--azure);
+}
+
+.ref-meta-table__usage-label {
+  color: var(--text-strong);
+  width: 6ch;
+  flex-shrink: 0;
+}
+
+.ref-meta-table__delta {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.ref-meta-table__delta--up {
+  color: var(--success);
+}
+
+.ref-meta-table__delta--down {
+  color: var(--danger);
+}
+
+/* ---------------------------------------------------------------------------
+   MetaUsageLists — titled percentage lists on a species drill-in.
+   ------------------------------------------------------------------------- */
+
+.ref-meta-lists {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.ref-meta-lists__section + .ref-meta-lists__section {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.ref-meta-lists__title {
+  margin: 0 0 var(--space-2);
+}
+
+.ref-meta-lists__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ref-meta-lists__item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  padding: var(--space-1) 0;
+}
+
+.ref-meta-lists__name {
+  color: var(--text-strong);
+  text-decoration: none;
+}
+
+a.ref-meta-lists__name:hover {
+  color: var(--poke-red);
+}
+
+.ref-meta-lists__value {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   MetaTrendSparkline — azure stays (informational, per the color law).
+   ------------------------------------------------------------------------- */
+
+.ref-meta-spark {
+  display: block;
+  overflow: visible;
+}
+
+.ref-meta-spark__line {
+  stroke: var(--azure);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ref-meta-spark__dot {
+  stroke: var(--azure);
+  stroke-width: 6;
+}
+
+.ref-meta-spark--empty {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+/* ---------------------------------------------------------------------------
+   CopyShowdownSet — the representative-set card; its button stays red-soft
+   (a primary-ish action, unlike the neutral machined filter chips).
+   ------------------------------------------------------------------------- */
+
+.ref-meta-set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ref-meta-set__text {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.ref-meta-set__button {
+  align-self: flex-start;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--poke-red);
+  background: var(--poke-red-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition: border-color var(--motion-fast);
+}
+
+.ref-meta-set__button:hover {
+  border-color: var(--poke-red);
+}

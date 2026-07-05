@@ -1,67 +1,18 @@
 /**
- * /moves — the Moves index. A flat A–Z enumeration of every move (each row a
- * crawlable link to its detail page), showing type + damage class + power when
- * the batched move summaries carried them.
+ * /moves — the Moves index. A searchable, type/category-filterable enumeration
+ * of every move (each row a crawlable link to its detail page). All grouping
+ * and filtering lives in the client MovesExplorer; this server page streams the
+ * raw index rows into it.
  *
  * Index route config + dynamic-import-inside-async rules: see /pokedex/page.tsx.
  */
 
 import type { Metadata } from "next";
 
-import EntityIndexList from "@/components/reference/EntityIndexList";
-import type {
-  EntityIndexEntry,
-  EntityIndexGroup,
-} from "@/components/reference/EntityIndexList";
-import type { MovesIndexData } from "@/lib/reference-pages-types";
+import MovesExplorer from "@/components/reference/explorer/MovesExplorer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/** Title-case a slug ("dynamic-punch" → "Dynamic Punch"). */
-function titleCase(slug: string): string {
-  return slug
-    .split(/[-\s]+/)
-    .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
-    .join(" ");
-}
-
-/** First-letter bucket for the alphabetical grouping ("#" for non-letters). */
-function letterOf(name: string): string {
-  const c = name.trim().charAt(0).toUpperCase();
-  return /[A-Z]/.test(c) ? c : "#";
-}
-
-function toGroups(data: MovesIndexData): EntityIndexGroup[] {
-  const byLetter = new Map<string, EntityIndexEntry[]>();
-  const sorted = [...data.rows].sort((a, b) =>
-    a.displayName.localeCompare(b.displayName),
-  );
-  for (const r of sorted) {
-    const meta =
-      r.damageClass || r.power != null
-        ? [
-            r.damageClass ? titleCase(r.damageClass) : null,
-            r.power != null ? `${r.power} BP` : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")
-        : null;
-    const entry: EntityIndexEntry = {
-      href: `/moves/${r.slug}`,
-      primary: r.displayName,
-      ...(r.type ? { types: [r.type] } : {}),
-      meta,
-    };
-    const key = letterOf(r.displayName);
-    const list = byLetter.get(key);
-    if (list) list.push(entry);
-    else byLetter.set(key, [entry]);
-  }
-  return [...byLetter.keys()]
-    .sort()
-    .map((heading) => ({ heading, entries: byLetter.get(heading)! }));
-}
 
 export async function generateMetadata(): Promise<Metadata> {
   const { loadMovesIndex } = await import("@/data/reference-pages");
@@ -87,7 +38,7 @@ export default async function MovesIndexPage() {
         moveset checks across Scarlet &amp; Violet, Champions, and Generations 5
         through 9.
       </p>
-      <EntityIndexList groups={toGroups(data)} />
+      <MovesExplorer rows={data.rows} />
     </main>
   );
 }

@@ -11,11 +11,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import EntityIndexList from "@/components/reference/EntityIndexList";
+import RefRosterList from "@/components/reference/RefRosterList";
 import type {
-  EntityIndexEntry,
-  EntityIndexGroup,
-} from "@/components/reference/EntityIndexList";
+  RefRosterEntry,
+  RefRosterGroup,
+} from "@/components/reference/RefRosterList";
 import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
 import TypeBadge from "@/components/TypeBadge";
@@ -51,11 +51,11 @@ function methodLabel(method: string | null): string {
 }
 
 /** Group the reverse-learner roster by method into index groups. */
-function learnerGroups(learners: LearnerRow[]): EntityIndexGroup[] {
-  const byMethod = new Map<string, EntityIndexEntry[]>();
+function learnerGroups(learners: LearnerRow[]): RefRosterGroup[] {
+  const byMethod = new Map<string, RefRosterEntry[]>();
   for (const l of learners) {
     const heading = methodLabel(l.method);
-    const entry: EntityIndexEntry = {
+    const entry: RefRosterEntry = {
       href: `/pokedex/${l.slug}`,
       primary: l.displayName,
     };
@@ -120,17 +120,17 @@ export default async function MoveDetailPage({
         <span>{data.displayName}</span>
       </nav>
 
-      <div className="ref-hero">
-        <div>
-          <h1 className="ref-hero__title">{data.displayName}</h1>
-          <div className="ref-hero__badges">
+      <div className="ref-card ref-detail-hero" data-type={data.type}>
+        <div className="ref-detail-hero__meta">
+          <h1 className="ref-detail-hero__title">{data.displayName}</h1>
+          <div className="ref-detail-hero__badges">
             <TypeBadge type={data.type as TypeName} />
           </div>
         </div>
       </div>
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">Details</h2>
+      <section className="ref-card ref-detail-section">
+        <h2 className="ref-detail-section__title">Details</h2>
         <table className="ref-fact-table">
           <tbody>
             {facts.map((f) => (
@@ -144,23 +144,23 @@ export default async function MoveDetailPage({
       </section>
 
       {effect && (
-        <section className="ref-section">
-          <h2 className="ref-section__title">Effect</h2>
+        <section className="ref-card ref-detail-section">
+          <h2 className="ref-detail-section__title">Effect</h2>
           <p className="ref-intro">{effect}</p>
         </section>
       )}
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">Availability</h2>
+      <section className="ref-card ref-detail-section">
+        <h2 className="ref-detail-section__title">Availability</h2>
         <FormatChips formats={data.availability} />
       </section>
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">
+      <section className="ref-card ref-detail-section">
+        <h2 className="ref-detail-section__title">
           Pokémon that can learn {data.displayName} ({data.learnerCount})
         </h2>
         {data.learnerCount > 0 ? (
-          <EntityIndexList groups={learnerGroups(data.learners)} />
+          <RefRosterList groups={learnerGroups(data.learners)} />
         ) : (
           <p className="ref-intro">
             No Pokémon in this scope can learn {data.displayName}.
@@ -168,9 +168,7 @@ export default async function MoveDetailPage({
         )}
       </section>
 
-      <section className="ref-section">
-        <AskOakCta prompt={`Tell me about ${data.displayName}`} />
-      </section>
+      <AskOakCta prompt={`Tell me about ${data.displayName}`} />
     </main>
   );
 }

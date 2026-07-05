@@ -195,24 +195,26 @@ export default async function PokemonDetailPage({
         <span>{data.displayName}</span>
       </nav>
 
-      <div className="ref-hero">
+      <div className="ref-card ref-detail-hero" data-type={data.types[0]}>
         {data.artworkUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- external sprite host, not a bundled asset; a plain lazy <img> is intended here
-          <img
-            className="ref-hero__art"
-            src={data.artworkUrl}
-            alt={`${data.displayName} official artwork`}
-            loading="lazy"
-            width={128}
-            height={128}
-          />
+          <div className="ref-detail-hero__art-well">
+            {/* eslint-disable-next-line @next/next/no-img-element -- external sprite host, not a bundled asset; a plain lazy <img> is intended here */}
+            <img
+              className="ref-detail-hero__art"
+              src={data.artworkUrl}
+              alt={`${data.displayName} official artwork`}
+              loading="lazy"
+              width={128}
+              height={128}
+            />
+          </div>
         )}
-        <div>
-          <h1 className="ref-hero__title">
-            {data.displayName}{" "}
-            <span className="mono-num">#{data.dexNumber}</span>
-          </h1>
-          <div className="ref-hero__badges">
+        <div className="ref-detail-hero__meta">
+          <span className="ref-detail-hero__dex mono-num">
+            #{data.dexNumber}
+          </span>
+          <h1 className="ref-detail-hero__title">{data.displayName}</h1>
+          <div className="ref-detail-hero__badges">
             {data.types.map((t) => (
               <TypeBadge key={t} type={t as TypeName} />
             ))}
@@ -220,52 +222,52 @@ export default async function PokemonDetailPage({
         </div>
       </div>
 
-      <p className="ref-intro">{pokemonIntro(data)}</p>
+      <p className="ref-intro ref-detail-intro">{pokemonIntro(data)}</p>
 
       {!data.isNative && (
-        <p className="ref-intro">
+        <p className="ref-intro ref-detail-intro">
           {data.displayName} isn&apos;t in the current Scarlet &amp; Violet
           games; the data below is drawn from {scopeLabel(data.sourceFormat)}.
         </p>
       )}
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">Availability</h2>
+      <section className="ref-card ref-detail-section">
+        <h2 className="ref-detail-section__title">Availability</h2>
         <FormatChips formats={data.availability} />
       </section>
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">Base stats</h2>
+      <section className="ref-card ref-detail-section">
+        <h2 className="ref-detail-section__title">Base stats</h2>
         <StatsTable stats={statRows(data)} total={data.baseStatTotal} />
       </section>
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">Type matchups</h2>
+      <section className="ref-card ref-detail-section">
+        <h2 className="ref-detail-section__title">Type matchups</h2>
         <MatchupChart groups={matchupGroups(data)} />
       </section>
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">Abilities</h2>
+      <section className="ref-card ref-detail-section">
+        <h2 className="ref-detail-section__title">Abilities</h2>
         <AbilityBlock abilities={data.abilities} />
       </section>
 
       {data.evolution && data.evolution.length > 0 && (
-        <section className="ref-section">
-          <h2 className="ref-section__title">Evolution</h2>
+        <section className="ref-card ref-detail-section">
+          <h2 className="ref-detail-section__title">Evolution</h2>
           <EvolutionChain edges={evolutionEdges(data.evolution)} />
         </section>
       )}
 
       {data.movepool.length > 0 && (
-        <section className="ref-section">
-          <h2 className="ref-section__title">Learnset</h2>
+        <section className="ref-card ref-detail-section">
+          <h2 className="ref-detail-section__title">Learnset</h2>
           <LearnsetTable groups={data.movepool} />
         </section>
       )}
 
       {data.usage && (
-        <section className="ref-section">
-          <h2 className="ref-section__title">Champions usage</h2>
+        <section className="ref-card ref-detail-section">
+          <h2 className="ref-detail-section__title">Champions usage</h2>
           <UsageBlock
             usage={{
               season: data.usage.season,
@@ -279,8 +281,8 @@ export default async function PokemonDetailPage({
       )}
 
       {otherForms.length > 0 && (
-        <section className="ref-section">
-          <h2 className="ref-section__title">Other forms</h2>
+        <section className="ref-card ref-detail-section">
+          <h2 className="ref-detail-section__title">Other forms</h2>
           <ul className="ref-formats">
             {otherForms.map((f) => (
               <li key={f} className="ref-formats__chip">
@@ -291,9 +293,7 @@ export default async function PokemonDetailPage({
         </section>
       )}
 
-      <section className="ref-section">
-        <AskOakCta prompt={`Tell me about ${data.displayName}`} />
-      </section>
+      <AskOakCta prompt={`Tell me about ${data.displayName}`} />
     </main>
   );
 }
