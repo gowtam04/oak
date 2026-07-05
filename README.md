@@ -150,17 +150,29 @@ flowchart TB
     META --> REPOS
     REPOS --> PG
     SUBMIT --> ANSWER --> ROUTE
-    ROUTE -->|"SSE: scope · tool_activity* · answer_start · answer_delta* · answer"| clients
+    ROUTE -->|"SSE: turn · scope · tool_activity* · answer_start · answer_delta* · answer | stopped"| clients
 
     XAI["xAI Grok Voice realtime API"]
     WEB -. "voice mode (signed-in): WebSocket +<br/>server-minted ephemeral token" .-> XAI
     XAI -. "per tool call → POST /api/voice/tool → dispatch()" .-> tools
 ```
 
-The client sees the loop as an SSE stream: one `scope` event (which game this
-turn is answered from and why), a `tool_activity` event per tool call, then
-`answer_start` / `answer_delta`\* (token-by-token markdown) and exactly one
-terminal `answer`. Voice mode bypasses the text loop entirely — the
+The client sees the loop as an SSE stream: one `turn` event first (the
+server-minted `turn_id`), one `scope` event (which game this turn is answered
+from and why), a `tool_activity` event per tool call, then `answer_start` /
+`answer_delta`\* (token-by-token markdown) and exactly one terminal `answer` —
+or `stopped`, if the user explicitly stopped the turn.
+
+**Turns are durable server-side** (`docs/features/background-turns/design.md`):
+the SSE connection is only a *subscription*. If the phone sleeps, the tab
+hides, or the user switches conversations, the turn keeps generating and
+persists on completion; clients reattach with
+`GET /api/chat/turns/:id/stream` (the server replays the turn's buffered
+events, then tails live), check `GET /api/chat/turns/:id` for a finished
+answer, and stop generation only via the explicit
+`POST /api/chat/turns/:id/stop`. One turn may run per conversation (a
+duplicate send gets `409` + the running `turn_id` to reattach), up to three
+per account. Voice mode bypasses the text loop entirely — the
 `grok-voice` model is its own brain, calling the same tool layer per-call over
 `POST /api/voice/tool` and speaking its answers instead of emitting an
 `OakAnswer`.
