@@ -515,6 +515,59 @@ struct ChatViewModelTests {
   }
 
   @Test
+  func stopBeforeTurnFrameDefersTheStopUntilTheIdArrives() async {
+    // The pre-`turn`-frame stop race (design §6.2): a Stop before `turn { turn_id }`
+    // must NOT tear down locally and leave the server turn running (a ghost answer).
+    // It arms a pending stop, finalizes the UI, keeps the read alive to capture the id,
+    // then fires the stop endpoint against the ORIGINAL session.
+    let fake = FakeChatService()
+    fake.scriptedEvents = []  // stays "in flight"; the consume task never runs (no await)
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState)
+    let originalSession = vm.sessionId
+
+    vm.composerText = "q"
+    vm.send()
+    #expect(vm.currentTurnId == nil)   // no id yet — the race window
+
+    // Stop inside the quick-stop window (no id): the UI finalizes now (quick stop wipes
+    // + rotates the session), but the stop endpoint is NOT called yet.
+    vm.performStop(now: Date())
+    #expect(vm.isStreaming == false)   // UI finalized immediately
+    #expect(fake.stopCount == 0)       // deferred — no id to POST to yet
+    #expect(vm.sessionId != originalSession)  // quick stop rotated the session
+
+    // The `turn` frame finally arrives (delivered by the still-alive read): now the stop
+    // fires with the captured id, against the ORIGINAL session (guest authorization).
+    vm.apply(.turn(turnId: "turn-late"))
+    for _ in 0..<20 where fake.stopCount == 0 { await Task.yield() }
+
+    #expect(fake.stopCount == 1)
+    #expect(fake.lastStopTurnId == "turn-late")
+    #expect(fake.lastStopSessionId == originalSession)  // NOT the rotated session
+    #expect(vm.streamTask == nil)      // connection torn down after the deferred stop
+  }
+
+  @Test
+  func stopBeforeTurnFrameStaysSilentlyIdleIfTheConnectionDiesFirst() async {
+    // If the connection dies before the `turn` frame arrives, there is nothing to stop —
+    // stay silently idle (no stop call, no error banner).
+    let fake = FakeChatService()
+    fake.thrownError = .transport(underlying: "URLError.-1005")  // the send stream dies
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState)
+
+    vm.composerText = "q"
+    vm.send()
+    vm.performStop(now: Date())        // arm the deferred stop (no id yet)
+    await vm.streamTask?.value         // the read dies before any `turn` frame
+
+    #expect(fake.stopCount == 0)       // nothing to stop
+    #expect(vm.errorBanner == nil)     // silent — not surfaced as a failure
+    #expect(vm.isStreaming == false)
+  }
+
+  @Test
   func stoppedEventDiscardsTheTurnWithNoBanner() {
     let appState = AppState()
     let vm = makeViewModel(fake: FakeChatService(), appState: appState)

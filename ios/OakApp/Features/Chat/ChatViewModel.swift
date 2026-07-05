@@ -112,6 +112,18 @@ final class ChatViewModel {
   /// explicit stop, or a resume 404.
   private(set) var currentTurnId: String?
 
+  /// A stop was requested BEFORE the `turn` frame arrived (design §6.2 — the
+  /// pre-`turn`-frame race). The read is kept alive solely to capture the incoming
+  /// `turn_id`; the reducer then fires the stop endpoint with it and drops the
+  /// connection. Cleared once handled, on a connection death before the frame, or on
+  /// send/resume/detach. See ``pendingStopSessionId``.
+  private var pendingStop = false
+
+  /// The `sessionId` the turn being stopped was started under, captured when
+  /// ``pendingStop`` is armed — a quick stop rotates `sessionId`, but a guest stop must
+  /// still authorize against the ORIGINAL session, so the deferred stop uses this.
+  private var pendingStopSessionId: String?
+
   /// The quick-stop window: a Stop tap within this of ``send()`` wipes the just-sent
   /// turn and restores its text (vs. a later stop, which keeps the answer-less turn).
   /// Mirrors web's `QUICK_STOP_MS` (2000ms).
@@ -249,14 +261,45 @@ final class ChatViewModel {
     guard isStreaming else { return }
     let elapsed = now.timeIntervalSince(turnStartedAt ?? .distantPast)
     let stopped = lastRequest
-    // Stop the running turn server-side (fire-and-forget; local teardown proceeds
-    // regardless of the call's outcome), then tear the local stream down (no banner)
-    // and drop the pending-turn pointer so no reattach fires for a discarded turn.
+    let turnId = currentTurnId ?? appState.pendingTurn(for: sessionId)
+
+    // Pre-`turn`-frame stop race (design §6.2): the user stopped before the server sent
+    // `turn { turn_id }`, so there is no id to POST to yet — but a stream attempt IS in
+    // flight. Tearing down now would strand the server turn (it would persist a ghost
+    // answer). Instead: mark a pending stop, finalize the UI immediately, and keep the
+    // READ ALIVE solely to capture the `turn` frame — the reducer then fires the stop
+    // endpoint with the captured id and drops the connection. Remember the session id
+    // the turn was started under (quick-stop rotates `sessionId`) so a guest stop still
+    // authorizes. If the connection dies before the frame, `consume` stays silently idle.
+    if turnId == nil, streamTask != nil {
+      pendingStop = true
+      pendingStopSessionId = sessionId
+      finalizeStopUI(elapsed: elapsed, request: stopped)  // keeps `streamTask` alive
+      return
+    }
+
+    // Normal stop: the turn id is known (or nothing is really in flight). Stop the
+    // running turn server-side (fire-and-forget; local teardown proceeds regardless of
+    // the call's outcome), tear the local stream down (no banner), and drop the
+    // pending-turn pointer so no reattach fires for a discarded turn.
     stopServerTurn()
     resetStreamState()
     clearPendingTurn()
+    finalizeStopUI(elapsed: elapsed, request: stopped)
+  }
 
-    guard elapsed < Self.quickStopThreshold, let request = stopped else {
+  /// Applies the quick-stop-vs-late-stop UI decision, WITHOUT tearing the stream down
+  /// (the caller owns whether the read stays alive — the pre-`turn`-frame race keeps it
+  /// alive to capture the id). A quick stop (within ``quickStopThreshold`` of ``send()``)
+  /// wipes the thread, rotates the session, and restores the composer for a redo; a late
+  /// stop keeps the now-answerless user turn. A user stop is never a failure (no banner).
+  private func finalizeStopUI(elapsed: TimeInterval, request: PendingRequest?) {
+    isStreaming = false
+    reconnecting = false
+    endBackgroundGrace()
+    setIdleTimerDisabled(false)
+
+    guard elapsed < Self.quickStopThreshold, let request else {
       // Late stop: keep the answer-less user turn in the thread; nothing else to do.
       return
     }
@@ -306,6 +349,7 @@ final class ChatViewModel {
   func detach() {
     streamTask?.cancel()
     streamTask = nil
+    clearPendingStop()  // abandon any deferred stop — a detach is not a stop (§6.2)
     endBackgroundGrace()
     setIdleTimerDisabled(false)
   }
@@ -439,8 +483,16 @@ final class ChatViewModel {
     isStreaming = false
     reconnecting = false
     resumeAttempts = 0
+    clearPendingStop()
     endBackgroundGrace()
     setIdleTimerDisabled(false)
+  }
+
+  /// Clears the deferred pre-`turn`-frame stop state (design §6.2). Called on
+  /// send/resume/detach and once a deferred stop has been handled.
+  private func clearPendingStop() {
+    pendingStop = false
+    pendingStopSessionId = nil
   }
 
   /// Drops the pending-turn pointer (local `currentTurnId` + the durable
@@ -463,6 +515,16 @@ final class ChatViewModel {
     if case .turn = event {} else { resumeAttempts = 0 }
     switch event {
     case let .turn(turnId):
+      // A stop was requested before this id existed (the pre-`turn`-frame race): now we
+      // have the id, so fire the stop endpoint against the ORIGINAL session and drop the
+      // connection — without resurrecting the (already-finalized) UI.
+      if pendingStop {
+        pendingStop = false
+        fireStop(turnId: turnId, sessionId: pendingStopSessionId ?? sessionId)
+        pendingStopSessionId = nil
+        detach()  // cancel the read; release grace/idle. Never calls the server itself.
+        return
+      }
       // The server-minted turn id (BT-2), first frame of both the POST and resume
       // streams. Record it as the conversation's pending turn (survives view teardown)
       // and, since a reattach replays from here, rebuild the in-flight UI from scratch:
@@ -544,6 +606,7 @@ final class ChatViewModel {
     isStreaming = true
     reconnecting = false
     resumeAttempts = 0
+    clearPendingStop()
     // A fresh POST turn: the server mints a new id, delivered on the `turn` frame.
     currentTurnId = nil
     // Hold the screen-wake lock while a turn streams (web's Screen Wake Lock analog).
@@ -567,6 +630,7 @@ final class ChatViewModel {
     errorBanner = nil
     isStreaming = true
     reconnecting = true
+    clearPendingStop()
     setIdleTimerDisabled(true)
 
     let sessionId = self.sessionId
@@ -591,6 +655,9 @@ final class ChatViewModel {
       return
     } catch let error as OakError {
       if Task.isCancelled { return }
+      // A deferred stop whose connection died before the `turn` frame arrived: there is
+      // no id to stop, so stay silently idle — no banner, no reattach (design §6.2).
+      if pendingStop { clearPendingStop(); return }
       // A send that clashes with an already-running turn (BT-5): reattach to it
       // instead of surfacing an error.
       if case let .turnInProgress(turnId) = error {
@@ -611,18 +678,23 @@ final class ChatViewModel {
       return
     } catch {
       if Task.isCancelled { return }
+      if pendingStop { clearPendingStop(); return }  // died before the id — nothing to stop
       // An unexpected non-`OakError` throw is treated as a connection drop.
       if attemptReattach() { return }
       applyStreamFailure(OakError.transportFailure(error))
       return
     }
     // The stream ended without a terminal event and was not cancelled — a dropped
-    // socket can return a clean EOF instead of throwing. Reattach to the known turn;
-    // otherwise clear the working flag (defensive).
-    if !Task.isCancelled, isStreaming {
-      if attemptReattach() { return }
-      isStreaming = false
-      setIdleTimerDisabled(false)
+    // socket can return a clean EOF instead of throwing.
+    if !Task.isCancelled {
+      // A deferred stop whose connection ended before the `turn` frame: stay idle.
+      if pendingStop { clearPendingStop(); return }
+      // Reattach to the known turn; otherwise clear the working flag (defensive).
+      if isStreaming {
+        if attemptReattach() { return }
+        isStreaming = false
+        setIdleTimerDisabled(false)
+      }
     }
   }
 
@@ -692,13 +764,17 @@ final class ChatViewModel {
     errorBanner = ErrorBanner(message: Self.interruptedMessage, isRetryable: true)
   }
 
-  /// Stops the current turn server-side (fire-and-forget). Captures the id + session
-  /// so the detached task holds no reference to `self`. A no-op with no turn in flight.
+  /// Stops the current turn server-side (fire-and-forget). A no-op with no turn in flight.
   private func stopServerTurn() {
     guard let turnId = currentTurnId ?? appState.pendingTurn(for: sessionId) else { return }
+    fireStop(turnId: turnId, sessionId: sessionId)
+  }
+
+  /// Fires the stop endpoint for `turnId` (fire-and-forget). Captures the id + session
+  /// so the detached task holds no reference to `self`.
+  private func fireStop(turnId: String, sessionId: String) {
     let chat = self.chat
-    let turnSessionId = sessionId
-    Task { try? await chat.stop(turnId: turnId, sessionId: turnSessionId) }
+    Task { try? await chat.stop(turnId: turnId, sessionId: sessionId) }
   }
 
   // MARK: Background-task grace (design §6.2 SHOULD — finish short turns after backgrounding)
