@@ -40,7 +40,18 @@ struct MoreView: View {
       .scrollContentBackground(.hidden)
       .background(Theme.canvas)
       .oakRedThread()
+      // Inline title + Fredoka principal — same phantom-band fix as the Chats list
+      // (the large-title band renders no visible custom-font title on iOS 26).
       .navigationTitle("More")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .principal) {
+          Text("More")
+            .font(Theme.display(.headline))
+            .foregroundStyle(Theme.textStrong)
+            .accessibilityAddTraits(.isHeader)
+        }
+      }
       .navigationDestination(for: MoreDestination.self) { destination in
         switch destination {
         case .account:
