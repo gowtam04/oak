@@ -14,6 +14,7 @@ import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.GenerationBasis
 import ai.gowtam.oak.wire.OakAnswer
 import ai.gowtam.oak.wire.SseEvent
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -261,6 +262,63 @@ class ChatViewModelReattachTest {
         assertNull(appState.pendingTurn("conv-1"))
     }
 
+    // -------------------------------------------------------------------
+    // Pre-`turn`-frame stop race
+    // -------------------------------------------------------------------
+
+    @Test
+    fun aStopBeforeTheTurnFrameCapturesTheIdThenStopsServerSide() = runTest(mainDispatcherRule.dispatcher) {
+        var clock = 0L
+        val appState = pinnedAppState()
+        val chat = DeferredTurnChatService("turn-1")
+        val vm = ChatViewModel(chat = chat, appState = appState, now = { clock })
+        vm.setComposerText("Who outspeeds Dragapult?")
+
+        vm.send()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.isStreaming) // streaming, but no `turn` frame yet
+
+        // Stop fires before the turn id exists → UI finalizes now, but nothing is stopped
+        // server-side yet (we have no id to POST to).
+        clock = 100L
+        vm.performStop(clock)
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.isStreaming)
+        assertTrue(chat.stopCalls.isEmpty())
+
+        // The turn frame finally arrives on the still-open read → its id is captured and
+        // the stop endpoint is hit with the OWNING session id (a quick-stop rotated the
+        // visible one), so the server turn is discarded rather than persisting a ghost.
+        chat.emitTurnFrame()
+        advanceUntilIdle()
+        assertEquals(listOf("turn-1" to "conv-1"), chat.stopCalls)
+        assertFalse(vm.uiState.value.isStreaming)
+    }
+
+    @Test
+    fun aStopBeforeTheTurnFrameStaysIdleIfTheConnectionDiesFirst() = runTest(mainDispatcherRule.dispatcher) {
+        var clock = 0L
+        val appState = pinnedAppState()
+        val chat = DeferredTurnChatService("turn-1")
+        val vm = ChatViewModel(chat = chat, appState = appState, now = { clock })
+        vm.setComposerText("hi")
+
+        vm.send()
+        advanceUntilIdle()
+
+        clock = 100L
+        vm.performStop(clock)
+        advanceUntilIdle()
+
+        // The connection drops before the turn frame ever arrives — nothing to stop, and
+        // no error banner (the user asked to stop; a dead capture is a silent no-op).
+        chat.failCapture()
+        advanceUntilIdle()
+        assertTrue(chat.stopCalls.isEmpty())
+        assertNull(vm.uiState.value.errorBanner)
+        assertFalse(vm.uiState.value.isStreaming)
+    }
+
     @Test
     fun loadResumedWithAnActiveTurnReattaches() = runTest(mainDispatcherRule.dispatcher) {
         val chat = FakeChatService(resumeEvents = listOf(SseEvent.Turn("turn-7"), SseEvent.Answer(answer())))
@@ -324,6 +382,42 @@ private class DropAfterTurnChatService(
     }
 
     override suspend fun stop(turnId: String, sessionId: String) = Unit
+}
+
+/**
+ * `send` opens the read but withholds the `turn` frame until the test releases it
+ * ([emitTurnFrame]) or kills the read ([failCapture]) — models the pre-turn-frame stop
+ * race, where connection setup + server pre-stream work delays the id by 100–500ms.
+ */
+private class DeferredTurnChatService(private val turnId: String) : ChatService {
+    private val gate = CompletableDeferred<Boolean>()
+    val stopCalls = mutableListOf<Pair<String, String>>()
+
+    /** Release the withheld `turn` frame onto the open read. */
+    fun emitTurnFrame() {
+        gate.complete(true)
+    }
+
+    /** Drop the read before any `turn` frame arrives. */
+    fun failCapture() {
+        gate.complete(false)
+    }
+
+    override fun send(sessionId: String, message: String, images: List<SourceImage>, scopeSeed: Format?): Flow<SseEvent> =
+        flow {
+            val shouldEmit = gate.await()
+            if (!shouldEmit) throw OakError.Transport("drop")
+            emit(SseEvent.Turn(turnId))
+            awaitCancellation()
+        }
+
+    override fun send(request: ChatRequest): Flow<SseEvent> = throw NotImplementedError("unused")
+
+    override fun resume(turnId: String, sessionId: String): Flow<SseEvent> = flow { awaitCancellation() }
+
+    override suspend fun stop(turnId: String, sessionId: String) {
+        stopCalls += turnId to sessionId
+    }
 }
 
 /** `send` immediately signals a 409 turn-in-progress; `resume` replays a turn + answer. */

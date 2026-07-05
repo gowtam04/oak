@@ -125,6 +125,18 @@ class ChatViewModel(
     /** A drop noticed while backgrounded; the reattach fires on the next foreground. */
     private var pendingReattach: Boolean = false
 
+    /**
+     * A stop requested BEFORE the `turn { turn_id }` frame arrived (the pre-turn-frame
+     * race — connection setup + server pre-stream work spans ~100–500ms, and quick-stop
+     * fires fast). The UI is finalized immediately, but the read is kept alive solely to
+     * capture the turn id so the stop endpoint can still be hit — otherwise the server
+     * turn runs to completion and persists a ghost answer into a signed-in conversation.
+     * [pendingStopSessionId] pins the owning session id (the visible session may rotate,
+     * e.g. a quick-stop). Cleared on send/resume/detach and once the turn is captured.
+     */
+    private var pendingStop: Boolean = false
+    private var pendingStopSessionId: String? = null
+
     /** Whether the app is currently in the foreground (updated by the lifecycle hooks). */
     private var isForeground: Boolean = true
 
@@ -278,9 +290,10 @@ class ChatViewModel(
         val elapsed = if (started == null) Long.MAX_VALUE else nowMillis - started
         val stopped = lastRequest
         // An explicit stop is now an API call (BT-4): discard the durable turn
-        // server-side, then tear down locally. Local teardown happens regardless of
-        // whether the stop call succeeds; no error banner (a user stop isn't a failure).
-        stopInFlightTurn()
+        // server-side, then tear down locally. When the `turn` frame hasn't arrived yet
+        // this arms the pre-turn-frame capture (below) rather than killing the read.
+        // Local teardown happens regardless; no error banner (a user stop isn't a failure).
+        requestStop()
         isStreaming = false
         reconnecting = false
         pendingReattach = false
@@ -440,6 +453,8 @@ class ChatViewModel(
     fun detach() {
         reattachJob?.cancel()
         reattachJob = null
+        pendingStop = false
+        pendingStopSessionId = null
         closeStream()
         reconnecting = false
         pendingReattach = false
@@ -473,6 +488,13 @@ class ChatViewModel(
      * rules are unit-testable directly, in addition to the end-to-end [send] path.
      */
     fun apply(event: SseEvent) {
+        // A stop is waiting for the turn id (pre-turn-frame race): capture it from the
+        // `turn` frame — always the first frame — fire the stop, and tear the read down.
+        // Ignore anything that races in ahead of the frame.
+        if (pendingStop) {
+            if (event is SseEvent.Turn) completePendingStop(event.turnId)
+            return
+        }
         // Any event means the stream is producing output again → clear "Reconnecting…".
         reconnecting = false
         // Real content (anything past the `turn` frame) means a (re)attach is making
@@ -556,6 +578,8 @@ class ChatViewModel(
     // ---- Streaming internals ----
 
     private fun beginStreaming(request: PendingRequest) {
+        pendingStop = false
+        pendingStopSessionId = null
         streamingText = ""
         toolActivities = emptyList()
         errorBanner = null
@@ -580,6 +604,8 @@ class ChatViewModel(
      * in-flight UI from scratch). A resume 404 → the turn is dead → [handleDeadTurn].
      */
     private fun reattachStream(turnId: String) {
+        pendingStop = false
+        pendingStopSessionId = null
         closeStream()
         currentTurnId = turnId
         appState.setPendingTurn(sessionId, turnId)
@@ -600,12 +626,20 @@ class ChatViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: TurnInProgressSignal) {
-            // 409 on send: a durable turn is already generating for this conversation →
-            // reattach to it instead of erroring (BT-5 / §6.3).
+            // 409 on send: a durable turn is already generating for this conversation. If
+            // a stop was pending the turn id, stop THAT turn; otherwise reattach to it
+            // instead of erroring (BT-5 / §6.3).
+            if (pendingStop) {
+                completePendingStop(e.turnId)
+                return
+            }
             reattachAttempts = 0
             reattachStream(e.turnId)
             return
         } catch (e: OakError) {
+            // A pre-turn-frame stop whose capture read died before the frame: nothing to
+            // stop, stay silently idle (§6.3, the pre-turn stop race).
+            if (abandonPendingStop()) return
             // A resume that 404s means the turn is gone (expired / server restart) — it
             // can't be tailed; surface the interrupted/Retry affordance.
             if (isResume && e is OakError.Http && e.status == 404) {
@@ -622,11 +656,14 @@ class ChatViewModel(
             return
         } catch (e: Exception) {
             // An unexpected non-OakError throw is treated as a connection drop.
+            if (abandonPendingStop()) return
             handleDrop()
             return
         }
         // The stream ended without a terminal event and was not cancelled — a dropped
-        // socket can return a clean EOF instead of throwing. Treat it as a drop.
+        // socket can return a clean EOF instead of throwing. A pre-turn-frame stop that
+        // saw EOF has nothing to stop; otherwise treat it as a drop.
+        if (abandonPendingStop()) return
         if (isStreaming) handleDrop()
     }
 
@@ -726,8 +763,68 @@ class ChatViewModel(
         }
         reattachJob?.cancel()
         reattachJob = null
+        pendingStop = false
+        pendingStopSessionId = null
         clearPendingTurn()
         closeStream()
+    }
+
+    /**
+     * The explicit-Stop teardown (BT-4), race-aware. If the durable turn id is already
+     * known, stop it now and close the read. If a stream attempt is in flight but its
+     * `turn` frame hasn't arrived yet, DON'T kill the read — arm [pendingStop] so the
+     * consumer keeps reading solely to capture the id, then stops server-side (the id
+     * capture happens in [apply]/[completePendingStop]). Otherwise there's nothing to stop.
+     */
+    private fun requestStop() {
+        reattachJob?.cancel()
+        reattachJob = null
+        val turnId = currentTurnId
+        if (turnId != null) {
+            if (isStreaming) viewModelScope.launch { runCatching { chat.stop(turnId, sessionId) } }
+            pendingStop = false
+            pendingStopSessionId = null
+            clearPendingTurn()
+            closeStream()
+            return
+        }
+        if (isStreaming && streamJob?.isActive == true) {
+            pendingStop = true
+            pendingStopSessionId = sessionId
+            return
+        }
+        pendingStop = false
+        pendingStopSessionId = null
+        clearPendingTurn()
+        closeStream()
+    }
+
+    /**
+     * The turn id arrived after a pre-turn-frame stop: fire the stop endpoint with the
+     * captured id + owning session (which may differ from the now-visible session after
+     * a quick-stop rotation) and tear the capture read down.
+     */
+    private fun completePendingStop(turnId: String) {
+        val sid = pendingStopSessionId ?: sessionId
+        pendingStop = false
+        pendingStopSessionId = null
+        viewModelScope.launch { runCatching { chat.stop(turnId, sid) } }
+        appState.clearPendingTurn(sid)
+        closeStream()
+    }
+
+    /**
+     * The capture read ended (drop / EOF) before the `turn` frame arrived: there is no id
+     * to stop, so stay silently idle (the turn may never have materialized, or died with
+     * the socket). Returns whether it took ownership so the consumer skips its own
+     * drop/banner handling.
+     */
+    private fun abandonPendingStop(): Boolean {
+        if (!pendingStop) return false
+        pendingStop = false
+        pendingStopSessionId = null
+        setKeepScreenOn(false)
+        return true
     }
 
     /** Drops this conversation's pending-turn pointer (local field + AppState map). */
