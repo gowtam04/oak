@@ -1,6 +1,7 @@
 package ai.gowtam.oak.features.teams
 
 import ai.gowtam.oak.services.TeamsAssistantService
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakRadius
@@ -500,7 +501,7 @@ private fun ExportDialog(paste: String, onDismiss: () -> Unit, onCopy: () -> Uni
                     item {
                         Text(
                             text = paste,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = JetBrainsMonoFamily),
                         )
                     }
                 }

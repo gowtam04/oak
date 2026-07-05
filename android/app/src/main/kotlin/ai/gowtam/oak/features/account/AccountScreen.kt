@@ -45,7 +45,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import ai.gowtam.oak.ui.OakTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -118,13 +118,14 @@ fun AccountScreen(
         modifier = modifier,
         topBar = {
             if (onBack != null) {
-                TopAppBar(
+                OakTopBar(
                     title = { Text("Account") },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
+                    redThread = false,
                 )
             }
         },

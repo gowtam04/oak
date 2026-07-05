@@ -437,7 +437,7 @@ fun parseInline(text: String, linkColor: Color = Color.Unspecified): AnnotatedSt
                     flushPlain()
                     withStyle(
                         SpanStyle(
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = JetBrainsMonoFamily,
                             background = Color(0x1F808080),
                         ),
                     ) {

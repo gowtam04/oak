@@ -5,9 +5,10 @@ import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -18,7 +19,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
  * Oak's brand expression over Android / Material 3.
@@ -48,6 +48,7 @@ fun OakTheme(
         MaterialTheme(
             colorScheme = colorScheme,
             typography = OakTypography,
+            shapes = OakShapes,
             content = content,
         )
     }
@@ -69,10 +70,15 @@ data class OakColors(
     val accentActive: Color,
     val accentSoft: Color,
     val sunflower: Color,
+    val sunflowerSoft: Color,
     val azure: Color,
+    val azureSoft: Color,
     val success: Color,
+    val successSoft: Color,
     val warning: Color,
+    val warningSoft: Color,
     val danger: Color,
+    val dangerSoft: Color,
     val info: Color,
     val surfaceRaised: Color,
     val surfaceSunken: Color,
@@ -82,6 +88,8 @@ data class OakColors(
     val text: Color,
     val textMuted: Color,
     val textFaint: Color,
+    /** Modal/overlay scrim — warm-tinted, unlike Material's neutral black. */
+    val scrim: Color,
 )
 
 /** Light-mode extended tokens (`:root` in globals.css). */
@@ -91,10 +99,15 @@ val OakLightColors = OakColors(
     accentActive = Color(0xFFC93B3B),
     accentSoft = Color(0xFFFCEBEB),
     sunflower = Color(0xFFF5A524),
+    sunflowerSoft = Color(0xFFFDF1DC),
     azure = Color(0xFF3AA0E3),
+    azureSoft = Color(0xFFE6F2FB),
     success = Color(0xFF2FB573),
+    successSoft = Color(0xFFE3F6EC),
     warning = Color(0xFFF08C00),
+    warningSoft = Color(0xFFFDEFD9),
     danger = Color(0xFFE0394A),
+    dangerSoft = Color(0xFFFCE8EA),
     info = Color(0xFF3AA0E3),
     surfaceRaised = Color(0xFFFFFFFF),
     surfaceSunken = Color(0xFFF7F1EB),
@@ -104,6 +117,7 @@ val OakLightColors = OakColors(
     text = Color(0xFF3D362F),
     textMuted = Color(0xFF6E625A),
     textFaint = Color(0xFF94867A),
+    scrim = Color(0x662A2521),
 )
 
 /** Dark-mode extended tokens (`[data-theme="dark"]` in globals.css). */
@@ -113,10 +127,15 @@ val OakDarkColors = OakColors(
     accentActive = Color(0xFFF25C5C),
     accentSoft = Color(0xFF3A1E1E),
     sunflower = Color(0xFFF8B73E),
+    sunflowerSoft = Color(0xFF3A2E14),
     azure = Color(0xFF5BB4EF),
+    azureSoft = Color(0xFF16263A),
     success = Color(0xFF46C98A),
+    successSoft = Color(0xFF10301F),
     warning = Color(0xFFFBA53B),
+    warningSoft = Color(0xFF3A2A0F),
     danger = Color(0xFFFF5C6B),
+    dangerSoft = Color(0xFF3A1518),
     info = Color(0xFF5BB4EF),
     surfaceRaised = Color(0xFF2A2420),
     surfaceSunken = Color(0xFF12100E),
@@ -126,6 +145,7 @@ val OakDarkColors = OakColors(
     text = Color(0xFFE4DAD0),
     textMuted = Color(0xFFB7A99C),
     textFaint = Color(0xFF8A7D72),
+    scrim = Color(0x99080605),
 )
 
 /**
@@ -226,32 +246,20 @@ object OakSpacing {
     val xxl = 32.dp
 }
 
-// ---------------------------------------------------------------------------
-// Typography — sp everywhere, honoring the system font scale
-// ---------------------------------------------------------------------------
-
 /**
- * Oak's type ramp. Built on the default (system) font family so it scales with the
- * user's font-size setting; every size is `sp`, so nothing is pinned to a physical
- * `dp` that would clip when the user enlarges text. The scale mirrors `--text-*` in
- * globals.css (11 / 12 / 13 / 14 / 18 / 22 / 28).
+ * Material's [Shapes] mapped onto [OakRadius] so every un-parameterized Material
+ * component (menus, dialogs, sheets, chips, buttons that don't pass an explicit
+ * `shape=`) inherits Oak's rounding instead of Material's default corner family.
+ * `extraLarge` collapses to 24.dp (Oak has no larger step) so bottom sheets round
+ * at the brand's top radius.
  */
-val OakTypography: Typography = Typography().let { base ->
-    base.copy(
-        displaySmall = base.displaySmall.copy(fontSize = 28.sp),
-        headlineMedium = base.headlineMedium.copy(fontSize = 22.sp),
-        headlineSmall = base.headlineSmall.copy(fontSize = 18.sp),
-        titleLarge = base.titleLarge.copy(fontSize = 18.sp),
-        titleMedium = base.titleMedium.copy(fontSize = 16.sp),
-        titleSmall = base.titleSmall.copy(fontSize = 14.sp),
-        bodyLarge = base.bodyLarge.copy(fontSize = 16.sp),
-        bodyMedium = base.bodyMedium.copy(fontSize = 14.sp),
-        bodySmall = base.bodySmall.copy(fontSize = 13.sp),
-        labelLarge = base.labelLarge.copy(fontSize = 14.sp),
-        labelMedium = base.labelMedium.copy(fontSize = 12.sp),
-        labelSmall = base.labelSmall.copy(fontSize = 11.sp),
-    )
-}
+val OakShapes: Shapes = Shapes(
+    extraSmall = RoundedCornerShape(OakRadius.sm),
+    small = RoundedCornerShape(OakRadius.md),
+    medium = RoundedCornerShape(OakRadius.lg),
+    large = RoundedCornerShape(OakRadius.xl),
+    extraLarge = RoundedCornerShape(OakRadius.xl),
+)
 
 // ---------------------------------------------------------------------------
 // Motion tokens + reduce-motion gate

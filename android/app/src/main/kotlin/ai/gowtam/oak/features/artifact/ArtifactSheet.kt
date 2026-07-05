@@ -2,6 +2,7 @@ package ai.gowtam.oak.features.artifact
 
 import ai.gowtam.oak.features.chat.answercard.DamageCalcBlock
 import ai.gowtam.oak.features.chat.answercard.titleizeNonNull
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -322,7 +323,7 @@ private fun TeamMemberRow(index: Int, member: TeamMember, onOpenSpecies: (String
             text = "${index + 1}",
             style = MaterialTheme.typography.labelSmall,
             color = oak.textMuted,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = JetBrainsMonoFamily,
             modifier = Modifier.width(16.dp),
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

@@ -45,7 +45,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import ai.gowtam.oak.ui.OakTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -166,7 +166,7 @@ private fun TeamsListScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            OakTopBar(
                 title = { Text("Teams", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     Box {

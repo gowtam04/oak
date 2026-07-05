@@ -132,7 +132,7 @@ private fun MarkdownListView(items: List<MdListItem>) {
                     text = marker(item),
                     color = oak.textMuted,
                     style = MaterialTheme.typography.bodyLarge,
-                    fontFamily = if (item.ordered) FontFamily.Monospace else FontFamily.Default,
+                    fontFamily = if (item.ordered) JetBrainsMonoFamily else FontFamily.Default,
                 )
                 Text(
                     text = parseInline(item.text, linkColor = oak.azure),
@@ -166,7 +166,7 @@ private fun MarkdownCodeBlock(code: String) {
     ) {
         Text(
             text = code,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = JetBrainsMonoFamily,
             fontSize = 13.sp,
             color = oak.text,
         )

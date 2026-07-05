@@ -25,7 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import ai.gowtam.oak.ui.OakTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -90,7 +90,7 @@ private fun MoreListScreen(appState: AppState, onSelect: (MoreDestination) -> Un
 
     Scaffold(
         modifier = modifier,
-        topBar = { TopAppBar(title = { Text("More", modifier = Modifier.semantics { heading() }) }) },
+        topBar = { OakTopBar(title = { Text("More", modifier = Modifier.semantics { heading() }) }) },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             MoreDestination.entries.forEach { destination ->

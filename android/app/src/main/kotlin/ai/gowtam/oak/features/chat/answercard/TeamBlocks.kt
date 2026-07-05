@@ -1,6 +1,7 @@
 package ai.gowtam.oak.features.chat.answercard
 
 import ai.gowtam.oak.app.LocalServices
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -202,7 +203,7 @@ private fun MemberRow(index: Int, member: TeamMember) {
             text = "${index + 1}",
             style = MaterialTheme.typography.labelSmall,
             color = oak.textMuted,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = JetBrainsMonoFamily,
         )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             val item = member.item?.trim()

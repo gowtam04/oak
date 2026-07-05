@@ -7,6 +7,7 @@ import ai.gowtam.oak.features.chat.answercard.AnswerCardActions
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakRadius
+import ai.gowtam.oak.ui.OakTopBar
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberHaptics
 import ai.gowtam.oak.wire.Format
@@ -45,7 +46,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -165,7 +165,7 @@ fun ChatScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            OakTopBar(
                 title = { Text("Oak", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     if (onBack != null) {

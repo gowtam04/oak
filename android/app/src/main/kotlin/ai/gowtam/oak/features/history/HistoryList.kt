@@ -48,7 +48,7 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import ai.gowtam.oak.ui.OakTopBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -100,7 +100,7 @@ fun HistoryScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            OakTopBar(
                 title = { Text("Chats", modifier = Modifier.semantics { heading() }) },
                 actions = {
                     IconButton(onClick = onNewChat) {

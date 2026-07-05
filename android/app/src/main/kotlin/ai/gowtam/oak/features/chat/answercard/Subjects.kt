@@ -1,5 +1,6 @@
 package ai.gowtam.oak.features.chat.answercard
 
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -93,7 +94,7 @@ internal fun SubjectCard(subject: Subject, onClick: () -> Unit) {
                         text = dexLabel(dex),
                         style = MaterialTheme.typography.bodySmall,
                         color = oak.textMuted,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = JetBrainsMonoFamily,
                     )
                 }
             }

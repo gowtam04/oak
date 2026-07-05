@@ -4,6 +4,7 @@ package ai.gowtam.oak.features.artifact
 
 import ai.gowtam.oak.features.chat.answercard.dexLabel
 import ai.gowtam.oak.features.chat.answercard.titleizeNonNull
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownText
 import ai.gowtam.oak.ui.OakRadius
@@ -129,7 +130,7 @@ private fun PokemonBody(data: PokemonArtifactData, onOpen: (EntityKind, String) 
             text = dexLabel(data.nationalDexNumber),
             style = MaterialTheme.typography.bodyMedium,
             color = oak.textMuted,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = JetBrainsMonoFamily,
         )
         Spacer(Modifier.height(OakSpacing.xs))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -500,7 +501,7 @@ private fun StatBarRow(label: String, value: Int) {
         Text(
             value.toString(),
             style = MaterialTheme.typography.labelSmall,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = JetBrainsMonoFamily,
             color = oak.textStrong,
             modifier = Modifier.width(32.dp),
         )
