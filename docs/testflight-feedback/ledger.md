@@ -34,7 +34,12 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** 11 (confirmed — crash.log `Version: 1.0.0 (11)`)
 - **Device/OS:** iPhone17_1, iOS 26.5, en-US
 - **Submitter:** gowtam04@gmail.com
-- **Status:** pending (fix in flight on `agent/feedback-pass-2`)
+- **Status:** fixed (533856a — ships in the next TestFlight build, 12)
+
+  The AVAudio tap block inherited MainActor isolation and trapped on the
+  realtime render thread; the tap body is now a compiler-checked
+  `nonisolated` function installed via an explicitly `@Sendable` block, with
+  an off-main regression test.
 
 > App crashed when I pressed the voice mode mic button
 
@@ -47,7 +52,11 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** 11 (inferred — timing places it after the 08:35 build 8 upload and closest to the build-11 crash)
 - **Device/OS:** iPhone17_1, iOS 26.5, en-US
 - **Submitter:** gowtam04@gmail.com
-- **Status:** pending (fix in flight on `agent/feedback-pass-2`)
+- **Status:** fixed (fce9295 web / 1337325 ios / 0a0f717 android — ships in the next TestFlight build, 12)
+
+  Truncated candidate lists now carry the withheld rows server-side
+  (`candidates.hidden_rows`, ≤200 rows) and "Show all N" expands in place on
+  all three clients; larger sets keep the follow-up-message fallback.
 
 > Show me everything should expand the list not send a message
 
