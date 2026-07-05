@@ -59,12 +59,20 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     }
   }
 
+  // active_turn (background-turns/design.md §5.4): a live registry lookup by
+  // conversation id + account, so a reopened thread knows to reattach even after
+  // an app relaunch (when the client's own pending-turn pointer is gone).
+  // Additive + best-effort — an in-process lookup, never a DB read.
+  const { findRunningByConversation } = await import("@/server/turn-store");
+  const running = findRunningByConversation(account.id, id);
+
   return json(200, {
     id: conv.id,
     title: conv.title,
     format: conv.format,
     pinned: conv.pinned,
     turns,
+    active_turn: running ? { turn_id: running.turnId } : null,
   });
 }
 

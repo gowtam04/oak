@@ -57,6 +57,7 @@ vi.mock("@/agent/context", () => ({
 
 import { POST } from "@/app/api/chat/route";
 import { _resetStoreForTests } from "@/server/rate-limit";
+import { _resetStoreForTests as resetTurnStore } from "@/server/turn-store";
 import { createPgSchema, installAsSingleton, type PgFixture } from "./support/pg";
 
 let fix: PgFixture;
@@ -91,6 +92,7 @@ afterAll(async () => {
 beforeEach(async () => {
   vi.clearAllMocks();
   await _resetStoreForTests();
+  await resetTurnStore();
   capturedHistories.length = 0;
   capturedModes.length = 0;
   nextAnswer = makeAnswer("default answer");
@@ -316,10 +318,14 @@ describe("signed-in persistence", () => {
     expect(text).toContain("delivered");
   });
 
-  it("persists nothing when the turn is aborted (AC-1.2)", async () => {
+  // BACKGROUND TURNS (design §5.2): a client disconnect no longer discards the
+  // turn — the request signal is not wired to the turn, only an explicit stop
+  // aborts it (BT-4). A turn whose request signal is already aborted still runs
+  // to completion and persists (BT-1). This reverses the old AC-1.2 guard.
+  it("a client disconnect no longer discards the turn — it still persists (BT-1)", async () => {
     const sid = randomUUID();
     await post({ session_id: sid, message: "q" }, { signal: AbortSignal.abort() });
-    expect(await repo.getConversation(ACCT.id, sid)).toBeNull();
+    expect(await repo.getConversation(ACCT.id, sid)).not.toBeNull();
   });
 });
 

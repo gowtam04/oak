@@ -44,6 +44,7 @@ vi.mock("@/agent/context", () => ({
 import { POST } from "@/app/api/chat/route";
 import { createAgentContext } from "@/agent/context";
 import { _resetStoreForTests } from "@/server/rate-limit";
+import { _resetStoreForTests as resetTurnStore } from "@/server/turn-store";
 import {
   clearSession,
   _resetStoreForTests as resetSessionStore,
@@ -154,6 +155,7 @@ function rawOf(events: SseEvent[]): string {
 beforeEach(async () => {
   mockRunOak.mockReset();
   await _resetStoreForTests();
+  await resetTurnStore();
   process.env.ANTHROPIC_API_KEY = SECRET;
 });
 

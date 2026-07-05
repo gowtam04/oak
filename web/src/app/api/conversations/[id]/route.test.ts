@@ -25,6 +25,11 @@ const cu = vi.hoisted(() => ({
 vi.mock("@/server/auth/current-user", () => cu);
 
 import { createPgSchema, installAsSingleton, type PgFixture } from "../../../../../test/support/pg";
+import {
+  _resetStoreForTests as resetTurnStore,
+  startTurn,
+  type TurnRecord,
+} from "@/server/turn-store";
 
 const ACCT_A = "acct-a";
 const ACCT_B = "acct-b";
@@ -59,6 +64,7 @@ beforeEach(async () => {
     sql`TRUNCATE TABLE team, conversation, conversation_message RESTART IDENTITY`,
   );
   cu.getCurrentAccount.mockReset();
+  await resetTurnStore();
 });
 
 // --- Helpers ---------------------------------------------------------------
@@ -102,6 +108,41 @@ describe("GET /api/conversations/[id] — no active_team_id field", () => {
     const body = await (await route.GET(new Request("http://t"), idCtx("c"))).json();
     expect(body).toMatchObject({ id: "c", format: SV });
     expect(body).not.toHaveProperty("active_team_id");
+  });
+});
+
+// --- active_turn (background-turns/design.md §5.4) --------------------------
+
+describe("GET /api/conversations/[id] — active_turn", () => {
+  it("is null when no turn is running for the conversation", async () => {
+    signedIn(ACCT_A);
+    await seedConv(ACCT_A, "c", SV);
+    const body = await (await route.GET(new Request("http://t"), idCtx("c"))).json();
+    expect(body.active_turn).toBeNull();
+  });
+
+  it("reports the running turn id for the account's conversation", async () => {
+    signedIn(ACCT_A);
+    await seedConv(ACCT_A, "c", SV);
+    const started = startTurn({
+      sessionId: "c",
+      accountId: ACCT_A,
+      ownerKey: `acct:${ACCT_A}`,
+    });
+    const turn = started as TurnRecord;
+
+    const body = await (await route.GET(new Request("http://t"), idCtx("c"))).json();
+    expect(body.active_turn).toEqual({ turn_id: turn.turnId });
+  });
+
+  it("does not report a turn running for a DIFFERENT conversation", async () => {
+    signedIn(ACCT_A);
+    await seedConv(ACCT_A, "c", SV);
+    // A turn is running, but for a different conversation id.
+    startTurn({ sessionId: "other", accountId: ACCT_A, ownerKey: `acct:${ACCT_A}` });
+
+    const body = await (await route.GET(new Request("http://t"), idCtx("c"))).json();
+    expect(body.active_turn).toBeNull();
   });
 });
 
