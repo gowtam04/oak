@@ -60,8 +60,10 @@ enum VoiceAudioError: Error {
 ///   replays for barge-in.
 ///
 /// `@MainActor`: every AVFoundation object is confined here; the ONLY off-actor
-/// code is the render-thread tap block, which captures only the Sendable lock +
-/// continuation and a `@unchecked Sendable` converter box.
+/// code is the render-thread tap, which runs the `nonisolated static processTap`
+/// helper via an explicitly `@Sendable` block — so the compiler, not luck, keeps
+/// the main actor off AVFAudio's realtime thread. It touches only the Sendable
+/// lock + continuation and a `@unchecked Sendable` converter box.
 @MainActor
 final class LiveVoiceAudioIO: VoiceAudioIO {
   /// 24 kHz — an xAI-supported rate, half the payload of 48 kHz, speech-optimal.
@@ -130,18 +132,41 @@ final class LiveVoiceAudioIO: VoiceAudioIO {
     // The converter box is @unchecked Sendable (tap is its sole, serial caller).
     let accumulator = OSAllocatedUnfairLock(initialState: VoiceChunkAccumulator(sampleRate: sampleRate))
     let sink = continuation!
-    input.installTap(onBus: 0, bufferSize: 4096, format: nativeFormat) { [converter] buffer, _ in
-      let samples = converter.convert(buffer)
-      guard !samples.isEmpty else { return }
-      let chunks = accumulator.withLock { $0.append(samples) }
-      for chunk in chunks { sink.yield(chunk) }
+    // AVFAudio invokes the tap on its realtime render thread, NOT the main actor.
+    // Binding the block to an explicitly `@Sendable` type and delegating to the
+    // `nonisolated static processTap` helper makes the compiler REJECT any main-
+    // actor touch on this path — a bare closure formed in this `@MainActor` method
+    // would instead inherit main-actor isolation and trap (`dispatch_assert_queue`)
+    // on the first buffer off-main. Same bufferSize/format/bus as before.
+    let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
+      LiveVoiceAudioIO.processTap(buffer: buffer, converter: converter, accumulator: accumulator, sink: sink)
     }
+    input.installTap(onBus: 0, bufferSize: 4096, format: nativeFormat, block: tapBlock)
 
     engine.prepare()
     try engine.start()
     playerNode.play()
     capturing = true
     return stream
+  }
+
+  /// The render-thread tap body, hoisted into a compiler-checked `nonisolated`
+  /// context. AVFAudio calls the installed tap on its realtime render thread; a
+  /// closure formed inside `@MainActor startCapture()` would inherit main-actor
+  /// isolation at runtime and trap there on the first buffer, so the body lives
+  /// here where the compiler forbids any main-actor touch. Every parameter is
+  /// `Sendable` (the converter box is `@unchecked Sendable`, the lock and the
+  /// continuation are `Sendable`), so nothing crosses an isolation boundary.
+  nonisolated static func processTap(
+    buffer: AVAudioPCMBuffer,
+    converter: CaptureConverter,
+    accumulator: OSAllocatedUnfairLock<VoiceChunkAccumulator>,
+    sink: AsyncStream<String>.Continuation
+  ) {
+    let samples = converter.convert(buffer)
+    guard !samples.isEmpty else { return }
+    let chunks = accumulator.withLock { $0.append(samples) }
+    for chunk in chunks { sink.yield(chunk) }
   }
 
   func stopCapture() {
@@ -257,7 +282,7 @@ final class LiveVoiceAudioIO: VoiceAudioIO {
 /// render thread. `@unchecked Sendable`: the tap block is its ONLY caller and the
 /// render thread invokes it serially, so the converter is never touched
 /// concurrently — the same serial-access rationale as the voice test fakes.
-private final class CaptureConverter: @unchecked Sendable {
+final class CaptureConverter: @unchecked Sendable {
   private let converter: AVAudioConverter
   private let targetFormat: AVAudioFormat
   private let ratio: Double
