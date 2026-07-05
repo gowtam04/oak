@@ -48,6 +48,19 @@ class AppState {
      */
     val guestThread: StateFlow<List<GuestTurn>> = _guestThread.asStateFlow()
 
+    /**
+     * The pending durable turn per conversation: `session_id → turn_id`
+     * (background-turns/design.md §6.3). A turn is recorded here on the `turn` SSE
+     * frame and removed when it reaches a terminal event (answer/error/stopped) or a
+     * reattach 404s. It lives on [AppState] — not the (per-thread) `ChatViewModel`
+     * state — so it survives list⟷thread navigation and a tab switch even though ONE
+     * shared view model backs every thread; that is what lets "send in chat A, work
+     * in chat B" reattach chat A's still-running turn when it is reopened. Guest
+     * threads are device-local, so this map is the guest's only pending pointer;
+     * signed-in threads additionally recover it from `active_turn` on the history GET.
+     */
+    private val pendingTurns = java.util.concurrent.ConcurrentHashMap<String, String>()
+
     private val _guestThreadScope = MutableStateFlow<Format>(Format.Champions)
 
     /**
@@ -82,6 +95,23 @@ class AppState {
     /** Records the scope a guest turn resolved to (mirrored from the `scope` SSE event). */
     fun setGuestThreadScope(format: Format) {
         _guestThreadScope.value = format
+    }
+
+    // -------------------------------------------------------------------
+    // Pending durable turns (background-turns/design.md §6.3)
+    // -------------------------------------------------------------------
+
+    /** Records the running turn for [sessionId] (set on the `turn` SSE frame). */
+    fun setPendingTurn(sessionId: String, turnId: String) {
+        pendingTurns[sessionId] = turnId
+    }
+
+    /** The pending turn id for [sessionId], or `null` when none is in flight. */
+    fun pendingTurn(sessionId: String): String? = pendingTurns[sessionId]
+
+    /** Clears [sessionId]'s pending turn (a terminal event or a resume 404). */
+    fun clearPendingTurn(sessionId: String) {
+        pendingTurns.remove(sessionId)
     }
 
     /** Clears the in-memory guest thread back to its defaults (e.g. on quick-stop). */

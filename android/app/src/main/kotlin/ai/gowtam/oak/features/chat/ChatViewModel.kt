@@ -4,6 +4,7 @@ import ai.gowtam.oak.app.AppState
 import ai.gowtam.oak.app.GuestTurn
 import ai.gowtam.oak.networking.ImageRejectReason
 import ai.gowtam.oak.networking.OakError
+import ai.gowtam.oak.networking.TurnInProgressSignal
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.services.BitmapSourceImage
 import ai.gowtam.oak.services.ChatService
@@ -21,6 +22,7 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -98,20 +100,42 @@ class ChatViewModel(
     /** The in-flight stream consumer; cancelled on a new turn or the screen leaving. */
     private var streamJob: Job? = null
 
-    /** The last turn's request, retained so [retry]/auto-reconnect can re-open the stream. */
+    /** A scheduled transport-drop reattach waiting out its backoff; cancelled by any
+     * teardown (detach/stop/new-conversation) so it can never fire after the fact. */
+    private var reattachJob: Job? = null
+
+    /** The last turn's request, retained so a manual [retry] can re-send a dead turn. */
     private var lastRequest: PendingRequest? = null
 
     /** When the current turn started (millis), for the quick-stop window. `null` when idle. */
     private var turnStartedAt: Long? = null
 
-    /** Armed while the app was backgrounded DURING the current stream; gates auto-retry. */
-    private var hiddenDuringTurn: Boolean = false
+    /**
+     * The durable turn currently attached (or pending) for THIS conversation — the
+     * server-minted id from the `turn` frame, or one recovered from `active_turn`.
+     * Mirrored into [AppState]'s pending-turn map so it survives navigation; `null`
+     * once the turn reaches a terminal event or a reattach 404s.
+     */
+    private var currentTurnId: String? = null
 
-    /** Auto-retries already spent on the current turn (bounded by [MAX_RETRIES]). */
-    private var retryCount: Int = 0
+    /** Consecutive transport-drop reattach attempts, bounded by [MAX_REATTACH]. Reset
+     * to 0 the moment real events flow again (a return-to-thread reattach also resets). */
+    private var reattachAttempts: Int = 0
 
-    /** A drop noticed while still backgrounded; the retry fires on the next foreground. */
-    private var pendingRetry: Boolean = false
+    /** A drop noticed while backgrounded; the reattach fires on the next foreground. */
+    private var pendingReattach: Boolean = false
+
+    /**
+     * A stop requested BEFORE the `turn { turn_id }` frame arrived (the pre-turn-frame
+     * race — connection setup + server pre-stream work spans ~100–500ms, and quick-stop
+     * fires fast). The UI is finalized immediately, but the read is kept alive solely to
+     * capture the turn id so the stop endpoint can still be hit — otherwise the server
+     * turn runs to completion and persists a ghost answer into a signed-in conversation.
+     * [pendingStopSessionId] pins the owning session id (the visible session may rotate,
+     * e.g. a quick-stop). Cleared on send/resume/detach and once the turn is captured.
+     */
+    private var pendingStop: Boolean = false
+    private var pendingStopSessionId: String? = null
 
     /** Whether the app is currently in the foreground (updated by the lifecycle hooks). */
     private var isForeground: Boolean = true
@@ -200,19 +224,20 @@ class ChatViewModel(
         val text = composerText.trim()
         val images = pendingImages
 
-        // Tear down any prior stream before starting a new turn.
-        cancelStreaming()
+        // Sending a new message in the SAME conversation while one is still running
+        // stops that turn server-side first (BT-4 / §6.3), then starts fresh. (The
+        // composer is normally disabled while streaming, so this is a defensive path.)
+        stopInFlightTurn()
 
         turns = turns + ChatTurnItem.User(text = text, imageCount = images.size)
         mirrorGuestTurn(GuestTurn(content = GuestTurn.Content.User(text)))
 
         composerText = ""
         pendingImages = emptyList()
-        // Reset reconnect bookkeeping for this fresh turn and stamp the quick-stop window.
+        // Reset reattach bookkeeping for this fresh turn and stamp the quick-stop window.
         turnStartedAt = now()
-        retryCount = 0
-        pendingRetry = false
-        hiddenDuringTurn = false
+        reattachAttempts = 0
+        pendingReattach = false
         reconnecting = false
         // A pending chip pick (if any) rides THIS turn as `scope_seed`; a `scope` event
         // clears `scopeSeed` mid-turn so it never leaks onto the next turn.
@@ -232,12 +257,18 @@ class ChatViewModel(
     }
 
     /**
-     * Re-opens the stream for the last turn after a recoverable failure, WITHOUT
-     * appending another user turn (the message is already in the thread).
+     * The manual Retry affordance for a genuinely dead/interrupted turn: re-sends the
+     * last turn as a FRESH request (a new durable turn), WITHOUT appending another user
+     * message (it is already in the thread). A no-op while a turn is already streaming
+     * or when there is nothing to re-send.
      */
     fun retry() {
         if (isStreaming) return
         val request = lastRequest ?: return
+        currentTurnId = null
+        appState.clearPendingTurn(sessionId)
+        reattachAttempts = 0
+        pendingReattach = false
         beginStreaming(request)
     }
 
@@ -258,19 +289,26 @@ class ChatViewModel(
         val started = turnStartedAt
         val elapsed = if (started == null) Long.MAX_VALUE else nowMillis - started
         val stopped = lastRequest
-        // Tear down the stream (no banner) and clear all reconnect state / wake hold.
-        cancelStreaming()
+        // An explicit stop is now an API call (BT-4): discard the durable turn
+        // server-side, then tear down locally. When the `turn` frame hasn't arrived yet
+        // this arms the pre-turn-frame capture (below) rather than killing the read.
+        // Local teardown happens regardless; no error banner (a user stop isn't a failure).
+        requestStop()
+        isStreaming = false
+        reconnecting = false
+        pendingReattach = false
+        streamingText = ""
+        toolActivities = emptyList()
 
         if (elapsed >= QUICK_STOP_MS || stopped == null) {
             // Late stop: keep the answerless user turn in the thread; nothing else to do.
+            publish()
             return
         }
 
         // Quick stop: wipe to a brand-new session and restore the message for a redo.
         // Scope is intentionally NOT reset (web keeps resolvedScope/scopeSeed on stop).
         turns = emptyList()
-        streamingText = ""
-        toolActivities = emptyList()
         errorBanner = null
         lastRequest = null
         turnStartedAt = null
@@ -284,25 +322,32 @@ class ChatViewModel(
         publish()
     }
 
-    // ---- Lifecycle (screen-off auto-reconnect — web's `visibilitychange`) ----
+    // ---- Lifecycle (background unsubscribes; foreground reattaches — §6.3) ----
 
     /**
      * The app entered the background (screen lock / app switch), wired from
-     * `Lifecycle.Event.ON_STOP`. If a turn is streaming, arm the screen-off auto-retry
-     * gate so a resulting connection drop can heal on resume.
+     * `Lifecycle.Event.ON_STOP`. The durable turn keeps generating server-side; we
+     * simply note we are hidden so a resulting socket drop defers its reattach to the
+     * next foreground rather than fighting the OS while backgrounded.
      */
     fun onEnterBackground() {
         isForeground = false
-        if (isStreaming) hiddenDuringTurn = true
     }
 
     /**
-     * The app returned to the foreground, wired from `Lifecycle.Event.ON_START`. Fire
-     * any retry that was deferred because the drop was noticed while backgrounded.
+     * The app returned to the foreground, wired from `Lifecycle.Event.ON_START`.
+     * Reattach to the conversation's durable turn if one is unresolved — either a drop
+     * was deferred while backgrounded, or the socket is simply no longer live
+     * (background-turns/design.md §6.3).
      */
     fun onEnterForeground() {
         isForeground = true
-        if (pendingRetry) fireRetry()
+        val turnId = currentTurnId ?: appState.pendingTurn(sessionId) ?: return
+        val needsReattach = pendingReattach || (isStreaming && streamJob?.isActive != true)
+        if (!needsReattach) return
+        pendingReattach = false
+        reattachAttempts = 0
+        reattachStream(turnId)
     }
 
     /**
@@ -324,7 +369,15 @@ class ChatViewModel(
      * thread for guests and drops any resolved scope so the chip falls back to champions.
      */
     fun startNewConversation() {
-        cancelStreaming()
+        // Abandon the current thread WITHOUT stopping its durable turn: unsubscribe and
+        // drop the LOCAL pending pointer, but let the turn keep generating server-side
+        // (BT-7 — the headline "start another chat while one generates" flow; parity with
+        // web `reset()` and iOS `resetStreamState()` + `clearPendingTurn()`, which never
+        // stop). A signed-in turn still completes and persists, recoverable on reopen via
+        // `active_turn`; a guest's wiped thread is unreachable anyway. Clearing the local
+        // pointer must happen BEFORE the session id rotates below.
+        detach()
+        clearPendingTurn()
         turns = emptyList()
         streamingText = ""
         toolActivities = emptyList()
@@ -333,6 +386,10 @@ class ChatViewModel(
         pendingImages = emptyList()
         lastRequest = null
         turnStartedAt = null
+        isStreaming = false
+        reconnecting = false
+        pendingReattach = false
+        reattachAttempts = 0
         sessionId = UUID.randomUUID().toString()
         appState.setActiveConversationId(null)
         resolvedScope = null
@@ -352,9 +409,22 @@ class ChatViewModel(
      * Also binds [AppState.activeConversationId] to [conversationId] (mirrors iOS's
      * `HistoryDetailViewModel.resume()`). Called by the Chat tab's history affordance
      * once it has loaded the conversation's full detail.
+     *
+     * [activeTurnId] is the conversation's `active_turn` from the history GET (a durable
+     * turn still generating server-side): when present it seeds the pending-turn pointer
+     * and the thread immediately reattaches to it — the app-relaunch recovery path
+     * (background-turns/design.md §6.3).
      */
-    fun loadResumed(conversationId: String, format: Format, turns: List<ChatTurn>) {
-        cancelStreaming()
+    fun loadResumed(
+        conversationId: String,
+        format: Format,
+        turns: List<ChatTurn>,
+        activeTurnId: String? = null,
+    ) {
+        // Close the socket for the PREVIOUS conversation without cancelling its durable
+        // turn — its pending pointer stays in AppState (keyed by the old session id), so
+        // it can be reattached if the user returns to it.
+        detach()
         sessionId = conversationId
         appState.setActiveConversationId(conversationId)
         this.turns = turns.map { turn ->
@@ -369,30 +439,51 @@ class ChatViewModel(
         streamingText = ""
         toolActivities = emptyList()
         errorBanner = null
+        isStreaming = false
+        reconnecting = false
+        pendingReattach = false
+        reattachAttempts = 0
+        currentTurnId = null
+        if (activeTurnId != null) appState.setPendingTurn(conversationId, activeTurnId)
+        publish()
+        reattachIfPending()
+    }
+
+    /**
+     * Unsubscribes from the live stream WITHOUT stopping the durable turn — the socket
+     * closes but the server keeps generating (background-turns/design.md §6.3). Used by
+     * the screen leaving composition and by [loadResumed] switching conversations. The
+     * pending-turn pointer is deliberately kept so the thread can reattach on return;
+     * releases the wake hold and clears "Reconnecting…" so neither gets stuck on.
+     */
+    fun detach() {
+        reattachJob?.cancel()
+        reattachJob = null
+        pendingStop = false
+        pendingStopSessionId = null
+        closeStream()
+        reconnecting = false
+        pendingReattach = false
         publish()
     }
 
     /**
-     * Cancels the in-flight stream (a new turn, or the screen disappearing). Leaves the
-     * thread intact; a cancelled consumer never writes a banner. Also clears the
-     * reconnect bookkeeping and releases the wake hold so "Reconnecting…" / the screen
-     * lock can never get stuck on.
+     * Reattaches to this conversation's pending durable turn if one exists and no live
+     * subscription is already running — the return-to-thread recovery path. Resets the
+     * transport-drop budget (a user-driven reattach is not a failed one).
      */
-    fun cancelStreaming() {
-        streamJob?.cancel()
-        streamJob = null
-        isStreaming = false
-        reconnecting = false
-        pendingRetry = false
-        hiddenDuringTurn = false
-        retryCount = 0
-        setKeepScreenOn(false)
-        publish()
+    fun reattachIfPending() {
+        if (streamJob?.isActive == true) return
+        val turnId = currentTurnId ?: appState.pendingTurn(sessionId) ?: return
+        reattachAttempts = 0
+        reattachStream(turnId)
     }
 
-    /** Releases the stream on `ViewModel` teardown so the wake hold never leaks. */
+    /** Releases the stream on `ViewModel` teardown so the wake hold never leaks. The
+     * durable turn keeps running server-side and stays reattachable (a config change
+     * retains the store; a true finish leaves it recoverable via `active_turn`). */
     override fun onCleared() {
-        cancelStreaming()
+        detach()
         super.onCleared()
     }
 
@@ -403,9 +494,41 @@ class ChatViewModel(
      * rules are unit-testable directly, in addition to the end-to-end [send] path.
      */
     fun apply(event: SseEvent) {
+        // A stop is waiting for the turn id (pre-turn-frame race): capture it from the
+        // `turn` frame — always the first frame — fire the stop, and tear the read down.
+        // Ignore anything that races in ahead of the frame.
+        if (pendingStop) {
+            if (event is SseEvent.Turn) completePendingStop(event.turnId)
+            return
+        }
         // Any event means the stream is producing output again → clear "Reconnecting…".
         reconnecting = false
+        // Real content (anything past the `turn` frame) means a (re)attach is making
+        // progress → reset the transport-drop budget so a genuine long turn isn't
+        // starved by earlier blips.
+        if (event !is SseEvent.Turn) reattachAttempts = 0
         when (event) {
+            is SseEvent.Turn -> {
+                // The server-minted turn id: record it as this conversation's pending
+                // turn (survives navigation via AppState) so it can be reattached/stopped.
+                // The `turn` frame opens BOTH the POST and the resume streams, so a
+                // reattach replay rebuilds the in-flight UI from scratch here.
+                currentTurnId = event.turnId
+                appState.setPendingTurn(sessionId, event.turnId)
+                streamingText = ""
+                toolActivities = emptyList()
+            }
+
+            SseEvent.Stopped -> {
+                // The durable turn was stopped (this device or another). Nothing is
+                // persisted; clear the in-flight state with no error banner.
+                clearPendingTurn()
+                streamingText = ""
+                toolActivities = emptyList()
+                isStreaming = false
+                setKeepScreenOn(false)
+            }
+
             is SseEvent.Scope -> {
                 // Adopt this turn's scope and retire any pending chip pick — the
                 // conversation's scope is now sticky server-side and outranks a stale
@@ -432,6 +555,7 @@ class ChatViewModel(
                 turns = turns + ChatTurnItem.Assistant(answer = event.answer)
                 // Mirror the FULL answer so the guest→sign-in import is non-lossy.
                 mirrorGuestTurn(GuestTurn(content = GuestTurn.Content.Assistant(event.answer)))
+                clearPendingTurn()
                 streamingText = ""
                 toolActivities = emptyList()
                 isStreaming = false
@@ -447,6 +571,7 @@ class ChatViewModel(
                     message = bannerMessage(event.code, event.message),
                     isRetryable = true,
                 )
+                clearPendingTurn()
                 streamingText = ""
                 toolActivities = emptyList()
                 isStreaming = false
@@ -459,12 +584,12 @@ class ChatViewModel(
     // ---- Streaming internals ----
 
     private fun beginStreaming(request: PendingRequest) {
+        pendingStop = false
+        pendingStopSessionId = null
         streamingText = ""
         toolActivities = emptyList()
         errorBanner = null
         isStreaming = true
-        // A fresh attempt: only a hide DURING it should arm the auto-retry.
-        hiddenDuringTurn = false
         setKeepScreenOn(true)
         publish()
 
@@ -475,10 +600,30 @@ class ChatViewModel(
             images = images,
             scopeSeed = request.scopeSeed,
         )
-        streamJob = viewModelScope.launch { consume(stream) }
+        streamJob = viewModelScope.launch { consume(stream, isResume = false) }
     }
 
-    private suspend fun consume(stream: Flow<SseEvent>) {
+    /**
+     * Reattaches to a durable turn's live stream: closes any current subscription,
+     * shows "Reconnecting…" until the replay flows, then folds the replayed +
+     * live-tailed events through the SAME reducer (the `turn` frame rebuilds the
+     * in-flight UI from scratch). A resume 404 → the turn is dead → [handleDeadTurn].
+     */
+    private fun reattachStream(turnId: String) {
+        pendingStop = false
+        pendingStopSessionId = null
+        closeStream()
+        currentTurnId = turnId
+        appState.setPendingTurn(sessionId, turnId)
+        isStreaming = true
+        reconnecting = true
+        errorBanner = null
+        setKeepScreenOn(true)
+        publish()
+        streamJob = viewModelScope.launch { consume(chat.resume(turnId, sessionId), isResume = true) }
+    }
+
+    private suspend fun consume(stream: Flow<SseEvent>, isResume: Boolean) {
         try {
             stream.collect { event ->
                 if (!currentCoroutineContext().isActive) return@collect
@@ -486,28 +631,46 @@ class ChatViewModel(
             }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: TurnInProgressSignal) {
+            // 409 on send: a durable turn is already generating for this conversation. If
+            // a stop was pending the turn id, stop THAT turn; otherwise reattach to it
+            // instead of erroring (BT-5 / §6.3).
+            if (pendingStop) {
+                completePendingStop(e.turnId)
+                return
+            }
+            reattachAttempts = 0
+            reattachStream(e.turnId)
+            return
         } catch (e: OakError) {
-            // A connection drop (`Transport`) while backgrounded auto-recovers; every
-            // other OakError (rate limit, HTTP, image rejection, decode) is a clean
-            // server fault — surface it, never auto-retry.
-            if (e is OakError.Transport && handleRecoverableFailure()) return
+            // A pre-turn-frame stop whose capture read died before the frame: nothing to
+            // stop, stay silently idle (§6.3, the pre-turn stop race).
+            if (abandonPendingStop()) return
+            // A resume that 404s means the turn is gone (expired / server restart) — it
+            // can't be tailed; surface the interrupted/Retry affordance.
+            if (isResume && e is OakError.Http && e.status == 404) {
+                handleDeadTurn()
+                return
+            }
+            // A connection drop reattaches (bounded); every other OakError (rate limit,
+            // HTTP, image rejection, decode) is a clean fault — surface it.
+            if (e is OakError.Transport) {
+                handleDrop()
+                return
+            }
             applyStreamFailure(e)
             return
         } catch (e: Exception) {
             // An unexpected non-OakError throw is treated as a connection drop.
-            if (handleRecoverableFailure()) return
-            applyStreamFailure(OakError.Transport(e::class.simpleName ?: "unknown"))
+            if (abandonPendingStop()) return
+            handleDrop()
             return
         }
-        // The stream ended without a terminal answer/error and was not cancelled — a
-        // dropped socket can return a clean EOF instead of throwing. Recover if the drop
-        // coincided with backgrounding; otherwise clear the working flag (defensive).
-        if (isStreaming) {
-            if (handleRecoverableFailure()) return
-            isStreaming = false
-            setKeepScreenOn(false)
-            publish()
-        }
+        // The stream ended without a terminal event and was not cancelled — a dropped
+        // socket can return a clean EOF instead of throwing. A pre-turn-frame stop that
+        // saw EOF has nothing to stop; otherwise treat it as a drop.
+        if (abandonPendingStop()) return
+        if (isStreaming) handleDrop()
     }
 
     /**
@@ -525,40 +688,155 @@ class ChatViewModel(
     }
 
     /**
-     * Decides whether a connection drop should be auto-recovered. Returns `true` if it
-     * took ownership (fired or armed a retry); `false` ⇒ the caller surfaces the error.
-     * Only a drop that happened while backgrounded, up to [MAX_RETRIES] times, recovers.
+     * Handles a live-stream drop (transport fault or clean EOF mid-turn). With a known
+     * durable turn id the client REATTACHES rather than re-sending: immediately when
+     * foregrounded (bounded by [MAX_REATTACH] with a brief backoff), or deferred to the
+     * next foreground when backgrounded. A drop before the `turn` frame (no id) has no
+     * turn to reattach to and falls back to the connection-error banner.
      */
-    private fun handleRecoverableFailure(): Boolean {
-        if (!hiddenDuringTurn || retryCount >= MAX_RETRIES) return false
-        if (isForeground) {
-            // Already back in the foreground — re-send immediately.
-            fireRetry()
-        } else {
-            // Still backgrounded — show "Reconnecting…" and fire on foreground. The turn
-            // stays in flight; keep the streamed buffer cleared so no half-answer lingers.
-            pendingRetry = true
+    private fun handleDrop() {
+        val turnId = currentTurnId
+        if (turnId == null) {
+            // Pre-turn drop: nothing to reattach to — surface the connection banner.
+            applyStreamFailure(OakError.Transport("pre_turn_drop"))
+            return
+        }
+        if (!isForeground) {
+            // Backgrounded: keep the turn "in flight" showing Reconnecting…; the actual
+            // reattach fires from onEnterForeground.
+            pendingReattach = true
             reconnecting = true
             isStreaming = true
             streamingText = ""
             toolActivities = emptyList()
             errorBanner = null
+            setKeepScreenOn(false)
             publish()
+            return
         }
-        return true
+        reattachAttempts += 1
+        if (reattachAttempts > MAX_REATTACH) {
+            handleDeadTurn()
+            return
+        }
+        reconnecting = true
+        isStreaming = true
+        streamingText = ""
+        toolActivities = emptyList()
+        publish()
+        reattachJob = viewModelScope.launch {
+            delay(REATTACH_BACKOFF_MS)
+            // Guard against a send/stop/detach having superseded the turn during backoff.
+            if (currentTurnId == turnId && isStreaming) reattachStream(turnId)
+        }
     }
 
     /**
-     * Re-opens the stream for the retained turn as an automatic recovery attempt (keeps
-     * the turn in flight; shows "Reconnecting…" until output resumes).
+     * A durable turn that can no longer be reattached (resume 404, or the transport-drop
+     * budget exhausted): clear the pending pointer and surface the interrupted banner.
+     * Retry re-sends the last turn as a fresh one when its request is still retained.
      */
-    private fun fireRetry() {
-        val request = lastRequest ?: return
-        pendingRetry = false
-        retryCount += 1
-        beginStreaming(request)
-        reconnecting = true
+    private fun handleDeadTurn() {
+        clearPendingTurn()
+        isStreaming = false
+        reconnecting = false
+        pendingReattach = false
+        streamingText = ""
+        toolActivities = emptyList()
+        errorBanner = ErrorBanner(INTERRUPTED_MESSAGE, isRetryable = lastRequest != null)
+        setKeepScreenOn(false)
         publish()
+    }
+
+    /** Cancels the live subscription and releases the wake hold — the mechanical half of
+     * [detach]/[stopInFlightTurn]. Leaves all reducer/pending state untouched. */
+    private fun closeStream() {
+        streamJob?.cancel()
+        streamJob = null
+        setKeepScreenOn(false)
+    }
+
+    /**
+     * Stops the conversation's durable turn server-side (fire-and-forget — a stop failure
+     * never blocks the UI) and tears down the local subscription. Used when a turn is
+     * genuinely abandoned: an explicit Stop, a new send in the same thread, or starting a
+     * new conversation. Does NOT touch the visible thread — callers decide that.
+     */
+    private fun stopInFlightTurn() {
+        val turnId = currentTurnId
+        if (isStreaming && turnId != null) {
+            viewModelScope.launch { runCatching { chat.stop(turnId, sessionId) } }
+        }
+        reattachJob?.cancel()
+        reattachJob = null
+        pendingStop = false
+        pendingStopSessionId = null
+        clearPendingTurn()
+        closeStream()
+    }
+
+    /**
+     * The explicit-Stop teardown (BT-4), race-aware. If the durable turn id is already
+     * known, stop it now and close the read. If a stream attempt is in flight but its
+     * `turn` frame hasn't arrived yet, DON'T kill the read — arm [pendingStop] so the
+     * consumer keeps reading solely to capture the id, then stops server-side (the id
+     * capture happens in [apply]/[completePendingStop]). Otherwise there's nothing to stop.
+     */
+    private fun requestStop() {
+        reattachJob?.cancel()
+        reattachJob = null
+        val turnId = currentTurnId
+        if (turnId != null) {
+            if (isStreaming) viewModelScope.launch { runCatching { chat.stop(turnId, sessionId) } }
+            pendingStop = false
+            pendingStopSessionId = null
+            clearPendingTurn()
+            closeStream()
+            return
+        }
+        if (isStreaming && streamJob?.isActive == true) {
+            pendingStop = true
+            pendingStopSessionId = sessionId
+            return
+        }
+        pendingStop = false
+        pendingStopSessionId = null
+        clearPendingTurn()
+        closeStream()
+    }
+
+    /**
+     * The turn id arrived after a pre-turn-frame stop: fire the stop endpoint with the
+     * captured id + owning session (which may differ from the now-visible session after
+     * a quick-stop rotation) and tear the capture read down.
+     */
+    private fun completePendingStop(turnId: String) {
+        val sid = pendingStopSessionId ?: sessionId
+        pendingStop = false
+        pendingStopSessionId = null
+        viewModelScope.launch { runCatching { chat.stop(turnId, sid) } }
+        appState.clearPendingTurn(sid)
+        closeStream()
+    }
+
+    /**
+     * The capture read ended (drop / EOF) before the `turn` frame arrived: there is no id
+     * to stop, so stay silently idle (the turn may never have materialized, or died with
+     * the socket). Returns whether it took ownership so the consumer skips its own
+     * drop/banner handling.
+     */
+    private fun abandonPendingStop(): Boolean {
+        if (!pendingStop) return false
+        pendingStop = false
+        pendingStopSessionId = null
+        setKeepScreenOn(false)
+        return true
+    }
+
+    /** Drops this conversation's pending-turn pointer (local field + AppState map). */
+    private fun clearPendingTurn() {
+        currentTurnId = null
+        appState.clearPendingTurn(sessionId)
     }
 
     private fun setKeepScreenOn(on: Boolean) {
@@ -617,10 +895,15 @@ class ChatViewModel(
         /** The quick-stop window: a Stop within this of [send] wipes the just-sent turn. */
         const val QUICK_STOP_MS = 2000L
 
-        /** Max automatic reconnect attempts after a backgrounding-induced drop. */
-        const val MAX_RETRIES = 1
+        /** Max consecutive transport-drop reattach attempts before giving the turn up
+         * for dead (background-turns/design.md §6.3, "bounded ~2 attempts"). */
+        const val MAX_REATTACH = 2
+
+        /** Brief backoff between transport-drop reattach attempts. */
+        const val REATTACH_BACKOFF_MS = 400L
 
         const val CONNECTION_MESSAGE = "No connection. Check your network and try again."
+        const val INTERRUPTED_MESSAGE = "This response was interrupted. Tap Retry to try again."
         const val SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again."
         const val GENERIC_MESSAGE = "Something went wrong. Please try again."
 

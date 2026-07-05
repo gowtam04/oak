@@ -40,8 +40,8 @@ data class ConversationSummary(
 
 /**
  * A full conversation with rehydrated turns — `GET /api/conversations/{id}`
- * (`{ id, title, format, pinned, turns }`, a flat envelope — not wrapped in
- * `{ conversation: {...} }`).
+ * (`{ id, title, format, pinned, turns, active_turn }`, a flat envelope — not
+ * wrapped in `{ conversation: {...} }`).
  */
 @Serializable
 data class ConversationDetail(
@@ -50,7 +50,18 @@ data class ConversationDetail(
     val format: Format,
     val pinned: Boolean,
     val turns: List<ChatTurn>,
+    /**
+     * A durable turn still generating for this conversation, as a live server-side
+     * registry lookup (background-turns/design.md §5.4). Lets a reopened thread
+     * reattach even after an app relaunch, when the client's own pending-turn pointer
+     * is gone. `null` ⇒ nothing in flight; absent on older servers ⇒ decodes to `null`.
+     */
+    @SerialName("active_turn") val activeTurn: ActiveTurn? = null,
 )
+
+/** The `active_turn` field of [ConversationDetail] — just the running turn's id. */
+@Serializable
+data class ActiveTurn(@SerialName("turn_id") val turnId: String)
 
 /**
  * One entry in a rehydrated conversation thread, discriminated on `role`. A

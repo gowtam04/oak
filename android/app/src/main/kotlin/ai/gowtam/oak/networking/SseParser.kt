@@ -5,6 +5,7 @@ import ai.gowtam.oak.wire.OakAnswer
 import ai.gowtam.oak.wire.OakJson
 import ai.gowtam.oak.wire.ScopeSource
 import ai.gowtam.oak.wire.SseEvent
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 
@@ -125,6 +126,10 @@ class SseParser : SseLineParser<SseEvent> {
         val (name, payload) = frame ?: return emptyList()
         return try {
             when (name) {
+                "turn" -> {
+                    val data = OakJson.decodeFromString(TurnData.serializer(), payload)
+                    listOf(SseEvent.Turn(turnId = data.turnId))
+                }
                 "scope" -> {
                     val data = OakJson.decodeFromString(ScopeData.serializer(), payload)
                     listOf(SseEvent.Scope(format = data.format, source = data.source))
@@ -134,6 +139,7 @@ class SseParser : SseLineParser<SseEvent> {
                     listOf(SseEvent.ToolActivity(tool = data.tool, label = data.label))
                 }
                 "answer_start" -> listOf(SseEvent.AnswerStart)
+                "stopped" -> listOf(SseEvent.Stopped)
                 "answer_delta" -> {
                     val data = OakJson.decodeFromString(AnswerDeltaData.serializer(), payload)
                     listOf(SseEvent.AnswerDelta(text = data.text))
@@ -154,6 +160,9 @@ class SseParser : SseLineParser<SseEvent> {
             throw OakError.Decoding("SseEvent.$name")
         }
     }
+
+    @Serializable
+    private data class TurnData(@SerialName("turn_id") val turnId: String)
 
     @Serializable
     private data class ScopeData(val format: Format, val source: ScopeSource)
