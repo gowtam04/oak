@@ -52,6 +52,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -141,7 +142,7 @@ fun TeamEditor(
                     }
                     IconButton(onClick = { showAssistant = true }) { Icon(Icons.Filled.AutoAwesome, contentDescription = "Team assistant") }
                     if (state.isSaving) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp).padding(end = OakSpacing.md), strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp).padding(end = OakSpacing.md), strokeWidth = 2.dp, color = LocalOakColors.current.accent)
                     } else {
                         TextButton(onClick = viewModel::save) { Text("Save", fontWeight = FontWeight.SemiBold) }
                     }
@@ -218,7 +219,13 @@ fun TeamEditor(
 
     if (showAssistant) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(onDismissRequest = { showAssistant = false }, sheetState = sheetState) {
+        ModalBottomSheet(
+            onDismissRequest = { showAssistant = false },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            scrimColor = LocalOakColors.current.scrim,
+            shape = RoundedCornerShape(topStart = OakRadius.xl, topEnd = OakRadius.xl),
+        ) {
             TeamsAssistantSheet(viewModel = assistantViewModel, onDone = { showAssistant = false })
         }
     }
@@ -436,11 +443,19 @@ private fun StatRow(label: String, value: Int, range: IntRange, step: Int, onCha
 
 @Composable
 private fun GenderRow(gender: TeamMember.Gender?, onChange: (TeamMember.Gender?) -> Unit) {
+    val oak = LocalOakColors.current
+    val chipShape = RoundedCornerShape(OakRadius.pill)
+    val chipColors = FilterChipDefaults.filterChipColors(
+        containerColor = oak.surfaceSunken,
+        labelColor = oak.textMuted,
+        selectedContainerColor = oak.azureSoft,
+        selectedLabelColor = oak.azure,
+    )
     Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
-        FilterChip(selected = gender == null, onClick = { onChange(null) }, label = { Text("Unspecified") })
-        FilterChip(selected = gender == TeamMember.Gender.MALE, onClick = { onChange(TeamMember.Gender.MALE) }, label = { Text("Male") })
-        FilterChip(selected = gender == TeamMember.Gender.FEMALE, onClick = { onChange(TeamMember.Gender.FEMALE) }, label = { Text("Female") })
-        FilterChip(selected = gender == TeamMember.Gender.NEUTRAL, onClick = { onChange(TeamMember.Gender.NEUTRAL) }, label = { Text("Genderless") })
+        FilterChip(selected = gender == null, onClick = { onChange(null) }, label = { Text("Unspecified") }, shape = chipShape, colors = chipColors)
+        FilterChip(selected = gender == TeamMember.Gender.MALE, onClick = { onChange(TeamMember.Gender.MALE) }, label = { Text("Male") }, shape = chipShape, colors = chipColors)
+        FilterChip(selected = gender == TeamMember.Gender.FEMALE, onClick = { onChange(TeamMember.Gender.FEMALE) }, label = { Text("Female") }, shape = chipShape, colors = chipColors)
+        FilterChip(selected = gender == TeamMember.Gender.NEUTRAL, onClick = { onChange(TeamMember.Gender.NEUTRAL) }, label = { Text("Genderless") }, shape = chipShape, colors = chipColors)
     }
 }
 

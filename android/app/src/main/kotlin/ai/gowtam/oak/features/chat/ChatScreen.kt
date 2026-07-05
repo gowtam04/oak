@@ -258,7 +258,13 @@ fun ChatScreen(
 
     if (showScopePicker) {
         val sheetState = rememberModalBottomSheetState()
-        ModalBottomSheet(onDismissRequest = { showScopePicker = false }, sheetState = sheetState) {
+        ModalBottomSheet(
+            onDismissRequest = { showScopePicker = false },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            scrimColor = oak.scrim,
+            shape = RoundedCornerShape(topStart = OakRadius.xl, topEnd = OakRadius.xl),
+        ) {
             ScopePickerSheet(
                 current = uiState.displayFormat,
                 onSelect = { format ->

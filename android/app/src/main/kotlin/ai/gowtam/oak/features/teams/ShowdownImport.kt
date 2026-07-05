@@ -81,7 +81,7 @@ fun ShowdownImportDialog(
                     navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Cancel") } },
                     actions = {
                         when {
-                            isImporting -> CircularProgressIndicator(modifier = Modifier.padding(end = OakSpacing.md), strokeWidth = 2.dp)
+                            isImporting -> CircularProgressIndicator(modifier = Modifier.padding(end = OakSpacing.md), strokeWidth = 2.dp, color = LocalOakColors.current.accent)
                             importedTeam == null -> TextButton(
                                 enabled = paste.isNotBlank(),
                                 onClick = {

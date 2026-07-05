@@ -1,7 +1,9 @@
 package ai.gowtam.oak.features.auth
 
+import ai.gowtam.oak.ui.FredokaFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberReduceMotion
@@ -105,7 +107,7 @@ fun AuthScreen(viewModel: AuthViewModel, modifier: Modifier = Modifier) {
     ) {
         Text(
             text = "Sign in to Oak",
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FredokaFamily),
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.semantics { heading() },
         )
@@ -313,12 +315,29 @@ private fun CodeBoxes(
 @Composable
 private fun DigitBox(digit: Char?, isActive: Boolean) {
     val colors = LocalOakColors.current
-    val borderColor = if (isActive) colors.accent else colors.border
+    val reduceMotion = rememberReduceMotion()
+    val filled = digit != null
+    // Azure focus ring on the box awaiting input (Oak reserves red for the live state);
+    // a filled box firms its hairline and pops in on the snappy spring.
+    val borderColor = when {
+        isActive -> colors.azure
+        filled -> colors.borderStrong
+        else -> colors.border
+    }
+    val shape = RoundedCornerShape(OakRadius.md)
+    val pop = remember { Animatable(1f) }
+    LaunchedEffect(filled) {
+        if (filled && !reduceMotion) {
+            pop.snapTo(0.85f)
+            pop.animateTo(1f, OakMotion.snappy)
+        }
+    }
     Box(
         modifier = Modifier
             .size(width = 44.dp, height = 56.dp)
-            .background(colors.surfaceRaised, RoundedCornerShape(OakRadius.md))
-            .border(if (isActive) 2.dp else 1.dp, borderColor, RoundedCornerShape(OakRadius.md)),
+            .graphicsLayer { scaleX = pop.value; scaleY = pop.value }
+            .background(colors.surfaceSunken, shape)
+            .border(if (isActive) 2.dp else 1.dp, borderColor, shape),
         contentAlignment = Alignment.Center,
     ) {
         if (digit != null) {

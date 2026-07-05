@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -316,10 +317,17 @@ private fun ConversationRow(
         },
     ) {
         var showMenu by remember { mutableStateOf(false) }
+        val pinned = conversation.pinned
+        val railColor = oak.accent
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(if (conversation.pinned) oak.accentSoft.copy(alpha = 0.4f) else Color.Transparent)
+                // Pinned/active rows carry the brand's red 3dp left rail over a faint
+                // accent wash; unpinned rows sit flush on the canvas (no width shift).
+                .background(if (pinned) oak.accentSoft.copy(alpha = 0.35f) else Color.Transparent)
+                .drawBehind {
+                    if (pinned) drawRect(color = railColor, size = size.copy(width = 3.dp.toPx()))
+                }
                 .clickable { onSelect(conversation) }
                 .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
@@ -383,14 +391,19 @@ private fun ConversationRow(
 @Composable
 private fun RenameDialog(initialTitle: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initialTitle) }
+    val oak = LocalOakColors.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Rename conversation") },
         text = {
             OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true, label = { Text("Title") })
         },
-        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save", color = oak.accent) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = oak.textMuted) } },
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(OakRadius.lg),
+        titleContentColor = oak.textStrong,
+        textContentColor = oak.text,
     )
 }
 

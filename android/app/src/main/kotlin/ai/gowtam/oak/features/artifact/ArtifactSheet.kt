@@ -126,6 +126,9 @@ fun ArtifactSheet(viewModel: ArtifactViewModel, modifier: Modifier = Modifier) {
         onDismissRequest = viewModel::dismiss,
         modifier = modifier,
         sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        scrimColor = LocalOakColors.current.scrim,
+        shape = RoundedCornerShape(topStart = OakRadius.xl, topEnd = OakRadius.xl),
         dragHandle = { BottomSheetDefaults.DragHandle() },
         properties = ModalBottomSheetDefaults.properties(shouldDismissOnBackPress = false),
     ) {

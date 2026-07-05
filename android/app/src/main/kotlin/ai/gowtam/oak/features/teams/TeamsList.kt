@@ -212,7 +212,7 @@ private fun TeamsListScreen(
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
                 state.teams.isEmpty() && state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(color = LocalOakColors.current.accent)
                 }
                 state.teams.isEmpty() -> EmptyState(formatFilter = state.formatFilter)
                 else -> LazyColumn {
