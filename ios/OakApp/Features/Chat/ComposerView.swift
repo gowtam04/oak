@@ -111,12 +111,17 @@ struct ComposerView: View {
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
-    // A frosted bar lifted off the thread with a hairline top divider and (light mode
-    // only) a faint upward shadow; dark mode leans on the divider alone (constraint 6).
+    // A frosted bar lifted off the thread: the keyboard blur (`.ultraThinMaterial`)
+    // tinted toward Oak's **canvas** so it reads warm paper, not cool system gray,
+    // against the cream thread (§4.2). A themed hairline top edge and (light mode
+    // only) a faint upward shadow; dark mode leans on the hairline alone.
     .background {
       Rectangle()
         .fill(.ultraThinMaterial)
-        .overlay(alignment: .top) { Divider() }
+        .overlay(Theme.canvas.opacity(0.7))
+        .overlay(alignment: .top) {
+          Rectangle().fill(Theme.separator).frame(height: 1)
+        }
         .shadow(
           color: colorScheme == .dark ? .clear : .black.opacity(0.05),
           radius: 8, y: -3

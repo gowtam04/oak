@@ -128,12 +128,14 @@ struct ChatView: View {
     .navigationTitle("Oak")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
-      // The wordmark lockup (§4.1): the brand tile + Fredoka "Oak" leading, so the
-      // Chat root reads as Oak the instant it opens. Only on the root (guest single
-      // thread); a pushed signed-in thread keeps the system back button leading.
+      // The brand tile (§4.1) leading, so the Chat root reads as Oak the instant it
+      // opens. Tile-only: iOS 26 crops a wide toolbar item to a circular glass
+      // chip, so the full "Oak" wordmark lives in the empty-state hero instead.
+      // Only on the root (guest single thread); a pushed signed-in thread keeps the
+      // system back button leading.
       if showsNewConversationButton {
         ToolbarItem(placement: .topBarLeading) {
-          OakWordmarkLockup()
+          OakWordmarkLockup(showsWordmark: false)
         }
       }
       // The scope control (GS-C): the header's visible counterpart to the `scope`

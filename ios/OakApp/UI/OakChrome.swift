@@ -84,6 +84,11 @@ struct OakWordmarkLockup: View {
   var titleStyle: Font.TextStyle = .title3
   /// Whether the tile carries a raised shadow (the hero lifts off the canvas).
   var elevated: Bool = false
+  /// Whether the "Oak" wordmark is shown beside the tile. The nav-leading slot
+  /// passes `false` — iOS 26 wraps a leading toolbar item in a circular glass
+  /// chip that would crop a wide tile+text lockup, so only the (square) tile,
+  /// which fits the chip cleanly, is shown there. The hero keeps the full lockup.
+  var showsWordmark: Bool = true
 
   var body: some View {
     HStack(spacing: tileSize * 0.28) {
@@ -96,9 +101,11 @@ struct OakWordmarkLockup: View {
             .frame(width: tileSize * 0.52, height: tileSize * 0.52)
         )
         .modifier(OptionalRaisedShadow(active: elevated))
-      Text("Oak")
-        .font(Theme.display(titleStyle))
-        .foregroundStyle(Theme.textStrong)
+      if showsWordmark {
+        Text("Oak")
+          .font(Theme.display(titleStyle))
+          .foregroundStyle(Theme.textStrong)
+      }
     }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Oak")
