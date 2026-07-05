@@ -77,6 +77,7 @@ struct ChatTabView: View {
       }
       .navigationDestination(for: ChatRoute.self) { route in
         ChatThreadScreen(source: route)
+          .oakRedThread()
       }
     }
   }
