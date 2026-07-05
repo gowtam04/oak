@@ -120,7 +120,7 @@ private fun CitationRow(citation: Citation, onOpenEntity: (EntityKind, String) -
         )
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                text = citation.source,
+                text = displayCitationSource(citation.source),
                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                 color = if (parsed != null) oak.azure else oak.textStrong,
                 modifier = if (parsed != null) {
