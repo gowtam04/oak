@@ -43,10 +43,9 @@ function setup(
 }
 
 describe("ConversationList", () => {
-  it("fires onNewChat", () => {
-    const h = setup([]);
-    fireEvent.click(screen.getByTestId("new-chat"));
-    expect(h.onNewChat).toHaveBeenCalled();
+  it("renders no New-chat button of its own (AppNav owns that affordance)", () => {
+    setup([]);
+    expect(screen.queryByTestId("new-chat")).toBeNull();
   });
 
   it("forwards search input to onQueryChange", () => {

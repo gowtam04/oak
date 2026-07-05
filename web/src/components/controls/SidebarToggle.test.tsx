@@ -21,15 +21,15 @@ describe("SidebarToggle", () => {
   it("reflects the expanded state via aria-expanded and label", () => {
     const { button } = setup({ collapsed: false });
     expect(button).toHaveAttribute("aria-expanded", "true");
-    expect(button).toHaveAttribute("aria-label", "Collapse conversation history");
-    expect(button).toHaveAttribute("title", "Collapse conversation history");
+    expect(button).toHaveAttribute("aria-label", "Collapse sidebar");
+    expect(button).toHaveAttribute("title", "Collapse sidebar");
   });
 
   it("reflects the collapsed state via aria-expanded and label", () => {
     const { button } = setup({ collapsed: true });
     expect(button).toHaveAttribute("aria-expanded", "false");
-    expect(button).toHaveAttribute("aria-label", "Show conversation history");
-    expect(button).toHaveAttribute("title", "Show conversation history");
+    expect(button).toHaveAttribute("aria-label", "Show sidebar");
+    expect(button).toHaveAttribute("title", "Show sidebar");
   });
 
   it("points aria-controls at the controlled element", () => {

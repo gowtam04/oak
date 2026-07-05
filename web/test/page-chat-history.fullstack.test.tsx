@@ -7,7 +7,9 @@
  *     header scope chip follows the stored format (AC-5.4),
  *   - New chat resets to an empty thread (AC-6.1) and the chip to the
  *     Champions default,
- *   - sign-out hides the sidebar but keeps the thread,
+ *   - sign-out swaps the history list back for the sign-in hint but keeps
+ *     the rail (and the thread) in place (nav refactor Part 1 — the rail is
+ *     guest-visible; only its middle slot's content changes on auth state),
  *   - delete the open conversation → resets to a new chat (AC-8.2).
  *
  * Imports only view + lib code (never db/repos/server-only). Vitest jsdom project.
@@ -222,14 +224,18 @@ describe("Home — chat-history sidebar", () => {
     render(<Home />);
     await screen.findByTestId("auth-signin-button");
 
-    // Guest has no sidebar.
-    expect(screen.queryByTestId("history-sidebar")).not.toBeInTheDocument();
+    // Guest: the rail is present but shows the sign-in hint, not a history list.
+    const guestSidebar = await screen.findByTestId("history-sidebar");
+    expect(within(guestSidebar).getByTestId("history-signin-hint")).toBeInTheDocument();
+    expect(within(guestSidebar).queryByTestId("conversation-list")).not.toBeInTheDocument();
 
     await sendAndAwait("What beats Garchomp?", 1);
     await signIn();
 
-    // Sidebar appears and lists the imported conversation (title = first message).
+    // Sidebar swaps the hint for the list, which shows the imported conversation
+    // (title = first message).
     const sidebar = await screen.findByTestId("history-sidebar");
+    expect(within(sidebar).queryByTestId("history-signin-hint")).not.toBeInTheDocument();
     await waitFor(() =>
       expect(within(sidebar).getByText("What beats Garchomp?")).toBeInTheDocument(),
     );
@@ -285,19 +291,25 @@ describe("Home — chat-history sidebar", () => {
     expect(screen.getByTestId("scope-chip")).toHaveTextContent("Champions · Reg M-B");
   });
 
-  it("sign-out hides the sidebar but keeps the thread", async () => {
+  it("sign-out keeps the rail but swaps history for the sign-in hint", async () => {
     render(<Home />);
     await screen.findByTestId("auth-signin-button");
     await sendAndAwait("keep me", 1);
     await signIn();
-    await screen.findByTestId("history-sidebar");
+    const sidebar = await screen.findByTestId("history-sidebar");
+    await waitFor(() =>
+      expect(within(sidebar).getByTestId("conversation-list")).toBeInTheDocument(),
+    );
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("auth-signout-button"));
     });
     await waitFor(() => expect(screen.getByTestId("auth-signin-button")).toBeInTheDocument());
 
-    expect(screen.queryByTestId("history-sidebar")).not.toBeInTheDocument();
+    // The rail itself stays mounted; only its middle slot reverts to the hint.
+    expect(screen.getByTestId("history-sidebar")).toBeInTheDocument();
+    expect(within(sidebar).getByTestId("history-signin-hint")).toBeInTheDocument();
+    expect(within(sidebar).queryByTestId("conversation-list")).not.toBeInTheDocument();
     // Thread persists across the user→guest transition.
     expect(screen.getByText("keep me")).toBeInTheDocument();
   });
@@ -306,15 +318,18 @@ describe("Home — chat-history sidebar", () => {
     render(<Home />);
     await screen.findByTestId("auth-signin-button");
 
-    // Guest: no toggle (the sidebar itself is also absent).
-    expect(screen.queryByTestId("sidebar-toggle")).not.toBeInTheDocument();
+    // Guest: the toggle (and rail) is already present, starting expanded (no
+    // stored pref; jsdom has no matchMedia → not narrow) — the rail is
+    // guest-visible, so there's nothing signed-in-only about the toggle.
+    const guestToggle = screen.getByTestId("sidebar-toggle");
+    expect(guestToggle).toHaveAttribute("aria-expanded", "true");
 
     await signIn();
     const sidebar = await screen.findByTestId("history-sidebar");
     const toggle = screen.getByTestId("sidebar-toggle");
     const inner = sidebar.querySelector(".chat-page__sidebar-inner")!;
 
-    // Starts expanded (no stored pref; jsdom has no matchMedia → not narrow).
+    // Still expanded after sign-in (same toggle instance, unaffected by auth).
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(sidebar).not.toHaveClass("chat-page__sidebar--collapsed");
     expect(inner).not.toHaveAttribute("inert");

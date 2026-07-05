@@ -1,13 +1,15 @@
 "use client";
 
 /**
- * SidebarToggle — collapses/expands the chat-history sidebar.
+ * SidebarToggle — collapses/expands the app rail (nav + history sidebar).
  *
- * Lives in the header band (signed-in only) and reuses the `.theme-toggle`
- * pill style (globals.css) so it reads as a peer chrome control. Purely
- * presentational: `collapsed` + `onToggle` come from the page, which owns the
- * state and its localStorage persistence. One glyph for both states — only the
- * label flips (mirrors how ThemeToggle keeps a single button).
+ * Lives in the header band and is visible to guests and signed-in users
+ * alike (the rail itself is guest-visible — nav refactor Part 1), reusing the
+ * `.theme-toggle` pill style (globals.css) so it reads as a peer chrome
+ * control. Purely presentational: `collapsed` + `onToggle` come from the
+ * page, which owns the state and its localStorage persistence. One glyph for
+ * both states — only the label flips (mirrors how ThemeToggle keeps a single
+ * button).
  */
 
 interface SidebarToggleProps {
@@ -22,9 +24,7 @@ export default function SidebarToggle({
   onToggle,
   controlsId,
 }: SidebarToggleProps) {
-  const label = collapsed
-    ? "Show conversation history"
-    : "Collapse conversation history";
+  const label = collapsed ? "Show sidebar" : "Collapse sidebar";
 
   return (
     <button

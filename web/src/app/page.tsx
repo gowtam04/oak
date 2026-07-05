@@ -9,6 +9,7 @@ import ThemeToggle from "@/components/controls/ThemeToggle";
 import AuthMenu from "@/components/auth/AuthMenu";
 import AuthDialog from "@/components/auth/AuthDialog";
 import ConversationList from "@/components/history/ConversationList";
+import AppNav from "@/components/nav/AppNav";
 import SidebarToggle from "@/components/controls/SidebarToggle";
 import ScopeChip from "@/components/controls/ScopeChip";
 import VoiceOverlay from "@/components/voice/VoiceOverlay";
@@ -144,13 +145,17 @@ export default function Home() {
     }
   }, []);
 
-  // History-sidebar collapsed state. Default expanded so the first render is
-  // deterministic (the sidebar + its toggle are both gated on `auth.signedIn`,
-  // which only flips after `fetchMe()` resolves post-mount, so no SSR markup
-  // ever contains them — no hydration risk). Resolve the real choice after
-  // mount: a stored explicit choice wins; absent one, narrow screens (≤768px)
-  // start collapsed (decided once, like the artifact viewer's CSS breakpoint).
+  // App-rail collapsed state. The rail is now visible to everyone (guests get
+  // nav + a sign-in hint where history would go), so it's present in SSR
+  // markup from the start — default expanded there is deterministic and
+  // matches the eventual desktop resolution for the common case. Resolve the
+  // real choice after mount: a stored explicit choice wins; absent one,
+  // narrow screens (≤768px) start collapsed (decided once, like the artifact
+  // viewer's CSS breakpoint). `railBoot` suppresses the collapse transition
+  // until this resolution lands, so an SSR-expanded rail that mount-corrects
+  // to collapsed (mobile) doesn't visibly slide shut on first paint.
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [railBoot, setRailBoot] = useState(true);
   useEffect(() => {
     try {
       // On a phone the sidebar is an overlay drawer, so it must NEVER start open
@@ -169,6 +174,8 @@ export default function Home() {
       // else: keep the default (expanded) on desktop.
     } catch {
       /* storage/matchMedia unavailable — keep the default (expanded) */
+    } finally {
+      setRailBoot(false);
     }
   }, []);
 
@@ -480,7 +487,7 @@ export default function Home() {
   // the NON-persisting setter + a viewport guard so it never collapses the
   // in-flow desktop sidebar or clobbers the stored desktop preference.
   useEffect(() => {
-    if (!auth.signedIn || sidebarCollapsed) return;
+    if (sidebarCollapsed) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (
         e.key === "Escape" &&
@@ -491,19 +498,17 @@ export default function Home() {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [auth.signedIn, sidebarCollapsed]);
+  }, [sidebarCollapsed]);
 
   return (
     <main className="chat-page" data-testid="chat-page">
       <header className="chat-page__header">
         <div className="chat-page__title-cluster">
-          {auth.signedIn && (
-            <SidebarToggle
-              collapsed={sidebarCollapsed}
-              onToggle={() => setSidebarCollapsedPersisted(!sidebarCollapsed)}
-              controlsId={SIDEBAR_ID}
-            />
-          )}
+          <SidebarToggle
+            collapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsedPersisted(!sidebarCollapsed)}
+            controlsId={SIDEBAR_ID}
+          />
           <button
             type="button"
             className="chat-page__title"
@@ -537,14 +542,6 @@ export default function Home() {
               (menuOpen ? " chat-page__controls--open" : "")
             }
           >
-            {auth.signedIn && (
-              <>
-                <a className="chat-page__teams-link" href="/teams">
-                  Teams
-                </a>
-                <span className="chat-page__header-divider" aria-hidden></span>
-              </>
-            )}
             <ThemeToggle />
             <AuthMenu
               signedIn={auth.signedIn}
@@ -572,45 +569,69 @@ export default function Home() {
 
       <div className="chat-page__body">
         <ArtifactViewerProvider format={displayFormat}>
-          {/* History sidebar — signed-in only (guests have no server history).
-              Collapses to width 0 via the toggle; the inner wrapper keeps its
-              fixed width so content doesn't reflow mid-slide, and goes `inert`
-              when collapsed so its controls leave the tab + a11y trees. */}
-          {auth.signedIn && (
-            <aside
-              id={SIDEBAR_ID}
-              data-testid="history-sidebar"
-              className={
-                "chat-page__sidebar" +
-                (sidebarCollapsed ? " chat-page__sidebar--collapsed" : "")
-              }
+          {/* App rail — visible to everyone (nav refactor Part 1): New chat +
+              Teams + a quiet Reference footer for all users, with the
+              signed-in conversation list (or a guest sign-in hint) in the
+              middle slot. Collapses to width 0 via the toggle; the inner
+              wrapper keeps its fixed width so content doesn't reflow
+              mid-slide, and goes `inert` when collapsed so its controls leave
+              the tab + a11y trees. `railBoot` suppresses the collapse
+              transition until the mount-resolution effect above has run, so a
+              mobile correction from the SSR-expanded default can't flash. */}
+          <aside
+            id={SIDEBAR_ID}
+            data-testid="history-sidebar"
+            className={
+              "chat-page__sidebar" +
+              (sidebarCollapsed ? " chat-page__sidebar--collapsed" : "") +
+              (railBoot ? " chat-page__sidebar--boot" : "")
+            }
+          >
+            <div
+              className="chat-page__sidebar-inner"
+              inert={sidebarCollapsed ? true : undefined}
             >
-              <div
-                className="chat-page__sidebar-inner"
-                inert={sidebarCollapsed ? true : undefined}
-              >
-                <ConversationList
-                  conversations={conversations.conversations}
-                  activeId={sessionId}
-                  query={conversations.query}
-                  onQueryChange={conversations.setQuery}
-                  formatFilter={conversations.formatFilter}
-                  onFormatFilterChange={conversations.setFormatFilter}
-                  onNewChat={handleNewChat}
-                  onOpen={handleOpenConversation}
-                  onRename={conversations.rename}
-                  onPin={conversations.pin}
-                  onDelete={handleDeleteConversation}
-                />
-              </div>
-            </aside>
-          )}
+              <AppNav pathname="/" onNewChat={handleNewChat}>
+                {auth.signedIn ? (
+                  <ConversationList
+                    conversations={conversations.conversations}
+                    activeId={sessionId}
+                    query={conversations.query}
+                    onQueryChange={conversations.setQuery}
+                    formatFilter={conversations.formatFilter}
+                    onFormatFilterChange={conversations.setFormatFilter}
+                    onNewChat={handleNewChat}
+                    onOpen={handleOpenConversation}
+                    onRename={conversations.rename}
+                    onPin={conversations.pin}
+                    onDelete={handleDeleteConversation}
+                  />
+                ) : (
+                  <div
+                    className="chat-page__signin-hint"
+                    data-testid="history-signin-hint"
+                  >
+                    <p className="chat-page__signin-hint-text">
+                      Sign in to save chat history
+                    </p>
+                    <button
+                      type="button"
+                      className="chat-page__signin-hint-cta"
+                      onClick={() => setAuthDialogOpen(true)}
+                    >
+                      Sign in
+                    </button>
+                  </div>
+                )}
+              </AppNav>
+            </div>
+          </aside>
 
-          {/* Mobile drawer scrim: tap to dismiss the history sidebar. Only
-              rendered when the drawer is open; CSS shows it as a full-screen
-              overlay below 768px and hides it on desktop (where the sidebar is
-              an in-flow column, not an overlay). */}
-          {auth.signedIn && !sidebarCollapsed && (
+          {/* Mobile drawer scrim: tap to dismiss the app rail. Only rendered
+              when the drawer is open; CSS shows it as a full-screen overlay
+              below 768px and hides it on desktop (where the rail is an
+              in-flow column, not an overlay). */}
+          {!sidebarCollapsed && (
             <div
               className="chat-page__scrim"
               data-testid="sidebar-scrim"

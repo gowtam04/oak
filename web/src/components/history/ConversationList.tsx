@@ -3,11 +3,15 @@
 /**
  * ConversationList — the signed-in history sidebar (chat-history Phase 6).
  *
- * A "New chat" action, a search field, a format filter, and the conversations
- * grouped pinned-first then most-recently-active (HIST-US-3, 6, 10, 11). Renders
- * a clear empty state (no conversations yet) and a distinct no-results state
- * (search/filter matched nothing). Purely presentational — all state + data come
- * from the parent (which wires the `useConversations` hook).
+ * A search field, a format filter, and the conversations grouped
+ * pinned-first then most-recently-active (HIST-US-3, 6, 10, 11). Renders a
+ * clear empty state (no conversations yet) and a distinct no-results state
+ * (search/filter matched nothing). Purely presentational — all state + data
+ * come from the parent (which wires the `useConversations` hook).
+ *
+ * "New chat" itself lives in `AppNav` now (nav refactor Part 1) — the
+ * `onNewChat` prop here only powers the empty-state CTA ("Start your first
+ * chat"), not a dedicated button of its own.
  */
 
 import type { ConversationSummary } from "@/lib/api/history-client";
@@ -73,15 +77,6 @@ export default function ConversationList({
       data-testid="conversation-list"
       aria-label="Conversation history"
     >
-      <button
-        type="button"
-        className="conv-list__newchat"
-        onClick={onNewChat}
-        data-testid="new-chat"
-      >
-        + New chat
-      </button>
-
       <input
         type="search"
         className="conv-list__search"
