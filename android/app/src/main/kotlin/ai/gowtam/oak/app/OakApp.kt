@@ -11,6 +11,8 @@ import ai.gowtam.oak.features.more.MoreRoute
 import ai.gowtam.oak.features.teams.TeamsRoute
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.ConnectionBanner
+import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakSpacing
@@ -330,8 +332,8 @@ private fun LoadErrorState(message: String, onRetry: () -> Unit, onBack: () -> U
                 color = oak.textMuted,
                 modifier = Modifier.padding(top = OakSpacing.xs, bottom = OakSpacing.lg),
             )
-            Button(onClick = onRetry) { Text("Retry") }
-            TextButton(onClick = onBack) { Text("Back to conversations") }
+            OakButton(onClick = onRetry) { Text("Retry") }
+            OakButton(onClick = onBack, style = OakButtonStyle.Ghost) { Text("Back to conversations") }
         }
     }
 }

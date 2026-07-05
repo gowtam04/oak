@@ -1,6 +1,8 @@
 package ai.gowtam.oak.features.chat.answercard
 
 import ai.gowtam.oak.ui.JetBrainsMonoFamily
+import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -156,7 +158,7 @@ fun DamageCalcBlock(
         }
 
         if (showOpenInViewerButton) {
-            OutlinedButton(onClick = onOpenInViewer) {
+            OakButton(onClick = onOpenInViewer, style = OakButtonStyle.Secondary) {
                 Text(text = "Open in viewer", color = oak.accent)
             }
         }

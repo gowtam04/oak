@@ -1,6 +1,8 @@
 package ai.gowtam.oak.features.teams
 
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -148,7 +150,7 @@ private fun IntroBlock(onSuggestion: (String) -> Unit) {
         )
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
             for (suggestion in TeamsAssistantViewModel.suggestions) {
-                OutlinedButton(onClick = { onSuggestion(suggestion) }) { Text(suggestion) }
+                OakButton(onClick = { onSuggestion(suggestion) }, style = OakButtonStyle.Secondary) { Text(suggestion) }
             }
         }
     }
@@ -220,11 +222,11 @@ private fun PatchCard(
                 Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = oak.success, modifier = Modifier.size(16.dp))
                 Text("Applied to draft", style = MaterialTheme.typography.labelMedium, color = oak.success)
                 if (isLastApplied) {
-                    OutlinedButton(onClick = onUndo) { Text("Undo") }
+                    OakButton(onClick = onUndo, style = OakButtonStyle.Secondary) { Text("Undo") }
                 }
             }
         } else {
-            Button(onClick = onApply, colors = ButtonDefaults.buttonColors(containerColor = oak.accent)) {
+            OakButton(onClick = onApply) {
                 Text("Apply to draft")
             }
         }

@@ -6,6 +6,7 @@ import ai.gowtam.oak.features.auth.AuthDialog
 import ai.gowtam.oak.features.auth.AuthViewModel
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.SpriteImage
 import ai.gowtam.oak.wire.DexSpriteRef
@@ -137,7 +138,7 @@ private fun TeamsSignInPrompt(services: ServiceContainer, appState: AppState, mo
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = OakSpacing.xl),
             )
-            Button(onClick = { showSignIn = true }) { Text("Sign in") }
+            OakButton(onClick = { showSignIn = true }) { Text("Sign in") }
         }
     }
 

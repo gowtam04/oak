@@ -2,6 +2,8 @@ package ai.gowtam.oak.features.teams
 
 import ai.gowtam.oak.services.TeamsAssistantService
 import ai.gowtam.oak.ui.JetBrainsMonoFamily
+import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakRadius
@@ -189,9 +191,9 @@ fun TeamEditor(
 
                 if (viewModel.canAddMember) {
                     item {
-                        OutlinedButton(onClick = viewModel::addMember, modifier = Modifier.fillMaxWidth()) {
+                        OakButton(onClick = viewModel::addMember, style = OakButtonStyle.Secondary, modifier = Modifier.fillMaxWidth()) {
                             Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text("  Add Pokémon")
+                            Text("Add Pokémon")
                         }
                     }
                 }

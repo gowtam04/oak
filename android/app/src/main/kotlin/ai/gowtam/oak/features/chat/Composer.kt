@@ -3,6 +3,7 @@ package ai.gowtam.oak.features.chat
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.rememberReduceMotion
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -11,11 +12,17 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +47,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -51,7 +59,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
@@ -216,36 +228,118 @@ fun Composer(
                 }
             }
 
+            // The composer field is a surface pill. Focus is AZURE (Oak reserves red for
+            // the live/streaming state), so the border + soft glow turn azure while
+            // editing and red only while a turn streams; borderStrong is the idle hairline.
+            var isFocused by remember { mutableStateOf(false) }
+            val fieldAccent = when {
+                isStreaming -> oak.accent
+                isFocused -> oak.azure
+                else -> oak.borderStrong
+            }
+            val glowActive = isStreaming || isFocused
             OutlinedTextField(
                 value = composerText,
                 onValueChange = onTextChange,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged { isFocused = it.isFocused }
+                    .then(
+                        if (glowActive) {
+                            Modifier.shadow(
+                                elevation = 6.dp,
+                                shape = RoundedCornerShape(OakRadius.lg),
+                                ambientColor = fieldAccent,
+                                spotColor = fieldAccent,
+                            )
+                        } else {
+                            Modifier
+                        },
+                    ),
                 placeholder = { Text("Ask Oak a Pokémon question…") },
                 maxLines = 5,
                 shape = RoundedCornerShape(OakRadius.lg),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = if (isStreaming) oak.accent else oak.azure,
+                    unfocusedBorderColor = if (isStreaming) oak.accent else oak.borderStrong,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    cursorColor = oak.azure,
+                    focusedTextColor = oak.text,
+                    unfocusedTextColor = oak.text,
+                    focusedPlaceholderColor = oak.textFaint,
+                    unfocusedPlaceholderColor = oak.textFaint,
+                ),
             )
 
-            val enabled = isStreaming || canSend
-            IconButton(
-                onClick = { if (isStreaming) onStop() else onSend() },
-                enabled = enabled,
-                // 48dp meets the minimum touch target (D-UI-4); Material's IconButton
-                // would otherwise expand a smaller explicit size back up via its own
-                // minimum-interactive-size wrapper, but setting it directly here keeps
-                // the visible circle and the touch bounds the same size.
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(if (enabled) oak.accent else oak.accent.copy(alpha = 0.4f)),
-            ) {
-                Icon(
-                    imageVector = if (isStreaming) Icons.Filled.Stop else Icons.Filled.ArrowUpward,
-                    contentDescription = if (isStreaming) "Stop" else "Send",
-                    tint = oak.surfaceRaised,
-                )
-            }
+            SendDisc(
+                isStreaming = isStreaming,
+                canSend = canSend,
+                onSend = onSend,
+                onStop = onStop,
+            )
         }
+    }
+}
+
+/**
+ * The 44dp coral send disc (theme-translation spec §4.2). Its state choreography IS
+ * the microinteraction: *empty* (nothing to send, not streaming) → the disc shrinks to
+ * 0.85 and fills `surfaceSunken` with a faint glyph; *ready* → full-size coral with a
+ * white arrow; *press* → 0.94 snappy dip; *streaming* → the circle morphs to a rounded
+ * stop square. Scale animates on the snappy spring, collapsing to an instant snap under
+ * reduce-motion. The touch target stays ≥48dp via [minimumInteractiveComponentSize].
+ */
+@Composable
+private fun SendDisc(
+    isStreaming: Boolean,
+    canSend: Boolean,
+    onSend: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val oak = LocalOakColors.current
+    val reduceMotion = rememberReduceMotion()
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+
+    val enabled = isStreaming || canSend
+    val emptyState = !enabled
+    val targetScale = when {
+        pressed && enabled -> 0.94f
+        emptyState -> 0.85f
+        else -> 1f
+    }
+    val scale by animateFloatAsState(
+        targetValue = targetScale,
+        animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessHigh),
+        label = "sendDiscScale",
+    )
+    val discShape = if (isStreaming) RoundedCornerShape(OakRadius.sm) else CircleShape
+    val discFill = if (enabled) oak.accent else oak.surfaceSunken
+    val glyphTint = if (enabled) Color.White else oak.textFaint
+
+    Box(
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .size(44.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(discShape)
+            .background(discFill)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                onClickLabel = if (isStreaming) "Stop" else "Send",
+                onClick = { if (isStreaming) onStop() else onSend() },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = if (isStreaming) Icons.Filled.Stop else Icons.Filled.ArrowUpward,
+            contentDescription = if (isStreaming) "Stop" else "Send",
+            tint = glyphTint,
+        )
     }
 }
 

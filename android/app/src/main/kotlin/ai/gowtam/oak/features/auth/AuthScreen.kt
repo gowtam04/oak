@@ -1,6 +1,7 @@
 package ai.gowtam.oak.features.auth
 
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberReduceMotion
@@ -354,12 +355,10 @@ private fun SuccessBlock(email: String, reduceMotion: Boolean) {
 
 @Composable
 private fun PrimaryButton(title: String, enabled: Boolean, isBusy: Boolean, onClick: () -> Unit) {
-    Button(
+    OakButton(
         onClick = onClick,
         enabled = enabled || isBusy,
-        shape = RoundedCornerShape(OakRadius.pill),
         modifier = Modifier.fillMaxWidth(),
-        colors = ButtonDefaults.buttonColors(containerColor = LocalOakColors.current.accent, contentColor = Color.White),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(text = title, modifier = Modifier.graphicsLayer(alpha = if (isBusy) 0f else 1f))

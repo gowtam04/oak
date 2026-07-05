@@ -6,14 +6,22 @@ import ai.gowtam.oak.features.chat.answercard.AnswerCard
 import ai.gowtam.oak.features.chat.answercard.AnswerCardActions
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
+import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakTopBar
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberHaptics
+import ai.gowtam.oak.ui.rememberReduceMotion
 import ai.gowtam.oak.wire.Format
 import android.content.res.Configuration
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +66,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.heading
@@ -271,11 +282,13 @@ fun ChatScreen(
 @Composable
 private fun ScopeChip(format: Format, enabled: Boolean, onClick: () -> Unit) {
     val oak = LocalOakColors.current
+    val chipShape = RoundedCornerShape(OakRadius.pill)
     Row(
         modifier = Modifier
             .padding(end = OakSpacing.sm)
-            .clip(RoundedCornerShape(OakRadius.pill))
-            .background(oak.surfaceRaised, RoundedCornerShape(OakRadius.pill))
+            .clip(chipShape)
+            .background(oak.surfaceSunken, chipShape)
+            .border(1.dp, oak.border, chipShape)
             .then(if (enabled) Modifier.clickableChip(onClick) else Modifier)
             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -283,7 +296,7 @@ private fun ScopeChip(format: Format, enabled: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text = format.shortLabel,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = if (enabled) oak.textStrong else oak.textMuted,
         )
         Icon(
@@ -355,15 +368,27 @@ private fun TurnRow(turn: ChatTurnItem, actions: AnswerCardActions) {
 @Composable
 private fun UserMessageRow(turn: ChatTurnItem.User) {
     val oak = LocalOakColors.current
+    val dark = isSystemInDarkTheme()
+    // The paper bubble (§4.3): a soft accent-tinted fill with a red-tinted hairline and
+    // OAK INK (not white) — quieter and more paper-like than a flat coral fill. Raised
+    // shadow in light; in dark the hairline carries the edge instead (no shadow).
+    val bubbleFill = if (dark) Color(0xFF2E1D1B) else Color(0xFFFDF2F1)
+    val bubbleShape = RoundedCornerShape(
+        topStart = OakRadius.lg, topEnd = OakRadius.lg,
+        bottomEnd = OakRadius.sm, bottomStart = OakRadius.lg,
+    )
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(max = 320.dp)) {
             if (turn.text.isNotEmpty()) {
                 Text(
                     text = turn.text,
-                    color = androidx.compose.ui.graphics.Color.White,
+                    color = oak.text,
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier
-                        .background(oak.accent, RoundedCornerShape(OakRadius.lg))
+                        .then(if (dark) Modifier else Modifier.shadow(2.dp, bubbleShape))
+                        .clip(bubbleShape)
+                        .background(bubbleFill)
+                        .border(1.dp, oak.accent.copy(alpha = 0.28f), bubbleShape)
                         .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
                 )
             }
@@ -495,20 +520,49 @@ private fun EmptyState(onExampleTap: (String) -> Unit) {
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         Spacer(Modifier.height(OakSpacing.lg))
+        Text(
+            text = "TRY ASKING",
+            style = MaterialTheme.typography.labelSmall,
+            color = oak.textMuted,
+        )
+        Spacer(Modifier.height(OakSpacing.sm))
         Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
             for (question in examples) {
-                Text(
-                    text = question,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                    color = oak.accent,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(OakRadius.pill))
-                        .background(oak.accent.copy(alpha = 0.12f), RoundedCornerShape(OakRadius.pill))
-                        .clickableChip { onExampleTap(question) }
-                        .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
-                )
+                ExampleChip(text = question, onClick = { onExampleTap(question) })
             }
         }
     }
+}
+
+/**
+ * An empty-state example chip (§4.6): a surface pill with a `borderStrong` hairline
+ * that, on press, tints `accentSoft` with an accent border and dips 0.97 (snappy;
+ * instant under reduce-motion). Empty-state chips press *red* — the in-thread variant
+ * presses azure. Color is paired with the label, never the sole signal.
+ */
+@Composable
+private fun ExampleChip(text: String, onClick: () -> Unit) {
+    val oak = LocalOakColors.current
+    val reduceMotion = rememberReduceMotion()
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = if (reduceMotion) snap() else OakMotion.snappy,
+        label = "exampleChipScale",
+    )
+    val shape = RoundedCornerShape(OakRadius.pill)
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+        color = if (pressed) oak.accent else oak.text,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = Modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(shape)
+            .background(if (pressed) oak.accentSoft else MaterialTheme.colorScheme.surface, shape)
+            .border(1.dp, if (pressed) oak.accent else oak.borderStrong, shape)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
+    )
 }

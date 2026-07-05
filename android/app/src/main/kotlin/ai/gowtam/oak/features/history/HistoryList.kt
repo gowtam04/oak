@@ -39,10 +39,12 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -164,6 +166,18 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch
             }
         },
         shape = RoundedCornerShape(OakRadius.pill),
+        // Borderless sunken pill; the azure ring appears only on focus (§5.4).
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = oak.surfaceSunken,
+            unfocusedContainerColor = oak.surfaceSunken,
+            focusedBorderColor = oak.azure,
+            unfocusedBorderColor = Color.Transparent,
+            cursorColor = oak.azure,
+            focusedTextColor = oak.text,
+            unfocusedTextColor = oak.text,
+            focusedPlaceholderColor = oak.textFaint,
+            unfocusedPlaceholderColor = oak.textFaint,
+        ),
     )
 }
 
@@ -172,20 +186,32 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch
  * common formats for now (mirrors `ConversationListView.formatFilterMenu`). */
 @Composable
 private fun FormatFilterRow(current: Format?, onSelect: (Format?) -> Unit) {
+    val oak = LocalOakColors.current
+    val chipShape = RoundedCornerShape(OakRadius.pill)
+    val chipColors = FilterChipDefaults.filterChipColors(
+        containerColor = oak.surfaceSunken,
+        labelColor = oak.textMuted,
+        selectedContainerColor = oak.azureSoft,
+        selectedLabelColor = oak.azure,
+    )
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = OakSpacing.lg, vertical = OakSpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
-        FilterChip(selected = current == null, onClick = { onSelect(null) }, label = { Text("All") })
+        FilterChip(selected = current == null, onClick = { onSelect(null) }, label = { Text("All") }, shape = chipShape, colors = chipColors)
         FilterChip(
             selected = current == Format.ScarletViolet,
             onClick = { onSelect(Format.ScarletViolet) },
             label = { Text("Gen 9") },
+            shape = chipShape,
+            colors = chipColors,
         )
         FilterChip(
             selected = current == Format.Champions,
             onClick = { onSelect(Format.Champions) },
             label = { Text("Champions") },
+            shape = chipShape,
+            colors = chipColors,
         )
     }
 }
