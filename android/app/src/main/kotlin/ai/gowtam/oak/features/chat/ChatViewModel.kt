@@ -369,9 +369,15 @@ class ChatViewModel(
      * thread for guests and drops any resolved scope so the chip falls back to champions.
      */
     fun startNewConversation() {
-        // Abandon the current thread: stop its durable turn server-side (frees the
-        // per-conversation / per-owner slot) rather than leaving it running unwatched.
-        stopInFlightTurn()
+        // Abandon the current thread WITHOUT stopping its durable turn: unsubscribe and
+        // drop the LOCAL pending pointer, but let the turn keep generating server-side
+        // (BT-7 — the headline "start another chat while one generates" flow; parity with
+        // web `reset()` and iOS `resetStreamState()` + `clearPendingTurn()`, which never
+        // stop). A signed-in turn still completes and persists, recoverable on reopen via
+        // `active_turn`; a guest's wiped thread is unreachable anyway. Clearing the local
+        // pointer must happen BEFORE the session id rotates below.
+        detach()
+        clearPendingTurn()
         turns = emptyList()
         streamingText = ""
         toolActivities = emptyList()

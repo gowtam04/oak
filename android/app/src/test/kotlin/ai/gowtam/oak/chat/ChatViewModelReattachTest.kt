@@ -90,6 +90,28 @@ class ChatViewModelReattachTest {
     }
 
     @Test
+    fun startNewConversationDetachesWithoutStoppingTheDurableTurn() = runTest(mainDispatcherRule.dispatcher) {
+        val appState = pinnedAppState()
+        val chat = TurnThenAwaitChatService("turn-1")
+        val vm = ChatViewModel(chat = chat, appState = appState)
+        vm.setComposerText("hi")
+
+        vm.send()
+        advanceUntilIdle()
+        assertEquals("turn-1", appState.pendingTurn("conv-1"))
+
+        vm.startNewConversation()
+        advanceUntilIdle()
+
+        // The turn keeps generating server-side (recoverable via active_turn) — no stop,
+        // but the LOCAL pending pointer for the abandoned session is dropped.
+        assertTrue(chat.stopCalls.isEmpty())
+        assertNull(appState.pendingTurn("conv-1"))
+        assertFalse(vm.uiState.value.isStreaming)
+        assertTrue(vm.uiState.value.turns.isEmpty())
+    }
+
+    @Test
     fun stopCallsTheStopEndpointAndClearsThePendingTurn() = runTest(mainDispatcherRule.dispatcher) {
         var clock = 0L
         val appState = pinnedAppState()
