@@ -49,6 +49,12 @@ the design intent.
 - **Team builder** (signed-in) — create, edit, import, and export teams (Showdown
   paste format). A team can be set **active** for a conversation, scoping the
   agent's answers to that team.
+- **Competitive usage reference** — a public, web-only [`/meta`](web/src/app/(reference)/meta/)
+  section (no sign-in needed, like `/pokedex`): a leaderboard plus a per-species
+  drill-in with a usage-derived representative set, a Showdown-paste copy
+  affordance, and an "Ask Oak" deep link into chat. Backed by stored Smogon
+  monthly ladder usage stats (v1: Gen 9 OU) and the agent's matching
+  `get_meta_usage` tool (see [Data](#data)).
 - **Voice mode** (signed-in) — real-time spoken conversation with Oak (a Pokédex
   persona). The browser talks directly to xAI's Grok Voice realtime API over
   WebSocket with a server-minted ephemeral token; the voice model calls Oak's
@@ -117,12 +123,13 @@ flowchart TB
         GPT["GPT-5.5"]
     end
 
-    subgraph tools["19 tools — src/agent/tools/ (never throw in-domain)"]
+    subgraph tools["20 tools — src/agent/tools/ (never throw in-domain)"]
         TYPED["Typed lookups (T1–T8)<br/>resolve_entity · query_pokedex · get_pokemon · get_move<br/>get_ability · get_type_matchups · get_evolution_chain · get_item"]
         MATH["Battle math (T9–T10)<br/>compute_stat · estimate_damage — pure formulas"]
         FEAT["Feature tools (T12–T17)<br/>get_team · save_team · get_encounters<br/>get_usage_stats · list_teams · get_learnset"]
         SQL["run_sql (T18)<br/>guarded read-only SQL over the offline warehouse"]
         WIKI["search_wiki (T19)<br/>Postgres full-text search over the Fandom game corpus"]
+        META["get_meta_usage (T21)<br/>stored Smogon monthly ladder usage stats"]
         SUBMIT["submit_answer (T11)<br/>terminates the turn"]
     end
 
@@ -140,6 +147,7 @@ flowchart TB
     FEAT --> REPOS
     SQL --> REPOS
     WIKI --> REPOS
+    META --> REPOS
     REPOS --> PG
     SUBMIT --> ANSWER --> ROUTE
     ROUTE -->|"SSE: scope · tool_activity* · answer_start · answer_delta* · answer"| clients
@@ -167,7 +175,7 @@ frontend, API, agent loop, and the ingest CLI.
   the [`@pkmn`](https://github.com/pkmn) ecosystem (`@pkmn/dex`, `@pkmn/data`,
   `@pkmn/mods`), plus a global **national-dex warehouse** and a **wiki prose
   corpus** built from committed/crawled snapshots — see [Data](#data).
-- **Agent** — a provider-agnostic tool-loop over **19 tools** that return
+- **Agent** — a provider-agnostic tool-loop over **20 tools** that return
   structured facts; the model reasons on top and emits a Zod-validated
   `OakAnswer`.
 - **Models** — **xAI Grok 4.3** (native Responses API) is the primary/default,
@@ -187,7 +195,8 @@ frontend, API, agent loop, and the ingest CLI.
 
 Everything the agent reads lives in Postgres, built by `npm run ingest` — which
 is **fully offline and deterministic** (it reads local packages and committed
-snapshot files, never the network). Four sources feed it:
+snapshot files, never the network). Four sources feed it, plus one separately-run
+exception:
 
 1. **`@pkmn` format indexes** — Pokémon, moves, abilities, items, types, and
    learnsets for the six data scopes, from the local `@pkmn` npm packages
@@ -216,6 +225,14 @@ snapshot files, never the network). Four sources feed it:
    and cited (Bulbapedia, CC BY-NC-SA, is never crawled). The cache is not
    committed — an unbuilt corpus just means `search_wiki` returns no results,
    never an error.
+
+**The one exception:** `meta_snapshot` + `meta_usage` (backing `get_meta_usage`
+and the `/meta` reference pages) are **not** built by `npm run ingest` — they're
+built by a separate CLI, `npm run sync:meta`, which fetches Smogon's published
+monthly ladder usage stats (v1: Gen 9 OU) over the network and replaces each
+`(meta_format, month)` pair's rows idempotently. This is the codebase's **one
+network-fetching DB writer**; `sync:meta` is run manually, monthly, after
+Smogon publishes each month — it is never invoked as part of `ingest`.
 
 ## Getting started
 
@@ -278,6 +295,7 @@ npm run db:migrate && npm run ingest && npm run dev
 | `npm run db:generate`     | `drizzle-kit generate` — author a new migration from the schema.      |
 | `npm run db:migrate`      | Apply Drizzle migrations to `$DATABASE_URL`.                          |
 | `npm run ingest`          | (Re)build the Postgres index from `@pkmn` + snapshots (migrates first). Offline. |
+| `npm run sync:meta`       | Fetch + store Smogon monthly ladder usage stats (`meta_snapshot`/`meta_usage`). The one networked DB writer; run monthly, by hand. |
 | `npm run fetch:encounters`| Re-crawl the PokeAPI encounter snapshot (manual, networked, rare).    |
 | `npm run fetch:natdex`    | Re-crawl the natdex warehouse snapshots — veekun CSVs + PMD dataset (manual, networked, rare). |
 | `npm run fetch:wiki`      | Crawl the Fandom game-content corpus into `web/.wiki-cache/` (manual, networked; feeds `search_wiki`). |

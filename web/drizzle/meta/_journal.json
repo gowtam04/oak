@@ -78,6 +78,20 @@
       "when": 1783125701467,
       "tag": "0010_good_toxin",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1783232760741,
+      "tag": "0011_awesome_killer_shrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1783232766702,
+      "tag": "0012_meta_readonly_grants",
+      "breakpoints": true
     }
   ]
 }

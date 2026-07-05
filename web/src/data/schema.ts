@@ -35,6 +35,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   customType,
+  doublePrecision,
   index,
   integer,
   pgTable,
@@ -832,5 +833,108 @@ export const wiki_chunk = pgTable(
     index("wiki_chunk_page_id_idx").on(t.page_id),
     // GIN index over the generated tsvector — the retrieval hot path.
     index("wiki_chunk_tsv_idx").using("gin", t.tsv),
+  ],
+);
+
+// ===========================================================================
+// Smogon metagame warehouse — competitive ladder usage stats (backlog B-5)
+//
+// Two GLOBAL tables populated by `npm run sync:meta` (src/ingest/sync-meta.ts)
+// — the ONE network-fetching DB writer in the codebase; ingest itself stays
+// fully offline (see "Data layer — built from @pkmn" in CLAUDE.md). Each month
+// of a competitive ladder (see `@/data/meta-formats`, the MetaFormat axis —
+// deliberately separate from the six-scope data Format/AgentMode) is fetched
+// from Smogon's published chaos stats, transformed, and replaced wholesale for
+// its (meta_format, month) pair — never partial-written. Retention is ALL
+// synced months (no pruning). Exposed read-only through the T18 `run_sql`
+// sandbox (see `oak_readonly` grants + `WAREHOUSE_ALLOWLIST`) and via the
+// typed T21 `get_meta_usage` tool. Champions is intentionally absent here —
+// its usage stats are served live by T15 `get_usage_stats`, never stored.
+//
+// Following the schema's conventions: snake_case columns, NO jsonb (JSON
+// payloads are `text` columns holding a JSON string, documented per-column
+// below), no physical FK constraints (meta_format/species are logical joins
+// resolved in SQL), epoch-ms timestamps as `bigint` with `mode: "number"`.
+// `usage_pct` is this schema's first `doublePrecision` column — usage stats
+// are inherently fractional (0–100), unlike every other numeric column here.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// meta_snapshot — one row per (meta_format, month) sync, snapshot bookkeeping
+// ---------------------------------------------------------------------------
+export const meta_snapshot = pgTable(
+  "meta_snapshot",
+  {
+    /** Ladder id, e.g. "gen9ou" (see MetaFormat). Part of the PK. */
+    meta_format: text("meta_format").notNull(),
+    /** Month this snapshot covers, "YYYY-MM". Part of the PK. */
+    month: text("month").notNull(),
+    /** Exact Smogon format id used for the fetch, e.g. "gen9ou". */
+    smogon_format_id: text("smogon_format_id").notNull(),
+    /** Minimum-battles usage cutoff this snapshot was fetched at. */
+    cutoff: integer("cutoff").notNull(),
+    /** Total ladder battles Smogon recorded for the month; null if unpublished. */
+    total_battles: integer("total_battles"),
+    /** Count of distinct species present in this snapshot's meta_usage rows. */
+    species_count: integer("species_count").notNull(),
+    /** Epoch ms this snapshot was fetched by sync-meta. */
+    fetched_at: bigint("fetched_at", { mode: "number" }).notNull(),
+    /** Source chaos-stats URL fetched (citation/audit). */
+    source_url: text("source_url").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.meta_format, t.month] }),
+    // Month-scoped scans across ladders (e.g. "what's synced for 2026-06?").
+    index("meta_snapshot_month_idx").on(t.month),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// meta_usage — one row per (meta_format, month, species) usage-stats entry
+// ---------------------------------------------------------------------------
+export const meta_usage = pgTable(
+  "meta_usage",
+  {
+    /** Ladder id, e.g. "gen9ou". Part of the PK. */
+    meta_format: text("meta_format").notNull(),
+    /** Month this row covers, "YYYY-MM". Part of the PK. */
+    month: text("month").notNull(),
+    /** Oak canonical species slug (resolved via searchable_names). Part of the PK. */
+    species: text("species").notNull(),
+    /** Raw Smogon display name as published, e.g. "Urshifu-Rapid-Strike". */
+    display_name: text("display_name").notNull(),
+    /** Usage rank within the month (1 = most used). */
+    rank: integer("rank").notNull(),
+    /** Usage percentage, 0–100. This schema's first doublePrecision column. */
+    usage_pct: doublePrecision("usage_pct").notNull(),
+    /** Raw weighted usage count backing usage_pct; null if not published. */
+    raw_count: integer("raw_count"),
+    /** JSON string: top 15 `{name, slug, pct}` moves by usage. */
+    moves: text("moves").notNull(),
+    /** JSON string: top 15 `{name, slug, pct}` held items by usage. */
+    items: text("items").notNull(),
+    /** JSON string: top 15 `{name, slug, pct}` abilities by usage. */
+    abilities: text("abilities").notNull(),
+    /**
+     * JSON string: top 10 `{nature, evs, pct}` spreads by usage. `evs` is a
+     * "252/0/0/252/4/0" string in HP/Atk/Def/SpA/SpD/Spe order.
+     */
+    spreads: text("spreads").notNull(),
+    /** JSON string: top 12 `{name, slug, pct}` teammates by usage. */
+    teammates: text("teammates").notNull(),
+    /**
+     * JSON string: top 10 `{name, slug, score, ko_or_switch_pct, n}`
+     * checks-and-counters entries, sorted by `score` desc. `score` is Smogon's
+     * C&C ranking score `(p − 4·d) × 100`; `ko_or_switch_pct` is `p × 100` (the
+     * KO-or-forced-switch rate); `n` is the weighted encounter count.
+     */
+    counters: text("counters").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.meta_format, t.month, t.species] }),
+    // Leaderboard reads: top-N by rank within a (ladder, month).
+    index("meta_usage_rank_idx").on(t.meta_format, t.month, t.rank),
+    // Per-species lookups/trend queries across months.
+    index("meta_usage_species_idx").on(t.species),
   ],
 );

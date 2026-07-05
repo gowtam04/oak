@@ -67,6 +67,15 @@ SELECT 'bulk-' || g, 2000 + g, 1, 100, 300, 'normal'
 FROM generate_series(1, 250) g
 `;
 
+const META_USAGE_INSERT = `
+INSERT INTO meta_usage
+  (meta_format, month, species, display_name, rank, usage_pct, raw_count, moves, items, abilities, spreads, teammates, counters)
+VALUES
+  ('gen9ou','2026-05','great-tusk','Great Tusk',1,58.7,1437000,'[]','[]','[]','[]','[]','[]'),
+  ('gen9ou','2026-05','kingambit','Kingambit',3,42.1,1030500,'[]','[]','[]','[]','[]','[]'),
+  ('gen9ou','2026-04','great-tusk','Great Tusk',1,55.2,1390000,'[]','[]','[]','[]','[]','[]')
+`;
+
 const ctx = {
   logger: console,
   requestId: "test",
@@ -90,6 +99,7 @@ beforeAll(async () => {
     fix = await createPgSchema({ seed: "tools" });
     await fix.bundle.pool.query(NATDEX_INSERT);
     await fix.bundle.pool.query(BULK_INSERT);
+    await fix.bundle.pool.query(META_USAGE_INSERT);
 
     ({ dispatch } = await import("@/agent/tools"));
     ({ installSandboxPool, resetSandboxPool } = await import(
@@ -171,6 +181,33 @@ describe("run_sql (T18) — aggregations, oak_readonly role configuration", () =
     expect(out.rows).toHaveLength(200);
     expect(out.row_count).toBe(200);
     expect(out.truncated).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// meta_usage — the Smogon monthly ladder-usage warehouse tables (B-5).
+// ---------------------------------------------------------------------------
+describe("run_sql (T18) — meta_usage (Smogon ladder-usage warehouse tables)", () => {
+  beforeAll(() => {
+    ensureLoaded();
+    installSandboxPool(fix.bundle.pool);
+  });
+
+  it("reads seeded meta_usage rows filtered by meta_format and month", async () => {
+    const out = await runSql(
+      `SELECT species, usage_pct FROM meta_usage
+       WHERE meta_format = 'gen9ou' AND month = '2026-05'
+       ORDER BY rank`,
+    );
+    expect(isRows(out)).toBe(true);
+    if (!isRows(out)) return;
+    expect(out.columns).toEqual(["species", "usage_pct"]);
+    expect(out.rows).toEqual([
+      ["great-tusk", 58.7],
+      ["kingambit", 42.1],
+    ]);
+    expect(out.row_count).toBe(2);
+    expect(out.truncated).toBe(false);
   });
 });
 

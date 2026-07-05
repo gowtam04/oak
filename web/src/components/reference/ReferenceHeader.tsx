@@ -13,7 +13,7 @@ import Link from "next/link";
 
 export interface ReferenceHeaderProps {
   /** The section this page belongs to, for `aria-current="page"` on its nav link. */
-  current?: "pokedex" | "moves" | "abilities" | "items";
+  current?: "pokedex" | "moves" | "abilities" | "items" | "meta";
 }
 
 const NAV_ITEMS = [
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { key: "moves", href: "/moves", label: "Moves" },
   { key: "abilities", href: "/abilities", label: "Abilities" },
   { key: "items", href: "/items", label: "Items" },
+  { key: "meta", href: "/meta", label: "Meta" },
 ] as const;
 
 export default function ReferenceHeader({ current }: ReferenceHeaderProps) {

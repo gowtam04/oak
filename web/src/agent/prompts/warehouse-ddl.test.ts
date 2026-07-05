@@ -51,6 +51,8 @@ const liveColumns: Record<string, string[]> = {
   natdex_moves: Object.keys(getTableColumns(schema.natdex_moves)),
   classic_encounters: Object.keys(getTableColumns(schema.classic_encounters)),
   pmd_recruits: Object.keys(getTableColumns(schema.pmd_recruits)),
+  meta_snapshot: Object.keys(getTableColumns(schema.meta_snapshot)),
+  meta_usage: Object.keys(getTableColumns(schema.meta_usage)),
 };
 
 describe("WAREHOUSE_DDL drift guard", () => {
@@ -58,8 +60,8 @@ describe("WAREHOUSE_DDL drift guard", () => {
     expect([...parsed.keys()].sort()).toEqual([...WAREHOUSE_ALLOWLIST].sort());
   });
 
-  it("the allowlist matches the sandbox's exposed set (11 tables)", () => {
-    expect(WAREHOUSE_ALLOWLIST).toHaveLength(11);
+  it("the allowlist matches the sandbox's exposed set (13 tables)", () => {
+    expect(WAREHOUSE_ALLOWLIST).toHaveLength(13);
   });
 
   for (const table of WAREHOUSE_ALLOWLIST) {
