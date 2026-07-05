@@ -298,7 +298,14 @@ private fun ExistingConversationThread(
         loadError = null
         try {
             val detail = services.history.get(summary.id)
-            chatViewModel.loadResumed(conversationId = detail.id, format = detail.format, turns = detail.turns)
+            chatViewModel.loadResumed(
+                conversationId = detail.id,
+                format = detail.format,
+                turns = detail.turns,
+                // A durable turn still generating server-side (survives an app relaunch,
+                // when the client's own pending pointer is gone) — reattach on open.
+                activeTurnId = detail.activeTurn?.turnId,
+            )
             isLoaded = true
         } catch (e: Exception) {
             loadError = "This conversation is no longer available."
