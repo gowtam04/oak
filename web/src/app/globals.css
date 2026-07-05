@@ -419,24 +419,6 @@
   width: 22px;
   height: 22px;
 }
-.chat-page__header-divider {
-  flex: none;
-  width: 1px;
-  height: 20px;
-  background: var(--border);
-}
-
-/* Teams link sits on the paper header — normal ink nav link, not white-on-red. */
-.chat-page__teams-link {
-  color: var(--text);
-  font-weight: 600;
-  text-decoration: none;
-}
-.chat-page__teams-link:hover,
-.chat-page__teams-link:focus-visible {
-  text-decoration: underline;
-}
-
 /* "Active team" label + its <select>, kept apart so they don't glue together. */
 .active-team-selector {
   display: inline-flex;
@@ -497,10 +479,11 @@
   height: 20px;
 }
 
-/* Collapsible history sidebar (signed-in only). The <aside> is the clip
-   container that animates its width; the inner wrapper keeps a fixed 300px so
-   content never reflows mid-slide. Chrome (border/background) lives on the
-   inner wrapper so the hairline border vanishes cleanly at width 0. */
+/* Collapsible app rail (guest-visible — nav on top, history/hint below, see
+   AppNav). The <aside> is the clip container that animates its width; the
+   inner wrapper keeps a fixed 300px so content never reflows mid-slide.
+   Chrome (border/background) lives on the inner wrapper so the hairline
+   border vanishes cleanly at width 0. */
 .chat-page__sidebar {
   width: 300px;
   flex-shrink: 0;
@@ -511,11 +494,155 @@
 .chat-page__sidebar--collapsed {
   width: 0;
 }
+/* Suppresses the width/transform transition for one paint while the mount
+   effect resolves the real collapsed state (desktop vs. mobile) — otherwise
+   an SSR-default-expanded rail can visibly slide shut on first load. */
+.chat-page__sidebar--boot {
+  transition: none;
+}
 .chat-page__sidebar-inner {
   width: 300px;
   height: 100%;
   background: var(--surface);
   border-right: 1px solid var(--border);
+}
+
+/* ----- App rail (AppNav) --------------------------------------------------
+   The rail's own content: a top nav group, an optional middle slot for
+   page-specific content (history list or a guest sign-in hint), and a quiet
+   Reference footer pinned to the bottom via margin-top: auto. */
+.app-nav {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.app-nav__primary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+/* Transplanted from the old .conv-list__newchat (New chat now lives in the
+   rail, not the history list) — same red-pill treatment for both the
+   `<button>` (chat page) and `<Link>` (teams page) variants. */
+.app-nav__newchat {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: var(--poke-red);
+  color: var(--neutral-0);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--motion-fast);
+}
+.app-nav__newchat:hover {
+  background: var(--poke-red-hover);
+}
+.app-nav__link {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border-left: 3px solid transparent;
+  color: var(--text);
+  font-weight: 600;
+  font-size: var(--text-md);
+  text-decoration: none;
+  transition: background var(--motion-fast);
+}
+.app-nav__link:hover {
+  background: var(--surface-sunken);
+}
+/* Active = red left rail + soft red fill, mirroring .conv-row's active
+   language (the border is always 3px, transparent when inactive, so it
+   never shifts the row on activation). */
+.app-nav__link--active {
+  background: var(--poke-red-soft);
+  border-left-color: var(--poke-red);
+  color: var(--text-strong);
+}
+.app-nav__slot {
+  flex: 1;
+  min-height: 0;
+}
+.app-nav__reference {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: auto;
+  padding: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.app-nav__ref-heading {
+  padding: var(--space-2) var(--space-1) var(--space-1);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+.app-nav__ref-link {
+  padding: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+.app-nav__ref-link:hover {
+  text-decoration: underline;
+}
+.app-nav__ref-link[aria-current="page"] {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.app-nav__privacy {
+  padding: var(--space-1);
+  color: var(--text-faint);
+  font-size: var(--text-2xs);
+  text-decoration: none;
+}
+.app-nav__privacy:hover {
+  text-decoration: underline;
+}
+
+/* Guest sign-in hint — replaces the history list in the rail's middle slot
+   when signed out (guests have no server history). Mirrors
+   .conv-list__empty*'s layout/copy weight. */
+.chat-page__signin-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  height: 100%;
+  padding: var(--space-6) var(--space-3);
+  text-align: center;
+}
+.chat-page__signin-hint-text {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+.chat-page__signin-hint-cta {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--poke-red);
+  background: var(--poke-red-soft);
+  color: var(--poke-red);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--motion-fast);
+}
+.chat-page__signin-hint-cta:hover {
+  background: color-mix(in srgb, var(--poke-red-soft) 60%, var(--surface));
 }
 
 /* The actual scroll container (className on a flex column in page.tsx). Owns
@@ -2760,7 +2887,8 @@ button.scope-chip:focus-visible {
   align-items: stretch;
 }
 
-/* History sidebar — list shell, new-chat / search / filter controls */
+/* History sidebar — list shell, search / filter controls (New chat now
+   lives in AppNav, above this list, not inside it). */
 .conv-list {
   display: flex;
   flex-direction: column;
@@ -2768,25 +2896,6 @@ button.scope-chip:focus-visible {
   min-height: 0;
   gap: var(--space-3);
   padding: var(--space-3);
-}
-.conv-list__newchat {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  height: 36px;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background: var(--poke-red);
-  color: var(--neutral-0);
-  font: inherit;
-  font-size: var(--text-md);
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--motion-fast);
-}
-.conv-list__newchat:hover {
-  background: var(--poke-red-hover);
 }
 /* Sunken-borderless search — no border at rest, an azure ring only on focus
    (foundation: inputs invert). */
@@ -3365,17 +3474,6 @@ button.scope-chip:focus-visible {
   opacity: 0.75;
   text-decoration: none;
 }
-.teams-page__crumb {
-  color: var(--text-faint);
-  font-family: var(--display);
-  font-size: 1.25rem;
-}
-.teams-page__crumb-current {
-  font-family: var(--display);
-  font-weight: 500;
-  font-size: var(--text-lg);
-  color: var(--text);
-}
 .teams-page__band-controls {
   display: inline-flex;
   align-items: center;
@@ -3427,37 +3525,26 @@ button.scope-chip:focus-visible {
   pointer-events: none;
   color: var(--text-muted);
 }
-.teams-page__back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: var(--space-10);
-  padding-inline: var(--space-4);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
+/* ----- Teams rail shell ---------------------------------------------------
+   Wraps AppNav (as `.teams-page__rail`) and the existing body content in a
+   flex row beneath the band, so the rail persists as an in-flow column
+   (there is no drawer/overlay machinery here — see the ≤768px block, where
+   the rail is simply hidden and the band wordmark carries mobile nav home). */
+.teams-page__shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+.teams-page__rail {
+  width: 260px;
+  flex-shrink: 0;
   background: var(--surface);
-  color: var(--text);
-  font-family: var(--body);
-  font-weight: 700;
-  font-size: var(--text-md);
-  text-decoration: none;
-  transition:
-    background var(--motion-fast),
-    border-color var(--motion-fast),
-    transform var(--motion-spring);
-}
-.teams-page__back:hover,
-.teams-page__back:focus-visible {
-  background: var(--surface-sunken);
-  text-decoration: none;
-  transform: translateX(-2px);
-}
-.teams-page__back-icon {
-  font-size: 1.1em;
-  line-height: 1;
+  border-right: 1px solid var(--border);
 }
 .teams-page__body {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   padding: var(--space-6)
     max(var(--space-6), env(safe-area-inset-right))
@@ -4853,6 +4940,12 @@ button.scope-chip:focus-visible {
     transform: translateX(-100%);
     pointer-events: none;
   }
+  /* Suppresses the slide-in transform transition for one paint while the
+     mount effect resolves the real collapsed state — mirrors the base
+     `--boot` rule, which only cancels the (here, unused) width transition. */
+  .chat-page__sidebar--boot {
+    transition: none;
+  }
   /* Cancel the desktop 300px floor so it never reintroduces page overflow.
      The drawer overlays the header area, which sits under the notch when
      viewport-fit=cover, so pad past the safe-area insets too. */
@@ -4876,6 +4969,11 @@ button.scope-chip:focus-visible {
   .teams-grid {
     grid-template-columns: 1fr;
   }
+  /* No drawer machinery on /teams — the rail simply disappears; the band
+     wordmark carries mobile nav home. */
+  .teams-page__rail {
+    display: none;
+  }
 }
 
 /* ---- ≤640px: collapse the header controls behind the gear ---------------- */
@@ -4886,8 +4984,8 @@ button.scope-chip:focus-visible {
     padding-left: max(var(--space-4), env(safe-area-inset-left));
     padding-right: max(var(--space-4), env(safe-area-inset-right));
   }
-  /* /teams band + body: trim gutters and drop the breadcrumb so the wordmark,
-     format pill, and Back-to-chat control fit a phone width. */
+  /* /teams band + body: trim gutters so the wordmark and format pill fit a
+     phone width. */
   .teams-page__band {
     gap: var(--space-2);
     padding-left: max(var(--space-4), env(safe-area-inset-left));
@@ -4896,10 +4994,6 @@ button.scope-chip:focus-visible {
   .teams-page__body {
     padding-left: max(var(--space-4), env(safe-area-inset-left));
     padding-right: max(var(--space-4), env(safe-area-inset-right));
-  }
-  .teams-page__crumb,
-  .teams-page__crumb-current {
-    display: none;
   }
   .composer {
     padding-left: max(var(--space-4), env(safe-area-inset-left));
@@ -4949,9 +5043,6 @@ button.scope-chip:focus-visible {
   }
   .chat-page__controls--open {
     display: flex;
-  }
-  .chat-page__controls .chat-page__header-divider {
-    display: none;
   }
   /* Each control becomes a full-width menu row. */
   .chat-page__controls .active-team-selector {
@@ -5053,8 +5144,8 @@ button.scope-chip:focus-visible {
     gap: var(--space-2);
     opacity: 1;
   }
-  /* History sidebar new-chat / search / format-filter controls. */
-  .conv-list__newchat,
+  /* Rail new-chat control + history sidebar search / format-filter controls. */
+  .app-nav__newchat,
   .conv-list__search,
   .conv-list__filter {
     min-height: 44px;
