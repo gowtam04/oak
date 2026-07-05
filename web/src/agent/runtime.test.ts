@@ -1008,6 +1008,39 @@ describe("describeToolCall — context-rich progress labels", () => {
     expect(emptyPurpose).not.toContain("run_sql");
   });
 
+  it("scrubs a run_sql purpose that leaks a table name / SQL to the generic label", () => {
+    // A model-supplied purpose that names an internal table falls back to the
+    // generic label instead of surfacing the table name to the user.
+    const tableName = describeToolCall("run_sql", {
+      query: "SELECT * FROM natdex_species",
+      purpose: "aggregate over natdex_species",
+    });
+    expect(tableName).toMatch(/Querying the dex database/);
+    expect(tableName).not.toContain("natdex_species");
+
+    // A purpose leaking SQL keywords is scrubbed too.
+    const sqlLeak = describeToolCall("run_sql", {
+      query: "SELECT ...",
+      purpose: "SELECT species JOIN moves",
+    });
+    expect(sqlLeak).toMatch(/Querying the dex database/);
+    expect(sqlLeak).not.toContain("JOIN");
+
+    // The stored-usage tables are scrubbed as well.
+    const metaLeak = describeToolCall("run_sql", {
+      query: "SELECT ...",
+      purpose: "read from meta_usage",
+    });
+    expect(metaLeak).toMatch(/Querying the dex database/);
+    expect(metaLeak).not.toContain("meta_usage");
+  });
+
+  it("gives an unknown tool a friendly generic label (never the raw name)", () => {
+    const label = describeToolCall("some_new_tool", { foo: "bar" });
+    expect(label).toBe("⚙️ Working…");
+    expect(label).not.toContain("some_new_tool");
+  });
+
   it("gives search_wiki a query-enriched label when query is present", () => {
     const withQuery = describeToolCall("search_wiki", {
       query: "Wigglytuff Guild Mystery Dungeon",
