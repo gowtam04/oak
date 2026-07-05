@@ -15,11 +15,29 @@ import type { ToolDef } from "@/agent/types";
 import {
   queryPokedexInputSchema,
   toJsonSchema,
+  type QueryPokedexInput,
   type QueryPokedexOutput,
 } from "@/agent/schemas";
 import { queryPokedex, type PokedexFilters } from "@/data/repos/pokedex-repo";
 import { formatForMode } from "@/data/formats";
 import type { OakDb } from "@/data/db";
+
+/**
+ * Map a validated `query_pokedex` input into the repo's `PokedexFilters`.
+ * Exported so answer enrichment can re-run the same query (to fetch the hidden
+ * rows of a truncated candidate list) with identical filter semantics.
+ */
+export function toPokedexFilters(input: QueryPokedexInput): PokedexFilters {
+  return {
+    types: input.types,
+    abilities: input.abilities,
+    moveIds: input.moves,
+    statFilters: input.stat_filters,
+    sortBy: input.sort_by,
+    order: input.order,
+    limit: input.limit,
+  };
+}
 
 const description =
   "Search the local Pokédex index for Pokémon matching structured filters, " +
@@ -45,18 +63,8 @@ export const queryPokedexTool: ToolDef = {
         results: [],
       });
     }
-    const i = parsed.data;
-    const filters: PokedexFilters = {
-      types: i.types,
-      abilities: i.abilities,
-      moveIds: i.moves,
-      statFilters: i.stat_filters,
-      sortBy: i.sort_by,
-      order: i.order,
-      limit: i.limit,
-    };
     return queryPokedex(
-      filters,
+      toPokedexFilters(parsed.data),
       formatForMode(ctx.mode),
       ctx.db as unknown as OakDb,
     );

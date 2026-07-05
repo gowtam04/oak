@@ -241,6 +241,151 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
     });
   });
 
+  it("populates candidates.hidden_rows from the turn's truncated query (with sprites)", async () => {
+    // The model queried fighting types (3 rows) but only shows 1 and reports the
+    // list truncated. Enrichment re-runs that exact query and backfills the 2
+    // hidden rows so the client expands locally instead of firing a new turn.
+    // The model also (wrongly) authored its own hidden_rows — server must STRIP
+    // it and substitute the real rows.
+    const answer: OakAnswer = {
+      status: "answered",
+      answer_markdown: "**3 Pokémon** are Fighting-type.",
+      reasoning_markdown: "Queried the index.",
+      citations: [],
+      inferences: [],
+      generation_basis: { generation: "gen-9", fallback: false },
+      candidates: {
+        total_count: 3,
+        truncated: true,
+        sort: "base_stat_total desc",
+        shown: [{ name: "Tauros (Paldean Aqua)", types: ["fighting", "water"] }],
+        // Model-authored junk — must be discarded by enrichment.
+        hidden_rows: [{ name: "Bogus", types: ["normal"] }],
+      },
+    };
+
+    const ctx = await buildCtx("standard");
+    const result = await runtime.runWithProvider(
+      grokProvider([
+        toolCallChunks("query_pokedex", { types: ["fighting"], limit: 1 }, "c1"),
+        toolCallChunks("submit_answer", answer, "c2"),
+      ]),
+      "which pokemon are fighting type?",
+      [],
+      ctx,
+    );
+
+    const hidden = result.candidates!.hidden_rows;
+    expect(hidden).toBeDefined();
+    expect(hidden!.map((r) => r.name)).toEqual([
+      "Tauros (Paldean Blaze)",
+      "Tauros (Paldean Combat)",
+    ]);
+    // The model's bogus row is gone.
+    expect(hidden!.some((r) => r.name === "Bogus")).toBe(false);
+    // Hidden rows carry backfilled sprites/dex just like shown rows.
+    expect(hidden![0].sprite_url).toBe("https://img.example/sprite/128-blaze.png");
+    expect(hidden![0].dex_number).toBe(128);
+    expect(hidden![1].sprite_url).toBe(
+      "https://img.example/sprite/128-combat.png",
+    );
+  });
+
+  it("skips hidden_rows when the trace is ambiguous (two matching queries)", async () => {
+    // Two identical fighting queries both report total_count 3 truncated — the
+    // source is ambiguous, so enrichment declines rather than guessing.
+    const answer: OakAnswer = {
+      status: "answered",
+      answer_markdown: "**3 Pokémon** are Fighting-type.",
+      reasoning_markdown: "Queried twice.",
+      citations: [],
+      inferences: [],
+      generation_basis: { generation: "gen-9", fallback: false },
+      candidates: {
+        total_count: 3,
+        truncated: true,
+        sort: "base_stat_total desc",
+        shown: [{ name: "Tauros (Paldean Aqua)", types: ["fighting", "water"] }],
+      },
+    };
+
+    const ctx = await buildCtx("standard");
+    const result = await runtime.runWithProvider(
+      grokProvider([
+        toolCallChunks("query_pokedex", { types: ["fighting"], limit: 1 }, "c1"),
+        toolCallChunks("query_pokedex", { types: ["fighting"], limit: 1 }, "c2"),
+        toolCallChunks("submit_answer", answer, "c3"),
+      ]),
+      "which pokemon are fighting type?",
+      [],
+      ctx,
+    );
+
+    expect(result.candidates!.hidden_rows).toBeUndefined();
+  });
+
+  it("skips hidden_rows when total_count exceeds the 200-row bound", async () => {
+    // The list is truncated but the full set is too large to materialize; the
+    // gate trips before any source lookup, so no hidden_rows.
+    const answer: OakAnswer = {
+      status: "answered",
+      answer_markdown: "**Many** Pokémon match.",
+      reasoning_markdown: "Big list.",
+      citations: [],
+      inferences: [],
+      generation_basis: { generation: "gen-9", fallback: false },
+      candidates: {
+        total_count: 250,
+        truncated: true,
+        sort: "base_stat_total desc",
+        shown: [{ name: "Garchomp", types: ["dragon", "ground"] }],
+      },
+    };
+
+    const ctx = await buildCtx("standard");
+    const result = await runtime.runWithProvider(
+      grokProvider([
+        toolCallChunks("query_pokedex", { types: ["dragon"], limit: 1 }, "c1"),
+        toolCallChunks("submit_answer", answer, "c2"),
+      ]),
+      "list everything",
+      [],
+      ctx,
+    );
+
+    expect(result.candidates!.hidden_rows).toBeUndefined();
+  });
+
+  it("strips model-authored hidden_rows when there is no source query to back it", async () => {
+    // No query_pokedex ran this turn, so the empty stash yields no source — a
+    // model-authored hidden_rows is stripped and left absent (never trusted).
+    const answer: OakAnswer = {
+      status: "answered",
+      answer_markdown: "**3 Pokémon** are Fighting-type.",
+      reasoning_markdown: "Hallucinated a list.",
+      citations: [],
+      inferences: [],
+      generation_basis: { generation: "gen-9", fallback: false },
+      candidates: {
+        total_count: 3,
+        truncated: true,
+        sort: "base_stat_total desc",
+        shown: [{ name: "Tauros (Paldean Aqua)", types: ["fighting", "water"] }],
+        hidden_rows: [{ name: "Bogus", types: ["normal"] }],
+      },
+    };
+
+    const ctx = await buildCtx("standard");
+    const result = await runtime.runWithProvider(
+      grokProvider([toolCallChunks("submit_answer", answer, "c1")]),
+      "which pokemon are fighting type?",
+      [],
+      ctx,
+    );
+
+    expect(result.candidates!.hidden_rows).toBeUndefined();
+  });
+
   it("leaves a Claude-style answer (already has sprites) unchanged", async () => {
     // Enrichment only ADDS missing fields — an answer that already carries
     // sprite_url/dex_number is returned as-is (no regression to the Claude path).

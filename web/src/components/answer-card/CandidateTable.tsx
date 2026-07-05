@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { CandidateTableProps, CandidateRow } from "@/components/types";
 import TypeBadge from "@/components/TypeBadge";
 import SpriteImg from "@/components/SpriteImg";
@@ -76,20 +77,36 @@ export default function CandidateTable({
   onShowAll,
   disabled = false,
 }: CandidateTableProps) {
-  const { total_count, truncated, shown, sort } = candidates;
+  const { total_count, truncated, shown, sort, hidden_rows } = candidates;
 
-  const countLabel = truncated
-    ? `Showing ${shown.length} of ${total_count}`
-    : `${total_count} result${total_count !== 1 ? "s" : ""}`;
+  // When the server enriched a truncated list with its hidden rows, "Show all"
+  // expands in place (no follow-up chat turn); the follow-up fallback via
+  // onShowAll is kept only for answers WITHOUT hidden_rows (>200-row sets, older
+  // history, non-web clients).
+  const canExpandLocally = truncated && (hidden_rows?.length ?? 0) > 0;
+  const [expanded, setExpanded] = useState(false);
+
+  const rows = expanded && hidden_rows ? [...shown, ...hidden_rows] : shown;
+
+  const countLabel =
+    truncated && !expanded
+      ? `Showing ${shown.length} of ${total_count}`
+      : `${total_count} result${total_count !== 1 ? "s" : ""}`;
 
   const sortDisplay = sort ? formatSort(sort) : null;
 
-  const hasAbilityColumn = shown.some((row) => row.ability != null);
-  const hasStats = shown.some(
+  const hasAbilityColumn = rows.some((row) => row.ability != null);
+  const hasStats = rows.some(
     (row) =>
       row.base_stats != null ||
       (row.key_stats != null && Object.keys(row.key_stats).length > 0),
   );
+
+  // Show the button while truncated and not yet locally expanded; local
+  // expansion needs no onShowAll handler, the follow-up fallback does.
+  const showAllVisible =
+    truncated && !expanded && (canExpandLocally || onShowAll != null);
+  const handleShowAll = canExpandLocally ? () => setExpanded(true) : onShowAll;
 
   return (
     <div className="candidate-table" data-testid="candidate-table">
@@ -117,13 +134,13 @@ export default function CandidateTable({
             </span>
           </span>
         )}
-        {truncated && onShowAll && (
+        {showAllVisible && handleShowAll && (
           <button
             type="button"
             className="candidate-table__show-all"
             data-testid="candidate-table-show-all"
-            onClick={onShowAll}
-            disabled={disabled}
+            onClick={handleShowAll}
+            disabled={disabled && !canExpandLocally}
           >
             Show all {total_count}
           </button>
@@ -143,7 +160,7 @@ export default function CandidateTable({
             </tr>
           </thead>
           <tbody>
-            {shown.map((row, i) => (
+            {rows.map((row, i) => (
               <CandidateRow
                 key={`${row.name}-${i}`}
                 row={row}

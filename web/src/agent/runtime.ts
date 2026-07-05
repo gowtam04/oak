@@ -815,6 +815,7 @@ export interface AnswerRunHooks<TAnswer> {
     answer: TAnswer,
     ctx: AgentContext,
     lookedUpProfiles: PokemonProfile[],
+    queryPokedexCalls: { args: unknown; result: unknown }[],
   ) => Promise<TAnswer>;
   /** Fallback answer when the turn can't complete (loop-max, invalid). */
   synthesizeInsufficient: (reason: string, ctx: AgentContext) => TAnswer;
@@ -1033,6 +1034,10 @@ export async function runWithProvider<TAnswer = OakAnswer>(
   // synthesize subjects[] when the model omits it on a single-entity answer.
   const lookedUpProfiles: PokemonProfile[] = [];
 
+  // query_pokedex {args,result} pairs from this turn — used by enrichment to
+  // re-run a truncated query and backfill candidates.hidden_rows.
+  const queryPokedexCalls: { args: unknown; result: unknown }[] = [];
+
   // Emit the "reasoning…" progress tick at most once per turn (UX for models like
   // Grok that stream a long reasoning phase before the answer arrives at once).
   let reasoningNudged = false;
@@ -1044,7 +1049,9 @@ export async function runWithProvider<TAnswer = OakAnswer>(
 
   // Post-accept enrichment via the hook; omitted ⇒ identity.
   const doEnrich = async (answer: TAnswer): Promise<TAnswer> =>
-    hooks.enrich ? hooks.enrich(answer, ctx, lookedUpProfiles) : answer;
+    hooks.enrich
+      ? hooks.enrich(answer, ctx, lookedUpProfiles, queryPokedexCalls)
+      : answer;
 
   // Give-up recovery shared by all three fallthroughs. Prefer a best-effort
   // answer (only ever set from a schema-valid, domain-rejected submit) over a
@@ -1257,6 +1264,11 @@ export async function runWithProvider<TAnswer = OakAnswer>(
           (result as { found?: unknown }).found === true
         ) {
           lookedUpProfiles.push(result as PokemonProfile);
+        }
+        // Stash query_pokedex {args,result} pairs for candidates.hidden_rows
+        // enrichment (dispatch didn't throw ⇒ result is a documented shape).
+        if (call.name === "query_pokedex") {
+          queryPokedexCalls.push({ args: call.input, result });
         }
       } catch (caught) {
         errorMessage =

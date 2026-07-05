@@ -663,6 +663,11 @@ export const candidatesSchema = z
     truncated: z.boolean(),
     sort: z.string().nullable().optional(),
     shown: z.array(candidateRowSchema),
+    // SERVER-POPULATED (enrichment) — the rows beyond `shown`, so clients can
+    // expand a truncated list locally instead of firing a follow-up chat turn.
+    // Declared because candidatesSchema is `.strict()`; NEVER model-authored —
+    // enrichment strips any model-emitted value and sets it server-side only.
+    hidden_rows: z.array(candidateRowSchema).optional(),
   })
   .strict();
 

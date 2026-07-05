@@ -303,6 +303,7 @@ export async function queryPokedex(
   f: PokedexFilters,
   format: Format,
   db: OakDb,
+  opts?: { maxLimit?: number },
 ): Promise<QueryPokedexOutput> {
   const meta = await readIndexMeta(db, format);
   if (!meta.available) {
@@ -317,7 +318,7 @@ export async function queryPokedex(
   }
 
   const order: "asc" | "desc" = f.order ?? "desc";
-  const limit = Math.min(Math.max(f.limit ?? 50, 1), 100);
+  const limit = Math.min(Math.max(f.limit ?? 50, 1), opts?.maxLimit ?? 100);
   // When the caller gives no sort field, rank by base_stat_total desc so every
   // list comes back ranked AND labeled (the UI's "sorted by" chip reads `sort`) —
   // regardless of which model composed the query. Callers that want dex order

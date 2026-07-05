@@ -112,6 +112,73 @@ export const CANDIDATES_TRUNCATED: Candidates = {
   ],
 };
 
+/**
+ * A truncated candidate set the SERVER enriched with `hidden_rows` (the rows
+ * beyond `shown`). CandidateTable expands these locally on "Show all" instead of
+ * firing a follow-up chat turn. total_count (4) === shown (2) + hidden_rows (2).
+ */
+export const CANDIDATES_TRUNCATED_WITH_HIDDEN: Candidates = {
+  total_count: 4,
+  truncated: true,
+  sort: "speed desc",
+  shown: [
+    {
+      name: "Garchomp",
+      dex_number: 445,
+      types: ["dragon", "ground"],
+      base_stats: {
+        hp: 108,
+        attack: 130,
+        defense: 95,
+        special_attack: 80,
+        special_defense: 85,
+        speed: 102,
+      },
+    },
+    {
+      name: "Dragonite",
+      dex_number: 149,
+      types: ["dragon", "flying"],
+      base_stats: {
+        hp: 91,
+        attack: 134,
+        defense: 95,
+        special_attack: 100,
+        special_defense: 100,
+        speed: 80,
+      },
+    },
+  ],
+  hidden_rows: [
+    {
+      name: "Salamence",
+      dex_number: 373,
+      types: ["dragon", "flying"],
+      base_stats: {
+        hp: 95,
+        attack: 135,
+        defense: 80,
+        special_attack: 110,
+        special_defense: 80,
+        speed: 100,
+      },
+    },
+    {
+      name: "Hydreigon",
+      dex_number: 635,
+      types: ["dark", "dragon"],
+      base_stats: {
+        hp: 92,
+        attack: 105,
+        defense: 90,
+        special_attack: 125,
+        special_defense: 90,
+        speed: 98,
+      },
+    },
+  ],
+};
+
 /** A candidate set with only `key_stats` (no `base_stats`) — the fallback path. */
 export const CANDIDATES_KEYSTATS_ONLY: Candidates = {
   total_count: 1,

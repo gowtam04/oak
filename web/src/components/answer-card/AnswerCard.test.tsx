@@ -5,7 +5,11 @@ afterEach(() => cleanup());
 
 import AnswerCard from "./AnswerCard";
 import type { OakAnswer } from "@/components/types";
-import { CANONICAL_ANSWER, QUESTION_ANSWER } from "@/components/test-fixtures";
+import {
+  CANONICAL_ANSWER,
+  CANDIDATES_TRUNCATED_WITH_HIDDEN,
+  QUESTION_ANSWER,
+} from "@/components/test-fixtures";
 
 /**
  * One answer carrying all three follow-up affordances at once:
@@ -59,6 +63,36 @@ describe("AnswerCard — follow-up affordances gate on `disabled` (U2)", () => {
     fireEvent.click(showAll);
 
     // Both the disabled attribute AND the inert `followUp` alias keep this at 0.
+    expect(onFollowUp).not.toHaveBeenCalled();
+  });
+
+  it("expands candidates.hidden_rows locally on Show all — no follow-up turn (T2)", () => {
+    const onFollowUp = vi.fn();
+    const answer: OakAnswer = {
+      ...CANONICAL_ANSWER,
+      suggestions: undefined,
+      damage_calc: undefined,
+      question: undefined,
+      candidates: CANDIDATES_TRUNCATED_WITH_HIDDEN,
+    };
+    render(<AnswerCard answer={answer} onFollowUp={onFollowUp} />);
+
+    // Before expanding: only the 2 shown rows, honest "Showing 2 of 4" footer.
+    expect(screen.getByTestId("candidate-row-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("candidate-row-2")).toBeNull();
+    expect(screen.getByTestId("candidate-table-count").textContent).toContain(
+      "Showing 2 of 4",
+    );
+
+    fireEvent.click(screen.getByTestId("candidate-table-show-all"));
+
+    // After: all 4 rows in place, footer flips to "4 results", button gone, and
+    // NO follow-up chat turn was fired (the whole point of the fix).
+    expect(screen.getByTestId("candidate-row-3")).toBeInTheDocument();
+    expect(screen.getByTestId("candidate-table-count").textContent).toContain(
+      "4 results",
+    );
+    expect(screen.queryByTestId("candidate-table-show-all")).toBeNull();
     expect(onFollowUp).not.toHaveBeenCalled();
   });
 

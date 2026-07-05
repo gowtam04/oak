@@ -31,6 +31,7 @@ afterEach(() => {
 import CandidateTable from "./CandidateTable";
 import {
   CANDIDATES_TRUNCATED,
+  CANDIDATES_TRUNCATED_WITH_HIDDEN,
   CANDIDATES_EXACT,
   CANDIDATES_KEYSTATS_ONLY,
 } from "@/components/test-fixtures";
@@ -130,6 +131,55 @@ describe("CandidateTable", () => {
   it("falls back to key_stats when a row has no base_stats", () => {
     render(<CandidateTable candidates={CANDIDATES_KEYSTATS_ONLY} />);
     expect(screen.getByText(/speed: 102/)).toBeInTheDocument();
+  });
+
+  describe("local expansion via server-enriched hidden_rows (T2)", () => {
+    it("shows a Show-all button (from hidden_rows) even without an onShowAll handler", () => {
+      render(
+        <CandidateTable candidates={CANDIDATES_TRUNCATED_WITH_HIDDEN} />,
+      );
+      expect(
+        screen.getByTestId("candidate-table-show-all"),
+      ).toHaveTextContent("Show all 4");
+      // Only the 2 shown rows are present before expansion.
+      expect(screen.getByTestId("candidate-row-1")).toBeInTheDocument();
+      expect(screen.queryByTestId("candidate-row-2")).not.toBeInTheDocument();
+    });
+
+    it("expands in place on Show all — appends hidden rows, flips footer, hides button", () => {
+      const onShowAll = vi.fn();
+      render(
+        <CandidateTable
+          candidates={CANDIDATES_TRUNCATED_WITH_HIDDEN}
+          onShowAll={onShowAll}
+        />,
+      );
+      fireEvent.click(screen.getByTestId("candidate-table-show-all"));
+
+      // All four rows now render, footer flips to the untruncated wording, the
+      // button is gone, and the follow-up handler was NOT invoked.
+      expect(screen.getByTestId("candidate-row-3")).toBeInTheDocument();
+      expect(screen.getByText("Salamence")).toBeInTheDocument();
+      expect(screen.getByText("Hydreigon")).toBeInTheDocument();
+      expect(screen.getByTestId("candidate-table-count")).toHaveTextContent(
+        "4 results",
+      );
+      expect(
+        screen.queryByTestId("candidate-table-show-all"),
+      ).not.toBeInTheDocument();
+      expect(onShowAll).not.toHaveBeenCalled();
+    });
+
+    it("still fires the onShowAll follow-up when there are no hidden_rows", () => {
+      const onShowAll = vi.fn();
+      render(
+        <CandidateTable candidates={CANDIDATES_TRUNCATED} onShowAll={onShowAll} />,
+      );
+      fireEvent.click(screen.getByTestId("candidate-table-show-all"));
+      expect(onShowAll).toHaveBeenCalledTimes(1);
+      // No local expansion: still only the 2 shown rows.
+      expect(screen.queryByTestId("candidate-row-2")).not.toBeInTheDocument();
+    });
   });
 
   it("renders singular 'result' for a single match", () => {

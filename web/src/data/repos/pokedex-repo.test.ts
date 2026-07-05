@@ -31,8 +31,11 @@ import { createPgSchema, type PgFixture } from "../../../test/support/pg";
 // format here so the call sites stay focused on filters/slugs; the format
 // threading itself is covered by the format-scoping checks below.
 const SV = "scarlet-violet" as const;
-const queryPokedex = (f: PokedexFilters, db: OakDb) =>
-  queryPokedexRaw(f, SV, db);
+const queryPokedex = (
+  f: PokedexFilters,
+  db: OakDb,
+  opts?: { maxLimit?: number },
+) => queryPokedexRaw(f, SV, db, opts);
 const getPokemon = (slug: string, db: OakDb) => getPokemonRaw(slug, SV, db);
 
 type MonInput = Partial<typeof pokemon.$inferSelect> &
@@ -283,6 +286,66 @@ describe("queryPokedex — sort / limit / truncation", () => {
     const r = await queryPokedex({ types: ["fire"] }, db);
     if ("error" in r || "unresolved" in r) throw new Error("expected results");
     expect(r.sort).toBe("base_stat_total desc");
+  });
+
+  it("opts.maxLimit lifts the hardcoded 100-row clamp (enrichment hidden_rows path)", async () => {
+    // The default clamp is 100; answer enrichment re-runs a truncated query with
+    // maxLimit:200 to materialize the hidden rows. Seed 105 rows so the default
+    // clamp truncates but the raised ceiling returns the full set.
+    const fix = await createPgSchema({ seed: "none" });
+    try {
+      const database = fix.db;
+      for (let n = 0; n < 105; n++) {
+        await insertMon(database, {
+          id: `bulk-${n}`,
+          species_name: `bulk-${n}`,
+          display_name: `Bulk ${n}`,
+          national_dex_number: 5000 + n,
+          type1: "normal",
+          ability_slot1: "run-away",
+          stat_hp: 50,
+          stat_attack: 50,
+          stat_defense: 50,
+          stat_special_attack: 50,
+          stat_special_defense: 50,
+          stat_speed: 50,
+        });
+      }
+      await database.insert(ingest_meta).values({
+        format: SV,
+        last_success_at: 0,
+        pokemon_count: 105,
+        learnset_count: 0,
+        names_count: 0,
+        schema_version: "2",
+      });
+
+      // Default ceiling: min(200, 100) = 100 rows, truncated.
+      const capped = await queryPokedex(
+        { types: ["normal"], limit: 200 },
+        database,
+      );
+      if ("error" in capped || "unresolved" in capped) {
+        throw new Error("expected results");
+      }
+      expect(capped.total_count).toBe(105);
+      expect(capped.results).toHaveLength(100);
+      expect(capped.truncated).toBe(true);
+
+      // Raised ceiling: min(200, 200) = 200 → all 105 rows, no truncation.
+      const lifted = await queryPokedex(
+        { types: ["normal"], limit: 200 },
+        database,
+        { maxLimit: 200 },
+      );
+      if ("error" in lifted || "unresolved" in lifted) {
+        throw new Error("expected results");
+      }
+      expect(lifted.results).toHaveLength(105);
+      expect(lifted.truncated).toBe(false);
+    } finally {
+      await fix.cleanup();
+    }
   });
 });
 
