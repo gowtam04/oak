@@ -238,6 +238,57 @@ artifacts depends on B-1 (per-account) and overlaps B-3 (what's stored per conve
 
 ## B-5 — Competitive battling page
 
+> **Status: BUILT (layers 1–3)** — shipped as four independent layers, the first
+> three of which are done; the fourth is deferred to a new item, **B-21**.
+> **Layer 1 (data):** a NEW metagame axis, deliberately separate from the
+> six-scope data `Format`/`AgentMode` — `MetaFormat` (`src/data/meta-formats.ts`,
+> config-driven; v1 is exactly one ladder, `"gen9ou"` — Smogon OU, Gen 9
+> singles, usage cutoff 1695). Two new warehouse tables, `meta_snapshot` +
+> `meta_usage` (migration 0011, plus hand-written migration 0012 for
+> `oak_readonly` grants), storing **all species for every synced month**
+> (retention: all months, not just the latest). A new CLI, **`npm run
+> sync:meta`** (`src/ingest/sync-meta.ts`, new `smogon` npm dependency) —
+> deliberately the **one** network-fetching DB writer in the codebase
+> (`npm run ingest` stays fully offline); it takes `--formats=`/`--month=`/
+> `--backfill=N`, is idempotent per `(meta_format, month)` (replace, not
+> append), and is a **monthly manual** refresh run by the operator a few days
+> after Smogon publishes each month's stats (a Fly scheduled machine to
+> automate this is a noted follow-up, not built). Initial production seeding
+> uses `sync:meta --backfill=6`. **Layer 2 (reference surface):** public,
+> web-only `/meta` pages (leaderboard + a per-species drill-in showing a
+> usage-derived representative set, a Showdown-paste copy affordance, and an
+> "Ask Oak" deep link into chat) — read-only, no live battle interaction,
+> mirroring how `/pokedex` is a reference surface today. **Layer 3 (agent
+> tool):** a new no-arg-adjacent read tool, **T21 `get_meta_usage`** (stored
+> monthly ladder usage; unlike the server-controlled data scope, its
+> `meta_format` input is **model-settable** since it's a genuinely new,
+> independent axis; available in every mode; not excluded from voice).
+> Champions is **deliberately NOT** a `MetaFormat` — Champions usage keeps
+> coming from the existing live T15 `get_usage_stats`, never from these stored
+> Smogon snapshots. Oak's tool count grows to **20** (T1–T19 + T21 — T20
+> `web_search` stays retired). **Layer 4 — the live battle co-pilot** (drive a
+> battle, run damage calcs against a live opponent turn by turn) is
+> **deferred** to the new **B-21**, below.
+>
+> **Resolved open questions:** *reference vs. interactive* — reference shipped
+> first (layers 1–3); interactive is the whole of B-21. *New tool vs. new
+> format column* — resolved as **new tables + a new `MetaFormat` axis**, not a
+> new value on the six-scope `Format` column; metagame data is a genuinely
+> different dimension (which competitive ladder) from data scope (which
+> game/generation the Pokémon data comes from), so the two stay independent
+> and a ladder just points at whichever `Format` its Pokémon data resolves
+> against. *`ps-local` as the ingest source* — **not adopted** for usage data;
+> Smogon's own published monthly "chaos" stats turned out to be the simpler,
+> already-public source for aggregate usage numbers, so `ps-local` was
+> dropped from this layer. `ps-local` remains relevant only to **B-21** (a
+> live server is the natural state source for an in-progress battle, which
+> chaos stats can't provide). *Ingest-without-network* — resolved by carving
+> `sync:meta` out as its own CLI and its own declared exception, rather than
+> bending `npm run ingest`'s offline guarantee. *Which format ships first* —
+> Smogon OU (Gen 9 singles), not VGC/Worlds; the regulation-string tracking
+> for VGC/BSS/DOU remains future config-driven entries in `META_FORMATS`, not
+> a redesign — each new ladder is one config entry.
+
 **Why:** Oak reasons about mechanics and legality, but it has no surface dedicated to
 *competitive* play — the metagame layer that defines what people actually battle with.
 The two core use cases (`requirements.md` §Overview) are mechanics reasoning and team
@@ -979,3 +1030,81 @@ interplay; iOS/Android parity screens.
 
 **Depends on:** B-1 (per-account). B-10 broadens gen coverage; B-12 sharpens encounter
 answers.
+
+---
+
+## B-21 — Live competitive battle UI
+
+**Why:** B-5's competitive surface (BUILT, layers 1–3) covers browsing the metagame —
+tiers, usage stats, sample sets — but says nothing about the moment that matters most: an
+actual live match. This item is B-5's originally-scoped **layer 4**, split out on its own
+because it's a fundamentally different kind of build (real-time, stateful, latency-bound)
+rather than another reference page. The product is a **friendly, real-time battle
+co-pilot** that sits beside a live competitive match: after each turn resolves, it explains
+what happened in plain language with the exact numbers behind it, recommends the next
+move with supporting stats, and maintains a live scouting sheet of everything the opponent
+has revealed or that can be inferred (speed bounds from turn order, EV spreads back-solved
+from damage rolls, Choice-lock tells, etc.) — all within Showdown's turn clock. It is
+explicitly **not** an autonomous bot; the human plays, the UI assists.
+
+There is a standing exploration doc that already carries the product definition and the
+architecture work: `docs/research/live-competitive-battle-ui.md`. It agrees the state
+source is **`ps-local`** (a self-hosted Pokémon Showdown server) read over its sim
+protocol (`@pkmn/protocol` parsing → `@pkmn/client` authoritative battle state), and lays
+out **two independently-prototyped directions**, deliberately not compared or decided
+between yet:
+
+- **Direction A — fully deterministic engine.** No model in the loop:
+  `@pkmn/protocol` + `@pkmn/client` for state, a scouting engine that infers hidden
+  information by rule (speed bounds, damage-roll back-solving, item/ability tells, usage-
+  prior set prediction), a `@smogon/calc` sweep over every legal action for the upcoming
+  turn, a recommendation engine (heuristic eval first, a shallow expectiminimax search as
+  an upgrade), and templated natural-language narration. Wins on latency (sub-millisecond
+  against a turn clock measured in seconds), exactness (numbers can never disagree with
+  what Showdown itself computes), and zero per-turn marginal cost.
+- **Direction B — per-turn LLM agent.** Reuses Oak's existing agent-runtime patterns: a
+  deterministic state assembler turns the `@pkmn/client` state into a compact per-turn
+  snapshot (field, both teams, revealed-info sheet, legal actions, and a
+  **pre-computed damage-calc table** so the model rarely needs a tool round-trip), then a
+  battle-specific tool subset (`damage_calc`, `usage_lookup`/`set_predictor`,
+  `speed_check`, `legality` — a new, parallel tool set that deliberately does not have to
+  honor the fixed chat-agent tool contract) feeds a tool-loop turn emitting a
+  `BattleTurnAnalysis` schema (a battle-shaped sibling of `OakAnswer`: what happened,
+  revealed-info updates, a recommendation with rationale/KO-chance/risk, confidence,
+  citations, inference flags), Zod-validated with the same re-emit-on-failure fallback.
+  Wins on producing exactly the kind of natural-language, contextually-judged explanation
+  ("why not switch here", win-condition/momentum reasoning) the product wants, and reuses
+  the platform's existing "reason on top of grounded data" machinery. The hard part is the
+  latency stack needed to stay inside a live turn clock: prompt-caching the static prefix,
+  the pre-computed calc table, token streaming to the HUD, a speculative start the instant
+  the turn resolves in the protocol stream, a fast/bounded-reasoning model tier, and a
+  graceful-degradation fallback (show the pre-computed calc table if the analysis is still
+  pending near the clock).
+
+**Scope:** As detailed in `docs/research/live-competitive-battle-ui.md` — a live HUD
+(field state, scouting-sheet badges, turn log, recommendation panel) for both Singles and
+Doubles, backed by whichever direction the prototype phase selects (or a hybrid). The next
+step per that doc is unchanged: **prototype both directions independently against
+`ps-local`, then decide** — this backlog item does not pre-select one.
+
+**Open questions:** All carried from the research doc — exactly which `ps-local`
+endpoints/streams are needed for live battles vs. replays; how a self-hosted live server is
+reached at runtime without violating the "no network at ingest" guarantee that governs
+`npm run ingest` (B-5's `sync:meta` is a narrow, declared exception for monthly usage
+sync — a live battle socket is a different, runtime-only concern); HUD design for both
+Singles and Doubles including how inferred ranges are shown without clutter; which ruleset
+(VGC/BSS/Smogon tier) is wired through first; for Direction B specifically, real p95 turn
+latency under the tightest clocks (notably Doubles) and whether the battle agent shares
+`src/agent/tools/` or gets its own parallel set.
+
+**Touches:** a new server-side `ps-local` websocket bridge (Node route, long-lived
+connection per active battle), new deterministic modules under `src/battle/` (Direction A)
+and/or a new battle-agent mode + tool subset + prompt prefix + `BattleTurnAnalysis`
+renderer (Direction B), a new live-battle HUD surface; `@pkmn/protocol`, `@pkmn/client`,
+`@smogon/calc` as new dependencies.
+
+**Depends on:** B-5 layers 1–3 (BUILT) — `meta_usage`'s stored Smogon usage priors now
+exist and feed both directions' set-prediction/scouting work. This is a **new surface
+outside the chat agent's fixed tool contract** (`docs/agent-design/tools.md`), not an
+extension of it — it does not touch the 20-tool chat contract and is free to define its
+own tools/schema.

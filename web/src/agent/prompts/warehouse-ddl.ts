@@ -36,6 +36,8 @@ export const WAREHOUSE_ALLOWLIST = [
   "natdex_moves",
   "classic_encounters",
   "pmd_recruits",
+  "meta_snapshot",
+  "meta_usage",
 ] as const;
 
 export type WarehouseTable = (typeof WAREHOUSE_ALLOWLIST)[number];
@@ -61,6 +63,18 @@ export const WAREHOUSE_DDL = `-- Oak offline warehouse — READ-ONLY schema refe
 --     partial/incomplete.
 --   * reference_cache.payload is a JSON string (move/ability/type/evolution/
 --     item detail), not columns — treat it as text.
+--   * meta_snapshot/meta_usage are stored monthly Smogon competitive-ladder
+--     usage stats (a SEPARATE axis from 'format' — see meta_format below).
+--     meta_format currently has only 'gen9ou' (Smogon OU, Gen 9 singles);
+--     Champions usage is NOT stored here (use the live get_usage_stats tool
+--     instead). "Latest synced month" = (SELECT max(month) FROM meta_snapshot
+--     WHERE meta_format = 'gen9ou') — always filter BOTH meta_format AND month
+--     on meta_usage or you will mix ladders/months together. usage_pct is
+--     0–100 (share of teams), ladder-weighted at the snapshot's cutoff rating.
+--     moves/items/abilities/spreads/teammates/counters are JSON STRINGS (text,
+--     not jsonb) — treat as opaque text in SQL; per-category detail is better
+--     served by the get_meta_usage tool. Join species to the dex:
+--     meta_usage.species = pokemon.id AND pokemon.format = 'scarlet-violet'.
 
 CREATE TABLE pokemon (
   format text,
@@ -240,4 +254,44 @@ CREATE TABLE pmd_recruits (
 -- sample rows:
 --   ('red-blue-rescue-team','bulbasaur','Route via recruitment','8.2%','Overgrown Forest')
 --   ('explorers-of-sky','riolu','Craggy Coast','6.3%',NULL)
+
+CREATE TABLE meta_snapshot (
+  meta_format text,
+  month text,
+  smogon_format_id text,
+  cutoff integer,
+  total_battles integer,
+  species_count integer,
+  fetched_at bigint,
+  source_url text
+);
+-- PK (meta_format, month). One row per synced ladder-month; species_count is
+-- the row count of that snapshot's meta_usage rows. total_battles is NULL
+-- when Smogon didn't publish that stat for the month.
+-- sample rows:
+--   ('gen9ou','2026-05','gen9ou',1695,2450000,312,1783000000000,'https://www.smogon.com/stats/2026-05/chaos/gen9ou-1695.json')
+--   ('gen9ou','2026-04','gen9ou',1695,2380000,309,1780500000000,'https://www.smogon.com/stats/2026-04/chaos/gen9ou-1695.json')
+
+CREATE TABLE meta_usage (
+  meta_format text,
+  month text,
+  species text,
+  display_name text,
+  rank integer,
+  usage_pct double precision,
+  raw_count integer,
+  moves text,
+  items text,
+  abilities text,
+  spreads text,
+  teammates text,
+  counters text
+);
+-- PK (meta_format, month, species). display_name is the raw Smogon name as
+-- published; species is Oak's resolved slug. moves/items/abilities/spreads/
+-- teammates/counters are JSON strings (text, not jsonb) — treat as opaque
+-- text; use get_meta_usage for per-category detail. usage_pct is 0–100.
+-- sample rows:
+--   ('gen9ou','2026-05','kingambit','Kingambit',3,42.1,1030500,'[{"name":"Sucker Punch","slug":"sucker-punch","pct":78.2},...]','[{"name":"Leftovers","slug":"leftovers","pct":33.5},...]','[{"name":"Supreme Overlord","slug":"supreme-overlord","pct":97.8},...]','[{"nature":"Adamant","evs":"0/252/0/0/4/252","pct":22.1},...]','[{"name":"Great Tusk","slug":"great-tusk","pct":18.4},...]','[{"name":"Great Tusk","slug":"great-tusk","score":85.3,"ko_or_switch_pct":81.2,"n":1071},...]')
+--   ('gen9ou','2026-05','great-tusk','Great Tusk',1,58.7,1437000,'[{"name":"Rapid Spin","slug":"rapid-spin","pct":62.0},...]','[{"name":"Booster Energy","slug":"booster-energy","pct":45.6},...]','[{"name":"Protosynthesis","slug":"protosynthesis","pct":100.0},...]','[{"nature":"Jolly","evs":"0/252/0/0/4/252","pct":30.5},...]','[{"name":"Kingambit","slug":"kingambit","pct":20.3},...]','[{"name":"Kingambit","slug":"kingambit","score":72.1,"ko_or_switch_pct":68.5,"n":950},...]')
 `;

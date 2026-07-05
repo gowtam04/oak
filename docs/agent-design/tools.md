@@ -39,6 +39,20 @@ model can reason about**, never raw exceptions.
 > complete legal move list up front, and the server's rejection feedback on an
 > illegal `proposed_team` now embeds that same list — see T17 below.
 
+> `get_meta_usage` (T21, backlog B-5) reads **stored monthly Smogon ladder
+> usage** — what a Pokémon runs on a competitive ladder (moves / items /
+> abilities / EV-spreads / teammates / checks-and-counters), with its usage %,
+> rank, and a short usage/rank trend — from the offline `meta_snapshot`/
+> `meta_usage` warehouse synced by `sync:meta` from Smogon's monthly chaos stats.
+> v1 covers ONE ladder, `gen9ou` (Smogon OU, Gen 9 singles); Pokémon Champions
+> is deliberately excluded (its CURRENT usage is served live by `get_usage_stats`
+> (T15), not these stored monthly snapshots). Unlike the mode-gated tools it is
+> available in **every** scope — the ladder is an explicit `meta_format` input,
+> so the server-controlled data scope stays uninvolved. The data is monthly, not
+> live, so the prompt makes the model cite the ladder + month and flag staleness.
+> The retired T20 number (`web_search`, removed 2026-07-03) is NOT reused — this
+> tool is T21. See T21 below.
+
 Conventions:
 
 - Names accepted by detail tools are canonical PokeAPI slugs (`will-o-wisp`,
@@ -920,6 +934,66 @@ tool order — and thus the prompt-cached prefix — is unchanged.
 
 ---
 
+## T21 — `get_meta_usage`
+
+_(Added by backlog B-5 — stored competitive-ladder usage.)_
+
+**Purpose:** give the agent STORED monthly Smogon ladder usage for a Pokémon —
+what it runs on a competitive ladder (most-used moves, items, abilities,
+EV-spreads, teammates, plus its checks-and-counters), with its usage percentage,
+usage rank, and a short usage/rank trend. Answers "what does X run in OU", "is X
+used on the ladder", "top moves/item/spread for X" and similar. The prompt maps
+"OU" / "Smogon" / "the ladder" / "singles usage" to `meta_format: "gen9ou"` and
+routes a "current meta" question here (latest synced month) before degrading to
+the no-live-web honesty policy. It is NOT live data — the model must cite the
+ladder AND the month and flag that monthly stats may have moved.
+
+**Available in all scopes.** Unlike `get_encounters` (standard-only) and
+`get_usage_stats` (champions-only), this tool has NO `ctx.mode` gate: the ladder
+is an explicit `meta_format` input, so the server-controlled data scope is
+uninvolved. It runs identically in every scope.
+
+**Input:** `{ name: string, meta_format?: "gen9ou", month?: "YYYY-MM" }` —
+`name` is a Pokémon name/slug (resolve_entity first if unsure); `meta_format`
+selects the ladder (defaults to `gen9ou`, the only v1 ladder); `month` omitted
+means the latest synced month.
+
+**Output (hit):** `{ found: true, name, species, display_name, meta_format,
+meta_format_label, smogon_format_id, month, cutoff, rank, usage_pct, moves,
+items, abilities, spreads, teammates, counters, trend, total_battles, source_url,
+attribution }`, where `moves`/`items`/`abilities`/`teammates` are `{ name, slug,
+pct }[]`, `spreads` is `{ nature, evs, pct }[]`, `counters` is `{ name, slug,
+score, ko_or_switch_pct, n }[]`, and `trend` is `{ month, usage_pct, rank }[]`
+(ascending by month, most-recent ≤6 months). `total_battles` is `number | null`;
+`attribution` is the constant `"Smogon usage statistics (smogon.com/stats)"`.
+
+**Misses / error shapes:** `{ found: false, suggestions }` — unknown/ambiguous
+name (up to five of the month's display names ranked by affinity, same
+convention as every other detail tool; malformed input degrades to the same
+shape with an empty `suggestions`). `{ error: "no_data", months_available }` —
+the requested `month` isn't synced, or the ladder has never been synced at all
+(`months_available: []`). Never throws in-domain; a genuine repo/transport fault
+propagates like every other DB-reading tool.
+
+**Data source & coverage:** reads `meta_snapshot` + `meta_usage` (via
+`meta-repo.ts` — `listMetaMonths`/`metaSnapshot`/`metaLeaderboard`/
+`metaSpeciesDetail`/`metaSpeciesTrend`), built offline by the `sync:meta` CLI
+from Smogon's monthly chaos stats (`smogon.com/stats/<month>/chaos/<id>.json`).
+**v1 coverage is one ladder, `gen9ou`** (Smogon OU, Gen 9 singles). **Pokémon
+Champions is excluded** — its current usage is served live by `get_usage_stats`
+(T15). The ladder axis (`src/data/meta-formats.ts`) is deliberately separate from
+the six-scope data-format axis, so a future VGC-style ladder can be added without
+touching the data scope.
+
+**Side effects:** Read-only. Idempotent.
+
+**Cache-prefix note:** appended LAST, after `search_wiki` (T19), so the existing
+T1–T19 tool order — and thus the prompt-cached prefix — is unchanged. The T20
+number (`web_search`, removed 2026-07-03) stays permanently retired and is NOT
+reused; this tool is T21.
+
+---
+
 ## Tool-existence status
 
 | Tool                                                                        | Exists? | Build note                                                 |
@@ -935,6 +1009,7 @@ tool order — and thus the prompt-cached prefix — is unchanged.
 | save_team                                                                   | ✅      | Built by team-builder (TEAM-AD-7); the one write tool — saves server-bound `ctx.proposedTeam` on approval. |
 | get_encounters                                                              | ✅      | Catch-location / obtain-method data from a committed PokeAPI snapshot (standard mode only; Gen 1–8 coverage). |
 | get_learnset                                                                | ✅      | Added by B-13; a species' complete legal moveset in the active scope, reading the same `learnset` table the team validator checks against. |
+| get_meta_usage                                                              | ✅      | Added by B-5; stored monthly Smogon ladder usage (v1 `gen9ou`) from the `meta_snapshot`/`meta_usage` warehouse synced by `sync:meta`. Available in every scope (ladder is explicit input); Champions excluded (live via get_usage_stats). Appended last as T21 (T20 retired). |
 
 (The ❌ marks are the original agent-design backlog state; `get_team`,
 `list_teams`, and `save_team` are implemented as part of the team-builder

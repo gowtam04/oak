@@ -175,3 +175,20 @@ describe("get_learnset parity guard (B-13) — present in every scope + provider
     }
   }
 });
+
+describe("get_meta_usage routing (B-5) — present + DDL in the cached prefix", () => {
+  for (const provider of PROVIDERS) {
+    for (const mode of ["standard", "champions", "gen-7"] as const) {
+      it(`routes get_meta_usage (${provider}, ${mode})`, () => {
+        expect(bodyText(provider, mode)).toContain("get_meta_usage");
+      });
+      it(`embeds the meta_usage warehouse table in the cached prefix (${provider}, ${mode})`, () => {
+        const prefix = buildSystemSegments({ provider, mode })
+          .slice(0, -1)
+          .map((s) => s.text)
+          .join("\n");
+        expect(prefix).toContain("CREATE TABLE meta_usage");
+      });
+    }
+  }
+});

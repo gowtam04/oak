@@ -152,7 +152,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 19 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse)", async () => {
+  it("creates all 23 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
@@ -186,11 +186,15 @@ describe("Drizzle migration — table creation", () => {
         // Fandom wiki corpus (Oak v2, NOT format-scoped) — added by the 0010 migration.
         "wiki_page",
         "wiki_chunk",
+        // Smogon metagame warehouse (backlog B-5, NOT format-scoped) — added by
+        // the 0011 migration.
+        "meta_snapshot",
+        "meta_usage",
       ]),
     );
-    // Exactly 21 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
-    // + 1 champions-items + 5 natdex warehouse + 2 wiki corpus).
-    expect(tables).toHaveLength(21);
+    // Exactly 23 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
+    // + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse).
+    expect(tables).toHaveLength(23);
   });
 
   it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {

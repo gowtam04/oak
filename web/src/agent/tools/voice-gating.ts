@@ -13,6 +13,11 @@
  * here so their addition never has to touch voice code again. (T20
  * `web_search` was named here too until it was removed 2026-07-03.)
  *
+ * T21 `get_meta_usage` is deliberately NOT listed — it was ADMITTED to voice
+ * (it stays a fast, bounded DB read of stored monthly usage, the same reasoning
+ * that keeps T15 `get_usage_stats` admitted), so the default "everything except
+ * this set" filter picks it up for the realtime session with no change here.
+ *
  * Both voice sites import THIS set instead of hand-rolling the filter.
  */
 export const VOICE_EXCLUDED_TOOLS: ReadonlySet<string> = new Set([

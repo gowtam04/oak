@@ -1,14 +1,16 @@
 import type { MetadataRoute } from "next";
 import { SITE_ORIGIN } from "@/lib/site";
+import { DEFAULT_META_FORMAT } from "@/data/meta-formats";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Shards: 0 = static pages; 1 = pokemon, 2 = moves, 3 = abilities, 4 = items
 // (filled by the reference-pages workstream via dynamic-imported repos — those
-// imports MUST stay inside the function bodies; see CLAUDE.md env-throw gotcha).
+// imports MUST stay inside the function bodies; see CLAUDE.md env-throw gotcha);
+// 5 = meta species drill-ins (B-5 — see its own degradation contract below).
 export async function generateSitemaps() {
-  return [{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }];
+  return [{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }];
 }
 
 export default async function sitemap({ id }: { id: number }): Promise<MetadataRoute.Sitemap> {
@@ -28,6 +30,12 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
       { url: `${SITE_ORIGIN}/moves`, changeFrequency: "monthly", priority: 0.7 },
       { url: `${SITE_ORIGIN}/abilities`, changeFrequency: "monthly", priority: 0.7 },
       { url: `${SITE_ORIGIN}/items`, changeFrequency: "monthly", priority: 0.7 },
+      { url: `${SITE_ORIGIN}/meta`, changeFrequency: "monthly", priority: 0.6 },
+      {
+        url: `${SITE_ORIGIN}/meta/${DEFAULT_META_FORMAT}`,
+        changeFrequency: "weekly",
+        priority: 0.6,
+      },
       { url: `${SITE_ORIGIN}/teams`, changeFrequency: "monthly", priority: 0.6 },
       { url: `${SITE_ORIGIN}/privacy`, changeFrequency: "yearly", priority: 0.2 },
     ];
@@ -91,6 +99,34 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
       changeFrequency: "monthly" as const,
       priority: 0.5,
     }));
+  }
+
+  if (shardId === 5) {
+    // Meta drill-ins deliberately DO NOT share shards 1-4's index_unavailable
+    // propagation above: `meta_snapshot`/`meta_usage` are filled by a separate,
+    // manual `sync:meta` step (never by `ingest`), so a never-synced ladder is
+    // an EXPECTED, temporary state, not a broken index (see
+    // src/data/meta-pages.ts's module doc). `loadMetaLeaderboardUncached`
+    // reflects that with `available: false` instead of throwing, so this
+    // shard contributes zero URLs for an unsynced ladder rather than 500ing.
+    const { META_FORMATS } = await import("@/data/meta-formats");
+    const { loadMetaLeaderboardUncached } = await import("@/data/meta-pages");
+
+    const entries: MetadataRoute.Sitemap = [];
+    for (const format of META_FORMATS) {
+      const view = await loadMetaLeaderboardUncached(format.id, undefined, db);
+      if (!view.available) continue;
+      const snapshotModified = new Date(view.snapshot.fetchedAt);
+      for (const row of view.rows) {
+        entries.push({
+          url: `${SITE_ORIGIN}/meta/${format.id}/${row.species}`,
+          lastModified: snapshotModified,
+          changeFrequency: "monthly" as const,
+          priority: 0.5,
+        });
+      }
+    }
+    return entries;
   }
 
   throw new Error(`unknown sitemap shard: ${id}`);

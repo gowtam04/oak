@@ -574,3 +574,220 @@
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
+
+/* ---------------------------------------------------------------------------
+   /meta — ref-meta-* (B-5 competitive metagame reference pages)
+   ------------------------------------------------------------------------- */
+
+/* MetaFormatTabs */
+
+.ref-meta-tabs {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.ref-meta-tabs__tab {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+}
+
+.ref-meta-tabs__tab:hover {
+  color: var(--text-strong);
+}
+
+.ref-meta-tabs__tab[aria-current="page"] {
+  color: var(--poke-red);
+  background: var(--poke-red-soft);
+}
+
+/* MetaMonthPicker */
+
+.ref-meta-month {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ref-meta-month__label {
+  color: var(--text-muted);
+}
+
+.ref-meta-month__select {
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+}
+
+/* MetaLeaderboardTable */
+
+.ref-meta-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ref-meta-table th,
+.ref-meta-table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.ref-meta-table__rank {
+  color: var(--text-muted);
+  width: 4ch;
+}
+
+.ref-meta-table__name a {
+  color: var(--text-strong);
+}
+
+.ref-meta-table__usage-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 40%;
+}
+
+.ref-meta-table__bar-track {
+  display: block;
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.ref-meta-table__bar {
+  --fill: 0%;
+  display: block;
+  height: 100%;
+  width: var(--fill);
+  border-radius: var(--radius-pill);
+  background: var(--azure);
+}
+
+.ref-meta-table__usage-label {
+  color: var(--text-strong);
+  width: 6ch;
+  flex-shrink: 0;
+}
+
+.ref-meta-table__delta {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.ref-meta-table__delta--up {
+  color: var(--success);
+}
+
+.ref-meta-table__delta--down {
+  color: var(--danger);
+}
+
+/* MetaUsageLists */
+
+.ref-meta-lists {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ref-meta-lists__title {
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+}
+
+.ref-meta-lists__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.ref-meta-lists__item {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+}
+
+.ref-meta-lists__name {
+  color: var(--text-strong);
+}
+
+.ref-meta-lists__value {
+  color: var(--text-muted);
+}
+
+/* MetaTrendSparkline */
+
+.ref-meta-spark {
+  display: block;
+  overflow: visible;
+}
+
+.ref-meta-spark__line {
+  stroke: var(--azure);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ref-meta-spark__dot {
+  stroke: var(--azure);
+  stroke-width: 6;
+}
+
+.ref-meta-spark--empty {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+/* CopyShowdownSet */
+
+.ref-meta-set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ref-meta-set__text {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.ref-meta-set__button {
+  align-self: flex-start;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--poke-red);
+  background: var(--poke-red-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+
+.ref-meta-set__button:hover {
+  border-color: var(--poke-red);
+}

@@ -20,6 +20,9 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 // this shared schema surface. Single source of truth for the full `Format` set
 // (all six scopes) so the team enums below stay in lockstep with the ingest.
 import { FORMATS } from "@/data/formats";
+// Pure, client-safe (no @pkmn/DB/server imports) — the competitive-ladder axis
+// for T21 get_meta_usage's input enum (kept in lockstep with the meta warehouse).
+import { META_FORMAT_IDS, DEFAULT_META_FORMAT } from "@/data/meta-formats";
 import {
   teamMembersSchema,
   teamWarningSchema,
@@ -983,6 +986,122 @@ export const searchWikiOutputSchema = z.object({
 });
 
 // ===========================================================================
+// T21 — get_meta_usage (stored monthly Smogon ladder usage; backlog B-5).
+// A DB read over the offline meta_snapshot/meta_usage warehouse (synced from
+// Smogon's monthly chaos stats via sync:meta) — what a Pokémon runs on a
+// competitive ladder (moves/items/abilities/spreads/teammates/checks), with its
+// usage %, rank, and a short usage/rank trend. v1 covers ONE ladder,
+// "gen9ou" (Smogon OU Gen 9 singles); Pokémon Champions is deliberately NOT a
+// meta_format (its current usage is served live by T15 get_usage_stats). The
+// data is MONTHLY, not live, so answers must cite the ladder + month and flag
+// staleness. Available in ALL scopes — the ladder is an explicit input, so the
+// server-controlled data scope stays uninvolved. See get-meta-usage.tool.ts +
+// src/data/repos/meta-repo.ts + src/data/meta-formats.ts.
+// ===========================================================================
+
+export const getMetaUsageInputSchema = z.object({
+  name: z
+    .string()
+    .min(1)
+    .describe("A Pokémon name or slug, e.g. 'Kingambit' or 'great-tusk'."),
+  meta_format: z
+    .enum(META_FORMAT_IDS)
+    .default(DEFAULT_META_FORMAT)
+    .describe(
+      "The competitive ladder to read usage for. Currently only \"gen9ou\" " +
+        "(Smogon OU, Gen 9 singles) is available.",
+    ),
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional()
+    .describe(
+      "The stats month as \"YYYY-MM\". Omit for the latest synced month.",
+    ),
+});
+
+/** One move/item/ability/teammate usage line — `{name, slug, pct}`. */
+export const metaUsageEntrySchema = z.object({
+  name: z.string(),
+  slug: z.string(),
+  pct: z.number(),
+});
+
+/** One EV-spread usage line (`evs` is "HP/Atk/Def/SpA/SpD/Spe"). */
+export const metaSpreadEntrySchema = z.object({
+  nature: z.string(),
+  evs: z.string(),
+  pct: z.number(),
+});
+
+/** One checks-and-counters entry (score + combined KO-or-switch %, sample n). */
+export const metaCounterEntrySchema = z.object({
+  name: z.string(),
+  slug: z.string(),
+  score: z.number(),
+  ko_or_switch_pct: z.number(),
+  n: z.number(),
+});
+
+/** One point of a species' usage/rank trend across synced months. */
+export const metaTrendPointSchema = z.object({
+  month: z.string(),
+  usage_pct: z.number(),
+  rank: z.number().int(),
+});
+
+export const metaUsageDetailSchema = z.object({
+  found: z.literal(true),
+  /** The name/slug the caller asked for (echoed). */
+  name: z.string(),
+  /** The canonical species slug the usage row is keyed by, e.g. "great-tusk". */
+  species: z.string(),
+  /** The display name, e.g. "Great Tusk". */
+  display_name: z.string(),
+  /** The ladder id this usage is from, e.g. "gen9ou". */
+  meta_format: z.enum(META_FORMAT_IDS),
+  /** Full ladder label, e.g. "Smogon OU (Gen 9 singles)". */
+  meta_format_label: z.string(),
+  /** Exact Smogon format id behind the stats URL, e.g. "gen9ou". */
+  smogon_format_id: z.string(),
+  /** The stats month this row covers ("YYYY-MM"). */
+  month: z.string(),
+  /** The usage cutoff (minimum battles a player needed to count). */
+  cutoff: z.number().int(),
+  /** The species' usage rank on the ladder that month (1 = most used). */
+  rank: z.number().int(),
+  /** The species' usage percentage that month, e.g. 46.1. */
+  usage_pct: z.number(),
+  moves: z.array(metaUsageEntrySchema),
+  items: z.array(metaUsageEntrySchema),
+  abilities: z.array(metaUsageEntrySchema),
+  spreads: z.array(metaSpreadEntrySchema),
+  teammates: z.array(metaUsageEntrySchema),
+  counters: z.array(metaCounterEntrySchema),
+  /** Usage/rank trend, ascending by month (oldest first), most-recent ≤6 months. */
+  trend: z.array(metaTrendPointSchema),
+  /** Total battles behind the snapshot; null when the source omitted it. */
+  total_battles: z.number().nullable(),
+  /** The Smogon chaos-stats URL this snapshot was synced from. */
+  source_url: z.string(),
+  /** Static attribution string — always cite Smogon. */
+  attribution: z.string(),
+});
+
+/** No usage data for the requested (or any) month on this ladder. */
+export const metaNoDataSchema = z.object({
+  error: z.literal("no_data"),
+  /** Every synced month for this ladder, most recent first (may be empty). */
+  months_available: z.array(z.string()),
+});
+
+export const getMetaUsageOutputSchema = z.union([
+  metaUsageDetailSchema,
+  notFoundSchema,
+  metaNoDataSchema,
+]);
+
+// ===========================================================================
 // Inferred TypeScript types
 // ===========================================================================
 
@@ -1053,6 +1172,15 @@ export type SearchWikiInput = z.infer<typeof searchWikiInputSchema>;
 export type WikiResult = z.infer<typeof wikiResultSchema>;
 export type SearchWikiOutput = z.infer<typeof searchWikiOutputSchema>;
 
+export type GetMetaUsageInput = z.infer<typeof getMetaUsageInputSchema>;
+export type MetaUsageEntry = z.infer<typeof metaUsageEntrySchema>;
+export type MetaSpreadEntry = z.infer<typeof metaSpreadEntrySchema>;
+export type MetaCounterEntry = z.infer<typeof metaCounterEntrySchema>;
+export type MetaTrendPoint = z.infer<typeof metaTrendPointSchema>;
+export type MetaUsageDetail = z.infer<typeof metaUsageDetailSchema>;
+export type MetaNoData = z.infer<typeof metaNoDataSchema>;
+export type GetMetaUsageOutput = z.infer<typeof getMetaUsageOutputSchema>;
+
 /** The single structured output the agent emits per turn (T11). */
 export type OakAnswer = z.infer<typeof oakAnswerSchema>;
 
@@ -1120,6 +1248,8 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   run_sql: toJsonSchema(runSqlInputSchema),
   // T19 — full-text retrieval over the self-built Fandom prose corpus (lore/anime).
   search_wiki: toJsonSchema(searchWikiInputSchema),
+  // T21 — stored monthly Smogon ladder usage (all scopes; ladder is explicit input).
+  get_meta_usage: toJsonSchema(getMetaUsageInputSchema),
 };
 
 /** The generated `submit_answer` (OakAnswer) JSON Schema. */
@@ -1147,6 +1277,7 @@ export const TOOL_NAMES = [
   "get_learnset",
   "run_sql",
   "search_wiki",
+  "get_meta_usage",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
