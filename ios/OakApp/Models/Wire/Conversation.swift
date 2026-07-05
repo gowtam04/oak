@@ -45,13 +45,22 @@ struct ConversationSummary: Decodable, Sendable, Identifiable, Hashable {
 }
 
 /// A full conversation with rehydrated turns — `GET /api/conversations/{id}`
-/// (`{ id, title, format, pinned, turns }`).
+/// (`{ id, title, format, pinned, turns, active_turn }`).
 struct ConversationDetail: Decodable, Sendable {
   let id: String
   let title: String
   let format: Format
   let pinned: Bool
   let turns: [ChatTurn]
+  /// A live registry lookup by conversation id + account: the turn still generating
+  /// for this thread, if any (background-turns/design.md §5.4). Present so a reopened
+  /// thread reattaches to an in-flight turn even after an app relaunch (when the
+  /// device-local pending-turn pointer is gone). `nil` ⇒ no running turn. Additive
+  /// and optional, so an older server that omits it decodes cleanly. `var` (not `let`)
+  /// with a `nil` default so it is still decoded by the synthesized `Decodable` (Swift
+  /// EXCLUDES a `let` property that has a default from decoding) while letting existing
+  /// constructors (previews/tests) omit it.
+  var activeTurn: ActiveTurn? = nil
 
   enum CodingKeys: String, CodingKey {
     case id
@@ -59,6 +68,18 @@ struct ConversationDetail: Decodable, Sendable {
     case format
     case pinned
     case turns
+    case activeTurn = "active_turn"
+  }
+}
+
+/// The `active_turn` field of a conversation detail — the id of the turn still
+/// generating for the thread (`{ turn_id }`), so the client can reattach to its
+/// live stream. `turn_id` is snake_case on the wire.
+struct ActiveTurn: Decodable, Sendable, Equatable {
+  let turnId: String
+
+  enum CodingKeys: String, CodingKey {
+    case turnId = "turn_id"
   }
 }
 

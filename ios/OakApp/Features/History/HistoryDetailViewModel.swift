@@ -102,7 +102,7 @@ final class HistoryDetailViewModel {
     case let .http(status, _, message):
       if status == 404 { return notAvailableMessage }
       return message.isEmpty ? genericMessage : message
-    case .decoding, .imageRejected:
+    case .decoding, .imageRejected, .turnInProgress:
       return genericMessage
     }
   }

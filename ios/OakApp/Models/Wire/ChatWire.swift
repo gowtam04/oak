@@ -65,17 +65,27 @@ struct ChatImage: Encodable, Sendable {
 
 /// One decoded server-sent event from the chat stream.
 ///
-/// The endpoint emits, in order: `scope` (exactly one, FIRST) → `tool_activity`*
-/// → `answer_start`*/`answer_delta`* → exactly one terminal `answer`
-/// (authoritative). An `error` event is reserved for transport/API faults ONLY —
-/// every in-domain failure (unresolved entity, clarification, index missing,
-/// loop-max) rides a normal `answer` event whose `OakAnswer.status` carries the
-/// failure.
+/// The endpoint emits, in order (background-turns/design.md §4): `turn` (exactly
+/// one, FIRST — the server-minted turn id) → `scope` (exactly one) →
+/// `tool_activity`* → `answer_start`*/`answer_delta`* → exactly one terminal
+/// `answer` | `error` | `stopped`. The `answer` event is authoritative; an
+/// `error` event is reserved for transport/API faults ONLY — every in-domain
+/// failure (unresolved entity, clarification, index missing, loop-max) rides a
+/// normal `answer` event whose `OakAnswer.status` carries the failure; a `stopped`
+/// event is the terminal alternative when the turn was explicitly stopped.
+///
+/// The `turn` frame opens BOTH the POST stream and the resume stream, so a client
+/// records it as the conversation's pending turn (to later reattach/stop) and, on
+/// reattach, rebuilds its in-flight UI from scratch when it arrives.
 ///
 /// `event:`-name decoding lives in `SSEParser`; this type only models the events
 /// and (via the nested `*Data` payloads below) the way to decode each frame's
 /// `data:` JSON.
 enum SSEEvent: Sendable, Equatable {
+    /// `turn` — the server-minted turn id (`TurnEvent`), emitted exactly once as
+    /// the FIRST frame of both the POST and resume streams (BT-2). Recorded as the
+    /// conversation's pending turn; on a resume it resets the in-flight UI.
+    case turn(turnId: String)
     /// `scope` — the server-resolved game scope for this turn (`ScopeEvent`),
     /// emitted once, before any `tool_activity`. Drives the header scope chip.
     case scope(format: Format, source: ScopeSource)
@@ -89,6 +99,9 @@ enum SSEEvent: Sendable, Equatable {
     case answer(OakAnswer)
     /// `error` — transport/API fault only (never an in-domain failure).
     case error(code: String, message: String, status: Int?)
+    /// `stopped` — terminal: the turn was explicitly stopped (BT-4). Nothing is
+    /// persisted; the client discards the in-flight turn and clears its pending id.
+    case stopped
 }
 
 /// How the server resolved a turn's scope — the `source` field of the `scope`
@@ -139,6 +152,16 @@ extension ScopeSource: Decodable {
 }
 
 extension SSEEvent {
+    /// `event: turn` data payload — the server-minted turn id (`TurnEvent` in
+    /// `web/src/lib/sse/sse-types.ts`). The `turn_id` is snake_case on the wire.
+    struct TurnData: Decodable, Sendable {
+        let turnId: String
+
+        enum CodingKeys: String, CodingKey {
+            case turnId = "turn_id"
+        }
+    }
+
     /// `event: scope` data payload — the server-resolved game scope for this turn
     /// (`ScopeEvent`). `format` decodes tolerantly (unknown → `.unknown(raw)`), and
     /// so does `source`, so a widened wire never fails the frame.
