@@ -103,6 +103,21 @@ describe("parseFrame", () => {
     });
   });
 
+  it("parses a turn frame (the new background-turns id event)", () => {
+    // Without the `case "turn"` in parseFrame, this FIRST frame would be dropped
+    // as unknown and the client would never learn its turn id (BT-2).
+    const raw = 'event: turn\ndata: {"turn_id":"abc-123"}';
+    expect(parseFrame(raw)).toEqual({
+      event: "turn",
+      data: { turn_id: "abc-123" },
+    });
+  });
+
+  it("parses a stopped frame (empty payload, terminal)", () => {
+    const raw = "event: stopped\ndata: {}";
+    expect(parseFrame(raw)).toEqual({ event: "stopped", data: {} });
+  });
+
   it("parses an answer_start frame (empty payload)", () => {
     const raw = "event: answer_start\ndata: {}";
     expect(parseFrame(raw)).toEqual({ event: "answer_start", data: {} });

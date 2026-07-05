@@ -1,7 +1,11 @@
 /**
  * SSE event protocol for `POST /api/chat` (design.md § API Design).
  *
- * The route emits, in order:
+ * The route emits, in order (background-turns/design.md §4):
+ *   event: turn            data: { turn_id }          (exactly one, FIRST frame
+ *                                                      of both the POST stream and
+ *                                                      the resume stream — the
+ *                                                      server-minted turn id)
  *   event: scope           data: { format, source }  (exactly one, first; the
  *                                                      server-resolved game scope
  *                                                      for this turn — GS-C)
@@ -12,9 +16,17 @@
  *                                                      begins streaming)
  *   event: answer_delta    data: { text }            (zero or more; incremental
  *                                                      chunks of answer_markdown)
- *   event: answer          data: { answer }          (exactly one, terminal,
- *                                                      authoritative)
- *   event: error           data: { code, message }   (transport faults ONLY)
+ *   event: answer          data: { answer }          (terminal, authoritative)
+ *   event: error           data: { code, message }   (terminal — transport faults
+ *                                                      ONLY)
+ *   event: stopped         data: {}                  (terminal alternative to
+ *                                                      answer/error when the turn
+ *                                                      was explicitly stopped —
+ *                                                      §4/BT-4; nothing persisted)
+ *
+ * The terminal event is exactly one of answer | error | stopped. The `turn`
+ * frame is emitted PER-SUBSCRIBER (it is NOT part of the buffered replay list),
+ * so the POST stream and the resume stream both open with it.
  *
  * IMPORTANT: every in-domain failure (unresolved entity, clarification, PokeAPI
  * down, index missing, loop-max, invalid-after-retry) is delivered as a NORMAL
@@ -84,6 +96,17 @@ export interface ScopeEvent {
   source: "message" | "conversation" | "seed" | "default";
 }
 
+/**
+ * `event: turn` payload — the server-minted turn id (background-turns/design.md
+ * §4 / BT-2). Emitted exactly once, as the very FIRST frame of both the POST
+ * stream and the resume stream, so a client can record the turn as its
+ * conversation's pending turn and later reattach/stop it. Additive — old clients
+ * that don't listen for `turn` simply ignore it.
+ */
+export interface TurnEvent {
+  turn_id: string;
+}
+
 /** `event: tool_activity` payload — progress shown while the loop runs. */
 export interface ToolActivityEvent {
   tool: string;
@@ -107,6 +130,15 @@ export interface AnswerEvent {
   answer: OakAnswer;
 }
 
+/**
+ * `event: stopped` payload — the terminal event for a turn that was explicitly
+ * stopped via `POST /api/chat/turns/:id/stop` (background-turns/design.md §4 /
+ * BT-4). Empty object `{}`; nothing is persisted or recorded for a stopped turn
+ * (matches today's Stop-discards semantics). It is a terminal ALTERNATIVE to
+ * `answer`/`error`.
+ */
+export type StoppedEvent = Record<string, never>;
+
 /** `event: error` payload — transport/API fault only (not in-domain failures). */
 export interface ErrorEvent {
   code: string;
@@ -120,21 +152,25 @@ export interface ErrorEvent {
 
 /** The SSE event names this endpoint emits. */
 export type SseEventName =
+  | "turn"
   | "scope"
   | "tool_activity"
   | "answer_start"
   | "answer_delta"
   | "answer"
-  | "error";
+  | "error"
+  | "stopped";
 
 /** Maps each event name to its `data` payload type. */
 export interface SseEventDataMap {
+  turn: TurnEvent;
   scope: ScopeEvent;
   tool_activity: ToolActivityEvent;
   answer_start: AnswerStartEvent;
   answer_delta: AnswerDeltaEvent;
   answer: AnswerEvent;
   error: ErrorEvent;
+  stopped: StoppedEvent;
 }
 
 /** A fully-typed, discriminated SSE event (name + its matching data). */

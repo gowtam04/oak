@@ -37,7 +37,9 @@ import type {
   ScopeEvent,
   SseEvent,
   SseEventName,
+  StoppedEvent,
   ToolActivityEvent,
+  TurnEvent,
 } from "@/lib/sse/sse-types";
 
 // ---------------------------------------------------------------------------
@@ -84,6 +86,8 @@ export function parseFrame(frame: string): SseEvent | null {
 
   // Only the event names this endpoint emits are accepted.
   switch (eventName as SseEventName) {
+    case "turn":
+      return { event: "turn", data: data as TurnEvent };
     case "scope":
       return { event: "scope", data: data as ScopeEvent };
     case "tool_activity":
@@ -96,6 +100,8 @@ export function parseFrame(frame: string): SseEvent | null {
       return { event: "answer", data: data as AnswerEvent };
     case "error":
       return { event: "error", data: data as ErrorEvent };
+    case "stopped":
+      return { event: "stopped", data: data as StoppedEvent };
     default:
       return null;
   }
