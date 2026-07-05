@@ -1,0 +1,657 @@
+/**
+ * reference-detail.css — styles for the reference DETAIL-page components
+ * (pokedex/moves/abilities/items `[slug]`): StatsTable, MatchupChart,
+ * LearnsetTable, AbilityBlock, EvolutionChain, FormatChips, UsageBlock, and
+ * AskOakCta — plus the detail-page card scaffolding (hero card + section
+ * cards) the four pages compose on top of the shared `.ref-card` primitive
+ * from `reference.css`. Split out of `reference.css` (chrome + scaffolding) so
+ * the detail-page redesign task owns one file. Tokens only (colors/spacing/
+ * radii/shadows all read CSS custom properties from `src/app/globals.css`) so
+ * dark theme works automatically. Imported once by the `(reference)` route
+ * layout.
+ *
+ * Field-guide language (UI §4 screen 06): the hero is a Level-1 card with a
+ * 3px top rule in the primary type's `--type-*` color (the one place a type
+ * color escapes the badge); every section is a Level-1 card with an
+ * "instrument label" heading (mono 600, uppercase, tracked, muted); tables use
+ * hairline separators + a row-hover tint + tabular mono numerals and no
+ * internal column borders; the base-stat meters keep the magnitude ramp and
+ * animate their fill; `AskOakCta` is the page's red primary moment.
+ */
+
+/* ---------------------------------------------------------------------------
+   Detail-page hero — a Level-1 card (`.ref-card` in markup) with the artwork
+   on a sunken well, a Fredoka name, a mono dex eyebrow, the TypeBadge row, and
+   a 3px top accent rule in the primary type's color. Pages set `data-type` to
+   the primary/only type (pokedex primary type, move type); abilities/items
+   have no type, so the accent falls back to a neutral machined edge.
+   ------------------------------------------------------------------------- */
+
+.ref-detail-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-top: var(--space-4);
+  padding: var(--space-6) var(--space-8);
+}
+
+/* The type-colored top rule. Clipped to the card's rounded top corners by the
+   hero's `overflow: hidden`. `--ref-type-accent` is set per type below; unset
+   (abilities/items) falls back to a neutral hairline-strong edge. */
+.ref-detail-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--ref-type-accent, var(--border-strong));
+}
+
+/* The 18 type-accent bindings — a `data-type` attribute avoids inline styles
+   (repo lint forbids the `style` prop) while keeping the color token-driven. */
+.ref-detail-hero[data-type="normal"] { --ref-type-accent: var(--type-normal); }
+.ref-detail-hero[data-type="fire"] { --ref-type-accent: var(--type-fire); }
+.ref-detail-hero[data-type="water"] { --ref-type-accent: var(--type-water); }
+.ref-detail-hero[data-type="electric"] { --ref-type-accent: var(--type-electric); }
+.ref-detail-hero[data-type="grass"] { --ref-type-accent: var(--type-grass); }
+.ref-detail-hero[data-type="ice"] { --ref-type-accent: var(--type-ice); }
+.ref-detail-hero[data-type="fighting"] { --ref-type-accent: var(--type-fighting); }
+.ref-detail-hero[data-type="poison"] { --ref-type-accent: var(--type-poison); }
+.ref-detail-hero[data-type="ground"] { --ref-type-accent: var(--type-ground); }
+.ref-detail-hero[data-type="flying"] { --ref-type-accent: var(--type-flying); }
+.ref-detail-hero[data-type="psychic"] { --ref-type-accent: var(--type-psychic); }
+.ref-detail-hero[data-type="bug"] { --ref-type-accent: var(--type-bug); }
+.ref-detail-hero[data-type="rock"] { --ref-type-accent: var(--type-rock); }
+.ref-detail-hero[data-type="ghost"] { --ref-type-accent: var(--type-ghost); }
+.ref-detail-hero[data-type="dragon"] { --ref-type-accent: var(--type-dragon); }
+.ref-detail-hero[data-type="dark"] { --ref-type-accent: var(--type-dark); }
+.ref-detail-hero[data-type="steel"] { --ref-type-accent: var(--type-steel); }
+.ref-detail-hero[data-type="fairy"] { --ref-type-accent: var(--type-fairy); }
+
+/* Artwork sits centered on a sunken, rounded well — a framed-portrait read. */
+.ref-detail-hero__art-well {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 144px;
+  height: 144px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md);
+}
+
+.ref-detail-hero__art {
+  width: 128px;
+  height: 128px;
+  object-fit: contain;
+}
+
+.ref-detail-hero__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Mono dex eyebrow above the name ("#0445"). */
+.ref-detail-hero__dex {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+.ref-detail-hero__title {
+  font-family: var(--display);
+  font-size: var(--text-2xl);
+  color: var(--text-strong);
+  margin: 0;
+}
+
+.ref-detail-hero__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+/* Narrow screens: stack the portrait above the name block. */
+@media (max-width: 560px) {
+  .ref-detail-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-5);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Detail-page section — a Level-1 card (`.ref-card` in markup) with an
+   instrument-label heading. Stacks below the hero with consistent rhythm.
+   ------------------------------------------------------------------------- */
+
+.ref-detail-section {
+  margin-top: var(--space-6);
+  padding: var(--space-6);
+}
+
+.ref-detail-section__title {
+  margin: 0 0 var(--space-4);
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* The intro/lead prose under a detail hero — editorial calm, not a card. */
+.ref-detail-intro {
+  margin-top: var(--space-6);
+}
+.ref-detail-intro + .ref-detail-intro {
+  margin-top: var(--space-3);
+}
+
+/* ---------------------------------------------------------------------------
+   StatsTable — six base stats + BST, each a value cell and a magnitude-ramp
+   bar. Hairline row separators, a row-hover tint, tabular mono values, and no
+   internal column borders. The `--danger/--warning/--success/--azure` ramp is
+   design law (kept verbatim); the bar now animates its fill 0 → value.
+   ------------------------------------------------------------------------- */
+
+.ref-stats {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ref-stats__row td,
+.ref-stats__row th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Row hover tint (non-total rows) — the sunken surface, not a selection color. */
+.ref-stats__row:not(.ref-stats__row--total):hover td,
+.ref-stats__row:not(.ref-stats__row--total):hover th {
+  background: var(--surface-sunken);
+}
+
+.ref-stats__label {
+  text-align: left;
+  color: var(--text-muted);
+  width: 30%;
+}
+
+.ref-stats__value {
+  text-align: right;
+  color: var(--text-strong);
+  font-weight: 600;
+  width: 15%;
+}
+
+.ref-stats__bar-cell {
+  width: 55%;
+}
+
+.ref-stats__bar-track {
+  display: block;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.ref-stats__bar {
+  --fill: 0%;
+  display: block;
+  height: 100%;
+  width: var(--fill);
+  border-radius: var(--radius-pill);
+  animation: ref-stats-fill 400ms ease-out both;
+}
+
+@keyframes ref-stats-fill {
+  from { width: 0; }
+  to { width: var(--fill); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ref-stats__bar {
+    animation: none;
+  }
+}
+
+.ref-stats__bar--danger { background: var(--danger); }
+.ref-stats__bar--warning { background: var(--warning); }
+.ref-stats__bar--success { background: var(--success); }
+.ref-stats__bar--azure { background: var(--azure); }
+
+.ref-stats__row--total th,
+.ref-stats__row--total td {
+  border-bottom: none;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+/* ---------------------------------------------------------------------------
+   MatchupChart — one row per multiplier bucket. The multiplier reads as a
+   small mono chip; the badges wrap.
+   ------------------------------------------------------------------------- */
+
+.ref-matchups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ref-matchups__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ref-matchups__label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  width: 12ch;
+  flex-shrink: 0;
+}
+
+.ref-matchups__mult {
+  flex-shrink: 0;
+  width: 5ch;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-align: center;
+}
+
+.ref-matchups__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ---------------------------------------------------------------------------
+   LearnsetTable — movepool grouped by learn method. Method heading as an
+   instrument label; hairline rows with a hover tint, tabular mono power, no
+   internal column borders.
+   ------------------------------------------------------------------------- */
+
+.ref-learnset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.ref-learnset__group {
+  margin: 0;
+}
+
+.ref-learnset__method {
+  margin: 0 0 var(--space-2);
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+.ref-learnset__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ref-learnset__row td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.ref-learnset__row:hover td {
+  background: var(--surface-sunken);
+}
+
+.ref-learnset__name a {
+  color: var(--text-strong);
+}
+.ref-learnset__name a:hover {
+  color: var(--poke-red);
+}
+
+.ref-learnset__power,
+.ref-learnset__class {
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------------------
+   AbilityBlock — abilities as hairline-separated rows, name linked, effect
+   prose muted.
+   ------------------------------------------------------------------------- */
+
+.ref-abilities {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ref-abilities__item {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.ref-abilities__item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.ref-abilities__name {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.ref-abilities__name:hover {
+  color: var(--poke-red);
+}
+
+.ref-abilities__hidden {
+  margin-left: var(--space-2);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.ref-abilities__effect {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+/* ---------------------------------------------------------------------------
+   EvolutionChain — an inline chain of node pills joined by faint arrows, with
+   the evolution condition as a small mono caption between pairs.
+   ------------------------------------------------------------------------- */
+
+.ref-evolution {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ref-evolution__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.ref-evolution__node {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  color: var(--text-strong);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  transition: border-color var(--motion-fast), color var(--motion-fast);
+}
+.ref-evolution__node:hover {
+  border-color: var(--border-strong);
+  color: var(--poke-red);
+}
+
+.ref-evolution__arrow {
+  color: var(--text-faint);
+}
+
+.ref-evolution__condition {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   FormatChips — availability scope chips (also reused for the pages' "Other
+   forms" / "Required by" linked chips). Machined pills: hairline border, sunken
+   fill, linked variants lift their border on hover.
+   ------------------------------------------------------------------------- */
+
+.ref-formats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ref-formats__chip {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  transition: border-color var(--motion-fast), color var(--motion-fast);
+}
+
+/* Linked chips ("Other forms" / "Required by") — the anchor fills the pill. */
+.ref-formats__chip a {
+  color: inherit;
+}
+.ref-formats__chip:hover:has(a) {
+  border-color: var(--border-strong);
+}
+.ref-formats__chip a:hover {
+  color: var(--poke-red);
+  text-decoration: none;
+}
+
+/* ---------------------------------------------------------------------------
+   UsageBlock — compact Champions-usage summary. Overall usage reads as a
+   prominent mono figure; category lists use hairline-separated rows.
+   ------------------------------------------------------------------------- */
+
+.ref-usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.ref-usage__season {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.ref-usage__percent {
+  color: var(--text-strong);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  margin: 0;
+}
+
+.ref-usage__group-title {
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+}
+
+.ref-usage__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ref-usage__item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+.ref-usage__item:last-child {
+  border-bottom: none;
+}
+
+.ref-usage__name {
+  color: var(--text-strong);
+}
+
+.ref-usage__pct {
+  color: var(--text-muted);
+}
+
+.ref-usage__attribution {
+  color: var(--text-faint);
+  font-size: var(--text-2xs);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   RefRosterList — a detail page's reverse roster (learners of a move, holders
+   of an ability). Grouped by an instrument-label heading; dense hairline rows
+   with a hover tint, each entry a plain crawl-path link.
+   ------------------------------------------------------------------------- */
+
+.ref-roster {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.ref-roster__group {
+  margin: 0;
+}
+
+.ref-roster__heading {
+  margin: 0 0 var(--space-2);
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+.ref-roster__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ref-roster__row {
+  border-bottom: 1px solid var(--border);
+}
+.ref-roster__row:last-child {
+  border-bottom: none;
+}
+
+.ref-roster__entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-strong);
+  text-decoration: none;
+  transition: background var(--motion-fast);
+}
+.ref-roster__entry:hover {
+  background: var(--surface-sunken);
+  text-decoration: none;
+}
+
+.ref-roster__primary {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+.ref-roster__entry:hover .ref-roster__primary {
+  color: var(--poke-red);
+}
+
+.ref-roster__secondary {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.ref-roster__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.ref-roster__meta {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+/* ---------------------------------------------------------------------------
+   AskOakCta — the page's red primary moment. A solid `--poke-red` panel that
+   mirrors the app's `.app-nav__newchat` pill energy (white label, red-hover on
+   hover), lifting on hover like a linked card.
+   ------------------------------------------------------------------------- */
+
+.ref-ask-oak {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-8);
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: var(--poke-red);
+  color: var(--neutral-0);
+  text-decoration: none;
+  box-shadow: var(--shadow-raised);
+  transition: background var(--motion-fast), transform var(--motion-fast),
+    box-shadow var(--motion-fast);
+}
+
+.ref-ask-oak:hover {
+  background: var(--poke-red-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-floating);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ref-ask-oak {
+    transition: none;
+  }
+  .ref-ask-oak:hover {
+    transform: none;
+  }
+}
+
+.ref-ask-oak__label {
+  font-family: var(--display);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--neutral-0);
+}
+
+.ref-ask-oak__prompt {
+  font-size: var(--text-sm);
+  color: color-mix(in srgb, var(--neutral-0) 82%, transparent);
+}

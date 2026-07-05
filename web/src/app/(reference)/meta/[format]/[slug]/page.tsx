@@ -145,15 +145,17 @@ export default async function MetaSpeciesPage({
             </p>
           )}
           <p className="ref-intro">
-            Rank #{data.rank} · {data.usagePct.toFixed(1)}% usage ·{" "}
-            {formatMonthLabel(data.month)} · {data.label} ladder · cutoff{" "}
-            {data.snapshot.cutoff}+ battles
+            Rank #<span className="mono-num">{data.rank}</span> ·{" "}
+            <span className="mono-num">{data.usagePct.toFixed(1)}%</span>{" "}
+            usage · {formatMonthLabel(data.month)} · {data.label} ladder ·
+            cutoff <span className="mono-num">{data.snapshot.cutoff}</span>+
+            battles
           </p>
         </div>
       </div>
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">Usage trend</h2>
+      <section className="ref-card ref-meta-card">
+        <h2 className="ref-meta-card__title">Usage trend</h2>
         <MetaTrendSparkline
           points={data.trend.map((t) => ({
             month: t.month,
@@ -162,20 +164,18 @@ export default async function MetaSpeciesPage({
         />
       </section>
 
-      <section className="ref-section">
+      <section className="ref-card ref-meta-card">
         <MetaUsageLists sections={usageSections(format, data)} />
       </section>
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">Representative set</h2>
+      <section className="ref-card ref-meta-card">
+        <h2 className="ref-meta-card__title">Representative set</h2>
         <CopyShowdownSet exportText={data.showdownExport} />
       </section>
 
-      <section className="ref-section">
-        <AskOakCta
-          prompt={`What does ${data.displayName} run in ${data.label} and why?`}
-        />
-      </section>
+      <AskOakCta
+        prompt={`What does ${data.displayName} run in ${data.label} and why?`}
+      />
     </main>
   );
 }

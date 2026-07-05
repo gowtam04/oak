@@ -41,6 +41,7 @@ import {
   metaSnapshot,
   metaSpeciesDetail,
   metaSpeciesTrend,
+  speciesSpriteUrls,
   speciesWithDexPage,
   type MetaSnapshotRecord,
   type MetaSpeciesDetailRecord,
@@ -172,10 +173,11 @@ export async function loadMetaLeaderboardUncached(
   // snapshot row must exist; the `!` reflects that invariant.
   const snapshot = toSnapshotInfo(snapshotRow!);
 
-  const dexPages = await speciesWithDexPage(
-    db,
-    entries.map((e) => e.species),
-  );
+  const speciesSlugs = entries.map((e) => e.species);
+  const [dexPages, spriteUrls] = await Promise.all([
+    speciesWithDexPage(db, speciesSlugs),
+    speciesSpriteUrls(db, speciesSlugs),
+  ]);
 
   const rows: MetaLeaderboardRow[] = entries.map((e) => ({
     rank: e.rank,
@@ -185,6 +187,7 @@ export async function loadMetaLeaderboardUncached(
     deltaPct:
       e.prev_usage_pct == null ? null : round2(e.usage_pct - e.prev_usage_pct),
     hasDexPage: dexPages.has(e.species),
+    spriteUrl: spriteUrls.get(e.species) ?? null,
   }));
 
   return {
@@ -265,7 +268,10 @@ const cachedMetaLeaderboard = unstable_cache(
     month?: string,
   ): Promise<MetaLeaderboardView> =>
     loadMetaLeaderboardUncached(metaFormat, month, await singletonDb()),
-  ["meta-leaderboard"],
+  // Bumped v1 -> v2: the row shape gained `spriteUrl` (Task D); a stale
+  // filesystem cache from before this change would serve rows missing that
+  // field, so the key must change to invalidate it across deploys.
+  ["meta-leaderboard-v2"],
   { revalidate: 3600 },
 );
 

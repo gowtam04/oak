@@ -63,27 +63,27 @@ export default async function ItemDetailPage({
         <span>{data.displayName}</span>
       </nav>
 
-      <div className="ref-hero">
-        <div>
-          <h1 className="ref-hero__title">{data.displayName}</h1>
+      <div className="ref-card ref-detail-hero">
+        <div className="ref-detail-hero__meta">
+          <h1 className="ref-detail-hero__title">{data.displayName}</h1>
         </div>
       </div>
 
       {effect && (
-        <section className="ref-section">
-          <h2 className="ref-section__title">Effect</h2>
+        <section className="ref-card ref-detail-section">
+          <h2 className="ref-detail-section__title">Effect</h2>
           <p className="ref-intro">{effect}</p>
         </section>
       )}
 
-      <section className="ref-section">
-        <h2 className="ref-section__title">Availability</h2>
+      <section className="ref-card ref-detail-section">
+        <h2 className="ref-detail-section__title">Availability</h2>
         <FormatChips formats={data.availability} />
       </section>
 
       {data.requiredBy.length > 0 && (
-        <section className="ref-section">
-          <h2 className="ref-section__title">Required by</h2>
+        <section className="ref-card ref-detail-section">
+          <h2 className="ref-detail-section__title">Required by</h2>
           <ul className="ref-formats">
             {data.requiredBy.map((r) => (
               <li key={r.slug} className="ref-formats__chip">
@@ -95,9 +95,9 @@ export default async function ItemDetailPage({
       )}
 
       {data.heldByWild.length > 0 && (
-        <section className="ref-section">
-          <h2 className="ref-section__title">Held by wild Pokémon</h2>
-          <ul className="ref-index__list">
+        <section className="ref-card ref-detail-section">
+          <h2 className="ref-detail-section__title">Held by wild Pokémon</h2>
+          <ul className="ref-usage__list">
             {data.heldByWild.map((h) => (
               <li key={h.pokemon} className="ref-usage__item">
                 <span className="ref-usage__name">{titleCase(h.pokemon)}</span>
@@ -110,9 +110,7 @@ export default async function ItemDetailPage({
         </section>
       )}
 
-      <section className="ref-section">
-        <AskOakCta prompt={`Tell me about ${data.displayName}`} />
-      </section>
+      <AskOakCta prompt={`Tell me about ${data.displayName}`} />
     </main>
   );
 }

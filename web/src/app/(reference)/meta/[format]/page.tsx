@@ -96,35 +96,37 @@ export default async function MetaLeaderboardPage({
           No metagame data synced yet for {view.label}.
         </p>
       ) : (
-        <>
-          <p className="ref-intro">
-            {formatMonthLabel(view.month)} · cutoff {view.snapshot.cutoff}+
-            battles
-            {view.snapshot.totalBattles != null &&
-              ` · ${view.snapshot.totalBattles.toLocaleString()} total battles`}
-            {" · "}
-            Data:{" "}
-            <a href={view.snapshot.sourceUrl}>Smogon usage statistics</a>
-          </p>
+        <section className="ref-card ref-meta-card">
+          <div className="ref-meta-card__header">
+            <p className="ref-meta-snapshot">
+              {formatMonthLabel(view.month)} · cutoff {view.snapshot.cutoff}+
+              battles
+              {view.snapshot.totalBattles != null &&
+                ` · ${view.snapshot.totalBattles.toLocaleString()} total battles`}
+              {" · "}
+              Data:{" "}
+              <a href={view.snapshot.sourceUrl}>Smogon usage statistics</a>
+            </p>
 
-          <MetaMonthPicker
-            months={view.months}
-            current={view.month}
-            basePath={`/meta/${format}`}
-          />
-
-          <section className="ref-section">
-            <MetaLeaderboardTable
-              rows={view.rows.map((r) => ({
-                rank: r.rank,
-                name: r.displayName,
-                href: `/meta/${format}/${r.species}`,
-                usagePct: r.usagePct,
-                deltaPct: r.deltaPct,
-              }))}
+            <MetaMonthPicker
+              months={view.months}
+              current={view.month}
+              basePath={`/meta/${format}`}
             />
-          </section>
-        </>
+          </div>
+
+          <MetaLeaderboardTable
+            rows={view.rows.map((r) => ({
+              rank: r.rank,
+              name: r.displayName,
+              href: `/meta/${format}/${r.species}`,
+              usagePct: r.usagePct,
+              deltaPct: r.deltaPct,
+              species: r.species,
+              spriteUrl: r.spriteUrl,
+            }))}
+          />
+        </section>
       )}
     </main>
   );

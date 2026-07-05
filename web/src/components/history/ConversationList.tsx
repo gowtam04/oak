@@ -3,7 +3,7 @@
 /**
  * ConversationList — the signed-in history sidebar (chat-history Phase 6).
  *
- * A search field, a format filter, and the conversations grouped
+ * A search field and the conversations grouped
  * pinned-first then most-recently-active (HIST-US-3, 6, 10, 11). Renders a
  * clear empty state (no conversations yet) and a distinct no-results state
  * (search/filter matched nothing). Purely presentational — all state + data
@@ -22,8 +22,6 @@ export interface ConversationListProps {
   activeId: string | null;
   query: string;
   onQueryChange: (q: string) => void;
-  formatFilter: string | null;
-  onFormatFilterChange: (f: string | null) => void;
   onNewChat: () => void;
   onOpen: (id: string) => void;
   onRename: (id: string, title: string) => void;
@@ -31,19 +29,11 @@ export interface ConversationListProps {
   onDelete: (id: string) => void;
 }
 
-const FILTERS: { label: string; value: string | null }[] = [
-  { label: "All", value: null },
-  { label: "Gen 9", value: "scarlet-violet" },
-  { label: "Champions", value: "champions" },
-];
-
 export default function ConversationList({
   conversations,
   activeId,
   query,
   onQueryChange,
-  formatFilter,
-  onFormatFilterChange,
   onNewChat,
   onOpen,
   onRename,
@@ -52,14 +42,13 @@ export default function ConversationList({
 }: ConversationListProps) {
   const pinned = conversations.filter((c) => c.pinned);
   const recent = conversations.filter((c) => !c.pinned);
-  const filtersActive = query.trim().length > 0 || formatFilter !== null;
+  const filtersActive = query.trim().length > 0;
 
   const row = (c: ConversationSummary) => (
     <ConversationRow
       key={c.id}
       conversation={c}
       active={c.id === activeId}
-      formatFilter={formatFilter}
       onOpen={() => onOpen(c.id)}
       onRename={(title) => onRename(c.id, title)}
       onPin={(p) => onPin(c.id, p)}
@@ -85,23 +74,6 @@ export default function ConversationList({
         placeholder="Search conversations…"
         aria-label="Search conversations"
       />
-
-      <div role="group" aria-label="Filter by format" className="conv-list__filters">
-        {FILTERS.map((f) => {
-          const selected = formatFilter === f.value;
-          return (
-            <button
-              key={f.label}
-              type="button"
-              className="conv-list__filter"
-              onClick={() => onFormatFilterChange(f.value)}
-              aria-pressed={selected}
-            >
-              {f.label}
-            </button>
-          );
-        })}
-      </div>
 
       <div className="conv-list__scroll">
         {conversations.length === 0 ? (

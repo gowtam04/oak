@@ -17,6 +17,12 @@ export interface SpriteImgProps {
   className?: string;
   width?: number;
   height?: number;
+  /**
+   * Native `<img loading>` hint. Pass `"lazy"` for offscreen sprites (the
+   * reference card grids render ~1000 at once) so the browser defers the fetch
+   * until each is near the viewport. Optional/additive — omit for eager loads.
+   */
+  loading?: "lazy" | "eager";
 }
 
 /**
@@ -40,6 +46,7 @@ export default function SpriteImg({
   className,
   width,
   height,
+  loading,
 }: SpriteImgProps) {
   const [erroredSrc, setErroredSrc] = useState<string | null>(null);
   const safeSrc = safeHttpUrl(src);
@@ -58,6 +65,7 @@ export default function SpriteImg({
       className={className}
       width={width}
       height={height}
+      loading={loading}
       onError={() => {
         if (safeFallbackSrc != null && safeFallbackSrc !== safeSrc) {
           setErroredSrc(src);

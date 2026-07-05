@@ -9,7 +9,15 @@ describe("MetaLeaderboardTable", () => {
     render(
       <MetaLeaderboardTable
         rows={[
-          { rank: 1, name: "Gholdengo", href: "/pokedex/gholdengo", usagePct: 46.1, deltaPct: 1.9 },
+          {
+            rank: 1,
+            name: "Gholdengo",
+            href: "/pokedex/gholdengo",
+            usagePct: 46.1,
+            deltaPct: 1.9,
+            species: "gholdengo",
+            spriteUrl: null,
+          },
         ]}
       />,
     );
@@ -23,7 +31,15 @@ describe("MetaLeaderboardTable", () => {
     render(
       <MetaLeaderboardTable
         rows={[
-          { rank: 1, name: "Some Unresolved Mon", href: null, usagePct: 10, deltaPct: null },
+          {
+            rank: 1,
+            name: "Some Unresolved Mon",
+            href: null,
+            usagePct: 10,
+            deltaPct: null,
+            species: "some-unresolved-mon",
+            spriteUrl: null,
+          },
         ]}
       />,
     );
@@ -35,7 +51,15 @@ describe("MetaLeaderboardTable", () => {
     render(
       <MetaLeaderboardTable
         rows={[
-          { rank: 1, name: "Gholdengo", href: null, usagePct: 46.14, deltaPct: null },
+          {
+            rank: 1,
+            name: "Gholdengo",
+            href: null,
+            usagePct: 46.14,
+            deltaPct: null,
+            species: "gholdengo",
+            spriteUrl: null,
+          },
         ]}
       />,
     );
@@ -46,8 +70,8 @@ describe("MetaLeaderboardTable", () => {
     render(
       <MetaLeaderboardTable
         rows={[
-          { rank: 1, name: "A", href: null, usagePct: 50, deltaPct: null },
-          { rank: 2, name: "B", href: null, usagePct: 25, deltaPct: null },
+          { rank: 1, name: "A", href: null, usagePct: 50, deltaPct: null, species: "a", spriteUrl: null },
+          { rank: 2, name: "B", href: null, usagePct: 25, deltaPct: null, species: "b", spriteUrl: null },
         ]}
       />,
     );
@@ -62,7 +86,9 @@ describe("MetaLeaderboardTable", () => {
   it("renders an up delta with the up class and a plus sign", () => {
     render(
       <MetaLeaderboardTable
-        rows={[{ rank: 1, name: "A", href: null, usagePct: 10, deltaPct: 1.9 }]}
+        rows={[
+          { rank: 1, name: "A", href: null, usagePct: 10, deltaPct: 1.9, species: "a", spriteUrl: null },
+        ]}
       />,
     );
     const delta = screen.getByText("▲ +1.9");
@@ -72,7 +98,9 @@ describe("MetaLeaderboardTable", () => {
   it("renders a down delta with the down class and a minus sign", () => {
     render(
       <MetaLeaderboardTable
-        rows={[{ rank: 1, name: "A", href: null, usagePct: 10, deltaPct: -0.8 }]}
+        rows={[
+          { rank: 1, name: "A", href: null, usagePct: 10, deltaPct: -0.8, species: "a", spriteUrl: null },
+        ]}
       />,
     );
     const delta = screen.getByText("▼ −0.8");
@@ -82,7 +110,9 @@ describe("MetaLeaderboardTable", () => {
   it("renders an em dash when deltaPct is null", () => {
     render(
       <MetaLeaderboardTable
-        rows={[{ rank: 1, name: "A", href: null, usagePct: 10, deltaPct: null }]}
+        rows={[
+          { rank: 1, name: "A", href: null, usagePct: 10, deltaPct: null, species: "a", spriteUrl: null },
+        ]}
       />,
     );
     expect(screen.getByText("—")).toBeInTheDocument();
@@ -91,5 +121,44 @@ describe("MetaLeaderboardTable", () => {
   it("renders nothing for an empty row list", () => {
     const { container } = render(<MetaLeaderboardTable rows={[]} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("renders the sprite image when spriteUrl is present", () => {
+    render(
+      <MetaLeaderboardTable
+        rows={[
+          {
+            rank: 1,
+            name: "Gholdengo",
+            href: null,
+            usagePct: 10,
+            deltaPct: null,
+            species: "gholdengo",
+            spriteUrl: "https://img.example/sprite/1000.png",
+          },
+        ]}
+      />,
+    );
+    const img = screen.getByRole("img", { name: "Gholdengo" });
+    expect(img).toHaveAttribute("src", "https://img.example/sprite/1000.png");
+  });
+
+  it("renders a neutral placeholder (no img) when spriteUrl is null", () => {
+    render(
+      <MetaLeaderboardTable
+        rows={[
+          {
+            rank: 1,
+            name: "Kingambit",
+            href: null,
+            usagePct: 10,
+            deltaPct: null,
+            species: "kingambit",
+            spriteUrl: null,
+          },
+        ]}
+      />,
+    );
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 });

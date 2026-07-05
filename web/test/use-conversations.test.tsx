@@ -1,6 +1,6 @@
 /**
  * Tests for src/lib/hooks/use-conversations.ts (chat-history Phase 5). Mocks the
- * history-client entirely so the hook's list/search/filter/mutation/refresh
+ * history-client entirely so the hook's list/search/mutation/refresh
  * behaviour is asserted without any network. Runs under the jsdom project.
  */
 
@@ -54,7 +54,7 @@ describe("useConversations", () => {
   it("lists on mount when enabled", async () => {
     const { result } = renderHook(() => useConversations(true));
     await waitFor(() => expect(result.current.conversations).toHaveLength(1));
-    expect(listConversations).toHaveBeenCalledWith({ q: undefined, format: undefined });
+    expect(listConversations).toHaveBeenCalledWith({ q: undefined });
   });
 
   it("debounces search then re-lists with q", async () => {
@@ -63,17 +63,7 @@ describe("useConversations", () => {
 
     act(() => result.current.setQuery("garchomp"));
     await waitFor(() =>
-      expect(listConversations).toHaveBeenCalledWith({ q: "garchomp", format: undefined }),
-    );
-  });
-
-  it("re-lists when the format filter changes", async () => {
-    const { result } = renderHook(() => useConversations(true));
-    await waitFor(() => expect(result.current.conversations).toHaveLength(1));
-
-    act(() => result.current.setFormatFilter("champions"));
-    await waitFor(() =>
-      expect(listConversations).toHaveBeenCalledWith({ q: undefined, format: "champions" }),
+      expect(listConversations).toHaveBeenCalledWith({ q: "garchomp" }),
     );
   });
 

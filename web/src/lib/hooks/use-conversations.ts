@@ -2,7 +2,7 @@
  * use-conversations — list-state hook for the history sidebar
  * (docs/features/chat-history § Interface Definitions, Phase 5).
  *
- * Owns the conversation list, the debounced search query, the format filter, and
+ * Owns the conversation list, the debounced search query, and
  * the optimistic rename/pin/delete mutations. When `enabled` is false (a guest)
  * it stays empty and never fetches (AC-1.3). All network calls go through the
  * never-throwing history-client, so the hook itself has no error path.
@@ -27,8 +27,6 @@ export interface UseConversationsResult {
   conversations: ConversationSummary[];
   query: string;
   setQuery: (q: string) => void;
-  formatFilter: string | null;
-  setFormatFilter: (f: string | null) => void;
   /** Re-list now (call after a completed signed-in turn). */
   refresh: () => void;
   rename: (id: string, title: string) => Promise<void>;
@@ -41,7 +39,6 @@ export interface UseConversationsResult {
 export function useConversations(enabled: boolean): UseConversationsResult {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [query, setQuery] = useState("");
-  const [formatFilter, setFormatFilter] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
@@ -53,8 +50,8 @@ export function useConversations(enabled: boolean): UseConversationsResult {
     return () => clearTimeout(handle);
   }, [query]);
 
-  // Fetch the list when enabled / the (debounced) query / the format filter /
-  // an explicit refresh changes. Guests stay empty and make no request.
+  // Fetch the list when enabled / the (debounced) query / an explicit refresh
+  // changes. Guests stay empty and make no request.
   useEffect(() => {
     if (!enabled) {
       setConversations([]);
@@ -63,14 +60,13 @@ export function useConversations(enabled: boolean): UseConversationsResult {
     let active = true;
     void listConversations({
       q: debouncedQuery || undefined,
-      format: formatFilter || undefined,
     }).then((list) => {
       if (active) setConversations(list);
     });
     return () => {
       active = false;
     };
-  }, [enabled, debouncedQuery, formatFilter, refreshTick]);
+  }, [enabled, debouncedQuery, refreshTick]);
 
   const rename = useCallback(
     async (id: string, title: string) => {
@@ -107,8 +103,6 @@ export function useConversations(enabled: boolean): UseConversationsResult {
     conversations,
     query,
     setQuery,
-    formatFilter,
-    setFormatFilter,
     refresh,
     rename,
     pin,

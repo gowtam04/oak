@@ -22,7 +22,6 @@ function setup(
 ) {
   const handlers = {
     onQueryChange: vi.fn(),
-    onFormatFilterChange: vi.fn(),
     onNewChat: vi.fn(),
     onOpen: vi.fn(),
     onRename: vi.fn(),
@@ -34,7 +33,6 @@ function setup(
       conversations={conversations}
       activeId={null}
       query=""
-      formatFilter={null}
       {...handlers}
       {...props}
     />,
@@ -54,12 +52,6 @@ describe("ConversationList", () => {
       target: { value: "garchomp" },
     });
     expect(h.onQueryChange).toHaveBeenCalledWith("garchomp");
-  });
-
-  it("forwards format filter clicks", () => {
-    const h = setup([]);
-    fireEvent.click(screen.getByRole("button", { name: "Champions" }));
-    expect(h.onFormatFilterChange).toHaveBeenCalledWith("champions");
   });
 
   it("shows the empty state with a start-your-first-chat CTA when there are no conversations and no filter", () => {
