@@ -59,6 +59,13 @@ struct ComposerView: View {
   @State private var showCameraDeniedAlert = false
   /// A transient inline note, e.g. when the 4-image cap is reached (M-AC-5.2).
   @State private var attachNote: String?
+  /// Drives the attach `confirmationDialog` ("Photo Library" / "Take Photo"). A
+  /// native `Menu` exposes no `isPresented` binding, so the attach affordance is a
+  /// plain button driving this state instead — the only way to make it and the
+  /// keyboard mutually exclusive (feedback APFrit48yRdOdP2IKOX6tBM: the menu used
+  /// to pop up on top of the raised keyboard). Opening it drops keyboard focus; the
+  /// text field gaining focus or its text changing dismisses it right back.
+  @State private var isAttachDialogPresented = false
 
   // MARK: Voice local state
 
@@ -127,6 +134,26 @@ struct ComposerView: View {
           radius: 8, y: -3
         )
         .ignoresSafeArea(edges: .bottom)
+    }
+    // The attach dialog and active typing are mutually exclusive (feedback
+    // APFrit48yRdOdP2IKOX6tBM): gaining text focus, or the text itself changing,
+    // dismisses any open attach dialog right back.
+    .onChange(of: isInputFocused) { _, focused in
+      if focused { isAttachDialogPresented = false }
+    }
+    .onChange(of: model.composerText) { _, _ in
+      isAttachDialogPresented = false
+    }
+    .confirmationDialog("Attach Image", isPresented: $isAttachDialogPresented, titleVisibility: .hidden) {
+      Button("Photo Library") {
+        isPhotosPickerPresented = true
+      }
+      if UIImagePickerController.isSourceTypeAvailable(.camera) {
+        Button("Take Photo") {
+          presentCamera()
+        }
+      }
+      Button("Cancel", role: .cancel) {}
     }
     .onChange(of: photoSelections) { _, items in
       guard !items.isEmpty else { return }
@@ -213,29 +240,21 @@ struct ComposerView: View {
   /// compiled — this is the single gate.
   private static let showsVoiceControl = false
 
-  // MARK: Image attach control (one menu → photo library / camera)
+  // MARK: Image attach control (one dialog → photo library / camera)
 
-  /// A single attach affordance: a paperclip that fans out a menu with "Photo Library"
-  /// and (on devices with a camera) "Take Photo". The library item opens the
-  /// `.photosPicker(isPresented:)` modifier on the composer; the camera item runs the
-  /// permission-gated ``presentCamera()``. Disabled at the 4-image cap / mid-stream.
+  /// A single attach affordance: a paperclip that opens a `confirmationDialog` with
+  /// "Photo Library" and (on devices with a camera) "Take Photo". Kept as a plain
+  /// button + owned `isPresented` state rather than a native `Menu` so the dialog
+  /// and the keyboard can be made mutually exclusive (feedback
+  /// APFrit48yRdOdP2IKOX6tBM) — a `Menu` exposes no such binding. The library item
+  /// opens the `.photosPicker(isPresented:)` modifier on the composer; the camera
+  /// item runs the permission-gated ``presentCamera()``. Disabled at the 4-image
+  /// cap / mid-stream.
   @ViewBuilder
   private func attachControls(model: ChatViewModel) -> some View {
-    Menu {
-      Button {
-        isPhotosPickerPresented = true
-      } label: {
-        Label("Photo Library", systemImage: "photo.on.rectangle")
-      }
-
-      // Camera — only when the device has one (hidden on the Simulator).
-      if UIImagePickerController.isSourceTypeAvailable(.camera) {
-        Button {
-          presentCamera()
-        } label: {
-          Label("Take Photo", systemImage: "camera")
-        }
-      }
+    Button {
+      isInputFocused = false
+      isAttachDialogPresented = true
     } label: {
       Image(systemName: "paperclip")
         .font(Theme.body(.title3))

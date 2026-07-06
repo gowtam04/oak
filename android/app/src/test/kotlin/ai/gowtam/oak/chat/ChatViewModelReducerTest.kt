@@ -152,9 +152,9 @@ class ChatViewModelReducerTest {
     }
 
     @Test
-    fun displayFormatFallsBackToChampionsWithNoSeedOrResolvedScope() {
+    fun displayFormatFallsBackToNationalDexWithNoSeedOrResolvedScope() {
         val vm = newModel()
-        assertEquals(Format.Champions, vm.uiState.value.displayFormat)
+        assertEquals(Format.NationalDex, vm.uiState.value.displayFormat)
     }
 
     // -------------------------------------------------------------------

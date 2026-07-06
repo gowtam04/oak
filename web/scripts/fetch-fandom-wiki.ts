@@ -76,6 +76,7 @@ const CATEGORIES: string[] = [
   "Cities",
   "Items",
   "Glitches",
+  "Glitch Pokémon",
   "Game mechanics",
   "Events",
   "Pokémon Mystery Dungeon",
@@ -91,6 +92,8 @@ const CATEGORIES: string[] = [
  * Ash/anime/movie seeds (design.md §9b).
  */
 const SEED_TITLES: string[] = [
+  "Glitches",
+  "Pokémon Glitches",
   "MissingNo.",
   "Glitch City",
   "Pokémon Mystery Dungeon: Red Rescue Team and Blue Rescue Team",
@@ -170,6 +173,11 @@ async function enumerateCategory(category: string): Promise<string[]> {
       cmtitle: `Category:${category}`,
       cmlimit: "500",
       cmtype: "page",
+      // ns:0 (main/article) only — belt-and-suspenders with cmtype=page so a
+      // File:/Category:/Template: member (e.g. the ns:14 `Category:Glitch
+      // Pokémon` subcategory, a ns:6 File: page) is never enumerated as an
+      // article to fetch. Subcategory members are NOT auto-recursed.
+      cmnamespace: "0",
     };
     if (cmcontinue) params.cmcontinue = cmcontinue;
     const data = (await getJson(params)) as CategoryMembersResponse;
@@ -283,20 +291,35 @@ function toChunks(wikitext: string): Chunk[] {
   const cleaned = stripBraces(wikitext);
   const lines = cleaned.split(/\r?\n/);
   const chunks: Chunk[] = [];
-  let section = "Overview";
+  // Heading breadcrumb stack (level = number of `=`). The section label is the
+  // full path, not just the leaf, so hub/table-of-contents pages keep context.
+  const stack: { level: number; title: string }[] = [];
   let buffer: string[] = [];
+
+  const sectionLabel = (): string =>
+    stack.map((s) => s.title).join(" > ") || "Overview";
 
   const flush = (): void => {
     const text = stripMarkup(stripLinks(buffer.join("\n")));
-    if (text.length >= 40) chunks.push({ section, text });
+    if (text.length >= 40) chunks.push({ section: sectionLabel(), text });
     buffer = [];
   };
 
   for (const line of lines) {
-    const heading = line.match(/^\s*={2,}\s*(.+?)\s*={2,}\s*$/);
+    const heading = line.match(/^\s*(={2,})\s*(.+?)\s*(={2,})\s*$/);
     if (heading) {
       flush();
-      section = heading[1]!.trim();
+      // Carry the heading HIERARCHY into the section label (a breadcrumb like
+      // "Generation II > Gold and Silver > Cloning Pokémon and Items"), not just
+      // the leaf heading. The "Glitches" hub page nests each glitch as a `===`/
+      // `====` sub-heading under a `==Generation N==` parent, so overwriting the
+      // section on every heading would drop the generation/game context — a query
+      // like "cloning glitch Generation II" would then match nothing. Titles are
+      // markup-stripped (a heading may itself carry [[links]]/'''bold''').
+      const level = Math.min(heading[1]!.length, heading[3]!.length);
+      const title = stripMarkup(stripLinks(heading[2]!)).trim();
+      while (stack.length > 0 && stack[stack.length - 1]!.level >= level) stack.pop();
+      if (title.length > 0) stack.push({ level, title });
     } else {
       buffer.push(line);
     }

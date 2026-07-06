@@ -16,6 +16,8 @@ const CHAMPIONS_REG_SHORT = CHAMPIONS_REGULATION.replace(/^Regulation\b/, "Reg")
 /** A short display label for a resolved scope, e.g. for the header scope chip. */
 export function scopeLabel(format: Format): string {
   switch (format) {
+    case "national-dex":
+      return "National Dex · All Gens";
     case "champions":
       return `Champions · ${CHAMPIONS_REG_SHORT}`;
     case "scarlet-violet":
@@ -28,6 +30,14 @@ export function scopeLabel(format: Format): string {
       return "Gen 6 · XY/ORAS";
     case "gen-5":
       return "Gen 5 · Black/White";
+    case "gen-4":
+      return "Gen 4 · Diamond/Pearl";
+    case "gen-3":
+      return "Gen 3 · Ruby/Sapphire";
+    case "gen-2":
+      return "Gen 2 · Gold/Silver";
+    case "gen-1":
+      return "Gen 1 · Red/Blue";
     default:
       // Unreachable given the closed `Format` union; echo the raw value
       // defensively so a newly-added format never renders as `undefined`.
@@ -42,6 +52,8 @@ export function scopeLabel(format: Format): string {
  */
 export function scopeLabelShort(format: Format): string {
   switch (format) {
+    case "national-dex":
+      return "National Dex";
     case "champions":
       return "Champions";
     case "scarlet-violet":
@@ -54,6 +66,14 @@ export function scopeLabelShort(format: Format): string {
       return "Gen 6";
     case "gen-5":
       return "Gen 5";
+    case "gen-4":
+      return "Gen 4";
+    case "gen-3":
+      return "Gen 3";
+    case "gen-2":
+      return "Gen 2";
+    case "gen-1":
+      return "Gen 1";
     default:
       // Unreachable given the closed `Format` union; echo the raw value
       // defensively so a newly-added format never renders as `undefined`.

@@ -14,6 +14,11 @@ const GENERATION_BASIS_CHAMPIONS: GenerationBasis = {
   fallback: false,
 };
 
+const GENERATION_BASIS_NATDEX: GenerationBasis = {
+  generation: "national-dex",
+  fallback: false,
+};
+
 describe("Masthead — status indicator mapping", () => {
   it("renders a check-mark, 'Answered', and the ok tone for 'answered'", () => {
     render(
@@ -99,5 +104,14 @@ describe("Masthead — scope tag", () => {
     const scope = screen.getByTestId("answer-masthead-scope");
     expect(scope).toHaveTextContent("Champions");
     expect(scope).toHaveTextContent("Reg M-B");
+  });
+
+  it("renders the National Dex scope tag", () => {
+    render(
+      <Masthead status="answered" generationBasis={GENERATION_BASIS_NATDEX} />,
+    );
+    expect(screen.getByTestId("answer-masthead-scope")).toHaveTextContent(
+      "National Dex",
+    );
   });
 });

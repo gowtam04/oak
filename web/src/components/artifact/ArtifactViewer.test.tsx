@@ -77,6 +77,36 @@ describe("ArtifactViewer — visibility + ok dispatch", () => {
   });
 });
 
+describe("ArtifactViewer — format tag exhaustiveness", () => {
+  it("renders the National Dex format tag while loading (national-dex scope)", () => {
+    vi.mocked(fetchEntityArtifact).mockReturnValue(new Promise(() => {}));
+    render(
+      <ArtifactViewerProvider format="national-dex">
+        <Capture />
+        <ArtifactViewer />
+      </ArtifactViewerProvider>,
+    );
+    act(() => api.openEntity({ kind: "pokemon", q: "garchomp" }));
+    expect(screen.getByTestId("artifact-format-tag")).toHaveTextContent(
+      "National Dex",
+    );
+  });
+
+  it("renders a mainline gen format tag while loading (gen-1 scope)", () => {
+    vi.mocked(fetchEntityArtifact).mockReturnValue(new Promise(() => {}));
+    render(
+      <ArtifactViewerProvider format="gen-1">
+        <Capture />
+        <ArtifactViewer />
+      </ArtifactViewerProvider>,
+    );
+    act(() => api.openEntity({ kind: "pokemon", q: "clefairy" }));
+    expect(screen.getByTestId("artifact-format-tag")).toHaveTextContent(
+      "Gen 1",
+    );
+  });
+});
+
 describe("ArtifactViewer — honest states", () => {
   it("renders the not_found state with suggestions", async () => {
     vi.mocked(fetchEntityArtifact).mockResolvedValue(NOT_FOUND_ARTIFACT);

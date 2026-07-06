@@ -62,9 +62,15 @@ describe("ingest_meta — availability sentinel", () => {
     expect(rows[0].schema_version).toBe("2");
   });
 
-  it("pokemon_count matches actual rows", async () => {
+  it("pokemon_count matches actual scarlet-violet-format rows", async () => {
+    // ingest_meta's one row is scoped to the scarlet-violet format, so the
+    // comparison must be too — the pokemon table also carries a separate
+    // national-dex partition (NATDEX_POKEMON_ROWS) with no matching
+    // ingest_meta row.
     const rows = await db.select().from(ingest_meta);
-    const actual = (await db.select().from(pokemon)).length;
+    const actual = (
+      await db.select().from(pokemon).where(eq(pokemon.format, "scarlet-violet"))
+    ).length;
     expect(rows[0].pokemon_count).toBe(actual);
   });
 });
@@ -280,6 +286,41 @@ describe("pokemon — Tauros forms (G18: ambiguous name disambiguation)", () => 
   it("all Tauros forms are Gen-9 native", async () => {
     const rows = await getTaurosRows();
     expect(rows.every((r) => r.is_gen9_native === 1)).toBe(true);
+  });
+});
+
+describe("pokemon@national-dex partition (G57: form-aware type-combo existence)", () => {
+  const getNatdexRows = async () =>
+    db.select().from(pokemon).where(eq(pokemon.format, "national-dex"));
+
+  it("has exactly three national-dex rows", async () => {
+    const rows = await getNatdexRows();
+    expect(rows).toHaveLength(3);
+  });
+
+  it("includes Darmanitan-Galar-Zen as Ice/Fire (National Dex #555), a form absent from natdex_species", async () => {
+    const rows = await getNatdexRows();
+    const row = rows.find((r) => r.id === "darmanitan-galar-zen");
+    expect(row).toBeDefined();
+    expect(row?.national_dex_number).toBe(555);
+    expect(row?.type1).toBe("ice");
+    expect(row?.type2).toBe("fire");
+  });
+
+  it("includes a mono-type default form (Pikachu, Electric)", async () => {
+    const rows = await getNatdexRows();
+    const row = rows.find((r) => r.id === "pikachu");
+    expect(row).toBeDefined();
+    expect(row?.type1).toBe("electric");
+    expect(row?.type2).toBeNull();
+  });
+
+  it("includes a common dual-type default form (Charizard, Fire/Flying)", async () => {
+    const rows = await getNatdexRows();
+    const row = rows.find((r) => r.id === "charizard");
+    expect(row).toBeDefined();
+    expect(row?.type1).toBe("fire");
+    expect(row?.type2).toBe("flying");
   });
 });
 
@@ -615,8 +656,8 @@ describe("G6 precondition — sort by speed desc", () => {
 });
 
 describe("fixture totals", () => {
-  it("has 9 Pokémon rows", async () => {
-    expect(await db.select().from(pokemon)).toHaveLength(9);
+  it("has 12 Pokémon rows (9 scarlet-violet + 3 national-dex)", async () => {
+    expect(await db.select().from(pokemon)).toHaveLength(12);
   });
 
   it("has 8 reference_cache entries", async () => {

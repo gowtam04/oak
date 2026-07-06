@@ -151,7 +151,7 @@ beforeEach(() => {
         seedConvo({
           id: body.session_id,
           title: firstUser && firstUser.role === "user" ? firstUser.content : "New conversation",
-          format: body.format ?? "champions",
+          format: body.format ?? "national-dex",
           turns,
         });
         return jsonResponse(200, { id: body.session_id });
@@ -275,7 +275,7 @@ describe("Home — chat-history sidebar", () => {
     expect(lastChatBody!.scope_seed).toBeUndefined();
   });
 
-  it("New chat resets to an empty thread (AC-6.1) and the chip to the Champions default", async () => {
+  it("New chat resets to an empty thread (AC-6.1) and the chip to the National Dex default", async () => {
     render(<Home />);
     await screen.findByTestId("auth-signin-button");
     await sendAndAwait("a question", 1);
@@ -287,8 +287,10 @@ describe("Home — chat-history sidebar", () => {
     });
     expect(screen.queryByTestId("user-turn")).not.toBeInTheDocument();
     expect(screen.queryByTestId("assistant-turn")).not.toBeInTheDocument();
-    // …and the chip resets to the Champions default on the fresh thread.
-    expect(screen.getByTestId("scope-chip")).toHaveTextContent("Champions · Reg M-B");
+    // …and the chip resets to the National Dex default on the fresh thread.
+    expect(screen.getByTestId("scope-chip")).toHaveTextContent(
+      "National Dex · All Gens",
+    );
   });
 
   it("sign-out keeps the rail but swaps history for the sign-in hint", async () => {

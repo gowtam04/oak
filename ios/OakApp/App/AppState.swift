@@ -28,9 +28,9 @@ final class AppState {
 
   /// The guest thread's resolved data scope (GS-C), mirrored from the chat
   /// reducer's `scope` events so the guest→sign-in import can persist the thread
-  /// under the scope it actually ran in. Defaults to champions (the server
+  /// under the scope it actually ran in. Defaults to national-dex (the server
   /// default) until a turn resolves otherwise; reset with the guest thread.
-  var guestThreadScope: Format = .champions
+  var guestThreadScope: Format = .nationalDex
 
   /// Pending server-side turns keyed by conversation id (`session_id`) → the
   /// server-minted `turn_id` still generating for that thread

@@ -49,8 +49,12 @@ describe("champions body parity", () => {
 describe("mainline body parity — every scope in MAINLINE_GEN_INFO", () => {
   const modes = Object.keys(MAINLINE_GEN_INFO) as MainlineMode[];
 
-  it("covers exactly standard + gen-5..gen-8", () => {
+  it("covers exactly standard + gen-1..gen-8", () => {
     expect([...modes].sort()).toEqual([
+      "gen-1",
+      "gen-2",
+      "gen-3",
+      "gen-4",
       "gen-5",
       "gen-6",
       "gen-7",
@@ -76,6 +80,30 @@ describe("mainline body parity — every scope in MAINLINE_GEN_INFO", () => {
       expect(grokText).toContain("get_learnset");
     });
   }
+});
+
+describe("national-dex builder branch — the default scope builds a sensible body", () => {
+  // National Dex is NOT in MAINLINE_GEN_INFO (it's a hand-authored builder info,
+  // like Champions), so `builderDomainForMode("national-dex")` must resolve to
+  // its own branch and not crash on an undefined MAINLINE_GEN_INFO lookup.
+  const claudeText = fullText(builderDomainForMode("national-dex"));
+  const grokText = fullText(grokBuilderDomainForMode("national-dex"));
+
+  it("both bodies frame it as the whole National Dex reference build", () => {
+    for (const text of [claudeText, grokText]) {
+      expect(text).toContain("National Dex");
+      expect(text.toLowerCase()).toContain("reference build");
+      expect(text.toLowerCase()).toContain("single-game legality gate");
+      expect(text).toContain("get_learnset");
+    }
+  });
+
+  it("both bodies keep Tera in play (National Dex rides modern Gen 9 rules)", () => {
+    for (const text of [claudeText, grokText]) {
+      expect(text).toContain("tera_type");
+      expect(text).not.toContain("tera_type does not apply");
+    }
+  });
 });
 
 describe("buildBuilderSystemSegments", () => {

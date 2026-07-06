@@ -15,7 +15,7 @@
  * Two render modes, selected by whether `onSelect` is passed:
  *   - ABSENT: today's plain, read-only pill (unchanged markup/attrs/styling —
  *     pinned by the existing display-only tests).
- *   - PRESENT: a menu button that opens a popover listing all six formats
+ *   - PRESENT: a menu button that opens a popover listing every format
  *     (`SCOPE_PICKER_ORDER`) as `menuitemradio` options — each a two-line row (name +
  *     one-line description, fable-ui §4 screen 02); picking one reports the new
  *     format via `onSelect` and closes the menu. Closes on Escape (refocusing
@@ -45,12 +45,17 @@ import { scopeLabel, scopeLabelShort } from "@/lib/scope/scope-label";
  * live regulation constant so it advances with a `@pkmn/mods` bump.
  */
 const SCOPE_DESCRIPTIONS: Record<Format, string> = {
+  "national-dex": "All Pokémon · Every generation",
   champions: `Current ${CHAMPIONS_REGULATION}`,
   "scarlet-violet": "Scarlet / Violet",
   "gen-8": "Sword / Shield",
   "gen-7": "Ultra Sun / Ultra Moon",
   "gen-6": "X / Y · Omega Ruby / Alpha Sapphire",
   "gen-5": "Black / White",
+  "gen-4": "Diamond / Pearl",
+  "gen-3": "Ruby / Sapphire",
+  "gen-2": "Gold / Silver",
+  "gen-1": "Red / Blue",
 };
 
 type ScopeChipProps = {

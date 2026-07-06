@@ -20,21 +20,22 @@ import type { TurnTrace } from "@/server/logger";
 /**
  * Query scope for a turn. Server-controlled — resolved per turn on the server
  * (explicit in-message signal → explicit `scope_seed` chip pick → sticky
- * conversation scope → the legacy `champions_mode` seed → the champions
+ * conversation scope → the legacy `champions_mode` seed → the national-dex
  * default; see `@/lib/scope`), bound onto {@link AgentContext}, and read by
  * repos/tools and the runtime — NEVER an LLM-visible tool input. This guarantees
  * the model has no parameter to widen the scope; it only ever sees a
  * scope-specific system prompt + scope-filtered tool results.
  *
- *   "standard"      → Gen 9 / Scarlet-Violet (today's behavior; the gen-9 alias).
- *   "champions"     → Pokémon Champions (current regulation), via the @pkmn mod.
- *   "gen-5"…"gen-8" → mainline generations 5–8 (generation-scope feature).
+ *   "standard"       → Gen 9 / Scarlet-Violet (today's behavior; the gen-9 alias).
+ *   "champions"      → Pokémon Champions (current regulation), via the @pkmn mod.
+ *   "national-dex"   → the whole-Pokédex, form-aware reference scope (all gens).
+ *   "gen-1"…"gen-8"  → mainline generations 1–8 (generation-scope feature).
  *
  * `"standard"` REMAINS the Gen 9 alias, so all existing `mode === "champions"`
  * guards and the `"standard"` default stay valid. The gen members derive from
  * {@link GenFormat} in `@/data/formats` (one source of truth for the literal set).
  */
-export type AgentMode = "standard" | "champions" | GenFormat;
+export type AgentMode = "standard" | "champions" | "national-dex" | GenFormat;
 
 /**
  * Bound data-access repositories for one request (assembled in

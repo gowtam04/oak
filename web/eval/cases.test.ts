@@ -1,10 +1,10 @@
 /**
- * eval/cases.test.ts — structural unit tests for the G1..G55 case definitions.
+ * eval/cases.test.ts — structural unit tests for the G1..G59 case definitions.
  *
  * Owned by: phase "Eval" / track "cases".
  *
  * Tests the STRUCTURE and INTENT of cases.ts without any LLM or DB calls:
- *  - all 55 cases present with unique IDs G1..G55
+ *  - all 59 cases present with unique IDs G1..G59
  *  - every case has the required fields with valid types
  *  - multi-turn input (G19) is correctly shaped
  *  - deterministic subset matches the design.md + Oak v2 §7 spec
@@ -13,6 +13,8 @@
  *  - key requirement IDs are covered across the suite
  *  - derived exports (caseById, deterministicCases, rebuildRegressionCases) are consistent
  *  - G26..G54 (Oak v2 §7) map 1:1 to benchmark questions BQ-1..BQ-29
+ *  - G56..G59 (national-dex-scope feature) regression-pin whole-dex routing +
+ *    LEAST/GREATEST slot-order normalization + form-awareness
  */
 
 import { describe, it, expect } from "vitest";
@@ -42,6 +44,8 @@ const VALID_STATUSES = new Set<string>([
  *  - G15 (compute_stat value = 169)
  *  - G1, G5, G6, G8 (tool-efficiency assertions)
  *  - G26, G32, G35, G44, G47 (Oak v2 §7 run_sql aggregations)
+ *  - G56, G57 (national-dex-scope whole-dex-routing + LEAST/GREATEST
+ *    slot-order-normalization regression cases)
  */
 const EXPECTED_DETERMINISTIC_IDS = new Set([
   "G1",
@@ -56,6 +60,8 @@ const EXPECTED_DETERMINISTIC_IDS = new Set([
   "G35",
   "G44",
   "G47",
+  "G56",
+  "G57",
 ]);
 
 /** Benchmark-question IDs (docs/features/oak-v2/benchmark-questions.md) that
@@ -104,8 +110,8 @@ describe("eval/cases", () => {
   // Top-level structure
   // -------------------------------------------------------------------------
 
-  it("exports exactly 55 cases", () => {
-    expect(cases).toHaveLength(55);
+  it("exports exactly 59 cases", () => {
+    expect(cases).toHaveLength(59);
   });
 
   it("all IDs follow the G<number> pattern", () => {
@@ -114,17 +120,17 @@ describe("eval/cases", () => {
     }
   });
 
-  it("all IDs G1..G55 are present and unique", () => {
+  it("all IDs G1..G59 are present and unique", () => {
     const ids = new Set(cases.map((c) => c.id));
-    expect(ids.size).toBe(55);
-    for (let n = 1; n <= 55; n++) {
+    expect(ids.size).toBe(59);
+    for (let n = 1; n <= 59; n++) {
       expect(ids.has(`G${n}`), `G${n} should be present`).toBe(true);
     }
   });
 
-  it("caseById indexes all 55 cases", () => {
-    expect(Object.keys(caseById)).toHaveLength(55);
-    for (let n = 1; n <= 55; n++) {
+  it("caseById indexes all 59 cases", () => {
+    expect(Object.keys(caseById)).toHaveLength(59);
+    for (let n = 1; n <= 59; n++) {
       expect(
         caseById[`G${n}`],
         `caseById["G${n}"] should be defined`,
@@ -132,7 +138,7 @@ describe("eval/cases", () => {
     }
   });
 
-  it("cases array order matches G1..G55 numerically", () => {
+  it("cases array order matches G1..G59 numerically", () => {
     for (let i = 0; i < cases.length; i++) {
       const expected = `G${i + 1}`;
       expect(cases[i].id).toBe(expected);

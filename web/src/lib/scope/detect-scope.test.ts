@@ -4,10 +4,11 @@
  *
  * These modules are pure/client-safe (only `@/data/formats`, a pure module), so
  * this suite needs no DB, no @pkmn, and no `server-only` mock. It pins:
- *   - every lexicon row (Champions → Gen 5, plus Gen 1–4 as `unsupported`),
+ *   - every lexicon row (Champions, National Dex, Gens 1–9 — all first-class),
  *   - every mandatory precision guard (region-form adjectives, ambiguous single
- *     words, "mega", bare "let's go"),
- *   - first-match precedence (Champions first; explicit "gen N" over regions),
+ *     words that fire only as pairs, "mega", bare "let's go"),
+ *   - first-match precedence (Champions first; National Dex beats an incidental
+ *     gen mention; a qualified remake beats the bare game pair),
  *   - the `matched` phrase reporting,
  *   - the short scope labels.
  */
@@ -25,6 +26,14 @@ describe("detectScopeSignal — supported scopes", () => {
     ["how does the Champions format work", "champions"],
     ["team for reg m-b", "champions"],
     ["give me a Regulation H core", "champions"],
+    // National Dex (whole-dex intent — after Champions, before any gen signal)
+    ["check the national dex", "national-dex"],
+    ["how many pokémon are in the national pokedex", "national-dex"],
+    ["list all pokemon that learn levitate", "national-dex"],
+    ["every pokemon with a signature move", "national-dex"],
+    ["which type combinations exist across the whole dex", "national-dex"],
+    // National Dex deliberately BEATS an incidental gen mention (the incident)
+    ["all pokemon introduced up to gen 3", "national-dex"],
     // Precedence guards: Champions rules (section 1) fire before the newer
     // Gen 9 signals (koraidon/vgc live in section 3a).
     ["is koraidon legal in champions", "champions"],
@@ -76,6 +85,33 @@ describe("detectScopeSignal — supported scopes", () => {
     ["black and white team", "gen-5"],
     ["b2w2 teams", "gen-5"],
     ["bw2 ladder", "gen-5"],
+    // Gen 4 / Diamond-Pearl-Platinum (+ Sinnoh, HGSS)
+    ["gen 4 team", "gen-4"],
+    ["exploring sinnoh", "gen-4"],
+    ["platinum battle frontier", "gen-4"],
+    ["heart gold nuzlocke", "gen-4"],
+    ["soul silver team", "gen-4"],
+    ["diamond and pearl starters", "gen-4"],
+    // Gen 3 / Ruby-Sapphire-Emerald (+ Hoenn, FRLG)
+    ["analyze my gen 3 team", "gen-3"],
+    ["hoenn team", "gen-3"],
+    ["firered playthrough", "gen-3"],
+    ["leaf green run", "gen-3"],
+    ["emerald battle frontier", "gen-3"],
+    ["ruby and sapphire", "gen-3"],
+    // Gen 2 / Gold-Silver-Crystal (+ Johto)
+    ["johto gym leaders", "gen-2"],
+    ["pokemon crystal team", "gen-2"],
+    ["gold and silver", "gen-2"],
+    // Gen 1 / Red-Blue-Yellow (+ Kanto, RBY)
+    ["gen 1 rby cup", "gen-1"],
+    ["kanto starters", "gen-1"],
+    ["red and blue", "gen-1"],
+    ["yellow version team", "gen-1"],
+    // Remake precedence: a qualified remake name beats the bare game pair.
+    ["brilliant diamond team", "gen-8"], // BDSP → gen-8, NOT the diamond&pearl pair
+    ["omega ruby run", "gen-6"], // ORAS → gen-6, NOT the ruby&sapphire pair
+    ["heart gold and soul silver", "gen-4"], // HGSS → gen-4, NOT the gold&silver pair
     // Case-insensitivity
     ["GEN 7 TEAM", "gen-7"],
     // Mixed: a region-form adjective plus a real signal → the real signal wins
@@ -86,25 +122,6 @@ describe("detectScopeSignal — supported scopes", () => {
 
   it.each(CASES)("%j → %s", (message, expected) => {
     expect(detectScopeSignal(message)).toMatchObject({ kind: "scope", format: expected });
-  });
-});
-
-describe("detectScopeSignal — unsupported gens 1–4 (detected, not silently answered)", () => {
-  const CASES: Array<[string, string]> = [
-    ["analyze my gen 3 team", "gen-3"],
-    ["gen 1 rby cup", "gen-1"],
-    ["gen 4 team", "gen-4"],
-    ["kanto starters", "gen-1"],
-    ["johto gym leaders", "gen-2"],
-    ["hoenn team", "gen-3"],
-    ["exploring sinnoh", "gen-4"],
-    ["platinum battle frontier", "gen-4"],
-    ["heart gold nuzlocke", "gen-4"],
-    ["firered playthrough", "gen-3"],
-  ];
-
-  it.each(CASES)("%j → unsupported %s", (message, label) => {
-    expect(detectScopeSignal(message)).toMatchObject({ kind: "unsupported", label });
   });
 });
 
@@ -121,6 +138,13 @@ describe("detectScopeSignal — mandatory precision guards return null", () => {
     "does sun boost fire moves", // "sun" without "moon"
     "shield your sweeper", // "shield" without "sword"
     "is swords dance good on garchomp", // "swords" ≠ \bsword\b
+    // Ambiguous Gen 1–4 game words fire ONLY as their pair — a lone common word
+    // must NOT trip a scope switch.
+    "the gold badge", // "gold" without "silver"
+    "a pearl necklace", // "pearl" without "diamond"
+    "a red herring", // "red" without "blue"
+    "a diamond ring", // "diamond" without "pearl"
+    "sapphire gemstone", // "sapphire" without "ruby"
     // Bare "let's go" is a casual phrase, not a Gen 7 signal
     "let's go build a great team",
     // No signal at all → stickiness should win
@@ -158,11 +182,16 @@ describe("detectScopeSignal — reported matched phrase", () => {
 
 describe("scopeLabel", () => {
   const CASES: Array<[Format, string]> = [
+    ["national-dex", "National Dex · All Gens"],
     ["scarlet-violet", "Gen 9 · Scarlet/Violet"],
     ["gen-8", "Gen 8 · Sword/Shield"],
     ["gen-7", "Gen 7 · USUM"],
     ["gen-6", "Gen 6 · XY/ORAS"],
     ["gen-5", "Gen 5 · Black/White"],
+    ["gen-4", "Gen 4 · Diamond/Pearl"],
+    ["gen-3", "Gen 3 · Ruby/Sapphire"],
+    ["gen-2", "Gen 2 · Gold/Silver"],
+    ["gen-1", "Gen 1 · Red/Blue"],
   ];
 
   it.each(CASES)("%s → %s", (format, expected) => {

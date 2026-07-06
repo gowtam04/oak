@@ -148,10 +148,10 @@ class ChatViewModel(
 
     /**
      * The scope the header chip displays and the artifact viewer scopes to: a pending
-     * chip pick, else the server-resolved scope, else the champions default — identical
-     * to web's `displayFormat = scopeSeed ?? resolvedScope ?? "champions"`.
+     * chip pick, else the server-resolved scope, else the national-dex default — identical
+     * to web's `displayFormat = scopeSeed ?? resolvedScope ?? "national-dex"`.
      */
-    private fun displayFormat(): Format = scopeSeed ?: resolvedScope ?: Format.Champions
+    private fun displayFormat(): Format = scopeSeed ?: resolvedScope ?: Format.NationalDex
 
     /**
      * Whether the composer can send: not already streaming, and either some text or at
@@ -941,7 +941,7 @@ data class ChatUiState(
     val toolActivities: List<ToolActivity> = emptyList(),
     val isStreaming: Boolean = false,
     val errorBanner: ErrorBanner? = null,
-    val displayFormat: Format = Format.Champions,
+    val displayFormat: Format = Format.NationalDex,
     val resolvedScope: Format? = null,
     val scopeSeed: Format? = null,
     val pendingImages: List<Bitmap> = emptyList(),

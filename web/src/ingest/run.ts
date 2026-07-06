@@ -134,7 +134,7 @@ export interface IngestReport {
 }
 
 export interface RunIngestOptions {
-  /** Formats to build. Default: every format in DEFAULT_FORMATS (all six). */
+  /** Formats to build. Default: every format in DEFAULT_FORMATS (all eleven). */
   formats?: Format[];
   /** Optional human-readable progress callback. */
   onProgress?: (msg: string) => void;
@@ -247,7 +247,7 @@ async function writeIngestMeta(
  * swaps plus the ingest_meta write commit or roll back together, and every
  * delete is scoped to `formats` — the formats actually built this run. A crash
  * or thrown error mid-write leaves the database exactly as it was before the
- * call (DATA-02); a partial-format call (`formats` shorter than all six)
+ * call (DATA-02); a partial-format call (`formats` shorter than all eleven)
  * leaves every other format's rows untouched (DATA-01).
  */
 export async function writeIndex(

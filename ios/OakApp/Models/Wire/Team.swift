@@ -14,9 +14,10 @@
 /// global `.convertFromSnakeCase` (payloads mix conventions).
 
 /// Data-scope format — the discriminator that scopes the index to a game
-/// (`web/src/data/formats.ts` `FORMATS`). `scarletViolet` is Gen 9 / standard
-/// mode; `champions` is the Pokémon Champions regulation scope; `gen5`…`gen8`
-/// are the mainline generation-scope formats.
+/// (`web/src/data/formats.ts` `FORMATS`). `nationalDex` is the whole-Pokédex
+/// reference scope (the app default); `scarletViolet` is Gen 9 / standard mode;
+/// `champions` is the Pokémon Champions regulation scope; `gen1`…`gen8` are the
+/// mainline generation-scope formats.
 ///
 /// **Tolerant decoding (`.unknown`):** the wire can widen this set independently
 /// of when this app ships (it already has: `gen-5`…`gen-8` postdate the app's
@@ -30,47 +31,65 @@
 /// `encode(to:)` below), and every known case round-trips through `rawValue`
 /// unchanged.
 enum Format: Sendable, Hashable {
+  case nationalDex
   case scarletViolet
   case champions
   case gen5
   case gen6
   case gen7
   case gen8
-  /// A format string not in the known six — preserves the original wire value.
+  case gen4
+  case gen3
+  case gen2
+  case gen1
+  /// A format string not in the known eleven — preserves the original wire value.
   case unknown(String)
 
   /// The known, orderable formats in scope-picker DISPLAY order — the default
-  /// (Champions) first, then by release date descending (Gen 9 → Gen 5). This no
-  /// longer mirrors the `FORMATS` array in `formats.ts` (which stays in its own
-  /// order to feed ingest/prompt lock-steps); web exposes the same display order
-  /// via a separate `SCOPE_PICKER_ORDER` constant. Backs the six-way format
-  /// pickers/filters; `.unknown` is deliberately excluded (it has no fixed
-  /// identity to list).
-  static let knownCases: [Format] = [.champions, .scarletViolet, .gen8, .gen7, .gen6, .gen5]
+  /// (National Dex) first, then Champions/Scarlet-Violet, then by release date
+  /// descending (Gen 8 → Gen 1). This no longer mirrors the `FORMATS` array in
+  /// `formats.ts` (which stays in its own order to feed ingest/prompt
+  /// lock-steps); web exposes the same display order via a separate
+  /// `SCOPE_PICKER_ORDER` constant. Backs the eleven-way format pickers/filters;
+  /// `.unknown` is deliberately excluded (it has no fixed identity to list).
+  static let knownCases: [Format] = [
+    .nationalDex, .champions, .scarletViolet, .gen8, .gen7, .gen6, .gen5, .gen4, .gen3, .gen2,
+    .gen1,
+  ]
 
   /// The wire string for a known case, or the original raw string for `.unknown`.
   var rawValue: String {
     switch self {
+    case .nationalDex: return "national-dex"
     case .scarletViolet: return "scarlet-violet"
     case .champions: return "champions"
     case .gen5: return "gen-5"
     case .gen6: return "gen-6"
     case .gen7: return "gen-7"
     case .gen8: return "gen-8"
+    case .gen4: return "gen-4"
+    case .gen3: return "gen-3"
+    case .gen2: return "gen-2"
+    case .gen1: return "gen-1"
     case let .unknown(raw): return raw
     }
   }
 
   /// Maps a wire string to its case, falling back to `.unknown` for anything
-  /// outside the known six.
+  /// outside the known eleven.
   init(rawValue: String) {
     switch rawValue {
+    case "national-dex": self = .nationalDex
     case "scarlet-violet": self = .scarletViolet
     case "champions": self = .champions
     case "gen-5": self = .gen5
     case "gen-6": self = .gen6
     case "gen-7": self = .gen7
     case "gen-8": self = .gen8
+    case "gen-4": self = .gen4
+    case "gen-3": self = .gen3
+    case "gen-2": self = .gen2
+    case "gen-1": self = .gen1
     default: self = .unknown(rawValue)
     }
   }
@@ -80,12 +99,17 @@ enum Format: Sendable, Hashable {
   /// `.unknown` echoes its raw value (never renders as blank/"undefined").
   var shortLabel: String {
     switch self {
+    case .nationalDex: return "National Dex"
     case .champions: return "Champions"
     case .scarletViolet: return "Gen 9"
     case .gen8: return "Gen 8"
     case .gen7: return "Gen 7"
     case .gen6: return "Gen 6"
     case .gen5: return "Gen 5"
+    case .gen4: return "Gen 4"
+    case .gen3: return "Gen 3"
+    case .gen2: return "Gen 2"
+    case .gen1: return "Gen 1"
     case let .unknown(raw): return raw
     }
   }
@@ -97,12 +121,17 @@ enum Format: Sendable, Hashable {
   /// `.unknown` echoes its raw value.
   var displayLabel: String {
     switch self {
+    case .nationalDex: return "National Dex · All Gens"
     case .champions: return "Champions · Reg M-B"
     case .scarletViolet: return "Gen 9 · Scarlet/Violet"
     case .gen8: return "Gen 8 · Sword/Shield"
     case .gen7: return "Gen 7 · USUM"
     case .gen6: return "Gen 6 · XY/ORAS"
     case .gen5: return "Gen 5 · Black/White"
+    case .gen4: return "Gen 4 · Diamond/Pearl"
+    case .gen3: return "Gen 3 · Ruby/Sapphire"
+    case .gen2: return "Gen 2 · Gold/Silver"
+    case .gen1: return "Gen 1 · Red/Blue"
     case let .unknown(raw): return raw
     }
   }

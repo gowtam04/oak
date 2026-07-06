@@ -71,8 +71,15 @@ describe("oakAnswerSchema — proposed_team (TEAM-AD-6)", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("accepts both formats in proposed_team.format and rejects an unknown one", () => {
-    for (const format of ["scarlet-violet", "champions"] as const) {
+  it("accepts every FORMATS member in proposed_team.format and rejects an unknown one", () => {
+    // National Dex scope feature widened FORMATS to 11 entries (national-dex +
+    // gen-1..gen-4 reference builds are now permissive proposed_team formats).
+    for (const format of [
+      "scarlet-violet",
+      "champions",
+      "national-dex",
+      "gen-1",
+    ] as const) {
       const parsed = oakAnswerSchema.safeParse({
         ...BASE_ANSWER,
         proposed_team: { name: "T", format, members: [] },
@@ -81,7 +88,7 @@ describe("oakAnswerSchema — proposed_team (TEAM-AD-6)", () => {
     }
     const bad = oakAnswerSchema.safeParse({
       ...BASE_ANSWER,
-      proposed_team: { name: "T", format: "gen-1", members: [] },
+      proposed_team: { name: "T", format: "gen-9", members: [] },
     });
     expect(bad.success).toBe(false);
   });

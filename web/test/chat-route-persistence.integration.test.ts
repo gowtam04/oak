@@ -141,8 +141,8 @@ describe("signed-in persistence", () => {
     expect(conv).toMatchObject({
       id: sid,
       title: "What beats Garchomp?",
-      // A plain post with no seed now defaults to Champions (the new default).
-      format: "champions",
+      // A plain post with no seed now defaults to National Dex (the new default).
+      format: "national-dex",
       pinned: false,
     });
     const stored = await repo.getMessages(ACCT.id, sid);

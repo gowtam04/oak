@@ -61,12 +61,12 @@ class AppState {
      */
     private val pendingTurns = java.util.concurrent.ConcurrentHashMap<String, String>()
 
-    private val _guestThreadScope = MutableStateFlow<Format>(Format.Champions)
+    private val _guestThreadScope = MutableStateFlow<Format>(Format.NationalDex)
 
     /**
      * The guest thread's resolved data scope, mirrored from the chat reducer's
      * `scope` events so the guest→sign-in import can persist the thread under the
-     * scope it actually ran in. Defaults to champions (the server default) until a
+     * scope it actually ran in. Defaults to national-dex (the server default) until a
      * turn resolves otherwise; reset with the guest thread.
      */
     val guestThreadScope: StateFlow<Format> = _guestThreadScope.asStateFlow()
@@ -117,7 +117,7 @@ class AppState {
     /** Clears the in-memory guest thread back to its defaults (e.g. on quick-stop). */
     fun clearGuestThread() {
         _guestThread.value = emptyList()
-        _guestThreadScope.value = Format.Champions
+        _guestThreadScope.value = Format.NationalDex
     }
 
     // -------------------------------------------------------------------

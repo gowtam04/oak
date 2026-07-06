@@ -41,6 +41,7 @@ type EstimateDamage = (p: {
 }) => unknown;
 
 let computeStat: ComputeStat;
+let computeStatGen12: ComputeStat;
 let estimateDamage: EstimateDamage;
 let loadError: unknown = null;
 
@@ -55,13 +56,15 @@ beforeAll(async () => {
       unknown
     >;
     computeStat = (csMod.computeStat ?? csMod.default) as ComputeStat;
+    computeStatGen12 = csMod.computeStatGen12 as ComputeStat;
     estimateDamage = (edMod.estimateDamage ?? edMod.default) as EstimateDamage;
     if (
       typeof computeStat !== "function" ||
+      typeof computeStatGen12 !== "function" ||
       typeof estimateDamage !== "function"
     ) {
       throw new Error(
-        "Expected computeStat / estimateDamage function exports from src/agent/formulas/*",
+        "Expected computeStat / computeStatGen12 / estimateDamage function exports from src/agent/formulas/*",
       );
     }
   } catch (e) {
@@ -152,6 +155,70 @@ describe("compute_stat oracle (T9)", () => {
     }).not.toThrow();
     expect(out).toMatchObject({ error: "invalid_input" });
     expect((out as { detail?: unknown }).detail).toEqual(expect.any(String));
+  });
+});
+
+describe("compute_stat Gen 1/2 oracle (National Dex scope — computeStatGen12)", () => {
+  it("max-DV max-StatExp non-HP stat: base 100, lvl 50, IV 31, EV 252 == 151", () => {
+    ensureLoaded();
+    // DV = clamp(round(31*15/31),0,15) = 15; StatExp = floor(min(252,252)/4) = 63
+    // core = 2*(100+15)+63 = 293; inner = floor(293*50/100) = 146; 146+5 = 151
+    expect(
+      asValue(
+        computeStatGen12({ base_stat: 100, level: 50, iv: 31, ev: 252 }),
+      ),
+    ).toBe(151);
+  });
+
+  it("max-DV max-StatExp HP stat: base 100, lvl 50, IV 31, EV 252 == 206", () => {
+    ensureLoaded();
+    // Same core/inner as above (146); HP = 146 + 50 + 10 = 206
+    expect(
+      asValue(
+        computeStatGen12({
+          base_stat: 100,
+          is_hp: true,
+          level: 50,
+          iv: 31,
+          ev: 252,
+        }),
+      ),
+    ).toBe(206);
+  });
+
+  it("Shedinja (base HP 1) is always 1 HP, same edge case as computeStat", () => {
+    ensureLoaded();
+    expect(
+      asValue(
+        computeStatGen12({ base_stat: 1, is_hp: true, level: 50, iv: 31, ev: 0 }),
+      ),
+    ).toBe(1);
+  });
+
+  it("IV 31 clamps DV to 15, IV 0 clamps DV to 0 (base 100, lvl 50, EV 0)", () => {
+    ensureLoaded();
+    // IV 31: DV=15; core=2*(100+15)+0=230; inner=floor(230*50/100)=115; 115+5=120
+    expect(
+      asValue(computeStatGen12({ base_stat: 100, level: 50, iv: 31, ev: 0 })),
+    ).toBe(120);
+    // IV 0: DV=0; core=2*(100+0)+0=200; inner=floor(200*50/100)=100; 100+5=105
+    expect(
+      asValue(computeStatGen12({ base_stat: 100, level: 50, iv: 0, ev: 0 })),
+    ).toBe(105);
+  });
+
+  it("applies documented defaults (lvl 50, IV 31, EV 0): base 100 == 120", () => {
+    ensureLoaded();
+    expect(asValue(computeStatGen12({ base_stat: 100 }))).toBe(120);
+  });
+
+  it("returns a structured invalid_input (never throws) on an out-of-range EV", () => {
+    ensureLoaded();
+    let out: unknown;
+    expect(() => {
+      out = computeStatGen12({ base_stat: 100, ev: 300 });
+    }).not.toThrow();
+    expect(out).toMatchObject({ error: "invalid_input" });
   });
 });
 

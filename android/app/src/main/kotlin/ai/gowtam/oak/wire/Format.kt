@@ -9,37 +9,49 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
 /**
- * The data-scope discriminator (mirrors `formats.ts` `FORMATS`). `scarlet-violet`
- * is Gen 9 / standard mode; `champions` is the Pokémon Champions regulation
- * scope; `gen-5`…`gen-8` are the mainline generation-scope formats.
+ * The data-scope discriminator (mirrors `formats.ts` `FORMATS`). `national-dex` is the
+ * whole-Pokédex, form-aware reference scope (the new default); `scarlet-violet` is
+ * Gen 9 / standard mode; `champions` is the Pokémon Champions regulation scope;
+ * `gen-1`…`gen-8` are the mainline generation-scope formats.
  *
  * **Tolerant decoding is load-bearing** (mirrors iOS `Format.unknown`): the wire
  * can widen this set independently of when this app ships (it already has —
- * `gen-5`…`gen-8` postdate the app's original two-case set), so an unrecognized
- * string degrades to [Unknown] rather than failing the parent object's decode
+ * `gen-5`…`gen-8` postdate the app's original two-case set, and `national-dex` +
+ * `gen-1`…`gen-4` postdate that), so an unrecognized string degrades to [Unknown]
+ * rather than failing the parent object's decode
  * (`ConversationSummary`/`ConversationDetail`/`Team`/`EntityArtifactOk`/…).
  */
 @Serializable(with = FormatSerializer::class)
 sealed interface Format {
+    data object NationalDex : Format
     data object ScarletViolet : Format
     data object Champions : Format
     data object Gen5 : Format
     data object Gen6 : Format
     data object Gen7 : Format
     data object Gen8 : Format
+    data object Gen4 : Format
+    data object Gen3 : Format
+    data object Gen2 : Format
+    data object Gen1 : Format
 
-    /** A format string outside the known six — preserves the original wire value. */
+    /** A format string outside the known set — preserves the original wire value. */
     data class Unknown(val raw: String) : Format
 
     /** The wire string for a known case, or the original raw string for [Unknown]. */
     val rawValue: String
         get() = when (this) {
+            NationalDex -> "national-dex"
             ScarletViolet -> "scarlet-violet"
             Champions -> "champions"
             Gen5 -> "gen-5"
             Gen6 -> "gen-6"
             Gen7 -> "gen-7"
             Gen8 -> "gen-8"
+            Gen4 -> "gen-4"
+            Gen3 -> "gen-3"
+            Gen2 -> "gen-2"
+            Gen1 -> "gen-1"
             is Unknown -> raw
         }
 
@@ -50,12 +62,17 @@ sealed interface Format {
      */
     val shortLabel: String
         get() = when (this) {
+            NationalDex -> "National Dex"
             Champions -> "Champions"
             ScarletViolet -> "Gen 9"
             Gen8 -> "Gen 8"
             Gen7 -> "Gen 7"
             Gen6 -> "Gen 6"
             Gen5 -> "Gen 5"
+            Gen4 -> "Gen 4"
+            Gen3 -> "Gen 3"
+            Gen2 -> "Gen 2"
+            Gen1 -> "Gen 1"
             is Unknown -> raw
         }
 
@@ -67,32 +84,45 @@ sealed interface Format {
      */
     val displayLabel: String
         get() = when (this) {
+            NationalDex -> "National Dex · All Gens"
             Champions -> "Champions · Reg M-B"
             ScarletViolet -> "Gen 9 · Scarlet/Violet"
             Gen8 -> "Gen 8 · Sword/Shield"
             Gen7 -> "Gen 7 · USUM"
             Gen6 -> "Gen 6 · XY/ORAS"
             Gen5 -> "Gen 5 · Black/White"
+            Gen4 -> "Gen 4 · Diamond/Pearl"
+            Gen3 -> "Gen 3 · Ruby/Sapphire"
+            Gen2 -> "Gen 2 · Gold/Silver"
+            Gen1 -> "Gen 1 · Red/Blue"
             is Unknown -> raw
         }
 
     companion object {
         /**
          * The known, orderable formats — display order: default first, then
-         * release-date descending. Backs the six-way scope chip/filter; [Unknown]
+         * release-date descending. Backs the scope chip/filter; [Unknown]
          * is deliberately excluded (it has no fixed identity to list).
          */
         val knownCases: List<Format> =
-            listOf(Champions, ScarletViolet, Gen8, Gen7, Gen6, Gen5)
+            listOf(
+                NationalDex, Champions, ScarletViolet,
+                Gen8, Gen7, Gen6, Gen5, Gen4, Gen3, Gen2, Gen1,
+            )
 
         /** Maps a wire string to its case, falling back to [Unknown] otherwise. */
         fun fromRaw(raw: String): Format = when (raw) {
+            "national-dex" -> NationalDex
             "scarlet-violet" -> ScarletViolet
             "champions" -> Champions
             "gen-5" -> Gen5
             "gen-6" -> Gen6
             "gen-7" -> Gen7
             "gen-8" -> Gen8
+            "gen-4" -> Gen4
+            "gen-3" -> Gen3
+            "gen-2" -> Gen2
+            "gen-1" -> Gen1
             else -> Unknown(raw)
         }
     }

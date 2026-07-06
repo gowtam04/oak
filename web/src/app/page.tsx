@@ -147,8 +147,9 @@ export default function Home() {
 
   // One-time cleanup: the Champions toggle (and its localStorage-persisted
   // choice) is gone — the header scope chip is now the sole scope control, and
-  // the server defaults a seedless fresh conversation to Champions itself. Clear
-  // any stale value left by a previous build so it can't linger unread forever.
+  // the server defaults a seedless fresh conversation to National Dex itself.
+  // Clear any stale value left by a previous build so it can't linger unread
+  // forever.
   useEffect(() => {
     try {
       localStorage.removeItem("oak-champions-mode");
@@ -282,9 +283,9 @@ export default function Home() {
         // Import the guest thread under its RESOLVED scope (GS-C): a thread that
         // switched to e.g. gen-7 via an in-message signal must import as gen-7,
         // not as whatever the header chip currently shows. Fall back to the
-        // champions default when no turn has resolved a scope yet. A pending
+        // national-dex default when no turn has resolved a scope yet. A pending
         // `scopeSeed` is deliberately excluded — no turn ran under it yet.
-        const importFormat: Format = resolvedScope ?? "champions";
+        const importFormat: Format = resolvedScope ?? "national-dex";
         void importConversation(sessionId, turns, importFormat).then(() =>
           refreshConversations(),
         );
@@ -366,7 +367,7 @@ export default function Home() {
 
   // Start a brand-new conversation (AC-6.1): a fresh session id + empty thread.
   // No DB row is created until the first successful turn. The previous
-  // conversation remains saved + unchanged; the scope resets to the champions
+  // conversation remains saved + unchanged; the scope resets to the national-dex
   // default so the fresh thread displays it until a turn resolves otherwise.
   const handleNewChat = useCallback(() => {
     reset();
@@ -452,10 +453,10 @@ export default function Home() {
   const heroComposer = showEmptyState && !narrow;
 
   // The scope in effect for the conversation: an explicit chip pick, else the
-  // server-resolved scope once a turn has run (GS-C), else the champions
+  // server-resolved scope once a turn has run (GS-C), else the national-dex
   // default. Drives BOTH the header scope chip and the artifact viewer (B-4) —
   // the viewer snapshots this onto each artifact at open (BR-AV-7).
-  const displayFormat: Format = scopeSeed ?? resolvedScope ?? "champions";
+  const displayFormat: Format = scopeSeed ?? resolvedScope ?? "national-dex";
 
   // Mic button tapped. Signed in → open the voice overlay at the current
   // display scope; guest → the sign-in dialog (the existing signed-in gate).

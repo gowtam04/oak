@@ -213,6 +213,22 @@ describe("POST /api/chat — no active-team seam", () => {
     expect((captured.options as Record<string, unknown>).accountId).toBe(ACCT_A);
   });
 
+  it("a seedless fresh conversation defaults to national-dex (scope flip)", async () => {
+    signedIn(ACCT_A);
+    await drain(await post({ session_id: "c2-default", message: "hi" }));
+    expect((captured.options as Record<string, unknown>).mode).toBe(
+      "national-dex",
+    );
+  });
+
+  it("an explicit scope_seed chip pick binds that scope's mode (gen-2)", async () => {
+    signedIn(ACCT_A);
+    await drain(
+      await post({ session_id: "c2-seed", message: "hi", scope_seed: "gen-2" }),
+    );
+    expect((captured.options as Record<string, unknown>).mode).toBe("gen-2");
+  });
+
   // BACKGROUND TURNS (design §5.2): a client disconnect NO LONGER cancels or
   // discards the turn. The request signal is not wired to the turn — only an
   // explicit stop aborts it (BT-4) — so a turn whose request signal is already
@@ -248,7 +264,8 @@ describe("POST /api/chat — turn recording", () => {
     expect(input).toMatchObject({
       sessionId: "rec1",
       accountId: ACCT_A,
-      mode: "champions",
+      // Seedless fresh conversation → the National Dex default (the scope flip).
+      mode: "national-dex",
       status: "answered",
       // From the captured TurnTrace.
       providerModel: FAKE_TRACE.model,

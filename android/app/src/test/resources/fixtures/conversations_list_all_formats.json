@@ -1,6 +1,13 @@
 {
   "conversations": [
     {
+      "id": "conv_natdex",
+      "title": "National Dex type combos",
+      "format": "national-dex",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    },
+    {
       "id": "conv_sv",
       "title": "Scarlet/Violet dragons",
       "format": "scarlet-violet",
@@ -39,6 +46,34 @@
       "id": "conv_gen8",
       "title": "Gen 8 dynamax cores",
       "format": "gen-8",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    },
+    {
+      "id": "conv_gen4",
+      "title": "Gen 4 Diamond/Pearl teams",
+      "format": "gen-4",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    },
+    {
+      "id": "conv_gen3",
+      "title": "Gen 3 Ruby/Sapphire teams",
+      "format": "gen-3",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    },
+    {
+      "id": "conv_gen2",
+      "title": "Gen 2 Gold/Silver teams",
+      "format": "gen-2",
+      "pinned": false,
+      "updatedAt": 1719600000000
+    },
+    {
+      "id": "conv_gen1",
+      "title": "Gen 1 Red/Blue teams",
+      "format": "gen-1",
       "pinned": false,
       "updatedAt": 1719600000000
     },

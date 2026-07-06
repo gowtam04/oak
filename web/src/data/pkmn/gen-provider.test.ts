@@ -69,9 +69,13 @@ describe("loadFormat", () => {
   let standard: FormatSource;
   let champions: FormatSource;
   let gen7: FormatSource;
+  let natdex: FormatSource;
+  let gen1: FormatSource;
+  let gen2: FormatSource;
   let standardIds: Set<string>;
   let championIds: Set<string>;
   let gen7Ids: Set<string>;
+  let natdexIds: Set<string>;
 
   beforeAll(async () => {
     standard = await loadFormat("scarlet-violet");
@@ -79,9 +83,14 @@ describe("loadFormat", () => {
     champions = await loadFormat("champions");
     // Exercises a mainline gen scope (generation-scope feature): Dex.forGen(7).
     gen7 = await loadFormat("gen-7");
+    // National Dex scope feature: national-dex + gens 1-2.
+    natdex = await loadFormat("national-dex");
+    gen1 = await loadFormat("gen-1");
+    gen2 = await loadFormat("gen-2");
     standardIds = new Set(standard.roster.map((s) => s.id));
     championIds = new Set(champions.roster.map((s) => s.id));
     gen7Ids = new Set(gen7.roster.map((s) => s.id));
+    natdexIds = new Set(natdex.roster.map((s) => s.id));
   });
 
   describe("scarlet-violet (standard / Dex.forGen(9))", () => {
@@ -202,6 +211,54 @@ describe("loadFormat", () => {
       // A move Alolan Raichu learns; sources carry a gen-7 method string.
       expect(ls.thunderbolt).toBeDefined();
       expect(ls.thunderbolt.some((src) => src.startsWith("7"))).toBe(true);
+    });
+  });
+
+  describe("national-dex (Dex.forGen(9) reused under a new format name) — National Dex scope", () => {
+    // Probed against @pkmn 0.10.11: roster 1367 (base + battle formes), 1025
+    // unique National Dex numbers.
+    it("stamps the format + genNumber 9 and resolves the whole form-aware roster", () => {
+      expect(natdex.format).toBe("national-dex");
+      expect(natdex.genNumber).toBe(9);
+      const uniqueDexNumbers = new Set(natdex.roster.map((s) => s.num));
+      expect(uniqueDexNumbers.size).toBeGreaterThanOrEqual(1025);
+    });
+
+    it("includes form-only type combos absent from the default-forms-only natdex_species table", () => {
+      for (const id of [
+        "rotomheat",
+        "weezinggalar",
+        "darmanitangalarzen",
+        "venusaurmega",
+      ]) {
+        expect(natdexIds.has(id)).toBe(true);
+      }
+    });
+  });
+
+  describe("gen-1 (Dex.forGen(1)) — National Dex scope, Gens 1-4 widening", () => {
+    it("resolves the real 151-species Gen 1 roster", () => {
+      expect(gen1.format).toBe("gen-1");
+      expect(gen1.genNumber).toBe(1);
+      expect(gen1.roster).toHaveLength(151);
+    });
+
+    it("Clefairy is pure Normal-type in Gen 1 (Fairy didn't exist until Gen 6)", () => {
+      const clefairy = gen1.dex.species.get("clefairy");
+      expect(clefairy.types).toEqual(["Normal"]);
+    });
+  });
+
+  describe("gen-2 (Dex.forGen(2)) — unified Special stat splits into spa/spd", () => {
+    it("Alakazam's Special Defense drops from Gen 1's unified 135 to Gen 2's 85", () => {
+      const alakazam1 = gen1.dex.species.get("alakazam");
+      const alakazam2 = gen2.dex.species.get("alakazam");
+      // Gen 1: unified Special -> spa === spd === 135.
+      expect(alakazam1.baseStats.spa).toBe(135);
+      expect(alakazam1.baseStats.spd).toBe(135);
+      // Gen 2 introduces the real split: spa stays 135, spd drops to 85.
+      expect(alakazam2.baseStats.spa).toBe(135);
+      expect(alakazam2.baseStats.spd).toBe(85);
     });
   });
 

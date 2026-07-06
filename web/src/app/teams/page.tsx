@@ -31,7 +31,7 @@ import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useTeams } from "@/lib/hooks/use-teams";
 import type { TeamDetail } from "@/lib/api/teams-client";
 import type { TeamMember } from "@/data/teams/team-schema";
-import { CHAMPIONS_FORMAT, FORMATS, type Format } from "@/data/formats";
+import { NATDEX_FORMAT, SCOPE_PICKER_ORDER, type Format } from "@/data/formats";
 import TeamList from "@/components/teams/TeamList";
 import TeamEditor, {
   type TeamEditorHandle,
@@ -57,7 +57,7 @@ export default function TeamsPage() {
   const { setFormatFilter } = teams;
 
   // Active format: scopes the list + is the format new/imported teams use.
-  const [format, setFormat] = useState<Format>(CHAMPIONS_FORMAT);
+  const [format, setFormat] = useState<Format>(NATDEX_FORMAT);
   useEffect(() => {
     setFormatFilter(format);
   }, [format, setFormatFilter]);
@@ -178,7 +178,7 @@ export default function TeamsPage() {
                   setSelected(null);
                 }}
               >
-                {FORMATS.map((f) => (
+                {SCOPE_PICKER_ORDER.map((f) => (
                   <option key={f} value={f}>
                     {formatLabel(f)}
                   </option>

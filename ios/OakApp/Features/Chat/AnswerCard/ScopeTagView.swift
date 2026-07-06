@@ -4,11 +4,14 @@ import SwiftUI
 /// mirror of web's `formatScopeTag` (`web/src/components/answer-card/scope-tag.ts`).
 ///
 /// The wire `generation` is the `basisForFormat` tag, not a display string:
-/// `"champions"`, `"gen-9"`, `"gen-5"`…`"gen-8"`, or a pre-Gen-9 fallback code like
-/// `"gen-1"`. This turns it into the label web shows:
+/// `"champions"`, `"national-dex"`, `"gen-9"`, `"gen-5"`…`"gen-8"`, or a
+/// pre-Gen-9 fallback code like `"gen-1"`. This turns it into the label web
+/// shows:
 ///
 ///   - `"champions"` → `"Champions · Reg M-B"` (the current regulation, `Regulation `
 ///     shortened to `Reg ` exactly as web's `/^Regulation\s+/i` → `"Reg "`),
+///   - `"national-dex"` → `"National Dex"` (the whole-Pokédex reference scope;
+///     `basisForFormat` returns the raw format string for it, not a `gen-N` tag),
 ///   - `"gen-N"` → `"Gen N"`,
 ///   - anything else → returned unchanged (web's `return generation` fallback — an
 ///     already-display-form string passes straight through).
@@ -25,6 +28,9 @@ enum ScopeTag {
   static func label(for generation: String) -> String {
     if generation == "champions" {
       return "Champions · \(shortRegulation)"
+    }
+    if generation == "national-dex" {
+      return "National Dex"
     }
     if generation.hasPrefix("gen-") {
       return "Gen \(generation.dropFirst("gen-".count))"
@@ -88,6 +94,9 @@ struct ScopeTagView: View {
     )
     ScopeTagView(
       generationBasis: GenerationBasis(generation: "champions", fallback: false, note: nil)
+    )
+    ScopeTagView(
+      generationBasis: GenerationBasis(generation: "national-dex", fallback: false, note: nil)
     )
     // Fallback: the tag stays neutral; the caution belongs to CaveatStripView.
     ScopeTagView(

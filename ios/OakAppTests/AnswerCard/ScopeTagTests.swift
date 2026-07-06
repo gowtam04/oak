@@ -33,6 +33,13 @@ struct ScopeTagTests {
   }
 
   @Test
+  func nationalDexBecomesNationalDexLabel() {
+    // "national-dex" → "National Dex" (basisForFormat returns the raw format
+    // string, not a "gen-N" tag, for the whole-Pokédex reference scope).
+    #expect(ScopeTag.label(for: "national-dex") == "National Dex")
+  }
+
+  @Test
   func unrecognizedGenerationReturnsUnchanged() {
     // web's `return generation` fallback — an already-display-form string (or any
     // code that is neither "champions" nor "gen-*") passes straight through.

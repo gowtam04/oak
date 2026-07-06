@@ -29,7 +29,11 @@ import DamageCalcArtifact from "./DamageCalcArtifact";
 import TeamArtifact from "./TeamArtifact";
 
 function formatLabel(format: string): string {
-  return format === "champions" ? "Champions" : "Scarlet/Violet";
+  if (format === "champions") return "Champions";
+  if (format === "scarlet-violet") return "Scarlet/Violet";
+  if (format === "national-dex") return "National Dex";
+  if (format.startsWith("gen-")) return `Gen ${format.slice("gen-".length)}`;
+  return format;
 }
 
 interface HeaderInfo {

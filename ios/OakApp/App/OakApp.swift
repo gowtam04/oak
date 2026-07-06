@@ -18,9 +18,21 @@ struct OakApp: App {
 
   var body: some Scene {
     WindowGroup {
-      RootView()
-        .environment(appState)
-        .oakServices(services)
+      #if DEBUG
+      if ProcessInfo.processInfo.arguments.contains(EntityPickerHarness.launchFlag) {
+        EntityPickerHarness()
+      } else {
+        rootView
+      }
+      #else
+      rootView
+      #endif
     }
+  }
+
+  private var rootView: some View {
+    RootView()
+      .environment(appState)
+      .oakServices(services)
   }
 }

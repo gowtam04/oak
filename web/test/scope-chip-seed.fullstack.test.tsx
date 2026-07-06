@@ -1,15 +1,15 @@
 /**
- * FULL-STACK (frontend) — the header ScopeChip is now the sole scope control
- * (champions-default): the Champions toggle is gone, a fresh conversation
- * defaults to Champions, and picking a scope from the chip's menu sends it as
- * `scope_seed` on the NEXT turn only — cleared the moment the server
- * acknowledges a turn via the `scope` SSE event (scope_seed > sticky scope, so
- * a stale seed would otherwise outrank the conversation's now-current scope).
+ * FULL-STACK (frontend) — the header ScopeChip is now the sole scope control:
+ * the Champions toggle is gone, a fresh conversation defaults to National Dex,
+ * and picking a scope from the chip's menu sends it as `scope_seed` on the
+ * NEXT turn only — cleared the moment the server acknowledges a turn via the
+ * `scope` SSE event (scope_seed > sticky scope, so a stale seed would
+ * otherwise outrank the conversation's now-current scope).
  *
  * Renders the REAL <Home/> with a single stubbed `fetch` (guest, then signed
  * in for the New-chat case — only the signed-in sidebar has a New-chat
  * control), and drives:
- *   - a fresh load shows "Champions · Reg M-B"; sending carries neither
+ *   - a fresh load shows "National Dex · All Gens"; sending carries neither
  *     `champions_mode` nor `scope_seed`,
  *   - picking "Gen 9 · Scarlet/Violet" from the chip menu updates the chip
  *     optimistically and rides the NEXT send as `scope_seed`; once the server
@@ -17,7 +17,7 @@
  *   - a chip pick followed by a message whose response resolves a DIFFERENT
  *     scope (an in-message signal) snaps the chip to that scope and clears
  *     the seed,
- *   - "New chat" resets the chip to the Champions default.
+ *   - "New chat" resets the chip to the National Dex default.
  *
  * Imports only view + lib code (never db/repos/runtime). Vitest jsdom project.
  */
@@ -165,11 +165,13 @@ async function signIn() {
 }
 
 describe("ScopeChip as the header's scope control", () => {
-  it("defaults to Champions and sends neither champions_mode nor scope_seed", async () => {
+  it("defaults to National Dex and sends neither champions_mode nor scope_seed", async () => {
     render(<Home />);
     await screen.findByTestId("composer");
 
-    expect(screen.getByTestId("scope-chip")).toHaveTextContent("Champions · Reg M-B");
+    expect(screen.getByTestId("scope-chip")).toHaveTextContent(
+      "National Dex · All Gens",
+    );
 
     await send("what beats Garchomp?", 1);
     const body = chatBodies.at(-1)!;
@@ -220,7 +222,7 @@ describe("ScopeChip as the header's scope control", () => {
     expect(chatBodies.at(-1)!.scope_seed).toBeUndefined();
   });
 
-  it("New chat resets the chip to the Champions default", async () => {
+  it("New chat resets the chip to the National Dex default", async () => {
     render(<Home />);
     await screen.findByTestId("auth-signin-button");
     await signIn();
@@ -235,7 +237,7 @@ describe("ScopeChip as the header's scope control", () => {
     });
 
     expect(screen.getByTestId("scope-chip")).toHaveTextContent(
-      "Champions · Reg M-B",
+      "National Dex · All Gens",
     );
   });
 });

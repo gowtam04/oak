@@ -440,6 +440,12 @@ const GEN9_BASIS: OakAnswer["generation_basis"] = {
   fallback: false,
 };
 
+/** Whole-dex answers (G56/G57) stamp the national-dex basis tag, not gen-9's. */
+const NATDEX_BASIS: OakAnswer["generation_basis"] = {
+  generation: "national-dex",
+  fallback: false,
+};
+
 /** Is this a successful query_pokedex result (vs. an error/unresolved shape)? */
 function isQueryResult(o: unknown): o is QueryPokedexResult {
   return (
@@ -867,10 +873,108 @@ const PLANS: Record<string, DeterministicPlan> = {
       };
     },
   },
+
+  // -------------------------------------------------------------------------
+  // National-dex-scope feature regression cases (G56/G57) — pin the two root
+  // causes of the production incident (whole-dex questions routed against a
+  // narrower scope's roster, and (type1, type2) treated as an ordered pair
+  // instead of normalized with LEAST/GREATEST — see warehouse-ddl.ts).
+  // -------------------------------------------------------------------------
+
+  // G56 — whole-dex total species count, asked from champions scope. Must
+  // route to a natdex_species aggregation (the whole National Pokédex), not
+  // the (much smaller) Champions roster.
+  G56: {
+    reads: [
+      {
+        name: "run_sql",
+        input: {
+          query: "SELECT COUNT(*) AS total FROM natdex_species",
+          purpose: "count every species in the whole National Pokédex",
+        },
+      },
+    ],
+    compose: (o) => {
+      const r = o.run_sql;
+      const rows = isRunSqlRows(r) ? r.rows : [];
+      const total = rows[0]?.[0];
+      return {
+        status: "answered",
+        answer_markdown:
+          total !== undefined
+            ? `The National Pokédex currently indexes **${total}** species, per a single whole-dex aggregation.`
+            : "Could not determine the whole-dex species count.",
+        reasoning_markdown:
+          "Ran one COUNT(*) aggregation over natdex_species (the whole National Pokédex) rather than counting from the narrower Champions roster.",
+        citations: [
+          { source: "natdex_species", detail: "COUNT(*) over the whole National Pokédex" },
+        ],
+        inferences: [],
+        generation_basis: NATDEX_BASIS,
+      };
+    },
+  },
+
+  // G57 — Fire/Ice type-combination existence, national-dex scope. The
+  // fixture's Darmanitan-Galar-Zen row stores type1="ice"/type2="fire" (the
+  // opposite of how the combo reads conventionally), so a query that assumes
+  // a canonical slot order would miss it — LEAST/GREATEST normalization is
+  // required. Also form-aware: this form is absent from natdex_species, so
+  // the query must target pokemon@national-dex, not the species table.
+  G57: {
+    reads: [
+      {
+        name: "run_sql",
+        input: {
+          query:
+            "SELECT display_name FROM pokemon WHERE format = 'national-dex' " +
+            "AND LEAST(type1, type2) = 'fire' AND GREATEST(type1, type2) = 'ice'",
+          purpose:
+            "check whether any Pokémon form has the Fire and Ice types together, regardless of listed slot order",
+        },
+      },
+    ],
+    compose: (o) => {
+      const r = o.run_sql;
+      const rows = isRunSqlRows(r) ? r.rows : [];
+      const names = rows.map((row) => String(row[0]));
+      return {
+        status: "answered",
+        answer_markdown:
+          names.length > 0
+            ? `Yes — **${names.join(", ")}** has the Fire/Ice type combination, per a form-aware, slot-order-normalized search over the whole national-dex partition.`
+            : "No Pokémon form in the warehouse has the Fire/Ice type combination.",
+        reasoning_markdown:
+          "Queried pokemon WHERE format = 'national-dex' (form-aware, not just default-form species) and normalized (type1, type2) with LEAST/GREATEST so the combo matches regardless of which slot holds Fire vs. Ice.",
+        citations: [
+          {
+            source: "pokemon (national-dex)",
+            detail: "LEAST/GREATEST(type1,type2) = (fire,ice)",
+          },
+        ],
+        inferences: [],
+        generation_basis: NATDEX_BASIS,
+      };
+    },
+  },
 };
 
 /** Case IDs that have a registered deterministic plan. */
 export const PLANNED_CASE_IDS: readonly string[] = Object.keys(PLANS);
+
+/**
+ * Read-only accessor for a plan's read-phase SQL query text(s), keyed by case
+ * ID. Exported so tests can pin the literal SQL shape a plan issues — e.g.
+ * G57's LEAST/GREATEST slot-order normalization — without exposing the whole
+ * (non-serializable, function-valued) `PLANS` map.
+ */
+export function planQueries(caseId: string): string[] {
+  const plan = PLANS[caseId];
+  if (!plan) return [];
+  return plan.reads
+    .map((r) => (r.input as { query?: unknown }).query)
+    .filter((q): q is string => typeof q === "string");
+}
 
 // ---------------------------------------------------------------------------
 // Public API

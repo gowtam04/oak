@@ -12,6 +12,13 @@ import { scopeLabelShort } from "@/lib/scope/scope-label";
  * so the same strings render on web and a future iOS client.
  */
 describe("ScopeChip", () => {
+  it("renders the National Dex label", () => {
+    render(<ScopeChip format="national-dex" />);
+    const chip = screen.getByTestId("scope-chip");
+    expect(chip).toHaveTextContent("National Dex · All Gens");
+    expect(chip).toHaveAttribute("data-format", "national-dex");
+  });
+
   it("renders the Champions label with the short regulation", () => {
     render(<ScopeChip format="champions" />);
     const chip = screen.getByTestId("scope-chip");
@@ -50,24 +57,25 @@ describe("ScopeChip", () => {
       expect(chip).toHaveAttribute("aria-expanded", "false");
     });
 
-    it("opens a menu listing all six formats on click, each as a two-line row", () => {
+    it("opens a menu listing all eleven formats on click, each as a two-line row", () => {
       render(<ScopeChip format="champions" onSelect={vi.fn()} />);
       fireEvent.click(screen.getByTestId("scope-chip"));
       const menu = screen.getByTestId("scope-chip-menu");
       expect(menu).toBeInTheDocument();
       // Header instrument label.
       expect(menu).toHaveTextContent("Answer scope");
+      expect(SCOPE_PICKER_ORDER).toHaveLength(11);
       for (const f of SCOPE_PICKER_ORDER) {
         // Row shows the short name…
         expect(screen.getByTestId(`scope-chip-option-${f}`)).toHaveTextContent(
           scopeLabelShort(f),
         );
       }
-      // Champions appears first (default scope, display-order first).
+      // National Dex appears first (default scope, display-order first).
       const options = screen
         .getAllByRole("menuitemradio")
         .map((el) => el.getAttribute("data-testid")?.replace("scope-chip-option-", ""));
-      expect(options[0]).toBe("champions");
+      expect(options[0]).toBe("national-dex");
     });
 
     it("each row carries a one-line description under the name", () => {
@@ -75,11 +83,17 @@ describe("ScopeChip", () => {
       fireEvent.click(screen.getByTestId("scope-chip"));
       // A representative sample of the per-scope descriptions.
       expect(
+        screen.getByTestId("scope-chip-option-national-dex"),
+      ).toHaveTextContent("All Pokémon · Every generation");
+      expect(
         screen.getByTestId("scope-chip-option-gen-7"),
       ).toHaveTextContent("Ultra Sun / Ultra Moon");
       expect(
         screen.getByTestId("scope-chip-option-gen-8"),
       ).toHaveTextContent("Sword / Shield");
+      expect(
+        screen.getByTestId("scope-chip-option-gen-1"),
+      ).toHaveTextContent("Red / Blue");
       // Champions rides the live regulation constant.
       expect(
         screen.getByTestId("scope-chip-option-champions"),

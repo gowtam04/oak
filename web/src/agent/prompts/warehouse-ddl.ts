@@ -51,10 +51,14 @@ export const WAREHOUSE_DDL = `-- Oak offline warehouse — READ-ONLY schema refe
 --   * Slugs are PokeAPI-style lowercase-with-hyphens: "great-tusk",
 --     "will-o-wisp", "choice-scarf", "johto-route-29". Join on slugs.
 --   * The 'format' column on the format-partitioned tables (pokemon, learnset,
---     reference_cache, searchable_names, ingest_meta) is one of the six Oak
+--     reference_cache, searchable_names, ingest_meta) is one of the eleven Oak
 --     scopes: 'scarlet-violet', 'champions', 'gen-5', 'gen-6', 'gen-7',
---     'gen-8'. ALWAYS filter by a single format or you will get duplicate rows
---     across scopes. For whole-Pokedex facts prefer the natdex_* tables.
+--     'gen-8', 'national-dex', 'gen-4', 'gen-3', 'gen-2', 'gen-1'. ALWAYS
+--     filter by a single format or you will get duplicate rows across scopes.
+--     'national-dex' is the form-aware whole-Pokedex partition — one row per
+--     battle-relevant form across all 1025 species (Megas, regional/battle
+--     formes included). For whole-Pokedex SPECIES-level facts (not form-aware)
+--     prefer the natdex_* tables.
 --   * The natdex_* tables, classic_encounters, pmd_recruits, and
 --     champions_item_exclusion are GLOBAL (no 'format' column) — one row per
 --     species / version-group / move / etc., covering the whole National Dex.
@@ -104,6 +108,9 @@ CREATE TABLE pokemon (
 );
 -- PK (format, id). One row per (format, battle-relevant form). type2/form_name
 -- are NULL for mono-type / base forms. is_gen9_native is 0/1.
+-- format='national-dex' is the whole-dex, FORM-AWARE partition — use it for
+-- form-aware questions (e.g. "which forms are Electric/Fire", Rotom-Heat,
+-- Galarian Weezing) since natdex_species below only carries default forms.
 -- sample rows:
 --   ('scarlet-violet','great-tusk','great-tusk',NULL,'Great Tusk',984,'ground','fighting','protosynthesis',NULL,NULL,115,131,131,53,53,87,570,'…','…',NULL,'gen-9',1,NULL)
 --   ('champions','flutter-mane','flutter-mane',NULL,'Flutter Mane',987,'ghost','fairy','protosynthesis',NULL,NULL,55,55,55,135,135,135,570,'…','…',NULL,'champions',1,NULL)
@@ -188,8 +195,20 @@ CREATE TABLE natdex_species (
 -- PK (species). GLOBAL — one row per National Dex species (default form).
 -- generation is 1–9. capture_rate is 0–255 (higher = easier to catch).
 -- evolves_from is the pre-evolution species slug (self-join), NULL if none.
--- type2 NULL for mono-type. This is the table for whole-Pokedex facts:
--- colors, shapes, catch rates, dex numbers, evolution parents, type combos.
+-- type2 NULL for mono-type. This is the table for whole-Pokedex SPECIES-level
+-- facts: colors, shapes, catch rates, dex numbers, evolution parents, and
+-- DEFAULT-FORM type combos.
+-- IMPORTANT — type1/type2 slot order is canonical game data, NOT semantic: a
+-- combo can be stored as either (type1,type2) or (type2,type1) depending on
+-- the species. For any type-COMBINATION-EXISTENCE query, normalize with
+-- LEAST(type1,type2) / GREATEST(type1,type2) (or check both orderings) so a
+-- mirrored pair isn't miscounted as missing; treat mono-type rows (type2 IS
+-- NULL) as their own case, not a combination.
+-- IMPORTANT — DEFAULT FORMS ONLY: form-only type combos are ABSENT here (e.g.
+-- Rotom-Heat is Electric/Fire, Galarian Weezing is Poison/Fairy — neither
+-- appears in this table, only their base forms do). For a FORM-AWARE
+-- type-combination-existence question, query pokemon WHERE
+-- format='national-dex' instead, with the same LEAST/GREATEST normalization.
 -- sample rows:
 --   ('bulbasaur',1,1,'green','quadruped',45,318,NULL,'grass','poison')
 --   ('ivysaur',2,1,'green','quadruped',45,405,'bulbasaur','grass','poison')

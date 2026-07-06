@@ -1,5 +1,7 @@
 # Generation Scope — agent-design addendum
 
+> **Update 2026-07-06:** Oak now has eleven scopes — national-dex (default for new conversations) and gen-1…gen-4 were added as first-class scopes; the default changed from champions to national-dex. See CLAUDE.md for the current state.
+
 **Status:** implemented (generation-scope feature).
 **Amends:** the otherwise-frozen agent-design contract (`overview.md`, `tools.md`,
 `prompts.md`, `output-formats.md`, `evaluation.md`). Read this alongside them the
@@ -9,7 +11,7 @@ per-file change list live in
 [`docs/features/generation-scope/implementation-plan.md`](../features/generation-scope/implementation-plan.md)
 (locked decisions GS-D1…GS-D7).
 
-The one-line summary: Oak's data scope grew from **two** formats
+The one-line summary (historical context): Oak's data scope grew from **two** formats
 (`scarlet-violet` = Gen 9, `champions`) to **six** — adding mainline generations
 **5, 6, 7, 8** — and the turn's scope is now **resolved on the server per turn**
 from an explicit in-message signal, then the conversation's sticky scope, then the

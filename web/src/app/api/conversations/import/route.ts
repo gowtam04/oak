@@ -16,7 +16,7 @@
 import { json, jsonError } from "@/app/api/auth/_lib/http";
 import { readJsonBodyWithLimit } from "@/server/body-limit";
 import { oakAnswerSchema } from "@/agent/schemas";
-import { formatForMode, isFormat, type Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, isFormat, NATDEX_FORMAT, type Format } from "@/data/formats";
 import type { ChatTurn } from "@/components/types";
 import { currentAccount, conversationRepo } from "../_lib/route-helpers";
 
@@ -116,11 +116,14 @@ export async function POST(req: Request): Promise<Response> {
   // GS-C import-flow: prefer the RESOLVED scope the client sends (a guest thread
   // that switched to gen-7 via an in-message signal must import as gen-7), and
   // fall back to the `champions_mode` toggle seed for back-compat when `format`
-  // is absent or not a known format.
+  // is absent or not a known format. A toggle-OFF maps to the National Dex
+  // default (matching the chat route's legacy-seed handling), not scarlet-violet.
   const format: Format =
     typeof body.format === "string" && isFormat(body.format)
       ? body.format
-      : formatForMode(body.champions_mode === true ? "champions" : "standard");
+      : body.champions_mode === true
+        ? CHAMPIONS_FORMAT
+        : NATDEX_FORMAT;
 
   const repo = await conversationRepo();
   const id = await repo.importConversation({

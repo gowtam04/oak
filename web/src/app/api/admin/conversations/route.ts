@@ -10,7 +10,8 @@
  * never 500):
  *   - `q`      substring search over the conversation title OR any message text
  *              (ilike, AD-7)
- *   - `format` exact format filter ("scarlet-violet" | "champions")
+ *   - `format` exact format filter (any Format literal — "national-dex",
+ *              "champions", "scarlet-violet", "gen-1"…"gen-8")
  *   - `limit`  page size (clamped 1..200 by the repo; default 50)
  *   - `cursor` opaque keyset cursor on (updated_at, id)
  *

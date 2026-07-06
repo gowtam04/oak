@@ -218,9 +218,11 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch
 }
 
 /**
- * The top-bar filter affordance (iOS parity: All / Gen 9 / Champions — NOT a six-way
- * filter; that is the Teams list's job). A filter icon that tints **accent** while a
- * filter is active, opening a menu of the three scopes with a check on the current one.
+ * The top-bar filter affordance (iOS parity: iterates the full known-scope set, same as
+ * the Teams list's filter — this used to be a hardcoded All / Gen 9 / Champions trio,
+ * which was a real divergence from iOS's `HistoryListView` once more scopes existed). A
+ * filter icon that tints **accent** while a filter is active, opening a menu of every
+ * known [Format] with a check on the current one.
  */
 @Composable
 private fun FilterAction(current: Format?, onSelect: (Format?) -> Unit) {
@@ -237,8 +239,9 @@ private fun FilterAction(current: Format?, onSelect: (Format?) -> Unit) {
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             FilterMenuItem("All", current == null) { onSelect(null); expanded = false }
-            FilterMenuItem("Gen 9", current == Format.ScarletViolet) { onSelect(Format.ScarletViolet); expanded = false }
-            FilterMenuItem("Champions", current == Format.Champions) { onSelect(Format.Champions); expanded = false }
+            Format.knownCases.forEach { format ->
+                FilterMenuItem(format.shortLabel, current == format) { onSelect(format); expanded = false }
+            }
         }
     }
 }

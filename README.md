@@ -16,7 +16,7 @@ and the agent deduces how those pieces interact.
 > inference/uncertainty flag, and the generation/format it's based on.
 
 It serves two blended use cases: **competitive team-building** (filter queries,
-mechanics reasoning, battle math across six data scopes) and **whole-games
+mechanics reasoning, battle math across eleven data scopes) and **whole-games
 curiosity** (lookups, evolutions, matchups, where-to-catch, in-game trivia,
 glitches, Mystery Dungeon).
 
@@ -65,20 +65,19 @@ the design intent.
   matchups) with clickable entity links and citations.
 - **Image input (vision)** — attach up to 4 images per turn ("what is this?",
   "rate this team sheet"); all three models are vision-capable.
-- **Multi-generation scope** — the typed competitive tools read one of **six
-  data scopes**: **Pokémon Champions**, Gen 9 / Scarlet-Violet, and mainline
-  **Gens 5–8** (Sword/Shield, Sun/Moon–USUM, XY/ORAS, Black/White). New
-  conversations default to **Champions**. The scope is **resolved per turn on
-  the server** — an explicit mention ("analyze my **gen 7** team", "in
-  **Scarlet and Violet**…") switches it; otherwise the conversation stays in its
-  current scope. The header **scope chip** is interactive: tap it to pick any of
-  the six scopes (seeding the next message), and it always shows which game the
-  current answer is based on, so a wrong guess is a one-tap correction rather
-  than a silently mis-scoped answer. In Champions scope, if you ask about
-  something that only exists in mainline Gen 9, Oak says so and points you at
-  the scope chip. Gens 1–4 have no dedicated typed-tool index — those questions
-  proceed in the standard data scope and are answered honestly from the global
-  warehouse and wiki corpus, with the basis flagged.
+- **Multi-generation scope** — the typed competitive tools read one of **eleven
+  data scopes**: **National Dex** (all battle-relevant forms), **Pokémon
+  Champions**, Gen 9 / Scarlet-Violet, and mainline **Gens 1–8**
+  (Sword/Shield, Sun/Moon–USUM, XY/ORAS, Black/White, Diamond/Pearl, Emerald,
+  Red/Blue). New conversations default to **National Dex**. The scope is
+  **resolved per turn on the server** — an explicit mention ("analyze my **gen
+  7** team", "in **Scarlet and Violet**…", "for **gen 2**") switches it;
+  otherwise the conversation stays in its current scope. The header **scope
+  chip** is interactive: tap it to pick any of the eleven scopes (seeding the
+  next message), and it always shows which game the current answer is based on,
+  so a wrong guess is a one-tap correction rather than a silently mis-scoped
+  answer. In Champions scope, if you ask about something that only exists in
+  mainline Gen 9, Oak says so and points you at the scope chip.
 - **Admin panel** (operator-only) — a private, **read-only** `/admin` dashboard
   for the single owner: usage/growth, estimated cost by model, error rollups,
   per-turn drill-down, a live view, and read-only account/conversation/team
@@ -110,7 +109,7 @@ flowchart TB
     end
 
     subgraph edge["HTTP edge — src/app/api/chat/route.ts"]
-        ROUTE["Validate · rate limit · image checks<br/>deterministic scope resolution (six scopes)"]
+        ROUTE["Validate · rate limit · image checks<br/>deterministic scope resolution (eleven scopes)"]
     end
 
     subgraph loop["Agent loop — src/agent/runtime.ts (provider-agnostic, ≤10 iterations)"]
@@ -134,7 +133,7 @@ flowchart TB
     end
 
     REPOS["Repos — src/data/repos/<br/>(sole Postgres readers)"]
-    PG[("Postgres<br/>six @pkmn format indexes · natdex warehouse<br/>wiki corpus · accounts / conversations / teams")]
+    PG[("Postgres<br/>eleven @pkmn format indexes · natdex warehouse<br/>wiki corpus · accounts / conversations / teams")]
     REDIS[("Redis (or in-process)<br/>guest sessions · rate limiter · OTP throttle")]
     ANSWER["OakAnswer (Zod-validated)"]
 
@@ -211,7 +210,7 @@ snapshot files, never the network). Four sources feed it, plus one separately-ru
 exception:
 
 1. **`@pkmn` format indexes** — Pokémon, moves, abilities, items, types, and
-   learnsets for the six data scopes, from the local `@pkmn` npm packages
+   learnsets for the eleven data scopes, from the local `@pkmn` npm packages
    (the gen scopes come from `Dex.forGen(n)`).
 2. **The national-dex warehouse** (backing `run_sql`) — committed snapshots in
    `web/src/ingest/data/`, rebuilt manually and rarely via `npm run fetch:natdex`

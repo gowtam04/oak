@@ -42,7 +42,7 @@ import {
   CHAMPIONS_FORMAT,
   isFormat,
   modeForFormat,
-  STANDARD_FORMAT,
+  NATDEX_FORMAT,
   type Format,
 } from "@/data/formats";
 import { detectScopeSignal } from "@/lib/scope/detect-scope";
@@ -212,17 +212,19 @@ export async function POST(req: Request): Promise<Response> {
   // ACTUAL scope is RESOLVED below from a five-tier precedence chain:
   //   (explicit in-message signal) > (scope_seed chip pick) >
   //   (conversation's sticky scope) > (legacy champions_mode seed) >
-  //   (champions default).
+  //   (National Dex default).
   // Explicit chip pick — ranks above sticky (fresh user intent).
   const explicitSeed: Format | undefined = body.scope_seed;
   // DEPRECATED champions_mode — old iOS builds always send a concrete boolean.
-  // Ranks BELOW sticky (preserves BR-H6 resume semantics).
+  // Ranks BELOW sticky (preserves BR-H6 resume semantics). A toggle-OFF now maps
+  // to National Dex (the new default), not scarlet-violet — a legacy client that
+  // never opted into Champions lands in the broad whole-dex scope.
   const legacySeed: Format | undefined =
     body.champions_mode === undefined
       ? undefined
       : body.champions_mode
         ? CHAMPIONS_FORMAT
-        : STANDARD_FORMAT;
+        : NATDEX_FORMAT;
 
   // 2. Orchestration guardrails — input-length cap + TIERED rate limit
   //    (integration.md § Guardrails; account-creation design.md § API Design
@@ -290,8 +292,8 @@ export async function POST(req: Request): Promise<Response> {
         // The rate-limit gate runs BEFORE scope resolution (it must stay cheap,
         // pre-history, before the sticky scope is even loaded), so record the
         // best seed-derived mode available at this point: explicit chip pick >
-        // legacy champions_mode > the champions default.
-        mode: modeForFormat(explicitSeed ?? legacySeed ?? CHAMPIONS_FORMAT),
+        // legacy champions_mode > the National Dex default.
+        mode: modeForFormat(explicitSeed ?? legacySeed ?? NATDEX_FORMAT),
         status: "rate_limited",
         inputTokens: 0,
         outputTokens: 0,
@@ -391,29 +393,21 @@ export async function POST(req: Request): Promise<Response> {
   //     Five-tier precedence: an explicit, high-precision in-message signal wins
   //     over an explicit scope_seed chip pick, which wins over the
   //     conversation's sticky scope, which wins over the legacy champions_mode
-  //     seed, which falls back to the champions default. The lexicon is
+  //     seed, which falls back to the National Dex default. The lexicon is
   //     DETERMINISTIC — no LLM pre-pass. `mode` then flows downstream exactly as
   //     before (ctx / formatForMode(mode) at persist / turn_record).
-  //     An in-message signal wins: a supported gen resolves to its format; an
-  //     EXPLICITLY named but un-indexed generation (Gens 1–4) resolves to the
-  //     broad STANDARD (national-dex) data scope — the honest-decline
-  //     short-circuit is GONE (oak-v2 §3). Gens 1–4 are now answerable: the typed
-  //     tools default to the broad Gen 9 index while the answer leans on the
-  //     whole-games tools (run_sql over natdex_*, search_wiki), which the single
-  //     canonical prompt body routes to.
+  //     Every generation (including Gens 1–4) is now a first-class scope, and a
+  //     whole-dex phrase ("national dex", "all Pokémon") resolves to National
+  //     Dex; the detector only ever returns a real format now (the old
+  //     `unsupported` honest-decline arm is GONE — oak-v2 §3 / National Dex).
   const detection = detectScopeSignal(message);
-  const messageFormat: Format | undefined =
-    detection?.kind === "scope"
-      ? detection.format
-      : detection?.kind === "unsupported"
-        ? STANDARD_FORMAT
-        : undefined;
+  const messageFormat: Format | undefined = detection?.format;
   const format: Format =
     messageFormat ??
     explicitSeed ??
     stickyFormat ??
     legacySeed ??
-    CHAMPIONS_FORMAT;
+    NATDEX_FORMAT;
   const mode: AgentMode = modeForFormat(format);
 
   // Observability for tuning the lexicon later (§3.4 step 3): one structured
@@ -425,12 +419,8 @@ export async function POST(req: Request): Promise<Response> {
         request_id: requestId,
         session_id,
         matched: detection.matched,
-        from: explicitSeed ?? stickyFormat ?? legacySeed ?? CHAMPIONS_FORMAT,
+        from: explicitSeed ?? stickyFormat ?? legacySeed ?? NATDEX_FORMAT,
         to: format,
-        // A named-but-unindexed gen (1–4) resolves to STANDARD but is still worth
-        // surfacing so the lexicon's older-gen coverage can be tuned later.
-        unsupported_gen:
-          detection.kind === "unsupported" ? detection.label : undefined,
       },
       "oak_scope_signal",
     );
@@ -551,9 +541,8 @@ export async function POST(req: Request): Promise<Response> {
   }
   const turn = started;
 
-  // How the scope was resolved — surfaced on the `scope` event (GS-C). A
-  // named-but-unindexed gen resolves to a STANDARD data scope via an in-message
-  // signal, so `detection` present ⇒ "message".
+  // How the scope was resolved — surfaced on the `scope` event (GS-C). Any
+  // in-message signal is message-sourced, so `detection` present ⇒ "message".
   const scopeSource: ScopeEvent["source"] = detection
     ? "message"
     : explicitSeed

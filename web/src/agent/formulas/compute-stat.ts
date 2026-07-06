@@ -204,3 +204,89 @@ export function computeStatChampions(p: ComputeStatParams): ComputeStatResult {
     inputs_echo,
   };
 }
+
+/**
+ * Gen 1/2 stat formula (National Dex scope feature): Determinant Values
+ * (0–15, the Gen 1/2 predecessor to IVs) and Stat Experience (the predecessor
+ * to EVs) — no natures, which were introduced in Gen 3. One function covers
+ * both generations: @pkmn's Gen 1 dex already encodes the unified Special stat
+ * as identical `spa`/`spd` base values, so `base_stat` works unchanged for
+ * either gen's Special/Special Attack/Special Defense.
+ *
+ *   DV      = clamp(round(IV * 15/31), 0, 15) (maps a modern 0–31 IV onto the
+ *             0–15 DV scale; 31 -> 15, 0 -> 0)
+ *   StatExp = floor(min(EV, 252) / 4)         (the EV input doubles as a
+ *             Stat Experience proxy)
+ *   core    = 2*(Base + DV) + StatExp
+ *   inner   = floor(core * Level / 100)
+ *   HP:     inner + Level + 10
+ *   non-HP: inner + 5                         (no nature multiplier)
+ *
+ * Shedinja doesn't exist before Gen 3, but the base-HP-1 edge case is kept for
+ * defensive symmetry with {@link computeStat}.
+ */
+export function computeStatGen12(p: ComputeStatParams): ComputeStatResult {
+  const is_hp = p.is_hp ?? false;
+  const iv = p.iv ?? 31;
+  const ev = p.ev ?? 0;
+  const level = p.level ?? 50;
+  const base_stat = p.base_stat;
+
+  if (!isInteger(base_stat) || base_stat < 1) {
+    return {
+      error: "invalid_input",
+      detail: "base_stat must be an integer >= 1",
+    };
+  }
+  if (!isInteger(iv) || iv < 0 || iv > 31) {
+    return { error: "invalid_input", detail: "iv must be 0..31" };
+  }
+  if (!isInteger(ev) || ev < 0 || ev > 252) {
+    return { error: "invalid_input", detail: "ev must be 0..252" };
+  }
+  if (!isInteger(level) || level < 1 || level > 100) {
+    return { error: "invalid_input", detail: "level must be 1..100" };
+  }
+
+  const dv = Math.min(15, Math.max(0, Math.round((iv * 15) / 31)));
+  const statExp = Math.floor(Math.min(ev, 252) / 4);
+  const inputs_echo: Record<string, unknown> = {
+    base_stat,
+    iv,
+    ev,
+    level,
+    is_hp,
+    dv,
+    stat_exp: statExp,
+    model: "gen-1-2",
+  };
+
+  const core = 2 * (base_stat + dv) + statExp;
+  const inner = Math.floor((core * level) / 100);
+
+  if (is_hp) {
+    // Shedinja edge case (post-Gen-3 species, kept for defensive symmetry).
+    if (base_stat === 1) {
+      return {
+        value: 1,
+        breakdown: "Shedinja: HP is always 1 (special case)",
+        inputs_echo,
+      };
+    }
+
+    const value = inner + level + 10;
+    const breakdown =
+      `Gen 1/2: DV ${dv} (from IV ${iv}), Stat-Exp term floor(min(${ev},252)/4) = ${statExp}; ` +
+      `floor((2*(${base_stat}+${dv}) + ${statExp}) * ${level} / 100) = ${inner}; ` +
+      `${inner} + ${level} + 10 = ${value}`;
+    return { value, breakdown, inputs_echo };
+  }
+
+  // non-HP — no nature (Gen 1/2 predates natures)
+  const value = inner + 5;
+  const breakdown =
+    `Gen 1/2: DV ${dv} (from IV ${iv}), Stat-Exp term floor(min(${ev},252)/4) = ${statExp}, no Nature; ` +
+    `floor((2*(${base_stat}+${dv}) + ${statExp}) * ${level} / 100) = ${inner}; ` +
+    `${inner} + 5 = ${value}`;
+  return { value, breakdown, inputs_echo };
+}

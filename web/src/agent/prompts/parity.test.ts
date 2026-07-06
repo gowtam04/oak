@@ -39,8 +39,12 @@ function fullBody(mode: Parameters<typeof domainForMode>[0]): string {
 }
 
 describe("scope facts — the fact table backs every mainline scope", () => {
-  it("covers exactly the expected mainline scopes (standard + gen-5…gen-8)", () => {
+  it("covers exactly the expected mainline scopes (standard + gen-1…gen-8)", () => {
     expect([...MAINLINE_MODES].sort()).toEqual([
+      "gen-1",
+      "gen-2",
+      "gen-3",
+      "gen-4",
       "gen-5",
       "gen-6",
       "gen-7",
@@ -96,9 +100,43 @@ describe("scope facts — the Champions body is Champions-correct", () => {
   });
 });
 
-describe("scope facts — the body names all six data-scope formats", () => {
+describe("scope facts — the National Dex body is whole-dex + form-aware", () => {
+  const text = fullBody("national-dex");
+
+  it("frames the scope as the whole National Pokédex", () => {
+    expect(text).toContain("National Pokédex");
+  });
+
+  it("routes form-aware whole-dex questions to the pokemon@national-dex partition", () => {
+    expect(text).toContain("pokemon@national-dex");
+  });
+
+  it("carries the national-dex basis tag", () => {
+    expect(text).toContain('generation: "national-dex"');
+  });
+});
+
+describe("scope facts — the whole-dex routing mandate rides EVERY scope's body", () => {
+  // The strengthened run_sql routing bullet is in the SHARED body, so every
+  // scope teaches slot-order normalization for type-combination existence.
+  for (const mode of [
+    "standard",
+    "champions",
+    "national-dex",
+    "gen-1",
+    "gen-8",
+  ] as const) {
+    it(`names LEAST/GREATEST slot-order normalization (${mode})`, () => {
+      const text = fullBody(mode);
+      expect(text).toContain("LEAST(type1,type2)");
+      expect(text).toContain("GREATEST(type1,type2)");
+    });
+  }
+});
+
+describe("scope facts — the body names all eleven data-scope formats", () => {
   // The injected warehouse DDL documents the `format` partition set, so run_sql
-  // knows every scope. This is the single place all six format strings must
+  // knows every scope. This is the single place all eleven format strings must
   // appear together — a new/renamed format trips this.
   it("mentions every format from formats.ts", () => {
     const text = fullBody("standard");

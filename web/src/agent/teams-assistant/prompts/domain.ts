@@ -124,10 +124,10 @@ ${info.mechanicsNotes}
   IVs default to 31, and level defaults to 50. Give every battle-ready member a
   held item, four legal moves, an ability, a nature, and a purposeful EV
   spread — explain the spread's intent in your reply.${
-    info.basisTag === "gen-9"
+    info.basisTag === "gen-9" || info.basisTag === "national-dex"
       ? `
 - \`tera_type\` is the member's Tera type — recommend one deliberately (it's a
-  Gen 9 team's key lever).`
+  key modern lever).`
       : `
 - \`tera_type\` does not apply in this generation — always leave it null.`
   }
@@ -136,6 +136,29 @@ ${TOOL_ROUTING}
 
 ${OUTPUT_CONTRACT}`;
 }
+
+/**
+ * National Dex builder facts — the whole-dex REFERENCE scope (Oak's default).
+ * Shaped as a {@link MainlineGenInfo} so it reuses `mainlineSystemPrompt`
+ * verbatim; `basisTag: "national-dex"` selects the Tera-applies clause there
+ * (National Dex rides modern Gen 9 rules). Not part of `MAINLINE_GEN_INFO`
+ * (which is the single-game per-gen table) — National Dex is a hand-authored
+ * scope like Champions.
+ */
+const NATDEX_BUILDER_INFO: MainlineGenInfo = {
+  basisTag: "national-dex",
+  label: "the National Dex (all Pokémon, every generation)",
+  gamesShort: "the National Dex",
+  mechanicsNotes: `National Dex builder facts: reason with modern Gen 9 rules —
+Terastallization is the battle gimmick, there are 18 types (Fairy included), and
+the standard EV/IV/nature stat system applies.
+- This is a permissive REFERENCE build with NO single-game legality gate: any
+  species or form from any generation is fair game (Mega Evolutions, regional
+  forms, past-generation Pokémon). Still keep every member internally legal —
+  confirm its moves with get_learnset and its ability with get_pokemon.`,
+  encountersNote: `National Dex spans every generation, so lean on your tools for
+any per-form legality rather than assuming a single game's roster.`,
+};
 
 const MAINLINE_FEW_SHOT = `# Worked examples
 
@@ -233,7 +256,10 @@ export function builderDomainForMode(mode: AgentMode): PromptDomain {
       fewShot: CHAMPIONS_FEW_SHOT,
     };
   }
-  const info = MAINLINE_GEN_INFO[mode as MainlineMode];
+  const info =
+    mode === "national-dex"
+      ? NATDEX_BUILDER_INFO
+      : MAINLINE_GEN_INFO[mode as MainlineMode];
   return {
     systemPrompt: mainlineSystemPrompt(info),
     fewShot: MAINLINE_FEW_SHOT,
