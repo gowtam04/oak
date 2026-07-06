@@ -18,5 +18,7 @@ export function titleizeSlug(value: string | null, empty = "Empty"): string {
 export function formatLabel(format: string): string {
   if (format === "champions") return "Champions";
   if (format === "scarlet-violet") return "Scarlet/Violet";
+  if (format === "national-dex") return "National Dex";
+  if (format.startsWith("gen-")) return `Gen ${format.slice("gen-".length)}`;
   return format;
 }

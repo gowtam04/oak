@@ -62,14 +62,18 @@ import type {
 
 /** Human format/generation tag shown on every artifact (AV-US-9). */
 function generationLabel(format: Format): string {
-  return format === "champions"
-    ? `Champions — ${CHAMPIONS_REGULATION}`
-    : "Scarlet/Violet (Gen 9)";
+  if (format === "champions") return `Champions — ${CHAMPIONS_REGULATION}`;
+  if (format === "scarlet-violet") return "Scarlet/Violet (Gen 9)";
+  if (format === "national-dex") return "National Dex (all generations)";
+  return formatName(format);
 }
 
 /** Short, readable format name for fallback notes. */
 function formatName(format: Format): string {
-  return format === "champions" ? "Champions" : "Scarlet/Violet";
+  if (format === "champions") return "Champions";
+  if (format === "scarlet-violet") return "Scarlet/Violet";
+  if (format === "national-dex") return "National Dex";
+  return `Gen ${format.slice("gen-".length)}`;
 }
 
 /** Title-case a slug ("rough-skin" → "Rough Skin", "ground" → "Ground"). */

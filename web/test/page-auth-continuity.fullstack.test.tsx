@@ -212,10 +212,11 @@ describe("Home — guest → sign-in → sign-out thread continuity (BR-A10)", (
     // ── Step 3 — sign in MID-THREAD (request code → enter code → verify) ────────
     await signIn();
 
-    // The guest thread is imported under the champions default (no scope ever
-    // resolved for this default-scoped session), and carries no champions_mode.
+    // The guest thread is imported under the national-dex default (no scope
+    // ever resolved for this default-scoped session), and carries no
+    // champions_mode.
     await waitFor(() => expect(importBodies).toHaveLength(1));
-    expect(importBodies[0]!.format).toBe("champions");
+    expect(importBodies[0]!.format).toBe("national-dex");
     expect(importBodies[0]!.champions_mode).toBeUndefined();
 
     // Menu now reflects the signed-in account: email + Sign out, no "Sign in".
