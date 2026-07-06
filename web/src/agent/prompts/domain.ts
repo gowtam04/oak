@@ -34,6 +34,7 @@
  */
 
 import { CHAMPIONS_PROFILE } from "@/agent/prompts/champions";
+import { NATDEX_PROFILE } from "@/agent/prompts/natdex";
 import {
   MAINLINE_GEN_INFO,
   type MainlineGenInfo,
@@ -112,7 +113,13 @@ say otherwise.
   data, independent of the active competitive scope; Oak has no live web tool, so
   a time-sensitive fact neither covers is answered honestly rather than
   fabricated. Oak answers about the GAMES only, NOT the anime, movies, TV, or
-  manga (decline those — see Answer policy).`,
+  manga (decline those — see Answer policy).
+- WHOLE-POKÉDEX questions cross every generation and form, so they are NEVER
+  answered from this game's roster: a count/superlative across all Pokémon, or
+  "which type combinations exist / are still missing", MUST be answered with
+  run_sql over the national-dex warehouse (the form-aware \`pokemon@national-dex\`
+  partition when non-default forms can matter) — the format-scoped typed tools
+  only see ${info.gamesShort} and will undercount.`,
     mechanicsSection: info.mechanicsNotes,
     toolNotes: `- For any stat or damage math, use compute_stat with the level, EV,
   IV, and nature you're modeling; it floors at each step so you never do the
@@ -222,11 +229,33 @@ ${p.toolNotes}
   counts and superlatives (how many purple Pokémon; species whose national-dex
   number equals their base-stat total), cross-evolution comparisons (catch rate vs
   pre-evolution; dual-type → monotype on evolution), unique type combinations,
-  TM/HM locations, and cross-generation move facts (natdex_moves is the ONLY source
-  covering Gens 1–4, where the per-format learnset index stops). The exposed tables
+  TM/HM locations, and cross-generation move facts (natdex_moves is the
+  cross-generation source for move facts, including Gens 1–4). The exposed tables
   and columns are in "# Warehouse schema" below — write SQL against THAT schema. It
   is also how you VERIFY a factual premise (e.g. which generation a move was
   introduced). On error, read the \`hint\`, fix the SQL, and retry.
+  - **A whole-Pokédex question MUST go through run_sql in EVERY scope** — even the
+    competitive ones. "How many Pokémon are <X>", "which type combinations have no
+    Pokémon", "list every Pokémon that <predicate>" are NOT answerable from the
+    format-scoped typed tools (which only see the active game's roster), so route
+    them to run_sql over the national-dex warehouse regardless of the active scope.
+  - **FORM-AWARE vs SPECIES-LEVEL.** If the question can hinge on a NON-DEFAULT
+    form (Rotom appliance forms, Galarian/Alolan/Hisuian/Paldean forms, Megas,
+    Darmanitan-Galar-Zen, …) — e.g. "which type combinations exist / are missing",
+    "which Pokémon are Electric/Fire" — you MUST query the FORM-AWARE partition:
+    the \`pokemon\` table filtered to \`format='national-dex'\` (\`pokemon@national-dex\`),
+    which carries one row per battle-relevant form. The species-level
+    \`natdex_species\` table is DEFAULT FORMS ONLY, so a form-only type combination
+    (e.g. Rotom-Heat's Electric/Fire) reads as MISSING there — only use
+    natdex_species for genuinely species-level facts (color, shape, catch rate,
+    base-stat totals, evolves_from).
+  - **TYPE-COMBINATION EXISTENCE — normalize slot order.** \`type1\`/\`type2\` slot
+    order is canonical game data, NOT semantic: a combo may be stored as either
+    (type1,type2) or (type2,type1). Normalize with
+    \`LEAST(type1,type2)\`/\`GREATEST(type1,type2)\` (or check both orderings) so a
+    mirrored pair isn't double-counted or wrongly read as missing, and treat
+    mono-type rows (\`type2 IS NULL\`) as their OWN separate case — never conflate a
+    mono-type with a dual-type combination.
 - **search_wiki** — full-text search over the community Pokémon wiki
   (pokemon.fandom.com) for GAME content the structured data doesn't carry: in-game
   locations, routes and towns, glitches, in-game mechanics and events, item and
@@ -642,6 +671,12 @@ const CHAMPIONS_DOMAIN: PromptDomain = {
   fewShot: buildFewShot(CHAMPIONS_PROFILE),
 };
 
+/** The National Dex domain — built once from the whole-dex reference profile. */
+const NATDEX_DOMAIN: PromptDomain = {
+  systemPrompt: buildSystemBody(NATDEX_PROFILE),
+  fewShot: buildFewShot(NATDEX_PROFILE),
+};
+
 /** Per-scope cache of the built mainline domain (byte-stable prompt prefix). */
 const standardDomainCache = new Map<AgentMode, PromptDomain>();
 
@@ -658,13 +693,15 @@ function cachedMainlineDomain(mode: MainlineMode): PromptDomain {
 }
 
 /**
- * The single canonical domain body for a turn's scope. Champions returns its
- * profile-built body; every mainline scope ("standard" = Gen 9, plus
- * "gen-5"…"gen-8") builds from its {@link MAINLINE_GEN_INFO} entry. All three
- * providers wrap the SAME body — the per-provider fork is gone.
+ * The single canonical domain body for a turn's scope. Champions and National Dex
+ * return their hand-authored profile-built bodies; every mainline single-game
+ * scope ("standard" = Gen 9, plus "gen-1"…"gen-8") builds from its
+ * {@link MAINLINE_GEN_INFO} entry. All three providers wrap the SAME body — the
+ * per-provider fork is gone.
  */
 export function domainForMode(mode: AgentMode): PromptDomain {
   if (mode === "champions") return CHAMPIONS_DOMAIN;
+  if (mode === "national-dex") return NATDEX_DOMAIN;
   return cachedMainlineDomain(mode);
 }
 

@@ -45,8 +45,11 @@ describe("buildSystemSegments — cache breakpoint invariant", () => {
     it(`places exactly one breakpoint on the last segment (${provider})`, () => {
       oneBreakpointOnLast(buildSystemSegments({ provider, mode: "standard" }));
       oneBreakpointOnLast(buildSystemSegments({ provider, mode: "champions" }));
+      // National Dex (the default) is its own hand-authored scope profile.
+      oneBreakpointOnLast(buildSystemSegments({ provider, mode: "national-dex" }));
       // A gen scope builds its own per-scope prefix — same breakpoint invariant.
       oneBreakpointOnLast(buildSystemSegments({ provider, mode: "gen-7" }));
+      oneBreakpointOnLast(buildSystemSegments({ provider, mode: "gen-1" }));
     });
   }
 });
@@ -56,7 +59,13 @@ describe("Claude + Grok styles — byte-identical pass-throughs of the one body"
   // for EVERY scope they serve — the collapse means Grok is no longer a separate
   // XML body, so it matches Claude byte-for-byte.
   for (const provider of ["anthropic", "xai"] as const) {
-    for (const mode of ["standard", "gen-7", "champions"] as const) {
+    for (const mode of [
+      "standard",
+      "gen-7",
+      "gen-1",
+      "national-dex",
+      "champions",
+    ] as const) {
       it(`is exactly [systemPrompt, fewShot] for ${provider} / ${mode}`, () => {
         const domain = domainForMode(mode);
         expect(buildSystemSegments({ provider, mode })).toEqual([

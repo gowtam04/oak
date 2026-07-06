@@ -43,7 +43,7 @@ export interface Conversation {
   id: string;
   accountId: string;
   title: string;
-  format: string; // "scarlet-violet" | "champions"
+  format: string; // a Format literal — "national-dex" (default) | "champions" | "scarlet-violet" | "gen-1"…"gen-8"
   pinned: boolean;
   createdAt: number;
   updatedAt: number;

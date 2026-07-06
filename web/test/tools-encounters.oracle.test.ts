@@ -187,6 +187,26 @@ describe("get_encounters oracle (T14)", () => {
     expect(detail.scope_note ?? null).toBeNull();
   });
 
+  it("gen-3 scope (a National Dex-era gen), species with no gen-3 groups → scope_note set, all groups flagged false", async () => {
+    ensureLoaded();
+    const gen3Ctx = { ...ctx, mode: "gen-3" } as AgentContext;
+    const out = await dispatch("get_encounters", { name: "garchomp" }, gen3Ctx);
+    parse(out);
+    const detail = out as {
+      found: true;
+      encounters: { in_active_scope?: boolean }[];
+      scope_note?: string | null;
+    };
+    expect(detail.encounters.length).toBe(2);
+    for (const group of detail.encounters) {
+      expect(group.in_active_scope).toBe(false);
+    }
+    expect(detail.scope_note).toBe(
+      "No Generation 3 catch locations are recorded for this Pokémon; the " +
+        "locations below are from other generations' games.",
+    );
+  });
+
   it("gen-5 scope, species with no gen-5 groups → scope_note set, all groups kept and flagged false", async () => {
     ensureLoaded();
     const gen5Ctx = { ...ctx, mode: "gen-5" } as AgentContext;

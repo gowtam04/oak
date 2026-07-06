@@ -12,8 +12,10 @@
  *     No `server-only`, no `@/env`, no SDK, no DB.
  *   - DETERMINISTIC lexicon — NO LLM pre-pass. First-match-wins over an ordered
  *     rule list; Champions rules are checked FIRST (an explicit "champions" is
- *     the strongest signal), then explicit "gen N" numbers, then per-format game
- *     / region / mechanic keywords.
+ *     the strongest signal), then the National Dex "whole-dex" phrases (which
+ *     deliberately beat an incidental gen mention — a "national dex" / "all
+ *     Pokémon" request wants the whole-dex scope, not one game), then explicit
+ *     "gen N" numbers, then per-format game / region / mechanic keywords.
  *   - PRECISION OVER RECALL. When in doubt we return `null` and let the caller's
  *     stickiness (conversation scope → toggle seed) win. Ambiguous single English
  *     words ("sun", "sword", "black", "x", "y") never fire alone — they require
@@ -23,29 +25,27 @@
  *     the bare region name ("alola", "galar", "paldea") already excludes the
  *     "-n"/"-ian" adjective forms. "mega" is never a signal (Megas exist in
  *     Champions and Gens 6–7).
- *   - Gens 1–4 are out of scope (GS-D1) but still DETECTED, as an `unsupported`
- *     result, so the route can answer honestly ("I don't have Gen 3 data yet")
- *     instead of silently replying from Gen 9 data.
+ *   - Gens 1–4 are now FIRST-CLASS scopes (National Dex feature): a named Gen 1–4
+ *     game or region resolves to that gen's format exactly like Gens 5–9.
+ *     Ambiguous game words (gold, pearl, red, ruby, sapphire, diamond) fire ONLY
+ *     as their game PAIR; the qualified remakes (BDSP → gen-8, ORAS → gen-6, HGSS
+ *     → gen-4) are matched EARLIER in the rule list so they win over the bare pair.
  */
 
 import type { Format } from "@/data/formats";
 
 /**
  * The result of scanning a message for a scope signal:
- *   - `{ kind: "scope", … }`    a supported format was named explicitly.
- *   - `{ kind: "unsupported", … }` a Gen 1–4 game was named (not yet ingested).
- *   - `null`                     no explicit signal — fall back to stickiness.
+ *   - `{ kind: "scope", … }`  a format was named explicitly.
+ *   - `null`                  no explicit signal — fall back to stickiness.
  * `matched` is the lexicon phrase that fired, kept for structured logging + tests.
  */
 export type ScopeDetection =
   | { kind: "scope"; format: Format; matched: string }
-  | { kind: "unsupported"; label: string; matched: string }
   | null;
 
 /** What a rule resolves to when it fires. */
-type RuleTarget =
-  | { kind: "scope"; format: Format }
-  | { kind: "unsupported"; label: string };
+type RuleTarget = { kind: "scope"; format: Format };
 
 interface Rule {
   target: RuleTarget;
@@ -74,18 +74,21 @@ function scope(format: Format, match: (m: string) => string | null): Rule {
   return { target: { kind: "scope", format }, match };
 }
 
-function unsupported(label: string, match: (m: string) => string | null): Rule {
-  return { target: { kind: "unsupported", label }, match };
-}
-
 /**
  * Ordered lexicon (first match wins). All patterns are case-insensitive and use
  * `\b` word boundaries over the RAW message. Ordering:
- *   1. Champions (strongest explicit signal — checked before everything else).
- *   2. Explicit "gen N" numbers (unambiguous; a supported gen beats a named
- *      region elsewhere in the same message, and beats an unsupported gen).
- *   3. Per-format game / region / mechanic keywords, Gen 9 → 5.
- *   4. Gen 1–4 (regions + numbers) as `unsupported`.
+ *   1.  Champions (strongest explicit signal — checked before everything else).
+ *   1b. National Dex "whole-dex" phrases — placed right after Champions and
+ *       BEFORE any gen signal, so a whole-dex request ("national dex", "all
+ *       Pokémon") deliberately BEATS an incidental gen mention in the same
+ *       message (this is the production incident: "check the national dex" must
+ *       widen scope rather than stick to one game).
+ *   2.  Explicit "gen N" numbers 1–9 (unambiguous; a named gen beats a named
+ *       region elsewhere in the same message).
+ *   3.  Per-format game / region / mechanic keywords, Gen 9 → 5.
+ *   4.  Gen 1–4 games / regions. Ambiguous game words fire only as their game
+ *       PAIR; the qualified remakes (BDSP/ORAS in §3, HGSS below) are matched
+ *       earlier so they win over the bare pair.
  *
  * NOTE (known tradeoff, per the plan): a VGC "regulation X" phrase maps to
  * Champions even though Scarlet/Violet has its own regulation letters — the plan
@@ -96,16 +99,22 @@ const RULES: readonly Rule[] = [
   scope("champions", on(/\bchampions\b/i)),
   scope("champions", on(/\breg(?:ulation)?\s+[a-z](?:-[a-z])?\b/i)),
 
+  // ── 1b. National Dex (whole-dex intent — beats an incidental gen mention) ─
+  scope("national-dex", on(/\bnational\s+(?:dex|pok[eé]dex)\b/i)),
+  scope("national-dex", on(/\bwhole\s+(?:dex|pok[eé]dex)\b/i)),
+  scope("national-dex", on(/\ball\s+pok[eé]mon\b/i)),
+  scope("national-dex", on(/\bevery\s+pok[eé]mon\b/i)),
+
   // ── 2. Explicit generation numbers ──────────────────────────────────────
   scope("scarlet-violet", on(/\bgen(?:eration)?\s*9\b/i)),
   scope("gen-8", on(/\bgen(?:eration)?\s*8\b/i)),
   scope("gen-7", on(/\bgen(?:eration)?\s*7\b/i)),
   scope("gen-6", on(/\bgen(?:eration)?\s*6\b/i)),
   scope("gen-5", on(/\bgen(?:eration)?\s*5\b/i)),
-  unsupported("gen-4", on(/\bgen(?:eration)?\s*4\b/i)),
-  unsupported("gen-3", on(/\bgen(?:eration)?\s*3\b/i)),
-  unsupported("gen-2", on(/\bgen(?:eration)?\s*2\b/i)),
-  unsupported("gen-1", on(/\bgen(?:eration)?\s*1\b/i)),
+  scope("gen-4", on(/\bgen(?:eration)?\s*4\b/i)),
+  scope("gen-3", on(/\bgen(?:eration)?\s*3\b/i)),
+  scope("gen-2", on(/\bgen(?:eration)?\s*2\b/i)),
+  scope("gen-1", on(/\bgen(?:eration)?\s*1\b/i)),
 
   // ── 3a. Gen 9 / Scarlet-Violet ──────────────────────────────────────────
   scope("scarlet-violet", on(/\bscarlet\b/i)),
@@ -164,18 +173,38 @@ const RULES: readonly Rule[] = [
   scope("gen-5", on(/\bwhite\s*2\b/i)),
   scope("gen-5", all("black & white", /\bblack\b/i, /\bwhite\b/i)),
 
-  // ── 4. Gens 1–4 (out of scope — detected so the route answers honestly) ──
-  unsupported("gen-1", on(/\bkanto\b/i)),
-  unsupported("gen-2", on(/\bjohto\b/i)),
-  unsupported("gen-3", on(/\bhoenn\b/i)),
-  unsupported("gen-4", on(/\bsinnoh\b/i)),
-  unsupported("gen-4", on(/\bplatinum\b/i)),
-  unsupported("gen-4", on(/\bhgss\b/i)),
-  unsupported("gen-4", on(/\bheart\s*gold\b/i)),
-  unsupported("gen-4", on(/\bsoul\s*silver\b/i)),
-  unsupported("gen-3", on(/\bfrlg\b/i)),
-  unsupported("gen-3", on(/\bfire\s*red\b/i)),
-  unsupported("gen-3", on(/\bleaf\s*green\b/i)),
+  // ── 4. Gens 1–4 (now first-class scopes) ────────────────────────────────
+  // Regions are unambiguous single tokens.
+  scope("gen-1", on(/\bkanto\b/i)),
+  scope("gen-2", on(/\bjohto\b/i)),
+  scope("gen-3", on(/\bhoenn\b/i)),
+  scope("gen-4", on(/\bsinnoh\b/i)),
+  // Gen 4 — Sinnoh singles + the HGSS remakes. These multi-word remake names
+  // must precede the bare "gold & silver" pair below (first-match-wins), so
+  // "heart gold" resolves to gen-4, not the Gen 2 pair.
+  scope("gen-4", on(/\bplatinum\b/i)),
+  scope("gen-4", on(/\bhgss\b/i)),
+  scope("gen-4", on(/\bheart\s*gold\b/i)),
+  scope("gen-4", on(/\bsoul\s*silver\b/i)),
+  // Gen 3 — FRLG remakes + unambiguous singles ("emerald").
+  scope("gen-3", on(/\bfrlg\b/i)),
+  scope("gen-3", on(/\bfire\s*red\b/i)),
+  scope("gen-3", on(/\bleaf\s*green\b/i)),
+  scope("gen-3", on(/\bemerald\b/i)),
+  // Gen 2 — unambiguous single ("crystal").
+  scope("gen-2", on(/\bcrystal\b/i)),
+  // Gen 1 — unambiguous token.
+  scope("gen-1", on(/\brby\b/i)),
+  // Ambiguous game words — ONLY as their game PAIR (precision: a lone "gold",
+  // "pearl", "red", "ruby", "sapphire", or "diamond" is a common English word).
+  // The qualified remakes fire FIRST via rule order — BDSP → gen-8 and ORAS →
+  // gen-6 in §3, HGSS → gen-4 above — so "brilliant diamond" / "omega ruby" /
+  // "heart gold" never fall through to these bare pairs.
+  scope("gen-4", all("diamond & pearl", /\bdiamond\b/i, /\bpearl\b/i)),
+  scope("gen-3", all("ruby & sapphire", /\bruby\b/i, /\bsapphire\b/i)),
+  scope("gen-2", all("gold & silver", /\bgold\b/i, /\bsilver\b/i)),
+  scope("gen-1", all("red & blue", /\bred\b/i, /\bblue\b/i)),
+  scope("gen-1", on(/\byellow\s+version\b/i)),
 ];
 
 /**
@@ -187,9 +216,7 @@ export function detectScopeSignal(message: string): ScopeDetection {
   for (const rule of RULES) {
     const matched = rule.match(message);
     if (matched === null) continue;
-    return rule.target.kind === "scope"
-      ? { kind: "scope", format: rule.target.format, matched }
-      : { kind: "unsupported", label: rule.target.label, matched };
+    return { kind: "scope", format: rule.target.format, matched };
   }
   return null;
 }

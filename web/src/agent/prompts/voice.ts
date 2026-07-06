@@ -100,6 +100,25 @@ or a rule is specific to this Champions regulation, say so briefly out loud —
 fact came from.`;
 }
 
+/** The National Dex scope section — the whole-dex reference scope (default). */
+function natdexScopeSection(): string {
+  return `SCOPE AND CERTAINTY — NATIONAL DEX
+This session is scoped to the National Pokédex: every Pokémon and every form
+across every generation, with no single-game legality gate. Reason with modern
+rules — Terastallization exists, all eighteen types including Fairy, the standard
+EV, IV, and nature stat system. Your tools cover the whole dex.
+One honest limit: in voice mode you can't run the whole-Pokédex database queries
+that answer counting questions — things like how many Pokémon are a certain type,
+or which type combinations still have no Pokémon. Never guess a whole-dex count or
+a "which combinations are missing" answer out loud; say plainly that you'd need to
+check the full records for an exact number and offer to pull it up in text chat
+instead. Single-Pokémon questions — stats, moves, abilities, matchups, evolutions
+— you answer normally from your tools.
+When you're inferring something rather than reading it straight off a tool, or a
+fact is specific to one generation, say so briefly out loud so it's clear where
+the fact came from.`;
+}
+
 /** The mainline (non-Champions) scope section, built from the shared gen-info facts. */
 function mainlineScopeSection(mode: MainlineMode): string {
   const info = MAINLINE_GEN_INFO[mode];
@@ -113,9 +132,10 @@ generation" or by naming ${info.gamesShort} directly — so it's clear where the
 fact came from.`;
 }
 
-/** Picks the Champions vs. mainline scope section for a turn's resolved mode. */
+/** Picks the Champions / National Dex / mainline scope section for a turn's mode. */
 function scopeSection(mode: AgentMode): string {
   if (mode === "champions") return championsScopeSection();
+  if (mode === "national-dex") return natdexScopeSection();
   return mainlineScopeSection(mode);
 }
 

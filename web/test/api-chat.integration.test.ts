@@ -480,7 +480,7 @@ describe("POST /api/chat — scope resolution", () => {
     expect(call2.mode).toBe("gen-7");
   });
 
-  it("a fresh session with no seed fields defaults to Champions", async () => {
+  it("a fresh session with no seed fields defaults to National Dex", async () => {
     mockRunOak.mockResolvedValue(G1_ANSWER);
 
     const res = await post({
@@ -488,11 +488,14 @@ describe("POST /api/chat — scope resolution", () => {
       message: "what about defensively?",
     });
     const events = await readSse(res);
-    expect(scopeOf(events)).toEqual({ format: "champions", source: "default" });
+    expect(scopeOf(events)).toEqual({
+      format: "national-dex",
+      source: "default",
+    });
     const call = vi.mocked(createAgentContext).mock.calls[0]![0] as {
       mode: string;
     };
-    expect(call.mode).toBe("champions");
+    expect(call.mode).toBe("national-dex");
   });
 
   it("an explicit scope_seed chip pick seeds a fresh session, then sticks", async () => {
@@ -523,12 +526,15 @@ describe("POST /api/chat — scope resolution", () => {
     mockRunOak.mockResolvedValue(G1_ANSWER);
     const sid = "s-scope-seed-override";
 
-    // Turn 1: plain — seeds (and sticks) Champions by default.
+    // Turn 1: plain — seeds (and sticks) National Dex by default.
     const res1 = await post({ session_id: sid, message: "hello" });
     const events1 = await readSse(res1);
-    expect(scopeOf(events1)).toEqual({ format: "champions", source: "default" });
+    expect(scopeOf(events1)).toEqual({
+      format: "national-dex",
+      source: "default",
+    });
 
-    // Turn 2: an explicit chip pick overrides the sticky Champions scope.
+    // Turn 2: an explicit chip pick overrides the sticky National Dex scope.
     const res2 = await post({
       session_id: sid,
       message: "what about defensively?",
@@ -561,9 +567,11 @@ describe("POST /api/chat — scope resolution", () => {
     expect(scopeOf(events)).toEqual({ format: "gen-7", source: "message" });
   });
 
-  it("the legacy champions_mode:false seeds standard on a fresh session (reported as 'seed')", async () => {
+  it("the legacy champions_mode:false seeds National Dex on a fresh session (reported as 'seed')", async () => {
     mockRunOak.mockResolvedValue(G1_ANSWER);
 
+    // A legacy client that toggled Champions OFF now lands in the National Dex
+    // default (the scope flip), not scarlet-violet.
     const res = await post({
       session_id: "s-scope-legacy-false",
       message: "what about defensively?",
@@ -571,44 +579,50 @@ describe("POST /api/chat — scope resolution", () => {
     });
     const events = await readSse(res);
     expect(scopeOf(events)).toEqual({
-      format: "scarlet-violet",
+      format: "national-dex",
       source: "seed",
     });
   });
 
-  it("a malformed scope_seed is silently dropped, falling through to the champions default", async () => {
+  it("a malformed scope_seed is silently dropped, falling through to the national-dex default", async () => {
     mockRunOak.mockResolvedValue(G1_ANSWER);
 
+    // "kalos-dex" is not a known Format (isFormat === false), so parseBody drops
+    // it and the turn falls through to the default. (Gen 1–4 seeds are now valid,
+    // so the invalid seed must be a genuinely unknown string.)
     const res = await post({
       session_id: "s-scope-seed-malformed",
       message: "what about defensively?",
-      scope_seed: "gen-3",
+      scope_seed: "kalos-dex",
     });
     const events = await readSse(res);
-    expect(scopeOf(events)).toEqual({ format: "champions", source: "default" });
+    expect(scopeOf(events)).toEqual({
+      format: "national-dex",
+      source: "default",
+    });
   });
 
-  it("(c) a named-but-unindexed gen (gen 3) runs the agent at the STANDARD data scope (no short-circuit)", async () => {
-    // Oak v2 §3 removed the honest-decline short-circuit: Gens 1–4 are now
-    // answerable via the whole-franchise tools. The in-message signal resolves
-    // to the broad STANDARD (scarlet-violet) data scope, and the agent runs.
+  it("(c) a named Gen 1–4 signal now resolves to that gen's own first-class scope", async () => {
+    // National Dex feature: Gens 1–4 are fully-ingested, first-class scopes, so
+    // "gen 3" resolves directly to the gen-3 data scope (no longer a widened
+    // STANDARD fallback). The in-message signal is message-sourced.
     mockRunOak.mockResolvedValue(G1_ANSWER);
 
     const res = await post({
-      session_id: "s-scope-unsupported",
+      session_id: "s-scope-gen3",
       message: "best strategy to catch feebas in gen 3",
     });
     const events = await readSse(res);
 
-    // The agent DID run and the scope was reported as a message-sourced standard.
+    // The agent DID run and the scope was reported as a message-sourced gen-3.
     expect(mockRunOak).toHaveBeenCalledTimes(1);
     expect(scopeOf(events)).toEqual({
-      format: "scarlet-violet",
+      format: "gen-3",
       source: "message",
     });
-    // The context threaded to the agent carries the standard mode.
+    // The context threaded to the agent carries the gen-3 mode.
     const ctxArg = vi.mocked(createAgentContext).mock.calls.at(-1)?.[0];
-    expect(ctxArg?.mode).toBe("standard");
+    expect(ctxArg?.mode).toBe("gen-3");
     expect(events.filter((e) => e.event === "error")).toHaveLength(0);
 
     const answers = events.filter((e) => e.event === "answer");

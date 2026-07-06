@@ -25,12 +25,14 @@ import type { AgentMode } from "@/agent/types";
 
 /**
  * The mainline modes this table covers — every {@link AgentMode} EXCEPT
- * `"champions"` (Champions has its own untouched prompt body). Deriving from
- * `AgentMode` (rather than re-spelling the literal union) makes this the single
- * source of truth: if the supported-gen set ever widens (e.g. gens 1–4), TS
- * forces a matching entry to be added to {@link MAINLINE_GEN_INFO}.
+ * `"champions"` AND `"national-dex"`, each of which has its own hand-authored
+ * scope profile (`./champions`, `./natdex`) rather than a per-gen fact entry.
+ * Deriving from `AgentMode` (rather than re-spelling the literal union) makes
+ * this the single source of truth: the mainline single-game gens (standard =
+ * Gen 9, plus gen-1…gen-8) each force a matching entry in
+ * {@link MAINLINE_GEN_INFO}.
  */
-export type MainlineMode = Exclude<AgentMode, "champions">;
+export type MainlineMode = Exclude<AgentMode, "champions" | "national-dex">;
 
 /** The generation-defining facts a mainline scope's prompt body is built from. */
 export interface MainlineGenInfo {
@@ -180,5 +182,118 @@ every group flagged \`in_active_scope\` (B-12) — lead the answer with the
 Sword/Shield locations and mention other games' locations only secondarily. If
 \`scope_note\` is set, say plainly that there's no catch data for this Pokémon
 in Gen 8's games before covering the other-gen locations returned.`,
+  },
+  "gen-4": {
+    basisTag: "gen-4",
+    label: "Generation 4 (Diamond/Pearl/Platinum and HeartGold/SoulSilver)",
+    gamesShort: "Diamond/Pearl/Platinum/HGSS",
+    mechanicsNotes: `Generation 4 mechanics: there is NO battle gimmick — no Mega
+Evolution, no Z-Moves, no Dynamax, and no Terastallization exist yet. Never
+recommend any of them.
+- The Fairy type does NOT exist in Gen 4 (there are 17 types). Do not treat any
+  Pokémon or move as Fairy or invent Fairy matchups — the ingested Gen 4 type
+  chart already omits Fairy, so trust the tools' typing and matchups.
+- The per-move PHYSICAL/SPECIAL SPLIT is INTRODUCED this generation: from Gen 4
+  on a move's damage class is set per MOVE (so Gyarados can attack physically off
+  Waterfall), NOT decided by the move's TYPE as it was in Gens 1–3. Trust each
+  move's damage_class from the tools.
+- Abilities, Natures, and the IV/EV stat system are all in force, so compute_stat
+  models this generation's stats exactly — use it for any stat math (no caveat
+  needed here).
+- "Can learn move X" for this older generation is best verified with run_sql over
+  natdex_moves (the cross-generation move source) rather than your memory.`,
+    encountersNote: `get_encounters HAS native catch/location data for this
+generation's games (Diamond/Pearl/Platinum and HeartGold/SoulSilver — inside the
+Gen 1–8 coverage). Results arrive with this generation's game groups sorted first
+and every group flagged \`in_active_scope\` (B-12) — lead the answer with the
+Gen 4 locations and mention other games' locations only secondarily. If
+\`scope_note\` is set, say plainly that there's no catch data for this Pokémon
+in Gen 4's games before covering the other-gen locations returned.`,
+  },
+  "gen-3": {
+    basisTag: "gen-3",
+    label: "Generation 3 (Ruby/Sapphire/Emerald and FireRed/LeafGreen)",
+    gamesShort: "Ruby/Sapphire/Emerald/FRLG",
+    mechanicsNotes: `Generation 3 mechanics: there is NO battle gimmick — no Mega
+Evolution, no Z-Moves, no Dynamax, and no Terastallization exist yet. Never
+recommend any of them.
+- The Fairy type does NOT exist in Gen 3 (there are 17 types). Do not treat any
+  Pokémon or move as Fairy or invent Fairy matchups — trust the tools' typing.
+- The physical/special split is by TYPE, not per move: a move's damage class is
+  decided by its TYPE (all Fire moves are Special, all Fighting moves Physical,
+  etc.). The per-MOVE split does not arrive until Gen 4 — so a "physical Fire
+  move" doesn't exist here.
+- Abilities, Natures, and the IV/EV stat system are all INTRODUCED this
+  generation (Ruby/Sapphire), and Double Battles debut here too. compute_stat
+  models this generation's stats exactly — use it for any stat math.
+- "Can learn move X" for this older generation is best verified with run_sql over
+  natdex_moves (the cross-generation move source) rather than your memory.`,
+    encountersNote: `get_encounters HAS native catch/location data for this
+generation's games (Ruby/Sapphire/Emerald and FireRed/LeafGreen — inside the Gen
+1–8 coverage). Results arrive with this generation's game groups sorted first and
+every group flagged \`in_active_scope\` (B-12) — lead the answer with the Gen 3
+locations and mention other games' locations only secondarily. If \`scope_note\`
+is set, say plainly that there's no catch data for this Pokémon in Gen 3's games
+before covering the other-gen locations returned.`,
+  },
+  "gen-2": {
+    basisTag: "gen-2",
+    label: "Generation 2 (Gold/Silver/Crystal)",
+    gamesShort: "Gold/Silver/Crystal",
+    mechanicsNotes: `Generation 2 mechanics: there is NO battle gimmick and there
+are NO Abilities and NO Natures yet — never recommend an ability, a nature, Mega
+Evolution, Z-Moves, Dynamax, or Terastallization.
+- The Dark and Steel types are INTRODUCED this generation (17 types), but the
+  Fairy type still does NOT exist. Trust the tools' Gen 2 type chart.
+- Held items are INTRODUCED this generation. The physical/special split is by
+  TYPE (a move's damage class follows its type, as in Gen 1); the per-move split
+  does not arrive until Gen 4.
+- The Special stat SPLITS this generation: Special Attack and Special Defense are
+  now SEPARATE stats (Gen 1 had a single combined Special).
+- Stats use DVs (0–15) and Stat Experience, not EVs or Natures — compute_stat
+  models this DV/Stat-Exp system CORRECTLY in this scope (it is exact here, not
+  an approximation). Pass the DV in the \`iv\` field and the Stat Exp target in
+  \`ev\`; nature has no effect.
+- "Can learn move X" for this older generation is best verified with run_sql over
+  natdex_moves (the cross-generation move source) rather than your memory.`,
+    encountersNote: `get_encounters HAS native catch/location data for this
+generation's games (Gold/Silver/Crystal — inside the Gen 1–8 coverage). Results
+arrive with this generation's game groups sorted first and every group flagged
+\`in_active_scope\` (B-12) — lead the answer with the Gen 2 locations and mention
+other games' locations only secondarily. If \`scope_note\` is set, say plainly
+that there's no catch data for this Pokémon in Gen 2's games before covering the
+other-gen locations returned.`,
+  },
+  "gen-1": {
+    basisTag: "gen-1",
+    label: "Generation 1 (Red/Blue/Yellow)",
+    gamesShort: "Red/Blue/Yellow",
+    mechanicsNotes: `Generation 1 mechanics: there is NO battle gimmick, NO held
+items, NO Abilities, and NO Natures — never recommend any of them, or Mega
+Evolution, Z-Moves, Dynamax, or Terastallization.
+- There are only 15 types: the Dark, Steel, AND Fairy types do NOT exist yet.
+  Trust the tools' Gen 1 type chart, which already omits them.
+- The Gen 1 GHOST-vs-PSYCHIC quirk: Ghost-type moves have NO effect on
+  Psychic-types in Gen 1 (a well-known bug — Ghost was intended to be
+  super-effective). The ingested Gen 1 type chart already encodes this, so read
+  the matchup off the tools rather than assuming modern effectiveness.
+- Special is a SINGLE combined stat: Special Attack and Special Defense are not
+  yet separate (they split in Gen 2). The physical/special split is by TYPE.
+- Critical hits are SPEED-BASED: a Pokémon's base Speed sets its crit rate (a
+  fast attacker crits far more often), unlike the flat modern rate — flag this
+  when it matters for a damage question.
+- Stats use DVs (0–15) and Stat Experience, not EVs or Natures — compute_stat
+  models this DV/Stat-Exp system CORRECTLY in this scope (it is exact here, not
+  an approximation). Pass the DV in the \`iv\` field and the Stat Exp target in
+  \`ev\`; nature has no effect.
+- "Can learn move X" for this older generation is best verified with run_sql over
+  natdex_moves (the cross-generation move source) rather than your memory.`,
+    encountersNote: `get_encounters HAS native catch/location data for this
+generation's games (Red/Blue/Yellow — the start of the Gen 1–8 coverage).
+Results arrive with this generation's game groups sorted first and every group
+flagged \`in_active_scope\` (B-12) — lead the answer with the Gen 1 locations and
+mention other games' locations only secondarily. If \`scope_note\` is set, say
+plainly that there's no catch data for this Pokémon in Gen 1's games before
+covering the other-gen locations returned.`,
   },
 };

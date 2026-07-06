@@ -9,11 +9,11 @@
  * Pass-through of the repo's miss / index shapes; never throws in-domain.
  *
  * B-12 (gen-scope annotate+foreground): on a mainline gen-scoped turn (`ctx.mode`
- * one of "gen-5".."gen-8"), a hit's `encounters` groups are stable-partitioned so
+ * one of "gen-1".."gen-8"), a hit's `encounters` groups are stable-partitioned so
  * the active generation's groups sort first, every group gains `in_active_scope`,
  * and a zero-match hit gets `scope_note`. Nothing is ever dropped, and standard/
- * champions output stays byte-identical (no fields added) — the annotation is
- * server-side-scope-only, never a new tool input.
+ * national-dex/champions output stays byte-identical (no fields added) — the
+ * annotation is server-side-scope-only, never a new tool input.
  */
 
 import type { ToolDef } from "@/agent/types";
@@ -27,7 +27,16 @@ import { STANDARD_FORMAT, formatForMode, genNumberForFormat } from "@/data/forma
 import type { OakDb } from "@/data/db";
 import type { AgentMode } from "@/agent/types";
 
-const GEN_SCOPES = new Set<AgentMode>(["gen-5", "gen-6", "gen-7", "gen-8"]);
+const GEN_SCOPES = new Set<AgentMode>([
+  "gen-1",
+  "gen-2",
+  "gen-3",
+  "gen-4",
+  "gen-5",
+  "gen-6",
+  "gen-7",
+  "gen-8",
+]);
 
 /**
  * Stable-partition `encounters` by active-generation match, annotate every
@@ -78,7 +87,8 @@ export const getEncountersTool: ToolDef = {
     }
     // GS-D4: encounter reference rows only exist under the scarlet-violet
     // format (the data itself is cross-game, Gen 1–8, grouped per game), so
-    // every mainline scope — gen-5…gen-9 — reads STANDARD_FORMAT here.
+    // every mainline scope — gen-1…gen-9 plus national-dex — reads
+    // STANDARD_FORMAT here.
     const result = await getEncounters(
       parsed.data.name,
       STANDARD_FORMAT,
