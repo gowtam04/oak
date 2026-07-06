@@ -3,9 +3,12 @@
  *
  * After the migration, all index data comes from the @pkmn ecosystem (local npm
  * packages — no network, no throttle, no read-through cache):
- *   - standard (`scarlet-violet`) ← `Dex.forGen(9)`
- *   - champions                   ← `Dex.mod('champions', @pkmn/mods/champions)`
- *   - gen scopes (`gen-5`…`gen-8`) ← `Dex.forGen(n)` (generation-scope feature)
+ *   - standard (`scarlet-violet`)    ← `Dex.forGen(9)`
+ *   - champions                      ← `Dex.mod('champions', @pkmn/mods/champions)`
+ *   - national-dex                   ← `Dex.forGen(9)` (same path as standard,
+ *                                       under a new format name — no new branch
+ *                                       needed; see loadFormat's else arm)
+ *   - gen scopes (`gen-1`…`gen-8`)    ← `Dex.forGen(n)` (generation-scope feature)
  *
  * The ingest builders consume the `FormatSource` returned by {@link loadFormat}
  * and never import @pkmn directly, so every @pkmn-specific quirk lives here.
@@ -23,9 +26,24 @@
  *     >700) EXCLUDES gen 8/9 species — those surface with `isNonstandard ===
  *     "Future"`, which `isRealSpecies` now drops (so e.g. Grookey is absent from
  *     a gen-7 roster). `"Past"` species are KEPT (the BR-1 native/fallback flag).
- *     `getLearnset('raichualola')` is non-empty in gen 7. Older gens can carry
- *     fewer than 18 battle types (no Fairy before gen 6); the `BATTLE_TYPE_NAMES`
- *     intersection handles a short type list without change.
+ *     `getLearnset('raichualola')` is non-empty in gen 7.
+ *   - `dex.types.all()` always returns the FULL modern 19-type set (incl. Fairy
+ *     and Stellar) in EVERY gen dex, even `Dex.forGen(1)` — @pkmn does not
+ *     historically gate the type list. `BATTLE_TYPE_NAMES` filters Stellar out
+ *     so `types` is always exactly 18 in every gen, not a shrinking set for
+ *     older gens; what actually varies by gen is per-species typings (which
+ *     types a Pokémon HAS) and the type-effectiveness chart consulted
+ *     elsewhere, not the type roster itself.
+ *   - Similarly, `dex.abilities.all()` / `dex.natures.all()` return the full
+ *     modern-valued sets in every gen dex (abilities/natures didn't exist until
+ *     Gen 3/4 in-game, but @pkmn's old-gen dexes still expose them) — this is
+ *     why gen-1/gen-2 ingest needs no nullable-column handling for those.
+ *   - Gen 1 encodes its unified Special stat as identical `spa`/`spd` base
+ *     values (e.g. Alakazam spa=spd=135 in `Dex.forGen(1)`); Gen 2 introduces
+ *     the real spa/spd split (Alakazam spd=85 in `Dex.forGen(2)`).
+ *   - `Dex.forGen(1)` resolves the real 151-species Gen 1 roster with no new
+ *     roster logic — Megas/later-gen forms surface as `isNonstandard ===
+ *     "Future"` there too and are dropped by the existing `isRealSpecies` gate.
  */
 
 import { Dex, type ModData, type ID } from "@pkmn/dex";
@@ -48,9 +66,9 @@ export type PkmnNature = ReturnType<PkmnDex["natures"]["get"]>;
 export interface FormatSource {
   format: Format;
   /**
-   * The Dex generation number this source resolves to (Champions and
-   * `scarlet-violet` → 9; gen scopes → 5–8). Ingest builders use it to filter
-   * learnset move sources to this generation.
+   * The Dex generation number this source resolves to (Champions,
+   * `scarlet-violet`, and `national-dex` → 9; gen scopes → 1–8). Ingest
+   * builders use it to filter learnset move sources to this generation.
    */
   genNumber: number;
   /** The resolved (gen-scoped or modded) dex. */
@@ -150,9 +168,9 @@ function isRealSpecies(s: PkmnSpecies): boolean {
  * native to the current game (`isNonstandard === "Past"`), so the scope keeps
  * answering about the whole reachable dex with a native/fallback flag (BR-1),
  * matching today's Gen 9 behavior. Native ⟺ `isNonstandard` is falsy; otherwise
- * the species is a fallback from `gen-{n}`. For gen scopes 5–8 this is the
- * `Dex.forGen(n)` view, whose later-generation species are dropped as "Future"
- * by {@link isRealSpecies}.
+ * the species is a fallback from `gen-{n}`. For gen scopes 1–8 (and
+ * `national-dex`) this is the `Dex.forGen(n)` view, whose later-generation
+ * species are dropped as "Future" by {@link isRealSpecies}.
  */
 function standardRoster(dex: PkmnDex): PkmnSpecies[] {
   return dex.species.all().filter(isRealSpecies);
@@ -197,7 +215,7 @@ export async function loadFormat(format: Format): Promise<FormatSource> {
     roster = championsRoster(dex, champData);
     genNumber = 9; // Champions rides the Gen 9 dex.
   } else {
-    const gen = genNumberForFormat(format); // 9 for "scarlet-violet", else 5–8
+    const gen = genNumberForFormat(format); // 9 for "scarlet-violet"/"national-dex", else 1–8
     dex = Dex.forGen(gen);
     roster = standardRoster(dex);
     genNumber = gen;
