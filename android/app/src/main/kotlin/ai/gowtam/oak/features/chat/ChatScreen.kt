@@ -86,11 +86,10 @@ import androidx.lifecycle.LifecycleEventObserver
  * a live streaming section while a turn is in flight, a recoverable error banner, and
  * the composer. Mirrors the iOS `ChatView`, re-expressed for Compose.
  *
- * All logic lives in [ChatViewModel]; this composable is layout + bindings. The scope
- * chip (component-design.md "AnswerCard render order" / GS-C), docked in a slim strip
- * directly above the composer for one-hand reachability, is the ONLY interactive scope
- * control — it opens a bottom-sheet picker over the six known [Format]s and is disabled
- * while a turn streams so a turn's scope stays stable.
+ * All logic lives in [ChatViewModel]; this composable is layout + bindings. The header
+ * scope chip (component-design.md "AnswerCard render order" / GS-C) is the ONLY
+ * interactive scope control — it opens a bottom-sheet picker over the six known
+ * [Format]s and is disabled while a turn streams so a turn's scope stays stable.
  *
  * Screen-off auto-reconnect (DADR-13) is wired here via the lifecycle observer:
  * `ON_STOP` arms the retry gate, `ON_START` fires any deferred retry — the Android
@@ -196,6 +195,11 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    ScopeChip(
+                        format = uiState.displayFormat,
+                        enabled = !uiState.isStreaming,
+                        onClick = { showScopePicker = true },
+                    )
                     if (showsNewConversationButton) {
                         IconButton(onClick = viewModel::startNewConversation) {
                             Icon(Icons.Filled.Add, contentDescription = "New conversation")
@@ -247,22 +251,6 @@ fun ChatScreen(
             uiState.errorBanner?.let { banner ->
                 ErrorBannerRow(banner = banner, onRetry = viewModel::retry)
             }
-            // The scope control sits directly above the composer — always visible and
-            // one-hand reachable, rather than in the top bar (GS-C; TestFlight feedback
-            // that the top-bar chip was an awkward stretch on larger phones).
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(oak.surfaceRaised)
-                    .padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                ScopeChip(
-                    format = uiState.displayFormat,
-                    enabled = !uiState.isStreaming,
-                    onClick = { showScopePicker = true },
-                )
-            }
             Composer(
                 composerText = uiState.composerText,
                 canSend = uiState.canSend,
@@ -312,6 +300,7 @@ private fun ScopeChip(format: Format, enabled: Boolean, onClick: () -> Unit) {
     val chipShape = RoundedCornerShape(OakRadius.pill)
     Row(
         modifier = Modifier
+            .padding(end = OakSpacing.sm)
             .clip(chipShape)
             .background(oak.surfaceSunken, chipShape)
             .border(1.dp, oak.border, chipShape)
