@@ -754,9 +754,9 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
   // not a per-turn lock. Once a guest session resolves to Champions it is STICKY —
   // a later turn that omits the toggle (and carries no explicit in-message game
   // signal) stays in Champions. A brand-new session with NO seed at all (no toggle,
-  // no scope_seed) now falls back to the CHAMPIONS default (the toggle-removal
-  // change). (Leaving Champions mid-session requires an explicit signal or a new
-  // session; see docs/features/generation-scope GS-D3.)
+  // no scope_seed) now falls back to the NATIONAL DEX default (the scope flip).
+  // (Leaving Champions mid-session requires an explicit signal or a new session;
+  // see docs/features/generation-scope GS-D3.)
   it("Champions toggle SEEDS a guest session and the resolved scope is sticky (GS-D3, amends BR-A11)", async () => {
     mockGetCurrentAccount.mockResolvedValue(null);
     // Turn 1: toggle ON seeds the fresh session → champions.
@@ -778,12 +778,12 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
       expect.objectContaining({ sessionId: "s-champ", mode: "champions" }),
     );
 
-    // A brand-new session with no seed at all falls back to the champions default.
+    // A brand-new session with no seed at all falls back to the National Dex default.
     mockCreateAgentContext.mockClear();
     const fresh = await post({ session_id: "s-fresh", message: "hello" });
     await drain(fresh);
     expect(mockCreateAgentContext).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: "s-fresh", mode: "champions" }),
+      expect.objectContaining({ sessionId: "s-fresh", mode: "national-dex" }),
     );
   });
 });
