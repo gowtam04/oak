@@ -226,7 +226,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** fixed (83aa77a agent — ships in the next TestFlight build; duplicate of AG_1gTxMcJu5knN-sYtgIwM. Prompt-guidance fix, not a new tool: the Champions Stats screen's nature chevrons are now taught in the image-reading prompt, and the deterministic (boosted, lowered)→nature table was already in the prompt)
+- **Status:** fixed (83aa77a agent — server-side, live after the next web deploy; duplicate of AG_1gTxMcJu5knN-sYtgIwM. Prompt-guidance fix, not a new tool: the Champions Stats screen's nature chevrons are now taught in the image-reading prompt, and the deterministic (boosted, lowered)→nature table was already in the prompt)
 
 > Nature can be inferred based on the screenshot. We can see specific stat increases/decreases for each pokemon so it can be inferred. Create a function/tool to do this for Pokemon champion screenshots that would look similar to what I provided.
 
@@ -239,7 +239,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** fixed (b4c2a6a ios — ships in the next TestFlight build. Root cause: Oak's opaque nav bar hard-clipped rows scrolled under the picker header; on iOS 26 the header background is now hidden + soft top scroll edge so rows fade gracefully; applies to all six entity pickers)
+- **Status:** fixed (b4c2a6a ios, build 19. Root cause: Oak's opaque nav bar hard-clipped rows scrolled under the picker header; on iOS 26 the header background is now hidden + soft top scroll edge so rows fade gracefully; applies to all six entity pickers)
 
 > There’s a cutoff on species
 
@@ -252,7 +252,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** fixed (83aa77a agent — ships in the next TestFlight build. Prompt-guidance fix rather than a new tool: the image-reading prompt now teaches the Champions Stats screen's red-up/blue-down chevrons on stat labels; the deterministic (boosted, lowered)→nature mapping was already in the cached prompt, so no context-window cost)
+- **Status:** fixed (83aa77a agent — server-side, live after the next web deploy. Prompt-guidance fix rather than a new tool: the image-reading prompt now teaches the Champions Stats screen's red-up/blue-down chevrons on stat labels; the deterministic (boosted, lowered)→nature mapping was already in the cached prompt, so no context-window cost)
 
 > In pokemon champion screenshot of your team, nature can be deduced based on which stats are showing red up arrow (indicating increase) and blue down arrow (indicating decrease). But in the app it says nature is not provided.
 >
@@ -267,7 +267,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** fixed (93837c4 ios / 310321d android — ships in the next TestFlight build. Attach menu and keyboard are now mutually exclusive on both clients: opening one dismisses the other, and typing dismisses an open menu)
+- **Status:** fixed (93837c4 ios, build 19 / 310321d android. Attach menu and keyboard are now mutually exclusive on both clients: opening one dismisses the other, and typing dismisses an open menu)
 
 > If I start typing it should minimize the take photo / photo library option and just show me what I’m typing. Check what other scenarios should be applied for similar items. 
 
