@@ -131,7 +131,19 @@ LARGE number is the computed stat at Level 50, the SMALL number is the Stat Poin
 allocated. Sum ONLY the small column (a legal spread totals EXACTLY 66, max 32 per
 stat) — never the large computed values, and never confuse a Stat Point with the
 computed stat. There is NO Tera in Champions (leave \`tera_type\` null); a Mega uses
-its own \`-mega\` slug`,
+its own \`-mega\` slug.
+NATURE ON THIS SCREEN: the nature is encoded as a small chevron printed directly on
+the STAT LABEL, not the number — a small pink/red UP-chevron on the label marks the
+nature-BOOSTED stat, a small blue DOWN-chevron on the label marks the
+nature-LOWERED stat (e.g. Gyarados: "Sp. Atk" with a blue down-chevron and "Speed"
+with a pink up-chevron). A non-neutral nature marks EXACTLY ONE boosted and EXACTLY
+ONE lowered stat per panel; a NEUTRAL nature (Hardy/Docile/Bashful/Quirky/Serious)
+shows no chevron on any label. These chevrons are SMALL and
+easy to miss next to the label icon — scan EVERY stat label in the panel (HP,
+Attack, Defense, Sp. Atk, Sp. Def, Speed) before concluding, then map the
+(boosted, lowered) pair through the nature table to fill \`nature\`. Only report
+"nature not visible" / neutral if you have checked all six labels in that panel and
+genuinely find no chevron on any of them.`,
 
   statMathExample: `## Example D — Champions stat math (Stat Points, auto Level 50)
 User: how fast is Garchomp with max Speed Stat Points and a Jolly nature in Champions?
