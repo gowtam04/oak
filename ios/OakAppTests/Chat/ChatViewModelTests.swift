@@ -263,10 +263,10 @@ struct ChatViewModelTests {
   // MARK: Scope chip → scope_seed on the request (GS-C)
 
   @Test
-  func displayFormatDefaultsToChampionsWithNoSeedOrResolvedScope() {
+  func displayFormatDefaultsToNationalDexWithNoSeedOrResolvedScope() {
     let vm = makeViewModel(fake: FakeChatService())
-    // seed ?? resolved ?? champions — a fresh thread has neither.
-    #expect(vm.displayFormat == .champions)
+    // seed ?? resolved ?? national-dex — a fresh thread has neither.
+    #expect(vm.displayFormat == .nationalDex)
     #expect(vm.scopeSeed == nil)
     #expect(vm.resolvedScope == nil)
   }

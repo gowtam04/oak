@@ -204,10 +204,10 @@ struct ChatView: View {
   // MARK: Scope chip (generation-scope GS-C)
 
   /// The header scope control: a compact pill showing the displayed scope's short
-  /// label, opening a menu of all six known formats as an inline radio list
+  /// label, opening a menu of all known formats as an inline radio list
   /// (checkmark on the current pick). Picking one seeds the next turn's scope
   /// (`selectScope`). Disabled while a turn streams so the scope can't change
-  /// mid-turn — mirrors `ScopeChip.tsx` (label = the scope, menu = the six
+  /// mid-turn — mirrors `ScopeChip.tsx` (label = the scope, menu =
   /// `Format.knownCases`, disabled while streaming).
   @ViewBuilder
   private var scopeChip: some View {

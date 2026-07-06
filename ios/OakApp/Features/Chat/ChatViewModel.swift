@@ -80,10 +80,11 @@ final class ChatViewModel {
   private(set) var scopeSeed: Format?
 
   /// The scope the header chip displays and the artifact viewer scopes to: a
-  /// pending chip pick, else the server-resolved scope, else the champions default
-  /// — identical to web's `displayFormat = scopeSeed ?? resolvedScope ?? "champions"`.
+  /// pending chip pick, else the server-resolved scope, else the national-dex
+  /// default — identical to web's
+  /// `displayFormat = scopeSeed ?? resolvedScope ?? "national-dex"`.
   var displayFormat: Format {
-    scopeSeed ?? resolvedScope ?? .champions
+    scopeSeed ?? resolvedScope ?? .nationalDex
   }
 
   // MARK: Dependencies + identity
@@ -413,14 +414,14 @@ final class ChatViewModel {
     lastRequest = nil
     sessionId = UUID().uuidString
     // A fresh thread has no resolved scope yet — the chip falls back to the
-    // champions default until a turn resolves one (web `handleNewChat`).
+    // national-dex default until a turn resolves one (web `handleNewChat`).
     resolvedScope = nil
     resolvedScopeSource = nil
     scopeSeed = nil
     appState.activeConversationId = nil
     if case .guest = appState.authState {
       appState.guestThread = []
-      appState.guestThreadScope = .champions
+      appState.guestThreadScope = .nationalDex
     }
   }
 
@@ -815,7 +816,7 @@ final class ChatViewModel {
 
   /// Mirrors the latest turn's RESOLVED scope onto the guest thread (guests only),
   /// so the guest→sign-in import can upload the thread under the scope it actually
-  /// ran in (web imports `resolvedScope ?? "champions"`). A pending chip pick is
+  /// ran in (web imports `resolvedScope ?? "national-dex"`). A pending chip pick is
   /// intentionally NOT mirrored — no turn has run under it yet.
   private func mirrorGuestScope(_ format: Format) {
     guard case .guest = appState.authState else { return }

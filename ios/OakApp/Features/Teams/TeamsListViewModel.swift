@@ -72,7 +72,7 @@ final class TeamsListViewModel {
 
   /// Batch-resolves sprite refs for every distinct species across the loaded teams so
   /// the rows can render Pokémon artwork instead of dots. Batches one call per distinct
-  /// format (teams can span any of the six scopes) and merges the results, keyed by
+  /// format (teams can span any of the known scopes) and merges the results, keyed by
   /// species slug. `dexLookup.sprites` never throws — a transport/decode fault folds to
   /// an empty map — so a miss just leaves those slots on the dot fallback; this never
   /// blocks or errors the list (M-AC-1.4). Replaces the map wholesale each load so refs

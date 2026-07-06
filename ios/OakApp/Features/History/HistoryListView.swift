@@ -312,7 +312,7 @@ struct ConversationListView: View {
     .background(Theme.canvas)
   }
 
-  /// Format filter spanning all six scopes (`Format.knownCases`) — mirrors the
+  /// Format filter spanning every known scope (`Format.knownCases`) — mirrors the
   /// Teams list's filter and `FORMATS` in full so every conversation scope is
   /// reachable from the history list. The icon fills + tints accent while a filter
   /// is active (paired with the dismissible pill — never color alone).

@@ -165,9 +165,9 @@ struct TeamsListView: View {
 
   // MARK: Toolbar menus
 
-  /// All six formats (mirrors the web `/teams` page's format selector, which
+  /// All known formats (mirrors the web `/teams` page's format selector, which
   /// spans `FORMATS` in full) — unlike the history list's 3-way filter, teams
-  /// exist in any of the six scopes so the library filter must too.
+  /// exist in any of the known scopes so the library filter must too.
   private var formatFilterMenu: some View {
     Menu {
       filterButton(title: "All formats", format: nil)
