@@ -33,6 +33,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -327,7 +329,7 @@ private fun Modifier.clickableChip(onClick: () -> Unit): Modifier =
 @Composable
 private fun ScopePickerSheet(current: Format, onSelect: (Format) -> Unit) {
     val oak = LocalOakColors.current
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = OakSpacing.xxl)) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "Answer scope",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -343,23 +345,33 @@ private fun ScopePickerSheet(current: Format, onSelect: (Format) -> Unit) {
             modifier = Modifier.padding(horizontal = OakSpacing.lg),
         )
         Spacer(Modifier.height(OakSpacing.sm))
-        for (format in Format.knownCases) {
-            val selected = format == current
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickableChip { onSelect(format) }
-                    .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.md),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = format.displayLabel,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = oak.textStrong,
-                )
-                if (selected) {
-                    Icon(Icons.Filled.Check, contentDescription = "Selected", tint = oak.accent)
+        // The known-scopes list now runs to 11 rows (national-dex + gen-1..8 + champions),
+        // which overflows a fixed-height ModalBottomSheet on most phones — scroll the rows
+        // so every option stays reachable instead of clipping off the bottom.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = OakSpacing.xxl),
+        ) {
+            for (format in Format.knownCases) {
+                val selected = format == current
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickableChip { onSelect(format) }
+                        .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.md),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = format.displayLabel,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = oak.textStrong,
+                    )
+                    if (selected) {
+                        Icon(Icons.Filled.Check, contentDescription = "Selected", tint = oak.accent)
+                    }
                 }
             }
         }

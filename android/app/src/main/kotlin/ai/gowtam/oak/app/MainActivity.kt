@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
     private val artifactViewModel: ArtifactViewModel by lazy {
         ViewModelProvider(
             this,
-            factoryOf { ArtifactViewModel(oakApplication.services.artifact, Format.Champions) },
+            factoryOf { ArtifactViewModel(oakApplication.services.artifact, Format.NationalDex) },
         )[ArtifactViewModel::class.java]
     }
 

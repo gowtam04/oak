@@ -69,11 +69,13 @@ private const val CHAMPIONS_REGULATION = "Regulation M-B"
 /**
  * Maps a raw `generation_basis.generation` code to its display tag — mirrors web's
  * `formatScopeTag`:
+ *  - `"national-dex"` → `"National Dex"`,
  *  - `"champions"` → `"Champions · Reg M-B"` (`Regulation ` shortened to `Reg `),
  *  - `"gen-N"` → `"Gen N"`,
  *  - anything else → returned unchanged (an already-display-form string passes through).
  */
 fun scopeTagLabel(generation: String): String = when {
+    generation == "national-dex" -> "National Dex"
     generation == "champions" -> "Champions · " + CHAMPIONS_REGULATION.replaceFirst(Regex("^Regulation\\s+", RegexOption.IGNORE_CASE), "Reg ")
     generation.startsWith("gen-") -> "Gen " + generation.removePrefix("gen-")
     else -> generation
