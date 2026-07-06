@@ -17,9 +17,10 @@
  * here rather than slipping past CI.
  *
  * Asserts:
- *   1. Every deterministic case (G1/G3/G5/G6/G8/G11/G15/G26/G32/G35/G44/G47)
- *      passes its structural checks against the real tools + fixture data,
- *      under EACH provider.
+ *   1. Every deterministic case
+ *      (G1/G3/G5/G6/G8/G11/G15/G26/G32/G35/G44/G47/G56/G57) passes its
+ *      structural checks against the real tools + fixture data, under EACH
+ *      provider.
  *   2. The subset is exactly the one design.md + Oak v2 §7 specifies (a guard
  *      against the subset silently drifting), and every such case has a
  *      registered plan.
@@ -57,6 +58,8 @@ const EXPECTED_IDS = [
   "G35",
   "G44",
   "G47",
+  "G56",
+  "G57",
 ];
 
 /** Both scripted transports are gated — Anthropic content-blocks AND native Grok. */
@@ -182,5 +185,43 @@ for (const provider of PROVIDERS) {
       expect(md).toContain("gengar");
       expect(md).toMatch(/^\*\*4\*\*/);
     });
+
+    it("G56 counts the whole-dex natdex_species table, not the narrower Champions roster", () => {
+      const a = byProvider[provider].byId.G56.answer;
+      // The fixture's natdex_species table (NATDEX_SPECIES_ROWS) has 9 rows —
+      // asserting the literal count pins that the aggregation ran over the
+      // whole table, not some narrower/filtered roster.
+      expect(a.answer_markdown).toContain("9");
+      expect(a.citations.some((c) => c.source.startsWith("natdex_species"))).toBe(
+        true,
+      );
+    });
+
+    it("G57 finds Darmanitan-Galar-Zen via LEAST/GREATEST-normalized, form-aware SQL", () => {
+      const a = byProvider[provider].byId.G57.answer;
+      expect(a.answer_markdown).toContain("Darmanitan");
+      expect(
+        a.citations.some((c) => c.source.startsWith("pokemon")),
+      ).toBe(true);
+    });
   });
 }
+
+describe("G57 plan — type-combo slot-order normalization (production incident regression)", () => {
+  it("issues a query normalized with LEAST/GREATEST, not an ordered-pair comparison", async () => {
+    const { planQueries } = await import("./deterministic");
+    const queries = planQueries("G57");
+    expect(queries.length).toBeGreaterThan(0);
+    for (const q of queries) {
+      expect(q).toContain("LEAST");
+      expect(q).toContain("GREATEST");
+    }
+  });
+
+  it("queries the form-aware pokemon@national-dex partition, not natdex_species", async () => {
+    const { planQueries } = await import("./deterministic");
+    const [query] = planQueries("G57");
+    expect(query).toContain("format = 'national-dex'");
+    expect(query).not.toContain("natdex_species");
+  });
+});

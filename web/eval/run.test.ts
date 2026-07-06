@@ -76,9 +76,9 @@ describe("parseArgs", () => {
 });
 
 describe("selectCases", () => {
-  it("defaults to all 55 cases for the judged suite", () => {
+  it("defaults to all 59 cases for the judged suite", () => {
     const { cases } = selectCases(parseArgs([]));
-    expect(cases).toHaveLength(55);
+    expect(cases).toHaveLength(59);
   });
 
   it("uses the G1/G5/G6/G7/G17/G25 set for --rebuild", () => {

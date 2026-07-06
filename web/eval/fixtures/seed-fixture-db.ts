@@ -38,6 +38,13 @@
  * Gen 4) use real, verified PokeAPI facts so those assertions hold against
  * the real warehouse too, not just this fixture.
  *
+ * pokemon@national-dex rows (NATDEX_POKEMON_ROWS) back PLANS.G56/G57 (the
+ * national-dex-scope feature's regression cases): a FORM-AWARE partition of
+ * the `pokemon` table (unlike natdex_species, which is default-forms-only),
+ * carrying a form-only type combo (Darmanitan-Galar-Zen, Ice/Fire, stored in
+ * the non-canonical type1/type2 slot order — G57's LEAST/GREATEST
+ * normalization pin) plus a mono-type and a dual-type default-form row.
+ *
  * Exports:
  *   - seedFixtureDb(db)   — seed an already-migrated Drizzle handle (async)
  *
@@ -355,6 +362,115 @@ const POKEMON_ROWS: Omit<PokemonRow, "format">[] = [
     artwork_url:
       "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10252.png",
     generation: "gen-9",
+    is_gen9_native: 1,
+    source_generation: null,
+  },
+];
+
+// ---------------------------------------------------------------------------
+// 1b. Pokémon rows — pokemon table, format="national-dex" partition (G57).
+// Unlike natdex_species (species-level, DEFAULT FORMS ONLY), this partition
+// is the FORM-AWARE whole-dex source — it carries per-form rows, so a
+// form-only type combination is visible here even when it's absent from
+// natdex_species. Backs PLANS.G57 in eval/deterministic.ts.
+// ---------------------------------------------------------------------------
+
+const NATDEX_POKEMON_ROWS: PokemonRow[] = [
+  // Darmanitan (Galarian Zen Mode) — National Dex #555. Real PokeAPI form:
+  // type1="ice", type2="fire" — stored in the OPPOSITE slot order from how
+  // the combo reads conventionally ("Fire/Ice"), which is exactly why a
+  // type-combination-existence query must normalize with
+  // LEAST(type1,type2)/GREATEST(type1,type2) rather than assume a canonical
+  // slot order (warehouse-ddl.ts's IMPORTANT note). This form does NOT
+  // appear in natdex_species — "darmanitan" there would only be the
+  // default (Standard Mode) form — so it's a form-only combo that only
+  // pokemon@national-dex can see.
+  {
+    format: "national-dex",
+    id: "darmanitan-galar-zen",
+    species_name: "darmanitan",
+    form_name: "galar-zen",
+    display_name: "Darmanitan (Galarian Zen Mode)",
+    national_dex_number: 555,
+    type1: "ice",
+    type2: "fire",
+    ability_slot1: "zen-mode",
+    ability_slot2: null,
+    ability_hidden: null,
+    stat_hp: 105,
+    stat_attack: 160,
+    stat_defense: 55,
+    stat_special_attack: 30,
+    stat_special_defense: 95,
+    stat_speed: 30,
+    base_stat_total: 475, // 105+160+55+30+95+30
+    sprite_url:
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10026.png",
+    artwork_url:
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10026.png",
+    required_item: null,
+    generation: "national-dex",
+    is_gen9_native: 1,
+    source_generation: null,
+  },
+
+  // Pikachu — default form, mono-type (Electric). A non-degenerate mono-type
+  // row so type-combo counts over this partition aren't trivially all-one-row.
+  {
+    format: "national-dex",
+    id: "pikachu",
+    species_name: "pikachu",
+    form_name: null,
+    display_name: "Pikachu",
+    national_dex_number: 25,
+    type1: "electric",
+    type2: null,
+    ability_slot1: "static",
+    ability_slot2: null,
+    ability_hidden: "lightning-rod",
+    stat_hp: 35,
+    stat_attack: 55,
+    stat_defense: 40,
+    stat_special_attack: 50,
+    stat_special_defense: 50,
+    stat_speed: 90,
+    base_stat_total: 320, // 35+55+40+50+50+90
+    sprite_url:
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png",
+    artwork_url:
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png",
+    required_item: null,
+    generation: "national-dex",
+    is_gen9_native: 1,
+    source_generation: null,
+  },
+
+  // Charizard — default form, a common dual-type (Fire/Flying) row.
+  {
+    format: "national-dex",
+    id: "charizard",
+    species_name: "charizard",
+    form_name: null,
+    display_name: "Charizard",
+    national_dex_number: 6,
+    type1: "fire",
+    type2: "flying",
+    ability_slot1: "blaze",
+    ability_slot2: null,
+    ability_hidden: "solar-power",
+    stat_hp: 78,
+    stat_attack: 84,
+    stat_defense: 78,
+    stat_special_attack: 109,
+    stat_special_defense: 85,
+    stat_speed: 100,
+    base_stat_total: 534, // 78+84+78+109+85+100
+    sprite_url:
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/6.png",
+    artwork_url:
+      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png",
+    required_item: null,
+    generation: "national-dex",
     is_gen9_native: 1,
     source_generation: null,
   },
@@ -1001,6 +1117,7 @@ export async function seedFixtureDb(db: FixtureDb): Promise<void> {
     await tx
       .insert(pokemon)
       .values(POKEMON_ROWS.map((r) => ({ ...r, format: SV })));
+    await tx.insert(pokemon).values(NATDEX_POKEMON_ROWS);
     await tx.insert(learnset).values(LEARNSET_ROWS);
     await tx
       .insert(reference_cache)

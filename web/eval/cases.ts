@@ -1,5 +1,5 @@
 /**
- * eval/cases.ts — G1..G55 golden test cases (evaluation.md + Oak v2 §7).
+ * eval/cases.ts — G1..G59 golden test cases (evaluation.md + Oak v2 §7).
  *
  * Owned by: phase "Eval" / track "cases". Do NOT edit from other phases.
  *
@@ -41,6 +41,16 @@
  * does not exempt a case from `ALL_CASES`). WIKI cases are judged-only (no
  * deterministic plan is attempted for them — search_wiki needs a live corpus,
  * per Oak v2 §7).
+ *
+ * G56..G59 (added for the national-dex-scope feature) regression-test the
+ * production incident where a whole-dex type-combination question answered
+ * 121 missing combos instead of the true ~17: G56/G57 are deterministic
+ * (plans in eval/deterministic.ts), pinning whole-dex routing from a
+ * non-default scope (G56) and LEAST/GREATEST slot-order + form-aware
+ * (pokemon@national-dex) query shape (G57); G58/G59 are judged-only (the
+ * live-warehouse figure and Rotom's six appliance forms can't be asserted
+ * against the small eval fixture). G28's rubricNote was also strengthened
+ * with the same LEAST/GREATEST + form-aware requirement.
  */
 
 // GoldenCase is defined once in ./judge (the single source of truth) and
@@ -521,7 +531,7 @@ export const cases: GoldenCase[] = [
       status: "answered",
       toolEfficiency: { usedTool: "run_sql", maxPerPokemonFetches: 0 },
       rubricNote:
-        "Correct answer aggregates (type1, type2) combos across natdex_species joined by evolves_from and counts combos that appear in exactly one line — a warehouse aggregation, not a per-species scan.",
+        "Correct answer aggregates (type1, type2) combos — normalized via LEAST(type1,type2)/GREATEST(type1,type2) so slot order doesn't split one real combo into two — across the full Pokédex INCLUDING per-form rows (pokemon@national-dex, not just the default-forms-only natdex_species), grouped by evolutionary line, and counts combos that appear in exactly one line — a warehouse aggregation, not a per-species scan. Treating (type1, type2) as an ordered pair, or omitting form-only Pokémon (e.g. Rotom's appliance forms, Darmanitan-Galar-Zen), miscounts the lines.",
     },
     covers: ["BQ-3", "SQL"],
   },
@@ -926,6 +936,86 @@ export const cases: GoldenCase[] = [
     },
     covers: ["AC-5.1", "TYPED"],
   },
+
+  // =========================================================================
+  // G56 – G59 National-dex-scope feature regression cases. Pin the production
+  // incident's two root causes (a conversation asked "list type combinations
+  // that don't have a Pokémon yet" → "check the national dex" and got 121
+  // missing combos vs. the true ~17): (1) whole-Pokédex questions must route
+  // to run_sql over COMPLETE records regardless of the active scope, not a
+  // narrower roster; (2) type-combination existence must normalize
+  // (type1, type2) with LEAST/GREATEST (slot order is canonical game data,
+  // not semantic) and must be FORM-AWARE (pokemon@national-dex), since
+  // natdex_species is default-forms-only and misses form-only combos like
+  // Rotom-Heat (Electric/Fire) or Darmanitan-Galar-Zen (Ice/Fire).
+  // =========================================================================
+
+  // G56 (deterministic): whole-dex total species count, asked from Champions
+  // scope — must still route to the whole National Pokédex, not the
+  // (much smaller) Champions roster.
+  {
+    id: "G56",
+    mode: "champions",
+    input: "How many Pokémon are in the National Pokédex in total?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "run_sql", maxPerPokemonFetches: 0 },
+      mustCite: ["natdex_species"],
+      deterministic: true,
+      rubricNote:
+        "This is a whole-Pokédex question, not a Champions-roster one — even though the active scope is Champions, the correct answer runs a single natdex_species aggregation (COUNT(*)) over the complete National Pokédex, not the much smaller Champions roster. Answering with the Champions roster's size instead is the scope-routing bug this case pins.",
+    },
+    covers: ["SQL", "whole-dex-routing"],
+  },
+
+  // G57 (deterministic): type-combination existence in national-dex scope —
+  // pins the LEAST/GREATEST slot-order normalization, form-aware routing.
+  {
+    id: "G57",
+    mode: "national-dex",
+    input: "Is there a Pokémon with the Fire/Ice type combination?",
+    expect: {
+      status: "answered",
+      toolEfficiency: { usedTool: "run_sql", maxPerPokemonFetches: 0 },
+      mustCite: ["pokemon"],
+      mustInclude: ["Darmanitan"],
+      deterministic: true,
+      rubricNote:
+        "Correct answer queries pokemon WHERE format='national-dex' (form-aware — this Fire/Ice form doesn't appear in the default-forms-only natdex_species) and normalizes (type1, type2) with LEAST(type1,type2)/GREATEST(type1,type2) so the combo matches regardless of which column holds Fire vs. Ice. The warehouse's real Fire/Ice Pokémon is Darmanitan's Galarian Zen Mode. Answering 'no' (missing the form) or matching only one literal slot order both fail.",
+    },
+    covers: ["SQL", "type-combo-normalization"],
+  },
+
+  // G58 (judged): the exact production incident question, asked from
+  // Champions scope. No deterministic plan — the real ~17 vs. the buggy
+  // 100+ can only be scored against the live warehouse.
+  {
+    id: "G58",
+    mode: "champions",
+    input: "How many unique type combinations still don't have any Pokémon?",
+    expect: {
+      status: "answered",
+      rubricNote:
+        "This is a whole-Pokédex question, not a Champions-roster one. Correct answer routes to run_sql over the COMPLETE warehouse records — natdex_species for species-level combos plus pokemon@national-dex for form-only combos — normalizing (type1, type2) with LEAST(type1,type2)/GREATEST(type1,type2) so a mirrored slot order isn't double-counted as two combos (or a real combo miscounted as missing). The correct figure is approximately 17 unique type combinations with zero Pokémon. A figure of 100+ signals the ordered-pair bug (treating (fire,ice) and (ice,fire) as distinct, so every real combo's 'mirror' reads as falsely missing). Answering from the (much smaller) Champions roster instead of the whole National Pokédex FAILS both scope_adherence and answer_correctness — this is the exact production incident.",
+    },
+    covers: ["SQL", "whole-dex-routing", "type-combo-normalization"],
+  },
+
+  // G59 (judged): form-awareness — Rotom's appliance forms are absent from
+  // natdex_species (default-forms-only); a form-blind answer only surfaces
+  // the default Electric/Ghost typing.
+  {
+    id: "G59",
+    mode: "national-dex",
+    input: "What are Rotom's forms and their types?",
+    expect: {
+      status: "answered",
+      mustInclude: ["Heat", "Fire"],
+      rubricNote:
+        "Rotom has six forms via held appliances: default (Electric/Ghost), Heat Rotom (Electric/Fire), Wash Rotom (Electric/Water), Frost Rotom (Electric/Ice), Fan Rotom (Electric/Flying), and Mow Rotom (Electric/Grass). A correct, form-aware answer sources these from pokemon@national-dex (not just natdex_species, which is default-forms-only) and lists all six with their types. An answer that gives ONLY Rotom's default Electric/Ghost typing and omits the appliance forms FAILS — it's the production form-blindness bug (natdex_species has no Rotom-Heat row).",
+    },
+    covers: ["national-dex", "form-awareness"],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -933,7 +1023,7 @@ export const cases: GoldenCase[] = [
 // ---------------------------------------------------------------------------
 
 /**
- * All 55 cases indexed by ID for O(1) lookup.
+ * All 59 cases indexed by ID for O(1) lookup.
  * Example: `caseById["G11"]`
  */
 export const caseById: Readonly<Record<string, GoldenCase>> =
@@ -949,7 +1039,9 @@ export const caseById: Readonly<Record<string, GoldenCase>> =
  *       run_sql aggregation cases.
  *
  * Includes: G1, G3, G5, G6, G8 (tool-efficiency), G11 (immunity), G15 (stat),
- * G26/G32/G35/G44/G47 (Oak v2 run_sql aggregations).
+ * G26/G32/G35/G44/G47 (Oak v2 run_sql aggregations), G56/G57 (national-dex-
+ * scope whole-dex-routing + LEAST/GREATEST slot-order-normalization
+ * regression cases).
  */
 export const deterministicCases: GoldenCase[] = cases.filter(
   (c) => c.expect.deterministic === true,
