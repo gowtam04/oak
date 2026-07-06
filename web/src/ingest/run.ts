@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import {
@@ -138,6 +138,12 @@ export interface RunIngestOptions {
   formats?: Format[];
   /** Optional human-readable progress callback. */
   onProgress?: (msg: string) => void;
+  /**
+   * Force replacing wiki_page/wiki_chunk even when the built wiki rows are
+   * empty. Default false — see the empty-wiki guard in `writeIndex`. Set this
+   * only for an intentional corpus removal.
+   */
+  allowEmptyWiki?: boolean;
 }
 
 /** The built rows for the GLOBAL natdex warehouse tables (built once per run). */
@@ -174,8 +180,14 @@ export interface GlobalReport {
   machines: number;
   classicEncounters: number;
   pmd: number;
+  /** Actual wiki_page/wiki_chunk row counts left in the DB after this run —
+   * the built-row counts when replaced, or the preserved counts when the
+   * empty-wiki guard fired (see `wikiPreserved`). */
   wikiPages: number;
   wikiChunks: number;
+  /** True when the empty-wiki guard preserved an existing populated corpus
+   * instead of wiping it with an empty build (see `writeIndex`). */
+  wikiPreserved: boolean;
 }
 
 const SCHEMA_VERSION = "2";
@@ -242,6 +254,29 @@ async function writeIngestMeta(
   }
 }
 
+export interface WriteIndexOptions {
+  /**
+   * Force replacing wiki_page/wiki_chunk even when the incoming wiki rows are
+   * empty. Default false — see the empty-wiki guard below.
+   */
+  allowEmptyWiki?: boolean;
+}
+
+/** What actually happened to the wiki tables this call — only set when
+ * `rows.global` was supplied. */
+export interface WikiWriteOutcome {
+  /** True when an empty incoming build hit a populated DB and was skipped
+   * (both wiki_page and wiki_chunk left untouched, as a consistent pair). */
+  preserved: boolean;
+  /** Row counts actually left in wiki_page/wiki_chunk after this call. */
+  wikiPages: number;
+  wikiChunks: number;
+}
+
+export interface WriteIndexResult {
+  wiki: WikiWriteOutcome | null;
+}
+
 /**
  * Apply a built index to Postgres in ONE atomic transaction: all four table
  * swaps plus the ingest_meta write commit or roll back together, and every
@@ -249,6 +284,17 @@ async function writeIngestMeta(
  * or thrown error mid-write leaves the database exactly as it was before the
  * call (DATA-02); a partial-format call (`formats` shorter than all eleven)
  * leaves every other format's rows untouched (DATA-01).
+ *
+ * Empty-wiki guard: the Fandom wiki corpus (`wiki_page`/`wiki_chunk`) is only
+ * ever built from the gitignored, manually-fetched `.wiki-cache/` (see
+ * `build-wiki.ts` / `npm run fetch:wiki`) — an ingest run without that cache
+ * builds ZERO wiki rows. Since these are GLOBAL tables (`replaceGlobalTable`
+ * does an unscoped delete), writing that empty build over a populated DB would
+ * silently wipe the corpus. So when the incoming wiki rows are empty AND the
+ * DB currently holds a populated `wiki_page` table, this call SKIPS replacing
+ * both wiki tables (they must stay consistent as a pair) and logs a warning
+ * instead. Pass `{ allowEmptyWiki: true }` (the CLI's `--allow-empty-wiki`) to
+ * force the old unconditional wipe for an intentional corpus removal.
  */
 export async function writeIndex(
   db: IngestDb,
@@ -257,7 +303,10 @@ export async function writeIndex(
   formats: Format[],
   finishedAt: number,
   report: (msg: string) => void = () => {},
-): Promise<void> {
+  opts: WriteIndexOptions = {},
+): Promise<WriteIndexResult> {
+  let wiki: WikiWriteOutcome | null = null;
+
   await db.transaction(async (tx) => {
     report("writing pokemon…");
     await replaceTable(tx, pokemon, rows.pokemon, formats);
@@ -285,13 +334,47 @@ export async function writeIndex(
       );
       report("writing pmd_recruits…");
       await replaceGlobalTable(tx, pmd_recruits, rows.global.pmd);
+
       // Fandom wiki corpus — pages before chunks (logical FK, no constraint).
-      report("writing wiki_page…");
-      await replaceGlobalTable(tx, wiki_page, rows.global.wikiPages);
-      report("writing wiki_chunk…");
-      await replaceGlobalTable(tx, wiki_chunk, rows.global.wikiChunks);
+      const incomingEmpty = rows.global.wikiPages.length === 0;
+      let skipWiki = false;
+      if (incomingEmpty && !opts.allowEmptyWiki) {
+        const [pageCount, chunkCount] = await Promise.all([
+          tx
+            .select({ n: sql<number>`count(*)`.mapWith(Number) })
+            .from(wiki_page),
+          tx
+            .select({ n: sql<number>`count(*)`.mapWith(Number) })
+            .from(wiki_chunk),
+        ]);
+        const existingPages = pageCount[0]?.n ?? 0;
+        const existingChunks = chunkCount[0]?.n ?? 0;
+        if (existingPages > 0) {
+          skipWiki = true;
+          const msg =
+            `wiki cache empty — preserving ${existingPages} existing ` +
+            `wiki_page rows (run 'npm run fetch:wiki' first, or pass ` +
+            `--allow-empty-wiki to force the wipe)`;
+          logger.warn({ event: "ingest_wiki_guard", existingPages, existingChunks }, msg);
+          report(msg);
+          wiki = { preserved: true, wikiPages: existingPages, wikiChunks: existingChunks };
+        }
+      }
+      if (!skipWiki) {
+        report("writing wiki_page…");
+        await replaceGlobalTable(tx, wiki_page, rows.global.wikiPages);
+        report("writing wiki_chunk…");
+        await replaceGlobalTable(tx, wiki_chunk, rows.global.wikiChunks);
+        wiki = {
+          preserved: false,
+          wikiPages: rows.global.wikiPages.length,
+          wikiChunks: rows.global.wikiChunks.length,
+        };
+      }
     }
   });
+
+  return { wiki };
 }
 
 // ---------------------------------------------------------------------------
@@ -395,8 +478,12 @@ export async function runIngest(
     machines: global.machines.length,
     classicEncounters: global.classicEncounters.length,
     pmd: global.pmd.length,
+    // Provisional — the built counts. Corrected below with what writeIndex
+    // actually left in the DB (the empty-wiki guard may preserve rather than
+    // replace).
     wikiPages: global.wikiPages.length,
     wikiChunks: global.wikiChunks.length,
+    wikiPreserved: false,
   };
   report(
     `[global] natdex_species: ${globalReport.natdexSpecies}, ` +
@@ -412,7 +499,7 @@ export async function runIngest(
   const { db, pool } = await openIngestDb();
   const finishedAt = Date.now();
   try {
-    await writeIndex(
+    const { wiki } = await writeIndex(
       db,
       {
         pokemon: pokemonRows,
@@ -425,7 +512,13 @@ export async function runIngest(
       formats,
       finishedAt,
       report,
+      { allowEmptyWiki: opts.allowEmptyWiki ?? false },
     );
+    if (wiki) {
+      globalReport.wikiPages = wiki.wikiPages;
+      globalReport.wikiChunks = wiki.wikiChunks;
+      globalReport.wikiPreserved = wiki.preserved;
+    }
   } finally {
     await pool.end();
   }
@@ -455,7 +548,11 @@ function parseCliOptions(argv: string[]): RunIngestOptions {
         .map((s) => s.trim())
         .filter((s): s is Format => isFormat(s))
     : undefined;
-  return formats && formats.length > 0 ? { formats } : {};
+  const allowEmptyWiki = argv.includes("--allow-empty-wiki");
+  return {
+    ...(formats && formats.length > 0 ? { formats } : {}),
+    ...(allowEmptyWiki ? { allowEmptyWiki } : {}),
+  };
 }
 
 async function main(): Promise<void> {
