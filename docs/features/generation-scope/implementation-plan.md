@@ -13,6 +13,11 @@
 > for the amended precedence chain and event shape. The body text below is left
 > as originally written and does not reflect this pass.
 
+> **Superseded further (2026-07-06, national-dex + gens-1-4 expansion):** Oak now has
+> eleven scopes — national-dex (new default), champions, scarlet-violet, and gen-1…gen-8.
+> The scope chip picks from all eleven; `champions_mode: false` now maps to national-dex
+> (was scarlet-violet). See CLAUDE.md for current state.
+
 **Status:** ready to implement (not started)
 **Written:** 2026-07-02
 **Problem:** Oak currently understands exactly two data scopes — Gen 9 (`scarlet-violet`) and
