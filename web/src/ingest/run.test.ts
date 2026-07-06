@@ -27,6 +27,8 @@ import {
   pokemon,
   reference_cache,
   searchable_names,
+  wiki_chunk,
+  wiki_page,
 } from "@/data/schema";
 import type { Format } from "@/data/formats";
 
@@ -34,6 +36,7 @@ import { createPgSchema, type PgFixture } from "../../test/support/pg";
 import {
   writeIndex,
   type FormatReport,
+  type GlobalRows,
   type IndexRows,
   type IngestDb,
 } from "./run";
@@ -41,6 +44,7 @@ import type { PokemonRow } from "./build-pokedex";
 import type { LearnsetRow } from "./build-learnsets";
 import type { NameRow } from "./build-names";
 import type { ReferenceRow } from "./build-reference";
+import type { WikiChunkRow, WikiPageRow } from "./build-wiki";
 
 let fix: PgFixture;
 let db: IngestDb;
@@ -270,5 +274,145 @@ describe("writeIndex — atomic rollback on a mid-write failure (DATA-02)", () =
     expect(after.gen6.n).toHaveLength(before.gen6.n.length);
     expect(after.gen6.r).toHaveLength(before.gen6.r.length);
     expect(after.gen6.m).toEqual(before.gen6.m);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Empty-wiki guard — writeIndex must never let an empty `.wiki-cache/` build
+// (rows.global.wikiPages/wikiChunks == []) silently wipe a populated wiki
+// corpus (both GLOBAL tables, unscoped delete). See run.ts writeIndex.
+// ---------------------------------------------------------------------------
+
+function makeGlobalRows(
+  wikiPages: WikiPageRow[],
+  wikiChunks: WikiChunkRow[],
+): GlobalRows {
+  return {
+    natdexSpecies: [],
+    natdexMoves: [],
+    machines: [],
+    classicEncounters: [],
+    pmd: [],
+    wikiPages,
+    wikiChunks,
+  };
+}
+
+function makeWikiPageRow(id: string): WikiPageRow {
+  return {
+    id,
+    title: `Title ${id}`,
+    url: `https://example.test/wiki/${id}`,
+    revised_at: null,
+    license: "CC BY-SA 4.0",
+  };
+}
+
+function makeWikiChunkRow(pageId: string, i = 0): WikiChunkRow {
+  return {
+    id: `${pageId}#${i}`,
+    page_id: pageId,
+    section: "Overview",
+    content: `content for ${pageId} chunk ${i}`,
+  };
+}
+
+async function wikiCounts() {
+  const [pages, chunks] = await Promise.all([
+    db.select().from(wiki_page),
+    db.select().from(wiki_chunk),
+  ]);
+  return { pages, chunks };
+}
+
+const EMPTY_INDEX_ROWS: Omit<IndexRows, "global"> = {
+  pokemon: [],
+  learnsets: [],
+  names: [],
+  references: [],
+};
+
+describe("writeIndex — empty-wiki guard", () => {
+  it("preserves an existing populated wiki corpus when incoming wiki rows are empty", async () => {
+    const seededPages = [makeWikiPageRow("bulbasaur"), makeWikiPageRow("charmander")];
+    const seededChunks = [
+      makeWikiChunkRow("bulbasaur"),
+      makeWikiChunkRow("charmander"),
+    ];
+    await writeIndex(
+      db,
+      { ...EMPTY_INDEX_ROWS, global: makeGlobalRows(seededPages, seededChunks) },
+      [],
+      [],
+      7000,
+    );
+    expect(await wikiCounts()).toMatchObject({
+      pages: expect.arrayContaining([expect.objectContaining({ id: "bulbasaur" })]),
+    });
+
+    const result = await writeIndex(
+      db,
+      { ...EMPTY_INDEX_ROWS, global: makeGlobalRows([], []) },
+      [],
+      [],
+      8000,
+    );
+
+    expect(result.wiki).toEqual({ preserved: true, wikiPages: 2, wikiChunks: 2 });
+    const after = await wikiCounts();
+    expect(after.pages.map((p) => p.id).sort()).toEqual(["bulbasaur", "charmander"]);
+    expect(after.chunks.map((c) => c.id).sort()).toEqual([
+      "bulbasaur#0",
+      "charmander#0",
+    ]);
+  });
+
+  it("allowEmptyWiki forces the wipe even over a populated corpus", async () => {
+    expect((await wikiCounts()).pages.length).toBeGreaterThan(0);
+
+    const result = await writeIndex(
+      db,
+      { ...EMPTY_INDEX_ROWS, global: makeGlobalRows([], []) },
+      [],
+      [],
+      9000,
+      undefined,
+      { allowEmptyWiki: true },
+    );
+
+    expect(result.wiki).toEqual({ preserved: false, wikiPages: 0, wikiChunks: 0 });
+    const after = await wikiCounts();
+    expect(after.pages).toHaveLength(0);
+    expect(after.chunks).toHaveLength(0);
+  });
+
+  it("replaces normally when incoming wiki rows are non-empty", async () => {
+    // Starting from the empty state left by the previous test.
+    const firstPages = [makeWikiPageRow("squirtle")];
+    const firstChunks = [makeWikiChunkRow("squirtle")];
+    await writeIndex(
+      db,
+      { ...EMPTY_INDEX_ROWS, global: makeGlobalRows(firstPages, firstChunks) },
+      [],
+      [],
+      10_000,
+    );
+    expect((await wikiCounts()).pages.map((p) => p.id)).toEqual(["squirtle"]);
+
+    const secondPages = [makeWikiPageRow("pikachu"), makeWikiPageRow("eevee")];
+    const secondChunks = [makeWikiChunkRow("pikachu"), makeWikiChunkRow("eevee")];
+    const result = await writeIndex(
+      db,
+      { ...EMPTY_INDEX_ROWS, global: makeGlobalRows(secondPages, secondChunks) },
+      [],
+      [],
+      11_000,
+    );
+
+    expect(result.wiki).toEqual({ preserved: false, wikiPages: 2, wikiChunks: 2 });
+    const after = await wikiCounts();
+    // squirtle is gone — replaced wholesale, not merged.
+    expect(after.pages.map((p) => p.id).sort()).toEqual(["eevee", "pikachu"]);
+    expect(after.chunks.map((c) => c.id).sort()).toEqual(["eevee#0", "pikachu#0"]);
   });
 });
