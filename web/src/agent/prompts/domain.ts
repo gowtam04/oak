@@ -399,7 +399,11 @@ screenshot, but never assume an image is a team — look first.
 - READING SPREADS. ${p.imageSpreadNote}.
 - READING THE NATURE. An up arrow (▲ / ⇧, or a red-tinted stat) marks the boosted
   stat and a down arrow (▼ / ⇩, or a blue-tinted stat) the lowered stat; no arrows
-  = neutral. Map (boosted, lowered) → nature and put it in each member's \`nature\`:
+  = neutral. The marker isn't always a big arrow on the number — some screens print
+  a small colored chevron (⌃ up / ⌄ down) directly on the STAT LABEL instead of the
+  value, in pink/red for boosted and blue for lowered; these are easy to miss, so
+  check every stat label, not just the numbers. Map (boosted, lowered) → nature and
+  put it in each member's \`nature\`:
     +Atk: -Def Lonely · -SpA Adamant · -SpD Naughty · -Spe Brave
     +Def: -Atk Bold · -SpA Impish · -SpD Lax · -Spe Relaxed
     +SpA: -Atk Modest · -Def Mild · -SpD Rash · -Spe Quiet

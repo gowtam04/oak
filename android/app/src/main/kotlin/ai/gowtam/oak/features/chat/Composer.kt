@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -104,6 +105,7 @@ fun Composer(
     val oak = LocalOakColors.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
     var menuExpanded by remember { mutableStateOf(false) }
     var attachNote by remember { mutableStateOf<String?>(null) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
@@ -201,7 +203,15 @@ fun Composer(
 
         Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.Bottom) {
             Box {
-                IconButton(onClick = { menuExpanded = true }, enabled = canAttachMore) {
+                IconButton(
+                    onClick = {
+                        // Menu and keyboard are mutually exclusive — opening the attach
+                        // menu clears text-field focus so the keyboard hides underneath it.
+                        focusManager.clearFocus()
+                        menuExpanded = true
+                    },
+                    enabled = canAttachMore,
+                ) {
                     Icon(Icons.Filled.AttachFile, contentDescription = "Attach image", tint = oak.accent)
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
@@ -240,10 +250,17 @@ fun Composer(
             val glowActive = isStreaming || isFocused
             OutlinedTextField(
                 value = composerText,
-                onValueChange = onTextChange,
+                onValueChange = {
+                    // Typing implies the user wants the keyboard, not the attach menu.
+                    if (menuExpanded) menuExpanded = false
+                    onTextChange(it)
+                },
                 modifier = Modifier
                     .weight(1f)
-                    .onFocusChanged { isFocused = it.isFocused }
+                    .onFocusChanged {
+                        isFocused = it.isFocused
+                        if (it.isFocused && menuExpanded) menuExpanded = false
+                    }
                     .then(
                         if (glowActive) {
                             Modifier.shadow(

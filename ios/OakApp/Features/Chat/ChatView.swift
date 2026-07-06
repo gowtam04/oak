@@ -105,6 +105,7 @@ struct ChatView: View {
         errorBannerView(banner)
           .transition(bannerTransition)
       }
+      scopeChipStrip
       ComposerView(
         model: model,
         onVoice: { isVoicePresented = true },
@@ -137,13 +138,6 @@ struct ChatView: View {
         ToolbarItem(placement: .topBarLeading) {
           OakWordmarkLockup(showsWordmark: false)
         }
-      }
-      // The scope control (GS-C): the header's visible counterpart to the `scope`
-      // SSE event and the ONLY interactive scope control (the Champions pill +
-      // Account toggle are gone). Centered so it reads as the thread's scope, not
-      // an action; disabled mid-stream so a turn's scope stays stable.
-      ToolbarItem(placement: .principal) {
-        scopeChip
       }
       if showsNewConversationButton {
         ToolbarItem(placement: .topBarTrailing) {
@@ -203,9 +197,24 @@ struct ChatView: View {
 
   // MARK: Scope chip (generation-scope GS-C)
 
-  /// The header scope control: a compact pill showing the displayed scope's short
-  /// label, opening a menu of all known formats as an inline radio list
-  /// (checkmark on the current pick). Picking one seeds the next turn's scope
+  /// A slim, trailing-aligned strip directly above the composer hosting the scope
+  /// chip (feedback AK-FdIbKm2ezTwpF_aTo4A4: the chip used to sit in the toolbar's
+  /// `.principal` slot, easy to miss above the nav bar). Minimal vertical padding
+  /// so it reads as part of the composer's seam, not a new section.
+  private var scopeChipStrip: some View {
+    HStack {
+      Spacer()
+      scopeChip
+    }
+    .padding(.horizontal, Theme.Spacing.md)
+    .padding(.top, Theme.Spacing.xs)
+    .background(Theme.canvas)
+  }
+
+  /// The scope control: a compact pill showing the displayed scope's short label,
+  /// opening a menu of all known formats as an inline radio list (checkmark on
+  /// the current pick). Opening it from the bottom-anchored strip means the menu
+  /// naturally opens upward. Picking one seeds the next turn's scope
   /// (`selectScope`). Disabled while a turn streams so the scope can't change
   /// mid-turn — mirrors `ScopeChip.tsx` (label = the scope, menu =
   /// `Format.knownCases`, disabled while streaming).

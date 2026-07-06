@@ -171,7 +171,21 @@ describe("Interpreting attached images — present in every scope + provider", (
         expect(text).toContain("general, not just teams");
         expect(text).toContain("uncertainty_flags");
       });
+
+      it(`teaches the nature-chevron glyph guidance in every scope (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        expect(text).toContain("small colored chevron");
+        expect(text).toContain("STAT LABEL");
+      });
     }
+
+    it(`teaches the Champions stats-screen chevron note in champions scope only (${provider})`, () => {
+      const championsText = bodyText(provider, "champions");
+      const standardText = bodyText(provider, "standard");
+      expect(championsText).toContain("NATURE ON THIS SCREEN");
+      expect(championsText).toContain("blue DOWN-chevron");
+      expect(standardText).not.toContain("NATURE ON THIS SCREEN");
+    });
   }
 });
 

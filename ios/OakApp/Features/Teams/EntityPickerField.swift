@@ -137,6 +137,7 @@ struct EntityPickerSheet: View {
           }
         }
       }
+      .softHeaderScrollEdge()
       .searchable(text: $query, prompt: "Search")
       .navigationTitle(title)
       .navigationBarTitleDisplayMode(.inline)
@@ -176,6 +177,27 @@ struct EntityPickerSheet: View {
       let matches = await search(kind, trimmed)
       guard !Task.isCancelled else { return }
       results = matches
+    }
+  }
+}
+
+extension View {
+  /// Lets scrolled list rows fade under the picker's inline header instead of
+  /// hard-clipping against it — the "cutoff on species" a TestFlight tester reported.
+  /// Oak paints its nav bars opaque (``OakChrome``), which fully occludes content
+  /// scrolling under the header; hiding this sheet's bar background is what lets iOS
+  /// 26's soft top scroll-edge effect render the graceful Liquid-Glass fade. Both
+  /// modifiers are gated together: **below iOS 26 the soft fade is unavailable, so we
+  /// must keep the opaque bar** — hiding the background there would leave the title
+  /// and rows colliding under a transparent header, worse than the original clip.
+  @ViewBuilder
+  func softHeaderScrollEdge() -> some View {
+    if #available(iOS 26.0, *) {
+      self
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+    } else {
+      self
     }
   }
 }

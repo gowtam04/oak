@@ -218,3 +218,89 @@ sync script greps these to dedupe against ASC's response.
 > Include an update to have the sources clickable into an artifact viewer so I can see more info
 
 **Assets:** [screenshot-1.jpg](assets/AGGcchFC6_5VtW53PR7-DXo/screenshot-1.jpg)
+
+### ANPJ-6ivGVVNKS8xFH0xFWI
+
+- **Date:** 2026-07-06T02:50:45.802Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (83aa77a agent — ships in the next TestFlight build; duplicate of AG_1gTxMcJu5knN-sYtgIwM. Prompt-guidance fix, not a new tool: the Champions Stats screen's nature chevrons are now taught in the image-reading prompt, and the deterministic (boosted, lowered)→nature table was already in the prompt)
+
+> Nature can be inferred based on the screenshot. We can see specific stat increases/decreases for each pokemon so it can be inferred. Create a function/tool to do this for Pokemon champion screenshots that would look similar to what I provided.
+
+**Assets:** [screenshot-1.jpg](assets/ANPJ-6ivGVVNKS8xFH0xFWI/screenshot-1.jpg), [screenshot-2.jpg](assets/ANPJ-6ivGVVNKS8xFH0xFWI/screenshot-2.jpg)
+
+### AL_Lc4N81kZu_ALUNkz5LfI
+
+- **Date:** 2026-07-06T02:44:17.172Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (b4c2a6a ios — ships in the next TestFlight build. Root cause: Oak's opaque nav bar hard-clipped rows scrolled under the picker header; on iOS 26 the header background is now hidden + soft top scroll edge so rows fade gracefully; applies to all six entity pickers)
+
+> There’s a cutoff on species
+
+**Assets:** [screenshot-1.jpg](assets/AL_Lc4N81kZu_ALUNkz5LfI/screenshot-1.jpg)
+
+### AG_1gTxMcJu5knN-sYtgIwM
+
+- **Date:** 2026-07-06T02:35:35.045Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (83aa77a agent — ships in the next TestFlight build. Prompt-guidance fix rather than a new tool: the image-reading prompt now teaches the Champions Stats screen's red-up/blue-down chevrons on stat labels; the deterministic (boosted, lowered)→nature mapping was already in the cached prompt, so no context-window cost)
+
+> In pokemon champion screenshot of your team, nature can be deduced based on which stats are showing red up arrow (indicating increase) and blue down arrow (indicating decrease). But in the app it says nature is not provided.
+>
+> Update this in the code to recognize this for champions for similar screenshots. It should probably have its own function/tool call to make it more deterministic and provide correct answer without overloading context window.
+
+**Assets:** [screenshot-1.jpg](assets/AG_1gTxMcJu5knN-sYtgIwM/screenshot-1.jpg), [screenshot-2.jpg](assets/AG_1gTxMcJu5knN-sYtgIwM/screenshot-2.jpg)
+
+### APFrit48yRdOdP2IKOX6tBM
+
+- **Date:** 2026-07-06T02:32:02.402Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (93837c4 ios / 310321d android — ships in the next TestFlight build. Attach menu and keyboard are now mutually exclusive on both clients: opening one dismisses the other, and typing dismisses an open menu)
+
+> If I start typing it should minimize the take photo / photo library option and just show me what I’m typing. Check what other scenarios should be applied for similar items. 
+
+**Assets:** [screenshot-1.jpg](assets/APFrit48yRdOdP2IKOX6tBM/screenshot-1.jpg)
+
+### AK-FdIbKm2ezTwpF_aTo4A4
+
+- **Date:** 2026-07-06T02:12:36.745Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (9c3f4da ios / 2353308 android — ships in the next TestFlight build. UI-placement part: the scope chip moved from the top bar to a slim trailing strip directly above the composer on both clients. The "national dex" default-scope suggestion is tracked separately — being implemented by another agent)
+
+> Instead of having the user choose which generation you are selecting from on the top, move it to the bottom.
+>
+> I included screenshots of ProDex where the symbol on the top right mentions what category of games you are searching against. Something like this but closer to the bottom of the screen so user can switch easily. Maybe something like nice logos like ProDex or direct text like Claude. Think through the amount of objects in the UI so it’s easy to maneuver through and doesn’t overwhelm the user. 
+>
+> Should you have a “national dex” for general questions as the default so it can optimize for searching quickly for general questions instead of doing generation specific search.
+
+**Assets:** [screenshot-1.jpg](assets/AK-FdIbKm2ezTwpF_aTo4A4/screenshot-1.jpg), [screenshot-2.jpg](assets/AK-FdIbKm2ezTwpF_aTo4A4/screenshot-2.jpg), [screenshot-3.jpg](assets/AK-FdIbKm2ezTwpF_aTo4A4/screenshot-3.jpg), [screenshot-4.jpg](assets/AK-FdIbKm2ezTwpF_aTo4A4/screenshot-4.jpg)
+
+### ALF0VVZ41Rnc3HaaL_hIRRw
+
+- **Date:** 2026-07-06T02:02:00.708Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** partial (7b1b6ec web — Fandom glitch crawl expanded: "Glitches"/"Pokémon Glitches" hub pages + Glitch Pokémon category seeded, and chunk sections now carry the per-generation heading breadcrumb, so Gens 1–7 glitch questions retrieve real results after the next prod crawl+ingest. Gen 8/9 glitch content does not exist on any license-compatible wiki (Fandom has none; Bulbapedia and Glitch City wiki are CC-NonCommercial), so those gens keep the honest "no documented information" degrade — decided 2026-07-05, strict tool-grounding policy retained)
+
+> https://bulbapedia.bulbagarden.net/wiki/List_of_glitches_in_Generation_VIII
+>
+> There are glitches and hacks in this gen like the ones in this article. Fix this across all gens
+
+**Assets:** [screenshot-1.jpg](assets/ALF0VVZ41Rnc3HaaL_hIRRw/screenshot-1.jpg)
