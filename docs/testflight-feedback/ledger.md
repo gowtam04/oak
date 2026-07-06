@@ -280,7 +280,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** fixed (9c3f4da ios / 2353308 android — ships in the next TestFlight build. UI-placement part: the scope chip moved from the top bar to a slim trailing strip directly above the composer on both clients. The "national dex" default-scope suggestion is tracked separately — being implemented by another agent)
+- **Status:** closed (placement move tried and reverted: the chip moved to a strip above the composer in 9c3f4da ios / 2353308 android, shipped in build 19, then reverted to the top bar by owner decision in 5c7ddbc ios / 7368815 android — the bottom strip looked out of place. The "national dex" default-scope suggestion from this item DID ship: e72fc41 web + the natdex client work, build 19)
 
 > Instead of having the user choose which generation you are selecting from on the top, move it to the bottom.
 >
