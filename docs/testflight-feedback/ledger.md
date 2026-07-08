@@ -379,7 +379,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** pending
+- **Status:** fixed (095b543 — prompt-level; unqualified aggregations now default to the active scope)
 
 > It doesn’t seem to filter based on generation selected
 
