@@ -22,7 +22,11 @@ import Observation
 /// the web hook.
 @MainActor
 @Observable
-final class TeamsAssistantViewModel {
+final class TeamsAssistantViewModel: Identifiable {
+
+  /// Stable identity so the editor can drive its assistant sheet via `.sheet(item:)`
+  /// — a non-nil model is the sole presentation trigger, so a blank sheet is impossible.
+  nonisolated let id = UUID()
 
   /// One committed exchange in the panel's thread.
   struct Turn: Identifiable, Equatable {

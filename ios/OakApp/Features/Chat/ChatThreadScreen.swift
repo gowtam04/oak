@@ -13,10 +13,16 @@ import SwiftUI
 ///
 /// While the detail loads it shows a `ProgressView`; a load failure shows the
 /// detail view model's message with a Retry that re-runs the load. The pushed thread
-/// hides the New-conversation button — Back returns to the list, and New Chat lives
-/// on the list (the Chat tab's toolbar).
+/// still offers a New-conversation button (TestFlight AG4sZ6E): a `.new` route starts
+/// a fresh thread in place, an `.existing` route routes back to the tab's stack via
+/// ``onNewChat`` so it becomes a new pushed thread rather than mutating the saved one.
 struct ChatThreadScreen: View {
   let source: ChatRoute
+
+  /// Invoked by the toolbar's New-conversation button when this screen is showing a
+  /// saved (`.existing`) thread — the Chat tab seeds a fresh `.new` route with it. `nil`
+  /// falls back to starting a new conversation in place.
+  var onNewChat: (() -> Void)? = nil
 
   @Environment(\.services) private var services
   @Environment(AppState.self) private var appState
@@ -30,7 +36,21 @@ struct ChatThreadScreen: View {
   var body: some View {
     Group {
       if let model {
-        ChatView(model: model, showsNewConversationButton: false)
+        ChatView(
+          model: model,
+          showsNewConversationButton: false,
+          onNewConversation: {
+            // A `.new` route is already a fresh thread — start over in place; an
+            // `.existing` (saved) thread routes New Chat back to the tab's stack so it
+            // opens as a new pushed thread instead of mutating the saved conversation.
+            switch source {
+            case .new:
+              model.startNewConversation()
+            case .existing:
+              onNewChat?()
+            }
+          }
+        )
       } else if let loadError {
         ContentUnavailableView {
           Label("Couldn't open conversation", systemImage: "exclamationmark.triangle")
