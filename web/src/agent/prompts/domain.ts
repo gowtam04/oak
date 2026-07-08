@@ -41,7 +41,7 @@ import {
   type MainlineMode,
 } from "@/agent/prompts/gen-info";
 import { WAREHOUSE_DDL } from "@/agent/prompts/warehouse-ddl";
-import { CHAMPIONS_REGULATION, FORMATS } from "@/data/formats";
+import { CHAMPIONS_REGULATION, FORMATS, formatForMode, type Format } from "@/data/formats";
 import type { AgentMode } from "@/agent/types";
 
 /** The shared domain content for one scope: the system body + worked examples. */
@@ -70,6 +70,15 @@ export interface ScopeProfile {
   basisLine: string;
   /** The "# Active scope" section body (roster/legality framing + data rule). */
   scopeSection: string;
+  /**
+   * The run_sql scope-default note injected into the `**run_sql**` tool-routing
+   * block: teaches that an UNQUALIFIED aggregation (count / superlative / ranking)
+   * asked while THIS scope is active defaults to this scope's warehouse partition
+   * — filter the format-partitioned tables to this scope's `format` and stamp
+   * `generation_basis` accordingly — and that the `national-dex` partition is for
+   * EXPLICITLY cross-generation questions only.
+   */
+  runSqlScopeNote: string;
   /** The generation-defining mechanics guard (gimmick, Fairy type, EV/Stat-Point). */
   mechanicsSection: string;
   /** Scope-specific tool-usage notes (stat-math field, live usage, …). */
@@ -88,7 +97,7 @@ export interface ScopeProfile {
 // Mainline scope profile — built from the single per-gen fact table (gen-info).
 // ---------------------------------------------------------------------------
 
-function mainlineProfile(info: MainlineGenInfo): ScopeProfile {
+function mainlineProfile(info: MainlineGenInfo, format: Format): ScopeProfile {
   return {
     basisTag: info.basisTag,
     label: info.label,
@@ -114,12 +123,26 @@ say otherwise.
   a time-sensitive fact neither covers is answered honestly rather than
   fabricated. Oak answers about the GAMES only, NOT the anime, movies, TV, or
   manga (decline those — see Answer policy).
-- WHOLE-POKÉDEX questions cross every generation and form, so they are NEVER
-  answered from this game's roster: a count/superlative across all Pokémon, or
-  "which type combinations exist / are still missing", MUST be answered with
-  run_sql over the national-dex warehouse (the form-aware \`pokemon@national-dex\`
-  partition when non-default forms can matter) — the format-scoped typed tools
-  only see ${info.gamesShort} and will undercount.`,
+- COUNTS, SUPERLATIVES, AND RANKINGS default to THIS scope. An EXPLICITLY
+  cross-generation question — one asked across all Pokémon or every generation
+  ("of all Pokémon", "ever", "in any generation", "the national dex"), or "which
+  type combinations exist / are still missing" — is NEVER answered from this
+  game's roster: route it to run_sql over the national-dex warehouse (the
+  form-aware \`pokemon@national-dex\` partition when non-default forms can matter).
+  But an UNQUALIFIED count/superlative/ranking asked while this scope is active
+  ("top 3 highest BST", "the fastest Pokémon") means WITHIN this scope — default
+  it to ${info.gamesShort}, not the national dex: prefer the typed tools
+  (query_pokedex with a \`sort_by\` + \`limit\`) where they fit, and when run_sql is
+  genuinely needed, filter the format-partitioned tables to \`format='${format}'\`
+  and stamp generation_basis with "${info.basisTag}". Reach for the national-dex
+  partition ONLY when the user EXPLICITLY asks across all Pokémon or all
+  generations.`,
+    runSqlScopeNote: `If you use run_sql for a question the user means WITHIN this
+    scope (an unqualified count or ranking like "top 3 highest BST" while this
+    scope is active), filter the format-partitioned tables to \`format='${format}'\`
+    — NOT \`'national-dex'\` — and stamp generation_basis with "${info.basisTag}".
+    Reach for the \`'national-dex'\` partition ONLY when the user explicitly asks
+    across all Pokémon or all generations.`,
     mechanicsSection: info.mechanicsNotes,
     toolNotes: `- For any stat or damage math, use compute_stat with the level, EV,
   IV, and nature you're modeling; it floors at each step so you never do the
@@ -235,10 +258,15 @@ ${p.toolNotes}
   is also how you VERIFY a factual premise (e.g. which generation a move was
   introduced). On error, read the \`hint\`, fix the SQL, and retry.
   - **A whole-Pokédex question MUST go through run_sql in EVERY scope** — even the
-    competitive ones. "How many Pokémon are <X>", "which type combinations have no
-    Pokémon", "list every Pokémon that <predicate>" are NOT answerable from the
-    format-scoped typed tools (which only see the active game's roster), so route
-    them to run_sql over the national-dex warehouse regardless of the active scope.
+    competitive ones. "Whole-Pokédex" means EXPLICITLY cross-generation: a question
+    asked across ALL Pokémon or ALL generations ("of all Pokémon", "ever", "in any
+    generation", "the national dex"). "How many Pokémon are <X> in total", "which
+    type combinations have no Pokémon anywhere", "list every Pokémon that
+    <predicate> across all games" are NOT answerable from the format-scoped typed
+    tools (which only see the active game's roster), so route them to run_sql over
+    the national-dex warehouse regardless of the active scope.
+  - **An UNQUALIFIED count / superlative / ranking, though, means WITHIN the active
+    scope** — not the whole Pokédex. ${p.runSqlScopeNote}
   - **FORM-AWARE vs SPECIES-LEVEL.** If the question can hinge on a NON-DEFAULT
     form (Rotom appliance forms, Galarian/Alolan/Hisuian/Paldean forms, Megas,
     Darmanitan-Galar-Zen, …) — e.g. "which type combinations exist / are missing",
@@ -687,7 +715,7 @@ const standardDomainCache = new Map<AgentMode, PromptDomain>();
 function cachedMainlineDomain(mode: MainlineMode): PromptDomain {
   const cached = standardDomainCache.get(mode);
   if (cached) return cached;
-  const profile = mainlineProfile(MAINLINE_GEN_INFO[mode]);
+  const profile = mainlineProfile(MAINLINE_GEN_INFO[mode], formatForMode(mode));
   const domain: PromptDomain = {
     systemPrompt: buildSystemBody(profile),
     fewShot: buildFewShot(profile),

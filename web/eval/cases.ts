@@ -1,5 +1,5 @@
 /**
- * eval/cases.ts — G1..G59 golden test cases (evaluation.md + Oak v2 §7).
+ * eval/cases.ts — G1..G60 golden test cases (evaluation.md + Oak v2 §7).
  *
  * Owned by: phase "Eval" / track "cases". Do NOT edit from other phases.
  *
@@ -1016,6 +1016,26 @@ export const cases: GoldenCase[] = [
     },
     covers: ["national-dex", "form-awareness"],
   },
+
+  // G60 (judged): run_sql scope-default. An UNQUALIFIED superlative ("top 3
+  // highest BST") asked while a GEN scope is active means WITHIN that scope, not
+  // the whole National Pokédex. Pins the fix for the Gen-1-chip BST screenshot
+  // (ledger ACxOs06j): the answer was badged NATIONAL DEX and named modern
+  // Pokémon because run_sql ran against the national-dex partition. The correct
+  // answer stays in gen-1 (filter format='gen-1' or use the typed tools) and
+  // stamps generation_basis.generation = "gen-1". No deterministic plan — the
+  // prompt's scope-defaulting behavior can only be scored against a live model.
+  {
+    id: "G60",
+    mode: "gen-1",
+    input: "top 3 highest BST",
+    expect: {
+      status: "answered",
+      rubricNote:
+        "The active scope is Generation 1 (Red/Blue/Yellow) and the question is UNQUALIFIED (no 'of all Pokémon', 'ever', or 'national dex'), so it means the top 3 base-stat totals WITHIN Gen 1 — NOT the whole National Pokédex. A correct answer stays in the Gen 1 roster: it either uses the typed tools (query_pokedex sorted by BST) or runs run_sql filtered to format='gen-1', and stamps generation_basis.generation = 'gen-1' (NOT 'national-dex'). The three highest-BST Gen 1 Pokémon are Mewtwo (680), then the pseudo-legendary Dragonite and the box legendaries Mew / the Kanto birds tier (Zapdos/Moltres/Articuno at 580, Dragonite 600, Gyarados/Lapras/etc.). Naming modern national-dex leaders that don't exist in Gen 1 — Eternatus, Mega/Primal formes, Arceus, Zacian — or badging the answer as national-dex is the scope-leak bug this case pins and FAILS scope_adherence.",
+    },
+    covers: ["SQL", "scope-defaulting", "whole-dex-routing"],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1023,7 +1043,7 @@ export const cases: GoldenCase[] = [
 // ---------------------------------------------------------------------------
 
 /**
- * All 59 cases indexed by ID for O(1) lookup.
+ * All 60 cases indexed by ID for O(1) lookup.
  * Example: `caseById["G11"]`
  */
 export const caseById: Readonly<Record<string, GoldenCase>> =
