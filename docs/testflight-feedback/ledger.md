@@ -312,7 +312,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** pending
+- **Status:** fixed (9d82733 — server-side turn deadline; live after the next web deploy)
 
 > I gave random words to see how it responds. It’s been processing for over 5 minutes. Consider timeout exceptions if the model is stuck in one step for too long and if overall process is taking too long. Maybe depending on the step / tool call there should be relevant timeout exceptions. 
 
