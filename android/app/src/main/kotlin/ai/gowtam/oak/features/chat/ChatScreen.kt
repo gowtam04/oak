@@ -14,6 +14,7 @@ import ai.gowtam.oak.ui.rememberHaptics
 import ai.gowtam.oak.ui.rememberReduceMotion
 import ai.gowtam.oak.wire.Format
 import android.content.res.Configuration
+import android.os.SystemClock
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
@@ -63,6 +64,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -79,6 +81,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.delay
 
 /**
  * The chat thread screen (chat-experience.md M-CHAT-US-1/2/3/4; component-design.md
@@ -88,7 +91,7 @@ import androidx.lifecycle.LifecycleEventObserver
  *
  * All logic lives in [ChatViewModel]; this composable is layout + bindings. The header
  * scope chip (component-design.md "AnswerCard render order" / GS-C) is the ONLY
- * interactive scope control — it opens a bottom-sheet picker over the six known
+ * interactive scope control — it opens a bottom-sheet picker over the eleven known
  * [Format]s and is disabled while a turn streams so a turn's scope stays stable.
  *
  * Screen-off auto-reconnect (DADR-13) is wired here via the lifecycle observer:
@@ -133,6 +136,26 @@ fun ChatScreen(
     }
     LaunchedEffect(uiState.errorBanner != null) {
         if (uiState.errorBanner != null) haptics.error()
+    }
+
+    // The elapsed-seconds counter is VIEW-layer only (never the ViewModel — mirrors
+    // iOS's `TimelineView`-driven counter, which is deliberately kept out of the model
+    // too): a wall-clock timestamp captured on `isStreaming` transitions, ticked into
+    // whole seconds once per second.
+    var streamStartedAt by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(uiState.isStreaming) {
+        streamStartedAt = if (uiState.isStreaming) SystemClock.elapsedRealtime() else null
+    }
+    val elapsedSeconds by produceState<Int?>(initialValue = null, streamStartedAt) {
+        val started = streamStartedAt
+        if (started == null) {
+            value = null
+        } else {
+            while (true) {
+                value = ((SystemClock.elapsedRealtime() - started) / 1000L).toInt()
+                delay(1_000)
+            }
+        }
     }
 
     // A scope change clears any open artifact stack (D-BR-ART-4) since its entries were
@@ -242,6 +265,7 @@ fun ChatScreen(
                                 activities = uiState.toolActivities,
                                 reconnecting = uiState.reconnecting,
                                 streamingText = uiState.streamingText,
+                                elapsedSeconds = elapsedSeconds,
                             )
                         }
                     }
@@ -441,9 +465,10 @@ private fun InProgressRow(
     activities: List<ToolActivity>,
     reconnecting: Boolean,
     streamingText: String,
+    elapsedSeconds: Int? = null,
 ) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(OakSpacing.md)) {
-        StreamingStatus(phase = phase, activities = activities, reconnecting = reconnecting)
+        StreamingStatus(phase = phase, activities = activities, reconnecting = reconnecting, elapsedSeconds = elapsedSeconds)
         if (streamingText.isNotEmpty()) {
             MarkdownBlockView(markdown = streamingText, modifier = Modifier.fillMaxWidth())
         }

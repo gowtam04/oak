@@ -41,13 +41,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.HistoryToggleOff
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -59,6 +60,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -205,42 +208,56 @@ private fun MatchupRow(label: String, types: List<String>, marked: Set<String>, 
 @Composable
 private fun MovepoolSection(groups: List<MovepoolGroup>, onOpen: (EntityKind, String) -> Unit) {
     if (groups.isEmpty()) return
+    val oak = LocalOakColors.current
+    val allEmpty = groups.all { it.moves.isEmpty() }
     Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
         SectionHeader("Movepool")
+        if (allEmpty) {
+            Text(
+                text = "No moves recorded for this format.",
+                style = MaterialTheme.typography.bodySmall,
+                color = oak.textMuted,
+            )
+        }
         for (group in groups) {
             if (group.moves.isEmpty()) continue
-            val oak = LocalOakColors.current
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = titleizeNonNull(group.method),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = oak.textMuted,
                 )
-                for (move in sortMovesByType(group.moves)) MovepoolMoveRow(move, onOpen)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (move in sortMovesByType(group.moves)) MoveChip(move, onOpen)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun MovepoolMoveRow(move: MovepoolMove, onOpen: (EntityKind, String) -> Unit) {
+private fun MoveChip(move: MovepoolMove, onOpen: (EntityKind, String) -> Unit) {
     val oak = LocalOakColors.current
     Row(
         modifier = Modifier
-            .fillMaxWidth()
+            .clip(RoundedCornerShape(OakRadius.pill))
+            .background(oak.surfaceRaised)
             .clickable { onOpen(EntityKind.MOVE, move.slug) }
-            .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+            .padding(horizontal = OakSpacing.md, vertical = 4.dp)
+            .semantics { contentDescription = "${move.displayName}, ${move.type} type" },
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TypeBadge(type = move.type)
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(OakType.color(move.type), CircleShape),
+        )
         Text(
             text = move.displayName,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = oak.textStrong,
-            modifier = Modifier.weight(1f),
         )
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = oak.textFaint, modifier = Modifier.height(18.dp))
     }
 }
 

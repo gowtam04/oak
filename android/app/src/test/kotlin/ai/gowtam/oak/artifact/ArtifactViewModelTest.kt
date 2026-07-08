@@ -111,6 +111,17 @@ class ArtifactViewModelTest {
     }
 
     @Test
+    fun openEntityFetchesByTheGivenNameNotASlug() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeArtifactService(entityResult = EntityArtifact.Ok(pokemonOk(name = "Mr. Mime", slug = "mr-mime")))
+        val vm = newModel(service, format = Format.Champions)
+
+        vm.openEntity(EntityKind.POKEMON, "Mr. Mime")
+        advanceUntilIdle()
+
+        assertEquals(listOf(Triple(EntityKind.POKEMON, "Mr. Mime", Format.Champions)), service.entityCalls)
+    }
+
+    @Test
     fun drillingIntoANestedEntityPushesANewArtifactAndBackReturnsToThePrevious() = runTest(mainDispatcherRule.dispatcher) {
         val service = FakeArtifactService(entityResult = EntityArtifact.Ok(pokemonOk()))
         val vm = newModel(service)

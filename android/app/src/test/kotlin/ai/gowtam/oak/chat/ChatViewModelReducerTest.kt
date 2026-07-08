@@ -190,6 +190,57 @@ class ChatViewModelReducerTest {
     }
 
     @Test
+    fun scopeSeedRidesTheNextChatRequest() = runTest(mainDispatcherRule.dispatcher) {
+        val finalAnswer = answer()
+        val chat = FakeChatService(
+            // No Scope event scripted — the seed must ride through untouched.
+            scriptedEvents = listOf(
+                SseEvent.AnswerStart,
+                SseEvent.AnswerDelta(finalAnswer.answerMarkdown),
+                SseEvent.Answer(finalAnswer),
+            ),
+        )
+        val vm = newModel(chat)
+        vm.selectScope(Format.Gen7)
+        vm.setComposerText("What's strong against Garchomp in Gen 7?")
+
+        vm.send()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(Format.Gen7, chat.sendWithImagesCalls.last().scopeSeed)
+    }
+
+    @Test
+    fun scopeSeedIsClearedAfterScopeEventSoTheNextTurnSendsNull() = runTest(mainDispatcherRule.dispatcher) {
+        val finalAnswer = answer()
+        val chat = FakeChatService(
+            scriptedEvents = listOf(
+                SseEvent.Scope(Format.Gen7, ScopeSource.Message),
+                SseEvent.AnswerStart,
+                SseEvent.AnswerDelta(finalAnswer.answerMarkdown),
+                SseEvent.Answer(finalAnswer),
+            ),
+        )
+        val vm = newModel(chat)
+        vm.selectScope(Format.Gen7)
+        vm.setComposerText("first turn")
+
+        vm.send()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        // Sanity: the first turn did carry the seed, and the scope event adopted it.
+        assertEquals(Format.Gen7, chat.sendWithImagesCalls.first().scopeSeed)
+        assertEquals(Format.Gen7, vm.uiState.value.resolvedScope)
+        assertNull(vm.uiState.value.scopeSeed)
+
+        vm.setComposerText("second turn")
+        vm.send()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(chat.sendWithImagesCalls.last().scopeSeed)
+    }
+
+    @Test
     fun aCompletedTurnMirrorsIntoTheGuestThreadWithItsResolvedScope() = runTest(mainDispatcherRule.dispatcher) {
         val finalAnswer = answer()
         val chat = FakeChatService(
