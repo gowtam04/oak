@@ -222,11 +222,19 @@ export async function loadFormat(format: Format): Promise<FormatSource> {
   }
 
   const types = dex.types.all().filter((t) => BATTLE_TYPE_NAMES.has(t.name));
-  const moves = dex.moves.all().filter((m) => m.exists && m.isNonstandard !== "CAP");
+  // As with isRealSpecies above: in an older-gen dex (e.g. Dex.forGen(3)),
+  // moves/abilities/items introduced in a LATER generation surface as
+  // isNonstandard === "Future" (e.g. Absolite, Earth Power, Download in
+  // Dex.forGen(3)) and must not be indexed. "Past" entries are KEPT — the
+  // Gen 9 dex marks now-delisted things like Mega Stones as "Past", and
+  // national-dex/scarlet-violet/champions must keep indexing them (BR-1).
+  const isCurrentOrPast = (x: { exists: boolean; isNonstandard?: string | null }): boolean =>
+    x.exists && x.isNonstandard !== "CAP" && x.isNonstandard !== "Future";
+  const moves = dex.moves.all().filter(isCurrentOrPast);
   const abilities = dex.abilities
     .all()
-    .filter((a) => a.exists && a.isNonstandard !== "CAP" && a.id !== "noability");
-  const items = dex.items.all().filter((i) => i.exists && i.isNonstandard !== "CAP");
+    .filter((a) => isCurrentOrPast(a) && a.id !== "noability");
+  const items = dex.items.all().filter(isCurrentOrPast);
   const natures = dex.natures.all().filter((n) => n.exists);
 
   return {

@@ -423,3 +423,57 @@ describe("validateTeam", () => {
     expect(warnings.length).toBeGreaterThan(0);
   });
 });
+
+describe("validateTeam — gen-3 Future-item exclusion (#5, ingest Future-entity filter)", () => {
+  // A SEPARATE schema/fixture from the describe above: the shared "tools" seed
+  // has no gen-3 row-set, so this adds a minimal one directly via `after` —
+  // just the gen-3 item master list (searchable_names, kind "item"), curated to
+  // mirror what the real ingest now produces post-fix: ordinary gen-3-legal
+  // items present, "absolite" (a Future item under Dex.forGen(3) — a Gen 6 Mega
+  // Stone) absent. No gen-3 species/learnset rows are needed since item
+  // legality is checked independently of species (validate-team.ts:294).
+  const GEN3 = "gen-3" as const;
+
+  let gen3Fix: PgFixture;
+  let gen3Db: OakDb;
+
+  beforeAll(async () => {
+    gen3Fix = await createPgSchema({
+      seed: "tools",
+      after: async (db) => {
+        const { searchable_names } = await import("@/data/schema");
+        await db.insert(searchable_names).values([
+          { format: GEN3, kind: "item", slug: "leftovers", display_name: "Leftovers" },
+          { format: GEN3, kind: "item", slug: "choice-band", display_name: "Choice Band" },
+          // Deliberately NOT seeded: "absolite" — excluded from gen-3 as a
+          // Future item, per the gen-provider.ts fix.
+        ]);
+      },
+    });
+    gen3Db = gen3Fix.db;
+  });
+
+  afterAll(async () => {
+    await gen3Fix.cleanup();
+  });
+
+  it("flags item_illegal for Absolite held in a gen-3 team (Future item, not in the gen-3 master list)", async () => {
+    const warnings = await validateTeam(
+      [member({ item: "absolite" })],
+      GEN3,
+      gen3Db,
+    );
+    const w = warnings.find((x) => x.code === "item_illegal");
+    expect(w).toBeDefined();
+    expect(w?.field).toBe("item");
+  });
+
+  it("is silent on an ordinary gen-3-legal item", async () => {
+    const warnings = await validateTeam(
+      [member({ item: "leftovers" })],
+      GEN3,
+      gen3Db,
+    );
+    expect(codes(warnings)).not.toContain("item_illegal");
+  });
+});
