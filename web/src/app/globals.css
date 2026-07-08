@@ -3847,6 +3847,165 @@ button.scope-chip:focus-visible {
   border-radius: var(--radius-md);
 }
 
+/* ----- Team analysis (#9): defensive matrix + coverage + speed ----------- */
+.team-analysis {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+.team-analysis__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-strong);
+}
+.team-analysis__toggle:hover {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+}
+.team-analysis__title {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+.team-analysis__chevron {
+  margin-left: auto;
+  color: var(--text-muted);
+}
+.team-analysis__spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--azure);
+  animation: team-analysis-spin 0.7s linear infinite;
+}
+@keyframes team-analysis-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .team-analysis__spinner {
+    animation: none;
+  }
+}
+.team-analysis__body {
+  padding: 0 var(--space-4) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.team-analysis__hint {
+  padding: var(--space-4) 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.team-analysis__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+}
+.team-analysis__error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--warning-soft);
+  color: color-mix(in srgb, var(--warning) 58%, var(--text-strong));
+  font-size: var(--text-sm);
+}
+.team-analysis__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.team-analysis__group-title {
+  color: var(--text-muted);
+}
+.team-analysis__none {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.team-analysis__rows,
+.team-analysis__speed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.team-analysis__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.team-analysis__count {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--danger, var(--warning));
+}
+.team-analysis__members {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.team-analysis__cov-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.team-analysis__cov-label {
+  min-width: 5rem;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.team-analysis__chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.team-analysis__chips--warn .type-badge {
+  outline: 1px solid var(--warning);
+  outline-offset: 1px;
+}
+.team-analysis__speed-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 2px 0;
+  border-bottom: 1px solid var(--border);
+}
+.team-analysis__speed-row:last-child {
+  border-bottom: none;
+}
+.team-analysis__speed-val {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.team-analysis__caveat {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
 /* Sticky save bar (UI §4 screen 07): format + count as instrument text, the
    legality state as a real pill, and a red Save — replaces the old bare-orange
    "incomplete" text. Sticks to the viewport bottom while the editor scrolls. */
