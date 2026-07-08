@@ -223,36 +223,54 @@ struct EntityDetailView: View {
     if !groups.isEmpty {
       VStack(alignment: .leading, spacing: 10) {
         sectionHeader("Movepool", systemImage: "list.bullet")
-        ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
-          if !group.moves.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-              Text(Self.titleize(group.method))
-                .font(Theme.body(.caption, weight: .semibold))
-                .foregroundStyle(Theme.textSecondary)
-              ForEach(Array(Self.sortMovesByType(group.moves).enumerated()), id: \.offset) { _, move in
-                Button {
-                  onOpen(.move, move.slug)
-                } label: {
-                  HStack(spacing: 8) {
-                    TypeBadge(type: move.type)
-                    Text(move.displayName)
-                      .font(Theme.body(.subheadline))
-                      .foregroundStyle(Theme.textPrimary)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                      .imageScale(.small)
-                      .foregroundStyle(Theme.textMuted)
+        if groups.allSatisfy({ $0.moves.isEmpty }) {
+          Text("No moves recorded for this format.")
+            .font(Theme.body(.caption))
+            .foregroundStyle(Theme.textSecondary)
+        } else {
+          ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
+            if !group.moves.isEmpty {
+              VStack(alignment: .leading, spacing: 6) {
+                Text(Self.titleize(group.method))
+                  .font(Theme.body(.caption, weight: .semibold))
+                  .foregroundStyle(Theme.textSecondary)
+                // A wrapping chip grid (web parity — PokemonArtifact.tsx) rather than a
+                // vertical list of full-width rows (TestFlight ANFj2FD).
+                flow(minimum: 104) {
+                  ForEach(Array(Self.sortMovesByType(group.moves).enumerated()), id: \.offset) { _, move in
+                    moveChip(move)
                   }
-                  .contentShape(Rectangle())
                 }
-                .buttonStyle(OakPressableButtonStyle())
-                .accessibilityHint("Opens \(move.displayName)")
               }
             }
           }
         }
       }
     }
+  }
+
+  /// One movepool move as a tappable chip: a type-colored dot (color-only, so the
+  /// accessibility label carries the type in words) plus the move's display name in a
+  /// raised capsule — the ability-holder chip idiom, tap opens the move's artifact.
+  private func moveChip(_ move: MovepoolMove) -> some View {
+    Button {
+      onOpen(.move, move.slug)
+    } label: {
+      HStack(spacing: 6) {
+        Circle()
+          .fill(Theme.type(move.type))
+          .frame(width: 8, height: 8)
+        Text(move.displayName)
+          .font(Theme.body(.caption, weight: .semibold))
+          .foregroundStyle(Theme.textPrimary)
+      }
+      .padding(.horizontal, 10)
+      .padding(.vertical, 4)
+      .background(Theme.surfaceRaised, in: Capsule())
+    }
+    .buttonStyle(OakPressableButtonStyle())
+    .accessibilityLabel("\(move.displayName), \(move.type) type")
+    .accessibilityHint("Opens \(move.displayName)")
   }
 
   // MARK: Move
@@ -506,10 +524,14 @@ struct EntityDetailView: View {
   }
 
   /// A simple wrapping container for chips. Uses an adaptive grid so chips reflow at large
-  /// Dynamic Type without horizontal clipping (no third-party flow-layout — ADR-5).
-  private func flow<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+  /// Dynamic Type without horizontal clipping (no third-party flow-layout — ADR-5). The
+  /// `minimum` column width defaults to type-badge width; movepool chips (name + dot) pass
+  /// a wider minimum so they don't crowd two-to-a-column.
+  private func flow<Content: View>(
+    minimum: CGFloat = 64, @ViewBuilder _ content: () -> Content
+  ) -> some View {
     LazyVGrid(
-      columns: [GridItem(.adaptive(minimum: 64), spacing: 6, alignment: .leading)],
+      columns: [GridItem(.adaptive(minimum: minimum), spacing: 6, alignment: .leading)],
       alignment: .leading,
       spacing: 6
     ) {

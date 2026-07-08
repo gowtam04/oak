@@ -90,6 +90,20 @@ struct ArtifactViewModelTests {
   }
 
   @Test
+  func openEntityPassesTheQueryVerbatim() async throws {
+    // Names with a period + space (e.g. "Mr. Mime") must reach the service untouched —
+    // no slugifying, trimming, or case-folding — with the viewer's fixed format.
+    let ok = try Fixtures.decode(EntityArtifact.self, from: "entity_pokemon.json")
+    let (vm, service) = makeVM(entityResult: ok, format: .scarletViolet)
+
+    await vm.openEntity(kind: .pokemon, query: "Mr. Mime")
+
+    #expect(service.lastEntityQuery == "Mr. Mime")
+    #expect(service.lastEntityKind == .pokemon)
+    #expect(service.lastEntityFormat == .scarletViolet)
+  }
+
+  @Test
   func entityFetchUsesTheActiveFormat() async throws {
     let ok = try Fixtures.decode(EntityArtifact.self, from: "entity_move.json")
     let (vm, service) = makeVM(entityResult: ok, format: .champions)

@@ -340,7 +340,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** pending
+- **Status:** fixed (5af6e2e — iOS 26 toolbar capsule separation; assistant sheet is item-driven)
 
 > This AI button doesn’t work 
 
@@ -392,7 +392,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** pending
+- **Status:** fixed (5af6e2e — New Chat button on pushed threads)
 
 > When you start chatting, include an easy way to start a new chat. Currently I have to go to chat history to start a new chat
 
