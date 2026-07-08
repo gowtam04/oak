@@ -73,20 +73,64 @@ export async function GET(req: Request): Promise<Response> {
       return json(200, { status: "unavailable", kind, format });
     }
 
-    const { resolveEntity } = await import("@/data/repos/resolve-index");
+    const { resolveEntity, findExactMatch } = await import(
+      "@/data/repos/resolve-index"
+    );
     const { matches } = await resolveEntity(q, kind, 5, format);
-    if (matches.length === 0) {
-      return json(200, {
-        status: "not_found",
-        kind,
-        format,
-        query: q,
-        suggestions: [],
-      });
+
+    // (a) EXACT match in the requested scope → assemble + return exactly as
+    // before (no new fields on this path). "Exact" is normalized string equality
+    // (findExactMatch), NOT the fuzzy top-ranked hit — so a nearest-name neighbour
+    // is never silently rendered as if it were the entity.
+    const exact = findExactMatch(matches, q);
+    if (exact) {
+      const result = await assembleEntityProfile(kind, exact.slug, format, db);
+      return json(200, result);
     }
 
-    const result = await assembleEntityProfile(kind, matches[0]!.slug, format, db);
-    return json(200, result);
+    // (b) No exact in-scope match. Rather than render the fuzzy neighbour (the
+    // Eternatus∉gen-6 → "Tornadus" bug, #2), fall back to National Dex: if the
+    // requested scope isn't already national-dex and that index is available,
+    // look for an EXACT national-dex match and show THAT, stamped `source_format`
+    // so the client can badge it. Champions items the operator has excluded from
+    // the roster don't resolve in-scope, so they intentionally fall through here
+    // and surface via this National-Dex badge instead of a bare "not found".
+    const NATIONAL_DEX: Format = "national-dex";
+    if (format !== NATIONAL_DEX && (await isIndexAvailable(NATIONAL_DEX, db))) {
+      const { matches: ndMatches } = await resolveEntity(
+        q,
+        kind,
+        5,
+        NATIONAL_DEX,
+      );
+      const ndExact = findExactMatch(ndMatches, q);
+      if (ndExact) {
+        const result = await assembleEntityProfile(
+          kind,
+          ndExact.slug,
+          NATIONAL_DEX,
+          db,
+        );
+        // The envelope's `format` stays national-dex (what the profile was
+        // assembled from — honest for old clients); `source_format` marks the
+        // cross-scope fallback so the viewer shows the "not in <scope>" banner.
+        if (result.status === "ok") {
+          return json(200, { ...result, source_format: NATIONAL_DEX });
+        }
+        return json(200, result);
+      }
+    }
+
+    // (c) No exact match anywhere → not_found with POPULATED suggestions (the
+    // requested-scope fuzzy matches' display names, top 5) so the client can
+    // offer them as tappable "did you mean" options.
+    return json(200, {
+      status: "not_found",
+      kind,
+      format,
+      query: q,
+      suggestions: matches.slice(0, 5).map((m) => m.display_name),
+    });
   } catch (err) {
     // Transport/DB fault — degrade to a clear "couldn't load" envelope (NFR-2)
     // rather than a 500, so the viewer shows an honest state, not a crash.

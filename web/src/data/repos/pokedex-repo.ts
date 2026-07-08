@@ -52,6 +52,7 @@ import {
 } from "drizzle-orm";
 
 import type { OakDb } from "@/data/db";
+import { normalizeName } from "./normalize-name";
 import { FORMATS, type Format } from "@/data/formats";
 import { ingest_meta, learnset, pokemon } from "@/data/schema";
 import type {
@@ -398,15 +399,10 @@ export async function queryPokedex(
 // getPokemon — T3
 // ===========================================================================
 
-/**
- * Lowercase + trim a user-supplied name into something close to a slug. Exported
- * so callers that need the SAME canonical id `getPokemon` matched on (e.g.
- * get_learnset keying the learnset table) derive it identically, rather than
- * re-implementing the rule.
- */
-export function normalizeName(name: string): string {
-  return name.trim().toLowerCase();
-}
+// The canonical name→id rule lives in the shared `./normalize-name` module so
+// `getPokemon` and `resolveEntity`'s exact-match gate can't drift. Re-exported
+// here for the existing callers (e.g. get_learnset) that import it from this repo.
+export { normalizeName };
 
 /**
  * Up to five close ids for a miss, by substring match on the slug or species

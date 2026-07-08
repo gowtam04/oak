@@ -24,9 +24,11 @@ vi.mock("server-only", () => ({}));
 import {
   createPgSchema,
   installAsSingleton,
+  type PgDb,
   type PgFixture,
 } from "./support/pg";
 import { seedEntityRefs } from "./fixtures/entity-refs";
+import { ingest_meta, pokemon, searchable_names } from "@/data/schema";
 import { _resetStoreForTests } from "@/server/rate-limit";
 
 import {
@@ -40,8 +42,74 @@ import { GET } from "@/app/api/entity/route";
 
 let fix: PgFixture;
 
+/**
+ * Extra rows for the National-Dex fallback gate (#2). Eternatus lives ONLY in a
+ * fresh `national-dex` partition (the fallback target); the `gen-7` partition
+ * (seeded by the tools fixture) gets a fuzzy neighbour, Tornadus, so an
+ * "Eternatus" query there fuzzes onto the WRONG species unless the exact-match
+ * gate refuses it.
+ */
+async function seedFallbackFixture(db: PgDb): Promise<void> {
+  const now = Date.now();
+  await db.insert(pokemon).values({
+    id: "eternatus",
+    format: "national-dex",
+    species_name: "eternatus",
+    form_name: null,
+    display_name: "Eternatus",
+    national_dex_number: 890,
+    type1: "poison",
+    type2: "dragon",
+    ability_slot1: "pressure",
+    ability_slot2: null,
+    ability_hidden: null,
+    stat_hp: 140,
+    stat_attack: 85,
+    stat_defense: 95,
+    stat_special_attack: 145,
+    stat_special_defense: 95,
+    stat_speed: 130,
+    base_stat_total: 690,
+    sprite_url: "https://img.example/sprite/890.png",
+    artwork_url: "https://img.example/art/890.png",
+    generation: "gen-8",
+    is_gen9_native: 1,
+    source_generation: null,
+  });
+  await db.insert(searchable_names).values([
+    {
+      format: "national-dex",
+      kind: "pokemon",
+      slug: "eternatus",
+      display_name: "Eternatus",
+    },
+    // Fuzzy neighbour in the REQUESTED (gen-7) scope: "Eternatus" would fuzz
+    // onto this without the exact-match gate.
+    {
+      format: "gen-7",
+      kind: "pokemon",
+      slug: "tornadus",
+      display_name: "Tornadus",
+    },
+  ]);
+  await db.insert(ingest_meta).values({
+    format: "national-dex",
+    last_success_at: now,
+    pokemon_count: 1,
+    learnset_count: 0,
+    names_count: 1,
+    schema_version: "2",
+  });
+}
+
 beforeAll(async () => {
-  fix = await createPgSchema({ seed: "tools", after: seedEntityRefs });
+  fix = await createPgSchema({
+    seed: "tools",
+    after: async (db) => {
+      await seedEntityRefs(db);
+      await seedFallbackFixture(db);
+    },
+  });
   await installAsSingleton(fix);
 }, 60_000);
 
@@ -127,6 +195,56 @@ describe("GET /api/entity — miss + unavailable", () => {
       }),
     );
     expect(env).toMatchObject({ status: "not_found", kind: "pokemon" });
+  });
+
+  it("falls back to National Dex for a species absent in the requested scope (not the fuzzy neighbour)", async () => {
+    // Eternatus has no gen-7 row; the fuzzy nearest name there is Tornadus. The
+    // exact-match gate must refuse Tornadus and instead show the EXACT National
+    // Dex Eternatus, marked source_format (the Eternatus∉gen-6 → Tornadus bug #2).
+    const env = await envelope(
+      await call({ kind: "pokemon", q: "Eternatus", format: "gen-7" }),
+    );
+    if (env.status !== "ok" || env.kind !== "pokemon") {
+      throw new Error("expected ok pokemon");
+    }
+    expect(env.resolved.slug).toBe("eternatus");
+    expect(env.resolved.slug).not.toBe("tornadus");
+    // Envelope format stays what the profile was assembled FROM (national-dex),
+    // with source_format marking the cross-scope fallback.
+    expect(env.format).toBe("national-dex");
+    expect(env.source_format).toBe("national-dex");
+  });
+
+  it("returns not_found with POPULATED suggestions for a fuzzy-only miss (no exact anywhere)", async () => {
+    // "Tornado" fuzzes onto gen-7's Tornadus but matches nothing exactly (and
+    // National Dex has no Tornadus), so the route declines to render a fuzzy hit
+    // and returns not_found with the requested-scope fuzzy names as suggestions.
+    const env = await envelope(
+      await call({ kind: "pokemon", q: "Tornado", format: "gen-7" }),
+    );
+    if (env.status !== "not_found") {
+      throw new Error("expected not_found");
+    }
+    expect(env.kind).toBe("pokemon");
+    expect(env.suggestions.length).toBeGreaterThan(0);
+    expect(env.suggestions).toContain("Tornadus");
+  });
+
+  it("returns an exact in-scope match with NO source_format key", async () => {
+    const res = await call({
+      kind: "pokemon",
+      q: "garchomp",
+      format: "scarlet-violet",
+    });
+    const body = await res.json();
+    const env = entityArtifactResponseSchema.parse(body);
+    if (env.status !== "ok" || env.kind !== "pokemon") {
+      throw new Error("expected ok pokemon");
+    }
+    expect(env.resolved.slug).toBe("garchomp");
+    // The in-scope path must not stamp any fallback marker.
+    expect("source_format" in body).toBe(false);
+    expect(env.source_format).toBeUndefined();
   });
 
   it("returns unavailable when the requested format's index is unbuilt", async () => {
