@@ -200,6 +200,35 @@ describe("entityArtifactResponseSchema — ok envelopes", () => {
   });
 });
 
+describe("entityArtifactResponseSchema — source_format (National-Dex fallback)", () => {
+  it("round-trips an ok envelope carrying source_format", () => {
+    const payload = {
+      ...OK_POKEMON,
+      format: "national-dex" as const,
+      source_format: "national-dex" as const,
+    };
+    const parsed = entityArtifactResponseSchema.parse(payload);
+    expect(parsed).toEqual(payload);
+    if (parsed.status === "ok") {
+      expect(parsed.source_format).toBe("national-dex");
+    }
+  });
+
+  it("parses an ok envelope WITHOUT source_format (additive/optional)", () => {
+    // The normal in-scope path omits the field entirely — it must stay optional.
+    const parsed = entityArtifactResponseSchema.parse(OK_POKEMON);
+    expect("source_format" in OK_POKEMON).toBe(false);
+    if (parsed.status === "ok") {
+      expect(parsed.source_format).toBeUndefined();
+    }
+  });
+
+  it("rejects a non-Format source_format value", () => {
+    const bad = { ...OK_MOVE, source_format: "gen1" };
+    expect(entityArtifactResponseSchema.safeParse(bad).success).toBe(false);
+  });
+});
+
 describe("entityArtifactResponseSchema — miss variants", () => {
   it("parses a not_found envelope with suggestions", () => {
     const payload: EntityArtifactResponse = {

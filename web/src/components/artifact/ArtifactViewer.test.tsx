@@ -22,6 +22,7 @@ import {
   MOVE_ARTIFACT,
   NOT_FOUND_ARTIFACT,
   POKEMON_ARTIFACT,
+  POKEMON_ARTIFACT_ND_FALLBACK,
   UNAVAILABLE_ARTIFACT,
 } from "./artifact-fixtures";
 
@@ -135,6 +136,51 @@ describe("ArtifactViewer — honest states", () => {
     act(() => api.openEntity({ kind: "move", q: "earthquake" }));
     await waitFor(() =>
       expect(screen.getByTestId("artifact-error")).toBeInTheDocument(),
+    );
+  });
+});
+
+describe("ArtifactViewer — National-Dex fallback (#2)", () => {
+  it("renders the fallback banner naming the requested scope for a source_format ok payload", async () => {
+    vi.mocked(fetchEntityArtifact).mockResolvedValue(POKEMON_ARTIFACT_ND_FALLBACK);
+    render(
+      <ArtifactViewerProvider format="gen-6">
+        <Capture />
+        <ArtifactViewer />
+      </ArtifactViewerProvider>,
+    );
+    await act(async () => {
+      api.openEntity({ kind: "pokemon", q: "eternatus" });
+    });
+    const banner = await screen.findByTestId("caveat-fallback");
+    expect(banner).toHaveTextContent("Not found in Gen 6");
+    expect(banner).toHaveTextContent("showing National Dex data");
+    // The species itself still renders below the banner.
+    expect(screen.getByTestId("pokemon-artifact")).toBeInTheDocument();
+  });
+
+  it("makes not_found suggestions clickable, firing a fresh entity fetch", async () => {
+    vi.mocked(fetchEntityArtifact).mockResolvedValue(NOT_FOUND_ARTIFACT);
+    mount();
+    await act(async () => {
+      api.openEntity({ kind: "pokemon", q: "garchom" });
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("artifact-not-found")).toBeInTheDocument(),
+    );
+
+    const suggestion = screen.getByTestId("artifact-suggestion");
+    expect(suggestion).toHaveTextContent("Garchomp");
+
+    vi.mocked(fetchEntityArtifact).mockClear();
+    await act(async () => {
+      fireEvent.click(suggestion);
+    });
+    // Clicking re-opens as the suggested entity → a new fetch for that name.
+    expect(fetchEntityArtifact).toHaveBeenCalledWith(
+      "pokemon",
+      "Garchomp",
+      "scarlet-violet",
     );
   });
 });

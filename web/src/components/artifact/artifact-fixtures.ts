@@ -75,6 +75,26 @@ export const POKEMON_ARTIFACT_FALLBACK: EntityArtifactOkOf<"pokemon"> = {
   },
 };
 
+/**
+ * A National-Dex fallback Pokémon (#2): the requested scope had no exact match,
+ * so the profile was assembled from national-dex and stamped `source_format`.
+ * Drives the "not found in <scope> — showing National Dex data" banner.
+ */
+export const POKEMON_ARTIFACT_ND_FALLBACK: EntityArtifactOkOf<"pokemon"> = {
+  ...POKEMON_ARTIFACT,
+  format: "national-dex",
+  source_format: "national-dex",
+  resolved: { slug: "eternatus", display_name: "Eternatus" },
+  generation: "National Dex (all generations)",
+  citations: [{ source: "pokemon/eternatus", detail: "Base stats and typing." }],
+  data: {
+    ...POKEMON_ARTIFACT.data,
+    display_name: "Eternatus",
+    national_dex_number: 890,
+    types: ["poison", "dragon"],
+  },
+};
+
 export const MOVE_ARTIFACT: EntityArtifactOkOf<"move"> = {
   status: "ok",
   kind: "move",

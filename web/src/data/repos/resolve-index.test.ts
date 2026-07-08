@@ -39,8 +39,10 @@ vi.mock("@/data/db", () => ({
 
 import {
   createResolveIndex,
+  findExactMatch,
   resolveEntity,
   resetResolveIndex,
+  type ResolveMatch,
   type SearchableName,
 } from "./resolve-index";
 
@@ -138,6 +140,61 @@ describe("createResolveIndex().resolve", () => {
     expect(createResolveIndex([]).resolve("garchomp", "any", 5).matches).toEqual(
       [],
     );
+  });
+});
+
+describe("findExactMatch — exact (normalized) gate, not the fuzzy top hit", () => {
+  const index = createResolveIndex(NAMES);
+
+  it("returns the match whose slug equals the normalized query", () => {
+    const { matches } = index.resolve("Garchomp", "pokemon", 5);
+    const exact = findExactMatch(matches, "Garchomp");
+    expect(exact?.slug).toBe("garchomp");
+  });
+
+  it("matches on the normalized display name when the slug differs", () => {
+    // slug "tauros-paldea-aqua" ≠ query, but the display name matches.
+    const { matches } = index.resolve("Tauros (Paldean Aqua)", "pokemon", 5);
+    const exact = findExactMatch(matches, "Tauros (Paldean Aqua)");
+    expect(exact?.slug).toBe("tauros-paldea-aqua");
+  });
+
+  it("is case/whitespace-insensitive (mirrors normalizeName)", () => {
+    const { matches } = index.resolve("garchomp", "pokemon", 5);
+    expect(findExactMatch(matches, "  GARCHOMP  ")?.slug).toBe("garchomp");
+  });
+
+  it("returns undefined when the fuzzy top match is NOT exact (Eternatus vs Tornadus)", () => {
+    // A Tornadus-only index: "Eternatus" fuzzes onto Tornadus, but there is no
+    // exact match — the gate must refuse to render the neighbour (the bug #2).
+    const tornadusOnly = createResolveIndex([
+      { kind: "pokemon", slug: "tornadus", display_name: "Tornadus" },
+    ]);
+    const { matches } = tornadusOnly.resolve("Eternatus", "pokemon", 5);
+    // Sanity: fuzzy DID surface Tornadus as a (non-exact) candidate…
+    expect(matches.some((m) => m.slug === "tornadus")).toBe(true);
+    // …but it is not an exact match, so the gate declines it.
+    expect(findExactMatch(matches, "Eternatus")).toBeUndefined();
+  });
+
+  it("returns undefined for a blank query", () => {
+    const matches: ResolveMatch[] = [
+      { kind: "pokemon", slug: "garchomp", display_name: "Garchomp", score: 1 },
+    ];
+    expect(findExactMatch(matches, "   ")).toBeUndefined();
+  });
+
+  it("returns undefined when there are no matches", () => {
+    expect(findExactMatch([], "garchomp")).toBeUndefined();
+  });
+
+  it("ignores a score of 1.00 that is not a normalized-string match", () => {
+    // A near-miss whose rounded score reads 1.00 must NOT count as exact — only
+    // string equality does.
+    const matches: ResolveMatch[] = [
+      { kind: "pokemon", slug: "garchomp", display_name: "Garchomp", score: 1 },
+    ];
+    expect(findExactMatch(matches, "garchom")).toBeUndefined();
   });
 });
 
