@@ -325,7 +325,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** pending
+- **Status:** partial (6dc42ff — wrong-species viewer fixed via exact-match gate + National Dex fallback; part 1 "shouldn't switch generations mid-chat" is by-design: deliberate scope-switching feature, declined)
 
 > 1. I would assume a user shouldn’t be able to switch between generations once they entered a chat
 >
