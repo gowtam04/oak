@@ -127,6 +127,24 @@ describe("The one body — the two new tools + warehouse DDL + no-live-web polic
   }
 });
 
+describe("run_sql scope-default sub-bullet — present per provider, shape unchanged", () => {
+  for (const provider of PROVIDERS) {
+    for (const mode of ["standard", "champions", "gen-1"] as const) {
+      it(`carries the unqualified-aggregation-stays-in-scope sub-bullet (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        // The qualifier on the whole-Pokédex bullet + the new counterweight bullet.
+        expect(text).toContain('"Whole-Pokédex" means EXPLICITLY cross-generation');
+        expect(text).toContain(
+          "An UNQUALIFIED count / superlative / ranking, though, means WITHIN the active",
+        );
+      });
+      it(`still places exactly one breakpoint on the last segment (${provider}, ${mode})`, () => {
+        oneBreakpointOnLast(buildSystemSegments({ provider, mode }));
+      });
+    }
+  }
+});
+
 describe("Generation-scope facts — per-scope label/basis tag in the assembled body", () => {
   for (const provider of PROVIDERS) {
     it(`carries the standard (Gen 9) label + basis tag (${provider})`, () => {

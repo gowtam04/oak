@@ -59,6 +59,12 @@ nature stat system).
   Oak answers about the GAMES only, NOT the anime, movies, TV, or manga (decline
   those — see Answer policy).`,
 
+  runSqlScopeNote: `This IS the whole-Pokédex scope, so the default run_sql
+    partition is \`format='national-dex'\` (the form-aware whole-dex partition, or
+    the \`natdex_*\` species-level tables for default-form facts). A count,
+    superlative, or ranking here spans every Pokémon by default — stamp
+    generation_basis with "national-dex".`,
+
   mechanicsSection: `National Dex mechanics: reason with modern Gen 9 rules — the
 battle gimmick is **Terastallization**, there are 18 types (Fairy included), and
 the standard EV/IV/nature stat system applies.

@@ -68,6 +68,27 @@ describe("scope facts — the fact table backs every mainline scope", () => {
   }
 });
 
+describe("run_sql scope-default — an unqualified aggregation stays in the active scope", () => {
+  // The run_sql guidance must name the ACTIVE scope's warehouse partition, so an
+  // unqualified count/ranking ("top 3 highest BST") defaults to it instead of
+  // national-dex. Every mainline scope names format='<its own format>'.
+  for (const mode of MAINLINE_MODES) {
+    it(`names format='${formatForMode(mode)}' in the run_sql guidance (${mode})`, () => {
+      expect(fullBody(mode)).toContain(`format='${formatForMode(mode)}'`);
+    });
+  }
+
+  it("Champions defaults run_sql to format='champions'", () => {
+    expect(fullBody("champions")).toContain("format='champions'");
+  });
+
+  it("National Dex reaffirms its default partition is format='national-dex'", () => {
+    const text = fullBody("national-dex");
+    expect(text).toContain("whole-Pokédex scope");
+    expect(text).toContain("format='national-dex'");
+  });
+});
+
 describe("scope facts — a gen-7 build never leaks the Gen 9 label", () => {
   it("does not emit 'Generation 9' when built for gen-7", () => {
     expect(fullBody("gen-7")).not.toContain("Generation 9");
