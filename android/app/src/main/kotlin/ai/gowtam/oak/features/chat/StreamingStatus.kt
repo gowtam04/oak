@@ -1,5 +1,6 @@
 package ai.gowtam.oak.features.chat
 
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -13,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -45,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +60,13 @@ import androidx.compose.ui.unit.dp
  * list and renders them. Meaning is carried by text + an icon + the spinner, never
  * color alone. When [reconnecting] the phase line reads "Reconnecting…". Renders
  * nothing when idle. Mirrors the iOS `StreamingStatusView`.
+ *
+ * [elapsedSeconds] renders a right-aligned mono `"${n}s"` timer alongside the phase
+ * line (mirrors iOS's `TimelineView`-driven counter, visible from 0s — no gate).
+ * `null` hides it entirely. It is a SIBLING of the phase row's polite live-region,
+ * not a member of it: a live-region re-announces on every content change, and a
+ * ticking counter would otherwise re-announce the whole phase line every second.
+ * It carries its own one-shot `contentDescription` instead.
  */
 @Composable
 fun StreamingStatus(
@@ -64,6 +74,7 @@ fun StreamingStatus(
     activities: List<ToolActivity>,
     reconnecting: Boolean,
     modifier: Modifier = Modifier,
+    elapsedSeconds: Int? = null,
 ) {
     if (phase == StreamingPhase.IDLE) return
     val oak = LocalOakColors.current
@@ -96,22 +107,39 @@ fun StreamingStatus(
         verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
         Row(
-            modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
             horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = oak.accent)
-            Icon(
-                imageVector = phaseIcon(phase, reconnecting),
-                contentDescription = null,
-                tint = oak.accent,
-                modifier = Modifier.size(16.dp).alpha(pulseAlpha),
-            )
-            Text(
-                text = phaseLabel(phase, reconnecting),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = oak.textStrong,
-            )
+            Row(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+                horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = oak.accent)
+                Icon(
+                    imageVector = phaseIcon(phase, reconnecting),
+                    contentDescription = null,
+                    tint = oak.accent,
+                    modifier = Modifier.size(16.dp).alpha(pulseAlpha),
+                )
+                Text(
+                    text = phaseLabel(phase, reconnecting),
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = oak.textStrong,
+                )
+            }
+            if (elapsedSeconds != null) {
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "${elapsedSeconds}s",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = JetBrainsMonoFamily,
+                    color = oak.textMuted,
+                    modifier = Modifier.semantics { contentDescription = "$elapsedSeconds seconds elapsed" },
+                )
+            }
         }
         if (activities.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
