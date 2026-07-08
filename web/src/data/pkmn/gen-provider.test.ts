@@ -72,6 +72,7 @@ describe("loadFormat", () => {
   let natdex: FormatSource;
   let gen1: FormatSource;
   let gen2: FormatSource;
+  let gen3: FormatSource;
   let standardIds: Set<string>;
   let championIds: Set<string>;
   let gen7Ids: Set<string>;
@@ -87,6 +88,7 @@ describe("loadFormat", () => {
     natdex = await loadFormat("national-dex");
     gen1 = await loadFormat("gen-1");
     gen2 = await loadFormat("gen-2");
+    gen3 = await loadFormat("gen-3");
     standardIds = new Set(standard.roster.map((s) => s.id));
     championIds = new Set(champions.roster.map((s) => s.id));
     gen7Ids = new Set(gen7.roster.map((s) => s.id));
@@ -259,6 +261,38 @@ describe("loadFormat", () => {
       // Gen 2 introduces the real split: spa stays 135, spd drops to 85.
       expect(alakazam2.baseStats.spa).toBe(135);
       expect(alakazam2.baseStats.spd).toBe(85);
+    });
+  });
+
+  describe("gen-3 (Dex.forGen(3)) — Future-entity filter on moves/abilities/items", () => {
+    // Probed against @pkmn 0.10.11 (recorded here as ground truth): in Dex.forGen(3),
+    // Absolite/Adamant Orb/Ability Shield (items), Earth Power (a gen-4 move), and
+    // Download (a gen-4 ability) all surface as isNonstandard === "Future".
+    it("excludes Future items (Absolite, Adamant Orb, Ability Shield) but keeps ordinary gen-3-legal items", () => {
+      const itemIds: Set<string> = new Set(gen3.items.map((i) => i.id));
+      for (const id of ["absolite", "adamantorb", "abilityshield"]) {
+        expect(itemIds.has(id)).toBe(false);
+      }
+      for (const id of ["leftovers", "choiceband"]) {
+        expect(itemIds.has(id)).toBe(true);
+      }
+    });
+
+    it("excludes a confirmed Future move (Earth Power, introduced gen 4)", () => {
+      const moveIds: Set<string> = new Set(gen3.moves.map((m) => m.id));
+      expect(moveIds.has("earthpower")).toBe(false);
+      expect(moveIds.has("tackle")).toBe(true);
+    });
+
+    it("excludes a confirmed Future ability (Download, introduced gen 4)", () => {
+      const abilityIds: Set<string> = new Set(gen3.abilities.map((a) => a.id));
+      expect(abilityIds.has("download")).toBe(false);
+      expect(abilityIds.has("overgrow")).toBe(true);
+    });
+
+    it("national-dex still includes Absolite (Past, not Future, on the Gen 9 dex — BR-1)", () => {
+      const natdexItemIds: Set<string> = new Set(natdex.items.map((i) => i.id));
+      expect(natdexItemIds.has("absolite")).toBe(true);
     });
   });
 

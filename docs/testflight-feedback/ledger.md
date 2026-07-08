@@ -366,7 +366,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** pending
+- **Status:** fixed (49f9835 — live after prod re-ingest)
 
 > If user gave you the format generation of the team, the items shown should be for that generation too. Currently its showing Absolite Z and Adamant Orb which are not available in Gen 3
 
