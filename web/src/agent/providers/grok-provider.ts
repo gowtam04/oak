@@ -275,11 +275,14 @@ export class GrokProvider implements LLMProvider {
     input: RInputItem[];
     previousResponseId: string | null;
   }): OpenAI.Responses.ResponseCreateParamsStreaming {
+    // xAI rejects `instructions` (and re-sending the full tool list is
+    // unnecessary) when chaining with previous_response_id — the prior
+    // response already carries the system/tools context. Prod 400:
+    // "Argument not supported: instructions and previous_response_id together".
+    const chaining = Boolean(args.previousResponseId);
     return {
       model: this.apiModelId,
-      instructions: args.instructions,
       input: args.input,
-      tools: args.tools,
       tool_choice: "auto",
       parallel_tool_calls: this.parallelToolCalls,
       max_output_tokens: this.maxOutputTokens,
@@ -289,9 +292,12 @@ export class GrokProvider implements LLMProvider {
       store: this.stateful,
       include: ["reasoning.encrypted_content"],
       stream: true,
-      ...(args.previousResponseId
-        ? { previous_response_id: args.previousResponseId }
-        : {}),
+      ...(chaining
+        ? { previous_response_id: args.previousResponseId! }
+        : {
+            instructions: args.instructions,
+            tools: args.tools,
+          }),
       ...(this.temperature !== undefined
         ? { temperature: this.temperature }
         : {}),
