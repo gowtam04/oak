@@ -24,9 +24,8 @@ import {
   type PkmnSpecies,
 } from "@/data/pkmn/gen-provider";
 import {
-  pokeApiArtwork,
-  pokeApiSprite,
-  showdownAniSprite,
+  oakMediaArtworkUrl,
+  oakMediaSpriteUrl,
   showdownSpriteId,
 } from "@/lib/sprites";
 
@@ -95,23 +94,12 @@ function makeDisplayName(s: PkmnSpecies): string {
 
 // ---------------------------------------------------------------------------
 // Sprite URLs (helpers in @/lib/sprites).
-//   - BASE forms → PokeAPI sprite CDN, keyed by national dex number.
-//   - ALT forms  → Pokémon Showdown animated CDN, keyed by the form's spriteid.
-//     A form shares its base species' dex number, so the dex-keyed URL would
-//     otherwise show base-species art. @pkmn doesn't expose `spriteid`, so it's
-//     recomputed from baseSpecies + forme (the divergence from `slugify` is why
-//     we can't reuse the row `id`).
+//   Every form uses a Showdown spriteid (base + forme) so Mega/regional art is
+//   form-accurate. Clients load via Oak's first-party media proxy
+//   (`/api/media/sprite|artwork`) — never hit GitHub raw / Showdown directly.
+//   Base forms keep official artwork on `artwork_url`; alternate forms reuse
+//   the form-accurate sprite for both fields (same as the old Showdown path).
 // ---------------------------------------------------------------------------
-
-/**
- * Showdown animated-sprite URL for an alternate form, or null for a base form
- * (which keeps its dex-number PokeAPI URL). Drives BOTH sprite_url and
- * artwork_url so the answer card and the entity artifact agree.
- */
-function formeSpriteUrl(s: PkmnSpecies): string | null {
-  if (!s.forme) return null;
-  return showdownAniSprite(showdownSpriteId(s.baseSpecies || s.name, s.forme));
-}
 
 // ---------------------------------------------------------------------------
 // buildPokemonRow — pure transform from an @pkmn Specie
@@ -121,7 +109,9 @@ export function buildPokemonRow(s: PkmnSpecies, format: Format): PokemonRow {
   const id = slugFor(s.id, s.name);
   const species_name = slugify(s.baseSpecies || s.name);
   const form_name = s.forme ? slugify(s.forme) : null;
-  const formeUrl = formeSpriteUrl(s);
+  const spriteId = showdownSpriteId(s.baseSpecies || s.name, s.forme ?? null);
+  const spriteUrl = oakMediaSpriteUrl(spriteId);
+  const artworkUrl = s.forme ? spriteUrl : oakMediaArtworkUrl(s.num);
 
   const types = s.types ?? [];
   const type1 = types[0] ? slugify(types[0]) : "normal";
@@ -171,8 +161,8 @@ export function buildPokemonRow(s: PkmnSpecies, format: Format): PokemonRow {
     stat_special_defense,
     stat_speed,
     base_stat_total,
-    sprite_url: formeUrl ?? pokeApiSprite(s.num),
-    artwork_url: formeUrl ?? pokeApiArtwork(s.num),
+    sprite_url: spriteUrl,
+    artwork_url: artworkUrl,
     // A Mega's stone (e.g. "Swampertite" → "swampertite"); slugify matches the
     // item index slugs ("Charizardite X" → "charizardite-x"). null otherwise.
     required_item: s.requiredItem ? slugify(s.requiredItem) : null,

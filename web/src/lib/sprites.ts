@@ -1,28 +1,42 @@
 /**
  * sprites — pure, client-safe sprite-URL helpers (no Node / `server-only` /
  * `@pkmn` / React imports). Shared by the ingest builder
- * (`@/ingest/build-pokedex`) and the client `<SpriteImg>` fallback, so the URL
- * patterns live in exactly one place. One of the portable modules in CLAUDE.md.
+ * (`@/ingest/build-pokedex`), the first-party media proxy, and client
+ * `<SpriteImg>` fallbacks, so the URL patterns live in exactly one place. One
+ * of the portable modules in CLAUDE.md.
  *
- * Two sprite sources:
- *   - BASE forms      → PokeAPI sprite CDN, keyed by NATIONAL DEX NUMBER. A base
- *     species' dex number uniquely identifies its art.
- *   - ALTERNATE forms → Pokémon Showdown's animated CDN, keyed by the
- *     form-distinguishing "spriteid". Every alternate form (Mega, regional,
- *     Rotom, …) shares its base species' national dex number, so the dex-number
- *     CDN can't tell a form from its base; the spriteid can. `@pkmn` does NOT
- *     expose `spriteid`, so we recompute it with Showdown's own formula.
+ * Oak serves sprites/artwork through first-party media routes so clients never
+ * hit rate-limited third-party CDNs (GitHub raw) directly:
+ *   - sprite_url   → `/api/media/sprite/{showdownId}`  (Showdown ani upstream)
+ *   - artwork_url  → `/api/media/artwork/{dex}`        (PokeAPI official art)
+ *   - legacy front → `/api/media/dex-sprite/{dex}`     (PokeAPI front sprite)
+ *
+ * Upstream builders (`showdownAniSprite`, `pokeApiSprite`, `pokeApiArtwork`)
+ * are for the media proxy (and tests) only — not client `<img src>` fallbacks.
  */
+
+import { SITE_ORIGIN } from "@/lib/site";
 
 const POKEAPI_BASE =
   "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon";
 
-/** PokeAPI front sprite for a national dex number, e.g. 445 → ".../445.png". */
+const SHOWDOWN_ANI_HOST = "play.pokemonshowdown.com";
+const GITHUB_RAW_HOST = "raw.githubusercontent.com";
+const POKEAPI_SPRITES_PREFIX = "/PokeAPI/sprites/master/sprites/pokemon";
+
+/** Showdown spriteid path segment: `gyarados`, `charizard-megax`, … */
+export const SPRITE_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** National dex numbers Oak will proxy (covers NatDex + a little headroom). */
+export const DEX_NUMBER_MIN = 1;
+export const DEX_NUMBER_MAX = 9999;
+
+/** PokeAPI front sprite for a national dex number (upstream only). */
 export function pokeApiSprite(num: number): string {
   return `${POKEAPI_BASE}/${num}.png`;
 }
 
-/** PokeAPI official artwork for a national dex number. */
+/** PokeAPI official artwork for a national dex number (upstream only). */
 export function pokeApiArtwork(num: number): string {
   return `${POKEAPI_BASE}/other/official-artwork/${num}.png`;
 }
@@ -36,7 +50,7 @@ export function pokeApiArtwork(num: number): string {
 export function toID(s: string): string {
   return s
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 }
@@ -59,16 +73,107 @@ export function showdownSpriteId(
 }
 
 /**
- * Animated Showdown sprite URL for a spriteid. The `ani/` directory is the one
- * source that covers every form including the Pokémon Champions Megas (the
- * static `dex/` directory lacks them).
+ * Animated Showdown sprite URL for a spriteid (upstream only). The `ani/`
+ * directory covers every form including the Pokémon Champions Megas.
  */
 export function showdownAniSprite(spriteId: string): string {
   return `https://play.pokemonshowdown.com/sprites/ani/${spriteId}.gif`;
 }
 
 // ---------------------------------------------------------------------------
-// guessShowdownAniSpriteUrl (F2) — client-side "PREFER animated" guess
+// First-party Oak media URLs (what ingest bakes into the index)
+// ---------------------------------------------------------------------------
+
+/** Absolute Oak media URL for a Showdown animated sprite. */
+export function oakMediaSpriteUrl(
+  spriteId: string,
+  origin: string = SITE_ORIGIN,
+): string {
+  return `${origin.replace(/\/$/, "")}/api/media/sprite/${encodeURIComponent(spriteId)}`;
+}
+
+/** Absolute Oak media URL for official artwork by national dex number. */
+export function oakMediaArtworkUrl(
+  dex: number,
+  origin: string = SITE_ORIGIN,
+): string {
+  return `${origin.replace(/\/$/, "")}/api/media/artwork/${dex}`;
+}
+
+/**
+ * Absolute Oak media URL for the classic PokeAPI front sprite by dex number.
+ * Used as a client fallback / legacy rewrite target (not baked for new rows).
+ */
+export function oakMediaDexSpriteUrl(
+  dex: number,
+  origin: string = SITE_ORIGIN,
+): string {
+  return `${origin.replace(/\/$/, "")}/api/media/dex-sprite/${dex}`;
+}
+
+/**
+ * Best-effort rewrite of a third-party sprite/artwork URL onto Oak's first-party
+ * media routes. Used by `<SpriteImg>` so historical answers that still embed
+ * GitHub raw or direct Showdown URLs load through the proxy (and avoid 429s).
+ * Already-Oak and unrecognized URLs are returned unchanged.
+ */
+export function rewriteLegacyMediaUrl(
+  url: string,
+  origin: string = SITE_ORIGIN,
+): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname;
+
+  // Direct Showdown ani GIF → Oak sprite proxy.
+  if (host === SHOWDOWN_ANI_HOST) {
+    const m = path.match(/^\/sprites\/ani\/([a-z0-9-]+)\.gif$/i);
+    if (m && SPRITE_ID_RE.test(m[1]!)) {
+      return oakMediaSpriteUrl(m[1]!, origin);
+    }
+    return url;
+  }
+
+  // PokeAPI via GitHub raw → Oak artwork or dex-sprite proxy.
+  if (host === GITHUB_RAW_HOST) {
+    const art = path.match(
+      new RegExp(
+        `^${POKEAPI_SPRITES_PREFIX.replace(/\//g, "\\/")}/other/official-artwork/(\\d+)\\.png$`,
+        "i",
+      ),
+    );
+    if (art) {
+      const dex = Number(art[1]);
+      if (dex >= DEX_NUMBER_MIN && dex <= DEX_NUMBER_MAX) {
+        return oakMediaArtworkUrl(dex, origin);
+      }
+    }
+    const front = path.match(
+      new RegExp(
+        `^${POKEAPI_SPRITES_PREFIX.replace(/\//g, "\\/")}/(\\d+)\\.png$`,
+        "i",
+      ),
+    );
+    if (front) {
+      const dex = Number(front[1]);
+      if (dex >= DEX_NUMBER_MIN && dex <= DEX_NUMBER_MAX) {
+        return oakMediaDexSpriteUrl(dex, origin);
+      }
+    }
+    return url;
+  }
+
+  return url;
+}
+
+// ---------------------------------------------------------------------------
+// guessShowdownAniSpriteUrl / guessOakMediaSpriteUrl — client-side slug guess
 // ---------------------------------------------------------------------------
 
 /**
@@ -116,32 +221,37 @@ const FORME_SUFFIXES: readonly string[] = [
   .sort((a, b) => b.length - a.length);
 
 /**
- * Best-effort ANIMATED Showdown sprite URL for a species slug, computed
- * CLIENT-SIDE without a server round-trip — ingest only bakes an animated
- * `sprite_url` for alternate-forme rows (`build-pokedex.ts`); base forms get a
- * static PokeAPI PNG. Splits `slug` on the longest matching entry of
- * {@link FORME_SUFFIXES} into base + forme, then defers to
- * {@link showdownSpriteId} for the actual URL (which folds a hyphenated forme
- * into Showdown's collapsed spriteid, e.g. "charizard-mega-x" →
- * "charizard-megax" — see that function's doc comment for why that diverges
- * from `slugify`). No suffix matches ⇒ treat the whole slug as a base species,
- * which is correct: Showdown base ids contain no internal hyphens
- * ("tapu-koko" → "tapukoko").
- *
- * This is a GUESS, not a lookup against the index — a slug this heuristic
- * mis-splits, or one with no Showdown-ani art, 404s. Callers MUST treat the
- * result as the PREFERRED src in an onError fallback chain (fall back to the
- * DB's static `sprite_url` when available, else hide the image) — never as
- * the sole source.
+ * Showdown spriteid guessed from an Oak species slug (same split rules as
+ * {@link guessShowdownAniSpriteUrl}). Returns null only for empty input.
  */
-export function guessShowdownAniSpriteUrl(slug: string): string {
+export function guessShowdownSpriteId(slug: string): string {
   const lower = slug.toLowerCase();
   for (const suffix of FORME_SUFFIXES) {
-    if (lower.length <= suffix.length) continue; // no room for a base species
+    if (lower.length <= suffix.length) continue;
     if (lower.endsWith(`-${suffix}`)) {
       const base = lower.slice(0, lower.length - suffix.length - 1);
-      return showdownAniSprite(showdownSpriteId(base, suffix));
+      return showdownSpriteId(base, suffix);
     }
   }
-  return showdownAniSprite(showdownSpriteId(lower, null));
+  return showdownSpriteId(lower, null);
+}
+
+/**
+ * Best-effort ANIMATED Showdown sprite URL for a species slug (direct CDN —
+ * prefer {@link guessOakMediaSpriteUrl} for client `<img>` tags so traffic
+ * goes through Oak's proxy).
+ */
+export function guessShowdownAniSpriteUrl(slug: string): string {
+  return showdownAniSprite(guessShowdownSpriteId(slug));
+}
+
+/**
+ * Best-effort first-party Oak media sprite URL for a species slug. Prefer this
+ * over {@link guessShowdownAniSpriteUrl} for client render paths.
+ */
+export function guessOakMediaSpriteUrl(
+  slug: string,
+  origin: string = SITE_ORIGIN,
+): string {
+  return oakMediaSpriteUrl(guessShowdownSpriteId(slug), origin);
 }

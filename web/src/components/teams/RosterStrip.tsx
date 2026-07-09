@@ -18,14 +18,16 @@ import { useEffect, useState } from "react";
 
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { SpriteRef } from "@/lib/api/sprites-client";
-import { guessShowdownAniSpriteUrl } from "@/lib/sprites";
+import {
+  guessOakMediaSpriteUrl,
+  rewriteLegacyMediaUrl,
+} from "@/lib/sprites";
 import { titleizeSlug } from "./display-names";
 
 /**
- * One roster slot's sprite (F2): PREFERS the animated Showdown GIF (guessed
- * from the species slug when the DB's `sprite_url` isn't already one) and
- * falls back to that static DB url on a load error — one-shot, so a second
- * failure just leaves the broken/placeholder image rather than looping.
+ * One roster slot's sprite: prefers the DB/API `sprite_url` (Oak media after
+ * re-ingest; legacy GitHub/Showdown URLs are rewritten onto the proxy), and
+ * falls back to a slug-guessed Oak media URL on a load error — one-shot.
  */
 function RosterSprite({
   species,
@@ -37,10 +39,11 @@ function RosterSprite({
   const [errored, setErrored] = useState(false);
   useEffect(() => setErrored(false), [species, staticUrl]);
 
-  const preferred = staticUrl?.endsWith(".gif")
-    ? staticUrl
-    : guessShowdownAniSpriteUrl(species);
-  const src = errored ? staticUrl : preferred;
+  const preferred = staticUrl
+    ? rewriteLegacyMediaUrl(staticUrl)
+    : guessOakMediaSpriteUrl(species);
+  const fallback = guessOakMediaSpriteUrl(species);
+  const src = errored && fallback !== preferred ? fallback : preferred;
 
   if (!src) {
     return <span className="roster-slot__sprite-empty" aria-hidden />;
@@ -53,7 +56,7 @@ function RosterSprite({
       aria-hidden
       loading="lazy"
       onError={() => {
-        if (!errored && staticUrl && staticUrl !== src) setErrored(true);
+        if (!errored && fallback && fallback !== preferred) setErrored(true);
       }}
     />
   );

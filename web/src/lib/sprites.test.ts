@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 
+import { SITE_ORIGIN } from "@/lib/site";
+
 import {
+  guessOakMediaSpriteUrl,
   guessShowdownAniSpriteUrl,
+  oakMediaArtworkUrl,
+  oakMediaDexSpriteUrl,
+  oakMediaSpriteUrl,
   pokeApiArtwork,
   pokeApiSprite,
+  rewriteLegacyMediaUrl,
   showdownAniSprite,
   showdownSpriteId,
   toID,
@@ -61,6 +68,77 @@ describe("sprites — showdownAniSprite", () => {
   it("builds the animated Showdown URL", () => {
     expect(showdownAniSprite("dragonite-mega")).toBe(
       "https://play.pokemonshowdown.com/sprites/ani/dragonite-mega.gif",
+    );
+  });
+});
+
+describe("sprites — Oak first-party media URLs", () => {
+  it("builds absolute Oak media paths under SITE_ORIGIN by default", () => {
+    expect(oakMediaSpriteUrl("garchomp")).toBe(
+      `${SITE_ORIGIN}/api/media/sprite/garchomp`,
+    );
+    expect(oakMediaArtworkUrl(445)).toBe(
+      `${SITE_ORIGIN}/api/media/artwork/445`,
+    );
+    expect(oakMediaDexSpriteUrl(445)).toBe(
+      `${SITE_ORIGIN}/api/media/dex-sprite/445`,
+    );
+  });
+
+  it("honors an explicit origin override (trailing slash stripped)", () => {
+    expect(oakMediaSpriteUrl("charizard-megax", "http://localhost:3000/")).toBe(
+      "http://localhost:3000/api/media/sprite/charizard-megax",
+    );
+  });
+});
+
+describe("sprites — rewriteLegacyMediaUrl", () => {
+  it("rewrites Showdown ani GIFs onto the Oak sprite proxy", () => {
+    expect(
+      rewriteLegacyMediaUrl(
+        "https://play.pokemonshowdown.com/sprites/ani/gyarados.gif",
+      ),
+    ).toBe(`${SITE_ORIGIN}/api/media/sprite/gyarados`);
+    expect(
+      rewriteLegacyMediaUrl(
+        "https://play.pokemonshowdown.com/sprites/ani/charizard-megax.gif",
+      ),
+    ).toBe(`${SITE_ORIGIN}/api/media/sprite/charizard-megax`);
+  });
+
+  it("rewrites PokeAPI GitHub front sprites and official artwork", () => {
+    expect(
+      rewriteLegacyMediaUrl(
+        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/229.png",
+      ),
+    ).toBe(`${SITE_ORIGIN}/api/media/dex-sprite/229`);
+    expect(
+      rewriteLegacyMediaUrl(
+        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/130.png",
+      ),
+    ).toBe(`${SITE_ORIGIN}/api/media/artwork/130`);
+  });
+
+  it("leaves already-Oak and unknown URLs unchanged", () => {
+    const oak = `${SITE_ORIGIN}/api/media/sprite/houndoom`;
+    expect(rewriteLegacyMediaUrl(oak)).toBe(oak);
+    expect(rewriteLegacyMediaUrl("https://img.example/sprite.png")).toBe(
+      "https://img.example/sprite.png",
+    );
+    expect(rewriteLegacyMediaUrl("not-a-url")).toBe("not-a-url");
+  });
+});
+
+describe("sprites — guessOakMediaSpriteUrl", () => {
+  it("maps a species slug to the Oak media sprite path (not the raw Showdown CDN)", () => {
+    expect(guessOakMediaSpriteUrl("garchomp")).toBe(
+      `${SITE_ORIGIN}/api/media/sprite/garchomp`,
+    );
+    expect(guessOakMediaSpriteUrl("charizard-mega-x")).toBe(
+      `${SITE_ORIGIN}/api/media/sprite/charizard-megax`,
+    );
+    expect(guessOakMediaSpriteUrl("tapu-koko")).toBe(
+      `${SITE_ORIGIN}/api/media/sprite/tapukoko`,
     );
   });
 });

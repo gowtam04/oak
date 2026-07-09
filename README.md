@@ -209,8 +209,11 @@ frontend, API, agent loop, and the ingest CLI.
 
 Everything the agent reads lives in Postgres, built by `npm run ingest` — which
 is **fully offline and deterministic** (it reads local packages and committed
-snapshot files, never the network). Four sources feed it, plus one separately-run
-exception:
+snapshot files, never the network). Pokémon `sprite_url` / `artwork_url` values
+are absolute first-party media links (`/api/media/sprite|artwork|dex-sprite`),
+proxied at request time from Showdown / PokeAPI with a long cache — after
+changing those URL helpers, **re-ingest** so index rows pick up the new hosts.
+Four sources feed ingest, plus one separately-run exception:
 
 1. **`@pkmn` format indexes** — Pokémon, moves, abilities, items, types, and
    learnsets for the eleven data scopes, from the local `@pkmn` npm packages

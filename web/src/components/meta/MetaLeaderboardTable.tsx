@@ -10,7 +10,7 @@
  */
 
 import SpriteImg from "@/components/SpriteImg";
-import { guessShowdownAniSpriteUrl } from "@/lib/sprites";
+import { guessOakMediaSpriteUrl } from "@/lib/sprites";
 
 export interface MetaLeaderboardRow {
   rank: number;
@@ -97,7 +97,7 @@ export default function MetaLeaderboardTable({
                   {row.spriteUrl ? (
                     <SpriteImg
                       src={row.spriteUrl}
-                      fallbackSrc={guessShowdownAniSpriteUrl(row.species)}
+                      fallbackSrc={guessOakMediaSpriteUrl(row.species)}
                       alt={row.name}
                       width={32}
                       height={32}

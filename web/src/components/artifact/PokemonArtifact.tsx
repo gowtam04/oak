@@ -11,7 +11,7 @@ import TypeBadge from "@/components/TypeBadge";
 import SpriteImg from "@/components/SpriteImg";
 import { typeDisplayIndex, type TypeName } from "@/agent/schemas";
 import type { PokemonArtifactData } from "@/lib/entity-artifact";
-import { pokeApiArtwork } from "@/lib/sprites";
+import { oakMediaArtworkUrl } from "@/lib/sprites";
 
 import EntityLink from "./EntityLink";
 import MatchupRow from "./MatchupRow";
@@ -129,7 +129,7 @@ export default function PokemonArtifact({
           <SpriteImg
             className="pokemon-artifact__art"
             src={data.artwork_url || data.sprite_url}
-            fallbackSrc={pokeApiArtwork(data.national_dex_number)}
+            fallbackSrc={oakMediaArtworkUrl(data.national_dex_number)}
             alt={data.display_name}
             width={104}
             height={104}

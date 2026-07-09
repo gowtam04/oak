@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Format } from "@/data/formats";
 import type { PkmnSpecies } from "@/data/pkmn/gen-provider";
+import { SITE_ORIGIN } from "@/lib/site";
 import { buildPokemonRow, buildPokedex, type PokemonRow } from "./build-pokedex";
 
 const g = Dex.forGen(9);
@@ -73,13 +74,9 @@ describe("buildPokemonRow — Garchomp (stats + types + BST)", () => {
     expect(r.ability_hidden).toBe("rough-skin");
   });
 
-  it("derives the front sprite and official-artwork URLs from the dex number", () => {
-    expect(r.sprite_url).toBe(
-      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/445.png",
-    );
-    expect(r.artwork_url).toBe(
-      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/445.png",
-    );
+  it("bakes first-party Oak media sprite + official-artwork URLs", () => {
+    expect(r.sprite_url).toBe(`${SITE_ORIGIN}/api/media/sprite/garchomp`);
+    expect(r.artwork_url).toBe(`${SITE_ORIGIN}/api/media/artwork/445`);
   });
 
   it("is Gen-9 native (not a fallback), no source_generation", () => {
@@ -89,7 +86,7 @@ describe("buildPokemonRow — Garchomp (stats + types + BST)", () => {
   });
 });
 
-describe("buildPokemonRow — alternate forms use the Showdown spriteid CDN", () => {
+describe("buildPokemonRow — alternate forms use the form-accurate Showdown spriteid", () => {
   it("keys a Mega's sprite/artwork on its spriteid, not the shared dex number", () => {
     // Charizard-Mega-X shares national dex #6 with base Charizard, so a
     // dex-number URL would render base Charizard. A multi-token forme also
@@ -99,7 +96,7 @@ describe("buildPokemonRow — alternate forms use the Showdown spriteid CDN", ()
     expect(r.form_name).toBe("mega-x");
     expect(r.national_dex_number).toBe(6);
     expect(r.sprite_url).toBe(
-      "https://play.pokemonshowdown.com/sprites/ani/charizard-megax.gif",
+      `${SITE_ORIGIN}/api/media/sprite/charizard-megax`,
     );
     expect(r.artwork_url).toBe(r.sprite_url);
   });
@@ -107,16 +104,15 @@ describe("buildPokemonRow — alternate forms use the Showdown spriteid CDN", ()
   it("keys a regional form on its spriteid", () => {
     const r = row("ninetalesalola");
     expect(r.sprite_url).toBe(
-      "https://play.pokemonshowdown.com/sprites/ani/ninetales-alola.gif",
+      `${SITE_ORIGIN}/api/media/sprite/ninetales-alola`,
     );
   });
 
-  it("leaves the base form on the dex-number PokeAPI URL (unchanged)", () => {
+  it("gives the base form an Oak media sprite + official-artwork URL", () => {
     const r = row("ninetales");
     expect(r.form_name).toBeNull();
-    expect(r.sprite_url).toBe(
-      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/38.png",
-    );
+    expect(r.sprite_url).toBe(`${SITE_ORIGIN}/api/media/sprite/ninetales`);
+    expect(r.artwork_url).toBe(`${SITE_ORIGIN}/api/media/artwork/38`);
   });
 });
 
@@ -312,15 +308,14 @@ describe("buildPokedex — D8 forms collapse", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("gives the base the dex-number URL and the forme the Showdown spriteid URL", () => {
+  it("gives the base an Oak media sprite URL and the forme a form-accurate Oak sprite URL", () => {
     const rows = buildPokedex({ format: SV, roster: [base, battle] });
     const b = rows.find((r) => r.id === "fakemon")!;
     const f = rows.find((r) => r.id === "fakemon-blaze")!;
-    expect(b.sprite_url).toBe(
-      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/9999.png",
-    );
+    expect(b.sprite_url).toBe(`${SITE_ORIGIN}/api/media/sprite/fakemon`);
+    expect(b.artwork_url).toBe(`${SITE_ORIGIN}/api/media/artwork/9999`);
     expect(f.sprite_url).toBe(
-      "https://play.pokemonshowdown.com/sprites/ani/fakemon-blaze.gif",
+      `${SITE_ORIGIN}/api/media/sprite/fakemon-blaze`,
     );
     expect(f.artwork_url).toBe(f.sprite_url);
   });

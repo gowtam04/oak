@@ -23,8 +23,7 @@ import type {
 export const SUBJECT_GARCHOMP: Subject = {
   name: "Garchomp",
   dex_number: 445,
-  sprite_url:
-    "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/445.png",
+  sprite_url: "https://oak.gowtam.ai/api/media/sprite/garchomp",
   types: ["dragon", "ground"],
   is_fallback: false,
 };
@@ -32,8 +31,7 @@ export const SUBJECT_GARCHOMP: Subject = {
 export const SUBJECT_MEWTWO_FALLBACK: Subject = {
   name: "Mewtwo",
   dex_number: 150,
-  sprite_url:
-    "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/150.png",
+  sprite_url: "https://oak.gowtam.ai/api/media/sprite/mewtwo",
   types: ["psychic"],
   is_fallback: true,
   source_generation: "gen-1",
@@ -80,8 +78,7 @@ export const CANDIDATES_TRUNCATED: Candidates = {
     {
       name: "Garchomp",
       dex_number: 445,
-      sprite_url:
-        "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/445.png",
+      sprite_url: "https://oak.gowtam.ai/api/media/sprite/garchomp",
       types: ["dragon", "ground"],
       // Full six stats — rendered in fixed order. key_stats kept to prove that
       // base_stats takes precedence when both are present.
