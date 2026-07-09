@@ -18,19 +18,50 @@ import SwiftUI
 struct EntityDetailView: View {
   let artifact: EntityArtifactOk
 
+  /// The scope the viewer actually asked for (its fixed request format). On the National-Dex
+  /// fallback path the artifact's own `format`/`source_format` are both `national-dex`, so the
+  /// requested scope has to be threaded in here for the "not found in <this scope>" badge/caption.
+  /// `nil` (previews / no-context renders) simply suppresses the fallback chrome.
+  var requestFormat: Format?
+
   /// Pushes another entity onto the viewer's back stack when one inside this profile is tapped.
   /// Defaults to a no-op so the view renders in isolation / previews.
   var onOpen: (EntityKind, String) -> Void = { _, _ in }
 
+  /// The National-Dex fallback source when the requested scope missed (#2): the profile was
+  /// assembled outside `requestFormat`, so its `source_format` differs from the request. `nil`
+  /// on the normal in-scope path (or when the request scope is unknown) — suppresses the badge.
+  private var fallbackSource: Format? {
+    guard let source = artifact.sourceFormat, let request = requestFormat, source != request else {
+      return nil
+    }
+    return source
+  }
+
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+        if let source = fallbackSource, let request = requestFormat {
+          fallbackCaption(request: request, source: source)
+        }
         kindBody
         groundingSection
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(Theme.Spacing.lg)
     }
+  }
+
+  /// The short "not found in <requested scope> — showing <source> data" note at the top of a
+  /// fallback profile, so the user knows the data isn't from the scope they asked for (#2).
+  private func fallbackCaption(request: Format, source: Format) -> some View {
+    Label(
+      "Not found in \(request.shortLabel) — showing \(source.shortLabel) data",
+      systemImage: "arrow.triangle.branch"
+    )
+    .font(Theme.body(.caption))
+    .foregroundStyle(Theme.azure)
+    .fixedSize(horizontal: false, vertical: true)
   }
 
   // MARK: Kind dispatch
@@ -402,6 +433,9 @@ struct EntityDetailView: View {
       Divider()
       HStack(spacing: 8) {
         formatBadge(artifact.format)
+        if let source = fallbackSource {
+          sourceFormatBadge(source)
+        }
         Text(artifact.generation)
           .font(Theme.body(.caption))
           .foregroundStyle(Theme.textSecondary)
@@ -521,6 +555,19 @@ struct EntityDetailView: View {
       .padding(.vertical, 3)
       .foregroundStyle(Theme.textSecondary)
       .background(Theme.surfaceRaised, in: Capsule())
+  }
+
+  /// The National-Dex fallback badge (#2) — an azure-tinted capsule beside the format badge
+  /// naming the scope the profile was actually resolved from, so the grounding chrome stays
+  /// honest about the cross-scope fallback. Same capsule shape as ``formatBadge``.
+  private func sourceFormatBadge(_ source: Format) -> some View {
+    Text(source.shortLabel)
+      .font(Theme.body(.caption2, weight: .semibold))
+      .padding(.horizontal, 8)
+      .padding(.vertical, 3)
+      .foregroundStyle(Theme.azure)
+      .background(Theme.azureSoft, in: Capsule())
+      .accessibilityLabel("Resolved from \(source.shortLabel)")
   }
 
   /// A simple wrapping container for chips. Uses an adaptive grid so chips reflow at large

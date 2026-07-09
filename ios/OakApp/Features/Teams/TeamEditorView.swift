@@ -125,8 +125,14 @@ struct TeamEditorView: View {
               }
             }
           }
+
+          // Passive draft-coverage read (#9) — debounced off member edits below.
+          TeamAnalysisSection(model: model)
         }
       }
+      // Member edits flow through direct bindings, so the coverage analysis is (re)scheduled
+      // from the view whenever the draft's members change; the view model debounces + coalesces.
+      .onChange(of: model.members) { _, _ in model.scheduleAnalysis() }
       .scrollContentBackground(.hidden)
       .background(Theme.canvas)
       .listRowBackground(Theme.surface)

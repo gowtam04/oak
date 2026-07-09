@@ -49,6 +49,11 @@ struct ArtifactViewModelTests {
     return true
   }
 
+  private func unavailableSuggestions(_ artifact: Artifact?) -> [String]? {
+    guard case .unavailable(_, _, let suggestions)? = artifact?.content else { return nil }
+    return suggestions
+  }
+
   private func isTeamUnavailable(_ artifact: Artifact?) -> Bool {
     guard case .teamUnavailable? = artifact?.content else { return false }
     return true
@@ -204,6 +209,8 @@ struct ArtifactViewModelTests {
     #expect(vm.stack.count == 1)
     #expect(vm.isPresented)
     #expect(isEntityUnavailable(vm.current))
+    // The server's populated close-name suggestions ride through for the tappable retries (#2).
+    #expect(unavailableSuggestions(vm.current) == ["Garchomp"])
   }
 
   @Test

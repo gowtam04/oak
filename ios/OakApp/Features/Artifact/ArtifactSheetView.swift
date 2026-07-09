@@ -89,7 +89,7 @@ struct ArtifactSheetView: View {
     case .loading:
       loadingView
     case .entity(let ok):
-      EntityDetailView(artifact: ok) { kind, query in
+      EntityDetailView(artifact: ok, requestFormat: model.requestFormat) { kind, query in
         Task { await model.openEntity(kind: kind, query: query) }
       }
     case .team(let team):
@@ -106,10 +106,14 @@ struct ArtifactSheetView: View {
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(16)
       }
-    case .unavailable(let kind, let query):
+    case .unavailable(let kind, let query, let suggestions):
       missView(
         title: "Couldn't open \(query)",
-        message: "Oak doesn't have a \(kind.rawValue) profile for \u{201C}\(query)\u{201D} in this format."
+        message: "Oak doesn't have a \(kind.rawValue) profile for \u{201C}\(query)\u{201D} in this format.",
+        suggestions: suggestions,
+        onOpenSuggestion: { suggestion in
+          Task { await model.openEntity(kind: kind, query: suggestion) }
+        }
       )
     case .teamUnavailable:
       missView(
@@ -157,12 +161,51 @@ struct ArtifactSheetView: View {
   }
 
   /// An honest miss — the sheet stays open and the user can always get back to chat
-  /// (M-BR-ART-5). Icon + text, never color alone (M-AC-UI9.3).
-  private func missView(title: String, message: String) -> some View {
+  /// (M-BR-ART-5). Icon + text, never color alone (M-AC-UI9.3). On a `not_found` the server's
+  /// close-name `suggestions` (#2) render as tappable capsule buttons that reopen the same entity
+  /// kind with the picked name; an empty list shows just the icon + message.
+  private func missView(
+    title: String,
+    message: String,
+    suggestions: [String] = [],
+    onOpenSuggestion: @escaping (String) -> Void = { _ in }
+  ) -> some View {
     ContentUnavailableView {
       Label(title, systemImage: "questionmark.circle")
     } description: {
       Text(message)
+    } actions: {
+      if !suggestions.isEmpty {
+        VStack(spacing: 8) {
+          Text("Did you mean…")
+            .font(Theme.body(.caption, weight: .semibold))
+            .foregroundStyle(Theme.textSecondary)
+          suggestionFlow(suggestions, onOpen: onOpenSuggestion)
+        }
+      }
+    }
+  }
+
+  /// A wrapping row of tappable suggestion capsules (the resolution-miss "did you mean" retries).
+  private func suggestionFlow(_ suggestions: [String], onOpen: @escaping (String) -> Void) -> some View {
+    LazyVGrid(
+      columns: [GridItem(.adaptive(minimum: 96), spacing: 8, alignment: .center)],
+      spacing: 8
+    ) {
+      ForEach(Array(suggestions.enumerated()), id: \.offset) { _, suggestion in
+        Button {
+          onOpen(suggestion)
+        } label: {
+          Text(suggestion)
+            .font(Theme.body(.caption, weight: .semibold))
+            .foregroundStyle(Theme.accent)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Theme.surfaceRaised, in: Capsule())
+        }
+        .buttonStyle(OakPressableButtonStyle())
+        .accessibilityHint("Opens \(suggestion)")
+      }
     }
   }
 }
