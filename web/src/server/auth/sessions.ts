@@ -35,6 +35,7 @@ import { cookies, headers } from "next/headers";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/data/db";
+import { isFormat } from "@/data/formats";
 import {
   type Account,
   type AuthSession,
@@ -165,11 +166,25 @@ async function findAccountById(id: string): Promise<Account | null> {
       id: account.id,
       email: account.email,
       createdAt: account.created_at,
+      lastUsedScope: account.last_used_scope,
     })
     .from(account)
     .where(eq(account.id, id))
     .limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  // Validate last_used_scope against the live Format set — a retired/hand-edited
+  // value fails soft to null so the chat default falls through to national-dex.
+  const lastUsedScope =
+    typeof row.lastUsedScope === "string" && isFormat(row.lastUsedScope)
+      ? row.lastUsedScope
+      : null;
+  return {
+    id: row.id,
+    email: row.email,
+    createdAt: row.createdAt,
+    lastUsedScope,
+  };
 }
 
 // ---------------------------------------------------------------------------

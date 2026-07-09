@@ -116,9 +116,10 @@ sealed interface ScopeSource {
     data object Message : ScopeSource
     data object Conversation : ScopeSource
     data object Seed : ScopeSource
+    data object Preference : ScopeSource
     data object Default : ScopeSource
 
-    /** A source string outside the known four — preserves the original wire value. */
+    /** A source string outside the known set — preserves the original wire value. */
     data class Unknown(val raw: String) : ScopeSource
 
     val rawValue: String
@@ -126,6 +127,7 @@ sealed interface ScopeSource {
             Message -> "message"
             Conversation -> "conversation"
             Seed -> "seed"
+            Preference -> "preference"
             Default -> "default"
             is Unknown -> raw
         }
@@ -135,6 +137,7 @@ sealed interface ScopeSource {
             "message" -> Message
             "conversation" -> Conversation
             "seed" -> Seed
+            "preference" -> Preference
             "default" -> Default
             else -> Unknown(raw)
         }

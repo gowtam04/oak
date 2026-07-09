@@ -17,7 +17,9 @@
  *   - a chip pick followed by a message whose response resolves a DIFFERENT
  *     scope (an in-message signal) snaps the chip to that scope and clears
  *     the seed,
- *   - "New chat" resets the chip to the National Dex default.
+ *   - "New chat" keeps the last resolved scope on the chip for a signed-in
+ *     user (account last-used preference); guests still fall back to National
+ *     Dex when they have no lastUsedScope.
  *
  * Imports only view + lib code (never db/repos/runtime). Vitest jsdom project.
  */
@@ -222,7 +224,7 @@ describe("ScopeChip as the header's scope control", () => {
     expect(chatBodies.at(-1)!.scope_seed).toBeUndefined();
   });
 
-  it("New chat resets the chip to the National Dex default", async () => {
+  it("New chat keeps the last-used scope on the chip for a signed-in user", async () => {
     render(<Home />);
     await screen.findByTestId("auth-signin-button");
     await signIn();
@@ -232,6 +234,26 @@ describe("ScopeChip as the header's scope control", () => {
     expect(screen.getByTestId("scope-chip")).toHaveTextContent("Gen 7 · USUM");
 
     const sidebar = await screen.findByTestId("history-sidebar");
+    await act(async () => {
+      fireEvent.click(within(sidebar).getByTestId("new-chat"));
+    });
+
+    // Signed-in last-used preference: the chip stays on Gen 7 for the fresh
+    // thread (server will also apply last_used_scope on the first turn).
+    expect(screen.getByTestId("scope-chip")).toHaveTextContent("Gen 7 · USUM");
+  });
+
+  it("New chat falls back to National Dex when the user has no last-used scope", async () => {
+    // Seed me with a signed-in account that has never resolved a scope.
+    meState = { signedIn: true, email: EMAIL };
+    render(<Home />);
+    await screen.findByTestId("history-sidebar");
+
+    expect(screen.getByTestId("scope-chip")).toHaveTextContent(
+      "National Dex · All Gens",
+    );
+
+    const sidebar = screen.getByTestId("history-sidebar");
     await act(async () => {
       fireEvent.click(within(sidebar).getByTestId("new-chat"));
     });

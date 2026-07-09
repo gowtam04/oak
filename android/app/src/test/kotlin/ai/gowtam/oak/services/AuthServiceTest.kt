@@ -4,6 +4,7 @@ import ai.gowtam.oak.networking.InMemoryTokenPreferences
 import ai.gowtam.oak.networking.OakApiClient
 import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.networking.TokenStore
+import ai.gowtam.oak.wire.Format
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -77,8 +78,9 @@ class AuthServiceTest {
     @Test
     fun meMapsSignedInResponse() = runTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"signedIn":true,"email":"a@b.com"}"""))
-        val state = service.me()
-        assertEquals(AuthState.SignedIn("a@b.com"), state)
+        val snapshot = service.me()
+        assertEquals(AuthState.SignedIn("a@b.com"), snapshot.state)
+        assertEquals(null, snapshot.lastUsedScope)
 
         val recorded = server.takeRequest()
         assertEquals("GET", recorded.method)
@@ -86,9 +88,21 @@ class AuthServiceTest {
     }
 
     @Test
+    fun meMapsSignedInResponseWithLastUsedScope() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody("""{"signedIn":true,"email":"a@b.com","lastUsedScope":"gen-7"}"""),
+        )
+        val snapshot = service.me()
+        assertEquals(AuthState.SignedIn("a@b.com"), snapshot.state)
+        assertEquals(Format.Gen7, snapshot.lastUsedScope)
+    }
+
+    @Test
     fun meMapsGuestResponse() = runTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"signedIn":false}"""))
-        assertEquals(AuthState.Guest, service.me())
+        assertEquals(MeSnapshot.Guest, service.me())
     }
 
     @Test

@@ -546,7 +546,7 @@ const ROUTE_ANSWER = {
   answer_markdown: "Pikachu is an Electric-type.",
 };
 
-const ACCOUNT = { id: "acct-42", email: "ash@pallet.town", createdAt: 0 };
+const ACCOUNT = { id: "acct-42", email: "ash@pallet.town", createdAt: 0, lastUsedScope: null };
 
 describe("POST /api/chat — tiered rate-limit keying", () => {
   beforeEach(() => {

@@ -30,6 +30,7 @@ describe("GET /api/auth/me", () => {
       id: "acct-1",
       email: "ash@pallet.town",
       createdAt: 1_700_000_000_000,
+      lastUsedScope: null,
     });
 
     const res = await GET();
@@ -38,6 +39,24 @@ describe("GET /api/auth/me", () => {
     expect(await res.json()).toEqual({
       signedIn: true,
       email: "ash@pallet.town",
+    });
+  });
+
+  it("includes lastUsedScope when the account has a remembered preference", async () => {
+    cu.getCurrentAccount.mockResolvedValue({
+      id: "acct-1",
+      email: "ash@pallet.town",
+      createdAt: 1_700_000_000_000,
+      lastUsedScope: "gen-7",
+    });
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      signedIn: true,
+      email: "ash@pallet.town",
+      lastUsedScope: "gen-7",
     });
   });
 

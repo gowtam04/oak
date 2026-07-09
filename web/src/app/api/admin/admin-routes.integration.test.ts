@@ -141,6 +141,7 @@ function asAdmin(): void {
     id: "acct-admin",
     email: ADMIN_EMAIL,
     createdAt: 0,
+    lastUsedScope: null,
   });
 }
 
@@ -151,6 +152,7 @@ function asNonAdmin(): void {
     id: ACCOUNTS.B.id,
     email: ACCOUNTS.B.email,
     createdAt: ACCOUNTS.B.createdAt,
+    lastUsedScope: null,
   });
 }
 
@@ -318,6 +320,7 @@ describe("gating — every /api/admin/* route", () => {
       id: "acct-admin",
       email: ADMIN_EMAIL,
       createdAt: 0,
+      lastUsedScope: null,
     });
     vi.stubEnv("ADMIN_EMAILS", "");
     const res = await overview.GET(adminReq("/api/admin/overview"));
@@ -331,6 +334,7 @@ describe("gating — every /api/admin/* route", () => {
       id: "acct-admin",
       email: "Owner@Oak.TEST",
       createdAt: 0,
+      lastUsedScope: null,
     });
     vi.stubEnv("ADMIN_EMAILS", "owner@oak.test, someone@else.test");
     const res = await overview.GET(adminReq("/api/admin/overview"));

@@ -125,6 +125,7 @@ function signedIn(id: string): void {
     id,
     email: `${id}@x.test`,
     createdAt: 0,
+    lastUsedScope: null,
   });
 }
 function guest(): void {

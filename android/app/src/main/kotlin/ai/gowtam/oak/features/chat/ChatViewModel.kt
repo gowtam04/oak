@@ -148,10 +148,12 @@ class ChatViewModel(
 
     /**
      * The scope the header chip displays and the artifact viewer scopes to: a pending
-     * chip pick, else the server-resolved scope, else the national-dex default — identical
-     * to web's `displayFormat = scopeSeed ?? resolvedScope ?? "national-dex"`.
+     * chip pick, else the server-resolved scope, else the signed-in last-used preference,
+     * else the national-dex default — identical to web's
+     * `displayFormat = scopeSeed ?? resolvedScope ?? lastUsedScope ?? "national-dex"`.
      */
-    private fun displayFormat(): Format = scopeSeed ?: resolvedScope ?: Format.NationalDex
+    private fun displayFormat(): Format =
+        scopeSeed ?: resolvedScope ?: appState.lastUsedScope.value ?: Format.NationalDex
 
     /**
      * Whether the composer can send: not already streaming, and either some text or at
@@ -366,7 +368,8 @@ class ChatViewModel(
     /**
      * Starts a fresh conversation: tears down any stream, clears the thread, and rotates
      * the session id so the agent has no prior context. Clears the in-memory guest
-     * thread for guests and drops any resolved scope so the chip falls back to champions.
+     * thread for guests and drops resolved/seed scope so the chip falls through to
+     * lastUsedScope (signed-in) or national-dex. lastUsedScope is intentionally kept.
      */
     fun startNewConversation() {
         // Abandon the current thread WITHOUT stopping its durable turn: unsubscribe and
@@ -536,6 +539,10 @@ class ChatViewModel(
                 resolvedScope = event.format
                 resolvedScopeSource = event.source
                 scopeSeed = null
+                // Signed-in only: remember for New Chat (server also persists on the account).
+                if (appState.authState.value is AuthState.SignedIn) {
+                    appState.setLastUsedScope(event.format)
+                }
                 mirrorGuestScope(event.format)
             }
 

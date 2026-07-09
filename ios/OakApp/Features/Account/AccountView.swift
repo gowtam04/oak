@@ -295,7 +295,7 @@ private struct PreviewAccountAuthService: AuthService {
   func verify(email: String, code: String) async throws -> Account {
     Account(email: email, created: false)
   }
-  func me() async throws -> AuthState { .guest }
+  func me() async throws -> MeSnapshot { .guest }
   func signOut() async throws {}
   func deleteAccount() async throws {}
 }

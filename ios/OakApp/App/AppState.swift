@@ -32,6 +32,12 @@ final class AppState {
   /// default) until a turn resolves otherwise; reset with the guest thread.
   var guestThreadScope: Format = .nationalDex
 
+  /// Signed-in account's last-used game scope for NEW chats (from `GET /api/auth/me`
+  /// + every subsequent `scope` event while signed in). Survives New Chat so the
+  /// chip doesn't flash National Dex for a user mid–Gen 7 run. `nil` for guests
+  /// and never-chatted accounts. Mirrors web's `lastUsedScope` (`page.tsx`).
+  var lastUsedScope: Format?
+
   /// Pending server-side turns keyed by conversation id (`session_id`) → the
   /// server-minted `turn_id` still generating for that thread
   /// (background-turns/design.md §6 / §6.2). It lives here — not on the chat view
@@ -71,7 +77,14 @@ extension AppState {
   /// next authed call will surface connectivity if it persists.
   func restoreSession(using auth: any AuthService) async {
     do {
-      authState = try await auth.me()
+      let snapshot = try await auth.me()
+      authState = snapshot.state
+      // Seed the new-chat chip from the account preference (signed-in only).
+      if case .signedIn = snapshot.state {
+        lastUsedScope = snapshot.lastUsedScope
+      } else {
+        lastUsedScope = nil
+      }
     } catch {
       Log.auth.error("session restore failed; remaining a guest")
     }
@@ -83,8 +96,14 @@ extension AppState {
   /// separate, non-fatal step — ``importGuestThread(using:)`` — invoked from the
   /// sign-in flow once a `HistoryService` is in hand, so the state flip here stays
   /// synchronous and dependency-free.
-  func completeSignIn(email: String) {
+  ///
+  /// `lastUsedScope` is typically nil on a fresh sign-in (verify doesn't return
+  /// it); the next `scope` event or a later `me()` restore fills it in.
+  func completeSignIn(email: String, lastUsedScope: Format? = nil) {
     authState = .signedIn(email: email)
+    if let lastUsedScope {
+      self.lastUsedScope = lastUsedScope
+    }
   }
 
   /// Signs out (M-ACCT-US-3): best-effort server revoke + Keychain clear via the
@@ -125,6 +144,7 @@ extension AppState {
   private func resetToGuest() {
     authState = .guest
     activeConversationId = nil
+    lastUsedScope = nil
     // Drop any pending-turn pointers — they belonged to the now-signed-out account
     // (or the prior guest session) and must not drive a reattach after the reset.
     pendingTurns.removeAll()

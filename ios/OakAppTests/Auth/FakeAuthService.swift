@@ -16,7 +16,7 @@ final class FakeAuthService: AuthService, @unchecked Sendable {
 
   var requestCodeResult: Result<Void, OakError> = .success(())
   var verifyResult: Result<Account, OakError> = .success(Account(email: "ash@pallet.town", created: false))
-  var meResult: Result<AuthState, OakError> = .success(.guest)
+  var meResult: Result<MeSnapshot, OakError> = .success(.guest)
   /// Thrown (if set) by ``signOut()`` *after* the local token is cleared, modeling
   /// a failed server revoke that must not block returning to guest.
   var signOutError: OakError?
@@ -55,7 +55,7 @@ final class FakeAuthService: AuthService, @unchecked Sendable {
     return account
   }
 
-  func me() async throws -> AuthState {
+  func me() async throws -> MeSnapshot {
     meCount += 1
     return try meResult.get()
   }

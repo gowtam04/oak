@@ -148,8 +148,16 @@ beforeEach(async () => {
 
 // --- Helpers ---------------------------------------------------------------
 
-function signedIn(id: string): void {
-  cu.getCurrentAccount.mockResolvedValue({ id, email: `${id}@x.test`, createdAt: 0 });
+function signedIn(
+  id: string,
+  opts?: { lastUsedScope?: string | null },
+): void {
+  cu.getCurrentAccount.mockResolvedValue({
+    id,
+    email: `${id}@x.test`,
+    createdAt: 0,
+    lastUsedScope: opts?.lastUsedScope ?? null,
+  });
 }
 
 function post(body: unknown, signal?: AbortSignal): Promise<Response> {
@@ -220,6 +228,17 @@ describe("POST /api/chat — no active-team seam", () => {
     expect((captured.options as Record<string, unknown>).mode).toBe(
       "national-dex",
     );
+  });
+
+  it("a seedless fresh conversation uses the account last_used_scope preference", async () => {
+    signedIn(ACCT_A, { lastUsedScope: "gen-7" });
+    const text = await readBody(
+      await post({ session_id: "c2-pref", message: "hi" }),
+    );
+    expect((captured.options as Record<string, unknown>).mode).toBe("gen-7");
+    // Preference source is reported on the scope frame.
+    expect(text).toContain('"source":"preference"');
+    expect(text).toContain('"format":"gen-7"');
   });
 
   it("an explicit scope_seed chip pick binds that scope's mode (gen-2)", async () => {

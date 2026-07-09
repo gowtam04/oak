@@ -5,6 +5,7 @@ import ai.gowtam.oak.networking.OakApiClient
 import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.networking.TokenStore
 import ai.gowtam.oak.wire.AuthVerifyResponse
+import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.MeResponse
 import android.util.Log
 import kotlinx.serialization.Serializable
@@ -42,10 +43,11 @@ interface AuthService {
     /**
      * Reports the current auth state for launch restore: the request carries the
      * stored Bearer token (when present); a valid token resolves to
-     * [AuthState.SignedIn], an absent or invalid token to [AuthState.Guest] (the route
-     * returns guest as a first-class 200, never an error).
+     * [AuthState.SignedIn] with an optional [MeSnapshot.lastUsedScope] (the account's
+     * remembered new-chat default), an absent or invalid token to [AuthState.Guest]
+     * (the route returns guest as a first-class 200, never an error).
      */
-    suspend fun me(): AuthState
+    suspend fun me(): MeSnapshot
 
     /**
      * Ends the device session: best-effort server revoke, then always clears the
@@ -73,6 +75,22 @@ data class Account(val email: String, val created: Boolean)
 sealed interface AuthState {
     data object Guest : AuthState
     data class SignedIn(val email: String) : AuthState
+}
+
+/**
+ * The result of [AuthService.me] — auth state plus the account's remembered
+ * new-chat scope when signed in (mirrors web's `MeResult.lastUsedScope`).
+ */
+data class MeSnapshot(
+    val state: AuthState,
+    val lastUsedScope: Format? = null,
+) {
+    companion object {
+        val Guest = MeSnapshot(AuthState.Guest, null)
+
+        fun signedIn(email: String, lastUsedScope: Format? = null) =
+            MeSnapshot(AuthState.SignedIn(email), lastUsedScope)
+    }
 }
 
 /**
@@ -108,11 +126,20 @@ class LiveAuthService(
         return Account(email = response.email, created = response.created)
     }
 
-    override suspend fun me(): AuthState {
+    override suspend fun me(): MeSnapshot {
         val endpoint = Endpoint(method = Endpoint.Method.GET, path = "/api/auth/me", requiresAuth = true)
         val response = apiClient.send(endpoint, MeResponse.serializer())
         val email = response.email
-        return if (response.signedIn && email != null) AuthState.SignedIn(email) else AuthState.Guest
+        if (response.signedIn && email != null) {
+            val scope = response.lastUsedScope?.let { raw ->
+                when (val f = Format.fromRaw(raw)) {
+                    is Format.Unknown -> null // retired wire value fails soft
+                    else -> f
+                }
+            }
+            return MeSnapshot.signedIn(email, scope)
+        }
+        return MeSnapshot.Guest
     }
 
     override suspend fun signOut() {

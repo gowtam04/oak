@@ -6,6 +6,7 @@ import ai.gowtam.oak.services.ArtifactService
 import ai.gowtam.oak.services.AuthService
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.services.ChatService
+import ai.gowtam.oak.services.MeSnapshot
 import ai.gowtam.oak.services.DexLookupService
 import ai.gowtam.oak.services.HistoryService
 import ai.gowtam.oak.services.SourceImage
@@ -48,7 +49,7 @@ import kotlinx.coroutines.flow.flow
 // ---------------------------------------------------------------------------
 
 class FakeAuthService(
-    var meResult: AuthState = AuthState.Guest,
+    var meResult: MeSnapshot = MeSnapshot.Guest,
     var verifyResult: Account = Account(email = "fake@example.com", created = false),
     var requestCodeError: OakError? = null,
     var verifyError: OakError? = null,
@@ -73,7 +74,7 @@ class FakeAuthService(
         return verifyResult
     }
 
-    override suspend fun me(): AuthState {
+    override suspend fun me(): MeSnapshot {
         meCallCount++
         meError?.let { throw it }
         return meResult

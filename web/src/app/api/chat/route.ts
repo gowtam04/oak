@@ -209,10 +209,10 @@ export async function POST(req: Request): Promise<Response> {
   };
 
   // Server-controlled query scope — never an LLM-visible tool field. The turn's
-  // ACTUAL scope is RESOLVED below from a five-tier precedence chain:
+  // ACTUAL scope is RESOLVED below from a six-tier precedence chain:
   //   (explicit in-message signal) > (scope_seed chip pick) >
   //   (conversation's sticky scope) > (legacy champions_mode seed) >
-  //   (National Dex default).
+  //   (signed-in account last_used_scope) > (National Dex default).
   // Explicit chip pick — ranks above sticky (fresh user intent).
   const explicitSeed: Format | undefined = body.scope_seed;
   // DEPRECATED champions_mode — old iOS builds always send a concrete boolean.
@@ -390,16 +390,19 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 3b. Resolve THIS turn's data scope (generation-scope GS-B / §3.4 step 3).
-  //     Five-tier precedence: an explicit, high-precision in-message signal wins
+  //     Six-tier precedence: an explicit, high-precision in-message signal wins
   //     over an explicit scope_seed chip pick, which wins over the
   //     conversation's sticky scope, which wins over the legacy champions_mode
-  //     seed, which falls back to the National Dex default. The lexicon is
-  //     DETERMINISTIC — no LLM pre-pass. `mode` then flows downstream exactly as
-  //     before (ctx / formatForMode(mode) at persist / turn_record).
-  //     Every generation (including Gens 1–4) is now a first-class scope, and a
-  //     whole-dex phrase ("national dex", "all Pokémon") resolves to National
-  //     Dex; the detector only ever returns a real format now (the old
-  //     `unsupported` honest-decline arm is GONE — oak-v2 §3 / National Dex).
+  //     seed, which wins over the signed-in account's last-used preference
+  //     (new-chat default), which falls back to the National Dex hard default.
+  //     The lexicon is DETERMINISTIC — no LLM pre-pass. `mode` then flows
+  //     downstream exactly as before (ctx / formatForMode(mode) at persist /
+  //     turn_record). Every generation (including Gens 1–4) is now a first-class
+  //     scope, and a whole-dex phrase ("national dex", "all Pokémon") resolves
+  //     to National Dex; the detector only ever returns a real format now (the
+  //     old `unsupported` honest-decline arm is GONE — oak-v2 §3 / National Dex).
+  const preferredFormat: Format | undefined =
+    account?.lastUsedScope ?? undefined;
   const detection = detectScopeSignal(message);
   const messageFormat: Format | undefined = detection?.format;
   const format: Format =
@@ -407,6 +410,7 @@ export async function POST(req: Request): Promise<Response> {
     explicitSeed ??
     stickyFormat ??
     legacySeed ??
+    preferredFormat ??
     NATDEX_FORMAT;
   const mode: AgentMode = modeForFormat(format);
 
@@ -419,7 +423,12 @@ export async function POST(req: Request): Promise<Response> {
         request_id: requestId,
         session_id,
         matched: detection.matched,
-        from: explicitSeed ?? stickyFormat ?? legacySeed ?? NATDEX_FORMAT,
+        from:
+          explicitSeed ??
+          stickyFormat ??
+          legacySeed ??
+          preferredFormat ??
+          NATDEX_FORMAT,
         to: format,
       },
       "oak_scope_signal",
@@ -430,11 +439,12 @@ export async function POST(req: Request): Promise<Response> {
   // recording — never on the user's critical path). Signed-in + an existing
   // conversation whose stored format actually moved → UPDATE it (appendTurnPair
   // stamps format only on CREATE, so a mid-conversation switch needs this
-  // explicit write). Guest → refresh the session's sticky scope every turn
-  // (cheap + idempotent).
+  // explicit write). Signed-in every turn → also refresh account.last_used_scope
+  // when it differs (drives the next new chat's default). Guest → refresh the
+  // session's sticky scope every turn (cheap + idempotent).
   if (account) {
+    const acctId = account.id;
     if (existingConversation && format !== stickyFormat) {
-      const acctId = account.id;
       const logScopePersistFailure = (err: unknown): void => {
         logger.error(
           {
@@ -454,6 +464,30 @@ export async function POST(req: Request): Promise<Response> {
           .catch(logScopePersistFailure);
       } catch (err) {
         logScopePersistFailure(err);
+      }
+    }
+    // Remember this turn's resolved scope as the account default for future
+    // new chats. Only write when it moved (cheap skip on the common sticky path).
+    if (format !== account.lastUsedScope) {
+      const logPrefPersistFailure = (err: unknown): void => {
+        logger.error(
+          {
+            event: "account_last_used_scope_update_failed",
+            request_id: requestId,
+            account_id: acctId,
+            session_id,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "oak_account_last_used_scope_update_failed",
+        );
+      };
+      try {
+        const accounts = await import("@/data/repos/accounts-repo");
+        void accounts
+          .updateLastUsedScope(acctId, format)
+          .catch(logPrefPersistFailure);
+      } catch (err) {
+        logPrefPersistFailure(err);
       }
     }
   } else {
@@ -544,6 +578,8 @@ export async function POST(req: Request): Promise<Response> {
 
   // How the scope was resolved — surfaced on the `scope` event (GS-C). Any
   // in-message signal is message-sourced, so `detection` present ⇒ "message".
+  // Preference is only reported when it actually decided the format (no higher
+  // tier matched).
   const scopeSource: ScopeEvent["source"] = detection
     ? "message"
     : explicitSeed
@@ -552,7 +588,9 @@ export async function POST(req: Request): Promise<Response> {
         ? "conversation"
         : legacySeed
           ? "seed"
-          : "default";
+          : preferredFormat
+            ? "preference"
+            : "default";
 
   // 5. Build the subscriber response FIRST — its ReadableStream.start() runs
   //    synchronously, emitting the `turn` frame and registering with the turn's

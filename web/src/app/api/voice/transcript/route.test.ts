@@ -58,7 +58,7 @@ function ensureLoaded(): void {
   if (loadError) throw new Error(`Route/repo not loadable: ${String(loadError)}`);
 }
 function signedIn(id: string): void {
-  cu.getCurrentAccount.mockResolvedValue({ id, email: `${id}@x.test`, createdAt: 0 });
+  cu.getCurrentAccount.mockResolvedValue({ id, email: `${id}@x.test`, createdAt: 0, lastUsedScope: null });
 }
 function guest(): void {
   cu.getCurrentAccount.mockResolvedValue(null);

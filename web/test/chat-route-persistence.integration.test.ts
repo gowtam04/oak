@@ -64,7 +64,12 @@ let fix: PgFixture;
 type Repo = typeof import("@/data/repos/conversation-repo");
 let repo: Repo;
 
-const ACCT: Account = { id: "acct-persist", email: "p@x.com", createdAt: 1 };
+const ACCT: Account = {
+  id: "acct-persist",
+  email: "p@x.com",
+  createdAt: 1,
+  lastUsedScope: null,
+};
 
 let nextAnswer: OakAnswer;
 
@@ -102,8 +107,14 @@ beforeEach(async () => {
     return nextAnswer;
   });
   await fix.db.execute(
-    sql`TRUNCATE TABLE conversation, conversation_message RESTART IDENTITY`,
+    sql`TRUNCATE TABLE conversation, conversation_message, account RESTART IDENTITY`,
   );
+  // Seed the signed-in account row so last_used_scope writes land (no FK, but
+  // updateLastUsedScope is a real UPDATE against account.id).
+  await fix.db.execute(sql`
+    INSERT INTO account (id, email, created_at)
+    VALUES (${ACCT.id}, ${ACCT.email}, ${ACCT.createdAt})
+  `);
 });
 
 // ---------------------------------------------------------------------------
@@ -326,6 +337,63 @@ describe("signed-in persistence", () => {
     const sid = randomUUID();
     await post({ session_id: sid, message: "q" }, { signal: AbortSignal.abort() });
     expect(await repo.getConversation(ACCT.id, sid)).not.toBeNull();
+  });
+
+  it("persists last_used_scope on the account after a resolved turn", async () => {
+    const sid = randomUUID();
+    const res = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sid,
+          message: "hi",
+          scope_seed: "gen-7",
+        }),
+      }),
+    );
+    await res.text();
+
+    // Poll for the fire-and-forget account update.
+    const accounts = await import("@/data/repos/accounts-repo");
+    let found = await accounts.findAccountByEmail(ACCT.email);
+    for (let i = 0; i < 50 && found?.lastUsedScope !== "gen-7"; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+      found = await accounts.findAccountByEmail(ACCT.email);
+    }
+    expect(found?.lastUsedScope).toBe("gen-7");
+  });
+
+  it("a new conversation uses the account last_used_scope when no seed/sticky", async () => {
+    // Prefill the preference and expose it on the mocked account (the chat
+    // route reads lastUsedScope from getCurrentAccount, not a re-query).
+    const accounts = await import("@/data/repos/accounts-repo");
+    await accounts.updateLastUsedScope(ACCT.id, "gen-7");
+    meMock.mockResolvedValue({ ...ACCT, lastUsedScope: "gen-7" });
+
+    const sid = randomUUID();
+    const res = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sid, message: "plain question" }),
+      }),
+    );
+    const text = await res.text();
+
+    const scopeFrame = text
+      .split("\n\n")
+      .find((f) => f.startsWith("event: scope"));
+    expect(scopeFrame).toBeTruthy();
+    const scopeData = JSON.parse(scopeFrame!.split("\ndata: ")[1]!) as {
+      format: string;
+      source: string;
+    };
+    expect(scopeData).toEqual({ format: "gen-7", source: "preference" });
+    expect(capturedModes[0]).toBe("gen-7");
+
+    const conv = await repo.getConversation(ACCT.id, sid);
+    expect(conv?.format).toBe("gen-7");
   });
 });
 

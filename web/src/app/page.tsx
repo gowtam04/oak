@@ -20,7 +20,7 @@ import ArtifactViewer from "@/components/artifact/ArtifactViewer";
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useConversations } from "@/lib/hooks/use-conversations";
 import { getConversation, importConversation } from "@/lib/api/history-client";
-import type { Format } from "@/data/formats";
+import { isFormat, type Format } from "@/data/formats";
 import type {
   ChatStatus,
   ChatTurn,
@@ -90,6 +90,19 @@ export default function Home() {
   // automatic reconnect (status stays "thinking" throughout).
   useScreenWakeLock(status === "thinking");
 
+  // Auth identity (account-creation design.md § API "/api/auth/me"; AUTH-US-1 /
+  // AC-1.2). Auth is a SEPARATE concern from the conversation: it lives in a
+  // cookie/account, never in `sessionId`/`turns[]`, so signing in or out must
+  // leave the on-screen thread untouched (BR-A10 / AUTH-US-6 — enforced below).
+  // Declared above scope-mirroring so the signed-in gate for lastUsedScope can
+  // read it without a temporal-dead-zone reference.
+  const [auth, setAuth] = useState<MeResult>({ signedIn: false });
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  // Voice mode (signed-in only). Guests tapping the mic get the sign-in dialog
+  // — the app's existing gate for signed-in-only features — instead of the
+  // overlay. The endpoints 401 regardless, so this is UX, not the security line.
+  const [voiceOpen, setVoiceOpen] = useState(false);
+
   // Server-resolved scope for the conversation (GS-C). The hook's `scope` is the
   // per-turn `scope` SSE frame — `null` on a fresh send and until that frame
   // lands — so mirror it into page-level state that STICKS between turns (and is
@@ -97,6 +110,10 @@ export default function Home() {
   // below). This drives the header scope chip + the artifact viewer's data scope,
   // so a server override of the toggle (e.g. a "gen 7" message) is made visible.
   const [resolvedScope, setResolvedScope] = useState<Format | null>(null);
+  // Signed-in account's last-used scope for NEW chats (from GET /api/auth/me +
+  // every subsequent `scope` event). Survives New Chat so the chip doesn't flash
+  // National Dex for a user mid–Gen 7 run. Guests leave this null.
+  const [lastUsedScope, setLastUsedScope] = useState<Format | null>(null);
   // An explicit chip pick, sent as `scope_seed` on the NEXT turn only. Cleared
   // on every scope event: once the server has acknowledged a turn (any turn),
   // the seed's job is done — the conversation's scope is now sticky server-side,
@@ -109,9 +126,13 @@ export default function Home() {
   useEffect(() => {
     if (scope) {
       setResolvedScope(scope.format);
+      // Only signed-in accounts remember scope across New Chat (server stores
+      // account.last_used_scope). Guests keep lastUsedScope null so New Chat
+      // always falls back to national-dex.
+      if (auth.signedIn) setLastUsedScope(scope.format);
       setScopeSeed(null);
     }
-  }, [scope]);
+  }, [scope, auth.signedIn]);
 
   // Track the active request so Stop can decide between a quick-stop reset and a
   // plain stop, and restore the stopped message into the composer.
@@ -232,17 +253,6 @@ export default function Home() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  // Auth identity (account-creation design.md § API "/api/auth/me"; AUTH-US-1 /
-  // AC-1.2). Auth is a SEPARATE concern from the conversation: it lives in a
-  // cookie/account, never in `sessionId`/`turns[]`, so signing in or out must
-  // leave the on-screen thread untouched (BR-A10 / AUTH-US-6 — enforced below).
-  const [auth, setAuth] = useState<MeResult>({ signedIn: false });
-  const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  // Voice mode (signed-in only). Guests tapping the mic get the sign-in dialog
-  // — the app's existing gate for signed-in-only features — instead of the
-  // overlay. The endpoints 401 regardless, so this is UX, not the security line.
-  const [voiceOpen, setVoiceOpen] = useState(false);
-
   // Durable chat history (chat-history B-3). The hook lists/searches/filters and
   // mutates the signed-in account's conversations; it stays empty + makes no
   // fetch for guests (`enabled = auth.signedIn`). The conversation `sessionId`
@@ -259,7 +269,18 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     void fetchMe().then((me) => {
-      if (active) setAuth(me);
+      if (!active) return;
+      setAuth(me);
+      // Seed the new-chat default chip from the account preference (signed-in
+      // only). Guests and never-chatted accounts leave lastUsedScope null →
+      // national-dex display fallback.
+      if (
+        me.signedIn &&
+        typeof me.lastUsedScope === "string" &&
+        isFormat(me.lastUsedScope)
+      ) {
+        setLastUsedScope(me.lastUsedScope);
+      }
     });
     return () => {
       active = false;
@@ -275,6 +296,13 @@ export default function Home() {
     setAuthDialogOpen(false);
     void fetchMe().then((me) => {
       setAuth(me);
+      if (
+        me.signedIn &&
+        typeof me.lastUsedScope === "string" &&
+        isFormat(me.lastUsedScope)
+      ) {
+        setLastUsedScope(me.lastUsedScope);
+      }
       // BR-H10 / HIST-US-12: the on-screen guest thread's full-fidelity turns
       // live only on the client at this moment, so save them into the new
       // account (idempotent import), then surface it in the now-enabled history
@@ -296,9 +324,11 @@ export default function Home() {
   // Sign-out completed (current device only — AC-5.2). Revert to the guest tier
   // WITHOUT resetting `sessionId` or clearing `turns[]`: the thread persists
   // across the user→guest transition exactly as it does across guest→user
-  // (BR-A10).
+  // (BR-A10). Clear lastUsedScope so a later guest new-chat doesn't inherit a
+  // signed-in preference.
   const handleSignedOut = useCallback(() => {
     setAuth({ signedIn: false });
+    setLastUsedScope(null);
   }, []);
 
   // Commit each terminal answer exactly once (guard against effect re-runs /
@@ -367,8 +397,9 @@ export default function Home() {
 
   // Start a brand-new conversation (AC-6.1): a fresh session id + empty thread.
   // No DB row is created until the first successful turn. The previous
-  // conversation remains saved + unchanged; the scope resets to the national-dex
-  // default so the fresh thread displays it until a turn resolves otherwise.
+  // conversation remains saved + unchanged. Resolved/seed clear so the chip
+  // falls through to lastUsedScope (signed-in preference) or national-dex
+  // (guest / never-chatted). lastUsedScope is intentionally kept.
   const handleNewChat = useCallback(() => {
     reset();
     committedAnswerRef.current = null;
@@ -453,10 +484,12 @@ export default function Home() {
   const heroComposer = showEmptyState && !narrow;
 
   // The scope in effect for the conversation: an explicit chip pick, else the
-  // server-resolved scope once a turn has run (GS-C), else the national-dex
-  // default. Drives BOTH the header scope chip and the artifact viewer (B-4) —
-  // the viewer snapshots this onto each artifact at open (BR-AV-7).
-  const displayFormat: Format = scopeSeed ?? resolvedScope ?? "national-dex";
+  // server-resolved scope once a turn has run (GS-C), else the signed-in
+  // last-used preference (new-chat default), else national-dex. Drives BOTH
+  // the header scope chip and the artifact viewer (B-4) — the viewer snapshots
+  // this onto each artifact at open (BR-AV-7).
+  const displayFormat: Format =
+    scopeSeed ?? resolvedScope ?? lastUsedScope ?? "national-dex";
 
   // Mic button tapped. Signed in → open the voice overlay at the current
   // display scope; guest → the sign-in dialog (the existing signed-in gate).

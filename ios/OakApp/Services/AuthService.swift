@@ -28,9 +28,10 @@ protocol AuthService: Sendable {
 
   /// Reports the current auth state for launch restore: the request carries the
   /// stored Bearer token (when present); a valid token resolves to
-  /// `.signedIn(email:)`, an absent or invalid token to `.guest` (the route
-  /// returns guest as a first-class 200, never an error).
-  func me() async throws -> AuthState
+  /// `.signedIn(email:)` with an optional `lastUsedScope` (the account's
+  /// remembered new-chat default), an absent or invalid token to `.guest` (the
+  /// route returns guest as a first-class 200, never an error).
+  func me() async throws -> MeSnapshot
 
   /// Ends the device session: best-effort server revoke, then always clears the
   /// Keychain token so the app returns to guest. Idempotent — calling it without
@@ -51,6 +52,20 @@ protocol AuthService: Sendable {
 struct Account: Equatable, Sendable {
   let email: String
   let created: Bool
+}
+
+/// The result of ``AuthService/me()`` — auth state plus the account's remembered
+/// new-chat scope when signed in (mirrors web's `MeResult.lastUsedScope`).
+struct MeSnapshot: Equatable, Sendable {
+  let state: AuthState
+  /// Present only when signed in and the account has a stored preference.
+  let lastUsedScope: Format?
+
+  static let guest = MeSnapshot(state: .guest, lastUsedScope: nil)
+
+  static func signedIn(email: String, lastUsedScope: Format? = nil) -> MeSnapshot {
+    MeSnapshot(state: .signedIn(email: email), lastUsedScope: lastUsedScope)
+  }
 }
 
 /// Production ``AuthService`` over ``OakAPIClient`` (the network) and
@@ -93,11 +108,17 @@ struct LiveAuthService: AuthService {
     return Account(email: response.email, created: response.created)
   }
 
-  func me() async throws -> AuthState {
+  func me() async throws -> MeSnapshot {
     let endpoint = Endpoint(method: .get, path: "/api/auth/me", requiresAuth: true)
     let response = try await apiClient.send(endpoint, as: MeResponse.self)
     if response.signedIn, let email = response.email {
-      return .signedIn(email: email)
+      let scope: Format? = response.lastUsedScope.map { Format(rawValue: $0) }.flatMap { format in
+        // Drop `.unknown` — a retired wire value fails soft to nil so the chip
+        // falls through to national-dex (server does the same via isFormat).
+        if case .unknown = format { return nil }
+        return format
+      }
+      return .signedIn(email: email, lastUsedScope: scope)
     }
     return .guest
   }

@@ -244,9 +244,9 @@ describe("Drizzle migration — table creation", () => {
     // migration_applies_auth_tables: account / auth_session / otp_code exist on
     // a fresh schema with the exact columns and primary keys from § Data Model.
     expect(await columnNames(db, "account")).toEqual(
-      expect.arrayContaining(["id", "email", "created_at"]),
+      expect.arrayContaining(["id", "email", "created_at", "last_used_scope"]),
     );
-    expect(await columnNames(db, "account")).toHaveLength(3);
+    expect(await columnNames(db, "account")).toHaveLength(4);
     expect(await pkColumns(db, "account")).toEqual(["id"]);
 
     expect(await columnNames(db, "auth_session")).toEqual(

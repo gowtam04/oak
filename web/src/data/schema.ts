@@ -236,6 +236,13 @@ export const account = pgTable(
     email: text("email").notNull(),
     /** Epoch milliseconds the account was created. */
     created_at: bigint("created_at", { mode: "number" }).notNull(),
+    /**
+     * Last game scope the user resolved a chat turn under (a `Format` literal).
+     * NULL for brand-new accounts / never-chatted. Used as the default for the
+     * next *new* conversation (signed-in only); per-conversation sticky format
+     * still wins when resuming an existing thread.
+     */
+    last_used_scope: text("last_used_scope"),
   },
   (t) => [
     // Unique normalized email enforces BR-A1 ("exactly one account per email")

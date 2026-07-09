@@ -385,10 +385,12 @@ struct FixtureDecodingTests {
     let signedIn = try Fixtures.decode(MeResponse.self, from: "me.json")
     #expect(signedIn.signedIn == true)
     #expect(signedIn.email == "trainer@example.com")
+    #expect(signedIn.lastUsedScope == nil)
 
     let guest = try Fixtures.decode(MeResponse.self, from: "me_guest.json")
     #expect(guest.signedIn == false)
     #expect(guest.email == nil)
+    #expect(guest.lastUsedScope == nil)
   }
 
   /// The error envelope decodes `{ code, message }`; `status` is not in the body.

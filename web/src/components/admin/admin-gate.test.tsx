@@ -22,6 +22,7 @@ const ADMIN_ACCOUNT: Account = {
   id: "acc-admin",
   email: "owner@example.com",
   createdAt: 1_700_000_000_000,
+  lastUsedScope: null,
 };
 
 beforeEach(() => {
@@ -48,6 +49,7 @@ describe("resolveAdminGate", () => {
       id: "acc-user",
       email: "user@example.com",
       createdAt: 1_700_000_000_000,
+      lastUsedScope: null,
     });
     mockIsAdmin.mockReturnValue(false);
 
