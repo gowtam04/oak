@@ -353,7 +353,12 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** pending
+- **Status:** fixed (fc39b5f web / bf35699 ios / 2b01bd3 android — ships in the next TestFlight build)
+
+  Shipped as a full team-analysis feature: a stateless public
+  `POST /api/teams/analyze` (defensive type matrix, offensive move-type
+  coverage, speed tiers; type-based v1 — abilities/items not yet factored)
+  with an Analysis panel in all three team editors.
 
 > What about including additional things for team builder. Like defensive coverage, offensive coverage, team stats, other type of information you can figure out
 
@@ -405,7 +410,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone17_1, iOS 26.5, en-US
 - **Submitter:** gowtam04@gmail.com
-- **Status:** pending
+- **Status:** fixed (5af6e2e ios / 7580206 android — movepool renders as a type-dotted chip grid matching the web; ships in the next TestFlight build)
 
 > Instead of showing moves as a list, show them as chips in a grid like in the web
 
