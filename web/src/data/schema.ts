@@ -487,7 +487,10 @@ export const turn_record = pgTable(
     /** Logical FK → account.id; NULL ⇒ guest turn. */
     account_id: text("account_id"),
     /**
-     * `ModelKey` ("grok-4.3" | "claude" | "gpt-5.5"); keys the cost lookup.
+     * The registry `ModelKey` active at the time of the turn; keys the cost
+     * lookup. Keys evolve as the registry grows/retires entries, so historical
+     * rows may hold a key no longer offered (e.g. a retired "claude" key) — the
+     * analytics repo looks up whatever string is stored, not a fixed union.
      * NULLABLE: a "rate_limited" row is recorded before the model is resolved,
      * so it has no model. The analytics repo treats null as "n/a".
      */
@@ -599,6 +602,30 @@ export const champions_item_exclusion = pgTable("champions_item_exclusion", {
   excluded_at: bigint("excluded_at", { mode: "number" }).notNull(),
   /** Admin email that made the change; null if unknown. Audit only. */
   excluded_by: text("excluded_by"),
+});
+
+// ===========================================================================
+// app_setting — generic operator-controlled key/value store
+//
+// A small general-purpose settings table, keyed by an arbitrary string, so the
+// admin panel can persist operator choices without a bespoke table per setting.
+// The first consumer is the active-model switch ("active_model" → a `ModelKey`,
+// see src/data/repos/settings-repo.ts) that replaces the old `ACTIVE_MODEL` Fly
+// secret; more keys can be added later without a schema change.
+//
+// Deliberately NOT granted to `oak_readonly` and NOT in the `run_sql` warehouse
+// allowlist (prompts/warehouse-ddl.ts) — this is operator config, not a fact the
+// agent should read or expose to a user.
+// ===========================================================================
+export const app_setting = pgTable("app_setting", {
+  /** Setting name, e.g. "active_model". PK. */
+  key: text("key").primaryKey(),
+  /** The setting's value, stored as text (callers parse/validate it). */
+  value: text("value").notNull(),
+  /** Admin email that last changed it; null if unknown. Audit only. */
+  updated_by: text("updated_by"),
+  /** Epoch ms of the last write. */
+  updated_at: bigint("updated_at", { mode: "number" }).notNull(),
 });
 
 // ===========================================================================
