@@ -5,6 +5,9 @@ import ai.gowtam.oak.networking.OakApiClient
 import ai.gowtam.oak.networking.TokenStore
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.OakJson
+import ai.gowtam.oak.wire.StatSpread
+import ai.gowtam.oak.wire.TeamAnalysis
+import ai.gowtam.oak.wire.TeamMember
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -149,5 +152,38 @@ class TeamServiceTest {
         val paste = service.exportPaste("t1")
         assertEquals("Garchomp @ Life Orb", paste)
         assertEquals("/api/teams/t1/export", server.takeRequest().path)
+    }
+
+    @Test
+    fun analyzePostsPublicWithFormatAndFullMemberWireShape() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody("""{"status":"unavailable","format":"champions"}"""),
+        )
+        val members = listOf(
+            TeamMember(
+                species = "garchomp", ability = "rough-skin", item = "life-orb",
+                moves = listOf("earthquake", "dragon-claw"), nature = "jolly",
+                evs = StatSpread(0, 252, 0, 0, 4, 252), ivs = StatSpread(31, 31, 31, 31, 31, 31),
+                teraType = "ground", level = 50,
+            ),
+        )
+        val result = service.analyze(Format.Champions, members)
+
+        assertTrue(result is TeamAnalysis.Unavailable)
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/api/teams/analyze", recorded.path)
+        // PUBLIC endpoint — carries no Bearer token even though a token is set.
+        assertNull(recorded.getHeader("Authorization"))
+
+        val body = OakJson.parseToJsonElement(recorded.body.readUtf8()).jsonObject
+        assertEquals("champions", body["format"]?.jsonPrimitive?.content)
+        val member = body["members"]!!.jsonArray.single().jsonObject
+        // The full team-member wire shape rides the body (species + always-present nullable keys).
+        assertEquals("garchomp", member["species"]?.jsonPrimitive?.content)
+        assertEquals("life-orb", member["item"]?.jsonPrimitive?.content)
+        assertEquals("ground", member["tera_type"]?.jsonPrimitive?.content)
+        assertEquals(50, member["level"]?.jsonPrimitive?.content?.toInt())
+        assertEquals(listOf("earthquake", "dragon-claw"), member["moves"]!!.jsonArray.map { it.jsonPrimitive.content })
     }
 }

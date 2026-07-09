@@ -6,14 +6,20 @@ import ai.gowtam.oak.support.FakeDexLookupService
 import ai.gowtam.oak.support.FakeTeamService
 import ai.gowtam.oak.support.MainDispatcherRule
 import ai.gowtam.oak.support.fakeTeam
+import ai.gowtam.oak.support.FakeTeamService.AnalyzeStep
 import ai.gowtam.oak.wire.BaseStats
+import ai.gowtam.oak.wire.DefenseRow
 import ai.gowtam.oak.wire.DexSpriteRef
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.LearnsetMove
+import ai.gowtam.oak.wire.Offense
 import ai.gowtam.oak.wire.SearchMatch
 import ai.gowtam.oak.wire.StatSpread
+import ai.gowtam.oak.wire.TeamAnalysis
+import ai.gowtam.oak.wire.TeamAnalysisOk
 import ai.gowtam.oak.wire.TeamMember
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -31,6 +37,7 @@ import org.junit.Test
  * auto-force (forward-only / idempotent / never-clears), warn-but-allow save, and
  * export.
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class TeamEditorViewModelTest {
 
     @get:Rule
@@ -318,5 +325,107 @@ class TeamEditorViewModelTest {
 
         assertEquals("Original", model.uiState.value.name)
         assertEquals("garchomp", model.uiState.value.members[0].species)
+    }
+
+    // -------------------------------------------------------------------
+    // Team analysis (debounce / empty-draft / error-retention / staleness)
+    // -------------------------------------------------------------------
+
+    private fun advanceTimeBy(ms: Long) = mainDispatcherRule.dispatcher.scheduler.advanceTimeBy(ms)
+    private fun runCurrent() = mainDispatcherRule.dispatcher.scheduler.runCurrent()
+
+    private fun okAnalysis(format: Format = Format.Champions, uncovered: List<String> = emptyList()) =
+        TeamAnalysisOk(
+            format = format,
+            members = emptyList(),
+            defense = listOf(DefenseRow(type = "ice", weak = listOf("garchomp"))),
+            offense = Offense(uncovered = uncovered),
+            speedTiers = emptyList(),
+            notes = listOf("Coverage is type-based only."),
+        )
+
+    private fun teamWithGarchomp() = fakeTeam(id = "t1").copy(members = listOf(member("garchomp")))
+
+    @Test
+    fun scheduleAnalysisCoalescesRapidEditsIntoOneRequest() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeTeamService(analyzeResult = TeamAnalysis.Ok(okAnalysis()))
+        val model = TeamEditorViewModel(service, team = teamWithGarchomp())
+
+        // Three schedules inside the debounce window — each cancels the last timer.
+        model.scheduleAnalysis()
+        model.scheduleAnalysis()
+        model.scheduleAnalysis()
+        advanceUntilIdle()
+
+        assertEquals(1, service.analyzeCalls.size)
+        assertEquals(Format.Champions, service.analyzeCalls.single().first)
+        assertTrue(model.uiState.value.analysis is TeamAnalysis.Ok)
+    }
+
+    @Test
+    fun scheduleAnalysisIsANoOpForADraftWithNoSpecies() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeTeamService(analyzeResult = TeamAnalysis.Ok(okAnalysis()))
+        val model = TeamEditorViewModel(service, format = Format.Champions) // one empty slot
+
+        model.scheduleAnalysis()
+        advanceUntilIdle()
+
+        assertTrue(service.analyzeCalls.isEmpty())
+        assertNull(model.uiState.value.analysis)
+        assertFalse(model.uiState.value.isAnalyzing)
+    }
+
+    @Test
+    fun aFailedAnalysisRetainsTheLastGoodResultAndSetsAnError() = runTest(mainDispatcherRule.dispatcher) {
+        val good = TeamAnalysis.Ok(okAnalysis())
+        val service = FakeTeamService(
+            analyzeScript = ArrayDeque(listOf(AnalyzeStep(result = good), AnalyzeStep(error = OakError.Transport("boom")))),
+        )
+        val model = TeamEditorViewModel(service, team = teamWithGarchomp())
+
+        model.scheduleAnalysis()
+        advanceUntilIdle()
+        assertEquals(good, model.uiState.value.analysis)
+        assertNull(model.uiState.value.analysisError)
+
+        model.scheduleAnalysis() // second request fails
+        advanceUntilIdle()
+
+        assertEquals(good, model.uiState.value.analysis) // last good retained
+        assertNotNull(model.uiState.value.analysisError)
+        assertFalse(model.uiState.value.isAnalyzing)
+    }
+
+    @Test
+    fun aStaleAnalysisResponseIsDiscardedInFavourOfTheNewerGeneration() = runTest(mainDispatcherRule.dispatcher) {
+        val gateOld = CompletableDeferred<Unit>()
+        val gateNew = CompletableDeferred<Unit>()
+        val resultOld = TeamAnalysis.Ok(okAnalysis(uncovered = listOf("water")))
+        val resultNew = TeamAnalysis.Ok(okAnalysis(uncovered = listOf("fire")))
+        val service = FakeTeamService(
+            analyzeScript = ArrayDeque(
+                listOf(
+                    AnalyzeStep(result = resultOld, gate = gateOld),
+                    AnalyzeStep(result = resultNew, gate = gateNew),
+                ),
+            ),
+        )
+        val model = TeamEditorViewModel(service, team = teamWithGarchomp())
+
+        model.scheduleAnalysis() // generation 1
+        advanceTimeBy(800); runCurrent() // gen-1 request issued, now blocked on gateOld
+        model.scheduleAnalysis() // generation 2
+        advanceTimeBy(800); runCurrent() // gen-2 request issued, blocked on gateNew
+
+        // Resolve the OLDER request first — it must NOT overwrite state (superseded).
+        gateOld.complete(Unit)
+        runCurrent()
+        // Then the newer one settles and wins.
+        gateNew.complete(Unit)
+        runCurrent()
+
+        assertEquals(2, service.analyzeCalls.size)
+        assertEquals(resultNew, model.uiState.value.analysis)
+        assertNull(model.uiState.value.analysisError)
     }
 }

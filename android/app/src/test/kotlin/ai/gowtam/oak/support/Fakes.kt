@@ -25,10 +25,12 @@ import ai.gowtam.oak.wire.ImportNote
 import ai.gowtam.oak.wire.LearnsetMove
 import ai.gowtam.oak.wire.SearchMatch
 import ai.gowtam.oak.wire.Team
+import ai.gowtam.oak.wire.TeamAnalysis
 import ai.gowtam.oak.wire.TeamMember
 import ai.gowtam.oak.wire.TeamSummary
 import ai.gowtam.oak.wire.TeamWarning
 import ai.gowtam.oak.wire.TeamsAssistantDraft
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -208,6 +210,12 @@ class FakeTeamService(
     var importPasteResult: Triple<Team, List<TeamWarning>, List<ImportNote>> = Triple(fakeTeam(), emptyList(), emptyList()),
     var exportPasteResult: String = "",
     var error: OakError? = null,
+    /** Default analyze result when [analyzeScript] is exhausted / unset. */
+    var analyzeResult: TeamAnalysis = TeamAnalysis.Unavailable(Format.Champions),
+    /** Default analyze error when [analyzeScript] is exhausted / unset (thrown before returning). */
+    var analyzeError: OakError? = null,
+    /** Optional per-call script (result / thrown error / a gate to suspend on) — overrides the defaults while non-empty. */
+    var analyzeScript: ArrayDeque<AnalyzeStep>? = null,
 ) : TeamService {
     val listCalls = mutableListOf<Format?>()
     val getCalls = mutableListOf<String>()
@@ -217,6 +225,14 @@ class FakeTeamService(
     val duplicateCalls = mutableListOf<String>()
     val importPasteCalls = mutableListOf<Pair<Format, String>>()
     val exportPasteCalls = mutableListOf<String>()
+    val analyzeCalls = mutableListOf<Pair<Format, List<TeamMember>>>()
+
+    /** One scripted `analyze` outcome: optionally suspend on [gate], then throw [error] or return [result]. */
+    data class AnalyzeStep(
+        val result: TeamAnalysis? = null,
+        val error: OakError? = null,
+        val gate: CompletableDeferred<Unit>? = null,
+    )
 
     override suspend fun list(format: Format?): List<TeamSummary> {
         listCalls += format
@@ -263,6 +279,18 @@ class FakeTeamService(
         exportPasteCalls += id
         error?.let { throw it }
         return exportPasteResult
+    }
+
+    override suspend fun analyze(format: Format, members: List<TeamMember>): TeamAnalysis {
+        analyzeCalls += format to members
+        val step = analyzeScript?.removeFirstOrNull()
+        if (step != null) {
+            step.gate?.await()
+            step.error?.let { throw it }
+            return step.result ?: analyzeResult
+        }
+        analyzeError?.let { throw it }
+        return analyzeResult
     }
 }
 

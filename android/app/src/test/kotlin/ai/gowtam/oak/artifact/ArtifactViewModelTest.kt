@@ -188,7 +188,10 @@ class ArtifactViewModelTest {
         vm.openEntity(EntityKind.POKEMON, "Garchmp")
         advanceUntilIdle()
 
-        assertTrue(vm.current!!.content is ArtifactContent.Unavailable)
+        val miss = vm.current!!.content
+        assertTrue(miss is ArtifactContent.Unavailable)
+        // The server's "did you mean" names ride onto the miss so it can offer them tappably (#2).
+        assertEquals(listOf("Garchomp"), (miss as ArtifactContent.Unavailable).suggestions)
 
         val unavailableWire = EntityArtifact.Unavailable(EntityArtifactUnavailable(kind = EntityKind.ITEM, format = Format.Champions))
         val service2 = FakeArtifactService(entityResult = unavailableWire)

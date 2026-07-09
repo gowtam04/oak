@@ -10,9 +10,12 @@ import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.SpriteImage
 import ai.gowtam.oak.ui.TypeBadge
+import ai.gowtam.oak.wire.AnalyzedMember
+import ai.gowtam.oak.wire.DefenseRow
 import ai.gowtam.oak.wire.DexSpriteRef
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.StatSpread
+import ai.gowtam.oak.wire.TeamAnalysis
 import ai.gowtam.oak.wire.TeamMember
 import ai.gowtam.oak.wire.TeamWarning
 import ai.gowtam.oak.wire.titleizeTeamSlug
@@ -23,6 +26,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -115,7 +120,11 @@ fun TeamEditor(
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
-        if (loadsOnAppear) viewModel.load() else { viewModel.refreshSprites(); viewModel.refreshAllMovepools() }
+        if (loadsOnAppear) {
+            viewModel.load()
+        } else {
+            viewModel.refreshSprites(); viewModel.refreshAllMovepools(); viewModel.scheduleAnalysis()
+        }
     }
 
     LaunchedEffect(state.showSaveConfirmation) {
@@ -201,6 +210,15 @@ fun TeamEditor(
 
                 if (viewModel.teamLevelWarnings.isNotEmpty()) {
                     item { WarningsBlock(title = "Team legality", warnings = viewModel.teamLevelWarnings) }
+                }
+
+                item {
+                    AnalysisSection(
+                        analysis = state.analysis,
+                        isAnalyzing = state.isAnalyzing,
+                        analysisError = state.analysisError,
+                        onRetry = viewModel::retryAnalysis,
+                    )
                 }
             }
 
@@ -483,6 +501,175 @@ private fun WarningsBlock(title: String?, warnings: List<TeamWarning>) {
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Team analysis (type coverage — defense matrix / offense coverage / speed order)
+// ---------------------------------------------------------------------------
+
+/**
+ * The live team-coverage panel (feedback item #9), fed by the debounced
+ * [TeamEditorViewModel.scheduleAnalysis]. States mirror iOS: an empty hint before any
+ * species is filled, a spinner on the first run, an error row with Retry (keeping the
+ * last good analysis on screen), and the full readout — the defensive type matrix,
+ * offensive coverage, speed order, and the type-only caveat note.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AnalysisSection(
+    analysis: TeamAnalysis?,
+    isAnalyzing: Boolean,
+    analysisError: String?,
+    onRetry: () -> Unit,
+) {
+    val oak = LocalOakColors.current
+    Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.md)) {
+        Text(
+            text = "Team analysis",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = oak.textStrong,
+            modifier = Modifier.semantics { heading() },
+        )
+
+        if (analysisError != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = oak.warning, modifier = Modifier.size(16.dp))
+                Text(analysisError, style = MaterialTheme.typography.bodySmall, color = oak.textStrong, modifier = Modifier.weight(1f))
+                TextButton(onClick = onRetry) { Text("Retry") }
+            }
+        }
+
+        when (analysis) {
+            is TeamAnalysis.Ok -> AnalysisReadout(analysis.v, isAnalyzing)
+            is TeamAnalysis.Unavailable ->
+                Text("Team analysis isn't available for this format.", style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
+            is TeamAnalysis.Unsupported -> Unit
+            null -> if (isAnalyzing) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = oak.accent)
+                    Text("Analyzing coverage…", style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
+                }
+            } else if (analysisError == null) {
+                Text("Add a Pokémon to see team coverage.", style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AnalysisReadout(ok: ai.gowtam.oak.wire.TeamAnalysisOk, isAnalyzing: Boolean) {
+    val oak = LocalOakColors.current
+
+    if (isAnalyzing) {
+        Text("Updating…", style = MaterialTheme.typography.labelSmall, color = oak.textFaint)
+    }
+
+    // Defensive matrix — three labeled rows, each a type + ×N count (count>0 only), desc.
+    val weak = defenseCounts(ok.defense) { it.weak }
+    val resists = defenseCounts(ok.defense) { it.resists }
+    val immune = defenseCounts(ok.defense) { it.immune }
+    if (weak.isNotEmpty() || resists.isNotEmpty() || immune.isNotEmpty()) {
+        SectionHeader("Defensive coverage")
+        DefenseCountRow("Weak", weak)
+        DefenseCountRow("Resists", resists)
+        DefenseCountRow("Immune", immune)
+    }
+
+    // Offensive coverage — covered types (neutral chips) + uncovered (warning-tinted).
+    val covered = ok.offense.covered.map { it.type }
+    if (covered.isNotEmpty() || ok.offense.uncovered.isNotEmpty()) {
+        SectionHeader("Offensive coverage")
+        if (covered.isNotEmpty()) {
+            Text("Super-effective", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = oak.textMuted)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (type in covered) TypeBadge(type)
+            }
+        }
+        if (ok.offense.uncovered.isNotEmpty()) {
+            Text("Not covered", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = oak.warning)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (type in ok.offense.uncovered) UncoveredChip(type)
+            }
+        }
+    }
+
+    // Speed order — display name + Speed, server-sorted desc.
+    if (ok.speedTiers.isNotEmpty()) {
+        SectionHeader("Speed order")
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            for (tier in ok.speedTiers) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(memberLabel(tier.member, ok.members), style = MaterialTheme.typography.bodySmall, color = oak.textStrong)
+                    Text("${tier.speed} Spe", style = MaterialTheme.typography.bodySmall, color = oak.textMuted, fontFamily = JetBrainsMonoFamily)
+                }
+            }
+        }
+    }
+
+    for (note in ok.notes) {
+        Text(note, style = MaterialTheme.typography.labelSmall, color = oak.textFaint)
+    }
+}
+
+/** One row of the defensive matrix: a label + a wrapped list of (type badge + ×N) chips. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DefenseCountRow(label: String, counts: List<TypeCount>) {
+    if (counts.isEmpty()) return
+    val oak = LocalOakColors.current
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = oak.textMuted)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            for ((type, count) in counts) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TypeBadge(type)
+                    Text("×$count", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = oak.textMuted)
+                }
+            }
+        }
+    }
+}
+
+/** A warning-tinted pill for a type no damaging move hits super-effectively. */
+@Composable
+private fun UncoveredChip(type: String) {
+    val oak = LocalOakColors.current
+    Text(
+        text = titleizeTeamSlug(type),
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+        color = oak.warning,
+        modifier = Modifier
+            .background(oak.warning.copy(alpha = 0.12f), RoundedCornerShape(OakRadius.pill))
+            .padding(horizontal = OakSpacing.sm, vertical = 3.dp),
+    )
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+        color = LocalOakColors.current.textStrong,
+    )
+}
+
+/** One attacking type and how many members fall in a given defensive bucket. */
+private data class TypeCount(val type: String, val count: Int)
+
+/** Builds the (type, count) list for one defensive bucket, count>0 only, sorted desc. */
+private fun defenseCounts(rows: List<DefenseRow>, pick: (DefenseRow) -> List<String>): List<TypeCount> =
+    rows.mapNotNull { row -> pick(row).size.takeIf { it > 0 }?.let { TypeCount(row.type, it) } }
+        .sortedByDescending { it.count }
+
+/** The display name for a member slug (from a resolved member), else the titleized slug. */
+private fun memberLabel(slug: String, members: List<AnalyzedMember>): String {
+    val found = members.firstOrNull { it.slug == slug } as? AnalyzedMember.Found
+    return found?.displayName ?: titleizeTeamSlug(slug)
 }
 
 @Composable

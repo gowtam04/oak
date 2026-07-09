@@ -149,6 +149,15 @@ object EntityKindSerializer : KSerializer<EntityKind> {
 data class EntityArtifactOk(
     val kind: EntityKind,
     val format: Format,
+    /**
+     * Set ONLY on the National-Dex fallback path (#2): the requested scope had no exact
+     * match, so the profile was assembled from `national-dex` instead. [format] above
+     * then stays the scope the profile was assembled FROM (national-dex — honest for old
+     * clients); this marks WHY, so the viewer can badge "not found in <requested scope>".
+     * Absent on the normal in-scope path (tolerant decode → `null`). Mirrors
+     * `source_format` on `okBaseSchema` in `web/src/lib/entity-artifact.ts`.
+     */
+    val sourceFormat: Format? = null,
     val resolved: ResolvedEntity,
     val generation: String,
     val isFallback: Boolean,
@@ -198,6 +207,8 @@ object EntityArtifactOkSerializer : KSerializer<EntityArtifactOk> {
         return EntityArtifactOk(
             kind = kind,
             format = json.decodeFromJsonElement(FormatSerializer, obj.getValue("format")),
+            sourceFormat = obj["source_format"]?.takeIf { it != JsonNull }
+                ?.let { json.decodeFromJsonElement(FormatSerializer, it) },
             resolved = json.decodeFromJsonElement(ResolvedEntity.serializer(), obj.getValue("resolved")),
             generation = obj.getValue("generation").jsonPrimitive.content,
             isFallback = obj.getValue("is_fallback").jsonPrimitive.content.toBoolean(),

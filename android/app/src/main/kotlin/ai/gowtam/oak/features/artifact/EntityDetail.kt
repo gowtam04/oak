@@ -86,6 +86,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun EntityDetail(
     artifact: EntityArtifactOk,
+    requestFormat: Format,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -104,7 +105,7 @@ fun EntityDetail(
             is EntityData.Item -> ItemBody(data.v)
             is EntityData.Type -> TypeBody(data.v, onOpen)
         }
-        GroundingSection(artifact)
+        GroundingSection(artifact, requestFormat)
     }
 }
 
@@ -415,13 +416,26 @@ private fun TypeBody(data: TypeArtifactData, onOpen: (EntityKind, String) -> Uni
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun GroundingSection(artifact: EntityArtifactOk) {
+private fun GroundingSection(artifact: EntityArtifactOk, requestFormat: Format) {
     val oak = LocalOakColors.current
+    // The National-Dex fallback (#2): the entity wasn't found in the user's requested
+    // scope, so the profile was assembled from `source_format` (national-dex). Badge it
+    // against the user's OWN request format, NOT the envelope's `format` (which is the
+    // assembled-from scope and equals source_format on this path).
+    val fallbackSource = artifact.sourceFormat?.takeIf { it != requestFormat }
     Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
         HorizontalDivider(color = oak.border)
         Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
             FormatBadge(artifact.format)
+            if (fallbackSource != null) SourceFormatBadge(fallbackSource)
             Text(artifact.generation, style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
+        }
+        if (fallbackSource != null) {
+            Text(
+                text = "Not found in ${requestFormat.shortLabel} — showing ${fallbackSource.shortLabel} data.",
+                style = MaterialTheme.typography.bodySmall,
+                color = oak.azure,
+            )
         }
         if (artifact.isFallback) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
@@ -454,6 +468,18 @@ private fun FormatBadge(format: Format) {
         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
         color = oak.textMuted,
         modifier = Modifier.background(oak.surfaceRaised, RoundedCornerShape(OakRadius.pill)).padding(horizontal = OakSpacing.sm, vertical = 3.dp),
+    )
+}
+
+/** The azure-tinted scope pill shown beside [FormatBadge] on a National-Dex fallback (#2). */
+@Composable
+private fun SourceFormatBadge(format: Format) {
+    val oak = LocalOakColors.current
+    Text(
+        text = format.shortLabel,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+        color = oak.azure,
+        modifier = Modifier.background(oak.azureSoft, RoundedCornerShape(OakRadius.pill)).padding(horizontal = OakSpacing.sm, vertical = 3.dp),
     )
 }
 
