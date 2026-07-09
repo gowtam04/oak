@@ -15,7 +15,7 @@
  * caller surfaces it as un-priced). Prices are updated by a code edit + deploy.
  *
  * Prices below are reconciled against each provider's public list pricing as of
- * 2026-07-03 (source: xAI docs, OpenAI pricing page, Anthropic model catalog).
+ * 2026-07-09 (source: xAI docs, OpenAI pricing page, Anthropic model catalog).
  * `thinkingPer1M` prices reasoning/thinking tokens (billed like output tokens on
  * all three providers today, hence equal to `outputPer1M`).
  *
@@ -52,6 +52,8 @@ export type LegacyModelKey = "claude";
 export const MODEL_PRICING: Record<ModelKey | LegacyModelKey, ModelPrice> = {
   // xAI Grok 4.3 (primary/default).
   "grok-4.3": { inputPer1M: 1.25, outputPer1M: 2.5, thinkingPer1M: 2.5 },
+  // xAI Grok 4.5 (admin-selectable; $2/$6 list price).
+  "grok-4.5": { inputPer1M: 2, outputPer1M: 6, thinkingPer1M: 6 },
   // Anthropic Claude Sonnet 5 (introductory rate through 2026-08-31).
   "claude-sonnet-5": { inputPer1M: 2, outputPer1M: 10, thinkingPer1M: 10 },
   // Anthropic Claude Sonnet 4.6 (standard rate).

@@ -29,9 +29,10 @@ import {
 import { GrokProvider } from "@/agent/providers/grok-provider";
 
 describe("model registry", () => {
-  it("exposes the four models in order with stable keys (Grok primary)", () => {
+  it("exposes the five models in order with stable keys (Grok 4.3 primary)", () => {
     expect(MODELS.map((m) => m.key)).toEqual([
       "grok-4.3",
+      "grok-4.5",
       "claude-sonnet-5",
       "claude-sonnet-4.6",
       "gpt-5.5",
@@ -44,6 +45,7 @@ describe("model registry", () => {
     expect(isModelKey("claude-sonnet-4.6")).toBe(true);
     expect(isModelKey("gpt-5.5")).toBe(true);
     expect(isModelKey("grok-4.3")).toBe(true);
+    expect(isModelKey("grok-4.5")).toBe(true);
     // Retired key — survives only in MODEL_PRICING (legacy), no longer a valid
     // registry key.
     expect(isModelKey("claude")).toBe(false);
@@ -57,6 +59,7 @@ describe("model registry", () => {
     expect(modelLabel("claude-sonnet-4.6")).toBe("Claude Sonnet 4.6");
     expect(modelLabel("gpt-5.5")).toBe("OpenAI GPT-5.5");
     expect(modelLabel("grok-4.3")).toBe("xAI Grok 4.3");
+    expect(modelLabel("grok-4.5")).toBe("xAI Grok 4.5");
   });
 });
 
@@ -102,6 +105,12 @@ describe("resolveModel", () => {
       apiModelId: "grok-4.3",
       effort: "high",
     });
+    expect(resolveModel("grok-4.5")).toMatchObject({
+      key: "grok-4.5",
+      provider: "xai",
+      apiModelId: "grok-4.5",
+      effort: "high",
+    });
   });
 
   it("falls back to the default (Grok) for unknown/missing keys", () => {
@@ -118,6 +127,14 @@ describe("providerFor / isModelConfigured (validate-on-use)", () => {
     expect(provider.kind).toBe("xai");
     expect(provider.apiModelId).toBe("grok-4.3");
     // The primary path is the dedicated native adapter, not the OpenAI shim.
+    expect(provider).toBeInstanceOf(GrokProvider);
+  });
+
+  it("builds the native Grok provider for grok-4.5 (shares XAI_API_KEY)", () => {
+    expect(isModelConfigured("grok-4.5")).toBe(true);
+    const provider = providerFor("grok-4.5");
+    expect(provider.kind).toBe("xai");
+    expect(provider.apiModelId).toBe("grok-4.5");
     expect(provider).toBeInstanceOf(GrokProvider);
   });
 
@@ -139,12 +156,14 @@ describe("providerFor / isModelConfigured (validate-on-use)", () => {
       "claude-sonnet-4.6": "claude-sonnet-4-6",
       "gpt-5.5": "gpt-5.5",
       "grok-4.3": "grok-4.3",
+      "grok-4.5": "grok-4.5",
     };
     for (const key of [
       "claude-sonnet-5",
       "claude-sonnet-4.6",
       "gpt-5.5",
       "grok-4.3",
+      "grok-4.5",
     ] as const) {
       if (isModelConfigured(key)) {
         const provider = providerFor(key);

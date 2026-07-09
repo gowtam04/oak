@@ -320,12 +320,12 @@ npm run db:migrate && npm run ingest && npm run dev
 
 ## Models
 
-Four models plug into one provider-agnostic loop across three providers.
-**Grok 4.3** (xAI's native Responses API) is the default; **Claude Sonnet 5**,
-**Claude Sonnet 4.6**, and **GPT-5.5** are drop-in alternatives. The active
-model is chosen by the operator, not the end user — via the admin panel's
-**Settings** tab (`/admin/settings`), which writes the selection to Postgres
-(`app_setting`) and is read fresh on every turn:
+Five models plug into one provider-agnostic loop across three providers.
+**Grok 4.3** (xAI's native Responses API) is the default; **Grok 4.5**,
+**Claude Sonnet 5**, **Claude Sonnet 4.6**, and **GPT-5.5** are drop-in
+alternatives. The active model is chosen by the operator, not the end user —
+via the admin panel's **Settings** tab (`/admin/settings`), which writes the
+selection to Postgres (`app_setting`) and is read fresh on every turn:
 
 ```
 Admin → Settings → pick a model → Save

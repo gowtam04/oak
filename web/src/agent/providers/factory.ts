@@ -77,6 +77,14 @@ const MODEL_CONFIG: Record<
     maxOutputTokens: 32000,
     parallelToolCalls: false,
   },
+  // Same Responses-API knobs as Grok 4.3 (native GrokProvider).
+  "grok-4.5": {
+    apiModelId: () => "grok-4.5",
+    effort: "high",
+    temperature: 0.2,
+    maxOutputTokens: 32000,
+    parallelToolCalls: false,
+  },
 };
 
 /** Resolve a (possibly missing/unknown) key to its wiring; defaults to Grok. */

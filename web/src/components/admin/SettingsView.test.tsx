@@ -10,6 +10,7 @@ import type { AdminSettingsModel } from "@/lib/admin/admin-types";
 // fixtures only; no db/repos imported (admin component-test rule).
 const MODELS: AdminSettingsModel[] = [
   { key: "grok-4.3", label: "xAI Grok 4.3", provider: "xai", configured: true },
+  { key: "grok-4.5", label: "xAI Grok 4.5", provider: "xai", configured: true },
   {
     key: "claude-sonnet-5",
     label: "Claude Sonnet 5",
@@ -45,9 +46,10 @@ function renderView(overrides: Partial<SettingsViewProps> = {}) {
 }
 
 describe("SettingsView", () => {
-  it("renders all four models", () => {
+  it("renders all five models", () => {
     renderView();
     expect(screen.getByTestId("settings-model-grok-4.3")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-model-grok-4.5")).toBeInTheDocument();
     expect(
       screen.getByTestId("settings-model-claude-sonnet-5"),
     ).toBeInTheDocument();

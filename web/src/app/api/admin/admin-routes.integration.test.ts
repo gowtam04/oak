@@ -441,12 +441,14 @@ describe("settings", () => {
 
     expect(body.models.map((m) => m.key)).toEqual([
       "grok-4.3",
+      "grok-4.5",
       "claude-sonnet-5",
       "claude-sonnet-4.6",
       "gpt-5.5",
     ]);
     const byKey = new Map(body.models.map((m) => [m.key, m]));
     expect(byKey.get("grok-4.3")!.configured).toBe(true);
+    expect(byKey.get("grok-4.5")!.configured).toBe(true);
     expect(byKey.get("claude-sonnet-5")!.configured).toBe(true);
     expect(byKey.get("claude-sonnet-4.6")!.configured).toBe(true);
     expect(byKey.get("gpt-5.5")!.configured).toBe(false);

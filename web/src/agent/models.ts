@@ -1,6 +1,6 @@
 /**
  * Model registry — the single source of truth for the LLMs the app can run on
- * (Grok 4.3 / Claude Sonnet 5 / Claude Sonnet 4.6 / GPT-5.5).
+ * (Grok 4.3 / Grok 4.5 / Claude Sonnet 5 / Claude Sonnet 4.6 / GPT-5.5).
  *
  * There is no per-turn picker: activation is OPERATOR-controlled via the admin
  * Settings panel — the selection is written to Postgres (`app_setting`) and
@@ -29,6 +29,7 @@ export type ProviderKind = "anthropic" | "openai" | "xai";
  */
 export type ModelKey =
   | "grok-4.3"
+  | "grok-4.5"
   | "claude-sonnet-5"
   | "claude-sonnet-4.6"
   | "gpt-5.5";
@@ -47,6 +48,7 @@ export interface ModelOption {
  */
 export const MODELS: readonly ModelOption[] = [
   { key: "grok-4.3", label: "xAI Grok 4.3", provider: "xai" },
+  { key: "grok-4.5", label: "xAI Grok 4.5", provider: "xai" },
   { key: "claude-sonnet-5", label: "Claude Sonnet 5", provider: "anthropic" },
   {
     key: "claude-sonnet-4.6",
