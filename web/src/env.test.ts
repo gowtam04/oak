@@ -33,8 +33,9 @@ describe("env", () => {
 
   it("accepts a registry ACTIVE_MODEL and rejects an unknown one", () => {
     expect(
-      parseEnv({ XAI_API_KEY: "xai-test", ACTIVE_MODEL: "claude" }).ACTIVE_MODEL,
-    ).toBe("claude");
+      parseEnv({ XAI_API_KEY: "xai-test", ACTIVE_MODEL: "claude-sonnet-5" })
+        .ACTIVE_MODEL,
+    ).toBe("claude-sonnet-5");
     expect(
       parseEnv({ XAI_API_KEY: "xai-test", ACTIVE_MODEL: "gpt-5.5" }).ACTIVE_MODEL,
     ).toBe("gpt-5.5");

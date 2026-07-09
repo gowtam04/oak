@@ -55,8 +55,8 @@ describe("parseArgs", () => {
   });
 
   it("accepts a known --model key and rejects an unknown one", () => {
-    const ok = parseArgs(["--model=claude"]);
-    expect(ok.model).toBe("claude");
+    const ok = parseArgs(["--model=claude-sonnet-5"]);
+    expect(ok.model).toBe("claude-sonnet-5");
     expect(ok.invalidModel).toBeUndefined();
 
     const bad = parseArgs(["--model=bogus"]);
