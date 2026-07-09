@@ -187,9 +187,10 @@ month and pick a retention/archival policy NOW while the table is small
   and emit a queued/position event — the channel supports it) instead of
   melting the provider connection.
 - **Automatic provider failover**: the three-provider seam already exists
-  (`src/agent/providers/factory.ts`) but switching is a manual
-  `ACTIVE_MODEL` secret change today. Add automatic per-turn fallback on
-  sustained 429/5xx from the primary.
+  (`src/agent/providers/factory.ts`) but switching is a manual admin-panel
+  **Settings** selection today (2026-07 — previously an `ACTIVE_MODEL` secret
+  change, now retired). Add automatic per-turn fallback on sustained 429/5xx
+  from the primary.
 - **Cost controls**: per-account and per-IP **daily token budgets** (the
   per-minute rate limiter bounds abuse, not spend). `turn_record` already
   captures per-turn token counts — budget enforcement can read/aggregate the
