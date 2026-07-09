@@ -478,9 +478,9 @@ describe("GrokProvider — stateful previous_response_id chaining", () => {
     expect(bodies[0].tools).toHaveLength(2);
     expect(bodies[0].input).toEqual([{ role: "user", content: "q" }]);
     expect(bodies[1].previous_response_id).toBe("resp_1");
-    // xAI forbids instructions (+ we omit tools) when chaining.
+    // xAI forbids instructions when chaining; tools still required with tool_choice.
     expect(bodies[1].instructions).toBeUndefined();
-    expect(bodies[1].tools).toBeUndefined();
+    expect(bodies[1].tools).toHaveLength(2);
     // Only the new client item — not reasoning / function_call re-echo.
     expect(bodies[1].input).toEqual([
       { type: "function_call_output", call_id: "call_1", output: '{"ok":true}' },
