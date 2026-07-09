@@ -126,8 +126,8 @@ function parseBody(
   // `scope_seed` is the new explicit chip pick — a malformed/unknown value is
   // silently dropped (defensive additive field), never a 400.
   // The answering model is NOT taken from the body — it is operator-controlled
-  // via the ACTIVE_MODEL secret (resolved server-side below). Any `model` field a
-  // client happens to send is ignored. Saved teams are referenced by name in
+  // via the admin Settings selection (resolved server-side below). Any `model`
+  // field a client happens to send is ignored. Saved teams are referenced by name in
   // chat (resolved live via list_teams/get_team), so the body carries no team id.
   return {
     session_id,
@@ -476,24 +476,25 @@ export async function POST(req: Request): Promise<Response> {
     void setSessionScope(session_id, format).catch(logScopePersistFailure);
   }
 
-  // 3c. Resolve the operator-selected active model (the ACTIVE_MODEL secret) and
-  //     fail fast if its provider isn't configured on this server (its API key is
-  //     absent) — a clean 503 BEFORE the stream opens, so the client sees a real
-  //     HTTP status rather than a mid-stream error. The default (Grok) is always
-  //     configured (XAI_API_KEY is required at boot), so an unset ACTIVE_MODEL
-  //     never hits this; it only fires on a deployment misconfig (e.g.
-  //     ACTIVE_MODEL=claude with no ANTHROPIC_API_KEY).
-  //     Dynamic import defers the factory's env/SDK evaluation to request time
+  // 3c. Resolve the operator-selected active model (the admin Settings selection,
+  //     persisted in `app_setting` and read per turn) and fail fast if its
+  //     provider isn't configured on this server (its API key is absent) — a clean
+  //     503 BEFORE the stream opens, so the client sees a real HTTP status rather
+  //     than a mid-stream error. Resolution is fail-soft to the default (Grok),
+  //     which is always configured (XAI_API_KEY is required at boot), so it only
+  //     fires on a deployment misconfig (e.g. a Claude selection with no
+  //     ANTHROPIC_API_KEY).
+  //     Dynamic import defers the factory's env/SDK/db evaluation to request time
   //     (the same reason the runtime import below is deferred).
   const { activeModelKey, isModelConfigured } = await import(
     "@/agent/providers/factory"
   );
-  const activeModel = activeModelKey();
+  const activeModel = await activeModelKey();
   if (!isModelConfigured(activeModel)) {
     return jsonError(
       503,
       "model_unavailable",
-      `The configured model (${modelLabel(activeModel)}) has no provider key on this server. Set ACTIVE_MODEL to a configured model or add the provider's API key.`,
+      `The configured model (${modelLabel(activeModel)}) has no provider key on this server. Pick a configured model in Admin → Settings or add the provider's API key.`,
     );
   }
 

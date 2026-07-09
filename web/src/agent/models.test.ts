@@ -4,7 +4,14 @@
  * validate-on-use (an unconfigured provider key throws / reads unconfigured).
  */
 
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// activeModelKey() dynamic-imports settings-repo (which reads the DB); mock it so
+// the test never dials the default DATABASE_URL. Hoisted so per-test resolves win.
+const settingsRepo = vi.hoisted(() => ({
+  getActiveModelKey: vi.fn<() => Promise<string>>(),
+}));
+vi.mock("@/data/repos/settings-repo", () => settingsRepo);
 
 import {
   DEFAULT_MODEL_KEY,
@@ -53,11 +60,21 @@ describe("model registry", () => {
   });
 });
 
-describe("activeModelKey", () => {
-  it("returns the default (Grok) when ACTIVE_MODEL is unset", () => {
-    // The test runner injects no ACTIVE_MODEL, so env defaults it to grok-4.3;
-    // activeModelKey passes through the safe resolver.
-    expect(activeModelKey()).toBe("grok-4.3");
+describe("activeModelKey (repo-backed, async)", () => {
+  beforeEach(() => {
+    settingsRepo.getActiveModelKey.mockReset();
+  });
+
+  it("passes through the admin-selected key from settings-repo", async () => {
+    settingsRepo.getActiveModelKey.mockResolvedValue("claude-sonnet-4.6");
+    await expect(activeModelKey()).resolves.toBe("claude-sonnet-4.6");
+  });
+
+  it("returns the default (Grok) when the repo resolves its fail-soft default", async () => {
+    // The repo already fail-softs a missing/invalid setting to DEFAULT_MODEL_KEY;
+    // activeModelKey re-validates through the safe resolver.
+    settingsRepo.getActiveModelKey.mockResolvedValue("grok-4.3");
+    await expect(activeModelKey()).resolves.toBe("grok-4.3");
   });
 });
 

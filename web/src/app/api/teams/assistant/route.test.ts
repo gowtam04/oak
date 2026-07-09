@@ -70,7 +70,7 @@ beforeEach(async () => {
   cu.getCurrentAccount.mockReset();
 
   factory.activeModelKey.mockReset();
-  factory.activeModelKey.mockReturnValue("grok-4.3");
+  factory.activeModelKey.mockResolvedValue("grok-4.3");
   factory.isModelConfigured.mockReset();
   factory.isModelConfigured.mockReturnValue(true);
   factory.providerFor.mockReset();

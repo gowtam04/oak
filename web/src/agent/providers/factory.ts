@@ -96,12 +96,19 @@ export function resolveModel(key: string | undefined | null): ResolvedModel {
 }
 
 /**
- * The operator-selected active model (from the `ACTIVE_MODEL` secret). There is
- * no per-turn picker — this is the single source for `ctx.model`. Passes through
- * the safe resolver so an unexpected value still falls back to the default.
+ * The operator-selected active model, chosen in the admin Settings panel and
+ * persisted in the `app_setting` table (read per turn via `settings-repo`).
+ * There is still no per-turn picker — this is the single source for `ctx.model`.
+ * Resolution is fail-soft: a missing/invalid row degrades to the default (see
+ * `resolveActiveModel`), and it's re-validated through the safe resolver here so
+ * an unexpected value still falls back to the default.
  */
-export function activeModelKey(): ModelKey {
-  return resolveModel(env.ACTIVE_MODEL).key;
+export async function activeModelKey(): Promise<ModelKey> {
+  // Dynamic import keeps the db chain out of factory's static module graph
+  // (same env-throw/build-time discipline as the routes' dynamic imports);
+  // eval/deterministic paths construct providers via providerFor and never call this.
+  const { getActiveModelKey } = await import("@/data/repos/settings-repo");
+  return resolveModel(await getActiveModelKey()).key; // belt-and-suspenders re-validation
 }
 
 /** Thrown when the selected model's provider API key is not configured. */

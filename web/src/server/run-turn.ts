@@ -58,7 +58,7 @@ export interface RunTurnParams {
   proposedTeam?: ProposedTeam;
   /** Validated + mime-sniffed images for THIS turn (consume-on-turn). */
   images: ImageAttachment[];
-  /** Operator-selected active model (ACTIVE_MODEL). */
+  /** Operator-selected active model (admin Settings selection, `app_setting`). */
   activeModel: ModelKey;
 }
 
