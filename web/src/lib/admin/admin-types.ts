@@ -32,6 +32,7 @@
  */
 
 import type { AgentMode } from "@/agent/types";
+import type { ModelKey, ProviderKind } from "@/agent/models";
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { ToolTraceEntry } from "@/server/logger";
 
@@ -519,4 +520,36 @@ export interface ChampionsItemsBulkRequest {
 export interface ChampionsItemsBulkResponse {
   all: true;
   available: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Settings — operator-controlled active-model switch (`app_setting`)
+// ---------------------------------------------------------------------------
+
+/** One entry in the model registry, with its live configured-on-this-server state. */
+export interface AdminSettingsModel {
+  key: ModelKey;
+  label: string;
+  provider: ProviderKind;
+  /** Whether this model's provider API key is present on this server. */
+  configured: boolean;
+}
+
+/**
+ * GET/POST /api/admin/settings — the active-model selection plus the full
+ * registry (so the UI can render every model, configured or not) and audit
+ * fields for the last change (`source: "default"` when no admin selection is
+ * stored yet, so `updatedBy`/`updatedAt` are null).
+ */
+export interface AdminSettingsResponse {
+  activeModel: ModelKey;
+  source: "db" | "default";
+  updatedBy: string | null;
+  updatedAt: number | null;
+  models: AdminSettingsModel[];
+}
+
+/** POST /api/admin/settings request body — `model` is raw and validated server-side. */
+export interface AdminSettingsUpdateRequest {
+  model: string;
 }

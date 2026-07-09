@@ -27,9 +27,10 @@ export interface AdminNavTab {
 }
 
 /**
- * The seven top-level admin tabs, in the order fixed by the design
- * (Overview, Usage, Cost, Errors, Accounts, Conversations, Teams). Overview is
- * the index route (`/admin`); every other tab is a child segment.
+ * The top-level admin tabs, in the order fixed by the design (Overview,
+ * Usage, Cost, Errors, Accounts, Conversations, Teams, Champions Items,
+ * Settings). Overview is the index route (`/admin`); every other tab is a
+ * child segment.
  */
 export const ADMIN_NAV_TABS: readonly AdminNavTab[] = [
   { label: "Overview", href: "/admin" },
@@ -40,6 +41,7 @@ export const ADMIN_NAV_TABS: readonly AdminNavTab[] = [
   { label: "Conversations", href: "/admin/conversations" },
   { label: "Teams", href: "/admin/teams" },
   { label: "Champions Items", href: "/admin/champions-items" },
+  { label: "Settings", href: "/admin/settings" },
 ];
 
 /**

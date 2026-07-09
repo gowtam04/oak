@@ -27,7 +27,7 @@ describe("isTabActive", () => {
 });
 
 describe("AdminNav", () => {
-  it("renders all eight tabs in the design order with their hrefs", () => {
+  it("renders all nine tabs in the design order with their hrefs", () => {
     render(<AdminNav pathname="/admin" />);
     const expected = [
       ["Overview", "/admin"],
@@ -38,9 +38,10 @@ describe("AdminNav", () => {
       ["Conversations", "/admin/conversations"],
       ["Teams", "/admin/teams"],
       ["Champions Items", "/admin/champions-items"],
+      ["Settings", "/admin/settings"],
     ];
     // the constant the shell relies on stays the canonical tab list
-    expect(ADMIN_NAV_TABS).toHaveLength(8);
+    expect(ADMIN_NAV_TABS).toHaveLength(9);
 
     for (const [label, href] of expected) {
       const tab = screen.getByTestId(`admin-nav-tab-${label.toLowerCase()}`);
