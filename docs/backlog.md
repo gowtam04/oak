@@ -495,25 +495,33 @@ across resume depends on B-1 / B-3.
 
 ## B-9 — Make Grok native
 
-> **Status: BUILT** — Grok 4.3 is now the PRIMARY model, served by a dedicated
-> native adapter (`src/agent/providers/grok-provider.ts`) on xAI's **Responses
-> API** (`client.responses.create` via the OpenAI SDK pointed at `XAI_BASE_URL` —
-> no new dependency), constructed by `factory.ts` and registered in `models.ts`.
-> Delivered: native request shaping (flattened function tools, `reasoning.effort`
-> high, `parallel_tool_calls` false, `store:false` + `include:["reasoning.encrypted_content"]`),
+> **Status: BUILT** — Grok 4.3 is the PRIMARY model (Grok 4.5 also admin-selectable),
+> served by a dedicated native adapter (`src/agent/providers/grok-provider.ts`) on
+> xAI's **Responses API** (`client.responses.create` via the OpenAI SDK pointed at
+> `XAI_BASE_URL` — no new dependency), constructed by `factory.ts` and registered
+> in `models.ts`. Delivered: native request shaping (flattened function tools,
+> `reasoning.effort` high, `parallel_tool_calls` false, `include:["reasoning.encrypted_content"]`),
 > a Responses→normalized streaming-event mapping feeding the same
-> AnswerMarkdownExtractor, the opaque-transcript echo/flatten mechanism (zero loop
-> changes), and the same `OakAnswer` validation seam. Made primary: `XAI_API_KEY`
-> required at boot (Anthropic/OpenAI now optional, validate-on-use),
-> `DEFAULT_MODEL_KEY="grok-4.3"`, switcher reordered, the judged eval suite runs
-> the agent on Grok (judge stays on Claude). Open questions resolved: prompt
-> caching is automatic on a stable prefix (no `cache_control`); the loop uses
-> `tool_choice:"auto"` + `reasoning.effort` (no forced-tool-choice conflict).
+> AnswerMarkdownExtractor, and the same `OakAnswer` validation seam. Made primary:
+> `XAI_API_KEY` required at boot (Anthropic/OpenAI optional, validate-on-use),
+> `DEFAULT_MODEL_KEY="grok-4.3"`, the judged eval suite runs the agent on Grok
+> (judge stays on Claude). Prompt caching is automatic on a stable prefix (no
+> `cache_control`); the loop uses `tool_choice:"auto"` + `reasoning.effort`.
 > Recorded-stream tests in `src/agent/providers/grok-provider.test.ts`.
 >
-> **Follow-up (audit A–D):** mid-turn Responses chaining (`store:true` +
-> `previous_response_id`), client memoization, shared G8 filter-bail prompt rule,
-> teams-assistant prompt collapse, and `cached_input_tokens` on turn traces.
+> **Follow-up (audit A–D, shipped 2026-07):** mid-turn Responses chaining
+> (`store:true` + `previous_response_id` by default; `stateful:false` restores
+> full-transcript re-echo), client memoization per `(apiKey, baseURL)`, shared G8
+> filter-bail prompt rule in `domain.ts`, teams-assistant prompt collapse (one
+> Markdown body + builder-specific OpenAI style), and `cached_input_tokens` on
+> turn traces / `turn_record` (migration 0014).
+>
+> **Prod lesson (2026-07-09 Fly):** when chaining with `previous_response_id`,
+> **omit `instructions`** (xAI 400 if both are set) but **keep `tools` +
+> `tool_choice`** (xAI 400 if `tool_choice` is set with no tools). First
+> iteration of a turn still sends instructions + tools. See AGENTS.md Gotchas
+> and `grok-provider.ts` `buildRequestBody`.
+>
 > Optional live regression after prompt changes:
 >
 > ```bash

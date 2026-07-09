@@ -25,15 +25,19 @@
  *    submit_answer JSON.
  *  - Mid-turn tool loop is STATEFUL by default (`store:true` +
  *    `previous_response_id`): the first iteration of a provider instance sends the
- *    full transcript; later iterations send only new client items
- *    (`function_call_output` + user nudges) so reasoning is not re-paid every
- *    tool round. Set `stateful:false` to force full-transcript re-echo. A chain
- *    failure falls back once to a full resend.
+ *    full transcript + `instructions` + tools; later iterations send only new
+ *    client items (`function_call_output` + user nudges) under
+ *    `previous_response_id` so reasoning is not re-paid every tool round.
+ *    **xAI chain shape (prod 2026-07-09):** chained requests MUST omit
+ *    `instructions` (400 if combined with `previous_response_id`) but MUST still
+ *    send `tools` + `tool_choice` (400 if `tool_choice` is set with no tools).
+ *    Set `stateful:false` to force full-transcript re-echo. A chain failure falls
+ *    back once to a full resend (`event: "grok_response_chain_fallback"`).
  *  - The streamed Responses events are mapped to the SAME normalized
  *    {@link ProviderStreamEvent} vocabulary the loop already consumes; the
  *    submit_answer argument fragments feed the runtime AnswerMarkdownExtractor
  *    exactly like the other adapters. (xAI tends to deliver a tool call's arguments
- *    in one shot — the `function_call_arguments.done` fallback covers that.)
+ *    in one shot — the `function_call_arguments.done` fallback covers it.)
  */
 
 import OpenAI from "openai";
