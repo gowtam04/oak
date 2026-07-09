@@ -54,6 +54,35 @@ final class TeamEditorViewModel {
   /// A user-facing error message for the last failed operation, or `nil` when clear.
   private(set) var errorMessage: String?
 
+  // MARK: Team analysis (draft coverage — public, debounced)
+
+  /// The latest whole-team coverage analysis for the current draft, or `nil` before the first
+  /// result / when the draft has no filled species. Rendered by the editor's Analysis section
+  /// (#9). Never blocks editing — it is a passive, advisory read.
+  private(set) var analysis: TeamAnalysis?
+
+  /// `true` while a debounced analysis request is in flight (drives a subtle spinner; the last
+  /// good result stays visible underneath).
+  private(set) var isAnalyzing: Bool = false
+
+  /// A user-facing message when the last analysis request failed. The previous ``analysis`` (if
+  /// any) is intentionally RETAINED so the panel keeps showing the last good coverage while the
+  /// error banner offers a Retry.
+  private(set) var analysisError: String?
+
+  /// The in-flight debounce/analysis task — cancelled and replaced on every fresh schedule so
+  /// rapid edits coalesce into a single request.
+  private var analysisTask: Task<Void, Never>?
+
+  /// Bumped on every schedule; a slow in-flight result whose generation no longer matches is
+  /// discarded (a stale result must never overwrite a newer one).
+  private var analysisGeneration = 0
+
+  /// The debounce window before a scheduled analysis fires. Internal (not `private`) so unit
+  /// tests can collapse it to `.zero` for deterministic coalescing — the production value is
+  /// 750 ms (matches the web panel's debounce).
+  var analysisDebounce: Duration = .milliseconds(750)
+
   // MARK: Dex-lookup state (transient — never persisted; feeds the entity pickers)
 
   /// Batch-resolved sprite/type/ability/base-stat refs, keyed by species slug. Refreshed
@@ -137,6 +166,7 @@ final class TeamEditorViewModel {
       apply(saved: team, validation: validation)
       await refreshSprites()
       await refreshAllMovepools()
+      scheduleAnalysis()
     } catch let error as OakError {
       errorMessage = Self.message(for: error)
     } catch {
@@ -295,6 +325,7 @@ final class TeamEditorViewModel {
       apply(saved: result.team, validation: result.validation)
       await refreshSprites()
       await refreshAllMovepools()
+      scheduleAnalysis()
       return result.team
     } catch let error as OakError {
       errorMessage = Self.message(for: error)
@@ -302,6 +333,74 @@ final class TeamEditorViewModel {
     } catch {
       errorMessage = Self.genericMessage
       return nil
+    }
+  }
+
+  // MARK: Team analysis (draft coverage — debounced, never blocks)
+
+  /// Schedules a debounced coverage analysis of the CURRENT draft (#9). Cancels any pending
+  /// request and fires a fresh one after ``analysisDebounce``, so a burst of edits collapses to
+  /// one call carrying the latest draft. A draft with no filled species clears the result and
+  /// makes no request. Fire-and-forget: never awaited on any editing path.
+  func scheduleAnalysis() {
+    runAnalysis(afterDelay: analysisDebounce)
+  }
+
+  /// Re-runs the analysis immediately (no debounce) — the Analysis section's Retry after a
+  /// failed request. Clears the error first so the panel returns to its loading state.
+  func retryAnalysis() {
+    analysisError = nil
+    runAnalysis(afterDelay: .zero)
+  }
+
+  /// Awaits the in-flight analysis task, if any. Test support (deterministic settling); a no-op
+  /// once the current request has resolved.
+  func awaitAnalysis() async {
+    await analysisTask?.value
+  }
+
+  /// The debounce/generation-guarded core behind ``scheduleAnalysis()`` / ``retryAnalysis()``.
+  /// Snapshots the draft NOW (`scheduleAnalysis` is called on every change, so the newest schedule
+  /// carries the newest draft), cancels the prior task, and applies the result only if this
+  /// schedule is still the latest (generation guard) and wasn't cancelled — so a stale response
+  /// never clobbers a newer one, and an error retains the last good analysis.
+  private func runAnalysis(afterDelay delay: Duration) {
+    analysisTask?.cancel()
+    analysisGeneration += 1
+    let generation = analysisGeneration
+    let snapshot = draftWireMembers()
+    // `asTeamMember()` maps a blank species to `nil`, so a filled slot has a non-nil species.
+    guard snapshot.contains(where: { $0.species != nil }) else {
+      analysis = nil
+      analysisError = nil
+      isAnalyzing = false
+      return
+    }
+    let format = self.format
+    isAnalyzing = true
+    analysisTask = Task { [weak self] in
+      if delay > .zero { try? await Task.sleep(for: delay) }
+      if Task.isCancelled { return }
+      guard let self else { return }
+      var result: TeamAnalysis?
+      var failure: String?
+      do {
+        result = try await self.teamService.analyze(format: format, members: snapshot)
+      } catch let error as OakError {
+        failure = Self.message(for: error)
+      } catch {
+        failure = Self.genericMessage
+      }
+      // Superseded by a newer schedule (or cancelled) → discard silently.
+      if Task.isCancelled || generation != self.analysisGeneration { return }
+      self.isAnalyzing = false
+      if let result {
+        self.analysis = result
+        self.analysisError = nil
+      } else {
+        // Keep the last good analysis; surface the error for a Retry.
+        self.analysisError = failure
+      }
     }
   }
 
@@ -350,6 +449,7 @@ final class TeamEditorViewModel {
   func restoreDraft(_ snapshot: TeamDraftSnapshot) {
     name = snapshot.name
     members = snapshot.members
+    scheduleAnalysis()
     Task {
       await refreshSprites()
       await refreshAllMovepools()
@@ -367,6 +467,7 @@ final class TeamEditorViewModel {
     if let newName = patch.name {
       name = newName
     }
+    scheduleAnalysis()
     Task {
       await refreshSprites()
       await refreshAllMovepools()

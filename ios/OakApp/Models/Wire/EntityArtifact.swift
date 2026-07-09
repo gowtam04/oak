@@ -127,6 +127,13 @@ extension EntityKind: Codable {
 struct EntityArtifactOk: Decodable, Sendable {
   let kind: EntityKind
   let format: Format
+  /// Set ONLY on the National-Dex fallback path (#2): the requested scope had no exact
+  /// match, so the profile was assembled from `national-dex` instead (`okBaseSchema.source_format`
+  /// in `entity-artifact.ts`). The `format` field above stays the scope the profile was assembled
+  /// FROM (national-dex — honest for old clients); this marks WHY, so the viewer can badge it
+  /// "not found in <requested scope>". Absent on the normal in-scope path — additive/optional
+  /// (`decodeIfPresent`), so pre-existing payloads still parse.
+  let sourceFormat: Format?
   let resolved: ResolvedEntity
   let generation: String
   let isFallback: Bool
@@ -137,6 +144,7 @@ struct EntityArtifactOk: Decodable, Sendable {
   private enum CodingKeys: String, CodingKey {
     case kind
     case format
+    case sourceFormat = "source_format"
     case resolved
     case generation
     case isFallback = "is_fallback"
@@ -150,6 +158,7 @@ struct EntityArtifactOk: Decodable, Sendable {
     let kind = try container.decode(EntityKind.self, forKey: .kind)
     self.kind = kind
     self.format = try container.decode(Format.self, forKey: .format)
+    self.sourceFormat = try container.decodeIfPresent(Format.self, forKey: .sourceFormat)
     self.resolved = try container.decode(ResolvedEntity.self, forKey: .resolved)
     self.generation = try container.decode(String.self, forKey: .generation)
     self.isFallback = try container.decode(Bool.self, forKey: .isFallback)

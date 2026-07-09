@@ -224,4 +224,117 @@ struct TeamEditorViewModelTests {
     #expect(fake.exportCount == 1)
     #expect(fake.lastExportId == "t1")
   }
+
+  // MARK: Team analysis (draft coverage — debounced, generation-guarded, #9)
+
+  /// A decoded `ok` analysis carrying a distinguishing `note`, so two results compare unequal.
+  private func analysisOk(note: String, format: Format = .scarletViolet) -> TeamAnalysis {
+    let json = """
+      {"status":"ok","format":"\(format.rawValue)","members":[],"defense":[],\
+      "offense":{"covered":[],"uncovered":[]},"speed_tiers":[],"notes":["\(note)"]}
+      """
+    return try! JSONDecoder().decode(TeamAnalysis.self, from: Data(json.utf8))
+  }
+
+  /// Spins the cooperative executor until `condition` holds (or a generous bound), so a test can
+  /// wait on the fake's gated analyze parking without a real sleep.
+  private func settle(until condition: @escaping () -> Bool, maxYields: Int = 5000) async {
+    var yields = 0
+    while !condition(), yields < maxYields {
+      await Task.yield()
+      yields += 1
+    }
+  }
+
+  /// A burst of rapid schedules coalesces into ONE analyze call, carrying the latest draft.
+  @Test
+  func analysisDebounceCoalescesRapidSchedules() async {
+    let fake = FakeTeamService()
+    let expected = analysisOk(note: "coalesced", format: .champions)
+    fake.analyzeResult = expected
+    let vm = TeamEditorViewModel(teamService: fake, format: .champions)
+    vm.analysisDebounce = .zero
+
+    vm.members[0].species = "a"
+    vm.scheduleAnalysis()
+    vm.members[0].species = "b"
+    vm.scheduleAnalysis()
+    vm.members[0].species = "garchomp"
+    vm.scheduleAnalysis()
+    await vm.awaitAnalysis()
+
+    #expect(fake.analyzeCalls == 1)
+    #expect(fake.lastAnalyzeFormat == .champions)
+    #expect(fake.lastAnalyzeMembers?.first?.species == "garchomp")
+    #expect(vm.analysis == expected)
+  }
+
+  /// An all-empty draft makes NO request and clears the result.
+  @Test
+  func analysisEmptyDraftMakesNoCall() async {
+    let fake = FakeTeamService()
+    let vm = TeamEditorViewModel(teamService: fake, format: .scarletViolet)
+    vm.analysisDebounce = .zero
+    // The seeded slot has a blank species.
+
+    vm.scheduleAnalysis()
+    await vm.awaitAnalysis()
+
+    #expect(fake.analyzeCalls == 0)
+    #expect(vm.analysis == nil)
+    #expect(vm.isAnalyzing == false)
+  }
+
+  /// A failed analysis retains the last good result and surfaces an error for Retry.
+  @Test
+  func analysisErrorRetainsPreviousResult() async {
+    let fake = FakeTeamService()
+    let good = analysisOk(note: "good")
+    fake.analyzeResult = good
+    let vm = TeamEditorViewModel(teamService: fake, format: .scarletViolet)
+    vm.analysisDebounce = .zero
+    vm.members[0].species = "garchomp"
+    vm.scheduleAnalysis()
+    await vm.awaitAnalysis()
+    #expect(vm.analysis == good)
+    #expect(vm.analysisError == nil)
+
+    fake.analyzeError = .transport(underlying: "URLError.-1009")
+    vm.members[0].species = "landorus"
+    vm.scheduleAnalysis()
+    await vm.awaitAnalysis()
+
+    #expect(vm.analysis == good)  // last good result retained
+    #expect(vm.analysisError == TeamEditorViewModel.connectionMessage)
+  }
+
+  /// A superseded (stale) in-flight analysis is discarded — the latest schedule wins.
+  @Test
+  func analysisStaleResultIsDiscarded() async {
+    let fake = FakeTeamService()
+    fake.holdsAnalyze = true
+    let first = analysisOk(note: "first")
+    let second = analysisOk(note: "second")
+    // Result is keyed to the request so it's stable no matter which parked call resumes first:
+    // the gen-1 call carries "garchomp", the gen-2 call carries "landorus".
+    fake.analyzeHandler = { _, members in
+      members.first?.species == "landorus" ? second : first
+    }
+    let vm = TeamEditorViewModel(teamService: fake, format: .scarletViolet)
+    vm.analysisDebounce = .zero
+
+    vm.members[0].species = "garchomp"
+    vm.scheduleAnalysis()  // gen 1 — parks in analyze
+    await settle(until: { fake.pendingAnalyzeCount == 1 })
+
+    vm.members[0].species = "landorus"
+    vm.scheduleAnalysis()  // gen 2 — supersedes gen 1
+    await settle(until: { fake.pendingAnalyzeCount == 2 })
+
+    fake.releaseAnalyze()  // both complete; the stale gen-1 result must not win
+    await vm.awaitAnalysis()
+
+    #expect(fake.analyzeCalls == 2)
+    #expect(vm.analysis == second)
+  }
 }
