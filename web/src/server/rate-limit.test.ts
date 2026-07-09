@@ -39,6 +39,22 @@ vi.mock("@/data/repos/conversation-repo", () => ({
   appendTurnPair: mockAppendTurnPair,
   newTurnId: () => "test-turn-id",
 }));
+// The route resolves the active model via factory.activeModelKey(), which
+// dynamically imports this repo (`import "server-only"`), which in turn
+// dynamically imports the real `@/data/db` singleton. Mock it wholesale (rather
+// than only neutralizing "server-only") so this Docker-light suite never opens
+// a real Postgres connection attempt — that fail-soft path still resolves, but
+// only after a real connection attempt/timeout, which would slow every test.
+vi.mock("@/data/repos/settings-repo", () => ({
+  getActiveModelKey: async () => "grok-4.3",
+  resolveActiveModel: async () => ({
+    key: "grok-4.3",
+    source: "default",
+    updatedBy: null,
+    updatedAt: null,
+  }),
+  setActiveModelKey: vi.fn(),
+}));
 vi.mock("@/server/rate-limit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/rate-limit")>();
   return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };
