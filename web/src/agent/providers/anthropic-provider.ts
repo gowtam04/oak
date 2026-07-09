@@ -191,6 +191,9 @@ function normalizeUsage(usage: Anthropic.Usage): NormalizedUsage {
       (usage.cache_creation_input_tokens ?? 0),
     outputTokens: usage.output_tokens,
     thinkingTokens: usage.output_tokens_details?.thinking_tokens ?? 0,
+    // Anthropic reports cache reads separately; surface them as cachedTokens
+    // so admin/trace can compare across providers.
+    cachedTokens: usage.cache_read_input_tokens ?? 0,
   };
 }
 

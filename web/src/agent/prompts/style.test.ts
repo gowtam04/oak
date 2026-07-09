@@ -99,6 +99,23 @@ describe("The one body — front-loaded contract + GFM (all plain-wrap providers
   }
 });
 
+describe("The one body — G8 never bail on answerable filters", () => {
+  // Restored after oak-v2 prompt collapse dropped the Grok-only rule; now shared.
+  for (const provider of PROVIDERS) {
+    for (const mode of ["standard", "champions", "gen-7"] as const) {
+      it(`forbids insufficient_data on tool-answerable questions (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        expect(text).toContain(
+          "NEVER return status `insufficient_data` for a question you can answer by",
+        );
+        expect(text).toContain(
+          "`insufficient_data` is only for genuine tool failure",
+        );
+      });
+    }
+  }
+});
+
 describe("The one body — the two new tools + warehouse DDL + no-live-web policy", () => {
   for (const provider of PROVIDERS) {
     for (const mode of ["standard", "champions", "gen-7"] as const) {

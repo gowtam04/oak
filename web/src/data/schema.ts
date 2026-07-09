@@ -511,6 +511,8 @@ export const turn_record = pgTable(
     input_tokens: integer("input_tokens").notNull().default(0),
     output_tokens: integer("output_tokens").notNull().default(0),
     thinking_tokens: integer("thinking_tokens").notNull().default(0),
+    /** Prompt-cache hits when the provider reports them; 0 if unknown. */
+    cached_input_tokens: integer("cached_input_tokens").notNull().default(0),
     /** JSON `ToolTraceEntry[]` (stringified by the repo). */
     tool_trace: text("tool_trace").notNull().default("[]"),
     /**

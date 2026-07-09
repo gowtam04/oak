@@ -1,7 +1,7 @@
 /**
  * Structure pins for the voice-mode Pokédex instructions (`./voice`). This is
  * a NEW prompt surface (see the top-of-file comment in voice.ts) — these tests
- * pin its own shape, not the domain.ts/domain-grok.ts parity contract.
+ * pin its own shape, not the main text-chat domain.ts contract.
  */
 
 import { describe, expect, it } from "vitest";

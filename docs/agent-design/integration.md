@@ -1,3 +1,5 @@
+> **Historical.** This document may lag the product. For the live stack (Grok primary, tools, data, auth), trust **code**, then `AGENTS.md` / `README.md`.
+
 # Integration
 
 How the agent plugs into the surrounding system. The architect will formalize

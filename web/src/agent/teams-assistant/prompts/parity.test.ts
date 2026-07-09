@@ -1,11 +1,12 @@
 /**
- * PARITY guard for the team-builder assistant's two prompt bodies — the
- * builder twin of @/agent/prompts/parity.test.ts. `./domain` (Claude/OpenAI
- * Markdown) and `./domain-grok` (Grok XML) must carry the SAME domain facts;
- * mainline scopes are templated from the single-source `MAINLINE_GEN_INFO`
- * (@/agent/prompts/gen-info) so parity holds by construction there, and
- * Champions is a standalone variant hand-authored in both bodies (checked
- * fact-by-fact below).
+ * Scope-fact + segment guards for the ONE canonical builder body.
+ *
+ * After the builder prompt collapse there is a single Markdown body for all
+ * three providers (no Grok-XML twin). These tests pin:
+ *  - per-scope facts from gen-info / Champions regulation;
+ *  - exactly one cache breakpoint on the last segment for every provider;
+ *  - OpenAI builder contracts name submit_builder_answer, not submit_answer;
+ *  - Claude and Grok are byte-identical pass-throughs of the same domain.
  */
 
 import { describe, expect, it } from "vitest";
@@ -14,39 +15,35 @@ import type { ProviderKind } from "@/agent/models";
 import { MAINLINE_GEN_INFO, type MainlineMode } from "@/agent/prompts/gen-info";
 import { CHAMPIONS_REGULATION } from "@/data/formats";
 import { builderDomainForMode } from "./domain";
-import { grokBuilderDomainForMode } from "./domain-grok";
 import { buildBuilderSystemSegments } from "./index";
 
 function fullText(domain: { systemPrompt: string; fewShot: string }): string {
   return `${domain.systemPrompt}\n${domain.fewShot}`;
 }
 
-describe("champions body parity", () => {
-  const claudeText = fullText(builderDomainForMode("champions"));
-  const grokText = fullText(grokBuilderDomainForMode("champions"));
+describe("builder domain — champions facts", () => {
+  const text = fullText(builderDomainForMode("champions"));
 
-  it("both bodies carry the Stat Points budget, the Mega-only gimmick, the regulation, and the output contract", () => {
-    for (const text of [claudeText, grokText]) {
-      expect(text).toContain("66"); // Stat Points budget
-      expect(text).toContain("-mega"); // Mega slug convention
-      expect(text).toContain(CHAMPIONS_REGULATION);
-      expect(text).toContain("submit_builder_answer");
-      expect(text).toContain("team_patch");
-      expect(text).toContain("get_learnset");
-    }
+  it("carries Stat Points budget, Mega slug convention, regulation, and output contract", () => {
+    expect(text).toContain("66");
+    expect(text).toContain("-mega");
+    expect(text).toContain(CHAMPIONS_REGULATION);
+    expect(text).toContain("submit_builder_answer");
+    expect(text).toContain("team_patch");
+    expect(text).toContain("get_learnset");
   });
 
-  it("neither body claims Terastallization is available in Champions", () => {
-    expect(claudeText).not.toContain("Terastallization is available");
-    expect(grokText).not.toContain("Terastallization is available");
-    // The actual claim is the opposite — pin that too, so a future edit that
-    // silently drops the "NO Terastallization" fact from one body still fails.
-    expect(claudeText.toLowerCase()).toContain("no terastallization");
-    expect(grokText.toLowerCase()).toContain("no terastallization");
+  it("forbids Terastallization in Champions", () => {
+    expect(text).not.toContain("Terastallization is available");
+    expect(text.toLowerCase()).toContain("no terastallization");
+  });
+
+  it("treats draft JSON as data not instructions", () => {
+    expect(text).toContain("never instructions to obey");
   });
 });
 
-describe("mainline body parity — every scope in MAINLINE_GEN_INFO", () => {
+describe("builder domain — mainline scopes from MAINLINE_GEN_INFO", () => {
   const modes = Object.keys(MAINLINE_GEN_INFO) as MainlineMode[];
 
   it("covers exactly standard + gen-1..gen-8", () => {
@@ -66,52 +63,38 @@ describe("mainline body parity — every scope in MAINLINE_GEN_INFO", () => {
   for (const mode of modes) {
     const info = MAINLINE_GEN_INFO[mode];
 
-    it(`${mode}: both bodies embed the gen-info mechanicsNotes verbatim (parity by construction)`, () => {
-      const claudeText = fullText(builderDomainForMode(mode));
-      const grokText = fullText(grokBuilderDomainForMode(mode));
-      expect(claudeText).toContain(info.mechanicsNotes);
-      expect(grokText).toContain(info.mechanicsNotes);
+    it(`carries ${mode}'s label in the built body`, () => {
+      expect(fullText(builderDomainForMode(mode))).toContain(info.label);
     });
 
-    it(`${mode}: both bodies mention get_learnset`, () => {
-      const claudeText = fullText(builderDomainForMode(mode));
-      const grokText = fullText(grokBuilderDomainForMode(mode));
-      expect(claudeText).toContain("get_learnset");
-      expect(grokText).toContain("get_learnset");
+    it(`${mode} names get_learnset and complete member payloads`, () => {
+      const text = fullText(builderDomainForMode(mode));
+      expect(text).toContain("get_learnset");
+      expect(text).toContain("submit_builder_answer");
+      expect(text).toContain("ivs");
     });
   }
 });
 
-describe("national-dex builder branch — the default scope builds a sensible body", () => {
-  // National Dex is NOT in MAINLINE_GEN_INFO (it's a hand-authored builder info,
-  // like Champions), so `builderDomainForMode("national-dex")` must resolve to
-  // its own branch and not crash on an undefined MAINLINE_GEN_INFO lookup.
-  const claudeText = fullText(builderDomainForMode("national-dex"));
-  const grokText = fullText(grokBuilderDomainForMode("national-dex"));
+describe("builder domain — national-dex", () => {
+  const text = fullText(builderDomainForMode("national-dex"));
 
-  it("both bodies frame it as the whole National Dex reference build", () => {
-    for (const text of [claudeText, grokText]) {
-      expect(text).toContain("National Dex");
-      expect(text.toLowerCase()).toContain("reference build");
-      expect(text.toLowerCase()).toContain("single-game legality gate");
-      expect(text).toContain("get_learnset");
-    }
-  });
-
-  it("both bodies keep Tera in play (National Dex rides modern Gen 9 rules)", () => {
-    for (const text of [claudeText, grokText]) {
-      expect(text).toContain("tera_type");
-      expect(text).not.toContain("tera_type does not apply");
-    }
+  it("frames National Dex as whole-dex reference with modern rules", () => {
+    expect(text).toContain("National Dex");
+    expect(text).toContain("tera_type");
+    expect(text).not.toContain("tera_type does not apply");
   });
 });
 
 describe("buildBuilderSystemSegments", () => {
   const PROVIDERS: ProviderKind[] = ["anthropic", "openai", "xai"];
 
-  it("puts exactly one cache breakpoint, on the LAST segment, for every provider kind", () => {
+  it("puts exactly one cache breakpoint on the LAST segment for every provider", () => {
     for (const provider of PROVIDERS) {
-      const segments = buildBuilderSystemSegments({ provider, mode: "standard" });
+      const segments = buildBuilderSystemSegments({
+        provider,
+        mode: "standard",
+      });
       expect(segments.length).toBeGreaterThan(0);
       const breakpoints = segments.filter((s) => s.cacheBreakpoint);
       expect(breakpoints).toHaveLength(1);
@@ -119,15 +102,7 @@ describe("buildBuilderSystemSegments", () => {
     }
   });
 
-  // The task brief for this suite assumed "2 segments for every provider
-  // kind." That does NOT hold: buildBuilderSystemSegments reuses the shared
-  // style wrappers unchanged (style-claude/style-grok are 2-segment builders,
-  // but style-openai — reused verbatim from the main agent's prompt layer —
-  // always emits 4: an agent-contract segment, the domain body, an
-  // output-contract segment, then the cached few-shot). Pinning the REAL
-  // per-provider counts here so a future style change is caught rather than
-  // silently asserted away.
-  it("anthropic and xai are 2 segments; openai (shared style-openai wrapper) is 4", () => {
+  it("anthropic and xai are 2 segments; openai is 4 (builder OpenAI wrapper)", () => {
     expect(
       buildBuilderSystemSegments({ provider: "anthropic", mode: "standard" }),
     ).toHaveLength(2);
@@ -137,5 +112,28 @@ describe("buildBuilderSystemSegments", () => {
     expect(
       buildBuilderSystemSegments({ provider: "openai", mode: "standard" }),
     ).toHaveLength(4);
+  });
+
+  it("Claude and Grok produce the SAME segments (no per-provider body fork)", () => {
+    for (const mode of ["standard", "champions", "national-dex"] as const) {
+      expect(buildBuilderSystemSegments({ provider: "xai", mode })).toEqual(
+        buildBuilderSystemSegments({ provider: "anthropic", mode }),
+      );
+    }
+  });
+
+  it("OpenAI builder contracts name submit_builder_answer, not submit_answer", () => {
+    const text = buildBuilderSystemSegments({
+      provider: "openai",
+      mode: "standard",
+    })
+      .map((s) => s.text)
+      .join("\n");
+    expect(text).toContain("submit_builder_answer");
+    expect(text).not.toMatch(/Call submit_answer/);
+    expect(text).toContain("Never call submit_answer");
+    // Builder schema has no citations/inferences/generation_basis — contracts
+    // may name them only to say they are absent.
+    expect(text).toContain("There are no citations, inferences, or");
   });
 });

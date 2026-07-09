@@ -510,6 +510,17 @@ across resume depends on B-1 / B-3.
 > caching is automatic on a stable prefix (no `cache_control`); the loop uses
 > `tool_choice:"auto"` + `reasoning.effort` (no forced-tool-choice conflict).
 > Recorded-stream tests in `src/agent/providers/grok-provider.test.ts`.
+>
+> **Follow-up (audit A–D):** mid-turn Responses chaining (`store:true` +
+> `previous_response_id`), client memoization, shared G8 filter-bail prompt rule,
+> teams-assistant prompt collapse, and `cached_input_tokens` on turn traces.
+> Optional live regression after prompt changes:
+>
+> ```bash
+> cd web
+> tsx eval/run.ts --model=grok-4.3 --case=G8   # filter-bail check
+> tsx eval/run.ts --model=grok-4.3 --repeat=3  # optional variance
+> ```
 
 **Why:** Oak already has a model-provider seam (the `LLMProvider` abstraction in
 `src/agent/providers/` with a client-safe `src/agent/models.ts` registry and a

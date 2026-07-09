@@ -10,6 +10,7 @@ function makeTrace(): TurnTrace {
     input_tokens: 1200,
     output_tokens: 340,
     thinking_tokens: 80,
+    cached_input_tokens: 400,
     tool_trace: [
       {
         tool: "query_pokedex",
@@ -47,6 +48,7 @@ describe("logTurn", () => {
     expect(record.input_tokens).toBe(1200);
     expect(record.output_tokens).toBe(340);
     expect(record.thinking_tokens).toBe(80);
+    expect(record.cached_input_tokens).toBe(400);
     expect(record.turn_latency_ms).toBe(2100);
     expect(record.status).toBe("answered");
     expect(record.citation_count).toBe(3);

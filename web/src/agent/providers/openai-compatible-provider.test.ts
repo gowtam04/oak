@@ -233,6 +233,7 @@ describe("OpenAICompatibleProvider — streaming + final turn", () => {
       inputTokens: 11,
       outputTokens: 7,
       thinkingTokens: 4,
+      cachedTokens: 0,
     });
     const echo = final.assistantContentToEcho as any;
     expect(echo.role).toBe("assistant");

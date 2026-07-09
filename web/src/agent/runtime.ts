@@ -4,8 +4,8 @@
  *
  * Drives one provider-NEUTRAL tool-loop turn. The transport (which model/SDK
  * answers, the request shape, the streaming vocabulary, the message shaping)
- * lives behind an {@link LLMProvider} — `ctx.model` selects Claude (default),
- * OpenAI GPT-5.5, or xAI Grok 4.3 via the provider factory. The loop itself is
+ * lives behind an {@link LLMProvider} — `ctx.model` selects xAI Grok (default),
+ * Claude, or OpenAI GPT-5.5 via the provider factory. The loop itself is
  * model-agnostic:
  *   1. Build the provider-tuned system prompt for `(provider, mode)` via
  *      `buildSystemSegments`, and the provider-owned opaque transcript (prior
@@ -775,6 +775,7 @@ export interface TraceState {
   inputTokens: number;
   outputTokens: number;
   thinkingTokens: number;
+  cachedTokens: number;
   toolTrace: ToolTraceEntry[];
 }
 
@@ -783,6 +784,7 @@ function accumulateUsage(state: TraceState, usage: NormalizedUsage): void {
   state.inputTokens += usage.inputTokens;
   state.outputTokens += usage.outputTokens;
   state.thinkingTokens += usage.thinkingTokens;
+  state.cachedTokens += usage.cachedTokens ?? 0;
 }
 
 /**
@@ -803,6 +805,7 @@ function finalize(
     input_tokens: state.inputTokens,
     output_tokens: state.outputTokens,
     thinking_tokens: state.thinkingTokens,
+    cached_input_tokens: state.cachedTokens,
     tool_trace: state.toolTrace,
     turn_latency_ms: Date.now() - state.startedAt,
     status: answer.status,
@@ -1058,6 +1061,7 @@ export async function runWithProvider<TAnswer = OakAnswer>(
     inputTokens: 0,
     outputTokens: 0,
     thinkingTokens: 0,
+    cachedTokens: 0,
     toolTrace: [],
   };
 

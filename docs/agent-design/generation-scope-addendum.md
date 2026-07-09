@@ -1,3 +1,5 @@
+> **Historical.** This document may lag the product. For the live stack (Grok primary, tools, data, auth), trust **code**, then `AGENTS.md` / `README.md`.
+
 # Generation Scope — agent-design addendum
 
 > **Update 2026-07-06:** Oak now has eleven scopes — national-dex (default for new conversations) and gen-1…gen-4 were added as first-class scopes; the default changed from champions to national-dex. See CLAUDE.md for the current state.

@@ -88,6 +88,11 @@ export interface NormalizedUsage {
   inputTokens: number;
   outputTokens: number;
   thinkingTokens: number;
+  /**
+   * Prompt-cache hits when the provider reports them (xAI Responses
+   * `input_tokens_details.cached_tokens`). 0 when unknown / unsupported.
+   */
+  cachedTokens: number;
 }
 
 /** What one streamed turn yields once the stream drains. */

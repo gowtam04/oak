@@ -87,6 +87,7 @@ const FAKE_TRACE: TurnTrace = {
   input_tokens: 111,
   output_tokens: 222,
   thinking_tokens: 33,
+  cached_input_tokens: 10,
   tool_trace: [
     { tool: "get_pokemon", args: {}, latency_ms: 5, cache_hit: false, error: null },
     { tool: "get_move", args: {}, latency_ms: 7, cache_hit: false, error: "boom" },

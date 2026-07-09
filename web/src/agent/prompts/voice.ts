@@ -2,19 +2,19 @@
  * Voice-mode Pokédex instructions — the "instructions" string handed to xAI's
  * Grok Voice Agent realtime session (voice-mode-plan.md §5, Workstream P).
  *
- * NEW PROMPT SURFACE, NOT covered by the domain.ts/domain-grok.ts PARITY rule
- * (CLAUDE.md "Models & providers"). The voice model is the brain of the
- * realtime session directly — it is not driven by runtime.ts's tool loop — and
- * it speaks its answers rather than emitting a structured `OakAnswer`, so this
- * body deliberately has no output-contract/citation machinery and MUST NOT
- * mention `submit_answer`. Tool-use announcements are prompt-driven (xAI's
- * realtime API has no separate "tool activity" event class for the browser to
- * render, unlike the SSE `tool_activity` event on the text chat path), so the
- * "say something before you call a tool" rule lives here as plain instruction
- * text rather than as protocol. Domain semantics (generation facts, Champions
- * rules) are still reused from the single-source tables so the two surfaces
- * never disagree on FACTS — but this file is free to diverge in prompt
- * *structure* and wording from the text-chat prompts at any time.
+ * NEW PROMPT SURFACE, separate from the single canonical text-chat body
+ * (`domain.ts`). The voice model is the brain of the realtime session directly
+ * — it is not driven by runtime.ts's tool loop — and it speaks its answers
+ * rather than emitting a structured `OakAnswer`, so this body deliberately has
+ * no output-contract/citation machinery and MUST NOT mention `submit_answer`.
+ * Tool-use announcements are prompt-driven (xAI's realtime API has no separate
+ * "tool activity" event class for the browser to render, unlike the SSE
+ * `tool_activity` event on the text chat path), so the "say something before
+ * you call a tool" rule lives here as plain instruction text rather than as
+ * protocol. Domain semantics (generation facts, Champions rules) are still
+ * reused from the single-source tables so the two surfaces never disagree on
+ * FACTS — but this file is free to diverge in prompt *structure* and wording
+ * from the text-chat prompts at any time.
  */
 
 import type { AgentMode } from "@/agent/types";

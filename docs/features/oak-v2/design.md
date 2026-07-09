@@ -1,13 +1,15 @@
 # Oak v2 — Single-Agent Harness Redesign
 
-Status: APPROVED, in implementation (fable-orchestrator; one worktree per phase agent).
-Owner docs: this file is the single source of truth for all phase briefs. Read it fully before coding.
+Status: **SHIPPED** (phases complete; product later pivoted to games-only — see §9b; T20 removed — see §11; T21 `get_meta_usage` added after the original redesign).
+Owner docs: this file records the redesign intent and superseding decisions. For the live stack, trust **code**, then `AGENTS.md` / `README.md`.
 
 ## 1. Problem
 
 Oak routes each turn through a deterministic keyword lexicon (`web/src/lib/scope/detect-scope.ts`) that selects one of six format-scoped prompt bodies (champions vs. per-gen prefixes, × two provider bodies — Markdown `domain.ts`/`champions.ts` and XML `domain-grok.ts` — kept in fact-parity by hand). The prompt IS the scope and the scope IS the data. Anything outside the six competitive formats — anime/movie trivia, PMD, Gens 1–4, franchise meta, current events, Pokédex colors/catch rates/TM locations — has no data and no answer path.
 
-Target: from the end user's perspective, ONE agent that answers ANY Pokémon question — competitive, mainline, trivia, lore, meta, current events — with citations, inference flags, and graceful failure. No routing.
+**Original target (superseded in part by §9b):** ONE agent that answers ANY Pokémon question — competitive, mainline, trivia, lore, meta, current events — with citations, inference flags, and graceful failure. No routing.
+
+**Shipped product frame (current):** ONE agent that answers **GAMES** questions (mainline all gens, Champions, spin-off games like Mystery Dungeon) with the same structure. Franchise **MEDIA** (anime/movies/TV/manga) is out of scope and declined (§9b).
 
 ## 2. Architecture
 
@@ -17,14 +19,15 @@ One agent, one system prompt, layered knowledge:
 |---|---|---|
 | Typed tools T1–T17 (existing) | Competitive lookups, battle math, teams | unchanged, fast path |
 | **T18 `run_sql`** | Arbitrary aggregations (natdex==BST, catch rate vs pre-evo, unique type combos, dual→mono evolutions, signature-move counts) | read-only SQL over the whole warehouse |
-| **T19 `search_wiki`** | Anime episodes/movies, Ash's Pokémon, PMD, lore, glitches, trivia | tsvector+GIN retrieval over self-built Fandom corpus |
-| **T20 `web_search`** | Release dates (Winds/Waves 2027, Gen 10), current anime season, sales totals, live-service issues | Tavily API |
-| Prompt policy | Opinions ("best legendary" → criteria-framed), false premises ("Fire Fang bug gen 3" → reject: move is Gen 4+), off-domain ("cake recipe" → graceful decline) | single prompt |
+| **T19 `search_wiki`** | In-game locations/mechanics/glitches/walkthroughs, Mystery Dungeon (**games only** after §9b; not anime/movies) | tsvector+GIN retrieval over self-built Fandom corpus |
+| ~~**T20 `web_search`**~~ | ~~Release dates, live-service, etc.~~ | **Removed 2026-07-03** — see §11; time-sensitive facts degrade honestly |
+| **T21 `get_meta_usage`** | Stored monthly Smogon ladder usage (v1 `gen9ou`) | offline `meta_snapshot`/`meta_usage` via `sync:meta` |
+| Prompt policy | Opinions ("best legendary" → criteria-framed), false premises ("Fire Fang bug gen 3" → reject: move is Gen 4+), off-domain + franchise media declines | single prompt |
 
 Unchanged invariants (violating any of these fails review):
 - Provider-agnostic loop (`runtime.ts` / `LLMProvider` seam) untouched in shape; `OakAnswer` Zod contract and SSE streaming untouched.
 - Tools NEVER throw in-domain — documented miss shapes only.
-- Tool barrel `web/src/agent/tools/index.ts` is APPEND-ONLY (order = prompt-cache prefix). New tools: T18 `run_sql`, T19 `search_wiki`, T20 `web_search`, appended in that ID order as they land.
+- Tool barrel `web/src/agent/tools/index.ts` is APPEND-ONLY (order = prompt-cache prefix). Shipped append order: T18 `run_sql`, T19 `search_wiki`, then T21 `get_meta_usage` (T20 number is **retired** — never reuse).
 - `ctx.mode` / `ctx.model` / `ctx.images` stay server-controlled and never become LLM-visible tool inputs. (`run_sql` sees a `format` COLUMN in the data — that is read-only data visibility, not control, and is accepted by design.)
 - Zod in `web/src/agent/schemas.ts` is the single schema source; `toJsonSchema()` derives provider schemas.
 - Last system segment always carries the cache breakpoint.
