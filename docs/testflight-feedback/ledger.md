@@ -340,7 +340,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** fixed (5af6e2e — iOS 26 toolbar capsule separation; assistant sheet is item-driven)
+- **Status:** fixed (5af6e2e — iOS 26 toolbar capsule separation; assistant sheet is item-driven, build 21)
 
 > This AI button doesn’t work 
 
@@ -353,7 +353,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** fixed (fc39b5f web / bf35699 ios / 2b01bd3 android — ships in the next TestFlight build)
+- **Status:** fixed (fc39b5f web / bf35699 ios / 2b01bd3 android — build 21)
 
   Shipped as a full team-analysis feature: a stateless public
   `POST /api/teams/analyze` (defensive type matrix, offensive move-type
@@ -397,7 +397,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
 - **Submitter:** anonymous
-- **Status:** fixed (5af6e2e — New Chat button on pushed threads)
+- **Status:** fixed (5af6e2e — New Chat button on pushed threads, build 21)
 
 > When you start chatting, include an easy way to start a new chat. Currently I have to go to chat history to start a new chat
 
@@ -410,7 +410,7 @@ sync script greps these to dedupe against ASC's response.
 - **Build:** unknown (not available from the feedback API — attribute manually)
 - **Device/OS:** iPhone17_1, iOS 26.5, en-US
 - **Submitter:** gowtam04@gmail.com
-- **Status:** fixed (5af6e2e ios / 7580206 android — movepool renders as a type-dotted chip grid matching the web; ships in the next TestFlight build)
+- **Status:** fixed (5af6e2e ios / 7580206 android — movepool renders as a type-dotted chip grid matching the web; build 21)
 
 > Instead of showing moves as a list, show them as chips in a grid like in the web
 
