@@ -34,16 +34,20 @@ struct AuthVerifyResponse: Decodable, Sendable {
 
 /// `GET /api/auth/me` body (`web/src/app/api/auth/me/route.ts`).
 ///
-/// `{ signedIn: true, email }` for a resolved account, `{ signedIn: false }` for
-/// a guest (no `email`) — always 200, never an error (a guest is a first-class
-/// value, not a failure), so `email` is optional.
+/// `{ signedIn: true, email, lastUsedScope? }` for a resolved account,
+/// `{ signedIn: false }` for a guest (no `email`) — always 200, never an error
+/// (a guest is a first-class value, not a failure), so `email` is optional.
+/// `lastUsedScope` is the account's remembered game scope for new chats (a
+/// Format wire string); omitted when never set.
 struct MeResponse: Decodable, Sendable {
   let signedIn: Bool
   let email: String?
+  let lastUsedScope: String?
 
   enum CodingKeys: String, CodingKey {
     case signedIn
     case email
+    case lastUsedScope
   }
 }
 

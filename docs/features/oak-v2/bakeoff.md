@@ -4,7 +4,13 @@ Owner doc: docs/features/oak-v2/design.md §7/§8; this doc is the P7 handoff to
 whoever runs the LIVE judged suite (the orchestrator, not the eval-expansion
 agent — P7 does not run this itself, no real API keys were available to it).
 
-Decides the final production model (`ACTIVE_MODEL`) between **Grok 4.3**
+> **Superseded (2026-07):** §4 below ("Ship the decision") describes flipping
+> an `ACTIVE_MODEL` Fly secret. That secret is retired — the active production
+> model is now an admin-panel **Settings** selection (`/admin/settings`,
+> written to Postgres, resolved per turn, fail-soft to `grok-4.3`). Sections 1–3
+> (running the judged suite via `eval/run.ts --model=…`) are unaffected.
+
+Decides the final production model between **Grok 4.3**
 (current default, `grok-4.3`) and **Claude Sonnet 5** (`claude`) by running the
 full 54-case judged golden suite (`web/eval/cases.ts`) against both, live.
 Cost was the reason Sonnet 5 was reverted to Grok on 2026-07-02 — this
@@ -54,7 +60,7 @@ extra fetch step beyond the default `DEFAULT_FORMATS` ingest.
 ## 2. Run the suite once per model
 
 `eval/run.ts` supports `--model=<key>` to A/B the AGENT model for a single
-judged run without touching the `ACTIVE_MODEL` secret (the judge always stays
+judged run without touching the production model selection (the judge always stays
 on Claude, per `env.ANTHROPIC_MODEL` — this avoids same-family
 self-preference bias). Valid `--model` keys are `grok-4.3` | `claude` |
 `gpt-5.5` (`src/agent/models.ts` — NOT `claude-sonnet-5`, which is the
@@ -133,13 +139,12 @@ from there rather than re-deriving them.
 
 ## 4. Ship the decision
 
-Once a model is chosen:
+Once a model is chosen, set it as the production model in **Admin → Settings**
+(`/admin/settings`) — pick the model and save. No redeploy or restart is
+required; the selection is written to the `app_setting` table and read fresh
+per turn via `factory.activeModelKey()` (fail-soft to `grok-4.3` if the row is
+ever missing or invalid).
 
-```bash
-fly secrets set ACTIVE_MODEL=grok-4.3   # or: ACTIVE_MODEL=claude
-```
-
-(`ACTIVE_MODEL` must be one of `grok-4.3` | `claude` | `gpt-5.5` — `src/env.ts`
-fails fast on any other value, same contract as `XAI_API_KEY`.) No redeploy is
-required — it's a secret, read at request time via
-`factory.activeModelKey()`.
+*(Historical: this used to be `fly secrets set ACTIVE_MODEL=grok-4.3` /
+`ACTIVE_MODEL=claude`, validated by `src/env.ts` at boot. That secret is
+retired — see the superseded note at the top of this doc.)*

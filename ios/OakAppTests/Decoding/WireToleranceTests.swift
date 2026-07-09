@@ -144,4 +144,39 @@ struct WireToleranceTests {
     #expect(EntityKind(rawValue: "move") == .move)
     #expect(EntityKind.move.rawValue == "move")
   }
+
+  // MARK: EntityArtifactOk.source_format (National-Dex fallback marker, #2)
+
+  /// A minimal `ok` type envelope, optionally carrying the additive `source_format` marker.
+  private func okTypeArtifact(sourceFormat: String?) -> String {
+    let source = sourceFormat.map { "\"source_format\":\"\($0)\"," } ?? ""
+    return """
+      {"status":"ok","kind":"type","format":"national-dex",\(source)\
+      "resolved":{"slug":"dragon","display_name":"Dragon"},"generation":"Gen 9",\
+      "is_fallback":false,"citations":[],\
+      "data":{"types":["dragon"],"defensive":{"weak_to":[],"resists":[],"immune_to":[]}}}
+      """
+  }
+
+  /// The National-Dex fallback path stamps `source_format`; it decodes into `sourceFormat`.
+  @Test
+  func sourceFormatDecodesWhenPresent() throws {
+    guard case let .ok(ok) = try decodeArtifact(okTypeArtifact(sourceFormat: "national-dex")) else {
+      Issue.record("expected an ok artifact")
+      return
+    }
+    #expect(ok.sourceFormat == .nationalDex)
+    #expect(ok.format == .nationalDex)
+  }
+
+  /// The normal in-scope path omits `source_format`; it decodes to nil without throwing (the
+  /// field is additive/optional, so pre-existing payloads still parse).
+  @Test
+  func sourceFormatAbsentDecodesAsNil() throws {
+    guard case let .ok(ok) = try decodeArtifact(okTypeArtifact(sourceFormat: nil)) else {
+      Issue.record("expected an ok artifact")
+      return
+    }
+    #expect(ok.sourceFormat == nil)
+  }
 }

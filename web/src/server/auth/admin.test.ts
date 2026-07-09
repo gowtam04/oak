@@ -28,7 +28,7 @@ import { isAdmin, requireAdmin } from "@/server/auth/admin";
 const mockedGetCurrentAccount = vi.mocked(getCurrentAccount);
 
 function acct(email: string, id = "acc_1"): Account {
-  return { id, email, createdAt: 1_700_000_000_000 };
+  return { id, email, createdAt: 1_700_000_000_000, lastUsedScope: null };
 }
 
 afterEach(() => {

@@ -155,11 +155,12 @@ describe("AnthropicProvider — stream adaptation + final turn", () => {
     expect(final.toolCalls).toEqual([
       { id: "t1", name: "submit_answer", input: { a: 1 }, inputJson: '{"a":1}' },
     ]);
-    // Cache-aware usage: input + cache_read + cache_creation.
+    // Cache-aware usage: input + cache_read + cache_creation; cachedTokens = cache_read.
     expect(final.usage).toEqual({
       inputTokens: 10 + 7 + 2,
       outputTokens: 5,
       thinkingTokens: 3,
+      cachedTokens: 7,
     });
     const echo = final.assistantContentToEcho as any;
     expect(echo).toEqual({ role: "assistant", content: message.content });

@@ -24,11 +24,18 @@ struct TeamEditorView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.services) private var services
 
-  /// The team-builder assistant panel state. The view model is created lazily on first
-  /// open (it needs the injected service + a reference to this editor's live draft), and
-  /// held for the editor's lifetime so its in-memory thread survives sheet dismiss/reopen.
+  /// The team-builder assistant's lifetime holder — created lazily on first open (it needs
+  /// the injected service + a reference to this editor's live draft) and then kept for the
+  /// editor's lifetime, so its in-memory thread survives sheet dismiss/reopen. This is
+  /// deliberately separate from ``presentedAssistant``: SwiftUI nils an `.sheet(item:)`
+  /// binding on dismiss, so presenting straight off this property would destroy the thread
+  /// every time the sheet closes.
   @State private var assistant: TeamsAssistantViewModel?
-  @State private var showAssistant = false
+
+  /// The sole driver of the assistant sheet via `.sheet(item:)` — non-nil presents, so a
+  /// blank/nil-model sheet is impossible. Dismiss nils only this binding; ``assistant``
+  /// itself is untouched, which is what keeps the thread alive across reopens.
+  @State private var presentedAssistant: TeamsAssistantViewModel?
 
   /// `true` for a brief window right after a successful save — drives the
   /// transient "Saved" checkmark overlay (self-clearing after ~1s).
@@ -118,8 +125,14 @@ struct TeamEditorView: View {
               }
             }
           }
+
+          // Passive draft-coverage read (#9) — debounced off member edits below.
+          TeamAnalysisSection(model: model)
         }
       }
+      // Member edits flow through direct bindings, so the coverage analysis is (re)scheduled
+      // from the view whenever the draft's members change; the view model debounces + coalesces.
+      .onChange(of: model.members) { _, _ in model.scheduleAnalysis() }
       .scrollContentBackground(.hidden)
       .background(Theme.canvas)
       .listRowBackground(Theme.surface)
@@ -133,6 +146,13 @@ struct TeamEditorView: View {
           } label: {
             Label("Team assistant", systemImage: "sparkles")
           }
+        }
+        // On iOS 26 liquid glass the two trailing items merge into one capsule,
+        // crowding the sparkle's tap target (TestFlight ANnTYLc). A fixed spacer
+        // splits them into separate capsules; availability-gated because the deploy
+        // target is iOS 18 (ToolbarContentBuilder supports `if #available`).
+        if #available(iOS 26.0, *) {
+          ToolbarSpacer(.fixed, placement: .topBarTrailing)
         }
         ToolbarItem(placement: .topBarTrailing) {
           if model.isSaving {
@@ -175,10 +195,11 @@ struct TeamEditorView: View {
       .sheet(item: $exportedPaste) { payload in
         ExportSheet(text: payload.text)
       }
-      .sheet(isPresented: $showAssistant) {
-        if let assistant {
-          TeamsAssistantSheet(model: assistant)
-        }
+      // `.sheet(item:)` on the presentation-only binding — a nil-model blank sheet is
+      // then structurally impossible (the sheet only presents once the model exists) —
+      // while the lifetime holder (`assistant`) is untouched by dismiss.
+      .sheet(item: $presentedAssistant) { assistant in
+        TeamsAssistantSheet(model: assistant)
       }
       .task {
         // `load()` (existing-team path) fetches sprites/movepools itself once the members
@@ -196,14 +217,16 @@ struct TeamEditorView: View {
 
   // MARK: Team assistant
 
-  /// Opens the assistant sheet, constructing its view model on first use (bound to this
-  /// editor's live draft and the injected service). Reopening reuses the same in-memory
-  /// thread.
+  /// Opens the assistant sheet. Constructs the lifetime-held view model (bound to this
+  /// editor's live draft and the injected service) only the first time — reopening after a
+  /// dismiss reuses the same instance, preserving its in-memory thread. Presenting assigns
+  /// that long-lived model to the presentation binding, which is what actually triggers
+  /// `.sheet(item:)`; dismiss nils only the presentation binding.
   private func openAssistant() {
     if assistant == nil {
       assistant = TeamsAssistantViewModel(service: services.teamsAssistant, editor: model)
     }
-    showAssistant = true
+    presentedAssistant = assistant
   }
 
   // MARK: Save confirmation

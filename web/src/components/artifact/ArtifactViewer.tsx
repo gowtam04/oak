@@ -94,6 +94,8 @@ function EntityRenderer({
 }
 
 function ArtifactBody({ view }: { view: ArtifactView }): React.JSX.Element {
+  const { openEntity } = useArtifactViewer();
+
   if (view.type === "structured") {
     return view.artifact.kind === "comparison" ? (
       <ComparisonArtifact subjects={view.artifact.subjects} />
@@ -155,7 +157,21 @@ function ArtifactBody({ view }: { view: ArtifactView }): React.JSX.Element {
         <p>No match found for “{response.query}”.</p>
         {response.suggestions.length > 0 && (
           <p className="artifact-viewer__suggestions">
-            Did you mean: {response.suggestions.join(", ")}?
+            Did you mean:{" "}
+            {response.suggestions.map((s, i) => (
+              <span key={s}>
+                {i > 0 && ", "}
+                <button
+                  type="button"
+                  className="artifact-viewer__suggestion"
+                  data-testid="artifact-suggestion"
+                  onClick={() => openEntity({ kind: response.kind, q: s })}
+                >
+                  {s}
+                </button>
+              </span>
+            ))}
+            ?
           </p>
         )}
       </div>
@@ -164,15 +180,31 @@ function ArtifactBody({ view }: { view: ArtifactView }): React.JSX.Element {
 
   return (
     <>
-      {response.is_fallback && (
+      {response.source_format ? (
+        // Cross-scope National-Dex fallback (#2): the requested scope had no
+        // exact match, so this profile came from National Dex. Reuse the
+        // fallback-banner styling to say so honestly.
         <CaveatStrip
           uncertaintyFlags={[]}
           generationBasis={{
             generation: response.generation,
             fallback: true,
-            note: response.fallback_note,
+            note: `Not found in ${formatLabel(
+              view.request.format,
+            )} — showing National Dex data.`,
           }}
         />
+      ) : (
+        response.is_fallback && (
+          <CaveatStrip
+            uncertaintyFlags={[]}
+            generationBasis={{
+              generation: response.generation,
+              fallback: true,
+              note: response.fallback_note,
+            }}
+          />
+        )
       )}
       <EntityRenderer response={response} />
       <ArtifactSources citations={response.citations} />

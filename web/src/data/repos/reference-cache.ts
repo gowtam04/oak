@@ -227,6 +227,53 @@ export async function moveSummaries(
   return out;
 }
 
+/**
+ * Batched map of EVERY type profile in `format` (type slug → its full
+ * {@link TypeMatchupsDetail}, offensive + defensive) in ONE read — the type
+ * chart the team-analysis service needs to build both the defensive matrix and
+ * offensive coverage without a per-type `getReference` fan-out. Reads every
+ * `resource_kind = 'type'` row for the format; a corrupt/foreign payload is
+ * skipped. The KEY SET doubles as the format's battle-type list — gen-1's chart
+ * has 15 type rows, so dark/steel/fairy are simply absent. Returns an empty map
+ * for an unreadable/unbuilt index (never throws).
+ *
+ * @param format the active data scope.
+ * @param db     the Drizzle handle.
+ */
+export async function allTypeProfiles(
+  format: Format,
+  db: OakDb,
+): Promise<Map<string, TypeMatchupsDetail>> {
+  const out = new Map<string, TypeMatchupsDetail>();
+  let rows: { resource_key: string; payload: string }[];
+  try {
+    rows = await db
+      .select({
+        resource_key: reference_cache.resource_key,
+        payload: reference_cache.payload,
+      })
+      .from(reference_cache)
+      .where(
+        and(
+          eq(reference_cache.format, format),
+          eq(reference_cache.resource_kind, "type"),
+        ),
+      );
+  } catch {
+    // Table missing (migrations not applied) — no profiles rather than throwing.
+    return out;
+  }
+
+  for (const row of rows) {
+    const record = parsePayload(row.payload);
+    if (!record || !("defensive" in record)) continue;
+    // resource_key is "type/<slug>" — strip the prefix back to the slug.
+    const slug = row.resource_key.slice("type/".length);
+    out.set(slug, record as TypeMatchupsDetail);
+  }
+  return out;
+}
+
 // ===========================================================================
 // Reference-page reads (SEO programmatic pages) — read-only, never throw
 // ===========================================================================

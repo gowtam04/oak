@@ -23,14 +23,17 @@ data class AuthVerifyResponse(
 )
 
 /**
- * `GET /api/auth/me` body. `{ signedIn: true, email }` for a resolved account,
- * `{ signedIn: false }` for a guest (no `email`) — always 200, never an error
- * (a guest is a first-class value, not a failure).
+ * `GET /api/auth/me` body. `{ signedIn: true, email, lastUsedScope? }` for a
+ * resolved account, `{ signedIn: false }` for a guest (no `email`) — always 200,
+ * never an error (a guest is a first-class value, not a failure).
+ * [lastUsedScope] is the account's remembered game scope for new chats (a Format
+ * wire string); omitted when never set.
  */
 @Serializable
 data class MeResponse(
     val signedIn: Boolean,
     val email: String? = null,
+    val lastUsedScope: String? = null,
 )
 
 /**

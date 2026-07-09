@@ -80,11 +80,11 @@ final class ChatViewModel {
   private(set) var scopeSeed: Format?
 
   /// The scope the header chip displays and the artifact viewer scopes to: a
-  /// pending chip pick, else the server-resolved scope, else the national-dex
-  /// default — identical to web's
-  /// `displayFormat = scopeSeed ?? resolvedScope ?? "national-dex"`.
+  /// pending chip pick, else the server-resolved scope, else the signed-in
+  /// last-used preference, else the national-dex default — identical to web's
+  /// `displayFormat = scopeSeed ?? resolvedScope ?? lastUsedScope ?? "national-dex"`.
   var displayFormat: Format {
-    scopeSeed ?? resolvedScope ?? .nationalDex
+    scopeSeed ?? resolvedScope ?? appState.lastUsedScope ?? .nationalDex
   }
 
   // MARK: Dependencies + identity
@@ -413,8 +413,9 @@ final class ChatViewModel {
     pendingImages = []
     lastRequest = nil
     sessionId = UUID().uuidString
-    // A fresh thread has no resolved scope yet — the chip falls back to the
-    // national-dex default until a turn resolves one (web `handleNewChat`).
+    // A fresh thread has no resolved scope yet — the chip falls through to
+    // lastUsedScope (signed-in preference) or national-dex (web `handleNewChat`).
+    // lastUsedScope on AppState is intentionally kept.
     resolvedScope = nil
     resolvedScopeSource = nil
     scopeSeed = nil
@@ -544,6 +545,10 @@ final class ChatViewModel {
       resolvedScope = format
       resolvedScopeSource = source
       scopeSeed = nil
+      // Signed-in only: remember for New Chat (server also persists on the account).
+      if case .signedIn = appState.authState {
+        appState.lastUsedScope = format
+      }
       mirrorGuestScope(format)
 
     case let .toolActivity(tool, label):

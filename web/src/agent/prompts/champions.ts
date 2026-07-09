@@ -81,6 +81,14 @@ and you must say so.
   partition when non-default forms can matter) — the curated Champions roster is
   not the whole Pokédex and will badly undercount.`,
 
+  runSqlScopeNote: `If you use run_sql for a question the user means WITHIN this
+    scope (an unqualified count, superlative, or ranking like "the strongest
+    Pokémon here" while Champions is active), filter the format-partitioned tables
+    to \`format='champions'\` — NOT \`'national-dex'\` — so the answer reflects the
+    Champions roster, and stamp generation_basis with "champions". Reach for the
+    \`'national-dex'\` partition ONLY when the user explicitly asks across all
+    Pokémon or all generations.`,
+
   mechanicsSection: `Pokémon Champions mechanics (these DIFFER from mainline — read
 carefully; they are the roster/stat system, not the engine):
 - **Stat Points, not EVs.** Champions replaces EVs with Stat Points (1 Stat Point

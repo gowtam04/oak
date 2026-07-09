@@ -79,6 +79,12 @@ struct ChatView: View {
   /// guest single thread; off for a pushed signed-in thread.
   private let showsNewConversationButton: Bool
 
+  /// When set, the toolbar shows a New-conversation button even on a pushed thread
+  /// (where the leading wordmark is absent), and tapping it calls this instead of
+  /// ``ChatViewModel/startNewConversation()`` — letting a signed-in pushed thread route
+  /// New Chat back to the tab's stack (TestFlight AG4sZ6E).
+  private let onNewConversation: (() -> Void)?
+
   /// When non-nil, renders the guest sign-in nudge above the thread; the "Sign in"
   /// button calls this (it presents the sign-in sheet). `nil` for a signed-in thread.
   private let signInAction: (() -> Void)?
@@ -86,10 +92,12 @@ struct ChatView: View {
   init(
     model: ChatViewModel,
     showsNewConversationButton: Bool = true,
+    onNewConversation: (() -> Void)? = nil,
     signInAction: (() -> Void)? = nil
   ) {
     _model = State(initialValue: model)
     self.showsNewConversationButton = showsNewConversationButton
+    self.onNewConversation = onNewConversation
     self.signInAction = signInAction
   }
 
@@ -145,10 +153,14 @@ struct ChatView: View {
       ToolbarItem(placement: .principal) {
         scopeChip
       }
-      if showsNewConversationButton {
+      if showsNewConversationButton || onNewConversation != nil {
         ToolbarItem(placement: .topBarTrailing) {
           Button {
-            model.startNewConversation()
+            if let onNewConversation {
+              onNewConversation()
+            } else {
+              model.startNewConversation()
+            }
           } label: {
             Label("New conversation", systemImage: "square.and.pencil")
           }

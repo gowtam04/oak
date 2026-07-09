@@ -116,9 +116,11 @@ describe("CostView", () => {
     expect(table.getByTestId("cost-model-grok-4.3")).toHaveTextContent(
       "xAI Grok 4.3",
     );
-    expect(table.getByTestId("cost-model-claude")).toHaveTextContent(
-      "Claude Sonnet 5",
-    );
+    // "claude" is a retired ModelKey (pre-rename historical turn_record rows)
+    // — it must display as its raw stored string, NOT "Claude Sonnet 5",
+    // otherwise a legacy row and a real claude-sonnet-5 row would render as
+    // two identically-labeled breakdown rows.
+    expect(table.getByTestId("cost-model-claude")).toHaveTextContent("claude");
     // An unknown stored model value falls back to its raw key.
     expect(table.getByTestId("cost-model-mystery-model")).toHaveTextContent(
       "mystery-model",

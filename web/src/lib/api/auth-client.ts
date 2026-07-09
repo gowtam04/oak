@@ -37,6 +37,11 @@ export interface VerifyCodeResult {
 export interface MeResult {
   signedIn: boolean;
   email?: string;
+  /**
+   * Signed-in account's remembered game scope for new chats (a Format literal).
+   * Absent for guests and for accounts that have never resolved a turn.
+   */
+  lastUsedScope?: string;
 }
 
 const JSON_HEADERS: Record<string, string> = {
@@ -158,7 +163,13 @@ export async function fetchMe(): Promise<MeResult> {
     });
     const body = await readJsonBody(res);
     if (body.signedIn === true && typeof body.email === "string") {
-      return { signedIn: true, email: body.email };
+      return {
+        signedIn: true,
+        email: body.email,
+        ...(typeof body.lastUsedScope === "string"
+          ? { lastUsedScope: body.lastUsedScope }
+          : {}),
+      };
     }
     return { signedIn: false };
   } catch {

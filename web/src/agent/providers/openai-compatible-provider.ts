@@ -244,11 +244,20 @@ function safeJsonParse(raw: string): unknown {
 }
 
 function normalizeUsage(usage: ChatChunk["usage"] | null): NormalizedUsage {
-  if (!usage) return { inputTokens: 0, outputTokens: 0, thinkingTokens: 0 };
+  if (!usage) {
+    return { inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cachedTokens: 0 };
+  }
+  const cached =
+    (
+      usage as {
+        prompt_tokens_details?: { cached_tokens?: number };
+      }
+    ).prompt_tokens_details?.cached_tokens ?? 0;
   return {
     inputTokens: usage.prompt_tokens ?? 0,
     outputTokens: usage.completion_tokens ?? 0,
     thinkingTokens: usage.completion_tokens_details?.reasoning_tokens ?? 0,
+    cachedTokens: cached,
   };
 }
 

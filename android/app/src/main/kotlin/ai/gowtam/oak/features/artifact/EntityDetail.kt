@@ -41,13 +41,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.HistoryToggleOff
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -59,6 +60,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -83,6 +86,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun EntityDetail(
     artifact: EntityArtifactOk,
+    requestFormat: Format,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -101,7 +105,7 @@ fun EntityDetail(
             is EntityData.Item -> ItemBody(data.v)
             is EntityData.Type -> TypeBody(data.v, onOpen)
         }
-        GroundingSection(artifact)
+        GroundingSection(artifact, requestFormat)
     }
 }
 
@@ -205,42 +209,56 @@ private fun MatchupRow(label: String, types: List<String>, marked: Set<String>, 
 @Composable
 private fun MovepoolSection(groups: List<MovepoolGroup>, onOpen: (EntityKind, String) -> Unit) {
     if (groups.isEmpty()) return
+    val oak = LocalOakColors.current
+    val allEmpty = groups.all { it.moves.isEmpty() }
     Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
         SectionHeader("Movepool")
+        if (allEmpty) {
+            Text(
+                text = "No moves recorded for this format.",
+                style = MaterialTheme.typography.bodySmall,
+                color = oak.textMuted,
+            )
+        }
         for (group in groups) {
             if (group.moves.isEmpty()) continue
-            val oak = LocalOakColors.current
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = titleizeNonNull(group.method),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                     color = oak.textMuted,
                 )
-                for (move in sortMovesByType(group.moves)) MovepoolMoveRow(move, onOpen)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (move in sortMovesByType(group.moves)) MoveChip(move, onOpen)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun MovepoolMoveRow(move: MovepoolMove, onOpen: (EntityKind, String) -> Unit) {
+private fun MoveChip(move: MovepoolMove, onOpen: (EntityKind, String) -> Unit) {
     val oak = LocalOakColors.current
     Row(
         modifier = Modifier
-            .fillMaxWidth()
+            .clip(RoundedCornerShape(OakRadius.pill))
+            .background(oak.surfaceRaised)
             .clickable { onOpen(EntityKind.MOVE, move.slug) }
-            .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+            .padding(horizontal = OakSpacing.md, vertical = 4.dp)
+            .semantics { contentDescription = "${move.displayName}, ${move.type} type" },
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TypeBadge(type = move.type)
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(OakType.color(move.type), CircleShape),
+        )
         Text(
             text = move.displayName,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = oak.textStrong,
-            modifier = Modifier.weight(1f),
         )
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = oak.textFaint, modifier = Modifier.height(18.dp))
     }
 }
 
@@ -398,13 +416,26 @@ private fun TypeBody(data: TypeArtifactData, onOpen: (EntityKind, String) -> Uni
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun GroundingSection(artifact: EntityArtifactOk) {
+private fun GroundingSection(artifact: EntityArtifactOk, requestFormat: Format) {
     val oak = LocalOakColors.current
+    // The National-Dex fallback (#2): the entity wasn't found in the user's requested
+    // scope, so the profile was assembled from `source_format` (national-dex). Badge it
+    // against the user's OWN request format, NOT the envelope's `format` (which is the
+    // assembled-from scope and equals source_format on this path).
+    val fallbackSource = artifact.sourceFormat?.takeIf { it != requestFormat }
     Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
         HorizontalDivider(color = oak.border)
         Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
             FormatBadge(artifact.format)
+            if (fallbackSource != null) SourceFormatBadge(fallbackSource)
             Text(artifact.generation, style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
+        }
+        if (fallbackSource != null) {
+            Text(
+                text = "Not found in ${requestFormat.shortLabel} — showing ${fallbackSource.shortLabel} data.",
+                style = MaterialTheme.typography.bodySmall,
+                color = oak.azure,
+            )
         }
         if (artifact.isFallback) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
@@ -437,6 +468,18 @@ private fun FormatBadge(format: Format) {
         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
         color = oak.textMuted,
         modifier = Modifier.background(oak.surfaceRaised, RoundedCornerShape(OakRadius.pill)).padding(horizontal = OakSpacing.sm, vertical = 3.dp),
+    )
+}
+
+/** The azure-tinted scope pill shown beside [FormatBadge] on a National-Dex fallback (#2). */
+@Composable
+private fun SourceFormatBadge(format: Format) {
+    val oak = LocalOakColors.current
+    Text(
+        text = format.shortLabel,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+        color = oak.azure,
+        modifier = Modifier.background(oak.azureSoft, RoundedCornerShape(OakRadius.pill)).padding(horizontal = OakSpacing.sm, vertical = 3.dp),
     )
 }
 

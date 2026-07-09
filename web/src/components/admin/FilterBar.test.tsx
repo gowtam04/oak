@@ -37,7 +37,7 @@ describe("FilterBar", () => {
 
   it("reflects the controlled value on every control", () => {
     setup({
-      model: "claude",
+      model: "claude-sonnet-5",
       mode: "champions",
       status: "resolution_failed",
       kind: "guest",
@@ -45,7 +45,7 @@ describe("FilterBar", () => {
     });
     expect(
       (screen.getByTestId("filter-model") as HTMLSelectElement).value,
-    ).toBe("claude");
+    ).toBe("claude-sonnet-5");
     expect((screen.getByTestId("filter-mode") as HTMLSelectElement).value).toBe(
       "champions",
     );
@@ -98,17 +98,17 @@ describe("FilterBar", () => {
   it("merges a new dimension into the existing filter, preserving the rest", () => {
     const { onChange } = setup({ status: "answered", q: "tera" });
     fireEvent.change(screen.getByTestId("filter-model"), {
-      target: { value: "claude" },
+      target: { value: "claude-sonnet-5" },
     });
     expect(onChange).toHaveBeenLastCalledWith({
       status: "answered",
       q: "tera",
-      model: "claude",
+      model: "claude-sonnet-5",
     });
   });
 
   it("selecting the 'all' option drops that dimension from the emitted filter", () => {
-    const { onChange } = setup({ model: "claude", kind: "guest" });
+    const { onChange } = setup({ model: "claude-sonnet-5", kind: "guest" });
     fireEvent.change(screen.getByTestId("filter-model"), {
       target: { value: "" },
     });
@@ -129,7 +129,7 @@ describe("FilterBar", () => {
   });
 
   it("shows the Clear button when a filter is active and resets to an empty filter", () => {
-    const { onChange } = setup({ model: "claude" });
+    const { onChange } = setup({ model: "claude-sonnet-5" });
     const clear = screen.getByTestId("filter-clear");
     expect(clear).toBeInTheDocument();
     fireEvent.click(clear);

@@ -304,3 +304,127 @@ sync script greps these to dedupe against ASC's response.
 > There are glitches and hacks in this gen like the ones in this article. Fix this across all gens
 
 **Assets:** [screenshot-1.jpg](assets/ALF0VVZ41Rnc3HaaL_hIRRw/screenshot-1.jpg)
+
+### AAtzBjJ-9ljLRQkzsLoRpdw
+
+- **Date:** 2026-07-07T21:49:13.852Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (9d82733 — server-side turn deadline; live after the next web deploy)
+
+> I gave random words to see how it responds. It’s been processing for over 5 minutes. Consider timeout exceptions if the model is stuck in one step for too long and if overall process is taking too long. Maybe depending on the step / tool call there should be relevant timeout exceptions. 
+
+**Assets:** [screenshot-1.jpg](assets/AAtzBjJ-9ljLRQkzsLoRpdw/screenshot-1.jpg)
+
+### AK4PB-sn075S8yTdP3wFe4Q
+
+- **Date:** 2026-07-07T01:09:55.3Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** partial (6dc42ff — wrong-species viewer fixed via exact-match gate + National Dex fallback; part 1 "shouldn't switch generations mid-chat" is by-design: deliberate scope-switching feature, declined)
+
+> 1. I would assume a user shouldn’t be able to switch between generations once they entered a chat
+>
+> 2. When I click viewer for eternatus it shows tornadus
+
+**Assets:** [screenshot-1.jpg](assets/AK4PB-sn075S8yTdP3wFe4Q/screenshot-1.jpg), [screenshot-2.jpg](assets/AK4PB-sn075S8yTdP3wFe4Q/screenshot-2.jpg)
+
+### ANnTYLcBOjHkEVtPxerjbKo
+
+- **Date:** 2026-07-06T08:10:38.787Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (5af6e2e — iOS 26 toolbar capsule separation; assistant sheet is item-driven, build 21)
+
+> This AI button doesn’t work 
+
+**Assets:** [screenshot-1.jpg](assets/ANnTYLcBOjHkEVtPxerjbKo/screenshot-1.jpg)
+
+### AAxEvdfHT8i1tuF6bqoce1U
+
+- **Date:** 2026-07-06T08:07:50.832Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (fc39b5f web / bf35699 ios / 2b01bd3 android — build 21)
+
+  Shipped as a full team-analysis feature: a stateless public
+  `POST /api/teams/analyze` (defensive type matrix, offensive move-type
+  coverage, speed tiers; type-based v1 — abilities/items not yet factored)
+  with an Analysis panel in all three team editors.
+
+> What about including additional things for team builder. Like defensive coverage, offensive coverage, team stats, other type of information you can figure out
+
+**Assets:** [screenshot-1.jpg](assets/AAxEvdfHT8i1tuF6bqoce1U/screenshot-1.jpg), [screenshot-2.jpg](assets/AAxEvdfHT8i1tuF6bqoce1U/screenshot-2.jpg)
+
+### ADfdcLoy-7UkU1taVj_Uhes
+
+- **Date:** 2026-07-06T08:05:50.578Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (49f9835 — live after prod re-ingest)
+
+> If user gave you the format generation of the team, the items shown should be for that generation too. Currently its showing Absolite Z and Adamant Orb which are not available in Gen 3
+
+**Assets:** [screenshot-1.jpg](assets/ADfdcLoy-7UkU1taVj_Uhes/screenshot-1.jpg), [screenshot-2.jpg](assets/ADfdcLoy-7UkU1taVj_Uhes/screenshot-2.jpg)
+
+### ACxOs06jUZqbsWhQSYt-cW8
+
+- **Date:** 2026-07-06T08:02:08.766Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (095b543 — prompt-level; unqualified aggregations now default to the active scope)
+
+> It doesn’t seem to filter based on generation selected
+
+**Assets:** [screenshot-1.jpg](assets/ACxOs06jUZqbsWhQSYt-cW8/screenshot-1.jpg)
+
+### AG4sZ6EYJACjKYOtUfWdbGc
+
+- **Date:** 2026-07-06T08:01:08.405Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (5af6e2e — New Chat button on pushed threads, build 21)
+
+> When you start chatting, include an easy way to start a new chat. Currently I have to go to chat history to start a new chat
+
+**Assets:** 
+
+### ANFj2FDaVI14LmcQWMRpGA4
+
+- **Date:** 2026-07-06T06:35:08.981Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually)
+- **Device/OS:** iPhone17_1, iOS 26.5, en-US
+- **Submitter:** gowtam04@gmail.com
+- **Status:** fixed (5af6e2e ios / 7580206 android — movepool renders as a type-dotted chip grid matching the web; build 21)
+
+> Instead of showing moves as a list, show them as chips in a grid like in the web
+
+**Assets:** [screenshot-1.jpg](assets/ANFj2FDaVI14LmcQWMRpGA4/screenshot-1.jpg)
+
+### ACGQITvfo_6iG2ZBf33kBh8
+
+- **Date:** 2026-07-06T05:19:04.303Z
+- **Type:** screenshot
+- **Build:** unknown (not available from the feedback API — attribute manually; predates build 19)
+- **Device/OS:** iPhone18_3, iOS 26.5.1, en-US
+- **Submitter:** anonymous
+- **Status:** fixed (2e0eb8e, build 19 — Format widened to all 11 scopes; gens 1–4 selectable in the scope picker on web/iOS/Android as of build 19)
+
+> Can’t select for generations below gen 5 but search says data is available
+
+**Assets:** [screenshot-1.jpg](assets/ACGQITvfo_6iG2ZBf33kBh8/screenshot-1.jpg)

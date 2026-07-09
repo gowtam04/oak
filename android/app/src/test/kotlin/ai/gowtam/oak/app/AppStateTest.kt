@@ -2,6 +2,7 @@ package ai.gowtam.oak.app
 
 import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.services.AuthState
+import ai.gowtam.oak.services.MeSnapshot
 import ai.gowtam.oak.support.FakeAuthService
 import ai.gowtam.oak.support.FakeHistoryService
 import ai.gowtam.oak.wire.ChatTurn
@@ -34,9 +35,12 @@ class AppStateTest {
     @Test
     fun restoreSessionAdoptsTheServicesResult() = runTest {
         val state = AppState()
-        val auth = FakeAuthService(meResult = AuthState.SignedIn("a@b.com"))
+        val auth = FakeAuthService(
+            meResult = MeSnapshot.signedIn("a@b.com", lastUsedScope = Format.Gen7),
+        )
         state.restoreSession(auth)
         assertEquals(AuthState.SignedIn("a@b.com"), state.authState.value)
+        assertEquals(Format.Gen7, state.lastUsedScope.value)
     }
 
     @Test

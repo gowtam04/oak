@@ -135,7 +135,7 @@ struct PreviewStubAuthService: AuthService {
     Account(email: email, created: false)
   }
 
-  func me() async throws -> AuthState { .guest }
+  func me() async throws -> MeSnapshot { .guest }
 
   func signOut() async throws {}
 
@@ -221,6 +221,10 @@ struct PreviewStubTeamService: TeamService {
   }
 
   func exportPaste(id: String) async throws -> String { throw notFound }
+
+  func analyze(format: Format, members: [TeamMember]) async throws -> TeamAnalysis {
+    .unavailable(format: format)
+  }
 }
 
 /// No-network ``ChatService`` for SwiftUI previews: a tiny scripted stream that

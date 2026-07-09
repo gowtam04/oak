@@ -55,8 +55,8 @@ describe("parseArgs", () => {
   });
 
   it("accepts a known --model key and rejects an unknown one", () => {
-    const ok = parseArgs(["--model=claude"]);
-    expect(ok.model).toBe("claude");
+    const ok = parseArgs(["--model=claude-sonnet-5"]);
+    expect(ok.model).toBe("claude-sonnet-5");
     expect(ok.invalidModel).toBeUndefined();
 
     const bad = parseArgs(["--model=bogus"]);
@@ -76,9 +76,9 @@ describe("parseArgs", () => {
 });
 
 describe("selectCases", () => {
-  it("defaults to all 59 cases for the judged suite", () => {
+  it("defaults to all 60 cases for the judged suite", () => {
     const { cases } = selectCases(parseArgs([]));
-    expect(cases).toHaveLength(59);
+    expect(cases).toHaveLength(60);
   });
 
   it("uses the G1/G5/G6/G7/G17/G25 set for --rebuild", () => {

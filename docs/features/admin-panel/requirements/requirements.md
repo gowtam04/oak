@@ -389,10 +389,13 @@ in the panel but never users *of* the panel.
 
 A builder should not add these without them being moved into scope:
 
-- **Any operational control.** Triggering ingest / index rebuild, switching the
-  active model (`ACTIVE_MODEL`), toggling formats, editing rate-limit tiers,
-  rotating or editing secrets, or anything deploy-related. The owner explicitly
-  deselected operational control — it stays CLI/Fly-managed.
+- **Any operational control.** Triggering ingest / index rebuild, toggling
+  formats, editing rate-limit tiers, rotating or editing secrets, or anything
+  deploy-related. The owner explicitly deselected operational control — it
+  stays CLI/Fly-managed. (*Revisited 2026-07*: active-model switching was later
+  moved INTO the panel as a follow-on feature — see the admin **Settings** tab
+  in `CLAUDE.md`/`README.md` — superseding the `ACTIVE_MODEL` scope decision
+  recorded here; the rest of this out-of-scope list is unchanged.)
 - **User moderation actions.** Banning/suspending users, deleting accounts,
   deleting/editing/redacting conversations, messages, or teams, force-logout /
   session revocation, or resetting/adjusting a user's rate limits or tier. The

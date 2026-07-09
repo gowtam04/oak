@@ -39,6 +39,7 @@ import "server-only";
 import { eq, lte, or, sql } from "drizzle-orm";
 
 import { db } from "@/data/db";
+import { isFormat, type Format } from "@/data/formats";
 import {
   account,
   auth_event,
@@ -59,6 +60,17 @@ export interface Account {
   id: string;
   email: string;
   createdAt: number;
+  /**
+   * Last game scope a chat turn resolved under for this account, or `null` when
+   * never set / invalid. Used as the signed-in default for brand-new chats.
+   */
+  lastUsedScope: Format | null;
+}
+
+/** Map a raw DB `last_used_scope` string to a validated Format (or null). */
+function parseLastUsedScope(raw: string | null | undefined): Format | null {
+  if (typeof raw === "string" && isFormat(raw)) return raw;
+  return null;
 }
 
 /** One active device session; the raw token is never stored — only its hash. */
@@ -97,11 +109,19 @@ export async function findAccountByEmail(
       id: account.id,
       email: account.email,
       createdAt: account.created_at,
+      lastUsedScope: account.last_used_scope,
     })
     .from(account)
     .where(eq(account.email, email))
     .limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    email: row.email,
+    createdAt: row.createdAt,
+    lastUsedScope: parseLastUsedScope(row.lastUsedScope),
+  };
 }
 
 /**
@@ -116,7 +136,23 @@ export async function createAccount(
   createdAt: number,
 ): Promise<Account> {
   await db.insert(account).values({ id, email, created_at: createdAt });
-  return { id, email, createdAt };
+  return { id, email, createdAt, lastUsedScope: null };
+}
+
+/**
+ * Persist the scope the signed-in user just resolved a turn under. Fire-and-
+ * forget from the chat route (same non-blocking discipline as conversation
+ * format updates). Idempotent when `format` already matches the stored value —
+ * callers may still skip the write when unchanged.
+ */
+export async function updateLastUsedScope(
+  accountId: string,
+  format: Format,
+): Promise<void> {
+  await db
+    .update(account)
+    .set({ last_used_scope: format })
+    .where(eq(account.id, accountId));
 }
 
 // ---------------------------------------------------------------------------

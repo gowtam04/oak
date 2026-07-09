@@ -75,10 +75,20 @@ describe("account", () => {
     const createdAt = 1_700_000_000_000;
 
     const created = await repo.createAccount(EMAIL, id, createdAt);
-    expect(created).toEqual({ id, email: EMAIL, createdAt });
+    expect(created).toEqual({
+      id,
+      email: EMAIL,
+      createdAt,
+      lastUsedScope: null,
+    });
 
     const found = await repo.findAccountByEmail(EMAIL);
-    expect(found).toEqual({ id, email: EMAIL, createdAt });
+    expect(found).toEqual({
+      id,
+      email: EMAIL,
+      createdAt,
+      lastUsedScope: null,
+    });
     // bigint mode:"number" must read back as a JS number, not a string.
     expect(typeof found?.createdAt).toBe("number");
   });
@@ -101,6 +111,14 @@ describe("account", () => {
     const found = await repo.findAccountByEmail(EMAIL);
     expect(found).not.toBeNull();
     expect(found?.createdAt).toBe(1);
+  });
+
+  it("updateLastUsedScope persists and findAccountByEmail returns it", async () => {
+    const id = randomUUID();
+    await repo.createAccount(EMAIL, id, 1);
+    await repo.updateLastUsedScope(id, "gen-7");
+    const found = await repo.findAccountByEmail(EMAIL);
+    expect(found?.lastUsedScope).toBe("gen-7");
   });
 });
 

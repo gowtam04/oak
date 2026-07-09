@@ -71,6 +71,16 @@ class AppState {
      */
     val guestThreadScope: StateFlow<Format> = _guestThreadScope.asStateFlow()
 
+    private val _lastUsedScope = MutableStateFlow<Format?>(null)
+
+    /**
+     * Signed-in account's last-used game scope for NEW chats (from `GET /api/auth/me`
+     * + every subsequent `scope` event while signed in). Survives New Chat so the
+     * chip doesn't flash National Dex for a user mid–Gen 7 run. `null` for guests
+     * and never-chatted accounts. Mirrors web's `lastUsedScope` / iOS `AppState`.
+     */
+    val lastUsedScope: StateFlow<Format?> = _lastUsedScope.asStateFlow()
+
     /**
      * Binds the active conversation id — the Chat tab's resume / New Chat navigation
      * (history-and-teams.md D-HIST-1): resuming a saved conversation sets it to that
@@ -95,6 +105,11 @@ class AppState {
     /** Records the scope a guest turn resolved to (mirrored from the `scope` SSE event). */
     fun setGuestThreadScope(format: Format) {
         _guestThreadScope.value = format
+    }
+
+    /** Updates the signed-in last-used scope (new-chat default). */
+    fun setLastUsedScope(format: Format?) {
+        _lastUsedScope.value = format
     }
 
     // -------------------------------------------------------------------
@@ -134,7 +149,10 @@ class AppState {
      */
     suspend fun restoreSession(auth: AuthService) {
         try {
-            _authState.value = auth.me()
+            val snapshot = auth.me()
+            _authState.value = snapshot.state
+            _lastUsedScope.value =
+                if (snapshot.state is AuthState.SignedIn) snapshot.lastUsedScope else null
         } catch (e: Exception) {
             Log.e(TAG, "session restore failed; remaining a guest (${e::class.simpleName})")
         }
@@ -145,9 +163,15 @@ class AppState {
      * was already persisted by the service. The on-screen guest thread is preserved;
      * importing it into durable history is the separate, non-fatal [importGuestThread]
      * step invoked by [onSignedIn].
+     *
+     * [lastUsedScope] is typically null on a fresh sign-in (verify doesn't return it);
+     * the next `scope` event or a later `me()` restore fills it in.
      */
-    fun completeSignIn(email: String) {
+    fun completeSignIn(email: String, lastUsedScope: Format? = null) {
         _authState.value = AuthState.SignedIn(email)
+        if (lastUsedScope != null) {
+            _lastUsedScope.value = lastUsedScope
+        }
     }
 
     /**
@@ -213,6 +237,7 @@ class AppState {
      * thread is intentionally left untouched — only auth/session identifiers reset. */
     private fun resetToGuest() {
         _authState.value = AuthState.Guest
+        _lastUsedScope.value = null
         _activeConversationId.value = null
     }
 

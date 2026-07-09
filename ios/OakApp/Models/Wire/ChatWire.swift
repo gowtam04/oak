@@ -109,7 +109,8 @@ enum SSEEvent: Sendable, Equatable {
 ///   - `.message` — an explicit in-message signal ("in gen 7, …");
 ///   - `.seed` — the client's `scope_seed` chip pick (or a legacy `champions_mode`);
 ///   - `.conversation` — the conversation's sticky scope;
-///   - `.default` — the champions default (no signal/seed/sticky).
+///   - `.preference` — the signed-in account's last-used scope (new-chat default);
+///   - `.default` — the National Dex hard default (no signal/seed/sticky/preference).
 ///
 /// **Tolerant decoding (`.unknown`)** mirrors ``Format``: the server can add a
 /// resolution source independently of when this app ships, so an unrecognized
@@ -119,8 +120,9 @@ enum ScopeSource: Sendable, Equatable {
     case message
     case conversation
     case seed
+    case preference
     case `default`
-    /// A source string not in the known four — preserves the original wire value.
+    /// A source string not in the known set — preserves the original wire value.
     case unknown(String)
 
     init(rawValue: String) {
@@ -128,6 +130,7 @@ enum ScopeSource: Sendable, Equatable {
         case "message": self = .message
         case "conversation": self = .conversation
         case "seed": self = .seed
+        case "preference": self = .preference
         case "default": self = .default
         default: self = .unknown(rawValue)
         }
@@ -138,6 +141,7 @@ enum ScopeSource: Sendable, Equatable {
         case .message: return "message"
         case .conversation: return "conversation"
         case .seed: return "seed"
+        case .preference: return "preference"
         case .default: return "default"
         case let .unknown(raw): return raw
         }

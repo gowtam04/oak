@@ -1,10 +1,10 @@
 /**
- * eval/cases.test.ts — structural unit tests for the G1..G59 case definitions.
+ * eval/cases.test.ts — structural unit tests for the G1..G60 case definitions.
  *
  * Owned by: phase "Eval" / track "cases".
  *
  * Tests the STRUCTURE and INTENT of cases.ts without any LLM or DB calls:
- *  - all 59 cases present with unique IDs G1..G59
+ *  - all 60 cases present with unique IDs G1..G60
  *  - every case has the required fields with valid types
  *  - multi-turn input (G19) is correctly shaped
  *  - deterministic subset matches the design.md + Oak v2 §7 spec
@@ -110,8 +110,8 @@ describe("eval/cases", () => {
   // Top-level structure
   // -------------------------------------------------------------------------
 
-  it("exports exactly 59 cases", () => {
-    expect(cases).toHaveLength(59);
+  it("exports exactly 60 cases", () => {
+    expect(cases).toHaveLength(60);
   });
 
   it("all IDs follow the G<number> pattern", () => {
@@ -120,17 +120,17 @@ describe("eval/cases", () => {
     }
   });
 
-  it("all IDs G1..G59 are present and unique", () => {
+  it("all IDs G1..G60 are present and unique", () => {
     const ids = new Set(cases.map((c) => c.id));
-    expect(ids.size).toBe(59);
-    for (let n = 1; n <= 59; n++) {
+    expect(ids.size).toBe(60);
+    for (let n = 1; n <= 60; n++) {
       expect(ids.has(`G${n}`), `G${n} should be present`).toBe(true);
     }
   });
 
-  it("caseById indexes all 59 cases", () => {
-    expect(Object.keys(caseById)).toHaveLength(59);
-    for (let n = 1; n <= 59; n++) {
+  it("caseById indexes all 60 cases", () => {
+    expect(Object.keys(caseById)).toHaveLength(60);
+    for (let n = 1; n <= 60; n++) {
       expect(
         caseById[`G${n}`],
         `caseById["G${n}"] should be defined`,
@@ -138,7 +138,7 @@ describe("eval/cases", () => {
     }
   });
 
-  it("cases array order matches G1..G59 numerically", () => {
+  it("cases array order matches G1..G60 numerically", () => {
     for (let i = 0; i < cases.length; i++) {
       const expected = `G${i + 1}`;
       expect(cases[i].id).toBe(expected);

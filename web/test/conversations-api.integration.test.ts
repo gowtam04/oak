@@ -46,8 +46,18 @@ let fix: PgFixture;
 type Repo = typeof import("@/data/repos/conversation-repo");
 let repo: Repo;
 
-const ACCT_A: Account = { id: "acct-a", email: "a@x.com", createdAt: 1 };
-const ACCT_B: Account = { id: "acct-b", email: "b@x.com", createdAt: 1 };
+const ACCT_A: Account = {
+  id: "acct-a",
+  email: "a@x.com",
+  createdAt: 1,
+  lastUsedScope: null,
+};
+const ACCT_B: Account = {
+  id: "acct-b",
+  email: "b@x.com",
+  createdAt: 1,
+  lastUsedScope: null,
+};
 
 beforeAll(async () => {
   fix = await createPgSchema({ seed: "none" });

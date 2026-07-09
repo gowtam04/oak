@@ -34,7 +34,10 @@ import type { TeamWarning } from "@/lib/api/teams-client";
 import type { SpriteRef } from "@/lib/api/sprites-client";
 import { type Format } from "@/data/formats";
 import { fetchLearnset, type LearnsetOption } from "@/lib/api/learnset-client";
-import { guessShowdownAniSpriteUrl } from "@/lib/sprites";
+import {
+  guessOakMediaSpriteUrl,
+  rewriteLegacyMediaUrl,
+} from "@/lib/sprites";
 import EntityPicker from "./EntityPicker";
 import {
   evBudgetFor,
@@ -219,20 +222,25 @@ export default function TeamMemberPanel({
 
   const evTotal = STAT_ROWS.reduce((sum, r) => sum + member.evs[r.spread], 0);
   const evOver = evTotal > budget.total;
-  // F2: prefer the animated Showdown GIF (guessed from the slug when the DB's
-  // static sprite_url isn't already one) and fall back to that static url on a
-  // load error — one-shot, reset whenever the focused species/sprite changes.
-  const staticSpriteUrl = spriteRef?.sprite_url ?? null;
+  // Prefer the DB/API sprite_url (Oak media after re-ingest; legacy URLs are
+  // rewritten onto the proxy) and fall back to a slug-guessed Oak media URL.
+  const staticSpriteUrl = spriteRef?.sprite_url
+    ? rewriteLegacyMediaUrl(spriteRef.sprite_url)
+    : null;
   const preferredSpriteUrl = member.species
-    ? staticSpriteUrl?.endsWith(".gif")
-      ? staticSpriteUrl
-      : guessShowdownAniSpriteUrl(member.species)
+    ? (staticSpriteUrl ?? guessOakMediaSpriteUrl(member.species))
+    : null;
+  const guessedFallback = member.species
+    ? guessOakMediaSpriteUrl(member.species)
     : null;
   const [spriteErrored, setSpriteErrored] = useState(false);
   useEffect(() => {
     setSpriteErrored(false);
   }, [member.species, staticSpriteUrl]);
-  const spriteUrl = spriteErrored ? staticSpriteUrl : preferredSpriteUrl;
+  const spriteUrl =
+    spriteErrored && guessedFallback && guessedFallback !== preferredSpriteUrl
+      ? guessedFallback
+      : preferredSpriteUrl;
   const types = spriteRef?.types ?? [];
   // A Mega must hold its stone — auto-filled by the editor and locked here.
   const requiredItem = spriteRef?.required_item ?? null;
@@ -299,8 +307,8 @@ export default function TeamMemberPanel({
                 onError={() => {
                   if (
                     !spriteErrored &&
-                    staticSpriteUrl &&
-                    staticSpriteUrl !== spriteUrl
+                    guessedFallback &&
+                    guessedFallback !== preferredSpriteUrl
                   ) {
                     setSpriteErrored(true);
                   }

@@ -7,8 +7,13 @@
  * expired/unknown/orphaned token — is the first-class `{ signedIn: false }` case
  * (never an error, BR-A11), so this always returns 200.
  *
- *   - account resolved → 200 { signedIn: true, email }
+ *   - account resolved → 200 { signedIn: true, email, lastUsedScope? }
  *   - null (guest)     → 200 { signedIn: false }
+ *
+ * `lastUsedScope` is the signed-in account's remembered game scope for new
+ * chats (a Format literal). Omitted when never set so old clients that only
+ * read `signedIn`/`email` stay happy; new clients use it to seed the empty
+ * new-chat chip before the first turn.
  */
 
 import { json } from "../_lib/http";
@@ -25,5 +30,9 @@ export async function GET(): Promise<Response> {
   if (account === null) {
     return json(200, { signedIn: false });
   }
-  return json(200, { signedIn: true, email: account.email });
+  return json(200, {
+    signedIn: true,
+    email: account.email,
+    ...(account.lastUsedScope ? { lastUsedScope: account.lastUsedScope } : {}),
+  });
 }

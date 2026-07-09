@@ -76,7 +76,9 @@ struct ChatTabView: View {
         }
       }
       .navigationDestination(for: ChatRoute.self) { route in
-        ChatThreadScreen(source: route)
+        // New Chat from a pushed saved thread seeds a fresh `.new` route (mirrors the
+        // post-sign-in seeding above) so it opens as a new pushed thread.
+        ChatThreadScreen(source: route, onNewChat: { path = [.new] })
           .oakRedThread()
       }
     }

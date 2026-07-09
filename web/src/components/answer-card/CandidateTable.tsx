@@ -6,7 +6,7 @@ import TypeBadge from "@/components/TypeBadge";
 import SpriteImg from "@/components/SpriteImg";
 import EntityLink from "@/components/artifact/EntityLink";
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
-import { pokeApiSprite } from "@/lib/sprites";
+import { oakMediaDexSpriteUrl } from "@/lib/sprites";
 
 /** Fixed display order for the six base stats (HP, Attack, Defense, SpA, SpD, Speed). */
 const STAT_ORDER = [
@@ -211,7 +211,9 @@ function CandidateRow({
             <SpriteImg
               src={row.sprite_url}
               fallbackSrc={
-                row.dex_number != null ? pokeApiSprite(row.dex_number) : undefined
+                row.dex_number != null
+                  ? oakMediaDexSpriteUrl(row.dex_number)
+                  : undefined
               }
               alt={row.name}
               width={40}

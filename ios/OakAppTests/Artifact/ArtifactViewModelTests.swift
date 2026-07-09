@@ -49,6 +49,11 @@ struct ArtifactViewModelTests {
     return true
   }
 
+  private func unavailableSuggestions(_ artifact: Artifact?) -> [String]? {
+    guard case .unavailable(_, _, let suggestions)? = artifact?.content else { return nil }
+    return suggestions
+  }
+
   private func isTeamUnavailable(_ artifact: Artifact?) -> Bool {
     guard case .teamUnavailable? = artifact?.content else { return false }
     return true
@@ -86,6 +91,20 @@ struct ArtifactViewModelTests {
     #expect(service.entityCallCount == 1)
     #expect(service.lastEntityKind == .pokemon)
     #expect(service.lastEntityQuery == "Garchomp")
+    #expect(service.lastEntityFormat == .scarletViolet)
+  }
+
+  @Test
+  func openEntityPassesTheQueryVerbatim() async throws {
+    // Names with a period + space (e.g. "Mr. Mime") must reach the service untouched —
+    // no slugifying, trimming, or case-folding — with the viewer's fixed format.
+    let ok = try Fixtures.decode(EntityArtifact.self, from: "entity_pokemon.json")
+    let (vm, service) = makeVM(entityResult: ok, format: .scarletViolet)
+
+    await vm.openEntity(kind: .pokemon, query: "Mr. Mime")
+
+    #expect(service.lastEntityQuery == "Mr. Mime")
+    #expect(service.lastEntityKind == .pokemon)
     #expect(service.lastEntityFormat == .scarletViolet)
   }
 
@@ -190,6 +209,8 @@ struct ArtifactViewModelTests {
     #expect(vm.stack.count == 1)
     #expect(vm.isPresented)
     #expect(isEntityUnavailable(vm.current))
+    // The server's populated close-name suggestions ride through for the tappable retries (#2).
+    #expect(unavailableSuggestions(vm.current) == ["Garchomp"])
   }
 
   @Test

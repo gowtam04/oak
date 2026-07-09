@@ -99,6 +99,23 @@ describe("The one body — front-loaded contract + GFM (all plain-wrap providers
   }
 });
 
+describe("The one body — G8 never bail on answerable filters", () => {
+  // Restored after oak-v2 prompt collapse dropped the Grok-only rule; now shared.
+  for (const provider of PROVIDERS) {
+    for (const mode of ["standard", "champions", "gen-7"] as const) {
+      it(`forbids insufficient_data on tool-answerable questions (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        expect(text).toContain(
+          "NEVER return status `insufficient_data` for a question you can answer by",
+        );
+        expect(text).toContain(
+          "`insufficient_data` is only for genuine tool failure",
+        );
+      });
+    }
+  }
+});
+
 describe("The one body — the two new tools + warehouse DDL + no-live-web policy", () => {
   for (const provider of PROVIDERS) {
     for (const mode of ["standard", "champions", "gen-7"] as const) {
@@ -122,6 +139,24 @@ describe("The one body — the two new tools + warehouse DDL + no-live-web polic
           .join("\n");
         expect(prefix).toContain("CREATE TABLE natdex_species");
         expect(prefix).toContain("CREATE TABLE natdex_moves");
+      });
+    }
+  }
+});
+
+describe("run_sql scope-default sub-bullet — present per provider, shape unchanged", () => {
+  for (const provider of PROVIDERS) {
+    for (const mode of ["standard", "champions", "gen-1"] as const) {
+      it(`carries the unqualified-aggregation-stays-in-scope sub-bullet (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        // The qualifier on the whole-Pokédex bullet + the new counterweight bullet.
+        expect(text).toContain('"Whole-Pokédex" means EXPLICITLY cross-generation');
+        expect(text).toContain(
+          "An UNQUALIFIED count / superlative / ranking, though, means WITHIN the active",
+        );
+      });
+      it(`still places exactly one breakpoint on the last segment (${provider}, ${mode})`, () => {
+        oneBreakpointOnLast(buildSystemSegments({ provider, mode }));
       });
     }
   }

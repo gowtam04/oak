@@ -11,7 +11,7 @@
  * propagation branch.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentContext, ChatMessage } from "@/agent/types";
 import type { OakAnswer } from "@/agent/schemas";
@@ -132,6 +132,7 @@ const ctx = {
   mode: "standard",
   logger: {
     info,
+    warn: vi.fn(),
     bindings: () => ({ request_id: "req-1", session_id: "sess-1" }),
   },
 } as unknown as AgentContext;
@@ -755,7 +756,7 @@ describe("synthesized fallbacks stamp the turn's scope basis", () => {
 // --- Client abort (the Stop button) ----------------------------------------
 
 describe("client abort (Stop)", () => {
-  it("forwards ctx.signal to messages.stream so the SDK can tear down the request", async () => {
+  it("forwards a Stop-composed signal to messages.stream so the SDK can tear down the request", async () => {
     const { client, stream } = scriptedClient([
       message([toolUse("submit_answer", validAnswer, "t1")]),
     ]);
@@ -764,8 +765,14 @@ describe("client abort (Stop)", () => {
 
     await runOakWith(client, "q", [], ctxWithSignal);
 
-    // Second arg is the request options carrying the abort signal.
-    expect(stream.mock.calls[0]?.[1]).toEqual({ signal: controller.signal });
+    // The forwarded signal now COMPOSES ctx.signal (Stop) with the per-call
+    // timeout (issue #6), so it's no longer the raw controller.signal — but
+    // aborting the user's controller must still abort the forwarded signal.
+    const forwarded = stream.mock.calls[0]?.[1]?.signal as AbortSignal;
+    expect(forwarded).toBeInstanceOf(AbortSignal);
+    expect(forwarded.aborted).toBe(false);
+    controller.abort();
+    expect(forwarded.aborted).toBe(true);
   });
 
   it("throws AbortError without calling the model when ctx.signal is already aborted", async () => {
@@ -779,6 +786,140 @@ describe("client abort (Stop)", () => {
     );
     // The loop-top guard fires before the first model call.
     expect(stream).not.toHaveBeenCalled();
+  });
+});
+
+// --- Turn deadline + per-provider-call timeout (issue #6) -------------------
+
+describe("turn deadline + provider-call timeout", () => {
+  // AbortSignal.timeout is driven by REAL timers (vi.useFakeTimers does NOT move
+  // it), so these tests use tiny real millisecond budgets via env stubs.
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  /**
+   * A client whose stream hangs — both its async iterator and finalMessage stay
+   * pending until the request's abort signal fires, then reject with an
+   * AbortError (mirroring how the real SDK surfaces an aborted request). The
+   * runtime forwards its composed callSignal (ctx.signal + per-call timeout) as
+   * `options.signal`, so this is what the timeout/Stop aborts.
+   */
+  function hangingClient() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stream = vi.fn((_params: any, options?: { signal?: AbortSignal }) => {
+      const signal = options?.signal;
+      const hang = <T>() =>
+        new Promise<T>((_resolve, reject) => {
+          const fail = () =>
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          if (signal?.aborted) return fail();
+          signal?.addEventListener("abort", fail, { once: true });
+        });
+      return {
+        async *[Symbol.asyncIterator]() {
+          await hang<void>();
+        },
+        finalMessage: () => hang<unknown>(),
+      };
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return { client: { messages: { stream } } as any, stream };
+  }
+
+  it("degrades a hung provider call to a valid insufficient_data answer (no throw)", async () => {
+    vi.stubEnv("OAK_PROVIDER_TIMEOUT_MS", "10");
+    const { client } = hangingClient();
+
+    const result = await runOakWith(client, "q", [], ctx);
+
+    // runOak RESOLVES — no throw, no error event; a schema-valid degrade.
+    expect(result.status).toBe("insufficient_data");
+    expect(result.answer_markdown).toMatch(/took longer/i);
+    // Player-visible flag is plain English; the machine reason never leaks.
+    expect((result.uncertainty_flags ?? []).some((f) => /too long/i.test(f))).toBe(true);
+    expect(result.uncertainty_flags).not.toContain("provider_call_timeout");
+  });
+
+  it("stops at the turn deadline well before MAX_ITERATIONS", async () => {
+    vi.stubEnv("OAK_TURN_DEADLINE_MS", "50");
+    // Every iteration returns one quick non-submit tool call, so the loop would
+    // otherwise run to MAX_ITERATIONS; a small real delay per dispatch lets the
+    // 50ms wall-clock budget expire after a few iterations.
+    const stream = vi.fn(() =>
+      fakeStream(message([toolUse("query_pokedex", { types: ["fire"] }, "t")])),
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = { messages: { stream } } as any;
+    mockDispatch.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 15));
+      return { ok: true };
+    });
+
+    const result = await runOakWith(client, "q", [], ctx);
+
+    expect(result.status).toBe("insufficient_data");
+    expect((result.uncertainty_flags ?? []).some((f) => /too long/i.test(f))).toBe(true);
+    // The deadline — not the iteration cap — ended the turn.
+    expect(stream.mock.calls.length).toBeGreaterThan(0);
+    expect(stream.mock.calls.length).toBeLessThan(MAX_ITERATIONS);
+  });
+
+  it("still propagates a user Stop as an abort throw despite the composed signal", async () => {
+    // A long per-call timeout so ONLY the user Stop can fire.
+    vi.stubEnv("OAK_PROVIDER_TIMEOUT_MS", "10000");
+    const controller = new AbortController();
+    const { client } = hangingClient();
+    const ctxWithSignal = { ...ctx, signal: controller.signal } as AgentContext;
+
+    const p = runOakWith(client, "q", [], ctxWithSignal);
+    // Abort mid-stream (the call is already hanging by now).
+    setTimeout(() => controller.abort(), 5);
+
+    // Stop must still surface as an abort throw — run-turn maps it to `stopped`.
+    await expect(p).rejects.toThrow(/abort/i);
+  });
+
+  it("salvages a domain-rejected best-effort answer when a later call times out", async () => {
+    vi.stubEnv("OAK_PROVIDER_TIMEOUT_MS", "10");
+    let call = 0;
+    const stream = vi.fn(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (_params: any, options?: { signal?: AbortSignal }) => {
+        call += 1;
+        if (call === 1) {
+          // A schema-valid submit that BUILDS an illegal team → domain-rejected
+          // and stashed as the best-effort answer.
+          return fakeStream(message([toolUse("submit_answer", teamAnswer, "s1")]));
+        }
+        // Then hang until the per-call timeout aborts.
+        const signal = options?.signal;
+        const hang = <T>() =>
+          new Promise<T>((_resolve, reject) => {
+            const fail = () =>
+              reject(new DOMException("Aborted", "AbortError"));
+            if (signal?.aborted) return fail();
+            signal?.addEventListener("abort", fail, { once: true });
+          });
+        return {
+          async *[Symbol.asyncIterator]() {
+            await hang<void>();
+          },
+          finalMessage: () => hang<unknown>(),
+        };
+      },
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = { messages: { stream } } as any;
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    const result = await runOakWith(client, "build me a team", [], ctx);
+
+    // The salvaged build survives — not the generic timeout apology.
+    expect(result.status).toBe("answered");
+    expect(result.proposed_team?.members).toHaveLength(2);
+    expect(result.uncertainty_flags).toContain("team_may_have_illegal_slots");
+    expect(result.uncertainty_flags).not.toContain("provider_call_timeout");
   });
 });
 

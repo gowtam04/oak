@@ -78,11 +78,12 @@ the design intent.
   so a wrong guess is a one-tap correction rather than a silently mis-scoped
   answer. In Champions scope, if you ask about something that only exists in
   mainline Gen 9, Oak says so and points you at the scope chip.
-- **Admin panel** (operator-only) — a private, **read-only** `/admin` dashboard
-  for the single owner: usage/growth, estimated cost by model, error rollups,
-  per-turn drill-down, a live view, and read-only account/conversation/team
-  browsers. It is gated by an `ADMIN_EMAILS` allowlist on top of the existing
-  email-OTP auth (see [Admin panel](#admin-panel)).
+- **Admin panel** (operator-only) — a private `/admin` dashboard for the single
+  owner: usage/growth, estimated cost by model, error rollups, per-turn
+  drill-down, a live view, read-only account/conversation/team browsers, and a
+  **Settings** tab to switch the active model. It is gated by an `ADMIN_EMAILS`
+  allowlist on top of the existing email-OTP auth (see
+  [Admin panel](#admin-panel)).
 
 ## Agent architecture
 
@@ -190,8 +191,10 @@ frontend, API, agent loop, and the ingest CLI.
   structured facts; the model reasons on top and emits a Zod-validated
   `OakAnswer`.
 - **Models** — **xAI Grok 4.3** (native Responses API) is the primary/default,
-  with **Claude** and **GPT-5.5** selectable. The active model is **operator-
-  controlled** via the `ACTIVE_MODEL` secret — there is no in-app model picker.
+  with **Claude Sonnet 5**, **Claude Sonnet 4.6**, and **GPT-5.5** selectable.
+  The active model is **operator-controlled** via the admin panel's **Settings**
+  tab (a Postgres-backed selection, no secret or restart needed) — there is no
+  end-user model picker.
 - **Transport** — **Server-Sent Events** stream scope, tool activity, then a
   token-by-token answer. Voice mode is a direct browser ↔ xAI **WebSocket**
   (server-minted ephemeral token; no WS proxy through Oak).
@@ -206,8 +209,11 @@ frontend, API, agent loop, and the ingest CLI.
 
 Everything the agent reads lives in Postgres, built by `npm run ingest` — which
 is **fully offline and deterministic** (it reads local packages and committed
-snapshot files, never the network). Four sources feed it, plus one separately-run
-exception:
+snapshot files, never the network). Pokémon `sprite_url` / `artwork_url` values
+are absolute first-party media links (`/api/media/sprite|artwork|dex-sprite`),
+proxied at request time from Showdown / PokeAPI with a long cache — after
+changing those URL helpers, **re-ingest** so index rows pick up the new hosts.
+Four sources feed ingest, plus one separately-run exception:
 
 1. **`@pkmn` format indexes** — Pokémon, moves, abilities, items, types, and
    learnsets for the eleven data scopes, from the local `@pkmn` npm packages
@@ -271,8 +277,10 @@ retrieval locally — without it, `search_wiki` simply returns no results.
 Only `XAI_API_KEY` is required to boot (Grok is the default model). The other
 keys are optional and validated on use:
 
-- `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` — needed only if you point `ACTIVE_MODEL`
-  at Claude or GPT-5.5.
+- `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` — needed only to make Claude or
+  GPT-5.5 **selectable** in the admin Settings panel; a provider with no key
+  configured shows its models disabled there, and selecting one server-side
+  is rejected with a 409.
 - `AUTH_SECRET` — HMAC secret for OTP codes (a dev default is used locally; a
   strong value is required in production).
 - `RESEND_API_KEY` — to send real OTP emails. Absent ⇒ the code is logged to the
@@ -315,17 +323,21 @@ npm run db:migrate && npm run ingest && npm run dev
 
 ## Models
 
-Three providers plug into one provider-agnostic loop. **Grok 4.3** (xAI's native
-Responses API) is the default; **Claude** and **GPT-5.5** are drop-in
-alternatives. The active model is chosen by the operator, not the end user:
+Five models plug into one provider-agnostic loop across three providers.
+**Grok 4.3** (xAI's native Responses API) is the default; **Grok 4.5**,
+**Claude Sonnet 5**, **Claude Sonnet 4.6**, and **GPT-5.5** are drop-in
+alternatives. The active model is chosen by the operator, not the end user —
+via the admin panel's **Settings** tab (`/admin/settings`), which writes the
+selection to Postgres (`app_setting`) and is read fresh on every turn:
 
-```bash
-fly secrets set ACTIVE_MODEL=claude   # grok-4.3 (default) | claude | gpt-5.5
+```
+Admin → Settings → pick a model → Save
 ```
 
-Switching is one secret change, no rebuild. The chosen model's provider key must
-be configured or the request returns a clean 503; an unknown value fails fast at
-boot.
+Switching takes effect on the next turn — no secret change, no rebuild, no
+restart. A model whose provider API key isn't configured shows as disabled in
+the picker, and selecting it is rejected server-side with a 409. If the stored
+selection is ever missing or invalid, resolution fails soft to `grok-4.3`.
 
 All three providers share **one canonical prompt body** — the active scope's
 facts (Champions regulation or a mainline gen profile) are injected as a
@@ -348,12 +360,14 @@ text share one unified history. Design: [`docs/features/voice-mode/`](docs/featu
 
 ## Admin panel
 
-A private, **read-only** operator dashboard for the single owner, served as a
-protected `/admin` route group inside the same Next.js app (no second deploy).
-It surfaces usage & growth, **estimated** cost by model, error rollups, a
-searchable per-turn drill-down, a live activity view, and read-only browsers for
-accounts, conversations, and saved teams. It mutates nothing — the only writes
-the feature adds are the two append-only records below.
+A private operator dashboard for the single owner, served as a protected
+`/admin` route group inside the same Next.js app (no second deploy). It
+surfaces usage & growth, **estimated** cost by model, error rollups, a
+searchable per-turn drill-down, a live activity view, read-only browsers for
+accounts, conversations, and saved teams, and a **Settings** tab for switching
+the active model (see [Models](#models)). It was originally read-only — the
+only writes were the two append-only records below — until Settings added its
+first genuine mutation, an upsert into a Postgres `app_setting` table.
 
 - **Access** — reuses the existing email-OTP login, gated by an `ADMIN_EMAILS`
   allowlist (comma-separated). Set it as a secret:

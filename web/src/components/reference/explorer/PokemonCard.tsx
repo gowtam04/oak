@@ -18,7 +18,7 @@ import type { TypeName } from "@/agent/schemas";
 import type { Format } from "@/data/formats";
 import type { PokemonIndexRow } from "@/lib/reference-pages-types";
 import { scopeLabelShort } from "@/lib/scope/scope-label";
-import { guessShowdownAniSpriteUrl } from "@/lib/sprites";
+import { guessOakMediaSpriteUrl } from "@/lib/sprites";
 import { safeHttpUrl } from "@/lib/safe-url";
 
 /** Zero-padded dex readout, "#0445". */
@@ -72,7 +72,7 @@ export interface ExtraCardProps {
  */
 export function ExtraCard({ slug, displayName, sourceFormat }: ExtraCardProps) {
   const [failed, setFailed] = useState(false);
-  const src = safeHttpUrl(guessShowdownAniSpriteUrl(slug));
+  const src = safeHttpUrl(guessOakMediaSpriteUrl(slug));
 
   return (
     <li className="ref-cardcell">

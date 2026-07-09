@@ -40,6 +40,8 @@ export interface TurnTrace {
   input_tokens: number;
   output_tokens: number;
   thinking_tokens: number;
+  /** Prompt-cache hits when the provider reports them; 0 if unknown. */
+  cached_input_tokens: number;
   tool_trace: ToolTraceEntry[];
   turn_latency_ms: number;
   status: TurnStatus;

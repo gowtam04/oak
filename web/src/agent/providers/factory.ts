@@ -55,14 +55,16 @@ const MODEL_CONFIG: Record<
     parallelToolCalls?: boolean;
   }
 > = {
-  claude: { apiModelId: () => env.ANTHROPIC_MODEL },
+  "claude-sonnet-5": { apiModelId: () => "claude-sonnet-5" },
+  // Anthropic API model id uses a dash, no date suffix (deliberate key≠id).
+  "claude-sonnet-4.6": { apiModelId: () => "claude-sonnet-4-6" },
   // OpenAI-compatible reasoning models: pin a LOW temperature (Grok 4.3 defaults
   // to 0.7 — too random for battle-math/eval stability), RAISE the output budget
   // (reasoning + a full candidate list can exceed the 16k default and truncate
   // submit_answer into invalid JSON), and DISABLE parallel tool calls so
   // submit_answer can't be returned in the same batch as a data tool.
   "gpt-5.5": {
-    apiModelId: () => env.OPENAI_MODEL,
+    apiModelId: () => "gpt-5.5",
     effort: "medium",
     temperature: 0.2,
     maxOutputTokens: 32000,
@@ -70,6 +72,14 @@ const MODEL_CONFIG: Record<
   },
   "grok-4.3": {
     apiModelId: () => "grok-4.3",
+    effort: "high",
+    temperature: 0.2,
+    maxOutputTokens: 32000,
+    parallelToolCalls: false,
+  },
+  // Same Responses-API knobs as Grok 4.3 (native GrokProvider).
+  "grok-4.5": {
+    apiModelId: () => "grok-4.5",
     effort: "high",
     temperature: 0.2,
     maxOutputTokens: 32000,
@@ -94,12 +104,19 @@ export function resolveModel(key: string | undefined | null): ResolvedModel {
 }
 
 /**
- * The operator-selected active model (from the `ACTIVE_MODEL` secret). There is
- * no per-turn picker — this is the single source for `ctx.model`. Passes through
- * the safe resolver so an unexpected value still falls back to the default.
+ * The operator-selected active model, chosen in the admin Settings panel and
+ * persisted in the `app_setting` table (read per turn via `settings-repo`).
+ * There is still no per-turn picker — this is the single source for `ctx.model`.
+ * Resolution is fail-soft: a missing/invalid row degrades to the default (see
+ * `resolveActiveModel`), and it's re-validated through the safe resolver here so
+ * an unexpected value still falls back to the default.
  */
-export function activeModelKey(): ModelKey {
-  return resolveModel(env.ACTIVE_MODEL).key;
+export async function activeModelKey(): Promise<ModelKey> {
+  // Dynamic import keeps the db chain out of factory's static module graph
+  // (same env-throw/build-time discipline as the routes' dynamic imports);
+  // eval/deterministic paths construct providers via providerFor and never call this.
+  const { getActiveModelKey } = await import("@/data/repos/settings-repo");
+  return resolveModel(await getActiveModelKey()).key; // belt-and-suspenders re-validation
 }
 
 /** Thrown when the selected model's provider API key is not configured. */

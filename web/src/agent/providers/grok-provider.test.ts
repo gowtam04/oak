@@ -43,7 +43,7 @@ const USAGE = {
   input_tokens: 11,
   output_tokens: 7,
   output_tokens_details: { reasoning_tokens: 4 },
-  input_tokens_details: { cached_tokens: 0 },
+  input_tokens_details: { cached_tokens: 3 },
   total_tokens: 18,
 };
 
@@ -150,7 +150,7 @@ async function drain(
 }
 
 describe("GrokProvider — request shape", () => {
-  it("sends FLATTENED function tools, instructions, reasoning.effort high, store false + encrypted reasoning", () => {
+  it("sends FLATTENED function tools, instructions, reasoning.effort high, store true + encrypted reasoning", () => {
     const { client, captured } = fakeGrokClient(submitResponseEvents(ANSWER));
     const provider = makeProvider(client);
     provider.streamTurn({
@@ -166,7 +166,9 @@ describe("GrokProvider — request shape", () => {
     expect(body.parallel_tool_calls).toBe(false);
     expect(body.reasoning).toEqual({ effort: "high" });
     expect(body.max_output_tokens).toBe(32000);
-    expect(body.store).toBe(false);
+    // store:true enables previous_response_id mid-turn chaining (default).
+    expect(body.store).toBe(true);
+    expect(body.previous_response_id).toBeUndefined();
     expect(body.include).toContain("reasoning.encrypted_content");
     expect(body.stream).toBe(true);
     expect(body.temperature).toBe(0.2);
@@ -193,6 +195,17 @@ describe("GrokProvider — request shape", () => {
       transcript: provider.createTranscript([], "q"),
     });
     expect("temperature" in captured.body).toBe(false);
+  });
+
+  it("stateful:false forces store:false (legacy full-echo path)", () => {
+    const { client, captured } = fakeGrokClient(submitResponseEvents(ANSWER));
+    const provider = makeProvider(client, { stateful: false });
+    provider.streamTurn({
+      system: SYSTEM,
+      tools: TOOLS,
+      transcript: provider.createTranscript([], "q"),
+    });
+    expect(captured.body.store).toBe(false);
   });
 });
 
@@ -278,6 +291,7 @@ describe("GrokProvider — streaming + final turn", () => {
       inputTokens: 11,
       outputTokens: 7,
       thinkingTokens: 4,
+      cachedTokens: 3,
     });
     // assistantContentToEcho is the WHOLE output[] array (echoed verbatim).
     const completed = events[events.length - 1].response;
@@ -335,9 +349,12 @@ describe("GrokProvider — transcript echo flattening (load-bearing)", () => {
     return transcript;
   }
 
-  it("flattens the nested echoed turn into a flat, correctly-ordered input array", () => {
+  it("flattens the nested echoed turn into a flat, correctly-ordered input array (stateful:false)", () => {
+    // Without a prior response id, the first request is always a full resend.
+    // Use stateful:false so a multi-item transcript is still sent in full (not
+    // a chain delta).
     const { client, captured } = fakeGrokClient([]);
-    const provider = makeProvider(client);
+    const provider = makeProvider(client, { stateful: false });
     provider.streamTurn({
       system: SYSTEM,
       tools: TOOLS,
@@ -354,7 +371,10 @@ describe("GrokProvider — transcript echo flattening (load-bearing)", () => {
 
   it("drops reasoning items from input when echoReasoning is false", () => {
     const { client, captured } = fakeGrokClient([]);
-    const provider = makeProvider(client, { echoReasoning: false });
+    const provider = makeProvider(client, {
+      echoReasoning: false,
+      stateful: false,
+    });
     provider.streamTurn({
       system: SYSTEM,
       tools: TOOLS,
@@ -365,6 +385,121 @@ describe("GrokProvider — transcript echo flattening (load-bearing)", () => {
       fnCallItem,
       { type: "function_call_output", call_id: "call_1", output: '{"ok":true}' },
     ]);
+  });
+});
+
+describe("GrokProvider — stateful previous_response_id chaining", () => {
+  function completedWithId(id: string, toolName = "get_pokemon") {
+    const fnCall = {
+      type: "function_call",
+      id: "fc_1",
+      call_id: "call_1",
+      name: toolName,
+      arguments: "{}",
+      status: "completed",
+    };
+    return [
+      {
+        type: "response.output_item.added",
+        output_index: 0,
+        sequence_number: 1,
+        item: { ...fnCall, arguments: "", status: "in_progress" },
+      },
+      {
+        type: "response.function_call_arguments.done",
+        output_index: 0,
+        item_id: "fc_1",
+        name: toolName,
+        sequence_number: 2,
+        arguments: "{}",
+      },
+      {
+        type: "response.completed",
+        sequence_number: 3,
+        response: { id, output: [fnCall], usage: USAGE },
+      },
+    ];
+  }
+
+  it("second streamTurn sends previous_response_id and only function_call_output", async () => {
+    const bodies: any[] = [];
+    let call = 0;
+    const client: GrokResponsesClientLike = {
+      responses: {
+        create(body: any) {
+          bodies.push(body);
+          const events =
+            call === 0
+              ? completedWithId("resp_1")
+              : submitResponseEvents(ANSWER, 0);
+          call += 1;
+          // Stamp response id on second completion too.
+          if (call === 2) {
+            const done = events[events.length - 1];
+            done.response = { ...done.response, id: "resp_2" };
+          }
+          return (async function* () {
+            for (const e of events) yield e as any;
+          })();
+        },
+      },
+    };
+
+    const provider = makeProvider(client);
+    const transcript = provider.createTranscript([], "q");
+
+    // Iteration 1: full input, capture response id.
+    const s1 = provider.streamTurn({
+      system: SYSTEM,
+      tools: TOOLS,
+      transcript,
+    });
+    await drain(s1);
+    const f1 = await s1.final();
+    transcript.push(f1.assistantContentToEcho as any);
+    for (const m of provider.buildToolResultMessages([
+      { toolCallId: "call_1", content: '{"ok":true}', isError: false },
+    ])) {
+      transcript.push(m);
+    }
+
+    // Iteration 2: chain.
+    const s2 = provider.streamTurn({
+      system: SYSTEM,
+      tools: TOOLS,
+      transcript,
+    });
+    await drain(s2);
+    await s2.final();
+
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].previous_response_id).toBeUndefined();
+    expect(bodies[0].instructions).toBe("SYS BODY\n\nFEW SHOT");
+    expect(bodies[0].tools).toHaveLength(2);
+    expect(bodies[0].input).toEqual([{ role: "user", content: "q" }]);
+    expect(bodies[1].previous_response_id).toBe("resp_1");
+    // xAI forbids instructions when chaining; tools still required with tool_choice.
+    expect(bodies[1].instructions).toBeUndefined();
+    expect(bodies[1].tools).toHaveLength(2);
+    // Only the new client item — not reasoning / function_call re-echo.
+    expect(bodies[1].input).toEqual([
+      { type: "function_call_output", call_id: "call_1", output: '{"ok":true}' },
+    ]);
+  });
+});
+
+describe("GrokProvider — client memoization", () => {
+  it("reuses the OpenAI client for the same apiKey + baseURL", async () => {
+    const { clearGrokClientCacheForTests, getGrokClient } = await import(
+      "./grok-provider"
+    );
+    clearGrokClientCacheForTests();
+    const a = getGrokClient("key-a", "https://api.x.ai/v1");
+    const b = getGrokClient("key-a", "https://api.x.ai/v1");
+    const c = getGrokClient("key-b", "https://api.x.ai/v1");
+    expect(a).toBe(b);
+    expect(a).not.toBe(c);
+    clearGrokClientCacheForTests();
   });
 });
 

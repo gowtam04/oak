@@ -4,8 +4,8 @@
  *
  * Drives one provider-NEUTRAL tool-loop turn. The transport (which model/SDK
  * answers, the request shape, the streaming vocabulary, the message shaping)
- * lives behind an {@link LLMProvider} — `ctx.model` selects Claude (default),
- * OpenAI GPT-5.5, or xAI Grok 4.3 via the provider factory. The loop itself is
+ * lives behind an {@link LLMProvider} — `ctx.model` selects xAI Grok (default),
+ * Claude, or OpenAI GPT-5.5 via the provider factory. The loop itself is
  * model-agnostic:
  *   1. Build the provider-tuned system prompt for `(provider, mode)` via
  *      `buildSystemSegments`, and the provider-owned opaque transcript (prior
@@ -44,6 +44,7 @@ import {
 } from "@/agent/providers/anthropic-provider";
 import { providerFor } from "@/agent/providers/factory";
 import type {
+  FinalTurn,
   LLMProvider,
   NormalizedUsage,
   ProviderToolDef,
@@ -99,6 +100,53 @@ export type { AnthropicClientLike, MessageStreamLike };
  * higher ceiling costs nothing for non-build turns; it's only a backstop.
  */
 export const MAX_ITERATIONS = 20;
+
+/**
+ * Overall wall-clock budget for a single turn (issue #6). The loop is otherwise
+ * ONLY iteration-capped (MAX_ITERATIONS): nothing bounds elapsed time, so a turn
+ * whose provider calls each return but slowly — or a single very long call — can
+ * run for minutes (a TestFlight turn ran 300s+). Past the deadline the turn
+ * degrades to an honest in-domain OakAnswer (never a transport `error`, never a
+ * `stopped` — those are user Stop only). Overridable per-deploy via
+ * OAK_TURN_DEADLINE_MS, read at CALL TIME (logger.ts LOG_LEVEL style, so tests
+ * can stub it); NaN/≤0 falls back to the default.
+ */
+export const DEFAULT_TURN_DEADLINE_MS = 180_000;
+
+/**
+ * Per-provider-call timeout (issue #6). Bounds ONE streaming turn (stream
+ * consumption + `stream.final()`) so a hung or crawling model call can't stall
+ * the loop indefinitely. Composed with `ctx.signal` (user Stop) AND clamped to
+ * the remaining turn budget, so {@link DEFAULT_TURN_DEADLINE_MS} is always the
+ * harder ceiling — even when a late iteration starts a fresh call. Overridable
+ * via OAK_PROVIDER_TIMEOUT_MS.
+ */
+export const DEFAULT_PROVIDER_CALL_TIMEOUT_MS = 90_000;
+
+/**
+ * A positive-number env override read at call time (logger.ts's LOG_LEVEL
+ * pattern — NOT via the memoized `env`, so it stays per-test stubbable). A
+ * missing, non-numeric, NaN, or ≤0 value falls back to `fallback`.
+ */
+function positiveEnvMs(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** The turn wall-clock budget in ms, read at call time (OAK_TURN_DEADLINE_MS). */
+export function turnDeadlineMs(): number {
+  return positiveEnvMs("OAK_TURN_DEADLINE_MS", DEFAULT_TURN_DEADLINE_MS);
+}
+
+/** The per-provider-call timeout in ms, read at call time (OAK_PROVIDER_TIMEOUT_MS). */
+export function providerCallTimeoutMs(): number {
+  return positiveEnvMs(
+    "OAK_PROVIDER_TIMEOUT_MS",
+    DEFAULT_PROVIDER_CALL_TIMEOUT_MS,
+  );
+}
 
 /** Re-emit budget when a `submit_answer` payload fails schema validation. */
 export const MAX_SUBMIT_RETRIES = 2;
@@ -650,11 +698,24 @@ function formatZodIssues(error: import("zod").ZodError): string {
  * scope (or Champions) still reports the right basis tag, not a hardcoded gen-9.
  */
 function synthesizeInsufficientData(reason: string, mode: AgentMode): OakAnswer {
+  // The two timeout reasons are internal machine strings; surfacing them raw in a
+  // player-visible uncertainty_flag would leak agent internals (anti-leak rule,
+  // domain.ts). Special-case them with plain English in BOTH the answer text and
+  // the flag, and keep the machine `reason` only in logs/trace (the caller passes
+  // it to the trace separately; this synthesized answer never carries it).
+  const isTimeout =
+    reason === "turn_deadline_exceeded" || reason === "provider_call_timeout";
+  const answer_markdown = isTimeout
+    ? "This one took longer than I allow for a single question, so I stopped " +
+      "early. Try narrowing it down or asking again."
+    : "I wasn't able to put together a reliable answer for that this time. " +
+      "Could you rephrase or narrow the question, and I'll try again?";
+  const uncertainty_flags = isTimeout
+    ? ["This answer was cut off because the question took too long to work through."]
+    : [reason];
   return {
     status: "insufficient_data",
-    answer_markdown:
-      "I wasn't able to put together a reliable answer for that this time. " +
-      "Could you rephrase or narrow the question, and I'll try again?",
+    answer_markdown,
     reasoning_markdown:
       "The agent could not complete this turn through its normal tool loop, " +
       "so it is reporting insufficient data rather than guessing.",
@@ -664,7 +725,7 @@ function synthesizeInsufficientData(reason: string, mode: AgentMode): OakAnswer 
       generation: basisForFormat(formatForMode(mode)),
       fallback: false,
     },
-    uncertainty_flags: [reason],
+    uncertainty_flags,
   };
 }
 
@@ -714,6 +775,7 @@ export interface TraceState {
   inputTokens: number;
   outputTokens: number;
   thinkingTokens: number;
+  cachedTokens: number;
   toolTrace: ToolTraceEntry[];
 }
 
@@ -722,6 +784,7 @@ function accumulateUsage(state: TraceState, usage: NormalizedUsage): void {
   state.inputTokens += usage.inputTokens;
   state.outputTokens += usage.outputTokens;
   state.thinkingTokens += usage.thinkingTokens;
+  state.cachedTokens += usage.cachedTokens ?? 0;
 }
 
 /**
@@ -742,6 +805,7 @@ function finalize(
     input_tokens: state.inputTokens,
     output_tokens: state.outputTokens,
     thinking_tokens: state.thinkingTokens,
+    cached_input_tokens: state.cachedTokens,
     tool_trace: state.toolTrace,
     turn_latency_ms: Date.now() - state.startedAt,
     status: answer.status,
@@ -997,6 +1061,7 @@ export async function runWithProvider<TAnswer = OakAnswer>(
     inputTokens: 0,
     outputTokens: 0,
     thinkingTokens: 0,
+    cachedTokens: 0,
     toolTrace: [],
   };
 
@@ -1080,6 +1145,11 @@ export async function runWithProvider<TAnswer = OakAnswer>(
     );
   };
 
+  // The absolute wall-clock deadline for this whole turn (issue #6). Fixed at the
+  // start; every iteration checks it and every provider call's timeout is clamped
+  // to what's left of it.
+  const deadlineAt = state.startedAt + turnDeadlineMs();
+
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     // Bail if the client disconnected (user pressed Stop) during the prior tool
     // dispatch — covers the gap between the provider-level aborts. Thrown as an
@@ -1089,13 +1159,38 @@ export async function runWithProvider<TAnswer = OakAnswer>(
       throw new DOMException("Aborted by client", "AbortError");
     }
 
-    // Transport/API faults here propagate to the route (NOT caught). The signal
-    // is forwarded so an in-flight stream is torn down immediately on Stop.
+    // Overall turn deadline (issue #6). Checked at the TOP of each iteration, so
+    // it also catches a turn that blew its budget inside the PRIOR iteration's
+    // tool dispatch — which is itself unbounded in v1 (accepted gap: a long local
+    // Postgres query isn't interrupted mid-flight, but the deadline stops the loop
+    // before any further model work). Surfaces as an honest in-domain OakAnswer,
+    // never a transport error or `stopped`.
+    if (Date.now() >= deadlineAt) {
+      ctx.logger.warn(
+        { event: "oak_turn_deadline_exceeded", deadline_ms: turnDeadlineMs() },
+        "oak turn exceeded its wall-clock deadline; degrading to insufficient_data",
+      );
+      return finalizeBestEffortOrInsufficient("turn_deadline_exceeded");
+    }
+
+    // Bound this single provider call: the smaller of the per-call timeout and the
+    // remaining turn budget (so the turn deadline always wins), floored at 1ms.
+    // AbortSignal.timeout is the aborter; it is composed with ctx.signal (user
+    // Stop) so BOTH can tear the stream down — the catch below disambiguates which.
+    const timeoutSignal = AbortSignal.timeout(
+      Math.max(1, Math.min(providerCallTimeoutMs(), deadlineAt - Date.now())),
+    );
+    const callSignal = ctx.signal
+      ? AbortSignal.any([ctx.signal, timeoutSignal])
+      : timeoutSignal;
+
+    // Transport/API faults here propagate to the route (NOT caught). The composed
+    // signal is forwarded so an in-flight stream is torn down on Stop OR timeout.
     const stream = provider.streamTurn({
       system: systemSegments,
       tools: providerToolDefs,
       transcript,
-      signal: ctx.signal,
+      signal: callSignal,
     });
 
     // Stream answer_markdown out of the submit_answer tool args as they arrive.
@@ -1106,38 +1201,64 @@ export async function runWithProvider<TAnswer = OakAnswer>(
     let extractor: AnswerMarkdownExtractor | null = null;
     // Captured for the prose fallback if this turn ends with no tool call.
     let assistantText = "";
-    for await (const event of stream) {
-      if (event.type === "tool_call_start") {
-        if (event.name === hooks.submitToolName) {
-          submitIndex = event.index;
-          extractor = new AnswerMarkdownExtractor();
-          onAnswerStart?.();
+    // Consuming the stream (and draining it via stream.final()) is the one place a
+    // provider call can hang. Wrap both and CLASSIFY BY SIGNAL STATE, not by error
+    // class: SDKs surface aborts inconsistently (APIUserAbortError / DOMException /
+    // TimeoutError). ctx.signal.aborted → user Stop, rethrow so run-turn maps it to
+    // `stopped` (unchanged). Else timeoutSignal.aborted → our timeout, degrade to a
+    // valid in-domain OakAnswer. Else a genuine transport fault → rethrow (→ error).
+    let final: FinalTurn;
+    try {
+      for await (const event of stream) {
+        if (event.type === "tool_call_start") {
+          if (event.name === hooks.submitToolName) {
+            submitIndex = event.index;
+            extractor = new AnswerMarkdownExtractor();
+            onAnswerStart?.();
+          }
+        } else if (
+          event.type === "tool_call_args_delta" &&
+          event.index === submitIndex &&
+          extractor !== null
+        ) {
+          const chunk = extractor.push(event.argChunk);
+          if (chunk) onAnswerDelta?.(chunk);
+        } else if (
+          event.type === "tool_call_stop" &&
+          event.index === submitIndex
+        ) {
+          submitIndex = null;
+          extractor = null;
+        } else if (event.type === "text_delta") {
+          assistantText += event.text;
+        } else if (event.type === "thinking_delta" && !reasoningNudged) {
+          // Surface a single "reasoning…" tick so a long pre-answer reasoning phase
+          // (e.g. Grok at reasoning_effort:high) reads as progress, not a stall.
+          reasoningNudged = true;
+          onProgress?.({ tool: "reasoning", label: "🤔 Reasoning…" });
         }
-      } else if (
-        event.type === "tool_call_args_delta" &&
-        event.index === submitIndex &&
-        extractor !== null
-      ) {
-        const chunk = extractor.push(event.argChunk);
-        if (chunk) onAnswerDelta?.(chunk);
-      } else if (
-        event.type === "tool_call_stop" &&
-        event.index === submitIndex
-      ) {
-        submitIndex = null;
-        extractor = null;
-      } else if (event.type === "text_delta") {
-        assistantText += event.text;
-      } else if (event.type === "thinking_delta" && !reasoningNudged) {
-        // Surface a single "reasoning…" tick so a long pre-answer reasoning phase
-        // (e.g. Grok at reasoning_effort:high) reads as progress, not a stall.
-        reasoningNudged = true;
-        onProgress?.({ tool: "reasoning", label: "🤔 Reasoning…" });
       }
-    }
 
-    // Drain the stream into a normalized final turn.
-    const final = await stream.final();
+      // Drain the stream into a normalized final turn.
+      final = await stream.final();
+    } catch (err) {
+      // User Stop wins: rethrow so run-turn maps it to `stopped` (the composed
+      // signal must never swallow a Stop). Our per-call timeout: degrade to a
+      // valid in-domain OakAnswer (best-effort salvage if we have one). Anything
+      // else is a genuine transport fault — rethrow so it becomes an error event.
+      if (ctx.signal?.aborted) throw err;
+      if (timeoutSignal.aborted) {
+        ctx.logger.warn(
+          {
+            event: "oak_provider_call_timeout",
+            timeout_ms: providerCallTimeoutMs(),
+          },
+          "oak provider call timed out; degrading to insufficient_data",
+        );
+        return finalizeBestEffortOrInsufficient("provider_call_timeout");
+      }
+      throw err;
+    }
 
     accumulateUsage(state, final.usage);
 

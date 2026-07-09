@@ -2,7 +2,7 @@ import type { SpriteCardProps } from "@/components/types";
 import TypeBadge from "@/components/TypeBadge";
 import SpriteImg from "@/components/SpriteImg";
 import EntityLink from "@/components/artifact/EntityLink";
-import { pokeApiSprite } from "@/lib/sprites";
+import { oakMediaDexSpriteUrl } from "@/lib/sprites";
 
 /**
  * SpriteCard — renders one entry from `subjects[]`: sprite image, display
@@ -13,9 +13,9 @@ import { pokeApiSprite } from "@/lib/sprites";
  * type's artifact (B-4, AV-US-1) via `EntityLink` — whose no-op default keeps the
  * card fully renderable in isolation tests with no viewer provider mounted (TD-5).
  *
- * The sprite URL comes from the answer payload (PokeAPI CDN for base forms, the
- * Showdown CDN for alternate forms); `SpriteImg` falls back to base-species art
- * by dex number if it 404s. Visual layout deferred to `frontend-design`.
+ * The sprite URL comes from the answer payload (Oak first-party media after
+ * re-ingest); `SpriteImg` rewrites legacy GitHub/Showdown URLs and falls back to
+ * the Oak dex-sprite proxy by national dex number if the primary 404s.
  */
 export default function SpriteCard({ subject }: SpriteCardProps) {
   const {
@@ -38,7 +38,9 @@ export default function SpriteCard({ subject }: SpriteCardProps) {
         <SpriteImg
           className="sprite-card__sprite"
           src={sprite_url}
-          fallbackSrc={dex_number != null ? pokeApiSprite(dex_number) : undefined}
+          fallbackSrc={
+            dex_number != null ? oakMediaDexSpriteUrl(dex_number) : undefined
+          }
           alt={name}
           width={96}
           height={96}

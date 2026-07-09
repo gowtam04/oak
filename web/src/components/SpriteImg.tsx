@@ -2,15 +2,16 @@
 
 import { useState } from "react";
 import { safeHttpUrl } from "@/lib/safe-url";
+import { rewriteLegacyMediaUrl } from "@/lib/sprites";
 
 export interface SpriteImgProps {
-  /** Primary sprite URL (for a form, the Showdown `ani/<spriteid>.gif`). */
+  /** Primary sprite URL (typically an Oak `/api/media/…` URL from the index). */
   src: string;
   /**
-   * Shown if `src` fails to load — typically the base-species PokeAPI art by
-   * national dex number. Lets an alternate form degrade to base art (the
-   * pre-fix behaviour) instead of a broken image when a Showdown sprite is
-   * missing. Omit it to leave a failed `src` as-is.
+   * Shown if `src` fails to load — typically Oak dex-sprite / artwork by
+   * national dex number. Lets an alternate form degrade to base art instead of
+   * a broken image when a form sprite is missing. Omit it to leave a failed
+   * `src` as-is.
    */
   fallbackSrc?: string;
   alt: string;
@@ -34,10 +35,12 @@ export interface SpriteImgProps {
  * that also 404s can't loop.
  *
  * `src`/`fallbackSrc` are model-composed (subject/candidate `sprite_url`,
- * `artwork_url`) and pass through `safeHttpUrl` (http/https only) before
- * reaching the DOM (FE-02). An unsafe `src` falls through to `fallbackSrc`
- * immediately — there's no real `<img>` to fire a load error on a rejected
- * scheme; if `fallbackSrc` is also unsafe/absent, nothing renders.
+ * `artwork_url`) and pass through {@link rewriteLegacyMediaUrl} (so historical
+ * GitHub raw / direct Showdown URLs hit Oak's first-party proxy) then
+ * `safeHttpUrl` (http/https only) before reaching the DOM (FE-02). An unsafe
+ * `src` falls through to `fallbackSrc` immediately — there's no real `<img>` to
+ * fire a load error on a rejected scheme; if `fallbackSrc` is also
+ * unsafe/absent, nothing renders.
  */
 export default function SpriteImg({
   src,
@@ -49,10 +52,14 @@ export default function SpriteImg({
   loading,
 }: SpriteImgProps) {
   const [erroredSrc, setErroredSrc] = useState<string | null>(null);
-  const safeSrc = safeHttpUrl(src);
-  const safeFallbackSrc = safeHttpUrl(fallbackSrc);
+  const rewrittenSrc = rewriteLegacyMediaUrl(src);
+  const rewrittenFallback =
+    fallbackSrc != null ? rewriteLegacyMediaUrl(fallbackSrc) : undefined;
+  const safeSrc = safeHttpUrl(rewrittenSrc);
+  const safeFallbackSrc = safeHttpUrl(rewrittenFallback);
   const useFallback =
-    safeFallbackSrc != null && (safeSrc == null || erroredSrc === src);
+    safeFallbackSrc != null &&
+    (safeSrc == null || erroredSrc === rewrittenSrc);
   const resolvedSrc = useFallback ? safeFallbackSrc : safeSrc;
 
   if (resolvedSrc == null) return null;
@@ -68,7 +75,7 @@ export default function SpriteImg({
       loading={loading}
       onError={() => {
         if (safeFallbackSrc != null && safeFallbackSrc !== safeSrc) {
-          setErroredSrc(src);
+          setErroredSrc(rewrittenSrc);
         }
       }}
     />

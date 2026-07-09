@@ -335,7 +335,7 @@ describe("TeamMemberPanel", () => {
     expect(screen.getByTestId("member-0-move-0")).toHaveValue("Earthquake");
   });
 
-  it("prefers the animated Showdown GIF for the identity sprite over a non-.gif DB url", () => {
+  it("uses the DB sprite_url for the identity sprite when present", () => {
     render(
       <TeamMemberPanel
         slot={0}
@@ -357,11 +357,11 @@ describe("TeamMemberPanel", () => {
     const img = document.querySelector(".team-member-panel__sprite img");
     expect(img).not.toBeNull();
     expect(img!.getAttribute("src")).toBe(
-      "https://play.pokemonshowdown.com/sprites/ani/garchomp.gif",
+      "https://example.test/static/garchomp.png",
     );
   });
 
-  it("keeps a DB sprite_url that's already an animated .gif", () => {
+  it("rewrites a legacy Showdown GIF sprite_url onto the Oak media proxy", () => {
     render(
       <TeamMemberPanel
         slot={0}
@@ -382,11 +382,11 @@ describe("TeamMemberPanel", () => {
     );
     const img = document.querySelector(".team-member-panel__sprite img");
     expect(img!.getAttribute("src")).toBe(
-      "https://play.pokemonshowdown.com/sprites/ani/charizard-megax.gif",
+      "https://oak.gowtam.ai/api/media/sprite/charizard-megax",
     );
   });
 
-  it("falls back to the static DB sprite_url after the animated guess errors", () => {
+  it("falls back to the Oak media guess after the DB sprite_url errors", () => {
     render(
       <TeamMemberPanel
         slot={0}
@@ -410,7 +410,7 @@ describe("TeamMemberPanel", () => {
     ) as HTMLImageElement;
     fireEvent.error(img);
     expect(img.getAttribute("src")).toBe(
-      "https://example.test/static/garchomp.png",
+      "https://oak.gowtam.ai/api/media/sprite/garchomp",
     );
   });
 

@@ -93,6 +93,15 @@ export const typeArtifactDataSchema = typeMatchupsDetailSchema.omit({
 const okBaseSchema = z.object({
   status: z.literal("ok"),
   format: formatSchema,
+  /**
+   * Set ONLY on the National-Dex fallback path (#2): the requested scope had no
+   * exact match, so the profile was assembled from `national-dex` instead. The
+   * `format` field above stays the scope the profile was assembled FROM
+   * (national-dex — honest for old clients); this marks WHY, so the viewer can
+   * badge it "not found in <requested scope>". Absent on the normal in-scope
+   * path — additive/optional, so pre-existing payloads still parse.
+   */
+  source_format: formatSchema.optional(),
   resolved: z.object({ slug: z.string(), display_name: z.string() }),
   generation: z.string(),
   is_fallback: z.boolean(),

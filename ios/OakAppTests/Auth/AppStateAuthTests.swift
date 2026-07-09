@@ -14,12 +14,13 @@ struct AppStateAuthTests {
   @Test
   func restoreSessionSignsInWithValidToken() async {
     let fake = FakeAuthService()
-    fake.meResult = .success(.signedIn(email: "ash@pallet.town"))
+    fake.meResult = .success(.signedIn(email: "ash@pallet.town", lastUsedScope: .gen7))
     let state = AppState()
 
     await state.restoreSession(using: fake)
 
     #expect(state.authState == .signedIn(email: "ash@pallet.town"))
+    #expect(state.lastUsedScope == .gen7)
     #expect(fake.meCount == 1)
   }
 

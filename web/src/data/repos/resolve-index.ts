@@ -34,7 +34,31 @@ import { db } from "@/data/db";
 import { type Format, CHAMPIONS_FORMAT } from "@/data/formats";
 import { searchable_names } from "@/data/schema";
 import { loadChampionsItemExclusions } from "@/data/repos/champions-items-repo";
+import { normalizeName } from "@/data/repos/normalize-name";
 import { type EntityKind, type ResolveEntityOutput } from "@/agent/schemas";
+
+/** One ranked match as returned by `resolveEntity` / `ResolveIndex.resolve`. */
+export type ResolveMatch = ResolveEntityOutput["matches"][number];
+
+/**
+ * The first EXACT (not merely fuzzy) match for `query` — normalized string
+ * equality against the match's `slug` OR its `display_name`. "Exact" is
+ * deliberately NOT `score === 1`: `toScore` rounds to two decimals, so a fuzzy
+ * near-miss can read 1.00. Returns `undefined` when nothing matches exactly, so
+ * the caller can decline to render a fuzzy neighbour as if it were the entity
+ * (the /api/entity Eternatus→Tornadus bug). Normalization mirrors `getPokemon`'s
+ * id derivation via the shared `normalizeName`, so the two can't drift.
+ */
+export function findExactMatch(
+  matches: ResolveMatch[],
+  query: string,
+): ResolveMatch | undefined {
+  const q = normalizeName(query);
+  if (q.length === 0) return undefined;
+  return matches.find(
+    (m) => q === m.slug || q === normalizeName(m.display_name),
+  );
+}
 
 /** One searchable name row (the in-memory record fuse.js indexes). */
 export type SearchableName = {

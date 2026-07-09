@@ -40,7 +40,7 @@ const GARCHOMP_REF: SpriteRef = {
 };
 
 describe("RosterStrip", () => {
-  it("prefers the animated Showdown GIF over a non-.gif DB sprite_url", () => {
+  it("uses the DB sprite_url when the sprite lookup has resolved", () => {
     render(
       <RosterStrip
         members={[member("garchomp")]}
@@ -55,11 +55,11 @@ describe("RosterStrip", () => {
     );
     expect(img).not.toBeNull();
     expect(img!.getAttribute("src")).toBe(
-      "https://play.pokemonshowdown.com/sprites/ani/garchomp.gif",
+      "https://example.test/static/garchomp.png",
     );
   });
 
-  it("guesses an animated sprite before the sprite lookup has resolved (no ref yet)", () => {
+  it("guesses an Oak media sprite before the sprite lookup has resolved (no ref yet)", () => {
     render(
       <RosterStrip
         members={[member("charizard-mega-x")]}
@@ -73,11 +73,11 @@ describe("RosterStrip", () => {
       "[data-testid='roster-slot-0'] .roster-slot__sprite img",
     );
     expect(img!.getAttribute("src")).toBe(
-      "https://play.pokemonshowdown.com/sprites/ani/charizard-megax.gif",
+      "https://oak.gowtam.ai/api/media/sprite/charizard-megax",
     );
   });
 
-  it("falls back to the static DB sprite_url after the animated guess errors (one-shot)", () => {
+  it("falls back to the Oak media guess after the DB sprite_url errors (one-shot)", () => {
     render(
       <RosterStrip
         members={[member("garchomp")]}
@@ -92,7 +92,7 @@ describe("RosterStrip", () => {
     ) as HTMLImageElement;
     fireEvent.error(img);
     expect(img.getAttribute("src")).toBe(
-      "https://example.test/static/garchomp.png",
+      "https://oak.gowtam.ai/api/media/sprite/garchomp",
     );
   });
 

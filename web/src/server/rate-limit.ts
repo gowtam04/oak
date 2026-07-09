@@ -121,6 +121,21 @@ export const PUBLIC_READ_CONFIG: RateLimitConfig = {
   windowMs: 60_000,
 };
 
+/**
+ * First-party media proxy (`/api/media/*`) — image GETs with no DB I/O.
+ * Separate bucket from {@link PUBLIC_READ_CONFIG}: a subject list or Pokédex
+ * grid can fire dozens of image requests in one paint, which must not burn the
+ * shared `pub:<ip>` DB-read allowance. Keyed `media:<clientIp>`.
+ *
+ * 600 / 60 s is deliberately high (CDN-style); the closed allowlist + upstream
+ * LRU keep abuse bounded. Input-length is irrelevant for GETs (pass `""`).
+ */
+export const MEDIA_READ_CONFIG: RateLimitConfig = {
+  maxInputLength: 2_000,
+  maxRequestsPerWindow: 600,
+  windowMs: 60_000,
+};
+
 // ---------------------------------------------------------------------------
 // Return shape
 // ---------------------------------------------------------------------------

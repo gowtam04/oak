@@ -42,6 +42,7 @@ import { type Format } from "@/data/formats";
 import TeamMemberPanel from "./TeamMemberPanel";
 import RosterStrip from "./RosterStrip";
 import TeamWarnings from "./TeamWarnings";
+import TeamAnalysisPanel from "./TeamAnalysisPanel";
 import { formatLabel } from "./display-names";
 
 /**
@@ -330,6 +331,8 @@ export default function TeamEditor({
           This team has no Pokémon yet. Add one to start building.
         </p>
       )}
+
+      <TeamAnalysisPanel members={members} format={team.format as Format} />
 
       <div className="team-editor__savebar" data-testid="team-editor-savebar">
         <span

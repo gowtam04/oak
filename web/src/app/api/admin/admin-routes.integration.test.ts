@@ -76,6 +76,7 @@ import {
 import type {
   AccountDetailResponse,
   AccountsResponse,
+  AdminSettingsResponse,
   ConversationThreadResponse,
   ConversationsListResponse,
   CostResponse,
@@ -108,6 +109,7 @@ type TeamsRoute = typeof import("./teams/route");
 type TeamsIdRoute = typeof import("./teams/[id]/route");
 type LiveRoute = typeof import("./live/route");
 type ChampionsItemsRoute = typeof import("./champions-items/route");
+type SettingsRoute = typeof import("./settings/route");
 
 let fix: PgFixture;
 let overview: OverviewRoute;
@@ -123,6 +125,7 @@ let teams: TeamsRoute;
 let teamsId: TeamsIdRoute;
 let live: LiveRoute;
 let championsItems: ChampionsItemsRoute;
+let settings: SettingsRoute;
 
 // ---------------------------------------------------------------------------
 // Identity + request harness
@@ -138,6 +141,7 @@ function asAdmin(): void {
     id: "acct-admin",
     email: ADMIN_EMAIL,
     createdAt: 0,
+    lastUsedScope: null,
   });
 }
 
@@ -148,6 +152,7 @@ function asNonAdmin(): void {
     id: ACCOUNTS.B.id,
     email: ACCOUNTS.B.email,
     createdAt: ACCOUNTS.B.createdAt,
+    lastUsedScope: null,
   });
 }
 
@@ -193,6 +198,7 @@ beforeAll(async () => {
   teamsId = await import("./teams/[id]/route");
   live = await import("./live/route");
   championsItems = await import("./champions-items/route");
+  settings = await import("./settings/route");
 }, 60_000);
 
 afterAll(async () => {
@@ -267,6 +273,10 @@ function routeCases(): RouteCase[] {
       name: "champions-items",
       call: () => championsItems.GET(adminReq("/api/admin/champions-items")),
     },
+    {
+      name: "settings",
+      call: () => settings.GET(adminReq("/api/admin/settings")),
+    },
   ];
 }
 
@@ -310,6 +320,7 @@ describe("gating — every /api/admin/* route", () => {
       id: "acct-admin",
       email: ADMIN_EMAIL,
       createdAt: 0,
+      lastUsedScope: null,
     });
     vi.stubEnv("ADMIN_EMAILS", "");
     const res = await overview.GET(adminReq("/api/admin/overview"));
@@ -323,6 +334,7 @@ describe("gating — every /api/admin/* route", () => {
       id: "acct-admin",
       email: "Owner@Oak.TEST",
       createdAt: 0,
+      lastUsedScope: null,
     });
     vi.stubEnv("ADMIN_EMAILS", "owner@oak.test, someone@else.test");
     const res = await overview.GET(adminReq("/api/admin/overview"));
@@ -395,6 +407,100 @@ describe("POST /api/admin/champions-items", () => {
     asNonAdmin();
     expect(
       (await championsItems.POST(toggleReq({ all: true, available: false }))).status,
+    ).toBe(403);
+  });
+});
+
+// ===========================================================================
+// GET/POST /api/admin/settings — the operator-controlled active-model switch
+// ===========================================================================
+//
+// Env note (CLAUDE.md "Testing"): a dummy XAI_API_KEY and a dummy
+// ANTHROPIC_API_KEY are injected for EVERY test run (vitest.config.ts) so xAI
+// and Anthropic models read `configured: true`. OPENAI_API_KEY is NOT
+// injected, so "gpt-5.5" (the sole OpenAI-provider registry entry) is the
+// naturally-unconfigured model — used below as the 409 target. `env` is
+// memoized at first import, so this is a property of the fixed test env, not
+// something re-stubbed per case.
+
+describe("settings", () => {
+  function settingsReq(body: unknown): Request {
+    return new Request("http://admin.test/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("GET returns the default state with the full registry and correct configured flags", async () => {
+    asAdmin();
+    const res = await settings.GET(adminReq("/api/admin/settings"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as AdminSettingsResponse;
+
+    expect(body.activeModel).toBe("grok-4.3");
+    expect(body.source).toBe("default");
+    expect(body.updatedBy).toBeNull();
+    expect(body.updatedAt).toBeNull();
+
+    expect(body.models.map((m) => m.key)).toEqual([
+      "grok-4.3",
+      "grok-4.5",
+      "claude-sonnet-5",
+      "claude-sonnet-4.6",
+      "gpt-5.5",
+    ]);
+    const byKey = new Map(body.models.map((m) => [m.key, m]));
+    expect(byKey.get("grok-4.3")!.configured).toBe(true);
+    expect(byKey.get("grok-4.5")!.configured).toBe(true);
+    expect(byKey.get("claude-sonnet-5")!.configured).toBe(true);
+    expect(byKey.get("claude-sonnet-4.6")!.configured).toBe(true);
+    expect(byKey.get("gpt-5.5")!.configured).toBe(false);
+  });
+
+  it("POST switches the active model and records the admin's email + a fresh GET reflects it", async () => {
+    asAdmin();
+    const res = await settings.POST(settingsReq({ model: "grok-4.3" }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as AdminSettingsResponse;
+    expect(body.activeModel).toBe("grok-4.3");
+    expect(body.source).toBe("db");
+    expect(body.updatedBy).toBe(ADMIN_EMAIL);
+    expect(body.updatedAt).toEqual(expect.any(Number));
+    expect(body.updatedAt!).toBeGreaterThan(Date.now() - 60_000);
+
+    const follow = (await (
+      await settings.GET(adminReq("/api/admin/settings"))
+    ).json()) as AdminSettingsResponse;
+    expect(follow.activeModel).toBe("grok-4.3");
+    expect(follow.source).toBe("db");
+    expect(follow.updatedBy).toBe(ADMIN_EMAIL);
+  });
+
+  it("400s an admin on an unknown model key", async () => {
+    asAdmin();
+    const res = await settings.POST(settingsReq({ model: "gpt-9000" }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe("invalid_request");
+  });
+
+  it("409s an admin on a model whose provider isn't configured (gpt-5.5 — no OPENAI_API_KEY in test env)", async () => {
+    asAdmin();
+    const res = await settings.POST(settingsReq({ model: "gpt-5.5" }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("model_not_configured");
+  });
+
+  it("rejects a guest (401) and a non-admin (403) on both verbs", async () => {
+    asGuest();
+    expect((await settings.GET(adminReq("/api/admin/settings"))).status).toBe(401);
+    expect(
+      (await settings.POST(settingsReq({ model: "grok-4.3" }))).status,
+    ).toBe(401);
+    asNonAdmin();
+    expect((await settings.GET(adminReq("/api/admin/settings"))).status).toBe(403);
+    expect(
+      (await settings.POST(settingsReq({ model: "grok-4.3" }))).status,
     ).toBe(403);
   });
 });

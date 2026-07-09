@@ -1,12 +1,12 @@
 /**
  * GrokProvider — the NATIVE xAI transport behind the {@link LLMProvider} seam.
  *
- * Unlike {@link OpenAICompatibleProvider} (which drives GPT-5.5 and previously
- * Grok through the lowest-common-denominator Chat Completions shim), this adapter
- * speaks xAI's first-class **Responses API** (`client.responses.create`) directly.
- * The OpenAI Node SDK already in the repo is the transport — pointed at
- * `XAI_BASE_URL` it exposes `responses.create` and the full typed Responses event
- * stream — so no new dependency is needed.
+ * Unlike {@link OpenAICompatibleProvider} (which drives GPT-5.5 through the
+ * Chat Completions shim), this adapter speaks xAI's first-class **Responses
+ * API** (`client.responses.create`) directly. The OpenAI Node SDK already in
+ * the repo is the transport — pointed at `XAI_BASE_URL` it exposes
+ * `responses.create` and the full typed Responses event stream — so no new
+ * dependency is needed.
  *
  * Differences from the Chat Completions shim:
  *  - System text rides on the top-level `instructions` field (not a system
@@ -23,19 +23,21 @@
  *    is disabled so `submit_answer` can't ride alongside a data tool, and
  *    `max_output_tokens` is raised so a full candidate list can't truncate the
  *    submit_answer JSON.
- *  - The turn runs STATELESS (`store:false`): we resend the growing `input` array
- *    each iteration rather than chaining `previous_response_id`. To preserve the
- *    reasoning chain across tool turns we request
- *    `include:["reasoning.encrypted_content"]` and echo the model's output items
- *    (reasoning + message + function_call) back verbatim — see the echo mechanism
- *    in `final()` / `streamTurn`. If xAI ever rejects reasoning items as input,
- *    set `echoReasoning:false` to drop them (stateless re-reasoning per turn — still
- *    correct, since the agent is grounded by tool facts, not chain-of-thought).
+ *  - Mid-turn tool loop is STATEFUL by default (`store:true` +
+ *    `previous_response_id`): the first iteration of a provider instance sends the
+ *    full transcript + `instructions` + tools; later iterations send only new
+ *    client items (`function_call_output` + user nudges) under
+ *    `previous_response_id` so reasoning is not re-paid every tool round.
+ *    **xAI chain shape (prod 2026-07-09):** chained requests MUST omit
+ *    `instructions` (400 if combined with `previous_response_id`) but MUST still
+ *    send `tools` + `tool_choice` (400 if `tool_choice` is set with no tools).
+ *    Set `stateful:false` to force full-transcript re-echo. A chain failure falls
+ *    back once to a full resend (`event: "grok_response_chain_fallback"`).
  *  - The streamed Responses events are mapped to the SAME normalized
  *    {@link ProviderStreamEvent} vocabulary the loop already consumes; the
  *    submit_answer argument fragments feed the runtime AnswerMarkdownExtractor
  *    exactly like the other adapters. (xAI tends to deliver a tool call's arguments
- *    in one shot — the `function_call_arguments.done` fallback covers that.)
+ *    in one shot — the `function_call_arguments.done` fallback covers it.)
  */
 
 import OpenAI from "openai";
@@ -57,6 +59,7 @@ import type {
 } from "@/agent/providers/types";
 import type { ProviderKind } from "@/agent/models";
 import type { ChatMessage, ImageAttachment } from "@/agent/types";
+import { logger } from "@/server/logger";
 
 type RInputItem = OpenAI.Responses.ResponseInputItem;
 type RInputContent = OpenAI.Responses.ResponseInputContent;
@@ -86,9 +89,15 @@ export interface GrokProviderConfig {
   /** Allow parallel tool calls. Defaults to false so submit_answer can't be
    *  returned alongside a data tool. */
   parallelToolCalls?: boolean;
-  /** Echo the model's reasoning items back across tool turns (encrypted-content
-   *  chain preservation). Default true; set false if xAI rejects reasoning input. */
+  /** Echo the model's reasoning items back across tool turns when using the
+   *  full-transcript (non-chain) path. Default true; chain deltas never re-send
+   *  model output (server already has it). */
   echoReasoning?: boolean;
+  /**
+   * Mid-turn Responses chaining via `previous_response_id` + `store:true`.
+   * Default true. Set false to force full-transcript re-send every iteration.
+   */
+  stateful?: boolean;
 }
 
 /** Minimal surface of the OpenAI client the Grok provider uses (injectable for tests). */
@@ -101,6 +110,31 @@ export interface GrokResponsesClientLike {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Client memoization (B4) — same idea as Anthropic's getAnthropicClient.
+// ---------------------------------------------------------------------------
+
+const clientCache = new Map<string, GrokResponsesClientLike>();
+
+/** Build or reuse an OpenAI SDK client for (apiKey, baseURL). Exported for tests. */
+export function getGrokClient(
+  apiKey: string,
+  baseURL?: string,
+): GrokResponsesClientLike {
+  const key = `${apiKey}\0${baseURL ?? ""}`;
+  let client = clientCache.get(key);
+  if (!client) {
+    client = new OpenAI({ apiKey, baseURL }) as GrokResponsesClientLike;
+    clientCache.set(key, client);
+  }
+  return client;
+}
+
+/** Test-only: clear the memoized client map. */
+export function clearGrokClientCacheForTests(): void {
+  clientCache.clear();
+}
+
 export class GrokProvider implements LLMProvider {
   readonly kind: ProviderKind = "xai";
   readonly apiModelId: string;
@@ -109,7 +143,16 @@ export class GrokProvider implements LLMProvider {
   private readonly maxOutputTokens: number;
   private readonly parallelToolCalls: boolean;
   private readonly echoReasoning: boolean;
+  private readonly stateful: boolean;
   private readonly client: GrokResponsesClientLike;
+
+  /**
+   * Mid-turn chain state for ONE runOak turn (one provider instance). Cleared
+   * only on chain fallback or when stateful is false.
+   */
+  private lastResponseId: string | null = null;
+  /** How many flattened transcript items the last successful request covered. */
+  private sentItemCount = 0;
 
   constructor(config: GrokProviderConfig, client?: GrokResponsesClientLike) {
     this.apiModelId = config.apiModelId;
@@ -118,12 +161,8 @@ export class GrokProvider implements LLMProvider {
     this.maxOutputTokens = config.maxOutputTokens ?? MAX_TOKENS;
     this.parallelToolCalls = config.parallelToolCalls ?? false;
     this.echoReasoning = config.echoReasoning ?? true;
-    this.client =
-      client ??
-      (new OpenAI({
-        apiKey: config.apiKey,
-        baseURL: config.baseURL,
-      }) as GrokResponsesClientLike);
+    this.stateful = config.stateful ?? true;
+    this.client = client ?? getGrokClient(config.apiKey, config.baseURL);
   }
 
   createTranscript(
@@ -145,8 +184,16 @@ export class GrokProvider implements LLMProvider {
   }
 
   streamTurn(req: TurnRequest): ProviderStream {
-    const instructions = req.system.map((seg) => seg.text).join("\n\n");
+    return this.openStream(req, /* allowChain */ this.stateful);
+  }
 
+  /**
+   * Open one streaming turn. When `allowChain` and we already have a response
+   * id, send only continuation items under `previous_response_id`. On a
+   * recoverable chain error, fall back once to a full-transcript resend.
+   */
+  private openStream(req: TurnRequest, allowChain: boolean): ProviderStream {
+    const instructions = req.system.map((seg) => seg.text).join("\n\n");
     const tools: RTool[] = req.tools.map((tool) => ({
       type: "function",
       name: tool.name,
@@ -155,44 +202,108 @@ export class GrokProvider implements LLMProvider {
       strict: false,
     }));
 
-    // The opaque transcript holds plain items PLUS, for each model turn, a single
-    // nested array of echoed output items (reasoning + message + function_call).
-    // A depth-1 flatten inlines those — the ONLY array-valued elements — preserving
-    // order so every function_call precedes its function_call_output. See the
-    // class header (echo mechanism). Optionally drop reasoning items.
-    const input = (req.transcript as unknown[])
-      .flat()
-      .filter(
-        (it) =>
-          this.echoReasoning ||
-          !(
-            it != null &&
-            typeof it === "object" &&
-            (it as { type?: string }).type === "reasoning"
-          ),
-      ) as RInputItem[];
+    const flat = flattenTranscript(req.transcript, this.echoReasoning);
+    const useChain = Boolean(allowChain && this.lastResponseId);
+    const input = useChain
+      ? flat.slice(this.sentItemCount).filter(isContinuationItem)
+      : flat;
 
-    const body: OpenAI.Responses.ResponseCreateParamsStreaming = {
-      model: this.apiModelId,
+    const body = this.buildRequestBody({
       instructions,
-      input,
       tools,
+      input,
+      previousResponseId: useChain ? this.lastResponseId : null,
+    });
+    const created = this.client.responses.create(body, { signal: req.signal });
+
+    let completed: RResponse | null = null;
+    let chainFailed = false;
+    let fallbackStream: ProviderStream | null = null;
+
+    const primary = adaptGrokStream(created, {
+      onCompleted: (response) => {
+        completed = response;
+      },
+    });
+
+    const previousId = this.lastResponseId;
+    // Nested stream callbacks need the instance; eslint no-this-alias waived.
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- stream closure
+    const provider = this;
+
+    return {
+      async *[Symbol.asyncIterator](): AsyncGenerator<ProviderStreamEvent> {
+        try {
+          for await (const event of primary) {
+            yield event;
+          }
+        } catch (err) {
+          if (useChain && isChainRecoverableError(err)) {
+            chainFailed = true;
+            logger.warn(
+              {
+                event: "grok_response_chain_fallback",
+                previous_response_id: previousId,
+                detail: err instanceof Error ? err.message : String(err),
+              },
+              "grok previous_response_id chain failed; resending full transcript",
+            );
+            provider.lastResponseId = null;
+            provider.sentItemCount = 0;
+            fallbackStream = provider.openStream(req, /* allowChain */ false);
+            for await (const event of fallbackStream) {
+              yield event;
+            }
+            return;
+          }
+          throw err;
+        }
+      },
+      async final(): Promise<FinalTurn> {
+        if (fallbackStream) {
+          return fallbackStream.final();
+        }
+        const final = await primary.final();
+        if (!chainFailed && completed?.id) {
+          provider.lastResponseId = completed.id;
+          provider.sentItemCount = flat.length;
+        }
+        return final;
+      },
+    };
+  }
+
+  private buildRequestBody(args: {
+    instructions: string;
+    tools: RTool[];
+    input: RInputItem[];
+    previousResponseId: string | null;
+  }): OpenAI.Responses.ResponseCreateParamsStreaming {
+    // xAI rejects `instructions` together with `previous_response_id` (prod 400:
+    // "Argument not supported: instructions and previous_response_id together").
+    // Tools + tool_choice MUST still be sent on chained turns — omitting tools
+    // while tool_choice is "auto" 400s with "tool_choice was set but no tools".
+    const chaining = Boolean(args.previousResponseId);
+    return {
+      model: this.apiModelId,
+      input: args.input,
+      tools: args.tools,
       tool_choice: "auto",
       parallel_tool_calls: this.parallelToolCalls,
       max_output_tokens: this.maxOutputTokens,
       reasoning: { effort: this.effort },
-      // Stateless: we resend `input` and echo output items ourselves rather than
-      // chaining previous_response_id. `include` keeps the reasoning chain intact.
-      store: false,
+      // store:true is required for previous_response_id chaining. When stateful
+      // is false we still set store:false so nothing is retained server-side.
+      store: this.stateful,
       include: ["reasoning.encrypted_content"],
       stream: true,
+      ...(chaining
+        ? { previous_response_id: args.previousResponseId! }
+        : { instructions: args.instructions }),
       ...(this.temperature !== undefined
         ? { temperature: this.temperature }
         : {}),
     };
-
-    const created = this.client.responses.create(body, { signal: req.signal });
-    return adaptGrokStream(created);
   }
 
   buildUserMessage(text: string): ProviderMessage {
@@ -213,6 +324,62 @@ export class GrokProvider implements LLMProvider {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Transcript helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Depth-1 flatten of the opaque transcript, optionally dropping reasoning
+ * items (echoReasoning:false). Nested arrays are the loop's
+ * assistantContentToEcho (whole output[]).
+ */
+function flattenTranscript(
+  transcript: ProviderTranscript,
+  echoReasoning: boolean,
+): RInputItem[] {
+  return (transcript as unknown[])
+    .flat()
+    .filter(
+      (it) =>
+        echoReasoning ||
+        !(
+          it != null &&
+          typeof it === "object" &&
+          (it as { type?: string }).type === "reasoning"
+        ),
+    ) as RInputItem[];
+}
+
+/**
+ * Items the client may send under previous_response_id (tool outputs + user
+ * nudges). Model output (reasoning / function_call / message) is already on
+ * the server when chaining.
+ */
+function isContinuationItem(item: RInputItem): boolean {
+  if (item == null || typeof item !== "object") return false;
+  const rec = item as { type?: string; role?: string };
+  if (rec.type === "function_call_output") return true;
+  if (rec.role === "user") return true;
+  return false;
+}
+
+/** Heuristic: previous_response_id missing / invalid / not found. */
+function isChainRecoverableError(err: unknown): boolean {
+  const msg =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+        ? err
+        : String(err);
+  const lower = msg.toLowerCase();
+  return (
+    lower.includes("previous_response") ||
+    lower.includes("response_id") ||
+    lower.includes("not found") ||
+    lower.includes("unknown response")
+  );
+}
+
 /**
  * Build the CURRENT user message content. Text-only stays a plain string (so the
  * request body is byte-identical to the pre-image path — `instructions` + a
@@ -220,7 +387,7 @@ export class GrokProvider implements LLMProvider {
  * images present, emit Responses content parts: the `input_text` part (omitted
  * for an image-only turn) followed by one `input_image` part per attachment,
  * each a base64 `data:` URL. The image rides INSIDE this message's `content`
- * array, so the transcript's depth-1 `.flat()` in `streamTurn` never disturbs it.
+ * array, so the transcript's depth-1 `.flat()` in streamTurn never disturbs it.
  */
 function buildUserContent(
   message: string,
@@ -269,11 +436,17 @@ function safeJsonParse(raw: string): unknown {
 }
 
 function normalizeUsage(usage: RUsage | undefined): NormalizedUsage {
-  if (!usage) return { inputTokens: 0, outputTokens: 0, thinkingTokens: 0 };
+  if (!usage) {
+    return { inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cachedTokens: 0 };
+  }
+  const details = usage.input_tokens_details as
+    | { cached_tokens?: number }
+    | undefined;
   return {
     inputTokens: usage.input_tokens ?? 0,
     outputTokens: usage.output_tokens ?? 0,
     thinkingTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
+    cachedTokens: details?.cached_tokens ?? 0,
   };
 }
 
@@ -285,6 +458,7 @@ function normalizeUsage(usage: RUsage | undefined): NormalizedUsage {
  */
 function adaptGrokStream(
   created: Promise<AsyncIterable<RStreamEvent>> | AsyncIterable<RStreamEvent>,
+  hooks?: { onCompleted?: (response: RResponse) => void },
 ): ProviderStream {
   let completed: RResponse | null = null;
   const started = new Set<number>();
@@ -358,6 +532,7 @@ function adaptGrokStream(
         }
         case "response.completed": {
           completed = ev.response;
+          hooks?.onCompleted?.(ev.response);
           break;
         }
         default:
@@ -386,8 +561,9 @@ function adaptGrokStream(
         }));
 
       return {
-        // The WHOLE output[] (reasoning + message + function_call), echoed verbatim
-        // and flattened into `input` on the next streamTurn.
+        // The WHOLE output[] (reasoning + message + function_call), echoed
+        // for loop compatibility; the chain path ignores re-echoed model items
+        // when building the next request input.
         assistantContentToEcho: output,
         toolCalls,
         usage: normalizeUsage(completed?.usage),

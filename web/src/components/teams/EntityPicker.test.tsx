@@ -165,7 +165,7 @@ describe("EntityPicker", () => {
     await screen.findByText("Charizard (Mega X)");
     const thumb = document.querySelector(".entity-picker__thumb") as HTMLImageElement;
     expect(thumb.getAttribute("src")).toBe(
-      "https://play.pokemonshowdown.com/sprites/ani/charizard-megax.gif",
+      "https://oak.gowtam.ai/api/media/sprite/charizard-megax",
     );
   });
 });

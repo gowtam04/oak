@@ -27,6 +27,32 @@ class EntityArtifactDecodeTest {
         assertEquals("dragon-claw", data.movepool[0].moves[0].slug)
     }
 
+    // A National-Dex fallback (#2) carries `source_format`; it decodes onto the optional
+    // [EntityArtifactOk.sourceFormat] so the viewer can badge the cross-scope fallback.
+    @Test
+    fun okEnvelopeDecodesSourceFormatWhenPresent() {
+        val json = """
+            {"status":"ok","kind":"pokemon","format":"national-dex","source_format":"national-dex",
+             "resolved":{"slug":"eternatus","display_name":"Eternatus"},"generation":"Gen 8",
+             "is_fallback":false,"fallback_note":null,"citations":[],
+             "data":{"display_name":"Eternatus","national_dex_number":890,"types":["poison","dragon"],
+                     "abilities":{"slot1":"pressure"},"base_stats":{"hp":140,"attack":85,"defense":95,"special_attack":145,"special_defense":95,"speed":130},
+                     "base_stat_total":690,"sprite_url":"","artwork_url":"","forms":["eternatus"],"is_gen9_native":false,
+                     "matchups":{"weak_to":[],"resists":[],"immune_to":[]},"movepool":[]}}
+        """.trimIndent()
+        val ok = OakJson.decodeFromString<EntityArtifact>(json) as EntityArtifact.Ok
+        assertEquals(Format.NationalDex, ok.v.sourceFormat)
+        assertEquals(Format.NationalDex, ok.v.format)
+    }
+
+    // The normal in-scope path omits `source_format`; it decodes to `null` (additive/optional).
+    @Test
+    fun okEnvelopeDecodesSourceFormatAsNullWhenAbsent() {
+        val artifact = OakJson.decodeFromString<EntityArtifact>(Fixtures.string("entity_pokemon.json"))
+        val ok = artifact as EntityArtifact.Ok
+        assertNull(ok.v.sourceFormat)
+    }
+
     @Test
     fun moveArtifactDecodesWithOptionalFieldsAbsent() {
         val artifact = OakJson.decodeFromString<EntityArtifact>(Fixtures.string("entity_move.json"))

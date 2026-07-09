@@ -61,6 +61,8 @@ export interface TurnRecordInput {
   inputTokens: number;
   outputTokens: number;
   thinkingTokens: number;
+  /** Prompt-cache hits; optional for older call sites (defaults to 0). */
+  cachedInputTokens?: number;
   toolTrace: ToolTraceEntry[]; // serialized to JSON by the repo
   citationCount: number;
   turnLatencyMs: number;
@@ -94,6 +96,7 @@ export async function recordTurn(input: TurnRecordInput): Promise<void> {
     input_tokens: int(input.inputTokens),
     output_tokens: int(input.outputTokens),
     thinking_tokens: int(input.thinkingTokens),
+    cached_input_tokens: int(input.cachedInputTokens ?? 0),
     tool_trace: JSON.stringify(input.toolTrace),
     tool_error_count: toolErrorCount,
     citation_count: int(input.citationCount),

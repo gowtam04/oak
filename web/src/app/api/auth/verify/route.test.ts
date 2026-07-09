@@ -45,6 +45,7 @@ const ACCOUNT = {
   id: "acct-1",
   email: "ash@pallet.town",
   createdAt: 1_700_000_000_000,
+  lastUsedScope: null,
 };
 
 beforeEach(() => {

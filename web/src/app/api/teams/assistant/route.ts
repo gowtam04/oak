@@ -188,17 +188,18 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  // 3) MODEL — operator-controlled; fail fast with a clean 503 if its key is
+  // 3) MODEL — operator-controlled via the admin Settings selection (never
+  //    per-request, never LLM-visible); fail fast with a clean 503 if its key is
   //    absent (same contract as /api/chat).
   const { activeModelKey, isModelConfigured } = await import(
     "@/agent/providers/factory"
   );
-  const activeModel = activeModelKey();
+  const activeModel = await activeModelKey();
   if (!isModelConfigured(activeModel)) {
     return jsonError(
       503,
       "model_not_configured",
-      `${modelLabel(activeModel)} is not configured on this server.`,
+      `${modelLabel(activeModel)} is not configured on this server. Pick a configured model in Admin → Settings or add the provider's API key.`,
     );
   }
 

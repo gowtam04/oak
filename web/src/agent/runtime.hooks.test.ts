@@ -58,7 +58,12 @@ function buildFakeProvider(toolName: string, input: unknown) {
     const final: FinalTurn = {
       assistantContentToEcho: { role: "assistant", echoedTool: toolName },
       toolCalls: [{ id: "b1", name: toolName, inputJson, input }],
-      usage: { inputTokens: 1, outputTokens: 1, thinkingTokens: 0 },
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        thinkingTokens: 0,
+        cachedTokens: 0,
+      },
     };
     return {
       async *[Symbol.asyncIterator]() {

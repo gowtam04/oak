@@ -36,6 +36,20 @@ final class FakeTeamService: TeamService, @unchecked Sendable {
   var duplicateError: OakError?
   var importError: OakError?
   var exportError: OakError?
+  var analyzeError: OakError?
+
+  // MARK: Analyze (public draft-coverage endpoint)
+
+  /// The result the next ``analyze(format:members:)`` returns (unless ``analyzeHandler`` is set).
+  var analyzeResult: TeamAnalysis = .unavailable(format: .scarletViolet)
+  /// Computes the result FROM the request, so overlapping gated calls get request-specific results
+  /// regardless of the (non-deterministic) order their continuations resume in — the reliable way
+  /// to test the stale-result guard. Takes precedence over ``analyzeResult`` when set.
+  var analyzeHandler: (@Sendable (Format, [TeamMember]) -> TeamAnalysis)?
+  /// When `true`, every analyze call parks until ``releaseAnalyze()`` — so a test can control the
+  /// completion ordering of overlapping requests (the stale-result guard).
+  var holdsAnalyze = false
+  private var parkedAnalyze: [CheckedContinuation<Void, Never>] = []
 
   // MARK: Recording
 
@@ -67,6 +81,10 @@ final class FakeTeamService: TeamService, @unchecked Sendable {
 
   private(set) var exportCount = 0
   private(set) var lastExportId: String?
+
+  private(set) var analyzeCalls = 0
+  private(set) var lastAnalyzeFormat: Format?
+  private(set) var lastAnalyzeMembers: [TeamMember]?
 
   init(seed: [Team] = []) {
     self.store = seed
@@ -202,6 +220,30 @@ final class FakeTeamService: TeamService, @unchecked Sendable {
     if let exportError { throw exportError }
     guard let team = store.first(where: { $0.id == id }) else { throw notFound() }
     return Self.encodeMembers(team.members)
+  }
+
+  func analyze(format: Format, members: [TeamMember]) async throws -> TeamAnalysis {
+    analyzeCalls += 1
+    lastAnalyzeFormat = format
+    lastAnalyzeMembers = members
+    if holdsAnalyze {
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+        parkedAnalyze.append(continuation)
+      }
+    }
+    if let analyzeError { throw analyzeError }
+    if let analyzeHandler { return analyzeHandler(format, members) }
+    return analyzeResult
+  }
+
+  /// How many analyze calls are currently parked on the ``holdsAnalyze`` gate.
+  var pendingAnalyzeCount: Int { parkedAnalyze.count }
+
+  /// Resumes every parked analyze call (they then return their queued/default result).
+  func releaseAnalyze() {
+    let continuations = parkedAnalyze
+    parkedAnalyze = []
+    for continuation in continuations { continuation.resume() }
   }
 
   // MARK: Round-trip (members ⇄ JSON "paste")

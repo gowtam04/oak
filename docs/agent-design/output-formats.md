@@ -1,3 +1,5 @@
+> **Historical.** This document may lag the product. For the live stack (Grok primary, tools, data, auth), trust **code**, then `AGENTS.md` / `README.md`.
+
 # Output Formats
 
 The agent produces exactly one structured output per turn: the **`OakAnswer`**

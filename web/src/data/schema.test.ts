@@ -152,7 +152,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 23 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse)", async () => {
+  it("creates all 24 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse + 1 app settings)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
@@ -190,11 +190,15 @@ describe("Drizzle migration — table creation", () => {
         // the 0011 migration.
         "meta_snapshot",
         "meta_usage",
+        // Generic operator-controlled key/value settings (multi-model switch,
+        // NOT format-scoped) — added by the 0013 migration.
+        "app_setting",
       ]),
     );
-    // Exactly 23 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
-    // + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse).
-    expect(tables).toHaveLength(23);
+    // Exactly 24 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
+    // + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse
+    // + 1 app settings).
+    expect(tables).toHaveLength(24);
   });
 
   it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {
@@ -240,9 +244,9 @@ describe("Drizzle migration — table creation", () => {
     // migration_applies_auth_tables: account / auth_session / otp_code exist on
     // a fresh schema with the exact columns and primary keys from § Data Model.
     expect(await columnNames(db, "account")).toEqual(
-      expect.arrayContaining(["id", "email", "created_at"]),
+      expect.arrayContaining(["id", "email", "created_at", "last_used_scope"]),
     );
-    expect(await columnNames(db, "account")).toHaveLength(3);
+    expect(await columnNames(db, "account")).toHaveLength(4);
     expect(await pkColumns(db, "account")).toEqual(["id"]);
 
     expect(await columnNames(db, "auth_session")).toEqual(

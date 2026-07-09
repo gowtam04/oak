@@ -15,7 +15,7 @@
  * caller surfaces it as un-priced). Prices are updated by a code edit + deploy.
  *
  * Prices below are reconciled against each provider's public list pricing as of
- * 2026-07-03 (source: xAI docs, OpenAI pricing page, Anthropic model catalog).
+ * 2026-07-09 (source: xAI docs, OpenAI pricing page, Anthropic model catalog).
  * `thinkingPer1M` prices reasoning/thinking tokens (billed like output tokens on
  * all three providers today, hence equal to `outputPer1M`).
  *
@@ -36,17 +36,33 @@ export interface ModelPrice {
 }
 
 /**
- * Static price table keyed by {@link ModelKey}. A model absent from this map is
- * treated as unpriced (estimate → $0; the caller flags it). List prices — see
- * the file header for reconciliation date/sources.
+ * Pre-registry-rename model key. `"claude"` was retired 2026-07 when the
+ * registry split into explicit per-model keys (`claude-sonnet-5` /
+ * `claude-sonnet-4.6`); it survives only here so historical `turn_record` rows
+ * still cost-estimate correctly.
  */
-export const MODEL_PRICING: Record<ModelKey, ModelPrice> = {
+export type LegacyModelKey = "claude";
+
+/**
+ * Static price table keyed by {@link ModelKey} (plus the retired
+ * {@link LegacyModelKey}). A model absent from this map is treated as unpriced
+ * (estimate → $0; the caller flags it). List prices — see the file header for
+ * reconciliation date/sources.
+ */
+export const MODEL_PRICING: Record<ModelKey | LegacyModelKey, ModelPrice> = {
   // xAI Grok 4.3 (primary/default).
   "grok-4.3": { inputPer1M: 1.25, outputPer1M: 2.5, thinkingPer1M: 2.5 },
+  // xAI Grok 4.5 (admin-selectable; $2/$6 list price).
+  "grok-4.5": { inputPer1M: 2, outputPer1M: 6, thinkingPer1M: 6 },
   // Anthropic Claude Sonnet 5 (introductory rate through 2026-08-31).
-  claude: { inputPer1M: 2, outputPer1M: 10, thinkingPer1M: 10 },
+  "claude-sonnet-5": { inputPer1M: 2, outputPer1M: 10, thinkingPer1M: 10 },
+  // Anthropic Claude Sonnet 4.6 (standard rate).
+  "claude-sonnet-4.6": { inputPer1M: 3, outputPer1M: 15, thinkingPer1M: 15 },
   // OpenAI GPT-5.5.
   "gpt-5.5": { inputPer1M: 5, outputPer1M: 30, thinkingPer1M: 30 },
+  // Legacy (retired 2026-07): historical turn_record rows still price as
+  // Sonnet 5 (the key "claude" pointed at before the registry rename).
+  claude: { inputPer1M: 2, outputPer1M: 10, thinkingPer1M: 10 },
 };
 
 /**
@@ -63,7 +79,9 @@ export function estimateCostUsd(m: {
   thinkingTokens: number;
 }): number {
   const price =
-    m.model == null ? undefined : MODEL_PRICING[m.model as ModelKey];
+    m.model == null
+      ? undefined
+      : MODEL_PRICING[m.model as ModelKey | LegacyModelKey];
   if (!price) return 0;
 
   const input = tokens(m.inputTokens);

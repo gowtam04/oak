@@ -1,3 +1,5 @@
+> **Historical.** This document may lag the product. For the live stack (Grok primary, tools, data, auth), trust **code**, then `AGENTS.md` / `README.md`.
+
 # Data Sources
 
 The agent reads from four sources. PokeAPI is the single upstream source of

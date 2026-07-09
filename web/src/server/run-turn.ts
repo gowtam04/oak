@@ -58,7 +58,7 @@ export interface RunTurnParams {
   proposedTeam?: ProposedTeam;
   /** Validated + mime-sniffed images for THIS turn (consume-on-turn). */
   images: ImageAttachment[];
-  /** Operator-selected active model (ACTIVE_MODEL). */
+  /** Operator-selected active model (admin Settings selection, `app_setting`). */
   activeModel: ModelKey;
 }
 
@@ -224,6 +224,7 @@ export async function runTurn(params: RunTurnParams): Promise<void> {
         inputTokens: traceRef.current?.input_tokens ?? 0,
         outputTokens: traceRef.current?.output_tokens ?? 0,
         thinkingTokens: traceRef.current?.thinking_tokens ?? 0,
+        cachedInputTokens: traceRef.current?.cached_input_tokens ?? 0,
         toolTrace: traceRef.current?.tool_trace ?? [],
         citationCount:
           traceRef.current?.citation_count ?? answer.citations.length,

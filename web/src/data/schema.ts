@@ -236,6 +236,13 @@ export const account = pgTable(
     email: text("email").notNull(),
     /** Epoch milliseconds the account was created. */
     created_at: bigint("created_at", { mode: "number" }).notNull(),
+    /**
+     * Last game scope the user resolved a chat turn under (a `Format` literal).
+     * NULL for brand-new accounts / never-chatted. Used as the default for the
+     * next *new* conversation (signed-in only); per-conversation sticky format
+     * still wins when resuming an existing thread.
+     */
+    last_used_scope: text("last_used_scope"),
   },
   (t) => [
     // Unique normalized email enforces BR-A1 ("exactly one account per email")
@@ -487,7 +494,10 @@ export const turn_record = pgTable(
     /** Logical FK → account.id; NULL ⇒ guest turn. */
     account_id: text("account_id"),
     /**
-     * `ModelKey` ("grok-4.3" | "claude" | "gpt-5.5"); keys the cost lookup.
+     * The registry `ModelKey` active at the time of the turn; keys the cost
+     * lookup. Keys evolve as the registry grows/retires entries, so historical
+     * rows may hold a key no longer offered (e.g. a retired "claude" key) — the
+     * analytics repo looks up whatever string is stored, not a fixed union.
      * NULLABLE: a "rate_limited" row is recorded before the model is resolved,
      * so it has no model. The analytics repo treats null as "n/a".
      */
@@ -508,6 +518,8 @@ export const turn_record = pgTable(
     input_tokens: integer("input_tokens").notNull().default(0),
     output_tokens: integer("output_tokens").notNull().default(0),
     thinking_tokens: integer("thinking_tokens").notNull().default(0),
+    /** Prompt-cache hits when the provider reports them; 0 if unknown. */
+    cached_input_tokens: integer("cached_input_tokens").notNull().default(0),
     /** JSON `ToolTraceEntry[]` (stringified by the repo). */
     tool_trace: text("tool_trace").notNull().default("[]"),
     /**
@@ -599,6 +611,30 @@ export const champions_item_exclusion = pgTable("champions_item_exclusion", {
   excluded_at: bigint("excluded_at", { mode: "number" }).notNull(),
   /** Admin email that made the change; null if unknown. Audit only. */
   excluded_by: text("excluded_by"),
+});
+
+// ===========================================================================
+// app_setting — generic operator-controlled key/value store
+//
+// A small general-purpose settings table, keyed by an arbitrary string, so the
+// admin panel can persist operator choices without a bespoke table per setting.
+// The first consumer is the active-model switch ("active_model" → a `ModelKey`,
+// see src/data/repos/settings-repo.ts) that replaces the old `ACTIVE_MODEL` Fly
+// secret; more keys can be added later without a schema change.
+//
+// Deliberately NOT granted to `oak_readonly` and NOT in the `run_sql` warehouse
+// allowlist (prompts/warehouse-ddl.ts) — this is operator config, not a fact the
+// agent should read or expose to a user.
+// ===========================================================================
+export const app_setting = pgTable("app_setting", {
+  /** Setting name, e.g. "active_model". PK. */
+  key: text("key").primaryKey(),
+  /** The setting's value, stored as text (callers parse/validate it). */
+  value: text("value").notNull(),
+  /** Admin email that last changed it; null if unknown. Audit only. */
+  updated_by: text("updated_by"),
+  /** Epoch ms of the last write. */
+  updated_at: bigint("updated_at", { mode: "number" }).notNull(),
 });
 
 // ===========================================================================

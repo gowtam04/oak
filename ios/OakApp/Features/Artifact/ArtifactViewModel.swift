@@ -34,6 +34,12 @@ final class ArtifactViewModel {
   /// fixed for the viewer's lifetime, so the model has no way to widen scope.
   private let format: Format
 
+  /// The viewer's fixed request scope — what every entity fetch is scoped to. Exposed so the
+  /// entity detail can badge a National-Dex fallback ("not found in <this scope>"): on the
+  /// fallback path the artifact's own `format`/`source_format` are both `national-dex`, so the
+  /// requested scope has to come from here, not the envelope.
+  var requestFormat: Format { format }
+
   init(service: any ArtifactService, format: Format) {
     self.service = service
     self.format = format
@@ -62,13 +68,23 @@ final class ArtifactViewModel {
     stack.append(entry)
     let result = await service.entity(kind: kind, q: query, format: format)
     guard let index = stack.firstIndex(where: { $0.id == entry.id }) else { return }
-    if case .ok(let ok)? = result {
+    switch result {
+    case .ok(let ok)?:
       stack[index] = Artifact(id: entry.id, title: ok.resolved.displayName, content: .entity(ok))
-    } else {
+    case .notFound(let miss)?:
+      // An honest resolution miss — carry the server's (now populated) close-name
+      // suggestions so the sheet can offer them as tappable retries (#2).
       stack[index] = Artifact(
         id: entry.id,
         title: query,
-        content: .unavailable(kind: kind, query: query)
+        content: .unavailable(kind: kind, query: query, suggestions: miss.suggestions)
+      )
+    default:
+      // `.unavailable` (index down) or `nil` (transport) — no suggestions to offer.
+      stack[index] = Artifact(
+        id: entry.id,
+        title: query,
+        content: .unavailable(kind: kind, query: query, suggestions: [])
       )
     }
   }
@@ -173,8 +189,9 @@ enum ArtifactContent: Sendable {
   /// (no fetch). Mirrors the web `damage-calc` structured artifact.
   case damageCalc(DamageCalc)
   /// An entity that couldn't be shown (`not_found` / `unavailable` / transport) — an honest miss
-  /// (M-BR-ART-5), carrying the original kind + query for the message.
-  case unavailable(kind: EntityKind, query: String)
+  /// (M-BR-ART-5), carrying the original kind + query for the message and, on a `not_found`, the
+  /// server's close-name `suggestions` (empty otherwise) to offer as tappable retries (#2).
+  case unavailable(kind: EntityKind, query: String, suggestions: [String])
   /// A saved team that couldn't be loaded.
   case teamUnavailable
 }

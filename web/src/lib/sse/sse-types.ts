@@ -87,13 +87,15 @@ export interface ChatRequestBody {
  * `source` records how it was resolved: an explicit in-message signal
  * (`"message"`), the conversation's sticky scope (`"conversation"`), an
  * explicit seed (`"seed"` — a `scope_seed` chip pick, or the legacy
- * `champions_mode` boolean from an old client), or the champions default
- * (`"default"` — no signal/sticky/seed at all). Additive — old clients that
- * don't listen for `scope` simply ignore it.
+ * `champions_mode` boolean from an old client), the signed-in account's
+ * last-used preference (`"preference"` — new chat with no sticky/seed/signal),
+ * or the National Dex hard default (`"default"` — no signal/sticky/seed/
+ * preference at all). Additive — old clients that don't listen for `scope`
+ * simply ignore it; unknown `source` values are tolerated by mobile decoders.
  */
 export interface ScopeEvent {
   format: Format;
-  source: "message" | "conversation" | "seed" | "default";
+  source: "message" | "conversation" | "seed" | "preference" | "default";
 }
 
 /**

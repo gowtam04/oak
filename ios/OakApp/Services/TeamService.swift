@@ -68,6 +68,16 @@ protocol TeamService: Sendable {
   /// Renders a saved team as Showdown paste text (`GET /api/teams/{id}/export`,
   /// M-TEAM-US-2). Round-trips through ``importPaste(format:paste:)`` (M-BR-T5).
   func exportPaste(id: String) async throws -> String
+
+  /// Analyzes a DRAFT team's type coverage (`POST /api/teams/analyze`, #9): per-member
+  /// stats, a defensive type matrix, offensive coverage, speed tiers, and caveat notes.
+  ///
+  /// Unlike every other method here this endpoint is **PUBLIC** (pure Pokédex math, no
+  /// account data — mirrors `/api/entity`), so the request is sent WITHOUT a Bearer token
+  /// (`requiresAuth: false`). It takes the live, possibly-unsaved draft `members` in the
+  /// same wire shape as create/update. Returns the decoded ``TeamAnalysis`` (`ok` or the
+  /// honest `unavailable` when the format's index is unbuilt).
+  func analyze(format: Format, members: [TeamMember]) async throws -> TeamAnalysis
 }
 
 // MARK: - List projection
@@ -237,6 +247,18 @@ struct LiveTeamService: TeamService {
     )
     return try await apiClient.send(endpoint, as: ExportEnvelope.self).paste
   }
+
+  func analyze(format: Format, members: [TeamMember]) async throws -> TeamAnalysis {
+    let endpoint = Endpoint(
+      method: .post,
+      path: "/api/teams/analyze",
+      body: AnalyzeBody(format: format, members: members),
+      // PUBLIC endpoint (pure Pokédex math, no account data) — sent without a Bearer token,
+      // deliberately mirroring the `web/` route's `requiresAuth: false`.
+      requiresAuth: false
+    )
+    return try await apiClient.send(endpoint, as: TeamAnalysis.self)
+  }
 }
 
 // MARK: - Wire bodies & envelopes (private to the service)
@@ -289,4 +311,12 @@ private struct UpdateTeamBody: Encodable, Sendable {
 private struct ImportBody: Encodable, Sendable {
   let format: Format
   let paste: String
+}
+
+/// `POST /api/teams/analyze` body (`{ format, members }`). `members` reuses the
+/// wire-faithful ``TeamMember`` encoding (nullable-required keys emitted, cosmetics
+/// `encodeIfPresent`d) that create/update send, so the draft round-trips identically.
+private struct AnalyzeBody: Encodable, Sendable {
+  let format: Format
+  let members: [TeamMember]
 }
