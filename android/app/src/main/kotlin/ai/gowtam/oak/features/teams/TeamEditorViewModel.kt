@@ -10,6 +10,7 @@ import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.LearnsetMove
 import ai.gowtam.oak.wire.StatSpread
 import ai.gowtam.oak.wire.Team
+import ai.gowtam.oak.wire.TeamAnalysis
 import ai.gowtam.oak.wire.TeamMember
 import ai.gowtam.oak.wire.TeamPatch
 import ai.gowtam.oak.wire.TeamSummary
@@ -20,6 +21,8 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import java.util.UUID
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -124,6 +127,12 @@ data class TeamEditorUiState(
     val showSaveConfirmation: Boolean = false,
     /** The last successful export's paste text, or `null` when no export sheet is open. */
     val exportedPaste: String? = null,
+    /** The latest team type-coverage analysis, or `null` before the first run / when the draft has no species. */
+    val analysis: TeamAnalysis? = null,
+    /** True while a debounced analysis request is in flight (the panel keeps showing the last good [analysis]). */
+    val isAnalyzing: Boolean = false,
+    /** A failed analysis's message; the last good [analysis] is retained alongside it. */
+    val analysisError: String? = null,
 )
 
 /**
@@ -153,6 +162,16 @@ class TeamEditorViewModel private constructor(
 
     private val _uiState = MutableStateFlow(initialState)
     val uiState: StateFlow<TeamEditorUiState> = _uiState.asStateFlow()
+
+    /** The pending debounce timer for [scheduleAnalysis]; cancelled/relaunched on each edit. */
+    private var analysisDebounceJob: Job? = null
+
+    /**
+     * Monotonic token stamping each analysis request. The response handler discards any
+     * result whose token is no longer current — so an in-flight request that a newer edit
+     * superseded (but that already left the debounce window) can never overwrite fresh state.
+     */
+    private var analysisGeneration = 0
 
     /** Opens the editor on a brand-new, unsaved team in [format], seeded with one empty
      * member set so the form has something to fill. */
@@ -209,6 +228,7 @@ class TeamEditorViewModel private constructor(
                 applySaved(team, validation)
                 doRefreshSprites()
                 doRefreshAllMovepools()
+                scheduleAnalysis()
             } catch (e: OakError) {
                 _uiState.update { it.copy(errorMessage = message(e)) }
             } catch (e: Exception) {
@@ -319,6 +339,7 @@ class TeamEditorViewModel private constructor(
     /** Adds an empty member set; a no-op at the 6-slot cap. */
     fun addMember() {
         _uiState.update { if (it.members.size < 6) it.copy(members = it.members + EditableMember()) else it }
+        scheduleAnalysis()
     }
 
     fun removeMember(index: Int) {
@@ -329,6 +350,7 @@ class TeamEditorViewModel private constructor(
                 state
             }
         }
+        scheduleAnalysis()
     }
 
     val canAddMember: Boolean get() = uiState.value.members.size < 6
@@ -346,11 +368,71 @@ class TeamEditorViewModel private constructor(
             refreshSprites()
             refreshMovepool(updated.id)
         }
+        scheduleAnalysis()
     }
 
     fun warningsForSlot(index: Int): List<TeamWarning> = uiState.value.warnings.filter { it.slot == index }
 
     val teamLevelWarnings: List<TeamWarning> get() = uiState.value.warnings.filter { it.slot == null }
+
+    // ---- Team analysis (debounced, public endpoint — never blocks editing) ----
+
+    /**
+     * Requests a fresh type-coverage analysis for the current draft after a ~750ms debounce
+     * (coalescing rapid edits into one request). A draft with no filled species clears the
+     * panel without a network call. A failed request keeps the last good [analysis] on screen
+     * and surfaces [analysisError]; a stale response (superseded by a newer edit) is discarded.
+     */
+    fun scheduleAnalysis() {
+        analysisDebounceJob?.cancel()
+        val members = uiState.value.members
+        if (members.none { it.species.isNotBlank() }) {
+            _uiState.update { it.copy(analysis = null, isAnalyzing = false, analysisError = null) }
+            return
+        }
+        val payload = members.map { it.asTeamMember() }
+        val generation = ++analysisGeneration
+        analysisDebounceJob = viewModelScope.launch {
+            delay(ANALYSIS_DEBOUNCE_MS)
+            runAnalysis(payload, generation)
+        }
+    }
+
+    /** Re-runs the analysis immediately (no debounce) — the "Retry" action after a failure. */
+    fun retryAnalysis() {
+        analysisDebounceJob?.cancel()
+        val members = uiState.value.members
+        if (members.none { it.species.isNotBlank() }) {
+            _uiState.update { it.copy(analysis = null, isAnalyzing = false, analysisError = null) }
+            return
+        }
+        val payload = members.map { it.asTeamMember() }
+        val generation = ++analysisGeneration
+        viewModelScope.launch { runAnalysis(payload, generation) }
+    }
+
+    /**
+     * Runs one analysis request, guarded by [generation]. Launched DETACHED from
+     * [analysisDebounceJob] so a later [scheduleAnalysis] (which cancels that debounce job)
+     * doesn't kill an already-issued request — staleness is handled by the generation token,
+     * not by cancellation, so an older response is discarded rather than clobbering fresh data.
+     */
+    private fun runAnalysis(members: List<TeamMember>, generation: Int) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isAnalyzing = true) }
+            try {
+                val result = teamService.analyze(format, members)
+                if (generation != analysisGeneration) return@launch
+                _uiState.update { it.copy(analysis = result, isAnalyzing = false, analysisError = null) }
+            } catch (e: OakError) {
+                if (generation != analysisGeneration) return@launch
+                _uiState.update { it.copy(isAnalyzing = false, analysisError = message(e)) }
+            } catch (e: Exception) {
+                if (generation != analysisGeneration) return@launch
+                _uiState.update { it.copy(isAnalyzing = false, analysisError = GENERIC_MESSAGE) }
+            }
+        }
+    }
 
     // ---- Save (warn-but-allow — never blocked) ----
 
@@ -373,6 +455,7 @@ class TeamEditorViewModel private constructor(
                 applySaved(team, validation)
                 doRefreshSprites()
                 doRefreshAllMovepools()
+                scheduleAnalysis()
                 _uiState.update { it.copy(showSaveConfirmation = true) }
             } catch (e: OakError) {
                 _uiState.update { it.copy(errorMessage = message(e)) }
@@ -437,6 +520,7 @@ class TeamEditorViewModel private constructor(
             doRefreshSprites()
             doRefreshAllMovepools()
         }
+        scheduleAnalysis()
     }
 
     /** Applies an assistant [TeamPatch] to the in-memory draft (mirrors the web panel's
@@ -456,6 +540,7 @@ class TeamEditorViewModel private constructor(
             doRefreshSprites()
             doRefreshAllMovepools()
         }
+        scheduleAnalysis()
     }
 
     // ---- Internals ----
@@ -490,6 +575,9 @@ class TeamEditorViewModel private constructor(
             "fighting", "poison", "ground", "flying", "psychic", "bug",
             "rock", "ghost", "dragon", "dark", "steel", "fairy",
         )
+
+        /** Debounce window collapsing rapid draft edits into one analysis request. */
+        const val ANALYSIS_DEBOUNCE_MS = 750L
 
         const val CONNECTION_MESSAGE = "No connection. Check your network and try again."
         const val SESSION_EXPIRED_MESSAGE = "Your session expired. Please sign in again."

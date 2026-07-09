@@ -59,6 +59,14 @@ class ArtifactViewModel(
      */
     private var format: Format = initialFormat
 
+    /**
+     * The scope every artifact currently on the stack was fetched under (M-BR-ART-4). A
+     * scope change clears the stack ([updateFormat]), so this always equals the request
+     * format of whatever is showing — the value the entity-fallback badge compares
+     * `source_format` against to name the user's OWN requested scope.
+     */
+    val activeFormat: Format get() = format
+
     /** The currently visible artifact (top of the stack), or `null` when closed. */
     val current: Artifact? get() = _stack.value.lastOrNull()
 
@@ -88,6 +96,14 @@ class ArtifactViewModel(
                         id = entryId,
                         title = result.v.resolved.displayName,
                         content = ArtifactContent.Entity(result.v),
+                    )
+                    // A resolution miss carries the server's "did you mean" names (#2) so
+                    // the miss view can offer them as tappable suggestions; every other
+                    // arm (unavailable / transport-null) is a bare miss.
+                    is EntityArtifact.NotFound -> Artifact(
+                        id = entryId,
+                        title = query,
+                        content = ArtifactContent.Unavailable(kind, query, result.v.suggestions),
                     )
                     else -> Artifact(id = entryId, title = query, content = ArtifactContent.Unavailable(kind, query))
                 }
@@ -246,8 +262,14 @@ sealed interface ArtifactContent {
     /**
      * An entity that couldn't be shown (`not_found` / `unavailable` / transport) — an
      * honest miss (M-BR-ART-5), carrying the original kind + query for the message.
+     * [suggestions] is populated only on a `not_found` (top "did you mean" names, #2),
+     * empty on an `unavailable`/transport miss.
      */
-    data class Unavailable(val kind: EntityKind, val query: String) : ArtifactContent
+    data class Unavailable(
+        val kind: EntityKind,
+        val query: String,
+        val suggestions: List<String> = emptyList(),
+    ) : ArtifactContent
 
     /** A saved team that couldn't be loaded. */
     data object TeamUnavailable : ArtifactContent

@@ -78,7 +78,7 @@ class EntityDetailRenderTest {
             ),
         )
 
-        composeTestRule.setContent { OakTheme { EntityDetail(artifact = artifact, onOpen = { _, _ -> }) } }
+        composeTestRule.setContent { OakTheme { EntityDetail(artifact = artifact, requestFormat = artifact.format, onOpen = { _, _ -> }) } }
 
         composeTestRule.onNodeWithText("Garchomp").assertIsDisplayed()
         composeTestRule.onNodeWithText("Dragon Claw").assertIsDisplayed()
@@ -105,7 +105,7 @@ class EntityDetailRenderTest {
             ),
         )
 
-        composeTestRule.setContent { OakTheme { EntityDetail(artifact = artifact, onOpen = { _, _ -> }) } }
+        composeTestRule.setContent { OakTheme { EntityDetail(artifact = artifact, requestFormat = artifact.format, onOpen = { _, _ -> }) } }
 
         composeTestRule.onNodeWithText("Dragon Claw").assertIsDisplayed()
     }
@@ -125,7 +125,7 @@ class EntityDetailRenderTest {
             ),
         )
 
-        composeTestRule.setContent { OakTheme { EntityDetail(artifact = artifact, onOpen = { _, _ -> }) } }
+        composeTestRule.setContent { OakTheme { EntityDetail(artifact = artifact, requestFormat = artifact.format, onOpen = { _, _ -> }) } }
 
         composeTestRule.onNodeWithText("Rough Skin").assertIsDisplayed()
         composeTestRule.onNodeWithText("Garchomp").assertIsDisplayed()
@@ -146,7 +146,7 @@ class EntityDetailRenderTest {
             ),
         )
 
-        composeTestRule.setContent { OakTheme { EntityDetail(artifact = artifact, onOpen = { _, _ -> }) } }
+        composeTestRule.setContent { OakTheme { EntityDetail(artifact = artifact, requestFormat = artifact.format, onOpen = { _, _ -> }) } }
 
         composeTestRule.onNodeWithText("Leftovers").assertIsDisplayed()
     }
@@ -169,7 +169,7 @@ class EntityDetailRenderTest {
             ),
         )
 
-        composeTestRule.setContent { OakTheme { EntityDetail(artifact = artifact, onOpen = { _, _ -> }) } }
+        composeTestRule.setContent { OakTheme { EntityDetail(artifact = artifact, requestFormat = artifact.format, onOpen = { _, _ -> }) } }
 
         // "Dragon" itself renders multiple times (the header chip + several matchup
         // rows), so assert on the section labels instead of risking an ambiguous match.

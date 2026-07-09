@@ -25,6 +25,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +36,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
@@ -154,7 +157,11 @@ fun ArtifactSheet(viewModel: ArtifactViewModel, modifier: Modifier = Modifier) {
                 },
                 label = "artifact-drill",
             ) { artifact ->
-                ArtifactContentDispatch(content = artifact.content, onOpen = viewModel::openEntity)
+                ArtifactContentDispatch(
+                    content = artifact.content,
+                    requestFormat = viewModel.activeFormat,
+                    onOpen = viewModel::openEntity,
+                )
             }
         }
     }
@@ -198,16 +205,22 @@ private fun ArtifactTopBar(title: String, canGoBack: Boolean, onBack: () -> Unit
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun ArtifactContentDispatch(content: ArtifactContent, onOpen: (EntityKind, String) -> Unit) {
+private fun ArtifactContentDispatch(
+    content: ArtifactContent,
+    requestFormat: Format,
+    onOpen: (EntityKind, String) -> Unit,
+) {
     when (content) {
         ArtifactContent.Loading -> LoadingView()
-        is ArtifactContent.Entity -> EntityDetail(artifact = content.v, onOpen = onOpen)
+        is ArtifactContent.Entity -> EntityDetail(artifact = content.v, requestFormat = requestFormat, onOpen = onOpen)
         is ArtifactContent.TeamSheet -> TeamArtifactDetail(team = content.v, onOpenSpecies = { onOpen(EntityKind.POKEMON, it) })
         is ArtifactContent.Comparison -> ComparisonView(subjects = content.subjects, onOpen = { onOpen(EntityKind.POKEMON, it) })
         is ArtifactContent.DamageCalcContent -> DamageCalcViewport(content.v)
         is ArtifactContent.Unavailable -> MissView(
             title = "Couldn't open ${content.query}",
             message = "Oak doesn't have a ${content.kind.rawValue} profile for “${content.query}” in this format.",
+            suggestions = content.suggestions,
+            onSuggestion = { onOpen(content.kind, it) },
         )
         ArtifactContent.TeamUnavailable -> MissView(
             title = "Couldn't load this team",
@@ -247,10 +260,17 @@ private fun LoadingView() {
 
 /**
  * An honest miss — the sheet stays open and the user can always get back to chat
- * (M-BR-ART-5). Icon + text, never color alone.
+ * (M-BR-ART-5). Icon + text, never color alone. On a `not_found` (#2) the server's
+ * [suggestions] render as tappable "did you mean" chips that reopen the same kind.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MissView(title: String, message: String) {
+private fun MissView(
+    title: String,
+    message: String,
+    suggestions: List<String> = emptyList(),
+    onSuggestion: (String) -> Unit = {},
+) {
     val oak = LocalOakColors.current
     Column(
         modifier = Modifier.fillMaxWidth().padding(OakSpacing.xxl),
@@ -260,6 +280,31 @@ private fun MissView(title: String, message: String) {
         Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, tint = oak.textFaint, modifier = Modifier.size(36.dp))
         Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = oak.textStrong, textAlign = TextAlign.Center)
         Text(message, style = MaterialTheme.typography.bodyMedium, color = oak.textMuted, textAlign = TextAlign.Center)
+        if (suggestions.isNotEmpty()) {
+            Text(
+                text = "Did you mean",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = oak.textMuted,
+                modifier = Modifier.padding(top = OakSpacing.sm),
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+            ) {
+                for (suggestion in suggestions) {
+                    Text(
+                        text = suggestion,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = oak.accent,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(OakRadius.pill))
+                            .background(oak.surfaceRaised)
+                            .clickable { onSuggestion(suggestion) }
+                            .padding(horizontal = OakSpacing.md, vertical = 6.dp),
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -5,6 +5,7 @@ import ai.gowtam.oak.networking.OakApiClient
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.ImportNote
 import ai.gowtam.oak.wire.Team
+import ai.gowtam.oak.wire.TeamAnalysis
 import ai.gowtam.oak.wire.TeamMember
 import ai.gowtam.oak.wire.TeamSummary
 import ai.gowtam.oak.wire.TeamWarning
@@ -73,6 +74,14 @@ interface TeamService {
      * Round-trips through [importPaste].
      */
     suspend fun exportPaste(id: String): String
+
+    /**
+     * Analyzes a draft team's defensive/offensive type coverage + speed tiers
+     * (`POST /api/teams/analyze`). **PUBLIC** — pure Pokédex math, no account data, so
+     * it carries NO Bearer token (`requiresAuth = false`) and works for guests. In-domain
+     * failure (unbuilt index) rides back as `TeamAnalysis.Unavailable`, never thrown.
+     */
+    suspend fun analyze(format: Format, members: List<TeamMember>): TeamAnalysis
 }
 
 /**
@@ -159,6 +168,17 @@ class LiveTeamService(private val apiClient: OakApiClient) : TeamService {
         val endpoint = Endpoint(method = Endpoint.Method.GET, path = "/api/teams/$id/export", requiresAuth = true)
         return apiClient.send(endpoint, ExportEnvelope.serializer()).paste
     }
+
+    override suspend fun analyze(format: Format, members: List<TeamMember>): TeamAnalysis {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.POST,
+            path = "/api/teams/analyze",
+            body = Endpoint.jsonBody(AnalyzeBody.serializer(), AnalyzeBody(format, members)),
+            // PUBLIC endpoint — pure Pokédex math, no account scope; no Bearer token.
+            requiresAuth = false,
+        )
+        return apiClient.send(endpoint, TeamAnalysis.serializer())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -199,3 +219,7 @@ private data class UpdateTeamBody(val name: String?, val members: List<TeamMembe
 /** `POST /api/teams/import` body (`{ format, paste }`). */
 @Serializable
 private data class ImportBody(val format: Format, val paste: String)
+
+/** `POST /api/teams/analyze` body (`{ format, members }`, members = the full team wire shape). */
+@Serializable
+private data class AnalyzeBody(val format: Format, val members: List<TeamMember>)
