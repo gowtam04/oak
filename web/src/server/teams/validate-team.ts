@@ -84,6 +84,12 @@ export interface DetailedTeamValidation {
   legalMoves: Map<string, string[]>;
   /** species slug -> legal ability slugs (slot1/slot2/hidden, non-null). */
   legalAbilities: Map<string, string[]>;
+  /**
+   * Sorted legal held-item slugs for the format (Champions: searchable_names
+   * minus admin exclusions). Empty when the item master list could not be
+   * read — item legality is then skipped (fail-soft).
+   */
+  legalItems: string[];
 }
 
 /**
@@ -342,7 +348,12 @@ export async function validateTeamDetailed(
     });
   }
 
-  return { warnings, legalMoves, legalAbilities };
+  return {
+    warnings,
+    legalMoves,
+    legalAbilities,
+    legalItems: legalItems ? [...legalItems].sort() : [],
+  };
 }
 
 /** A repeated non-null value and the (0-based) slots it occupies. */

@@ -75,6 +75,10 @@ import {
   isHardViolation,
   type TeamWarning,
 } from "@/server/teams/validate-team";
+import {
+  formatRepairsNote,
+  legalizeTeam,
+} from "@/server/teams/legalize-team";
 import { logTurn, type ToolTraceEntry, type TurnTrace } from "@/server/logger";
 
 // Re-exported for back-compat (was previously declared here). The value lives in
@@ -152,16 +156,16 @@ export function providerCallTimeoutMs(): number {
 export const MAX_SUBMIT_RETRIES = 2;
 
 /**
- * Re-emit budget when a `proposed_team` has a HARD legality violation (see
- * `HARD_VIOLATION_CODES`): a species NOT in the turn's format roster (e.g.
- * Heatran in Champions), an illegal move/ability/item, a battle-ready member
- * missing its held item, the species clause (by Dex number), or the item
- * clause. The server validates the proposal and feeds the violation(s) back so
- * the model rebuilds legally. Bounded so the loop can't churn: once spent, the
- * answer is accepted with the warnings attached (warn-but-allow, surfaced in
- * the UI) rather than failing the turn (MAX_ITERATIONS is the hard backstop).
+ * Historical name kept for callers/tests. Built proposed_teams with hard
+ * violations are now rejected for the whole turn (until MAX_ITERATIONS); there
+ * is no accept-with-warnings after N rejections. On give-up the runtime
+ * legalizes the last best-effort team instead. This constant is no longer
+ * consulted by the gate.
  */
-export const MAX_PROPOSED_TEAM_RETRIES = 2;
+export const MAX_PROPOSED_TEAM_RETRIES = Number.POSITIVE_INFINITY;
+
+/** Cap how many legal item slugs we embed in a rejection tool_result. */
+const LEGAL_ITEMS_FEEDBACK_CAP = 120;
 
 /**
  * Re-prompt budget when the model ends a turn with no tool call at all (it wrote
@@ -203,10 +207,13 @@ const SUBMIT_NUDGE =
   "enough information to answer, call submit_answer NOW with what you have — " +
   "do not gather or recompute more data. If you genuinely cannot answer, call " +
   "submit_answer with an insufficient_data payload explaining what's missing. " +
-  "EXCEPTION: if the user asked you to BUILD something (e.g. a team), do NOT " +
-  "report insufficient_data — submit your best COMPLETE attempt instead; the " +
-  "server will tell you exactly what to fix if anything is illegal. " +
-  "Either way, submit_answer on your next turn.";
+  "EXCEPTION: if the user asked you to BUILD a team, do NOT report " +
+  "insufficient_data and do NOT ship a known-illegal or incomplete set — " +
+  "submit a COMPLETE legal proposed_team (every battle-ready member has a " +
+  "legal held item, four legal moves, a legal ability; no species/item " +
+  "clause clashes). Use the legal move/ability/item lists from any prior " +
+  "rejection. The server will legalize remaining hard violations on give-up, " +
+  "but you should get it right first. Either way, submit_answer on your next turn.";
 
 // ---------------------------------------------------------------------------
 // Provider-neutral tool definitions. `name` / `parameters` come straight from
@@ -869,8 +876,9 @@ export interface AnswerRunHooks<TAnswer> {
   ) => SystemSegment[];
   /**
    * Domain validation of a schema-valid answer. `rejectionsSoFar` counts this
-   * run's prior `ok: false` verdicts so the hook owns its own retry budget
-   * (reject while under budget, accept-with-warnings once spent).
+   * run's prior `ok: false` verdicts (for hooks that still use a local budget).
+   * Oak rejects every hard-illegal proposed_team until the iteration cap; there
+   * is no accept-with-warnings path.
    */
   validateAnswer: (
     answer: TAnswer,
@@ -884,6 +892,11 @@ export interface AnswerRunHooks<TAnswer> {
     lookedUpProfiles: PokemonProfile[],
     queryPokedexCalls: { args: unknown; result: unknown }[],
   ) => Promise<TAnswer>;
+  /**
+   * Give-up salvage for a schema-valid answer that was only domain-rejected
+   * (Oak: legalize proposed_team). Omitted ⇒ apply `annotateBestEffort` if set.
+   */
+  salvageAnswer?: (answer: TAnswer, ctx: AgentContext) => Promise<TAnswer>;
   /** Fallback answer when the turn can't complete (loop-max, invalid). */
   synthesizeInsufficient: (reason: string, ctx: AgentContext) => TAnswer;
   /** Wrap prose from a no-submit turn into a valid answer. */
@@ -916,22 +929,16 @@ function stampTeamWarnings(answer: OakAnswer, warnings: TeamWarning[]): void {
 /**
  * The OakAnswer domain validation: roster-validate a proposed team against the
  * turn's ACTUAL format (server-controlled — never the model-emitted
- * proposed_team.format, so the model can't dodge the check by mislabeling).
- * validateTeam never throws. HARD format-illegalities (see
- * HARD_VIOLATION_CODES) — an out-of-format species, an illegal
- * move/ability/item, and the species (by Dex number) / item clauses — are fed
- * back verbatim so the model rebuilds legally, up to
- * MAX_PROPOSED_TEAM_RETRIES, then accept-with-warnings (warn-but-allow). We
- * ALSO require a held item on every battle-ready member (`item_missing`) — but
- * only for a BUILT team, not when the user attached an image: an import
- * honestly reflects an obscured/unset item as null and shouldn't be forced to
- * fabricate one. Softer per-slot warnings (EV/IV caps, `incomplete`) ride
- * through as badges and never block.
+ * proposed_team.format). HARD format-illegalities are always rejected while the
+ * loop can continue; the model rebuilds with embedded legal move/ability/item
+ * lists. On give-up, {@link salvageOakAnswer} legalizes the last best-effort
+ * team rather than shipping illegal slots. Image imports still skip hard
+ * `item_missing` (obscured items). Soft EV/IV/`incomplete` warnings never block.
  */
 async function validateOakAnswer(
   answer: OakAnswer,
   ctx: AgentContext,
-  rejectionsSoFar: number,
+  _rejectionsSoFar: number,
 ): Promise<AnswerVerdict<OakAnswer>> {
   const pt = answer.proposed_team;
   const format = formatForMode(ctx.mode);
@@ -941,22 +948,18 @@ async function validateOakAnswer(
         warnings: [] as TeamWarning[],
         legalMoves: new Map<string, string[]>(),
         legalAbilities: new Map<string, string[]>(),
+        legalItems: [] as string[],
       };
   const teamWarnings = validation.warnings;
   const hasImages = (ctx.images?.length ?? 0) > 0;
   const hardViolations = teamWarnings.filter(
     (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
   );
-  if (hardViolations.length > 0 && rejectionsSoFar < MAX_PROPOSED_TEAM_RETRIES) {
-    // Each warning message is already specific (names the species, move,
-    // item, or clashing slots). Enumerate them, then — so the model stops
-    // swapping one illegal guess for another — tell it what IS legal for
-    // each implicated species (B-13), then a rebuild directive.
+  if (hardViolations.length > 0) {
     const issues = hardViolations.map((w) => w.message).join(" ");
     const speciesAt = (slot: number | undefined): string | null =>
       slot === undefined ? null : pt?.members[slot]?.species ?? null;
 
-    // Distinct species with an illegal MOVE → list their legal moves.
     const moveSpecies = new Set<string>();
     for (const w of hardViolations) {
       if (w.code !== "move_not_in_learnset") continue;
@@ -968,7 +971,6 @@ async function validateOakAnswer(
       return `Legal moves for ${sp} in ${format}: ${moves.join(", ")}.`;
     });
 
-    // Distinct species with an illegal ABILITY → list their legal abilities.
     const abilitySpecies = new Set<string>();
     for (const w of hardViolations) {
       if (w.code !== "ability_not_for_species") continue;
@@ -980,24 +982,46 @@ async function validateOakAnswer(
       return `Legal abilities for ${sp}: ${abilities.join(", ")}.`;
     });
 
+    // Legal held items for the format (admin Champions catalog included).
+    const itemIssues = hardViolations.some(
+      (w) => w.code === "item_illegal" || w.code === "item_missing",
+    );
+    const legalItemLines: string[] = [];
+    if (itemIssues || hardViolations.some((w) => w.code === "duplicate_item")) {
+      const items = validation.legalItems;
+      if (items.length === 0) {
+        legalItemLines.push(
+          `No legal held-item list could be loaded for ${format}; call get_item / resolve_entity to verify each item.`,
+        );
+      } else if (items.length <= LEGAL_ITEMS_FEEDBACK_CAP) {
+        legalItemLines.push(
+          `Legal held items in ${format}: ${items.join(", ")}.`,
+        );
+      } else {
+        legalItemLines.push(
+          `Legal held items in ${format} (first ${LEGAL_ITEMS_FEEDBACK_CAP} of ${items.length}): ${items
+            .slice(0, LEGAL_ITEMS_FEEDBACK_CAP)
+            .join(", ")}. Verify any other candidate with get_item.`,
+        );
+      }
+    }
+
     const feedback =
       `Your proposed_team is not legal for ${format} and ` +
       `was rejected: ${issues}` +
-      [...legalMoveLines, ...legalAbilityLines]
+      [...legalMoveLines, ...legalAbilityLines, ...legalItemLines]
         .map((line) => ` ${line}`)
         .join("") +
-      ` Rebuild the team choosing ONLY from the legal moves listed above ` +
-      `(or call get_learnset for any other species), fix the other ` +
-      `violations — give every battle-ready member a held item and make ` +
-      `sure no two members share a species or a held item — and call ` +
-      `submit_answer again.`;
+      ` Rebuild a COMPLETE team: choose moves ONLY from the legal lists ` +
+      `(or call get_learnset), held items ONLY from the legal item list above ` +
+      `(or get_item), give every battle-ready member a held item, make sure no ` +
+      `two members share a species or a held item — do NOT clear items to dodge ` +
+      `checks — and call submit_answer again.`;
     return {
       ok: false,
       feedback,
       traceError: "proposed_team_illegal",
-      // Salvage stamping mirrors the accept path, plus a top-level caveat so a
-      // confident answer_markdown can't oversell legality: the per-slot badges
-      // explain WHICH slots, this explains WHY. Preserve model-authored flags.
+      // Fallback if salvageAnswer is absent: never leave an unstamped illegal card.
       annotateBestEffort: (enriched) => {
         stampTeamWarnings(enriched, teamWarnings);
         enriched.uncertainty_flags = [
@@ -1013,6 +1037,81 @@ async function validateOakAnswer(
   };
 }
 
+/**
+ * End-of-budget salvage: legalize a hard-illegal built proposed_team so the
+ * user still gets a complete, Apply-ready card (with an honesty note about
+ * what changed). Image-import incomplete items are not force-filled here —
+ * only hard violations + item_missing on non-image turns are repaired.
+ * If legalize cannot clear hard violations (e.g. illegal species), drop
+ * proposed_team rather than shipping illegal slots.
+ */
+async function salvageOakAnswer(
+  answer: OakAnswer,
+  ctx: AgentContext,
+): Promise<OakAnswer> {
+  const pt = answer.proposed_team;
+  if (!pt) return answer;
+
+  const format = formatForMode(ctx.mode);
+  const db = ctx.db as unknown as OakDb;
+  const hasImages = (ctx.images?.length ?? 0) > 0;
+  const before = await validateTeamDetailed(pt.members, format, db);
+  const hardBefore = before.warnings.filter(
+    (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
+  );
+  if (hardBefore.length === 0) {
+    stampTeamWarnings(answer, before.warnings);
+    return answer;
+  }
+
+  const { members, repairs, remainingHard } = await legalizeTeam(
+    pt.members,
+    format,
+    db,
+  );
+  // item_missing after legalize is still a failure for built teams.
+  const stillHard = remainingHard.filter(
+    (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
+  );
+
+  if (stillHard.length > 0) {
+    // Cannot ship a legal complete team — drop the proposal; keep prose.
+    delete answer.proposed_team;
+    delete answer.proposed_team_warnings;
+    answer.uncertainty_flags = [
+      ...(answer.uncertainty_flags ?? []),
+      "team_could_not_be_legalized",
+    ];
+    const note =
+      "I could not finish a fully legal team for this format after adjusting " +
+      "the illegal slots — please ask me to rebuild around a different core.";
+    if (!answer.answer_markdown.includes("could not finish a fully legal")) {
+      answer.answer_markdown = `${answer.answer_markdown.trim()}\n\n${note}`;
+    }
+    return answer;
+  }
+
+  answer.proposed_team = { ...pt, members };
+  const after = await validateTeamDetailed(members, format, db);
+  // Soft warnings only (EV caps etc.).
+  stampTeamWarnings(
+    answer,
+    after.warnings.filter((w) => !isHardViolation(w) && w.code !== "item_missing"),
+  );
+  const note = formatRepairsNote(repairs);
+  if (note && repairs.length > 0) {
+    answer.answer_markdown = `${answer.answer_markdown.trim()}\n\n${note}`;
+  }
+  // Drop the old "may be illegal" flag if present; team is legal now.
+  if (answer.uncertainty_flags) {
+    answer.uncertainty_flags = answer.uncertainty_flags.filter(
+      (f) => f !== "team_may_have_illegal_slots",
+    );
+    if (answer.uncertainty_flags.length === 0) delete answer.uncertainty_flags;
+  }
+  return answer;
+}
+
 /** The original Oak agent behavior, expressed as hooks (the default run). */
 const DEFAULT_OAK_HOOKS: AnswerRunHooks<OakAnswer> = {
   tools,
@@ -1023,6 +1122,7 @@ const DEFAULT_OAK_HOOKS: AnswerRunHooks<OakAnswer> = {
     buildSystemSegments({ provider: providerKind, mode: ctx.mode }),
   validateAnswer: validateOakAnswer,
   enrich: enrichAnswer,
+  salvageAnswer: salvageOakAnswer,
   synthesizeInsufficient: (reason, ctx) =>
     synthesizeInsufficientData(reason, ctx.mode),
   synthesizeFromProse: (prose, ctx) => synthesizeFromProse(prose, ctx.mode),
@@ -1082,19 +1182,13 @@ export async function runWithProvider<TAnswer = OakAnswer>(
   let emptyTurnNudges = 0;
   // Fire the late-iteration submit nudge at most once per turn (see SUBMIT_NUDGE).
   let submitNudged = false;
-  // Dedicated budget for domain-level answer rejections (for Oak: the
-  // proposed-team roster re-emit, see MAX_PROPOSED_TEAM_RETRIES) — separate
-  // from the schema-failure budget so an illegal team never burns the schema
-  // retries or trips insufficient_data. The loop only counts; the
-  // validateAnswer hook owns the budget comparison.
+  // Domain-level answer rejection count (for Oak: hard-illegal proposed_team).
+  // Separated from the schema-failure budget so an illegal team never burns
+  // schema retries. The loop keeps rejecting until MAX_ITERATIONS; on give-up
+  // we salvage via hooks.salvageAnswer (legalize) rather than shipping illegal.
   let answerRejections = 0;
-  // The last schema-VALID submit that was rejected ONLY by domain validation
-  // (see the rejection branch below). If the turn later gives up without an
-  // accepted submit — the model built a team, got it rejected twice, then
-  // burned iterations / went silent / failed schema — we salvage THIS
-  // (enriched, annotated) instead of discarding it for a generic apology.
-  // This just makes the already-sanctioned accept-with-warnings behavior reachable
-  // when the model runs out of budget before its 3rd submit (see B-13).
+  // Last schema-VALID submit rejected only by domain validation. On give-up
+  // we legalize (Oak) or annotate it instead of a bare insufficient_data.
   let bestEffortAnswer: TAnswer | null = null;
   let bestEffortAnnotate: ((enriched: TAnswer) => void) | null = null;
 
@@ -1124,17 +1218,18 @@ export async function runWithProvider<TAnswer = OakAnswer>(
   // Give-up recovery shared by all three fallthroughs. Prefer a best-effort
   // answer (only ever set from a schema-valid, domain-rejected submit) over a
   // discard; else recovered prose if we have any (empty-turn case), else the
-  // generic insufficient_data apology. Closes over the mutable locals, read at
-  // call time.
+  // generic insufficient_data apology. Oak's salvageAnswer legalizes the team.
   const finalizeBestEffortOrInsufficient = async (
     reason: string,
     prose?: string,
   ): Promise<TAnswer> => {
     if (bestEffortAnswer) {
-      const enriched = await doEnrich(bestEffortAnswer);
-      // Apply the verdict's salvage annotation (for Oak: stamp warnings
-      // server-authoritatively + the team_may_have_illegal_slots caveat).
-      bestEffortAnnotate?.(enriched);
+      let enriched = await doEnrich(bestEffortAnswer);
+      if (hooks.salvageAnswer) {
+        enriched = await hooks.salvageAnswer(enriched, ctx);
+      } else {
+        bestEffortAnnotate?.(enriched);
+      }
       return doFinalize(enriched);
     }
     const trimmed = prose?.trim() ?? "";

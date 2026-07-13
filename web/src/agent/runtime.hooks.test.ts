@@ -27,6 +27,7 @@ vi.mock("@/server/teams/validate-team", () => ({
     warnings: [],
     legalMoves: new Map(),
     legalAbilities: new Map(),
+    legalItems: [],
   })),
   isHardViolation: () => false,
 }));

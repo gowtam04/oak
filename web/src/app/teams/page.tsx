@@ -31,7 +31,11 @@ import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useTeams } from "@/lib/hooks/use-teams";
 import type { TeamDetail } from "@/lib/api/teams-client";
 import type { TeamMember } from "@/data/teams/team-schema";
-import { NATDEX_FORMAT, SCOPE_PICKER_ORDER, type Format } from "@/data/formats";
+import {
+  NATDEX_FORMAT,
+  SCOPE_PICKER_ORDER,
+  type Format,
+} from "@/data/formats";
 import TeamList from "@/components/teams/TeamList";
 import TeamEditor, {
   type TeamEditorHandle,
@@ -56,10 +60,13 @@ export default function TeamsPage() {
   const teams = useTeams(auth.signedIn);
   const { setFormatFilter } = teams;
 
-  // Active format: scopes the list + is the format new/imported teams use.
-  const [format, setFormat] = useState<Format>(NATDEX_FORMAT);
+  // List defaults to ALL formats so a team saved from chat (e.g. Champions) is
+  // visible without hunting for a filter. Create/import use the selected format,
+  // or national-dex when "All" is selected.
+  const [format, setFormat] = useState<Format | "all">("all");
+  const createFormat: Format = format === "all" ? NATDEX_FORMAT : format;
   useEffect(() => {
-    setFormatFilter(format);
+    setFormatFilter(format === "all" ? null : format);
   }, [format, setFormatFilter]);
 
   // Selected team detail (full members + validation), loaded on demand.
@@ -112,9 +119,13 @@ export default function TeamsPage() {
   );
 
   const handleNew = useCallback(async () => {
-    const created = await teams.create({ format, name: "New team", members: [] });
+    const created = await teams.create({
+      format: createFormat,
+      name: "New team",
+      members: [],
+    });
     if (created) setSelected(created);
-  }, [teams, format]);
+  }, [teams, createFormat]);
 
   const handleDuplicate = useCallback(
     async (id: string) => {
@@ -174,10 +185,12 @@ export default function TeamsPage() {
                 className="teams-page__format-select"
                 value={format}
                 onChange={(e) => {
-                  setFormat(e.target.value as Format);
+                  const v = e.target.value;
+                  setFormat(v === "all" ? "all" : (v as Format));
                   setSelected(null);
                 }}
               >
+                <option value="all">All formats</option>
                 {SCOPE_PICKER_ORDER.map((f) => (
                   <option key={f} value={f}>
                     {formatLabel(f)}
@@ -269,7 +282,7 @@ export default function TeamsPage() {
 
       <PasteImportDialog
         open={importOpen}
-        format={format}
+        format={createFormat}
         onClose={() => setImportOpen(false)}
         onImport={teams.importPaste}
         onImported={(team) => {

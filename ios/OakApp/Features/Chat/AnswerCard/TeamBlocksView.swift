@@ -23,6 +23,14 @@ import SwiftUI
 /// color alone (M-AC-UI9.3); all type uses `Theme`'s Dynamic-Type styles and wraps
 /// (`fixedSize` vertical) so the blocks reflow rather than clip at large sizes and
 /// adapt to light/dark (M-AC-1.4 / M-UI-US-9).
+/// Local Apply lifecycle: success only after a real `POST /api/teams` (never optimistic).
+private enum ApplyPhase: Equatable {
+  case idle
+  case saving
+  case saved
+  case failed
+}
+
 struct TeamBlocksView: View {
   /// The agent's proposed team (model-emitted). `nil` ⇒ no proposed-team block.
   let proposedTeam: ProposedTeam?
@@ -31,22 +39,21 @@ struct TeamBlocksView: View {
   /// The team the agent saved this turn (server-stamped). `nil` ⇒ no saved block.
   let savedTeam: SavedTeamRef?
 
-  /// Saves the proposed team to the user's Teams (`POST /api/teams`). The chat host
-  /// routes this to `TeamsListViewModel.applyProposed`; it defaults to a no-op so the
-  /// view builds in isolation / previews. Applying is always an explicit user action
-  /// (M-BR-T4) — Oak never silently overwrites saved teams.
+  /// Optional host hook after a successful Apply (e.g. list refresh). The view
+  /// itself performs `TeamService.create` via ``services`` so Apply never no-ops.
   var onApply: (ProposedTeam) -> Void = { _ in }
   /// Opens a saved team in the artifact viewer (fetched fresh by id). Wired by the
   /// artifact phase; a no-op placeholder for now.
   var onOpenSavedTeam: (SavedTeamRef) -> Void = { _ in }
 
-  /// Tracks the explicit-apply state so the button can confirm in place once the user
-  /// applies the proposed team (M-AC-T4.2). Local to the rendered answer.
-  @State private var didApply = false
+  @Environment(\.services) private var services
+
+  /// Tracks the explicit-apply network lifecycle (M-AC-T4.2). Local to the rendered answer.
+  @State private var applyPhase: ApplyPhase = .idle
 
   /// Explicit memberwise initializer — pinned so the (now `private`-state-carrying) view
   /// keeps the exact construction signature `AnswerCardView` and the previews already use
-  /// (a synthesized memberwise init would turn private once `didApply` was added).
+  /// (a synthesized memberwise init would turn private once apply state was added).
   init(
     proposedTeam: ProposedTeam?,
     proposedTeamWarnings: [TeamWarning] = [],
@@ -103,29 +110,63 @@ struct TeamBlocksView: View {
     )
   }
 
-  /// The explicit "Apply" affordance (M-AC-T4.2). Before applying, a prominent button
-  /// that calls ``onApply`` (the host saves it via `POST /api/teams`); after applying, an
-  /// in-place "Saved to your Teams" confirmation — an icon **and** text, never color
-  /// alone (M-AC-UI9.3).
+  /// The explicit "Apply" affordance (M-AC-T4.2). Persists via ``TeamService/create``
+  /// and only shows success after a real 200 — never optimistic "Saved".
   @ViewBuilder
   private func applyControl(_ team: ProposedTeam) -> some View {
-    if didApply {
+    switch applyPhase {
+    case .saved:
       Label("Saved to your Teams", systemImage: "checkmark.seal.fill")
         .font(Theme.display(.subheadline))
         .foregroundStyle(Theme.success)
         .frame(maxWidth: .infinity)
         .accessibilityLabel("Saved \(team.name) to your Teams")
-    } else {
-      Button {
-        onApply(team)
-        didApply = true
-      } label: {
-        Label("Apply", systemImage: "square.and.arrow.down")
+    case .saving:
+      HStack(spacing: 8) {
+        ProgressView()
+        Text("Saving…")
+          .font(Theme.display(.subheadline))
+          .foregroundStyle(Theme.textSecondary)
+      }
+      .frame(maxWidth: .infinity)
+      .accessibilityLabel("Saving \(team.name)")
+    case .idle, .failed:
+      VStack(alignment: .leading, spacing: 6) {
+        if applyPhase == .failed {
+          Label("Couldn't save — try again.", systemImage: "exclamationmark.triangle.fill")
+            .font(Theme.body(.footnote))
+            .foregroundStyle(Theme.warning)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        Button {
+          Task { await applyTeam(team) }
+        } label: {
+          Label(
+            applyPhase == .failed ? "Retry" : "Apply",
+            systemImage: "square.and.arrow.down"
+          )
           .font(Theme.display(.subheadline))
           .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.oakPrimary)
+        .accessibilityHint("Save this proposed team to your Teams")
       }
-      .buttonStyle(.oakPrimary)
-      .accessibilityHint("Save this proposed team to your Teams")
+    }
+  }
+
+  /// `POST /api/teams` for the proposed team; success-only UI confirmation.
+  private func applyTeam(_ team: ProposedTeam) async {
+    applyPhase = .saving
+    do {
+      _ = try await services.teams.create(
+        format: team.format,
+        name: team.name,
+        members: team.members
+      )
+      applyPhase = .saved
+      onApply(team)
+    } catch {
+      applyPhase = .failed
     }
   }
 

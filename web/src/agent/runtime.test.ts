@@ -52,9 +52,9 @@ vi.mock("@/agent/enrich-answer", () => ({
 
 // Mock the roster validator so the proposed_team gate is deterministic without a
 // Postgres pool. Returns TWO hard violations — an illegal move on garchomp (slot 1)
-// and an item clause → the runtime keeps rejecting the proposal
-// (proposed_team_illegal) up to its budget. `validateTeamDetailed` also surfaces
-// the per-species legal-choice lists the self-healing feedback quotes back (B-13).
+// and an item clause → the runtime keeps rejecting the proposal for the whole
+// turn. `validateTeamDetailed` also surfaces the per-species legal-choice lists
+// and legal items the self-healing feedback quotes back (B-13 + item catalog).
 vi.mock("@/server/teams/validate-team", () => ({
   validateTeamDetailed: vi.fn(async () => ({
     warnings: [
@@ -70,9 +70,30 @@ vi.mock("@/server/teams/validate-team", () => ({
       ["garchomp", ["dragon-claw", "earthquake", "fire-fang"]],
     ]),
     legalAbilities: new Map([["garchomp", ["sand-veil", "rough-skin"]]]),
+    legalItems: ["sitrus-berry", "leftovers", "focus-sash", "life-orb"],
   })),
   isHardViolation: (w: { code: string }) =>
     w.code === "duplicate_item" || w.code === "move_not_in_learnset",
+}));
+
+// On give-up the runtime legalizes rather than shipping illegal slots. Mock a
+// successful legalize so unit tests stay offline and deterministic.
+vi.mock("@/server/teams/legalize-team", () => ({
+  legalizeTeam: vi.fn(async (members: unknown[]) => ({
+    members,
+    repairs: [
+      {
+        slot: 1,
+        field: "moves[0]",
+        from: "thunderbolt",
+        to: "earthquake",
+        reason: "move not in learnset for this format",
+      },
+    ],
+    remainingHard: [],
+  })),
+  formatRepairsNote: () =>
+    "I adjusted a few choices so every set is legal in this format.",
 }));
 
 import {
@@ -504,11 +525,10 @@ describe("orchestration fallbacks", () => {
     expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
   });
 
-  it("salvages the best-effort team (with warnings) when a build turn hits the iteration cap", async () => {
+  it("legalizes the best-effort team when a build turn hits the iteration cap", async () => {
     // The model builds a schema-valid but format-illegal team, gets it rejected
-    // twice (proposed_team_illegal), then keeps gathering until the cap. Instead
-    // of discarding it for a generic apology, the runtime surfaces that team with
-    // the legality warnings stamped (accept-with-warnings, B-13).
+    // repeatedly, then keeps gathering until the cap. Instead of shipping the
+    // illegal set (or a bare apology), the runtime legalizes the last proposal.
     const responses = [
       message([toolUse("submit_answer", teamAnswer, "s1")]),
       message([toolUse("submit_answer", teamAnswer, "s2")]),
@@ -522,27 +542,26 @@ describe("orchestration fallbacks", () => {
     const result = await runOakWith(client, "build me a doubles team", [], ctx);
 
     expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
-    // The built team survives — not a bare insufficient_data discard.
+    // Complete legalized team survives — not insufficient_data, not hard-illegal badges.
     expect(result.status).toBe("answered");
     expect(result.status).not.toBe("insufficient_data");
     expect(result.proposed_team?.members).toHaveLength(2);
-    // Legality warnings are stamped server-authoritatively…
     expect(
       (result.proposed_team_warnings ?? []).some((w) => w.code === "duplicate_item"),
-    ).toBe(true);
-    // …and the top-level caveat explains why, replacing the raw give-up code.
-    expect(result.uncertainty_flags).toContain("team_may_have_illegal_slots");
-    expect(result.uncertainty_flags).not.toContain("max_iterations_reached");
+    ).toBe(false);
+    expect(result.uncertainty_flags ?? []).not.toContain("team_may_have_illegal_slots");
+    expect(result.answer_markdown).toContain(
+      "I adjusted a few choices so every set is legal in this format",
+    );
   });
 
   it("feeds the rejected build the legal moves for the offending species + points at get_learnset (B-13)", async () => {
     // First submit builds an illegal team → rejected; the follow-up call carries
-    // the self-healing tool_result. Two more submits exhaust the retry budget so
-    // the run terminates cleanly (accept-with-warnings on the third).
+    // the self-healing tool_result (legal moves + items). Second submit is a
+    // clean non-team answer so the turn ends after we can assert feedback.
     const { client, snapshots } = scriptedClient([
       message([toolUse("submit_answer", teamAnswer, "s1")]),
-      message([toolUse("submit_answer", teamAnswer, "s2")]),
-      message([toolUse("submit_answer", teamAnswer, "s3")]),
+      message([toolUse("submit_answer", validAnswer, "s2")]),
     ]);
     mockDispatch.mockResolvedValue({ ok: true });
 
@@ -565,6 +584,8 @@ describe("orchestration fallbacks", () => {
     expect(feedback).toContain(
       "Legal moves for garchomp in scarlet-violet: dragon-claw, earthquake, fire-fang.",
     );
+    // …and legal held items for the format (item catalog)…
+    expect(feedback).toContain("Legal held items in scarlet-violet:");
     // …and routes further move verification at the new tool.
     expect(feedback).toContain("get_learnset");
   });
@@ -880,7 +901,7 @@ describe("turn deadline + provider-call timeout", () => {
     await expect(p).rejects.toThrow(/abort/i);
   });
 
-  it("salvages a domain-rejected best-effort answer when a later call times out", async () => {
+  it("legalizes a domain-rejected best-effort answer when a later call times out", async () => {
     vi.stubEnv("OAK_PROVIDER_TIMEOUT_MS", "10");
     let call = 0;
     const stream = vi.fn(
@@ -889,7 +910,7 @@ describe("turn deadline + provider-call timeout", () => {
         call += 1;
         if (call === 1) {
           // A schema-valid submit that BUILDS an illegal team → domain-rejected
-          // and stashed as the best-effort answer.
+          // and stashed as the best-effort answer (legalized on give-up).
           return fakeStream(message([toolUse("submit_answer", teamAnswer, "s1")]));
         }
         // Then hang until the per-call timeout aborts.
@@ -915,11 +936,13 @@ describe("turn deadline + provider-call timeout", () => {
 
     const result = await runOakWith(client, "build me a team", [], ctx);
 
-    // The salvaged build survives — not the generic timeout apology.
+    // The legalized build survives — not the generic timeout apology or hard-illegal badges.
     expect(result.status).toBe("answered");
     expect(result.proposed_team?.members).toHaveLength(2);
-    expect(result.uncertainty_flags).toContain("team_may_have_illegal_slots");
-    expect(result.uncertainty_flags).not.toContain("provider_call_timeout");
+    expect(result.uncertainty_flags ?? []).not.toContain("team_may_have_illegal_slots");
+    expect(result.answer_markdown).toContain(
+      "I adjusted a few choices so every set is legal in this format",
+    );
   });
 });
 

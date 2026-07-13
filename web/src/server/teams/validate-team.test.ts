@@ -374,8 +374,8 @@ describe("validateTeam", () => {
       expect(detailed.warnings).toEqual(flat);
     });
 
-    it("populates legalMoves + legalAbilities for a found species", async () => {
-      const { legalMoves, legalAbilities } = await validateTeamDetailed(
+    it("populates legalMoves + legalAbilities + legalItems for a found species", async () => {
+      const { legalMoves, legalAbilities, legalItems } = await validateTeamDetailed(
         [legalGarchomp()],
         SV,
         db,
@@ -391,6 +391,9 @@ describe("validateTeam", () => {
         "sand-veil",
         "rough-skin",
       ]);
+      // Format item master list (sorted); fixture seeds at least life-orb.
+      expect(legalItems).toEqual(expect.arrayContaining(["life-orb"]));
+      expect([...legalItems].sort()).toEqual(legalItems);
     });
 
     it("has no entry for an illegal species", async () => {
