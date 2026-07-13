@@ -106,16 +106,16 @@ Red does **not** fill user bubbles, paint selection rails, or wash entire header
 - [x] History OPEN plate (no red rail)  
 - [x] Web + iOS + Android parity on the above  
 
-## Phase 2 checklist — instrument objects
+## Phase 2 checklist — instrument objects — **done** (web + iOS + Android)
 
-- [x] Artifact viewer = specimen plate continuation (type wash + type-glow hero) — **web**  
-- [x] Team party slots = type edge / glow when types known — **web**  
-- [x] Streaming skeleton soft wash (client heuristic; no backend) — **web**  
+- [x] Artifact viewer = specimen plate continuation (type wash + type-glow hero)  
+- [x] Team party slots = type edge / glow when types known  
+- [x] Streaming skeleton soft wash (client heuristic; no backend)  
 - [ ] History durable type rails — **deferred** (needs `ConversationSummary` metadata; no API this pass)  
 
-## Phase 3 checklist — alive & dual
+## Phase 3 checklist — alive & dual — **done** (scoped)
 
-- [x] Subtle desk grain on canvas (web primary; reduced-motion safe) — **web**  
-- [x] Machine markdown export (“Copy for agents”) from finalized `OakAnswer` — **web**  
-- [x] Dev-only plate tuner (web only)  
+- [x] Subtle desk grain on canvas (all clients; reduced-motion safe)  
+- [x] Machine markdown export (“Copy for agents”) from finalized `OakAnswer`  
+- [x] Dev-only plate tuner (**web only**)  
 - [ ] Team “wrapped” playfulness — **deferred** (not critical path)  
