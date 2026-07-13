@@ -8,7 +8,6 @@ import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakSpacing
-import ai.gowtam.oak.ui.SpriteImage
 import ai.gowtam.oak.wire.DexSpriteRef
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.Team
@@ -320,10 +319,11 @@ private fun SlotIndicator(species: List<String>, spriteRefs: Map<String, DexSpri
             val slug = species.getOrNull(slot)
             val ref = if (slug != null) spriteRefs[slug] else null
             when {
-                ref != null -> SpriteImage(
-                    url = ref.spriteUrl,
+                ref != null -> TypeEdgeSlot(
+                    spriteUrl = ref.spriteUrl,
                     name = titleizeTeamSlug(slug!!),
-                    size = 26.dp,
+                    types = ref.types,
+                    size = 28.dp,
                 )
                 slot < memberCount -> Box(
                     modifier = Modifier.size(8.dp).background(oak.accent.copy(alpha = 0.4f), CircleShape),
