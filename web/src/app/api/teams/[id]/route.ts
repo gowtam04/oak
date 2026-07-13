@@ -70,8 +70,14 @@ export async function PUT(req: Request, ctx: Ctx): Promise<Response> {
 
   const hasName = body.name !== undefined;
   const hasMembers = body.members !== undefined;
-  if (!hasName && !hasMembers) {
-    return jsonError(400, "invalid_request", "Provide at least one of { name, members }.");
+  const hasWin =
+    body.win_condition !== undefined || body.winCondition !== undefined;
+  if (!hasName && !hasMembers && !hasWin) {
+    return jsonError(
+      400,
+      "invalid_request",
+      "Provide at least one of { name, members, win_condition }.",
+    );
   }
 
   let name: string | undefined;
@@ -94,12 +100,25 @@ export async function PUT(req: Request, ctx: Ctx): Promise<Response> {
     members = parsed.data;
   }
 
+  let winCondition: string | null | undefined;
+  if (hasWin) {
+    const raw = body.win_condition ?? body.winCondition;
+    if (raw === null) {
+      winCondition = null;
+    } else if (typeof raw === "string") {
+      winCondition = raw.trim().slice(0, 280);
+    } else {
+      return jsonError(400, "invalid_request", "win_condition must be a string or null.");
+    }
+  }
+
   const { updateTeam } = await import("@/data/repos/team-repo");
   const team = await updateTeam({
     accountId: account.id,
     id,
     name,
     members,
+    winCondition,
     now: Date.now(),
   });
   if (team === null) return NOT_FOUND();

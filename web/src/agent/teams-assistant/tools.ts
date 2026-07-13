@@ -10,7 +10,7 @@
  *   - `submit_answer` — replaced by `submit_builder_answer`.
  *
  * SECURITY-RELEVANT: `builderDispatch` is built over ONLY this subset. The main
- * `dispatch` (tools/index.ts) closes over all 17 tools, so reusing it would
+ * `dispatch` (tools/index.ts) closes over all tools, so reusing it would
  * execute a hallucinated `save_team` call even though the model was never
  * offered that tool. Unknown names get the documented in-domain error shape.
  */
@@ -28,12 +28,13 @@ import { computeStatTool } from "@/agent/tools/compute-stat.tool";
 import { estimateDamageTool } from "@/agent/tools/estimate-damage.tool";
 import { getLearnsetTool } from "@/agent/tools/get-learnset";
 import { getUsageStatsTool } from "@/agent/tools/get-usage-stats.tool";
+import { getMetaUsageTool } from "@/agent/tools/get-meta-usage.tool";
 import { submitBuilderAnswerTool } from "@/agent/tools/submit-builder-answer";
 
 /**
  * The builder's tool list, in the main barrel's relative order (stable order ⇒
- * stable prompt-cache prefix). `get_usage_stats` self-gates on Champions mode
- * and degrades to a documented miss elsewhere, so it is safe to always offer.
+ * stable prompt-cache prefix). `get_usage_stats` self-gates on Champions mode.
+ * `get_meta_usage` is append-only before the terminal submit tool (gen9ou).
  */
 export const builderTools: ToolDef[] = [
   resolveEntityTool,
@@ -48,6 +49,7 @@ export const builderTools: ToolDef[] = [
   estimateDamageTool,
   getUsageStatsTool,
   getLearnsetTool,
+  getMetaUsageTool,
   submitBuilderAnswerTool,
 ];
 

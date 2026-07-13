@@ -44,7 +44,11 @@ export interface UseTeamsResult {
   }) => Promise<TeamDetail | null>;
   update: (
     id: string,
-    input: { name?: string; members?: TeamMember[] },
+    input: {
+      name?: string;
+      members?: TeamMember[];
+      winCondition?: string | null;
+    },
   ) => Promise<TeamDetail | null>;
   remove: (id: string) => Promise<void>;
   duplicate: (id: string) => Promise<TeamDetail | null>;

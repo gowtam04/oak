@@ -83,6 +83,47 @@ data class TeamAnalysisOk(
     val offense: Offense = Offense(),
     @SerialName("speed_tiers") val speedTiers: List<SpeedTier> = emptyList(),
     val notes: List<String> = emptyList(),
+    val roles: List<MemberRolesWire> = emptyList(),
+    @SerialName("roles_present") val rolesPresent: List<String> = emptyList(),
+    @SerialName("roles_missing") val rolesMissing: List<String> = emptyList(),
+    @SerialName("physical_special") val physicalSpecial: PhysicalSpecialWire = PhysicalSpecialWire(),
+    @SerialName("defense_notes") val defenseNotes: List<String> = emptyList(),
+    val threats: List<ThreatRowWire> = emptyList(),
+    @SerialName("meta_attribution") val metaAttribution: String? = null,
+)
+
+@Serializable
+data class MemberRolesWire(
+    val member: String = "",
+    val flags: List<String> = emptyList(),
+)
+
+@Serializable
+data class PhysicalSpecialWire(
+    @SerialName("physical_moves") val physicalMoves: Int = 0,
+    @SerialName("special_moves") val specialMoves: Int = 0,
+    @SerialName("status_moves") val statusMoves: Int = 0,
+    @SerialName("attacker_bias") val attackerBias: String = "none",
+)
+
+@Serializable
+data class ThreatCalcWire(
+    val attacker: String = "",
+    val defender: String = "",
+    val move: String = "",
+    @SerialName("min_pct") val minPct: Double = 0.0,
+    @SerialName("max_pct") val maxPct: Double = 0.0,
+)
+
+@Serializable
+data class ThreatRowWire(
+    val species: String = "",
+    @SerialName("display_name") val displayName: String = "",
+    @SerialName("usage_pct") val usagePct: Double? = null,
+    val rank: Int? = null,
+    val status: String = "soft",
+    val reasons: List<String> = emptyList(),
+    @SerialName("sample_calcs") val sampleCalcs: List<ThreatCalcWire> = emptyList(),
 )
 
 /** A member's six computed final stats; `null` where it couldn't be computed. */

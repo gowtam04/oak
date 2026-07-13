@@ -257,3 +257,47 @@ describe("analyzeTeam — gen-1 15-type chart", () => {
     }
   });
 });
+
+describe("analyzeTeam — ability-aware defense + roles", () => {
+  it("Levitate removes Ground from the weak list", () => {
+    // Fire is weak to Ground in this fixture chart; Levitate should flip it.
+    const team: AnalysisMemberSource[] = [
+      {
+        ...member("rotom", ["fire"], 86),
+        ability: "levitate",
+        moves: [{ slug: "overheat", type: "fire", damageClass: "special" }],
+      },
+    ];
+    const without = analyzeTeam(
+      [{ ...member("rotom", ["fire"], 86), ability: null, moves: [] }],
+      chart(ALL_18),
+      "scarlet-violet",
+    );
+    expect(without.defense.find((r) => r.type === "ground")!.weak).toContain(
+      "rotom",
+    );
+
+    const result = analyzeTeam(team, chart(ALL_18), "scarlet-violet");
+    const ground = result.defense.find((r) => r.type === "ground")!;
+    expect(ground.weak).not.toContain("rotom");
+    expect(ground.immune).toContain("rotom");
+    expect(result.defense_notes.some((n) => n.includes("levitate"))).toBe(true);
+  });
+
+  it("detects Tailwind as speed control on Champions", () => {
+    const team: AnalysisMemberSource[] = [
+      {
+        ...member("whimsicott", ["grass", "fairy"], 116, [
+          { slug: "tailwind", type: "flying", damageClass: "status" },
+          { slug: "moonblast", type: "fairy", damageClass: "special" },
+        ]),
+        ability: "prankster",
+      },
+    ];
+    const result = analyzeTeam(team, chart(ALL_18), "champions");
+    expect(result.roles_present).toContain("speed_control");
+    expect(result.roles_missing).not.toContain("speed_control");
+    expect(result.physical_special.special_moves).toBe(1);
+  });
+});
+

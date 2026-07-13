@@ -37,7 +37,30 @@ const OK: TeamAnalysisOk = {
     uncovered: ["water", "grass"],
   },
   speed_tiers: [{ member: "garchomp", speed: 122 }],
-  notes: ["Coverage is type-based only."],
+  notes: [
+    "Abilities/items outside the curated matchup table, weather, terrain, and dynamic effects are not fully modeled.",
+  ],
+  roles: [{ member: "garchomp", flags: ["stealth_rock"] }],
+  roles_present: ["stealth_rock"],
+  roles_missing: ["hazard_removal"],
+  physical_special: {
+    physical_moves: 1,
+    special_moves: 0,
+    status_moves: 0,
+    attacker_bias: "physical",
+  },
+  defense_notes: ["Garchomp: levitate: immune to ground"],
+  threats: [
+    {
+      species: "kingambit",
+      display_name: "Kingambit",
+      usage_pct: 40,
+      rank: 1,
+      status: "soft",
+      reasons: ["1 member(s) weak to its STAB"],
+    },
+  ],
+  meta_attribution: "Smogon gen9ou 2026-05",
 };
 
 describe("teamAnalysisResponseSchema", () => {

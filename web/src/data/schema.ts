@@ -447,6 +447,11 @@ export const team = pgTable(
      * (src/data/teams/team-schema.ts). Stored whole — no cross-member SQL.
      */
     members: text("members").notNull(),
+    /**
+     * Optional free-text win condition / game plan (team-analysis Phase 3).
+     * NULL when unset. Capped at the app layer (~280 chars).
+     */
+    win_condition: text("win_condition"),
     /** Epoch ms the team was created. */
     created_at: bigint("created_at", { mode: "number" }).notNull(),
     /** Epoch ms of last edit — drives list ordering (ORDER BY updated_at DESC). */

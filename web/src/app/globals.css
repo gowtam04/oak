@@ -4340,6 +4340,166 @@ button.scope-chip:focus-visible {
   font-size: var(--text-xs);
   line-height: 1.5;
 }
+.team-analysis__role-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.team-analysis__role-chip {
+  display: inline-block;
+  padding: 0.1em 0.45em;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.team-analysis__role-chip--ok {
+  background: color-mix(in srgb, var(--success, #2a9d5c) 18%, transparent);
+  color: var(--text-strong);
+}
+.team-analysis__role-chip--miss {
+  background: color-mix(in srgb, var(--warn, #c48a1a) 22%, transparent);
+  color: var(--text-strong);
+}
+.team-analysis__physpec {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.team-analysis__defense-notes {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.1em;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.team-analysis__meta-attr {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+}
+.team-analysis__threats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.team-analysis__threat {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.5rem;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2, var(--surface)) 80%, transparent);
+  font-size: var(--text-xs);
+}
+.team-analysis__threat--answered {
+  border-left-color: var(--success, #2a9d5c);
+}
+.team-analysis__threat--soft {
+  border-left-color: var(--warn, #c48a1a);
+}
+.team-analysis__threat--unanswered {
+  border-left-color: var(--danger, #c44);
+}
+.team-analysis__threat-name {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.team-analysis__threat-status {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  opacity: 0.75;
+}
+.team-analysis__threat-reasons {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+}
+.team-analysis__calcs {
+  grid-column: 1 / -1;
+  margin: 0.15rem 0 0;
+  padding-left: 1em;
+  color: var(--text-faint);
+  font-family: var(--font-mono, monospace);
+}
+
+.teams-archetype-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, #000 45%, transparent);
+  padding: var(--space-4);
+}
+.teams-archetype-modal__card {
+  max-width: 28rem;
+  width: 100%;
+  max-height: 85vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+.teams-archetype-modal__card h3 {
+  margin: 0 0 var(--space-2);
+}
+.teams-archetype-modal__hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.teams-archetype-modal__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.teams-archetype-modal__list button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  white-space: normal;
+}
+.teams-archetype-modal__list button span {
+  font-weight: 400;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.teams-archetype-modal__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  justify-content: flex-end;
+}
+
+.team-editor__win-condition {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0 0 var(--space-3);
+}
+.team-editor__win-condition input {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+.team-editor__win-condition input::placeholder {
+  color: var(--text-faint);
+}
 
 /* Sticky save bar (UI §4 screen 07): format + count as instrument text, the
    legality state as a real pill, and a red Save — replaces the old bare-orange

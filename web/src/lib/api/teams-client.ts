@@ -39,6 +39,8 @@ export interface TeamDetail {
   name: string;
   format: string;
   members: TeamMember[];
+  /** Optional free-text win condition (camelCase from team-repo). */
+  winCondition?: string | null;
   validation: TeamWarning[];
 }
 
@@ -68,11 +70,18 @@ function toDetail(body: Record<string, unknown>): TeamDetail | null {
   if (team === null || typeof team !== "object") return null;
   const t = team as Record<string, unknown>;
   if (typeof t.id !== "string") return null;
+  const winRaw = t.winCondition ?? t.win_condition;
   return {
     id: t.id,
     name: typeof t.name === "string" ? t.name : "",
     format: typeof t.format === "string" ? t.format : "",
     members: Array.isArray(t.members) ? (t.members as TeamMember[]) : [],
+    winCondition:
+      typeof winRaw === "string"
+        ? winRaw
+        : winRaw === null
+          ? null
+          : null,
     validation: Array.isArray(body.validation)
       ? (body.validation as TeamWarning[])
       : [],
@@ -148,7 +157,12 @@ export async function createTeam(input: {
  */
 export async function updateTeam(
   id: string,
-  input: { name?: string; members?: TeamMember[] },
+  input: {
+    name?: string;
+    members?: TeamMember[];
+    winCondition?: string | null;
+    win_condition?: string | null;
+  },
 ): Promise<TeamDetail | null> {
   try {
     const res = await fetch(`/api/teams/${encodeURIComponent(id)}`, {

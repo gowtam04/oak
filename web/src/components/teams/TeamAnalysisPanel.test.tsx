@@ -65,7 +65,21 @@ const OK: TeamAnalysisOk = {
     uncovered: ["water"],
   },
   speed_tiers: [{ member: "garchomp", speed: 122 }],
-  notes: ["Coverage is type-based only."],
+  notes: [
+    "Abilities/items outside the curated matchup table, weather, terrain, and dynamic effects are not fully modeled.",
+  ],
+  roles: [],
+  roles_present: ["priority"],
+  roles_missing: [],
+  physical_special: {
+    physical_moves: 1,
+    special_moves: 0,
+    status_moves: 0,
+    attacker_bias: "physical",
+  },
+  defense_notes: [],
+  threats: [],
+  meta_attribution: null,
 };
 
 beforeEach(() => mockFetch.mockReset());
@@ -104,8 +118,9 @@ describe("TeamAnalysisPanel", () => {
     // Speed order + caveat note.
     expect(screen.getByTestId("team-analysis-speed")).toHaveTextContent("122");
     expect(screen.getByTestId("team-analysis-caveat")).toHaveTextContent(
-      /type-based only/,
+      /curated matchup table/,
     );
+    expect(screen.getByTestId("team-analysis-roles")).toBeInTheDocument();
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 

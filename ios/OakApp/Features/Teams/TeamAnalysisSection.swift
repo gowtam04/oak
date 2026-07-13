@@ -77,6 +77,26 @@ struct TeamAnalysisSection: View {
   private func okBody(_ ok: TeamAnalysisOk) -> some View {
     let names = memberNames(ok)
 
+    // Roles & tools
+    if !ok.rolesPresent.isEmpty || !ok.rolesMissing.isEmpty {
+      VStack(alignment: .leading, spacing: 6) {
+        sectionLabel("Roles & tools")
+        if !ok.rolesPresent.isEmpty {
+          Text("Present: " + ok.rolesPresent.map { $0.replacingOccurrences(of: "_", with: " ") }.joined(separator: ", "))
+            .font(Theme.body(.caption))
+            .foregroundStyle(Theme.textPrimary)
+        }
+        if !ok.rolesMissing.isEmpty {
+          Text("Gaps: " + ok.rolesMissing.map { $0.replacingOccurrences(of: "_", with: " ") }.joined(separator: ", "))
+            .font(Theme.body(.caption))
+            .foregroundStyle(Theme.danger)
+        }
+        Text("Moves: \(ok.physicalSpecial.physicalMoves) phys · \(ok.physicalSpecial.specialMoves) spec · \(ok.physicalSpecial.statusMoves) status")
+          .font(Theme.body(.caption2))
+          .foregroundStyle(Theme.textSecondary)
+      }
+    }
+
     // Defense — weak / resists / immune flows, each type with its member count (desc).
     defenseFlow("Weak", rows: ok.defense.map { ($0.type, $0.weak.count) }, tint: Theme.danger)
     defenseFlow("Resists", rows: ok.defense.map { ($0.type, $0.resists.count) }, tint: Theme.success)
@@ -117,7 +137,34 @@ struct TeamAnalysisSection: View {
       }
     }
 
-    // v1 caveat (type-only).
+    // Meta threats
+    if !ok.threats.isEmpty {
+      VStack(alignment: .leading, spacing: 6) {
+        sectionLabel("Meta threats")
+        if let attr = ok.metaAttribution {
+          Text(attr)
+            .font(Theme.body(.caption2))
+            .foregroundStyle(Theme.textSecondary)
+        }
+        ForEach(Array(ok.threats.prefix(12).enumerated()), id: \.offset) { _, threat in
+          VStack(alignment: .leading, spacing: 2) {
+            HStack {
+              Text(threat.displayName)
+                .font(Theme.body(.footnote, weight: .semibold))
+              Spacer()
+              Text(threat.status.uppercased())
+                .font(Theme.body(.caption2, weight: .bold))
+                .foregroundStyle(threatStatusColor(threat.status))
+            }
+            Text(threat.reasons.joined(separator: "; "))
+              .font(Theme.body(.caption2))
+              .foregroundStyle(Theme.textSecondary)
+          }
+        }
+      }
+    }
+
+    // Residual caveats.
     ForEach(Array(ok.notes.enumerated()), id: \.offset) { _, note in
       Text(note)
         .font(Theme.body(.caption))
@@ -162,6 +209,14 @@ struct TeamAnalysisSection: View {
     Text(title)
       .font(Theme.body(.caption, weight: .semibold))
       .foregroundStyle(Theme.textSecondary)
+  }
+
+  private func threatStatusColor(_ status: String) -> Color {
+    switch status {
+    case "answered": return Theme.success
+    case "unanswered": return Theme.danger
+    default: return Theme.warning
+    }
   }
 
   private func labeledFlow<Content: View>(_ label: String, @ViewBuilder _ content: () -> Content) -> some View {

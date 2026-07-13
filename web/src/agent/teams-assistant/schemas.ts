@@ -32,10 +32,12 @@ export const teamPatchSlotSchema = z
 
 export type TeamPatchSlot = z.infer<typeof teamPatchSlotSchema>;
 
-/** A set of slot edits (plus an optional rename). Omitted name ⇒ unchanged. */
+/** A set of slot edits (plus optional rename / win condition). */
 export const teamPatchSchema = z
   .object({
     name: z.string().min(1).max(120).nullable().optional(),
+    /** Optional win-condition text for the draft (null clears). */
+    win_condition: z.string().max(280).nullable().optional(),
     slots: z.array(teamPatchSlotSchema).max(6),
   })
   .strict();

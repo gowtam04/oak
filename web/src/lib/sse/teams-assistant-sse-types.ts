@@ -41,6 +41,8 @@ export interface TeamsAssistantDraft {
   format: Format;
   /** The editor's current members, in slot order (0-indexed, ≤ 6). */
   members: TeamMember[];
+  /** Optional win condition text for the draft. */
+  win_condition?: string | null;
 }
 
 /** Request body for `POST /api/teams/assistant` (signed-in only). */

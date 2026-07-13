@@ -33,6 +33,10 @@ describe("builderTools — the scoped read-only subset", () => {
     );
   });
 
+  it("includes get_meta_usage for Smogon ladder sets", () => {
+    expect(builderTools.some((t) => t.name === "get_meta_usage")).toBe(true);
+  });
+
   it("excludes save_team, get_team, list_teams, get_encounters, and submit_answer", () => {
     const names = builderTools.map((t) => t.name);
     for (const excluded of EXCLUDED_TOOL_NAMES) {

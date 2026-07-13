@@ -84,6 +84,7 @@ const requestBodySchema = z
         name: z.string().max(120),
         format: z.enum(FORMATS as unknown as [Format, ...Format[]]),
         members: teamMembersSchema,
+        win_condition: z.string().max(280).nullable().optional(),
       })
       .strict(),
   })
@@ -101,27 +102,72 @@ function storeKey(sessionId: string): string {
 }
 
 /**
- * Fold the live draft into the current user message as a JSON preamble. Only
- * the CURRENT turn carries it (history keeps the typed messages alone) — the
- * prompt tells the model the latest message's block is the live editor state
- * and to trust it over earlier turns.
+ * Fold the live draft (+ optional analysis) into the current user message.
+ * Only the CURRENT turn carries it (history keeps typed messages alone).
  */
-function composeMessage(body: TeamsAssistantBody): string {
+async function composeMessage(body: TeamsAssistantBody): Promise<string> {
   const draftJson = JSON.stringify(
     {
       name: body.draft.name,
       format: body.draft.format,
       members: body.draft.members,
+      win_condition: body.draft.win_condition ?? null,
     },
     null,
     2,
   );
+  let analysisBlock = "";
+  const hasSpecies = body.draft.members.some((m) => m.species);
+  if (hasSpecies) {
+    try {
+      const { db } = await import("@/data/db");
+      const { analyzeTeamForFormat } = await import(
+        "@/server/teams/analyze-team"
+      );
+      const analysis = await analyzeTeamForFormat(
+        body.draft.members,
+        body.draft.format,
+        db,
+      );
+      if (analysis.status === "ok") {
+        // Slim payload for the model — drop per-member BST noise.
+        const slim = {
+          format: analysis.format,
+          roles_present: analysis.roles_present,
+          roles_missing: analysis.roles_missing,
+          physical_special: analysis.physical_special,
+          defense: analysis.defense
+            .filter((r) => r.weak.length > 0)
+            .map((r) => ({ type: r.type, weak: r.weak })),
+          offense_uncovered: analysis.offense.uncovered,
+          speed_tiers: analysis.speed_tiers,
+          threats: analysis.threats.slice(0, 10).map((t) => ({
+            species: t.species,
+            display_name: t.display_name,
+            status: t.status,
+            reasons: t.reasons,
+          })),
+          defense_notes: analysis.defense_notes,
+          meta_attribution: analysis.meta_attribution,
+          notes: analysis.notes,
+        };
+        analysisBlock =
+          `\n\n[CURRENT TEAM ANALYSIS — server-attached]\n` +
+          "```json\n" +
+          JSON.stringify(slim, null, 2) +
+          "\n```";
+      }
+    } catch {
+      // Fail-soft: draft-only is still enough for the turn.
+    }
+  }
   return (
     `[CURRENT TEAM DRAFT — live editor state, server-attached]\n` +
     "```json\n" +
     draftJson +
-    "\n```\n\n" +
-    `[USER MESSAGE]\n${body.message}`
+    "\n```" +
+    analysisBlock +
+    `\n\n[USER MESSAGE]\n${body.message}`
   );
 }
 
@@ -210,7 +256,7 @@ export async function POST(req: Request): Promise<Response> {
   const history = [...(await getHistory(historyKey))];
 
   const mode = modeForFormat(body.draft.format);
-  const composedMessage = composeMessage(body);
+  const composedMessage = await composeMessage(body);
 
   const encoder = new TextEncoder();
   let closed = false;
