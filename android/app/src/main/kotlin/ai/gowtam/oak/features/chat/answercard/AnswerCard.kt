@@ -1,7 +1,11 @@
 package ai.gowtam.oak.features.chat.answercard
 
+import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakMotion
+import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.OakType
+import ai.gowtam.oak.ui.PlateWash
 import ai.gowtam.oak.ui.rememberReduceMotion
 import ai.gowtam.oak.wire.DamageCalc
 import ai.gowtam.oak.wire.EntityKind
@@ -12,15 +16,23 @@ import ai.gowtam.oak.wire.Subject
 import ai.gowtam.oak.wire.TeamWarning
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -30,9 +42,14 @@ import kotlinx.coroutines.launch
 
 /**
  * The top-level renderer for a single finalized [OakAnswer] — the native mirror of the
- * iOS `AnswerCardView` and web `AnswerCard`. It fans each field of the payload out to
- * its mapped leaf subview, **rendering a subview only when its field is present** (the
- * render-if-present rule the whole tree follows), in one fixed reading order:
+ * iOS `AnswerCardView` and web `AnswerCard`. Phase 1 specimen desk: wraps content in a
+ * **type-reactive plate shell** (wash/edge from `subjects[].types`, or mechanics ink
+ * plate when there are no subjects) and unifies reasoning + citations into a full-width
+ * RECEIPTS footer (`docs/design/soul.md`).
+ *
+ * It fans each field of the payload out to its mapped leaf subview, **rendering a
+ * subview only when its field is present** (the render-if-present rule), in one fixed
+ * reading order:
  *
  *   1. status badge   — non-`answered` outcomes only
  *   2. scope tag       — `generation_basis` masthead
@@ -44,9 +61,9 @@ import kotlinx.coroutines.launch
  *   8. damage calc
  *   9. team blocks     — proposed/saved team + warnings
  *  10. suggestions
- *  11. reasoning       — collapsible, closed by default
- *  12. citations       — collapsible "Sources"
- *  13. inferences      — dashed border, confidence badges
+ *  11. reasoning       — via RECEIPTS footer (testTag `section:reasoning`)
+ *  12. citations       — via RECEIPTS footer (testTag `section:citations`)
+ *  13. inferences      — after receipts, dashed border, confidence badges
  *
  * Which blocks render is exposed as the pure [answerSections] list so the orchestration
  * is unit-testable without inspecting the Compose tree; the body renders exactly that
@@ -58,68 +75,151 @@ fun AnswerCard(
     modifier: Modifier = Modifier,
     actions: AnswerCardActions = AnswerCardActions(),
 ) {
+    val oak = LocalOakColors.current
+    val dark = isSystemInDarkTheme()
     val reduceMotion = rememberReduceMotion()
-    Column(
-        modifier = modifier.fillMaxWidth().testTag(TAG_ANSWER_CARD),
-        verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
+    val wash: PlateWash = remember(
+        answer.subjects,
+        dark,
+        oak.surfaceRaised,
+        oak.surfaceSunken,
+        oak.border,
+        oak.borderStrong,
     ) {
-        for ((index, section) in answerSections(answer).withIndex()) {
-            val sectionModifier = Modifier
+        OakType.plateWashForTypes(
+            subjectTypes = answer.subjects.orEmpty().map { it.types },
+            surface = oak.surfaceRaised,
+            surfaceSunken = oak.surfaceSunken,
+            border = oak.border,
+            borderStrong = oak.borderStrong,
+            dark = dark,
+        )
+    }
+    val plateShape = RoundedCornerShape(OakRadius.xl)
+    val plateBrush = remember(wash, oak.surfaceRaised, oak.surfaceSunken) {
+        when {
+            wash.fillSecondary != null ->
+                Brush.linearGradient(listOf(wash.fill, wash.fillSecondary, oak.surfaceRaised))
+            wash.isMechanics ->
+                Brush.verticalGradient(listOf(oak.surfaceSunken, oak.surfaceRaised))
+            else ->
+                Brush.linearGradient(listOf(wash.fill, oak.surfaceRaised))
+        }
+    }
+    val sections = answerSections(answer)
+    val bodySections = sections.filter {
+        it != AnswerSection.REASONING &&
+            it != AnswerSection.CITATIONS &&
+            it != AnswerSection.INFERENCES
+    }
+    val hasReceipts = sections.any {
+        it == AnswerSection.REASONING || it == AnswerSection.CITATIONS
+    }
+    val hasInferences = sections.contains(AnswerSection.INFERENCES)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag(TAG_ANSWER_CARD)
+            .then(if (dark) Modifier else Modifier.shadow(6.dp, plateShape))
+            .clip(plateShape)
+            .background(plateBrush, plateShape)
+            .border(1.dp, wash.border, plateShape),
+    ) {
+        Column(
+            modifier = Modifier
                 .fillMaxWidth()
-                .testTag(section.testTag)
-                .sectionEntrance(index = index, reduceMotion = reduceMotion)
-            when (section) {
-                AnswerSection.STATUS -> StatusBadge(answer.status, sectionModifier)
-                AnswerSection.SCOPE -> ScopeTag(answer.generationBasis, sectionModifier)
-                AnswerSection.CAVEAT -> CaveatStrip(answer.uncertaintyFlags, answer.generationBasis, sectionModifier)
-                AnswerSection.ANSWER -> AnswerBody(answer.answerMarkdown, sectionModifier)
-                AnswerSection.SUBJECTS -> Subjects(
-                    subjects = answer.subjects.orEmpty(),
-                    onOpenEntity = actions.onOpenEntity,
-                    onOpenComparison = actions.onOpenComparison,
-                    modifier = sectionModifier,
-                )
-                AnswerSection.QUESTION -> ClarifyQuestion(answer.question, actions.onFollowUp, sectionModifier)
-                AnswerSection.CANDIDATES -> CandidatesTable(
-                    candidates = answer.candidates!!,
-                    onOpenPokemon = { actions.onOpenEntity(EntityKind.POKEMON, it) },
-                    onOpenType = { actions.onOpenEntity(EntityKind.TYPE, it) },
-                    onShowAll = {
-                        val c = answer.candidates!!
-                        actions.onFollowUp(
-                            "Show me all ${c.totalCount} of those, not just the top ${c.shown.size}.",
-                        )
-                    },
-                    modifier = sectionModifier,
-                )
-                AnswerSection.DAMAGE -> DamageCalcBlock(
-                    damageCalc = answer.damageCalc!!,
-                    onOpenInViewer = { actions.onOpenDamageCalc(answer.damageCalc!!) },
-                    modifier = sectionModifier,
-                )
-                AnswerSection.TEAMS -> TeamBlocks(
-                    proposedTeam = answer.proposedTeam,
-                    proposedTeamWarnings = answer.proposedTeamWarnings.orEmpty(),
-                    savedTeam = answer.savedTeam,
-                    onApply = actions.onApplyTeam,
-                    onOpenSavedTeam = actions.onOpenSavedTeam,
-                    onOpenProposedTeam = { actions.onOpenProposedTeam(it, answer.proposedTeamWarnings.orEmpty()) },
-                    modifier = sectionModifier,
-                )
-                AnswerSection.SUGGESTIONS -> Suggestions(
-                    suggestions = answer.suggestions.orEmpty(),
-                    status = answer.status,
-                    onSelect = actions.onFollowUp,
-                    modifier = sectionModifier,
-                )
-                AnswerSection.REASONING -> Reasoning(answer.reasoningMarkdown, sectionModifier)
-                AnswerSection.CITATIONS -> Citations(
-                    citations = answer.citations,
-                    modifier = sectionModifier,
-                    onOpenEntity = actions.onOpenEntity,
-                )
-                AnswerSection.INFERENCES -> Inferences(answer.inferences, sectionModifier)
+                .padding(
+                    start = OakSpacing.lg,
+                    end = OakSpacing.lg,
+                    top = OakSpacing.lg,
+                    bottom = if (hasReceipts || hasInferences) OakSpacing.md else OakSpacing.lg,
+                ),
+            verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
+        ) {
+            for (section in bodySections) {
+                // Use the original index from the full sections list for entrance stagger.
+                val originalIndex = sections.indexOf(section)
+                val sectionModifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(section.testTag)
+                    .sectionEntrance(index = originalIndex, reduceMotion = reduceMotion)
+                when (section) {
+                    AnswerSection.STATUS -> StatusBadge(answer.status, sectionModifier)
+                    AnswerSection.SCOPE -> ScopeTag(answer.generationBasis, sectionModifier)
+                    AnswerSection.CAVEAT -> CaveatStrip(answer.uncertaintyFlags, answer.generationBasis, sectionModifier)
+                    AnswerSection.ANSWER -> AnswerBody(answer.answerMarkdown, sectionModifier)
+                    AnswerSection.SUBJECTS -> Subjects(
+                        subjects = answer.subjects.orEmpty(),
+                        onOpenEntity = actions.onOpenEntity,
+                        onOpenComparison = actions.onOpenComparison,
+                        modifier = sectionModifier,
+                    )
+                    AnswerSection.QUESTION -> ClarifyQuestion(answer.question, actions.onFollowUp, sectionModifier)
+                    AnswerSection.CANDIDATES -> CandidatesTable(
+                        candidates = answer.candidates!!,
+                        onOpenPokemon = { actions.onOpenEntity(EntityKind.POKEMON, it) },
+                        onOpenType = { actions.onOpenEntity(EntityKind.TYPE, it) },
+                        onShowAll = {
+                            val c = answer.candidates!!
+                            actions.onFollowUp(
+                                "Show me all ${c.totalCount} of those, not just the top ${c.shown.size}.",
+                            )
+                        },
+                        modifier = sectionModifier,
+                    )
+                    AnswerSection.DAMAGE -> DamageCalcBlock(
+                        damageCalc = answer.damageCalc!!,
+                        onOpenInViewer = { actions.onOpenDamageCalc(answer.damageCalc!!) },
+                        modifier = sectionModifier,
+                    )
+                    AnswerSection.TEAMS -> TeamBlocks(
+                        proposedTeam = answer.proposedTeam,
+                        proposedTeamWarnings = answer.proposedTeamWarnings.orEmpty(),
+                        savedTeam = answer.savedTeam,
+                        onApply = actions.onApplyTeam,
+                        onOpenSavedTeam = actions.onOpenSavedTeam,
+                        onOpenProposedTeam = { actions.onOpenProposedTeam(it, answer.proposedTeamWarnings.orEmpty()) },
+                        modifier = sectionModifier,
+                    )
+                    AnswerSection.SUGGESTIONS -> Suggestions(
+                        suggestions = answer.suggestions.orEmpty(),
+                        status = answer.status,
+                        onSelect = actions.onFollowUp,
+                        modifier = sectionModifier,
+                    )
+                    AnswerSection.REASONING,
+                    AnswerSection.CITATIONS,
+                    AnswerSection.INFERENCES,
+                    -> Unit
+                }
             }
+        }
+        if (hasReceipts) {
+            val receiptsIndex = sections.indexOfFirst {
+                it == AnswerSection.REASONING || it == AnswerSection.CITATIONS
+            }.coerceAtLeast(0)
+            ReceiptsFooter(
+                reasoningMarkdown = answer.reasoningMarkdown.takeIf { it.isNotBlank() },
+                citations = answer.citations,
+                onOpenEntity = actions.onOpenEntity,
+                edgeColor = wash.wellGlow,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .sectionEntrance(index = receiptsIndex, reduceMotion = reduceMotion),
+            )
+        }
+        if (hasInferences) {
+            val inferencesIndex = sections.indexOf(AnswerSection.INFERENCES).coerceAtLeast(0)
+            Inferences(
+                inferences = answer.inferences,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = OakSpacing.lg)
+                    .padding(top = if (hasReceipts) OakSpacing.md else 0.dp, bottom = OakSpacing.lg)
+                    .testTag(AnswerSection.INFERENCES.testTag)
+                    .sectionEntrance(index = inferencesIndex, reduceMotion = reduceMotion),
+            )
         }
     }
 }

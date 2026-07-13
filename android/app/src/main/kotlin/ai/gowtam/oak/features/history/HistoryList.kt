@@ -72,7 +72,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -443,20 +442,30 @@ private fun ConversationRow(
         },
     ) {
         var showMenu by remember { mutableStateOf(false) }
-        // Pinned OR last-opened rows carry the brand's red 3dp start-edge rail over a
-        // faint accent wash; other rows sit flush on the canvas (transparent rail — no
-        // width shift on either state).
-        val highlighted = conversation.pinned || active
-        val railColor = oak.accent
+        // Specimen-desk selection (soul.md): NOT a red left rail. Active = lifted mini-
+        // plate (surface + hairline + raised shadow) + mono OPEN stamp. Pinned rows keep
+        // the pin icon only — no brand rail wash.
+        val plateShape = RoundedCornerShape(OakRadius.md)
+        val dark = isSystemInDarkTheme()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(if (highlighted) oak.accentSoft.copy(alpha = 0.35f) else Color.Transparent)
-                .drawBehind {
-                    if (highlighted) drawRect(color = railColor, size = size.copy(width = 3.dp.toPx()))
-                }
+                .padding(horizontal = OakSpacing.md, vertical = 4.dp)
+                .then(
+                    if (active) {
+                        Modifier
+                            .then(if (dark) Modifier else Modifier.shadow(4.dp, plateShape))
+                            .clip(plateShape)
+                            .background(MaterialTheme.colorScheme.surface, plateShape)
+                            .border(1.dp, oak.borderStrong, plateShape)
+                    } else {
+                        Modifier
+                            .clip(plateShape)
+                            .background(Color.Transparent)
+                    },
+                )
                 .clickable { onSelect(conversation) }
-                .padding(horizontal = OakSpacing.lg, vertical = 10.dp),
+                .padding(horizontal = OakSpacing.md, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -484,6 +493,19 @@ private fun ConversationRow(
                     style = MaterialTheme.typography.labelSmall,
                     color = oak.textMuted,
                     maxLines = 1,
+                )
+            }
+            if (active) {
+                Text(
+                    text = "OPEN",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = oak.accent,
+                    modifier = Modifier
+                        .padding(end = OakSpacing.xs)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(oak.accent.copy(alpha = 0.08f))
+                        .border(1.dp, oak.accent.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
                 )
             }
             IconButton(onClick = { onTogglePin(conversation) }) {

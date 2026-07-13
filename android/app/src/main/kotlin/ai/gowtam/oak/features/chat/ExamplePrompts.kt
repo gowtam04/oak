@@ -1,21 +1,75 @@
 package ai.gowtam.oak.features.chat
 
 /**
- * Starter prompts for the fresh-thread empty state ([EmptyState]). A large, curated
- * pool spanning *all* of Oak's capabilities so that, across repeated visits, a user
- * discovers the full range of help on offer — filters, learnsets, mechanics reasoning,
- * type matchups, stat/damage math, lookups, ability/item effects, evolution, catch
- * locations, in-game events/progression, glitches, spin-off games like Mystery
- * Dungeon, and competitive Champions content.
+ * Starter prompts for the fresh-thread empty state ([EmptyState]).
  *
- * This is a structural mirror of the web pool: **`web/src/lib/example-prompts.ts`
- * (`STARTER_PROMPTS`) is the canonical source** — keep this list in sync with it
- * (same entries, same order, same category comments) whenever either changes. iOS
- * carries its own mirror at `ios/OakApp/Features/Chat/ExamplePrompts.swift`.
+ * Phase 1 specimen desk (`docs/design/soul.md`) shows **filed starters** — four
+ * category rows (Battle / Dex / Rules / Meta) with an optional type-dot — not
+ * equal beige pills. [pickFiled] returns one prompt per category.
  *
- * Categories below are for authoring only — the list stays flat.
+ * The flat [pool] remains the full curated set (synced with
+ * `web/src/lib/example-prompts.ts` / `ios/OakApp/Features/Chat/ExamplePrompts.swift`)
+ * for sampling and tests.
  */
 object ExamplePrompts {
+
+    /** Filed-starter categories — fixed labels, sync across web/iOS/Android. */
+    enum class Category(val label: String) {
+        Battle("Battle"),
+        Dex("Dex"),
+        Rules("Rules"),
+        Meta("Meta"),
+    }
+
+    /**
+     * One filed starter: mono category label, type-dot (Pokémon type slug for
+     * [ai.gowtam.oak.ui.OakType.color]), and the prompt text sent on tap.
+     */
+    data class FiledStarter(
+        val category: Category,
+        /** Type slug for the colored dot (e.g. `"dragon"`); unknown falls back to Normal. */
+        val typeDot: String,
+        val prompt: String,
+    )
+
+    /**
+     * Curated filed-starter pool, grouped by [Category]. [pickFiled] samples one
+     * from each category so the empty desk always shows Battle/Dex/Rules/Meta.
+     * Type-dot defaults match soul.md (Battle dragon/fighting, Dex ground/normal,
+     * Rules ghost/dark, Meta steel/water).
+     */
+    val filedPool: List<FiledStarter> = listOf(
+        // Battle — competitive / nature / damage
+        FiledStarter(Category.Battle, "dragon", "What's Garchomp's best nature for Speed?"),
+        FiledStarter(Category.Battle, "fighting", "Can Garchomp OHKO Gholdengo with Earthquake?"),
+        FiledStarter(Category.Battle, "dragon", "Garchomp's Speed at level 50 with max Speed and Jolly"),
+        FiledStarter(Category.Battle, "fire", "Build me a rain team"),
+        FiledStarter(Category.Battle, "water", "Best Stat Point spread for Incineroar in Champions"),
+        // Dex — species / typing / immunity lists
+        FiledStarter(Category.Dex, "ground", "Which Pokémon are immune to Ground?"),
+        FiledStarter(Category.Dex, "normal", "Show me Garchomp"),
+        FiledStarter(Category.Dex, "steel", "Gholdengo's stats and typing"),
+        FiledStarter(Category.Dex, "ground", "What is Gholdengo weak to?"),
+        FiledStarter(Category.Dex, "fairy", "Best counters to Fairy types"),
+        // Rules — mechanics / abilities / gen rules
+        FiledStarter(Category.Rules, "ghost", "Does Prankster work on Dark types?"),
+        FiledStarter(Category.Rules, "dark", "Does Fake Out work on Farigiraf?"),
+        FiledStarter(Category.Rules, "ghost", "How does Fake Out's priority work?"),
+        FiledStarter(Category.Rules, "dark", "Does Earthquake hit everyone in doubles?"),
+        FiledStarter(Category.Rules, "ghost", "How does the Physical/Special split work?"),
+        // Meta — usage / role / format niche
+        FiledStarter(Category.Meta, "steel", "What is Gholdengo's role in Champions?"),
+        FiledStarter(Category.Meta, "water", "Who has the highest usage in Champions right now?"),
+        FiledStarter(Category.Meta, "steel", "Is Dragapult legal in Champions?"),
+        FiledStarter(Category.Meta, "dragon", "Was Excadrill good in Gen 5?"),
+        FiledStarter(Category.Meta, "water", "Build me a Champions team around Mega Swampert"),
+    )
+
+    /**
+     * Flat pool spanning all of Oak's capabilities (filters, learnsets, mechanics,
+     * type matchups, stat/damage math, locations, glitches, Mystery Dungeon, …).
+     * Kept in sync with web `STARTER_PROMPTS` / iOS `ExamplePrompts.pool`.
+     */
     val pool: List<String> = listOf(
         // Lookups / profiles
         "Show me Garchomp",
@@ -108,4 +162,14 @@ object ExamplePrompts {
 
     /** Sample [count] distinct prompts from [pool] at random (sampling without replacement). */
     fun pick(count: Int = 4): List<String> = pool.shuffled().take(count)
+
+    /**
+     * One filed starter per category (Battle → Dex → Rules → Meta), each sampled
+     * at random from that category's entries in [filedPool]. Stable category order
+     * so the empty desk always reads the same instrument layout.
+     */
+    fun pickFiled(): List<FiledStarter> =
+        Category.entries.map { category ->
+            filedPool.filter { it.category == category }.random()
+        }
 }

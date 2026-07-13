@@ -17,6 +17,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
@@ -315,6 +316,9 @@ fun rememberReduceMotion(): Boolean {
  * The 18 Pokémon type brand colors + their Champions display order. Theme-stable
  * (the same solid in light and dark — the badge recipe, not the solid, adapts).
  * Pair every use with the type's text label; the color is never the sole signal.
+ *
+ * Also owns specimen-plate wash helpers ([plateWash] / [plateWashForTypes]) per
+ * `docs/design/soul.md` — type atmosphere for answer shells and sprite wells.
  */
 object OakType {
     /** The brand color for a type name (e.g. `"fire"`); unknown falls back to Normal. */
@@ -322,6 +326,104 @@ object OakType {
 
     /** Sort index for a type slug in Champions display order; unknown sorts last. */
     fun displayIndex(name: String): Int = displayRank[name.trim().lowercase()] ?: Int.MAX_VALUE
+
+    /**
+     * Specimen-plate atmosphere from one primary type and an optional secondary
+     * (soul.md "Plate wash rules"). Light mixes ~8–14% type into [surface]; dark
+     * ~18–28% so the wash still reads. Call [plateWashForTypes] when deriving from
+     * an answer's subject list (handles multi-subject + mechanics).
+     */
+    fun plateWash(
+        primary: String?,
+        secondary: String? = null,
+        surface: Color,
+        surfaceSunken: Color,
+        border: Color,
+        borderStrong: Color,
+        dark: Boolean,
+    ): PlateWash {
+        val primaryName = primary?.trim()?.takeIf { it.isNotEmpty() }
+        if (primaryName == null) {
+            return mechanicsPlate(surfaceSunken, borderStrong)
+        }
+        val primarySolid = color(primaryName)
+        val secondarySolid = secondary?.trim()?.takeIf { it.isNotEmpty() }?.let { color(it) }
+        val primaryMix = if (dark) 0.22f else 0.11f
+        val secondaryMix = if (dark) 0.18f else 0.08f
+        val borderMix = if (dark) 0.32f else 0.28f
+        val wellMix = if (dark) 0.28f else 0.16f
+        val fill = lerp(surface, primarySolid, primaryMix)
+        val fillSecondary = secondarySolid?.let { lerp(surface, it, secondaryMix) }
+        return PlateWash(
+            fill = fill,
+            fillSecondary = fillSecondary,
+            border = lerp(border, primarySolid, borderMix),
+            wellFill = lerp(surface, primarySolid, wellMix),
+            wellBorder = lerp(border, primarySolid, if (dark) 0.28f else 0.22f),
+            wellGlow = primarySolid.copy(alpha = if (dark) 0.32f else 0.28f),
+            wellGlowSecondary = secondarySolid?.copy(alpha = if (dark) 0.18f else 0.15f),
+            isMechanics = false,
+            isMulti = false,
+        )
+    }
+
+    /**
+     * Derives a [PlateWash] from zero-or-more subjects' type lists:
+     * - empty → mechanics ink plate (sunken paper, strong border)
+     * - multiple subjects → neutral-ish multi plate (light first-type accent only)
+     * - one subject → primary/secondary type wash
+     */
+    fun plateWashForTypes(
+        subjectTypes: List<List<String>>,
+        surface: Color,
+        surfaceSunken: Color,
+        border: Color,
+        borderStrong: Color,
+        dark: Boolean,
+    ): PlateWash {
+        if (subjectTypes.isEmpty()) {
+            return mechanicsPlate(surfaceSunken, borderStrong)
+        }
+        if (subjectTypes.size > 1) {
+            val first = subjectTypes.firstOrNull()?.firstOrNull()
+            val accent = first?.let { color(it) }
+            val multiMix = if (dark) 0.12f else 0.05f
+            return PlateWash(
+                fill = if (accent != null) lerp(surface, accent, multiMix) else surface,
+                fillSecondary = null,
+                border = if (accent != null) lerp(border, accent, if (dark) 0.18f else 0.12f) else border,
+                wellFill = surfaceSunken,
+                wellBorder = border,
+                wellGlow = accent?.copy(alpha = if (dark) 0.18f else 0.12f),
+                wellGlowSecondary = null,
+                isMechanics = false,
+                isMulti = true,
+            )
+        }
+        val types = subjectTypes.first()
+        return plateWash(
+            primary = types.getOrNull(0),
+            secondary = types.getOrNull(1),
+            surface = surface,
+            surfaceSunken = surfaceSunken,
+            border = border,
+            borderStrong = borderStrong,
+            dark = dark,
+        )
+    }
+
+    private fun mechanicsPlate(surfaceSunken: Color, borderStrong: Color): PlateWash =
+        PlateWash(
+            fill = surfaceSunken,
+            fillSecondary = null,
+            border = borderStrong,
+            wellFill = surfaceSunken,
+            wellBorder = borderStrong,
+            wellGlow = null,
+            wellGlowSecondary = null,
+            isMechanics = true,
+            isMulti = false,
+        )
 
     private val solids: Map<String, Color> = mapOf(
         "normal" to Color(0xFFA8A77A),
@@ -354,3 +456,29 @@ object OakType {
     private val displayRank: Map<String, Int> =
         displayOrder.withIndex().associate { (index, name) -> name to index }
 }
+
+/**
+ * Colors for a type-reactive specimen plate (answer card shell + sprite well).
+ * Produced by [OakType.plateWash] / [OakType.plateWashForTypes] per soul.md.
+ */
+@Immutable
+data class PlateWash(
+    /** Primary plate fill (type-mixed surface, or sunken for mechanics). */
+    val fill: Color,
+    /** Optional secondary fill for dual-type radial/linear blend. */
+    val fillSecondary: Color?,
+    /** Plate edge color (type-mixed border, or [OakColors.borderStrong] for mechanics). */
+    val border: Color,
+    /** Sprite-well base fill. */
+    val wellFill: Color,
+    /** Sprite-well border. */
+    val wellBorder: Color,
+    /** Soft type glow for the sprite well center (null when mechanics). */
+    val wellGlow: Color?,
+    /** Optional secondary glow ring for dual-type wells. */
+    val wellGlowSecondary: Color?,
+    /** True when the answer has no subjects — ink / mechanics plate. */
+    val isMechanics: Boolean,
+    /** True when multiple subjects share one plate (neutral multi accent). */
+    val isMulti: Boolean,
+)
