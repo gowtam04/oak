@@ -1162,20 +1162,43 @@
   border-top: 1px solid var(--border);
 }
 
-/* GFM tables — the issue #4 fix. Same "dense but scannable" recipe as the
-   candidate table: sunken uppercase header, hairline rows, zebra body, and an
-   x-scroll so a wide table never blows out the column. */
-.markdown-body table {
-  display: block;
-  width: 100%;
+/* GFM tables — issue #4 recipe (dense/scannable, matches candidate table),
+   with a scroll WRAPPER so the real <table> layout stays intact. Putting
+   display:block + overflow-x on <table> itself (the old pattern) broke column
+   sizing and stretched compact tables full-width with blank right space —
+   same lesson as `.candidate-table__scroll`. */
+.markdown-body__table-wrap {
+  width: fit-content;
+  max-width: 100%;
   margin: var(--space-5) 0;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-raised);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  overscroll-behavior-x: contain;
+}
+.markdown-body__table-wrap::-webkit-scrollbar {
+  height: 8px;
+}
+.markdown-body__table-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+.markdown-body__table-wrap::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+}
+.markdown-body table {
+  /* Real table layout — NOT display:block. width:auto hugs content so
+     key-value sheets and short stat rows don't leave blank right columns. */
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  border: none;
   border-collapse: collapse;
   font-size: 0.84375rem;
   font-variant-numeric: tabular-nums;
-  box-shadow: var(--shadow-raised);
 }
 .markdown-body thead th {
   text-align: left;
