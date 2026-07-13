@@ -100,10 +100,14 @@ vi.mock("@/server/teams/legalize-team", () => ({
 import {
   AnswerMarkdownExtractor,
   describeToolCall,
+  isTeamBuildMessage,
   MAX_EMPTY_TURN_NUDGES,
   MAX_ITERATIONS,
+  MAX_ITERATIONS_TEAM_BUILD,
+  MAX_PROPOSED_TEAM_HARD_REJECTIONS,
   runOakWith,
   SUBMIT_NUDGE_REMAINING,
+  SUBMIT_NUDGE_REMAINING_TEAM_BUILD,
 } from "./runtime";
 
 // --- Fixtures --------------------------------------------------------------
@@ -528,12 +532,13 @@ describe("orchestration fallbacks", () => {
 
   it("legalizes the best-effort team when a build turn hits the iteration cap", async () => {
     // The model builds a schema-valid but format-illegal team, gets it rejected
-    // repeatedly, then keeps gathering until the cap. Instead of shipping the
-    // illegal set (or a bare apology), the runtime legalizes the last proposal.
+    // (under the hard-rejection budget), then keeps gathering until the build
+    // cap. Instead of shipping the illegal set (or a bare apology), salvage
+    // legalizes the last proposal.
     const responses = [
       message([toolUse("submit_answer", teamAnswer, "s1")]),
       message([toolUse("submit_answer", teamAnswer, "s2")]),
-      ...Array.from({ length: MAX_ITERATIONS - 2 }, () =>
+      ...Array.from({ length: MAX_ITERATIONS_TEAM_BUILD - 2 }, () =>
         message([toolUse("query_pokedex", {}, "q")]),
       ),
     ];
@@ -542,7 +547,7 @@ describe("orchestration fallbacks", () => {
 
     const result = await runOakWith(client, "build me a doubles team", [], ctx);
 
-    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS_TEAM_BUILD);
     // Complete legalized team survives — not insufficient_data, not hard-illegal badges.
     expect(result.status).toBe("answered");
     expect(result.status).not.toBe("insufficient_data");
@@ -553,6 +558,29 @@ describe("orchestration fallbacks", () => {
     expect(result.uncertainty_flags ?? []).not.toContain("team_may_have_illegal_slots");
     expect(result.answer_markdown).toContain(
       "I adjusted a few choices so every set is legal in this format",
+    );
+  });
+
+  it("legalizes-and-accepts after MAX_PROPOSED_TEAM_HARD_REJECTIONS hard rejections", async () => {
+    // Two rejections feed legal lists; the third illegal submit is legalized
+    // and accepted instead of thrashing until the iteration cap.
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", teamAnswer, "s1")]),
+      message([toolUse("submit_answer", teamAnswer, "s2")]),
+      message([toolUse("submit_answer", teamAnswer, "s3")]),
+    ]);
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    const result = await runOakWith(client, "build me a doubles team", [], ctx);
+
+    expect(stream).toHaveBeenCalledTimes(MAX_PROPOSED_TEAM_HARD_REJECTIONS + 1);
+    expect(result.status).toBe("answered");
+    expect(result.proposed_team?.members).toHaveLength(2);
+    expect(result.answer_markdown).toContain(
+      "I adjusted a few choices so every set is legal in this format",
+    );
+    expect(result.uncertainty_flags ?? []).not.toContain(
+      "team_may_have_illegal_slots",
     );
   });
 
@@ -595,7 +623,7 @@ describe("orchestration fallbacks", () => {
     // The model never submits — always asks for another tool, so the loop runs
     // every iteration and the late-iteration submit nudge fires. Script one
     // tool-use response per iteration (rather than mockImplementation, which
-    // would bypass the snapshot recorder).
+    // would bypass the snapshot recorder). Non-build message → default cap.
     const { client, stream, snapshots } = scriptedClient(
       Array.from({ length: MAX_ITERATIONS }, () =>
         message([toolUse("query_pokedex", {}, "t")]),
@@ -626,6 +654,65 @@ describe("orchestration fallbacks", () => {
     );
     // Never duplicated, even though several iterations remain after it fires.
     expect(nudgeCount(snapshots.at(-1))).toBe(1);
+  });
+
+  it("uses the higher build cap and earlier BUILD_SUBMIT_NUDGE for team-build messages", async () => {
+    const { client, stream, snapshots } = scriptedClient(
+      Array.from({ length: MAX_ITERATIONS_TEAM_BUILD }, () =>
+        message([toolUse("query_pokedex", {}, "t")]),
+      ),
+    );
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    const result = await runOakWith(
+      client,
+      "build me a team with gholdengo",
+      [],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS_TEAM_BUILD);
+    expect(result.status).toBe("insufficient_data");
+    expect(result.uncertainty_flags).toContain("max_iterations_reached");
+    // Build-specific apology, not the generic rephrase line.
+    expect(result.answer_markdown).toContain(
+      "ran out of room before I could submit a complete six",
+    );
+    expect(result.answer_markdown).not.toContain(
+      "Could you rephrase or narrow the question",
+    );
+
+    const fireAt =
+      MAX_ITERATIONS_TEAM_BUILD - SUBMIT_NUDGE_REMAINING_TEAM_BUILD;
+    const buildNudge = (params: {
+      messages: { role: string; content: unknown }[];
+    }) =>
+      params.messages.filter(
+        (m) =>
+          m.role === "user" &&
+          typeof m.content === "string" &&
+          m.content.includes("TEAM BUILD"),
+      ).length;
+    expect(buildNudge(snapshots[fireAt])).toBe(0);
+    expect(buildNudge(snapshots[fireAt + 1])).toBe(1);
+    expect(snapshots[fireAt + 1].messages.at(-1).content).toContain(
+      "submit_answer NOW",
+    );
+  });
+
+  it("isTeamBuildMessage detects build intent and skips pure analysis", () => {
+    expect(isTeamBuildMessage("Help me build a team with gholdengo")).toBe(
+      true,
+    );
+    expect(isTeamBuildMessage("build me a doubles team")).toBe(true);
+    expect(isTeamBuildMessage("Hyper offense")).toBe(true);
+    expect(isTeamBuildMessage("suggest a rain team")).toBe(true);
+    expect(isTeamBuildMessage("I want a team for singles")).toBe(true);
+    expect(isTeamBuildMessage("analyze my team")).toBe(false);
+    expect(isTeamBuildMessage("What is Gholdengo's role?")).toBe(false);
+    expect(isTeamBuildMessage("how much damage does earthquake do")).toBe(
+      false,
+    );
   });
 
   it("nudges back to submit_answer when a turn ends with no tool call, then accepts the submit", async () => {

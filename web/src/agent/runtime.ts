@@ -102,8 +102,18 @@ export type { AnthropicClientLike, MessageStreamLike };
  * iteration — the old cap made a correct build hit the submit nudge mid-gathering
  * and give up. Ordinary turns terminate at 2–6 iterations on their own, so the
  * higher ceiling costs nothing for non-build turns; it's only a backstop.
+ *
+ * Team-build turns use {@link MAX_ITERATIONS_TEAM_BUILD} instead (see
+ * {@link isTeamBuildMessage}) so learnsets + submit fit under the cap.
  */
 export const MAX_ITERATIONS = 20;
+
+/**
+ * Higher iteration cap for explicit team-build turns. Grok often does one tool
+ * call per iteration; a full 6-mon build (anchor + pool + learnsets + submit)
+ * regularly exhausts {@link MAX_ITERATIONS} before `submit_answer`.
+ */
+export const MAX_ITERATIONS_TEAM_BUILD = 28;
 
 /**
  * Overall wall-clock budget for a single turn (issue #6). The loop is otherwise
@@ -156,13 +166,19 @@ export function providerCallTimeoutMs(): number {
 export const MAX_SUBMIT_RETRIES = 2;
 
 /**
- * Historical name kept for callers/tests. Built proposed_teams with hard
- * violations are now rejected for the whole turn (until MAX_ITERATIONS); there
- * is no accept-with-warnings after N rejections. On give-up the runtime
- * legalizes the last best-effort team instead. This constant is no longer
- * consulted by the gate.
+ * After this many hard-illegal `proposed_team` rejections, the gate legalizes
+ * the latest proposal and accepts it (complete legal card + honesty note).
+ * Earlier rejections still feed legal move/ability/item lists so the model can
+ * self-correct. Never reintroduces accept-with-warnings for hard violations.
  */
-export const MAX_PROPOSED_TEAM_RETRIES = Number.POSITIVE_INFINITY;
+export const MAX_PROPOSED_TEAM_HARD_REJECTIONS = 2;
+
+/**
+ * @deprecated Alias of {@link MAX_PROPOSED_TEAM_HARD_REJECTIONS} for callers/tests.
+ * Not "infinite rejections" anymore — hard-illegal teams are rejected this many
+ * times, then legalized-and-accepted.
+ */
+export const MAX_PROPOSED_TEAM_RETRIES = MAX_PROPOSED_TEAM_HARD_REJECTIONS;
 
 /** Cap how many legal item slugs we embed in a rejection tool_result. */
 const LEGAL_ITEMS_FEEDBACK_CAP = 120;
@@ -185,15 +201,55 @@ const EMPTY_TURN_NUDGE =
   "reply with plain text.";
 
 /**
- * How many iterations from the MAX_ITERATIONS cap to start nudging the model to
- * wrap up. A data-gathering turn that's still calling read/compute tools this
- * close to the cap is at risk of exhausting the loop before it ever submits —
- * the cap is the hard backstop, and a model that keeps second-guessing (e.g.
- * recomputing a damage roll for a second spread) can burn the remaining budget
- * and trip `max_iterations_reached`. Firing once at cap − N leaves a couple of
+ * How many iterations from the iteration cap to start nudging the model to
+ * wrap up (non-build turns). Firing once at cap − N leaves a couple of
  * iterations for the model to act on the nudge before the backstop hits.
  */
 export const SUBMIT_NUDGE_REMAINING = 3;
+
+/**
+ * Earlier wrap-up window for team-build turns (with
+ * {@link MAX_ITERATIONS_TEAM_BUILD}). Leaves ~10 iterations after the nudge so
+ * a late submit (and one legalize-reject cycle) still fit.
+ */
+export const SUBMIT_NUDGE_REMAINING_TEAM_BUILD = 10;
+
+/**
+ * High-precision check: does this user message ask Oak to BUILD / suggest a
+ * team? Used only to raise the iteration cap and fire an earlier submit nudge —
+ * not for routing or scope. Prefers build/suggest verbs so "analyze my team"
+ * stays on the default budget.
+ */
+export function isTeamBuildMessage(message: string): boolean {
+  const m = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!m) return false;
+  if (
+    /\b(build|make|create|craft|suggest|propose)\b.{0,48}\b(team|party)\b/.test(
+      m,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(team|party)\b.{0,40}\b(with|around|for|built|including)\b/.test(m)
+  ) {
+    return true;
+  }
+  if (/\bhelp me (build|make)\b/.test(m)) return true;
+  if (
+    /\b(want|need|give me|gimme)\b.{0,24}\b(a |an )?(team|party)\b/.test(m)
+  ) {
+    return true;
+  }
+  if (
+    /\b(hyper\s*offense|balanced team|stall team|rain team|sun team|offense team|defensive team)\b/.test(
+      m,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
 
 /**
  * The corrective user turn appended (once) when the loop is within
@@ -214,6 +270,30 @@ const SUBMIT_NUDGE =
   "clause clashes). Use the legal move/ability/item lists from any prior " +
   "rejection. The server will legalize remaining hard violations on give-up, " +
   "but you should get it right first. Either way, submit_answer on your next turn.";
+
+/**
+ * Stronger wrap-up for explicit team-build turns. Fired earlier so the model
+ * stops item/learnset thrash and submits a complete card.
+ */
+const BUILD_SUBMIT_NUDGE =
+  "TEAM BUILD — stop gathering. Do NOT call get_pokemon, get_learnset, " +
+  "get_item, get_usage_stats, query_pokedex, or any other read tool again. " +
+  "Call submit_answer NOW with a COMPLETE 6-member proposed_team: every " +
+  "battle-ready member needs a legal ability, a held item (competitive " +
+  "staples are fine — Sitrus Berry, Leftovers, Focus Sash, Life Orb, Choice " +
+  "Specs/Scarf when format-legal; Mega formes hold their mega stone only), " +
+  "four legal moves from the learnsets you already fetched, and no " +
+  "species/item clause clashes. Do NOT report insufficient_data. Do NOT " +
+  "verify each item with get_item. If a prior rejection listed legal " +
+  "moves/abilities/items, use those lists. The server will legalize remaining " +
+  "hard violations if needed — your job is to submit a complete team on this " +
+  "turn.";
+
+/** Actionable insufficient_data body when a build turn never submitted a team. */
+const TEAM_BUILD_INSUFFICIENT_MARKDOWN =
+  "I gathered pieces for a team but ran out of room before I could submit a " +
+  "complete six. Ask me again — naming Singles or Doubles, or any " +
+  "must-includes — and I'll submit a full legal team immediately.";
 
 // ---------------------------------------------------------------------------
 // Provider-neutral tool definitions. `name` / `parameters` come straight from
@@ -876,9 +956,9 @@ export interface AnswerRunHooks<TAnswer> {
   ) => SystemSegment[];
   /**
    * Domain validation of a schema-valid answer. `rejectionsSoFar` counts this
-   * run's prior `ok: false` verdicts (for hooks that still use a local budget).
-   * Oak rejects every hard-illegal proposed_team until the iteration cap; there
-   * is no accept-with-warnings path.
+   * run's prior `ok: false` verdicts. Oak rejects hard-illegal proposed_teams
+   * up to {@link MAX_PROPOSED_TEAM_HARD_REJECTIONS}, then legalizes-and-accepts;
+   * there is no accept-with-warnings path for hard violations.
    */
   validateAnswer: (
     answer: TAnswer,
@@ -927,18 +1007,92 @@ function stampTeamWarnings(answer: OakAnswer, warnings: TeamWarning[]): void {
 }
 
 /**
+ * Legalize a built proposed_team in place (or drop it if unrepairable). Shared
+ * by the hard-rejection budget path and end-of-budget salvage. Image-import
+ * incomplete items are not force-filled — only hard violations + item_missing
+ * on non-image turns are repaired.
+ */
+async function applyLegalizedTeam(
+  answer: OakAnswer,
+  ctx: AgentContext,
+): Promise<OakAnswer> {
+  const pt = answer.proposed_team;
+  if (!pt) return answer;
+
+  const format = formatForMode(ctx.mode);
+  const db = ctx.db as unknown as OakDb;
+  const hasImages = (ctx.images?.length ?? 0) > 0;
+  const before = await validateTeamDetailed(pt.members, format, db);
+  const hardBefore = before.warnings.filter(
+    (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
+  );
+  if (hardBefore.length === 0) {
+    stampTeamWarnings(answer, before.warnings);
+    return answer;
+  }
+
+  const { members, repairs, remainingHard } = await legalizeTeam(
+    pt.members,
+    format,
+    db,
+  );
+  // item_missing after legalize is still a failure for built teams.
+  const stillHard = remainingHard.filter(
+    (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
+  );
+
+  if (stillHard.length > 0) {
+    // Cannot ship a legal complete team — drop the proposal; keep prose.
+    delete answer.proposed_team;
+    delete answer.proposed_team_warnings;
+    answer.uncertainty_flags = [
+      ...(answer.uncertainty_flags ?? []),
+      "team_could_not_be_legalized",
+    ];
+    const note =
+      "I could not finish a fully legal team for this format after adjusting " +
+      "the illegal slots — please ask me to rebuild around a different core.";
+    if (!answer.answer_markdown.includes("could not finish a fully legal")) {
+      answer.answer_markdown = `${answer.answer_markdown.trim()}\n\n${note}`;
+    }
+    return answer;
+  }
+
+  answer.proposed_team = { ...pt, members };
+  const after = await validateTeamDetailed(members, format, db);
+  // Soft warnings only (EV caps etc.).
+  stampTeamWarnings(
+    answer,
+    after.warnings.filter((w) => !isHardViolation(w) && w.code !== "item_missing"),
+  );
+  const note = formatRepairsNote(repairs);
+  if (note && repairs.length > 0) {
+    answer.answer_markdown = `${answer.answer_markdown.trim()}\n\n${note}`;
+  }
+  // Drop the old "may be illegal" flag if present; team is legal now.
+  if (answer.uncertainty_flags) {
+    answer.uncertainty_flags = answer.uncertainty_flags.filter(
+      (f) => f !== "team_may_have_illegal_slots",
+    );
+    if (answer.uncertainty_flags.length === 0) delete answer.uncertainty_flags;
+  }
+  return answer;
+}
+
+/**
  * The OakAnswer domain validation: roster-validate a proposed team against the
  * turn's ACTUAL format (server-controlled — never the model-emitted
- * proposed_team.format). HARD format-illegalities are always rejected while the
- * loop can continue; the model rebuilds with embedded legal move/ability/item
- * lists. On give-up, {@link salvageOakAnswer} legalizes the last best-effort
- * team rather than shipping illegal slots. Image imports still skip hard
- * `item_missing` (obscured items). Soft EV/IV/`incomplete` warnings never block.
+ * proposed_team.format). HARD format-illegalities are rejected up to
+ * {@link MAX_PROPOSED_TEAM_HARD_REJECTIONS} with embedded legal move/ability/item
+ * lists; after that budget the team is legalized-and-accepted. On give-up,
+ * {@link salvageOakAnswer} legalizes the last best-effort team. Image imports
+ * still skip hard `item_missing` (obscured items). Soft EV/IV/`incomplete`
+ * warnings never block.
  */
 async function validateOakAnswer(
   answer: OakAnswer,
   ctx: AgentContext,
-  _rejectionsSoFar: number,
+  rejectionsSoFar: number,
 ): Promise<AnswerVerdict<OakAnswer>> {
   const pt = answer.proposed_team;
   const format = formatForMode(ctx.mode);
@@ -957,6 +1111,34 @@ async function validateOakAnswer(
     (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
   );
   if (hardViolations.length > 0) {
+    // Budget spent → legalize and accept (never ship hard-illegal slots).
+    if (rejectionsSoFar >= MAX_PROPOSED_TEAM_HARD_REJECTIONS) {
+      const legalized = await applyLegalizedTeam(answer, ctx);
+      return {
+        ok: true,
+        annotate: (enriched) => {
+          // applyLegalizedTeam mutated `answer`; copy the repaired fields onto
+          // the enriched copy (enrich runs on the pre-annotate payload).
+          if (legalized.proposed_team) {
+            enriched.proposed_team = legalized.proposed_team;
+          } else {
+            delete enriched.proposed_team;
+          }
+          if (legalized.proposed_team_warnings) {
+            enriched.proposed_team_warnings = legalized.proposed_team_warnings;
+          } else {
+            delete enriched.proposed_team_warnings;
+          }
+          enriched.answer_markdown = legalized.answer_markdown;
+          if (legalized.uncertainty_flags) {
+            enriched.uncertainty_flags = legalized.uncertainty_flags;
+          } else {
+            delete enriched.uncertainty_flags;
+          }
+        },
+      };
+    }
+
     const issues = hardViolations.map((w) => w.message).join(" ");
     const speciesAt = (slot: number | undefined): string | null =>
       slot === undefined ? null : pt?.members[slot]?.species ?? null;
@@ -1041,76 +1223,13 @@ async function validateOakAnswer(
 /**
  * End-of-budget salvage: legalize a hard-illegal built proposed_team so the
  * user still gets a complete, Apply-ready card (with an honesty note about
- * what changed). Image-import incomplete items are not force-filled here —
- * only hard violations + item_missing on non-image turns are repaired.
- * If legalize cannot clear hard violations (e.g. illegal species), drop
- * proposed_team rather than shipping illegal slots.
+ * what changed).
  */
 async function salvageOakAnswer(
   answer: OakAnswer,
   ctx: AgentContext,
 ): Promise<OakAnswer> {
-  const pt = answer.proposed_team;
-  if (!pt) return answer;
-
-  const format = formatForMode(ctx.mode);
-  const db = ctx.db as unknown as OakDb;
-  const hasImages = (ctx.images?.length ?? 0) > 0;
-  const before = await validateTeamDetailed(pt.members, format, db);
-  const hardBefore = before.warnings.filter(
-    (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
-  );
-  if (hardBefore.length === 0) {
-    stampTeamWarnings(answer, before.warnings);
-    return answer;
-  }
-
-  const { members, repairs, remainingHard } = await legalizeTeam(
-    pt.members,
-    format,
-    db,
-  );
-  // item_missing after legalize is still a failure for built teams.
-  const stillHard = remainingHard.filter(
-    (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
-  );
-
-  if (stillHard.length > 0) {
-    // Cannot ship a legal complete team — drop the proposal; keep prose.
-    delete answer.proposed_team;
-    delete answer.proposed_team_warnings;
-    answer.uncertainty_flags = [
-      ...(answer.uncertainty_flags ?? []),
-      "team_could_not_be_legalized",
-    ];
-    const note =
-      "I could not finish a fully legal team for this format after adjusting " +
-      "the illegal slots — please ask me to rebuild around a different core.";
-    if (!answer.answer_markdown.includes("could not finish a fully legal")) {
-      answer.answer_markdown = `${answer.answer_markdown.trim()}\n\n${note}`;
-    }
-    return answer;
-  }
-
-  answer.proposed_team = { ...pt, members };
-  const after = await validateTeamDetailed(members, format, db);
-  // Soft warnings only (EV caps etc.).
-  stampTeamWarnings(
-    answer,
-    after.warnings.filter((w) => !isHardViolation(w) && w.code !== "item_missing"),
-  );
-  const note = formatRepairsNote(repairs);
-  if (note && repairs.length > 0) {
-    answer.answer_markdown = `${answer.answer_markdown.trim()}\n\n${note}`;
-  }
-  // Drop the old "may be illegal" flag if present; team is legal now.
-  if (answer.uncertainty_flags) {
-    answer.uncertainty_flags = answer.uncertainty_flags.filter(
-      (f) => f !== "team_may_have_illegal_slots",
-    );
-    if (answer.uncertainty_flags.length === 0) delete answer.uncertainty_flags;
-  }
-  return answer;
+  return applyLegalizedTeam(answer, ctx);
 }
 
 /** The original Oak agent behavior, expressed as hooks (the default run). */
@@ -1179,14 +1298,26 @@ export async function runWithProvider<TAnswer = OakAnswer>(
   // Provider-neutral tool defs for this run's tool list (loop-invariant).
   const providerToolDefs = toProviderToolDefs(hooks.tools);
 
+  // Team-build turns get a higher iteration cap and an earlier, stronger submit
+  // nudge so Grok's one-tool-per-iteration pattern can still reach submit_answer.
+  const teamBuild = isTeamBuildMessage(message);
+  const maxIterations = teamBuild
+    ? MAX_ITERATIONS_TEAM_BUILD
+    : MAX_ITERATIONS;
+  const submitNudgeRemaining = teamBuild
+    ? SUBMIT_NUDGE_REMAINING_TEAM_BUILD
+    : SUBMIT_NUDGE_REMAINING;
+  const submitNudgeText = teamBuild ? BUILD_SUBMIT_NUDGE : hooks.submitNudge;
+
   let submitRetries = 0;
   let emptyTurnNudges = 0;
-  // Fire the late-iteration submit nudge at most once per turn (see SUBMIT_NUDGE).
+  // Fire the late-iteration submit nudge at most once per turn.
   let submitNudged = false;
   // Domain-level answer rejection count (for Oak: hard-illegal proposed_team).
   // Separated from the schema-failure budget so an illegal team never burns
-  // schema retries. The loop keeps rejecting until MAX_ITERATIONS; on give-up
-  // we salvage via hooks.salvageAnswer (legalize) rather than shipping illegal.
+  // schema retries. Oak rejects up to MAX_PROPOSED_TEAM_HARD_REJECTIONS then
+  // legalizes-and-accepts; give-up salvage covers timeouts / max-iter when a
+  // best-effort submit exists.
   let answerRejections = 0;
   // Last schema-VALID submit rejected only by domain validation. On give-up
   // we legalize (Oak) or annotate it instead of a bare insufficient_data.
@@ -1219,7 +1350,8 @@ export async function runWithProvider<TAnswer = OakAnswer>(
   // Give-up recovery shared by all three fallthroughs. Prefer a best-effort
   // answer (only ever set from a schema-valid, domain-rejected submit) over a
   // discard; else recovered prose if we have any (empty-turn case), else the
-  // generic insufficient_data apology. Oak's salvageAnswer legalizes the team.
+  // generic insufficient_data apology (build-specific copy when applicable).
+  // Oak's salvageAnswer legalizes the team.
   const finalizeBestEffortOrInsufficient = async (
     reason: string,
     prose?: string,
@@ -1234,11 +1366,29 @@ export async function runWithProvider<TAnswer = OakAnswer>(
       return doFinalize(enriched);
     }
     const trimmed = prose?.trim() ?? "";
-    return doFinalize(
-      trimmed.length > 0
-        ? hooks.synthesizeFromProse(trimmed, ctx)
-        : hooks.synthesizeInsufficient(reason, ctx),
-    );
+    if (trimmed.length > 0) {
+      return doFinalize(hooks.synthesizeFromProse(trimmed, ctx));
+    }
+    const insufficient = hooks.synthesizeInsufficient(reason, ctx);
+    // Build turns that never submitted a team: actionable body, same machine
+    // uncertainty flag (UI still maps max_iterations_reached → "Couldn't complete").
+    // Duck-type via unknown — TAnswer may be BuilderAnswer for alternate hooks.
+    if (
+      teamBuild &&
+      reason !== "turn_deadline_exceeded" &&
+      reason !== "provider_call_timeout" &&
+      insufficient &&
+      typeof insufficient === "object"
+    ) {
+      const maybe = insufficient as unknown as {
+        status?: string;
+        answer_markdown?: string;
+      };
+      if (maybe.status === "insufficient_data") {
+        maybe.answer_markdown = TEAM_BUILD_INSUFFICIENT_MARKDOWN;
+      }
+    }
+    return doFinalize(insufficient);
   };
 
   // The absolute wall-clock deadline for this whole turn (issue #6). Fixed at the
@@ -1246,7 +1396,7 @@ export async function runWithProvider<TAnswer = OakAnswer>(
   // to what's left of it.
   const deadlineAt = state.startedAt + turnDeadlineMs();
 
-  for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+  for (let iteration = 0; iteration < maxIterations; iteration++) {
     // Bail if the client disconnected (user pressed Stop) during the prior tool
     // dispatch — covers the gap between the provider-level aborts. Thrown as an
     // AbortError so it propagates to the route like any transport fault (where it
@@ -1537,15 +1687,14 @@ export async function runWithProvider<TAnswer = OakAnswer>(
       transcript.push(m);
     }
 
-    // Late-iteration submit nudge: once we're within SUBMIT_NUDGE_REMAINING of
+    // Late-iteration submit nudge: once we're within submitNudgeRemaining of
     // the cap and the model is STILL gathering (it reached here, so it called
-    // tools but not a valid submit_answer), remind it to wrap up. Appended after
-    // the tool_result message as a separate user turn (providers accept a
-    // tool_result turn followed by a user turn — Anthropic combines same-role
-    // messages, Grok/OpenAI treat them as ordinary items). Fired once.
-    if (!submitNudged && iteration >= MAX_ITERATIONS - SUBMIT_NUDGE_REMAINING) {
+    // tools but not a valid submit_answer), remind it to wrap up. Team-build
+    // turns use an earlier/stronger BUILD_SUBMIT_NUDGE. Appended after the
+    // tool_result message as a separate user turn. Fired once.
+    if (!submitNudged && iteration >= maxIterations - submitNudgeRemaining) {
       submitNudged = true;
-      transcript.push(provider.buildUserMessage(hooks.submitNudge));
+      transcript.push(provider.buildUserMessage(submitNudgeText));
     }
   }
 

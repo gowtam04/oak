@@ -337,9 +337,10 @@ describe("team-lookup-agent-e2e — list_teams + get_team via the real runtime",
 // ---------------------------------------------------------------------------
 // proposed_team roster gate — the runtime roster-validates a proposed team
 // against the turn's format. An out-of-roster species (`species_illegal`) is
-// fed back so the model rebuilds legally (up to MAX_PROPOSED_TEAM_RETRIES=2),
-// then accepted with warnings stamped (warn-but-allow). `heatran` is ABSENT from
-// the "tools" seed → species_illegal; `garchomp` is present → legal.
+// fed back so the model rebuilds legally (up to
+// MAX_PROPOSED_TEAM_HARD_REJECTIONS=2), then legalized-and-accepted on give-up
+// (or dropped if unrepairable). `heatran` is ABSENT from the "tools" seed →
+// species_illegal; `garchomp` is present → legal.
 // ---------------------------------------------------------------------------
 
 /** A second seeded-roster species (distinct from garchomp), for clause tests. */

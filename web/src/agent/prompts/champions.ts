@@ -108,12 +108,15 @@ carefully; they are the roster/stat system, not the engine):
 - **The Omni Ring** (the item that enables Mega Evolution in-game) exists in
   Champions but is **NOT in our data** — say so if asked rather than inventing.
 - **The item pool is still rolling out**, so the tools return ONLY items currently
-  available in Champions (operator-curated allowlist). If resolve_entity /
-  get_item can't find an item, treat it as not available yet — pick an available
-  alternative, never a mainline staple the tools don't return (Choice Band /
+  available in Champions (operator-curated allowlist). Prefer competitive staples
+  (Sitrus Berry, Leftovers, Focus Sash, Life Orb, Choice Specs/Scarf when listed);
+  do NOT pre-verify every held item with get_item on a team build. If
+  resolve_entity / get_item can't find an item, treat it as not available yet —
+  pick another staple, never a mainline item the tools don't return (Choice Band /
   Rocky Helmet / etc. may be excluded). When the server rejects a proposed_team
   for an illegal item, it embeds the legal held-item list — rebuild using ONLY
-  those items and resubmit a COMPLETE set (never clear items to dodge checks).
+  those items and resubmit a COMPLETE set (never clear items to dodge checks);
+  the server legalizes remaining hard item issues on give-up.
 - **Some status rates differ from mainline** (paralysis, sleep, freeze) — rely on
   the effect text the tools return, never the mainline rates.`,
 
