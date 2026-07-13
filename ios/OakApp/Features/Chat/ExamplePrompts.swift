@@ -1,9 +1,10 @@
-/// Starter prompts for the fresh-thread empty state (``ChatView``'s `emptyState`). A
-/// large, curated pool spanning *all* of Oak's capabilities so that, across repeated
-/// visits, a user discovers the full range of help on offer — filters, learnsets,
-/// mechanics reasoning, type matchups, stat/damage math, lookups, ability/item
-/// effects, evolution, catch locations, in-game events/progression, glitches,
-/// spin-off games like Mystery Dungeon, and competitive Champions content.
+/// Starter prompts for the fresh-thread empty state (``ChatView``'s blank specimen
+/// plate). A large, curated pool spanning *all* of Oak's capabilities so that,
+/// across repeated visits, a user discovers the full range of help on offer —
+/// filters, learnsets, mechanics reasoning, type matchups, stat/damage math,
+/// lookups, ability/item effects, evolution, catch locations, in-game
+/// events/progression, glitches, spin-off games like Mystery Dungeon, and
+/// competitive Champions content.
 ///
 /// Phrasing is **mostly mode-agnostic** (valid in both Standard and Champions), plus
 /// a handful of Champions-flavored prompts — Champions is Oak's default scope, so the
@@ -15,8 +16,99 @@
 /// are structural ports of the portable web modules; there is no shared package).
 /// Keep this array, in this order, in sync with the web file. Android mirrors it too,
 /// at `android/app/src/main/kotlin/ai/gowtam/oak/features/chat/ExamplePrompts.kt`.
-/// Categories below are for authoring only — the array is flat.
+///
+/// **Filed starters** (soul.md empty desk) are a separate, category-tagged set —
+/// Battle / Dex / Rules / Meta with a type-dot — shown on the blank specimen plate
+/// instead of four equal beige pills.
 enum ExamplePrompts {
+  // MARK: Filed starters (soul.md — Battle / Dex / Rules / Meta)
+
+  /// One filed starter on the empty desk: category label, type-dot (Pokémon type
+  /// slug for `Theme.type`), and the prompt text sent on tap.
+  struct FiledStarter: Hashable, Identifiable {
+    /// The four starter categories — keep labels in sync with soul.md / web / Android.
+    enum Category: String, CaseIterable, Hashable {
+      case battle = "Battle"
+      case dex = "Dex"
+      case rules = "Rules"
+      case meta = "Meta"
+    }
+
+    var id: String { "\(category.rawValue)|\(prompt)" }
+    let category: Category
+    /// Pokémon type slug driving the colored type-dot (e.g. `"dragon"`).
+    let typeDot: String
+    let prompt: String
+  }
+
+  /// Curated filed-starter pool, one or more per category. `pickFiledStarters()`
+  /// returns exactly one random entry per category (four rows, fixed category order).
+  /// Type-dots match soul.md examples (Battle→dragon/fighting, Dex→ground/normal,
+  /// Rules→ghost/dark, Meta→steel/water).
+  static let filedPool: [FiledStarter] = [
+    // Battle — competitive / nature / damage
+    FiledStarter(
+      category: .battle, typeDot: "dragon",
+      prompt: "What's Garchomp's best nature for Speed?"
+    ),
+    FiledStarter(
+      category: .battle, typeDot: "fighting",
+      prompt: "Can Garchomp OHKO Gholdengo with Earthquake?"
+    ),
+    FiledStarter(
+      category: .battle, typeDot: "dragon",
+      prompt: "Garchomp's Speed at level 50 with max Speed and Jolly"
+    ),
+    // Dex — species / typing / immunity lists
+    FiledStarter(
+      category: .dex, typeDot: "ground",
+      prompt: "Which Pokémon are immune to Ground?"
+    ),
+    FiledStarter(
+      category: .dex, typeDot: "normal",
+      prompt: "Show me Garchomp"
+    ),
+    FiledStarter(
+      category: .dex, typeDot: "ground",
+      prompt: "What is Gholdengo weak to?"
+    ),
+    // Rules — mechanics / abilities / gen rules
+    FiledStarter(
+      category: .rules, typeDot: "ghost",
+      prompt: "Does Prankster work on Dark types?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "dark",
+      prompt: "Does Fake Out work on Farigiraf?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "ghost",
+      prompt: "How does Fake Out's priority work?"
+    ),
+    // Meta — usage / role / format niche
+    FiledStarter(
+      category: .meta, typeDot: "steel",
+      prompt: "What is Gholdengo's role in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "water",
+      prompt: "Who has the highest usage in Champions right now?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "steel",
+      prompt: "Is Dragapult legal in Champions?"
+    ),
+  ]
+
+  /// One random starter per category, in soul.md order (Battle → Dex → Rules → Meta).
+  static func pickFiledStarters() -> [FiledStarter] {
+    FiledStarter.Category.allCases.compactMap { category in
+      filedPool.filter { $0.category == category }.randomElement()
+    }
+  }
+
+  // MARK: Legacy flat pool (parity with web STARTER_PROMPTS)
+
   static let pool: [String] = [
     // Lookups / profiles
     "Show me Garchomp",

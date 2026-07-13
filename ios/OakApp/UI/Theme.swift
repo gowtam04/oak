@@ -432,7 +432,7 @@ extension Theme {
   /// `base` at a scheme-dependent opacity. With an explicit `scheme` the alpha is
   /// baked; with `nil` it returns a dynamic color that re-resolves per trait
   /// collection so a single gradient value adapts to appearance changes.
-  private static func washColor(
+  fileprivate static func washColor(
     _ base: Color, light: Double, dark: Double, scheme: ColorScheme?
   ) -> Color {
     if let scheme {
@@ -443,6 +443,222 @@ extension Theme {
         let alpha = traits.userInterfaceStyle == .dark ? dark : light
         return UIColor(base).resolvedColor(with: traits).withAlphaComponent(alpha)
       }
+    )
+  }
+}
+
+// MARK: - Specimen plate wash (soul.md plate wash rules)
+
+extension Theme {
+  /// Atmosphere for a finalized answer plate — type-reactive shell from
+  /// `subjects[].types`, multi-subject neutral, or mechanics ink plate.
+  /// See `docs/design/soul.md` "Plate wash rules".
+  enum PlateAtmosphere: Equatable {
+    /// One subject, 1–2 types: primary wash + secondary edge/radial.
+    case typed(primary: String, secondary: String?)
+    /// Multiple subjects: neutral-ish plate + light multi accent (don't fight
+    /// dual washes).
+    case multi
+    /// No subjects (mechanics/rules): sunken paper, stronger border, no type wash.
+    case mechanics
+
+    /// Resolve from the answer's subject type arrays (outer = subjects, inner =
+    /// that subject's types). Empty → mechanics; >1 subject → multi; else typed.
+    static func resolve(subjectTypes: [[String]]) -> PlateAtmosphere {
+      let cleaned = subjectTypes.map { types in
+        types
+          .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+          .filter { !$0.isEmpty }
+      }
+      .filter { !$0.isEmpty }
+      guard !cleaned.isEmpty else { return .mechanics }
+      if cleaned.count > 1 { return .multi }
+      let types = cleaned[0]
+      let primary = types[0]
+      let secondary = types.count > 1 ? types[1] : nil
+      return .typed(primary: primary, secondary: secondary)
+    }
+
+    /// Primary type slug for glow/edge accents; `nil` for multi/mechanics.
+    var primaryType: String? {
+      if case let .typed(primary, _) = self { return primary }
+      return nil
+    }
+
+    /// Secondary type slug when dual-typed; otherwise `nil`.
+    var secondaryType: String? {
+      if case let .typed(_, secondary) = self { return secondary }
+      return nil
+    }
+  }
+
+  /// Mix ratios for type → surface plate wash (soul.md): light ~8–14%, dark
+  /// ~18–28% so the wash still reads on dark paper.
+  enum PlateWashMix {
+    /// Primary type into the plate fill.
+    static func primary(scheme: ColorScheme) -> Double {
+      scheme == .dark ? 0.22 : 0.11
+    }
+    /// Secondary type into the plate fill / second radial.
+    static func secondary(scheme: ColorScheme) -> Double {
+      scheme == .dark ? 0.16 : 0.07
+    }
+    /// Primary type into the plate border edge.
+    static func border(scheme: ColorScheme) -> Double {
+      scheme == .dark ? 0.32 : 0.28
+    }
+    /// Radial glow behind a sprite well (stronger than the plate wash).
+    static func spriteGlow(scheme: ColorScheme) -> Double {
+      scheme == .dark ? 0.34 : 0.28
+    }
+  }
+
+  /// Type color mixed into `surface` for plate chrome. Prefer the layered
+  /// gradients in ``oakSpecimenPlate(_:)``; this is for simple solid mixes.
+  static func plateWash(
+    primary: String,
+    secondary: String? = nil,
+    scheme: ColorScheme
+  ) -> Color {
+    // Approximate color-mix(type p%, surface) via opacity over surface — callers
+    // that need full dual radials should use `oakSpecimenPlate`.
+    let p = PlateWashMix.primary(scheme: scheme)
+    return type(primary).opacity(p)
+  }
+
+  /// Border color for a typed plate: primary type mixed into `border`.
+  static func plateBorder(
+    primary: String?,
+    atmosphere: PlateAtmosphere,
+    scheme: ColorScheme
+  ) -> Color {
+    switch atmosphere {
+    case .mechanics:
+      return borderStrong
+    case .multi:
+      return border
+    case .typed(let primary, _):
+      // Approximate color-mix(primary 28%, border) as a translucent type stroke
+      // over the plate's own edge — the overlay stroke uses this color.
+      return type(primary).opacity(PlateWashMix.border(scheme: scheme))
+    }
+  }
+}
+
+// MARK: - Specimen plate chrome (View)
+
+extension View {
+  /// Wraps content in Oak's specimen-plate shell: type wash / multi / ink plate
+  /// fill, hairline edge, and raised shadow (soul.md answer plate).
+  func oakSpecimenPlate(_ atmosphere: Theme.PlateAtmosphere) -> some View {
+    modifier(OakSpecimenPlateModifier(atmosphere: atmosphere))
+  }
+}
+
+/// Specimen plate background + border. Light mode elevates with shadow; dark
+/// mode keeps a stronger stroke (same elevation grammar as `oakCard`).
+private struct OakSpecimenPlateModifier: ViewModifier {
+  @Environment(\.colorScheme) private var colorScheme
+  let atmosphere: Theme.PlateAtmosphere
+
+  func body(content: Content) -> some View {
+    let shape = RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
+    let isDark = colorScheme == .dark
+    content
+      .background {
+        ZStack {
+          plateFill(isDark: isDark)
+          plateRadials(isDark: isDark)
+        }
+        .clipShape(shape)
+      }
+      .overlay {
+        shape.strokeBorder(borderColor(isDark: isDark), lineWidth: atmosphere == .mechanics ? 1.5 : 1)
+      }
+      .clipShape(shape)
+      .shadow(
+        color: isDark ? .clear : Theme.Shadow.raised.ambient.color,
+        radius: Theme.Shadow.raised.ambient.radius,
+        y: Theme.Shadow.raised.ambient.y
+      )
+      .shadow(
+        color: isDark ? .clear : Theme.Shadow.raised.key.color,
+        radius: Theme.Shadow.raised.key.radius,
+        y: Theme.Shadow.raised.key.y
+      )
+  }
+
+  @ViewBuilder
+  private func plateFill(isDark: Bool) -> some View {
+    switch atmosphere {
+    case .mechanics:
+      // Ink plate: sunken → surface vertical gradient, no type wash.
+      LinearGradient(
+        colors: [Theme.surfaceSunken, Theme.surface],
+        startPoint: .top,
+        endPoint: .bottom
+      )
+    case .multi:
+      // Neutral-ish + faint multi accent (flying-ish cool wash, low %).
+      ZStack {
+        Theme.surface
+        LinearGradient(
+          colors: [
+            Theme.type("flying").opacity(isDark ? 0.10 : 0.05),
+            .clear,
+          ],
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+      }
+    case let .typed(primary, secondary):
+      let p = Theme.PlateWashMix.primary(scheme: colorScheme)
+      let s = Theme.PlateWashMix.secondary(scheme: colorScheme)
+      ZStack {
+        Theme.surface
+        LinearGradient(
+          colors: [
+            Theme.type(primary).opacity(p),
+            Theme.type(secondary ?? primary).opacity(s * 0.85),
+            .clear,
+          ],
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func plateRadials(isDark: Bool) -> some View {
+    switch atmosphere {
+    case let .typed(primary, secondary):
+      let p = Theme.PlateWashMix.primary(scheme: colorScheme) + 0.05
+      let s = Theme.PlateWashMix.secondary(scheme: colorScheme) + 0.04
+      RadialGradient(
+        colors: [Theme.type(primary).opacity(p), .clear],
+        center: UnitPoint(x: 0.88, y: 0.18),
+        startRadius: 4,
+        endRadius: 180
+      )
+      if let secondary {
+        RadialGradient(
+          colors: [Theme.type(secondary).opacity(s), .clear],
+          center: UnitPoint(x: 0.12, y: 0.90),
+          startRadius: 4,
+          endRadius: 140
+        )
+      }
+    case .multi, .mechanics:
+      EmptyView()
+    }
+  }
+
+  private func borderColor(isDark: Bool) -> Color {
+    Theme.plateBorder(
+      primary: atmosphere.primaryType,
+      atmosphere: atmosphere,
+      scheme: colorScheme
     )
   }
 }

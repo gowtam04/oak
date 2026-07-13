@@ -13,11 +13,11 @@ import SwiftUI
 /// which pushes the thread route (load detail + resume into chat); ``onNewChat`` (the
 /// floating action disc) starts a fresh thread.
 ///
-/// Chrome (history polish, §5.4): a custom **sunken search pill** (not `.searchable`)
-/// pinned above the list, a **new-chat FAB** bottom-trailing (reachable one-handed),
-/// dense rows (Fredoka-adjacent title + engraved mono meta), an **active-row rail**
-/// marking the last-opened thread, and a **filter cue** (tinted toolbar icon + a
-/// dismissible scope pill) when a format filter is on.
+/// Chrome (history polish, §5.4 + soul.md): a custom **sunken search pill** (not
+/// `.searchable`) pinned above the list, a **new-chat FAB** bottom-trailing, dense
+/// rows (title + engraved mono meta), an **OPEN stamp + lifted plate** marking the
+/// last-opened thread (never a red left rail), and a **filter cue** when a format
+/// filter is on.
 struct ConversationListView: View {
   @State private var model: HistoryListViewModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -232,29 +232,41 @@ struct ConversationListView: View {
   /// factored out so both the "Pinned" section and the main list share it.
   @ViewBuilder
   private func conversationRow(_ conversation: ConversationSummary) -> some View {
-    // A row is highlighted (accentSoft wash + 3pt accent rail) when pinned OR when
-    // it's the last-opened thread (web `[data-active]`). Never color alone — the pin
-    // glyph states pinned, and the rail is a redundant position cue.
+    // Active = last-opened thread: lifted mini-plate + mono OPEN stamp (soul.md).
+    // Never a red left selection rail. Pinned is still the pin glyph only.
     let isActive = conversation.id == lastOpenedId
-    let highlighted = conversation.pinned || isActive
     Button {
       lastOpenedId = conversation.id
       onSelect(conversation)
     } label: {
-      ConversationRow(conversation: conversation)
+      ConversationRow(conversation: conversation, isOpen: isActive)
     }
     .buttonStyle(.plain)
-    .listRowInsets(EdgeInsets(top: 0, leading: Theme.Spacing.lg, bottom: 0, trailing: Theme.Spacing.lg))
-    // The rail sits at the true leading edge of the row background so nothing shifts
-    // when it appears/disappears; content is inset past it.
+    .listRowInsets(
+      EdgeInsets(
+        top: Theme.Spacing.xs,
+        leading: Theme.Spacing.lg,
+        bottom: Theme.Spacing.xs,
+        trailing: Theme.Spacing.lg
+      )
+    )
     .listRowBackground(
-      ZStack(alignment: .leading) {
-        highlighted ? Theme.accentSoft : Theme.surface
-        Rectangle()
-          .fill(highlighted ? Theme.accent : Color.clear)
-          .frame(width: 3)
+      Group {
+        if isActive {
+          RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+            .fill(Theme.surface)
+            .overlay {
+              RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+                .strokeBorder(Theme.borderStrong, lineWidth: 1)
+            }
+            .oakShadow(.card)
+            .padding(.vertical, 2)
+        } else {
+          Color.clear
+        }
       }
     )
+    .listRowSeparator(isActive ? .hidden : .automatic)
     // Separator aligned to the text, not the row edge.
     .alignmentGuide(.listRowSeparatorLeading) { _ in Theme.Spacing.lg }
     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -398,11 +410,13 @@ private struct FloatingActionButtonStyle: ButtonStyle {
 }
 
 /// One conversation row: the title and an engraved mono meta line ("GEN 9 · 19H
-/// AGO"). Denser than the old row — subheadline semibold title, single line
-/// truncated. Color is never the sole signal — the format is shown as text
+/// AGO"). When `isOpen`, a mono **OPEN** stamp trails (soul.md history selection —
+/// never a red rail). Color is never the sole signal — the format is shown as text
 /// (M-AC-UI9.3 / conventions.md).
 private struct ConversationRow: View {
   let conversation: ConversationSummary
+  /// True when this is the last-opened / active thread — shows the OPEN stamp.
+  var isOpen: Bool = false
 
   var body: some View {
     HStack(spacing: Theme.Spacing.sm) {
@@ -425,6 +439,22 @@ private struct ConversationRow: View {
           .foregroundStyle(Theme.textMuted)
       }
       Spacer(minLength: 0)
+      if isOpen {
+        Text("Open")
+          .instrumentLabel(.caption2)
+          .foregroundStyle(Theme.accent)
+          .padding(.horizontal, 7)
+          .padding(.vertical, 3)
+          .background(
+            Theme.accent.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+          )
+          .overlay {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+              .strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1)
+          }
+          .accessibilityLabel("Open")
+      }
     }
     .padding(.vertical, 10)
     .contentShape(Rectangle())

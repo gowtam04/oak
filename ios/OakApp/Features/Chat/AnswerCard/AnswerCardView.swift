@@ -17,8 +17,8 @@ import SwiftUI
 ///   8. damage calc          ← `damage_calc` (+ "Open in viewer")
 ///   9. team blocks          ← `proposed_team` / `saved_team` (+ warnings)
 ///  10. suggestions          ← `suggestions[]` (+ status)
-///  11. credibility strip    ← `reasoning_markdown` + `citations[]` — chip strip + inline wells
-///  12. inferences           ← `inferences[]`
+///  11. inferences           ← `inferences[]`
+///  12. receipts footer      ← `reasoning_markdown` + `citations[]` — plate foot
 ///
 /// The scope tag and caveat strip are lifted to the TOP to mirror the web
 /// `AnswerCard` (masthead + `CaveatStrip` lead the card): a caveat is read before
@@ -26,10 +26,8 @@ import SwiftUI
 /// into ONE `CaveatStripView` (they used to render as two separate blocks near the
 /// bottom).
 ///
-/// The blocks render full-width on the chat background (no outer bubble): user
-/// turns carry the colored bubble, the answer is the open, reasoned content, and
-/// each structured block supplies its own card chrome — so there is no
-/// surface-on-surface nesting.
+/// The whole card is a **specimen plate** (soul.md): type-reactive wash / multi /
+/// mechanics ink chrome from `subjects[].types`, with a RECEIPTS footer at the foot.
 ///
 /// Interactivity: a clarify-option or suggestion tap sends its text **verbatim**
 /// as the next user turn via ``onFollowUp`` (the same UI→agent-input mechanism the
@@ -84,21 +82,53 @@ struct AnswerCardView: View {
   /// ``ArtifactViewModel/openDamageCalc(_:)``; no-op default.
   var onOpenDamageCalc: (DamageCalc) -> Void = { _ in }
 
+  /// Plate atmosphere from the answer's subjects (typed / multi / mechanics ink).
+  private var plateAtmosphere: Theme.PlateAtmosphere {
+    Theme.PlateAtmosphere.resolve(
+      subjectTypes: (answer.subjects ?? []).map(\.types)
+    )
+  }
+
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      ForEach(Array(sections.enumerated()), id: \.element) { index, section in
-        view(for: section)
-          .opacity(hasAppeared ? 1 : 0)
-          .offset(y: hasAppeared ? 0 : 6)
-          .animation(
-            reduceMotion ? nil : Theme.Motion.staggered(index), value: hasAppeared
-          )
+    VStack(alignment: .leading, spacing: 0) {
+      // Plate body — everything except the receipts foot tab.
+      VStack(alignment: .leading, spacing: 14) {
+        ForEach(Array(bodySections.enumerated()), id: \.element) { index, section in
+          view(for: section)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 6)
+            .animation(
+              reduceMotion ? nil : Theme.Motion.staggered(index), value: hasAppeared
+            )
+        }
+      }
+      .padding(Theme.Spacing.lg)
+      .frame(maxWidth: .infinity, alignment: .leading)
+
+      // Full-width RECEIPTS footer (soul.md) — only when reasoning/citations present.
+      if hasReceipts {
+        ReceiptsFooterView(
+          reasoningMarkdown: answer.reasoningMarkdown,
+          citations: answer.citations,
+          onOpenEntity: onOpenEntity
+        )
+        .opacity(hasAppeared ? 1 : 0)
+        .animation(
+          reduceMotion ? nil : Theme.Motion.staggered(bodySections.count),
+          value: hasAppeared
+        )
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    .oakSpecimenPlate(plateAtmosphere)
     // The whole answer reads as one VoiceOver container with ordered children.
     .accessibilityElement(children: .contain)
     .onAppear { hasAppeared = true }
+  }
+
+  /// Sections rendered inside the plate body (everything except receipts).
+  private var bodySections: [Section] {
+    sections.filter { $0 != .receipts }
   }
 
   // MARK: Section model (testable orchestration seam)
@@ -117,18 +147,17 @@ struct AnswerCardView: View {
     case damageCalc
     case teams
     case suggestions
-    /// Unified credibility strip: replaces the former separate `.reasoning` and
-    /// `.citations` sections. A horizontal chip strip expands inline into a
-    /// `surfaceSunken` well — one section is present when EITHER reasoning OR
-    /// citations (or both) is non-empty.
-    case credibility
     case inferences
+    /// Full-width RECEIPTS footer at the plate foot (soul.md). Present when
+    /// EITHER reasoning OR citations (or both) is non-empty. Replaces the former
+    /// free-floating credibility chip strip.
+    case receipts
   }
 
   /// The ordered blocks this card renders for ``answer`` — the single source of
   /// truth `body` iterates. A block is included only when its field is present
   /// (and non-empty after the same trimming its subview applies), so an absent
-  /// field renders nothing.
+  /// field renders nothing. Receipts always trail (plate foot).
   var sections: [Section] {
     var out: [Section] = []
     if hasStatus { out.append(.status) }
@@ -141,8 +170,8 @@ struct AnswerCardView: View {
     if hasDamageCalc { out.append(.damageCalc) }
     if hasTeams { out.append(.teams) }
     if hasSuggestions { out.append(.suggestions) }
-    if hasCredibility { out.append(.credibility) }
     if hasInferences { out.append(.inferences) }
+    if hasReceipts { out.append(.receipts) }
     return out
   }
 
@@ -255,14 +284,12 @@ struct AnswerCardView: View {
         status: answer.status,
         onSelect: onFollowUp
       )
-    case .credibility:
-      CredibilityStripView(
-        reasoningMarkdown: answer.reasoningMarkdown,
-        citations: answer.citations,
-        onOpenEntity: onOpenEntity
-      )
     case .inferences:
       InferencesView(inferences: answer.inferences)
+    case .receipts:
+      // Rendered separately as the plate foot (see `body`); kept here so the
+      // section enum stays exhaustive for tests that map 1:1 to subviews.
+      EmptyView()
     }
   }
 
@@ -380,9 +407,8 @@ struct AnswerCardView: View {
 
   private var hasSuggestions: Bool { !Self.nonBlank(answer.suggestions).isEmpty }
 
-  /// The credibility strip shows when EITHER reasoning or citations is non-empty —
-  /// the two chips share one section and one entrance animation slot.
-  private var hasCredibility: Bool {
+  /// The receipts footer shows when EITHER reasoning or citations is non-empty.
+  private var hasReceipts: Bool {
     !Self.trimmed(answer.reasoningMarkdown).isEmpty || !answer.citations.isEmpty
   }
 
@@ -414,125 +440,113 @@ struct AnswerCardView: View {
   }
 }
 
-// MARK: - Credibility strip (Reasoning + Sources chips)
+// MARK: - Receipts footer (soul.md)
 
-/// A horizontal strip of two capsule chips — `REASONING` and `SOURCES · N` — that
-/// sit directly under the answer prose. Tapping a chip expands its content INLINE
-/// into a `surfaceSunken` rounded well, animated with `Theme.Motion.smooth`. Only
-/// one panel may be open at a time (opening one closes the other). Replaces the
-/// former stacked `DisclosureGroup` pair (design §4.04 "Credibility strip").
+/// Full-width plate-foot tab: `RECEIPTS · N SOURCE(S)`. Expands inline to
+/// reasoning markdown + citation list. Replaces free-floating credibility chips
+/// (soul.md "Receipts" / Phase 1 checklist).
 ///
-/// Accessibility: each chip is a `Button` with `.isToggle` trait + an
-/// `accessibilityValue` reporting "expanded"/"collapsed", and a descriptive hint.
-/// The card-level `accessibilityElement(children: .contain)` on `AnswerCardView`
-/// ensures the strip reads in document order.
-private struct CredibilityStripView: View {
+/// Accessibility: a single toggle button with expanded/collapsed value, plus
+/// the expanded content in document order under the card's contain group.
+private struct ReceiptsFooterView: View {
   let reasoningMarkdown: String
   let citations: [Citation]
 
   /// Opens a citation's source entity (e.g. `move/outrage`) in the artifact
-  /// viewer, mirroring web's clickable Sources entries (`SourceList.tsx` +
-  /// `parseCitationSource`). Defaults to a no-op so the strip renders in isolation.
+  /// viewer. Defaults to a no-op so the footer renders in isolation.
   var onOpenEntity: (EntityKind, String) -> Void = { _, _ in }
 
-  /// Which panel (if any) is currently expanded. Nil → both closed.
-  @State private var expanded: Panel? = nil
+  @State private var isOpen = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-  enum Panel { case reasoning, sources }
 
   private var hasReasoning: Bool {
     !reasoningMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
   }
 
-  var body: some View {
-    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-      // Chip strip
-      HStack(spacing: Theme.Spacing.sm) {
-        if hasReasoning {
-          chipButton(
-            label: "REASONING",
-            panel: .reasoning,
-            hint: "Shows how Oak reached this answer"
-          )
-        }
-        if !citations.isEmpty {
-          chipButton(
-            label: "SOURCES · \(citations.count)",
-            panel: .sources,
-            hint: "Shows the \(citations.count) source\(citations.count == 1 ? "" : "s") cited"
-          )
-        }
-        Spacer(minLength: 0)
-      }
+  private var sourceCount: Int { citations.count }
 
-      // Expanded inline well — animated in/out with smooth spring; Reduce Motion
-      // uses a plain opacity crossfade with no height animation (M-AC-UI9.2).
-      if let panel = expanded {
-        expandedWell(panel)
-          .transition(
-            reduceMotion
-              ? .opacity
-              : .asymmetric(
-                  insertion: .opacity.combined(with: .move(edge: .top)),
-                  removal: .opacity
-                )
-          )
+  private var tabLabel: String {
+    if sourceCount == 0 {
+      return "Receipts"
+    }
+    let noun = sourceCount == 1 ? "source" : "sources"
+    return "Receipts · \(sourceCount) \(noun)"
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      Button {
+        isOpen.toggle()
+      } label: {
+        HStack(spacing: Theme.Spacing.sm) {
+          Text(tabLabel)
+            .instrumentLabel()
+            .foregroundStyle(Theme.textSecondary)
+          Spacer(minLength: 0)
+          Image(systemName: "chevron.right")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Theme.textMuted)
+            .rotationEffect(.degrees(isOpen ? 90 : 0))
+        }
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.vertical, Theme.Spacing.md)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityAddTraits([.isButton, .isToggle])
+      .accessibilityLabel(tabLabel)
+      .accessibilityHint("Shows reasoning and cited sources")
+      .accessibilityValue(isOpen ? "expanded" : "collapsed")
+
+      if isOpen {
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+          if hasReasoning {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+              Text("Reasoning")
+                .instrumentLabel()
+                .foregroundStyle(Theme.textMuted)
+              MarkdownBlockView(reasoningMarkdown)
+                .font(Theme.body(.footnote))
+                .foregroundStyle(Theme.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+          }
+          if !citations.isEmpty {
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+              Text("Sources")
+                .instrumentLabel()
+                .foregroundStyle(Theme.textMuted)
+              ForEach(Array(citations.enumerated()), id: \.offset) { _, citation in
+                citationRow(citation)
+              }
+            }
+          }
+        }
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.bottom, Theme.Spacing.lg)
+        .transition(
+          reduceMotion
+            ? .opacity
+            : .asymmetric(
+                insertion: .opacity.combined(with: .move(edge: .top)),
+                removal: .opacity
+              )
+        )
       }
     }
-    .animation(reduceMotion ? .default : Theme.Motion.smooth, value: expanded)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(Theme.surfaceSunken.opacity(0.65))
+    .overlay(alignment: .top) {
+      Rectangle()
+        .fill(Theme.border.opacity(0.9))
+        .frame(height: 1)
+    }
+    .animation(reduceMotion ? .default : Theme.Motion.smooth, value: isOpen)
     .accessibilityElement(children: .contain)
   }
 
-  // MARK: Chip button
-
-  private func chipButton(label: String, panel: Panel, hint: String) -> some View {
-    let isOpen = expanded == panel
-    return Button {
-      expanded = (isOpen ? nil : panel)
-    } label: {
-      Text(label)
-        .instrumentLabel()
-        .foregroundStyle(Theme.textSecondary)
-        .padding(.horizontal, Theme.Spacing.sm)
-        .padding(.vertical, Theme.Spacing.xs)
-        .background(Theme.surfaceSunken, in: Capsule())
-    }
-    .buttonStyle(.plain)
-    .accessibilityAddTraits([.isButton, .isToggle])
-    .accessibilityHint(hint)
-    .accessibilityValue(isOpen ? "expanded" : "collapsed")
-  }
-
-  // MARK: Expanded well
-
-  @ViewBuilder
-  private func expandedWell(_ panel: Panel) -> some View {
-    Group {
-      switch panel {
-      case .reasoning:
-        MarkdownBlockView(reasoningMarkdown)
-          .font(Theme.body(.footnote))
-          .foregroundStyle(Theme.textSecondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .fixedSize(horizontal: false, vertical: true)
-      case .sources:
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-          ForEach(Array(citations.enumerated()), id: \.offset) { _, citation in
-            citationRow(citation)
-          }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-      }
-    }
-    .padding(Theme.Spacing.md)
-    .background(
-      Theme.surfaceSunken,
-      in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-    )
-  }
-
-  // MARK: Citation row (inline — mirrors CitationsView's row rendering)
+  // MARK: Citation row
 
   private func citationRow(_ citation: Citation) -> some View {
     HStack(alignment: .top, spacing: Theme.Spacing.sm) {

@@ -16,8 +16,9 @@ import Testing
 /// nothing. Each `Section` case maps 1:1 to a subview, so per-section assertions are
 /// the per-subview "field present vs absent" structure tests.
 ///
-/// Note: the former `.reasoning` and `.citations` sections were unified into a single
-/// `.credibility` chip strip (design §4.04 "Credibility strip"). Tests updated accordingly.
+/// Note: the former `.reasoning` / `.citations` / `.credibility` chip strip is now
+/// a single `.receipts` plate-foot footer (soul.md "Receipts"). Tests updated
+/// accordingly.
 ///
 /// `@MainActor` because `View` members are main-actor isolated (reading `sections`
 /// off a `View` value is main-actor work).
@@ -185,37 +186,52 @@ struct AnswerCardViewTests {
     #expect(sections(makeAnswer(suggestions: ["Gible"])).contains(.suggestions))
   }
 
-  // MARK: Credibility strip — present when reasoning OR citations is non-empty.
-  // Replaces the former separate `.reasoning` and `.citations` section tests;
-  // both content types share one chip strip and one entrance-animation slot.
+  // MARK: Receipts footer — present when reasoning OR citations is non-empty.
+  // Replaces the former credibility chip strip; both content types share one
+  // plate-foot tab (soul.md "Receipts").
 
   @Test
-  func credibilityPresentWhenReasoningNonBlank() {
-    #expect(!sections(makeAnswer(reasoningMarkdown: "")).contains(.credibility))
-    #expect(!sections(makeAnswer(reasoningMarkdown: "   \n ")).contains(.credibility))
-    #expect(sections(makeAnswer(reasoningMarkdown: "Compared Speed.")).contains(.credibility))
+  func receiptsPresentWhenReasoningNonBlank() {
+    #expect(!sections(makeAnswer(reasoningMarkdown: "")).contains(.receipts))
+    #expect(!sections(makeAnswer(reasoningMarkdown: "   \n ")).contains(.receipts))
+    #expect(sections(makeAnswer(reasoningMarkdown: "Compared Speed.")).contains(.receipts))
   }
 
   @Test
-  func credibilityPresentWhenCitationsNonEmpty() {
-    #expect(!sections(makeAnswer(citations: [])).contains(.credibility))
+  func receiptsPresentWhenCitationsNonEmpty() {
+    #expect(!sections(makeAnswer(citations: [])).contains(.receipts))
     let citation = Citation(source: "PokeAPI", detail: "Base stats", endpointUrl: nil)
-    #expect(sections(makeAnswer(citations: [citation])).contains(.credibility))
+    #expect(sections(makeAnswer(citations: [citation])).contains(.receipts))
   }
 
   @Test
-  func credibilityAbsentWhenBothReasoningAndCitationsEmpty() {
-    #expect(!sections(makeAnswer(reasoningMarkdown: "", citations: [])).contains(.credibility))
-    #expect(!sections(makeAnswer(reasoningMarkdown: "   \n ", citations: [])).contains(.credibility))
+  func receiptsAbsentWhenBothReasoningAndCitationsEmpty() {
+    #expect(!sections(makeAnswer(reasoningMarkdown: "", citations: [])).contains(.receipts))
+    #expect(!sections(makeAnswer(reasoningMarkdown: "   \n ", citations: [])).contains(.receipts))
   }
 
   @Test
-  func credibilityIsOneSectionEvenWhenBothPresent() {
-    // When both reasoning and citations are non-empty, the strip renders once (one
-    // section, two chips) — never as two separate sections.
+  func receiptsIsOneSectionEvenWhenBothPresent() {
+    // When both reasoning and citations are non-empty, the footer renders once —
+    // never as two separate sections.
     let citation = Citation(source: "PokeAPI", detail: "Base stats", endpointUrl: nil)
     let s = sections(makeAnswer(reasoningMarkdown: "Compared Speed.", citations: [citation]))
-    #expect(s.filter { $0 == .credibility }.count == 1)
+    #expect(s.filter { $0 == .receipts }.count == 1)
+  }
+
+  @Test
+  func receiptsTrailsAllOtherSections() {
+    let citation = Citation(source: "PokeAPI", detail: "Base stats", endpointUrl: nil)
+    let inference = Inference(claim: "Outspeeds.", confidence: .high, note: nil)
+    let s = sections(
+      makeAnswer(
+        reasoningMarkdown: "Compared Speed.",
+        citations: [citation],
+        inferences: [inference]
+      )
+    )
+    #expect(s.last == .receipts)
+    #expect(s.contains(.inferences))
   }
 
   // MARK: Inferences
@@ -299,8 +315,8 @@ struct AnswerCardViewTests {
         .damageCalc,
         .teams,
         .suggestions,
-        .credibility,
         .inferences,
+        .receipts,
       ]
     )
   }
@@ -312,7 +328,7 @@ struct AnswerCardViewTests {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
     // `answered` ⇒ no status badge. The fixture carries a named (non-fallback)
     // generation → scope tag, and one uncertainty flag → caveat; both lifted to top.
-    // reasoning + citations present → credibility strip (replaces former separate sections).
+    // reasoning + citations present → receipts footer (plate foot).
     #expect(
       sections(answer) == [
         .scope,
@@ -324,38 +340,38 @@ struct AnswerCardViewTests {
         .damageCalc,
         .teams,
         .suggestions,
-        .credibility,
         .inferences,
+        .receipts,
       ]
     )
   }
 
   @Test
-  func clarificationFixtureShowsStatusScopeAnswerQuestionCredibility() throws {
+  func clarificationFixtureShowsStatusScopeAnswerQuestionReceipts() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_clarification.json")
     // Named generation, no fallback, no flags → scope tag but no caveat.
-    // Has reasoning → credibility strip.
+    // Has reasoning → receipts footer.
     #expect(
-      sections(answer) == [.status, .scope, .answer, .question, .credibility]
+      sections(answer) == [.status, .scope, .answer, .question, .receipts]
     )
   }
 
   @Test
-  func resolutionFailedFixtureShowsStatusScopeAnswerSuggestionsCredibility() throws {
+  func resolutionFailedFixtureShowsStatusScopeAnswerSuggestionsReceipts() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_resolution_failed.json")
-    // Has reasoning → credibility strip.
+    // Has reasoning → receipts footer.
     #expect(
-      sections(answer) == [.status, .scope, .answer, .suggestions, .credibility]
+      sections(answer) == [.status, .scope, .answer, .suggestions, .receipts]
     )
   }
 
   @Test
-  func insufficientDataFixtureShowsStatusScopeCaveatAnswerCredibility() throws {
+  func insufficientDataFixtureShowsStatusScopeCaveatAnswerReceipts() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_insufficient_data.json")
     // The fixture is a generation fallback with a flag → caveat present at top.
-    // reasoning + citations both present → credibility strip.
+    // reasoning + citations both present → receipts footer.
     #expect(
-      sections(answer) == [.status, .scope, .caveat, .answer, .credibility]
+      sections(answer) == [.status, .scope, .caveat, .answer, .receipts]
     )
   }
 

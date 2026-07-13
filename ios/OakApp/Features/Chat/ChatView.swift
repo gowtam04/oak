@@ -55,11 +55,10 @@ struct ChatView: View {
   /// the eye lands where the action is (§4.01). Skipped under Reduce Motion.
   @State private var sendPulse = false
 
-  /// The empty state's four example chips, resampled from ``ExamplePrompts/pool``
-  /// each time the empty state (re)appears (fresh load, or a new chat after turns
-  /// existed) — never mid-appearance, so chips don't shuffle under the user's
-  /// finger. Mirrors web's `pickRandomPrompts` call in `ChatThread`'s effect.
-  @State private var exampleQuestions: [String] = []
+  /// The empty desk's four filed starters (Battle / Dex / Rules / Meta), resampled
+  /// from ``ExamplePrompts/filedPool`` each time the empty state (re)appears —
+  /// never mid-appearance, so rows don't shuffle under the user's finger.
+  @State private var filedStarters: [ExamplePrompts.FiledStarter] = []
 
   /// The thread's artifact bottom-sheet viewer (artifact-viewer.md M-ART-US-1/2/3).
   /// One per chat thread, hosted once via ``artifactViewerHost(_:)``. Built lazily in
@@ -422,83 +421,141 @@ struct ChatView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  /// A branded empty state: the ``OakBrandMark`` hero, a title + description, and the
-  /// example-question chips (styled like ``SuggestionsView`` chips) that cascade in.
-  /// Sends its text verbatim as the first user turn on tap (same path as a
-  /// suggestion chip). Games-wide since oak-v2 — the four chips are resampled from
-  /// ``ExamplePrompts/pool`` on each appearance, mirroring the web starter prompts.
+  /// Blank specimen plate empty desk (soul.md): dashed/grid plate, `NEW ENTRY`,
+  /// "What are we looking up?", scope stamp from `displayFormat`, and filed
+  /// starters (Battle / Dex / Rules / Meta with type-dots). **Not** a centered
+  /// logo / "Ask Oak" AI-hero composition.
   private var emptyState: some View {
-    VStack(spacing: Theme.Spacing.xl) {
-      // The wordmark lockup hero (§5.1): the brand tile + Fredoka "Oak", the web
-      // landing page in the hand.
-      OakWordmarkLockup(tileSize: 48, titleStyle: .largeTitle, elevated: true)
-
-      VStack(spacing: Theme.Spacing.sm) {
-        Text("Every answer carries its reasoning, sources, and the generation it's based on.")
-          .font(Theme.body(.subheadline))
-          .foregroundStyle(Theme.textSecondary)
-          .multilineTextAlignment(.center)
+    blankSpecimenPlate
+      .frame(maxWidth: Self.plateMaxWidth)
+      .frame(maxWidth: .infinity)
+      .padding(.horizontal, Theme.Spacing.sm)
+      .onAppear {
+        filedStarters = ExamplePrompts.pickFiledStarters()
+        emptyStateAppeared = true
       }
+  }
 
-      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-        Text("Try asking")
+  /// Max width the blank plate snaps to so it reads as a desk specimen, not a
+  /// full-bleed hero.
+  private static let plateMaxWidth: CGFloat = 420
+
+  /// The blank specimen plate: dashed border, subtle grid, NEW ENTRY + scope stamp,
+  /// prompt, subcopy, and filed starters.
+  private var blankSpecimenPlate: some View {
+    VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+      HStack(alignment: .center) {
+        Text("New entry")
           .instrumentLabel()
           .foregroundStyle(Theme.textSecondary)
           .accessibilityAddTraits(.isHeader)
-        // A 2-column chip grid (web parity, §5.1).
-        LazyVGrid(columns: Self.chipColumns, spacing: Theme.Spacing.sm) {
-          ForEach(Array(exampleQuestions.enumerated()), id: \.offset) { index, question in
-            exampleChip(question, index: index)
+        Spacer(minLength: Theme.Spacing.sm)
+        Text(model.displayFormat.displayLabel)
+          .instrumentLabel()
+          .foregroundStyle(Theme.textStrong)
+          .padding(.horizontal, 10)
+          .padding(.vertical, 5)
+          .background(
+            Theme.accent.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+          )
+          .overlay {
+            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+              .strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1)
           }
+          .accessibilityLabel("Scope: \(model.displayFormat.displayLabel)")
+      }
+
+      Text("What are we looking up?")
+        .font(Theme.body(.title3, weight: .bold))
+        .foregroundStyle(Theme.textStrong)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityIdentifier("empty-desk-prompt")
+
+      Text("Open a specimen. Every answer carries receipts — reasoning, sources, and the generation it is based on.")
+        .font(Theme.body(.subheadline))
+        .foregroundStyle(Theme.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+        Text("Filed starters")
+          .instrumentLabel()
+          .foregroundStyle(Theme.textMuted)
+          .padding(.top, Theme.Spacing.xs)
+        ForEach(Array(filedStarters.enumerated()), id: \.element.id) { index, starter in
+          filedStarterRow(starter, index: index)
         }
       }
-      .frame(maxWidth: Self.chipMaxWidth)
-      .padding(.top, Theme.Spacing.xs)
     }
-    .frame(maxWidth: .infinity)
-    // No top offset: the thread centers this composition in the viewport (§3 —
-    // empty states are centered, not top- or bottom-anchored).
-    .padding(.horizontal, Theme.Spacing.sm)
-    .onAppear {
-      exampleQuestions = ExamplePrompts.pick(4)
-      emptyStateAppeared = true
+    .padding(Theme.Spacing.lg)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background {
+      ZStack {
+        Theme.surface
+        // Subtle desk grid (soul.md blank plate).
+        BlankPlateGrid()
+          .opacity(0.45)
+          .padding(12)
+      }
     }
+    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
+        // Dashed plate edge — border with a faint accent mix (prototype blank-plate).
+        .strokeBorder(
+          Theme.borderStrong.opacity(0.85),
+          style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+        )
+    }
+    .oakShadow(.card)
   }
 
-  /// The max-width the `TRY ASKING` label + chip grid snap to, so the 2-column
-  /// grid reads as one aligned cluster (§5.1).
-  private static let chipMaxWidth: CGFloat = 340
-
-  /// Two flexible columns for the empty-state example-chip grid.
-  private static let chipColumns = [
-    GridItem(.flexible(), spacing: Theme.Spacing.sm),
-    GridItem(.flexible(), spacing: Theme.Spacing.sm),
-  ]
-
-  /// One example-question chip, styled with the Oak chip grammar (§4.6). Empty
-  /// state, so it presses **red-soft** (brand); tapping sends it as the next user
-  /// turn and pulses the send button once. Cascades in with a per-index stagger,
-  /// collapsing to an instant appearance under Reduce Motion.
-  private func exampleChip(_ text: String, index: Int) -> some View {
+  /// One filed starter row: type-dot + category instrument label + prompt.
+  /// Tapping sends the prompt as the next user turn and pulses send.
+  private func filedStarterRow(
+    _ starter: ExamplePrompts.FiledStarter,
+    index: Int
+  ) -> some View {
     let shown = reduceMotion || emptyStateAppeared
     return Button {
       Haptics.tap()
       if !reduceMotion {
-        // A single pulse: bump the toggle so the composer's send button scales once.
         sendPulse.toggle()
       }
-      sendFollowUp(text)
+      sendFollowUp(starter.prompt)
     } label: {
-      Text(text)
-        .multilineTextAlignment(.center)
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity)
+      HStack(spacing: Theme.Spacing.sm) {
+        Circle()
+          .fill(Theme.type(starter.typeDot))
+          .frame(width: 8, height: 8)
+          .accessibilityHidden(true)
+        Text(starter.category.rawValue)
+          .instrumentLabel(.caption2)
+          .foregroundStyle(Theme.textMuted)
+          .frame(width: 52, alignment: .leading)
+        Text(starter.prompt)
+          .font(Theme.body(.subheadline, weight: .semibold))
+          .foregroundStyle(Theme.textStrong)
+          .multilineTextAlignment(.leading)
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      .padding(.horizontal, Theme.Spacing.md)
+      .padding(.vertical, 10)
+      .background(
+        Theme.surface.opacity(0.7),
+        in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+          .strokeBorder(Theme.border, lineWidth: 1)
+      }
     }
-    .buttonStyle(.oakChip(.accent))
+    .buttonStyle(OakPressableButtonStyle())
     .opacity(shown ? 1 : 0)
     .offset(y: shown ? 0 : 8)
     .animation(reduceMotion ? nil : Theme.Motion.staggered(index), value: emptyStateAppeared)
-    .accessibilityLabel("Ask: \(text)")
+    .accessibilityLabel("\(starter.category.rawValue): \(starter.prompt)")
     .accessibilityHint("Sends this as your next message")
   }
 
@@ -547,10 +604,10 @@ struct ChatView: View {
   }
 }
 
-// MARK: - User message
+// MARK: - User note (soul.md — sunken paper + red corner pip)
 
-/// A user's message bubble, trailing-aligned. Shows an attached-image caption when
-/// the turn carried photos (the actual thumbnails are P8).
+/// A user's desk note, trailing-aligned. Sunken/neutral paper + thin border +
+/// small red corner pip — **not** an accent-filled iMessage/ChatGPT bubble.
 private struct UserMessageView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let text: String
@@ -562,16 +619,23 @@ private struct UserMessageView: View {
       VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
         if !text.isEmpty {
           Text(text)
-            .font(Theme.body(.body))
-            .foregroundStyle(Theme.textPrimary)
+            .font(Theme.body(.body, weight: .semibold))
+            .foregroundStyle(Theme.textStrong)
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.vertical, Theme.Spacing.md)
-            // The paper bubble (§4.3): a soft accent-tinted fill with an
-            // accent-tinted hairline and dark ink — clearly "yours" without
-            // outshouting Oak's answer, and paper-like to match the web recipe.
-            .background(Theme.userBubble, in: bubbleShape)
+            // Room for the corner pip so it doesn't collide with the last glyph.
+            .padding(.trailing, Theme.Spacing.sm)
+            .background(Theme.surfaceSunken, in: noteShape)
             .overlay {
-              bubbleShape.strokeBorder(Theme.accent.opacity(0.28), lineWidth: 1)
+              noteShape.strokeBorder(Theme.border, lineWidth: 1)
+            }
+            .overlay(alignment: .topTrailing) {
+              // Small red corner pip — record-light accent (soul.md user note).
+              Circle()
+                .fill(Theme.accent)
+                .frame(width: 6, height: 6)
+                .padding(8)
+                .accessibilityHidden(true)
             }
             .oakShadow(.card)
         }
@@ -586,8 +650,8 @@ private struct UserMessageView: View {
   }
 
   /// Asymmetric corners — the bottom-trailing corner tucks in (`Radius.sm`) so the
-  /// bubble reads as anchored to the sender's edge; the rest stay `Radius.lg`.
-  private var bubbleShape: UnevenRoundedRectangle {
+  /// note reads as anchored to the sender's edge; the rest stay `Radius.lg`.
+  private var noteShape: UnevenRoundedRectangle {
     UnevenRoundedRectangle(
       topLeadingRadius: Theme.Radius.lg,
       bottomLeadingRadius: Theme.Radius.lg,
@@ -607,6 +671,33 @@ private struct UserMessageView: View {
         .combined(with: .offset(y: 8)),
       removal: .opacity
     )
+  }
+}
+
+// MARK: - Blank plate grid
+
+/// A light desk grid drawn inside the blank specimen plate (decorative only).
+private struct BlankPlateGrid: View {
+  var body: some View {
+    Canvas { context, size in
+      let step: CGFloat = 24
+      var path = Path()
+      var x: CGFloat = 0
+      while x <= size.width {
+        path.move(to: CGPoint(x: x, y: 0))
+        path.addLine(to: CGPoint(x: x, y: size.height))
+        x += step
+      }
+      var y: CGFloat = 0
+      while y <= size.height {
+        path.move(to: CGPoint(x: 0, y: y))
+        path.addLine(to: CGPoint(x: size.width, y: y))
+        y += step
+      }
+      context.stroke(path, with: .color(Theme.border.opacity(0.7)), lineWidth: 1)
+    }
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
   }
 }
 
