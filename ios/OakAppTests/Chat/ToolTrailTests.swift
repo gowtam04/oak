@@ -2,7 +2,7 @@ import Testing
 
 @testable import OakApp
 
-/// Pins the client-side tool-trail label + symbol mapping (fable-ui-strategy-ios.md
+/// Pins the client-side tool-trail label + symbol mapping (specimen desk field notes /
 /// §4.03): the server sends web-oriented labels that may carry leading emoji, and the
 /// iOS field-notes trail strips them, maps tool identity → SF Symbol, and renders the
 /// instrument-voice row text. These are pure functions, so — unlike the SwiftUI view

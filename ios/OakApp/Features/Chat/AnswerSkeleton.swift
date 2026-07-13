@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The answer's landing zone, held from the moment of send until the first answer
-/// token arrives (fable-ui-strategy-ios.md §4.03): one masthead bar (the verdict's
+/// token arrives (specimen desk / soul.md streaming field notes): one masthead bar (the verdict's
 /// place) plus two prose lines, built from ``SkeletonBlock`` so they inherit the soft
 /// shimmer and the Reduce-Motion static dimming. Sized to sit flush where the real
 /// answer prose lands, so there's no layout jump when streamed text replaces it.
