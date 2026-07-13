@@ -93,5 +93,5 @@ default, about/legal links.
 ## Notes
 
 Detailed visual design is a downstream deliverable extending
-`docs/design-system/design-system.md` and `docs/design/fable-ui-strategy.md`
-for Android, not redefining the brand.
+`docs/design-system/design-system.md` and `docs/design/soul.md`
+(specimen desk) for Android, not redefining the brand.

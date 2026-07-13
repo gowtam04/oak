@@ -343,11 +343,12 @@ Qualitative checks (show a stranger for 3 seconds):
 
 | Doc | Role |
 |---|---|
-| `docs/design/fable-ui-strategy.md` | Pass 1 — raise the floor (mostly **done**) |
-| `docs/design-system/design-system.md` | Tokens; update philosophy section when Phase 1 ships (“color from content” must become real) |
-| **This doc** | Pass 2 — raise the ceiling; kill AI-chat genre |
+| `docs/design-system/design-system.md` | Tokens / type scale / brand colors (implementation floor) |
+| **This doc** | Strategy — why generic AI still read after the Fable floor-raise; specimen desk direction |
 | `docs/design/soul.md` | **Operational forbiddens** — source of truth for implementers |
 | `docs/design/prototypes/specimen-desk.html` | Clickable web+mobile mock (states, type washes, OPEN history) |
+
+Superseded Fable UI strategy markdowns (`fable-ui-strategy*.md`, mobile theme translation) were removed after Phases 1–3 shipped.
 
 Do **not** re-open Pass 1 debates (paper header vs red band) unless a new screen reintroduces chrome louder than content.
 
