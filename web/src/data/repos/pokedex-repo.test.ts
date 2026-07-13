@@ -669,11 +669,11 @@ describe("reference-page reads (tools fixture)", () => {
   });
 
   describe("pokemonFormats", () => {
-    it("lists the formats a slug appears in, in FORMATS order", async () => {
+    it("lists the formats a slug appears in, in SCOPE_PICKER_ORDER", async () => {
       // Garchomp is seeded under scarlet-violet, champions AND gen-7.
       expect(await pokemonFormats("garchomp", tdb)).toEqual([
-        "scarlet-violet",
         "champions",
+        "scarlet-violet",
         "gen-7",
       ]);
     });

@@ -109,8 +109,8 @@ describe("reference-pages loaders (tools fixture)", () => {
       expect(p.types).toEqual(["dragon", "ground"]);
       expect(p.sourceFormat).toBe("scarlet-violet");
       expect(p.availability).toEqual([
-        "scarlet-violet",
         "champions",
+        "scarlet-violet",
         "gen-7",
       ]);
       expect(p.isNative).toBe(true);

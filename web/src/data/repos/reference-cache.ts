@@ -21,7 +21,7 @@ import "server-only";
 import { and, asc, eq, ilike, inArray } from "drizzle-orm";
 
 import type { OakDb } from "@/data/db";
-import { FORMATS, type Format } from "@/data/formats";
+import { SCOPE_PICKER_ORDER, type Format } from "@/data/formats";
 import { reference_cache, searchable_names } from "@/data/schema";
 import type {
   NameRow,
@@ -315,9 +315,10 @@ export async function listNamesByKind(
 
 /**
  * Which formats' `searchable_names` contain `(kind, slug)`, returned in
- * {@link FORMATS} order — the cross-format availability chips on a detail page.
- * Cross-format read (not scoped to one format) in ONE query; the FORMATS-order
- * sort happens in JS. Returns `[]` for an unreadable index or an unknown entity.
+ * {@link SCOPE_PICKER_ORDER} (National Dex → Champions → gens newest→oldest —
+ * the cross-format availability chips on a detail page). Cross-format read (not
+ * scoped to one format) in ONE query; the picker-order sort happens in JS.
+ * Returns `[]` for an unreadable index or an unknown entity.
  *
  * @param kind "pokemon" | "move" | "ability" | "item".
  * @param slug canonical slug.
@@ -339,7 +340,7 @@ export async function entityFormats(
         ),
       );
     const present = new Set(rows.map((r) => r.format));
-    return FORMATS.filter((f) => present.has(f));
+    return SCOPE_PICKER_ORDER.filter((f) => present.has(f));
   } catch {
     return [];
   }

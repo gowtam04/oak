@@ -354,12 +354,12 @@ describe("reference-page reads (tools fixture)", () => {
       ]);
     });
 
-    it("returns FORMATS-ordered formats for a move in several scopes", async () => {
+    it("returns SCOPE_PICKER_ORDER formats for a move in several scopes", async () => {
       // earthquake is in searchable_names under BOTH scarlet-violet AND champions
       // in the tools fixture (the plan's "champions-only" note does not hold here).
       expect(await entityFormats("move", "earthquake", tdb)).toEqual([
-        "scarlet-violet",
         "champions",
+        "scarlet-violet",
       ]);
     });
 
@@ -371,8 +371,8 @@ describe("reference-page reads (tools fixture)", () => {
 
     it("covers pokemon across every scope it appears in (garchomp)", async () => {
       expect(await entityFormats("pokemon", "garchomp", tdb)).toEqual([
-        "scarlet-violet",
         "champions",
+        "scarlet-violet",
         "gen-7",
       ]);
     });
