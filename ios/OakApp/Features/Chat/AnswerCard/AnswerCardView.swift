@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The top-level renderer for a single finalized ``OakAnswer`` — the native mirror
 /// of the web `AnswerCard` (`web/src/components/answer-card/AnswerCard.tsx`). It
@@ -89,6 +90,9 @@ struct AnswerCardView: View {
     )
   }
 
+  /// Feedback after "Copy for agents" (soul.md Phase 3.2).
+  @State private var didCopyForAgents = false
+
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       // Plate body — everything except the receipts foot tab.
@@ -110,20 +114,70 @@ struct AnswerCardView: View {
         ReceiptsFooterView(
           reasoningMarkdown: answer.reasoningMarkdown,
           citations: answer.citations,
-          onOpenEntity: onOpenEntity
+          onOpenEntity: onOpenEntity,
+          onCopyForAgents: copyForAgents
         )
         .opacity(hasAppeared ? 1 : 0)
         .animation(
           reduceMotion ? nil : Theme.Motion.staggered(bodySections.count),
           value: hasAppeared
         )
+      } else {
+        // No receipts: still expose machine export on the plate foot strip.
+        copyForAgentsStrip
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .oakSpecimenPlate(plateAtmosphere)
+    .contextMenu {
+      Button {
+        copyForAgents()
+      } label: {
+        Label("Copy for agents", systemImage: "doc.on.clipboard")
+      }
+    }
     // The whole answer reads as one VoiceOver container with ordered children.
     .accessibilityElement(children: .contain)
     .onAppear { hasAppeared = true }
+  }
+
+  /// Compact plate-foot strip when there are no receipts to expand.
+  private var copyForAgentsStrip: some View {
+    Button(action: copyForAgents) {
+      HStack(spacing: Theme.Spacing.sm) {
+        Text(didCopyForAgents ? "Copied" : "Copy for agents")
+          .instrumentLabel()
+          .foregroundStyle(didCopyForAgents ? Theme.success : Theme.textSecondary)
+        Spacer(minLength: 0)
+        Image(systemName: didCopyForAgents ? "checkmark" : "doc.on.clipboard")
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundStyle(didCopyForAgents ? Theme.success : Theme.textMuted)
+      }
+      .padding(.horizontal, Theme.Spacing.lg)
+      .padding(.vertical, Theme.Spacing.md)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .background(Theme.surfaceSunken.opacity(0.65))
+    .overlay(alignment: .top) {
+      Rectangle()
+        .fill(Theme.border.opacity(0.9))
+        .frame(height: 1)
+    }
+    .accessibilityLabel(didCopyForAgents ? "Copied for agents" : "Copy for agents")
+    .accessibilityHint("Copies a distilled markdown version of this answer to the clipboard")
+  }
+
+  private func copyForAgents() {
+    let markdown = OakAnswerAgentMarkdown.build(answer)
+    UIPasteboard.general.string = markdown
+    Haptics.tap()
+    didCopyForAgents = true
+    // Reset the "Copied" label after a beat so the control stays reusable.
+    Task { @MainActor in
+      try? await Task.sleep(for: .seconds(2))
+      didCopyForAgents = false
+    }
   }
 
   /// Sections rendered inside the plate body (everything except receipts).
@@ -456,7 +510,11 @@ private struct ReceiptsFooterView: View {
   /// viewer. Defaults to a no-op so the footer renders in isolation.
   var onOpenEntity: (EntityKind, String) -> Void = { _, _ in }
 
+  /// Copies distilled agent markdown to the pasteboard (soul.md Phase 3.2).
+  var onCopyForAgents: () -> Void = {}
+
   @State private var isOpen = false
+  @State private var didCopy = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private var hasReasoning: Bool {
@@ -475,28 +533,49 @@ private struct ReceiptsFooterView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      Button {
-        isOpen.toggle()
-      } label: {
-        HStack(spacing: Theme.Spacing.sm) {
-          Text(tabLabel)
-            .instrumentLabel()
-            .foregroundStyle(Theme.textSecondary)
-          Spacer(minLength: 0)
-          Image(systemName: "chevron.right")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(Theme.textMuted)
-            .rotationEffect(.degrees(isOpen ? 90 : 0))
+      HStack(spacing: 0) {
+        Button {
+          isOpen.toggle()
+        } label: {
+          HStack(spacing: Theme.Spacing.sm) {
+            Text(tabLabel)
+              .instrumentLabel()
+              .foregroundStyle(Theme.textSecondary)
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+              .font(.system(size: 11, weight: .semibold))
+              .foregroundStyle(Theme.textMuted)
+              .rotationEffect(.degrees(isOpen ? 90 : 0))
+          }
+          .padding(.leading, Theme.Spacing.lg)
+          .padding(.vertical, Theme.Spacing.md)
+          .contentShape(Rectangle())
         }
-        .padding(.horizontal, Theme.Spacing.lg)
-        .padding(.vertical, Theme.Spacing.md)
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .accessibilityAddTraits([.isButton, .isToggle])
+        .accessibilityLabel(tabLabel)
+        .accessibilityHint("Shows reasoning and cited sources")
+        .accessibilityValue(isOpen ? "expanded" : "collapsed")
+
+        Button {
+          onCopyForAgents()
+          didCopy = true
+          Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            didCopy = false
+          }
+        } label: {
+          Image(systemName: didCopy ? "checkmark" : "doc.on.clipboard")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(didCopy ? Theme.success : Theme.textMuted)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(didCopy ? "Copied for agents" : "Copy for agents")
+        .accessibilityHint("Copies a distilled markdown version of this answer to the clipboard")
+        .padding(.trailing, Theme.Spacing.sm)
       }
-      .buttonStyle(.plain)
-      .accessibilityAddTraits([.isButton, .isToggle])
-      .accessibilityLabel(tabLabel)
-      .accessibilityHint("Shows reasoning and cited sources")
-      .accessibilityValue(isOpen ? "expanded" : "collapsed")
 
       if isOpen {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {

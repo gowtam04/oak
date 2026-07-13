@@ -38,6 +38,21 @@ struct EntityDetailView: View {
     return source
   }
 
+  /// Specimen-plate atmosphere from this entity's types (soul.md Phase 2.1).
+  /// Pokémon / move / type → typed wash; ability / item / unsupported → ink plate.
+  private var plateAtmosphere: Theme.PlateAtmosphere {
+    switch artifact.data {
+    case .pokemon(let data):
+      return Theme.PlateAtmosphere.resolve(subjectTypes: [data.types])
+    case .move(let data):
+      return Theme.PlateAtmosphere.resolve(subjectTypes: [[data.type]])
+    case .type(let data):
+      return Theme.PlateAtmosphere.resolve(subjectTypes: [data.types])
+    case .ability, .item, .unsupported:
+      return .mechanics
+    }
+  }
+
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
@@ -49,7 +64,12 @@ struct EntityDetailView: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(Theme.Spacing.lg)
+      // Artifact chrome is a specimen-plate continuation of the answer card.
+      .oakSpecimenPlate(plateAtmosphere)
+      .padding(.horizontal, Theme.Spacing.sm)
+      .padding(.vertical, Theme.Spacing.sm)
     }
+    .background(Theme.canvas)
   }
 
   /// The short "not found in <requested scope> — showing <source> data" note at the top of a
@@ -119,14 +139,23 @@ struct EntityDetailView: View {
     movepoolSection(data.movepool)
   }
 
-  /// The full-width Pokémon hero band: a dual-type diagonal wash (primary type at the top-leading
-  /// corner, secondary at the bottom-trailing) behind the 112pt artwork, the display-face name,
-  /// the mono dex number, and the tappable type chips. The gradient is enhancement only — the type
-  /// chips still carry the typing as color **and** label (M-AC-UI9.3).
+  /// The full-width Pokémon hero band: type-glow artwork well (SubjectsView quality)
+  /// over a dual-type wash, plus display name, mono dex, and tappable type chips.
+  /// Wash/glow are enhancement only — chips carry typing as color **and** label
+  /// (M-AC-UI9.3). Soul.md Phase 2.1 artifact continuation.
   private func pokemonHeader(_ data: PokemonArtifactData) -> some View {
-    VStack(spacing: 12) {
+    let primary = data.types.first ?? "normal"
+    let secondary = data.types.count > 1 ? data.types[1] : nil
+    return VStack(spacing: 12) {
       SpriteImage(urlString: data.artworkUrl, name: data.displayName, size: 112)
-        .shadow(color: Color.black.opacity(0.18), radius: 8, x: 0, y: 4)
+        .padding(Theme.Spacing.md)
+        .oakTypeGlowWell(
+          primary: primary,
+          secondary: secondary,
+          cornerRadius: Theme.Radius.xl,
+          glowEndRadius: 96
+        )
+        .shadow(color: Color.black.opacity(0.14), radius: 10, x: 0, y: 4)
       VStack(spacing: 6) {
         Text(data.displayName)
           .font(Theme.display(.title))
@@ -142,7 +171,7 @@ struct EntityDetailView: View {
     .padding(.vertical, 20)
     .padding(.horizontal, 16)
     .background(
-      Theme.typeGradient(primary: data.types.first ?? "normal", secondary: data.types.dropFirst().first),
+      Theme.typeGradient(primary: primary, secondary: secondary),
       in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
     )
   }

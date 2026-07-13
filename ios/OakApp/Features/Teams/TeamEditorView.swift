@@ -377,7 +377,18 @@ private struct MemberEditorSection: View {
         }
       }
       .padding(16)
-      .oakCard(radius: Theme.Radius.md, tint: spriteRef?.types.first.map(Theme.type))
+      // Type-reactive member plate when types known (soul.md Phase 2.2).
+      // Accent is never used as a selection rail.
+      .oakCard(
+        radius: Theme.Radius.md,
+        tint: spriteRef?.types.first.map { Theme.type($0) }
+      )
+      .overlay {
+        if let primary = spriteRef?.types.first {
+          RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+            .strokeBorder(Theme.type(primary).opacity(0.30), lineWidth: 1.5)
+        }
+      }
       .listRowInsets(EdgeInsets())
       .listRowBackground(Color.clear)
     } header: {
@@ -407,11 +418,12 @@ private struct MemberEditorSection: View {
 
   /// Sprite + type badges for the resolved species (mirrors `TeamMemberPanel.tsx`'s
   /// identity block) — omitted for an empty slot or before the batch sprite fetch resolves.
+  /// Type-glow well when types are known (soul.md Phase 2.2 party edge language).
   @ViewBuilder
   private var identityHeader: some View {
     if !member.species.isEmpty {
       HStack(spacing: 12) {
-        SpriteImage(urlString: spriteRef?.spriteUrl, name: headerTitle, size: 48)
+        identitySprite
         VStack(alignment: .leading, spacing: 4) {
           Text(headerTitle)
             .font(Theme.body(.headline))
@@ -424,6 +436,14 @@ private struct MemberEditorSection: View {
         Spacer(minLength: 0)
       }
     }
+  }
+
+  private var identitySprite: some View {
+    let primary = spriteRef?.types.first
+    let secondary = (spriteRef?.types.count ?? 0) > 1 ? spriteRef?.types[1] : nil
+    return SpriteImage(urlString: spriteRef?.spriteUrl, name: headerTitle, size: 48)
+      .padding(6)
+      .modifier(RosterTypeEdge(primary: primary, secondary: secondary))
   }
 
   @ViewBuilder
@@ -595,17 +615,7 @@ private struct RosterStripView: View {
           Button {
             onSelect(index)
           } label: {
-            VStack(spacing: 4) {
-              SpriteImage(
-                urlString: member.species.isEmpty ? nil : spriteRefs[member.species]?.spriteUrl,
-                name: slotLabel(member, index),
-                size: 44
-              )
-              Text(slotLabel(member, index))
-                .font(Theme.body(.caption2))
-                .lineLimit(1)
-                .frame(width: 60)
-            }
+            rosterSlot(member: member, index: index)
           }
           .buttonStyle(.plain)
         }
@@ -616,10 +626,61 @@ private struct RosterStripView: View {
     .accessibilityLabel("Team roster")
   }
 
+  /// One party slot: type-glow edge when species types are known (soul.md Phase
+  /// 2.2). Selection language stays scroll-to-focus, not a SaaS left rail.
+  private func rosterSlot(member: EditableMember, index: Int) -> some View {
+    let ref = member.species.isEmpty ? nil : spriteRefs[member.species]
+    let primary = ref?.types.first
+    let secondary = (ref?.types.count ?? 0) > 1 ? ref?.types[1] : nil
+    return VStack(spacing: 4) {
+      SpriteImage(
+        urlString: ref?.spriteUrl,
+        name: slotLabel(member, index),
+        size: 44
+      )
+      .padding(6)
+      .background {
+        if primary == nil {
+          RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+            .fill(Theme.surfaceSunken)
+        }
+      }
+      .modifier(RosterTypeEdge(primary: primary, secondary: secondary))
+      Text(slotLabel(member, index))
+        .font(Theme.body(.caption2))
+        .lineLimit(1)
+        .frame(width: 60)
+    }
+  }
+
   private func slotLabel(_ member: EditableMember, _ index: Int) -> String {
     member.species.isEmpty
       ? "Slot \(index + 1)"
       : (spriteRefs[member.species]?.displayName ?? TeamBlocksView.titleizeNonNil(member.species))
+  }
+}
+
+/// Type edge / glow for a roster slot when types are known; empty/unknown slots
+/// keep a quiet sunken well (soul.md Phase 2.2).
+private struct RosterTypeEdge: ViewModifier {
+  let primary: String?
+  let secondary: String?
+
+  func body(content: Content) -> some View {
+    if let primary {
+      content.oakTypeGlowWell(
+        primary: primary,
+        secondary: secondary,
+        cornerRadius: Theme.Radius.md,
+        glowEndRadius: 36
+      )
+    } else {
+      content
+        .overlay {
+          RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+            .strokeBorder(Theme.border, style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+        }
+    }
   }
 }
 

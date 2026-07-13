@@ -45,46 +45,16 @@ private struct SubjectCard: View {
   private var primaryType: String { subject.types.first ?? "normal" }
   private var secondaryType: String? { subject.types.count > 1 ? subject.types[1] : nil }
 
-  @Environment(\.colorScheme) private var colorScheme
-
   var body: some View {
     HStack(alignment: .top, spacing: Theme.Spacing.md) {
-      // Stronger type-glow sprite well (soul.md specimen well / Phase 1 checklist).
+      // Stronger type-glow sprite well (soul.md specimen well / Phase 1–2).
       SpriteImage(url: URL(string: subject.spriteUrl), name: subject.name, size: spriteSize)
         .padding(Theme.Spacing.sm)
-        .background {
-          ZStack {
-            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-              .fill(Theme.type(primaryType).opacity(colorScheme == .dark ? 0.14 : 0.10))
-            RadialGradient(
-              colors: [
-                Theme.type(primaryType).opacity(Theme.PlateWashMix.spriteGlow(scheme: colorScheme)),
-                .clear,
-              ],
-              center: UnitPoint(x: 0.5, y: 0.45),
-              startRadius: 2,
-              endRadius: spriteSize * 0.85
-            )
-          }
-        }
-        .overlay {
-          RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-            .strokeBorder(
-              Theme.type(primaryType).opacity(colorScheme == .dark ? 0.28 : 0.22),
-              lineWidth: 1
-            )
-        }
-        .overlay {
-          // Secondary-type inset ring when dual-typed (prototype specimen__well).
-          if let secondaryType {
-            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-              .strokeBorder(
-                Theme.type(secondaryType).opacity(0.15),
-                lineWidth: 1
-              )
-              .padding(1)
-          }
-        }
+        .oakTypeGlowWell(
+          primary: primaryType,
+          secondary: secondaryType,
+          glowEndRadius: spriteSize * 0.85
+        )
 
       VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
         nameRow

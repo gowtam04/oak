@@ -63,8 +63,8 @@ struct ArtifactSheetView: View {
     }
     .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
-    // The sheet container sits on Oak's paper, not a system material (§5.8).
-    .presentationBackground(Theme.surface)
+    // Desk canvas under specimen plates — continuation of chat paper (§5.8 / soul.md).
+    .presentationBackground(Theme.canvas)
     .presentationCornerRadius(24)
   }
 
@@ -104,8 +104,11 @@ struct ArtifactSheetView: View {
       ScrollView {
         DamageCalcView(damageCalc: damageCalc)
           .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(16)
+          .padding(Theme.Spacing.lg)
+          .oakSpecimenPlate(.mechanics)
+          .padding(Theme.Spacing.sm)
       }
+      .background(Theme.canvas)
     case .unavailable(let kind, let query, let suggestions):
       missView(
         title: "Couldn't open \(query)",
@@ -156,6 +159,9 @@ struct ArtifactSheetView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(Theme.Spacing.lg)
+    // Soft ink-plate skeleton while the entity fetch settles (soul.md Phase 2).
+    .oakSpecimenPlate(.mechanics)
+    .padding(Theme.Spacing.sm)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Loading")
   }
@@ -264,8 +270,13 @@ private struct TeamArtifactDetail: View {
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(16)
+      .padding(Theme.Spacing.lg)
+      // Team artifacts have no subject types — ink plate (mechanics).
+      .oakSpecimenPlate(.mechanics)
+      .padding(.horizontal, Theme.Spacing.sm)
+      .padding(.vertical, Theme.Spacing.sm)
     }
+    .background(Theme.canvas)
   }
 
   private var header: some View {
