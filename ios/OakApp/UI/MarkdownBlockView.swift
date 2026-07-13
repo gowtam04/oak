@@ -109,48 +109,58 @@ private struct MarkdownListView: View {
 
 // MARK: - Table
 
-/// A GFM table rendered as a native, horizontally-scrollable grid, matching the
-/// `CandidatesTableView` conventions (header wash, full-width hairline, zebra rows,
-/// trailing scroll fade). Cells are inline-parsed so bold/`code`/links inside a
-/// cell still render.
+/// A GFM table rendered as a native, horizontally-scrollable grid.
+///
+/// Matches the web hug-content recipe (`width: fit-content; max-width: 100%`
+/// scroll wrap, table `width: auto`): card chrome lives on the grid *inside*
+/// the scroll view so compact tables (usage sheets, key–value rows) don't
+/// stretch full-width with blank right space. Wide tables still scroll.
+/// Header wash + hairline + zebra rows stay; cells are inline-parsed so
+/// bold/`code`/links still render. (`CandidatesTableView` stays full-width —
+/// multi-stat candidate grids are meant to use the horizontal space.)
 private struct MarkdownTableView: View {
   let table: MarkdownTable
 
   var body: some View {
     ScrollView(.horizontal, showsIndicators: true) {
-      Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
-        GridRow {
-          ForEach(Array(table.header.enumerated()), id: \.offset) { index, heading in
-            cell(background: headerBackground, alignment: alignment(index)) {
-              MarkdownText(heading)
-                .font(Theme.body(.caption, weight: .semibold))
-                .fixedSize(horizontal: false, vertical: true)
-            }
+      grid
+        .fixedSize(horizontal: true, vertical: false)
+        .background(Theme.surface)
+        .oakCard(radius: Theme.Radius.md)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private var grid: some View {
+    Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+      GridRow {
+        ForEach(Array(table.header.enumerated()), id: \.offset) { index, heading in
+          cell(background: headerBackground, alignment: alignment(index)) {
+            MarkdownText(heading)
+              .font(Theme.body(.caption, weight: .semibold))
+              .fixedSize(horizontal: true, vertical: true)
           }
         }
+      }
+      GridRow {
+        Rectangle()
+          .fill(Theme.separator)
+          .frame(height: 1)
+          .gridCellUnsizedAxes(.horizontal)
+          .gridCellColumns(max(table.header.count, 1))
+      }
+      ForEach(Array(table.rows.enumerated()), id: \.offset) { rowIndex, row in
         GridRow {
-          Rectangle()
-            .fill(Theme.separator)
-            .frame(height: 1)
-            .gridCellUnsizedAxes(.horizontal)
-            .gridCellColumns(max(table.header.count, 1))
-        }
-        ForEach(Array(table.rows.enumerated()), id: \.offset) { rowIndex, row in
-          GridRow {
-            ForEach(Array(row.enumerated()), id: \.offset) { colIndex, value in
-              cell(background: rowBackground(rowIndex), alignment: alignment(colIndex)) {
-                MarkdownText(value)
-                  .font(Theme.body(.subheadline))
-                  .fixedSize(horizontal: false, vertical: true)
-              }
+          ForEach(Array(row.enumerated()), id: \.offset) { colIndex, value in
+            cell(background: rowBackground(rowIndex), alignment: alignment(colIndex)) {
+              MarkdownText(value)
+                .font(Theme.body(.subheadline))
+                .fixedSize(horizontal: true, vertical: true)
             }
           }
         }
       }
     }
-    .background(Theme.surface)
-    .oakCard(radius: Theme.Radius.md)
-    .overlay(alignment: .trailing) { scrollFade }
   }
 
   private func alignment(_ column: Int) -> Alignment {
@@ -160,16 +170,6 @@ private struct MarkdownTableView: View {
     case .center: return .center
     case .trailing: return .trailing
     }
-  }
-
-  private var scrollFade: some View {
-    LinearGradient(
-      colors: [Theme.surface.opacity(0), Theme.surface],
-      startPoint: .leading,
-      endPoint: .trailing
-    )
-    .frame(width: 24)
-    .allowsHitTesting(false)
   }
 
   private var headerBackground: Color { Theme.textPrimary.opacity(0.06) }
@@ -187,7 +187,9 @@ private struct MarkdownTableView: View {
     content()
       .padding(.horizontal, 12)
       .padding(.vertical, 8)
-      .frame(maxWidth: .infinity, alignment: alignment)
+      // Content-hugging columns (web table width:auto). maxWidth:.infinity was
+      // expanding short tables across the full answer column.
+      .frame(alignment: alignment)
       .background(background)
   }
 }

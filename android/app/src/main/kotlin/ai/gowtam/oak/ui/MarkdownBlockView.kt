@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -200,9 +201,14 @@ private fun MarkdownBlockquote(text: String) {
 
 /**
  * A GFM table rendered as a native grid, horizontally scrollable so a wide table
- * never forces the page to scroll sideways. Column widths size to content (capped)
- * and every cell in a visual column shares that width, so rows line up. Header row
- * gets a wash + underline; body rows zebra-stripe.
+ * never forces the page to scroll sideways.
+ *
+ * Matches the web hug-content recipe (`width: fit-content; max-width: 100%`
+ * scroll wrap, table `width: auto`): [wrapContentWidth] keeps the bordered
+ * chrome on the grid's intrinsic width so compact tables (usage sheets,
+ * key–value rows) don't stretch full-width with blank right fill. Wide tables
+ * still scroll. Column widths size to content (capped) and every cell in a
+ * visual column shares that width so rows line up. Header wash + zebra rows.
  */
 @Composable
 private fun MarkdownTableView(table: MdTable) {
@@ -210,51 +216,59 @@ private fun MarkdownTableView(table: MdTable) {
     val cols = maxOf(table.header.size, 1)
     val allRows = remember(table) { listOf(table.header) + table.rows }
 
+    // Outer: fit-content up to parent max (web max-width:100% + width:fit-content).
+    // Chrome sits on the INNER box so a full-width scrollport never paints blank
+    // right surface past the last column.
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(OakRadius.md))
-            .border(1.dp, oak.border, RoundedCornerShape(OakRadius.md))
-            .background(MaterialTheme.colorScheme.surface)
+            .wrapContentWidth(align = Alignment.Start, unbounded = false)
             .horizontalScroll(rememberScrollState()),
     ) {
-        TableGrid(
-            cols = cols,
-            cellCap = 240.dp,
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(OakRadius.md))
+                .border(1.dp, oak.border, RoundedCornerShape(OakRadius.md))
+                .background(MaterialTheme.colorScheme.surface),
         ) {
-            allRows.forEachIndexed { rowIndex, row ->
-                val isHeader = rowIndex == 0
-                val background = when {
-                    isHeader -> oak.textStrong.copy(alpha = 0.06f)
-                    rowIndex % 2 == 0 -> Color.Transparent
-                    else -> oak.textStrong.copy(alpha = 0.04f)
-                }
-                for (c in 0 until cols) {
-                    val value = row.getOrNull(c) ?: ""
-                    val align = table.alignments.getOrNull(c) ?: MdColumnAlignment.Leading
-                    Box(
-                        modifier = Modifier
-                            .background(background)
-                            .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
-                        contentAlignment = when (align) {
-                            MdColumnAlignment.Leading -> Alignment.CenterStart
-                            MdColumnAlignment.Center -> Alignment.Center
-                            MdColumnAlignment.Trailing -> Alignment.CenterEnd
-                        },
-                    ) {
-                        Text(
-                            text = parseInline(value, linkColor = oak.azure),
-                            style = if (isHeader) {
-                                MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
-                            } else {
-                                MaterialTheme.typography.bodyMedium
+            TableGrid(
+                cols = cols,
+                cellCap = 240.dp,
+            ) {
+                allRows.forEachIndexed { rowIndex, row ->
+                    val isHeader = rowIndex == 0
+                    val background = when {
+                        isHeader -> oak.textStrong.copy(alpha = 0.06f)
+                        rowIndex % 2 == 0 -> Color.Transparent
+                        else -> oak.textStrong.copy(alpha = 0.04f)
+                    }
+                    for (c in 0 until cols) {
+                        val value = row.getOrNull(c) ?: ""
+                        val align = table.alignments.getOrNull(c) ?: MdColumnAlignment.Leading
+                        Box(
+                            modifier = Modifier
+                                .background(background)
+                                .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
+                            contentAlignment = when (align) {
+                                MdColumnAlignment.Leading -> Alignment.CenterStart
+                                MdColumnAlignment.Center -> Alignment.Center
+                                MdColumnAlignment.Trailing -> Alignment.CenterEnd
                             },
-                            color = if (isHeader) oak.textStrong else oak.text,
-                            textAlign = when (align) {
-                                MdColumnAlignment.Leading -> TextAlign.Start
-                                MdColumnAlignment.Center -> TextAlign.Center
-                                MdColumnAlignment.Trailing -> TextAlign.End
-                            },
-                        )
+                        ) {
+                            Text(
+                                text = parseInline(value, linkColor = oak.azure),
+                                style = if (isHeader) {
+                                    MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                                } else {
+                                    MaterialTheme.typography.bodyMedium
+                                },
+                                color = if (isHeader) oak.textStrong else oak.text,
+                                textAlign = when (align) {
+                                    MdColumnAlignment.Leading -> TextAlign.Start
+                                    MdColumnAlignment.Center -> TextAlign.Center
+                                    MdColumnAlignment.Trailing -> TextAlign.End
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -278,11 +292,17 @@ private fun TableGrid(
         if (measurables.isEmpty()) return@Layout layout(0, 0) {}
         val capPx = cellCap.roundToPx()
         val rowCount = (measurables.size + cols - 1) / cols
+        // Ignore parent minWidth so a full-width ancestor can't force columns open.
+        val measureCap = if (constraints.hasBoundedWidth) {
+            minOf(capPx, constraints.maxWidth.coerceAtLeast(0))
+        } else {
+            capPx
+        }
 
         // Pass 1 — natural width (capped) → per-column max width.
         val colWidths = IntArray(cols)
         measurables.forEachIndexed { idx, m ->
-            val p = m.measure(Constraints(maxWidth = capPx))
+            val p = m.measure(Constraints(minWidth = 0, maxWidth = measureCap))
             val c = idx % cols
             if (p.width > colWidths[c]) colWidths[c] = p.width
         }
