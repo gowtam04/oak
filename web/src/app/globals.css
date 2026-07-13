@@ -2299,7 +2299,7 @@
 /* --------------------------------------------------------------------------
    16. Progress / loading — the Poké Ball spinner
    -------------------------------------------------------------------------- */
-/* Streaming "field notes" trail (fable-ui-strategy §4 screen 03): the agent's
+/* Streaming "field notes" trail (specimen desk / soul.md): the agent's
    tool-loop rendered as a cascading stack of instrument chips + an answer
    skeleton, collapsing to a summary chip once prose streams. */
 .chat-thread__progress {

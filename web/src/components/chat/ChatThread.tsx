@@ -98,7 +98,7 @@ function FieldNote({
 /**
  * ChatThread — renders the committed conversation (user + assistant turns) in
  * order, plus the streaming "field notes" experience while `status ===
- * "streaming"` (fable-ui-strategy §4 screen 03):
+ * "streaming"` (specimen desk field notes / soul.md):
  *   - a vertical trail of instrument chips, one per accumulated `tool_activity`
  *     event (mono tool token + subject); the latest carries the pokeball micro-
  *     spinner, completed ones a tick. Before the first tool it's a single
