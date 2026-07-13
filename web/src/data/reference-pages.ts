@@ -3,14 +3,15 @@
  * reference pages (/pokedex, /moves, /abilities, /items).
  *
  * It sits ON TOP of `entity-profile.ts` (the artifact assembler): each detail
- * loader resolves an entity through `assembleEntityProfile` with a fixed
- * scarlet-violet → champions → gen-8 … gen-5 fallback chain, records which scope
- * it resolved from (`sourceFormat`), and reshapes the profile into the
- * page-and-component-friendly view-models in `@/lib/reference-pages-types`.
- * Detail loaders additionally batch in cross-scope availability, evolution
- * edges, ability effect prose, learnset enrichment, and — only when the species
- * is Champions-available — best-effort live usage (bounded by a timeout;
- * never fails the page). Index loaders enumerate a whole kind for the crawl.
+ * loader resolves an entity through `assembleEntityProfile`. By default it walks
+ * a fixed scarlet-violet → champions → gen-8 … gen-5 fallback chain; when the
+ * Pokédex page passes an optional preferred format (`?format=`), that scope is
+ * tried first and only the fallback chain runs if the species is missing there.
+ * The scope that wins becomes `sourceFormat`. Detail loaders additionally batch
+ * in cross-scope availability, evolution edges, ability effect prose, learnset
+ * enrichment, and — when Champions is relevant for the displayed view —
+ * best-effort live usage (bounded by a timeout; never fails the page). Index
+ * loaders enumerate a whole kind for the crawl.
  *
  * INDEX-UNAVAILABLE CONTRACT. B1's list repos return `[]` on an unreadable index
  * (no distinction between "empty" and "broken"). A reference page must NOT
@@ -132,18 +133,38 @@ async function singletonDb(): Promise<OakDb> {
 }
 
 /**
- * Resolve an entity to its `ok` artifact envelope + the scope it came from,
- * walking {@link DETAIL_FALLBACK}. Throws `index_unavailable` if the PRIMARY
- * index isn't built; returns null when the entity resolves in NO scope. A
- * per-format `unavailable`/`not_found` during the walk is skipped, not fatal.
+ * Resolve an entity to its `ok` artifact envelope + the scope it came from.
+ * When `preferredFormat` is set (Pokédex `?format=`), that scope is tried first;
+ * on a miss the loader soft-falls back to {@link DETAIL_FALLBACK} so an invalid
+ * or unavailable format never blanks a valid slug. Without a preferred format
+ * the fallback chain alone runs (unchanged SV-first behavior). Throws
+ * `index_unavailable` if the PRIMARY index isn't built; returns null when the
+ * entity resolves in NO scope. A per-format `unavailable`/`not_found` during
+ * the walk is skipped, not fatal.
  */
 async function resolveEntityProfile(
   kind: EntityKind,
   slug: string,
   db: OakDb,
+  preferredFormat?: Format,
 ): Promise<{ ok: EntityArtifactOk; sourceFormat: Format } | null> {
   requireIndex(await isIndexAvailable(STANDARD_FORMAT, db));
+
+  if (preferredFormat) {
+    const preferred = await assembleEntityProfile(
+      kind,
+      slug,
+      preferredFormat,
+      db,
+    );
+    if (preferred.status === "ok") {
+      return { ok: preferred, sourceFormat: preferredFormat };
+    }
+  }
+
   for (const format of DETAIL_FALLBACK) {
+    // Already tried above — skip a redundant assemble.
+    if (format === preferredFormat) continue;
     const res = await assembleEntityProfile(kind, slug, format, db);
     if (res.status === "ok") return { ok: res, sourceFormat: format };
   }
@@ -211,8 +232,14 @@ async function bestEffortUsage(displayName: string): Promise<UsageBlock | null> 
 export async function loadPokemonPageUncached(
   slug: string,
   db: OakDb,
+  preferredFormat?: Format,
 ): Promise<PokemonPageData | null> {
-  const resolved = await resolveEntityProfile("pokemon", slug, db);
+  const resolved = await resolveEntityProfile(
+    "pokemon",
+    slug,
+    db,
+    preferredFormat,
+  );
   if (!resolved || resolved.ok.kind !== "pokemon") return null;
   const { ok, sourceFormat } = resolved;
   const data = ok.data;
@@ -239,9 +266,15 @@ export async function loadPokemonPageUncached(
       moveSummaries(moveSlugs, sourceFormat, db),
     ]);
 
-  const usage = availability.includes("champions")
-    ? await bestEffortUsage(data.display_name)
-    : null;
+  // Champions ladder only when the species is champions-available AND the
+  // viewer is not explicitly looking at a different scope. Default (no
+  // preferred format) keeps today's "show usage on SV-first pages when the mon
+  // is also on Champions" behavior; selecting Champions still shows it;
+  // selecting Gen 1–8 / National Dex / SV hides it.
+  const wantUsage =
+    availability.includes("champions") &&
+    (preferredFormat === undefined || preferredFormat === "champions");
+  const usage = wantUsage ? await bestEffortUsage(data.display_name) : null;
 
   const abilities: AbilityEntry[] = abilitySlots.map((a, i) => {
     const ref = abilityRefs[i]!;
@@ -522,8 +555,11 @@ export async function referenceLastModifiedUncached(
 
 /** Detail loaders — React `cache()` dedupes page + generateMetadata per request. */
 export const loadPokemonPage = cache(
-  async (slug: string): Promise<PokemonPageData | null> =>
-    loadPokemonPageUncached(slug, await singletonDb()),
+  async (
+    slug: string,
+    preferredFormat?: Format,
+  ): Promise<PokemonPageData | null> =>
+    loadPokemonPageUncached(slug, await singletonDb(), preferredFormat),
 );
 export const loadMovePage = cache(
   async (slug: string): Promise<MovePageData | null> =>
