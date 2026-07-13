@@ -112,17 +112,23 @@ private struct MarkdownListView: View {
 /// A GFM table rendered as a native, horizontally-scrollable grid.
 ///
 /// Matches the web hug-content recipe (`width: fit-content; max-width: 100%`
-/// scroll wrap, table `width: auto`): card chrome lives on the grid *inside*
-/// the scroll view so compact tables (usage sheets, key–value rows) don't
-/// stretch full-width with blank right space. Wide tables still scroll.
-/// Header wash + hairline + zebra rows stay; cells are inline-parsed so
-/// bold/`code`/links still render. (`CandidatesTableView` stays full-width —
-/// multi-stat candidate grids are meant to use the horizontal space.)
+/// scroll wrap, table `width: auto`):
+/// - Card chrome lives on the grid *inside* the scroll view, and the grid is
+///   `fixedSize(horizontal:)` so the *table* hugs content (no full-width blank
+///   right chrome).
+/// - Cells still use `maxWidth: .infinity` so they fill their *column* — otherwise
+///   zebra/header washes only paint text bounds and columns look gappy
+///   (short labels leave unpainted column space between Move and Usage, etc.).
+/// Wide tables still scroll. (`CandidatesTableView` stays full-width — multi-stat
+/// candidate grids are meant to use the horizontal space.)
 private struct MarkdownTableView: View {
   let table: MarkdownTable
 
   var body: some View {
     ScrollView(.horizontal, showsIndicators: true) {
+      // fixedSize locks the Grid at its ideal width (sum of column ideal
+      // widths). Cells may still expand to fill those columns via
+      // maxWidth:.infinity without stretching the whole table to the viewport.
       grid
         .fixedSize(horizontal: true, vertical: false)
         .background(Theme.surface)
@@ -138,7 +144,7 @@ private struct MarkdownTableView: View {
           cell(background: headerBackground, alignment: alignment(index)) {
             MarkdownText(heading)
               .font(Theme.body(.caption, weight: .semibold))
-              .fixedSize(horizontal: true, vertical: true)
+              .fixedSize(horizontal: false, vertical: true)
           }
         }
       }
@@ -155,7 +161,7 @@ private struct MarkdownTableView: View {
             cell(background: rowBackground(rowIndex), alignment: alignment(colIndex)) {
               MarkdownText(value)
                 .font(Theme.body(.subheadline))
-                .fixedSize(horizontal: true, vertical: true)
+                .fixedSize(horizontal: false, vertical: true)
             }
           }
         }
@@ -187,9 +193,10 @@ private struct MarkdownTableView: View {
     content()
       .padding(.horizontal, 12)
       .padding(.vertical, 8)
-      // Content-hugging columns (web table width:auto). maxWidth:.infinity was
-      // expanding short tables across the full answer column.
-      .frame(alignment: alignment)
+      // Fill the Grid column (so header/zebra washes form continuous bands),
+      // not the scroll viewport — the grid's fixedSize keeps ideal column
+      // widths content-derived.
+      .frame(maxWidth: .infinity, alignment: alignment)
       .background(background)
   }
 }
