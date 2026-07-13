@@ -75,6 +75,24 @@ describe("ArtifactViewer — visibility + ok dispatch", () => {
     );
     // Grounding footer (citations) is present.
     expect(screen.getByTestId("artifact-sources")).toBeInTheDocument();
+    // Specimen plate wash from species types (Phase 2).
+    const panel = screen.getByTestId("artifact-viewer");
+    expect(panel.getAttribute("data-plate")).toBe("typed");
+    expect(panel.style.getPropertyValue("--plate-a")).toBe(
+      "var(--type-dragon)",
+    );
+    expect(panel.style.getPropertyValue("--plate-b")).toBe(
+      "var(--type-ground)",
+    );
+  });
+
+  it("uses an ink plate while loading (no types yet)", () => {
+    vi.mocked(fetchEntityArtifact).mockReturnValue(new Promise(() => {}));
+    mount();
+    act(() => api.openEntity({ kind: "pokemon", q: "garchomp" }));
+    const panel = screen.getByTestId("artifact-viewer");
+    expect(panel.getAttribute("data-plate")).toBe("ink");
+    expect(panel.className).toContain("answer-card--ink");
   });
 });
 

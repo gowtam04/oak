@@ -186,6 +186,7 @@ export default function AnswerCard({
       <ReceiptsFooter
         reasoningMarkdown={reasoning_markdown}
         citations={citations}
+        answer={answer}
       />
     </div>
   );

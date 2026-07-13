@@ -12,6 +12,7 @@ import SpriteImg from "@/components/SpriteImg";
 import { typeDisplayIndex, type TypeName } from "@/agent/schemas";
 import type { PokemonArtifactData } from "@/lib/entity-artifact";
 import { oakMediaArtworkUrl } from "@/lib/sprites";
+import { typeCssVar } from "@/lib/plate-types";
 
 import EntityLink from "./EntityLink";
 import MatchupRow from "./MatchupRow";
@@ -113,17 +114,19 @@ export default function PokemonArtifact({
   const orderTypes = (types: readonly string[]): string[] =>
     [...types].sort((a, b) => typeDisplayIndex(a) - typeDisplayIndex(b));
 
-  // The halo (UI §4 screen 06) tints by the primary type at low opacity; a
-  // Pokémon always has at least one type, but fall back to normal defensively.
-  const primaryType = (data.types[0] ?? "normal") as TypeName;
-  const haloStyle: CssVars = { "--halo-type": `var(--type-${primaryType})` };
+  // Type-glow well (soul.md Phase 2 — mirror SpriteCard): radial wash from
+  // primary/secondary types via --plate-a / --plate-b.
+  const haloStyle: CssVars = {
+    "--plate-a": typeCssVar(data.types[0]),
+    "--plate-b": typeCssVar(data.types[1] ?? data.types[0]),
+  };
 
   return (
     <div className="pokemon-artifact" data-testid="pokemon-artifact">
       <div className="pokemon-artifact__head">
         <span
           className="pokemon-artifact__halo"
-          // eslint-disable-next-line react/forbid-dom-props -- dynamic --halo-type CSS var bound per species' primary type
+          // eslint-disable-next-line react/forbid-dom-props -- dynamic --plate-a/--plate-b CSS vars bound per species types
           style={haloStyle}
         >
           <SpriteImg

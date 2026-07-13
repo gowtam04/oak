@@ -59,6 +59,37 @@ describe("RosterStrip", () => {
     );
   });
 
+  it("applies a type plate edge from sprite types on filled slots", () => {
+    render(
+      <RosterStrip
+        members={[member("garchomp")]}
+        selectedSlot={0}
+        spriteBySpecies={{ garchomp: GARCHOMP_REF }}
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+      />,
+    );
+    const slot = screen.getByTestId("roster-slot-0");
+    expect(slot.getAttribute("data-plate")).toBe("typed");
+    expect(slot.style.getPropertyValue("--plate-a")).toBe("var(--type-dragon)");
+    expect(slot.style.getPropertyValue("--plate-b")).toBe("var(--type-ground)");
+  });
+
+  it("does not type-wash empty slots", () => {
+    render(
+      <RosterStrip
+        members={[member(null)]}
+        selectedSlot={0}
+        spriteBySpecies={{}}
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+      />,
+    );
+    const slot = screen.getByTestId("roster-slot-0");
+    expect(slot.getAttribute("data-empty")).toBe("true");
+    expect(slot.getAttribute("data-plate")).toBeNull();
+  });
+
   it("guesses an Oak media sprite before the sprite lookup has resolved (no ref yet)", () => {
     render(
       <RosterStrip

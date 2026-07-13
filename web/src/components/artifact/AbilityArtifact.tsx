@@ -19,14 +19,14 @@ export default function AbilityArtifact({
   return (
     <div className="ability-artifact" data-testid="ability-artifact">
       <section className="ability-artifact__effect">
-        <h3 className="artifact-section__title">Effect</h3>
+        <h3 className="artifact-section__title ilabel">Effect</h3>
         <p className="artifact-text" data-testid="ability-effect">
           {data.effect_full || data.effect_short}
         </p>
       </section>
 
       <section className="ability-artifact__holders">
-        <h3 className="artifact-section__title">
+        <h3 className="artifact-section__title ilabel">
           Pokémon with this ability ({data.learned_by.length})
         </h3>
         {data.learned_by.length === 0 ? (

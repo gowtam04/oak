@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatThreadProps } from "@/components/types";
 import type { ToolActivityEvent } from "@/lib/sse/sse-types";
 import AnswerCard from "@/components/answer-card/AnswerCard";
 import Markdown from "@/components/Markdown";
+import { plateHintFromToolLabels } from "@/lib/plate-types";
 import {
   STARTER_ENTRIES,
   pickRandomStarters,
@@ -222,6 +223,14 @@ export default function ChatThread({
   const hasActivity = activity.length > 0;
   const lastIndex = activity.length - 1;
   const collapsed = Boolean(streamingMarkdown);
+
+  // Early plate wash for the skeleton (Phase 2): best-effort type hint from
+  // tool-activity labels. Conservative — prefer sunken desk tint over wrong type.
+  const skeletonPlate = useMemo(
+    () => plateHintFromToolLabels(activity.map((a) => a.label)),
+    [activity],
+  );
+
   const lookupCount = activity.length;
   const thinkingLabel = reconnecting
     ? "Reconnecting…"
@@ -432,11 +441,21 @@ export default function ChatThread({
 
       {/* Answer skeleton — shown the instant a turn starts (before prose), so the
           shape of what's coming holds the layout and the streamed answer (or the
-          error strip) replaces it in place with no jump. */}
+          error strip) replaces it in place with no jump. Mild type wash when
+          activity labels confidently name a type; else sunken desk tint. */}
       {status === "streaming" && !streamingMarkdown && (
         <div
-          className="chat-turn chat-turn--assistant chat-thread__skeleton"
+          className={[
+            "chat-turn",
+            "chat-turn--assistant",
+            "chat-thread__skeleton",
+            skeletonPlate ? "" : "chat-thread__skeleton--desk",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          style={skeletonPlate?.style}
           data-testid="answer-skeleton"
+          data-plate={skeletonPlate?.kind ?? "desk"}
           aria-hidden="true"
         >
           <div className="chat-thread__skeleton-masthead" />

@@ -1,5 +1,5 @@
-import { afterEach, describe, it, expect } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 
 afterEach(() => cleanup());
 
@@ -87,5 +87,35 @@ describe("ReceiptsFooter", () => {
     expect(
       (screen.getByTestId("receipts-footer") as HTMLDetailsElement).open,
     ).toBe(false);
+  });
+
+  it("hides Copy for agents when no answer is provided", () => {
+    render(
+      <ReceiptsFooter reasoningMarkdown={markdown} citations={citations} />,
+    );
+    expect(screen.queryByTestId("copy-for-agents")).toBeNull();
+  });
+
+  it("copies machine markdown when Copy for agents is clicked", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(
+      <ReceiptsFooter
+        reasoningMarkdown={markdown}
+        citations={citations}
+        answer={CANONICAL_ANSWER}
+      />,
+    );
+    const btn = screen.getByTestId("copy-for-agents");
+    expect(btn).toHaveTextContent("Copy for agents");
+    fireEvent.click(btn);
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const md = writeText.mock.calls[0]![0] as string;
+    expect(md).toContain("# Oak answer");
+    expect(md).toContain("**Status:**");
+    await waitFor(() => expect(btn).toHaveTextContent("Copied"));
   });
 });

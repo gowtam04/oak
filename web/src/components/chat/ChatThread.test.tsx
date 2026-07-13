@@ -307,6 +307,37 @@ describe("ChatThread — streaming field-notes trail", () => {
     expect(screen.getByTestId("trail-full")).toBeInTheDocument();
   });
 
+  it("applies a desk tint skeleton when activity labels name no type", () => {
+    render(
+      <ChatThread {...props({ status: "streaming", activity: twoTools })} />,
+    );
+    const skeleton = screen.getByTestId("answer-skeleton");
+    expect(skeleton.getAttribute("data-plate")).toBe("desk");
+    expect(skeleton.className).toContain("chat-thread__skeleton--desk");
+  });
+
+  it("applies a mild type wash when activity labels name a single type", () => {
+    render(
+      <ChatThread
+        {...props({
+          status: "streaming",
+          activity: [
+            {
+              tool: "get_type_matchups",
+              label: "Type matchups for dragon",
+            },
+          ],
+        })}
+      />,
+    );
+    const skeleton = screen.getByTestId("answer-skeleton");
+    expect(skeleton.getAttribute("data-plate")).toBe("typed");
+    expect(skeleton.className).not.toContain("chat-thread__skeleton--desk");
+    expect(
+      (skeleton as HTMLElement).style.getPropertyValue("--plate-a"),
+    ).toBe("var(--type-dragon)");
+  });
+
   it("falls back to a generic thinking chip before the first tool runs", () => {
     render(<ChatThread {...props({ status: "streaming" })} />);
     expect(screen.getByTestId("progress-thinking")).toHaveTextContent(

@@ -6,7 +6,7 @@
 
 import type { CSSProperties } from "react";
 
-const TYPE_TOKENS = new Set([
+const TYPE_TOKEN_LIST = [
   "normal",
   "fire",
   "water",
@@ -25,12 +25,25 @@ const TYPE_TOKENS = new Set([
   "dark",
   "steel",
   "fairy",
-]);
+] as const;
+
+const TYPE_TOKENS = new Set<string>(TYPE_TOKEN_LIST);
+
+/** Word-boundary matchers for conservative streaming type hints. */
+const TYPE_WORD_RE = new RegExp(
+  `\\b(${TYPE_TOKEN_LIST.join("|")})\\b`,
+  "gi",
+);
 
 /** Resolve a type name to `var(--type-…)` (falls back to normal). */
 export function typeCssVar(type: string | undefined | null): string {
   const t = (type ?? "").toLowerCase();
   return TYPE_TOKENS.has(t) ? `var(--type-${t})` : "var(--type-normal)";
+}
+
+/** True when the string is a known type slug (case-insensitive). */
+export function isTypeName(type: string | undefined | null): boolean {
+  return TYPE_TOKENS.has((type ?? "").toLowerCase());
 }
 
 export type PlateKind = "typed" | "multi" | "ink";
@@ -39,8 +52,67 @@ export interface PlateVars {
   kind: PlateKind;
   /** Inline style setting `--plate-a` / `--plate-b`. */
   style: CSSProperties;
-  /** Extra class on `.answer-card` (`answer-card--ink` / `answer-card--multi`). */
+  /**
+   * Extra class for the plate shell
+   * (`answer-card--ink` / `answer-card--multi` / empty for typed).
+   * Also used on `.artifact-viewer` / skeleton via shared plate modifiers.
+   */
   className: string;
+}
+
+function inkPlate(): PlateVars {
+  return {
+    kind: "ink",
+    className: "answer-card--ink",
+    style: {
+      ["--plate-a" as string]: "var(--neutral-500)",
+      ["--plate-b" as string]: "var(--neutral-600)",
+    },
+  };
+}
+
+function typedPlate(types: string[]): PlateVars {
+  const a = typeCssVar(types[0]);
+  const b = typeCssVar(types[1] ?? types[0]);
+  return {
+    kind: "typed",
+    className: "",
+    style: {
+      ["--plate-a" as string]: a,
+      ["--plate-b" as string]: b,
+    },
+  };
+}
+
+function multiPlate(types: string[]): PlateVars {
+  const a = typeCssVar(types[0]);
+  const b = typeCssVar(types[1] ?? types[0]);
+  return {
+    kind: "multi",
+    className: "answer-card--multi",
+    style: {
+      ["--plate-a" as string]: a,
+      ["--plate-b" as string]: b,
+    },
+  };
+}
+
+/**
+ * Derive plate wash vars from a flat type list (artifact shells, roster slots).
+ * - empty → ink plate
+ * - 1–2 types → single dual-type wash
+ * - 3+ types → multi accent (don't fight many washes)
+ */
+export function plateFromTypes(
+  types: string[] | undefined | null,
+): PlateVars {
+  if (!types || types.length === 0) return inkPlate();
+  const cleaned = types
+    .map((t) => t.toLowerCase())
+    .filter((t) => TYPE_TOKENS.has(t));
+  if (cleaned.length === 0) return inkPlate();
+  if (cleaned.length >= 3) return multiPlate(cleaned);
+  return typedPlate(cleaned);
 }
 
 /**
@@ -52,38 +124,33 @@ export interface PlateVars {
 export function plateFromSubjects(
   subjects: { types: string[] }[] | undefined | null,
 ): PlateVars {
-  if (!subjects || subjects.length === 0) {
-    return {
-      kind: "ink",
-      className: "answer-card--ink",
-      style: {
-        ["--plate-a" as string]: "var(--neutral-500)",
-        ["--plate-b" as string]: "var(--neutral-600)",
-      },
-    };
-  }
+  if (!subjects || subjects.length === 0) return inkPlate();
 
   const first = subjects[0]!.types;
-  const a = typeCssVar(first[0]);
-  const b = typeCssVar(first[1] ?? first[0]);
+  if (subjects.length >= 2) return multiPlate(first);
+  return typedPlate(first);
+}
 
-  if (subjects.length >= 2) {
-    return {
-      kind: "multi",
-      className: "answer-card--multi",
-      style: {
-        ["--plate-a" as string]: a,
-        ["--plate-b" as string]: b,
-      },
-    };
+/**
+ * Best-effort plate hint from streaming tool-activity labels (client-only).
+ * Conservative: prefer no wash over a wrong type.
+ * - Collect whole-word type mentions across labels
+ * - Exactly 1 unique type → mild typed wash
+ * - Exactly 2 unique types → dual-type wash (common dual-type phrasing)
+ * - 0 or 3+ → null (caller uses sunken desk tint)
+ */
+export function plateHintFromToolLabels(
+  labels: string[] | undefined | null,
+): PlateVars | null {
+  if (!labels || labels.length === 0) return null;
+  const found = new Set<string>();
+  for (const label of labels) {
+    TYPE_WORD_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = TYPE_WORD_RE.exec(label)) !== null) {
+      found.add(m[1]!.toLowerCase());
+    }
   }
-
-  return {
-    kind: "typed",
-    className: "",
-    style: {
-      ["--plate-a" as string]: a,
-      ["--plate-b" as string]: b,
-    },
-  };
+  if (found.size === 0 || found.size >= 3) return null;
+  return plateFromTypes([...found]);
 }

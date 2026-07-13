@@ -108,14 +108,14 @@ Red does **not** fill user bubbles, paint selection rails, or wash entire header
 
 ## Phase 2 checklist — instrument objects
 
-- [ ] Artifact viewer = specimen plate continuation (type wash + type-glow hero)  
-- [ ] Team party slots = type edge / glow when types known  
-- [ ] Streaming skeleton soft wash (client heuristic; no backend)  
+- [x] Artifact viewer = specimen plate continuation (type wash + type-glow hero) — **web**  
+- [x] Team party slots = type edge / glow when types known — **web**  
+- [x] Streaming skeleton soft wash (client heuristic; no backend) — **web**  
 - [ ] History durable type rails — **deferred** (needs `ConversationSummary` metadata; no API this pass)  
 
 ## Phase 3 checklist — alive & dual
 
-- [ ] Subtle desk grain on canvas (web primary; reduced-motion safe)  
-- [ ] Machine markdown export (“Copy for agents”) from finalized `OakAnswer`  
-- [ ] Dev-only plate tuner (web only)  
+- [x] Subtle desk grain on canvas (web primary; reduced-motion safe) — **web**  
+- [x] Machine markdown export (“Copy for agents”) from finalized `OakAnswer` — **web**  
+- [x] Dev-only plate tuner (web only)  
 - [ ] Team “wrapped” playfulness — **deferred** (not critical path)  

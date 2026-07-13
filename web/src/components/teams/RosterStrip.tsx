@@ -5,7 +5,8 @@
  * item pip) the user clicks to focus that member in the editor below; an empty
  * member renders a dashed pokeball "Add a Pokémon" placeholder, and a trailing
  * dashed pokeball tile appends a new blank slot (until the team is full at six).
- * The selected card carries the one selection language — a red rail + soft fill.
+ * Filled slots take a type edge/glow from `spriteBySpecies[species].types`
+ * (soul.md Phase 2). Selection is a red record-light ring — not a left list rail.
  * Sprites/types come from the page's batch
  * `resolveSprites` lookup; an unknown species falls back to a Showdown sprite by
  * slug, then to a pokéball glyph. Pure presentational — selection, add, and the
@@ -14,7 +15,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { SpriteRef } from "@/lib/api/sprites-client";
@@ -22,6 +23,7 @@ import {
   guessOakMediaSpriteUrl,
   rewriteLegacyMediaUrl,
 } from "@/lib/sprites";
+import { plateFromTypes } from "@/lib/plate-types";
 import { titleizeSlug } from "./display-names";
 
 /**
@@ -84,6 +86,9 @@ export default function RosterStrip({
         const ref = species ? spriteBySpecies[species] : undefined;
         const types = ref?.types ?? [];
         const selected = i === selectedSlot;
+        // Type edge/glow for filled slots; empty slots stay untyped (dashed).
+        const plate = species && types.length > 0 ? plateFromTypes(types) : null;
+        const slotStyle = (plate?.style ?? undefined) as CSSProperties | undefined;
         return (
           <button
             type="button"
@@ -93,7 +98,9 @@ export default function RosterStrip({
             data-testid={`roster-slot-${i}`}
             data-selected={selected ? "true" : "false"}
             data-empty={species ? "false" : "true"}
+            data-plate={plate?.kind}
             className="roster-slot"
+            style={slotStyle}
             onClick={() => onSelect(i)}
           >
             <span className="roster-slot__index mono-num">{i + 1}</span>
