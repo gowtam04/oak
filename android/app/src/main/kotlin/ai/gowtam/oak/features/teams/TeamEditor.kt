@@ -8,7 +8,6 @@ import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
-import ai.gowtam.oak.ui.SpriteImage
 import ai.gowtam.oak.ui.TypeBadge
 import ai.gowtam.oak.wire.AnalyzedMember
 import ai.gowtam.oak.wire.DefenseRow
@@ -273,9 +272,19 @@ private fun RosterStrip(members: List<EditableMember>, spriteRefs: Map<String, D
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
         members.forEachIndexed { index, member ->
-            val label = if (member.species.isBlank()) "Slot ${index + 1}" else (spriteRefs[member.species]?.displayName ?: titleizeTeamSlug(member.species))
+            val ref = if (member.species.isBlank()) null else spriteRefs[member.species]
+            val label = if (member.species.isBlank()) {
+                "Slot ${index + 1}"
+            } else {
+                ref?.displayName ?: titleizeTeamSlug(member.species)
+            }
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(60.dp)) {
-                SpriteImage(url = if (member.species.isBlank()) null else spriteRefs[member.species]?.spriteUrl, name = label, size = 44.dp)
+                TypeEdgeSlot(
+                    spriteUrl = ref?.spriteUrl,
+                    name = label,
+                    types = ref?.types.orEmpty(),
+                    size = 48.dp,
+                )
                 Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
         }
@@ -314,7 +323,12 @@ private fun MemberEditorCard(
 
         if (member.species.isNotBlank() && spriteRef != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
-                SpriteImage(url = spriteRef.spriteUrl, name = headerTitle, size = 48.dp)
+                TypeEdgeSlot(
+                    spriteUrl = spriteRef.spriteUrl,
+                    name = headerTitle,
+                    types = spriteRef.types,
+                    size = 52.dp,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { spriteRef.types.forEach { TypeBadge(it) } }
             }
         }
@@ -569,6 +583,29 @@ private fun AnalysisReadout(ok: ai.gowtam.oak.wire.TeamAnalysisOk, isAnalyzing: 
         Text("Updating…", style = MaterialTheme.typography.labelSmall, color = oak.textFaint)
     }
 
+    if (ok.rolesPresent.isNotEmpty() || ok.rolesMissing.isNotEmpty()) {
+        SectionHeader("Roles & tools")
+        if (ok.rolesPresent.isNotEmpty()) {
+            Text(
+                "Present: " + ok.rolesPresent.joinToString(", ") { it.replace('_', ' ') },
+                style = MaterialTheme.typography.bodySmall,
+                color = oak.textStrong,
+            )
+        }
+        if (ok.rolesMissing.isNotEmpty()) {
+            Text(
+                "Gaps: " + ok.rolesMissing.joinToString(", ") { it.replace('_', ' ') },
+                style = MaterialTheme.typography.bodySmall,
+                color = oak.danger,
+            )
+        }
+        Text(
+            "Moves: ${ok.physicalSpecial.physicalMoves} phys · ${ok.physicalSpecial.specialMoves} spec · ${ok.physicalSpecial.statusMoves} status",
+            style = MaterialTheme.typography.labelSmall,
+            color = oak.textMuted,
+        )
+    }
+
     // Defensive matrix — three labeled rows, each a type + ×N count (count>0 only), desc.
     val weak = defenseCounts(ok.defense) { it.weak }
     val resists = defenseCounts(ok.defense) { it.resists }
@@ -606,6 +643,32 @@ private fun AnalysisReadout(ok: ai.gowtam.oak.wire.TeamAnalysisOk, isAnalyzing: 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(memberLabel(tier.member, ok.members), style = MaterialTheme.typography.bodySmall, color = oak.textStrong)
                     Text("${tier.speed} Spe", style = MaterialTheme.typography.bodySmall, color = oak.textMuted, fontFamily = JetBrainsMonoFamily)
+                }
+            }
+        }
+    }
+
+    if (ok.threats.isNotEmpty()) {
+        SectionHeader("Meta threats")
+        ok.metaAttribution?.let {
+            Text(it, style = MaterialTheme.typography.labelSmall, color = oak.textFaint)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (threat in ok.threats.take(12)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(threat.displayName, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = oak.textStrong)
+                        Text(
+                            threat.status.uppercase(),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = when (threat.status) {
+                                "answered" -> oak.success
+                                "unanswered" -> oak.danger
+                                else -> oak.warning
+                            },
+                        )
+                    }
+                    Text(threat.reasons.joinToString("; "), style = MaterialTheme.typography.labelSmall, color = oak.textMuted)
                 }
             }
         }

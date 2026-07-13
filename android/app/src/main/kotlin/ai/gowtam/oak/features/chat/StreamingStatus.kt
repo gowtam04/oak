@@ -4,6 +4,7 @@ import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.OakType
 import ai.gowtam.oak.ui.rememberReduceMotion
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -11,11 +12,15 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,9 +47,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -60,6 +68,10 @@ import androidx.compose.ui.unit.dp
  * list and renders them. Meaning is carried by text + an icon + the spinner, never
  * color alone. When [reconnecting] the phase line reads "Reconnecting…". Renders
  * nothing when idle. Mirrors the iOS `StreamingStatusView`.
+ *
+ * Phase 2 specimen desk: soft plate-skeleton wash (client heuristic from tool labels
+ * when a type name is visible mid-stream; otherwise a quiet sunken paper tint). No
+ * backend change — wash is presentation only (`docs/design/soul.md`).
  *
  * [elapsedSeconds] renders a right-aligned mono `"${n}s"` timer alongside the phase
  * line (mirrors iOS's `TimelineView`-driven counter, visible from 0s — no gate).
@@ -78,7 +90,55 @@ fun StreamingStatus(
 ) {
     if (phase == StreamingPhase.IDLE) return
     val oak = LocalOakColors.current
+    val dark = isSystemInDarkTheme()
     val reduceMotion = rememberReduceMotion()
+    val heuristicTypes = remember(activities) { heuristicTypesFromActivities(activities) }
+    val wash = remember(
+        heuristicTypes,
+        dark,
+        oak.surfaceRaised,
+        oak.surfaceSunken,
+        oak.border,
+        oak.borderStrong,
+    ) {
+        if (heuristicTypes.isEmpty()) {
+            OakType.plateWashForTypes(
+                subjectTypes = emptyList(),
+                surface = oak.surfaceRaised,
+                surfaceSunken = oak.surfaceSunken,
+                border = oak.border,
+                borderStrong = oak.borderStrong,
+                dark = dark,
+            )
+        } else {
+            OakType.plateWash(
+                primary = heuristicTypes.getOrNull(0),
+                secondary = heuristicTypes.getOrNull(1),
+                surface = oak.surfaceRaised,
+                surfaceSunken = oak.surfaceSunken,
+                border = oak.border,
+                borderStrong = oak.borderStrong,
+                dark = dark,
+            )
+        }
+    }
+    val shellShape = RoundedCornerShape(OakRadius.lg)
+    val shellBrush = remember(wash, oak.surfaceRaised, oak.surfaceSunken) {
+        when {
+            wash.fillSecondary != null ->
+                Brush.linearGradient(listOf(wash.fill, wash.fillSecondary, oak.surfaceRaised))
+            wash.isMechanics ->
+                Brush.linearGradient(
+                    listOf(
+                        oak.surfaceSunken,
+                        oak.surfaceRaised.copy(alpha = 0.92f),
+                        oak.surfaceSunken.copy(alpha = 0.85f),
+                    ),
+                )
+            else ->
+                Brush.linearGradient(listOf(wash.fill, oak.surfaceRaised))
+        }
+    }
 
     // A slow breathing pulse on the phase icon signals "still working" without
     // repeating the spinner's motion; disabled outright under reduce-motion (a static
@@ -102,7 +162,9 @@ fun StreamingStatus(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(oak.surfaceRaised, RoundedCornerShape(OakRadius.md))
+            .clip(shellShape)
+            .background(shellBrush, shellShape)
+            .border(1.dp, wash.border.copy(alpha = 0.85f), shellShape)
             .padding(OakSpacing.md),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
@@ -165,7 +227,78 @@ fun StreamingStatus(
                 }
             }
         }
+        // Soft skeleton lines — plate-in-progress atmosphere (prototype .plate-skeleton).
+        StreamingSkeletonLines(reduceMotion = reduceMotion)
     }
+}
+
+@Composable
+private fun StreamingSkeletonLines(reduceMotion: Boolean) {
+    val oak = LocalOakColors.current
+    val pulse = if (reduceMotion) {
+        0.55f
+    } else {
+        val transition = rememberInfiniteTransition(label = "skelPulse")
+        val animated by transition.animateFloat(
+            initialValue = 0.85f,
+            targetValue = 0.40f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "skelPulseAlpha",
+        )
+        animated
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = OakSpacing.xs)
+            .alpha(pulse),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.72f)
+                .height(12.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(oak.textFaint.copy(alpha = 0.22f)),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .height(10.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(oak.textFaint.copy(alpha = 0.16f)),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.55f)
+                .height(10.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(oak.textFaint.copy(alpha = 0.14f)),
+        )
+    }
+}
+
+/**
+ * Client-only type heuristic for streaming wash: scans tool-activity labels for
+ * known type slugs/names (e.g. "dragon", "Ground"). Returns up to two types.
+ * Pure; never invents types from species names (those need the final answer).
+ */
+internal fun heuristicTypesFromActivities(activities: List<ToolActivity>): List<String> {
+    if (activities.isEmpty()) return emptyList()
+    val found = linkedSetOf<String>()
+    val haystack = activities.joinToString(" ") { "${it.tool} ${it.label}" }.lowercase()
+    for (type in OakType.displayOrder) {
+        // Word-ish match: type as whole token (spaces, punctuation, or edges).
+        val re = Regex("""(^|[^a-z])${Regex.escape(type)}([^a-z]|$)""")
+        if (re.containsMatchIn(haystack)) {
+            found.add(type)
+            if (found.size >= 2) break
+        }
+    }
+    return found.toList()
 }
 
 private fun phaseLabel(phase: StreamingPhase, reconnecting: Boolean): String {

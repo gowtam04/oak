@@ -11,6 +11,10 @@
  * min-width keeps it usable at the low end. The mobile overlay below replaces
  * all three with a fixed full-screen layout. */
 .artifact-viewer {
+  /* Specimen-plate wash (soul.md Phase 2) — type colors via --plate-a/--plate-b;
+     mix strengths inherit from :root (plate tuner). */
+  --plate-a: var(--neutral-500);
+  --plate-b: var(--neutral-600);
   display: flex;
   flex-direction: column;
   flex: 0 0 min(45%, var(--artifact-panel-w));
@@ -20,10 +24,48 @@
   align-self: stretch;
   max-height: 100%;
   overflow: hidden;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--plate-a) var(--plate-edge), var(--border));
   border-radius: var(--radius-lg);
+  background:
+    radial-gradient(
+      90% 70% at 88% 18%,
+      color-mix(in srgb, var(--plate-a) var(--plate-radial-a), transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      70% 60% at 12% 90%,
+      color-mix(in srgb, var(--plate-b) var(--plate-radial-b), transparent),
+      transparent 50%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--plate-a) var(--plate-wash-a), var(--surface)),
+      color-mix(in srgb, var(--plate-b) var(--plate-wash-b), var(--surface)) 55%,
+      var(--surface)
+    );
   box-shadow: var(--shadow-floating);
+}
+/* Ink plate (mechanics / ability / item / loading) — sunken paper, no type wash. */
+.artifact-viewer.answer-card--ink {
+  --plate-a: var(--neutral-500);
+  --plate-b: var(--neutral-600);
+  background: linear-gradient(180deg, var(--surface-sunken), var(--surface));
+  border-color: var(--border-strong);
+}
+/* Multi-subject comparison / multi-member team — light accent. */
+.artifact-viewer.answer-card--multi {
+  --plate-radial-a: 8%;
+  --plate-radial-b: 6%;
+  --plate-wash-a: 4%;
+  --plate-wash-b: 3%;
+  --plate-edge: 18%;
+  border-color: var(--border);
+}
+[data-theme="dark"] .artifact-viewer.answer-card--multi {
+  --plate-radial-a: 14%;
+  --plate-radial-b: 10%;
+  --plate-wash-a: 10%;
+  --plate-wash-b: 7%;
 }
 
 /* Thin, sticky header: a single control row (title + actions) over a compact
@@ -33,8 +75,12 @@
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid color-mix(in srgb, var(--plate-a) 14%, var(--border));
+  background: color-mix(in srgb, var(--plate-a) 4%, var(--surface-raised));
+}
+.artifact-viewer.answer-card--ink .artifact-viewer__header {
   background: var(--surface-raised);
+  border-bottom-color: var(--border);
 }
 
 .artifact-viewer__topline {
@@ -289,26 +335,31 @@
   gap: var(--space-4);
 }
 
-/* Hero header (UI §4 screen 06): sprite in a type-tinted halo + display name +
- * mono dex number + type badges. The Pokédex readout moment. */
+/* Hero header (UI §4 screen 06 + soul.md Phase 2): type-glow radial well
+ * mirroring SpriteCard — primary/secondary types via --plate-a / --plate-b. */
 .pokemon-artifact__head {
   display: flex;
   align-items: center;
   gap: var(--space-4);
 }
 .pokemon-artifact__halo {
-  --halo-type: var(--type-normal);
+  --plate-a: var(--type-normal);
+  --plate-b: var(--type-normal);
   flex: 0 0 auto;
   display: grid;
   place-items: center;
   width: 136px;
   height: 136px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--halo-type) 12%, transparent) 0%,
-    transparent 72%
-  );
+  border-radius: 28px;
+  background:
+    radial-gradient(
+      circle at 50% 45%,
+      color-mix(in srgb, var(--plate-a) 28%, transparent),
+      transparent 65%
+    ),
+    color-mix(in srgb, var(--plate-a) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--plate-a) 22%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--plate-b) 15%, transparent);
 }
 .pokemon-artifact__art {
   width: 104px;

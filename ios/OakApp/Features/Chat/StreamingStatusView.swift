@@ -3,7 +3,7 @@ import SwiftUI
 /// The live in-progress indicator shown while a turn streams (chat-experience.md
 /// M-CHAT-US-4): a tool-activity ticker plus a "thinking"/"answering" state, so the
 /// wait feels responsive and the reasoning is visible — Oak's **field-notes trail**,
-/// the signature moment of the product (fable-ui-strategy-ios.md §4.03).
+/// the signature moment of the product (specimen desk field notes / soul.md).
 ///
 /// Two shapes, chosen by `phase`:
 ///   - while Oak works (`thinking`/`usingTools`): the full trail — a phase line with
@@ -184,7 +184,7 @@ struct StreamingStatusView: View {
 /// The client-side mapping that turns the server's web-oriented tool-activity labels
 /// (which may carry leading emoji, e.g. `📇 Looking up Garchomp…`) into the iOS
 /// instrument voice: a single SF Symbol per tool identity and emoji-free mono caps
-/// text (fable-ui-strategy-ios.md §4.03). Pure and namespaced so it can be unit-tested
+/// text (specimen desk field notes). Pure and namespaced so it can be unit-tested
 /// without constructing a view.
 enum ToolTrail {
   /// Maps a tool name to its representative SF Symbol — the per-tool distinctions

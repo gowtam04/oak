@@ -234,6 +234,33 @@ describe("get_learnset parity guard (B-13) — present in every scope + provider
   }
 });
 
+describe("Team-build budget policy — batch learnsets + staple items", () => {
+  for (const provider of PROVIDERS) {
+    for (const mode of ["standard", "champions"] as const) {
+      it(`requires parallel get_learnset batching on builds (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        expect(text).toContain("HARD RULE");
+        expect(text).toContain("in parallel");
+        expect(text).toContain("get_learnset");
+      });
+      it(`prefers staples over per-slot get_item verification (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        expect(text).toContain("competitive staples");
+        // Source wraps mid-sentence; match the durable policy phrases.
+        expect(text).toContain("Do NOT spend a tool call per slot on");
+        expect(text).toContain("get_item for staples");
+        expect(text).not.toContain("verify with get_item");
+      });
+    }
+    it(`Champions item bullet skips pre-verifying every held item (${provider})`, () => {
+      const text = bodyText(provider, "champions");
+      expect(text).toContain("operator-curated allowlist");
+      expect(text).toContain("do NOT pre-verify every held item with get_item");
+      expect(text).toContain("legal held-item list");
+    });
+  }
+});
+
 describe("Anti-leak — no internal machinery in user-visible fields", () => {
   for (const provider of PROVIDERS) {
     for (const mode of ["standard", "champions", "gen-7"] as const) {

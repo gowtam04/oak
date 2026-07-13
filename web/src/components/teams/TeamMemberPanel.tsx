@@ -250,6 +250,52 @@ export default function TeamMemberPanel({
     (slug) => ({ slug, display_name: titleizeSlug(slug) }),
   );
 
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [templateNote, setTemplateNote] = useState<string | null>(null);
+  const applyCommonSet = () => {
+    if (!member.species || templateLoading) return;
+    if (
+      member.moves.length > 0 &&
+      !window.confirm("Replace this slot's set with the common usage set?")
+    ) {
+      return;
+    }
+    setTemplateLoading(true);
+    setTemplateNote(null);
+    void fetch("/api/teams/set-template", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ format, species: member.species }),
+    })
+      .then(async (res) => {
+        const body = (await res.json()) as {
+          found?: boolean;
+          member?: TeamMember;
+          attribution?: string;
+          notes?: string[];
+        };
+        if (!body.found || !body.member) {
+          setTemplateNote(
+            body.notes?.[0] ?? "No common set available for this species.",
+          );
+          return;
+        }
+        onChange({
+          ...member,
+          ...body.member,
+          species: member.species,
+          // Keep cosmetic fields the user may have set.
+          nickname: member.nickname,
+          gender: member.gender,
+          shiny: member.shiny,
+        });
+        setTemplateNote(body.attribution ?? "Applied common set.");
+      })
+      .catch(() => setTemplateNote("Couldn't load common set."))
+      .finally(() => setTemplateLoading(false));
+  };
+
   return (
     <div className="team-member-panel" data-testid={id("panel")}>
       <div className="team-member-panel__header">
@@ -262,6 +308,18 @@ export default function TeamMemberPanel({
           )}
         </div>
         <div className="team-member-panel__actions">
+          {member.species && (
+            <button
+              type="button"
+              className="tm-btn tm-btn--ghost tm-btn--sm"
+              data-testid={id("common-set")}
+              onClick={applyCommonSet}
+              disabled={templateLoading}
+              title="Fill moves/item/nature/EVs from ladder usage"
+            >
+              {templateLoading ? "Loading…" : "Apply common set"}
+            </button>
+          )}
           <button
             type="button"
             className="tm-icon-btn"
@@ -293,6 +351,11 @@ export default function TeamMemberPanel({
           </button>
         </div>
       </div>
+      {templateNote && (
+        <p className="team-member-panel__template-note" data-testid={id("template-note")}>
+          {templateNote}
+        </p>
+      )}
 
       {member.species && (
         <div className="team-member-panel__identity">

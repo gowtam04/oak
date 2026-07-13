@@ -6,7 +6,7 @@
  * bottom, the Fredoka wordmark with its brand-mark chip, and an "Open chat" red
  * pill mirroring `.app-nav__newchat`. Red only appears as the thread, the active
  * nav pill, the CTA, and link hover — never as wallpaper (the old red band is
- * retired, per `docs/design/fable-ui-strategy-reference.md` §3).
+ * retired; reference chrome follows `docs/design/soul.md` desk rules).
  *
  * Server-safe: no hooks, no "use client". The active-section highlight needs
  * the current route, so the nav is delegated to {@link ReferenceNav}, a small

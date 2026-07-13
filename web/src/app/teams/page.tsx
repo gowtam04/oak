@@ -31,7 +31,11 @@ import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useTeams } from "@/lib/hooks/use-teams";
 import type { TeamDetail } from "@/lib/api/teams-client";
 import type { TeamMember } from "@/data/teams/team-schema";
-import { NATDEX_FORMAT, SCOPE_PICKER_ORDER, type Format } from "@/data/formats";
+import {
+  NATDEX_FORMAT,
+  SCOPE_PICKER_ORDER,
+  type Format,
+} from "@/data/formats";
 import TeamList from "@/components/teams/TeamList";
 import TeamEditor, {
   type TeamEditorHandle,
@@ -40,6 +44,12 @@ import TeamsAssistantPanel from "@/components/teams/TeamsAssistantPanel";
 import PasteImportDialog from "@/components/teams/PasteImportDialog";
 import ExportDialog from "@/components/teams/ExportDialog";
 import { formatLabel } from "@/components/teams/display-names";
+import type { TeamAnalysisOk } from "@/lib/teams/team-analysis";
+import { analysisSuggestionChips } from "@/lib/teams/role-inventory";
+import {
+  presetsForFormat,
+  type ArchetypePreset,
+} from "@/lib/teams/archetype-presets";
 
 export default function TeamsPage() {
   const [auth, setAuth] = useState<MeResult>({ signedIn: false });
@@ -56,10 +66,13 @@ export default function TeamsPage() {
   const teams = useTeams(auth.signedIn);
   const { setFormatFilter } = teams;
 
-  // Active format: scopes the list + is the format new/imported teams use.
-  const [format, setFormat] = useState<Format>(NATDEX_FORMAT);
+  // List defaults to ALL formats so a team saved from chat (e.g. Champions) is
+  // visible without hunting for a filter. Create/import use the selected format,
+  // or national-dex when "All" is selected.
+  const [format, setFormat] = useState<Format | "all">("all");
+  const createFormat: Format = format === "all" ? NATDEX_FORMAT : format;
   useEffect(() => {
-    setFormatFilter(format);
+    setFormatFilter(format === "all" ? null : format);
   }, [format, setFormatFilter]);
 
   // Selected team detail (full members + validation), loaded on demand.
@@ -68,10 +81,18 @@ export default function TeamsPage() {
   // Imperative access to the editor's unsaved draft for the assistant panel
   // (read at send/apply time — never a render-time data flow).
   const editorRef = useRef<TeamEditorHandle>(null);
+  const [analysis, setAnalysis] = useState<TeamAnalysisOk | null>(null);
+  const [winConditionDraft, setWinConditionDraft] = useState("");
+  const [assistantSeed, setAssistantSeed] = useState<string | null>(null);
+  const [archetypeOpen, setArchetypeOpen] = useState(false);
   const openTeam = useCallback(
     async (id: string) => {
       const detail = await teams.get(id);
-      if (detail) setSelected(detail);
+      if (detail) {
+        setSelected(detail);
+        setWinConditionDraft(detail.winCondition ?? "");
+        setAnalysis(null);
+      }
     },
     [teams],
   );
@@ -104,17 +125,68 @@ export default function TeamsPage() {
     async (input: { name: string; members: TeamMember[] }) => {
       if (!selected) return;
       setSaving(true);
-      const updated = await teams.update(selected.id, input);
+      const updated = await teams.update(selected.id, {
+        ...input,
+        winCondition: winConditionDraft.trim() || null,
+      });
       setSaving(false);
-      if (updated) setSelected(updated);
+      if (updated) {
+        setSelected(updated);
+        setWinConditionDraft(updated.winCondition ?? "");
+      }
     },
-    [selected, teams],
+    [selected, teams, winConditionDraft],
   );
 
   const handleNew = useCallback(async () => {
-    const created = await teams.create({ format, name: "New team", members: [] });
-    if (created) setSelected(created);
-  }, [teams, format]);
+    setArchetypeOpen(true);
+  }, []);
+
+  const createBlank = useCallback(async () => {
+    const created = await teams.create({
+      format: createFormat,
+      name: "New team",
+      members: [],
+    });
+    if (created) {
+      setSelected(created);
+      setWinConditionDraft("");
+      setAnalysis(null);
+      setAssistantSeed(null);
+    }
+    setArchetypeOpen(false);
+  }, [teams, createFormat]);
+
+  const createFromArchetype = useCallback(
+    async (preset: ArchetypePreset) => {
+      const created = await teams.create({
+        format: createFormat,
+        name: `${preset.label} team`,
+        members: [],
+      });
+      if (created) {
+        setSelected(created);
+        setWinConditionDraft("");
+        setAnalysis(null);
+        setAssistantSeed(preset.seedPrompt);
+      }
+      setArchetypeOpen(false);
+    },
+    [teams, createFormat],
+  );
+
+  const suggestionChips = analysis
+    ? analysisSuggestionChips({
+        roles_missing: analysis.roles_missing,
+        defense_weak_counts: analysis.defense
+          .filter((r) => r.weak.length > 0)
+          .map((r) => ({ type: r.type, count: r.weak.length })),
+        uncovered: analysis.offense.uncovered,
+        unanswered_threats: analysis.threats
+          .filter((t) => t.status === "unanswered")
+          .map((t) => t.display_name),
+      })
+    : undefined;
 
   const handleDuplicate = useCallback(
     async (id: string) => {
@@ -174,10 +246,12 @@ export default function TeamsPage() {
                 className="teams-page__format-select"
                 value={format}
                 onChange={(e) => {
-                  setFormat(e.target.value as Format);
+                  const v = e.target.value;
+                  setFormat(v === "all" ? "all" : (v as Format));
                   setSelected(null);
                 }}
               >
+                <option value="all">All formats</option>
                 {SCOPE_PICKER_ORDER.map((f) => (
                   <option key={f} value={f}>
                     {formatLabel(f)}
@@ -226,6 +300,53 @@ export default function TeamsPage() {
                 onDelete={(id) => void handleDelete(id)}
               />
 
+              {archetypeOpen && (
+                <div
+                  className="teams-archetype-modal"
+                  data-testid="archetype-picker"
+                  role="dialog"
+                  aria-label="Start from archetype"
+                >
+                  <div className="teams-archetype-modal__card">
+                    <h3>Start from an archetype</h3>
+                    <p className="teams-archetype-modal__hint">
+                      Creates an empty team and seeds the assistant with a build
+                      brief. You still Apply patches and Save.
+                    </p>
+                    <ul className="teams-archetype-modal__list">
+                      {presetsForFormat(createFormat).map((p) => (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            className="tm-btn tm-btn--secondary"
+                            onClick={() => void createFromArchetype(p)}
+                          >
+                            <strong>{p.label}</strong>
+                            <span>{p.blurb}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="teams-archetype-modal__actions">
+                      <button
+                        type="button"
+                        className="tm-btn tm-btn--ghost"
+                        onClick={() => void createBlank()}
+                      >
+                        Blank team
+                      </button>
+                      <button
+                        type="button"
+                        className="tm-btn tm-btn--ghost"
+                        onClick={() => setArchetypeOpen(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {selected ? (
                 <>
                   <TeamEditor
@@ -235,20 +356,33 @@ export default function TeamsPage() {
                     onExport={() => void handleExport()}
                     onClose={() => setSelected(null)}
                     handleRef={editorRef}
+                    onAnalysisChange={setAnalysis}
+                    winCondition={winConditionDraft}
+                    onWinConditionChange={setWinConditionDraft}
                   />
                   <TeamsAssistantPanel
                     teamId={selected.id}
                     format={selected.format as Format}
-                    getDraft={() =>
-                      editorRef.current?.getDraft() ?? {
-                        name: selected.name,
-                        members: selected.members,
+                    getDraft={() => {
+                      const d = editorRef.current?.getDraft();
+                      return {
+                        name: d?.name ?? selected.name,
+                        members: d?.members ?? selected.members,
+                        win_condition: winConditionDraft.trim() || null,
+                      };
+                    }}
+                    applyPatch={(patch) => {
+                      editorRef.current?.applyPatch(patch);
+                      if (patch.win_condition !== undefined) {
+                        setWinConditionDraft(patch.win_condition ?? "");
                       }
-                    }
-                    applyPatch={(patch) => editorRef.current?.applyPatch(patch)}
+                    }}
                     replaceDraft={(draft) =>
                       editorRef.current?.replaceDraft(draft)
                     }
+                    suggestionChips={suggestionChips}
+                    seedMessage={assistantSeed}
+                    onSeedConsumed={() => setAssistantSeed(null)}
                   />
                 </>
               ) : (
@@ -269,7 +403,7 @@ export default function TeamsPage() {
 
       <PasteImportDialog
         open={importOpen}
-        format={format}
+        format={createFormat}
         onClose={() => setImportOpen(false)}
         onImport={teams.importPaste}
         onImported={(team) => {

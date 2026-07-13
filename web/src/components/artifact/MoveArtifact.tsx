@@ -8,6 +8,7 @@
 import TypeBadge from "@/components/TypeBadge";
 import type { TypeName } from "@/agent/schemas";
 import type { MoveArtifactData } from "@/lib/entity-artifact";
+import { typeCssVar } from "@/lib/plate-types";
 
 import EntityLink from "./EntityLink";
 
@@ -31,8 +32,17 @@ export default function MoveArtifact({
     { label: "Target", value: data.target },
   ];
 
+  const plateStyle = {
+    ["--plate-a" as string]: typeCssVar(data.type),
+    ["--plate-b" as string]: typeCssVar(data.type),
+  };
+
   return (
-    <div className="move-artifact" data-testid="move-artifact">
+    <div
+      className="move-artifact"
+      data-testid="move-artifact"
+      style={plateStyle}
+    >
       <div className="move-artifact__type">
         <EntityLink kind="type" q={data.type} className="entity-link--type">
           <TypeBadge type={data.type as TypeName} />
@@ -42,14 +52,14 @@ export default function MoveArtifact({
       <dl className="kv-grid" data-testid="move-stats">
         {stats.map((s) => (
           <div key={s.label} className="kv-grid__pair">
-            <dt className="kv-grid__key">{s.label}</dt>
+            <dt className="kv-grid__key ilabel">{s.label}</dt>
             <dd className="kv-grid__value">{s.value}</dd>
           </div>
         ))}
       </dl>
 
       <section className="move-artifact__effect">
-        <h3 className="artifact-section__title">Effect</h3>
+        <h3 className="artifact-section__title ilabel">Effect</h3>
         <p className="artifact-text" data-testid="move-effect">
           {data.effect_full || data.effect_short}
         </p>

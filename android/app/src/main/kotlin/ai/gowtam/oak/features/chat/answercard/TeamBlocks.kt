@@ -161,18 +161,17 @@ private fun ProposedCard(
                     }
                     OakButton(
                         onClick = {
-                            onApply(team)
                             val service = teamService
                             if (service == null) {
-                                // No composition-root access (e.g. a preview/test host) — fall
-                                // back to a local-only confirmation rather than crashing.
-                                applyState = ApplyState.SAVED
+                                // Preview/test host with no TeamService — never fake success.
+                                applyState = ApplyState.FAILED
                                 return@OakButton
                             }
                             applyState = ApplyState.SAVING
                             scope.launch {
                                 applyState = try {
                                     service.create(team.format, team.name, team.members)
+                                    onApply(team)
                                     ApplyState.SAVED
                                 } catch (e: Exception) {
                                     ApplyState.FAILED
@@ -181,7 +180,7 @@ private fun ProposedCard(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(if (applyState == ApplyState.FAILED) "Retry" else "Apply")
+                        Text(if (applyState == ApplyState.FAILED) "Retry" else "Save")
                     }
                 }
             }

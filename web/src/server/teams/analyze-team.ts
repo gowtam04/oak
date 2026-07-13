@@ -73,6 +73,8 @@ export async function analyzeTeamForFormat(
       input: { evs: m.evs, nature: m.nature, level: m.level },
       slug: m.species ?? "",
       ref: (m.species && refs.get(m.species)) || null,
+      ability: m.ability,
+      item: m.item,
       moves: m.moves.map((slug) => {
         const summary = summaries.get(slug);
         return {
@@ -83,7 +85,14 @@ export async function analyzeTeamForFormat(
       }),
     }));
 
-    return analyzeTeam(sources, typeProfiles, format);
+    // Pure analysis first; meta threat board is fail-soft and never blocks ok.
+    const base = analyzeTeam(sources, typeProfiles, format);
+    try {
+      const { attachThreatBoard } = await import("./threat-board");
+      return await attachThreatBoard(base, members, format, db, typeProfiles);
+    } catch {
+      return base;
+    }
   } catch {
     // Transport/DB fault — degrade to an honest "couldn't analyze" envelope
     // rather than throwing out of the route (mirrors validate-team's policy).

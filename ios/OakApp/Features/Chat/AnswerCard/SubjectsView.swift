@@ -47,11 +47,13 @@ private struct SubjectCard: View {
 
   var body: some View {
     HStack(alignment: .top, spacing: Theme.Spacing.md) {
+      // Stronger type-glow sprite well (soul.md specimen well / Phase 1–2).
       SpriteImage(url: URL(string: subject.spriteUrl), name: subject.name, size: spriteSize)
         .padding(Theme.Spacing.sm)
-        .background(
-          Theme.type(primaryType).opacity(0.12),
-          in: RoundedRectangle(cornerRadius: Theme.Radius.md)
+        .oakTypeGlowWell(
+          primary: primaryType,
+          secondary: secondaryType,
+          glowEndRadius: spriteSize * 0.85
         )
 
       VStack(alignment: .leading, spacing: Theme.Spacing.sm) {

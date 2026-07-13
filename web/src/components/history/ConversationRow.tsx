@@ -96,7 +96,17 @@ export default function ConversationRow({
           onClick={onOpen}
           title={conversation.title}
         >
-          <span className="conv-row__title">{conversation.title}</span>
+          <span className="conv-row__title-row">
+            <span className="conv-row__title">{conversation.title}</span>
+            {active && (
+              <span
+                className="conv-row__open-stamp"
+                data-testid="conv-row-open"
+              >
+                OPEN
+              </span>
+            )}
+          </span>
           <span className="conv-row__meta">
             <span data-testid="format-badge" className="conv-row__badge">
               {scopeLabelShort(conversation.format as Format)}

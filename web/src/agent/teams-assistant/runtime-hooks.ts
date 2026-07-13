@@ -7,16 +7,13 @@
  *
  * The legality gate mirrors the main agent's proposed_team loop
  * (runtime.ts validateOakAnswer): apply the patch to the turn's draft, validate
- * the RESULT, and feed hard violations back (with the species' legal
- * move/ability lists) so the model rebuilds legally — up to
- * MAX_BUILDER_PATCH_RETRIES, then warn-but-allow (the /teams editor re-renders
- * its own per-slot warnings once the user applies the patch). One deliberate
+ * the RESULT, and feed hard violations back (with legal move/ability/item
+ * lists) so the model rebuilds legally for the whole turn. One deliberate
  * difference: the model is held to violations its PATCH INTRODUCES — a hard
  * violation already present in untouched draft slots (the user's own hand
- * edits) never burns the model's retry budget, since the assistant didn't
- * cause it and may not even be asked to fix it. `item_missing` is not enforced
- * here at all: draft editing is incremental by design (a member without an
- * item yet is normal mid-build), unlike a chat-proposed complete team.
+ * edits) is never rejected, since the assistant didn't cause it. `item_missing`
+ * is not enforced here: draft editing is incremental by design (a member
+ * without an item yet is normal mid-build), unlike a chat-proposed complete team.
  */
 
 import type { AgentContext } from "@/agent/types";
@@ -91,15 +88,18 @@ function buildValidateAnswer(
         .map(warningKey),
     );
     const introduced = hard.filter((w) => !preExisting.has(warningKey(w)));
-    if (introduced.length === 0 || rejectionsSoFar >= MAX_BUILDER_PATCH_RETRIES) {
-      // Nothing new is the model's fault, or the budget is spent —
-      // warn-but-allow; the editor surfaces per-slot warnings after Apply.
+    // Pre-existing hard violations (user hand-edits) never burn the model —
+    // only patch-introduced illegality is rejected. Keep rejecting introduced
+    // hard violations for the whole turn (no accept-with-warnings after N).
+    if (introduced.length === 0) {
       return { ok: true };
     }
+    // rejectionsSoFar is retained for observability/hooks parity; the builder
+    // no longer accepts-with-warnings after MAX_BUILDER_PATCH_RETRIES.
+    void rejectionsSoFar;
 
     // Mirror the main agent's rejection feedback: enumerate the violations,
-    // then the legal move/ability lists for the implicated species (so the
-    // model stops swapping one illegal guess for another), then a directive.
+    // then the legal move/ability/item lists, then a rebuild directive.
     const issues = introduced.map((w) => w.message).join(" ");
     const speciesAt = (slot: number | undefined): string | null =>
       slot === undefined ? null : patched[slot]?.species ?? null;
@@ -126,15 +126,28 @@ function buildValidateAnswer(
       return `Legal abilities for ${sp}: ${abilities.join(", ")}.`;
     });
 
+    const itemIssues = introduced.some(
+      (w) =>
+        w.code === "item_illegal" ||
+        w.code === "duplicate_item" ||
+        w.code === "item_missing",
+    );
+    const legalItemLines: string[] = [];
+    if (itemIssues && validation.legalItems.length > 0) {
+      legalItemLines.push(
+        `Legal held items in ${format}: ${validation.legalItems.join(", ")}.`,
+      );
+    }
+
     const feedback =
       `Your team_patch makes the draft illegal for ${format} and was ` +
       `rejected: ${issues}` +
-      [...legalMoveLines, ...legalAbilityLines]
+      [...legalMoveLines, ...legalAbilityLines, ...legalItemLines]
         .map((line) => ` ${line}`)
         .join("") +
-      ` Rebuild the patch choosing ONLY from the legal moves listed above ` +
-      `(or call get_learnset for any other species), make sure no two members ` +
-      `of the post-patch draft share a species or a held item, and call ` +
+      ` Rebuild the patch choosing ONLY from the legal lists above ` +
+      `(or call get_learnset / get_item), make sure no two members of the ` +
+      `post-patch draft share a species or a held item, and call ` +
       `submit_builder_answer again.`;
     return { ok: false, feedback, traceError: "team_patch_illegal" };
   };

@@ -1,0 +1,1631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Oak — Specimen Desk prototype</title>
+  <style>
+    /* =====================================================================
+       Oak Specimen Desk — interactive redesign mock
+       Strategy: docs/design/beyond-generic-ai.md
+       Open in a browser; click states in the control bar.
+       ===================================================================== */
+
+    :root {
+      --poke-red: #ee5a5a;
+      --poke-red-soft: #fcebeb;
+      --azure: #3aa0e3;
+      --success: #2fb573;
+      --warning: #f08c00;
+      --bg: #fbf7f4;
+      --surface: #ffffff;
+      --surface-sunken: #f7f1eb;
+      --border: #e9e0d8;
+      --border-strong: #d8ccc1;
+      --text-strong: #2a2521;
+      --text: #3d362f;
+      --text-muted: #6e625a;
+      --text-faint: #94867a;
+      --shadow-raised: 0 1px 2px rgba(74, 53, 42, 0.05), 0 4px 12px rgba(74, 53, 42, 0.07);
+      --shadow-floating: 0 6px 16px rgba(74, 53, 42, 0.1), 0 2px 6px rgba(74, 53, 42, 0.08);
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      --radius-pill: 999px;
+      --display: "Fredoka", "Segoe UI", system-ui, sans-serif;
+      --body: "Nunito Sans", system-ui, -apple-system, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+      /* type solids */
+      --type-dragon: #6f35fc;
+      --type-ground: #e2bf65;
+      --type-steel: #b7b7ce;
+      --type-ghost: #735797;
+      --type-fire: #ee8130;
+      --type-flying: #a98ff3;
+      --type-water: #6390f0;
+      --type-normal: #a8a77a;
+    }
+
+    @import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=JetBrains+Mono:wght@500;600&family=Nunito+Sans:wght@400;600;700;800&display=swap");
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--body);
+      background: #1a1614;
+      color: #f5efe9;
+      min-height: 100vh;
+    }
+
+    /* ---- Studio chrome (outside the app mock) ---- */
+    .studio {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 100vh;
+    }
+    .studio__bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 16px;
+      padding: 14px 20px;
+      background: #231f1c;
+      border-bottom: 1px solid #3a332e;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .studio__brand {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: 0.02em;
+      margin-right: 8px;
+      white-space: nowrap;
+    }
+    .studio__brand span { color: var(--poke-red); }
+    .studio__group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .studio__label {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #8a7d72;
+      margin-right: 4px;
+    }
+    .studio__btn {
+      appearance: none;
+      border: 1px solid #4e453f;
+      background: #332d29;
+      color: #e4dad0;
+      font-family: var(--body);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .studio__btn:hover { background: #3f3732; }
+    .studio__btn.is-active {
+      background: color-mix(in srgb, var(--poke-red) 22%, #332d29);
+      border-color: var(--poke-red);
+      color: #fff;
+    }
+    .studio__hint {
+      margin-left: auto;
+      font-size: 12px;
+      color: #8a7d72;
+      max-width: 360px;
+      line-height: 1.35;
+    }
+    @media (max-width: 900px) {
+      .studio__hint { display: none; }
+    }
+
+    .studio__stage {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 40px;
+      padding: 32px 24px 48px;
+      flex-wrap: wrap;
+    }
+
+    /* ---- Device frames ---- */
+    .device {
+      flex: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    .device__tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #8a7d72;
+    }
+    .device--web .frame {
+      width: min(1080px, 92vw);
+      height: min(720px, 78vh);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+      border: 1px solid #3a332e;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      color: var(--text);
+    }
+    .device--mobile .frame {
+      width: 390px;
+      height: 780px;
+      max-height: 85vh;
+      border-radius: 36px;
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+      border: 10px solid #111;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      color: var(--text);
+      position: relative;
+    }
+    .device--mobile .notch {
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 28px;
+      background: #111;
+      border-radius: 0 0 16px 16px;
+      z-index: 20;
+    }
+    .device.is-hidden { display: none; }
+
+    /* Dark theme inside app */
+    .frame[data-theme="dark"] {
+      --bg: #161311;
+      --surface: #211c19;
+      --surface-sunken: #12100e;
+      --border: #3a332e;
+      --border-strong: #4e453f;
+      --text-strong: #f5efe9;
+      --text: #e4dad0;
+      --text-muted: #b7a99c;
+      --text-faint: #8a7d72;
+      --poke-red-soft: #3a1e1e;
+      --shadow-raised: 0 1px 2px rgba(0,0,0,0.22), 0 4px 12px rgba(0,0,0,0.3);
+      --shadow-floating: 0 6px 16px rgba(0,0,0,0.34), 0 2px 6px rgba(0,0,0,0.28);
+    }
+
+    /* ---- App shell ---- */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+      background:
+        radial-gradient(120% 50% at 50% -8%, color-mix(in srgb, var(--poke-red) 5%, var(--bg)), var(--bg) 55%);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .header {
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 20px;
+      background: var(--bg);
+      border-top: 2px solid var(--poke-red);
+      border-bottom: 1px solid var(--border);
+    }
+    .wordmark {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 22px;
+      color: var(--text-strong);
+      letter-spacing: 0.01em;
+    }
+    .wordmark__mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background:
+        radial-gradient(circle at 50% 50%, transparent 28%, var(--poke-red) 29%, var(--poke-red) 42%, transparent 43%),
+        linear-gradient(var(--poke-red), var(--poke-red));
+      background-color: var(--surface);
+      box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(74,53,42,0.14);
+      position: relative;
+    }
+    .wordmark__mark::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(to bottom, var(--poke-red) 0 46%, var(--surface) 54% 100%);
+      mask: radial-gradient(circle at 50% 50%, transparent 32%, #000 33%);
+      -webkit-mask: radial-gradient(circle at 50% 50%, transparent 32%, #000 33%);
+    }
+    .header__right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 34px;
+      padding: 0 12px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .pill:hover { background: var(--surface-sunken); }
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .body-row {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+    }
+
+    /* Sidebar (web only) */
+    .sidebar {
+      width: 260px;
+      flex: none;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .device--mobile .sidebar { display: none; }
+    .sidebar__new {
+      margin: 12px;
+      height: 40px;
+      border: 0;
+      border-radius: var(--radius-pill);
+      background: var(--poke-red);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .sidebar__new:hover { filter: brightness(0.95); }
+    .sidebar__filters {
+      display: flex;
+      gap: 6px;
+      padding: 0 12px 10px;
+    }
+    .filter {
+      height: 28px;
+      padding: 0 10px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border);
+      background: var(--surface-sunken);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .filter.is-active {
+      background: var(--poke-red-soft);
+      border-color: color-mix(in srgb, var(--poke-red) 40%, var(--border));
+      color: var(--text-strong);
+    }
+    .hist {
+      flex: 1;
+      overflow: auto;
+      padding: 4px 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    /*
+      Selection is a mini specimen plate on the desk — NOT a left accent rail
+      (that rail is the generic AI/SaaS tell). Active = lifted card + "OPEN"
+      instrument stamp. Hover = flat sunken only.
+    */
+    .hist__row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      background: transparent;
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .hist__row:hover {
+      background: var(--surface-sunken);
+    }
+    .hist__row.is-active {
+      background: var(--surface);
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-raised);
+    }
+    .hist__row.is-active:hover {
+      background: var(--surface);
+    }
+    .hist__main {
+      min-width: 0;
+      flex: 1;
+    }
+    .hist__title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-strong);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .hist__meta {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-faint);
+      margin-top: 3px;
+      letter-spacing: 0.04em;
+    }
+    /* Instrument stamp — only on the open entry; red used as a label, not a rail */
+    .hist__open {
+      flex: none;
+      align-self: center;
+      display: none;
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--poke-red);
+      padding: 3px 7px;
+      border-radius: 4px;
+      border: 1px solid color-mix(in srgb, var(--poke-red) 35%, var(--border));
+      background: color-mix(in srgb, var(--poke-red) 8%, var(--surface));
+      line-height: 1;
+    }
+    .hist__row.is-active .hist__open {
+      display: inline-flex;
+    }
+
+    /* Main column */
+    .main {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .thread {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 20px 24px 12px;
+    }
+    .device--mobile .thread {
+      padding: 36px 16px 12px;
+    }
+    .thread__inner {
+      max-width: 760px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 100%;
+    }
+
+    .ilabel {
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+    .mono-num {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+
+    /* ========== STATE: EMPTY (desk / blank specimen) ========== */
+    .empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: center;
+      gap: 16px;
+      padding: 8px 0 24px;
+      max-width: 560px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .blank-plate {
+      background: var(--surface);
+      border: 1.5px dashed color-mix(in srgb, var(--border-strong) 80%, var(--poke-red) 20%);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-raised);
+      padding: 20px 20px 16px;
+      position: relative;
+      overflow: hidden;
+      min-height: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .blank-plate::before {
+      content: "";
+      position: absolute;
+      inset: 12px;
+      border-radius: calc(var(--radius-xl) - 8px);
+      background-image:
+        linear-gradient(to right, color-mix(in srgb, var(--border) 70%, transparent) 1px, transparent 1px),
+        linear-gradient(to bottom, color-mix(in srgb, var(--border) 70%, transparent) 1px, transparent 1px);
+      background-size: 24px 24px;
+      opacity: 0.45;
+      pointer-events: none;
+    }
+    .blank-plate > * { position: relative; z-index: 1; }
+    .blank-plate__top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .stamp {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid color-mix(in srgb, var(--poke-red) 35%, var(--border));
+      background: color-mix(in srgb, var(--poke-red) 8%, var(--surface));
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-strong);
+      cursor: pointer;
+    }
+    .blank-plate__prompt {
+      margin: 12px 0 4px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-strong);
+      letter-spacing: -0.01em;
+    }
+    .blank-plate__sub {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-muted);
+      max-width: 36ch;
+      line-height: 1.45;
+    }
+    .silhouette {
+      position: absolute;
+      right: 18px;
+      bottom: 56px;
+      width: 120px;
+      height: 120px;
+      opacity: 0.05;
+      background: center / contain no-repeat;
+      pointer-events: none;
+      filter: grayscale(1);
+      z-index: 0;
+    }
+    .starters {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .starter {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--surface) 70%, transparent);
+      cursor: pointer;
+      transition: border-color 0.15s, transform 0.15s, background 0.15s;
+      font: inherit;
+      color: var(--text-strong);
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .starter:hover {
+      border-color: var(--border-strong);
+      background: var(--surface);
+      transform: translateY(-1px);
+    }
+    .starter__cat {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      width: 52px;
+      flex: none;
+    }
+    .starter__dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex: none;
+    }
+
+    /* ========== User note (not iMessage red) ========== */
+    .user-note {
+      align-self: flex-end;
+      max-width: 72%;
+      padding: 10px 14px;
+      background: var(--surface-sunken);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      border-bottom-right-radius: 6px;
+      color: var(--text-strong);
+      font-size: 14px;
+      font-weight: 600;
+      position: relative;
+      box-shadow: var(--shadow-raised);
+    }
+    .user-note::before {
+      content: "";
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--poke-red);
+    }
+
+    /* ========== Field notes (streaming) ========== */
+    .field-notes {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 4px 0;
+    }
+    .note-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      align-self: flex-start;
+      padding: 7px 12px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text);
+      box-shadow: var(--shadow-raised);
+      animation: turn-in 0.22s ease both;
+    }
+    .note-chip--done { color: var(--text-muted); }
+    .note-chip--live {
+      border-color: color-mix(in srgb, var(--poke-red) 40%, var(--border));
+      background: color-mix(in srgb, var(--poke-red) 6%, var(--surface));
+    }
+    .note-chip__spin {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid var(--border-strong);
+      border-top-color: var(--poke-red);
+      animation: spin 0.7s linear infinite;
+    }
+    .note-chip__tick {
+      color: var(--success);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .note-elapsed {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-faint);
+      padding-left: 4px;
+    }
+    .plate-skeleton {
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border);
+      background: linear-gradient(
+        105deg,
+        color-mix(in srgb, var(--type-a, var(--type-dragon)) 10%, var(--surface)),
+        color-mix(in srgb, var(--type-b, var(--type-ground)) 8%, var(--surface))
+      );
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: var(--shadow-raised);
+    }
+    .skel-line {
+      height: 12px;
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--text-faint) 18%, transparent);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    .skel-line:nth-child(1) { width: 72%; height: 18px; }
+    .skel-line:nth-child(2) { width: 92%; }
+    .skel-line:nth-child(3) { width: 58%; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 50% { opacity: 0.45; } }
+    @keyframes turn-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    /* ========== Specimen plate (answer) ========== */
+    .plate {
+      --type-a: var(--type-dragon);
+      --type-b: var(--type-ground);
+      border-radius: var(--radius-xl);
+      border: 1px solid color-mix(in srgb, var(--type-a) 28%, var(--border));
+      background:
+        radial-gradient(90% 70% at 88% 18%, color-mix(in srgb, var(--type-a) 16%, transparent), transparent 55%),
+        radial-gradient(70% 60% at 12% 90%, color-mix(in srgb, var(--type-b) 12%, transparent), transparent 50%),
+        linear-gradient(
+          145deg,
+          color-mix(in srgb, var(--type-a) 9%, var(--surface)),
+          color-mix(in srgb, var(--type-b) 6%, var(--surface)) 55%,
+          var(--surface)
+        );
+      box-shadow: var(--shadow-floating);
+      padding: 18px 18px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      animation: turn-in 0.28s ease both;
+      overflow: hidden;
+    }
+    .plate--steel {
+      --type-a: var(--type-steel);
+      --type-b: var(--type-ghost);
+    }
+    .plate--fire {
+      --type-a: var(--type-fire);
+      --type-b: var(--type-flying);
+    }
+    .plate--mechanics {
+      --type-a: #94867a;
+      --type-b: #6e625a;
+      background:
+        linear-gradient(180deg, var(--surface-sunken), var(--surface));
+      border-color: var(--border-strong);
+    }
+    .plate--multi {
+      --type-a: var(--type-flying);
+      --type-b: var(--type-dragon);
+    }
+
+    .plate__stamp-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .status-ok {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--success);
+    }
+    .plate__body {
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+    }
+    .device--mobile .plate__body { flex-direction: column-reverse; }
+    .plate__prose { flex: 1; min-width: 0; }
+    .plate__lead {
+      margin: 0 0 10px;
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1.3;
+      letter-spacing: -0.015em;
+      color: var(--text-strong);
+      max-width: 36ch;
+    }
+    .plate__lead .mono-num {
+      color: color-mix(in srgb, var(--type-a) 55%, var(--text-strong));
+    }
+    .plate__p {
+      margin: 0 0 8px;
+      font-size: 14.5px;
+      line-height: 1.55;
+      color: var(--text);
+      max-width: 52ch;
+    }
+    .plate__p strong { color: var(--text-strong); font-weight: 700; }
+
+    .specimen {
+      flex: none;
+      width: 148px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .device--mobile .specimen {
+      width: 100%;
+      flex-direction: row;
+      align-items: center;
+      gap: 14px;
+    }
+    .specimen__well {
+      width: 120px;
+      height: 120px;
+      border-radius: 22px;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--type-a) 28%, transparent), transparent 65%),
+        color-mix(in srgb, var(--type-a) 10%, var(--surface));
+      border: 1px solid color-mix(in srgb, var(--type-a) 22%, var(--border));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--type-b) 15%, transparent);
+    }
+    .specimen__well img {
+      width: 96px;
+      height: 96px;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .specimen__meta { text-align: center; }
+    .device--mobile .specimen__meta { text-align: left; }
+    .specimen__name {
+      font-weight: 800;
+      font-size: 15px;
+      color: var(--text-strong);
+    }
+    .specimen__dex {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-top: 2px;
+    }
+    .type-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+      justify-content: center;
+    }
+    .device--mobile .type-row { justify-content: flex-start; }
+    .type-badge {
+      display: inline-flex;
+      padding: 3px 10px;
+      border-radius: var(--radius-pill);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: capitalize;
+      border: 1px solid color-mix(in srgb, var(--t) 30%, transparent);
+      background: color-mix(in srgb, var(--t) 16%, var(--surface));
+      color: color-mix(in srgb, var(--t) 65%, var(--text-strong));
+    }
+
+    .inference {
+      margin: 4px 0 0;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      background: color-mix(in srgb, var(--azure) 10%, var(--surface));
+      border: 1px solid color-mix(in srgb, var(--azure) 28%, var(--border));
+    }
+    .inference__head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .conf {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--success) 18%, var(--surface));
+      color: color-mix(in srgb, var(--success) 70%, var(--text-strong));
+    }
+    .inference p {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--text);
+    }
+
+    /* Results table inside plate */
+    .results {
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .results__head {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--surface-sunken);
+      border-bottom: 1px solid var(--border);
+    }
+    .results table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+    .results th {
+      text-align: left;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      padding: 8px 12px;
+      font-weight: 600;
+    }
+    .results td {
+      padding: 9px 12px;
+      border-top: 1px solid var(--border);
+      color: var(--text);
+    }
+    .results tr { cursor: pointer; }
+    .results tr:hover td { background: color-mix(in srgb, var(--type-a) 6%, transparent); }
+    .results__name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      color: var(--text-strong);
+    }
+    .results__name img { width: 32px; height: 32px; image-rendering: pixelated; }
+
+    /* Receipts drawer */
+    .receipts {
+      margin: 4px -18px 0;
+      border-top: 1px solid color-mix(in srgb, var(--type-a) 18%, var(--border));
+      background: color-mix(in srgb, var(--surface-sunken) 65%, transparent);
+    }
+    .receipts__tab {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 18px;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      font: inherit;
+      color: var(--text);
+      text-align: left;
+    }
+    .receipts__tab:hover { background: color-mix(in srgb, var(--text) 3%, transparent); }
+    .receipts__panel {
+      display: none;
+      padding: 0 18px 16px;
+      animation: turn-in 0.2s ease both;
+    }
+    .receipts.is-open .receipts__panel { display: block; }
+    .receipts.is-open .receipts__chevron { transform: rotate(90deg); }
+    .receipts__chevron {
+      transition: transform 0.15s;
+      color: var(--text-faint);
+      font-size: 12px;
+    }
+    .receipts__block + .receipts__block { margin-top: 12px; }
+    .receipts__block p {
+      margin: 6px 0 0;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    .receipts__src {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--azure);
+      font-weight: 600;
+    }
+
+    /* Composer */
+    .composer-wrap {
+      flex: none;
+      padding: 10px 20px 16px;
+      background: linear-gradient(to top, var(--bg) 70%, transparent);
+    }
+    .device--mobile .composer-wrap { padding: 8px 14px 10px; }
+    .composer {
+      max-width: 680px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 6px 6px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-floating);
+    }
+    .composer:focus-within {
+      box-shadow: var(--shadow-floating), 0 0 0 3px color-mix(in srgb, var(--azure) 35%, transparent);
+    }
+    .composer input {
+      flex: 1;
+      border: 0;
+      background: transparent;
+      font: inherit;
+      font-size: 14px;
+      color: var(--text-strong);
+      outline: none;
+      min-width: 0;
+      padding: 8px 0;
+    }
+    .composer input::placeholder { color: var(--text-faint); }
+    .composer__send {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 0;
+      background: var(--poke-red);
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      flex: none;
+    }
+    .composer__send.is-stop {
+      background: var(--poke-red);
+    }
+    .composer__send.is-stop::after {
+      content: "";
+      width: 12px;
+      height: 12px;
+      background: #fff;
+      border-radius: 2px;
+    }
+    .composer__send:not(.is-stop)::after {
+      content: "↑";
+      font-weight: 700;
+    }
+
+    /* Mobile top chrome */
+    .m-top {
+      display: none;
+      flex: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 36px 16px 8px;
+      gap: 8px;
+    }
+    .device--mobile .m-top { display: flex; }
+    .device--mobile .header { display: none; }
+    .m-guest {
+      display: none;
+      padding: 0 16px 4px;
+      font-size: 12px;
+      color: var(--text-muted);
+      justify-content: space-between;
+    }
+    .device--mobile .m-guest { display: flex; }
+    .m-guest a { color: var(--poke-red); font-weight: 700; text-decoration: none; }
+
+    .tabbar {
+      display: none;
+      flex: none;
+      justify-content: center;
+      padding: 6px 16px 14px;
+      background: var(--bg);
+    }
+    .device--mobile .tabbar { display: flex; }
+    .tabbar__pill {
+      display: flex;
+      gap: 4px;
+      padding: 6px;
+      border-radius: var(--radius-pill);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-raised);
+    }
+    .tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 8px 18px;
+      border-radius: var(--radius-pill);
+      border: 0;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tab.is-active {
+      background: var(--poke-red-soft);
+      color: var(--poke-red);
+    }
+    .tab__icon { font-size: 16px; }
+
+    /* Compare strip */
+    .compare {
+      display: none;
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #332d29;
+      border: 1px solid #4e453f;
+      color: #e4dad0;
+      font-size: 12px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      z-index: 200;
+      box-shadow: var(--shadow-overlay, 0 8px 24px rgba(0,0,0,0.4));
+    }
+
+    /* Hide state sections by default; JS toggles */
+    [data-view] { display: none; }
+    [data-view].is-visible { display: flex; flex-direction: column; gap: 16px; }
+    .empty[data-view].is-visible { display: flex; }
+  </style>
+</head>
+<body>
+  <div class="studio">
+    <div class="studio__bar">
+      <div class="studio__brand">Oak · <span>Specimen Desk</span></div>
+
+      <div class="studio__group">
+        <span class="studio__label">Device</span>
+        <button type="button" class="studio__btn is-active" data-device="both">Both</button>
+        <button type="button" class="studio__btn" data-device="web">Web</button>
+        <button type="button" class="studio__btn" data-device="mobile">Mobile</button>
+      </div>
+
+      <div class="studio__group">
+        <span class="studio__label">State</span>
+        <button type="button" class="studio__btn is-active" data-state="empty">Empty desk</button>
+        <button type="button" class="studio__btn" data-state="streaming">Streaming</button>
+        <button type="button" class="studio__btn" data-state="garchomp">Answer · Garchomp</button>
+        <button type="button" class="studio__btn" data-state="gholdengo">Answer · Gholdengo</button>
+        <button type="button" class="studio__btn" data-state="multi">Multi-result</button>
+        <button type="button" class="studio__btn" data-state="mechanics">Mechanics</button>
+      </div>
+
+      <div class="studio__group">
+        <span class="studio__label">Extras</span>
+        <button type="button" class="studio__btn" id="btn-receipts" data-toggle="receipts">Receipts open</button>
+        <button type="button" class="studio__btn" id="btn-theme" data-toggle="theme">Dark desk</button>
+      </div>
+
+      <p class="studio__hint">
+        Click states above · starters jump to answers · open receipts on a plate · compare type washes side by side on web + phone.
+      </p>
+    </div>
+
+    <div class="studio__stage">
+      <!-- ===================== WEB ===================== -->
+      <div class="device device--web" data-frame="web">
+        <div class="device__tag">Web · desktop</div>
+        <div class="frame" data-theme="light">
+          <div class="app">
+            <header class="header">
+              <div class="wordmark">
+                <span class="wordmark__mark" aria-hidden="true"></span>
+                Oak
+              </div>
+              <div class="header__right">
+                <button type="button" class="pill" title="Scope">Champions · Reg M-B ▾</button>
+                <button type="button" class="pill">Teams</button>
+                <button type="button" class="icon-btn" title="Theme">☾</button>
+                <button type="button" class="pill">Sign in</button>
+              </div>
+            </header>
+            <div class="body-row">
+              <aside class="sidebar">
+                <button type="button" class="sidebar__new">+ New entry</button>
+                <div class="sidebar__filters">
+                  <button type="button" class="filter is-active">All</button>
+                  <button type="button" class="filter">Gen 9</button>
+                  <button type="button" class="filter">Champions</button>
+                </div>
+                <div class="hist">
+                  <div class="hist__row is-active" data-goto="garchomp">
+                    <div class="hist__main">
+                      <div class="hist__title">Garchomp base Speed</div>
+                      <div class="hist__meta">CHAMPIONS · 2m</div>
+                    </div>
+                    <span class="hist__open">Open</span>
+                  </div>
+                  <div class="hist__row" data-goto="gholdengo">
+                    <div class="hist__main">
+                      <div class="hist__title">What is Gholdengo?</div>
+                      <div class="hist__meta">CHAMPIONS · 41m</div>
+                    </div>
+                    <span class="hist__open">Open</span>
+                  </div>
+                  <div class="hist__row" data-goto="multi">
+                    <div class="hist__main">
+                      <div class="hist__title">Immune to Ground</div>
+                      <div class="hist__meta">CHAMPIONS · 1d</div>
+                    </div>
+                    <span class="hist__open">Open</span>
+                  </div>
+                  <div class="hist__row" data-goto="mechanics">
+                    <div class="hist__main">
+                      <div class="hist__title">Does Prankster work…</div>
+                      <div class="hist__meta">NATDEX · 3d</div>
+                    </div>
+                    <span class="hist__open">Open</span>
+                  </div>
+                </div>
+              </aside>
+              <div class="main">
+                <div class="thread">
+                  <div class="thread__inner" data-thread="web">
+                    <!-- filled by JS -->
+                  </div>
+                </div>
+                <div class="composer-wrap">
+                  <div class="composer">
+                    <input type="text" placeholder="What are we looking up?" aria-label="Message" />
+                    <button type="button" class="composer__send" data-send aria-label="Send"></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== MOBILE ===================== -->
+      <div class="device device--mobile" data-frame="mobile">
+        <div class="device__tag">Mobile · 390×780</div>
+        <div class="frame" data-theme="light">
+          <div class="notch"></div>
+          <div class="app">
+            <div class="m-top">
+              <button type="button" class="pill">Champions ▾</button>
+              <button type="button" class="icon-btn">✎</button>
+            </div>
+            <div class="m-guest">
+              <span>☁ Sign in to save entries</span>
+              <a href="#">Sign in</a>
+            </div>
+            <div class="main">
+              <div class="thread">
+                <div class="thread__inner" data-thread="mobile">
+                  <!-- filled by JS -->
+                </div>
+              </div>
+              <div class="composer-wrap">
+                <div class="composer">
+                  <input type="text" placeholder="Ask Oak a Pokémon question…" aria-label="Message" />
+                  <button type="button" class="composer__send" data-send aria-label="Send"></button>
+                </div>
+              </div>
+            </div>
+            <nav class="tabbar" aria-label="Main">
+              <div class="tabbar__pill">
+                <button type="button" class="tab is-active"><span class="tab__icon">💬</span>Chat</button>
+                <button type="button" class="tab"><span class="tab__icon">▦</span>Teams</button>
+                <button type="button" class="tab"><span class="tab__icon">☺</span>Account</button>
+              </div>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SPRITE = (id) =>
+      `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+
+    const state = {
+      view: "empty",
+      device: "both",
+      receiptsOpen: false,
+      dark: false,
+    };
+
+    const templates = {
+      empty() {
+        return `
+          <div class="empty" data-view="empty">
+            <div class="blank-plate">
+              <div class="blank-plate__top">
+                <span class="ilabel">New entry</span>
+                <button type="button" class="stamp">Champions · Reg M-B ▾</button>
+              </div>
+              <p class="blank-plate__prompt">What are we looking up?</p>
+              <p class="blank-plate__sub">Open a specimen. Every answer carries receipts — reasoning, sources, and the generation it is based on.</p>
+              <div class="silhouette" style="background-image:url('${SPRITE(445)}')"></div>
+              <div class="starters">
+                <span class="ilabel" style="margin-bottom:2px">Filed starters</span>
+                <button type="button" class="starter" data-goto="garchomp">
+                  <span class="starter__dot" style="background:var(--type-dragon)"></span>
+                  <span class="starter__cat">Battle</span>
+                  <span>What's Garchomp's best nature for Speed?</span>
+                </button>
+                <button type="button" class="starter" data-goto="multi">
+                  <span class="starter__dot" style="background:var(--type-ground)"></span>
+                  <span class="starter__cat">Dex</span>
+                  <span>Which Pokémon are immune to Ground?</span>
+                </button>
+                <button type="button" class="starter" data-goto="mechanics">
+                  <span class="starter__dot" style="background:var(--type-ghost)"></span>
+                  <span class="starter__cat">Rules</span>
+                  <span>Does Prankster work on Dark types?</span>
+                </button>
+                <button type="button" class="starter" data-goto="gholdengo">
+                  <span class="starter__dot" style="background:var(--type-steel)"></span>
+                  <span class="starter__cat">Meta</span>
+                  <span>What is Gholdengo's role in Champions?</span>
+                </button>
+              </div>
+            </div>
+          </div>`;
+      },
+
+      streaming() {
+        return `
+          <div class="user-note">What is Garchomp's base Speed and what nature should I run?</div>
+          <div class="field-notes">
+            <div class="note-chip note-chip--done"><span class="note-chip__tick">✓</span> RESOLVE · garchomp</div>
+            <div class="note-chip note-chip--done"><span class="note-chip__tick">✓</span> GET_POKEMON · garchomp</div>
+            <div class="note-chip note-chip--live"><span class="note-chip__spin"></span> GET_LEARNSET · garchomp</div>
+            <div class="note-elapsed">field notes · 4.2s</div>
+          </div>
+          <div class="plate-skeleton" style="--type-a:var(--type-dragon);--type-b:var(--type-ground)">
+            <div class="skel-line"></div>
+            <div class="skel-line"></div>
+            <div class="skel-line"></div>
+          </div>`;
+      },
+
+      garchomp() {
+        return `
+          <div class="user-note">What is Garchomp's base Speed?</div>
+          <article class="plate" data-plate>
+            <div class="plate__stamp-row">
+              <span class="status-ok">✓ Verified</span>
+              <span class="stamp">Champions · Reg M-B</span>
+            </div>
+            <div class="plate__body">
+              <div class="plate__prose">
+                <p class="plate__lead">Garchomp's base Speed is <span class="mono-num">102</span>.</p>
+                <p class="plate__p"><strong>Recommended nature: Jolly</strong> (or Adamant if you want more Attack instead).</p>
+                <p class="plate__p">In Champions, Garchomp is typically built as a fast physical attacker. With <span class="mono-num">32</span> Speed EVs and a Jolly nature it reaches <span class="mono-num">169</span> Speed at Level 50 (fixed 31 IVs).</p>
+                <div class="inference">
+                  <div class="inference__head">
+                    <span class="ilabel">Inference</span>
+                    <span class="conf">HIGH</span>
+                  </div>
+                  <p>Jolly is the standard competitive choice for Garchomp's speed tier in doubles — based on typical usage for speed-focused sets.</p>
+                </div>
+              </div>
+              <div class="specimen">
+                <div class="specimen__well">
+                  <img src="${SPRITE(445)}" alt="Garchomp" width="96" height="96" />
+                </div>
+                <div class="specimen__meta">
+                  <div class="specimen__name">Garchomp</div>
+                  <div class="specimen__dex">#445</div>
+                  <div class="type-row">
+                    <span class="type-badge" style="--t:var(--type-dragon)">Dragon</span>
+                    <span class="type-badge" style="--t:var(--type-ground)">Ground</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            ${receiptsHTML(
+              "Speed is a base stat on the species record; nature multipliers are deterministic. Jolly (+Spe −SpA) is inferred from competitive usage patterns, not a hard rule.",
+              "Base stats · Scarlet/Violet / Champions index",
+              "3 lookups"
+            )}
+          </article>`;
+      },
+
+      gholdengo() {
+        return `
+          <div class="user-note">What is Gholdengo?</div>
+          <article class="plate plate--steel" data-plate>
+            <div class="plate__stamp-row">
+              <span class="status-ok">✓ Verified</span>
+              <span class="stamp">Champions · Reg M-B</span>
+            </div>
+            <div class="plate__body">
+              <div class="plate__prose">
+                <p class="plate__lead">Gholdengo is a <span class="mono-num">Steel</span> / <span class="mono-num">Ghost</span> pseudo-legendary evolved from Gimmighoul.</p>
+                <p class="plate__p">Ability <strong>Good as Gold</strong> makes it immune to status moves — a huge doubles niche. Special Attack base <span class="mono-num">133</span> with Make It Rain as its signature.</p>
+                <p class="plate__p">In Champions it often sits as a special wallbreaker that also checks priority status and some support tools.</p>
+              </div>
+              <div class="specimen">
+                <div class="specimen__well">
+                  <img src="${SPRITE(1000)}" alt="Gholdengo" width="96" height="96" />
+                </div>
+                <div class="specimen__meta">
+                  <div class="specimen__name">Gholdengo</div>
+                  <div class="specimen__dex">#1000</div>
+                  <div class="type-row">
+                    <span class="type-badge" style="--t:var(--type-steel)">Steel</span>
+                    <span class="type-badge" style="--t:var(--type-ghost)">Ghost</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            ${receiptsHTML(
+              "Species typing, ability text, and base stats come from the indexed Champions format row for gholdengo.",
+              "Species index · ability effect text",
+              "4 lookups"
+            )}
+          </article>`;
+      },
+
+      multi() {
+        return `
+          <div class="user-note">Which Pokémon are immune to Ground?</div>
+          <article class="plate plate--multi" data-plate>
+            <div class="plate__stamp-row">
+              <span class="status-ok">✓ Verified</span>
+              <span class="stamp">Champions · Reg M-B</span>
+            </div>
+            <div class="plate__prose" style="width:100%">
+              <p class="plate__lead">Flying-types and Pokémon with Levitate are immune to Ground-type moves.</p>
+              <p class="plate__p">In Champions this covers <span class="mono-num">27</span> Flying types (including Megas) plus Levitate users. Ground has no effect on Flying per the type chart; Levitate grants Ground immunity unless Gravity is up.</p>
+              <div class="results">
+                <div class="results__head">
+                  <span class="ilabel">27 results</span>
+                  <span class="ilabel">Sorted by BST ↓</span>
+                </div>
+                <table>
+                  <thead><tr><th>Name</th><th>Types</th><th>BST</th></tr></thead>
+                  <tbody>
+                    <tr data-goto="garchomp">
+                      <td><span class="results__name"><img src="${SPRITE(10089)}" alt="" />Dragonite Mega</span></td>
+                      <td><span class="type-badge" style="--t:var(--type-dragon)">Dragon</span>
+                          <span class="type-badge" style="--t:var(--type-flying)">Flying</span></td>
+                      <td class="mono-num">700</td>
+                    </tr>
+                    <tr>
+                      <td><span class="results__name"><img src="${SPRITE(10034)}" alt="" />Charizard Mega Y</span></td>
+                      <td><span class="type-badge" style="--t:var(--type-fire)">Fire</span>
+                          <span class="type-badge" style="--t:var(--type-flying)">Flying</span></td>
+                      <td class="mono-num">634</td>
+                    </tr>
+                    <tr>
+                      <td><span class="results__name"><img src="${SPRITE(142)}" alt="" />Aerodactyl</span></td>
+                      <td><span class="type-badge" style="--t:#b6a136">Rock</span>
+                          <span class="type-badge" style="--t:var(--type-flying)">Flying</span></td>
+                      <td class="mono-num">515</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            ${receiptsHTML(
+              "Type chart immunity (Flying) plus ability scan for Levitate; roster filtered to Champions format.",
+              "Type chart · ability index · roster",
+              "6 lookups"
+            )}
+          </article>`;
+      },
+
+      mechanics() {
+        return `
+          <div class="user-note">Does Prankster work on Dark types?</div>
+          <article class="plate plate--mechanics" data-plate>
+            <div class="plate__stamp-row">
+              <span class="status-ok">✓ Verified</span>
+              <span class="stamp">Mechanics · Gen 9</span>
+            </div>
+            <div class="plate__prose" style="width:100%">
+              <p class="plate__lead">No — Dark-types are immune to Prankster-boosted status moves (Gen 7+).</p>
+              <p class="plate__p">Prankster gives +1 priority to status moves. From Generation 7 onward, Dark-type Pokémon are immune to moves that gained priority this way. Damaging moves are unaffected.</p>
+              <div class="inference">
+                <div class="inference__head">
+                  <span class="ilabel">Scope</span>
+                  <span class="conf" style="background:color-mix(in srgb,var(--warning) 18%,var(--surface));color:color-mix(in srgb,var(--warning) 70%,var(--text-strong))">GEN 7+</span>
+                </div>
+                <p>In Generations 5–6, Prankster still affected Dark-types. Always check the active scope before citing this rule.</p>
+              </div>
+            </div>
+            ${receiptsHTML(
+              "Ability effect text for Prankster cross-checked with generation-scoped Dark-type interaction notes in the mechanics corpus.",
+              "Ability index · gen notes",
+              "2 lookups"
+            )}
+          </article>`;
+      },
+    };
+
+    function receiptsHTML(reasoning, sourceLabel, lookups) {
+      const open = state.receiptsOpen ? " is-open" : "";
+      return `
+        <div class="receipts${open}" data-receipts>
+          <button type="button" class="receipts__tab" data-receipts-toggle>
+            <span class="ilabel">Receipts · 1 source · ${lookups}</span>
+            <span class="receipts__chevron">▸</span>
+          </button>
+          <div class="receipts__panel">
+            <div class="receipts__block">
+              <div class="ilabel">Reasoning</div>
+              <p>${reasoning}</p>
+            </div>
+            <div class="receipts__block">
+              <div class="ilabel">Sources</div>
+              <div class="receipts__src">📎 ${sourceLabel}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function render() {
+      const html = templates[state.view]();
+      document.querySelectorAll("[data-thread]").forEach((el) => {
+        el.innerHTML = html;
+      });
+
+      // send button stop state while streaming
+      document.querySelectorAll("[data-send]").forEach((btn) => {
+        btn.classList.toggle("is-stop", state.view === "streaming");
+        btn.setAttribute("aria-label", state.view === "streaming" ? "Stop" : "Send");
+      });
+
+      // theme
+      document.querySelectorAll(".frame").forEach((f) => {
+        f.dataset.theme = state.dark ? "dark" : "light";
+      });
+
+      // device visibility
+      document.querySelectorAll("[data-frame]").forEach((d) => {
+        const kind = d.getAttribute("data-frame");
+        const show =
+          state.device === "both" ||
+          state.device === kind;
+        d.classList.toggle("is-hidden", !show);
+      });
+
+      // control active states
+      document.querySelectorAll("[data-state]").forEach((b) => {
+        b.classList.toggle("is-active", b.dataset.state === state.view);
+      });
+      document.querySelectorAll("[data-device]").forEach((b) => {
+        b.classList.toggle("is-active", b.dataset.device === state.device);
+      });
+      document.getElementById("btn-receipts").classList.toggle(
+        "is-active",
+        state.receiptsOpen
+      );
+      document.getElementById("btn-theme").classList.toggle("is-active", state.dark);
+
+      // bind in-thread clicks
+      bindThreadClicks();
+    }
+
+    function bindThreadClicks() {
+      document.querySelectorAll("[data-goto]").forEach((el) => {
+        el.addEventListener("click", () => {
+          state.view = el.getAttribute("data-goto");
+          render();
+        });
+      });
+      document.querySelectorAll("[data-receipts-toggle]").forEach((el) => {
+        el.addEventListener("click", () => {
+          state.receiptsOpen = !state.receiptsOpen;
+          render();
+        });
+      });
+    }
+
+    // Studio controls
+    document.querySelectorAll("[data-state]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.view = btn.dataset.state;
+        render();
+      });
+    });
+    document.querySelectorAll("[data-device]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.device = btn.dataset.device;
+        render();
+      });
+    });
+    document.getElementById("btn-receipts").addEventListener("click", () => {
+      state.receiptsOpen = !state.receiptsOpen;
+      // if on empty, jump to an answer so receipts matter
+      if (state.view === "empty" || state.view === "streaming") {
+        state.view = "garchomp";
+      }
+      render();
+    });
+    document.getElementById("btn-theme").addEventListener("click", () => {
+      state.dark = !state.dark;
+      render();
+    });
+
+    document.querySelectorAll(".hist__row").forEach((row) => {
+      row.addEventListener("click", () => {
+        document.querySelectorAll(".hist__row").forEach((r) => r.classList.remove("is-active"));
+        row.classList.add("is-active");
+        const g = row.getAttribute("data-goto");
+        if (g) {
+          state.view = g;
+          render();
+        }
+      });
+    });
+
+    // Click send on empty → streaming → answer demo path
+    document.querySelectorAll("[data-send]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (state.view === "streaming") {
+          state.view = "garchomp";
+        } else if (state.view === "empty") {
+          state.view = "streaming";
+          setTimeout(() => {
+            if (state.view === "streaming") {
+              state.view = "garchomp";
+              render();
+            }
+          }, 2200);
+        } else {
+          state.view = "empty";
+        }
+        render();
+      });
+    });
+
+    render();
+  </script>
+</body>
+</html>

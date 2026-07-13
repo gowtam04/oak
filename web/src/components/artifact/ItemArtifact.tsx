@@ -17,7 +17,7 @@ export default function ItemArtifact({
   return (
     <div className="item-artifact" data-testid="item-artifact">
       <section className="item-artifact__effect">
-        <h3 className="artifact-section__title">Effect</h3>
+        <h3 className="artifact-section__title ilabel">Effect</h3>
         <p className="artifact-text" data-testid="item-effect">
           {data.effect_full || data.effect_short}
         </p>
@@ -25,7 +25,7 @@ export default function ItemArtifact({
 
       {data.held_by_wild && data.held_by_wild.length > 0 && (
         <section className="item-artifact__held">
-          <h3 className="artifact-section__title">Held in the wild</h3>
+          <h3 className="artifact-section__title ilabel">Held in the wild</h3>
           <ul className="held-list" data-testid="item-held-by">
             {data.held_by_wild.map((h) => (
               <li key={h.pokemon} className="held-list__row">

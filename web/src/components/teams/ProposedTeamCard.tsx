@@ -178,7 +178,7 @@ export default function ProposedTeamCard({
               disabled={busy || targetId === ""}
               onClick={() => void handleApplyExisting()}
             >
-              Apply
+              Save
             </button>
           </div>
         )}

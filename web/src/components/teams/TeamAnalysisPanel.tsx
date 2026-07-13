@@ -1,20 +1,9 @@
 /**
- * TeamAnalysisPanel — the collapsible "Team analysis" section of the team editor
- * (#9). Driven by the LIVE draft members + format: it debounces (~500ms) a call
- * to the stateless `POST /api/teams/analyze` endpoint (via the never-throwing
- * `fetchTeamAnalysis` helper), cancelling any in-flight request when the draft
- * changes (AbortController) and discarding stale responses (a generation guard).
+ * TeamAnalysisPanel — collapsible team analysis for the editor.
+ * Driven by live draft members + format via debounced POST /api/teams/analyze.
  *
- * States, all keeping the last good content so the panel never flickers empty:
- *   - no species yet → a hint ("Add a Pokémon to see team coverage.");
- *   - loading        → a subtle indicator over the last good content;
- *   - error          → an inline notice + Retry, over the last good content;
- *   - ok             → the defensive matrix (shared weaknesses), offensive
- *                      coverage (covered / uncovered), and speed order.
- *
- * Rendering reuses `TypeBadge` for type chips and the design-system CSS vars; the
- * v1 caveat (`notes[]`) renders as a footnote. It reads ONLY the wire contract —
- * no db/repos — so it's safe under jsdom with the fetch helper mocked.
+ * Renders: roles, phys/spec, defensive weaknesses, offense, speed, meta threats,
+ * and residual notes. Optional onAnalysisChange for assistant suggestion chips.
  */
 
 "use client";
@@ -29,7 +18,9 @@ import { fetchTeamAnalysis } from "@/lib/api/team-analysis-client";
 import type {
   DefenseRow,
   TeamAnalysisOk,
+  ThreatRowWire,
 } from "@/lib/teams/team-analysis";
+import { ROLE_LABELS, type RoleFlag } from "@/lib/teams/role-inventory";
 
 /** Debounce before hitting the endpoint after the draft changes. */
 const DEBOUNCE_MS = 500;
@@ -37,9 +28,10 @@ const DEBOUNCE_MS = 500;
 export interface TeamAnalysisPanelProps {
   members: TeamMember[];
   format: Format;
+  /** Fires when analysis settles (ok) or clears — for assistant chips. */
+  onAnalysisChange?: (analysis: TeamAnalysisOk | null) => void;
 }
 
-/** Map each analyzed member slug → its display name (found members only). */
 function nameBySlug(analysis: TeamAnalysisOk): Map<string, string> {
   const map = new Map<string, string>();
   for (const m of analysis.members) {
@@ -48,16 +40,26 @@ function nameBySlug(analysis: TeamAnalysisOk): Map<string, string> {
   return map;
 }
 
-/** Defense rows with at least one weak member, worst (most weak) first. */
 function weaknessRows(defense: DefenseRow[]): DefenseRow[] {
   return defense
     .filter((row) => row.weak.length > 0)
     .sort((a, b) => b.weak.length - a.weak.length || a.type.localeCompare(b.type));
 }
 
+function roleLabel(flag: string): string {
+  return ROLE_LABELS[flag as RoleFlag] ?? flag.replace(/_/g, " ");
+}
+
+function threatClass(status: ThreatRowWire["status"]): string {
+  if (status === "answered") return "team-analysis__threat--answered";
+  if (status === "soft") return "team-analysis__threat--soft";
+  return "team-analysis__threat--unanswered";
+}
+
 export default function TeamAnalysisPanel({
   members,
   format,
+  onAnalysisChange,
 }: TeamAnalysisPanelProps) {
   const [open, setOpen] = useState(true);
   const [analysis, setAnalysis] = useState<TeamAnalysisOk | null>(null);
@@ -65,16 +67,19 @@ export default function TeamAnalysisPanel({
   const [error, setError] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
   const genRef = useRef(0);
+  const onAnalysisRef = useRef(onAnalysisChange);
+  onAnalysisRef.current = onAnalysisChange;
 
   const hasSpecies = members.some((m) => m.species);
 
-  // A stable key over only the analysis-relevant fields, so cosmetic edits
-  // (nickname, tera, IVs) don't trigger a refetch.
+  // Include ability/item so ability-aware defense refetches.
   const analysisKey = useMemo(
     () =>
       JSON.stringify(
         members.map((m) => ({
           s: m.species,
+          a: m.ability,
+          i: m.item,
           mv: m.moves,
           n: m.nature,
           l: m.level,
@@ -89,6 +94,7 @@ export default function TeamAnalysisPanel({
       setAnalysis(null);
       setError(false);
       setLoading(false);
+      onAnalysisRef.current?.(null);
       return;
     }
     const gen = ++genRef.current;
@@ -97,7 +103,7 @@ export default function TeamAnalysisPanel({
     const timer = setTimeout(() => {
       void fetchTeamAnalysis(format, members, controller.signal).then(
         (result) => {
-          if (gen !== genRef.current) return; // superseded — discard
+          if (gen !== genRef.current) return;
           setLoading(false);
           if (!result || result.status !== "ok") {
             setError(true);
@@ -105,6 +111,7 @@ export default function TeamAnalysisPanel({
           }
           setError(false);
           setAnalysis(result);
+          onAnalysisRef.current?.(result);
         },
       );
     }, DEBOUNCE_MS);
@@ -112,7 +119,6 @@ export default function TeamAnalysisPanel({
       clearTimeout(timer);
       controller.abort();
     };
-    // members is captured intentionally; analysisKey stands in for its content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysisKey, format, retryNonce]);
 
@@ -169,7 +175,56 @@ export default function TeamAnalysisPanel({
 
               {analysis ? (
                 <div className="team-analysis__content">
-                  {/* Defensive matrix — shared weaknesses. */}
+                  {/* Roles & tools */}
+                  <div
+                    className="team-analysis__group"
+                    data-testid="team-analysis-roles"
+                  >
+                    <h4 className="team-analysis__group-title ilabel">
+                      Roles &amp; tools
+                    </h4>
+                    <div className="team-analysis__role-row">
+                      <span className="team-analysis__cov-label">Present</span>
+                      <span className="team-analysis__chips">
+                        {analysis.roles_present.length === 0 ? (
+                          <span className="team-analysis__none">—</span>
+                        ) : (
+                          analysis.roles_present.map((f) => (
+                            <span
+                              key={f}
+                              className="team-analysis__role-chip team-analysis__role-chip--ok"
+                            >
+                              {roleLabel(f)}
+                            </span>
+                          ))
+                        )}
+                      </span>
+                    </div>
+                    {analysis.roles_missing.length > 0 && (
+                      <div className="team-analysis__role-row">
+                        <span className="team-analysis__cov-label">Gaps</span>
+                        <span className="team-analysis__chips team-analysis__chips--warn">
+                          {analysis.roles_missing.map((f) => (
+                            <span
+                              key={f}
+                              className="team-analysis__role-chip team-analysis__role-chip--miss"
+                            >
+                              {roleLabel(f)}
+                            </span>
+                          ))}
+                        </span>
+                      </div>
+                    )}
+                    <p className="team-analysis__physpec" data-testid="team-analysis-physpec">
+                      Moves: {analysis.physical_special.physical_moves} physical ·{" "}
+                      {analysis.physical_special.special_moves} special ·{" "}
+                      {analysis.physical_special.status_moves} status
+                      {analysis.physical_special.attacker_bias !== "none" &&
+                        ` · bias ${analysis.physical_special.attacker_bias}`}
+                    </p>
+                  </div>
+
+                  {/* Defensive matrix */}
                   <div
                     className="team-analysis__group"
                     data-testid="team-analysis-defense"
@@ -203,9 +258,19 @@ export default function TeamAnalysisPanel({
                         ))}
                       </ul>
                     )}
+                    {analysis.defense_notes.length > 0 && (
+                      <ul
+                        className="team-analysis__defense-notes"
+                        data-testid="team-analysis-defense-notes"
+                      >
+                        {analysis.defense_notes.map((n) => (
+                          <li key={n}>{n}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
 
-                  {/* Offensive coverage — covered / uncovered. */}
+                  {/* Offensive coverage */}
                   <div
                     className="team-analysis__group"
                     data-testid="team-analysis-offense"
@@ -244,7 +309,7 @@ export default function TeamAnalysisPanel({
                     </div>
                   </div>
 
-                  {/* Speed order. */}
+                  {/* Speed order */}
                   <div
                     className="team-analysis__group"
                     data-testid="team-analysis-speed"
@@ -272,6 +337,62 @@ export default function TeamAnalysisPanel({
                       </ul>
                     )}
                   </div>
+
+                  {/* Meta threats */}
+                  {(analysis.threats.length > 0 || analysis.meta_attribution) && (
+                    <div
+                      className="team-analysis__group"
+                      data-testid="team-analysis-threats"
+                    >
+                      <h4 className="team-analysis__group-title ilabel">
+                        Meta threats
+                      </h4>
+                      {analysis.meta_attribution && (
+                        <p className="team-analysis__meta-attr">
+                          {analysis.meta_attribution}
+                        </p>
+                      )}
+                      {analysis.threats.length === 0 ? (
+                        <p className="team-analysis__none">No ladder threats loaded.</p>
+                      ) : (
+                        <ul className="team-analysis__threats">
+                          {analysis.threats.map((t) => (
+                            <li
+                              key={t.species}
+                              className={`team-analysis__threat ${threatClass(t.status)}`}
+                              data-testid={`threat-${t.species}`}
+                            >
+                              <span className="team-analysis__threat-name">
+                                {t.display_name}
+                                {t.rank != null && (
+                                  <span className="team-analysis__threat-rank mono-num">
+                                    {" "}
+                                    #{t.rank}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="team-analysis__threat-status">
+                                {t.status}
+                              </span>
+                              <span className="team-analysis__threat-reasons">
+                                {t.reasons.join("; ")}
+                              </span>
+                              {t.sample_calcs && t.sample_calcs.length > 0 && (
+                                <ul className="team-analysis__calcs">
+                                  {t.sample_calcs.map((c) => (
+                                    <li key={`${c.defender}-${c.move}`}>
+                                      {c.move} → {label(c.defender)}:{" "}
+                                      {c.min_pct}–{c.max_pct}%
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
 
                   {analysis.notes.length > 0 && (
                     <p

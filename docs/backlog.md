@@ -905,6 +905,14 @@ modifier gaps), a read endpoint over `src/data/repos/`, optionally
 
 ## B-17 — Team analysis dashboard (coverage, speed tiers, threats)
 
+> **Status: BUILT (agent/team-analysis)** — ability/item-aware defense (curated
+> table), role/utility inventory, phys/spec balance, meta threat board (gen9ou
+> for SV/NatDex), sample damage lines, analysis injection into Teams Assistant,
+> `get_meta_usage` in builder tools, archetype starters, team `win_condition`,
+> Apply common set (`POST /api/teams/set-template`). Web + iOS + Android analysis
+> sections updated. Residual: weather/terrain still unmodeled; Champions threat
+> board uses assistant live usage rather than a stored ladder.
+
 **Why:** Saved teams (B-2) store full competitive sets, and the index + usage stats
 (T15) hold everything needed to judge one — but the Teams page is a filing cabinet: it
 renders and validates sets without evaluating them. A per-team analysis view

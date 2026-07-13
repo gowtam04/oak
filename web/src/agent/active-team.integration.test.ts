@@ -337,9 +337,10 @@ describe("team-lookup-agent-e2e — list_teams + get_team via the real runtime",
 // ---------------------------------------------------------------------------
 // proposed_team roster gate — the runtime roster-validates a proposed team
 // against the turn's format. An out-of-roster species (`species_illegal`) is
-// fed back so the model rebuilds legally (up to MAX_PROPOSED_TEAM_RETRIES=2),
-// then accepted with warnings stamped (warn-but-allow). `heatran` is ABSENT from
-// the "tools" seed → species_illegal; `garchomp` is present → legal.
+// fed back so the model rebuilds legally (up to
+// MAX_PROPOSED_TEAM_HARD_REJECTIONS=2), then legalized-and-accepted on give-up
+// (or dropped if unrepairable). `heatran` is ABSENT from the "tools" seed →
+// species_illegal; `garchomp` is present → legal.
 // ---------------------------------------------------------------------------
 
 /** A second seeded-roster species (distinct from garchomp), for clause tests. */
@@ -411,7 +412,7 @@ describe("active-team-agent-e2e — proposed_team roster gate", () => {
     ).toBe(false);
   });
 
-  it("accepts with species_illegal stamped once the retry budget is spent (warn-fallback)", async () => {
+  it("drops proposed_team when species_illegal cannot be legalized on give-up", async () => {
     const ctx = await buildCtx("standard", undefined);
     const illegalAnswer: OakAnswer = {
       ...TEAM_ANSWER,
@@ -421,46 +422,8 @@ describe("active-team-agent-e2e — proposed_team roster gate", () => {
         members: [heatranMember(), garchompMember()],
       },
     };
-    // Model stays illegal on every retry; budget (MAX_PROPOSED_TEAM_RETRIES=2) spent.
-    const { client, stream } = scriptedClient([
-      message([toolUse("submit_answer", illegalAnswer, "t1")]),
-      message([toolUse("submit_answer", illegalAnswer, "t2")]),
-      message([toolUse("submit_answer", illegalAnswer, "t3")]),
-    ]);
-
-    const result = await runtime.runOakWith(
-      client,
-      "build me a team",
-      [] as ChatMessage[],
-      ctx,
-    );
-
-    // Two re-emits, then accepted on the 3rd despite still being illegal — the
-    // turn never fails; the warning rides through for the UI to flag.
-    expect(stream).toHaveBeenCalledTimes(3);
-    expect(result.proposed_team).toBeDefined();
-    expect(
-      (result.proposed_team_warnings ?? []).some(
-        (w) => w.code === "species_illegal",
-      ),
-    ).toBe(true);
-    expect(oakAnswerSchema.safeParse(result).success).toBe(true);
-  });
-
-  it("salvages the built team when the turn gives up before an accepted submit (B-13)", async () => {
-    const ctx = await buildCtx("standard", undefined);
-    const illegalAnswer: OakAnswer = {
-      ...TEAM_ANSWER,
-      proposed_team: {
-        name: "Still bad",
-        format: SV,
-        members: [heatranMember(), garchompMember()],
-      },
-    };
-    // Two schema-valid-but-illegal submits capture the best-effort team; then the
-    // model fails SCHEMA validation until MAX_SUBMIT_RETRIES is spent → give up.
-    // Instead of a bare insufficient_data apology, the runtime salvages the last
-    // built team with its legality warnings (accept-with-warnings reused).
+    // Heatran is not in the fixture roster → legalize cannot invent a species.
+    // Two illegal submits then silence → give-up salvage drops the proposal.
     const invalid = () =>
       message([toolUse("submit_answer", { status: "answered" }, "tx")]);
     const { client, stream } = scriptedClient([
@@ -478,28 +441,66 @@ describe("active-team-agent-e2e — proposed_team roster gate", () => {
       ctx,
     );
 
-    // 2 legality re-emits + 3 schema re-emits (last trips the budget) = 5 calls.
     expect(stream).toHaveBeenCalledTimes(5);
-    // The built team survives — NOT discarded for a bare insufficient_data.
-    expect(result.proposed_team?.members[0]?.species).toBe("heatran");
+    expect(result.proposed_team).toBeUndefined();
+    expect(result.status).toBe("answered");
+    expect(result.uncertainty_flags).toContain("team_could_not_be_legalized");
+    expect(oakAnswerSchema.safeParse(result).success).toBe(true);
+  });
+
+  it("legalizes repairable illegality when the turn gives up before an accepted submit", async () => {
+    const ctx = await buildCtx("standard", undefined);
+    // Illegal item on an otherwise legal Garchomp — legalize can swap the item.
+    const illegalAnswer: OakAnswer = {
+      ...TEAM_ANSWER,
+      proposed_team: {
+        name: "Still bad",
+        format: SV,
+        members: [
+          {
+            ...garchompMember(),
+            item: "choice-band", // not in fixture legal items
+            moves: ["earthquake", "dragon-claw", "fire-fang", "earthquake"],
+          },
+        ],
+      },
+    };
+    const invalid = () =>
+      message([toolUse("submit_answer", { status: "answered" }, "tx")]);
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", illegalAnswer, "t1")]),
+      message([toolUse("submit_answer", illegalAnswer, "t2")]),
+      invalid(),
+      invalid(),
+      invalid(),
+    ]);
+
+    const result = await runtime.runOakWith(
+      client,
+      "build me a team",
+      [] as ChatMessage[],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(5);
+    expect(result.proposed_team).toBeDefined();
+    expect(result.proposed_team?.members[0]?.item).not.toBe("choice-band");
     expect(
       (result.proposed_team_warnings ?? []).some(
-        (w) => w.code === "species_illegal",
+        (w) => w.code === "item_illegal",
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(result.status).toBe("answered");
-    expect(result.status).not.toBe("insufficient_data");
-    expect(result.uncertainty_flags).toContain("team_may_have_illegal_slots");
+    expect(result.answer_markdown).toMatch(/adjusted|legal/i);
     expect(oakAnswerSchema.safeParse(result).success).toBe(true);
   });
 });
 
 // ---------------------------------------------------------------------------
 // proposed_team clause gate — the species clause (duplicate species, by Dex
-// number) and item clause (duplicate held item) are HARD violations alongside
-// species_illegal: fed back so the model rebuilds legally (up to
-// MAX_PROPOSED_TEAM_RETRIES=2), then accepted with warnings stamped
-// (warn-but-allow) once spent.
+// number) and item clause (duplicate held item) are HARD violations. The model
+// is rejected until it rebuilds legally; on give-up legalize repairs item
+// clause (not species clause).
 // ---------------------------------------------------------------------------
 
 describe("active-team-agent-e2e — proposed_team clause gate (species/item)", () => {
@@ -546,20 +547,33 @@ describe("active-team-agent-e2e — proposed_team clause gate (species/item)", (
     ).toBe(false);
   });
 
-  it("accepts with duplicate_item stamped once the retry budget is spent (warn-fallback)", async () => {
+  it("legalizes duplicate_item on give-up rather than shipping the clause violation", async () => {
     const ctx = await buildCtx("standard", undefined);
     const illegalAnswer: OakAnswer = {
       ...TEAM_ANSWER,
       proposed_team: {
         name: "Still bad",
         format: SV,
-        members: [garchompMember(), ninetalesMember("leftovers")],
+        members: [
+          {
+            ...garchompMember(),
+            moves: ["earthquake", "dragon-claw", "fire-fang", "earthquake"],
+          },
+          {
+            ...ninetalesMember("leftovers"),
+            moves: ["flamethrower", "will-o-wisp", "trick-room", "flamethrower"],
+          },
+        ],
       },
     };
+    const invalid = () =>
+      message([toolUse("submit_answer", { status: "answered" }, "tx")]);
     const { client, stream } = scriptedClient([
       message([toolUse("submit_answer", illegalAnswer, "t1")]),
       message([toolUse("submit_answer", illegalAnswer, "t2")]),
-      message([toolUse("submit_answer", illegalAnswer, "t3")]),
+      invalid(),
+      invalid(),
+      invalid(),
     ]);
 
     const result = await runtime.runOakWith(
@@ -569,13 +583,15 @@ describe("active-team-agent-e2e — proposed_team clause gate (species/item)", (
       ctx,
     );
 
-    expect(stream).toHaveBeenCalledTimes(3);
+    expect(stream).toHaveBeenCalledTimes(5);
     expect(result.proposed_team).toBeDefined();
+    const items = result.proposed_team!.members.map((m) => m.item);
+    expect(new Set(items).size).toBe(items.filter(Boolean).length);
     expect(
       (result.proposed_team_warnings ?? []).some(
         (w) => w.code === "duplicate_item",
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(oakAnswerSchema.safeParse(result).success).toBe(true);
   });
 

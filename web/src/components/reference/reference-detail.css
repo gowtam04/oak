@@ -146,6 +146,9 @@
   letter-spacing: 0.08em;
   color: var(--text-muted);
 }
+.ref-detail-section__title:has(+ .ref-detail-section__hint) {
+  margin-bottom: var(--space-2);
+}
 
 /* The intro/lead prose under a detail hero — editorial calm, not a card. */
 .ref-detail-intro {
@@ -452,9 +455,12 @@
   transition: border-color var(--motion-fast), color var(--motion-fast);
 }
 
-/* Linked chips ("Other forms" / "Required by") — the anchor fills the pill. */
+/* Linked chips ("Other forms" / "Required by" / selectable Availability) —
+   the anchor fills the pill. */
 .ref-formats__chip a {
   color: inherit;
+  text-decoration: none;
+  display: inline-block;
 }
 .ref-formats__chip:hover:has(a) {
   border-color: var(--border-strong);
@@ -462,6 +468,30 @@
 .ref-formats__chip a:hover {
   color: var(--poke-red);
   text-decoration: none;
+}
+
+/* Active generation on Pokédex detail — the scope currently driving the page. */
+.ref-formats__chip--active {
+  background: color-mix(in srgb, var(--poke-red) 12%, var(--surface));
+  border-color: var(--poke-red);
+  color: var(--poke-red);
+}
+.ref-formats__chip--active a {
+  color: inherit;
+}
+.ref-formats__chip--active:hover:has(a) {
+  border-color: var(--poke-red);
+}
+.ref-formats__chip--active a:hover {
+  color: var(--poke-red);
+}
+
+/* Microcopy under Availability (generation picker). */
+.ref-detail-section__hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  line-height: 1.45;
 }
 
 /* ---------------------------------------------------------------------------

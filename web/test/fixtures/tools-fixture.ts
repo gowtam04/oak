@@ -69,6 +69,8 @@ export type PokemonSeed = {
   generation: string;
   is_gen9_native: number; // 0 | 1
   source_generation: string | null;
+  /** Mega stone slug when this form requires one; omit/null for ordinary forms. */
+  required_item?: string | null;
 };
 
 function bst(s: {
@@ -114,6 +116,39 @@ export const POKEMON_SEED: PokemonSeed[] = [
     generation: "gen-9",
     is_gen9_native: 1,
     source_generation: null,
+  },
+  {
+    // Mega forme with a locked stone — validates required_item / legalize path.
+    id: "swampert-mega",
+    species_name: "swampert",
+    form_name: "mega",
+    display_name: "Swampert (Mega)",
+    national_dex_number: 260,
+    type1: "water",
+    type2: "ground",
+    ability_slot1: "swift-swim",
+    ability_slot2: null,
+    ability_hidden: null,
+    stat_hp: 100,
+    stat_attack: 150,
+    stat_defense: 110,
+    stat_special_attack: 95,
+    stat_special_defense: 110,
+    stat_speed: 70,
+    base_stat_total: bst({
+      hp: 100,
+      atk: 150,
+      def: 110,
+      spa: 95,
+      spd: 110,
+      spe: 70,
+    }),
+    sprite_url: "https://img.example/sprite/260-mega.png",
+    artwork_url: "https://img.example/art/260-mega.png",
+    generation: "gen-6",
+    is_gen9_native: 0,
+    source_generation: "gen-6",
+    required_item: "swampertite",
   },
   {
     id: "farigiraf",
@@ -372,6 +407,30 @@ export const LEARNSET_SEED: LearnsetSeed[] = [
     method: "level-up",
   },
   {
+    pokemon_id: "swampert-mega",
+    move_slug: "earthquake",
+    format: SV,
+    method: "level-up",
+  },
+  {
+    pokemon_id: "swampert-mega",
+    move_slug: "waterfall",
+    format: SV,
+    method: "level-up",
+  },
+  {
+    pokemon_id: "swampert-mega",
+    move_slug: "ice-punch",
+    format: SV,
+    method: "level-up",
+  },
+  {
+    pokemon_id: "swampert-mega",
+    move_slug: "superpower",
+    format: SV,
+    method: "level-up",
+  },
+  {
     pokemon_id: "ninetales",
     move_slug: "will-o-wisp",
     format: SV,
@@ -448,6 +507,15 @@ export type SearchableNameSeed = {
 /** Names index backing resolve_entity (T1). */
 export const SEARCHABLE_NAMES_SEED: SearchableNameSeed[] = [
   { kind: "pokemon", slug: "garchomp", display_name: "Garchomp" },
+  {
+    kind: "pokemon",
+    slug: "swampert-mega",
+    display_name: "Swampert (Mega)",
+  },
+  { kind: "item", slug: "swampertite", display_name: "Swampertite" },
+  { kind: "move", slug: "waterfall", display_name: "Waterfall" },
+  { kind: "move", slug: "ice-punch", display_name: "Ice Punch" },
+  { kind: "move", slug: "superpower", display_name: "Superpower" },
   { kind: "pokemon", slug: "farigiraf", display_name: "Farigiraf" },
   { kind: "pokemon", slug: "ninetales", display_name: "Ninetales" },
   { kind: "pokemon", slug: "dracovish", display_name: "Dracovish" },

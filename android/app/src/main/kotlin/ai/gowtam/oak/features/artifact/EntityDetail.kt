@@ -11,6 +11,7 @@ import ai.gowtam.oak.ui.MarkdownText
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.OakType
+import ai.gowtam.oak.ui.PlateWash
 import ai.gowtam.oak.ui.SpriteImage
 import ai.gowtam.oak.ui.TypeBadge
 import ai.gowtam.oak.wire.AbilityArtifactData
@@ -29,7 +30,9 @@ import ai.gowtam.oak.wire.MoveArtifactData
 import ai.gowtam.oak.wire.PokemonArtifactData
 import ai.gowtam.oak.wire.TypeArtifactData
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,14 +58,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -71,6 +75,11 @@ import androidx.compose.ui.unit.dp
  * mirror of the iOS `EntityDetailView` / web entity-detail panes (artifact-viewer.md
  * M-ART-US-1, M-AC-A1.1/A4.2, M-BR-ART-4). One composable, five kinds: Pokémon, move,
  * ability, item, and type, each switched on [EntityArtifactOk.data].
+ *
+ * Phase 2 specimen desk (`docs/design/soul.md`): the detail is a **continuation of
+ * the answer plate** — type-reactive wash + edge from entity types, type-glow hero
+ * well for Pokémon art, and a mechanics/ink plate for non-typed entities
+ * (ability/item).
  *
  * Consistent with answers (M-AC-A4.2 — grounded, cited, format-tagged, never an
  * un-sourced data dump): every profile carries the format + generation grounding
@@ -91,40 +100,120 @@ fun EntityDetail(
     modifier: Modifier = Modifier,
 ) {
     val oak = LocalOakColors.current
+    val dark = isSystemInDarkTheme()
+    val types = entityPlateTypes(artifact.data)
+    val wash = remember(
+        types,
+        dark,
+        oak.surfaceRaised,
+        oak.surfaceSunken,
+        oak.border,
+        oak.borderStrong,
+    ) {
+        OakType.plateWashForTypes(
+            subjectTypes = if (types.isEmpty()) emptyList() else listOf(types),
+            surface = oak.surfaceRaised,
+            surfaceSunken = oak.surfaceSunken,
+            border = oak.border,
+            borderStrong = oak.borderStrong,
+            dark = dark,
+        )
+    }
+    val plateShape = RoundedCornerShape(OakRadius.xl)
+    val plateBrush = rememberPlateBrush(wash, oak.surfaceRaised, oak.surfaceSunken)
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
+            .padding(OakSpacing.lg)
+            .then(if (dark) Modifier else Modifier.shadow(6.dp, plateShape))
+            .clip(plateShape)
+            .background(plateBrush, plateShape)
+            .border(1.dp, wash.border, plateShape)
             .padding(OakSpacing.lg),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
     ) {
         when (val data = artifact.data) {
-            is EntityData.Pokemon -> PokemonBody(data.v, onOpen)
-            is EntityData.Move -> MoveBody(data.v, onOpen)
-            is EntityData.Ability -> AbilityBody(data.v, onOpen)
-            is EntityData.Item -> ItemBody(data.v)
-            is EntityData.Type -> TypeBody(data.v, onOpen)
+            is EntityData.Pokemon -> PokemonBody(data.v, wash, onOpen)
+            is EntityData.Move -> MoveBody(data.v, wash, onOpen)
+            is EntityData.Ability -> AbilityBody(data.v, wash, onOpen)
+            is EntityData.Item -> ItemBody(data.v, wash)
+            is EntityData.Type -> TypeBody(data.v, wash, onOpen)
         }
         GroundingSection(artifact, requestFormat)
     }
 }
+
+/** Types that drive the artifact plate wash (empty → mechanics ink plate). */
+internal fun entityPlateTypes(data: EntityData): List<String> = when (data) {
+    is EntityData.Pokemon -> data.v.types
+    is EntityData.Move -> listOf(data.v.type)
+    is EntityData.Type -> data.v.types
+    is EntityData.Ability, is EntityData.Item -> emptyList()
+}
+
+@Composable
+private fun rememberPlateBrush(wash: PlateWash, surfaceRaised: Color, surfaceSunken: Color): Brush =
+    remember(wash, surfaceRaised, surfaceSunken) {
+        when {
+            wash.fillSecondary != null ->
+                Brush.linearGradient(listOf(wash.fill, wash.fillSecondary, surfaceRaised))
+            wash.isMechanics ->
+                Brush.verticalGradient(listOf(surfaceSunken, surfaceRaised))
+            else ->
+                Brush.linearGradient(listOf(wash.fill, surfaceRaised))
+        }
+    }
 
 // ---------------------------------------------------------------------------
 // Pokémon
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun PokemonBody(data: PokemonArtifactData, onOpen: (EntityKind, String) -> Unit) {
+private fun PokemonBody(
+    data: PokemonArtifactData,
+    wash: PlateWash,
+    onOpen: (EntityKind, String) -> Unit,
+) {
     val oak = LocalOakColors.current
+    val headerShape = RoundedCornerShape(OakRadius.lg)
+    val wellShape = RoundedCornerShape(28.dp)
+    val glowColors = buildList {
+        wash.wellGlow?.let { add(it) }
+        wash.wellGlowSecondary?.let { add(it) }
+        add(wash.wellFill)
+        add(wash.wellFill.copy(alpha = 0f))
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(OakRadius.lg))
-            .background(typeWash(data.types.getOrNull(0), data.types.getOrNull(1)))
+            .clip(headerShape)
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        wash.fill,
+                        wash.fillSecondary ?: wash.fill.copy(alpha = 0.55f),
+                        oak.surfaceRaised.copy(alpha = 0.35f),
+                    ),
+                ),
+                headerShape,
+            )
+            .border(1.dp, wash.border.copy(alpha = 0.65f), headerShape)
             .padding(vertical = OakSpacing.xl, horizontal = OakSpacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        SpriteImage(url = data.artworkUrl, name = data.displayName, size = 112.dp)
+        // Type-glow specimen hero (aligns with Subjects.kt wells / soul.md).
+        Box(
+            modifier = Modifier
+                .size(128.dp)
+                .clip(wellShape)
+                .background(Brush.radialGradient(glowColors), wellShape)
+                .border(1.dp, wash.wellBorder, wellShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            SpriteImage(url = data.artworkUrl, name = data.displayName, size = 112.dp)
+        }
         Spacer(Modifier.height(OakSpacing.sm))
         Text(
             text = data.displayName,
@@ -275,13 +364,19 @@ private fun sortMovesByType(moves: List<MovepoolMove>): List<MovepoolMove> =
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun MoveBody(data: MoveArtifactData, onOpen: (EntityKind, String) -> Unit) {
+private fun MoveBody(
+    data: MoveArtifactData,
+    wash: PlateWash,
+    onOpen: (EntityKind, String) -> Unit,
+) {
     val oak = LocalOakColors.current
+    val headerShape = RoundedCornerShape(OakRadius.lg)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(OakRadius.lg))
-            .background(typeWash(data.type, null))
+            .clip(headerShape)
+            .background(wash.fill, headerShape)
+            .border(1.dp, wash.border.copy(alpha = 0.65f), headerShape)
             .padding(OakSpacing.lg),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
@@ -320,13 +415,12 @@ private fun DamageClassBadge(damageClass: DamageClass) {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun AbilityBody(data: AbilityArtifactData, onOpen: (EntityKind, String) -> Unit) {
-    val oak = LocalOakColors.current
-    Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(OakRadius.lg)).background(accentWash(oak.accent)).padding(OakSpacing.lg),
-    ) {
-        Text(data.displayName, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold), color = oak.textStrong)
-    }
+private fun AbilityBody(
+    data: AbilityArtifactData,
+    wash: PlateWash,
+    onOpen: (EntityKind, String) -> Unit,
+) {
+    MechanicsHeader(title = data.displayName, wash = wash)
     EffectSection(data.effectShort, data.effectFull)
     if (data.learnedBy.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -358,13 +452,8 @@ private fun HolderChip(holder: AbilityHolder, onOpen: (EntityKind, String) -> Un
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun ItemBody(data: ItemArtifactData) {
-    val oak = LocalOakColors.current
-    Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(OakRadius.lg)).background(accentWash(oak.accent)).padding(OakSpacing.lg),
-    ) {
-        Text(data.displayName, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold), color = oak.textStrong)
-    }
+private fun ItemBody(data: ItemArtifactData, wash: PlateWash) {
+    MechanicsHeader(title = data.displayName, wash = wash)
     EffectSection(data.effectShort, data.effectFull)
     val holders = data.heldByWild
     if (!holders.isNullOrEmpty()) {
@@ -372,6 +461,30 @@ private fun ItemBody(data: ItemArtifactData) {
             SectionHeader("Held in the wild")
             for (holder in holders) InfoRow(titleizeNonNull(holder.pokemon), percentText(holder.rarityPercent))
         }
+    }
+}
+
+/** Ink-plate header band for ability/item (no type wash — soul.md mechanics plate). */
+@Composable
+private fun MechanicsHeader(title: String, wash: PlateWash) {
+    val oak = LocalOakColors.current
+    val headerShape = RoundedCornerShape(OakRadius.lg)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(headerShape)
+            .background(
+                Brush.verticalGradient(listOf(wash.fill, oak.surfaceRaised.copy(alpha = 0.55f))),
+                headerShape,
+            )
+            .border(1.5.dp, wash.border, headerShape)
+            .padding(OakSpacing.lg),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = oak.textStrong,
+        )
     }
 }
 
@@ -383,12 +496,23 @@ private fun percentText(value: Double): String =
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun TypeBody(data: TypeArtifactData, onOpen: (EntityKind, String) -> Unit) {
+private fun TypeBody(
+    data: TypeArtifactData,
+    wash: PlateWash,
+    onOpen: (EntityKind, String) -> Unit,
+) {
+    val headerShape = RoundedCornerShape(OakRadius.lg)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(OakRadius.lg))
-            .background(typeWash(data.types.getOrNull(0), data.types.getOrNull(1)))
+            .clip(headerShape)
+            .background(
+                Brush.linearGradient(
+                    listOfNotNull(wash.fill, wash.fillSecondary, wash.fill.copy(alpha = 0.4f)),
+                ),
+                headerShape,
+            )
+            .border(1.dp, wash.border.copy(alpha = 0.65f), headerShape)
             .padding(OakSpacing.lg),
     ) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -567,18 +691,3 @@ private fun StatBarRow(label: String, value: Int) {
 }
 
 private fun signed(value: Int): String = if (value > 0) "+$value" else value.toString()
-
-/**
- * A faint type-tinted diagonal wash for a Pokémon/type header band — the Android
- * counterpart of iOS `Theme.typeGradient`, kept local to this file rather than added
- * to the shared theme so this phase's changes stay additive-only.
- */
-private fun typeWash(primaryType: String?, secondaryType: String?): Brush {
-    val primary = OakType.color(primaryType ?: "normal")
-    val secondary = secondaryType?.let { OakType.color(it) } ?: primary
-    return Brush.linearGradient(colors = listOf(primary.copy(alpha = 0.22f), secondary.copy(alpha = 0.08f)))
-}
-
-/** The neutral accent wash for ability/item bands — no single type to tint with. */
-private fun accentWash(accent: Color): Brush =
-    Brush.linearGradient(colors = listOf(accent.copy(alpha = 0.14f), accent.copy(alpha = 0.05f)))

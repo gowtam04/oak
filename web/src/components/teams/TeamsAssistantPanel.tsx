@@ -30,8 +30,8 @@ import { titleizeSlug } from "./display-names";
 /** Collapse-state persistence key (a UX nicety, not load-bearing). */
 const COLLAPSE_KEY = "oak-teams-assistant-collapsed";
 
-/** First-use prompts — one tap sends them with the live draft attached. */
-const ASSISTANT_SUGGESTIONS = [
+/** Fallback prompts when analysis has not settled yet. */
+const FALLBACK_SUGGESTIONS = [
   "Check my coverage",
   "Fill slot 3",
   "Suggest an item",
@@ -42,11 +42,24 @@ export interface TeamsAssistantPanelProps {
   teamId: string;
   format: Format;
   /** Read the live, unsaved draft from the editor (called at send/apply time). */
-  getDraft: () => { name: string; members: TeamMember[] };
+  getDraft: () => {
+    name: string;
+    members: TeamMember[];
+    win_condition?: string | null;
+  };
   /** Apply an assistant patch to the editor draft. */
   applyPatch: (patch: TeamPatch) => void;
   /** Restore an exact draft snapshot (Undo). */
   replaceDraft: (draft: { name: string; members: TeamMember[] }) => void;
+  /**
+   * Dynamic first-use chips from team analysis (roles gaps, weaknesses, threats).
+   * Falls back to static suggestions when empty/undefined.
+   */
+  suggestionChips?: string[];
+  /** Optional seed message to auto-send once when the panel mounts (archetype). */
+  seedMessage?: string | null;
+  /** Called after the seed message is consumed. */
+  onSeedConsumed?: () => void;
 }
 
 /** Human-readable one-liners for a patch's operations (self-contained). */
@@ -87,6 +100,9 @@ export default function TeamsAssistantPanel({
   getDraft,
   applyPatch,
   replaceDraft,
+  suggestionChips,
+  seedMessage,
+  onSeedConsumed,
 }: TeamsAssistantPanelProps) {
   const assistant = useTeamsAssistant();
   const [input, setInput] = useState("");
@@ -95,6 +111,10 @@ export default function TeamsAssistantPanel({
   const [lastApplied, setLastApplied] = useState<AppliedSnapshot | null>(null);
   const lastMessageRef = useRef("");
   const threadRef = useRef<HTMLDivElement | null>(null);
+  const chips =
+    suggestionChips && suggestionChips.length > 0
+      ? suggestionChips
+      : [...FALLBACK_SUGGESTIONS];
 
   // Restore the collapse preference once on mount.
   useEffect(() => {
@@ -138,12 +158,24 @@ export default function TeamsAssistantPanel({
         name: draft.name,
         format,
         members: draft.members,
+        win_condition: draft.win_condition ?? null,
       };
       lastMessageRef.current = text;
       void assistant.send(text, wireDraft);
     },
     [assistant, format, getDraft],
   );
+
+  // Archetype seed: auto-send once when the panel opens with a seed message.
+  const seedSentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!seedMessage) return;
+    if (seedSentRef.current === seedMessage) return;
+    if (assistant.status === "thinking") return;
+    seedSentRef.current = seedMessage;
+    sendMessage(seedMessage);
+    onSeedConsumed?.();
+  }, [seedMessage, sendMessage, onSeedConsumed, assistant.status]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -231,7 +263,7 @@ export default function TeamsAssistantPanel({
             >
               <span className="ilabel">Try asking</span>
               <div className="assistant-panel__chips">
-                {ASSISTANT_SUGGESTIONS.map((s) => (
+                {chips.map((s) => (
                   <button
                     key={s}
                     type="button"

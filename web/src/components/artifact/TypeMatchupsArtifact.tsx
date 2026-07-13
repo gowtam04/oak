@@ -7,6 +7,7 @@
 "use client";
 
 import type { TypeArtifactData } from "@/lib/entity-artifact";
+import { typeCssVar } from "@/lib/plate-types";
 
 import MatchupRow from "./MatchupRow";
 
@@ -17,8 +18,19 @@ export interface TypeMatchupsArtifactProps {
 export default function TypeMatchupsArtifact({
   data,
 }: TypeMatchupsArtifactProps): React.JSX.Element {
+  const primary = data.types[0];
+  const secondary = data.types[1] ?? data.types[0];
+  const plateStyle = {
+    ["--plate-a" as string]: typeCssVar(primary),
+    ["--plate-b" as string]: typeCssVar(secondary),
+  };
+
   return (
-    <div className="type-artifact" data-testid="type-artifact">
+    <div
+      className="type-artifact"
+      data-testid="type-artifact"
+      style={plateStyle}
+    >
       {data.offensive && (
         <section className="type-artifact__section">
           <h3 className="artifact-section__title ilabel">Offensive</h3>

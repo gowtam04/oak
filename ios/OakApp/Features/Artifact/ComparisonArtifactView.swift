@@ -19,6 +19,12 @@ struct ComparisonArtifactView: View {
   /// default so the view renders in isolation / previews.
   var onOpen: (String) -> Void = { _ in }
 
+  /// Multi-subject plate (or single-typed / mechanics) — specimen continuation
+  /// of the answer card (soul.md Phase 2.1).
+  private var plateAtmosphere: Theme.PlateAtmosphere {
+    Theme.PlateAtmosphere.resolve(subjectTypes: subjects.map(\.types))
+  }
+
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 12) {
@@ -33,8 +39,12 @@ struct ComparisonArtifactView: View {
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(16)
+      .padding(Theme.Spacing.lg)
+      .oakSpecimenPlate(plateAtmosphere)
+      .padding(.horizontal, Theme.Spacing.sm)
+      .padding(.vertical, Theme.Spacing.sm)
     }
+    .background(Theme.canvas)
   }
 }
 

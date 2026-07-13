@@ -1,9 +1,31 @@
 "use client";
 
+import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type { MarkdownProps } from "@/components/types";
+
+/**
+ * GFM tables need a real table layout (so columns hug content) plus an
+ * outer scrollport for wide tables. Putting overflow/display:block on
+ * <table> itself drops it out of the table formatting context — same
+ * lesson as `.candidate-table__scroll`.
+ */
+function MarkdownTable({
+  children,
+  ...props
+}: ComponentPropsWithoutRef<"table">) {
+  return (
+    <div className="markdown-body__table-wrap">
+      <table {...props}>{children}</table>
+    </div>
+  );
+}
+
+const markdownComponents = {
+  table: MarkdownTable,
+};
 
 /**
  * Markdown — the single markdown renderer shared by AnswerBody, ReasoningBlock,
@@ -24,7 +46,12 @@ export default function Markdown({ markdown, className }: MarkdownProps) {
   const wrapperClass = className ? `markdown-body ${className}` : "markdown-body";
   return (
     <div className={wrapperClass}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={markdownComponents}
+      >
+        {markdown}
+      </ReactMarkdown>
     </div>
   );
 }

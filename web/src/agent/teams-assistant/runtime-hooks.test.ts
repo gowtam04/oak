@@ -133,7 +133,7 @@ describe("buildBuilderHooks().validateAnswer — the patch legality gate", () =>
     expect(verdict.feedback).toContain("get_learnset");
   });
 
-  it("accepts the same illegal patch once the retry budget is spent (warn-but-allow)", async () => {
+  it("keeps rejecting an illegal patch even after many rejections (no warn-but-allow)", async () => {
     const hooks = buildBuilderHooks([]);
     const ctx = await ctxFor();
     const patch: TeamPatch = { slots: [{ slot: 0, member: illegalGarchomp() }] };
@@ -148,7 +148,9 @@ describe("buildBuilderHooks().validateAnswer — the patch legality gate", () =>
       MAX_BUILDER_PATCH_RETRIES,
     );
 
-    expect(verdict.ok).toBe(true);
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) throw new Error("expected a rejection");
+    expect(verdict.traceError).toBe("team_patch_illegal");
   });
 
   it("does not blame the model for a hard violation already present in an UNTOUCHED draft slot", async () => {

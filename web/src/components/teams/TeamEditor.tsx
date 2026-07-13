@@ -44,6 +44,7 @@ import RosterStrip from "./RosterStrip";
 import TeamWarnings from "./TeamWarnings";
 import TeamAnalysisPanel from "./TeamAnalysisPanel";
 import { formatLabel } from "./display-names";
+import type { TeamAnalysisOk } from "@/lib/teams/team-analysis";
 
 /**
  * A team is "incomplete" when it isn't a full, battle-ready six — mirrors the
@@ -104,6 +105,11 @@ export interface TeamEditorProps {
   onClose?: () => void;
   /** Optional imperative handle (see {@link TeamEditorHandle}). */
   handleRef?: Ref<TeamEditorHandle>;
+  /** Live analysis for assistant suggestion chips. */
+  onAnalysisChange?: (analysis: TeamAnalysisOk | null) => void;
+  /** Persist optional win condition (Phase 3). */
+  winCondition?: string | null;
+  onWinConditionChange?: (value: string) => void;
 }
 
 export default function TeamEditor({
@@ -114,6 +120,9 @@ export default function TeamEditor({
   onExport,
   onClose,
   handleRef,
+  onAnalysisChange,
+  winCondition,
+  onWinConditionChange,
 }: TeamEditorProps) {
   const [name, setName] = useState(team.name);
   const [members, setMembers] = useState<TeamMember[]>(team.members);
@@ -293,6 +302,19 @@ export default function TeamEditor({
           )}
         </div>
       </div>
+      {onWinConditionChange && (
+        <label className="team-editor__win-condition">
+          <span className="ilabel">Win condition</span>
+          <input
+            type="text"
+            data-testid="team-win-condition"
+            maxLength={280}
+            value={winCondition ?? ""}
+            placeholder="e.g. late-game SD Garchomp after hazards"
+            onChange={(e) => onWinConditionChange(e.target.value)}
+          />
+        </label>
+      )}
 
       <TeamWarnings
         warnings={teamLevelWarnings}
@@ -332,7 +354,11 @@ export default function TeamEditor({
         </p>
       )}
 
-      <TeamAnalysisPanel members={members} format={team.format as Format} />
+      <TeamAnalysisPanel
+        members={members}
+        format={team.format as Format}
+        onAnalysisChange={onAnalysisChange}
+      />
 
       <div className="team-editor__savebar" data-testid="team-editor-savebar">
         <span

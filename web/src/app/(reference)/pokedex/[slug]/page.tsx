@@ -1,7 +1,8 @@
 /**
  * /pokedex/[slug] — a single Pokémon reference page: hero, generated intro,
- * availability chips, base-stat table, defensive matchups, abilities, evolution
- * line, full learnset, best-effort Champions usage, and an "Ask Oak" CTA.
+ * selectable availability chips (per-generation stats/abilities/learnset via
+ * `?format=`), base-stat table, defensive matchups, abilities, evolution line,
+ * full learnset, best-effort Champions usage, and an "Ask Oak" CTA.
  *
  * Detail route: `runtime = "nodejs"` + `revalidate = 86400`, NO
  * `generateStaticParams` — nothing prerenders at build (so `@/env`/`@/data/db`
@@ -9,6 +10,10 @@
  * for 24h. The loader is dynamically imported INSIDE both the page and
  * `generateMetadata` (React `cache()` dedupes the two into one query). An
  * unknown slug → `notFound()`; an unbuilt index throws (→ 500).
+ *
+ * `?format=<Format>` selects which scope's profile is shown (shareable). An
+ * invalid or unavailable format soft-falls back to the default SV-first chain.
+ * Canonical SEO URL stays `/pokedex/{slug}` without the query.
  */
 
 import type { Metadata } from "next";
@@ -28,7 +33,8 @@ import type { UsageListEntry } from "@/components/reference/UsageBlock";
 import AskOakCta from "@/components/reference/AskOakCta";
 import TypeBadge from "@/components/TypeBadge";
 import type { TypeName } from "@/agent/schemas";
-import { scopeLabel } from "@/lib/scope/scope-label";
+import { isFormat, type Format } from "@/data/formats";
+import { scopeLabel, scopeLabelShort } from "@/lib/scope/scope-label";
 import {
   buildPokemonDescription,
   buildPokemonTitle,
@@ -154,17 +160,35 @@ function pokemonIntro(data: PokemonPageData): string {
   );
 }
 
+/** Parse `?format=` into a known Format, or undefined when missing/invalid. */
+function parseFormatParam(raw: string | string[] | undefined): Format | undefined {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || !isFormat(value)) return undefined;
+  return value;
+}
+
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ format?: string | string[] }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const preferred = parseFormatParam((await searchParams).format);
   const { loadPokemonPage } = await import("@/data/reference-pages");
-  const data = await loadPokemonPage(slug);
+  const data = await loadPokemonPage(slug, preferred);
   if (!data) return {};
+
+  // Share previews name the selected scope when the user picked one and it
+  // stuck (preferred resolved). Canonical stays bare for SEO de-dup.
+  let title = buildPokemonTitle(data);
+  if (preferred && data.sourceFormat === preferred) {
+    title = `${data.displayName} (${scopeLabelShort(data.sourceFormat)}) — Stats, Abilities & Movepool`;
+  }
+
   return {
-    title: buildPokemonTitle(data),
+    title,
     description: buildPokemonDescription(data),
     alternates: { canonical: `/pokedex/${slug}` },
     ...(data.artworkUrl
@@ -175,15 +199,20 @@ export async function generateMetadata({
 
 export default async function PokemonDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ format?: string | string[] }>;
 }) {
   const { slug } = await params;
+  const preferred = parseFormatParam((await searchParams).format);
   const { loadPokemonPage } = await import("@/data/reference-pages");
-  const data = await loadPokemonPage(slug);
+  const data = await loadPokemonPage(slug, preferred);
   if (!data) notFound();
 
   const otherForms = data.forms.filter((f) => f !== data.slug);
+  const formatSelected =
+    preferred != null && data.sourceFormat === preferred;
 
   return (
     <main className="ref-page">
@@ -224,16 +253,30 @@ export default async function PokemonDetailPage({
 
       <p className="ref-intro ref-detail-intro">{pokemonIntro(data)}</p>
 
-      {!data.isNative && (
+      {formatSelected ? (
         <p className="ref-intro ref-detail-intro">
-          {data.displayName} isn&apos;t in the current Scarlet &amp; Violet
-          games; the data below is drawn from {scopeLabel(data.sourceFormat)}.
+          Showing {scopeLabel(data.sourceFormat)} data. Select another scope
+          below to compare generations.
         </p>
+      ) : (
+        !data.isNative && (
+          <p className="ref-intro ref-detail-intro">
+            {data.displayName} isn&apos;t in the current Scarlet &amp; Violet
+            games; the data below is drawn from {scopeLabel(data.sourceFormat)}.
+          </p>
+        )
       )}
 
       <section className="ref-card ref-detail-section">
         <h2 className="ref-detail-section__title">Availability</h2>
-        <FormatChips formats={data.availability} />
+        <p className="ref-detail-section__hint">
+          Select a generation to view its stats, abilities, and learnset.
+        </p>
+        <FormatChips
+          formats={data.availability}
+          activeFormat={data.sourceFormat}
+          hrefFor={(f) => `/pokedex/${slug}?format=${f}`}
+        />
       </section>
 
       <section className="ref-card ref-detail-section">

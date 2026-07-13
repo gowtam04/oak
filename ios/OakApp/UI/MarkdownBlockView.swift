@@ -109,48 +109,64 @@ private struct MarkdownListView: View {
 
 // MARK: - Table
 
-/// A GFM table rendered as a native, horizontally-scrollable grid, matching the
-/// `CandidatesTableView` conventions (header wash, full-width hairline, zebra rows,
-/// trailing scroll fade). Cells are inline-parsed so bold/`code`/links inside a
-/// cell still render.
+/// A GFM table rendered as a native, horizontally-scrollable grid.
+///
+/// Matches the web hug-content recipe (`width: fit-content; max-width: 100%`
+/// scroll wrap, table `width: auto`):
+/// - Card chrome lives on the grid *inside* the scroll view, and the grid is
+///   `fixedSize(horizontal:)` so the *table* hugs content (no full-width blank
+///   right chrome).
+/// - Cells still use `maxWidth: .infinity` so they fill their *column* — otherwise
+///   zebra/header washes only paint text bounds and columns look gappy
+///   (short labels leave unpainted column space between Move and Usage, etc.).
+/// Wide tables still scroll. (`CandidatesTableView` stays full-width — multi-stat
+/// candidate grids are meant to use the horizontal space.)
 private struct MarkdownTableView: View {
   let table: MarkdownTable
 
   var body: some View {
     ScrollView(.horizontal, showsIndicators: true) {
-      Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
-        GridRow {
-          ForEach(Array(table.header.enumerated()), id: \.offset) { index, heading in
-            cell(background: headerBackground, alignment: alignment(index)) {
-              MarkdownText(heading)
-                .font(Theme.body(.caption, weight: .semibold))
-                .fixedSize(horizontal: false, vertical: true)
-            }
+      // fixedSize locks the Grid at its ideal width (sum of column ideal
+      // widths). Cells may still expand to fill those columns via
+      // maxWidth:.infinity without stretching the whole table to the viewport.
+      grid
+        .fixedSize(horizontal: true, vertical: false)
+        .background(Theme.surface)
+        .oakCard(radius: Theme.Radius.md)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private var grid: some View {
+    Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+      GridRow {
+        ForEach(Array(table.header.enumerated()), id: \.offset) { index, heading in
+          cell(background: headerBackground, alignment: alignment(index)) {
+            MarkdownText(heading)
+              .font(Theme.body(.caption, weight: .semibold))
+              .fixedSize(horizontal: false, vertical: true)
           }
         }
+      }
+      GridRow {
+        Rectangle()
+          .fill(Theme.separator)
+          .frame(height: 1)
+          .gridCellUnsizedAxes(.horizontal)
+          .gridCellColumns(max(table.header.count, 1))
+      }
+      ForEach(Array(table.rows.enumerated()), id: \.offset) { rowIndex, row in
         GridRow {
-          Rectangle()
-            .fill(Theme.separator)
-            .frame(height: 1)
-            .gridCellUnsizedAxes(.horizontal)
-            .gridCellColumns(max(table.header.count, 1))
-        }
-        ForEach(Array(table.rows.enumerated()), id: \.offset) { rowIndex, row in
-          GridRow {
-            ForEach(Array(row.enumerated()), id: \.offset) { colIndex, value in
-              cell(background: rowBackground(rowIndex), alignment: alignment(colIndex)) {
-                MarkdownText(value)
-                  .font(Theme.body(.subheadline))
-                  .fixedSize(horizontal: false, vertical: true)
-              }
+          ForEach(Array(row.enumerated()), id: \.offset) { colIndex, value in
+            cell(background: rowBackground(rowIndex), alignment: alignment(colIndex)) {
+              MarkdownText(value)
+                .font(Theme.body(.subheadline))
+                .fixedSize(horizontal: false, vertical: true)
             }
           }
         }
       }
     }
-    .background(Theme.surface)
-    .oakCard(radius: Theme.Radius.md)
-    .overlay(alignment: .trailing) { scrollFade }
   }
 
   private func alignment(_ column: Int) -> Alignment {
@@ -160,16 +176,6 @@ private struct MarkdownTableView: View {
     case .center: return .center
     case .trailing: return .trailing
     }
-  }
-
-  private var scrollFade: some View {
-    LinearGradient(
-      colors: [Theme.surface.opacity(0), Theme.surface],
-      startPoint: .leading,
-      endPoint: .trailing
-    )
-    .frame(width: 24)
-    .allowsHitTesting(false)
   }
 
   private var headerBackground: Color { Theme.textPrimary.opacity(0.06) }
@@ -187,6 +193,9 @@ private struct MarkdownTableView: View {
     content()
       .padding(.horizontal, 12)
       .padding(.vertical, 8)
+      // Fill the Grid column (so header/zebra washes form continuous bands),
+      // not the scroll viewport — the grid's fixedSize keeps ideal column
+      // widths content-derived.
       .frame(maxWidth: .infinity, alignment: alignment)
       .background(background)
   }

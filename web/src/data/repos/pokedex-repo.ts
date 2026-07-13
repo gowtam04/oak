@@ -53,7 +53,7 @@ import {
 
 import type { OakDb } from "@/data/db";
 import { normalizeName } from "./normalize-name";
-import { FORMATS, type Format } from "@/data/formats";
+import { SCOPE_PICKER_ORDER, type Format } from "@/data/formats";
 import { ingest_meta, learnset, pokemon } from "@/data/schema";
 import type {
   NameRow,
@@ -486,6 +486,8 @@ export async function getPokemon(
     forms,
     is_gen9_native: row.is_gen9_native === 1,
     source_generation: row.source_generation,
+    // Mega stone (or other forme-locked item); null for ordinary forms.
+    required_item: row.required_item ?? null,
   };
   return profile;
 }
@@ -743,9 +745,10 @@ export async function listAllPokemon(
 }
 
 /**
- * Which formats' `pokemon` tables contain `slug`, returned in {@link FORMATS}
- * order (the availability chips on a `/pokedex/[slug]` page). Cross-format read
- * (not scoped to one format) in ONE query; the FORMATS-order sort happens in JS.
+ * Which formats' `pokemon` tables contain `slug`, returned in
+ * {@link SCOPE_PICKER_ORDER} (National Dex → Champions → gens newest→oldest —
+ * the availability chips on a `/pokedex/[slug]` page). Cross-format read (not
+ * scoped to one format) in ONE query; the picker-order sort happens in JS.
  * Returns `[]` for an unreadable index or an unknown slug.
  *
  * @param slug canonical Pokémon slug.
@@ -761,7 +764,7 @@ export async function pokemonFormats(
       .from(pokemon)
       .where(eq(pokemon.id, slug));
     const present = new Set(rows.map((r) => r.format));
-    return FORMATS.filter((f) => present.has(f));
+    return SCOPE_PICKER_ORDER.filter((f) => present.has(f));
   } catch {
     return [];
   }

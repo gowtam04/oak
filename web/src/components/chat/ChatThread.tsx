@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatThreadProps } from "@/components/types";
 import type { ToolActivityEvent } from "@/lib/sse/sse-types";
 import AnswerCard from "@/components/answer-card/AnswerCard";
 import Markdown from "@/components/Markdown";
-import { STARTER_PROMPTS, pickRandomPrompts } from "@/lib/example-prompts";
+import { plateHintFromToolLabels } from "@/lib/plate-types";
+import {
+  STARTER_ENTRIES,
+  pickRandomStarters,
+  type StarterPrompt,
+} from "@/lib/example-prompts";
 
 /**
  * The tool_activity label carries a leading status emoji (🔍/📊/…) as its own
@@ -93,7 +98,7 @@ function FieldNote({
 /**
  * ChatThread — renders the committed conversation (user + assistant turns) in
  * order, plus the streaming "field notes" experience while `status ===
- * "streaming"` (fable-ui-strategy §4 screen 03):
+ * "streaming"` (specimen desk field notes / soul.md):
  *   - a vertical trail of instrument chips, one per accumulated `tool_activity`
  *     event (mono tool token + subject); the latest carries the pokeball micro-
  *     spinner, completed ones a tick. Before the first tool it's a single
@@ -127,17 +132,18 @@ export default function ChatThread({
 }: ChatThreadProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
 
-  // Empty-state starter chips: show a fresh random 6 each time the empty state
+  // Empty-state filed starters: show a fresh random 6 each time the empty state
   // appears (page load, or returning to it after a "new chat" resets `turns`),
   // so a user discovers Oak's full range over repeated visits. The initial value
   // is the deterministic first-6 so the server render and first client render
   // match (this is a Client Component — `Math.random()` at render time would
   // hydration-mismatch); the post-mount effect then swaps in the random set.
-  const [examples, setExamples] = useState<string[]>(() =>
-    STARTER_PROMPTS.slice(0, 6),
+  // Each starter carries category + optional type-dot (specimen desk, soul.md).
+  const [examples, setExamples] = useState<StarterPrompt[]>(() =>
+    STARTER_ENTRIES.slice(0, 6),
   );
   useEffect(() => {
-    if (showEmptyState) setExamples(pickRandomPrompts(6));
+    if (showEmptyState) setExamples(pickRandomStarters(6));
   }, [showEmptyState]);
 
   // Auto-scroll to the newest content (new turn / streamed token) — important on
@@ -217,6 +223,14 @@ export default function ChatThread({
   const hasActivity = activity.length > 0;
   const lastIndex = activity.length - 1;
   const collapsed = Boolean(streamingMarkdown);
+
+  // Early plate wash for the skeleton (Phase 2): best-effort type hint from
+  // tool-activity labels. Conservative — prefer sunken desk tint over wrong type.
+  const skeletonPlate = useMemo(
+    () => plateHintFromToolLabels(activity.map((a) => a.label)),
+    [activity],
+  );
+
   const lookupCount = activity.length;
   const thinkingLabel = reconnecting
     ? "Reconnecting…"
@@ -229,39 +243,58 @@ export default function ChatThread({
           className={"chat-empty" + (composerSlot ? " chat-empty--hero" : "")}
           data-testid="chat-empty"
         >
-          <span className="chat-empty__wordmark">Oak</span>
-          <h1 className="chat-empty__invite">
-            Ask anything about Pokémon — team-building filters, stat math, damage
-            calcs, or a quick Pokédex lookup.
-          </h1>
-          {scopeChipSlot && (
-            <div
-              className="chat-empty__scope-hint"
-              data-testid="chat-empty-scope-hint"
-            >
-              {scopeChipSlot}
-            </div>
-          )}
-
-          {/* Composer promoted to center stage on desktop empty state; on
-              mobile / after the first turn this slot is empty and the composer
-              stays bottom-docked (fable-ui §4 screen 01). */}
-          {composerSlot && (
-            <div className="chat-empty__composer">{composerSlot}</div>
-          )}
-
-          <div className="chat-empty__examples">
-            <span className="ilabel chat-empty__examples-label">Try asking</span>
-            <div className="chat-empty__examples-grid">
-              {examples.map((query) => (
-                <button
-                  key={query}
-                  type="button"
-                  className="chat-empty__chip"
-                  onClick={() => onFollowUp(query)}
-                  data-testid="chat-empty-example"
+          {/* Blank specimen plate — dashed/grid desk, NEW ENTRY + filed starters
+              (soul.md). No centered logo / equal chips cloud. */}
+          <div className="blank-plate" data-testid="blank-plate">
+            <div className="blank-plate__top">
+              <span className="ilabel blank-plate__ilabel">NEW ENTRY</span>
+              {scopeChipSlot && (
+                <div
+                  className="blank-plate__scope"
+                  data-testid="chat-empty-scope-hint"
                 >
-                  {query}
+                  {scopeChipSlot}
+                </div>
+              )}
+            </div>
+
+            <h1 className="blank-plate__prompt">What are we looking up?</h1>
+            <p className="blank-plate__sub">
+              Open a specimen. Every answer carries receipts — reasoning,
+              sources, and the generation it is based on.
+            </p>
+
+            {/* Composer promoted into the plate on desktop empty state; on
+                mobile / after the first turn this slot is empty and the composer
+                stays bottom-docked. */}
+            {composerSlot && (
+              <div className="chat-empty__composer">{composerSlot}</div>
+            )}
+
+            <div className="starters" data-testid="filed-starters">
+              <span className="ilabel starters__label">Filed starters</span>
+              {examples.map((entry) => (
+                <button
+                  key={entry.text}
+                  type="button"
+                  className="starter"
+                  onClick={() => onFollowUp(entry.text)}
+                  data-testid="chat-empty-example"
+                  data-prompt={entry.text}
+                  data-category={entry.category}
+                >
+                  <span
+                    className="starter__dot"
+                    style={
+                      entry.type
+                        ? { background: `var(--type-${entry.type})` }
+                        : undefined
+                    }
+                    data-type={entry.type}
+                    aria-hidden="true"
+                  />
+                  <span className="starter__cat">{entry.category}</span>
+                  <span className="starter__text">{entry.text}</span>
                 </button>
               ))}
             </div>
@@ -408,11 +441,21 @@ export default function ChatThread({
 
       {/* Answer skeleton — shown the instant a turn starts (before prose), so the
           shape of what's coming holds the layout and the streamed answer (or the
-          error strip) replaces it in place with no jump. */}
+          error strip) replaces it in place with no jump. Mild type wash when
+          activity labels confidently name a type; else sunken desk tint. */}
       {status === "streaming" && !streamingMarkdown && (
         <div
-          className="chat-turn chat-turn--assistant chat-thread__skeleton"
+          className={[
+            "chat-turn",
+            "chat-turn--assistant",
+            "chat-thread__skeleton",
+            skeletonPlate ? "" : "chat-thread__skeleton--desk",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          style={skeletonPlate?.style}
           data-testid="answer-skeleton"
+          data-plate={skeletonPlate?.kind ?? "desk"}
           aria-hidden="true"
         >
           <div className="chat-thread__skeleton-masthead" />

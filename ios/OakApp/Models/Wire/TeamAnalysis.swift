@@ -59,6 +59,13 @@ struct TeamAnalysisOk: Decodable, Sendable, Equatable {
   let offense: TeamOffense
   let speedTiers: [SpeedTier]
   let notes: [String]
+  let roles: [MemberRolesWire]
+  let rolesPresent: [String]
+  let rolesMissing: [String]
+  let physicalSpecial: PhysicalSpecialWire
+  let defenseNotes: [String]
+  let threats: [ThreatRowWire]
+  let metaAttribution: String?
 
   private enum CodingKeys: String, CodingKey {
     case format
@@ -67,6 +74,13 @@ struct TeamAnalysisOk: Decodable, Sendable, Equatable {
     case offense
     case speedTiers = "speed_tiers"
     case notes
+    case roles
+    case rolesPresent = "roles_present"
+    case rolesMissing = "roles_missing"
+    case physicalSpecial = "physical_special"
+    case defenseNotes = "defense_notes"
+    case threats
+    case metaAttribution = "meta_attribution"
   }
 
   init(from decoder: any Decoder) throws {
@@ -78,6 +92,113 @@ struct TeamAnalysisOk: Decodable, Sendable, Equatable {
       ?? TeamOffense(covered: [], uncovered: [])
     self.speedTiers = try container.decodeIfPresent([SpeedTier].self, forKey: .speedTiers) ?? []
     self.notes = try container.decodeIfPresent([String].self, forKey: .notes) ?? []
+    self.roles = try container.decodeIfPresent([MemberRolesWire].self, forKey: .roles) ?? []
+    self.rolesPresent = try container.decodeIfPresent([String].self, forKey: .rolesPresent) ?? []
+    self.rolesMissing = try container.decodeIfPresent([String].self, forKey: .rolesMissing) ?? []
+    self.physicalSpecial = try container.decodeIfPresent(PhysicalSpecialWire.self, forKey: .physicalSpecial)
+      ?? PhysicalSpecialWire()
+    self.defenseNotes = try container.decodeIfPresent([String].self, forKey: .defenseNotes) ?? []
+    self.threats = try container.decodeIfPresent([ThreatRowWire].self, forKey: .threats) ?? []
+    self.metaAttribution = try container.decodeIfPresent(String.self, forKey: .metaAttribution)
+  }
+}
+
+struct MemberRolesWire: Decodable, Sendable, Equatable {
+  let member: String
+  let flags: [String]
+
+  init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    member = try c.decodeIfPresent(String.self, forKey: .member) ?? ""
+    flags = try c.decodeIfPresent([String].self, forKey: .flags) ?? []
+  }
+
+  private enum CodingKeys: String, CodingKey { case member, flags }
+}
+
+struct PhysicalSpecialWire: Decodable, Sendable, Equatable {
+  let physicalMoves: Int
+  let specialMoves: Int
+  let statusMoves: Int
+  let attackerBias: String
+
+  init(
+    physicalMoves: Int = 0,
+    specialMoves: Int = 0,
+    statusMoves: Int = 0,
+    attackerBias: String = "none"
+  ) {
+    self.physicalMoves = physicalMoves
+    self.specialMoves = specialMoves
+    self.statusMoves = statusMoves
+    self.attackerBias = attackerBias
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case physicalMoves = "physical_moves"
+    case specialMoves = "special_moves"
+    case statusMoves = "status_moves"
+    case attackerBias = "attacker_bias"
+  }
+
+  init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    physicalMoves = try c.decodeIfPresent(Int.self, forKey: .physicalMoves) ?? 0
+    specialMoves = try c.decodeIfPresent(Int.self, forKey: .specialMoves) ?? 0
+    statusMoves = try c.decodeIfPresent(Int.self, forKey: .statusMoves) ?? 0
+    attackerBias = try c.decodeIfPresent(String.self, forKey: .attackerBias) ?? "none"
+  }
+}
+
+struct ThreatCalcWire: Decodable, Sendable, Equatable {
+  let attacker: String
+  let defender: String
+  let move: String
+  let minPct: Double
+  let maxPct: Double
+
+  private enum CodingKeys: String, CodingKey {
+    case attacker, defender, move
+    case minPct = "min_pct"
+    case maxPct = "max_pct"
+  }
+
+  init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    attacker = try c.decodeIfPresent(String.self, forKey: .attacker) ?? ""
+    defender = try c.decodeIfPresent(String.self, forKey: .defender) ?? ""
+    move = try c.decodeIfPresent(String.self, forKey: .move) ?? ""
+    minPct = try c.decodeIfPresent(Double.self, forKey: .minPct) ?? 0
+    maxPct = try c.decodeIfPresent(Double.self, forKey: .maxPct) ?? 0
+  }
+}
+
+struct ThreatRowWire: Decodable, Sendable, Equatable {
+  let species: String
+  let displayName: String
+  let usagePct: Double?
+  let rank: Int?
+  let status: String
+  let reasons: [String]
+  let sampleCalcs: [ThreatCalcWire]
+
+  private enum CodingKeys: String, CodingKey {
+    case species
+    case displayName = "display_name"
+    case usagePct = "usage_pct"
+    case rank, status, reasons
+    case sampleCalcs = "sample_calcs"
+  }
+
+  init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    species = try c.decodeIfPresent(String.self, forKey: .species) ?? ""
+    displayName = try c.decodeIfPresent(String.self, forKey: .displayName) ?? ""
+    usagePct = try c.decodeIfPresent(Double.self, forKey: .usagePct)
+    rank = try c.decodeIfPresent(Int.self, forKey: .rank)
+    status = try c.decodeIfPresent(String.self, forKey: .status) ?? "soft"
+    reasons = try c.decodeIfPresent([String].self, forKey: .reasons) ?? []
+    sampleCalcs = try c.decodeIfPresent([ThreatCalcWire].self, forKey: .sampleCalcs) ?? []
   }
 }
 

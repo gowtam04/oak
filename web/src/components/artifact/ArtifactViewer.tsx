@@ -15,6 +15,11 @@ import { useEffect, useRef, useState } from "react";
 
 import CaveatStrip from "@/components/answer-card/CaveatStrip";
 import type { EntityArtifactOk } from "@/lib/entity-artifact";
+import {
+  plateFromSubjects,
+  plateFromTypes,
+  type PlateVars,
+} from "@/lib/plate-types";
 
 import { useArtifactViewer } from "./useArtifactViewer";
 import type { ArtifactView } from "./types";
@@ -27,6 +32,48 @@ import TypeMatchupsArtifact from "./TypeMatchupsArtifact";
 import ComparisonArtifact from "./ComparisonArtifact";
 import DamageCalcArtifact from "./DamageCalcArtifact";
 import TeamArtifact from "./TeamArtifact";
+
+/**
+ * Specimen-plate wash for the artifact shell (soul.md Phase 2 — continuation
+ * of the answer plate, not a second product). Typed when types are known;
+ * ink for mechanics / loading / ability / item.
+ */
+function plateForView(view: ArtifactView): PlateVars {
+  if (view.type === "structured") {
+    if (view.artifact.kind === "comparison") {
+      return plateFromSubjects(view.artifact.subjects);
+    }
+    return plateFromTypes([]);
+  }
+
+  if (view.type === "team") {
+    const refs = view.spriteRefs;
+    if (!refs) return plateFromTypes([]);
+    const members = view.detail?.members ?? [];
+    const typeLists = members
+      .map((m) => (m.species ? refs[m.species]?.types : undefined))
+      .filter((t): t is string[] => Array.isArray(t) && t.length > 0);
+    if (typeLists.length === 0) return plateFromTypes([]);
+    if (typeLists.length === 1) return plateFromTypes(typeLists[0]!);
+    return plateFromSubjects(typeLists.map((types) => ({ types })));
+  }
+
+  // Entity view.
+  if (view.phase === "done" && view.response?.status === "ok") {
+    const r = view.response;
+    switch (r.kind) {
+      case "pokemon":
+        return plateFromTypes(r.data.types);
+      case "move":
+        return plateFromTypes([r.data.type]);
+      case "type":
+        return plateFromTypes(r.data.types);
+      default:
+        return plateFromTypes([]);
+    }
+  }
+  return plateFromTypes([]);
+}
 
 function formatLabel(format: string): string {
   if (format === "champions") return "Champions";
@@ -292,12 +339,18 @@ export default function ArtifactViewer(): React.JSX.Element | null {
   if (!isOpen || !current) return null;
 
   const { title, formatTag } = headerFor(current);
+  const plate = plateForView(current);
+  const plateClass = ["artifact-viewer", plate.className]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <aside
       ref={panelRef}
-      className="artifact-viewer"
+      className={plateClass}
+      style={plate.style}
       data-testid="artifact-viewer"
+      data-plate={plate.kind}
       role={isMobileOverlay ? "dialog" : "complementary"}
       aria-modal={isMobileOverlay || undefined}
       aria-label="Artifact viewer"

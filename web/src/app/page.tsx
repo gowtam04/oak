@@ -17,6 +17,7 @@ import SavedTeamAutoOpen from "@/components/teams/SavedTeamAutoOpen";
 import LandingSection from "@/components/landing/LandingSection";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";
+import PlateTuner from "@/components/dev/PlateTuner";
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useConversations } from "@/lib/hooks/use-conversations";
 import { getConversation, importConversation } from "@/lib/api/history-client";
@@ -772,6 +773,9 @@ export default function Home() {
         sessionId={sessionId}
         format={displayFormat}
       />
+
+      {/* Dev-only plate wash dials (Phase 3). Hidden in prod unless ?plateTuner=1. */}
+      <PlateTuner />
     </main>
   );
 }

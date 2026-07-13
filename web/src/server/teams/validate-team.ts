@@ -84,6 +84,17 @@ export interface DetailedTeamValidation {
   legalMoves: Map<string, string[]>;
   /** species slug -> legal ability slugs (slot1/slot2/hidden, non-null). */
   legalAbilities: Map<string, string[]>;
+  /**
+   * Sorted legal held-item slugs for the format (Champions: searchable_names
+   * minus admin exclusions). Empty when the item master list could not be
+   * read — item legality is then skipped (fail-soft).
+   */
+  legalItems: string[];
+  /**
+   * species slug -> required held-item slug (Mega stones). Populated only for
+   * found species that have `pokemon.required_item` set.
+   */
+  requiredItems: Map<string, string>;
 }
 
 /**
@@ -176,9 +187,10 @@ export async function validateTeamDetailed(
   // Per-species legal-choice lists for self-healing rejection feedback (B-13),
   // populated only for species found in the roster. Moves come from the learnset
   // Set (sorted, deterministic; [] when the read failed); abilities from the
-  // profile's non-null slots.
+  // profile's non-null slots. requiredItems: Mega stones etc.
   const legalMoves = new Map<string, string[]>();
   const legalAbilities = new Map<string, string[]>();
+  const requiredItems = new Map<string, string>();
   for (const [slug, profile] of profiles) {
     if (!profile.found) continue;
     const learnset = learnsets.get(slug);
@@ -191,6 +203,9 @@ export async function validateTeamDetailed(
         profile.abilities.hidden,
       ].filter((a): a is string => Boolean(a)),
     );
+    if (profile.required_item) {
+      requiredItems.set(slug, profile.required_item);
+    }
   }
 
   // ---- Per-slot checks ----
@@ -287,11 +302,41 @@ export async function validateTeamDetailed(
             }
           });
         }
+
+        // Mega (and any forme with a locked item): must hold required_item only.
+        // Fires as item_illegal so HARD_VIOLATION_CODES already covers it.
+        const stone = profile.required_item ?? null;
+        if (stone && member.item !== stone) {
+          warnings.push({
+            code: "item_illegal",
+            slot,
+            field: "item",
+            message: member.item
+              ? `${member.species} must hold "${stone}" (mega stone only); "${member.item}" is not permitted.`
+              : `${member.species} must hold "${stone}" (mega stone only).`,
+          });
+        }
       }
     }
 
-    // Held-item legality (independent of species).
-    if (member.item && legalItems && !legalItems.has(member.item)) {
+    // Held-item legality (format allowlist) — independent of species.
+    // Skip when the mega-stone rule already flagged this slot (avoid double noise).
+    const foundProfile = member.species
+      ? profiles.get(member.species)
+      : undefined;
+    const stoneRequired =
+      foundProfile && foundProfile.found
+        ? (foundProfile.required_item ?? null)
+        : null;
+    const megaStoneMismatch = Boolean(
+      stoneRequired && member.item !== stoneRequired,
+    );
+    if (
+      member.item &&
+      legalItems &&
+      !legalItems.has(member.item) &&
+      !megaStoneMismatch
+    ) {
       warnings.push({
         code: "item_illegal",
         slot,
@@ -300,11 +345,15 @@ export async function validateTeamDetailed(
       });
     }
 
-    // Missing held item — only for an OTHERWISE-COMPLETE member (species + a
-    // full 4-move set). A member with fewer than 4 moves is already `incomplete`
-    // (an explicitly-requested skeleton/rough core) and is exempt, so this never
-    // punishes a partial team the user asked for.
-    if (member.species && member.moves.length === 4 && !member.item) {
+    // Missing held item — only for an OTHERWISE-COMPLETE non-Mega member
+    // (species + 4 moves). Megas are covered by the required_item rule above.
+    // A member with fewer than 4 moves is already `incomplete` and is exempt.
+    if (
+      member.species &&
+      member.moves.length === 4 &&
+      !member.item &&
+      !stoneRequired
+    ) {
       warnings.push({
         code: "item_missing",
         slot,
@@ -342,7 +391,13 @@ export async function validateTeamDetailed(
     });
   }
 
-  return { warnings, legalMoves, legalAbilities };
+  return {
+    warnings,
+    legalMoves,
+    legalAbilities,
+    legalItems: legalItems ? [...legalItems].sort() : [],
+    requiredItems,
+  };
 }
 
 /** A repeated non-null value and the (0-based) slots it occupies. */

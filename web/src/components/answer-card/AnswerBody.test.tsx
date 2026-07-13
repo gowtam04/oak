@@ -26,7 +26,13 @@ describe("AnswerBody", () => {
     );
     render(<AnswerBody markdown={md} />);
     const body = screen.getByTestId("answer-body");
-    expect(within(body).getByRole("table")).toBeInTheDocument();
+    const table = within(body).getByRole("table");
+    expect(table).toBeInTheDocument();
+    // Compact tables sit in a scroll wrap so real table layout can hug content
+    // (avoids full-width blank right columns from the old display:block hack).
+    const wrap = table.parentElement;
+    expect(wrap).toHaveClass("markdown-body__table-wrap");
+    expect(wrap?.parentElement).toHaveClass("markdown-body");
     expect(
       within(body).getAllByRole("columnheader").map((h) => h.textContent),
     ).toEqual(["Name", "Type"]);

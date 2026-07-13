@@ -109,8 +109,8 @@ describe("reference-pages loaders (tools fixture)", () => {
       expect(p.types).toEqual(["dragon", "ground"]);
       expect(p.sourceFormat).toBe("scarlet-violet");
       expect(p.availability).toEqual([
-        "scarlet-violet",
         "champions",
+        "scarlet-violet",
         "gen-7",
       ]);
       expect(p.isNative).toBe(true);
@@ -179,6 +179,46 @@ describe("reference-pages loaders (tools fixture)", () => {
       const page = await loadPokemonPageUncached("garchomp", db);
       expect(page).not.toBeNull();
       expect(page!.displayName).toBe("Garchomp");
+      expect(page!.usage).toBeNull();
+    });
+
+    it("preferredFormat gen-7 loads that scope's profile and learnset", async () => {
+      const page = await loadPokemonPageUncached("garchomp", db, "gen-7");
+      expect(page).not.toBeNull();
+      expect(page!.sourceFormat).toBe("gen-7");
+      expect(page!.displayName).toBe("Garchomp");
+      // Gen-7 fixture learnset is a subset (no fire-fang).
+      const moveSlugs = page!.movepool.flatMap((g) =>
+        g.moves.map((m) => m.slug),
+      );
+      expect(moveSlugs).toEqual(
+        expect.arrayContaining(["earthquake", "dragon-claw"]),
+      );
+      expect(moveSlugs).not.toContain("fire-fang");
+      // Explicit non-champions scope → no Champions usage fetch.
+      expect(getUsageMock).not.toHaveBeenCalled();
+      expect(page!.usage).toBeNull();
+    });
+
+    it("preferredFormat champions loads Champions profile and fetches usage", async () => {
+      getUsageMock.mockResolvedValue(fakeUsage());
+
+      const page = await loadPokemonPageUncached("garchomp", db, "champions");
+      expect(page).not.toBeNull();
+      expect(page!.sourceFormat).toBe("champions");
+      expect(getUsageMock).toHaveBeenCalled();
+      expect(page!.usage).not.toBeNull();
+    });
+
+    it("unavailable preferredFormat soft-falls back to the default chain", async () => {
+      getUsageMock.mockResolvedValue(fakeUsage());
+
+      // gen-1 is not seeded for garchomp in the tools fixture.
+      const page = await loadPokemonPageUncached("garchomp", db, "gen-1");
+      expect(page).not.toBeNull();
+      expect(page!.sourceFormat).toBe("scarlet-violet");
+      // preferred was gen-1 (not champions) → usage gated off even on SV fallback.
+      expect(getUsageMock).not.toHaveBeenCalled();
       expect(page!.usage).toBeNull();
     });
   });

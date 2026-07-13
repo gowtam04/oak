@@ -43,6 +43,8 @@ export interface Team {
   format: string; // "scarlet-violet" | "champions"
   name: string;
   members: TeamMember[];
+  /** Optional free-text win condition / game plan. */
+  winCondition: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -143,6 +145,7 @@ export async function getTeam(
       format: team.format,
       name: team.name,
       members: team.members,
+      winCondition: team.win_condition,
       createdAt: team.created_at,
       updatedAt: team.updated_at,
     })
@@ -150,7 +153,13 @@ export async function getTeam(
     .where(and(eq(team.account_id, accountId), eq(team.id, id)))
     .limit(1);
   const row = rows[0];
-  return row ? { ...row, members: parseMembers(row.members) } : null;
+  return row
+    ? {
+        ...row,
+        members: parseMembers(row.members),
+        winCondition: row.winCondition ?? null,
+      }
+    : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -167,15 +176,18 @@ export async function createTeam(args: {
   format: string;
   name: string;
   members: TeamMember[];
+  winCondition?: string | null;
   now: number;
 }): Promise<Team> {
   const id = randomUUID();
+  const winCondition = args.winCondition?.trim() || null;
   await db.insert(team).values({
     id,
     account_id: args.accountId,
     format: args.format,
     name: args.name,
     members: JSON.stringify(args.members),
+    win_condition: winCondition,
     created_at: args.now,
     updated_at: args.now,
   });
@@ -185,6 +197,7 @@ export async function createTeam(args: {
     format: args.format,
     name: args.name,
     members: args.members,
+    winCondition,
     createdAt: args.now,
     updatedAt: args.now,
   };
@@ -201,15 +214,20 @@ export async function updateTeam(args: {
   id: string;
   name?: string;
   members?: TeamMember[];
+  winCondition?: string | null;
   now: number;
 }): Promise<Team | null> {
   const set: {
     updated_at: number;
     name?: string;
     members?: string;
+    win_condition?: string | null;
   } = { updated_at: args.now };
   if (args.name !== undefined) set.name = args.name;
   if (args.members !== undefined) set.members = JSON.stringify(args.members);
+  if (args.winCondition !== undefined) {
+    set.win_condition = args.winCondition?.trim() || null;
+  }
 
   const rows = await db
     .update(team)
@@ -221,11 +239,18 @@ export async function updateTeam(args: {
       format: team.format,
       name: team.name,
       members: team.members,
+      winCondition: team.win_condition,
       createdAt: team.created_at,
       updatedAt: team.updated_at,
     });
   const row = rows[0];
-  return row ? { ...row, members: parseMembers(row.members) } : null;
+  return row
+    ? {
+        ...row,
+        members: parseMembers(row.members),
+        winCondition: row.winCondition ?? null,
+      }
+    : null;
 }
 
 /**
@@ -245,6 +270,7 @@ export async function duplicateTeam(
     format: source.format,
     name: `${source.name} copy`,
     members: source.members,
+    winCondition: source.winCondition,
     now,
   });
 }

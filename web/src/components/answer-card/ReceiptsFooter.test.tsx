@@ -1,0 +1,121 @@
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+
+afterEach(() => cleanup());
+
+import ReceiptsFooter from "./ReceiptsFooter";
+import { CANONICAL_ANSWER } from "@/components/test-fixtures";
+
+describe("ReceiptsFooter", () => {
+  const citations = CANONICAL_ANSWER.citations;
+  const markdown = CANONICAL_ANSWER.reasoning_markdown;
+
+  it("renders a single RECEIPTS disclosure with the source count", () => {
+    render(
+      <ReceiptsFooter reasoningMarkdown={markdown} citations={citations} />,
+    );
+    const details = screen.getByTestId("receipts-footer") as HTMLDetailsElement;
+    expect(details.tagName).toBe("DETAILS");
+    expect(screen.getByTestId("receipts-summary")).toHaveTextContent(
+      "RECEIPTS · 2 SOURCES",
+    );
+  });
+
+  it("uses singular SOURCE when there is exactly one citation", () => {
+    render(
+      <ReceiptsFooter
+        reasoningMarkdown={markdown}
+        citations={citations.slice(0, 1)}
+      />,
+    );
+    expect(screen.getByTestId("receipts-summary")).toHaveTextContent(
+      "RECEIPTS · 1 SOURCE",
+    );
+  });
+
+  it("is collapsed by default", () => {
+    render(
+      <ReceiptsFooter reasoningMarkdown={markdown} citations={citations} />,
+    );
+    expect(
+      (screen.getByTestId("receipts-footer") as HTMLDetailsElement).open,
+    ).toBe(false);
+  });
+
+  it("expands when defaultExpanded=true", () => {
+    render(
+      <ReceiptsFooter
+        reasoningMarkdown={markdown}
+        citations={citations}
+        defaultExpanded
+      />,
+    );
+    expect(
+      (screen.getByTestId("receipts-footer") as HTMLDetailsElement).open,
+    ).toBe(true);
+  });
+
+  it("embeds reasoning and citations when open", () => {
+    render(
+      <ReceiptsFooter
+        reasoningMarkdown={markdown}
+        citations={citations}
+        defaultExpanded
+      />,
+    );
+    expect(screen.getByTestId("reasoning-block-content")).toHaveTextContent(
+      "query_pokedex",
+    );
+    expect(screen.getByTestId("citation-0")).toBeInTheDocument();
+  });
+
+  it("honours controlled open state after defaultExpanded", () => {
+    const { rerender } = render(
+      <ReceiptsFooter reasoningMarkdown={markdown} citations={citations} />,
+    );
+    expect(
+      (screen.getByTestId("receipts-footer") as HTMLDetailsElement).open,
+    ).toBe(false);
+    rerender(
+      <ReceiptsFooter
+        reasoningMarkdown={markdown}
+        citations={citations}
+        defaultExpanded
+      />,
+    );
+    // defaultExpanded only applies on first mount; re-render keeps prior state.
+    expect(
+      (screen.getByTestId("receipts-footer") as HTMLDetailsElement).open,
+    ).toBe(false);
+  });
+
+  it("hides Copy for agents when no answer is provided", () => {
+    render(
+      <ReceiptsFooter reasoningMarkdown={markdown} citations={citations} />,
+    );
+    expect(screen.queryByTestId("copy-for-agents")).toBeNull();
+  });
+
+  it("copies machine markdown when Copy for agents is clicked", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(
+      <ReceiptsFooter
+        reasoningMarkdown={markdown}
+        citations={citations}
+        answer={CANONICAL_ANSWER}
+      />,
+    );
+    const btn = screen.getByTestId("copy-for-agents");
+    expect(btn).toHaveTextContent("Copy for agents");
+    fireEvent.click(btn);
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const md = writeText.mock.calls[0]![0] as string;
+    expect(md).toContain("# Oak answer");
+    expect(md).toContain("**Status:**");
+    await waitFor(() => expect(btn).toHaveTextContent("Copied"));
+  });
+});
