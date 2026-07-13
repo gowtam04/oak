@@ -88,11 +88,16 @@ describe("AnswerCard — canonical answered payload (all fields)", () => {
     );
   });
 
-  it("renders the citations through a SourceList", () => {
+  it("renders citations inside the unified RECEIPTS footer", () => {
     render(<AnswerCard answer={CANONICAL_ANSWER} />);
+    const receipts = screen.getByTestId("receipts-footer");
+    expect(receipts).toBeInTheDocument();
+    expect(screen.getByTestId("receipts-summary")).toHaveTextContent(
+      "RECEIPTS · 2 SOURCES",
+    );
     const sources = screen.getByTestId("source-list");
     expect(sources).toBeInTheDocument();
-    // Two citations in the canonical payload.
+    // Two citations in the canonical payload (also echoed in the panel label).
     expect(screen.getByTestId("source-list-summary")).toHaveTextContent(
       "Sources (2)",
     );
@@ -100,6 +105,7 @@ describe("AnswerCard — canonical answered payload (all fields)", () => {
       displayCitationSource(CANONICAL_ANSWER.citations[0]!.source),
     );
   });
+
 
   it("renders an InferenceCallout for the deduction", () => {
     render(<AnswerCard answer={CANONICAL_ANSWER} />);
@@ -130,22 +136,25 @@ describe("AnswerCard — canonical answered payload (all fields)", () => {
     expect(result).toHaveTextContent("168");
   });
 
-  it("renders the ReasoningBlock (the collapsible 'why')", () => {
+  it("renders reasoning inside the RECEIPTS footer", () => {
     render(<AnswerCard answer={CANONICAL_ANSWER} />);
+    expect(screen.getByTestId("receipts-footer")).toBeInTheDocument();
     expect(screen.getByTestId("reasoning-block")).toBeInTheDocument();
     expect(screen.getByTestId("reasoning-block-content")).toHaveTextContent(
       "query_pokedex",
     );
   });
 
-  it("tags the card with the answer status", () => {
+  it("tags the card with the answer status and a type-reactive plate", () => {
     render(<AnswerCard answer={CANONICAL_ANSWER} />);
-    expect(screen.getByTestId("answer-card")).toHaveAttribute(
-      "data-status",
-      "answered",
-    );
+    const card = screen.getByTestId("answer-card");
+    expect(card).toHaveAttribute("data-status", "answered");
+    // Canonical answer has one subject (Garchomp) → typed plate, not ink/multi.
+    expect(card).toHaveAttribute("data-plate", "typed");
+    expect(card.style.getPropertyValue("--plate-a")).toContain("dragon");
   });
 });
+
 
 // ---------------------------------------------------------------------------
 // Minimal "answered" payload — only required fields. Optional leaves absent.
@@ -155,7 +164,13 @@ describe("AnswerCard — minimal answered payload (no optional fields)", () => {
   it("renders the answer body and sources but omits the optional leaves", () => {
     render(<AnswerCard answer={MINIMAL_ANSWER} />);
     expect(screen.getByTestId("answer-body")).toBeInTheDocument();
+    expect(screen.getByTestId("receipts-footer")).toBeInTheDocument();
     expect(screen.getByTestId("source-list")).toBeInTheDocument();
+    // No subjects → ink plate (mechanics).
+    expect(screen.getByTestId("answer-card")).toHaveAttribute(
+      "data-plate",
+      "ink",
+    );
     // No subjects / candidates / damage / inferences / suggestions / caveats.
     expect(screen.queryByTestId("sprite-card")).not.toBeInTheDocument();
     expect(screen.queryByTestId("candidate-table")).not.toBeInTheDocument();
@@ -166,6 +181,7 @@ describe("AnswerCard — minimal answered payload (no optional fields)", () => {
     expect(screen.queryByTestId("caveat-strip")).not.toBeInTheDocument();
   });
 });
+
 
 // ---------------------------------------------------------------------------
 // question.options → QuestionOptions (the "stop and ask" affordance).

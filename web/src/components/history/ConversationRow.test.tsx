@@ -53,6 +53,20 @@ describe("ConversationRow", () => {
     expect(h.onOpen).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the OPEN stamp only when active (specimen-desk plate)", () => {
+    setup({}, { active: false });
+    expect(screen.queryByTestId("conv-row-open")).toBeNull();
+    cleanup();
+    setup({}, { active: true });
+    const stamp = screen.getByTestId("conv-row-open");
+    expect(stamp).toHaveTextContent("OPEN");
+    expect(screen.getByTestId("conversation-row")).toHaveAttribute(
+      "data-active",
+      "true",
+    );
+  });
+
+
   it("pins an unpinned conversation", () => {
     const h = setup({ pinned: false });
     fireEvent.click(screen.getByRole("button", { name: "Pin conversation" }));

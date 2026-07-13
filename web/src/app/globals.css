@@ -697,18 +697,30 @@
   align-items: flex-end;
   gap: var(--space-2);
 }
+/* User desk note (soul.md): sunken paper + thin border + red corner pip.
+   Not a soft-red iMessage/ChatGPT bubble fill. */
 .chat-turn--user .chat-turn__content {
+  position: relative;
   max-width: 70%;
-  padding: var(--space-3) var(--space-4);
-  /* Clearer surface (only a hint of red) + border + shadow so the bubble
-     separates from the red-tinted page instead of blending into it. */
-  background: color-mix(in srgb, var(--poke-red-soft) 55%, var(--surface));
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-4);
+  background: var(--surface-sunken);
   color: var(--text-strong);
   font-size: 0.9375rem;
-  border: 1px solid color-mix(in srgb, var(--poke-red) 30%, var(--border));
+  font-weight: 600;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   border-bottom-right-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised);
+}
+.chat-turn--user .chat-turn__content::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--poke-red);
 }
 /* Thumbnails of images the user attached to their turn (session-only) */
 .chat-turn__images {
@@ -778,19 +790,73 @@
 .type-badge--fairy { --type: var(--type-fairy); }
 
 /* --------------------------------------------------------------------------
-   7. Answer card + its sections
+   7. Answer card + its sections — specimen plate (soul.md type wash)
    -------------------------------------------------------------------------- */
 .answer-card {
+  /* Mix strengths: light ≈ 8–14% type into surface; dark raises via theme. */
+  --plate-a: var(--neutral-500);
+  --plate-b: var(--neutral-600);
+  --plate-radial-a: 12%;
+  --plate-radial-b: 10%;
+  --plate-wash-a: 8%;
+  --plate-wash-b: 6%;
+  --plate-edge: 28%;
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-6);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-raised);
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-6) 0;
+  border-radius: var(--radius-xl);
+  border: 1px solid color-mix(in srgb, var(--plate-a) var(--plate-edge), var(--border));
+  background:
+    radial-gradient(
+      90% 70% at 88% 18%,
+      color-mix(in srgb, var(--plate-a) var(--plate-radial-a), transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      70% 60% at 12% 90%,
+      color-mix(in srgb, var(--plate-b) var(--plate-radial-b), transparent),
+      transparent 50%
+    ),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--plate-a) var(--plate-wash-a), var(--surface)),
+      color-mix(in srgb, var(--plate-b) var(--plate-wash-b), var(--surface)) 55%,
+      var(--surface)
+    );
+  box-shadow: var(--shadow-floating);
+  overflow: hidden;
 }
-
+/* Dark: stronger type mix so wash still reads (soul.md ~18–28%). */
+[data-theme="dark"] .answer-card {
+  --plate-radial-a: 24%;
+  --plate-radial-b: 18%;
+  --plate-wash-a: 18%;
+  --plate-wash-b: 14%;
+  --plate-edge: 32%;
+}
+/* Mechanics / no subjects — sunken paper ink plate, no type wash. */
+.answer-card--ink {
+  --plate-a: var(--neutral-500);
+  --plate-b: var(--neutral-600);
+  background: linear-gradient(180deg, var(--surface-sunken), var(--surface));
+  border-color: var(--border-strong);
+}
+/* Multi-subject: neutral-ish shell + light accent (don't fight dual washes). */
+.answer-card--multi {
+  --plate-radial-a: 8%;
+  --plate-radial-b: 6%;
+  --plate-wash-a: 4%;
+  --plate-wash-b: 3%;
+  --plate-edge: 18%;
+  border-color: var(--border);
+}
+[data-theme="dark"] .answer-card--multi {
+  --plate-radial-a: 14%;
+  --plate-radial-b: 10%;
+  --plate-wash-a: 10%;
+  --plate-wash-b: 7%;
+}
 /* Masthead — the slim status row leading every answer card (UI §4 screen 04):
    a status indicator (left) + the turn's scope tag (right, `.ilabel`). */
 .answer-masthead {
@@ -1155,32 +1221,50 @@
 }
 
 /* --------------------------------------------------------------------------
-   8. Sprite card (signature pop)
+   8. Sprite card — type-glow specimen well (soul.md)
    -------------------------------------------------------------------------- */
 .sprite-card {
+  --plate-a: var(--type-normal);
+  --plate-b: var(--type-normal);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
   width: 168px;
-  padding: var(--space-4);
-  background: radial-gradient(
-      115% 80% at 50% 28%,
-      color-mix(in srgb, var(--azure) 6%, var(--surface-sunken)),
-      var(--surface-sunken) 70%
-    );
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-raised);
-  transition: transform var(--motion-spring), box-shadow var(--motion-spring);
+  padding: var(--space-3);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  transition: transform var(--motion-spring);
 }
 .sprite-card:hover {
   transform: scale(1.03);
-  box-shadow: var(--shadow-floating);
 }
-.sprite-card__sprite {
+/* Type-glow radial well — not azure default. */
+.sprite-card__well {
   width: 120px;
   height: 120px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(
+      circle at 50% 45%,
+      color-mix(in srgb, var(--plate-a) 28%, transparent),
+      transparent 65%
+    ),
+    color-mix(in srgb, var(--plate-a) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--plate-a) 22%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--plate-b) 15%, transparent);
+}
+.sprite-card__sprite-link {
+  display: block;
+  border-radius: 22px;
+}
+.sprite-card__sprite {
+  width: 96px;
+  height: 96px;
   object-fit: contain;
   image-rendering: auto;
   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.12));
@@ -1685,15 +1769,84 @@
 }
 
 /* --------------------------------------------------------------------------
-   11. Disclosures — Reasoning · Sources · Assumptions
+   11. Disclosures — Receipts footer · Sources (artifacts) · Assumptions
    -------------------------------------------------------------------------- */
-.reasoning-block,
-.source-list {
+
+/* Specimen-plate RECEIPTS footer (soul.md) — full-width expandable tab
+   unifying reasoning + citations. */
+.receipts {
+  margin: var(--space-2) calc(-1 * var(--space-6)) 0;
+  border-top: 1px solid color-mix(in srgb, var(--plate-a) 18%, var(--border));
+  background: color-mix(in srgb, var(--surface-sunken) 65%, transparent);
+}
+.receipts__tab {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  border-radius: 0;
+  transition: background var(--motion-fast);
+}
+.receipts__tab:hover {
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+.receipts__tab::-webkit-details-marker {
+  display: none;
+}
+.receipts__label {
+  color: var(--text-muted);
+}
+.receipts__chevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  background: var(--text-faint);
+  -webkit-mask: var(--icon-chevron) center / contain no-repeat;
+  mask: var(--icon-chevron) center / contain no-repeat;
+  transition: transform var(--motion-base);
+}
+.receipts[open] > .receipts__tab .receipts__chevron {
+  transform: rotate(90deg);
+}
+.receipts__panel {
+  padding: 0 var(--space-6) var(--space-5);
+  animation: turn-in var(--motion-base) both;
+}
+.receipts__block + .receipts__block {
+  margin-top: var(--space-4);
+}
+.receipts__block-label {
+  display: inline-block;
+  margin-bottom: var(--space-2);
+  color: var(--text-faint);
+}
+/* Nested sources summary inside receipts is a static label, not a second tab. */
+.receipts .source-list__summary {
+  cursor: default;
+  list-style: none;
+}
+.receipts .source-list__summary::before,
+.receipts .source-list__summary::after {
+  display: none;
+}
+
+/* Standalone SourceList / ReasoningBlock (artifacts, unit tests) keep a
+   collapsible disclosure. */
+.reasoning-block:not(.receipts__block),
+.source-list:not(.receipts__block) {
   border-top: 1px solid var(--border);
   padding-top: var(--space-4);
 }
 .reasoning-block__summary,
-.source-list__summary,
+.source-list:not(.receipts__block) > .source-list__summary,
 .damage-readout__assumptions-summary {
   display: inline-flex;
   align-items: center;
@@ -1701,43 +1854,13 @@
   list-style: none;
   cursor: pointer;
   user-select: none;
-  font-family: var(--display);
-  font-weight: 500;
-  font-size: 1.125rem;
-  color: var(--text-strong);
-  border-radius: var(--radius-sm);
-}
-/* Credibility strip (UI §4 screen 04) — Reasoning + Sources demoted from
-   full-width headed sections to a footer row of quiet `.ilabel` tabs. A
-   future "tool trail" chip has room to join this row. Pure-CSS expand: a
-   closed <details> sizes to its label; the opened one claims the full row
-   width (pushing/wrapping its sibling) via `[open]`. */
-.answer-card__credibility {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-2) var(--space-5);
-  border-top: 1px solid var(--border);
-  padding-top: var(--space-4);
-}
-.answer-card__credibility .reasoning-block,
-.answer-card__credibility .source-list {
-  flex: 0 0 auto;
-  border-top: none;
-  padding-top: 0;
-}
-.answer-card__credibility .reasoning-block[open],
-.answer-card__credibility .source-list[open] {
-  flex: 1 1 100%;
-}
-.reasoning-block__summary,
-.source-list__summary {
   font-family: var(--mono);
   font-weight: 600;
   font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
+  border-radius: var(--radius-sm);
 }
 .reasoning-block__summary::-webkit-details-marker,
 .source-list__summary::-webkit-details-marker,
@@ -1745,7 +1868,7 @@
   display: none;
 }
 .reasoning-block__summary::before,
-.source-list__summary::before,
+.source-list:not(.receipts__block) > .source-list__summary::before,
 .damage-readout__assumptions-summary::before {
   content: "";
   width: 16px;
@@ -1760,7 +1883,7 @@
 .damage-readout__assumptions[open] > .damage-readout__assumptions-summary::before {
   transform: rotate(90deg);
 }
-.source-list__summary::after {
+.source-list:not(.receipts__block) > .source-list__summary::after {
   content: "";
   width: 16px;
   height: 16px;
@@ -1778,12 +1901,20 @@
   line-height: 1.55;
   color: var(--text);
 }
+.receipts .reasoning-block__content {
+  margin-top: var(--space-2);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
 .source-list__list {
   margin: var(--space-3) 0 0;
   padding: var(--space-2) var(--space-4);
   list-style: none;
   background: var(--surface-sunken);
   border-radius: var(--radius-md);
+}
+.receipts .source-list__list {
+  margin-top: var(--space-2);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
 }
 .source-list__item {
   padding: var(--space-2) 0;
@@ -2335,65 +2466,99 @@
 }
 
 /* --------------------------------------------------------------------------
-   17. First-run empty state
+   17. First-run empty state — blank specimen plate (soul.md)
    -------------------------------------------------------------------------- */
 .chat-empty {
   margin: auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-4);
   max-width: 560px;
-  padding: var(--space-16) var(--space-4);
-  text-align: center;
+  width: 100%;
+  padding: var(--space-8) var(--space-4);
+  text-align: left;
 }
-/* Hero variant: the composer is promoted into the cluster (screen 01), so the
-   composition widens to the composer measure and tightens its rhythm. */
+/* Hero variant: the composer is promoted into the plate, so the composition
+   widens to the composer measure. */
 .chat-empty--hero {
   max-width: var(--composer-max);
   gap: var(--space-5);
 }
-.chat-empty__wordmark {
-  display: inline-flex;
-  align-items: center;
+
+/* Blank specimen plate — dashed border + faint grid, desk not AI-hero. */
+.blank-plate {
+  position: relative;
+  overflow: hidden;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: 2.125rem;
-  color: var(--text-strong);
-}
-.chat-empty__wordmark::before {
-  content: "";
-  width: 48px;
-  height: 48px;
-  flex: 0 0 auto;
-  border-radius: 12px;
-  background: var(--brand-mark) center / cover no-repeat;
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  background: var(--surface);
+  border: 1.5px dashed color-mix(in srgb, var(--border-strong) 80%, var(--poke-red) 20%);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-raised);
 }
-/* This is now the page's single <h1> (SEO); font-weight: 400 neutralizes the
-   UA default h1 bold so the visual size/weight are unchanged from before. */
-.chat-empty__invite {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 400;
-  line-height: 1.6;
-  color: var(--text-muted);
+.blank-plate::before {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border-radius: calc(var(--radius-xl) - 8px);
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--border) 70%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--border) 70%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 24px 24px;
+  opacity: 0.45;
+  pointer-events: none;
 }
-.chat-empty__scope-hint {
-  margin: 0;
-  font-size: var(--text-sm);
-  line-height: 1.7;
+.blank-plate > * {
+  position: relative;
+  z-index: 1;
+}
+.blank-plate__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.blank-plate__ilabel {
   color: var(--text-faint);
 }
-/* The inline scope chip reads as part of the sentence, baseline-aligned. */
-.chat-empty__scope-hint .scope-chip-container {
-  margin-inline: 2px;
+.blank-plate__scope {
+  margin: 0;
+}
+.blank-plate__scope .scope-chip-container {
+  margin: 0;
+}
+.blank-plate__prompt {
+  margin: var(--space-2) 0 0;
+  font-family: var(--body);
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  color: var(--text-strong);
+}
+.blank-plate__sub {
+  margin: 0;
+  max-width: 36ch;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--text-muted);
 }
 
-/* Promoted composer slot: full hero width, its own breathing room. The docked
-   `.composer` styling (sticky, backdrop, gradient) is neutralized here — in the
-   hero it's a static, floating card. */
+/* Promoted composer slot inside the plate. Docked sticky/backdrop styles are
+   neutralized — here it's a static card. */
 .chat-empty__composer {
   width: 100%;
   margin-block: var(--space-2);
@@ -2410,43 +2575,64 @@
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
-/* Empty-state chip grid — a labeled set, max 2 per row, aligned (screen 01). */
-.chat-empty__examples {
-  width: 100%;
+
+/* Filed starters — category + type-dot + text (not equal beige pills). */
+.starters {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  margin-top: var(--space-1);
 }
-.chat-empty__examples-label {
-  align-self: center;
+.starters__label {
+  margin-bottom: 2px;
+  color: var(--text-faint);
 }
-.chat-empty__examples-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-}
-.chat-empty__chip {
-  padding: var(--space-2) var(--space-4);
-  background: var(--surface);
-  color: var(--text-strong);
-  font-size: 0.875rem;
-  font-weight: 600;
+.starter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
   text-align: left;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-pill);
-  box-shadow: var(--shadow-raised);
-  transition: background var(--motion-spring), border-color var(--motion-fast),
-    transform var(--motion-spring);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--motion-fast), transform var(--motion-fast),
+    background var(--motion-fast);
 }
-.chat-empty__chip:hover {
-  background: var(--poke-red-soft);
-  border-color: var(--poke-red);
-  transform: translateY(-2px) scale(1.02);
+.starter:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  transform: translateY(-1px);
 }
-.chat-empty__chip:active {
-  transform: scale(0.98);
+.starter:active {
+  transform: scale(0.99);
+}
+.starter__cat {
+  flex: none;
+  width: 52px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.starter__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.starter__text {
+  flex: 1;
+  min-width: 0;
 }
 
 /* --------------------------------------------------------------------------
@@ -2456,11 +2642,9 @@
    top border to separate it from `.chat-empty`.
    -------------------------------------------------------------------------- */
 
-/* The hero (wordmark + h1 + scope hint) is vertically centered via
-   `.chat-empty { margin: auto }` inside the scrolling `.chat-page__main`.
-   Once the landing section adds height below it, that container grows past
-   one viewport and the centering has more room to work with than intended —
-   this floor keeps the hero still effectively owning the first viewport. */
+/* The blank plate is vertically centered via `.chat-empty { margin: auto }`
+   inside the scrolling `.chat-page__main`. Once the landing section adds
+   height below it, this floor keeps the plate owning the first viewport. */
 .chat-page__main:has(.landing) .chat-empty {
   min-height: calc(100dvh - 220px);
 }
@@ -2571,9 +2755,11 @@
   .sprite-card,
   .suggestion-chips__chip,
   .question-options__option,
+  .starter,
   .chat-empty__chip,
   .composer__field,
-  .composer__send {
+  .composer__send,
+  .receipts__panel {
     animation: none !important;
     transition: color var(--motion-fast), background-color var(--motion-fast),
       border-color var(--motion-fast), box-shadow var(--motion-fast);
@@ -2582,6 +2768,7 @@
   .suggestion-chips__chip:hover,
   .question-options__option:hover,
   .question-options__option:active,
+  .starter:hover,
   .chat-empty__chip:hover,
   .composer__field:focus-within,
   .composer__send:hover:not(:disabled),
@@ -2966,26 +3153,26 @@ button.scope-chip:focus-visible {
   background: color-mix(in srgb, var(--poke-red-soft) 60%, var(--surface));
 }
 
-/* History row — wrapper state via [data-active]; actions keep their own block.
-   A 3px left rail carries the active accent without shifting the row (the border
-   is always 3px, transparent when inactive). */
+/* History row — specimen-desk OPEN plate (soul.md). Active = lifted mini-plate
+   (surface + hairline + raised shadow) + mono OPEN stamp. NO red left rail. */
 .conv-row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  border-left: 3px solid transparent;
+  border: 1px solid transparent;
   background: transparent;
-  transition: background var(--motion-fast);
+  transition: background var(--motion-fast), border-color var(--motion-fast),
+    box-shadow var(--motion-fast);
 }
 .conv-row:hover {
   background: var(--surface-sunken);
 }
-/* Active row = red left rail + soft red fill (the one selection language). */
 .conv-row[data-active] {
-  background: var(--poke-red-soft);
-  border-left-color: var(--poke-red);
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: var(--shadow-raised);
 }
 .conv-row__rename {
   flex: 1;
@@ -3013,8 +3200,16 @@ button.scope-chip:focus-visible {
   padding: 0;
   color: var(--text);
 }
-.conv-row__title {
+.conv-row__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   max-width: 100%;
+  min-width: 0;
+}
+.conv-row__title {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3024,6 +3219,21 @@ button.scope-chip:focus-visible {
 }
 .conv-row[data-active] .conv-row__title {
   font-weight: 600;
+}
+/* Mono OPEN stamp — record-light accent, active row only (soul.md). */
+.conv-row__open-stamp {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--poke-red) 40%, var(--border));
+  background: color-mix(in srgb, var(--poke-red) 8%, var(--surface));
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--poke-red) 75%, var(--text-strong));
+  line-height: 1.2;
 }
 .conv-row__meta {
   display: inline-flex;

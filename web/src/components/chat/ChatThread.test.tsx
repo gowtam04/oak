@@ -62,21 +62,41 @@ describe("ChatThread — in-flight streaming bubble", () => {
   });
 });
 
-describe("ChatThread — empty-state starter chips", () => {
-  it("renders exactly 6 starter chips, each drawn from the prompt pool", () => {
+describe("ChatThread — empty-state blank specimen plate", () => {
+  it("renders a blank plate with NEW ENTRY + prompt (not a logo hero)", () => {
+    render(<ChatThread {...props({ turns: [], status: "idle" })} />);
+    expect(screen.getByTestId("blank-plate")).toBeInTheDocument();
+    expect(screen.getByText("NEW ENTRY")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "What are we looking up?",
+    );
+    // No centered wordmark hero.
+    expect(screen.queryByText("Oak")).not.toBeInTheDocument();
+  });
+
+  it("renders exactly 6 filed starters from the prompt pool with categories", () => {
     render(<ChatThread {...props({ turns: [], status: "idle" })} />);
     const chips = screen.getAllByTestId("chat-empty-example");
     // After mount the effect swaps the deterministic first-6 for a random 6.
     expect(chips).toHaveLength(6);
+    const categories = new Set(["Battle", "Dex", "Rules", "Meta"]);
     for (const chip of chips) {
-      expect(STARTER_PROMPTS).toContain(chip.textContent);
+      const prompt = chip.getAttribute("data-prompt");
+      expect(prompt).toBeTruthy();
+      expect(STARTER_PROMPTS).toContain(prompt);
+      expect(categories.has(chip.getAttribute("data-category") ?? "")).toBe(
+        true,
+      );
+      // Category label + prompt text both present (not equal bare chips).
+      expect(chip.querySelector(".starter__cat")).toBeTruthy();
+      expect(chip.querySelector(".starter__text")?.textContent).toBe(prompt);
     }
     // No duplicates within the shown set (sampled without replacement).
-    const shown = chips.map((c) => c.textContent);
+    const shown = chips.map((c) => c.getAttribute("data-prompt"));
     expect(new Set(shown).size).toBe(6);
   });
 
-  it("shows no starter chips once the conversation has turns", () => {
+  it("shows no empty plate once the conversation has turns", () => {
     render(
       <ChatThread
         {...props({ turns: [{ id: "u1", role: "user", content: "hi" }] })}
@@ -87,12 +107,12 @@ describe("ChatThread — empty-state starter chips", () => {
     expect(screen.queryByTestId("chat-empty-scope-hint")).toBeNull();
   });
 
-  it("does not render the scope-hint text when no scopeChipSlot is provided", () => {
+  it("does not render the scope stamp when no scopeChipSlot is provided", () => {
     render(<ChatThread {...props({ turns: [], status: "idle" })} />);
     expect(screen.queryByTestId("chat-empty-scope-hint")).toBeNull();
   });
 
-  it("renders the scope-hint area with just the chip when scopeChipSlot is provided", () => {
+  it("renders the scope stamp when scopeChipSlot is provided", () => {
     render(
       <ChatThread
         {...props({
@@ -104,15 +124,13 @@ describe("ChatThread — empty-state starter chips", () => {
     );
     const hint = screen.getByTestId("chat-empty-scope-hint");
     expect(hint).toBeInTheDocument();
-    // No "Answers default to" text — only the chip renders.
     expect(hint).not.toHaveTextContent("Answers default to");
-    expect(hint).not.toHaveTextContent("Champions");
     expect(within(hint).getByTestId("scope-chip-slot")).toBeInTheDocument();
   });
 });
 
 describe("ChatThread — empty-state composer promotion (screen 01)", () => {
-  it("renders the composer + scope chip slots inside the hero when provided (desktop)", () => {
+  it("renders the composer + scope chip slots inside the plate when provided (desktop)", () => {
     render(
       <ChatThread
         {...props({
@@ -126,9 +144,10 @@ describe("ChatThread — empty-state composer promotion (screen 01)", () => {
     const empty = screen.getByTestId("chat-empty");
     // The hero variant class drives the wider, composer-holding composition.
     expect(empty.className).toContain("chat-empty--hero");
-    // Both slots render inside the hero cluster.
+    // Both slots render inside the blank plate.
     expect(within(empty).getByTestId("hero-composer-slot")).toBeInTheDocument();
     expect(within(empty).getByTestId("hero-scope-slot")).toBeInTheDocument();
+    expect(within(empty).getByTestId("blank-plate")).toBeInTheDocument();
   });
 
   it("omits the hero composer (docked mode) when no slot is passed (mobile / non-empty)", () => {

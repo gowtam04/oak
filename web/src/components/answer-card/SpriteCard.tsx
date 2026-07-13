@@ -1,8 +1,10 @@
+import type { CSSProperties } from "react";
 import type { SpriteCardProps } from "@/components/types";
 import TypeBadge from "@/components/TypeBadge";
 import SpriteImg from "@/components/SpriteImg";
 import EntityLink from "@/components/artifact/EntityLink";
 import { oakMediaDexSpriteUrl } from "@/lib/sprites";
+import { typeCssVar } from "@/lib/plate-types";
 
 /**
  * SpriteCard — renders one entry from `subjects[]`: sprite image, display
@@ -16,6 +18,9 @@ import { oakMediaDexSpriteUrl } from "@/lib/sprites";
  * The sprite URL comes from the answer payload (Oak first-party media after
  * re-ingest); `SpriteImg` rewrites legacy GitHub/Showdown URLs and falls back to
  * the Oak dex-sprite proxy by national dex number if the primary 404s.
+ *
+ * Specimen desk: the well glows from the subject's types via `--plate-a` /
+ * `--plate-b` (not the azure default).
  */
 export default function SpriteCard({ subject }: SpriteCardProps) {
   const {
@@ -27,24 +32,35 @@ export default function SpriteCard({ subject }: SpriteCardProps) {
     source_generation,
   } = subject;
 
+  const plateStyle = {
+    ["--plate-a" as string]: typeCssVar(types[0]),
+    ["--plate-b" as string]: typeCssVar(types[1] ?? types[0]),
+  } as CSSProperties;
+
   return (
-    <div className="sprite-card" data-testid="sprite-card">
+    <div
+      className="sprite-card"
+      style={plateStyle}
+      data-testid="sprite-card"
+    >
       <EntityLink
         kind="pokemon"
         q={name}
         className="sprite-card__sprite-link"
         testid="sprite-card-sprite-link"
       >
-        <SpriteImg
-          className="sprite-card__sprite"
-          src={sprite_url}
-          fallbackSrc={
-            dex_number != null ? oakMediaDexSpriteUrl(dex_number) : undefined
-          }
-          alt={name}
-          width={96}
-          height={96}
-        />
+        <div className="sprite-card__well">
+          <SpriteImg
+            className="sprite-card__sprite"
+            src={sprite_url}
+            fallbackSrc={
+              dex_number != null ? oakMediaDexSpriteUrl(dex_number) : undefined
+            }
+            alt={name}
+            width={96}
+            height={96}
+          />
+        </div>
       </EntityLink>
       <div className="sprite-card__info">
         <EntityLink

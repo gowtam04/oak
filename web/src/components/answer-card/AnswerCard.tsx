@@ -3,18 +3,18 @@
 import type { AnswerCardProps } from "@/components/types";
 import Masthead from "@/components/answer-card/Masthead";
 import AnswerBody from "@/components/answer-card/AnswerBody";
-import ReasoningBlock from "@/components/answer-card/ReasoningBlock";
 import SpriteCard from "@/components/answer-card/SpriteCard";
 import CandidateTable from "@/components/answer-card/CandidateTable";
-import SourceList from "@/components/answer-card/SourceList";
 import InferenceCallout from "@/components/answer-card/InferenceCallout";
 import CaveatStrip from "@/components/answer-card/CaveatStrip";
 import DamageReadout from "@/components/answer-card/DamageReadout";
 import SuggestionChips from "@/components/answer-card/SuggestionChips";
 import QuestionOptions from "@/components/answer-card/QuestionOptions";
+import ReceiptsFooter from "@/components/answer-card/ReceiptsFooter";
 import ProposedTeamCard from "@/components/teams/ProposedTeamCard";
 import SavedTeamCard from "@/components/teams/SavedTeamCard";
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
+import { plateFromSubjects } from "@/lib/plate-types";
 
 /**
  * AnswerCard — the top-level renderer for a single `OakAnswer` (T11 /
@@ -29,8 +29,7 @@ import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
  *   6. DamageReadout     ← damage_calc
  *   7. InferenceCallout  ← inferences[]
  *   8. SuggestionChips   ← suggestions[] (+ status) — click → follow-up turn
- *   9. ReasoningBlock    ← reasoning_markdown (collapsible)
- *  10. SourceList        ← citations[] (collapsible "Sources")
+ *   9. ReceiptsFooter    ← reasoning_markdown + citations[] (unified expandable)
  *
  * `onFollowUp` is threaded into the interactive leaves (SuggestionChips,
  * QuestionOptions, and CandidateTable's "Show all N"). A suggestion click sends
@@ -38,13 +37,14 @@ import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
  * (ux-design.md UI → Agent Input Map). A candidate row click instead opens that
  * Pokémon's artifact in the viewer (CandidateTable owns that, no follow-up).
  *
- * Visual structure (UI strategy doc §4 screen 04 — "the answer card"):
+ * Specimen-desk plate (soul.md):
  *  - `Masthead` (status + scope tag) leads the card.
+ *  - Type wash from `subjects[0].types` via `--plate-a` / `--plate-b` (ink plate
+ *    when no subjects; multi accent when several subjects).
  *  - `AnswerBody` + `subjects[]` share an "evidence rail" row so sprite cards
  *    sit beside the prose instead of stranding it (media object, stacks on
  *    narrow viewports).
- *  - `ReasoningBlock` + `SourceList` are grouped into one footer "credibility
- *    strip" of quiet expandable tabs.
+ *  - Reasoning + sources live in one full-width `RECEIPTS · N SOURCE(S)` footer.
  */
 export default function AnswerCard({
   answer,
@@ -81,8 +81,17 @@ export default function AnswerCard({
   // fetch (TD-2). Its no-op default keeps the card renderable without a provider.
   const { openStructured } = useArtifactViewer();
 
+  const plate = plateFromSubjects(subjects);
+  const plateClass = ["answer-card", plate.className].filter(Boolean).join(" ");
+
   return (
-    <div className="answer-card" data-testid="answer-card" data-status={status}>
+    <div
+      className={plateClass}
+      style={plate.style}
+      data-testid="answer-card"
+      data-status={status}
+      data-plate={plate.kind}
+    >
       <Masthead status={status} generationBasis={generation_basis} />
 
       <CaveatStrip
@@ -174,14 +183,10 @@ export default function AnswerCard({
         />
       )}
 
-      <div
-        className="answer-card__credibility"
-        data-testid="answer-card-credibility"
-      >
-        <ReasoningBlock markdown={reasoning_markdown} />
-
-        <SourceList citations={citations} />
-      </div>
+      <ReceiptsFooter
+        reasoningMarkdown={reasoning_markdown}
+        citations={citations}
+      />
     </div>
   );
 }
