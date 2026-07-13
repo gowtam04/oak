@@ -80,7 +80,8 @@ enum OakUITest {
     static let composerPlaceholder = "Ask Oak a Pokémon question…"
     static let sendButton = "Send"
     static let newConversation = "New conversation"
-    static let emptyState = "Ask Oak"
+    /// Blank specimen plate prompt (soul.md empty desk — not the old "Ask Oak" hero).
+    static let emptyState = "What are we looking up?"
     static let attachImage = "Attach image"
     static let retry = "Retry"
   }
