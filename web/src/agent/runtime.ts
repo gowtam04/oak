@@ -949,6 +949,7 @@ async function validateOakAnswer(
         legalMoves: new Map<string, string[]>(),
         legalAbilities: new Map<string, string[]>(),
         legalItems: [] as string[],
+        requiredItems: new Map<string, string>(),
       };
   const teamWarnings = validation.warnings;
   const hasImages = (ctx.images?.length ?? 0) > 0;

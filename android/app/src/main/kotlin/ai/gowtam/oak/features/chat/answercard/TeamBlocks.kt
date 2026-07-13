@@ -180,7 +180,7 @@ private fun ProposedCard(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(if (applyState == ApplyState.FAILED) "Retry" else "Apply")
+                        Text(if (applyState == ApplyState.FAILED) "Retry" else "Save")
                     }
                 }
             }

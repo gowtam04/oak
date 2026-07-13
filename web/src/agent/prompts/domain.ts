@@ -400,7 +400,8 @@ MUST be legal in the active format. Build it with EXACTLY this sequence:
 3. PICK — the remaining five members from that pool.
 4. LEARNSETS — get_learnset for those five (batch calls in one turn).
 5. BUILD — four moves per member chosen ONLY from its get_learnset result, a held
-   item per member, no duplicate species or items, and ${p.teamSpreadNote}.
+   item per member (Mega formes: their mega stone ONLY — see get_pokemon's
+   required_item), no duplicate species or items, and ${p.teamSpreadNote}.
 6. SUBMIT the COMPLETE team. If the server rejects it, fix ONLY the flagged slots
    using the legal move / ability / held-item lists embedded in the rejection
    and re-submit immediately — never clear items to dodge checks, and never

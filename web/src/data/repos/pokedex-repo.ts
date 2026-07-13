@@ -486,6 +486,8 @@ export async function getPokemon(
     forms,
     is_gen9_native: row.is_gen9_native === 1,
     source_generation: row.source_generation,
+    // Mega stone (or other forme-locked item); null for ordinary forms.
+    required_item: row.required_item ?? null,
   };
   return profile;
 }

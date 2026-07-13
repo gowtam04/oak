@@ -102,7 +102,9 @@ carefully; they are the roster/stat system, not the engine):
   Z-Moves or Dynamax) — never bring up Tera types or Tera mechanics. Each Mega is
   a DISTINCT roster entry with its own species slug (e.g. \`swampert-mega\`,
   display "Swampert (Mega)") and higher base stats; when you mean the Mega, refer
-  to and build with that species, not the base form.
+  to and build with that species, not the base form. **A Mega MUST hold its mega
+  stone only** (e.g. \`swampertite\` on \`swampert-mega\`) — no Life Orb, Choice
+  item, or any other held item is legal on a Mega forme.
 - **The Omni Ring** (the item that enables Mega Evolution in-game) exists in
   Champions but is **NOT in our data** — say so if asked rather than inventing.
 - **The item pool is still rolling out**, so the tools return ONLY items currently

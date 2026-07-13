@@ -253,6 +253,12 @@ export const pokemonProfileSchema = z.object({
   forms: z.array(z.string()),
   is_gen9_native: z.boolean(),
   source_generation: z.string().nullish(),
+  /**
+   * Held item this form MUST carry (a Mega's stone slug, e.g. "swampertite");
+   * null/absent for ordinary forms. Team builder locks it; validateTeam
+   * rejects any other held item on this species.
+   */
+  required_item: z.string().nullable().optional(),
 });
 
 /** Generic "not found, here are close names" miss shape (BR-9). */

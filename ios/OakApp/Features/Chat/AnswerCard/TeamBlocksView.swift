@@ -142,7 +142,7 @@ struct TeamBlocksView: View {
           Task { await applyTeam(team) }
         } label: {
           Label(
-            applyPhase == .failed ? "Retry" : "Apply",
+            applyPhase == .failed ? "Retry" : "Save",
             systemImage: "square.and.arrow.down"
           )
           .font(Theme.display(.subheadline))

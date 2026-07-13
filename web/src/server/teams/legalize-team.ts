@@ -90,7 +90,14 @@ function heldByOthers(members: TeamMember[], exceptSlot: number): Set<string> {
 function pickLegalItem(
   legalItems: string[],
   taken: Set<string>,
+  /** When set (Mega stone), always prefer this over staples. */
+  requiredItem?: string | null,
 ): string | null {
+  if (requiredItem) {
+    // Mega stones may not appear on the format item allowlist in every seed;
+    // still force the stone — that is the only legal held item for the forme.
+    return requiredItem;
+  }
   if (legalItems.length === 0) return null;
   for (const staple of ITEM_STAPLES) {
     if (legalItems.includes(staple) && !taken.has(staple)) return staple;
@@ -126,6 +133,23 @@ export async function legalizeTeam(
 
     let changed = false;
 
+    // Proactive mega-stone fix for every slot that has a required_item
+    // (even if this pass's warnings list is stale mid-loop).
+    out.forEach((member, slot) => {
+      if (!member.species) return;
+      const stone = validation.requiredItems.get(member.species);
+      if (!stone || member.item === stone) return;
+      repairs.push({
+        slot,
+        field: "item",
+        from: member.item,
+        to: stone,
+        reason: "mega stone required",
+      });
+      member.item = stone;
+      changed = true;
+    });
+
     // Per-slot fixes first (stable slot order).
     for (const w of repairable) {
       if (w.slot === undefined) continue;
@@ -138,15 +162,19 @@ export async function legalizeTeam(
         // Free the illegal item so we can re-pick it if it's somehow legal for
         // another slot (not needed here) — exclude current illegal from taken.
         if (member.item) taken.delete(member.item);
-        const next = pickLegalItem(validation.legalItems, taken);
+        const stone = member.species
+          ? validation.requiredItems.get(member.species)
+          : undefined;
+        const next = pickLegalItem(validation.legalItems, taken, stone);
         if (next && next !== member.item) {
           repairs.push({
             slot,
             field: "item",
             from: member.item,
             to: next,
-            reason:
-              w.code === "item_missing"
+            reason: stone
+              ? "mega stone required"
+              : w.code === "item_missing"
                 ? "missing held item"
                 : "item not legal in this format",
           });
@@ -220,14 +248,21 @@ export async function legalizeTeam(
           const member = out[slot];
           if (!member) continue;
           const taken = heldByOthers(out, slot);
-          const next = pickLegalItem(validation.legalItems, taken);
+          const stone = member.species
+            ? validation.requiredItems.get(member.species)
+            : undefined;
+          // Never strip a mega stone to resolve item clause — reassign the
+          // *other* slots instead (this slot is kept when it's the first holder).
+          const next = pickLegalItem(validation.legalItems, taken, stone);
           if (next && next !== member.item) {
             repairs.push({
               slot,
               field: "item",
               from: member.item,
               to: next,
-              reason: "item clause (duplicate held item)",
+              reason: stone
+                ? "mega stone required"
+                : "item clause (duplicate held item)",
             });
             member.item = next;
             changed = true;

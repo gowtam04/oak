@@ -215,7 +215,8 @@ ${DRAFT_CONTEXT}
 - The battle gimmick is **Mega Evolution** only — there is NO Terastallization
   (\`tera_type\` is always null), no Z-Moves, no Dynamax. To run a Mega, put the
   Mega's OWN species in the slot — its \`-mega\` slug (e.g. \`swampert-mega\`),
-  NOT the base form — and give it its Mega Stone as the held item.
+  NOT the base form — and give it its Mega Stone as the held item ONLY (no
+  other held item is legal on a Mega forme).
 - Stat Points replace EVs: they live in the \`evs\` field with a budget of 66
   total, max 32 per stat. Spend the FULL 66 (e.g. 32/32/2 — never just 32/32)
   so no points are wasted, and explain the spread's intent.

@@ -242,6 +242,41 @@ describe("validateTeam", () => {
       );
       expect(codes(warnings)).not.toContain("item_illegal");
     });
+
+    it("flags item_illegal when a Mega holds a non-stone item", async () => {
+      const warnings = await validateTeam(
+        [
+          member({
+            species: "swampert-mega",
+            ability: "swift-swim",
+            item: "life-orb",
+            moves: ["earthquake", "waterfall", "ice-punch", "superpower"],
+          }),
+        ],
+        SV,
+        db,
+      );
+      const w = warnings.find((x) => x.code === "item_illegal");
+      expect(w).toBeDefined();
+      expect(w?.message).toMatch(/swampertite/i);
+      expect(w?.message).toMatch(/mega stone/i);
+    });
+
+    it("is silent when a Mega holds its required stone", async () => {
+      const warnings = await validateTeam(
+        [
+          member({
+            species: "swampert-mega",
+            ability: "swift-swim",
+            item: "swampertite",
+            moves: ["earthquake", "waterfall", "ice-punch", "superpower"],
+          }),
+        ],
+        SV,
+        db,
+      );
+      expect(codes(warnings)).not.toContain("item_illegal");
+    });
   });
 
   describe("clauses (AC-5.3) — team-level, no slot", () => {

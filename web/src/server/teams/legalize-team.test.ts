@@ -133,6 +133,24 @@ describe("legalizeTeam", () => {
     );
     expect(remainingHard.some((w) => w.code === "species_illegal")).toBe(true);
   });
+
+  it("forces a Mega to hold its mega stone (not a competitive staple)", async () => {
+    const { members, repairs, remainingHard } = await legalizeTeam(
+      [
+        member({
+          species: "swampert-mega",
+          ability: "swift-swim",
+          item: "life-orb",
+          moves: ["earthquake", "waterfall", "ice-punch", "superpower"],
+        }),
+      ],
+      SV,
+      db,
+    );
+    expect(members[0]!.item).toBe("swampertite");
+    expect(repairs.some((r) => r.to === "swampertite")).toBe(true);
+    expect(remainingHard.filter(isHardViolation)).toHaveLength(0);
+  });
 });
 
 describe("formatRepairsNote", () => {

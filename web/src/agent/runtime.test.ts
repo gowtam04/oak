@@ -71,6 +71,7 @@ vi.mock("@/server/teams/validate-team", () => ({
     ]),
     legalAbilities: new Map([["garchomp", ["sand-veil", "rough-skin"]]]),
     legalItems: ["sitrus-berry", "leftovers", "focus-sash", "life-orb"],
+    requiredItems: new Map(),
   })),
   isHardViolation: (w: { code: string }) =>
     w.code === "duplicate_item" || w.code === "move_not_in_learnset",
