@@ -8,7 +8,6 @@ import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
-import ai.gowtam.oak.ui.SpriteImage
 import ai.gowtam.oak.ui.TypeBadge
 import ai.gowtam.oak.wire.AnalyzedMember
 import ai.gowtam.oak.wire.DefenseRow
@@ -273,9 +272,19 @@ private fun RosterStrip(members: List<EditableMember>, spriteRefs: Map<String, D
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
         members.forEachIndexed { index, member ->
-            val label = if (member.species.isBlank()) "Slot ${index + 1}" else (spriteRefs[member.species]?.displayName ?: titleizeTeamSlug(member.species))
+            val ref = if (member.species.isBlank()) null else spriteRefs[member.species]
+            val label = if (member.species.isBlank()) {
+                "Slot ${index + 1}"
+            } else {
+                ref?.displayName ?: titleizeTeamSlug(member.species)
+            }
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(60.dp)) {
-                SpriteImage(url = if (member.species.isBlank()) null else spriteRefs[member.species]?.spriteUrl, name = label, size = 44.dp)
+                TypeEdgeSlot(
+                    spriteUrl = ref?.spriteUrl,
+                    name = label,
+                    types = ref?.types.orEmpty(),
+                    size = 48.dp,
+                )
                 Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
         }
@@ -314,7 +323,12 @@ private fun MemberEditorCard(
 
         if (member.species.isNotBlank() && spriteRef != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
-                SpriteImage(url = spriteRef.spriteUrl, name = headerTitle, size = 48.dp)
+                TypeEdgeSlot(
+                    spriteUrl = spriteRef.spriteUrl,
+                    name = headerTitle,
+                    types = spriteRef.types,
+                    size = 52.dp,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { spriteRef.types.forEach { TypeBadge(it) } }
             }
         }
