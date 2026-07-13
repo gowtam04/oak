@@ -33,6 +33,19 @@ git branch -d agent/<task>
 
 Never commit straight to a shared `develop` working copy while other agents may also be active in it — always go through a worktree, and never leave finished work stranded on an agent branch instead of merged into `develop`.
 
+## Cross-platform bug fixes (web + iOS + Android)
+
+Oak ships **three clients** that share one product surface: **`web/`**, **`ios/`**, and **`android/`**. The natives are pure clients of the same HTTP/SSE API and deliberately mirror web/iOS feature and UI behavior (answer card, markdown, chat, teams, etc.).
+
+**When a bug is reported or fixed on any one platform, check the other two and fix them in the same change (or an immediately follow-up commit in the same PR/branch) unless the defect is demonstrably platform-specific.**
+
+- Do **not** stop after fixing only the platform where the bug was noticed. A web-only UI fix that leaves the same layout bug on iOS/Android (or the reverse) is incomplete.
+- Before marking the work done, explicitly ask: *Does this bug class exist on web, iOS, and Android?* Map the analogous code (e.g. GFM table styling: `web` `Markdown`/`globals.css` ↔ `ios` `MarkdownBlockView` ↔ `android` `MarkdownBlockView`) and either fix all affected surfaces or document in the commit why a platform is exempt (true platform-only constraint, not “didn’t look”).
+- Client UI/UX bugs, answer-card rendering, markdown presentation, chat chrome, and teams UX almost always need the three-way pass. Server-only / API / agent / DB bugs usually live once in `web/` and need no mobile code change — still confirm the clients don’t reimplement the bad behavior locally.
+- Prefer one worktree/branch that lands all three platforms together so users never get a staggered half-fix.
+
+This exists because a full-width blank GFM-table chrome bug was fixed on web first and only later on mobile after a separate screenshot — the other platforms should have been checked in the first pass.
+
 ## Repository layout
 
 The app lives in **`web/`** — the Next.js app plus all of its config (`package.json`, `tsconfig.json`, `next.config.ts`, `vitest.config.ts`, `drizzle.config.ts`), `src/`, `test/`, `eval/`, `drizzle/`, `scripts/`, and deployment files (`Dockerfile*`, `docker-compose.dev.yml`, `fly.toml`, `migrate.mjs`). The native mobile clients live in sibling folders: **`ios/`** (Swift 6 / SwiftUI) and **`android/`** (Kotlin 2.1 / Jetpack Compose) — both pure clients of `web/`'s HTTP/SSE API, holding no LLM keys or DB access of their own. Only `docs/`, `README.md`, `CLAUDE.md`, `ios/`, `android/`, and `.git/` stay at the repo root. **All `src/…`, `test/…`, `eval/…`, and `drizzle/` paths in this document are relative to `web/`**, and the `@/` alias resolves to `web/src/`.
@@ -246,8 +259,9 @@ full build/test walkthrough).
   same one iOS speaks, derived from the **portable web modules** listed above
   (`src/lib/sse/sse-types.ts`, `src/agent/schemas.ts`, `src/data/teams/team-schema.ts`,
   `src/data/formats.ts`); no backend changes were needed for Android (the account-deletion
-  and Bearer-auth enablers already shipped for iOS). Requirements/architecture:
-  `docs/features/android-app/`.
+  and Bearer-auth enablers already shipped for iOS). Bug fixes that touch shared client UX
+  must still follow **Cross-platform bug fixes** above — do not leave Android behind when
+  web or iOS is patched. Requirements/architecture: `docs/features/android-app/`.
 - **Build/test commands** (from `android/`, `JAVA_HOME` exported, `--no-daemon`
   recommended — the Gradle daemon hangs in sandboxed shells):
 
