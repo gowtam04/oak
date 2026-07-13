@@ -344,7 +344,10 @@ struct ChatView: View {
             .frame(minHeight: geo.size.height, alignment: .bottom)
           }
         }
-        .background(Theme.canvas)
+        .background {
+          Theme.canvas
+            .oakDeskGrain()
+        }
         .scrollDismissesKeyboard(.interactively)
         // Keep the newest content in view as turns/tokens arrive (M-AC-2.2).
         .onChange(of: model.turns.count) { _, _ in scrollToBottom(proxy) }
@@ -413,8 +416,12 @@ struct ChatView: View {
             .foregroundStyle(Theme.textPrimary)
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-          // Hold the answer's landing zone until the first token arrives (§4.03).
-          AnswerSkeleton()
+          // Soft desk tint + optional mild type wash from tool labels (§4.03 / soul.md 2.3).
+          AnswerSkeleton(
+            washType: Theme.streamingWashType(
+              from: model.toolActivities.map(\.label)
+            )
+          )
         }
       }
     }

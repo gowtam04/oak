@@ -61,6 +61,40 @@ struct ThemeFoundationTests {
     #expect(Bool(true))
   }
 
+  // MARK: Specimen plate + type-glow (Phase 1–2)
+
+  @Test
+  func plateAtmosphereResolveMatchesSubjectRules() {
+    #expect(Theme.PlateAtmosphere.resolve(subjectTypes: []) == .mechanics)
+    #expect(
+      Theme.PlateAtmosphere.resolve(subjectTypes: [["dragon", "ground"]])
+        == .typed(primary: "dragon", secondary: "ground")
+    )
+    #expect(
+      Theme.PlateAtmosphere.resolve(subjectTypes: [["fire"], ["water"]]) == .multi
+    )
+  }
+
+  @Test
+  func typeGlowWellAndSpecimenPlateModifiersCompile() {
+    _ = Color.clear.oakTypeGlowWell(primary: "dragon", secondary: "ground")
+    _ = Color.clear.oakSpecimenPlate(.mechanics)
+    _ = Color.clear.oakSpecimenPlate(.typed(primary: "fire", secondary: nil))
+    _ = Color.clear.oakDeskGrain()
+    #expect(Bool(true))
+  }
+
+  @Test
+  func streamingWashTypeHeuristicIsConservative() {
+    #expect(Theme.streamingWashType(from: []) == nil)
+    #expect(Theme.streamingWashType(from: ["Looking up Garchomp"]) == nil)
+    #expect(Theme.streamingWashType(from: ["Dragon type matchups"]) == "dragon")
+    // Ambiguous multi-type mentions → no wash.
+    #expect(
+      Theme.streamingWashType(from: ["Fire vs Water matchup"]) == nil
+    )
+  }
+
   // MARK: Component construction (signatures compile with their defaults)
 
   @Test

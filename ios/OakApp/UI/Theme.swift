@@ -663,6 +663,145 @@ private struct OakSpecimenPlateModifier: ViewModifier {
   }
 }
 
+// MARK: - Type-glow specimen well (View)
+
+extension View {
+  /// Type-glow specimen well chrome (soul.md Phase 1–2): radial primary glow +
+  /// dual-type edge rings around sprite/artwork. Matches SubjectsView quality so
+  /// artifact heroes and party slots share one instrument language.
+  ///
+  /// - Parameters:
+  ///   - primary: Primary type slug (falls back to normal solid if unknown).
+  ///   - secondary: Optional dual-type slug for the inset ring.
+  ///   - cornerRadius: Well corner radius (`.lg` for cards, slightly tighter for
+  ///     roster slots).
+  ///   - glowEndRadius: Radial glow extent; pass sprite size × ~0.85 for scale.
+  func oakTypeGlowWell(
+    primary: String,
+    secondary: String? = nil,
+    cornerRadius: CGFloat = Theme.Radius.lg,
+    glowEndRadius: CGFloat = 60
+  ) -> some View {
+    modifier(
+      OakTypeGlowWellModifier(
+        primary: primary,
+        secondary: secondary,
+        cornerRadius: cornerRadius,
+        glowEndRadius: glowEndRadius
+      )
+    )
+  }
+}
+
+/// Radial type glow + primary/secondary edge rings behind sprite artwork.
+private struct OakTypeGlowWellModifier: ViewModifier {
+  @Environment(\.colorScheme) private var colorScheme
+  let primary: String
+  let secondary: String?
+  let cornerRadius: CGFloat
+  let glowEndRadius: CGFloat
+
+  func body(content: Content) -> some View {
+    let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    let isDark = colorScheme == .dark
+    content
+      .background {
+        ZStack {
+          shape.fill(Theme.type(primary).opacity(isDark ? 0.14 : 0.10))
+          RadialGradient(
+            colors: [
+              Theme.type(primary).opacity(Theme.PlateWashMix.spriteGlow(scheme: colorScheme)),
+              .clear,
+            ],
+            center: UnitPoint(x: 0.5, y: 0.45),
+            startRadius: 2,
+            endRadius: glowEndRadius
+          )
+        }
+      }
+      .overlay {
+        shape.strokeBorder(
+          Theme.type(primary).opacity(isDark ? 0.28 : 0.22),
+          lineWidth: 1
+        )
+      }
+      .overlay {
+        if let secondary, !secondary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+          shape
+            .strokeBorder(Theme.type(secondary).opacity(0.15), lineWidth: 1)
+            .padding(1)
+        }
+      }
+  }
+}
+
+// MARK: - Streaming wash heuristic
+
+extension Theme {
+  /// Client-side heuristic: when a streaming tool label names a single known
+  /// Pokémon type, return that slug for a mild skeleton wash. Returns `nil`
+  /// when ambiguous or absent — never invents types (soul.md Phase 2.3).
+  static func streamingWashType(from labels: [String]) -> String? {
+    let known = Set(typeDisplayOrder)
+    var found: Set<String> = []
+    for label in labels {
+      let tokens = label.lowercased().split { !$0.isLetter }
+      for token in tokens {
+        let t = String(token)
+        if known.contains(t) { found.insert(t) }
+      }
+    }
+    return found.count == 1 ? found.first : nil
+  }
+}
+
+// MARK: - Desk grain (Phase 3.1)
+
+extension View {
+  /// Ultra-subtle static paper grain over the desk canvas. Decorative only;
+  /// skips when Reduce Motion is on so the desk stays calm (soul.md Phase 3.1).
+  func oakDeskGrain(opacity: Double = 0.028) -> some View {
+    modifier(OakDeskGrainModifier(opacity: opacity))
+  }
+}
+
+private struct OakDeskGrainModifier: ViewModifier {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  let opacity: Double
+
+  func body(content: Content) -> some View {
+    content.overlay {
+      if !reduceMotion {
+        Canvas { context, size in
+          // Deterministic sparse dots — cheap static texture, not animated noise.
+          let step: CGFloat = 11
+          var y: CGFloat = 3
+          var row = 0
+          while y < size.height {
+            var x: CGFloat = CGFloat((row % 3) * 3) + 2
+            var col = 0
+            while x < size.width {
+              let seed = (row * 31 &+ col * 17) & 7
+              if seed == 0 || seed == 3 {
+                let r: CGFloat = seed == 0 ? 0.6 : 0.45
+                let rect = CGRect(x: x, y: y, width: r, height: r)
+                context.fill(Path(ellipseIn: rect), with: .color(.black))
+              }
+              x += step
+              col += 1
+            }
+            y += step
+            row += 1
+          }
+        }
+        .opacity(opacity)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+      }
+    }
+  }
+}
+
 // MARK: - Instrument voice (View extension)
 
 extension View {
