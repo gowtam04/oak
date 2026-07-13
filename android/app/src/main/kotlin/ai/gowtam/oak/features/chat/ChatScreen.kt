@@ -33,12 +33,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -73,6 +75,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.heading
@@ -253,7 +256,12 @@ fun ChatScreen(
                     verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
                 ) {
                     if (showEmptyState) {
-                        item(key = "empty-state") { EmptyState(onExampleTap = viewModel::sendFollowUp) }
+                        item(key = "empty-state") {
+                            EmptyState(
+                                format = uiState.displayFormat,
+                                onExampleTap = viewModel::sendFollowUp,
+                            )
+                        }
                     }
                     items(uiState.turns, key = { it.id }) { turn ->
                         TurnRow(turn, actions = cardActions)
@@ -418,28 +426,38 @@ private fun TurnRow(turn: ChatTurnItem, actions: AnswerCardActions) {
 private fun UserMessageRow(turn: ChatTurnItem.User) {
     val oak = LocalOakColors.current
     val dark = isSystemInDarkTheme()
-    // The paper bubble (§4.3): a soft accent-tinted fill with a red-tinted hairline and
-    // OAK INK (not white) — quieter and more paper-like than a flat coral fill. Raised
-    // shadow in light; in dark the hairline carries the edge instead (no shadow).
-    val bubbleFill = if (dark) Color(0xFF2E1D1B) else Color(0xFFFDF2F1)
-    val bubbleShape = RoundedCornerShape(
+    // Desk note (soul.md): sunken/neutral paper + thin border + small red corner pip —
+    // never an accent-filled iMessage bubble.
+    val noteShape = RoundedCornerShape(
         topStart = OakRadius.lg, topEnd = OakRadius.lg,
         bottomEnd = OakRadius.sm, bottomStart = OakRadius.lg,
     )
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(max = 320.dp)) {
             if (turn.text.isNotEmpty()) {
-                Text(
-                    text = turn.text,
-                    color = oak.text,
-                    style = MaterialTheme.typography.bodyLarge,
+                Box(
                     modifier = Modifier
-                        .then(if (dark) Modifier else Modifier.shadow(2.dp, bubbleShape))
-                        .clip(bubbleShape)
-                        .background(bubbleFill)
-                        .border(1.dp, oak.accent.copy(alpha = 0.28f), bubbleShape)
+                        .then(if (dark) Modifier else Modifier.shadow(2.dp, noteShape))
+                        .clip(noteShape)
+                        .background(oak.surfaceSunken)
+                        .border(1.dp, oak.border, noteShape)
                         .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
-                )
+                ) {
+                    Text(
+                        text = turn.text,
+                        color = oak.textStrong,
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier.padding(end = 10.dp),
+                    )
+                    // Red record-light corner pip (soul.md "User note").
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(oak.accent),
+                    )
+                }
             }
             if (turn.imageCount > 0) {
                 Row(
@@ -537,82 +555,133 @@ private fun ErrorBannerRow(banner: ErrorBanner, onRetry: () -> Unit) {
 }
 
 // ---------------------------------------------------------------------------
-// Empty state
+// Empty state — blank specimen plate + filed starters (soul.md)
 // ---------------------------------------------------------------------------
 
 /**
- * A branded empty state: a title + description and four example-question chips (a tap
- * sends the text verbatim as the first user turn), plus a scope hint naming the header
- * chip as the interactive scope control. The four chips are sampled fresh from
- * [ExamplePrompts.pool] each time this composable enters composition — a new chat or
- * app relaunch reshuffles them; `remember` keeps them stable while the empty state
- * stays on screen. Mirrors iOS `ChatView.emptyState`.
+ * Blank specimen plate on the desk: dashed/grid plate, `NEW ENTRY` label, live scope
+ * stamp, prompt line, and four **filed starters** (Battle / Dex / Rules / Meta with
+ * type-dots) — not a centered "Ask Oak" hero with equal pills (`docs/design/soul.md`).
+ * Starters are sampled once per composition via [ExamplePrompts.pickFiled].
  */
 @Composable
-private fun EmptyState(onExampleTap: (String) -> Unit) {
+private fun EmptyState(format: Format, onExampleTap: (String) -> Unit) {
     val oak = LocalOakColors.current
-    val examples = remember { ExamplePrompts.pick(4) }
+    val dark = isSystemInDarkTheme()
+    val starters = remember { ExamplePrompts.pickFiled() }
+    val plateShape = RoundedCornerShape(OakRadius.xl)
+    // Soft red in the plate edge (prototype mixes border-strong with poke-red).
+    val dashBorder = lerp(oak.borderStrong, oak.accent, 0.20f)
+
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = OakSpacing.xxl, bottom = OakSpacing.lg),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = OakSpacing.md, bottom = OakSpacing.lg),
     ) {
-        Text(
-            text = "Ask Oak",
-            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = oak.textStrong,
-            modifier = Modifier.semantics { heading() },
-        )
-        Spacer(Modifier.height(OakSpacing.xs))
-        Text(
-            text = "Every answer carries its reasoning, sources, and the generation it's based on.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = oak.textMuted,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
-        Spacer(Modifier.height(OakSpacing.lg))
-        Text(
-            text = "TRY ASKING",
-            style = MaterialTheme.typography.labelSmall,
-            color = oak.textMuted,
-        )
-        Spacer(Modifier.height(OakSpacing.sm))
-        Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm), horizontalAlignment = Alignment.CenterHorizontally) {
-            for (question in examples) {
-                ExampleChip(text = question, onClick = { onExampleTap(question) })
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (dark) Modifier else Modifier.shadow(4.dp, plateShape))
+                .clip(plateShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.5.dp, dashBorder, plateShape)
+                .padding(OakSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "NEW ENTRY",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = oak.textMuted,
+                )
+                // Scope stamp — mirrors the active format (read-only; chip in header is interactive).
+                Text(
+                    text = format.displayLabel.uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = oak.textStrong,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(OakRadius.sm))
+                        .background(oak.accent.copy(alpha = 0.08f))
+                        .border(1.dp, oak.accent.copy(alpha = 0.35f), RoundedCornerShape(OakRadius.sm))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                )
+            }
+            Text(
+                text = "What are we looking up?",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = oak.textStrong,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = "Open a specimen. Every answer carries receipts — reasoning, sources, and the generation it is based on.",
+                style = MaterialTheme.typography.bodySmall,
+                color = oak.textMuted,
+            )
+            Text(
+                text = "FILED STARTERS",
+                style = MaterialTheme.typography.labelSmall,
+                color = oak.textFaint,
+                modifier = Modifier.padding(top = OakSpacing.xs),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
+                for (starter in starters) {
+                    FiledStarterRow(starter = starter, onClick = { onExampleTap(starter.prompt) })
+                }
             }
         }
     }
 }
 
 /**
- * An empty-state example chip (§4.6): a surface pill with a `borderStrong` hairline
- * that, on press, tints `accentSoft` with an accent border and dips 0.97 (snappy;
- * instant under reduce-motion). Empty-state chips press *red* — the in-thread variant
- * presses azure. Color is paired with the label, never the sole signal.
+ * One filed-starter row: type-dot + mono category + prompt text. Full-width, not a
+ * centered equal pill.
  */
 @Composable
-private fun ExampleChip(text: String, onClick: () -> Unit) {
+private fun FiledStarterRow(starter: ExamplePrompts.FiledStarter, onClick: () -> Unit) {
     val oak = LocalOakColors.current
     val reduceMotion = rememberReduceMotion()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.97f else 1f,
+        targetValue = if (pressed) 0.98f else 1f,
         animationSpec = if (reduceMotion) snap() else OakMotion.snappy,
-        label = "exampleChipScale",
+        label = "filedStarterScale",
     )
-    val shape = RoundedCornerShape(OakRadius.pill)
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-        color = if (pressed) oak.accent else oak.text,
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+    val shape = RoundedCornerShape(OakRadius.md)
+    val typeColor = ai.gowtam.oak.ui.OakType.color(starter.typeDot)
+    Row(
         modifier = Modifier
+            .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
-            .background(if (pressed) oak.accentSoft else MaterialTheme.colorScheme.surface, shape)
-            .border(1.dp, if (pressed) oak.accent else oak.borderStrong, shape)
+            .background(if (pressed) MaterialTheme.colorScheme.surface else oak.surfaceRaised.copy(alpha = 0.70f))
+            .border(1.dp, if (pressed) oak.borderStrong else oak.border, shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
-    )
+            .padding(horizontal = OakSpacing.md, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(typeColor),
+        )
+        Text(
+            text = starter.category.label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = oak.textFaint,
+            modifier = Modifier.widthIn(min = 52.dp),
+        )
+        Text(
+            text = starter.prompt,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+            color = oak.textStrong,
+            modifier = Modifier.weight(1f),
+        )
+    }
 }

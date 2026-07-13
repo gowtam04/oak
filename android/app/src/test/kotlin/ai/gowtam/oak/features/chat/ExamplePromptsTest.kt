@@ -7,7 +7,7 @@ import org.junit.Test
 /**
  * Exercises [ExamplePrompts]: the pool has no duplicate entries, and [ExamplePrompts.pick]
  * samples distinct members of the pool without replacement, clamping to the pool size when
- * asked for more than it holds.
+ * asked for more than it holds. Also covers filed starters (specimen-desk empty state).
  */
 class ExamplePromptsTest {
 
@@ -29,5 +29,29 @@ class ExamplePromptsTest {
         val picked = ExamplePrompts.pick(ExamplePrompts.pool.size + 100)
         assertEquals(ExamplePrompts.pool.size, picked.size)
         assertEquals(ExamplePrompts.pool.toSet(), picked.toSet())
+    }
+
+    @Test
+    fun `pickFiled returns one starter per category in Battle Dex Rules Meta order`() {
+        val filed = ExamplePrompts.pickFiled()
+        assertEquals(4, filed.size)
+        assertEquals(
+            listOf(
+                ExamplePrompts.Category.Battle,
+                ExamplePrompts.Category.Dex,
+                ExamplePrompts.Category.Rules,
+                ExamplePrompts.Category.Meta,
+            ),
+            filed.map { it.category },
+        )
+        assertTrue(filed.all { it.prompt.isNotBlank() })
+        assertTrue(filed.all { it.typeDot.isNotBlank() })
+        assertTrue(filed.all { starter -> starter in ExamplePrompts.filedPool })
+    }
+
+    @Test
+    fun `filedPool covers all four categories`() {
+        val categories = ExamplePrompts.filedPool.map { it.category }.toSet()
+        assertEquals(ExamplePrompts.Category.entries.toSet(), categories)
     }
 }
