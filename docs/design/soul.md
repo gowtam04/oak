@@ -96,12 +96,26 @@ Red does **not** fill user bubbles, paint selection rails, or wash entire header
 - Wire contract / tool names  
 - Dynamic Type, reduce-motion, layout stability  
 
-## Phase 1 checklist (implementation)
+## Phase 1 checklist (implementation) — **done**
 
-- [ ] Empty = blank plate + filed starters  
-- [ ] Answer shell type-reactive (or ink plate)  
-- [ ] Sprite well type-glow  
-- [ ] Receipts footer  
-- [ ] User desk note + pip  
-- [ ] History OPEN plate (no red rail)  
-- [ ] Web + iOS + Android parity on the above  
+- [x] Empty = blank plate + filed starters  
+- [x] Answer shell type-reactive (or ink plate)  
+- [x] Sprite well type-glow  
+- [x] Receipts footer  
+- [x] User desk note + pip  
+- [x] History OPEN plate (no red rail)  
+- [x] Web + iOS + Android parity on the above  
+
+## Phase 2 checklist — instrument objects
+
+- [ ] Artifact viewer = specimen plate continuation (type wash + type-glow hero)  
+- [ ] Team party slots = type edge / glow when types known  
+- [ ] Streaming skeleton soft wash (client heuristic; no backend)  
+- [ ] History durable type rails — **deferred** (needs `ConversationSummary` metadata; no API this pass)  
+
+## Phase 3 checklist — alive & dual
+
+- [ ] Subtle desk grain on canvas (web primary; reduced-motion safe)  
+- [ ] Machine markdown export (“Copy for agents”) from finalized `OakAnswer`  
+- [ ] Dev-only plate tuner (web only)  
+- [ ] Team “wrapped” playfulness — **deferred** (not critical path)  
