@@ -24,9 +24,14 @@
  *   - Move source strings encode gen+method at indexes 0/1 ('9M','9L42','9E'…).
  *   - `Dex.forGen(7)` returns a gen-7-scoped view: its roster (real species,
  *     >700) EXCLUDES gen 8/9 species — those surface with `isNonstandard ===
- *     "Future"`, which `isRealSpecies` now drops (so e.g. Grookey is absent from
- *     a gen-7 roster). `"Past"` species are KEPT (the BR-1 native/fallback flag).
- *     `getLearnset('raichualola')` is non-empty in gen 7.
+ *     "Future"`, which `isRealSpecies` drops on gen ≤8 (so e.g. Grookey is
+ *     absent from a gen-7 roster). `"Past"` species are KEPT (the BR-1
+ *     native/fallback flag). `getLearnset('raichualola')` is non-empty in gen 7.
+ *   - On Gen 9 (`scarlet-violet` / `national-dex`), `Future` is KEPT: @pkmn
+ *     marks Legends Z-A / Champions megas (e.g. Raichu-Mega-X/Y and ~48 peers)
+ *     as `Future` (not SV-legal), but they are real national-dex forms and must
+ *     appear in the Pokédex. Same exception applies to their mega stones and
+ *     mega-exclusive abilities/moves.
  *   - `dex.types.all()` always returns the FULL modern 19-type set (incl. Fairy
  *     and Stellar) in EVERY gen dex, even `Dex.forGen(1)` — @pkmn does not
  *     historically gate the type list. `BATTLE_TYPE_NAMES` filters Stellar out
@@ -147,33 +152,42 @@ const BATTLE_TYPE_NAMES: ReadonlySet<string> = new Set([
 // Roster enumeration
 // ---------------------------------------------------------------------------
 
-function isRealSpecies(s: PkmnSpecies): boolean {
+/**
+ * @param allowFuture — when true (Gen 9 formats), keep `isNonstandard ===
+ *   "Future"` entries. On Gen 9 those are Legends Z-A / Champions megas already
+ *   present in @pkmn but not SV-legal. On gen ≤8, Future means later-generation
+ *   content and must stay dropped.
+ */
+function isRealSpecies(
+  s: PkmnSpecies,
+  opts: { allowFuture: boolean },
+): boolean {
   return (
     s.exists &&
     typeof s.num === "number" &&
     s.num > 0 &&
     s.isNonstandard !== "CAP" &&
     s.isNonstandard !== "Custom" &&
-    // In an older-gen dex (e.g. Dex.forGen(7)) species introduced in a LATER
-    // generation surface as `isNonstandard === "Future"`; they are not part of
-    // that gen's game and must not be indexed (unlike "Past" species, which we
-    // KEEP as native/fallback rows — BR-1). No-op for the Gen 9 dex.
-    s.isNonstandard !== "Future"
+    // Older-gen dexes: later-gen species surface as "Future" and must not be
+    // indexed (unlike "Past", which we KEEP as BR-1 fallbacks). Gen 9: keep
+    // Future so Z-A megas index into scarlet-violet / national-dex.
+    (opts.allowFuture || s.isNonstandard !== "Future")
   );
 }
 
 /**
  * Standard / mainline roster: the full national-dex view as @pkmn knows it in
  * the resolved generation — real species + battle formes, INCLUDING species not
- * native to the current game (`isNonstandard === "Past"`), so the scope keeps
- * answering about the whole reachable dex with a native/fallback flag (BR-1),
- * matching today's Gen 9 behavior. Native ⟺ `isNonstandard` is falsy; otherwise
- * the species is a fallback from `gen-{n}`. For gen scopes 1–8 (and
- * `national-dex`) this is the `Dex.forGen(n)` view, whose later-generation
- * species are dropped as "Future" by {@link isRealSpecies}.
+ * native to the current game (`isNonstandard === "Past"` or, on Gen 9,
+ * `"Future"` Z-A megas), so the scope keeps answering about the whole reachable
+ * dex with a native/fallback flag (BR-1). Native ⟺ `isNonstandard` is falsy;
+ * otherwise the species is a fallback from `gen-{n}`. For gen scopes 1–8 this
+ * is the `Dex.forGen(n)` view, whose later-generation species are dropped as
+ * "Future" by {@link isRealSpecies}.
  */
-function standardRoster(dex: PkmnDex): PkmnSpecies[] {
-  return dex.species.all().filter(isRealSpecies);
+function standardRoster(dex: PkmnDex, genNumber: number): PkmnSpecies[] {
+  const allowFuture = genNumber >= 9;
+  return dex.species.all().filter((s) => isRealSpecies(s, { allowFuture }));
 }
 
 /**
@@ -217,7 +231,7 @@ export async function loadFormat(format: Format): Promise<FormatSource> {
   } else {
     const gen = genNumberForFormat(format); // 9 for "scarlet-violet"/"national-dex", else 1–8
     dex = Dex.forGen(gen);
-    roster = standardRoster(dex);
+    roster = standardRoster(dex, gen);
     genNumber = gen;
   }
 
@@ -228,13 +242,20 @@ export async function loadFormat(format: Format): Promise<FormatSource> {
   // Dex.forGen(3)) and must not be indexed. "Past" entries are KEPT — the
   // Gen 9 dex marks now-delisted things like Mega Stones as "Past", and
   // national-dex/scarlet-violet/champions must keep indexing them (BR-1).
-  const isCurrentOrPast = (x: { exists: boolean; isNonstandard?: string | null }): boolean =>
-    x.exists && x.isNonstandard !== "CAP" && x.isNonstandard !== "Future";
-  const moves = dex.moves.all().filter(isCurrentOrPast);
+  // Gen 9 also keeps Future entities (Z-A mega stones / mega abilities).
+  const allowFuture = genNumber >= 9;
+  const isIndexableEntity = (x: {
+    exists: boolean;
+    isNonstandard?: string | null;
+  }): boolean =>
+    x.exists &&
+    x.isNonstandard !== "CAP" &&
+    (allowFuture || x.isNonstandard !== "Future");
+  const moves = dex.moves.all().filter(isIndexableEntity);
   const abilities = dex.abilities
     .all()
-    .filter((a) => isCurrentOrPast(a) && a.id !== "noability");
-  const items = dex.items.all().filter(isCurrentOrPast);
+    .filter((a) => isIndexableEntity(a) && a.id !== "noability");
+  const items = dex.items.all().filter(isIndexableEntity);
   const natures = dex.natures.all().filter((n) => n.exists);
 
   return {
