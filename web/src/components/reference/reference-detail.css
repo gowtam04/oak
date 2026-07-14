@@ -385,8 +385,8 @@
 }
 
 /* ---------------------------------------------------------------------------
-   EvolutionChain — an inline chain of node pills joined by faint arrows, with
-   the evolution condition as a small mono caption between pairs.
+   EvolutionChain — an inline chain of sprite+name chips joined by faint
+   arrows, with the evolution condition as a small mono caption between pairs.
    ------------------------------------------------------------------------- */
 
 .ref-evolution {
@@ -403,18 +403,44 @@
 }
 
 .ref-evolution__node {
-  padding: var(--space-1) var(--space-3);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   background: var(--surface-sunken);
   border: 1px solid var(--border);
   color: var(--text-strong);
   font-weight: 600;
   font-size: var(--text-sm);
+  text-decoration: none;
   transition: border-color var(--motion-fast), color var(--motion-fast);
 }
 .ref-evolution__node:hover {
   border-color: var(--border-strong);
   color: var(--poke-red);
+}
+
+.ref-evolution__well {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.ref-evolution__sprite {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.ref-evolution__name {
+  line-height: 1.2;
+  text-align: center;
 }
 
 .ref-evolution__arrow {
