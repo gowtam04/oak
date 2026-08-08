@@ -101,6 +101,7 @@ import {
   AnswerMarkdownExtractor,
   describeToolCall,
   isTeamBuildMessage,
+  isTeamRosterMessage,
   MAX_EMPTY_TURN_NUDGES,
   MAX_ITERATIONS,
   MAX_ITERATIONS_TEAM_BUILD,
@@ -715,6 +716,86 @@ describe("orchestration fallbacks", () => {
     );
   });
 
+  it("isTeamRosterMessage detects catalog intent; full-build override wins", () => {
+    const screenshot =
+      "I want to build a new sun team in champions. Give me a list of all the pokemon that could fit and why/what role they play";
+    expect(isTeamRosterMessage(screenshot)).toBe(true);
+    // Both match the raw build detector, but loop routes roster first.
+    expect(isTeamBuildMessage(screenshot)).toBe(true);
+    expect(!isTeamRosterMessage(screenshot) && isTeamBuildMessage(screenshot)).toBe(
+      false,
+    );
+
+    expect(
+      isTeamRosterMessage(
+        "list Chlorophyll abusers for sun and their roles",
+      ),
+    ).toBe(true);
+    expect(isTeamRosterMessage("who fits on a rain team")).toBe(true);
+    expect(isTeamRosterMessage("sun team staples and options")).toBe(true);
+
+    // Full-build override — not roster.
+    expect(isTeamRosterMessage("Build me a sun team with Torkoal")).toBe(
+      false,
+    );
+    expect(isTeamBuildMessage("Build me a sun team with Torkoal")).toBe(true);
+    expect(
+      isTeamRosterMessage("give me a complete team with full sets"),
+    ).toBe(false);
+
+    // Build-only (no catalog cues) stays non-roster.
+    expect(isTeamRosterMessage("suggest a rain team")).toBe(false);
+    expect(isTeamBuildMessage("suggest a rain team")).toBe(true);
+    expect(isTeamRosterMessage("Hyper offense")).toBe(false);
+
+    // Analysis / single-species / battle math — not roster.
+    expect(isTeamRosterMessage("analyze my team")).toBe(false);
+    expect(isTeamRosterMessage("What is Gholdengo's role?")).toBe(false);
+    expect(isTeamRosterMessage("how much damage does earthquake do")).toBe(
+      false,
+    );
+  });
+
+  it("uses the default cap and ROSTER_SUBMIT_NUDGE for roster messages", async () => {
+    const { client, stream, snapshots } = scriptedClient(
+      Array.from({ length: MAX_ITERATIONS }, () =>
+        message([toolUse("query_pokedex", {}, "t")]),
+      ),
+    );
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    const result = await runOakWith(
+      client,
+      "list of all the pokemon that could fit sun and what role they play",
+      [],
+      ctx,
+    );
+
+    // Roster stays on default cap — not the 28-iter team-build path.
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
+    expect(result.status).toBe("insufficient_data");
+
+    const fireAt = MAX_ITERATIONS - SUBMIT_NUDGE_REMAINING;
+    const rosterNudge = (params: {
+      messages: { role: string; content: unknown }[];
+    }) =>
+      params.messages.filter(
+        (m) =>
+          m.role === "user" &&
+          typeof m.content === "string" &&
+          m.content.includes("TEAM ROSTER"),
+      ).length;
+    expect(rosterNudge(snapshots[fireAt])).toBe(0);
+    expect(rosterNudge(snapshots[fireAt + 1])).toBe(1);
+    expect(snapshots[fireAt + 1].messages.at(-1).content).toContain(
+      "SHORTLIST",
+    );
+    // Must not demand a complete six.
+    expect(snapshots[fireAt + 1].messages.at(-1).content).not.toContain(
+      "COMPLETE 6-member proposed_team",
+    );
+  });
+
   it("nudges back to submit_answer when a turn ends with no tool call, then accepts the submit", async () => {
     const { client, stream, snapshots } = scriptedClient([
       message([textBlock("here is some prose")], "end_turn"),
@@ -972,6 +1053,49 @@ describe("turn deadline + provider-call timeout", () => {
     // The deadline — not the iteration cap — ended the turn.
     expect(stream.mock.calls.length).toBeGreaterThan(0);
     expect(stream.mock.calls.length).toBeLessThan(MAX_ITERATIONS);
+  });
+
+  it("fires a soft time-budget nudge once before the hard deadline", async () => {
+    // 100ms turn budget; fire time nudge when ≤80ms remain so the first slow
+    // tool iteration trips nearTimeCap long before the iteration cap.
+    vi.stubEnv("OAK_TURN_DEADLINE_MS", "100");
+    vi.stubEnv("OAK_TIME_NUDGE_REMAINING_MS", "80");
+
+    const { client, stream, snapshots } = scriptedClient(
+      Array.from({ length: MAX_ITERATIONS }, () =>
+        message([toolUse("query_pokedex", {}, "t")]),
+      ),
+    );
+    mockDispatch.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 25));
+      return { ok: true };
+    });
+
+    const result = await runOakWith(client, "q", [], ctx);
+
+    // Hard deadline still ends the turn (model never submits).
+    expect(result.status).toBe("insufficient_data");
+    expect(
+      (result.uncertainty_flags ?? []).some((f) => /too long/i.test(f)),
+    ).toBe(true);
+    expect(stream.mock.calls.length).toBeGreaterThan(0);
+    expect(stream.mock.calls.length).toBeLessThan(MAX_ITERATIONS);
+
+    const timeNudgeCount = (params: {
+      messages: { role: string; content: unknown }[];
+    }) =>
+      params.messages.filter(
+        (m) =>
+          m.role === "user" &&
+          typeof m.content === "string" &&
+          m.content.includes("close to the tool-call limit"),
+      ).length;
+
+    // At least one request after the first iteration should carry the nudge,
+    // and it must never be duplicated across later requests.
+    const withNudge = snapshots.filter((s) => timeNudgeCount(s) > 0);
+    expect(withNudge.length).toBeGreaterThan(0);
+    expect(timeNudgeCount(snapshots.at(-1)!)).toBe(1);
   });
 
   it("still propagates a user Stop as an abort throw despite the composed signal", async () => {

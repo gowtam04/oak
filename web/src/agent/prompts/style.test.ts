@@ -261,6 +261,23 @@ describe("Team-build budget policy — batch learnsets + staple items", () => {
   }
 });
 
+describe("Roster vs full-build policy — catalog shortlist, not exhaustive", () => {
+  for (const provider of PROVIDERS) {
+    for (const mode of ["standard", "champions"] as const) {
+      it(`splits roster/catalog from full build (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        expect(text).toContain("roster/catalog vs full build");
+        expect(text).toContain("8–12 staples");
+        expect(text).toContain("representative coverage");
+        // Source wraps mid-sentence; match durable fragments, not the join.
+        expect(text).toContain("Do NOT call get_learnset per");
+        expect(text).toContain("on a roster turn");
+        expect(text).toContain("partial high-signal list");
+      });
+    }
+  }
+});
+
 describe("Anti-leak — no internal machinery in user-visible fields", () => {
   for (const provider of PROVIDERS) {
     for (const mode of ["standard", "champions", "gen-7"] as const) {
