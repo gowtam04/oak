@@ -5,6 +5,7 @@ import type {
   ConversationThreadResponse,
   StoredTurn,
 } from "@/lib/admin/admin-types";
+import { formatClientPlatforms } from "@/lib/client-platform";
 import AnswerCard from "@/components/answer-card/AnswerCard";
 
 /**
@@ -179,6 +180,12 @@ export default function ConversationThread({
               <dt>Format</dt>
               <dd data-testid="conversation-thread-format">
                 {formatLabel(summary.format)}
+              </dd>
+            </div>
+            <div className="conversation-thread__meta-item">
+              <dt>Client</dt>
+              <dd data-testid="conversation-thread-client">
+                {formatClientPlatforms(summary.clients ?? [])}
               </dd>
             </div>
             <div className="conversation-thread__meta-item">

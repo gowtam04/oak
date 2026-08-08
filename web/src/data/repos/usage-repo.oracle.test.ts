@@ -160,6 +160,16 @@ describe("recordTurn", () => {
     expect(row!.account_id).toBeNull();
   });
 
+  it("persists client platform when provided, null when omitted", async () => {
+    const withClient = answeredTurn({ client: "ios" });
+    await repo.recordTurn(withClient);
+    expect((await readTurn(withClient.id))!.client).toBe("ios");
+
+    const without = answeredTurn();
+    await repo.recordTurn(without);
+    expect((await readTurn(without.id))!.client).toBeNull();
+  });
+
   it("derives tool_error_count from the tool trace (mix of error/no-error)", async () => {
     const input = answeredTurn({
       toolTrace: [

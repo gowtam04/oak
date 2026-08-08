@@ -33,6 +33,8 @@ struct VoiceEndpointTests {
     #expect(request.url?.path == "/api/voice/token")
     #expect(request.httpMethod == "POST")
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer test-token")
+    // First-party platform identity for admin turn_record.client.
+    #expect(request.value(forHTTPHeaderField: "X-Oak-Client") == "ios")
 
     let object = try bodyObject(endpoint)
     #expect(object["session_id"] as? String == "sess_1")

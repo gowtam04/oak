@@ -144,6 +144,7 @@ async function seedGuestConversationFixture(): Promise<void> {
       citation_count: 0,
       turn_latency_ms: 1000,
       images_count: 0,
+      client: "ios",
       prompt_text: "zzzguest first question",
       answer_text: "zzzguest first answer",
       answer_json: JSON.stringify({
@@ -168,6 +169,7 @@ async function seedGuestConversationFixture(): Promise<void> {
       citation_count: 0,
       turn_latency_ms: 1000,
       images_count: 0,
+      client: "web",
       prompt_text: "zzzguest follow up",
       answer_text: "zzzguest second answer",
       answer_json: JSON.stringify({
@@ -768,6 +770,8 @@ describe("getConversationThread", () => {
     expect(thread!.summary.accountEmail).toBeNull();
     expect(thread!.summary.format).toBe("champions");
     expect(thread!.summary.messageCount).toBe(4);
+    // Distinct clients in stable web → ios → android order.
+    expect(thread!.summary.clients).toEqual(["web", "ios"]);
     expect(thread!.turns.map((t) => t.role)).toEqual([
       "user",
       "assistant",
@@ -777,6 +781,12 @@ describe("getConversationThread", () => {
     expect(thread!.turns[0]!.textContent).toBe("zzzguest first question");
     expect(thread!.turns[1]!.textContent).toBe("zzzguest first answer");
     expect(thread!.turns[1]!.answerJson).not.toBeNull();
+  });
+
+  it("returns empty clients when turn_record has no client column values", async () => {
+    const thread = await repo.getConversationThread(GUEST_CONV.GUEST_RL.id);
+    expect(thread).not.toBeNull();
+    expect(thread!.summary.clients).toEqual([]);
   });
 
   it("omits the assistant turn for a rate_limited guest turn", async () => {

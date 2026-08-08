@@ -25,6 +25,7 @@ const SUMMARY: ConversationSummary = {
   messageCount: 3,
   createdAt: 1_700_000_100_000,
   updatedAt: 1_700_000_300_000,
+  clients: ["web"],
 };
 
 /** A plain user message turn. */
@@ -83,9 +84,36 @@ describe("ConversationThread", () => {
     expect(screen.getByTestId("conversation-thread-format")).toHaveTextContent(
       "Champions",
     );
+    expect(screen.getByTestId("conversation-thread-client")).toHaveTextContent(
+      "Web",
+    );
     expect(
       screen.getByTestId("conversation-thread-message-count"),
     ).toHaveTextContent("3");
+  });
+
+  it("formats multiple clients and falls back to em dash when unknown", () => {
+    render(
+      <ConversationThread
+        thread={{
+          summary: { ...SUMMARY, clients: ["android", "ios"] },
+          turns: [USER_TURN],
+        }}
+      />,
+    );
+    expect(screen.getByTestId("conversation-thread-client")).toHaveTextContent(
+      "iOS, Android",
+    );
+
+    cleanup();
+    render(
+      <ConversationThread
+        thread={{ summary: { ...SUMMARY, clients: [] }, turns: [USER_TURN] }}
+      />,
+    );
+    expect(screen.getByTestId("conversation-thread-client")).toHaveTextContent(
+      "—",
+    );
   });
 
   it("renders a user turn as plain message text with a role label", () => {

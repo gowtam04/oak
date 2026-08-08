@@ -23,6 +23,7 @@ const SIGNED_CONVO: ConversationSummary = {
   messageCount: 6,
   createdAt: 1_700_000_100_000,
   updatedAt: 1_700_000_300_000,
+  clients: [],
 };
 
 const CHAMPIONS_CONVO: ConversationSummary = {
@@ -34,6 +35,7 @@ const CHAMPIONS_CONVO: ConversationSummary = {
   messageCount: 2,
   createdAt: 1_700_000_050_000,
   updatedAt: 1_700_000_080_000,
+  clients: [],
 };
 
 const GUEST_CONVO: ConversationSummary = {
@@ -45,6 +47,7 @@ const GUEST_CONVO: ConversationSummary = {
   messageCount: 4,
   createdAt: 1_700_000_000_000,
   updatedAt: 1_700_000_010_000,
+  clients: [],
 };
 
 const ROWS = [SIGNED_CONVO, CHAMPIONS_CONVO];

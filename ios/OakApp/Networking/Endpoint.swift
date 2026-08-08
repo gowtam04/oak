@@ -79,6 +79,8 @@ struct Endpoint: Sendable {
     var request = URLRequest(url: url)
     request.httpMethod = method.rawValue
     request.setValue("application/json", forHTTPHeaderField: "Accept")
+    // First-party platform identity for admin turn_record.client (web/iOS/Android).
+    request.setValue("ios", forHTTPHeaderField: "X-Oak-Client")
     if requiresAuth, let token {
       request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }

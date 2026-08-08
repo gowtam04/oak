@@ -151,6 +151,14 @@ class OakApiClientTest {
     }
 
     @Test
+    fun sendsOakClientPlatformHeader() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
+        client.sendNoContent(Endpoint(Endpoint.Method.GET, "/api/auth/me", requiresAuth = false))
+        val recorded = server.takeRequest()
+        assertEquals("android", recorded.getHeader("X-Oak-Client"))
+    }
+
+    @Test
     fun bearerAbsentWhenEndpointDoesNotRequireAuth() = runTest {
         tokenStore.set("secret-token")
         server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))

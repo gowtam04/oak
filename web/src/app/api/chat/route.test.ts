@@ -160,11 +160,18 @@ function signedIn(
   });
 }
 
-function post(body: unknown, signal?: AbortSignal): Promise<Response> {
+function post(
+  body: unknown,
+  signal?: AbortSignal,
+  extraHeaders?: Record<string, string>,
+): Promise<Response> {
   return route.POST(
     new Request("http://t/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...extraHeaders,
+      },
       body: JSON.stringify(body),
       ...(signal ? { signal } : {}),
     }),
@@ -306,6 +313,26 @@ describe("POST /api/chat — turn recording", () => {
     expect(typeof input.model).toBe("string");
     // The full tool trace is forwarded so the repo can derive tool_error_count.
     expect(input.toolTrace).toHaveLength(FAKE_TRACE.tool_trace.length);
+    // No X-Oak-Client header on this request → client is null (never invent web).
+    expect(input.client).toBeNull();
+  });
+
+  it("records client platform from X-Oak-Client when present", async () => {
+    signedIn(ACCT_A);
+    await drain(
+      await post(
+        { session_id: "rec-client", message: "from ios" },
+        undefined,
+        { "X-Oak-Client": "ios" },
+      ),
+    );
+    expect(usage.recordTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "rec-client",
+        client: "ios",
+        promptText: "from ios",
+      }),
+    );
   });
 
   it("a recorder that rejects never fails or delays the turn", async () => {

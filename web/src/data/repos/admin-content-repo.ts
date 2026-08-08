@@ -71,6 +71,11 @@ import {
   turn_record,
 } from "@/data/schema";
 import { teamMembersSchema, type TeamMember } from "@/data/teams/team-schema";
+import {
+  CLIENT_PLATFORMS,
+  parseClientPlatform,
+  type ClientPlatform,
+} from "@/lib/client-platform";
 import { estimateCostUsd } from "@/server/admin/pricing";
 import { deriveTitle } from "@/server/history/derive-title";
 import type { ToolTraceEntry } from "@/server/logger";
@@ -106,6 +111,28 @@ import type {
  */
 function likePattern(q: string): string {
   return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
+/**
+ * Distinct first-party platforms recorded on a conversation/session's
+ * `turn_record` rows, in stable web → ios → android order. Unknown/null
+ * values are dropped. conversation.id IS the client session_id (HIST-AD-1).
+ */
+async function clientsForSession(
+  sessionId: string,
+): Promise<ClientPlatform[]> {
+  const rows = await db
+    .selectDistinct({ client: turn_record.client })
+    .from(turn_record)
+    .where(
+      and(eq(turn_record.session_id, sessionId), isNotNull(turn_record.client)),
+    );
+  const set = new Set<ClientPlatform>();
+  for (const r of rows) {
+    const parsed = parseClientPlatform(r.client);
+    if (parsed) set.add(parsed);
+  }
+  return CLIENT_PLATFORMS.filter((c) => set.has(c));
 }
 
 /** Clamp a requested page size into a sane range (lenient: bad/0/∞ → default). */
@@ -784,6 +811,9 @@ export async function listAllConversations(
       messageCount: num(r.message_count),
       createdAt: num(r.created_at),
       updatedAt: num(r.updated_at),
+      // List browser does not join turn_record.client (avoid N+1); thread
+      // detail loads clients via getConversationThread.
+      clients: [],
     };
   });
 
@@ -848,6 +878,8 @@ export async function getConversationThread(
       createdAt: t.createdAt,
     }));
 
+    const clients = await clientsForSession(conversationId);
+
     const summary: ConversationSummary = {
       id: c.id,
       accountId: c.accountId,
@@ -857,6 +889,7 @@ export async function getConversationThread(
       messageCount: turns.length,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
+      clients,
     };
 
     return { summary, turns };
@@ -870,6 +903,7 @@ export async function getConversationThread(
       id: turn_record.id,
       status: turn_record.status,
       mode: turn_record.mode,
+      client: turn_record.client,
       promptText: turn_record.prompt_text,
       answerText: turn_record.answer_text,
       answerJson: turn_record.answer_json,
@@ -888,7 +922,10 @@ export async function getConversationThread(
 
   const turns: StoredTurn[] = [];
   let seq = 0;
+  const clientSet = new Set<ClientPlatform>();
   for (const t of guestTurns) {
+    const parsed = parseClientPlatform(t.client);
+    if (parsed) clientSet.add(parsed);
     turns.push({
       id: `${t.id}-u`,
       role: "user",
@@ -920,6 +957,7 @@ export async function getConversationThread(
     messageCount: turns.length,
     createdAt: first.createdAt,
     updatedAt: last.createdAt,
+    clients: CLIENT_PLATFORMS.filter((c) => clientSet.has(c)),
   };
 
   return { summary, turns };

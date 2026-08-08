@@ -65,6 +65,10 @@ import {
 import { runTurn } from "@/server/run-turn";
 import { startTurn } from "@/server/turn-store";
 import { streamTurnResponse } from "@/server/turn-stream";
+import {
+  CLIENT_PLATFORM_HEADER,
+  parseClientPlatform,
+} from "@/lib/client-platform";
 import type { ChatRequestBody, ScopeEvent } from "@/lib/sse/sse-types";
 
 // Node runtime (node-postgres + the Anthropic SDK need it) and never cached /
@@ -147,6 +151,9 @@ function parseBody(
 
 export async function POST(req: Request): Promise<Response> {
   const requestId = randomUUID();
+  // First-party client platform for admin turn_record (web | ios | android).
+  // Missing/invalid → null; never invent a default.
+  const client = parseClientPlatform(req.headers.get(CLIENT_PLATFORM_HEADER));
 
   // 0+1. Read + parse the body under a HARD streaming byte cap (EDGE-01). This
   //    replaces the old Content-Length-only guard, which a chunked-encoding
@@ -302,6 +309,7 @@ export async function POST(req: Request): Promise<Response> {
         citationCount: 0,
         turnLatencyMs: 0,
         imagesCount: images.length,
+        client,
         promptText: message,
         answerText: null,
         answer: null,
@@ -613,6 +621,7 @@ export async function POST(req: Request): Promise<Response> {
     proposedTeam,
     images,
     activeModel,
+    client,
   });
   return response;
 }
