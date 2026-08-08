@@ -1,13 +1,11 @@
 import SwiftUI
 
-/// Top-level navigation shell: a three-tab `TabView` (Chat / Teams / More). Chat is
-/// the default surface on launch (M-AC-UI2.1); conversation history is folded into the
-/// Chat tab WhatsApp-style (the list appears once signed in), so there is no separate
-/// History tab. Teams hosts the team-builder library (``TeamsListView``, which already
-/// owns its own `NavigationStack` and guest-vs-signed-in branching internally). More is
-/// a list screen (``MoreView``, also owning its own `NavigationStack`) whose first row
-/// pushes ``AccountView`` — a scalable home for future destinations that slot in as
-/// rows rather than new tabs.
+/// Top-level navigation shell: a four-tab `TabView` (Chat / Teams / Dex / Account).
+/// Chat is the default surface on launch (M-AC-UI2.1); conversation history is folded
+/// into the Chat tab WhatsApp-style (the list appears once signed in), so there is no
+/// separate History tab. Teams hosts the team-builder library. Dex browses the public
+/// reference index (Pokémon / Moves / Abilities / Items). Account is a first-class tab
+/// (no intermediate More list).
 ///
 /// This view is the single wiring point for launch behavior:
 ///   * on appear it restores the session (a stored Bearer token resolves to
@@ -30,12 +28,13 @@ struct RootView: View {
   /// The selected tab, tracked so tab changes can fire haptics + a symbol bounce.
   @State private var selection: AppTab = .chat
 
-  /// The three root destinations. Named `AppTab` to avoid colliding with SwiftUI's
+  /// The four root destinations. Named `AppTab` to avoid colliding with SwiftUI's
   /// `Tab`; `Hashable` so it can back the `TabView(selection:)`.
   private enum AppTab: Hashable {
     case chat
     case teams
-    case more
+    case dex
+    case account
   }
 
   var body: some View {
@@ -54,11 +53,19 @@ struct RootView: View {
         Label("Teams", systemImage: "square.grid.3x2.fill")
           .symbolEffect(.bounce, value: selection == .teams)
       }
-      Tab(value: AppTab.more) {
-        MoreView()
+      Tab(value: AppTab.dex) {
+        DexView()
       } label: {
-        Label("More", systemImage: "ellipsis")
-          .symbolEffect(.bounce, value: selection == .more)
+        Label("Dex", systemImage: "books.vertical")
+          .symbolEffect(.bounce, value: selection == .dex)
+      }
+      Tab(value: AppTab.account) {
+        NavigationStack {
+          AccountView(model: AccountViewModel(auth: services.auth, appState: appState))
+        }
+      } label: {
+        Label("Account", systemImage: "person.crop.circle")
+          .symbolEffect(.bounce, value: selection == .account)
       }
     }
     .tint(Theme.accent)

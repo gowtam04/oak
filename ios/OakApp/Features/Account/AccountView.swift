@@ -6,9 +6,8 @@ import SwiftUI
 /// was removed — scope is chosen per conversation via the header scope chip
 /// (`ChatView`), matching web (which also dropped its default toggle).
 ///
-/// Pushed from the More tab's list (nav restructure: Chat / Teams / More), so this
-/// view no longer owns a `NavigationStack` — it supplies the `Form` and title, and
-/// ``MoreView`` supplies the stack.
+/// Hosted as a first-class tab root (Chat / Teams / Dex / Account). The tab wraps
+/// this view in a `NavigationStack`; this view supplies the `Form` and title.
 ///
 /// The view owns its ``AccountViewModel`` (`@State`) and drives it from `Task`s;
 /// all logic and copy live in the view model. Layout uses Dynamic-Type styles and

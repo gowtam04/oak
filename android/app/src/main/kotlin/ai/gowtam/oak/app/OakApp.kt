@@ -1,13 +1,15 @@
 package ai.gowtam.oak.app
 
+import ai.gowtam.oak.features.account.AccountScreen
+import ai.gowtam.oak.features.account.AccountViewModel
 import ai.gowtam.oak.features.artifact.ArtifactViewModel
 import ai.gowtam.oak.features.auth.AuthDialog
 import ai.gowtam.oak.features.auth.AuthViewModel
 import ai.gowtam.oak.features.chat.ChatScreen
 import ai.gowtam.oak.features.chat.ChatViewModel
+import ai.gowtam.oak.features.dex.DexRoute
 import ai.gowtam.oak.features.history.HistoryScreen
 import ai.gowtam.oak.features.history.HistoryViewModel
-import ai.gowtam.oak.features.more.MoreRoute
 import ai.gowtam.oak.features.teams.TeamsRoute
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.ConnectionBanner
@@ -30,9 +32,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,7 +44,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -58,13 +59,13 @@ import androidx.compose.ui.unit.dp
 private enum class OakTab(val label: String) {
     Chat("Chat"),
     Teams("Teams"),
-    More("More"),
+    Dex("Dex"),
+    Account("Account"),
 }
 
 /**
- * The app's root composable — the 3-tab `NavigationBar` shell (component-design.md
- * "Navigation graph"). Chat, Teams, and More are all fully wired to their real
- * screens (More's own list ⟷ Account push is owned by [MoreRoute]). The
+ * The app's root composable — the 4-tab `NavigationBar` shell (Chat / Teams /
+ * Dex / Account). Chat, Teams, Dex, and Account are all fully wired. The
  * [ChatViewModel] and [ArtifactViewModel] are owned by the caller
  * (`MainActivity`) and passed in so their stream/back-stack state survives a tab
  * switch away from Chat and back.
@@ -154,7 +155,13 @@ fun OakApp(
                                 artifactViewModel = artifactViewModel,
                             )
                             OakTab.Teams -> TeamsRoute(services = services, appState = appState)
-                            OakTab.More -> MoreRoute(services = services, appState = appState)
+                            OakTab.Dex -> DexRoute(services = services, appState = appState)
+                            OakTab.Account -> {
+                                val accountViewModel = remember(services, appState) {
+                                    AccountViewModel(services.auth, appState)
+                                }
+                                AccountScreen(viewModel = accountViewModel, onBack = null)
+                            }
                         }
                     }
                 }
@@ -166,7 +173,8 @@ fun OakApp(
 private fun OakTab.icon() = when (this) {
     OakTab.Chat -> Icons.AutoMirrored.Filled.Chat
     OakTab.Teams -> Icons.Filled.Groups
-    OakTab.More -> Icons.Filled.MoreHoriz
+    OakTab.Dex -> Icons.AutoMirrored.Filled.MenuBook
+    OakTab.Account -> Icons.Filled.AccountCircle
 }
 
 // ---------------------------------------------------------------------------

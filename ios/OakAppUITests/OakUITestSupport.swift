@@ -63,15 +63,15 @@ enum OakUITest {
 
   // MARK: Visible-label targets (mirror the app's labels)
 
-  /// Tab-bar button labels (`RootView`). The app ships THREE tabs — Chat, Teams, and
-  /// More. History folded into the Chat tab (signed-in users see a conversation list
-  /// there); Account moved under the More tab (nav restructure: Chat / Teams / More),
-  /// reached via the More tab's Account row (``MoreScreen``).
+  /// Tab-bar button labels (`RootView`). The app ships FOUR tabs — Chat, Teams, Dex,
+  /// and Account. History folded into the Chat tab (signed-in users see a conversation
+  /// list there); Account is a first-class tab (no intermediate More list).
   enum Tab {
     static let chat = "Chat"
     static let teams = "Teams"
-    static let more = "More"
-    static let all = [chat, teams, more]
+    static let dex = "Dex"
+    static let account = "Account"
+    static let all = [chat, teams, dex, account]
   }
 
   /// Chat surface (`ChatView` / `ComposerView`).
@@ -100,14 +100,7 @@ enum OakUITest {
     static let openTeamInViewer = "Open team in viewer"
   }
 
-  /// More surface (`MoreView`): the list screen reached from the More tab, whose
-  /// first row pushes ``Account``.
-  enum MoreScreen {
-    static let navigationTitle = "More"
-    static let accountRow = "Account"
-  }
-
-  /// Account / Settings surface (`AccountView`).
+  /// Account / Settings surface (`AccountView`) — first-class tab root.
   enum Account {
     static let navigationTitle = "Account"
     static let signIn = "Sign in"
