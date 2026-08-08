@@ -331,11 +331,16 @@ struct CandidatesTableView: View {
 
   // MARK: Layout helper
 
-  /// One table cell: consistent padding, fills its grid column (so the row
-  /// background reads as one continuous band with `horizontalSpacing: 0`), and
-  /// aligns its content. `accentWash` layers a faint accent tint on top of
-  /// `background` (not a replacement) for the actively-sorted column, so the sort
-  /// is legible without depending on the header caret alone.
+  /// One table cell: consistent padding, fills its grid **column and row** (so the
+  /// zebra/header wash reads as one continuous band with `horizontalSpacing: 0`
+  /// and `verticalSpacing: 0`), and aligns its content. Without `maxHeight:
+  /// .infinity`, short cells (type badges) only paint content height while tall
+  /// sibling cells (sprite + name + dex) fill the row — zebra bands break into
+  /// left-only gray strips. Same lesson as web/Android painting the whole row,
+  /// and as GFM table cells filling their column width.
+  /// `accentWash` layers a faint accent tint on top of `background` (not a
+  /// replacement) for the actively-sorted column, so the sort is legible without
+  /// depending on the header caret alone.
   @ViewBuilder
   private func cell<Content: View>(
     background: Color,
@@ -346,7 +351,7 @@ struct CandidatesTableView: View {
     content()
       .padding(.horizontal, Theme.Spacing.md)
       .padding(.vertical, Theme.Spacing.sm)
-      .frame(maxWidth: .infinity, alignment: alignment)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
       .background {
         ZStack {
           background
