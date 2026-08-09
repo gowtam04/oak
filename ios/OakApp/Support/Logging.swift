@@ -23,4 +23,7 @@ enum Log {
 
   /// UI: view/navigation lifecycle and recoverable user-facing states.
   static let ui = Logger(subsystem: subsystem, category: "ui")
+
+  /// Soft-update checks (App Store Lookup): outcome only, never PII.
+  static let update = Logger(subsystem: subsystem, category: "update")
 }

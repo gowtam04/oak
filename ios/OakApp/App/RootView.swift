@@ -23,7 +23,9 @@ import SwiftUI
 /// needed — SwiftUI's symbol effects already no-op under that setting.
 struct RootView: View {
   @Environment(\.services) private var services
+  @Environment(\.scenePhase) private var scenePhase
   @Environment(AppState.self) private var appState
+  @Environment(UpdateViewModel.self) private var updateModel
 
   /// The selected tab, tracked so tab changes can fire haptics + a symbol bounce.
   @State private var selection: AppTab = .chat
@@ -70,11 +72,37 @@ struct RootView: View {
     }
     .tint(Theme.accent)
     .onChange(of: selection) { _, _ in Haptics.tap() }
-    .task { await appState.restoreSession(using: services.auth) }
+    .task {
+      await appState.restoreSession(using: services.auth)
+      await updateModel.checkIfNeeded()
+    }
+    .onChange(of: scenePhase) { _, phase in
+      // Foreground re-check is throttled inside the view model (24h).
+      if phase == .active {
+        Task { await updateModel.checkIfNeeded() }
+      }
+    }
     .onChange(of: appState.authState) { _, newValue in
       if case .signedIn = newValue {
         Task { await appState.importGuestThread(using: services.history) }
       }
+    }
+    .sheet(
+      item: Binding(
+        get: { updateModel.pendingSoftUpdate },
+        set: { newValue in
+          // Swipe-to-dismiss / system dismiss → same as "Not now" (snooze).
+          if newValue == nil, updateModel.pendingSoftUpdate != nil {
+            updateModel.dismissSoftUpdate()
+          }
+        }
+      )
+    ) { offer in
+      UpdateAvailableSheet(
+        offer: offer,
+        onUpdate: { updateModel.openStore() },
+        onNotNow: { updateModel.dismissSoftUpdate() }
+      )
     }
   }
 }
