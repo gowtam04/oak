@@ -59,10 +59,17 @@ type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,regulation,showdown
 
 ## What's New (this release)
 
+**1.0.2 (build 34)** — submitted to App Review 2026-08-09; auto-release after approval.
+
 ```
-Welcome to Oak for iPhone — chat-based team reasoning, a full competitive team builder with Showdown-format import/export, and one-tap regulation-format switching, right in your pocket. Sign in with an email code to sync your chats and teams across devices.
+What's new in 1.0.2
+
+• New Dex tab to browse Pokémon species and game data in the app
+• Account tab for sign-in, privacy, and app info
+• Optional soft update prompt when a newer version is on the App Store
+• Cleaner answer tables and general UI polish
 ```
-**257 / 4000 chars** (kept tight since this is a first release, not a changelog).
+**~220 / 4000 chars.**
 
 ## Submission checklist (not produced by this listing — flagged for the user)
 
