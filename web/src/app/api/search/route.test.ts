@@ -81,11 +81,23 @@ describe("GET /api/search", () => {
     const body = (await res.json()) as {
       matches: { slug: string; display_name: string; kind: string }[];
     };
-    // Focusing an empty picker browses options, not an empty list.
-    expect(body.matches.length).toBeGreaterThan(0);
+    // Blank browse returns the FULL kind (Dex tab / picker focus) — not a
+    // partial window that forces typing to reach the rest of the index.
+    const { SEARCHABLE_NAMES_SEED } = await import(
+      "../../../../test/fixtures/tools-fixture"
+    );
+    const expectedPokemon = SEARCHABLE_NAMES_SEED.filter(
+      (n) => n.kind === "pokemon",
+    );
+    expect(body.matches).toHaveLength(expectedPokemon.length);
     expect(body.matches.every((m) => m.kind === "pokemon")).toBe(true);
     const names = body.matches.map((m) => m.display_name);
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+    // Every seeded slug is present (no silent cap at 50).
+    const slugs = new Set(body.matches.map((m) => m.slug));
+    for (const p of expectedPokemon) {
+      expect(slugs.has(p.slug)).toBe(true);
+    }
   });
 
   it("returns ranked, slug-bearing matches for a partial name", async () => {

@@ -40,16 +40,16 @@ function toMatch(value: unknown): SearchMatch | null {
 
 /**
  * Resolve candidate matches for a query `q` of one `kind` in `format`. A typed
- * `q` returns ranked matches; a blank `q` returns an alphabetical listing (so a
- * focused picker can show options to browse). A guest or any failure yields `[]`.
+ * `q` returns ranked matches (capped); a blank `q` returns the full kind
+ * alphabetically (Dex browse / focused picker). A guest or any failure yields `[]`.
  */
 export async function searchEntities(
   kind: EntityKind,
   q: string,
   format: Format,
 ): Promise<SearchMatch[]> {
-  // An empty query is allowed: the route returns an alphabetical listing so a
-  // focused picker can show options to browse before any typing.
+  // An empty query is allowed: the route returns the full kind alphabetically
+  // so Dex / a focused picker can browse before any typing.
   const query = q.trim();
   try {
     const params = new URLSearchParams({ kind, q: query, format });

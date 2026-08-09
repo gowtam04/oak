@@ -12,7 +12,7 @@
  *
  * Responses (all in-domain results ride a 200, mirroring `/api/entity`):
  *   - 200 { matches: { slug, display_name, kind }[] }   (typed: ≤ LIMIT best-first;
- *           blank query: an alphabetical listing ≤ LISTING_LIMIT, to browse on focus)
+ *           blank query: the full kind, alphabetical — Dex browse + picker focus)
  *   - 400 { error }         for a malformed/missing kind or format
  *
  * Never throws for in-domain misses: an unreadable index degrades to an empty
@@ -34,10 +34,6 @@ const KINDS = new Set<string>(ENTITY_KINDS);
 
 /** Max matches returned per typed query — enough for a dropdown, bounds abuse. */
 const LIMIT = 8;
-
-/** Max entities listed for a blank query (focus with no input) — a browsable
- *  window the user then narrows by typing. Larger than LIMIT but still bounded. */
-const LISTING_LIMIT = 50;
 
 /** Cap the query length — names are short; this bounds fuse.js work. */
 const MAX_Q = 64;
@@ -70,11 +66,11 @@ export async function GET(req: Request): Promise<Response> {
 
   try {
     const repo = await import("@/data/repos/resolve-index");
-    // A blank query (a focused, empty picker) lists the kind's options so the
-    // user can browse + filter; a typed query fuzzy-ranks the best matches.
+    // A blank query lists the full kind alphabetically (Dex browse + picker
+    // focus). A typed query fuzzy-ranks the best matches (capped).
     const { matches } =
       q.length === 0
-        ? await repo.listEntities(kind, LISTING_LIMIT, format)
+        ? await repo.listEntities(kind, undefined, format)
         : await repo.resolveEntity(q, kind, LIMIT, format);
     return json(200, {
       matches: matches.map((m) => ({

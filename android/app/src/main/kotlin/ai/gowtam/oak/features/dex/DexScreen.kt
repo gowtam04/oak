@@ -160,7 +160,6 @@ fun DexListScreen(
                     }
                     list.matches.isEmpty() -> {
                         EmptyMatches(
-                            sectionTitle = list.section.title,
                             hasQuery = list.query.isNotEmpty(),
                             modifier = Modifier.align(Alignment.Center).padding(OakSpacing.lg),
                         )
@@ -170,16 +169,6 @@ fun DexListScreen(
                             items(list.matches, key = { "${it.kind.rawValue}:${it.slug}" }) { match ->
                                 MatchRow(match = match, onClick = { onOpen(match.kind, match.slug) })
                                 HorizontalDivider(color = oak.border)
-                            }
-                            if (list.query.isEmpty()) {
-                                item {
-                                    Text(
-                                        "Showing the first results — type to search the full index.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = oak.textMuted,
-                                        modifier = Modifier.padding(OakSpacing.md),
-                                    )
-                                }
                             }
                         }
                     }
@@ -240,7 +229,7 @@ private fun MatchRow(match: SearchMatch, onClick: () -> Unit) {
 }
 
 @Composable
-private fun EmptyMatches(sectionTitle: String, hasQuery: Boolean, modifier: Modifier = Modifier) {
+private fun EmptyMatches(hasQuery: Boolean, modifier: Modifier = Modifier) {
     val oak = LocalOakColors.current
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -253,7 +242,7 @@ private fun EmptyMatches(sectionTitle: String, hasQuery: Boolean, modifier: Modi
             if (hasQuery) {
                 "Try a different name or scope."
             } else {
-                "Type to search the full ${sectionTitle.lowercase()} index."
+                "No entries in this scope."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = oak.textMuted,

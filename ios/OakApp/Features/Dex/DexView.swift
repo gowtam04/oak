@@ -79,7 +79,7 @@ struct DexView: View {
           } description: {
             Text(
               model.query.isEmpty
-                ? "Type to search the full \(model.section.title.lowercased()) index."
+                ? "No entries in this scope."
                 : "Try a different name or scope."
             )
           }
@@ -105,14 +105,6 @@ struct DexView: View {
             .listRowBackground(Theme.surface)
             .accessibilityHint("Opens \(match.displayName)")
           }
-        }
-
-        if model.query.isEmpty && !model.matches.isEmpty {
-          Text("Showing the first results — type to search the full index.")
-            .font(Theme.body(.caption))
-            .foregroundStyle(Theme.textSecondary)
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
         }
       }
       .listStyle(.plain)
