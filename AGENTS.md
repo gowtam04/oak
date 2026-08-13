@@ -305,3 +305,53 @@ A commit that fixes a feedback item **must** flip that item's ledger row to
 `fixed (<commit>, build N)` in the same commit. Run the sync script promptly
 when new feedback arrives — ASC's screenshot/crash-log asset URLs expire
 (~30 days), so unsynced feedback loses its assets permanently.
+
+## Cursor Cloud specific instructions
+
+This section is for the **web app only** (`web/`). The `ios/`/`android/` clients
+need macOS/Xcode and the Android SDK, neither of which exists in this Linux VM —
+they are out of scope here. Follow the existing "Commands", "Testing", and
+"Gotchas" sections; the notes below are only the non-obvious cloud-VM specifics.
+
+- **The dev environment is native, not Docker-compose.** The VM already has
+  system **PostgreSQL 16** and **Redis** installed (apt), plus a **Docker** engine
+  (for Testcontainers). Do **not** use `npm run docker:dev` — run `next dev`
+  directly against local Postgres, exactly the "run directly against a local
+  Postgres" path in the README.
+- **There is no systemd** — start services by hand at the beginning of a session
+  (they are not auto-started on boot). The update script does NOT start them:
+  - Postgres: `sudo pg_ctlcluster 16 main start`
+  - Redis: `sudo redis-server /etc/redis/redis.conf --daemonize yes`
+  - Docker (only needed for `npm test`): `sudo dockerd > /tmp/dockerd.log 2>&1 &`
+    then, to use it as the non-root `ubuntu` user, `sudo chmod 666 /var/run/docker.sock`.
+- **DB is pre-provisioned.** A `oak` role (password `oak`, superuser) and `oak`
+  database already exist and match the default `DATABASE_URL`
+  (`postgres://oak:oak@localhost:5432/oak`), and the index is already built
+  (`npm run db:migrate` + `npm run ingest`). The `@pkmn` ingest is fully offline.
+  Re-run `npm run db:migrate && npm run ingest` after any schema change (see the
+  Gotchas re-ingest note). The wiki corpus is intentionally empty (no
+  `web/.wiki-cache/`), so `search_wiki` returns nothing here.
+- **`web/.env.local` holds a placeholder `XAI_API_KEY`.** It lets the app and the
+  `tsx` scripts boot, but **real chat/voice/eval need a valid `XAI_API_KEY`** — a
+  placeholder key makes `/api/chat` emit a `model_provider_error` (HTTP 400) from
+  xAI. All the non-LLM surfaces work fully: the `/pokedex`·`/moves`·`/abilities`·
+  `/items`·`/meta` reference pages and the `/api/search`·`/api/entity`·
+  `/api/learnset` read APIs render live from the ingested index.
+- **`tsx` scripts (`db:migrate`, `ingest`, `sync:meta`, `eval`) do NOT auto-load
+  `.env.local`.** `next dev` does. For the scripts, either rely on the built-in
+  defaults (the default `DATABASE_URL` already matches local Postgres) or export
+  the vars first. Do **not** `source`/`set -a` `web/.env.local` — `EMAIL_FROM`'s
+  unquoted `<` in `Oak <onboarding@resend.dev>` breaks POSIX sourcing.
+- **Run `npm test` with `DATABASE_URL` and `REDIS_URL` UNSET in the shell.** The
+  node project injects its own Testcontainers Postgres and expects `REDIS_URL`
+  absent (in-process store path). A leaked `DATABASE_URL`/`REDIS_URL` (e.g. from
+  exporting them for a prior `ingest`) makes fixture and store tests fail
+  spuriously. Prefer `env -u DATABASE_URL -u REDIS_URL npm run test:node`.
+- **Known pre-existing test failures on `develop` (NOT environment issues):** 10
+  node + 2 jsdom tests fail because the committed `test/fixtures/tools-fixture.ts`
+  seed grew and migration `0016_team_win_condition.sql` added a `win_condition`
+  column, but a handful of exact-count/column assertions
+  (`schema.test.ts`, `reference-pages.test.ts`, `pokedex-repo`/`reference-cache`/
+  `learnset-repo` repo tests, `tools-pokedex.oracle.test.ts`, `teams-client`/
+  `page-team-builder` jsdom tests) weren't updated to match. Don't chase these as
+  setup breakage.
