@@ -161,9 +161,12 @@ describe("query_pokedex oracle (T2)", () => {
         ctx,
       ),
     );
-    // No fixture mon exceeds 130 -> honest empty, NOT an error.
-    expect(strict.total_count).toBe(0);
-    expect(strict.results).toEqual([]);
+    // Only Mega Swampert (150) exceeds 130 — Garchomp sits exactly at the
+    // threshold and must be excluded by the strict operator.
+    expect(strict.total_count).toBe(1);
+    expect(strict.results.map((x) => x.display_name)).toEqual([
+      "Swampert (Mega)",
+    ]);
 
     const inclusive = expectSuccess(
       await dispatch(
@@ -172,8 +175,11 @@ describe("query_pokedex oracle (T2)", () => {
         ctx,
       ),
     );
-    expect(inclusive.total_count).toBe(1);
-    expect(inclusive.results[0]?.display_name).toBe("Garchomp");
+    expect(inclusive.total_count).toBe(2);
+    expect(inclusive.results.map((x) => x.display_name).sort()).toEqual([
+      "Garchomp",
+      "Swampert (Mega)",
+    ]);
   });
 
   it("returns { unresolved } (not a throw, not silent empty) for an unknown move slug", async () => {

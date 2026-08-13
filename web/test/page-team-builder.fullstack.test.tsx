@@ -260,9 +260,14 @@ describe("/teams — manual build", () => {
     await screen.findByTestId("team-list");
     expect(screen.queryByTestId("teams-guest")).not.toBeInTheDocument();
 
-    // Create a new team → the editor opens on it.
+    // Create a new team → the archetype picker opens first (B-17); choosing
+    // "Blank team" creates the empty team and opens the editor on it.
     await act(async () => {
       fireEvent.click(screen.getByTestId("team-new"));
+    });
+    await screen.findByTestId("archetype-picker");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Blank team" }));
     });
     await screen.findByTestId("team-editor");
     expect(store).toHaveLength(1);

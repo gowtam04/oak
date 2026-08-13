@@ -250,9 +250,9 @@ describe("reference-pages loaders (tools fixture)", () => {
   });
 
   describe("index loaders", () => {
-    it("loadPokedexIndex: 8 SV rows + 2 cross-scope extras (incineroar, decidueye)", async () => {
+    it("loadPokedexIndex: 9 SV rows + 2 cross-scope extras (incineroar, decidueye)", async () => {
       const index = await loadPokedexIndexUncached(db);
-      expect(index.rows).toHaveLength(8);
+      expect(index.rows).toHaveLength(9);
       expect(index.extras.map((e) => e.slug).sort()).toEqual([
         "decidueye",
         "incineroar",
@@ -260,9 +260,9 @@ describe("reference-pages loaders (tools fixture)", () => {
       expect(index.extras.every((e) => e.sourceFormat === "gen-7")).toBe(true);
     });
 
-    it("loadMovesIndex: 6 SV move names, flamethrower hydrated from its summary", async () => {
+    it("loadMovesIndex: 9 SV move names, flamethrower hydrated from its summary", async () => {
       const index = await loadMovesIndexUncached(db);
-      expect(index.rows).toHaveLength(6);
+      expect(index.rows).toHaveLength(9);
       const flamethrower = index.rows.find((r) => r.slug === "flamethrower");
       expect(flamethrower?.type).toBe("fire");
       expect(flamethrower?.power).toBe(90);
@@ -273,9 +273,13 @@ describe("reference-pages loaders (tools fixture)", () => {
       expect(index.rows).toHaveLength(5);
     });
 
-    it("loadItemsIndex: 2 SV items", async () => {
+    it("loadItemsIndex: 3 SV items", async () => {
       const index = await loadItemsIndexUncached(db);
-      expect(index.rows.map((r) => r.slug)).toEqual(["leftovers", "life-orb"]);
+      expect(index.rows.map((r) => r.slug)).toEqual([
+        "leftovers",
+        "life-orb",
+        "swampertite",
+      ]);
     });
   });
 

@@ -183,9 +183,15 @@ describe("learnersOfMove (tools fixture)", () => {
     ]);
   });
 
-  it("carries the learn method through the join (single learner)", async () => {
-    // earthquake (SV) is learned only by Garchomp, via machine.
+  it("carries the learn method through the join", async () => {
+    // earthquake (SV): Mega Swampert (dex 260, level-up) then Garchomp
+    // (dex 445, machine) — dex-then-slug ordering.
     expect(await learnersOfMove("earthquake", SV, tdb)).toEqual([
+      {
+        slug: "swampert-mega",
+        displayName: "Swampert (Mega)",
+        method: "level-up",
+      },
       { slug: "garchomp", displayName: "Garchomp", method: "machine" },
     ]);
   });
