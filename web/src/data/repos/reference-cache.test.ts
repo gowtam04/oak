@@ -316,7 +316,10 @@ describe("reference-page reads (tools fixture)", () => {
         "earthquake", // Earthquake
         "fake-out", // Fake Out
         "flamethrower", // Flamethrower
+        "ice-punch", // Ice Punch
+        "superpower", // Superpower
         "trick-room", // Trick Room
+        "waterfall", // Waterfall
         "will-o-wisp", // Will-O-Wisp
         "wish", // Wish
       ]);
@@ -338,6 +341,7 @@ describe("reference-page reads (tools fixture)", () => {
       expect(rows).toEqual([
         { slug: "leftovers", displayName: "Leftovers" },
         { slug: "life-orb", displayName: "Life Orb" },
+        { slug: "swampertite", displayName: "Swampertite" },
       ]);
     });
 

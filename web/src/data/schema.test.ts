@@ -408,11 +408,12 @@ describe("Drizzle migration — table creation", () => {
         "format",
         "name",
         "members",
+        "win_condition",
         "created_at",
         "updated_at",
       ]),
     );
-    expect(await columnNames(db, "team")).toHaveLength(7);
+    expect(await columnNames(db, "team")).toHaveLength(8);
     expect(await pkColumns(db, "team")).toEqual(["id"]);
 
     const indexes = await indexNames(db);

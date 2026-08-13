@@ -107,6 +107,7 @@ describe("getTeam", () => {
       format: "scarlet-violet",
       members: [MEMBER],
       validation,
+      winCondition: null,
     });
   });
 
