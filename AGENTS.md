@@ -331,12 +331,19 @@ they are out of scope here. Follow the existing "Commands", "Testing", and
   Re-run `npm run db:migrate && npm run ingest` after any schema change (see the
   Gotchas re-ingest note). The wiki corpus is intentionally empty (no
   `web/.wiki-cache/`), so `search_wiki` returns nothing here.
-- **`web/.env.local` holds a placeholder `XAI_API_KEY`.** It lets the app and the
-  `tsx` scripts boot, but **real chat/voice/eval need a valid `XAI_API_KEY`** — a
-  placeholder key makes `/api/chat` emit a `model_provider_error` (HTTP 400) from
-  xAI. All the non-LLM surfaces work fully: the `/pokedex`·`/moves`·`/abilities`·
-  `/items`·`/meta` reference pages and the `/api/search`·`/api/entity`·
-  `/api/learnset` read APIs render live from the ingested index.
+- **A real `XAI_API_KEY` is provided as an injected secret** (Grok is the primary
+  model, so this powers live chat/voice). `web/.env.local` still holds a
+  placeholder `XAI_API_KEY` as a boot fallback, but **the injected secret wins**:
+  a real env var takes precedence over `.env.local` in Next. Start `next dev` from
+  a shell that has the secret in its environment (a **freshly-started** login
+  shell — one started before the secret was added won't have it) so the real key
+  is used; otherwise the placeholder is used and `/api/chat` emits a
+  `model_provider_error` (HTTP 400). The `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`
+  alternate providers and the judged `eval` remain unconfigured unless their
+  secrets are also added. All non-LLM surfaces work regardless: the
+  `/pokedex`·`/moves`·`/abilities`·`/items`·`/meta` reference pages and the
+  `/api/search`·`/api/entity`·`/api/learnset` read APIs render live from the
+  ingested index.
 - **`tsx` scripts (`db:migrate`, `ingest`, `sync:meta`, `eval`) do NOT auto-load
   `.env.local`.** `next dev` does. For the scripts, either rely on the built-in
   defaults (the default `DATABASE_URL` already matches local Postgres) or export
