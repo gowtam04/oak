@@ -2,6 +2,7 @@ package ai.gowtam.oak.ui
 
 import android.provider.Settings
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -28,9 +29,9 @@ import androidx.compose.ui.unit.dp
  * re-expressed natively, mirroring the iOS `Theme` (`ios/OakApp/UI/Theme.swift`).
  * Material's [ColorScheme] carries the surface/text/primary ramp so components get
  * Material contrast + dark-mode behavior for free; the *extended* Oak tokens that
- * Material has no slot for (the accent hover/active variants, sunflower, azure, the
- * four semantic colors, the muted/faint text steps) ride a companion [OakColors]
- * over [LocalOakColors].
+ * Material has no slot for (the accent hover/active variants, azure, the four
+ * semantic colors, the muted/faint text steps) ride a companion [OakColors] over
+ * [LocalOakColors].
  *
  * Color is never the sole carrier of meaning — that pairing with text/icon is the
  * calling view's responsibility; the theme only supplies the palette and ramp.
@@ -70,8 +71,6 @@ data class OakColors(
     val accentHover: Color,
     val accentActive: Color,
     val accentSoft: Color,
-    val sunflower: Color,
-    val sunflowerSoft: Color,
     val azure: Color,
     val azureSoft: Color,
     val success: Color,
@@ -95,58 +94,54 @@ data class OakColors(
 
 /** Light-mode extended tokens (`:root` in globals.css). */
 val OakLightColors = OakColors(
-    accent = Color(0xFFEE5A5A),
-    accentHover = Color(0xFFE04545),
-    accentActive = Color(0xFFC93B3B),
-    accentSoft = Color(0xFFFCEBEB),
-    sunflower = Color(0xFFF5A524),
-    sunflowerSoft = Color(0xFFFDF1DC),
-    azure = Color(0xFF3AA0E3),
-    azureSoft = Color(0xFFE6F2FB),
-    success = Color(0xFF2FB573),
-    successSoft = Color(0xFFE3F6EC),
-    warning = Color(0xFFF08C00),
-    warningSoft = Color(0xFFFDEFD9),
-    danger = Color(0xFFE0394A),
-    dangerSoft = Color(0xFFFCE8EA),
-    info = Color(0xFF3AA0E3),
+    accent = Color(0xFFE3350D),
+    accentHover = Color(0xFFC92E0B),
+    accentActive = Color(0xFFB02A0A),
+    accentSoft = Color(0xFFFBE9E4),
+    azure = Color(0xFF2B7DD1),
+    azureSoft = Color(0xFFE5F0FA),
+    success = Color(0xFF1F9D61),
+    successSoft = Color(0xFFE4F4EC),
+    warning = Color(0xFFE08700),
+    warningSoft = Color(0xFFFBF0DC),
+    danger = Color(0xFFD6303F),
+    dangerSoft = Color(0xFFFAE7E9),
+    info = Color(0xFF2B7DD1),
     surfaceRaised = Color(0xFFFFFFFF),
-    surfaceSunken = Color(0xFFF7F1EB),
-    border = Color(0xFFE9E0D8),
-    borderStrong = Color(0xFFD8CCC1),
-    textStrong = Color(0xFF2A2521),
-    text = Color(0xFF3D362F),
-    textMuted = Color(0xFF6E625A),
-    textFaint = Color(0xFF94867A),
-    scrim = Color(0x662A2521),
+    surfaceSunken = Color(0xFFE3E6E8),
+    border = Color(0xFFD3D7DA),
+    borderStrong = Color(0xFFB9BEC3),
+    textStrong = Color(0xFF131517),
+    text = Color(0xFF24282B),
+    textMuted = Color(0xFF5F656C),
+    textFaint = Color(0xFF8A9096),
+    scrim = Color(0x66131517),
 )
 
 /** Dark-mode extended tokens (`[data-theme="dark"]` in globals.css). */
 val OakDarkColors = OakColors(
-    accent = Color(0xFFFF6B6B),
-    accentHover = Color(0xFFFF7E7E),
-    accentActive = Color(0xFFF25C5C),
-    accentSoft = Color(0xFF3A1E1E),
-    sunflower = Color(0xFFF8B73E),
-    sunflowerSoft = Color(0xFF3A2E14),
-    azure = Color(0xFF5BB4EF),
-    azureSoft = Color(0xFF16263A),
-    success = Color(0xFF46C98A),
-    successSoft = Color(0xFF10301F),
-    warning = Color(0xFFFBA53B),
-    warningSoft = Color(0xFF3A2A0F),
-    danger = Color(0xFFFF5C6B),
-    dangerSoft = Color(0xFF3A1518),
-    info = Color(0xFF5BB4EF),
-    surfaceRaised = Color(0xFF2A2420),
-    surfaceSunken = Color(0xFF12100E),
-    border = Color(0xFF3A332E),
-    borderStrong = Color(0xFF4E453F),
-    textStrong = Color(0xFFF5EFE9),
-    text = Color(0xFFE4DAD0),
-    textMuted = Color(0xFFB7A99C),
-    textFaint = Color(0xFF8A7D72),
-    scrim = Color(0x99080605),
+    accent = Color(0xFFFF4A22),
+    accentHover = Color(0xFFFF5F3C),
+    accentActive = Color(0xFFE8431E),
+    accentSoft = Color(0xFF33170F),
+    azure = Color(0xFF55A0E8),
+    azureSoft = Color(0xFF142433),
+    success = Color(0xFF34C27F),
+    successSoft = Color(0xFF0E2B1D),
+    warning = Color(0xFFF0A030),
+    warningSoft = Color(0xFF33260F),
+    danger = Color(0xFFF04A58),
+    dangerSoft = Color(0xFF331417),
+    info = Color(0xFF55A0E8),
+    surfaceRaised = Color(0xFF1D2124),
+    surfaceSunken = Color(0xFF0B0D0E),
+    border = Color(0xFF2A2E32),
+    borderStrong = Color(0xFF3A3F44),
+    textStrong = Color(0xFFF2F4F5),
+    text = Color(0xFFDDE1E3),
+    textMuted = Color(0xFF9BA1A7),
+    textFaint = Color(0xFF6E747A),
+    scrim = Color(0x99000000),
 )
 
 /**
@@ -161,67 +156,67 @@ val LocalOakColors = staticCompositionLocalOf { OakLightColors }
 // ---------------------------------------------------------------------------
 
 private val OakLightColorScheme: ColorScheme = lightColorScheme(
-    primary = Color(0xFFEE5A5A),
+    primary = Color(0xFFE3350D),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFFCEBEB),
-    onPrimaryContainer = Color(0xFF2A2521),
-    secondary = Color(0xFF3AA0E3),
+    primaryContainer = Color(0xFFFBE9E4),
+    onPrimaryContainer = Color(0xFF131517),
+    secondary = Color(0xFF2B7DD1),
     onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFE6F2FB),
-    onSecondaryContainer = Color(0xFF2A2521),
-    tertiary = Color(0xFFF5A524),
-    onTertiary = Color(0xFF2A2521),
-    tertiaryContainer = Color(0xFFFDF1DC),
-    onTertiaryContainer = Color(0xFF2A2521),
-    background = Color(0xFFFBF7F4),
-    onBackground = Color(0xFF3D362F),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF3D362F),
-    surfaceVariant = Color(0xFFF7F1EB),
-    onSurfaceVariant = Color(0xFF6E625A),
+    secondaryContainer = Color(0xFFE5F0FA),
+    onSecondaryContainer = Color(0xFF131517),
+    tertiary = Color(0xFFE08700),
+    onTertiary = Color(0xFF131517),
+    tertiaryContainer = Color(0xFFFBF0DC),
+    onTertiaryContainer = Color(0xFF131517),
+    background = Color(0xFFEEF0F1),
+    onBackground = Color(0xFF24282B),
+    surface = Color(0xFFF9FAFA),
+    onSurface = Color(0xFF24282B),
+    surfaceVariant = Color(0xFFE3E6E8),
+    onSurfaceVariant = Color(0xFF5F656C),
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFBF7F4),
-    surfaceContainer = Color(0xFFF7F1EB),
-    surfaceContainerHigh = Color(0xFFF3ECE6),
-    surfaceContainerHighest = Color(0xFFE9E0D8),
-    outline = Color(0xFFD8CCC1),
-    outlineVariant = Color(0xFFE9E0D8),
-    error = Color(0xFFE0394A),
+    surfaceContainerLow = Color(0xFFF9FAFA),
+    surfaceContainer = Color(0xFFEEF0F1),
+    surfaceContainerHigh = Color(0xFFE3E6E8),
+    surfaceContainerHighest = Color(0xFFD3D7DA),
+    outline = Color(0xFFB9BEC3),
+    outlineVariant = Color(0xFFD3D7DA),
+    error = Color(0xFFD6303F),
     onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFCE8EA),
-    onErrorContainer = Color(0xFF2A2521),
+    errorContainer = Color(0xFFFAE7E9),
+    onErrorContainer = Color(0xFF131517),
 )
 
 private val OakDarkColorScheme: ColorScheme = darkColorScheme(
-    primary = Color(0xFFFF6B6B),
-    onPrimary = Color(0xFF2A1010),
-    primaryContainer = Color(0xFF3A1E1E),
-    onPrimaryContainer = Color(0xFFF5EFE9),
-    secondary = Color(0xFF5BB4EF),
+    primary = Color(0xFFFF4A22),
+    onPrimary = Color(0xFF2B0D05),
+    primaryContainer = Color(0xFF33170F),
+    onPrimaryContainer = Color(0xFFF2F4F5),
+    secondary = Color(0xFF55A0E8),
     onSecondary = Color(0xFF0C1620),
-    secondaryContainer = Color(0xFF16263A),
-    onSecondaryContainer = Color(0xFFF5EFE9),
-    tertiary = Color(0xFFF8B73E),
-    onTertiary = Color(0xFF2A1E0A),
-    tertiaryContainer = Color(0xFF3A2E14),
-    onTertiaryContainer = Color(0xFFF5EFE9),
-    background = Color(0xFF161311),
-    onBackground = Color(0xFFE4DAD0),
-    surface = Color(0xFF211C19),
-    onSurface = Color(0xFFE4DAD0),
-    surfaceVariant = Color(0xFF12100E),
-    onSurfaceVariant = Color(0xFFB7A99C),
-    surfaceContainerLowest = Color(0xFF12100E),
-    surfaceContainerLow = Color(0xFF1B1714),
-    surfaceContainer = Color(0xFF211C19),
-    surfaceContainerHigh = Color(0xFF2A2420),
-    surfaceContainerHighest = Color(0xFF332D29),
-    outline = Color(0xFF4E453F),
-    outlineVariant = Color(0xFF3A332E),
-    error = Color(0xFFFF5C6B),
-    onError = Color(0xFF2A1010),
-    errorContainer = Color(0xFF3A1518),
-    onErrorContainer = Color(0xFFF5EFE9),
+    secondaryContainer = Color(0xFF142433),
+    onSecondaryContainer = Color(0xFFF2F4F5),
+    tertiary = Color(0xFFF0A030),
+    onTertiary = Color(0xFF2B1D05),
+    tertiaryContainer = Color(0xFF33260F),
+    onTertiaryContainer = Color(0xFFF2F4F5),
+    background = Color(0xFF101214),
+    onBackground = Color(0xFFDDE1E3),
+    surface = Color(0xFF16191B),
+    onSurface = Color(0xFFDDE1E3),
+    surfaceVariant = Color(0xFF0B0D0E),
+    onSurfaceVariant = Color(0xFF9BA1A7),
+    surfaceContainerLowest = Color(0xFF0B0D0E),
+    surfaceContainerLow = Color(0xFF141719),
+    surfaceContainer = Color(0xFF16191B),
+    surfaceContainerHigh = Color(0xFF1D2124),
+    surfaceContainerHighest = Color(0xFF23272B),
+    outline = Color(0xFF3A3F44),
+    outlineVariant = Color(0xFF2A2E32),
+    error = Color(0xFFF04A58),
+    onError = Color(0xFF2E0D10),
+    errorContainer = Color(0xFF331417),
+    onErrorContainer = Color(0xFFF2F4F5),
 )
 
 // ---------------------------------------------------------------------------
@@ -230,10 +225,10 @@ private val OakDarkColorScheme: ColorScheme = darkColorScheme(
 
 /** Corner radii, mirroring `--radius-*` in globals.css. */
 object OakRadius {
-    val sm = 6.dp
-    val md = 10.dp
-    val lg = 16.dp
-    val xl = 24.dp
+    val sm = 5.dp
+    val md = 9.dp
+    val lg = 12.dp
+    val xl = 16.dp
     val pill = 999.dp
 }
 
@@ -283,6 +278,19 @@ object OakMotion {
     val smooth: AnimationSpec<Float> =
         spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
 
+    /**
+     * Instrument-precise easing (Phase 2 wires call sites onto this + [FAST_MILLIS] /
+     * [BASE_MILLIS]) — a fast-out, near-linear-in curve for tween-driven transitions
+     * that need a deliberate, mechanical feel rather than a spring's overshoot.
+     */
+    val fastEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
+    /** Fast tween duration (ms) — direct-feedback transitions (Phase 2). */
+    const val FAST_MILLIS = 120
+
+    /** Base tween duration (ms) — standard content transitions (Phase 2). */
+    const val BASE_MILLIS = 180
+
     /** Entrance/exit fade duration (ms) when motion is allowed. */
     const val FADE_MILLIS = 200
 
@@ -323,6 +331,15 @@ fun rememberReduceMotion(): Boolean {
 object OakType {
     /** The brand color for a type name (e.g. `"fire"`); unknown falls back to Normal. */
     fun color(name: String): Color = solids[name.trim().lowercase()] ?: solids.getValue("normal")
+
+    /**
+     * The fixed ink (text/icon) color for a full-chroma type solid — WHITE for the
+     * five dark solids ([darkInkTypes]) and DARK ([INK_DARK]) for the other thirteen,
+     * so a solid-fill [TypeBadge] always meets contrast without per-type tuning.
+     * Unknown type names fall back to the dark ink (matches [color]'s Normal fallback).
+     */
+    fun ink(name: String): Color =
+        if (name.trim().lowercase() in darkInkTypes) Color.White else INK_DARK
 
     /** Sort index for a type slug in Champions display order; unknown sorts last. */
     fun displayIndex(name: String): Int = displayRank[name.trim().lowercase()] ?: Int.MAX_VALUE
@@ -424,6 +441,13 @@ object OakType {
             isMechanics = true,
             isMulti = false,
         )
+
+    /** Dark ink color for [ink]'s 13-type majority (fallback included). */
+    private val INK_DARK = Color(0xFF16181A)
+
+    /** The five type solids dark/saturated enough to need white ink instead. */
+    private val darkInkTypes: Set<String> =
+        setOf("fighting", "poison", "ghost", "dragon", "dark")
 
     private val solids: Map<String, Color> = mapOf(
         "normal" to Color(0xFFA8A77A),

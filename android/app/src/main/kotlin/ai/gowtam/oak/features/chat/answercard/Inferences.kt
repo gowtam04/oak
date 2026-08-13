@@ -32,9 +32,8 @@ import androidx.compose.ui.unit.dp
  * Renders an answer's `inferences` — claims Oak *deduced* rather than read directly.
  * Each row shows the claim, a confidence level (high/medium/low) carried by an icon +
  * text label (never color alone), and an optional note. Styling mirrors the web
- * `InferenceCallout`: a soft azure fill with a distinct dashed-edge intent (drawn here
- * as an azure border to mark "inferred, not cited"). The caller gates it on non-empty
- * inferences.
+ * `InferenceCallout`: a soft azure fill with an azure-tinted border to mark "inferred,
+ * not cited". The caller gates it on non-empty inferences.
  */
 @Composable
 fun Inferences(inferences: List<Inference>, modifier: Modifier = Modifier) {
@@ -63,7 +62,7 @@ fun Inferences(inferences: List<Inference>, modifier: Modifier = Modifier) {
 @Composable
 private fun InferenceRow(inference: Inference) {
     val oak = LocalOakColors.current
-    val (icon, label, tint) = confidencePresentation(inference.confidence, oak.success, oak.sunflower, oak.textMuted)
+    val (icon, label, tint) = confidencePresentation(inference.confidence, oak.success, oak.warning, oak.textMuted)
     Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.Top) {
         Row(
             modifier = Modifier
@@ -92,11 +91,11 @@ private fun InferenceRow(inference: Inference) {
 private fun confidencePresentation(
     confidence: Inference.Confidence,
     success: Color,
-    sunflower: Color,
+    warning: Color,
     muted: Color,
 ): Triple<ImageVector, String, Color> = when (confidence) {
     Inference.Confidence.High -> Triple(Icons.Filled.Circle, "Solid", success)
-    Inference.Confidence.Medium -> Triple(Icons.Filled.Circle, "Likely", sunflower)
+    Inference.Confidence.Medium -> Triple(Icons.Filled.Circle, "Likely", warning)
     Inference.Confidence.Low -> Triple(Icons.Outlined.Circle, "Unsure", muted)
     // A confidence value the wire added after this app shipped: render its raw
     // string with neutral styling rather than hard-failing the answer's decode.

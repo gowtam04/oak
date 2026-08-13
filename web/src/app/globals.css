@@ -16,50 +16,48 @@
    -------------------------------------------------------------------------- */
 :root {
   /* Brand */
-  --poke-red: #ee5a5a;
-  --poke-red-hover: #e04545;
-  --poke-red-active: #c93b3b;
-  --poke-red-soft: #fcebeb;
-  --sunflower: #f5a524;
-  --sunflower-soft: #fdf1dc;
-  --azure: #3aa0e3;
-  --azure-soft: #e6f2fb;
+  --poke-red: #e3350d;
+  --poke-red-hover: #c92e0b;
+  --poke-red-active: #b02a0a;
+  --poke-red-soft: #fbe9e4;
+  --azure: #2b7dd1;
+  --azure-soft: #e5f0fa;
 
-  /* Warm neutral ramp (theme-stable) */
+  /* Neutral ramp (theme-stable) */
   --neutral-0: #ffffff;
-  --neutral-50: #fbf7f4;
-  --neutral-100: #f3ece6;
-  --neutral-200: #e9e0d8;
-  --neutral-300: #d8ccc1;
-  --neutral-400: #b8a99c;
-  --neutral-500: #94867a;
-  --neutral-600: #6e625a;
-  --neutral-700: #4e453f;
-  --neutral-800: #332d29;
-  --neutral-900: #231f1c;
-  --neutral-950: #161311;
+  --neutral-50: #f9fafa;
+  --neutral-100: #eef0f1;
+  --neutral-200: #e3e6e8;
+  --neutral-300: #d3d7da;
+  --neutral-400: #b9bec3;
+  --neutral-500: #8a9096;
+  --neutral-600: #5f656c;
+  --neutral-700: #4d5257;
+  --neutral-800: #2e3236;
+  --neutral-900: #1d2023;
+  --neutral-950: #131517;
 
   /* Semantic */
-  --success: #2fb573;
-  --success-soft: #e3f6ec;
-  --warning: #f08c00;
-  --warning-soft: #fdefd9;
-  --danger: #e0394a;
-  --danger-soft: #fce8ea;
-  --info: #3aa0e3;
-  --info-soft: #e6f2fb;
+  --success: #1f9d61;
+  --success-soft: #e4f4ec;
+  --warning: #e08700;
+  --warning-soft: #fbf0dc;
+  --danger: #d6303f;
+  --danger-soft: #fae7e9;
+  --info: #2b7dd1;
+  --info-soft: #e5f0fa;
 
   /* Surfaces / text */
-  --bg: #fbf7f4;
-  --surface: #ffffff;
+  --bg: #eef0f1;
+  --surface: #f9fafa;
   --surface-raised: #ffffff;
-  --surface-sunken: #f7f1eb;
-  --border: #e9e0d8;
-  --border-strong: #d8ccc1;
-  --text-strong: #2a2521;
-  --text: #3d362f;
-  --text-muted: #6e625a;
-  --text-faint: #94867a;
+  --surface-sunken: #e3e6e8;
+  --border: #d3d7da;
+  --border-strong: #b9bec3;
+  --text-strong: #131517;
+  --text: #24282b;
+  --text-muted: #5f656c;
+  --text-faint: #8a9096;
 
   /* The 18 type solids (theme-stable; the badge recipe adapts per theme) */
   --type-normal: #a8a77a;
@@ -82,10 +80,10 @@
   --type-fairy: #d685ad;
 
   /* Radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-sm: 5px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-pill: 999px;
 
   /* Spacing (4px base) */
@@ -101,22 +99,23 @@
   --space-16: 64px;
 
   /* Motion */
-  --motion-fast: 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  --motion-base: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  --motion-spring: 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
+  --motion-base: 180ms cubic-bezier(0.2, 0, 0, 1);
+  --motion-spring: 220ms cubic-bezier(0.2, 0, 0, 1);
 
-  /* Shadows (warm-tinted) */
-  --shadow-raised: 0 1px 2px rgba(74, 53, 42, 0.05),
-    0 4px 12px rgba(74, 53, 42, 0.07);
-  --shadow-floating: 0 6px 16px rgba(74, 53, 42, 0.1),
-    0 2px 6px rgba(74, 53, 42, 0.08);
-  --shadow-overlay: 0 16px 40px rgba(74, 53, 42, 0.18);
+  /* Shadows (cool ink-tinted) */
+  --shadow-raised: 0 1px 2px rgba(13, 16, 18, 0.05),
+    0 8px 22px -14px rgba(13, 16, 18, 0.18);
+  --shadow-floating: 0 2px 4px rgba(13, 16, 18, 0.06),
+    0 12px 32px -16px rgba(13, 16, 18, 0.22);
+  --shadow-overlay: 0 20px 48px -16px rgba(13, 16, 18, 0.3);
+  --shadow-well: inset 0 2px 8px rgba(13, 16, 18, 0.16);
 
-  /* Focus ring: 2px azure with a surface-colored offset */
-  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--azure);
+  /* Focus ring: 2px info blue with a surface-colored offset */
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--info);
 
   /* Type families (next/font sets the variables on <body>; fallbacks here) */
-  --display: var(--font-display), "Segoe UI", system-ui, sans-serif;
+  --display: var(--font-display), system-ui, -apple-system, sans-serif;
   --body: var(--font-body), system-ui, -apple-system, sans-serif;
   --mono: var(--font-mono), ui-monospace, "SF Mono", monospace;
 
@@ -151,9 +150,8 @@
   --composer-max: 680px; /* composer field column */
   --artifact-panel-w: 460px; /* artifact side panel */
 
-  /* Warm overlay scrim (behind modals / drawers) — replaces cold gray/black
-     rgba so backdrops keep the paper palette. */
-  --scrim: rgba(42, 37, 33, 0.4);
+  /* Neutral ink overlay scrim (behind modals / drawers). */
+  --scrim: rgba(13, 16, 18, 0.45);
 
   /* CSS-only icon set — masked SVGs, tinted via currentColor */
   --brand-mark: url("/oak-app-icon.png");
@@ -174,41 +172,40 @@
    opt-in only, applied when the user toggles it (`data-theme="dark"`).
    -------------------------------------------------------------------------- */
 [data-theme="dark"] {
-  --poke-red: #ff6b6b;
-  --poke-red-hover: #ff7e7e;
-  --poke-red-active: #f25c5c;
-  --poke-red-soft: #3a1e1e;
-  --sunflower: #f8b73e;
-  --sunflower-soft: #3a2e14;
-  --azure: #5bb4ef;
-  --azure-soft: #16263a;
+  --poke-red: #ff4a22;
+  --poke-red-hover: #ff5f3c;
+  --poke-red-active: #e8431e;
+  --poke-red-soft: #33170f;
+  --azure: #55a0e8;
+  --azure-soft: #142433;
 
-  --success: #46c98a;
-  --success-soft: #10301f;
-  --warning: #fba53b;
-  --warning-soft: #3a2a0f;
-  --danger: #ff5c6b;
-  --danger-soft: #3a1518;
-  --info: #5bb4ef;
-  --info-soft: #16263a;
+  --success: #34c27f;
+  --success-soft: #123821;
+  --warning: #f0a030;
+  --warning-soft: #3a2a0d;
+  --danger: #f04a58;
+  --danger-soft: #3a1216;
+  --info: #55a0e8;
+  --info-soft: #142a3e;
 
-  --bg: #161311;
-  --surface: #211c19; /* warm dark card paper (UI §4 screen 10) */
-  --surface-raised: #2a2420; /* one step above --surface; keeps the ramp ordered */
-  --surface-sunken: #12100e; /* deepest — sunken inputs (UI §4 screen 10) */
-  --border: #3a332e;
-  --border-strong: #4e453f;
-  --text-strong: #f5efe9;
-  --text: #e4dad0;
-  --text-muted: #b7a99c;
-  --text-faint: #8a7d72;
+  --bg: #101214; /* device dark chassis (Instrument) */
+  --surface: #16191b;
+  --surface-raised: #1d2124; /* one step above --surface; keeps the ramp ordered */
+  --surface-sunken: #0b0d0e; /* deepest — sunken inputs */
+  --border: #2a2e32;
+  --border-strong: #3a3f44;
+  --text-strong: #f2f4f5;
+  --text: #dde1e3;
+  --text-muted: #9ba1a7;
+  --text-faint: #6e747a;
 
   --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.3);
   --shadow-floating: 0 6px 16px rgba(0, 0, 0, 0.34), 0 2px 6px rgba(0, 0, 0, 0.28);
   --shadow-overlay: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --shadow-well: inset 0 2px 8px rgba(0, 0, 0, 0.45);
 
   /* Deeper scrim in dark mode so overlays still read against the near-black canvas. */
-  --scrim: rgba(8, 6, 5, 0.6);
+  --scrim: rgba(0, 0, 0, 0.6);
 }
 
 /* --------------------------------------------------------------------------
@@ -317,43 +314,7 @@
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
-  background: radial-gradient(
-      120% 60% at 50% -10%,
-      color-mix(in srgb, var(--poke-red) 4%, var(--bg)),
-      var(--bg) 55%
-    )
-    no-repeat;
-}
-/* Subtle desk grain (Phase 3) — ≤4% opacity; off under reduced motion/transparency. */
-.chat-page::before {
-  content: "";
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.29  0 0 0 0 0.21  0 0 0 0 0.16  0 0 0 0.55 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  background-repeat: repeat;
-  background-size: 160px 160px;
-  mix-blend-mode: multiply;
-}
-[data-theme="dark"] .chat-page::before {
-  opacity: 0.04;
-  mix-blend-mode: soft-light;
-}
-.chat-page > * {
-  position: relative;
-  z-index: 1;
-}
-@media (prefers-reduced-motion: reduce) {
-  .chat-page::before {
-    display: none;
-  }
-}
-@media (prefers-reduced-transparency: reduce) {
-  .chat-page::before {
-    display: none;
-  }
+  background: var(--bg);
 }
 
 /* Header demoted to paper (UI §1/§3): warm surface + hairline, with a 2px red
@@ -393,7 +354,7 @@
   font-weight: 600;
   font-size: var(--text-2xl);
   line-height: 1.2;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
   text-decoration: none;
   cursor: pointer;
@@ -409,11 +370,11 @@
   flex: 0 0 auto;
   border-radius: 8px;
   background: var(--brand-mark) center / cover no-repeat;
-  /* Paper-friendly: a hairline ring + soft warm shadow (was a white ring for the
-     red band). The mark's O-ring keeps its own red — the brand's record light. */
+  /* A hairline ring + soft ink shadow (was a white ring for the red band). The
+     mark's O-ring keeps its own red — the brand's record light. */
   box-shadow:
     0 0 0 1px var(--border),
-    0 1px 2px rgba(74, 53, 42, 0.14);
+    0 1px 2px rgba(13, 16, 18, 0.14);
 }
 
 /* Right-side header controls: logical groups wrapped in a cluster, split by a
@@ -780,46 +741,45 @@
    -------------------------------------------------------------------------- */
 .type-badge {
   --type: var(--type-normal);
+  --type-ink: #16181a;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 2px 10px;
   border-radius: var(--radius-pill);
-  font-family: var(--body);
+  font-family: var(--mono);
   font-weight: 600;
-  font-size: 0.6875rem;
+  font-size: 10.5px;
   line-height: 1;
-  letter-spacing: 0.03em;
-  text-transform: capitalize;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
-  background: color-mix(in srgb, var(--type) 16%, var(--surface));
-  color: color-mix(in srgb, var(--type) 72%, var(--text-strong));
-  border: 1px solid color-mix(in srgb, var(--type) 30%, transparent);
+  background: var(--type);
+  color: var(--type-ink);
+  border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
-[data-theme="dark"] .type-badge {
-  background: color-mix(in srgb, var(--type) 26%, var(--surface));
-  color: color-mix(in srgb, var(--type) 45%, #ffffff);
-}
-
-.type-badge--normal { --type: var(--type-normal); }
-.type-badge--fire { --type: var(--type-fire); }
-.type-badge--water { --type: var(--type-water); }
-.type-badge--electric { --type: var(--type-electric); }
-.type-badge--grass { --type: var(--type-grass); }
-.type-badge--ice { --type: var(--type-ice); }
-.type-badge--fighting { --type: var(--type-fighting); }
-.type-badge--poison { --type: var(--type-poison); }
-.type-badge--ground { --type: var(--type-ground); }
-.type-badge--flying { --type: var(--type-flying); }
-.type-badge--psychic { --type: var(--type-psychic); }
-.type-badge--bug { --type: var(--type-bug); }
-.type-badge--rock { --type: var(--type-rock); }
-.type-badge--ghost { --type: var(--type-ghost); }
-.type-badge--dragon { --type: var(--type-dragon); }
-.type-badge--dark { --type: var(--type-dark); }
-.type-badge--steel { --type: var(--type-steel); }
-.type-badge--fairy { --type: var(--type-fairy); }
+/* Full-chroma solids are theme-stable — no dark-mode pastel override. Ink is
+   picked per-type for contrast (WCAG-legible white or near-black on the raw
+   type color), not derived from the theme. */
+.type-badge--normal { --type: var(--type-normal); --type-ink: #16181a; }
+.type-badge--fire { --type: var(--type-fire); --type-ink: #16181a; }
+.type-badge--water { --type: var(--type-water); --type-ink: #16181a; }
+.type-badge--electric { --type: var(--type-electric); --type-ink: #16181a; }
+.type-badge--grass { --type: var(--type-grass); --type-ink: #16181a; }
+.type-badge--ice { --type: var(--type-ice); --type-ink: #16181a; }
+.type-badge--fighting { --type: var(--type-fighting); --type-ink: #ffffff; }
+.type-badge--poison { --type: var(--type-poison); --type-ink: #ffffff; }
+.type-badge--ground { --type: var(--type-ground); --type-ink: #16181a; }
+.type-badge--flying { --type: var(--type-flying); --type-ink: #16181a; }
+.type-badge--psychic { --type: var(--type-psychic); --type-ink: #16181a; }
+.type-badge--bug { --type: var(--type-bug); --type-ink: #16181a; }
+.type-badge--rock { --type: var(--type-rock); --type-ink: #16181a; }
+.type-badge--ghost { --type: var(--type-ghost); --type-ink: #ffffff; }
+.type-badge--dragon { --type: var(--type-dragon); --type-ink: #ffffff; }
+.type-badge--dark { --type: var(--type-dark); --type-ink: #ffffff; }
+.type-badge--steel { --type: var(--type-steel); --type-ink: #16181a; }
+.type-badge--fairy { --type: var(--type-fairy); --type-ink: #16181a; }
 
 /* --------------------------------------------------------------------------
    7. Answer card + its sections — specimen plate (soul.md type wash)
@@ -940,13 +900,15 @@
 }
 
 /* Answer lead — the first paragraph of every answer is the verdict line (UI
-   §4 screen 04 hero moment). Nunito 700 22px/1.35, a full step above body
-   text; every following paragraph stays plain body copy. */
+   §4 screen 04 hero moment). Space Grotesk 600 22px/1.35, a display-face
+   moment a full step above body text; every following paragraph stays plain
+   body copy. */
 .answer-body__content.markdown-body > p:first-child {
-  font-family: var(--body);
-  font-weight: 700;
+  font-family: var(--display);
+  font-weight: 600;
   font-size: var(--text-xl);
   line-height: 1.35;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 
@@ -1041,6 +1003,7 @@
   font-family: var(--display);
   font-weight: 600;
   line-height: 1.25;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .markdown-body h1 {
@@ -1341,6 +1304,7 @@
   font-weight: 500;
   font-size: 1.125rem;
   line-height: 1.35;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
   text-transform: capitalize;
 }
@@ -2126,7 +2090,7 @@
   background: var(--success);
 }
 .inference-callout__confidence--medium {
-  background: var(--sunflower);
+  background: var(--warning);
   color: var(--text-strong);
 }
 .inference-callout__confidence--low {
@@ -2156,9 +2120,9 @@
   align-self: flex-start;
   padding: 2px 10px;
   border-radius: var(--radius-pill);
-  background: var(--sunflower-soft);
-  color: color-mix(in srgb, var(--sunflower) 45%, var(--text-strong));
-  border: 1px solid color-mix(in srgb, var(--sunflower) 40%, transparent);
+  background: var(--warning-soft);
+  color: color-mix(in srgb, var(--warning) 45%, var(--text-strong));
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -2611,7 +2575,7 @@
   gap: var(--space-5);
 }
 
-/* Blank specimen plate — dashed border + faint grid, desk not AI-hero. */
+/* Blank specimen plate — raised panel, not a paper cutout. */
 .blank-plate {
   position: relative;
   overflow: hidden;
@@ -2620,34 +2584,10 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-5) var(--space-5) var(--space-4);
-  background: var(--surface);
-  border: 1.5px dashed color-mix(in srgb, var(--border-strong) 80%, var(--poke-red) 20%);
-  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-raised);
-}
-.blank-plate::before {
-  content: "";
-  position: absolute;
-  inset: 12px;
-  border-radius: calc(var(--radius-xl) - 8px);
-  background-image:
-    linear-gradient(
-      to right,
-      color-mix(in srgb, var(--border) 70%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--border) 70%, transparent) 1px,
-      transparent 1px
-    );
-  background-size: 24px 24px;
-  opacity: 0.45;
-  pointer-events: none;
-}
-.blank-plate > * {
-  position: relative;
-  z-index: 1;
 }
 .blank-plate__top {
   display: flex;
@@ -2791,6 +2731,7 @@
   margin: 0 0 var(--space-3);
   font-family: var(--display);
   font-size: var(--text-lg);
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 
@@ -3465,6 +3406,7 @@ button.scope-chip:focus-visible {
   font-weight: 600;
   font-size: 22px;
   line-height: 1.3;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .auth-dialog__close {
@@ -3733,12 +3675,7 @@ button.scope-chip:focus-visible {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background: radial-gradient(
-      120% 60% at 50% -10%,
-      color-mix(in srgb, var(--poke-red) 4%, var(--bg)),
-      var(--bg) 55%
-    )
-    no-repeat;
+  background: var(--bg);
 }
 .teams-page__band {
   position: sticky;
@@ -3773,7 +3710,7 @@ button.scope-chip:focus-visible {
   font-weight: 600;
   font-size: var(--text-2xl);
   line-height: 1.2;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
   text-decoration: none;
 }
@@ -3784,10 +3721,10 @@ button.scope-chip:focus-visible {
   flex: 0 0 auto;
   border-radius: 8px;
   background: var(--brand-mark) center / cover no-repeat;
-  /* Paper-friendly ring (was white-on-red); mark's O-ring keeps its red. */
+  /* Hairline ring (was white-on-red); mark's O-ring keeps its red. */
   box-shadow:
     0 0 0 1px var(--border),
-    0 1px 2px rgba(74, 53, 42, 0.14);
+    0 1px 2px rgba(13, 16, 18, 0.14);
 }
 .teams-page__wordmark:hover,
 .teams-page__wordmark:focus-visible {
@@ -3963,6 +3900,7 @@ button.scope-chip:focus-visible {
   font-family: var(--display);
   font-weight: 600;
   font-size: var(--text-lg);
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .teams-page__guest-text {
@@ -3977,7 +3915,7 @@ button.scope-chip:focus-visible {
   min-height: 320px;
   box-shadow: none;
   background: color-mix(in srgb, var(--surface) 60%, transparent);
-  border-style: dashed;
+  border-style: solid;
 }
 .teams-page__placeholder-icon {
   opacity: 0.6;
@@ -4009,7 +3947,7 @@ button.scope-chip:focus-visible {
   padding: var(--space-6) var(--space-4);
   text-align: center;
   background: var(--surface-sunken);
-  border: 1px dashed var(--border-strong);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
 }
 .team-list__empty-icon {
@@ -4145,6 +4083,7 @@ button.scope-chip:focus-visible {
   font-weight: 600;
   font-size: var(--text-2xl) !important;
   line-height: 1.2;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
   box-shadow: none !important;
   transition:
@@ -4178,7 +4117,7 @@ button.scope-chip:focus-visible {
   text-align: center;
   color: var(--text-muted);
   background: var(--surface-sunken);
-  border: 1px dashed var(--border-strong);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
 }
 
@@ -4358,7 +4297,7 @@ button.scope-chip:focus-visible {
   color: var(--text-strong);
 }
 .team-analysis__role-chip--miss {
-  background: color-mix(in srgb, var(--warn, #c48a1a) 22%, transparent);
+  background: color-mix(in srgb, var(--warning, #e08700) 22%, transparent);
   color: var(--text-strong);
 }
 .team-analysis__physpec {
@@ -4399,7 +4338,7 @@ button.scope-chip:focus-visible {
   border-left-color: var(--success, #2a9d5c);
 }
 .team-analysis__threat--soft {
-  border-left-color: var(--warn, #c48a1a);
+  border-left-color: var(--warning, #e08700);
 }
 .team-analysis__threat--unanswered {
   border-left-color: var(--danger, #c44);
@@ -4628,15 +4567,15 @@ button.scope-chip:focus-visible {
   );
   transform: translateY(-2px);
 }
-/* Empty / unknown-type filled slots: neutral dashed or plain surface. */
+/* Empty / unknown-type filled slots: neutral solid outline or plain surface. */
 .roster-slot[data-empty="true"] {
-  border-style: dashed;
+  border-style: solid;
   border-color: var(--border);
   background: transparent;
   box-shadow: none;
 }
 .roster-slot[data-empty="true"][data-selected="true"] {
-  border-style: dashed;
+  border-style: solid;
   border-color: var(--poke-red);
   box-shadow: 0 0 0 1px var(--poke-red);
   background: radial-gradient(
@@ -4666,12 +4605,12 @@ button.scope-chip:focus-visible {
   object-fit: contain;
   image-rendering: -webkit-optimize-contrast;
 }
-/* The ONE legitimate dashed border — an empty slot's "not yet" pokeball. */
+/* An empty slot's "not yet" pokeball — solid outline, no dashed placeholders. */
 .roster-slot__sprite-empty {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  border: 2px dashed var(--border-strong);
+  border: 2px solid var(--border-strong);
   background: var(--icon-pokeball) center / 28px no-repeat;
   opacity: 0.55;
 }
@@ -4680,7 +4619,7 @@ button.scope-chip:focus-visible {
   height: 32px;
   border-radius: 50%;
   background: var(--surface);
-  border: 2px dashed var(--border-strong);
+  border: 2px solid var(--border-strong);
 }
 .roster-slot__name {
   font-family: var(--body);
@@ -4729,11 +4668,11 @@ button.scope-chip:focus-visible {
   height: 6px;
   flex: none;
   border-radius: 50%;
-  background: var(--sunflower);
+  background: var(--text-muted);
 }
 .roster-slot--add {
   justify-content: center;
-  border-style: dashed;
+  border-style: solid;
   border-color: var(--border);
   background: transparent;
   box-shadow: none;
@@ -4865,6 +4804,7 @@ button.scope-chip:focus-visible {
   font-family: var(--display);
   font-weight: 600;
   font-size: 1.25rem;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .team-member-panel__types {
@@ -5091,7 +5031,7 @@ button.scope-chip:focus-visible {
   background: linear-gradient(90deg, var(--success), color-mix(in srgb, var(--success) 70%, var(--azure)));
 }
 .tm-stat[data-effect="hindered"] .tm-stat__bar-fill {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--danger) 70%, var(--sunflower)), var(--danger));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--danger) 70%, var(--warning)), var(--danger));
 }
 .tm-stat__final {
   position: relative;
@@ -5258,6 +5198,7 @@ button.scope-chip:focus-visible {
   font-weight: 600;
   font-size: var(--text-lg);
   line-height: 1.3;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .import-dialog__close,
@@ -5381,6 +5322,7 @@ button.scope-chip:focus-visible {
   font-family: var(--display);
   font-weight: 600;
   font-size: var(--text-lg);
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .proposed-team__format {

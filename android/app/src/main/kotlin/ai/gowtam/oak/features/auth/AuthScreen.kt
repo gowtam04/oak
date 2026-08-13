@@ -1,11 +1,11 @@
 package ai.gowtam.oak.features.auth
 
-import ai.gowtam.oak.ui.FredokaFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.SpaceGroteskFamily
 import ai.gowtam.oak.ui.rememberReduceMotion
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.keyframes
@@ -107,7 +107,7 @@ fun AuthScreen(viewModel: AuthViewModel, modifier: Modifier = Modifier) {
     ) {
         Text(
             text = "Sign in to Oak",
-            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FredokaFamily),
+            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = SpaceGroteskFamily),
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.semantics { heading() },
         )

@@ -72,10 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
@@ -87,7 +84,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
-import kotlin.math.floor
 
 /**
  * The chat thread screen (chat-experience.md M-CHAT-US-1/2/3/4; component-design.md
@@ -247,18 +243,11 @@ fun ChatScreen(
         // landscape trades a non-essential nudge for a transcript that's actually
         // visible and scrollable.
         val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val reduceMotion = rememberReduceMotion()
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             if (signInAction != null && !isLandscape) {
                 SignInNudge(onSignIn = signInAction)
             }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    // Subtle desk grain (soul.md Phase 3 — optional paper texture).
-                    // Static dots only; skipped under reduce-motion for a11y/perf.
-                    .deskGrain(enabled = !reduceMotion, ink = oak.textFaint),
-            ) {
+            Box(modifier = Modifier.weight(1f)) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
@@ -420,36 +409,6 @@ private fun ScopePickerSheet(current: Format, onSelect: (Format) -> Unit) {
     }
 }
 
-/**
- * Very light paper grain for the chat canvas — deterministic pseudo-random dots
- * so recomposition does not flicker. Web is primary for grain; Android keeps this
- * subtle (≈3% ink) and omit under [enabled] = false (reduce-motion).
- */
-private fun Modifier.deskGrain(enabled: Boolean, ink: Color): Modifier {
-    if (!enabled) return this
-    return this.drawBehind {
-        val step = 14.dp.toPx()
-        val cols = floor(size.width / step).toInt().coerceAtLeast(1)
-        val rows = floor(size.height / step).toInt().coerceAtLeast(1)
-        val dot = 1.1.dp.toPx()
-        val color = ink.copy(alpha = 0.045f)
-        for (row in 0..rows) {
-            for (col in 0..cols) {
-                // Sparse: only ~1/5 cells get a speck (hash of cell coords).
-                val h = (row * 73856093) xor (col * 19349663)
-                if (h and 0x7 != 0) continue
-                val ox = ((h ushr 3) and 7) / 7f * step * 0.35f
-                val oy = ((h ushr 6) and 7) / 7f * step * 0.35f
-                drawCircle(
-                    color = color,
-                    radius = dot,
-                    center = Offset(col * step + ox, row * step + oy),
-                )
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Thread rows
 // ---------------------------------------------------------------------------
@@ -599,7 +558,7 @@ private fun ErrorBannerRow(banner: ErrorBanner, onRetry: () -> Unit) {
 // ---------------------------------------------------------------------------
 
 /**
- * Blank specimen plate on the desk: dashed/grid plate, `NEW ENTRY` label, live scope
+ * Blank specimen plate on the desk: a solid-edged plate, `NEW ENTRY` label, live scope
  * stamp, prompt line, and four **filed starters** (Battle / Dex / Rules / Meta with
  * type-dots) — not a centered "Ask Oak" hero with equal pills (`docs/design/soul.md`).
  * Starters are sampled once per composition via [ExamplePrompts.pickFiled].
@@ -610,8 +569,9 @@ private fun EmptyState(format: Format, onExampleTap: (String) -> Unit) {
     val dark = isSystemInDarkTheme()
     val starters = remember { ExamplePrompts.pickFiled() }
     val plateShape = RoundedCornerShape(OakRadius.xl)
-    // Soft red in the plate edge (prototype mixes border-strong with poke-red).
-    val dashBorder = lerp(oak.borderStrong, oak.accent, 0.20f)
+    // Soft red in the plate edge — the accent is far more saturated post-Instrument,
+    // so the mix fraction is lighter than the old paper-era border tint.
+    val plateEdge = lerp(oak.borderStrong, oak.accent, 0.12f)
 
     Column(
         modifier = Modifier
@@ -624,7 +584,7 @@ private fun EmptyState(format: Format, onExampleTap: (String) -> Unit) {
                 .then(if (dark) Modifier else Modifier.shadow(4.dp, plateShape))
                 .clip(plateShape)
                 .background(MaterialTheme.colorScheme.surface)
-                .border(1.5.dp, dashBorder, plateShape)
+                .border(1.5.dp, plateEdge, plateShape)
                 .padding(OakSpacing.lg),
             verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
         ) {

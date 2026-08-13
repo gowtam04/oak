@@ -118,7 +118,7 @@ function Chips({
   empty?: string;
 }) {
   if (items.length === 0) {
-    return <span style={{ color: "var(--text-muted, #6e625a)" }}>{empty}</span>;
+    return <span style={{ color: "var(--text-muted, #5f656c)" }}>{empty}</span>;
   }
   return (
     <span
@@ -132,8 +132,8 @@ function Chips({
             display: "inline-block",
             padding: "1px 7px",
             borderRadius: "var(--radius-sm, 6px)",
-            background: "var(--surface-sunken, #f5efe8)",
-            border: "1px solid var(--border, #e9e0d8)",
+            background: "var(--surface-sunken, #e3e6e8)",
+            border: "1px solid var(--border, #d3d7da)",
             fontSize: "var(--text-xs, 12px)",
             lineHeight: 1.5,
           }}
@@ -152,10 +152,10 @@ function MemberCard({ member, index }: { member: TeamMember; index: number }) {
     <div
       data-testid={`team-member-${index}`}
       style={{
-        border: "1px solid var(--border, #e9e0d8)",
+        border: "1px solid var(--border, #d3d7da)",
         borderRadius: "var(--radius-md, 8px)",
         padding: "var(--space-3, 12px)",
-        background: "var(--surface, #fffdfb)",
+        background: "var(--surface, #f9fafa)",
         opacity: empty ? 0.6 : 1,
       }}
     >
@@ -174,7 +174,7 @@ function MemberCard({ member, index }: { member: TeamMember; index: number }) {
         <span
           style={{
             fontSize: "var(--text-xs, 12px)",
-            color: "var(--text-muted, #6e625a)",
+            color: "var(--text-muted, #5f656c)",
           }}
         >
           Lv {member.level}
@@ -193,15 +193,15 @@ function MemberCard({ member, index }: { member: TeamMember; index: number }) {
               fontSize: "var(--text-sm, 13px)",
             }}
           >
-            <dt style={{ color: "var(--text-muted, #6e625a)" }}>Ability</dt>
+            <dt style={{ color: "var(--text-muted, #5f656c)" }}>Ability</dt>
             <dd style={{ margin: 0 }}>{prettySlug(member.ability)}</dd>
-            <dt style={{ color: "var(--text-muted, #6e625a)" }}>Item</dt>
+            <dt style={{ color: "var(--text-muted, #5f656c)" }}>Item</dt>
             <dd style={{ margin: 0 }}>{prettySlug(member.item)}</dd>
-            <dt style={{ color: "var(--text-muted, #6e625a)" }}>Tera</dt>
+            <dt style={{ color: "var(--text-muted, #5f656c)" }}>Tera</dt>
             <dd style={{ margin: 0 }}>{prettySlug(member.tera_type)}</dd>
-            <dt style={{ color: "var(--text-muted, #6e625a)" }}>Nature</dt>
+            <dt style={{ color: "var(--text-muted, #5f656c)" }}>Nature</dt>
             <dd style={{ margin: 0 }}>{prettySlug(member.nature)}</dd>
-            <dt style={{ color: "var(--text-muted, #6e625a)" }}>EVs</dt>
+            <dt style={{ color: "var(--text-muted, #5f656c)" }}>EVs</dt>
             <dd
               style={{ margin: 0 }}
               data-testid={`team-member-${index}-evs`}
@@ -213,7 +213,7 @@ function MemberCard({ member, index }: { member: TeamMember; index: number }) {
           <div style={{ marginTop: "8px" }}>
             <span
               style={{
-                color: "var(--text-muted, #6e625a)",
+                color: "var(--text-muted, #5f656c)",
                 fontSize: "var(--text-sm, 13px)",
                 marginRight: "6px",
               }}
@@ -247,13 +247,13 @@ function TeamDetailPanel({
   let body: ReactNode;
   if (loading) {
     body = (
-      <p data-testid="team-detail-loading" style={{ color: "var(--text-muted, #6e625a)" }}>
+      <p data-testid="team-detail-loading" style={{ color: "var(--text-muted, #5f656c)" }}>
         Loading team…
       </p>
     );
   } else if (error != null && error !== "") {
     body = (
-      <p data-testid="team-detail-error" role="alert" style={{ color: "var(--danger, #ee5a5a)" }}>
+      <p data-testid="team-detail-error" role="alert" style={{ color: "var(--danger, #d6303f)" }}>
         {error}
       </p>
     );
@@ -282,7 +282,7 @@ function TeamDetailPanel({
               onClick={onClose}
               style={{
                 background: "transparent",
-                border: "1px solid var(--border, #e9e0d8)",
+                border: "1px solid var(--border, #d3d7da)",
                 borderRadius: "var(--radius-sm, 6px)",
                 padding: "2px 8px",
                 cursor: "pointer",
@@ -297,7 +297,7 @@ function TeamDetailPanel({
           data-testid="team-detail-meta"
           style={{
             margin: "0 0 12px",
-            color: "var(--text-muted, #6e625a)",
+            color: "var(--text-muted, #5f656c)",
             fontSize: "var(--text-sm, 13px)",
           }}
         >
@@ -320,7 +320,7 @@ function TeamDetailPanel({
     );
   } else {
     body = (
-      <p data-testid="team-detail-empty" style={{ color: "var(--text-muted, #6e625a)" }}>
+      <p data-testid="team-detail-empty" style={{ color: "var(--text-muted, #5f656c)" }}>
         No team to display.
       </p>
     );
@@ -332,9 +332,9 @@ function TeamDetailPanel({
       style={{
         marginTop: "var(--space-4, 16px)",
         padding: "var(--space-4, 16px)",
-        border: "1px solid var(--border, #e9e0d8)",
+        border: "1px solid var(--border, #d3d7da)",
         borderRadius: "var(--radius-md, 8px)",
-        background: "var(--surface-sunken, #f5efe8)",
+        background: "var(--surface-sunken, #e3e6e8)",
       }}
     >
       {body}
@@ -446,8 +446,8 @@ export default function TeamsBrowser({
                 marginLeft: "6px",
                 padding: "0 6px",
                 borderRadius: "var(--radius-sm, 6px)",
-                background: "var(--warn-surface, #fbf0d8)",
-                color: "var(--warn, #9a6b00)",
+                background: "var(--warning-soft, #fbf0dc)",
+                color: "var(--warning, #e08700)",
                 fontSize: "var(--text-xs, 12px)",
               }}
             >
@@ -554,9 +554,9 @@ export default function TeamsBrowser({
           style={{
             marginTop: "var(--space-3, 12px)",
             padding: "var(--space-3, 12px) var(--space-4, 16px)",
-            border: "1px solid var(--danger, #ee5a5a)",
+            border: "1px solid var(--danger, #d6303f)",
             borderRadius: "var(--radius-md, 8px)",
-            color: "var(--danger, #ee5a5a)",
+            color: "var(--danger, #d6303f)",
             fontSize: "var(--text-sm, 13px)",
           }}
         >

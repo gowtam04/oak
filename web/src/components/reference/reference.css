@@ -46,6 +46,7 @@
 .ref-hero__title {
   font-family: var(--display);
   font-size: var(--text-2xl);
+  letter-spacing: -0.02em;
   color: var(--text-strong);
   margin: 0 0 var(--space-2);
 }
@@ -69,6 +70,7 @@
 .ref-section__title {
   font-family: var(--display);
   font-size: var(--text-lg);
+  letter-spacing: -0.02em;
   color: var(--text-strong);
   margin: 0 0 var(--space-4);
 }
@@ -170,9 +172,9 @@ a.ref-card:hover,
 }
 
 /* ---------------------------------------------------------------------------
-   ReferenceHeader / ReferenceNav — the sticky paper chrome, mirroring the chat
-   page's header (`.chat-page__header` / `.chat-page__title`): a warm surface
-   with a 2px `--poke-red` "thread" on top and a hairline bottom, the Fredoka
+   ReferenceHeader / ReferenceNav — the sticky chrome, mirroring the chat
+   page's header (`.chat-page__header` / `.chat-page__title`): a surface
+   with a 2px `--poke-red` "thread" on top and a hairline bottom, the display
    wordmark with its brand-mark chip, pill nav links (active = red on red-soft),
    and an "Open chat" red pill mirroring `.app-nav__newchat`. Red's whole job
    here: the thread, the active pill, the CTA, and link hover — nothing else.
@@ -214,7 +216,7 @@ a.ref-card:hover,
   padding-right: max(var(--space-6), env(safe-area-inset-right));
 }
 
-/* Fredoka wordmark + brand-mark chip — mirrors `.chat-page__title`. */
+/* Space Grotesk wordmark + brand-mark chip — mirrors `.chat-page__title`. */
 .ref-header__wordmark {
   display: inline-flex;
   align-items: center;
@@ -223,7 +225,7 @@ a.ref-card:hover,
   font-weight: 600;
   font-size: var(--text-2xl);
   line-height: 1.2;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
   text-decoration: none;
 }

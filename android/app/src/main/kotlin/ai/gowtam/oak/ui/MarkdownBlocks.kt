@@ -414,7 +414,11 @@ object MarkdownBlocks {
  * Ports the inline subset of the iOS renderer (which uses `AttributedString(markdown:)`
  * with `.inlineOnlyPreservingWhitespace`).
  */
-fun parseInline(text: String, linkColor: Color = Color.Unspecified): AnnotatedString =
+fun parseInline(
+    text: String,
+    linkColor: Color = Color.Unspecified,
+    codeBackground: Color = Color(0x1F808080),
+): AnnotatedString =
     buildAnnotatedString {
         var i = 0
         val n = text.length
@@ -438,7 +442,7 @@ fun parseInline(text: String, linkColor: Color = Color.Unspecified): AnnotatedSt
                     withStyle(
                         SpanStyle(
                             fontFamily = JetBrainsMonoFamily,
-                            background = Color(0x1F808080),
+                            background = codeBackground,
                         ),
                     ) {
                         append(text.substring(i + 1, close))
@@ -471,7 +475,7 @@ fun parseInline(text: String, linkColor: Color = Color.Unspecified): AnnotatedSt
                                 ),
                             ),
                         ) {
-                            append(parseInline(label, linkColor))
+                            append(parseInline(label, linkColor, codeBackground))
                         }
                         i = closeParen + 1
                         continue
@@ -486,7 +490,7 @@ fun parseInline(text: String, linkColor: Color = Color.Unspecified): AnnotatedSt
                 if (close > i + 1) {
                     flushPlain()
                     withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append(parseInline(text.substring(i + 2, close), linkColor))
+                        append(parseInline(text.substring(i + 2, close), linkColor, codeBackground))
                     }
                     i = close + 2
                     continue
@@ -499,7 +503,7 @@ fun parseInline(text: String, linkColor: Color = Color.Unspecified): AnnotatedSt
                 if (close > i && close != i + 1) {
                     flushPlain()
                     withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                        append(parseInline(text.substring(i + 1, close), linkColor))
+                        append(parseInline(text.substring(i + 1, close), linkColor, codeBackground))
                     }
                     i = close + 1
                     continue

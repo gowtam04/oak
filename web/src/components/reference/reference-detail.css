@@ -21,7 +21,7 @@
 
 /* ---------------------------------------------------------------------------
    Detail-page hero — a Level-1 card (`.ref-card` in markup) with the artwork
-   on a sunken well, a Fredoka name, a mono dex eyebrow, the TypeBadge row, and
+   on a sunken well, a Space Grotesk name, a mono dex eyebrow, the TypeBadge row, and
    a 3px top accent rule in the primary type's color. Pages set `data-type` to
    the primary/only type (pokedex primary type, move type); abilities/items
    have no type, so the accent falls back to a neutral machined edge.
@@ -106,6 +106,7 @@
 .ref-detail-hero__title {
   font-family: var(--display);
   font-size: var(--text-2xl);
+  letter-spacing: -0.02em;
   color: var(--text-strong);
   margin: 0;
 }

@@ -29,7 +29,7 @@ const TURNS_SERIES: ChartSeries = {
 const SIGNUPS_SERIES: ChartSeries = {
   key: "signups",
   label: "Signups",
-  color: "var(--success, #2fb573)",
+  color: "var(--success, #1f9d61)",
   points: [
     { t: BASE, value: 1 },
     { t: BASE + DAY, value: 4 },

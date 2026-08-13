@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
  * (theme-translation spec §4.1). Instead of Material's tonal surface it paints the
  * **canvas** (background) edge-to-edge, reserves the status-bar strip in the same
  * warm color, pins the 2dp **red thread** accent rule at the top of the content
- * band on root screens, renders the title in Fredoka (via the rewired `titleLarge`),
+ * band on root screens, renders the title in Space Grotesk (via the rewired `titleLarge`),
  * and closes with a hairline `border` rule at the bottom.
  *
  * Slots pass straight through to [TopAppBar], so existing `semantics { heading() }`

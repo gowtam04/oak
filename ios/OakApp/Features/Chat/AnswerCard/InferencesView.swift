@@ -130,7 +130,7 @@ private extension Inference.Confidence {
   var tint: Color {
     switch self {
     case .high: return Theme.success
-    case .medium: return Theme.sunflower
+    case .medium: return Theme.warning
     case .low: return Theme.textMuted
     case .unknown: return Theme.textMuted
     }

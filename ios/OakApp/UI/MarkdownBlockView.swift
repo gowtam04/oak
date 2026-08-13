@@ -67,7 +67,7 @@ struct MarkdownBlockView: View {
   }
 
   /// Heading type ramp, scaled to chat-card sizing (h1 is a section title, not a
-  /// hero). `display(_:)` is Fredoka SemiBold — Oak's heading voice. Color is
+  /// hero). `display(_:)` is Space Grotesk SemiBold — Oak's heading voice. Color is
   /// left to inherit so a heading inside muted reasoning text stays muted.
   private func headingFont(_ level: Int) -> Font {
     switch level {

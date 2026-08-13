@@ -5,18 +5,18 @@ import UIKit
 ///
 /// Colors are sourced from the web design system (`web/src/app/globals.css`) and
 /// re-expressed natively. Brand/semantic colors adapt to light & dark via a
-/// dynamic `UIColor` provider. Surfaces use the **warm neutral ramp** — a brand
-/// paper identity (`canvas` #FBF7F4 / #161311, `surface` #FFFFFF / #211C19,
-/// `surfaceSunken` #F7F1EB / #12100E) reconciled 1:1 with the web tokens.
+/// dynamic `UIColor` provider. Surfaces use a **cool neutral ramp** — a field
+/// instrument identity (`canvas` #EEF0F1 / #101214, `surface` #F9FAFA / #16191B,
+/// `surfaceSunken` #E3E6E8 / #0B0D0E) reconciled 1:1 with the web tokens.
 ///
-/// Text and separator now use the web's **warm ink ramp** (adaptive themed
-/// colors, e.g. `textPrimary` #3D362F / #E4DAD0, `separator` #E9E0D8 / #3A332E)
+/// Text and separator use the web's **neutral ink ramp** (adaptive themed
+/// colors, e.g. `textPrimary` #24282B / #DDE1E3, `separator` #D3D7DA / #2A2E32)
 /// rather than Apple's cool-gray system semantics — the temperature match is
 /// part of "feels like Oak." Contrast was designed into the ramp; Dynamic Type
 /// still scales via the custom-font `relativeTo:` anchors (M-AC-UI1.2–1.4).
 ///
-/// Typography is the loudest brand carrier: `display()` is **Fredoka**,
-/// `body()` is **Nunito Sans**, `mono()`/`instrument()` are **JetBrains Mono**,
+/// Typography is the loudest brand carrier: `display()` is **Space Grotesk**,
+/// `body()` is **Inter**, `mono()`/`instrument()` are **JetBrains Mono**,
 /// each `Font.custom(_:size:relativeTo:)` so Dynamic Type keeps scaling. Custom
 /// fonts don't synthesize weights reliably, so the weight-aware overloads switch
 /// the PostScript face per weight rather than calling `.weight()`.
@@ -28,91 +28,90 @@ enum Theme {
   // MARK: Brand
 
   /// Pokédex red — the primary brand/accent color (mirrored by `AccentColor`).
-  static let accent = adaptive(light: 0xEE5A5A, dark: 0xFF6B6B)
-  static let accentHover = adaptive(light: 0xE04545, dark: 0xFF7E7E)
-  static let accentActive = adaptive(light: 0xC93B3B, dark: 0xF25C5C)
-  static let sunflower = adaptive(light: 0xF5A524, dark: 0xF8B73E)
-  static let azure = adaptive(light: 0x3AA0E3, dark: 0x5BB4EF)
+  static let accent = adaptive(light: 0xE3350D, dark: 0xFF4A22)
+  static let accentHover = adaptive(light: 0xC92E0B, dark: 0xFF5F3C)
+  static let accentActive = adaptive(light: 0xB02A0A, dark: 0xE8431E)
+  /// Info/focus blue — interaction states, links, focus rings.
+  static let azure = adaptive(light: 0x2B7DD1, dark: 0x55A0E8)
 
   // MARK: Semantic
 
-  static let success = adaptive(light: 0x2FB573, dark: 0x46C98A)
-  static let warning = adaptive(light: 0xF08C00, dark: 0xFBA53B)
-  static let danger = adaptive(light: 0xE0394A, dark: 0xFF5C6B)
-  static let info = adaptive(light: 0x3AA0E3, dark: 0x5BB4EF)
+  static let success = adaptive(light: 0x1F9D61, dark: 0x34C27F)
+  static let warning = adaptive(light: 0xE08700, dark: 0xF0A030)
+  static let danger = adaptive(light: 0xD6303F, dark: 0xF04A58)
+  static let info = adaptive(light: 0x2B7DD1, dark: 0x55A0E8)
 
   // MARK: Soft tints (faint fills for chips, callouts, selection washes)
 
   /// Faint accent fill — empty-state chip press, red callouts.
-  static let accentSoft = adaptive(light: 0xFCEBEB, dark: 0x3A1E1E)
-  static let sunflowerSoft = adaptive(light: 0xFDF1DC, dark: 0x3A2E14)
+  static let accentSoft = adaptive(light: 0xFBE9E4, dark: 0x33170F)
   /// Faint azure fill — interaction focus glow, in-thread chip press, links.
-  static let azureSoft = adaptive(light: 0xE6F2FB, dark: 0x16263A)
-  static let successSoft = adaptive(light: 0xE3F6EC, dark: 0x10301F)
-  static let warningSoft = adaptive(light: 0xFDEFD9, dark: 0x3A2A0F)
-  static let dangerSoft = adaptive(light: 0xFCE8EA, dark: 0x3A1518)
+  static let azureSoft = adaptive(light: 0xE5F0FA, dark: 0x142433)
+  static let successSoft = adaptive(light: 0xE4F4EC, dark: 0x0E2B1D)
+  static let warningSoft = adaptive(light: 0xFBF0DC, dark: 0x33260F)
+  static let dangerSoft = adaptive(light: 0xFAE7E9, dark: 0x331417)
 
-  /// The user chat bubble's paper fill — the web's `color-mix(accent-soft 55%,
-  /// surface)` precomputed per theme (§4.3). Softer and more paper-like than a
-  /// flat accent fill; paired with an accent-tinted hairline and `textPrimary` ink.
-  static let userBubble = adaptive(light: 0xFDF2F1, dark: 0x2E1D1B)
+  /// The user chat bubble's sunken-note fill — a cool, quiet note rather than a
+  /// warm pink-tinted paper. Paired with an accent-tinted corner pip and
+  /// `textPrimary` ink (§4.3).
+  static let userBubble = adaptive(light: 0xE9EBED, dark: 0x1A1E21)
 
-  // MARK: Surfaces (warm neutral ramp — brand paper identity)
+  // MARK: Surfaces (cool neutral ramp — field instrument identity)
 
   /// The screen/chat canvas — the base layer every screen sits on.
-  /// Light: #FBF7F4 (warm paper); dark: #161311 (warm near-black).
-  static let canvas = adaptive(light: 0xFBF7F4, dark: 0x161311)
+  /// Light: #EEF0F1 (cool paper); dark: #101214 (cool near-black).
+  static let canvas = adaptive(light: 0xEEF0F1, dark: 0x101214)
 
   /// Legacy alias for `canvas` — kept so existing call sites resolve without edits.
   /// Prefer `canvas` for new call sites.
   static let background = canvas
 
   /// Card / modal surface — lifts one level above `canvas`.
-  /// Light: #FFFFFF; dark: #211C19.
-  static let surface = adaptive(light: 0xFFFFFF, dark: 0x211C19)
+  /// Light: #F9FAFA; dark: #16191B.
+  static let surface = adaptive(light: 0xF9FAFA, dark: 0x16191B)
 
   /// Floating / tooltip surface — lifts above `surface`.
-  /// Light: #FFFFFF; dark: #2A2420.
-  static let surfaceRaised = adaptive(light: 0xFFFFFF, dark: 0x2A2420)
+  /// Light: #FFFFFF; dark: #1D2124.
+  static let surfaceRaised = adaptive(light: 0xFFFFFF, dark: 0x1D2124)
 
   /// Recessed well — inputs, search bars, inner wells.
-  /// Light: #F7F1EB; dark: #12100E.
-  static let surfaceSunken = adaptive(light: 0xF7F1EB, dark: 0x12100E)
+  /// Light: #E3E6E8; dark: #0B0D0E.
+  static let surfaceSunken = adaptive(light: 0xE3E6E8, dark: 0x0B0D0E)
 
-  // MARK: Text & separator (warm ink ramp — mirrors the web tokens)
+  // MARK: Text & separator (cool ink ramp — mirrors the web tokens)
 
   /// Hairline dividers, card borders. Web `--border`.
-  static let separator = adaptive(light: 0xE9E0D8, dark: 0x3A332E)
+  static let separator = adaptive(light: 0xD3D7DA, dark: 0x2A2E32)
   /// Alias of `separator` for call sites that read a "border" role.
   static let border = separator
   /// A stronger hairline — button/composer outlines, emphasized edges.
-  static let borderStrong = adaptive(light: 0xD8CCC1, dark: 0x4E453F)
+  static let borderStrong = adaptive(light: 0xB9BEC3, dark: 0x3A3F44)
 
   /// Emphasized ink — headings, wordmark, verdict. Web `--text-strong`.
-  static let textStrong = adaptive(light: 0x2A2521, dark: 0xF5EFE9)
+  static let textStrong = adaptive(light: 0x131517, dark: 0xF2F4F5)
   /// Default body ink. Web `--text`.
-  static let textPrimary = adaptive(light: 0x3D362F, dark: 0xE4DAD0)
+  static let textPrimary = adaptive(light: 0x24282B, dark: 0xDDE1E3)
   /// Secondary rows / captions. Web `--text-muted`.
-  static let textSecondary = adaptive(light: 0x6E625A, dark: 0xB7A99C)
+  static let textSecondary = adaptive(light: 0x5F656C, dark: 0x9BA1A7)
   /// Faint labels / disabled ink. Web `--text-faint`.
-  static let textMuted = adaptive(light: 0x94867A, dark: 0x8A7D72)
+  static let textMuted = adaptive(light: 0x8A9096, dark: 0x6E747A)
 
-  /// Overlay scrim behind sheets/dialogs — warm, semi-opaque.
+  /// Overlay scrim behind sheets/dialogs — neutral ink, semi-opaque.
   static let scrim = Color(
     uiColor: UIColor { traits in
       traits.userInterfaceStyle == .dark
-        ? UIColor(red: 8 / 255, green: 6 / 255, blue: 5 / 255, alpha: 0.6)
-        : UIColor(red: 42 / 255, green: 37 / 255, blue: 33 / 255, alpha: 0.4)
+        ? UIColor(red: 0, green: 0, blue: 0, alpha: 0.6)
+        : UIColor(red: 19 / 255, green: 21 / 255, blue: 23 / 255, alpha: 0.4)
     }
   )
 
   // MARK: Corner radii (brand favors generous rounding)
 
   enum Radius {
-    static let sm: CGFloat = 6
-    static let md: CGFloat = 10
-    static let lg: CGFloat = 16
-    static let xl: CGFloat = 24
+    static let sm: CGFloat = 5
+    static let md: CGFloat = 9
+    static let lg: CGFloat = 12
+    static let xl: CGFloat = 16
     static let pill: CGFloat = 999
   }
 
@@ -166,16 +165,28 @@ enum Theme {
     }
   }
 
-  /// Display face — **Fredoka SemiBold** for the "playful chrome": wordmark,
-  /// screen titles, markdown headings, entity names.
+  /// Display face — **Space Grotesk SemiBold** for the instrument chrome:
+  /// wordmark, screen titles, markdown headings, entity names.
   static func display(_ style: Font.TextStyle = .title) -> Font {
-    .custom("Fredoka-SemiBold", size: pointSize(for: style), relativeTo: style)
+    .custom("SpaceGrotesk-SemiBold", size: pointSize(for: style), relativeTo: style)
   }
 
-  /// Body face — **Nunito Sans**. `weight` switches the static face (regular /
+  /// Display face at an explicit weight — medium / semibold / bold — since
+  /// custom fonts don't take `.weight()`.
+  static func display(_ style: Font.TextStyle, weight: Weight) -> Font {
+    let face: String
+    switch weight {
+    case .regular, .medium: face = "SpaceGrotesk-Medium"
+    case .semibold: face = "SpaceGrotesk-SemiBold"
+    case .bold: face = "SpaceGrotesk-Bold"
+    }
+    return .custom(face, size: pointSize(for: style), relativeTo: style)
+  }
+
+  /// Body face — **Inter**. `weight` switches the static face (regular /
   /// medium / semibold / bold) since custom fonts don't take `.weight()`.
   static func body(_ style: Font.TextStyle = .body, weight: Weight = .regular) -> Font {
-    .custom(nunitoFace(weight), size: pointSize(for: style), relativeTo: style)
+    .custom(interFace(weight), size: pointSize(for: style), relativeTo: style)
   }
 
   /// Monospaced face — **JetBrains Mono** for "precise data" (stats, dex
@@ -187,10 +198,11 @@ enum Theme {
   }
 
   /// Answer-lead role — the verdict at the top of every answer card.
-  /// **Nunito Sans Bold 22** relative to `.title3`, so it scales with Dynamic
-  /// Type. It is the largest text in any conversation — the editorial masthead.
+  /// **Space Grotesk SemiBold 22** relative to `.title3`, so it scales with
+  /// Dynamic Type. It is the largest text in any conversation — the editorial
+  /// masthead.
   static func answerLead() -> Font {
-    .custom("NunitoSans-Bold", size: 22, relativeTo: .title3)
+    .custom("SpaceGrotesk-SemiBold", size: 22, relativeTo: .title3)
   }
 
   /// Instrument voice — **JetBrains Mono SemiBold**, typically `.caption2`
@@ -202,13 +214,13 @@ enum Theme {
     .custom("JetBrainsMono-SemiBold", size: pointSize(for: style), relativeTo: style)
   }
 
-  /// Nunito Sans PostScript face for a `Weight`.
-  private static func nunitoFace(_ weight: Weight) -> String {
+  /// Inter PostScript face for a `Weight`.
+  private static func interFace(_ weight: Weight) -> String {
     switch weight {
-    case .regular: "NunitoSans-Regular"
-    case .medium: "NunitoSans-Medium"
-    case .semibold: "NunitoSans-SemiBold"
-    case .bold: "NunitoSans-Bold"
+    case .regular: "Inter-Regular"
+    case .medium: "Inter-Medium"
+    case .semibold: "Inter-SemiBold"
+    case .bold: "Inter-Bold"
     }
   }
 
@@ -220,6 +232,38 @@ enum Theme {
   static func type(_ name: String) -> Color {
     typeColors[name.lowercased()] ?? typeColors["normal"]!
   }
+
+  /// The legible ink color for text/labels set directly on a full-chroma
+  /// `type(_:)` fill (e.g. `TypeBadge`'s solid capsule). White for the darker
+  /// type solids, near-black for the lighter ones — a fixed per-type contrast
+  /// table rather than a computed luminance check, so it's theme-stable.
+  static func typeInk(_ name: String) -> Color {
+    typeInkColors[name.lowercased()] ?? typeInkColors["normal"]!
+  }
+
+  private static let typeInkWhite = solid(0xFFFFFF)
+  private static let typeInkDark = solid(0x16181A)
+
+  private static let typeInkColors: [String: Color] = [
+    "normal": typeInkDark,
+    "fire": typeInkDark,
+    "water": typeInkDark,
+    "electric": typeInkDark,
+    "grass": typeInkDark,
+    "ice": typeInkDark,
+    "fighting": typeInkWhite,
+    "poison": typeInkWhite,
+    "ground": typeInkDark,
+    "flying": typeInkDark,
+    "psychic": typeInkDark,
+    "bug": typeInkDark,
+    "rock": typeInkDark,
+    "ghost": typeInkWhite,
+    "dragon": typeInkWhite,
+    "dark": typeInkWhite,
+    "steel": typeInkDark,
+    "fairy": typeInkDark,
+  ]
 
   private static let typeColors: [String: Color] = [
     "normal": solid(0xA8A77A),
@@ -286,11 +330,11 @@ enum Theme {
   /// Dynamic `UIColor` versions of the tokens the UIKit bar appearance needs
   /// (`configureWithOpaqueBackground` takes `UIColor`, not SwiftUI `Color`).
   /// Kept in lock-step with the SwiftUI tokens above.
-  static let uiCanvas = uiAdaptive(light: 0xFBF7F4, dark: 0x161311)
-  static let uiSeparator = uiAdaptive(light: 0xE9E0D8, dark: 0x3A332E)
-  static let uiAccent = uiAdaptive(light: 0xEE5A5A, dark: 0xFF6B6B)
-  static let uiTextSecondary = uiAdaptive(light: 0x6E625A, dark: 0xB7A99C)
-  static let uiTextStrong = uiAdaptive(light: 0x2A2521, dark: 0xF5EFE9)
+  static let uiCanvas = uiAdaptive(light: 0xEEF0F1, dark: 0x101214)
+  static let uiSeparator = uiAdaptive(light: 0xD3D7DA, dark: 0x2A2E32)
+  static let uiAccent = uiAdaptive(light: 0xE3350D, dark: 0xFF4A22)
+  static let uiTextSecondary = uiAdaptive(light: 0x5F656C, dark: 0x9BA1A7)
+  static let uiTextStrong = uiAdaptive(light: 0x131517, dark: 0xF2F4F5)
 
   private static func uiAdaptive(light: UInt32, dark: UInt32) -> UIColor {
     UIColor { traits in
@@ -340,16 +384,18 @@ extension Theme {
     /// The soft, wide cast shadow.
     var ambient: Layer
 
-    /// Resting card elevation (key y=1 blur=2 @ black 8%; ambient y=8 blur=24 @ black 6%).
+    /// Resting card elevation (key y=1 blur=2 @ black 5%; ambient y=6 blur=14 @ black 7%).
+    /// Cooler and tighter than the prior warm-paper recipe — a field instrument
+    /// reads as precision-milled, not soft-shadowed.
     static let card = Shadow(
-      key: Layer(color: .black.opacity(0.08), radius: 1, y: 1),
-      ambient: Layer(color: .black.opacity(0.06), radius: 12, y: 8)
+      key: Layer(color: .black.opacity(0.05), radius: 2, y: 1),
+      ambient: Layer(color: .black.opacity(0.07), radius: 14, y: 6)
     )
 
-    /// Lifted elevation for pressed/floating surfaces (key y=2 blur=6 @ 10%; ambient y=12 blur=32 @ 8%).
+    /// Lifted elevation for pressed/floating surfaces (key y=2 blur=3 @ 6%; ambient y=10 blur=18 @ 9%).
     static let raised = Shadow(
-      key: Layer(color: .black.opacity(0.10), radius: 3, y: 2),
-      ambient: Layer(color: .black.opacity(0.08), radius: 16, y: 12)
+      key: Layer(color: .black.opacity(0.06), radius: 3, y: 2),
+      ambient: Layer(color: .black.opacity(0.09), radius: 18, y: 10)
     )
 
     /// A single-layer accent-tinted glow (y=2 blur=8 @ 25% of `color`) — for
@@ -755,50 +801,53 @@ extension Theme {
   }
 }
 
-// MARK: - Desk grain (Phase 3.1)
+// MARK: - Inset well (Phase 2 groundwork)
 
 extension View {
-  /// Ultra-subtle static paper grain over the desk canvas. Decorative only;
-  /// skips when Reduce Motion is on so the desk stays calm (soul.md Phase 3.1).
-  func oakDeskGrain(opacity: Double = 0.028) -> some View {
-    modifier(OakDeskGrainModifier(opacity: opacity))
+  /// A recessed "instrument well" surface: `surfaceSunken` fill plus a faint
+  /// inner-shadow illusion (a dark hairline hugging the top edge, a light
+  /// hairline hugging the bottom) so the content reads as sunken into the
+  /// panel rather than sitting on a flat tint. Cheap — two strokes, no blur
+  /// passes. Phase 2 wires this into search bars, inputs, and inner wells.
+  func oakInsetWell(cornerRadius: CGFloat = Theme.Radius.md) -> some View {
+    modifier(OakInsetWellModifier(cornerRadius: cornerRadius))
   }
 }
 
-private struct OakDeskGrainModifier: ViewModifier {
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  let opacity: Double
+private struct OakInsetWellModifier: ViewModifier {
+  @Environment(\.colorScheme) private var colorScheme
+  let cornerRadius: CGFloat
 
   func body(content: Content) -> some View {
-    content.overlay {
-      if !reduceMotion {
-        Canvas { context, size in
-          // Deterministic sparse dots — cheap static texture, not animated noise.
-          let step: CGFloat = 11
-          var y: CGFloat = 3
-          var row = 0
-          while y < size.height {
-            var x: CGFloat = CGFloat((row % 3) * 3) + 2
-            var col = 0
-            while x < size.width {
-              let seed = (row * 31 &+ col * 17) & 7
-              if seed == 0 || seed == 3 {
-                let r: CGFloat = seed == 0 ? 0.6 : 0.45
-                let rect = CGRect(x: x, y: y, width: r, height: r)
-                context.fill(Path(ellipseIn: rect), with: .color(.black))
-              }
-              x += step
-              col += 1
-            }
-            y += step
-            row += 1
-          }
-        }
-        .opacity(opacity)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+    let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    let isDark = colorScheme == .dark
+    content
+      .background(Theme.surfaceSunken, in: shape)
+      .overlay {
+        shape
+          .inset(by: 0.5)
+          .stroke(Color.black.opacity(isDark ? 0.22 : 0.10), lineWidth: 1)
+          .blur(radius: 0.5)
+          .mask(
+            LinearGradient(
+              colors: [.black, .black.opacity(0.35), .clear],
+              startPoint: .top,
+              endPoint: .bottom
+            )
+          )
       }
-    }
+      .overlay {
+        shape
+          .inset(by: 0.5)
+          .stroke((isDark ? Color.clear : Color.white).opacity(0.6), lineWidth: 1)
+          .mask(
+            LinearGradient(
+              colors: [.clear, .black.opacity(0.3), .black],
+              startPoint: .top,
+              endPoint: .bottom
+            )
+          )
+      }
   }
 }
 

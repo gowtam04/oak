@@ -32,14 +32,15 @@ import androidx.compose.ui.unit.dp
  * The Oak button family (theme-translation spec §4.5), mirroring the web `.tm-btn`
  * system so a control reads as Oak, not Material:
  *
- * - [OakButtonStyle.Primary]   — coral fill, white Nunito 700, pill.
+ * - [OakButtonStyle.Primary]   — accent fill, white Inter 700, [OakRadius.md] rounding.
  * - [OakButtonStyle.Secondary] — `surface` fill + `borderStrong` hairline; press tints azure.
  * - [OakButtonStyle.Ghost]     — text-only `textMuted`.
  * - [OakButtonStyle.Danger]    — `dangerSoft` fill + danger ink.
  *
- * All are pill-shaped, ≥44dp tall, and dip to 0.97 on press (snappy spring; collapses
- * to an instant snap under reduce-motion). Color is never the only signal — the label
- * always carries the meaning.
+ * All are [OakRadius.md]-rounded (pill remains reserved for chips/composer), ≥44dp
+ * tall, and dip to 0.97 on press (snappy spring; collapses to an instant snap under
+ * reduce-motion). Color is never the only signal — the label always carries the
+ * meaning.
  */
 enum class OakButtonStyle { Primary, Secondary, Ghost, Danger }
 
@@ -90,7 +91,7 @@ fun OakButton(
         pressed -> oak.azure
         else -> borderColor
     }
-    val shape = RoundedCornerShape(OakRadius.pill)
+    val shape = RoundedCornerShape(OakRadius.md)
     val alpha = if (enabled) 1f else 0.5f
 
     Row(

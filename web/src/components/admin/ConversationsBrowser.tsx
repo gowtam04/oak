@@ -250,9 +250,9 @@ export default function ConversationsBrowser({
           role="alert"
           style={{
             padding: "var(--space-3, 12px) var(--space-4, 16px)",
-            border: "1px solid var(--danger, #ee5a5a)",
+            border: "1px solid var(--danger, #d6303f)",
             borderRadius: "var(--radius-md, 8px)",
-            color: "var(--danger, #ee5a5a)",
+            color: "var(--danger, #d6303f)",
             fontSize: "var(--text-sm, 13px)",
           }}
         >

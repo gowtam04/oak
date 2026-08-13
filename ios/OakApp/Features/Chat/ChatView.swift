@@ -344,10 +344,7 @@ struct ChatView: View {
             .frame(minHeight: geo.size.height, alignment: .bottom)
           }
         }
-        .background {
-          Theme.canvas
-            .oakDeskGrain()
-        }
+        .background(Theme.canvas)
         .scrollDismissesKeyboard(.interactively)
         // Keep the newest content in view as turns/tokens arrive (M-AC-2.2).
         .onChange(of: model.turns.count) { _, _ in scrollToBottom(proxy) }
@@ -428,7 +425,7 @@ struct ChatView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  /// Blank specimen plate empty desk (soul.md): dashed/grid plate, `NEW ENTRY`,
+  /// Blank specimen plate empty desk (soul.md): solid-edge plate, `NEW ENTRY`,
   /// "What are we looking up?", scope stamp from `displayFormat`, and filed
   /// starters (Battle / Dex / Rules / Meta with type-dots). **Not** a centered
   /// logo / "Ask Oak" AI-hero composition.
@@ -447,8 +444,8 @@ struct ChatView: View {
   /// full-bleed hero.
   private static let plateMaxWidth: CGFloat = 420
 
-  /// The blank specimen plate: dashed border, subtle grid, NEW ENTRY + scope stamp,
-  /// prompt, subcopy, and filed starters.
+  /// The blank specimen plate: solid border, NEW ENTRY + scope stamp, prompt,
+  /// subcopy, and filed starters.
   private var blankSpecimenPlate: some View {
     VStack(alignment: .leading, spacing: Theme.Spacing.md) {
       HStack(alignment: .center) {
@@ -496,23 +493,12 @@ struct ChatView: View {
     }
     .padding(Theme.Spacing.lg)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background {
-      ZStack {
-        Theme.surface
-        // Subtle desk grid (soul.md blank plate).
-        BlankPlateGrid()
-          .opacity(0.45)
-          .padding(12)
-      }
-    }
+    .background(Theme.surfaceRaised)
     .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous))
     .overlay {
       RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
-        // Dashed plate edge — border with a faint accent mix (prototype blank-plate).
-        .strokeBorder(
-          Theme.borderStrong.opacity(0.85),
-          style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-        )
+        // Solid plate edge (soul.md — no dashed "wireframe" callouts).
+        .strokeBorder(Theme.border, lineWidth: 1)
     }
     .oakShadow(.card)
   }
@@ -678,33 +664,6 @@ private struct UserMessageView: View {
         .combined(with: .offset(y: 8)),
       removal: .opacity
     )
-  }
-}
-
-// MARK: - Blank plate grid
-
-/// A light desk grid drawn inside the blank specimen plate (decorative only).
-private struct BlankPlateGrid: View {
-  var body: some View {
-    Canvas { context, size in
-      let step: CGFloat = 24
-      var path = Path()
-      var x: CGFloat = 0
-      while x <= size.width {
-        path.move(to: CGPoint(x: x, y: 0))
-        path.addLine(to: CGPoint(x: x, y: size.height))
-        x += step
-      }
-      var y: CGFloat = 0
-      while y <= size.height {
-        path.move(to: CGPoint(x: 0, y: y))
-        path.addLine(to: CGPoint(x: size.width, y: y))
-        y += step
-      }
-      context.stroke(path, with: .color(Theme.border.opacity(0.7)), lineWidth: 1)
-    }
-    .allowsHitTesting(false)
-    .accessibilityHidden(true)
   }
 }
 

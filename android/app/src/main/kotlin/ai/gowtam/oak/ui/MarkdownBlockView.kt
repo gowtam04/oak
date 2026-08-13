@@ -73,7 +73,7 @@ fun MarkdownText(
 ) {
     val oak = LocalOakColors.current
     Text(
-        text = parseInline(markdown, linkColor = oak.azure),
+        text = parseInline(markdown, linkColor = oak.azure, codeBackground = oak.textStrong.copy(alpha = 0.08f)),
         modifier = modifier,
         color = color,
     )
@@ -84,14 +84,14 @@ private fun BlockView(block: MdBlock) {
     val oak = LocalOakColors.current
     when (block) {
         is MdBlock.Heading -> Text(
-            text = parseInline(block.text, linkColor = oak.azure),
+            text = parseInline(block.text, linkColor = oak.azure, codeBackground = oak.textStrong.copy(alpha = 0.08f)),
             style = headingStyle(block.level),
             color = oak.textStrong,
             modifier = Modifier.fillMaxWidth(),
         )
 
         is MdBlock.Paragraph -> Text(
-            text = parseInline(block.text, linkColor = oak.azure),
+            text = parseInline(block.text, linkColor = oak.azure, codeBackground = oak.textStrong.copy(alpha = 0.08f)),
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -136,7 +136,7 @@ private fun MarkdownListView(items: List<MdListItem>) {
                     fontFamily = if (item.ordered) JetBrainsMonoFamily else FontFamily.Default,
                 )
                 Text(
-                    text = parseInline(item.text, linkColor = oak.azure),
+                    text = parseInline(item.text, linkColor = oak.azure, codeBackground = oak.textStrong.copy(alpha = 0.08f)),
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f),
                 )
@@ -189,7 +189,7 @@ private fun MarkdownBlockquote(text: String) {
                 .background(oak.accent.copy(alpha = 0.5f), RoundedCornerShape(2.dp)),
         )
         Text(
-            text = parseInline(text, linkColor = oak.azure),
+            text = parseInline(text, linkColor = oak.azure, codeBackground = oak.textStrong.copy(alpha = 0.08f)),
             style = MaterialTheme.typography.bodyLarge,
             color = oak.textMuted,
             modifier = Modifier.weight(1f),
@@ -255,7 +255,7 @@ private fun MarkdownTableView(table: MdTable) {
                             },
                         ) {
                             Text(
-                                text = parseInline(value, linkColor = oak.azure),
+                                text = parseInline(value, linkColor = oak.azure, codeBackground = oak.textStrong.copy(alpha = 0.08f)),
                                 style = if (isHeader) {
                                     MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
                                 } else {

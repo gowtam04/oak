@@ -60,11 +60,12 @@ struct ChatTabView: View {
         onNewChat: { path.append(.new) }
       )
       .oakRedThread()
-      // Inline title with a custom Fredoka principal view. Root cause of the old
-      // phantom band: the screen used the default (large) title display mode, and
-      // our global largeTitleTextAttributes custom Fredoka UIFont doesn't render on
-      // iOS 26's large-title band — it reserved the tall band but drew nothing.
-      // Inline mode removes the band; the principal view guarantees the Fredoka face.
+      // Inline title with a custom Space Grotesk principal view. Root cause of the
+      // old phantom band: the screen used the default (large) title display mode,
+      // and our global largeTitleTextAttributes custom Space Grotesk UIFont
+      // doesn't render on iOS 26's large-title band — it reserved the tall band
+      // but drew nothing. Inline mode removes the band; the principal view
+      // guarantees the Space Grotesk face.
       .navigationTitle("Chats")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {

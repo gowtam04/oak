@@ -204,10 +204,10 @@ export default function UsageExplorer({
           data-testid="usage-explorer-scope"
           style={{
             padding: "var(--space-2, 8px) var(--space-3, 12px)",
-            border: "1px solid var(--border, #e9e0d8)",
+            border: "1px solid var(--border, #d3d7da)",
             borderRadius: "var(--radius-md, 8px)",
-            background: "var(--surface-sunken, #f5efe8)",
-            color: "var(--text-muted, #6e625a)",
+            background: "var(--surface-sunken, #e3e6e8)",
+            color: "var(--text-muted, #5f656c)",
             fontSize: "var(--text-sm, 13px)",
           }}
         >
@@ -224,9 +224,9 @@ export default function UsageExplorer({
           role="alert"
           style={{
             padding: "var(--space-3, 12px) var(--space-4, 16px)",
-            border: "1px solid var(--danger, #ee5a5a)",
+            border: "1px solid var(--danger, #d6303f)",
             borderRadius: "var(--radius-md, 8px)",
-            color: "var(--danger, #ee5a5a)",
+            color: "var(--danger, #d6303f)",
             fontSize: "var(--text-sm, 13px)",
           }}
         >

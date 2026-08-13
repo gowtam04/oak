@@ -678,7 +678,7 @@ private struct RosterTypeEdge: ViewModifier {
       content
         .overlay {
           RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-            .strokeBorder(Theme.border, style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+            .strokeBorder(Theme.border, lineWidth: 1)
         }
     }
   }

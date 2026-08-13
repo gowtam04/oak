@@ -1,121 +1,106 @@
 # Oak soul — visual source of truth
 
-> Operational contract for **every** UI surface (web, iOS, Android).  
-> Agents and humans must obey this when touching chrome.  
-> Full strategy: [`beyond-generic-ai.md`](./beyond-generic-ai.md) · Prototype: [`prototypes/specimen-desk.html`](./prototypes/specimen-desk.html)
+> Operational contract for **every** UI surface (web, iOS, Android).
+> Agents and humans must obey this when touching chrome.
+> Strategy: [`fable-ui-strategy.md`](./fable-ui-strategy.md) (the Instrument redesign, 2026-08).
+> This file REPLACES the former "field notes / specimen desk" doctrine — do not
+> reintroduce cream paper, grain textures, dashed chrome, or pastel type washes.
 
-Oak is a **field desk and Pokédex**, not a chatbot skin. Answers are **specimen plates**. Chrome is a quiet lab desk. Red is a **record light**, not wallpaper.
+Oak is a **precision instrument** — a modern Pokédex as hardware — not a chatbot skin.
+Chrome is a quiet chassis. Data renders as readouts. Red is a **record light**, not
+wallpaper. The Pokémon content (sprites, the 18 type colors) carries the color;
+the frame stays neutral.
 
 ---
 
 ## We are
 
-- Warm paper desk + content-colored plates  
-- Honest about uncertainty (flags are designed objects)  
-- Instrument voice for data (mono labels, tabular numerals)  
-- Editorial calm for prose (measured lead, comfortable measure)
+- Cool chassis neutrals (light "lab white" / dark graphite — never cream, never cocoa)
+- True Pokéball red (`#E3350D` light / `#FF4A22` dark) used sparingly as a signal
+- Instrument voice for data (mono silkscreen labels, tabular numerals, readouts)
+- Type color at **full chroma** where it encodes data (solid chips, type-light glows)
+- Machined depth: hairlines, raised panels, and **inset wells** — content sits *in*
+  the device, not on floating paper
+- Mechanical motion: 120/180ms, `cubic-bezier(.2, 0, 0, 1)`, no overshoot bounce
+- Honest about uncertainty (flags are designed objects)
+- Editorial calm for prose (Space Grotesk lead, comfortable measure)
 
 ## We never
 
-1. Center a logo / concentric rings + “Ask Oak” / “Ask …” + **four equal chips** as the empty hero  
-2. Use solid brand-red user bubbles (iMessage / ChatGPT twin)  
-3. Use a **red left selection rail** (or any brand-color rail) for “selected” list rows  
-4. Let two answers about different types share an identical beige/white shell  
-5. Ship dashed wireframe callouts as the final inference/credibility treatment  
-6. Add decoration that doesn’t encode **type, status, scope, or tool work**
+1. Center a logo / concentric rings + "Ask Oak" + **four equal chips** as the empty hero
+2. Use solid brand-red user bubbles (iMessage / ChatGPT twin)
+3. Use a **red left selection rail** (or any brand-color rail) for "selected" list rows
+4. Let two answers about different types share an identical neutral shell
+5. Use cream/warm-paper canvases, grain/noise textures, or graph-grid backgrounds
+6. Use dashed borders anywhere (empty sockets are **solid hairline** outlines)
+7. Tint type badges as pastel washes — type chips are **solid** type color with
+   per-type contrast-safe ink
+8. Round every control into a pill — pill radius is reserved for **chips and the
+   composer**; buttons/cards use the radius scale (5/9/12/16)
+9. Add decoration that doesn't encode **type, status, scope, or tool work**
 
 ## Signature objects (must appear)
 
 | Object | Where |
 |--------|--------|
-| **Blank specimen plate** | Empty chat — dashed/grid plate, scope stamp, filed starters |
-| **Type-reactive answer plate** | Finalized answer — wash/edge from `subjects[].types` |
-| **Receipts footer** | Plate foot — `RECEIPTS · N SOURCE(S)`, expands to reasoning + citations |
-| **Desk chrome** | Header/sidebar/tab — quiet; red = record light + primary actions only |
+| **Standby readout** | Empty chat — raised panel, LED scope stamp, starters. No dash, no grid. |
+| **Type-lit answer plate** | Finalized answer — saturated glow from the sprite well + leading-edge light from `subjects[].types`; neutral inset "ink plate" for mechanics |
+| **LED scope stamp** | Empty state + scope surfaces — mono label + glowing red dot on an inset well |
+| **Receipts footer** | Plate foot — `RECEIPTS · N SOURCE(S)`, expands to reasoning + citations (a readout drawer) |
+| **Instrument ticker** | Streaming — the tool loop as cascading mono readout lines (friendly nouns, not raw tool ids) |
+| **Chassis chrome** | Header/sidebar/tab — quiet; 2px red thread on the header; red = record light + primary actions only |
 
-## Plate wash rules
+## Type-light rules (replaces the old plate-wash table)
 
 | Case | Treatment |
 |------|-----------|
-| 1 subject, 1–2 types | Primary → wash (~8–14% type into surface); secondary → edge / second radial |
-| Multiple subjects | Neutral-ish plate + light multi accent (don’t fight full dual washes) |
-| No subjects (mechanics) | **Ink plate**: sunken paper, stronger border, no type wash |
-| Dark mode | Higher mix (~18–28%) so wash still reads |
+| 1 subject, 1–2 types | Primary → well glow + leading-edge light; secondary → second edge segment |
+| Multiple subjects | Neutral plate + light multi accent (don't fight dual glows) |
+| No subjects (mechanics) | **Ink plate**: sunken inset panel, stronger border, no type light |
+| Dark mode | Glow intensity rises so the light still reads (graphite ground) |
 
-Web: set `--plate-a` / `--plate-b` on `.answer-card` from first subject types (map to `--type-*`).  
-Native: `Theme.plateWash(primary, secondary?)` / `OakType` helpers.
+Web: `--plate-*` vars on `.answer-card` from first subject types. Native:
+`Theme.plateWash`/`OakType.plateWash` helpers (retuned to glow + edge, not wash).
 
 ## History selection
 
-**Not** left accent rail.  
-**Yes** lifted mini-plate: surface + hairline border + raised shadow; mono **`OPEN`** stamp on the active row only.
+**Not** a left accent rail. **Yes** lifted mini-plate: surface + hairline + raised
+shadow; mono **`OPEN`** stamp on the active row only.
 
 ## Empty desk copy
 
-- Ilabel: `NEW ENTRY`  
-- Prompt: `What are we looking up?`  
-- Scope stamp from active format (e.g. `CHAMPIONS · REG M-B`)  
-- **Filed starters** — category + optional type-dot + prompt text (not equal beige pills)
-
-### Starter categories (sync across clients)
-
-Use these four labels everywhere:
-
-| Category | Role | Example type-dot |
-|----------|------|------------------|
-| `Battle` | Competitive / nature / damage | dragon / fighting |
-| `Dex` | Species / typing / immunity lists | ground / normal |
-| `Rules` | Mechanics / abilities / gen rules | ghost / dark |
-| `Meta` | Usage / role / format niche | steel / water |
+- Ilabel: `STANDBY` · Prompt: `What are we looking up?`
+- Scope stamp from active format (e.g. `NATIONAL DEX · ALL GENS`) as an LED stamp
+- **Starters** — category + optional type-dot + prompt text (not equal beige pills)
+- Categories (sync across clients): `Battle` / `Dex` / `Rules` / `Meta`
 
 ## User note
 
-Sunken/neutral paper + thin border + **small red corner pip**. Not accent-filled bubble.
+Sunken/neutral inset row + thin border + **small red corner pip**. Not an
+accent-filled bubble.
 
-## Receipts
+## Red's jobs (exhaustive)
 
-Full-width plate footer tab: `RECEIPTS · N SOURCE(S)` (tool count optional if client already has it).  
-Expand inline: reasoning markdown + citation list.  
-Do not present credibility only as free-floating filter chips.
-
-## Red’s jobs (exhaustive)
-
-1. Primary actions (send, save, new chat / new entry)  
-2. Live/recording (stop, spinner)  
-3. Record-light accents (header thread, OPEN stamp border, user pip)  
+1. Primary actions (send, save, new chat)
+2. Live/recording (stop, streaming glow, LED stamps)
+3. Record-light accents (header thread, OPEN stamp border, user pip, status dot)
 
 Red does **not** fill user bubbles, paint selection rails, or wash entire headers.
 
+## Typography
+
+- Display: **Space Grotesk** (500/600/700) — wordmark, titles, answer lead, headings;
+  tracking −0.02em at ≥18px
+- Body: **Inter** (400/500/600/700)
+- Data: **JetBrains Mono** (500/600) — ilabels, tabular numerals, readouts
+
 ## Protect (do not undo)
 
-- Paper header + 2px red thread (not red slab banner)  
-- Warm neutral ramp + 18 type solids  
-- Type-badge recipe  
-- Field-notes tool trail while streaming  
-- Answer lead typography + structured OakAnswer field order  
-- Wire contract / tool names  
-- Dynamic Type, reduce-motion, layout stability  
-
-## Phase 1 checklist (implementation) — **done**
-
-- [x] Empty = blank plate + filed starters  
-- [x] Answer shell type-reactive (or ink plate)  
-- [x] Sprite well type-glow  
-- [x] Receipts footer  
-- [x] User desk note + pip  
-- [x] History OPEN plate (no red rail)  
-- [x] Web + iOS + Android parity on the above  
-
-## Phase 2 checklist — instrument objects — **done** (web + iOS + Android)
-
-- [x] Artifact viewer = specimen plate continuation (type wash + type-glow hero)  
-- [x] Team party slots = type edge / glow when types known  
-- [x] Streaming skeleton soft wash (client heuristic; no backend)  
-- [ ] History durable type rails — **deferred** (needs `ConversationSummary` metadata; no API this pass)  
-
-## Phase 3 checklist — alive & dual — **done** (scoped)
-
-- [x] Subtle desk grain on canvas (all clients; reduced-motion safe)  
-- [x] Machine markdown export (“Copy for agents”) from finalized `OakAnswer`  
-- [x] Dev-only plate tuner (**web only**)  
-- [ ] Team “wrapped” playfulness — **deferred** (not critical path)  
+- Chassis header + 2px red thread (not a red slab banner)
+- Cool neutral ramp + 18 type solids + per-type contrast ink table
+- Solid full-chroma type-badge recipe
+- Instrument ticker while streaming (friendly nouns — never raw tool ids)
+- Answer lead typography + structured OakAnswer field order
+- Receipts + uncertainty as designed objects
+- Wire contract / tool names
+- Dynamic Type, reduce-motion, layout stability, 44pt targets

@@ -37,9 +37,9 @@ struct ThemeFoundationTests {
   @Test
   func shadowTokensCarryTheSpecifiedOffsets() {
     #expect(Theme.Shadow.card.key.y == 1)
-    #expect(Theme.Shadow.card.ambient.y == 8)
+    #expect(Theme.Shadow.card.ambient.y == 6)
     #expect(Theme.Shadow.raised.key.y == 2)
-    #expect(Theme.Shadow.raised.ambient.y == 12)
+    #expect(Theme.Shadow.raised.ambient.y == 10)
   }
 
   @Test
@@ -80,7 +80,6 @@ struct ThemeFoundationTests {
     _ = Color.clear.oakTypeGlowWell(primary: "dragon", secondary: "ground")
     _ = Color.clear.oakSpecimenPlate(.mechanics)
     _ = Color.clear.oakSpecimenPlate(.typed(primary: "fire", secondary: nil))
-    _ = Color.clear.oakDeskGrain()
     #expect(Bool(true))
   }
 
@@ -114,6 +113,7 @@ struct ThemeFoundationTests {
     _ = Color.clear.oakCard()
     _ = Color.clear.oakCard(radius: Theme.Radius.md, tint: Theme.type("water"))
     _ = Color.clear.oakShadow(.card)
+    _ = Color.clear.oakInsetWell()
     _ = Color.clear.shimmer()
     _ = Color.clear.shimmer(active: false)
     _ = OakPressableButtonStyle()

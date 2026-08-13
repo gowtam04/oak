@@ -9,16 +9,16 @@ import UIKit
 enum OakChrome {
   /// Installs Oak's global `UIBarAppearance` so every `NavigationStack` nav bar and
   /// the root `TabView` tab bar render on the **canvas** paper with a hairline
-  /// `separator` bottom edge, Fredoka nav titles, and a red-tinted selected tab —
-  /// replacing the default translucent system material (diagnosis §1, tell #3).
+  /// `separator` bottom edge, Space Grotesk nav titles, and a red-tinted selected
+  /// tab — replacing the default translucent system material (diagnosis §1, tell #3).
   ///
   /// Called once at app launch. Appearance proxies are process-global and the
   /// colors are dynamic `UIColor`s, so light/dark tracking is automatic.
   @MainActor
   static func applyBarAppearance() {
-    // Fredoka titles when the face is available; system font otherwise.
-    let titleFont = UIFont(name: "Fredoka-SemiBold", size: 17)
-    let largeTitleFont = UIFont(name: "Fredoka-SemiBold", size: 32)
+    // Space Grotesk titles when the face is available; system font otherwise.
+    let titleFont = UIFont(name: "SpaceGrotesk-SemiBold", size: 17)
+    let largeTitleFont = UIFont(name: "SpaceGrotesk-SemiBold", size: 32)
 
     let nav = UINavigationBarAppearance()
     nav.configureWithOpaqueBackground()
@@ -72,15 +72,15 @@ extension View {
 }
 
 /// Oak's wordmark lockup — the rounded-square brand tile (icon.svg geometry:
-/// `#EE5A5A` square, white "O" ring) beside the Fredoka "Oak" wordmark. Used as
-/// the Chat root's leading nav item (§4.1). Decorative tile + text; exposed to
-/// VoiceOver as the single label "Oak".
+/// `#E3350D` square, white "O" ring) beside the Space Grotesk "Oak" wordmark.
+/// Used as the Chat root's leading nav item (§4.1). Decorative tile + text;
+/// exposed to VoiceOver as the single label "Oak".
 struct OakWordmarkLockup: View {
   /// The tile edge length. Defaults to the nav-header size; the empty-state hero
   /// passes ~48.
   var tileSize: CGFloat = 24
   /// The wordmark's Dynamic Type anchor — `.title3` in the header, `.largeTitle`
-  /// (Fredoka 34) for the hero.
+  /// (Space Grotesk 34) for the hero.
   var titleStyle: Font.TextStyle = .title3
   /// Whether the tile carries a raised shadow (the hero lifts off the canvas).
   var elevated: Bool = false

@@ -328,7 +328,7 @@ private struct TeamRow: View {
   /// the VM's batch `GET /api/sprites` hydration) shows the Pokémon's 24pt artwork; a
   /// filled slot with no resolved ref (unknown species, or a failed/degraded sprite
   /// fetch — which folds silently to an empty map, never erroring the list) falls back
-  /// to a solid accent-tinted dot; an empty slot is a dashed outline. Decorative —
+  /// to a solid accent-tinted dot; an empty slot is a solid outline. Decorative —
   /// `accessibilityLabel` above already states the composition.
   private var slotIndicator: some View {
     HStack(spacing: 3) {
@@ -343,7 +343,7 @@ private struct TeamRow: View {
           }
         } else {
           Circle()
-            .strokeBorder(Theme.textMuted, style: StrokeStyle(lineWidth: 1, dash: [3]))
+            .strokeBorder(Theme.textMuted.opacity(0.5), lineWidth: 1)
             .frame(width: 8, height: 8)
         }
       }

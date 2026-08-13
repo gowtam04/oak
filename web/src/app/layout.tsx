@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Fredoka, Nunito_Sans, JetBrains_Mono } from "next/font/google";
+import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import "../components/artifact/artifact-viewer.css";
 
@@ -38,25 +38,30 @@ export const metadata: Metadata = {
 // non-zero (the header/composer pad themselves with it). `viewportFit: "cover"`
 // is the prerequisite for any safe-area handling. We deliberately do NOT cap
 // zoom (no maximumScale/userScalable) — that would break WCAG 1.4.4. themeColor
-// tints the browser chrome to match the app background; it's a static light
-// value (not a `prefers-color-scheme` media pair) since light is the
-// unconditional default regardless of OS preference — dark is opt-in only via
-// the in-app toggle, which a static viewport export can't react to anyway.
+// tints the browser chrome to match the app background. This is a media pair
+// keyed to `prefers-color-scheme` rather than the in-app `data-theme` toggle —
+// Oak's dark mode is opt-in via the toggle, not OS-driven, so this tracks the
+// OS preference rather than the actual active theme. That's an accepted
+// mismatch: the browser chrome may not match the toggled-in-app theme, but it
+// always matches *a* plausible theme rather than staying hardcoded light.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#fbf7f4",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#101214" },
+    { media: "(prefers-color-scheme: light)", color: "#EEF0F1" },
+  ],
 };
 
 // Display / body / mono — exposed as CSS variables consumed by globals.css.
-const fredoka = Fredoka({
+const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
-  weight: ["500", "600"],
+  weight: ["500", "600", "700"],
   variable: "--font-display",
   display: "swap",
 });
-const nunitoSans = Nunito_Sans({
+const inter = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-body",
@@ -80,7 +85,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${fredoka.variable} ${nunitoSans.variable} ${jetBrainsMono.variable}`}
+      className={`${spaceGrotesk.variable} ${inter.variable} ${jetBrainsMono.variable}`}
       suppressHydrationWarning
     >
       <head>

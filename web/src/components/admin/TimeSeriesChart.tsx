@@ -86,12 +86,11 @@ const DEFAULT_HEIGHT = 180;
  * (e.g. in the jsdom test render).
  */
 const DEFAULT_PALETTE = [
-  "var(--azure, #3aa0e3)",
-  "var(--sunflower, #f5a524)",
-  "var(--success, #2fb573)",
-  "var(--poke-red, #ee5a5a)",
-  "var(--type-psychic, #f95587)",
-  "var(--type-dragon, #6f35fc)",
+  "var(--info, #2b7dd1)",
+  "var(--poke-red, #e3350d)",
+  "var(--success, #1f9d61)",
+  "var(--warning, #e08700)",
+  "var(--neutral-500, #8a9096)",
 ];
 
 /** Compact default y/value formatter: 12 345 → "12.3k", integers stay whole. */
@@ -163,7 +162,7 @@ export default function TimeSeriesChart({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "var(--text-faint, #94867a)",
+            color: "var(--text-faint, #8a9096)",
             font: "500 13px/1.4 var(--body, system-ui, sans-serif)",
           }}
         >
@@ -261,7 +260,7 @@ export default function TimeSeriesChart({
           flexWrap: "wrap",
           gap: 12,
           font: "500 12px/1 var(--body, system-ui, sans-serif)",
-          color: "var(--text-muted, #6e625a)",
+          color: "var(--text-muted, #5f656c)",
         }}
       >
         {allSeries.map((s, i) => (
@@ -328,7 +327,7 @@ export default function TimeSeriesChart({
                 y1={y}
                 x2={VIEW_W}
                 y2={y}
-                stroke="var(--border, #e9e0d8)"
+                stroke="var(--border, #d3d7da)"
                 strokeWidth={1}
                 vectorEffect="non-scaling-stroke"
                 shapeRendering="crispEdges"
@@ -414,7 +413,7 @@ export default function TimeSeriesChart({
                 y1={0}
                 x2={hoverX}
                 y2={height}
-                stroke="var(--text-muted, #6e625a)"
+                stroke="var(--text-muted, #5f656c)"
                 strokeWidth={1}
                 strokeDasharray="4 3"
                 vectorEffect="non-scaling-stroke"
@@ -430,7 +429,7 @@ export default function TimeSeriesChart({
                       y1={cy}
                       x2={hoverX}
                       y2={cy}
-                      stroke="var(--surface, #fff)"
+                      stroke="var(--surface, #f9fafa)"
                       strokeWidth={9}
                       strokeLinecap="round"
                       vectorEffect="non-scaling-stroke"
@@ -471,8 +470,8 @@ export default function TimeSeriesChart({
                 transform: "translateY(-50%)",
                 padding: "0 4px",
                 font: "500 10px/1 var(--mono, ui-monospace, monospace)",
-                color: "var(--text-faint, #94867a)",
-                background: "var(--surface, #fff)",
+                color: "var(--text-faint, #8a9096)",
+                background: "var(--surface, #f9fafa)",
               }}
             >
               {yFormat(tick.v)}
@@ -498,19 +497,19 @@ export default function TimeSeriesChart({
                   : "translateX(10px)",
               pointerEvents: "none",
               zIndex: 2,
-              background: "var(--surface, #fff)",
-              border: "1px solid var(--border, #e9e0d8)",
+              background: "var(--surface, #f9fafa)",
+              border: "1px solid var(--border, #d3d7da)",
               borderRadius: 6,
               boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
               padding: "6px 8px",
               font: "500 11px/1.35 var(--body, system-ui, sans-serif)",
-              color: "var(--text-strong, #2b2320)",
+              color: "var(--text-strong, #131517)",
               whiteSpace: "nowrap",
             }}
           >
             <div
               className="time-series-chart__tooltip-time"
-              style={{ marginBottom: 4, color: "var(--text-muted, #6e625a)" }}
+              style={{ marginBottom: 4, color: "var(--text-muted, #5f656c)" }}
             >
               {formatTime(hoverT, bucket)}
             </div>
@@ -556,7 +555,7 @@ export default function TimeSeriesChart({
           display: "flex",
           justifyContent: "space-between",
           font: "500 10px/1 var(--mono, ui-monospace, monospace)",
-          color: "var(--text-faint, #94867a)",
+          color: "var(--text-faint, #8a9096)",
         }}
       >
         <span className="time-series-chart__xtick">
