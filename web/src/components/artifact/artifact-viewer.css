@@ -266,10 +266,11 @@
 }
 
 /* ---- Shared section bits ------------------------------------------------ */
-/* Every section head (Base stats, Type matchups, Movepool, Abilities, …)
- * carries `.ilabel` alongside this class (UI strategy §3: "every section
- * label becomes .ilabel") — that utility supplies the mono/uppercase/tracking
- * voice; this rule is just spacing. */
+/* Section heads that DO carry a heading (Base stats, Movepool, Abilities, …)
+ * pair `.ilabel` with this class for the mono/uppercase/tracking voice; this
+ * rule is just spacing. Not every section has one — Type matchups was
+ * pruned (ilabel prune, phase 3): its own rows already say "Weak to" /
+ * "Resists" / "Immune to", so the heading added no information. */
 .artifact-section__title {
   margin: 0 0 var(--space-2);
 }

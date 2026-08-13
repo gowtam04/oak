@@ -687,15 +687,15 @@ export default function Home() {
                     data-testid="history-signin-hint"
                   >
                     <p className="chat-page__signin-hint-text">
-                      Sign in to save chat history
+                      Sign in to save chat history{" "}
+                      <button
+                        type="button"
+                        className="chat-page__signin-hint-cta"
+                        onClick={() => setAuthDialogOpen(true)}
+                      >
+                        Sign in
+                      </button>
                     </p>
-                    <button
-                      type="button"
-                      className="chat-page__signin-hint-cta"
-                      onClick={() => setAuthDialogOpen(true)}
-                    >
-                      Sign in
-                    </button>
                   </div>
                 )}
               </AppNav>

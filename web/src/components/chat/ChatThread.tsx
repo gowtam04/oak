@@ -14,10 +14,10 @@ import {
 
 /**
  * The tool_activity label carries a leading status emoji (🔍/📊/…) as its own
- * decoration. A field-note chip renders its own spinner/tick glyph instead, so we
- * strip the leading pictographic run (emoji + optional variation selector / ZWJ
- * sequence) and let the mono tool token carry the "which tool" signal. Falls back
- * to the raw label if stripping would empty it.
+ * decoration. An instrument-ticker row renders its own spinner/tick glyph instead,
+ * so we strip the leading pictographic run (emoji + optional variation selector /
+ * ZWJ sequence) and let the mono tool token carry the "which tool" signal. Falls
+ * back to the raw label if stripping would empty it.
  */
 const EMOJI_PREFIX = /^[\p{Extended_Pictographic}️‍]+\s*/u;
 function noteDescription(label: string): string {
@@ -217,15 +217,16 @@ export default function ChatThread({
     if (status !== "streaming") setTrailExpanded(false);
   }, [status]);
 
-  // The field-notes trail: while working (no prose yet) it's shown in full with
-  // the latest chip live-spinning; once prose streams it collapses. Before the
-  // first tool lands there are no activities — a lone "thinking" chip stands in.
+  // The instrument ticker: while working (no prose yet) it's shown in full with
+  // the latest row live-spinning; once prose streams it collapses. Before the
+  // first tool lands there are no activities — a lone "thinking" row stands in.
   const hasActivity = activity.length > 0;
   const lastIndex = activity.length - 1;
   const collapsed = Boolean(streamingMarkdown);
 
-  // Early plate wash for the skeleton (Phase 2): best-effort type hint from
-  // tool-activity labels. Conservative — prefer sunken desk tint over wrong type.
+  // Early type-light for the skeleton (Phase 2): best-effort type hint from
+  // tool-activity labels. Conservative — prefer the neutral ink-plate inset over
+  // guessing the wrong type.
   const skeletonPlate = useMemo(
     () => plateHintFromToolLabels(activity.map((a) => a.label)),
     [activity],
@@ -243,11 +244,11 @@ export default function ChatThread({
           className={"chat-empty" + (composerSlot ? " chat-empty--hero" : "")}
           data-testid="chat-empty"
         >
-          {/* Blank specimen plate — dashed/grid desk, NEW ENTRY + filed starters
+          {/* Standby readout — raised panel, LED scope stamp, starters
               (soul.md). No centered logo / equal chips cloud. */}
           <div className="blank-plate" data-testid="blank-plate">
             <div className="blank-plate__top">
-              <span className="ilabel blank-plate__ilabel">NEW ENTRY</span>
+              <span className="ilabel blank-plate__ilabel">STANDBY</span>
               {scopeChipSlot && (
                 <div
                   className="blank-plate__scope"
@@ -260,8 +261,8 @@ export default function ChatThread({
 
             <h1 className="blank-plate__prompt">What are we looking up?</h1>
             <p className="blank-plate__sub">
-              Open a specimen. Every answer carries receipts — reasoning,
-              sources, and the generation it is based on.
+              Every answer carries its receipts — reasoning, sources, and the
+              generation it is based on.
             </p>
 
             {/* Composer promoted into the plate on desktop empty state; on
@@ -272,7 +273,7 @@ export default function ChatThread({
             )}
 
             <div className="starters" data-testid="filed-starters">
-              <span className="ilabel starters__label">Filed starters</span>
+              <span className="ilabel starters__label">Starters</span>
               {examples.map((entry) => (
                 <button
                   key={entry.text}

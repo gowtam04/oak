@@ -49,27 +49,32 @@
 }
 
 /* The 18 type-accent bindings — a `data-type` attribute avoids inline styles
-   (repo lint forbids the `style` prop) while keeping the color token-driven. */
-.ref-detail-hero[data-type="normal"] { --ref-type-accent: var(--type-normal); }
-.ref-detail-hero[data-type="fire"] { --ref-type-accent: var(--type-fire); }
-.ref-detail-hero[data-type="water"] { --ref-type-accent: var(--type-water); }
-.ref-detail-hero[data-type="electric"] { --ref-type-accent: var(--type-electric); }
-.ref-detail-hero[data-type="grass"] { --ref-type-accent: var(--type-grass); }
-.ref-detail-hero[data-type="ice"] { --ref-type-accent: var(--type-ice); }
-.ref-detail-hero[data-type="fighting"] { --ref-type-accent: var(--type-fighting); }
-.ref-detail-hero[data-type="poison"] { --ref-type-accent: var(--type-poison); }
-.ref-detail-hero[data-type="ground"] { --ref-type-accent: var(--type-ground); }
-.ref-detail-hero[data-type="flying"] { --ref-type-accent: var(--type-flying); }
-.ref-detail-hero[data-type="psychic"] { --ref-type-accent: var(--type-psychic); }
-.ref-detail-hero[data-type="bug"] { --ref-type-accent: var(--type-bug); }
-.ref-detail-hero[data-type="rock"] { --ref-type-accent: var(--type-rock); }
-.ref-detail-hero[data-type="ghost"] { --ref-type-accent: var(--type-ghost); }
-.ref-detail-hero[data-type="dragon"] { --ref-type-accent: var(--type-dragon); }
-.ref-detail-hero[data-type="dark"] { --ref-type-accent: var(--type-dark); }
-.ref-detail-hero[data-type="steel"] { --ref-type-accent: var(--type-steel); }
-.ref-detail-hero[data-type="fairy"] { --ref-type-accent: var(--type-fairy); }
+   (repo lint forbids the `style` prop) while keeping the color token-driven.
+   Also bound on `.ref-detail-section[data-type]` (the Base stats section)
+   so the stat meters below the hero can read the same `--ref-type-accent`
+   without it needing to cascade from the hero element. */
+.ref-detail-hero[data-type="normal"], .ref-detail-section[data-type="normal"] { --ref-type-accent: var(--type-normal); }
+.ref-detail-hero[data-type="fire"], .ref-detail-section[data-type="fire"] { --ref-type-accent: var(--type-fire); }
+.ref-detail-hero[data-type="water"], .ref-detail-section[data-type="water"] { --ref-type-accent: var(--type-water); }
+.ref-detail-hero[data-type="electric"], .ref-detail-section[data-type="electric"] { --ref-type-accent: var(--type-electric); }
+.ref-detail-hero[data-type="grass"], .ref-detail-section[data-type="grass"] { --ref-type-accent: var(--type-grass); }
+.ref-detail-hero[data-type="ice"], .ref-detail-section[data-type="ice"] { --ref-type-accent: var(--type-ice); }
+.ref-detail-hero[data-type="fighting"], .ref-detail-section[data-type="fighting"] { --ref-type-accent: var(--type-fighting); }
+.ref-detail-hero[data-type="poison"], .ref-detail-section[data-type="poison"] { --ref-type-accent: var(--type-poison); }
+.ref-detail-hero[data-type="ground"], .ref-detail-section[data-type="ground"] { --ref-type-accent: var(--type-ground); }
+.ref-detail-hero[data-type="flying"], .ref-detail-section[data-type="flying"] { --ref-type-accent: var(--type-flying); }
+.ref-detail-hero[data-type="psychic"], .ref-detail-section[data-type="psychic"] { --ref-type-accent: var(--type-psychic); }
+.ref-detail-hero[data-type="bug"], .ref-detail-section[data-type="bug"] { --ref-type-accent: var(--type-bug); }
+.ref-detail-hero[data-type="rock"], .ref-detail-section[data-type="rock"] { --ref-type-accent: var(--type-rock); }
+.ref-detail-hero[data-type="ghost"], .ref-detail-section[data-type="ghost"] { --ref-type-accent: var(--type-ghost); }
+.ref-detail-hero[data-type="dragon"], .ref-detail-section[data-type="dragon"] { --ref-type-accent: var(--type-dragon); }
+.ref-detail-hero[data-type="dark"], .ref-detail-section[data-type="dark"] { --ref-type-accent: var(--type-dark); }
+.ref-detail-hero[data-type="steel"], .ref-detail-section[data-type="steel"] { --ref-type-accent: var(--type-steel); }
+.ref-detail-hero[data-type="fairy"], .ref-detail-section[data-type="fairy"] { --ref-type-accent: var(--type-fairy); }
 
-/* Artwork sits centered on a sunken, rounded well — a framed-portrait read. */
+/* Artwork sits in a machined well — inset shadow + type glow, matching the
+   answer card's sprite well (consistent "sits in the device" depth). Falls
+   back to a neutral well (no glow) when no type is set. */
 .ref-detail-hero__art-well {
   display: flex;
   align-items: center;
@@ -79,6 +84,8 @@
   height: 144px;
   background: var(--surface-sunken);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-well),
+    0 0 24px -6px var(--ref-type-accent, transparent);
 }
 
 .ref-detail-hero__art {
@@ -160,10 +167,14 @@
 }
 
 /* ---------------------------------------------------------------------------
-   StatsTable — six base stats + BST, each a value cell and a magnitude-ramp
-   bar. Hairline row separators, a row-hover tint, tabular mono values, and no
-   internal column borders. The `--danger/--warning/--success/--azure` ramp is
-   design law (kept verbatim); the bar now animates its fill 0 → value.
+   StatsTable — six base stats + BST, each a mono tabular value cell beside a
+   proportional bar. Hairline row separators, a row-hover tint, no internal
+   column borders. The bar reads in the page's type accent (`--ref-type-accent`,
+   set on the wrapping `.ref-detail-section[data-type]`) rather than a
+   magnitude-threshold color — one readout, one hue, tied to the subject on
+   the page. `StatsTable.tsx` still computes a tier class per stat (shared
+   logic with the answer-card meter) but this page no longer colors by it.
+   The bar animates its fill 0 → value.
    ------------------------------------------------------------------------- */
 
 .ref-stats {
@@ -204,7 +215,11 @@
   display: block;
   height: 8px;
   border-radius: var(--radius-pill);
-  background: var(--surface-sunken);
+  background: color-mix(
+    in srgb,
+    var(--ref-type-accent, var(--border-strong)) 14%,
+    var(--surface-sunken)
+  );
   overflow: hidden;
 }
 
@@ -214,6 +229,7 @@
   height: 100%;
   width: var(--fill);
   border-radius: var(--radius-pill);
+  background: var(--ref-type-accent, var(--text-muted));
   animation: ref-stats-fill 400ms ease-out both;
 }
 
@@ -227,11 +243,6 @@
     animation: none;
   }
 }
-
-.ref-stats__bar--danger { background: var(--danger); }
-.ref-stats__bar--warning { background: var(--warning); }
-.ref-stats__bar--success { background: var(--success); }
-.ref-stats__bar--azure { background: var(--azure); }
 
 .ref-stats__row--total th,
 .ref-stats__row--total td {
@@ -666,8 +677,9 @@
 
 /* ---------------------------------------------------------------------------
    AskOakCta — the page's red primary moment. A solid `--poke-red` panel that
-   mirrors the app's `.app-nav__newchat` pill energy (white label, red-hover on
-   hover), lifting on hover like a linked card.
+   mirrors the app's `.app-nav__newchat` pill energy (`--on-red` label —
+   white in light mode, near-black ink in dark mode where white-on-red fails
+   AA; red-hover on hover), lifting on hover like a linked card.
    ------------------------------------------------------------------------- */
 
 .ref-ask-oak {
@@ -679,7 +691,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
   background: var(--poke-red);
-  color: var(--neutral-0);
+  color: var(--on-red);
   text-decoration: none;
   box-shadow: var(--shadow-raised);
   transition: background var(--motion-fast), transform var(--motion-fast),
@@ -705,10 +717,10 @@
   font-family: var(--display);
   font-size: var(--text-md);
   font-weight: 600;
-  color: var(--neutral-0);
+  color: var(--on-red);
 }
 
 .ref-ask-oak__prompt {
   font-size: var(--text-sm);
-  color: color-mix(in srgb, var(--neutral-0) 82%, transparent);
+  color: color-mix(in srgb, var(--on-red) 82%, transparent);
 }

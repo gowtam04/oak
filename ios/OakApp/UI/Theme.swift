@@ -487,6 +487,26 @@ extension Theme {
     )
   }
 
+  /// The Phase-2 plate-glow language applied to entity header bands: a flat
+  /// neutral band (`surfaceRaised`) lit by a single radial glow of the type
+  /// color, anchored top-trailing — replaces the flat diagonal type wash
+  /// (`typeGradient`) so entity chrome reads as chassis + light, the same
+  /// register as the answer plate's own radial (`oakSpecimenPlate`), not a
+  /// painted gradient. Secondary type is deliberately omitted — the band stays
+  /// single-source; dual typing still reads via the sprite well's edge rings.
+  static func typeGlowBand(_ name: String) -> RadialGradient {
+    let base = type(name)
+    return RadialGradient(
+      colors: [
+        washColor(base, light: 0.16, dark: 0.26, scheme: nil),
+        surfaceRaised,
+      ],
+      center: .topTrailing,
+      startRadius: 4,
+      endRadius: 240
+    )
+  }
+
   /// `base` at a scheme-dependent opacity. With an explicit `scheme` the alpha is
   /// baked; with `nil` it returns a dynamic color that re-resolves per trait
   /// collection so a single gradient value adapts to appearance changes.

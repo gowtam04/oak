@@ -208,8 +208,11 @@ export default function PokemonArtifact({
         </div>
       </section>
 
+      {/* No section head here (ilabel prune, phase 3): each row already
+          labels itself ("Weak to" / "Resists" / "Immune to"), so a
+          "Type matchups" heading above them added no information a reader
+          didn't already have. */}
       <section className="pokemon-artifact__section">
-        <h3 className="artifact-section__title ilabel">Type matchups</h3>
         <div className="matchup-grid" data-testid="pokemon-matchups">
           <MatchupRow
             label="Weak to"

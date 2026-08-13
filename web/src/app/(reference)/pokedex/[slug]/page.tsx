@@ -279,7 +279,10 @@ export default async function PokemonDetailPage({
         />
       </section>
 
-      <section className="ref-card ref-detail-section">
+      <section
+        className="ref-card ref-detail-section"
+        data-type={data.types[0]}
+      >
         <h2 className="ref-detail-section__title">Base stats</h2>
         <StatsTable stats={statRows(data)} total={data.baseStatTotal} />
       </section>

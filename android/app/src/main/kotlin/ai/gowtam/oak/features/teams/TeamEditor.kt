@@ -651,7 +651,10 @@ private fun AnalysisReadout(ok: ai.gowtam.oak.wire.TeamAnalysisOk, isAnalyzing: 
     if (ok.threats.isNotEmpty()) {
         SectionHeader("Meta threats")
         ok.metaAttribution?.let {
-            Text(it, style = MaterialTheme.typography.labelSmall, color = oak.textFaint)
+            // Real attribution text a user reads to understand the data source, not a
+            // decorative caption — textMuted clears AA dark-mode contrast (~7:1 vs
+            // textFaint's <4:1; fable-ui-strategy.md §4 dark-mode AA pass).
+            Text(it, style = MaterialTheme.typography.labelSmall, color = oak.textMuted)
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             for (threat in ok.threats.take(12)) {
@@ -675,7 +678,9 @@ private fun AnalysisReadout(ok: ai.gowtam.oak.wire.TeamAnalysisOk, isAnalyzing: 
     }
 
     for (note in ok.notes) {
-        Text(note, style = MaterialTheme.typography.labelSmall, color = oak.textFaint)
+        // Genuine analysis notes, not decorative captions — same AA fix as the meta
+        // attribution line above.
+        Text(note, style = MaterialTheme.typography.labelSmall, color = oak.textMuted)
     }
 }
 

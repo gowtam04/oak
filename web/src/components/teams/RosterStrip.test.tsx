@@ -151,7 +151,7 @@ describe("RosterStrip", () => {
     );
   });
 
-  it("renders the trailing add tile as a dashed pokeball placeholder", () => {
+  it("renders the trailing add tile as a socket pokeball placeholder", () => {
     render(
       <RosterStrip
         members={[member("garchomp")]}

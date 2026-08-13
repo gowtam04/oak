@@ -287,7 +287,7 @@ a.ref-card:hover,
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: var(--poke-red);
-  color: var(--neutral-0);
+  color: var(--on-red);
   font-size: var(--text-md);
   font-weight: 600;
   text-decoration: none;

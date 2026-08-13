@@ -626,10 +626,10 @@ private struct ReceiptsFooterView: View {
             }
           }
           if !citations.isEmpty {
+            // No "Sources" section head: each citation row already self-labels
+            // (source icon + bold name + detail), so a head above them would
+            // just repeat it (instrumentLabel prune, Phase 3).
             VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-              Text("Sources")
-                .instrumentLabel()
-                .foregroundStyle(Theme.textMuted)
               ForEach(Array(citations.enumerated()), id: \.offset) { _, citation in
                 citationRow(citation)
               }

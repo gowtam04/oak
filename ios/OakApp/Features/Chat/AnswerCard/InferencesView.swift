@@ -5,12 +5,13 @@ import SwiftUI
 /// level (`high`/`medium`/`low`), and an optional note on what the deduction
 /// hinges on.
 ///
-/// Styling mirrors the web `InferenceCallout`: a soft azure fill with a **dashed**
-/// azure border — the dashed edge is the visual signal for "inferred, not cited",
-/// keeping it distinct from the solid uncertainty caveat strip. Confidence is
-/// carried by an icon (a fill-level meter) **and** a text label, not color alone
-/// (M-AC-UI9.3); colors and type ramp adapt to light/dark + Dynamic Type and wrap
-/// rather than clip at large sizes (M-AC-1.4, M-UI-US-9).
+/// Styling mirrors the web `InferenceCallout`: a soft azure fill with a **solid**
+/// azure hairline border (soul.md bans dashed chrome outright) — the azure tint
+/// is the visual signal for "inferred, not cited", keeping it distinct from the
+/// caveat strip's warning tint. Confidence is carried by an icon (a fill-level
+/// meter) **and** a text label, not color alone (M-AC-UI9.3); colors and type
+/// ramp adapt to light/dark + Dynamic Type and wrap rather than clip at large
+/// sizes (M-AC-1.4, M-UI-US-9).
 ///
 /// Renders nothing when there are no inferences.
 struct InferencesView: View {

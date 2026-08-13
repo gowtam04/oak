@@ -233,7 +233,7 @@ private fun PokemonBody(
     }
 
     AbilitiesSection(data.abilities)
-    BaseStatsSection(data.baseStats, data.baseStatTotal)
+    BaseStatsSection(data.baseStats, data.baseStatTotal, primaryType = data.types.firstOrNull())
     MatchupsSection(data.matchups.weakTo, data.matchups.resists, data.matchups.immuneTo, data.matchups.quadWeakTo.orEmpty(), data.matchups.quadResists.orEmpty(), onOpen)
     MovepoolSection(data.movepool, onOpen)
 }
@@ -252,15 +252,15 @@ private fun AbilitiesSection(abilities: Abilities) {
 }
 
 @Composable
-private fun BaseStatsSection(stats: BaseStats, total: Int) {
+private fun BaseStatsSection(stats: BaseStats, total: Int, primaryType: String?) {
     Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
         SectionHeader("Base stats")
-        StatBarRow("HP", stats.hp)
-        StatBarRow("Atk", stats.atk)
-        StatBarRow("Def", stats.def)
-        StatBarRow("SpA", stats.spa)
-        StatBarRow("SpD", stats.spd)
-        StatBarRow("Spe", stats.spe)
+        StatBarRow("HP", stats.hp, primaryType)
+        StatBarRow("Atk", stats.atk, primaryType)
+        StatBarRow("Def", stats.def, primaryType)
+        StatBarRow("SpA", stats.spa, primaryType)
+        StatBarRow("SpD", stats.spd, primaryType)
+        StatBarRow("Spe", stats.spe, primaryType)
         InfoRow("Total", total.toString())
     }
 }
@@ -577,7 +577,11 @@ private fun GroundingSection(artifact: EntityArtifactOk, requestFormat: Format) 
                 Text(
                     text = "${displayCitationSource(citation.source)} — ${citation.detail}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = oak.textFaint,
+                    // Real reading content (a citation source + detail), not a decorative
+                    // caption — textFaint reads under 4:1 in dark mode (AA needs 4.5:1 for
+                    // body text); textMuted clears ~7:1 (fable-ui-strategy.md §4 dark-mode
+                    // AA pass).
+                    color = oak.textMuted,
                 )
             }
         }
@@ -650,11 +654,21 @@ private fun TappableType(type: String, quadMark: String?, onOpen: (EntityKind, S
     }
 }
 
+/**
+ * A base-stat readout row. Track/fill are tinted by the entity's PRIMARY type color
+ * (soul.md — "the Pokémon content carries the color; the frame stays neutral") rather
+ * than the old danger/warning/success/azure threshold ramp, so six bars for one
+ * Pokémon read as one instrument, not an unrelated traffic-light scatter. The
+ * threshold semantics aren't lost — a tiny dot after the value keeps them as a
+ * secondary signal. The value is already set in [JetBrainsMonoFamily], a true
+ * monospace face, so digits align without a separate tabular-figure feature setting.
+ */
 @Composable
-private fun StatBarRow(label: String, value: Int) {
+private fun StatBarRow(label: String, value: Int, primaryType: String?) {
     val oak = LocalOakColors.current
     val fraction = (value.coerceIn(0, 255) / 255f)
-    val barColor = when {
+    val barColor = primaryType?.let { OakType.color(it) } ?: oak.textStrong
+    val thresholdColor = when {
         value < 60 -> oak.danger
         value < 90 -> oak.warning
         value < 120 -> oak.success
@@ -666,19 +680,27 @@ private fun StatBarRow(label: String, value: Int) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = oak.textMuted, modifier = Modifier.width(40.dp))
-        Text(
-            value.toString(),
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = JetBrainsMonoFamily,
-            color = oak.textStrong,
-            modifier = Modifier.width(32.dp),
-        )
+        Row(modifier = Modifier.width(38.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                value.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = JetBrainsMonoFamily,
+                color = oak.textStrong,
+            )
+            Box(
+                modifier = Modifier
+                    .size(5.dp)
+                    .clip(CircleShape)
+                    .background(thresholdColor)
+                    .semantics { contentDescription = statThresholdLabel(value) },
+            )
+        }
         Box(
             modifier = Modifier
                 .weight(1f)
                 .height(8.dp)
                 .clip(RoundedCornerShape(OakRadius.pill))
-                .background(oak.textStrong.copy(alpha = 0.10f)),
+                .background(barColor.copy(alpha = 0.16f)),
         ) {
             Box(
                 modifier = Modifier
@@ -688,6 +710,14 @@ private fun StatBarRow(label: String, value: Int) {
             )
         }
     }
+}
+
+/** Content description for the threshold dot — the same bands as the old bar color. */
+private fun statThresholdLabel(value: Int): String = when {
+    value < 60 -> "Low stat"
+    value < 90 -> "Below average stat"
+    value < 120 -> "Average stat"
+    else -> "High stat"
 }
 
 private fun signed(value: Int): String = if (value > 0) "+$value" else value.toString()

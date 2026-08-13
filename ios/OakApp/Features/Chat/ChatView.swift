@@ -18,8 +18,10 @@ import UIKit
 /// onto the Chat tab's stack). Two flags adapt it to those contexts:
 /// ``showsNewConversationButton`` hides the toolbar's New-conversation button for a
 /// pushed signed-in thread (where "New Chat" lives on the list and Back returns to
-/// it), and ``signInAction`` — set for a guest only — renders the "Sign in to save
-/// your conversations" nudge above the thread (accounts-and-access.md M-ACCT-US-1).
+/// it), and ``signInAction`` — set for a guest only — renders a quiet "Sign in to
+/// save your conversations" row inside the scrollable thread, above the standby
+/// panel when empty and at the top of the scroll otherwise (accounts-and-access.md
+/// M-ACCT-US-1) — not a full-width band under the header.
 struct ChatView: View {
   @State private var model: ChatViewModel
 
@@ -102,10 +104,6 @@ struct ChatView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      if let signInAction {
-        signInNudge(action: signInAction)
-          .transition(bannerTransition)
-      }
       thread
       Divider()
       if let banner = model.errorBanner {
@@ -290,29 +288,31 @@ struct ChatView: View {
 
   // MARK: Sign-in nudge (guest)
 
-  /// A quiet one-line card inviting a guest to sign in so their conversations persist
-  /// (accounts-and-access.md M-ACCT-US-1). Shown only in the guest single-thread
-  /// context; the "Sign in" button presents the sign-in sheet via ``signInAction``.
-  /// De-pinked per §4.01 — a `surface` card with the icon + text in `textSecondary`,
-  /// red reserved for the "Sign in" action alone. An icon paired with text so meaning
-  /// is never carried by color alone (M-AC-UI9.3).
+  /// A single quiet row inviting a guest to sign in so their conversations persist
+  /// (accounts-and-access.md M-ACCT-US-1). Lives INSIDE the scrollable thread area
+  /// (above the standby panel when empty, top of the scroll otherwise) — **not** a
+  /// full-width band under the header (soul.md: red is a record light, not
+  /// wallpaper; chrome stays quiet). Muted footnote text + an inline red
+  /// text-button; a small icloud glyph pairs with the text so the invitation isn't
+  /// carried by the red button color alone (M-AC-UI9.3). No surface fill, no
+  /// padding beyond breathing room — it reads as a caption, not a card.
   @ViewBuilder
   private func signInNudge(action: @escaping () -> Void) -> some View {
-    HStack(spacing: Theme.Spacing.sm) {
-      Image(systemName: "icloud.and.arrow.up")
+    HStack(spacing: 6) {
+      Image(systemName: "icloud")
+        .font(.system(size: 11, weight: .medium))
         .foregroundStyle(Theme.textSecondary)
+        .accessibilityHidden(true)
       Text("Sign in to save your conversations")
         .font(Theme.body(.footnote))
         .foregroundStyle(Theme.textSecondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
       Button("Sign in", action: action)
-        .font(Theme.display(.footnote))
+        .font(Theme.display(.footnote, weight: .semibold))
         .buttonStyle(.borderless)
         .tint(Theme.accent)
     }
-    .padding(Theme.Spacing.md)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Theme.surface)
+    .padding(.vertical, Theme.Spacing.xs)
   }
 
   // MARK: Thread
@@ -328,11 +328,23 @@ struct ChatView: View {
           // with a void beneath. Both pin content to at least the viewport height;
           // once a thread outgrows the viewport it scrolls normally.
           if model.turns.isEmpty && !model.isStreaming {
-            emptyState
-              .padding(Theme.Spacing.lg)
-              .frame(minHeight: geo.size.height, alignment: .center)
+            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+              if let signInAction {
+                signInNudge(action: signInAction)
+                  .frame(maxWidth: Self.plateMaxWidth, alignment: .leading)
+                  .frame(maxWidth: .infinity)
+              }
+              emptyState
+            }
+            .padding(Theme.Spacing.lg)
+            .frame(minHeight: geo.size.height, alignment: .center)
           } else {
             VStack(spacing: 0) {
+              if let signInAction {
+                signInNudge(action: signInAction)
+                  .padding(.horizontal, Theme.Spacing.lg)
+                  .padding(.top, Theme.Spacing.sm)
+              }
               Spacer(minLength: 0)
               LazyVStack(alignment: .leading, spacing: Theme.Spacing.lg) {
                 ForEach(model.turns) { turn in
@@ -435,8 +447,8 @@ struct ChatView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  /// Blank specimen plate empty desk (soul.md): solid-edge plate, `NEW ENTRY`,
-  /// "What are we looking up?", scope stamp from `displayFormat`, and filed
+  /// Standby readout empty state (soul.md): raised panel, `STANDBY`,
+  /// "What are we looking up?", LED scope stamp from `displayFormat`, and
   /// starters (Battle / Dex / Rules / Meta with type-dots). **Not** a centered
   /// logo / "Ask Oak" AI-hero composition.
   private var emptyState: some View {
@@ -450,16 +462,16 @@ struct ChatView: View {
       }
   }
 
-  /// Max width the blank plate snaps to so it reads as a desk specimen, not a
-  /// full-bleed hero.
+  /// Max width the standby panel snaps to so it reads as an instrument readout,
+  /// not a full-bleed hero.
   private static let plateMaxWidth: CGFloat = 420
 
-  /// The blank specimen plate: solid border, NEW ENTRY + scope stamp, prompt,
-  /// subcopy, and filed starters.
+  /// The standby readout panel: raised surface, hairline border, STANDBY + LED
+  /// scope stamp, prompt, subcopy, and starters.
   private var blankSpecimenPlate: some View {
     VStack(alignment: .leading, spacing: Theme.Spacing.md) {
       HStack(alignment: .center) {
-        Text("New entry")
+        Text("Standby")
           .instrumentLabel()
           .foregroundStyle(Theme.textSecondary)
           .accessibilityAddTraits(.isHeader)
@@ -489,13 +501,13 @@ struct ChatView: View {
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityIdentifier("empty-desk-prompt")
 
-      Text("Open a specimen. Every answer carries receipts — reasoning, sources, and the generation it is based on.")
+      Text("Every answer carries its receipts — reasoning, sources, and the generation it is based on.")
         .font(Theme.body(.subheadline))
         .foregroundStyle(Theme.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
 
       VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-        Text("Filed starters")
+        Text("Starters")
           .instrumentLabel()
           .foregroundStyle(Theme.textMuted)
           .padding(.top, Theme.Spacing.xs)
@@ -565,8 +577,8 @@ struct ChatView: View {
     .accessibilityHint("Sends this as your next message")
   }
 
-  /// The entrance transition for the error banner / sign-in nudge — a slide up from
-  /// the composer seam, degrading to a plain crossfade under Reduce Motion.
+  /// The entrance transition for the error banner — a slide up from the composer
+  /// seam, degrading to a plain crossfade under Reduce Motion.
   private var bannerTransition: AnyTransition {
     reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
   }

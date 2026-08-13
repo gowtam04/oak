@@ -14,7 +14,6 @@ import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberHaptics
 import ai.gowtam.oak.ui.rememberReduceMotion
 import ai.gowtam.oak.wire.Format
-import android.content.res.Configuration
 import android.os.SystemClock
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -46,7 +45,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.WarningAmber
@@ -75,7 +73,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -110,9 +107,10 @@ fun ChatScreen(
     artifactViewModel: ArtifactViewModel,
     modifier: Modifier = Modifier,
     showsNewConversationButton: Boolean = true,
-    /** When non-null, renders the guest "Sign in to save your conversations" nudge
-     * above the thread; the "Sign in" button calls this (it presents the sign-in
-     * sheet). `null` for a signed-in thread — mirrors iOS `ChatView.signInAction`. */
+    /** When non-null, renders the guest "Sign in to save your conversations" nudge as
+     * the first row inside the scrollable transcript; the "Sign in" button calls this
+     * (it presents the sign-in sheet). `null` for a signed-in thread — mirrors iOS
+     * `ChatView.signInAction`. */
     signInAction: (() -> Unit)? = null,
     /** When non-null, the top bar shows a back arrow calling this instead of the
      * app title alone — used for a pushed/resumed signed-in thread so there is an
@@ -236,19 +234,7 @@ fun ChatScreen(
             )
         },
     ) { innerPadding ->
-        // Landscape on a phone leaves very little vertical room once the top bar,
-        // composer, and bottom nav (all fixed-height chrome, unchanged from portrait)
-        // are subtracted — the sign-in nudge alone was costing the transcript's
-        // LazyColumn ~190px out of a ~733px content area, squeezing it down to an
-        // unusably (and on some builds, unrenderably) short sliver. It stays available
-        // in portrait and via the Account tab either way, so hiding it here in
-        // landscape trades a non-essential nudge for a transcript that's actually
-        // visible and scrollable.
-        val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            if (signInAction != null && !isLandscape) {
-                SignInNudge(onSignIn = signInAction)
-            }
             Box(modifier = Modifier.weight(1f)) {
                 LazyColumn(
                     state = listState,
@@ -256,6 +242,16 @@ fun ChatScreen(
                     contentPadding = PaddingValues(OakSpacing.lg),
                     verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
                 ) {
+                    // A single quiet row inside the scroll, not a full-width band under
+                    // the header (soul.md / fable-ui-strategy.md §4 "01 — iOS Home") —
+                    // it now scrolls with the transcript instead of permanently costing
+                    // fixed viewport height (the old landscape-only hide is gone since
+                    // there's no fixed band left to squeeze the list).
+                    if (signInAction != null) {
+                        item(key = "sign-in-nudge") {
+                            SignInNudge(onSignIn = signInAction)
+                        }
+                    }
                     if (showEmptyState) {
                         item(key = "empty-state") {
                             EmptyState(
@@ -505,28 +501,26 @@ private fun InProgressRow(
 // ---------------------------------------------------------------------------
 
 /**
- * A slim banner inviting a guest to sign in so their conversations persist
+ * A quiet row inviting a guest to sign in so their conversations persist
  * (accounts-and-access.md M-ACCT-US-1; history-and-teams.md D-HIST-1 — the guest's
  * "history affordance" for a surface that, once signed in, becomes the saved-
- * conversation list). Icon + text so meaning is never carried by color alone.
- * Mirrors iOS `ChatView.signInNudge`.
+ * conversation list). Demoted from a full-width accent-wash band to a single muted
+ * text row + inline accent text-button living inside the scrollable transcript
+ * (fable-ui-strategy.md §4 "01 — iOS Home": "not a full-width band under the
+ * header"). Mirrors iOS `ChatView.signInNudge`.
  */
 @Composable
 private fun SignInNudge(onSignIn: () -> Unit) {
     val oak = LocalOakColors.current
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(oak.accent.copy(alpha = 0.10f))
-            .padding(OakSpacing.md),
-        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.CloudUpload, contentDescription = null, tint = oak.accent, modifier = Modifier.height(18.dp))
         Text(
             text = "Sign in to save your conversations",
             style = MaterialTheme.typography.bodySmall,
-            color = oak.textStrong,
+            color = oak.textMuted,
             modifier = Modifier.weight(1f),
         )
         TextButton(onClick = onSignIn) { Text("Sign in", color = oak.accent) }
@@ -562,13 +556,13 @@ private fun ErrorBannerRow(banner: ErrorBanner, onRetry: () -> Unit) {
 }
 
 // ---------------------------------------------------------------------------
-// Empty state — blank specimen plate + filed starters (soul.md)
+// Empty state — standby readout + filed starters (soul.md)
 // ---------------------------------------------------------------------------
 
 /**
- * Blank specimen plate on the desk: a solid-edged plate, `NEW ENTRY` label, live scope
- * stamp, prompt line, and four **filed starters** (Battle / Dex / Rules / Meta with
- * type-dots) — not a centered "Ask Oak" hero with equal pills (`docs/design/soul.md`).
+ * Standby readout: a raised panel, `STANDBY` label, live scope stamp (LED), prompt
+ * line, and four **filed starters** (Battle / Dex / Rules / Meta with type-dots) — not
+ * a centered "Ask Oak" hero with equal pills (`docs/design/soul.md`).
  * Starters are sampled once per composition via [ExamplePrompts.pickFiled].
  */
 @Composable
@@ -602,7 +596,7 @@ private fun EmptyState(format: Format, onExampleTap: (String) -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "NEW ENTRY",
+                    text = "STANDBY",
                     style = MaterialTheme.typography.labelSmall,
                     color = oak.textMuted,
                 )
@@ -634,12 +628,12 @@ private fun EmptyState(format: Format, onExampleTap: (String) -> Unit) {
                 modifier = Modifier.semantics { heading() },
             )
             Text(
-                text = "Open a specimen. Every answer carries receipts — reasoning, sources, and the generation it is based on.",
+                text = "Every answer carries its receipts — reasoning, sources, and the generation it is based on.",
                 style = MaterialTheme.typography.bodySmall,
                 color = oak.textMuted,
             )
             Text(
-                text = "FILED STARTERS",
+                text = "STARTERS",
                 style = MaterialTheme.typography.labelSmall,
                 color = oak.textFaint,
                 modifier = Modifier.padding(top = OakSpacing.xs),

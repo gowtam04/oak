@@ -63,10 +63,10 @@ describe("ChatThread — in-flight streaming bubble", () => {
 });
 
 describe("ChatThread — empty-state blank specimen plate", () => {
-  it("renders a blank plate with NEW ENTRY + prompt (not a logo hero)", () => {
+  it("renders a blank plate with STANDBY + prompt (not a logo hero)", () => {
     render(<ChatThread {...props({ turns: [], status: "idle" })} />);
     expect(screen.getByTestId("blank-plate")).toBeInTheDocument();
-    expect(screen.getByText("NEW ENTRY")).toBeInTheDocument();
+    expect(screen.getByText("STANDBY")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "What are we looking up?",
     );
