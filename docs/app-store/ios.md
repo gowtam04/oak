@@ -59,17 +59,18 @@ type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,regulation,showdown
 
 ## What's New (this release)
 
-**1.0.2 (build 34)** — submitted to App Review 2026-08-09; auto-release after approval.
+**1.0.3 (build 36)** — uploaded to App Store Connect 2026-08-13; awaiting review submission.
 
 ```
-What's new in 1.0.2
+What's new in 1.0.3
 
-• New Dex tab to browse Pokémon species and game data in the app
-• Account tab for sign-in, privacy, and app info
-• Optional soft update prompt when a newer version is on the App Store
-• Cleaner answer tables and general UI polish
+• Refreshed Instrument look — type color leads, quieter chrome
+• Clearer answer cards, tables, and chat layout
+• Same Dex, teams, and calculator — just easier to read
 ```
-**~220 / 4000 chars.**
+**~180 / 4000 chars.**
+
+**1.0.2 (build 34)** — approved; train closed.
 
 ## Submission checklist (not produced by this listing — flagged for the user)
 
