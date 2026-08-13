@@ -618,14 +618,15 @@ describe("reference-page reads (tools fixture)", () => {
   describe("listAllPokemon", () => {
     it("returns every scarlet-violet row, dex-then-slug ordered", async () => {
       const rows = await listAllPokemon(SV, tdb);
-      // POKEMON_SEED has 8 scarlet-violet rows.
-      expect(rows).toHaveLength(8);
+      // POKEMON_SEED has 9 scarlet-violet rows.
+      expect(rows).toHaveLength(9);
       expect(rows.map((r) => r.slug)).toEqual([
         "ninetales", // 38
         "tauros", // 128 (slug order among dex 128)
         "tauros-paldea-aqua",
         "tauros-paldea-blaze",
         "tauros-paldea-combat",
+        "swampert-mega", // 260
         "garchomp", // 445
         "dracovish", // 882
         "farigiraf", // 981
@@ -688,36 +689,15 @@ describe("reference-page reads (tools fixture)", () => {
   });
 
   describe("pokemonRequiringItem", () => {
-    it("returns [] when no form requires the item (fixture has no Megas)", async () => {
+    it("returns [] when no form requires the item (ordinary held item)", async () => {
       expect(await pokemonRequiringItem("leftovers", SV, tdb)).toEqual([]);
     });
 
     it("back-links the forms whose required_item matches", async () => {
-      // The tools fixture seeds no Mega, so add one to prove the match path.
-      const fix = await createPgSchema({ seed: "tools" });
-      try {
-        await insertMon(fix.db, {
-          id: "swampert-mega",
-          species_name: "swampert",
-          display_name: "Swampert (Mega)",
-          national_dex_number: 260,
-          type1: "water",
-          type2: "ground",
-          ability_slot1: "swift-swim",
-          stat_hp: 100,
-          stat_attack: 150,
-          stat_defense: 110,
-          stat_special_attack: 95,
-          stat_special_defense: 110,
-          stat_speed: 70,
-          required_item: "swampertite",
-        });
-        expect(
-          await pokemonRequiringItem("swampertite", SV, fix.db),
-        ).toEqual([{ slug: "swampert-mega", displayName: "Swampert (Mega)" }]);
-      } finally {
-        await fix.cleanup();
-      }
+      // The tools fixture seeds Mega Swampert with required_item swampertite.
+      expect(await pokemonRequiringItem("swampertite", SV, tdb)).toEqual([
+        { slug: "swampert-mega", displayName: "Swampert (Mega)" },
+      ]);
     }, 60_000);
   });
 });
