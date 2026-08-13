@@ -49,6 +49,13 @@ struct AnswerCardView: View {
   /// entrance cascade below — never reset, so re-layout/scroll never re-plays it.
   @State private var hasAppeared = false
 
+  /// Flips once, on first appearance, to drive the "reading latches" finalize
+  /// moment (soul.md §3 Motion signature moment): the masthead status glyph
+  /// red→green and the plate's type edge+glow fading in, over `Theme.Motion.latch`
+  /// (~300ms). A separate flag from ``hasAppeared`` (which drives the per-section
+  /// stagger) so the two one-shot moments stay independently tunable.
+  @State private var hasLatched = false
+
   /// Sends the given text verbatim as the next user turn (clarify options +
   /// suggestion chips). Defaults to a no-op so the card renders in isolation.
   var onFollowUp: (String) -> Void = { _ in }
@@ -128,7 +135,14 @@ struct AnswerCardView: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .oakSpecimenPlate(plateAtmosphere)
+    // The plate's type edge+glow fades in with the latch moment; the flat
+    // fill/border stay always visible (see `revealed` on the modifier).
+    .oakSpecimenPlate(plateAtmosphere, revealed: hasLatched)
+    .animation(reduceMotion ? nil : Theme.Motion.latch, value: hasLatched)
+    .overlay(alignment: .topLeading) {
+      mastheadStatusDot
+        .padding(10)
+    }
     .contextMenu {
       Button {
         copyForAgents()
@@ -138,7 +152,27 @@ struct AnswerCardView: View {
     }
     // The whole answer reads as one VoiceOver container with ordered children.
     .accessibilityElement(children: .contain)
-    .onAppear { hasAppeared = true }
+    .onAppear {
+      hasAppeared = true
+      hasLatched = true
+    }
+  }
+
+  // MARK: Masthead status dot ("the reading latches" — soul.md §3 Motion)
+
+  /// The masthead's record-light dot: red until the card latches, then the
+  /// resolved status's own color (green for `answered`, the status badge's tint
+  /// otherwise) — the one-shot finalize moment (M-AC "reading latches"). Purely
+  /// decorative; the status badge/text already carries the outcome for
+  /// VoiceOver (M-AC-UI9.3), so this is hidden from the accessibility tree.
+  private var mastheadStatusDot: some View {
+    let color = hasLatched ? statusColor : Theme.accent
+    return Circle()
+      .fill(color)
+      .frame(width: 6, height: 6)
+      .shadow(color: color.opacity(0.5), radius: hasLatched ? 0 : 4)
+      .animation(reduceMotion ? nil : Theme.Motion.latch, value: hasLatched)
+      .accessibilityHidden(true)
   }
 
   /// Compact plate-foot strip when there are no receipts to expand.

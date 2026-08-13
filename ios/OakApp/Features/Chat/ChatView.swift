@@ -236,6 +236,16 @@ struct ChatView: View {
       }
     } label: {
       HStack(spacing: 3) {
+        // The system menu can't be customized to mark the selected row, so a
+        // small record-light dot on the chip itself signals "scope changed from
+        // the default" — tasteful in place of a checkmark we can't reach.
+        if model.displayFormat != .nationalDex {
+          Circle()
+            .fill(Theme.accent)
+            .frame(width: 5, height: 5)
+            .shadow(color: Theme.accent.opacity(0.5), radius: 3)
+            .accessibilityHidden(true)
+        }
         Text(model.displayFormat.shortLabel)
           .font(Theme.body(.footnote, weight: .semibold))
         Image(systemName: "chevron.down")
@@ -454,20 +464,23 @@ struct ChatView: View {
           .foregroundStyle(Theme.textSecondary)
           .accessibilityAddTraits(.isHeader)
         Spacer(minLength: Theme.Spacing.sm)
-        Text(model.displayFormat.displayLabel)
-          .instrumentLabel()
-          .foregroundStyle(Theme.textStrong)
-          .padding(.horizontal, 10)
-          .padding(.vertical, 5)
-          .background(
-            Theme.accent.opacity(0.08),
-            in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
-          )
-          .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
-              .strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1)
-          }
-          .accessibilityLabel("Scope: \(model.displayFormat.displayLabel)")
+        // LED scope stamp (soul.md signature object): an inset well with a
+        // glowing record-light dot, not a flat accent-tinted capsule.
+        HStack(spacing: 6) {
+          Circle()
+            .fill(Theme.accent)
+            .frame(width: 6, height: 6)
+            .shadow(color: Theme.accent.opacity(0.55), radius: 4)
+            .accessibilityHidden(true)
+          Text(model.displayFormat.displayLabel)
+            .instrumentLabel()
+            .foregroundStyle(Theme.textStrong)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .oakInsetWell(cornerRadius: Theme.Radius.sm)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Scope: \(model.displayFormat.displayLabel)")
       }
 
       Text("What are we looking up?")

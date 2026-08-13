@@ -89,15 +89,17 @@ struct DamageCalcView: View {
 
   // MARK: Result
 
-  /// The computed figure(s) — rendered prominently in the monospaced face. Whole
+  /// The computed figure(s) — an inset readout (soul.md "well" elevation): a
+  /// sunken panel holding mono caption labels and tabular numerals. Whole
   /// numbers (the min/max damage figures) get the emphasized title3 face with a
-  /// one-shot count-up; other scalars (e.g. `"78–92%"`) render statically.
+  /// one-shot count-up; a percent scalar (e.g. `"78–92%"`) is the headline figure
+  /// and reads at the same large size; any other scalar renders at body size.
   private var resultSection: some View {
     VStack(alignment: .leading, spacing: 6) {
       ForEach(sortedEntries(damageCalc.result), id: \.key) { entry in
         HStack(alignment: .firstTextBaseline, spacing: 12) {
           Text(humanize(entry.key))
-            .font(Theme.body(.subheadline))
+            .font(Theme.mono(.caption, weight: .medium))
             .foregroundStyle(Theme.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
           Spacer(minLength: 8)
@@ -107,6 +109,8 @@ struct DamageCalcView: View {
         .accessibilityLabel("\(humanize(entry.key)): \(entry.value.displayText)")
       }
     }
+    .padding(Theme.Spacing.md)
+    .oakInsetWell(cornerRadius: Theme.Radius.md)
   }
 
   @ViewBuilder
@@ -114,6 +118,15 @@ struct DamageCalcView: View {
     if case .int(let intValue) = value {
       CountUpIntText(value: intValue)
         .multilineTextAlignment(.trailing)
+    } else if case .string(let stringValue) = value, stringValue.contains("%") {
+      // The percent-of-HP figure is the readout's headline — same emphasized
+      // size as the count-up integers, just no count-up animation (it's a range).
+      Text(stringValue)
+        .font(Theme.mono(.title3, weight: .semibold))
+        .monospacedDigit()
+        .foregroundStyle(Theme.textPrimary)
+        .multilineTextAlignment(.trailing)
+        .fixedSize(horizontal: false, vertical: true)
     } else {
       Text(value.displayText)
         .font(Theme.mono(.body, weight: .semibold))

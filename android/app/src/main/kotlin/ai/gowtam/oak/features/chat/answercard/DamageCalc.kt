@@ -93,9 +93,19 @@ fun DamageCalcBlock(
         }
 
         if (damageCalc.result.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+            // Inset readout (soul.md): the headline damage figures sit in a machined
+            // sunken well of their own, larger mono tabular numerals + mono captions —
+            // the single most "instrument" moment in the answer card.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(oak.surfaceSunken, RoundedCornerShape(OakRadius.md))
+                    .border(1.dp, oak.border, RoundedCornerShape(OakRadius.md))
+                    .padding(OakSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(OakSpacing.xs),
+            ) {
                 for ((key, value) in sortedEntries(damageCalc.result)) {
-                    ScalarRow(humanize(key), scalarDisplayText(value), emphasized = true)
+                    ReadoutRow(humanize(key), scalarDisplayText(value))
                 }
             }
         }
@@ -162,6 +172,26 @@ fun DamageCalcBlock(
                 Text(text = "Open in viewer", color = oak.accent)
             }
         }
+    }
+}
+
+/** One line of the inset damage readout: a mono caption + a large mono tabular figure. */
+@Composable
+private fun ReadoutRow(label: String, value: String) {
+    val oak = LocalOakColors.current
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = JetBrainsMonoFamily,
+            color = oak.textMuted,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+            fontFamily = JetBrainsMonoFamily,
+            color = oak.textStrong,
+        )
     }
 }
 

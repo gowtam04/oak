@@ -304,6 +304,17 @@
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
+/* `.readout` — a numeric surface machined into the chassis: inset well +
+   mono tabular figures. Shared by DamageReadout (composed via a selector
+   list below, no markup change) and available for future readouts. */
+.readout {
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-well);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
 
 /* --------------------------------------------------------------------------
    4. App shell — header band · thread · composer
@@ -782,74 +793,114 @@
 .type-badge--fairy { --type: var(--type-fairy); --type-ink: #16181a; }
 
 /* --------------------------------------------------------------------------
-   7. Answer card + its sections — specimen plate (soul.md type wash)
+   7. Answer card + its sections — TYPE-LIGHT plate (soul.md Instrument redesign)
    -------------------------------------------------------------------------- */
-/* Plate mix strengths live on :root so the dev plate tuner can dial them
-   (Phase 3). Dark theme raises the mix so wash still reads (~18–28%). */
+/* Type-light dial values live on :root so the dev plate tuner can dial them.
+   These are the SAME 5 custom properties the old pastel-wash recipe used
+   (PlateTuner.tsx keys are unchanged) but their meaning is remapped for the
+   "type is a light, not a wash" recipe:
+     --plate-radial-a  the plate's own corner glow (answer-card / artifact-viewer)
+     --plate-radial-b  the sprite WELL's glow — the light SOURCE, stronger
+     --plate-wash-a    the streaming skeleton's softer corner glow
+     --plate-wash-b    roster slots' ambient glow
+     --plate-edge      border color-mix strength (the hairline tint under the
+                        bold edge light); also reused as the multi-plate's
+                        faint edge-segment opacity (see .answer-card--multi)
+   Dark theme raises every glow so the light still reads on graphite. */
 :root {
   --plate-radial-a: 12%;
-  --plate-radial-b: 10%;
+  --plate-radial-b: 28%;
   --plate-wash-a: 8%;
-  --plate-wash-b: 6%;
-  --plate-edge: 28%;
+  --plate-wash-b: 16%;
+  --plate-edge: 30%;
 }
 [data-theme="dark"] {
-  --plate-radial-a: 24%;
-  --plate-radial-b: 18%;
-  --plate-wash-a: 18%;
-  --plate-wash-b: 14%;
-  --plate-edge: 32%;
+  --plate-radial-a: 22%;
+  --plate-radial-b: 40%;
+  --plate-wash-a: 16%;
+  --plate-wash-b: 24%;
+  --plate-edge: 38%;
 }
 .answer-card {
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
   padding: var(--space-6) var(--space-6) 0;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
+  /* A whisper of type tint under the bold 3px edge light below. */
   border: 1px solid color-mix(in srgb, var(--plate-a) var(--plate-edge), var(--border));
-  background:
-    radial-gradient(
-      90% 70% at 88% 18%,
-      color-mix(in srgb, var(--plate-a) var(--plate-radial-a), transparent),
-      transparent 55%
-    ),
-    radial-gradient(
-      70% 60% at 12% 90%,
-      color-mix(in srgb, var(--plate-b) var(--plate-radial-b), transparent),
-      transparent 50%
-    ),
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--plate-a) var(--plate-wash-a), var(--surface)),
-      color-mix(in srgb, var(--plate-b) var(--plate-wash-b), var(--surface)) 55%,
-      var(--surface)
-    );
-  box-shadow: var(--shadow-floating);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
   overflow: hidden;
 }
-/* Mechanics / no subjects — sunken paper ink plate, no type wash. */
+/* Leading-edge light — a 3px inset strip in the primary type color; a linear
+   split at 60/40 folds in the secondary type without a second pseudo-element
+   (single subject collapses to one solid color since --plate-a === --plate-b). */
+.answer-card::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--plate-a) 0 60%, var(--plate-b) 60% 100%);
+  --latch-opacity: 1;
+  animation: latch-glow 300ms var(--motion-base) both;
+}
+/* Glow — ONE radial anchored where the sprite well sits (top-right on desktop),
+   layered above the solid surface via its own pseudo-element so the base panel
+   never has to fade (only the light does, for the "reading latches" moment). */
+.answer-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    90% 70% at 88% 18%,
+    color-mix(in srgb, var(--plate-a) var(--plate-radial-a), transparent),
+    transparent 60%
+  );
+  animation: latch-glow 300ms var(--motion-base) both;
+}
+/* Mechanics / no subjects — sunken ink plate. Neutral, no type light. */
 .answer-card--ink {
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
-  background: linear-gradient(180deg, var(--surface-sunken), var(--surface));
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-well);
   border-color: var(--border-strong);
 }
-/* Multi-subject: neutral-ish shell + light accent (don't fight dual washes). */
+.answer-card--ink::before,
+.answer-card--ink::after {
+  content: none;
+}
+/* Multi-subject: neutral-ish shell + a faint dual-segment edge (don't fight
+   several glows at once) — no card-corner glow. */
 .answer-card--multi {
-  --plate-radial-a: 8%;
-  --plate-radial-b: 6%;
-  --plate-wash-a: 4%;
-  --plate-wash-b: 3%;
-  --plate-edge: 18%;
   border-color: var(--border);
 }
-[data-theme="dark"] .answer-card--multi {
-  --plate-radial-a: 14%;
-  --plate-radial-b: 10%;
-  --plate-wash-a: 10%;
-  --plate-wash-b: 7%;
+.answer-card--multi::before {
+  /* Faint — reuses the edge dial's own percentage as the segment's opacity. */
+  --latch-opacity: var(--plate-edge);
+}
+.answer-card--multi::after {
+  content: none;
+}
+
+/* "Reading latches" (UI §3 Motion) — the type-light fades in once, on mount,
+   which for `.answer-card` IS the finalize moment (it only ever mounts with a
+   terminal `status`; there is no in-place re-render mid-stream). */
+@keyframes latch-glow {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: var(--latch-opacity, 1);
+  }
 }
 /* Masthead — the slim status row leading every answer card (UI §4 screen 04):
    a status indicator (left) + the turn's scope tag (right, `.ilabel`). */
@@ -869,15 +920,36 @@
 .answer-masthead__status-symbol {
   font-size: 0.9375rem;
   line-height: 1;
+  /* "Reading latches" — the record light (red) blips to the settled status
+     color once, on mount (the masthead only ever mounts at terminal status —
+     the streaming skeleton's own red dot below stands in beforehand). */
+  animation: latch-status 300ms var(--motion-base) both;
 }
 .answer-masthead__status--ok {
   color: var(--success);
 }
+.answer-masthead__status--ok .answer-masthead__status-symbol {
+  --latch-to: var(--success);
+}
 .answer-masthead__status--partial {
   color: color-mix(in srgb, var(--warning) 70%, var(--text-strong));
 }
+.answer-masthead__status--partial .answer-masthead__status-symbol {
+  --latch-to: color-mix(in srgb, var(--warning) 70%, var(--text-strong));
+}
 .answer-masthead__status--insufficient {
   color: var(--text-faint);
+}
+.answer-masthead__status--insufficient .answer-masthead__status-symbol {
+  --latch-to: var(--text-faint);
+}
+@keyframes latch-status {
+  from {
+    color: var(--poke-red);
+  }
+  to {
+    color: var(--latch-to, currentColor);
+  }
 }
 .answer-masthead__scope {
   color: var(--text-faint);
@@ -1261,7 +1333,9 @@
 .sprite-card:hover {
   transform: scale(1.03);
 }
-/* Type-glow radial well — not azure default. */
+/* Type-glow radial well — the light SOURCE (soul.md Instrument redesign):
+   an inset well (machined into the chassis) with a saturated glow stronger
+   than the card's own corner light (--plate-radial-b, tuned higher). */
 .sprite-card__well {
   width: 120px;
   height: 120px;
@@ -1271,12 +1345,12 @@
   background:
     radial-gradient(
       circle at 50% 45%,
-      color-mix(in srgb, var(--plate-a) 28%, transparent),
+      color-mix(in srgb, var(--plate-a) var(--plate-radial-b), transparent),
       transparent 65%
     ),
-    color-mix(in srgb, var(--plate-a) 10%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--plate-a) 22%, var(--border));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--plate-b) 15%, transparent);
+    var(--surface-sunken);
+  border: 1px solid color-mix(in srgb, var(--plate-a) 32%, var(--border-strong));
+  box-shadow: var(--shadow-well);
 }
 .sprite-card__sprite-link {
   display: block;
@@ -1556,18 +1630,21 @@
   transition: border-color var(--motion-fast),
     box-shadow var(--motion-base), transform var(--motion-base);
 }
-/* The PILL owns focus — an azure ring per the foundation. The inner textarea's
-   own focus ring is suppressed below so the two don't fight (screen 11). The
-   border does NOT turn red on focus; red is reserved for the live/streaming
-   state (`--live`). */
+/* The PILL owns focus — "record-ready": a red hairline + a subtle red glow,
+   not the global info-blue ring (that stays reserved for keyboard-nav focus
+   elsewhere, per the foundation). The inner textarea's own focus ring is
+   suppressed below so the two don't fight (screen 11). This is the SAME red
+   the live/streaming state uses (`--live`) — focusing the console and a turn
+   actually being in flight both read as "recording". */
 .composer__field:focus-within {
-  border-color: var(--azure);
+  border-color: var(--poke-red);
   transform: translateY(-1px);
   box-shadow: var(--shadow-floating),
-    0 0 0 4px color-mix(in srgb, var(--azure) 20%, transparent);
+    0 0 0 4px color-mix(in srgb, var(--poke-red) 18%, transparent);
 }
-/* Live (streaming) state — red border + glow, matching the red Stop button. The
-   record-light red only appears while a turn is actually in flight. */
+/* Live (streaming) state — same red border + glow as focus, matching the red
+   Stop button. Kept as an explicit rule (not just relying on focus) since a
+   streaming composer can be blurred. */
 .composer__field--live,
 .composer__field--live:focus-within {
   border-color: var(--poke-red);
@@ -2113,7 +2190,8 @@
   gap: var(--space-3);
   padding: var(--space-5);
   background: var(--surface-sunken);
-  border: 1px solid var(--border);
+  box-shadow: var(--shadow-well);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
 }
 .damage-readout__estimate-tag {
@@ -2142,9 +2220,11 @@
 /* `.ilabel` in markup (DamageReadout.tsx) supplies the mono/uppercase/tracked
    instrument voice; no key-specific override needed. */
 .damage-readout__result-value {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: var(--text-xl);
+  font-weight: 700;
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
   color: var(--text-strong);
 }
 .damage-readout__breakdown {
@@ -2316,7 +2396,8 @@
   align-items: baseline;
   gap: var(--space-2);
   margin: 0;
-  font-size: 0.8125rem;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
   line-height: 1.4;
   color: var(--text-muted);
   animation: turn-in var(--motion-base) both;
@@ -2324,8 +2405,13 @@
 .chat-thread__note--done {
   color: var(--text-faint);
 }
+/* Active row = the record light — status glyph + label read in red while the
+   loop is live on this call (soul.md "Red's jobs" #2). */
 .chat-thread__note--active {
-  color: var(--text-strong);
+  color: var(--poke-red);
+}
+.chat-thread__note--active .chat-thread__note-tool {
+  color: var(--poke-red);
 }
 .chat-thread__note-tool {
   flex: none;
@@ -2357,8 +2443,11 @@
     linear-gradient(180deg, var(--poke-red) 0 50%, var(--neutral-0) 50% 100%);
   animation: pokeball-spin 0.9s linear infinite;
 }
+/* Dim success tick once a call has moved on (soul.md — completed readouts
+   settle, only the active one stays bright). */
 .chat-thread__note-glyph[data-state="done"] {
   background: var(--success);
+  opacity: 0.6;
   -webkit-mask: var(--icon-check) center / 13px 13px no-repeat;
   mask: var(--icon-check) center / 13px 13px no-repeat;
   --icon-check: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5 13l4 4L19 7'/></svg>");
@@ -2447,49 +2536,63 @@
 
 /* Answer skeleton — masthead bar + prose lines with a soft opacity pulse; holds
    the layout so the streamed answer replaces it in place with no jump. */
-/* Streaming skeleton — mild type wash when activity hints a type (Phase 2);
-   else subtle sunken desk tint. Uses the same --plate-* recipe as answer plates. */
+/* Streaming skeleton — a softer echo of the answer-card's type-light when
+   activity hints a type; else a plain raised panel. No leading-edge light
+   (that's reserved for the confirmed terminal answer) — just a faint glow. */
 .chat-thread__skeleton {
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
-  --plate-radial-a: 8%;
-  --plate-radial-b: 6%;
-  --plate-wash-a: 5%;
-  --plate-wash-b: 4%;
-  --plate-edge: 18%;
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-5) var(--space-6);
-  border-radius: var(--radius-xl);
-  border: 1px solid color-mix(in srgb, var(--plate-a) var(--plate-edge), var(--border));
-  background:
-    radial-gradient(
-      90% 70% at 88% 18%,
-      color-mix(in srgb, var(--plate-a) var(--plate-radial-a), transparent),
-      transparent 55%
-    ),
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--plate-a) var(--plate-wash-a), var(--surface-sunken)),
-      color-mix(in srgb, var(--plate-b) var(--plate-wash-b), var(--surface)) 55%,
-      var(--surface)
-    );
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
   box-shadow: var(--shadow-raised);
+  overflow: hidden;
+}
+.chat-thread__skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    90% 70% at 88% 18%,
+    color-mix(in srgb, var(--plate-a) var(--plate-wash-a), transparent),
+    transparent 60%
+  );
 }
 .chat-thread__skeleton--desk {
-  background: linear-gradient(180deg, var(--surface-sunken), var(--surface));
+  background: var(--surface-raised);
   border-color: var(--border);
+}
+.chat-thread__skeleton--desk::after {
+  content: none;
 }
 .chat-thread__skeleton-masthead,
 .chat-thread__skeleton-line {
-  background: color-mix(in srgb, var(--plate-a) 6%, var(--surface-sunken));
+  position: relative;
+  background: var(--surface-sunken);
   border-radius: var(--radius-sm);
   animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
 }
-.chat-thread__skeleton--desk .chat-thread__skeleton-masthead,
-.chat-thread__skeleton--desk .chat-thread__skeleton-line {
-  background: var(--surface-sunken);
+/* Record light — a glowing red dot beside the masthead placeholder while a
+   turn is live (soul.md "LED scope stamp" / "reading latches": red while
+   streaming, latches to the resolved status color once the card finalizes). */
+.chat-thread__skeleton-masthead::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--poke-red);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--poke-red) 55%, transparent);
+  animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
 }
 .chat-thread__skeleton-masthead {
   height: 1.6rem;
@@ -2542,8 +2645,8 @@
   font-weight: 600;
   cursor: pointer;
   transition:
-    background 120ms ease,
-    color 120ms ease;
+    background var(--motion-fast),
+    color var(--motion-fast);
 }
 .chat-thread__error-retry:hover {
   background: var(--danger);
@@ -2596,8 +2699,31 @@
   gap: var(--space-2);
   flex-wrap: wrap;
 }
+/* LED scope stamp — inset well chip + a glowing red record dot, standing in
+   for "the device is on, waiting" (soul.md "Standby readout"). */
 .blank-plate__ilabel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) 18px;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-well);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   color: var(--text-faint);
+}
+.blank-plate__ilabel::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--poke-red);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--poke-red) 55%, transparent);
 }
 .blank-plate__scope {
   margin: 0;
@@ -2854,8 +2980,24 @@
     animation: none !important;
     opacity: 0.7;
   }
+  .chat-thread__skeleton-masthead::before {
+    animation: none !important;
+    opacity: 0.8;
+  }
   .chat-thread__summary-caret {
     transition: none;
+  }
+  /* "Reading latches" — instant swap, no fade/color-blip. */
+  .answer-card::before,
+  .answer-card::after,
+  .answer-masthead__status-symbol {
+    animation: none !important;
+    opacity: var(--latch-opacity, 1);
+  }
+  .answer-masthead__status--ok .answer-masthead__status-symbol,
+  .answer-masthead__status--partial .answer-masthead__status-symbol,
+  .answer-masthead__status--insufficient .answer-masthead__status-symbol {
+    color: var(--latch-to);
   }
   .chat-page__sidebar {
     transition: none;
@@ -3038,9 +3180,11 @@ button.scope-chip:focus-visible {
 .scope-chip__menu-label {
   padding: 0 var(--space-2) var(--space-1);
 }
-/* Two-line rows: name + one-line description (screen 02). Selection is the one
-   red language — a soft fill plus a 3px red left rail. */
+/* Two-line rows: name + one-line description (screen 02). Selection is an LED
+   dot beside the name (soul.md "We never" #3 — no red left selection rail),
+   plus a soft fill so the row still reads at a glance. */
 .scope-chip__option {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -3048,7 +3192,6 @@ button.scope-chip:focus-visible {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   border: none;
-  border-left: 3px solid transparent;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -3069,10 +3212,23 @@ button.scope-chip:focus-visible {
 }
 .scope-chip__option[aria-checked="true"] {
   background: var(--poke-red-soft);
-  border-left-color: var(--poke-red);
 }
 .scope-chip__option[aria-checked="true"] .scope-chip__option-name {
   color: var(--poke-red);
+  padding-left: 14px;
+  position: relative;
+}
+.scope-chip__option[aria-checked="true"] .scope-chip__option-name::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--poke-red);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--poke-red) 55%, transparent);
 }
 
 /* Auth header control — account email + the translucent sign-in/out pills */
@@ -4523,7 +4679,8 @@ button.scope-chip:focus-visible {
   gap: var(--space-3);
 }
 .roster-slot {
-  /* Type edge/glow from --plate-a/--plate-b (soul.md Phase 2 party tray). */
+  /* Filled slot = type edge + a small glow (soul.md "six sockets in a
+     device" — the party tray). --plate-a/--plate-b set per-slot in TSX. */
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
   display: flex;
@@ -4533,15 +4690,11 @@ button.scope-chip:focus-visible {
   position: relative;
   min-height: 148px;
   padding: var(--space-4) var(--space-2) var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--plate-a) 28%, var(--border));
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: radial-gradient(
-    120% 80% at 50% 20%,
-    color-mix(in srgb, var(--plate-a) 12%, var(--surface)),
-    var(--surface) 74%
-  );
+  background: var(--surface);
   box-shadow:
-    0 0 14px color-mix(in srgb, var(--plate-a) 14%, transparent),
+    0 0 10px color-mix(in srgb, var(--plate-a) var(--plate-wash-b), transparent),
     var(--shadow-raised);
   cursor: pointer;
   transition:
@@ -4550,10 +4703,21 @@ button.scope-chip:focus-visible {
     background var(--motion-fast),
     transform var(--motion-spring);
 }
+/* Leading-edge light, same recipe as the answer plate — small, top-inset. */
+.roster-slot::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--plate-a) 0 60%, var(--plate-b) 60% 100%);
+}
 .roster-slot:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 0 18px color-mix(in srgb, var(--plate-a) 18%, transparent),
+    0 0 14px color-mix(in srgb, var(--plate-a) var(--plate-wash-b), transparent),
     var(--shadow-floating);
 }
 /* Selection = red record-light ring (not a left list rail). */
@@ -4567,12 +4731,16 @@ button.scope-chip:focus-visible {
   );
   transform: translateY(-2px);
 }
-/* Empty / unknown-type filled slots: neutral solid outline or plain surface. */
+/* Empty / unknown-type filled slots: a solid hairline socket machined into
+   the chassis (inset well) — no type edge, no dashed placeholder. */
 .roster-slot[data-empty="true"] {
   border-style: solid;
   border-color: var(--border);
-  background: transparent;
-  box-shadow: none;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-well);
+}
+.roster-slot[data-empty="true"]::before {
+  content: none;
 }
 .roster-slot[data-empty="true"][data-selected="true"] {
   border-style: solid;
@@ -4677,6 +4845,9 @@ button.scope-chip:focus-visible {
   background: transparent;
   box-shadow: none;
   color: var(--text-muted);
+}
+.roster-slot--add::before {
+  content: none;
 }
 .roster-slot--add:hover {
   border-color: var(--poke-red);
@@ -5039,7 +5210,8 @@ button.scope-chip:focus-visible {
   padding-inline: var(--space-2);
   font-family: var(--mono);
   font-weight: 700;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
   color: var(--text-strong);
 }
 

@@ -11,10 +11,13 @@
  * min-width keeps it usable at the low end. The mobile overlay below replaces
  * all three with a fixed full-screen layout. */
 .artifact-viewer {
-  /* Specimen-plate wash (soul.md Phase 2) — type colors via --plate-a/--plate-b;
-     mix strengths inherit from :root (plate tuner). */
+  /* Type-light plate (soul.md Instrument redesign) — mirrors .answer-card in
+     globals.css §7: solid surface + a leading-edge light + one corner glow,
+     both on pseudo-elements so the base panel never has to fade. Mix
+     strengths inherit from :root (plate tuner). */
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 0 0 min(45%, var(--artifact-panel-w));
@@ -24,48 +27,55 @@
   align-self: stretch;
   max-height: 100%;
   overflow: hidden;
+  /* A whisper of type tint under the bold 3px edge light below. */
   border: 1px solid color-mix(in srgb, var(--plate-a) var(--plate-edge), var(--border));
   border-radius: var(--radius-lg);
-  background:
-    radial-gradient(
-      90% 70% at 88% 18%,
-      color-mix(in srgb, var(--plate-a) var(--plate-radial-a), transparent),
-      transparent 55%
-    ),
-    radial-gradient(
-      70% 60% at 12% 90%,
-      color-mix(in srgb, var(--plate-b) var(--plate-radial-b), transparent),
-      transparent 50%
-    ),
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--plate-a) var(--plate-wash-a), var(--surface)),
-      color-mix(in srgb, var(--plate-b) var(--plate-wash-b), var(--surface)) 55%,
-      var(--surface)
-    );
+  background: var(--surface-raised);
   box-shadow: var(--shadow-floating);
 }
-/* Ink plate (mechanics / ability / item / loading) — sunken paper, no type wash. */
+.artifact-viewer::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--plate-a) 0 60%, var(--plate-b) 60% 100%);
+}
+.artifact-viewer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    90% 70% at 88% 18%,
+    color-mix(in srgb, var(--plate-a) var(--plate-radial-a), transparent),
+    transparent 60%
+  );
+}
+/* Ink plate (mechanics / ability / item / loading) — sunken well, no type light. */
 .artifact-viewer.answer-card--ink {
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
-  background: linear-gradient(180deg, var(--surface-sunken), var(--surface));
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-well);
   border-color: var(--border-strong);
 }
-/* Multi-subject comparison / multi-member team — light accent. */
+.artifact-viewer.answer-card--ink::before,
+.artifact-viewer.answer-card--ink::after {
+  content: none;
+}
+/* Multi-subject comparison / multi-member team — a faint dual-segment edge,
+   no corner glow (don't fight several types' light at once). */
 .artifact-viewer.answer-card--multi {
-  --plate-radial-a: 8%;
-  --plate-radial-b: 6%;
-  --plate-wash-a: 4%;
-  --plate-wash-b: 3%;
-  --plate-edge: 18%;
   border-color: var(--border);
 }
-[data-theme="dark"] .artifact-viewer.answer-card--multi {
-  --plate-radial-a: 14%;
-  --plate-radial-b: 10%;
-  --plate-wash-a: 10%;
-  --plate-wash-b: 7%;
+.artifact-viewer.answer-card--multi::before {
+  opacity: var(--plate-edge);
+}
+.artifact-viewer.answer-card--multi::after {
+  content: none;
 }
 
 /* Thin, sticky header: a single control row (title + actions) over a compact
@@ -342,6 +352,7 @@
   align-items: center;
   gap: var(--space-4);
 }
+/* The well — the light SOURCE, same recipe as SpriteCard's (globals.css §7). */
 .pokemon-artifact__halo {
   --plate-a: var(--type-normal);
   --plate-b: var(--type-normal);
@@ -354,12 +365,12 @@
   background:
     radial-gradient(
       circle at 50% 45%,
-      color-mix(in srgb, var(--plate-a) 28%, transparent),
+      color-mix(in srgb, var(--plate-a) var(--plate-radial-b), transparent),
       transparent 65%
     ),
-    color-mix(in srgb, var(--plate-a) 10%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--plate-a) 22%, var(--border));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--plate-b) 15%, transparent);
+    var(--surface-sunken);
+  border: 1px solid color-mix(in srgb, var(--plate-a) 32%, var(--border-strong));
+  box-shadow: var(--shadow-well);
 }
 .pokemon-artifact__art {
   width: 104px;
@@ -429,7 +440,7 @@
   height: 100%;
   width: var(--fill);
   border-radius: var(--radius-pill);
-  animation: stat-fill-in 400ms ease-out both;
+  animation: stat-fill-in var(--motion-base) both;
 }
 @keyframes stat-fill-in {
   from {
@@ -797,7 +808,7 @@
   height: 100%;
   width: var(--fill);
   border-radius: var(--radius-pill);
-  animation: stat-fill-in 400ms ease-out both;
+  animation: stat-fill-in var(--motion-base) both;
 }
 .team-stat__bar-fill--danger {
   background: var(--danger);

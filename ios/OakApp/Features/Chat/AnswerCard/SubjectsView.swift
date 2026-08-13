@@ -67,12 +67,8 @@ private struct SubjectCard: View {
     }
     .padding(Theme.Spacing.md)
     .frame(maxWidth: .infinity, alignment: .leading)
-    // The dual-type wash sits behind oakCard's own raised fill; passing it as a
-    // background (rather than oakCard's single-color `tint:`) lets a dual-type
-    // subject blend both type colors while still resolving to exactly one shadow
-    // source (oakCard's) — a single-type subject degrades to the same wash oakCard
-    // would have produced from `tint:` directly.
-    .background(Theme.typeGradient(primary: primaryType, secondary: secondaryType))
+    // Instrument redesign (Phase 2): the card goes neutral — no type wash on the
+    // card itself — the sprite well (`oakTypeGlowWell` above) carries the light.
     .oakCard()
     // One combined VoiceOver label so the card reads as a single, ordered unit
     // (M-AC-UI9.1) instead of disjoint sprite/badge fragments.

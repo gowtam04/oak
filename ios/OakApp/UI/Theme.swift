@@ -411,27 +411,39 @@ extension Theme {
 // MARK: - Motion (Theme.Motion)
 
 extension Theme {
-  /// The shared animation vocabulary. Two springs cover almost everything —
-  /// `snappy` for direct-manipulation feedback (presses, focus, toggles) and
-  /// `smooth` for content settling in (bubbles, cards, list reflow) — plus a
-  /// `staggered` helper for cascade-in sequences.
+  /// The shared animation vocabulary — mechanical and decisive
+  /// (`cubic-bezier(.2, 0, 0, 1)`), not the old overshoot springs: `snappy` for
+  /// direct-manipulation feedback (presses, focus, toggles) and `smooth` for
+  /// content settling in (bubbles, cards, list reflow), plus a `staggered`
+  /// helper for cascade-in sequences. The overshoot spring is retired except for
+  /// the Poké Ball spinner, which keeps its personality (franchise-native, not
+  /// slop — soul.md §3 Motion).
   ///
   /// Callers gate every use behind `@Environment(\.accessibilityReduceMotion)`
   /// (constraint 2): with Reduce Motion on, movement/scale becomes an opacity
   /// crossfade or is dropped. These tokens are the *what*; the *whether* stays
   /// the calling view's decision.
   enum Motion {
-    /// Direct-feedback spring — fast, lightly damped. Presses, focus, toggles.
-    static let snappy: Animation = .spring(response: 0.28, dampingFraction: 0.8)
+    /// Direct-feedback curve — 120ms, `cubic-bezier(.2, 0, 0, 1)`. Presses,
+    /// focus, toggles.
+    static let snappy: Animation = .timingCurve(0.2, 0, 0, 1, duration: 0.12)
 
-    /// Content-settling spring — slower, well damped. Bubbles, cards, reflow.
-    static let smooth: Animation = .spring(response: 0.45, dampingFraction: 0.85)
+    /// Content-settling curve — 180ms, `cubic-bezier(.2, 0, 0, 1)`. Bubbles,
+    /// cards, reflow.
+    static let smooth: Animation = .timingCurve(0.2, 0, 0, 1, duration: 0.18)
 
     /// `base` delayed by `step × index` — the per-item offset that turns a batch
-    /// appearance into a cascade. Index 0 plays immediately.
-    static func staggered(_ index: Int, base: Animation = smooth, step: Double = 0.04) -> Animation {
+    /// appearance into a cascade. Index 0 plays immediately. `step` defaults to
+    /// 60ms (the instrument ticker's cascade stagger).
+    static func staggered(_ index: Int, base: Animation = smooth, step: Double = 0.06) -> Animation {
       base.delay(step * Double(index))
     }
+
+    /// The one-shot "reading latches" finalize moment (soul.md §3 Motion
+    /// signature moment): the masthead status glyph red→green and the plate's
+    /// type edge+glow fade-in, 300ms on the same mechanical curve. Nothing else
+    /// on screen animates at this moment.
+    static let latch: Animation = .timingCurve(0.2, 0, 0, 1, duration: 0.3)
   }
 }
 
@@ -500,12 +512,14 @@ extension Theme {
   /// `subjects[].types`, multi-subject neutral, or mechanics ink plate.
   /// See `docs/design/soul.md` "Plate wash rules".
   enum PlateAtmosphere: Equatable {
-    /// One subject, 1–2 types: primary wash + secondary edge/radial.
+    /// One subject, 1–2 types: primary radial glow + leading-edge light
+    /// (secondary type gets a weaker radial + the edge's lower 40% segment).
     case typed(primary: String, secondary: String?)
-    /// Multiple subjects: neutral-ish plate + light multi accent (don't fight
-    /// dual washes).
+    /// Multiple subjects: neutral raised plate + a faint neutral dual-segment
+    /// edge (don't fight dual glows with no dominant type to key off).
     case multi
-    /// No subjects (mechanics/rules): sunken paper, stronger border, no type wash.
+    /// No subjects (mechanics/rules): sunken ink plate (inset well), stronger
+    /// border, no type light.
     case mechanics
 
     /// Resolve from the answer's subject type arrays (outer = subjects, inner =
@@ -538,22 +552,30 @@ extension Theme {
     }
   }
 
-  /// Mix ratios for type → surface plate wash (soul.md): light ~8–14%, dark
-  /// ~18–28% so the wash still reads on dark paper.
+  /// Type-light intensities (soul.md "type-light" — replaces the old plate-wash
+  /// mix table). The plate itself is a flat neutral fill; these tune the RADIAL
+  /// GLOW anchored top-trailing and the LEADING-EDGE LIGHT strip instead of a
+  /// diagonal wash across the whole surface.
   enum PlateWashMix {
-    /// Primary type into the plate fill.
+    /// Primary-type radial glow behind the plate (soul.md: light ~0.12, dark ~0.22).
     static func primary(scheme: ColorScheme) -> Double {
-      scheme == .dark ? 0.22 : 0.11
+      scheme == .dark ? 0.22 : 0.12
     }
-    /// Secondary type into the plate fill / second radial.
+    /// Secondary-type radial glow — weaker than primary, same anchor family.
     static func secondary(scheme: ColorScheme) -> Double {
-      scheme == .dark ? 0.16 : 0.07
+      scheme == .dark ? 0.14 : 0.07
     }
     /// Primary type into the plate border edge.
     static func border(scheme: ColorScheme) -> Double {
       scheme == .dark ? 0.32 : 0.28
     }
-    /// Radial glow behind a sprite well (stronger than the plate wash).
+    /// Leading-edge light strip intensity (primary segment; the secondary
+    /// segment, when present, mixes at ~75% of this).
+    static func edgeLight(scheme: ColorScheme) -> Double {
+      scheme == .dark ? 0.85 : 0.75
+    }
+    /// Radial glow behind a sprite well — the well IS the light source, so this
+    /// stays the strongest mix in the table.
     static func spriteGlow(scheme: ColorScheme) -> Double {
       scheme == .dark ? 0.34 : 0.28
     }
@@ -594,10 +616,16 @@ extension Theme {
 // MARK: - Specimen plate chrome (View)
 
 extension View {
-  /// Wraps content in Oak's specimen-plate shell: type wash / multi / ink plate
-  /// fill, hairline edge, and raised shadow (soul.md answer plate).
-  func oakSpecimenPlate(_ atmosphere: Theme.PlateAtmosphere) -> some View {
-    modifier(OakSpecimenPlateModifier(atmosphere: atmosphere))
+  /// Wraps content in Oak's specimen-plate shell: neutral fill / ink-plate well,
+  /// hairline edge, and raised shadow (soul.md answer plate).
+  ///
+  /// - Parameter revealed: Gates the opacity of the type radial glow + leading-
+  ///   edge light (not the flat fill/border, which are always visible). Defaults
+  ///   to `true` (always shown); the answer card's one-shot "reading latches"
+  ///   finalize moment (soul.md §3) passes a `@State` flag here and animates it
+  ///   0→1 so the type-light fades in once the turn finalizes.
+  func oakSpecimenPlate(_ atmosphere: Theme.PlateAtmosphere, revealed: Bool = true) -> some View {
+    modifier(OakSpecimenPlateModifier(atmosphere: atmosphere, revealed: revealed))
   }
 }
 
@@ -606,81 +634,75 @@ extension View {
 private struct OakSpecimenPlateModifier: ViewModifier {
   @Environment(\.colorScheme) private var colorScheme
   let atmosphere: Theme.PlateAtmosphere
+  var revealed: Bool = true
 
   func body(content: Content) -> some View {
     let shape = RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
     let isDark = colorScheme == .dark
-    content
-      .background {
-        ZStack {
-          plateFill(isDark: isDark)
-          plateRadials(isDark: isDark)
-        }
-        .clipShape(shape)
-      }
-      .overlay {
-        shape.strokeBorder(borderColor(isDark: isDark), lineWidth: atmosphere == .mechanics ? 1.5 : 1)
-      }
-      .clipShape(shape)
-      .shadow(
-        color: isDark ? .clear : Theme.Shadow.raised.ambient.color,
-        radius: Theme.Shadow.raised.ambient.radius,
-        y: Theme.Shadow.raised.ambient.y
-      )
-      .shadow(
-        color: isDark ? .clear : Theme.Shadow.raised.key.color,
-        radius: Theme.Shadow.raised.key.radius,
-        y: Theme.Shadow.raised.key.y
-      )
-  }
-
-  @ViewBuilder
-  private func plateFill(isDark: Bool) -> some View {
     switch atmosphere {
     case .mechanics:
-      // Ink plate: sunken → surface vertical gradient, no type wash.
-      LinearGradient(
-        colors: [Theme.surfaceSunken, Theme.surface],
-        startPoint: .top,
-        endPoint: .bottom
-      )
-    case .multi:
-      // Neutral-ish + faint multi accent (flying-ish cool wash, low %).
-      ZStack {
-        Theme.surface
-        LinearGradient(
-          colors: [
-            Theme.type("flying").opacity(isDark ? 0.10 : 0.05),
-            .clear,
-          ],
-          startPoint: .topLeading,
-          endPoint: .bottomTrailing
+      // Ink plate: sunken well treatment (surfaceSunken fill + inner-shadow
+      // illusion), a stronger border, and no type light (soul.md).
+      content
+        .oakInsetWell(cornerRadius: Theme.Radius.xl)
+        .overlay {
+          shape.strokeBorder(Theme.borderStrong, lineWidth: 1.5)
+        }
+        .shadow(
+          color: isDark ? .clear : Theme.Shadow.raised.ambient.color,
+          radius: Theme.Shadow.raised.ambient.radius,
+          y: Theme.Shadow.raised.ambient.y
         )
-      }
-    case let .typed(primary, secondary):
-      let p = Theme.PlateWashMix.primary(scheme: colorScheme)
-      let s = Theme.PlateWashMix.secondary(scheme: colorScheme)
-      ZStack {
-        Theme.surface
-        LinearGradient(
-          colors: [
-            Theme.type(primary).opacity(p),
-            Theme.type(secondary ?? primary).opacity(s * 0.85),
-            .clear,
-          ],
-          startPoint: .topLeading,
-          endPoint: .bottomTrailing
+        .shadow(
+          color: isDark ? .clear : Theme.Shadow.raised.key.color,
+          radius: Theme.Shadow.raised.key.radius,
+          y: Theme.Shadow.raised.key.y
         )
-      }
+    case .multi, .typed:
+      content
+        .background {
+          ZStack {
+            // Flat neutral fill — the content carries the color, not the frame.
+            Theme.surfaceRaised
+            // The glow is the part that "reveals" — the flat fill/border stay
+            // always visible so only the light fades in (reading-latches moment).
+            plateRadials(isDark: isDark)
+              .opacity(revealed ? 1 : 0)
+          }
+          .clipShape(shape)
+        }
+        .overlay(alignment: .leading) {
+          plateEdgeLight(isDark: isDark)
+            .opacity(revealed ? 1 : 0)
+        }
+        .overlay {
+          shape.strokeBorder(borderColor(isDark: isDark), lineWidth: 1)
+        }
+        .clipShape(shape)
+        .shadow(
+          color: isDark ? .clear : Theme.Shadow.raised.ambient.color,
+          radius: Theme.Shadow.raised.ambient.radius,
+          y: Theme.Shadow.raised.ambient.y
+        )
+        .shadow(
+          color: isDark ? .clear : Theme.Shadow.raised.key.color,
+          radius: Theme.Shadow.raised.key.radius,
+          y: Theme.Shadow.raised.key.y
+        )
     }
   }
 
+  /// The plate's single radial glow, anchored top-trailing (where SubjectsView
+  /// places the subject's sprite well) — the light source for a typed plate. A
+  /// dual-typed subject adds a second, weaker radial anchored bottom-leading so
+  /// both types read as light without fighting. `multi`/`mechanics` have no
+  /// single dominant type to key off, so no radial.
   @ViewBuilder
   private func plateRadials(isDark: Bool) -> some View {
     switch atmosphere {
     case let .typed(primary, secondary):
-      let p = Theme.PlateWashMix.primary(scheme: colorScheme) + 0.05
-      let s = Theme.PlateWashMix.secondary(scheme: colorScheme) + 0.04
+      let p = Theme.PlateWashMix.primary(scheme: colorScheme)
+      let s = Theme.PlateWashMix.secondary(scheme: colorScheme)
       RadialGradient(
         colors: [Theme.type(primary).opacity(p), .clear],
         center: UnitPoint(x: 0.88, y: 0.18),
@@ -698,6 +720,54 @@ private struct OakSpecimenPlateModifier: ViewModifier {
     case .multi, .mechanics:
       EmptyView()
     }
+  }
+
+  /// The 3pt leading-edge light — a vertical capsule strip inset along the
+  /// plate's leading edge. A typed plate splits it 60/40 primary/secondary when
+  /// dual-typed; `multi` gets a faint neutral two-segment edge (no single type
+  /// to key off); `mechanics` gets none (the ink plate stays quiet).
+  @ViewBuilder
+  private func plateEdgeLight(isDark: Bool) -> some View {
+    switch atmosphere {
+    case .mechanics:
+      EmptyView()
+    case .multi:
+      edgeLightStrip(
+        primary: Theme.borderStrong.opacity(isDark ? 0.55 : 0.45),
+        secondary: Theme.border.opacity(isDark ? 0.4 : 0.3)
+      )
+    case let .typed(primary, secondary):
+      let intensity = Theme.PlateWashMix.edgeLight(scheme: colorScheme)
+      edgeLightStrip(
+        primary: Theme.type(primary).opacity(intensity),
+        secondary: secondary.map { Theme.type($0).opacity(intensity * 0.75) }
+      )
+    }
+  }
+
+  /// A 3pt vertical capsule inset along the leading edge — full-height
+  /// `primary`, or a hard-edged two-tone gradient (top 60% primary, bottom 40%
+  /// `secondary`) when a second color is present.
+  private func edgeLightStrip(primary: Color, secondary: Color?) -> some View {
+    let fill: LinearGradient
+    if let secondary {
+      fill = LinearGradient(
+        stops: [
+          .init(color: primary, location: 0),
+          .init(color: primary, location: 0.58),
+          .init(color: secondary, location: 0.62),
+          .init(color: secondary, location: 1),
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+      )
+    } else {
+      fill = LinearGradient(colors: [primary, primary], startPoint: .top, endPoint: .bottom)
+    }
+    return Capsule()
+      .fill(fill)
+      .frame(width: 3)
+      .padding(.vertical, 10)
   }
 
   private func borderColor(isDark: Bool) -> Color {
@@ -739,7 +809,10 @@ extension View {
   }
 }
 
-/// Radial type glow + primary/secondary edge rings behind sprite artwork.
+/// Radial type glow + primary/secondary edge rings behind sprite artwork. The
+/// well is now INSET — sunken fill + the shared inner-shadow illusion — with
+/// the glow reading as the well's own light source, plus a 1px border tinted by
+/// the primary type (soul.md "type-light" — replaces the old flat-tint well).
 private struct OakTypeGlowWellModifier: ViewModifier {
   @Environment(\.colorScheme) private var colorScheme
   let primary: String
@@ -753,7 +826,8 @@ private struct OakTypeGlowWellModifier: ViewModifier {
     content
       .background {
         ZStack {
-          shape.fill(Theme.type(primary).opacity(isDark ? 0.14 : 0.10))
+          // Sunken well base — the light sits IN the chassis, not on a flat tint.
+          shape.fill(Theme.surfaceSunken)
           RadialGradient(
             colors: [
               Theme.type(primary).opacity(Theme.PlateWashMix.spriteGlow(scheme: colorScheme)),
@@ -764,17 +838,19 @@ private struct OakTypeGlowWellModifier: ViewModifier {
             endRadius: glowEndRadius
           )
         }
+        .clipShape(shape)
       }
+      .overlay { oakInsetWellIllusion(shape: shape, isDark: isDark) }
       .overlay {
         shape.strokeBorder(
-          Theme.type(primary).opacity(isDark ? 0.28 : 0.22),
+          Theme.type(primary).opacity(isDark ? 0.42 : 0.34),
           lineWidth: 1
         )
       }
       .overlay {
         if let secondary, !secondary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
           shape
-            .strokeBorder(Theme.type(secondary).opacity(0.15), lineWidth: 1)
+            .strokeBorder(Theme.type(secondary).opacity(0.18), lineWidth: 1)
             .padding(1)
         }
       }
@@ -823,32 +899,38 @@ private struct OakInsetWellModifier: ViewModifier {
     let isDark = colorScheme == .dark
     content
       .background(Theme.surfaceSunken, in: shape)
-      .overlay {
-        shape
-          .inset(by: 0.5)
-          .stroke(Color.black.opacity(isDark ? 0.22 : 0.10), lineWidth: 1)
-          .blur(radius: 0.5)
-          .mask(
-            LinearGradient(
-              colors: [.black, .black.opacity(0.35), .clear],
-              startPoint: .top,
-              endPoint: .bottom
-            )
-          )
-      }
-      .overlay {
-        shape
-          .inset(by: 0.5)
-          .stroke((isDark ? Color.clear : Color.white).opacity(0.6), lineWidth: 1)
-          .mask(
-            LinearGradient(
-              colors: [.clear, .black.opacity(0.3), .black],
-              startPoint: .top,
-              endPoint: .bottom
-            )
-          )
-      }
+      .overlay { oakInsetWellIllusion(shape: shape, isDark: isDark) }
   }
+}
+
+/// The inner-shadow illusion shared by every inset well (search bars, inputs,
+/// the mechanics ink plate, and the type-glow sprite well): a dark hairline
+/// hugging the top edge, a light hairline hugging the bottom — two strokes, one
+/// blur pass, no offscreen shadow render — so every "machined into the chassis"
+/// surface reads as the same physical recess.
+@ViewBuilder
+private func oakInsetWellIllusion(shape: RoundedRectangle, isDark: Bool) -> some View {
+  shape
+    .inset(by: 0.5)
+    .stroke(Color.black.opacity(isDark ? 0.22 : 0.10), lineWidth: 1)
+    .blur(radius: 0.5)
+    .mask(
+      LinearGradient(
+        colors: [.black, .black.opacity(0.35), .clear],
+        startPoint: .top,
+        endPoint: .bottom
+      )
+    )
+  shape
+    .inset(by: 0.5)
+    .stroke((isDark ? Color.clear : Color.white).opacity(0.6), lineWidth: 1)
+    .mask(
+      LinearGradient(
+        colors: [.clear, .black.opacity(0.3), .black],
+        startPoint: .top,
+        endPoint: .bottom
+      )
+    )
 }
 
 // MARK: - Instrument voice (View extension)

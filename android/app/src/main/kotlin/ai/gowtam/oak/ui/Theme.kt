@@ -3,8 +3,7 @@ package ai.gowtam.oak.ui
 import android.provider.Settings
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
@@ -262,26 +261,20 @@ val OakShapes: Shapes = Shapes(
 // ---------------------------------------------------------------------------
 
 /**
- * The shared animation vocabulary. Two springs cover almost everything — [snappy]
- * for direct-manipulation feedback (presses, focus, toggles) and [smooth] for
- * content settling in (bubbles, cards, list reflow). Callers gate every use behind
- * [rememberReduceMotion]; with reduce-motion on, movement collapses to an instant
- * change or an opacity crossfade. These tokens are the *what*; the *whether* stays
- * the calling view's decision.
+ * The shared animation vocabulary. [snappy] and [smooth] cover almost everything —
+ * [snappy] for direct-manipulation feedback (presses, focus, toggles) and [smooth]
+ * for content settling in (bubbles, cards, list reflow). Both are Instrument-precise
+ * TWEENS on [fastEasing] (Phase 2 retired the overshoot springs everywhere except the
+ * Poké Ball spinner and the composer send-disc, which keep their franchise-native
+ * personality by design). Callers gate every use behind [rememberReduceMotion]; with
+ * reduce-motion on, movement collapses to an instant change or an opacity crossfade.
+ * These tokens are the *what*; the *whether* stays the calling view's decision.
  */
 object OakMotion {
-    /** Direct-feedback spring — fast, lightly damped. */
-    val snappy: AnimationSpec<Float> =
-        spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium)
-
-    /** Content-settling spring — slower, well damped. */
-    val smooth: AnimationSpec<Float> =
-        spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
-
     /**
-     * Instrument-precise easing (Phase 2 wires call sites onto this + [FAST_MILLIS] /
-     * [BASE_MILLIS]) — a fast-out, near-linear-in curve for tween-driven transitions
-     * that need a deliberate, mechanical feel rather than a spring's overshoot.
+     * Instrument-precise easing — a fast-out, near-linear-in curve for tween-driven
+     * transitions that need a deliberate, mechanical feel rather than a spring's
+     * overshoot. Declared first: [snappy]/[smooth] below capture it at initialization.
      */
     val fastEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
@@ -291,11 +284,20 @@ object OakMotion {
     /** Base tween duration (ms) — standard content transitions (Phase 2). */
     const val BASE_MILLIS = 180
 
+    /** Direct-feedback tween — fast, mechanical (Phase 2: replaces the overshoot spring). */
+    val snappy: AnimationSpec<Float> =
+        tween(durationMillis = FAST_MILLIS, easing = fastEasing)
+
+    /** Content-settling tween — slower, mechanical (Phase 2: replaces the overshoot spring). */
+    val smooth: AnimationSpec<Float> =
+        tween(durationMillis = BASE_MILLIS, easing = fastEasing)
+
     /** Entrance/exit fade duration (ms) when motion is allowed. */
     const val FADE_MILLIS = 200
 
-    /** Per-item cascade offset (ms) for staggered batch entrances. */
-    const val STAGGER_STEP_MILLIS = 40
+    /** Per-item cascade offset (ms) for staggered batch entrances (answer-card sections,
+     * the instrument ticker's tool rows). */
+    const val STAGGER_STEP_MILLIS = 60
 }
 
 /**
@@ -345,10 +347,13 @@ object OakType {
     fun displayIndex(name: String): Int = displayRank[name.trim().lowercase()] ?: Int.MAX_VALUE
 
     /**
-     * Specimen-plate atmosphere from one primary type and an optional secondary
-     * (soul.md "Plate wash rules"). Light mixes ~8–14% type into [surface]; dark
-     * ~18–28% so the wash still reads. Call [plateWashForTypes] when deriving from
-     * an answer's subject list (handles multi-subject + mechanics).
+     * Specimen-plate **type-light** from one primary type and an optional secondary
+     * (soul.md "Type-light rules" — replaces the old plate-wash-percentage table). The
+     * plate fill itself goes essentially neutral ([surface]); the type reads instead
+     * as a saturated glow radiating from the sprite well ([wellGlow]/[wellGlowSecondary])
+     * plus a solid leading-edge light ([edge]/[edgeSecondary]) the caller renders as a
+     * thin strip along the plate's leading edge. Call [plateWashForTypes] when deriving
+     * from an answer's subject list (handles multi-subject + mechanics).
      */
     fun plateWash(
         primary: String?,
@@ -365,20 +370,17 @@ object OakType {
         }
         val primarySolid = color(primaryName)
         val secondarySolid = secondary?.trim()?.takeIf { it.isNotEmpty() }?.let { color(it) }
-        val primaryMix = if (dark) 0.22f else 0.11f
-        val secondaryMix = if (dark) 0.18f else 0.08f
-        val borderMix = if (dark) 0.32f else 0.28f
         val wellMix = if (dark) 0.28f else 0.16f
-        val fill = lerp(surface, primarySolid, primaryMix)
-        val fillSecondary = secondarySolid?.let { lerp(surface, it, secondaryMix) }
         return PlateWash(
-            fill = fill,
-            fillSecondary = fillSecondary,
-            border = lerp(border, primarySolid, borderMix),
+            fill = surface,
+            fillSecondary = null,
+            border = border,
             wellFill = lerp(surface, primarySolid, wellMix),
             wellBorder = lerp(border, primarySolid, if (dark) 0.28f else 0.22f),
-            wellGlow = primarySolid.copy(alpha = if (dark) 0.32f else 0.28f),
-            wellGlowSecondary = secondarySolid?.copy(alpha = if (dark) 0.18f else 0.15f),
+            wellGlow = primarySolid.copy(alpha = if (dark) 0.40f else 0.30f),
+            wellGlowSecondary = secondarySolid?.copy(alpha = if (dark) 0.28f else 0.20f),
+            edge = primarySolid,
+            edgeSecondary = secondarySolid,
             isMechanics = false,
             isMulti = false,
         )
@@ -386,9 +388,9 @@ object OakType {
 
     /**
      * Derives a [PlateWash] from zero-or-more subjects' type lists:
-     * - empty → mechanics ink plate (sunken paper, strong border)
-     * - multiple subjects → neutral-ish multi plate (light first-type accent only)
-     * - one subject → primary/secondary type wash
+     * - empty → mechanics ink plate (sunken inset, strong border, no type light)
+     * - multiple subjects → neutral plate + one faint multi edge (don't fight dual glows)
+     * - one subject → primary/secondary type-light
      */
     fun plateWashForTypes(
         subjectTypes: List<List<String>>,
@@ -404,15 +406,16 @@ object OakType {
         if (subjectTypes.size > 1) {
             val first = subjectTypes.firstOrNull()?.firstOrNull()
             val accent = first?.let { color(it) }
-            val multiMix = if (dark) 0.12f else 0.05f
             return PlateWash(
-                fill = if (accent != null) lerp(surface, accent, multiMix) else surface,
+                fill = surface,
                 fillSecondary = null,
-                border = if (accent != null) lerp(border, accent, if (dark) 0.18f else 0.12f) else border,
+                border = border,
                 wellFill = surfaceSunken,
                 wellBorder = border,
                 wellGlow = accent?.copy(alpha = if (dark) 0.18f else 0.12f),
                 wellGlowSecondary = null,
+                edge = accent?.copy(alpha = if (dark) 0.55f else 0.45f) ?: Color.Transparent,
+                edgeSecondary = null,
                 isMechanics = false,
                 isMulti = true,
             )
@@ -438,6 +441,8 @@ object OakType {
             wellBorder = borderStrong,
             wellGlow = null,
             wellGlowSecondary = null,
+            edge = Color.Transparent,
+            edgeSecondary = null,
             isMechanics = true,
             isMulti = false,
         )
@@ -483,26 +488,34 @@ object OakType {
 
 /**
  * Colors for a type-reactive specimen plate (answer card shell + sprite well).
- * Produced by [OakType.plateWash] / [OakType.plateWashForTypes] per soul.md.
+ * Produced by [OakType.plateWash] / [OakType.plateWashForTypes] per soul.md's
+ * "Type-light rules" — the plate chrome ([fill]/[border]) stays essentially neutral;
+ * the type reads through [wellGlow] (the light source, in the sprite well) and
+ * [edge] (a solid leading-edge light strip the caller renders along the plate's
+ * start edge).
  */
 @Immutable
 data class PlateWash(
-    /** Primary plate fill (type-mixed surface, or sunken for mechanics). */
+    /** Plate fill — neutral (surfaceRaised) for typed/multi plates, sunken for mechanics. */
     val fill: Color,
-    /** Optional secondary fill for dual-type radial/linear blend. */
+    /** Deprecated blend slot, kept for the mechanics vertical-gradient callers; null for typed/multi. */
     val fillSecondary: Color?,
-    /** Plate edge color (type-mixed border, or [OakColors.borderStrong] for mechanics). */
+    /** Plate chrome border — neutral ([OakColors.border]/[OakColors.borderStrong]); the type never tints the frame. */
     val border: Color,
-    /** Sprite-well base fill. */
+    /** Sprite-well base fill (still type-mixed — the well is the light source). */
     val wellFill: Color,
     /** Sprite-well border. */
     val wellBorder: Color,
-    /** Soft type glow for the sprite well center (null when mechanics). */
+    /** Saturated type glow for the sprite well / plate corner (null when mechanics). */
     val wellGlow: Color?,
     /** Optional secondary glow ring for dual-type wells. */
     val wellGlowSecondary: Color?,
+    /** Solid leading-edge light in the primary type color; [Color.Transparent] for mechanics. */
+    val edge: Color,
+    /** Optional secondary edge segment for a dual-type leading-edge light. */
+    val edgeSecondary: Color?,
     /** True when the answer has no subjects — ink / mechanics plate. */
     val isMechanics: Boolean,
-    /** True when multiple subjects share one plate (neutral multi accent). */
+    /** True when multiple subjects share one plate (neutral plate + one faint multi edge). */
     val isMulti: Boolean,
 )

@@ -118,14 +118,13 @@ struct ComposerView: View {
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
-    // A frosted bar lifted off the thread: the keyboard blur (`.ultraThinMaterial`)
-    // tinted toward Oak's **canvas** so it reads warm paper, not cool system gray,
-    // against the cream thread (§4.2). A themed hairline top edge and (light mode
-    // only) a faint upward shadow; dark mode leans on the hairline alone.
+    // A quiet chassis bar lifted off the thread (Instrument redesign): a flat
+    // `canvas` fill (no frosted-glass material — the bar reads as part of the
+    // device, not a floating pane) plus a themed hairline top edge and (light
+    // mode only) a faint upward shadow; dark mode leans on the hairline alone.
     .background {
       Rectangle()
-        .fill(.ultraThinMaterial)
-        .overlay(Theme.canvas.opacity(0.7))
+        .fill(Theme.canvas.opacity(0.92))
         .overlay(alignment: .top) {
           Rectangle().fill(Theme.separator).frame(height: 1)
         }
@@ -202,24 +201,27 @@ struct ComposerView: View {
     }
   }
 
-  // MARK: Composer field focus grammar (§4.2)
+  // MARK: Composer field focus grammar (§4.2, unified for the Instrument redesign)
 
-  /// Red while streaming (the live state), azure while focused (interaction),
-  /// hairline otherwise. Red is never the focus color.
+  /// **Record-ready red** (`Theme.accent`) for both focus (interaction) and
+  /// streaming (the live state) — the two states used to split azure/red;
+  /// now the composer reads as "armed" the moment it's focused, and "live"
+  /// once a turn is streaming, both on the same record-light hue. Hairline
+  /// otherwise.
   private var fieldBorderColor: Color {
-    if model.isStreaming { return Theme.accent }
-    if isInputFocused { return Theme.azure }
-    return Theme.separator
+    (model.isStreaming || isInputFocused) ? Theme.accent : Theme.separator
   }
 
   private var fieldBorderWidth: CGFloat {
     model.isStreaming || isInputFocused ? 1.5 : 1
   }
 
-  /// The soft focus/live glow — azure when focused, red when streaming, none at rest.
+  /// The soft record-ready glow: a fuller red glow while streaming (the live
+  /// state), a subtler one on plain focus so "recording" still reads as the
+  /// stronger signal, none at rest.
   private var fieldGlowColor: Color {
     if model.isStreaming { return Theme.accent.opacity(0.28) }
-    if isInputFocused { return Theme.azure.opacity(0.28) }
+    if isInputFocused { return Theme.accent.opacity(0.16) }
     return .clear
   }
 

@@ -89,11 +89,13 @@ struct StreamingStatusView: View {
     .accessibilityLabel(phaseLabel)
   }
 
-  /// One tool-activity line in the instrument voice: a per-tool SF Symbol + a mono
-  /// caps label (`GET_POKEMON · GARCHOMP`). A completed line dims to `textMuted` and
-  /// gains a trailing checkmark; the active (last, pre-answer) line stays azure and
-  /// shimmers like the phase line. Text is the primary meaning carrier — the icon is
-  /// enhancement (M-AC-UI9.3).
+  /// One tool-activity line as a mono readout row (soul.md instrument ticker): a
+  /// per-tool SF Symbol + a `Theme.mono(.caption)` label (never a raw tool id —
+  /// ``ToolTrail/rowLabel(tool:label:)`` always resolves a friendly noun). The
+  /// active (last, pre-answer) row's glyph is the **record light** — tinted
+  /// `Theme.accent` — and its label shimmers; a completed row dims its glyph and
+  /// label to `textMuted` and gains a trailing success tick. Text is the primary
+  /// meaning carrier — the icon/tint is enhancement (M-AC-UI9.3).
   private func activityRow(
     _ activity: ChatViewModel.ToolActivity,
     completed: Bool,
@@ -101,13 +103,13 @@ struct StreamingStatusView: View {
   ) -> some View {
     HStack(spacing: Theme.Spacing.sm) {
       Image(systemName: ToolTrail.symbol(for: activity.tool))
-        .foregroundStyle(completed ? Theme.textMuted : Theme.azure)
+        .foregroundStyle(completed ? Theme.textMuted : Theme.accent)
         .imageScale(.small)
         .frame(width: 18)
         // Bounce the icon as new activity arrives; frozen under Reduce Motion.
         .symbolEffect(.bounce, value: reduceMotion ? 0 : activities.count)
       Text(ToolTrail.rowLabel(tool: activity.tool, label: activity.label))
-        .instrumentLabel()
+        .font(Theme.mono(.caption))
         .foregroundStyle(completed ? Theme.textMuted : Theme.textSecondary)
         .lineLimit(1)
         .truncationMode(.tail)

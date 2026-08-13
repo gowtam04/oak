@@ -156,13 +156,10 @@ internal fun entityPlateTypes(data: EntityData): List<String> = when (data) {
 @Composable
 private fun rememberPlateBrush(wash: PlateWash, surfaceRaised: Color, surfaceSunken: Color): Brush =
     remember(wash, surfaceRaised, surfaceSunken) {
-        when {
-            wash.fillSecondary != null ->
-                Brush.linearGradient(listOf(wash.fill, wash.fillSecondary, surfaceRaised))
-            wash.isMechanics ->
-                Brush.verticalGradient(listOf(surfaceSunken, surfaceRaised))
-            else ->
-                Brush.linearGradient(listOf(wash.fill, surfaceRaised))
+        if (wash.isMechanics) {
+            Brush.verticalGradient(listOf(surfaceSunken, surfaceRaised))
+        } else {
+            Brush.linearGradient(listOf(wash.fill, wash.fill))
         }
     }
 
@@ -178,12 +175,13 @@ private fun PokemonBody(
 ) {
     val oak = LocalOakColors.current
     val headerShape = RoundedCornerShape(OakRadius.lg)
-    val wellShape = RoundedCornerShape(28.dp)
+    // Inset hero well (soul.md): sunken fill + the type glow as the light source,
+    // OakRadius-derived (was a hardcoded 28.dp) — aligns with Subjects.kt's wells.
+    val wellShape = RoundedCornerShape(OakRadius.xl)
     val glowColors = buildList {
         wash.wellGlow?.let { add(it) }
         wash.wellGlowSecondary?.let { add(it) }
-        add(wash.wellFill)
-        add(wash.wellFill.copy(alpha = 0f))
+        add(Color.Transparent)
     }
     Column(
         modifier = Modifier
@@ -203,11 +201,13 @@ private fun PokemonBody(
             .padding(vertical = OakSpacing.xl, horizontal = OakSpacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Type-glow specimen hero (aligns with Subjects.kt wells / soul.md).
+        // Type-glow specimen hero (aligns with Subjects.kt wells / soul.md) — sunken
+        // base + the type glow as the light source + type-tinted border.
         Box(
             modifier = Modifier
                 .size(128.dp)
                 .clip(wellShape)
+                .background(oak.surfaceSunken, wellShape)
                 .background(Brush.radialGradient(glowColors), wellShape)
                 .border(1.dp, wash.wellBorder, wellShape),
             contentAlignment = Alignment.Center,

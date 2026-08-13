@@ -19,8 +19,9 @@ struct ThemeFoundationTests {
   @Test
   func staggeredDelaysBaseByStepTimesIndex() {
     // staggered(index) == base delayed by step·index (index 0 == a zero delay).
+    // step defaults to 0.06 (60ms) — the instrument ticker's cascade stagger.
     #expect(Theme.Motion.staggered(0) == Theme.Motion.smooth.delay(0))
-    #expect(Theme.Motion.staggered(3) == Theme.Motion.smooth.delay(0.04 * 3))
+    #expect(Theme.Motion.staggered(3) == Theme.Motion.smooth.delay(0.06 * 3))
     #expect(
       Theme.Motion.staggered(2, base: Theme.Motion.snappy, step: 0.1)
         == Theme.Motion.snappy.delay(0.1 * 2)

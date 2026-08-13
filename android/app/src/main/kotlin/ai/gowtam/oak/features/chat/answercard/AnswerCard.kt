@@ -16,17 +16,22 @@ import ai.gowtam.oak.wire.SavedTeamRef
 import ai.gowtam.oak.wire.Subject
 import ai.gowtam.oak.wire.TeamWarning
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -43,9 +48,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
@@ -116,14 +123,15 @@ fun AnswerCard(
         )
     }
     val plateShape = RoundedCornerShape(OakRadius.xl)
+    // Instrument type-light plate: the chrome fill is now essentially neutral (see
+    // OakType.plateWash), so this simplifies to a flat neutral fill (typed/multi) or
+    // the sunken-to-raised vertical gradient for the mechanics ink plate. The type
+    // itself carries through the well glow + leading-edge light below, not the fill.
     val plateBrush = remember(wash, oak.surfaceRaised, oak.surfaceSunken) {
-        when {
-            wash.fillSecondary != null ->
-                Brush.linearGradient(listOf(wash.fill, wash.fillSecondary, oak.surfaceRaised))
-            wash.isMechanics ->
-                Brush.verticalGradient(listOf(oak.surfaceSunken, oak.surfaceRaised))
-            else ->
-                Brush.linearGradient(listOf(wash.fill, oak.surfaceRaised))
+        if (wash.isMechanics) {
+            Brush.verticalGradient(listOf(oak.surfaceSunken, oak.surfaceRaised))
+        } else {
+            Brush.linearGradient(listOf(wash.fill, wash.fill))
         }
     }
     val sections = answerSections(answer)
@@ -137,7 +145,21 @@ fun AnswerCard(
     }
     val hasInferences = sections.contains(AnswerSection.INFERENCES)
 
-    Column(
+    // "The reading latches" (soul.md signature moment): the type-light (leading-edge
+    // strip + well-anchored glow) fades in once, 300ms, the moment this — already
+    // finalized — card first mounts (the handoff from StreamingStatus's live accent
+    // icon into the settled plate). Instant under reduce-motion.
+    var latched by remember { mutableStateOf(reduceMotion) }
+    LaunchedEffect(Unit) {
+        if (!reduceMotion) latched = true
+    }
+    val typeLightAlpha by animateFloatAsState(
+        targetValue = if (latched) 1f else 0f,
+        animationSpec = if (reduceMotion) snap() else tween(300, easing = OakMotion.fastEasing),
+        label = "typeLightFade",
+    )
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .testTag(TAG_ANSWER_CARD)
@@ -146,6 +168,23 @@ fun AnswerCard(
             .background(plateBrush, plateShape)
             .border(1.dp, wash.border, plateShape),
     ) {
+        // Type-light glow — anchored top-end, where Subjects sits (soul.md "Type-lit
+        // answer plate": saturated glow from the sprite well). Drawn first (behind
+        // the content column) so it never intercepts touch or dims text.
+        if (!wash.isMechanics && wash.wellGlow != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(220.dp)
+                    .alpha(typeLightAlpha)
+                    .background(
+                        Brush.radialGradient(
+                            listOfNotNull(wash.wellGlow, wash.wellGlowSecondary, Color.Transparent),
+                        ),
+                    ),
+            )
+        }
+        Column(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -243,6 +282,34 @@ fun AnswerCard(
                     .sectionEntrance(index = inferencesIndex, reduceMotion = reduceMotion),
             )
         }
+        }
+        // Leading-edge type light (soul.md): a thin solid strip along the plate's
+        // start edge, in the primary type color; a second segment (60/40) when a
+        // secondary type is present. Drawn above content, clipped to the plate shape.
+        if (!wash.isMechanics && wash.edge != Color.Transparent) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .fillMaxHeight()
+                    .width(3.dp)
+                    .alpha(typeLightAlpha),
+            ) {
+                if (wash.edgeSecondary != null) {
+                    Box(Modifier.weight(0.6f).fillMaxWidth().background(wash.edge))
+                    Box(Modifier.weight(0.4f).fillMaxWidth().background(wash.edgeSecondary))
+                } else {
+                    Box(Modifier.fillMaxHeight().fillMaxWidth().background(wash.edge))
+                }
+            }
+        }
+        // Masthead status LED (soul.md "the reading latches"): blips accent (live) →
+        // its settled status tint over the same 300ms the type-light fades in on.
+        StatusLed(
+            status = answer.status,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(OakSpacing.sm),
+        )
     }
 }
 

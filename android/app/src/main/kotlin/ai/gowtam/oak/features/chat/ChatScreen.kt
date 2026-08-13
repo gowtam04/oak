@@ -4,6 +4,7 @@ import ai.gowtam.oak.features.artifact.ArtifactSheet
 import ai.gowtam.oak.features.artifact.ArtifactViewModel
 import ai.gowtam.oak.features.chat.answercard.AnswerCard
 import ai.gowtam.oak.features.chat.answercard.AnswerCardActions
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakMotion
@@ -45,7 +46,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Photo
@@ -77,9 +77,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -401,7 +403,13 @@ private fun ScopePickerSheet(current: Format, onSelect: (Format) -> Unit) {
                         color = oak.textStrong,
                     )
                     if (selected) {
-                        Icon(Icons.Filled.Check, contentDescription = "Selected", tint = oak.accent)
+                        // Selected row: a red LED dot, not a checkmark (soul.md — the
+                        // record light reads "active"/"selected" across the app).
+                        LedDot(
+                            dotSize = 8.dp,
+                            haloSize = 14.dp,
+                            modifier = Modifier.semantics { contentDescription = "Selected" },
+                        )
                     }
                 }
             }
@@ -598,17 +606,26 @@ private fun EmptyState(format: Format, onExampleTap: (String) -> Unit) {
                     style = MaterialTheme.typography.labelSmall,
                     color = oak.textMuted,
                 )
-                // Scope stamp — mirrors the active format (read-only; chip in header is interactive).
-                Text(
-                    text = format.displayLabel.uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = oak.textStrong,
+                // LED scope stamp (soul.md): a sunken inset well, mono label, and a
+                // glowing red LED reading the active format — mirrors the active
+                // format (read-only; the chip in the header is the interactive control).
+                Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(OakRadius.sm))
-                        .background(oak.accent.copy(alpha = 0.08f))
-                        .border(1.dp, oak.accent.copy(alpha = 0.35f), RoundedCornerShape(OakRadius.sm))
+                        .background(oak.surfaceSunken)
+                        .border(1.dp, oak.borderStrong, RoundedCornerShape(OakRadius.sm))
                         .padding(horizontal = 10.dp, vertical = 5.dp),
-                )
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    LedDot()
+                    Text(
+                        text = format.displayLabel.uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        fontFamily = JetBrainsMonoFamily,
+                        color = oak.textStrong,
+                    )
+                }
             }
             Text(
                 text = "What are we looking up?",
@@ -633,6 +650,30 @@ private fun EmptyState(format: Format, onExampleTap: (String) -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * The Instrument "record light" LED: a solid `oak.accent` dot with a soft halo behind
+ * it (a larger, low-alpha same-color disc — cheap, no `RenderEffect` blur needed).
+ * Shared by the empty-state scope stamp and the scope picker's selected row.
+ */
+@Composable
+private fun LedDot(modifier: Modifier = Modifier, dotSize: Dp = 6.dp, haloSize: Dp = 10.dp) {
+    val oak = LocalOakColors.current
+    Box(modifier = modifier.size(haloSize), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .size(haloSize)
+                .clip(CircleShape)
+                .background(oak.accent.copy(alpha = 0.35f)),
+        )
+        Box(
+            modifier = Modifier
+                .size(dotSize)
+                .clip(CircleShape)
+                .background(oak.accent),
+        )
     }
 }
 

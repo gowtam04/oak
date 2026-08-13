@@ -238,13 +238,12 @@ fun Composer(
                 }
             }
 
-            // The composer field is a surface pill. Focus is AZURE (Oak reserves red for
-            // the live/streaming state), so the border + soft glow turn azure while
-            // editing and red only while a turn streams; borderStrong is the idle hairline.
+            // The composer field is a surface pill. Focus and streaming now read as the
+            // same "record-ready" signal — both turn the border + soft glow oak.accent
+            // (soul.md: red is the record light); borderStrong is the idle hairline.
             var isFocused by remember { mutableStateOf(false) }
             val fieldAccent = when {
-                isStreaming -> oak.accent
-                isFocused -> oak.azure
+                isStreaming || isFocused -> oak.accent
                 else -> oak.borderStrong
             }
             val glowActive = isStreaming || isFocused
@@ -278,11 +277,11 @@ fun Composer(
                 shape = RoundedCornerShape(OakRadius.lg),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = if (isStreaming) oak.accent else oak.azure,
+                    focusedBorderColor = oak.accent,
                     unfocusedBorderColor = if (isStreaming) oak.accent else oak.borderStrong,
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    cursorColor = oak.azure,
+                    cursorColor = oak.accent,
                     focusedTextColor = oak.text,
                     unfocusedTextColor = oak.text,
                     focusedPlaceholderColor = oak.textFaint,

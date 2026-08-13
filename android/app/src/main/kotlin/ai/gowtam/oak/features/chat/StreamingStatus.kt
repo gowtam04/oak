@@ -2,10 +2,12 @@ package ai.gowtam.oak.features.chat
 
 import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.OakType
 import ai.gowtam.oak.ui.rememberReduceMotion
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -46,20 +48,27 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The live in-progress indicator shown while a turn streams: a phase line
@@ -123,20 +132,20 @@ fun StreamingStatus(
         }
     }
     val shellShape = RoundedCornerShape(OakRadius.lg)
+    // Instrument type-light (soul.md): the shell fill goes neutral (typed/mechanics
+    // alike — see OakType.plateWash), softened to a quiet gradient; the type reads
+    // through a faint corner glow instead of a fill tint.
     val shellBrush = remember(wash, oak.surfaceRaised, oak.surfaceSunken) {
-        when {
-            wash.fillSecondary != null ->
-                Brush.linearGradient(listOf(wash.fill, wash.fillSecondary, oak.surfaceRaised))
-            wash.isMechanics ->
-                Brush.linearGradient(
-                    listOf(
-                        oak.surfaceSunken,
-                        oak.surfaceRaised.copy(alpha = 0.92f),
-                        oak.surfaceSunken.copy(alpha = 0.85f),
-                    ),
-                )
-            else ->
-                Brush.linearGradient(listOf(wash.fill, oak.surfaceRaised))
+        if (wash.isMechanics) {
+            Brush.linearGradient(
+                listOf(
+                    oak.surfaceSunken,
+                    oak.surfaceRaised.copy(alpha = 0.92f),
+                    oak.surfaceSunken.copy(alpha = 0.85f),
+                ),
+            )
+        } else {
+            Brush.linearGradient(listOf(oak.surfaceRaised, oak.surfaceRaised))
         }
     }
 
@@ -159,15 +168,33 @@ fun StreamingStatus(
         animated
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(shellShape)
             .background(shellBrush, shellShape)
-            .border(1.dp, wash.border.copy(alpha = 0.85f), shellShape)
-            .padding(OakSpacing.md),
-        verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+            .border(1.dp, wash.border.copy(alpha = 0.85f), shellShape),
     ) {
+        // Faint type-atmosphere glow (soul.md: soften the streaming plate to
+        // neutral+faint glow rather than a tinted fill) — half the answer card's
+        // settled well-glow strength, since this is an in-progress, not final, plate.
+        if (!wash.isMechanics && wash.wellGlow != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(140.dp)
+                    .alpha(0.5f)
+                    .background(
+                        Brush.radialGradient(listOf(wash.wellGlow, Color.Transparent)),
+                    ),
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(OakSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+        ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
             verticalAlignment = Alignment.CenterVertically,
@@ -204,20 +231,32 @@ fun StreamingStatus(
             }
         }
         if (activities.isNotEmpty()) {
+            // Instrument ticker (soul.md): each tool row is a mono readout line — the
+            // friendly noun stays, but it reads as engraved silkscreen, not prose. The
+            // active row's icon is tinted accent (still working); done rows dim as a
+            // whole (icon + text + check) rather than just muting the text.
             Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
                 activities.forEachIndexed { index, activity ->
                     val completed = phase == StreamingPhase.ANSWERING || index < activities.size - 1
-                    Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .toolRowEntrance(index = index, reduceMotion = reduceMotion)
+                            .alpha(if (completed) 0.7f else 1f),
+                        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Icon(
                             imageVector = toolIcon(activity.tool),
                             contentDescription = null,
-                            tint = if (completed) oak.textMuted else oak.azure,
+                            tint = if (completed) oak.textMuted else oak.accent,
                             modifier = Modifier.size(16.dp),
                         )
                         Text(
                             text = activity.label,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (completed) oak.textMuted else oak.text,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = JetBrainsMonoFamily,
+                            color = if (completed) oak.textMuted else oak.textStrong,
                             modifier = Modifier.weight(1f, fill = false),
                         )
                         if (completed) {
@@ -229,6 +268,36 @@ fun StreamingStatus(
         }
         // Soft skeleton lines — plate-in-progress atmosphere (prototype .plate-skeleton).
         StreamingSkeletonLines(reduceMotion = reduceMotion)
+        }
+    }
+}
+
+/**
+ * A one-shot fade + slide entrance for one instrument-ticker row, staggered by
+ * [index] ([OakMotion.STAGGER_STEP_MILLIS] per position) — the Android take on the
+ * iOS ticker cascade, mirroring `AnswerCard.sectionEntrance`. Deliberately animates
+ * opacity/`translationY` on an always-mounted node (never
+ * [androidx.compose.animation.AnimatedVisibility]'s insert/remove) so a row already
+ * on screen never disappears mid-stream; `remember` keys only on `index`, so a row
+ * that has already settled does not restart when the ticker recomposes for a new
+ * activity. No-ops entirely under [reduceMotion].
+ */
+private fun Modifier.toolRowEntrance(index: Int, reduceMotion: Boolean): Modifier = composed {
+    if (reduceMotion) {
+        this
+    } else {
+        val density = LocalDensity.current
+        val alpha = remember(index) { Animatable(0f) }
+        val offsetY = remember(index) { Animatable(with(density) { 4.dp.toPx() }) }
+        LaunchedEffect(index) {
+            delay(index * OakMotion.STAGGER_STEP_MILLIS.toLong())
+            launch { offsetY.animateTo(0f, tween(OakMotion.FADE_MILLIS)) }
+            alpha.animateTo(1f, tween(OakMotion.FADE_MILLIS))
+        }
+        this.graphicsLayer {
+            this.alpha = alpha.value
+            translationY = offsetY.value
+        }
     }
 }
 
