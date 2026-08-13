@@ -9,8 +9,9 @@ import type { AdminSettingsModel } from "@/lib/admin/admin-types";
 // Fixtures — the GET /api/admin/settings projection. Components render
 // fixtures only; no db/repos imported (admin component-test rule).
 const MODELS: AdminSettingsModel[] = [
-  { key: "grok-4.3", label: "xAI Grok 4.3", provider: "xai", configured: true },
+  { key: "grok-4.6", label: "xAI Grok 4.6", provider: "xai", configured: true },
   { key: "grok-4.5", label: "xAI Grok 4.5", provider: "xai", configured: true },
+  { key: "grok-4.3", label: "xAI Grok 4.3", provider: "xai", configured: true },
   {
     key: "claude-sonnet-5",
     label: "Claude Sonnet 5",
@@ -33,7 +34,7 @@ const MODELS: AdminSettingsModel[] = [
 
 function renderView(overrides: Partial<SettingsViewProps> = {}) {
   const props: SettingsViewProps = {
-    activeModel: "grok-4.3",
+    activeModel: "grok-4.6",
     source: "default",
     models: MODELS,
     updatedBy: null,
@@ -46,10 +47,11 @@ function renderView(overrides: Partial<SettingsViewProps> = {}) {
 }
 
 describe("SettingsView", () => {
-  it("renders all five models", () => {
+  it("renders all six models", () => {
     renderView();
-    expect(screen.getByTestId("settings-model-grok-4.3")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-model-grok-4.6")).toBeInTheDocument();
     expect(screen.getByTestId("settings-model-grok-4.5")).toBeInTheDocument();
+    expect(screen.getByTestId("settings-model-grok-4.3")).toBeInTheDocument();
     expect(
       screen.getByTestId("settings-model-claude-sonnet-5"),
     ).toBeInTheDocument();
@@ -80,7 +82,7 @@ describe("SettingsView", () => {
   });
 
   it("calls onSelect with the key when a configured, non-active model is clicked", () => {
-    const props = renderView({ activeModel: "grok-4.3" });
+    const props = renderView({ activeModel: "grok-4.6" });
     fireEvent.click(screen.getByTestId("settings-model-claude-sonnet-5"));
     expect(props.onSelect).toHaveBeenCalledWith("claude-sonnet-5");
   });

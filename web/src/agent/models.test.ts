@@ -29,15 +29,16 @@ import {
 import { GrokProvider } from "@/agent/providers/grok-provider";
 
 describe("model registry", () => {
-  it("exposes the five models in order with stable keys (Grok 4.3 primary)", () => {
+  it("exposes the six models in order with stable keys (Grok 4.6 primary)", () => {
     expect(MODELS.map((m) => m.key)).toEqual([
-      "grok-4.3",
+      "grok-4.6",
       "grok-4.5",
+      "grok-4.3",
       "claude-sonnet-5",
       "claude-sonnet-4.6",
       "gpt-5.5",
     ]);
-    expect(DEFAULT_MODEL_KEY).toBe("grok-4.3");
+    expect(DEFAULT_MODEL_KEY).toBe("grok-4.6");
   });
 
   it("isModelKey only accepts known keys", () => {
@@ -46,6 +47,7 @@ describe("model registry", () => {
     expect(isModelKey("gpt-5.5")).toBe(true);
     expect(isModelKey("grok-4.3")).toBe(true);
     expect(isModelKey("grok-4.5")).toBe(true);
+    expect(isModelKey("grok-4.6")).toBe(true);
     // Retired key — survives only in MODEL_PRICING (legacy), no longer a valid
     // registry key.
     expect(isModelKey("claude")).toBe(false);
@@ -60,6 +62,7 @@ describe("model registry", () => {
     expect(modelLabel("gpt-5.5")).toBe("OpenAI GPT-5.5");
     expect(modelLabel("grok-4.3")).toBe("xAI Grok 4.3");
     expect(modelLabel("grok-4.5")).toBe("xAI Grok 4.5");
+    expect(modelLabel("grok-4.6")).toBe("xAI Grok 4.6");
   });
 });
 
@@ -76,8 +79,8 @@ describe("activeModelKey (repo-backed, async)", () => {
   it("returns the default (Grok) when the repo resolves its fail-soft default", async () => {
     // The repo already fail-softs a missing/invalid setting to DEFAULT_MODEL_KEY;
     // activeModelKey re-validates through the safe resolver.
-    settingsRepo.getActiveModelKey.mockResolvedValue("grok-4.3");
-    await expect(activeModelKey()).resolves.toBe("grok-4.3");
+    settingsRepo.getActiveModelKey.mockResolvedValue("grok-4.6");
+    await expect(activeModelKey()).resolves.toBe("grok-4.6");
   });
 });
 
@@ -111,12 +114,18 @@ describe("resolveModel", () => {
       apiModelId: "grok-4.5",
       effort: "high",
     });
+    expect(resolveModel("grok-4.6")).toMatchObject({
+      key: "grok-4.6",
+      provider: "xai",
+      apiModelId: "grok-4.6",
+      effort: "high",
+    });
   });
 
   it("falls back to the default (Grok) for unknown/missing keys", () => {
-    expect(resolveModel("nonsense").key).toBe("grok-4.3");
-    expect(resolveModel(undefined).key).toBe("grok-4.3");
-    expect(resolveModel(null).key).toBe("grok-4.3");
+    expect(resolveModel("nonsense").key).toBe("grok-4.6");
+    expect(resolveModel(undefined).key).toBe("grok-4.6");
+    expect(resolveModel(null).key).toBe("grok-4.6");
   });
 });
 
@@ -135,6 +144,14 @@ describe("providerFor / isModelConfigured (validate-on-use)", () => {
     const provider = providerFor("grok-4.5");
     expect(provider.kind).toBe("xai");
     expect(provider.apiModelId).toBe("grok-4.5");
+    expect(provider).toBeInstanceOf(GrokProvider);
+  });
+
+  it("builds the native Grok provider for grok-4.6 (shares XAI_API_KEY)", () => {
+    expect(isModelConfigured("grok-4.6")).toBe(true);
+    const provider = providerFor("grok-4.6");
+    expect(provider.kind).toBe("xai");
+    expect(provider.apiModelId).toBe("grok-4.6");
     expect(provider).toBeInstanceOf(GrokProvider);
   });
 
@@ -157,6 +174,7 @@ describe("providerFor / isModelConfigured (validate-on-use)", () => {
       "gpt-5.5": "gpt-5.5",
       "grok-4.3": "grok-4.3",
       "grok-4.5": "grok-4.5",
+      "grok-4.6": "grok-4.6",
     };
     for (const key of [
       "claude-sonnet-5",
@@ -164,6 +182,7 @@ describe("providerFor / isModelConfigured (validate-on-use)", () => {
       "gpt-5.5",
       "grok-4.3",
       "grok-4.5",
+      "grok-4.6",
     ] as const) {
       if (isModelConfigured(key)) {
         const provider = providerFor(key);

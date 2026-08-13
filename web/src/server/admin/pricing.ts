@@ -50,10 +50,12 @@ export type LegacyModelKey = "claude";
  * reconciliation date/sources.
  */
 export const MODEL_PRICING: Record<ModelKey | LegacyModelKey, ModelPrice> = {
-  // xAI Grok 4.3 (primary/default).
-  "grok-4.3": { inputPer1M: 1.25, outputPer1M: 2.5, thinkingPer1M: 2.5 },
+  // xAI Grok 4.6 (primary/default; $2/$6 list price, <200k prompt tier).
+  "grok-4.6": { inputPer1M: 2, outputPer1M: 6, thinkingPer1M: 6 },
   // xAI Grok 4.5 (admin-selectable; $2/$6 list price).
   "grok-4.5": { inputPer1M: 2, outputPer1M: 6, thinkingPer1M: 6 },
+  // xAI Grok 4.3 (admin-selectable).
+  "grok-4.3": { inputPer1M: 1.25, outputPer1M: 2.5, thinkingPer1M: 2.5 },
   // Anthropic Claude Sonnet 5 (introductory rate through 2026-08-31).
   "claude-sonnet-5": { inputPer1M: 2, outputPer1M: 10, thinkingPer1M: 10 },
   // Anthropic Claude Sonnet 4.6 (standard rate).
