@@ -1,4 +1,4 @@
-/* Oak theme lab · five worlds, web + iOS */
+/* Oak theme lab · Box One + four replacements */
 
 const S = {
   garchomp: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/445.png",
@@ -15,162 +15,13 @@ const WHY = "Fake Out has priority +3. Armor Tail (and Queenly Majesty / Dazzlin
 
 const WORLDS = [
   {
-    id: "shift",
-    name: "Night Shift",
-    thesis: "A Japanese research floor at 1am. You file queries. Oak files reports.",
-    hero: "assets/silph-office.jpg",
-    swatches: ["#0e1520", "#d7e4d8", "#c41e3a", "#e8b86d", "#162033"],
-    fonts: "IBM Plex Sans Condensed + IBM Plex Sans + IBM Plex Mono",
-    why: "Oak is a professor inside an institution, not a gadget and not a journal. Citations become filed sources. Scope is a regional office. Uncertainty is a clearance stamp. The fluorescent green-white and navy have nothing to do with Pokéball red or cream paper.",
-    palette: [
-      ["Ground", "#0E1520"],
-      ["Panel", "#162033"],
-      ["Fluorescent", "#D7E4D8"],
-      ["Hanko red", "#C41E3A"],
-      ["Amber data", "#E8B86D"],
-    ],
-    type: "Condensed grotesque for report titles. Plex Sans for body. Plex Mono for clocks, document numbers, the query slip. Labels are 10–11px, tracked, uppercase. Almost no rounding (2px).",
-    motion: [
-      "Folder pull: content enters 10px from the left in 520ms, cubic-bezier(0.2, 0, 0, 1). Elevator doors, not a bounce.",
-      "Hanko stamp: the signature. 1.45 scale, −12° rotation, 180ms delay, then a press to rest. One per inferred claim.",
-      "Teletype ticker while tools run. Each line appears, no caret fireworks.",
-      "Block cursor blinks at 530ms. The clock in the header is real.",
-      "Send: the slip does not bounce. It becomes a filed note with a red corner pip.",
-      "Hover is a fluorescent hairline, never a lift. Press is an 80ms fill flash.",
-      "Scope change: the division name crossfades. A red underline slides.",
-      "iOS tabs are department codes (INQ / BOX / UNIT / ID). Active is fluorescent text, no bubble.",
-    ],
-    micro: [
-      "Report spine color encodes query class: battle red, dex teal, rules amber, meta violet.",
-      "Focus is a 2px rectangular fluorescent ring, offset.",
-      "Auth is researcher access. OTP is a 6-digit clearance, not a friendly code.",
-      "Voice is a desk intercom. Amber VU meters, not an orb.",
-      "History is a cabinet of report titles and timestamps.",
-      "Artifact is a dossier sliding from the right like a pulled folder.",
-      "Empty state is a blank form: FILE A QUERY, not a logo hero.",
-    ],
-    web: "196px department rail. Thin status bar (company, division, time). Bound reports in the well. Command-line composer with a block cursor.",
-    ios: "Slim corporate header. Query slip above a code tab bar. Dossiers rise as sheets. No large titles, no friendly bubbles.",
-    refuse: "Pokéball chassis, cream paper, grain, dashed plates, pill buttons, chat bubbles, spring bounce, rounded display faces.",
-  },
-  {
-    id: "climate",
-    name: "Climate",
-    thesis: "The 18 types are weather. Every answer changes the sky.",
-    hero: "assets/climate-sand.jpg",
-    swatches: ["#3a2418", "#e8b86d", "#7038f8", "#e0c068", "#f7f1e8"],
-    fonts: "Syne + Manrope + DM Mono",
-    why: "Pokémon's native language is type, and every previous Oak skin treated type as a badge. Climate puts type in the air. You feel Dragon/Ground as a late sandstorm before you finish the sentence. The chrome is landscape, not a device.",
-    palette: [
-      ["Dusk sand", "#C9A27A"],
-      ["Violet sky", "#3A2458"],
-      ["Card glass", "rgba(18,16,22,0.58)"],
-      ["Moon ink", "#F7F1E8"],
-      ["Clear dawn", "#8EB4D4"],
-    ],
-    type: "Syne for climate names and the answer lead (wide, a little strange). Manrope for reading. DM Mono for weather codes (SANDSTORM, CLEAR). Type badges are flags: a stripe plus a name, not candy pills.",
-    motion: [
-      "Hero: when the answer resolves, the sky crossfades in 800ms to the subject's climate.",
-      "Cards form like clouds: blur 10px to 0, rise 16px, 700ms [0.16, 1, 0.3, 1].",
-      "Fine dust drifts on sand/ground/rock answers. Electric would spark. Ghost would fog. Particles stay under 35% opacity.",
-      "Starter fronts approach on load, staggered 70ms.",
-      "Scope change is wind: content shears 6px and settles.",
-      "Voice: the sky pulses with amplitude. A quiet brightness, not a scale bounce.",
-      "Composer focus brightens the horizon glass.",
-    ],
-    micro: [
-      "Empty is a clear dawn. The first answer is what brings weather.",
-      "Uncertainty is a folded weather advisory, not a warning triangle.",
-      "Artifact is a field glass over the landscape.",
-      "Teams are a line of small climates, one sky each.",
-      "iOS tab bar is four instruments sitting in the fog above the home bar.",
-      "Text never sits on raw sky. Cards are 58–62% opaque glass.",
-    ],
-    web: "No sidebar. A horizon bar with location (scope) and weather code. Reports float in the sky. Composer is a fog pill at the bottom.",
-    ios: "Full-bleed climate. Translucent horizon composer. Sheets are weather glass. The moon/location lives in the header, not a chip farm.",
-    refuse: "Device bezels, record-light red, paper grain, equal starter chips, Inter, purple AI mesh on black.",
-  },
-  {
-    id: "press",
-    name: "Press Box",
-    thesis: "The sports desk that covers the games. Box scores, not chat bubbles.",
-    hero: "assets/ladder-lights.jpg",
-    swatches: ["#101114", "#f2f4f6", "#3ddc84", "#f0b429", "#c1121f"],
-    fonts: "Oswald + Source Sans 3 + IBM Plex Mono",
-    why: "Half of Oak is competitive: damage rolls, usage, rosters, speed ties. Treat that half with the graphic dignity of F1 timing and a night game, not gamer neon and not a notebook. Numbers are the identity.",
-    palette: [
-      ["Stadium night", "#101114"],
-      ["Panel", "#181B21"],
-      ["Live green", "#3DDC84"],
-      ["Clock amber", "#F0B429"],
-      ["KO red", "#C1121F"],
-    ],
-    type: "Oswald for recap headlines and jersey numbers (condensed, uppercase, tabular). Source Sans 3 for the article. Plex Mono for the crawl and the box score. Radius 0–4px. Hairlines, not cards.",
-    motion: [
-      "Split-flap: the lead numeral rotates in on X in 420ms. That is the signature.",
-      "LIVE pip blinks on a 1.2s step while a turn is open.",
-      "Bottom ticker crawls tool work as play-by-play.",
-      "Rows flash a 200ms green sweep when a number lands.",
-      "No bounce. 140–180ms snaps. Send locks the prompt as a slug (PROMPT FILED).",
-      "iOS titles are condensed and huge. Tabs are FEED / ROSTER / BOX / YOU.",
-    ],
-    micro: [
-      "Damage is a box score, not a paragraph.",
-      "Teams are a numbered roster 01–06.",
-      "History is a standings column with tiny result marks.",
-      "Auth is a press credential.",
-      "Voice shows a live decibel numeral, stadium-board size.",
-      "Artifact is a broadcast player card.",
-    ],
-    web: "240px feed rail. League header. Recap plus box-score module. Persistent crawl. Composer is a slug line with a live-green go key.",
-    ios: "Large condensed title. Recap stacks over the score module. Tab bar is league lettering. Sheets are player cards.",
-    refuse: "Warm paper, rounded blobs, Pokéball chrome, playful bounce, badge soup, ChatGPT bubbles.",
-  },
-  {
-    id: "garden",
-    name: "Night Garden",
-    thesis: "Oak is a tree. Knowledge grows in the dark.",
-    hero: "assets/garden-moon.jpg",
-    swatches: ["#07110c", "#e8f0e4", "#c4e87a", "#e89b6c", "#0e2218"],
-    fonts: "Newsreader + Figtree + IBM Plex Mono",
-    why: "The name is a tree and nobody has taken that seriously. This is not wellness beige and not a lab. It is a moonlit grove. History is growth rings. Voice is moths. Uncertainty is a folded leaf. The curiosity half of Oak finally has a home.",
-    palette: [
-      ["Soil", "#07110C"],
-      ["Canopy", "#0E2218"],
-      ["Moon", "#E8F0E4"],
-      ["Sap", "#C4E87A"],
-      ["Blossom", "#E89B6C"],
-    ],
-    type: "Newsreader italic for the lead (a garden journal, optical sizes). Figtree for the rest. Mono in sap green for numbers. Organic radii 20–28px. Soft moon-glow, green-tinted, never black drop shadows.",
-    motion: [
-      "Growth: answers unfurl from 96% and 10px below, 800ms [0.22, 1, 0.36, 1].",
-      "Sap line draws down the left rail while tools run.",
-      "Sprites breathe 1.00–1.03 over 4s. Living, not bouncing.",
-      "Send ripples the basin (box-shadow pulse).",
-      "History hover expands a ring.",
-      "Voice gathers moths (four drifting points).",
-      "Scope lives in the moon. Phase shifts when the generation changes.",
-    ],
-    micro: [
-      "Empty: What should we grow? Four seeds, not chips.",
-      "Citations are pressed blossom labels.",
-      "Artifact is a pressed-leaf sheet.",
-      "Teams are a bed of six plants.",
-      "Auth is a gardener's mark, quiet, serif.",
-      "iOS tab bar is four seed words over soil.",
-    ],
-    web: "A 72px ring rail. A narrow reading path. A stone basin composer. Optional pressed sheet from the right.",
-    ios: "Moon disk as the scope control. Serif lead. Basin above a seed tab bar. Sheets are rounded leaves.",
-    refuse: "Cream craft paper, Fredoka, dashed specimen plates, record-light red, stadium density, hardware bezels.",
-  },
-  {
     id: "box",
     name: "Box One",
     thesis: "Everything lives in a PC box. Scope is wallpaper. Teams are party slots.",
     hero: "assets/box-wallpaper.jpg",
     swatches: ["#e7ecf4", "#3d4c7a", "#5b8def", "#1b2430", "#f7f9fc"],
     fonts: "Outfit + IBM Plex Mono",
-    why: "The most Pokémon spatial system that is not a red gadget. Conversations are boxes. A Pokémon is a cell. Chat is the summary screen writing itself. This is native without becoming a ROM hack.",
+    why: "Kept from the first lab. Cool storage plastic, indigo wallpaper, the PC cursor. Conversations are boxes. A Pokémon is a cell. Chat is the summary screen writing itself.",
     palette: [
       ["Shell", "#E7ECF4"],
       ["Well", "#F7F9FC"],
@@ -178,26 +29,153 @@ const WORLDS = [
       ["Wallpaper", "#3D4C7A"],
       ["Ink", "#1B2430"],
     ],
-    type: "Outfit at 400/600 for everything human. Plex Mono for slot codes and the wallpaper name. Slot radius 16px. The PC cursor is a 3px rounded rect. Wallpaper changes with scope (indigo National Dex, gold Champions, teal SV).",
+    type: "Outfit at 400/600. Plex Mono for slot codes. Slot radius 16px. The PC cursor is a 3px rounded rect.",
     motion: [
-      "Signature: the PC cursor. It follows in 180ms and overshoots to 1.04, then settles. The only theme allowed a tiny overshoot, because that is the game cursor.",
+      "PC cursor follows in 180ms and overshoots to 1.04, then settles.",
       "Slot land: sprites drop 12px in 200ms.",
       "Wallpaper crossfades 400ms on scope change.",
       "Answer is a summary page sliding up from the active slot.",
-      "Streaming: the cursor blinks on an empty SEARCHING slot.",
-      "Teams: six party slots. Hover lifts 2px.",
     ],
     micro: [
-      "Empty box shows a 6×5 grid. Four slots hold starter silhouettes.",
+      "Empty box shows a slot grid. Four slots hold starter silhouettes.",
       "Auth is a trainer ID. OTP is six box codes.",
-      "History is a wall of mini-boxes with wallpapers.",
+      "History is a wall of mini-boxes.",
       "Artifact is the official summary layout: art, types, stat bars.",
-      "Voice: the current slot's sprite waves.",
-      "iOS: wallpaper full-bleed under translucent panels. Swiping boxes is swiping threads.",
     ],
-    web: "Box list on the left. Current box in the center. Optional summary pane. Composer sits in a party bar.",
-    ios: "Wallpaper behind glass panels. Party-bar composer. Four-item storage tab. Sheets are summary pages.",
-    refuse: "Night-only chrome, paper grain, hanko stamps, weather particles, stadium crawl, Instrument red thread.",
+    web: "Box list on the left. Current box in the center. Composer sits in a party bar.",
+    ios: "Wallpaper behind glass panels. Party-bar composer. Four-item storage tab.",
+    refuse: "Night-only chrome, paper grain, hanko stamps, weather, stadium crawl.",
+  },
+  {
+    id: "dex",
+    name: "The Dex",
+    thesis: "The phone is Oak's original Pokédex. Flip it open. It dings. It speaks the entry.",
+    hero: "css:linear-gradient(165deg,#e23b32 0%,#c62828 42%,#9b1c1c 100%)",
+    swatches: ["#c62828", "#f3ead6", "#3b82f6", "#111811", "#f2c14e"],
+    fonts: "IBM Plex Sans + IBM Plex Mono",
+    why: "In the original series, Professor Oak hands Ash a red clamshell. You flip it open, it dings, a two-frame sprite appears on a small LCD, and a robotic voice (Dexter, in the English dub) says the species, the category, then two sentences of fact. Height and weight sit on a yellow data strip. Blue round buttons, cream interior, red lid. Later regions change the hardware. The object people mean when they say 'a Pokédex from the show' is this one. Oak the app is named after the man who invented it. On iOS you are holding that device.",
+    palette: [
+      ["Lid red", "#C62828"],
+      ["Cream well", "#F3EAD6"],
+      ["Button blue", "#3B82F6"],
+      ["LCD", "#111811"],
+      ["Data yellow", "#F2C14E"],
+    ],
+    type: "Plex Sans for the spoken entry. Plex Mono for silkscreen labels (POKÉDEX, HT, WT, NO.). No display face. The sprite on the dark LCD is the hero, not the type.",
+    motion: [
+      "Empty iOS: the lid is closed. It hinges open 480ms (rotateX) to the cream well. That is the boot.",
+      "Identify: a two-note ding (CSS flash on the yellow strip) then the LCD scanline draws the sprite.",
+      "Entry types on in the Dexter cadence: name, then category ('The Long Neck Pokémon'), then the fact.",
+      "Streaming is a scan, not a spinner. Horizontal line over the LCD, 900ms loop.",
+      "Buttons depress 2px on tap, like plastic. No spring.",
+      "Voice is Dexter. The yellow strip pulses. The LCD holds the last sprite.",
+    ],
+    micro: [
+      "Lead of every species answer is the show formula: Name. The X Pokémon.",
+      "HT 10'06\" / WT 352.7 lbs sit on the yellow strip, always tabular.",
+      "Scope is which regional chip is seated (Kanto red, National as a second chip).",
+      "Teams are six party lights under the LCD, the way the show implies a roster, not a sports card.",
+      "History is the Pokédex list: number, sprite, name. Conversations, not caught marks.",
+      "Auth: 'This Pokédex is registered to' plus an email and a six-digit ID.",
+    ],
+    web: "A quiet gray desk. The red device is the window. Left hinge rail. Cream well. LCD + entry + yellow strip composer.",
+    ios: "The whole phone is the device. Red chassis. Cream well. LCD at the top. Blue hardware buttons replace the tab bar. No iOS-looking chrome inside the red.",
+    refuse: "Rotom face, Alola yellow, smartphone-skin, pixel fonts, Game Boy green-on-green as the whole UI, merch plastic everywhere except the chassis.",
+  },
+  {
+    id: "day",
+    name: "Daylight",
+    thesis: "A calm daylight app. White, one indigo, no metaphor. The content is the color.",
+    hero: "css:linear-gradient(180deg,#f6f7f9 0%,#e8edf4 100%)",
+    swatches: ["#f6f7f9", "#ffffff", "#3d4c7a", "#1b2430", "#5b8def"],
+    fonts: "Figtree + IBM Plex Mono",
+    why: "Box One's cool palette, stripped of the PC-box story. This is what Oak looks like if it is just a carefully made consumer app: lots of air, one indigo, type badges as the only saturation. For people who thought the first lab was costumed.",
+    palette: [
+      ["Day", "#F6F7F9"],
+      ["Card", "#FFFFFF"],
+      ["Indigo", "#3D4C7A"],
+      ["Ink", "#1B2430"],
+      ["Link", "#5B8DEF"],
+    ],
+    type: "Figtree 400/600. 15px body, 22px lead. Radius 12. Soft tinted shadow, no grain. Pills only for chips.",
+    motion: [
+      "Enter: 8px rise, 280ms, no blur.",
+      "Send: the note settles. No bounce.",
+      "Streaming: a thin indigo bar that inches. That's it.",
+      "Hover is a 1px tighter shadow, not a lift.",
+    ],
+    micro: [
+      "Empty is a short prompt and four text starters. No hero illustration.",
+      "Uncertainty is a single line under the lead, not a banner.",
+      "Teams are a quiet list with sprites, not a grid of worlds.",
+      "iOS uses a standard tab bar. It should feel like a native app, not a skin.",
+    ],
+    web: "Slim left nav. Wide reading column. Composer as a simple field.",
+    ios: "Large title. Native tab bar. White cards on pale gray.",
+    refuse: "Background photos, display type, weather, stamps, hardware chrome, crawl tickers.",
+  },
+  {
+    id: "index",
+    name: "Index",
+    thesis: "A quiet index. Hairlines, tabular numbers, no broadcast.",
+    hero: "css:linear-gradient(180deg,#eef0f3 0%,#d9dee6 100%)",
+    swatches: ["#eef0f3", "#111318", "#5b6570", "#ffffff", "#2f6fed"],
+    fonts: "IBM Plex Sans + IBM Plex Mono",
+    why: "The competitive half of Oak without a stadium. Damage, speed, usage, and teams are rows. Press Box was the loud version of this idea. Index is the same job spoken quietly, like a well-set reference table.",
+    palette: [
+      ["Paper", "#EEF0F3"],
+      ["Ink", "#111318"],
+      ["Mute", "#5B6570"],
+      ["Rule", "#D0D5DC"],
+      ["Mark", "#2F6FED"],
+    ],
+    type: "Plex Sans for prose. Plex Mono 13 for every number and source. Radius 2. No shadows. Rules do the work.",
+    motion: [
+      "Rows do not animate in. The page is just there.",
+      "Streaming is three mono lines, 80ms apart.",
+      "Active row: a 2px mark in indigo on the left. No fill.",
+      "Numbers never flap or count up.",
+    ],
+    micro: [
+      "Damage and priority live in a two-column table under the lead.",
+      "Teams are a numbered list, 1-6, hairline between rows.",
+      "History is an index: date, title, scope. Like a book's back matter.",
+      "Auth is 'Sign in', nothing else.",
+    ],
+    web: "Narrow index rail. Wide article. Tables, not cards.",
+    ios: "Plain navigation title. List rows. No large type.",
+    refuse: "LIVE pips, crawls, jersey numbers as decoration, split-flap, night stadium.",
+  },
+  {
+    id: "guide",
+    name: "Guide",
+    thesis: "A field guide. Chapters, plates, a short entry. Not a garden.",
+    hero: "css:linear-gradient(180deg,#f4f1ea 0%,#e4dfd4 100%)",
+    swatches: ["#f4f1ea", "#1f1c18", "#6b6358", "#ffffff", "#3d4c7a"],
+    fonts: "Source Sans 3 + IBM Plex Mono",
+    why: "The curiosity half of Oak, without moonlight or sap. A modern field guide: a plate for the sprite, a short entry, then the mechanics. Scope is the chapter (National Dex, Johto, Champions). Warm paper only as a quiet page color, no grain, no dashes, no stamps.",
+    palette: [
+      ["Page", "#F4F1EA"],
+      ["Ink", "#1F1C18"],
+      ["Caption", "#6B6358"],
+      ["Plate", "#FFFFFF"],
+      ["Chapter", "#3D4C7A"],
+    ],
+    type: "Source Sans 3. Lead is 22px, not italic display. Captions 12px in the mute. Plates have a 1px rule, radius 4.",
+    motion: [
+      "Plate fades 200ms. No unfurl, no breathe.",
+      "Chapter chip slides 2px when scope changes.",
+      "Streaming is a caption: 'Looking up Armor Tail.'",
+    ],
+    micro: [
+      "Every species answer starts with a plate (sprite + name + types) then the entry.",
+      "Citations are a caption list, not receipts.",
+      "Teams are a page of six small plates.",
+      "History is a table of contents.",
+    ],
+    web: "Chapter rail. Page column, measure about 62ch. Plate then prose.",
+    ios: "Chapter name in the nav. Plate, then entry. Simple tab bar.",
+    refuse: "Serif display, moths, moon disks, growth animations, dashed specimen plates, Fredoka.",
   },
 ];
 
@@ -213,7 +191,28 @@ const SCREENS = [
   ["compare", "All five"],
 ];
 
-const state = { world: "shift", screen: "answer", plat: "web", doctrine: false, view: "picker" };
+const state = { world: "box", screen: "answer", plat: "web", doctrine: false, view: "picker" };
+
+const $ = (id) => document.getElementById(id);
+
+function typeChip(name, hex, kind) {
+  if (kind === "box") {
+    return `<span class="box-type" style="--tc:${hex}">${name}</span>`;
+  }
+  if (kind === "quiet") {
+    return `<span class="quiet-type" style="--tc:${hex}">${name}</span>`;
+  }
+  return `<span style="display:inline-block;padding:2px 7px;border-radius:3px;background:${hex};color:#fff;font-size:10px;letter-spacing:.06em;text-transform:uppercase;margin-right:4px">${name}</span>`;
+}
+
+const PARTY = [
+  { n: "1", img: S.garchomp, name: "Garchomp", types: "Dragon / Ground" },
+  { n: "2", img: S.dragapult, name: "Dragapult", types: "Dragon / Ghost" },
+  { n: "3", img: S.kingambit, name: "Kingambit", types: "Dark / Steel" },
+  { n: "4", img: S.greatTusk, name: "Great Tusk", types: "Ground / Fighting" },
+  { n: "5", img: S.tingLu, name: "Ting-Lu", types: "Dark / Ground" },
+  { n: "6", img: S.farigiraf, name: "Farigiraf", types: "Normal / Psychic" },
+];
 
 function readHash() {
   const h = (location.hash || "").replace(/^#/, "");
@@ -230,48 +229,21 @@ function writeHash() {
   if (location.hash !== next) history.replaceState(null, "", next);
 }
 
-const $ = (id) => document.getElementById(id);
-
-function typeChip(name, hex, kind) {
-  if (kind === "flag") {
-    return `<span class="climate-flag"><i style="background:${hex}"></i>${name}</span>`;
-  }
-  if (kind === "box") {
-    return `<span class="box-type" style="--tc:${hex}">${name}</span>`;
-  }
-  return `<span style="display:inline-block;padding:2px 7px;border-radius:3px;background:${hex};color:#fff;font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-right:4px">${name}</span>`;
-}
-
-const dragon = typeChip("Dragon", "#7038f8");
-const ground = typeChip("Ground", "#e0c068");
-const psychic = typeChip("Psychic", "#f85888");
-const normal = typeChip("Normal", "#a8a878");
-
-function team(n, img, name, types) {
-  return { n, img, name, types };
-}
-const PARTY = [
-  team("01", S.garchomp, "Garchomp", "Dragon / Ground"),
-  team("02", S.dragapult, "Dragapult", "Dragon / Ghost"),
-  team("03", S.kingambit, "Kingambit", "Dark / Steel"),
-  team("04", S.greatTusk, "Great Tusk", "Ground / Fighting"),
-  team("05", S.tingLu, "Ting-Lu", "Dark / Ground"),
-  team("06", S.farigiraf, "Farigiraf", "Normal / Psychic"),
-];
-
-/* ---------- picker ---------- */
 function renderPicker() {
-  $("picker-grid").innerHTML = WORLDS.map((w) => `
-    <button class="world-card" data-enter="${w.id}" type="button">
-      <div class="world-card-hero" style="background-image:url('${w.hero}')"></div>
+  $("picker-grid").innerHTML = WORLDS.map((w) => {
+    const bg = w.hero.startsWith("css:")
+      ? `background:${w.hero.slice(4)}`
+      : `background-image:url('${w.hero}')`;
+    return `<button class="world-card" data-enter="${w.id}" type="button">
+      <div class="world-card-hero" style="${bg}"></div>
       <div class="world-card-body">
         <h2>${w.name}</h2>
         <p>${w.thesis}</p>
         <div class="swatches">${w.swatches.map((c) => `<i style="background:${c}"></i>`).join("")}</div>
         <span class="enter">Enter</span>
       </div>
-    </button>
-  `).join("");
+    </button>`;
+  }).join("");
 }
 
 function renderLabChrome() {
@@ -299,7 +271,7 @@ function renderDoctrine() {
     <p>${w.type}</p>
     <h4>Palette</h4>
     <div class="pal">${w.palette.map(([n, c]) => `<span><i style="background:${c}"></i>${n}</span>`).join("")}</div>
-    <h4>Motion, down to the tick</h4>
+    <h4>Motion</h4>
     <ul>${w.motion.map((m) => `<li>${m}</li>`).join("")}</ul>
     <h4>Micro</h4>
     <ul>${w.micro.map((m) => `<li>${m}</li>`).join("")}</ul>
@@ -314,409 +286,19 @@ function renderDoctrine() {
   `;
 }
 
-/* ---------- shells ---------- */
-function webFrame(world, sky, html) {
-  return `<div class="web-frame play" data-world="${world}" ${sky ? `data-sky="${sky}"` : ""}>${html}</div>`;
+function webFrame(world, html) {
+  return `<div class="web-frame play" data-world="${world}">${html}</div>`;
 }
-function phone(world, sky, html) {
-  return `<div class="phone"><div class="phone-screen play" data-world="${world}" ${sky ? `data-sky="${sky}"` : ""}>
+function phone(world, html) {
+  return `<div class="phone"><div class="phone-screen play" data-world="${world}">
     <div class="island"></div>${html}<div class="home-bar"></div>
   </div></div>`;
 }
-
 function tabs(items, on, cls) {
   return `<nav class="${cls}">${items.map((t) => `<span class="${t === on ? "is-on on" : ""}">${t}</span>`).join("")}</nav>`;
 }
 
-/* ---------- NIGHT SHIFT ---------- */
-function shiftComposer(ios) {
-  return `<div class="shift-composer"><span class="prompt">FILE A QUERY${ios ? "" : "  ·  NAT-DEX DIV."} <i class="shift-cursor"></i></span><span class="shift-go">File</span></div>`;
-}
-function shiftEmpty() {
-  return `<div class="shift-empty">
-    <div class="k">Standby · Nat-Dex Div.</div>
-    <h3>File a query.</h3>
-    <p>Night shift is staffed. Mechanics, locations, and damage are on file. Media (anime, film, manga) is out of division.</p>
-    <div class="shift-slips">
-      <div class="shift-slip"><em>BTL-04</em><span>Does Fake Out work on Farigiraf?</span></div>
-      <div class="shift-slip"><em>DEX-11</em><span>Where does Roaring Moon spawn?</span></div>
-      <div class="shift-slip"><em>RUL-02</em><span>What changed in Gen 5 crits?</span></div>
-      <div class="shift-slip"><em>MTA-01</em><span>What is using Stealth Rock in OU?</span></div>
-    </div>
-  </div>`;
-}
-function shiftAsk() {
-  return `<div class="shift-note">${Q}<i></i></div>`;
-}
-function shiftStream() {
-  return `${shiftAsk()}<div class="shift-ticker">
-    <span>RESOLVING  FARIGIRAF</span>
-    <span>PULLING    MOVE / FAKE OUT</span>
-    <span>PULLING    ABILITY / ARMOR TAIL</span>
-    <span>CROSS-REF  PRIORITY TABLE</span>
-  </div>`;
-}
-function shiftAnswer() {
-  return `${shiftAsk()}<article class="shift-report">
-    <div class="shift-spine"></div>
-    <div class="shift-report-body">
-      <div class="shift-meta"><span>RPT-1842 · BATTLE</span><span>NAT-DEX · FILED 01:14</span></div>
-      <h4>${A}</h4>
-      <p class="why">${WHY}</p>
-      <div class="shift-row">
-        <img class="sprite" src="${S.farigiraf}" alt="" />
-        <div>
-          <b>Farigiraf</b> ${psychic}${normal}<br />
-          <span class="shift-id">#0981 · Armor Tail · source SV index</span>
-        </div>
-        <div class="shift-stamps">
-          <div class="shift-hanko">Inferred</div>
-        </div>
-      </div>
-      <div class="shift-src">
-        SRC-01  get_move / fake-out  priority +3, flinch<br />
-        SRC-02  get_ability / armor-tail  blocks priority &gt; 0<br />
-        SRC-03  get_pokemon / farigiraf  ability slot 1
-      </div>
-    </div>
-  </article>`;
-}
-function shiftArt() {
-  return `${shiftAnswer()}<aside class="shift-dossier">
-    <div class="shift-meta"><span>DOSSIER</span><span>ABIL-044</span></div>
-    <h4 style="font-family:var(--display);font-size:22px;margin:0 0 8px">Armor Tail</h4>
-    <p style="color:var(--mute);font-size:13px;line-height:1.5">The Pokémon's overflowing tail blocks the opposing Pokémon from using priority moves against it or its allies.</p>
-    <div class="shift-src">Filed against Fake Out, Extreme Speed, Aqua Jet, Grassy Glide. Does not block priority status that targets the user (Protect).</div>
-  </aside>`;
-}
-function shiftTeams() {
-  return `<div class="shift-meta"><span>FIELD UNIT 07</span><span>ACTIVE</span></div>
-    <h4 style="font-family:var(--display);font-size:22px;margin:8px 0 12px">Swords / HO</h4>
-    <div class="shift-unit">${PARTY.map((p) => `<div class="shift-badge"><img class="sprite-sm" src="${p.img}" alt="" style="margin:0 auto"/><b>${p.name}</b><small>${p.types}</small></div>`).join("")}</div>`;
-}
-function shiftHist() {
-  return `<div class="shift-hist">
-    <div>Fake Out vs Farigiraf <em>01:14 · BTL</em></div>
-    <div>Roaring Moon spawns <em>00:41 · DEX</em></div>
-    <div>Gen 5 crit table <em>YDAY · RUL</em></div>
-    <div>OU Stealth Rock users <em>YDAY · MTA</em></div>
-  </div>`;
-}
-function shiftAuth() {
-  return `<div class="shift-auth">
-    <div class="k" style="font:500 11px/1 var(--mono);letter-spacing:.18em;color:var(--stamp);text-transform:uppercase">Researcher access</div>
-    <h3>Identify.</h3>
-    <div class="shift-field">you@lab.org</div>
-    <div class="shift-otp"><b>4</b><b>8</b><b>1</b><b></b><b></b><b></b></div>
-  </div>`;
-}
-function shiftVoice() {
-  return `<div class="shift-voice">
-    <div>
-      <div class="k" style="font:500 11px/1 var(--mono);letter-spacing:.18em;color:var(--amber)">INTERCOM OPEN</div>
-      <div class="shift-vu">${"<i style='height:28px'></i>".repeat(12)}</div>
-      <p style="color:var(--mute)">Listening on the desk line.</p>
-    </div>
-  </div>`;
-}
-function shiftWeb(screen) {
-  const rail = `<aside class="shift-rail">
-    <div class="shift-mark">Oak<small>Night research</small></div>
-    <nav class="shift-nav">
-      <span class="${["empty","streaming","answer","artifact","voice"].includes(screen) ? "is-on" : ""}">INQ</span>
-      <span class="${screen === "history" ? "is-on" : ""}">BOX</span>
-      <span class="${screen === "teams" ? "is-on" : ""}">UNIT</span>
-      <span class="${screen === "auth" ? "is-on" : ""}">ID</span>
-    </nav>
-    <div class="shift-clock">SAFFRON<br/>01:14:22<br/>NAT-DEX DIV.</div>
-  </aside>`;
-  const body = {
-    empty: shiftEmpty(),
-    streaming: shiftStream(),
-    answer: shiftAnswer(),
-    artifact: shiftArt(),
-    teams: shiftTeams(),
-    history: shiftHist(),
-    auth: shiftAuth(),
-    voice: shiftVoice(),
-  }[screen];
-  return `<div class="shift-web">${rail}<div class="shift-main">
-    <header class="shift-top"><span>Oak Research</span><span>Nat-Dex Div. · <b>REC</b></span></header>
-    <div class="shift-thread">${body}</div>
-    ${screen === "auth" || screen === "voice" ? "" : shiftComposer(false)}
-  </div></div>`;
-}
-function shiftIOS(screen) {
-  const body = {
-    empty: shiftEmpty(),
-    streaming: shiftStream(),
-    answer: shiftAnswer(),
-    artifact: shiftArt(),
-    teams: shiftTeams(),
-    history: shiftHist(),
-    auth: shiftAuth(),
-    voice: shiftVoice(),
-  }[screen];
-  return `<div class="shift-ios ios-safe">
-    <header class="shift-ios-head"><span>Oak Research</span><span>01:14</span></header>
-    <div class="shift-thread">${body}</div>
-    ${screen === "auth" || screen === "voice" ? "" : shiftComposer(true)}
-    ${tabs(["INQ", "BOX", "UNIT", "ID"], screen === "teams" ? "UNIT" : screen === "history" ? "BOX" : screen === "auth" ? "ID" : "INQ", "shift-ios-tabs")}
-  </div>`;
-}
-
-/* ---------- CLIMATE ---------- */
-function climateSky(screen) {
-  return screen === "empty" || screen === "auth" || screen === "history" ? "clear" : "";
-}
-function climateComposer() {
-  return `<div class="climate-composer"><span>Ask the sky</span><span>↑</span></div>`;
-}
-function climateEmpty() {
-  return `<div class="climate-empty">
-    <h3>What is in the air?</h3>
-    <p>Ask a battle question and the climate will change. Clear skies until then.</p>
-    <div class="climate-fronts">
-      <div class="climate-front">Fake Out on Farigiraf</div>
-      <div class="climate-front">Roaring Moon, where</div>
-      <div class="climate-front">Gen 5 crits</div>
-      <div class="climate-front">OU Stealth Rock</div>
-    </div>
-  </div>`;
-}
-function climateAsk() {
-  return `<div class="climate-ask">${Q}</div>`;
-}
-function climateStream() {
-  return `${climateAsk()}<div class="climate-clouds">
-    <span>A front is building over Farigiraf</span>
-    <span>Reading Fake Out in the pressure</span>
-    <span>Armor Tail is the inversion</span>
-  </div>`;
-}
-function climateAnswer() {
-  return `${climateAsk()}<article class="climate-card">
-    <div class="climate-flags">
-      ${typeChip("Psychic", "#f85888", "flag")}
-      ${typeChip("Normal", "#a8a878", "flag")}
-    </div>
-    <h4>${A}</h4>
-    <p>${WHY}</p>
-    <div class="climate-obs">
-      <img class="sprite" src="${S.farigiraf}" alt="" />
-      <div><b>Farigiraf</b><small>Observed under Armor Tail · National Dex</small></div>
-    </div>
-  </article>`;
-}
-function climateArt() {
-  return `${climateAnswer()}<aside class="climate-glass">
-    <div class="climate-flags">${typeChip("Psychic", "#f85888", "flag")}</div>
-    <h4 style="font-family:var(--display);font-size:26px;margin:8px 0">Armor Tail</h4>
-    <p>A still column of air. Priority cannot cross it. Fake Out, Extreme Speed, Aqua Jet all die at the edge.</p>
-    <img class="sprite-lg" src="${S.farigiraf}" alt="" />
-  </aside>`;
-}
-function climateTeams() {
-  return `<div class="climate-team">${PARTY.map((p) => `<div class="climate-mon"><img class="sprite" src="${p.img}" alt="" /><div>${p.name}</div></div>`).join("")}</div>`;
-}
-function climateHist() {
-  return `<div class="climate-fronts" style="flex-direction:column;align-items:flex-start">
-    <div class="climate-front">Sandstorm · Fake Out / Farigiraf</div>
-    <div class="climate-front">Clear · Roaring Moon</div>
-    <div class="climate-front">Cold front · Gen 5 crits</div>
-  </div>`;
-}
-function climateAuth() {
-  return `<div class="climate-auth"><h3>Leave a mark.</h3><p>A code arrives on the wind.</p>
-    <div class="climate-fronts"><div class="climate-front">you@route.org</div></div></div>`;
-}
-function climateVoice() {
-  return `<div class="climate-voice"><div class="climate-pulse"></div><p>The sky is listening.</p></div>`;
-}
-function climateWeb(screen) {
-  const body = { empty: climateEmpty(), streaming: climateStream(), answer: climateAnswer(), artifact: climateArt(), teams: climateTeams(), history: climateHist(), auth: climateAuth(), voice: climateVoice() }[screen];
-  return `<div class="climate-web"><div class="climate-dust"></div>
-    <header class="climate-horizon"><span class="loc">National Dex</span><span class="wx">${climateSky(screen) ? "CLEAR" : "SANDSTORM"}</span></header>
-    <div class="climate-thread">${body}</div>
-    ${screen === "auth" || screen === "voice" ? "" : climateComposer()}
-  </div>`;
-}
-function climateIOS(screen) {
-  const body = { empty: climateEmpty(), streaming: climateStream(), answer: climateAnswer(), artifact: climateArt(), teams: climateTeams(), history: climateHist(), auth: climateAuth(), voice: climateVoice() }[screen];
-  return `<div class="climate-ios ios-safe"><div class="climate-dust"></div>
-    <header class="climate-horizon"><span class="loc">NatDex</span><span class="wx">${climateSky(screen) ? "CLEAR" : "SAND"}</span></header>
-    <div class="climate-thread">${body}</div>
-    ${screen === "auth" || screen === "voice" ? "" : climateComposer()}
-    ${tabs(["Ask", "Path", "Party", "You"], screen === "teams" ? "Party" : screen === "history" ? "Path" : screen === "auth" ? "You" : "Ask", "climate-ios-tabs")}
-  </div>`;
-}
-
-/* ---------- PRESS BOX ---------- */
-function pressComposer() {
-  return `<div class="press-composer"><div class="prompt">Ask the desk</div><button type="button">GO</button></div>`;
-}
-function pressEmpty() {
-  return `<div class="press-empty">
-    <div class="press-live"><i></i>DESK OPEN</div>
-    <h3>Tonight's card.</h3>
-    <p>Mechanics, calcs, and the ladder. Oak writes the recap. You bring the question.</p>
-    <div class="press-starts">
-      <div>Fake Out<div><small>Does it hit Farigiraf?</small></div></div>
-      <div>Spawns<div><small>Roaring Moon, Area Zero</small></div></div>
-      <div>Rules<div><small>Gen 5 critical hits</small></div></div>
-      <div>Usage<div><small>Stealth Rock in OU</small></div></div>
-    </div>
-  </div>`;
-}
-function pressStream() {
-  return `<div class="press-q">Prompt filed</div><p>${Q}</p>
-    <p class="press-live"><i></i>IN PLAY · resolving Farigiraf · Fake Out · Armor Tail</p>`;
-}
-function pressAnswer() {
-  return `<div class="press-q">${Q}</div>
-    <div class="press-recap">
-      <div>
-        <h4>Fake Out fails.</h4>
-        <p>${WHY}</p>
-        <div class="press-subj"><img class="sprite" src="${S.farigiraf}" alt="" /><div><b>Farigiraf</b><br/>Armor Tail · #981</div></div>
-      </div>
-      <div class="press-score">
-        <div class="n">PRI <em>+3</em></div>
-        <table>
-          <tr><td>Fake Out</td><td>+3 priority</td></tr>
-          <tr><td>Armor Tail</td><td>blocks &gt; 0</td></tr>
-          <tr><td>Flinch</td><td>does not apply</td></tr>
-          <tr><td>Call</td><td>inferred</td></tr>
-        </table>
-      </div>
-    </div>`;
-}
-function pressArt() {
-  return `${pressAnswer()}<aside class="press-card-art">
-    <div class="press-live"><i></i>PLAYER CARD</div>
-    <img class="sprite-lg" src="${S.farigiraf}" alt="" />
-    <h4 style="font-family:var(--display);text-transform:uppercase;margin:8px 0 4px">Armor Tail</h4>
-    <p style="color:var(--mute)">Blocks every priority move aimed at Farigiraf or its ally. Protect still works. First Impression does not.</p>
-  </aside>`;
-}
-function pressTeams() {
-  return `<div class="press-roster">${PARTY.map((p) => `<div class="press-player"><div class="num">${p.n}</div><img class="sprite-sm" src="${p.img}" alt="" /><div><b>${p.name}</b><br/><span style="color:var(--mute);font-size:12px">${p.types}</span></div></div>`).join("")}</div>`;
-}
-function pressHist() {
-  return `<div class="press-row is-on"><b>Fake Out / Farigiraf</b><span>W</span></div>
-    <div class="press-row"><b>Roaring Moon</b><span>W</span></div>
-    <div class="press-row"><b>Gen 5 crits</b><span>W</span></div>
-    <div class="press-row"><b>OU rocks</b><span>W</span></div>`;
-}
-function pressAuth() {
-  return `<div class="press-auth"><h3>Press pass.</h3><p style="color:var(--mute)">Email for a credential. Six digits at the gate.</p>
-    <div class="press-composer"><div class="prompt">you@desk.org</div><button type="button">SEND</button></div></div>`;
-}
-function pressVoice() {
-  return `<div class="press-voice"><div><div class="press-live"><i></i>ON AIR</div><div class="n">-12</div><p>dB · desk mic</p></div></div>`;
-}
-function pressSide() {
-  return `<aside class="press-side"><h6>FEED</h6>
-    <div class="press-row is-on"><b>Farigiraf</b><span>live</span></div>
-    <div class="press-row"><b>Roaring Moon</b><span>1h</span></div>
-    <div class="press-row"><b>Gen 5 crits</b><span>1d</span></div>
-  </aside>`;
-}
-function pressWeb(screen) {
-  const body = { empty: pressEmpty(), streaming: pressStream(), answer: pressAnswer(), artifact: pressArt(), teams: pressTeams(), history: pressHist(), auth: pressAuth(), voice: pressVoice() }[screen];
-  return `<div class="press-web"><div class="press-body">${pressSide()}<div class="press-main">
-    <header class="press-top"><span class="lg">NAT DEX · NIGHT</span><span class="press-live"><i></i>${screen === "streaming" || screen === "voice" ? "LIVE" : "FINAL"}</span></header>
-    <div class="press-thread">${body}${screen === "auth" || screen === "voice" ? "" : pressComposer()}</div>
-  </div></div>
-  <div class="press-ticker"><span>RESOLVE FARIGIRAF · GET MOVE FAKE OUT · GET ABILITY ARMOR TAIL · PRIORITY TABLE · SUBMIT</span></div></div>`;
-}
-function pressIOS(screen) {
-  const body = { empty: pressEmpty(), streaming: pressStream(), answer: pressAnswer(), artifact: pressArt(), teams: pressTeams(), history: pressHist(), auth: pressAuth(), voice: pressVoice() }[screen];
-  return `<div class="press-ios ios-safe">
-    <header class="press-top"><span class="lg">NAT DEX</span><span class="press-live"><i></i>LIVE</span></header>
-    <div class="press-thread">${body}${screen === "auth" || screen === "voice" ? "" : pressComposer()}</div>
-    ${tabs(["FEED", "ROSTER", "BOX", "YOU"], screen === "teams" ? "ROSTER" : screen === "history" ? "BOX" : screen === "auth" ? "YOU" : "FEED", "press-ios-tabs")}
-  </div>`;
-}
-
-/* ---------- NIGHT GARDEN ---------- */
-function gardenComposer() {
-  return `<div class="garden-basin"><span>What should we grow?</span><span style="color:var(--sap)">Plant</span></div>`;
-}
-function gardenEmpty() {
-  return `<div class="garden-empty">
-    <h3>What should we grow?</h3>
-    <p>Ask a question. An answer will unfurl. The grove keeps every ring.</p>
-    <div class="garden-seeds">
-      <div class="garden-seed"><i></i>Does Fake Out work on Farigiraf?</div>
-      <div class="garden-seed"><i></i>Where does Roaring Moon live?</div>
-      <div class="garden-seed"><i></i>How did crits change in Gen 5?</div>
-      <div class="garden-seed"><i></i>Who is setting rocks in OU?</div>
-    </div>
-  </div>`;
-}
-function gardenStream() {
-  return `<div class="garden-ask">${Q}</div>
-    <p style="color:var(--sap);font:400 12px/1.8 var(--mono)">sap rising<br/>finding Farigiraf<br/>tasting Fake Out<br/>Armor Tail is the old wood</p>`;
-}
-function gardenAnswer() {
-  return `<div class="garden-ask">${Q}</div>
-    <article class="garden-leaf">
-      <div><span class="garden-tag">inferred</span><span class="garden-tag">nat dex</span></div>
-      <h4>${A}</h4>
-      <p>${WHY}</p>
-      <div style="display:flex;gap:12px;align-items:center">
-        <img class="sprite garden-breathe" src="${S.farigiraf}" alt="" />
-        <div>Farigiraf · Armor Tail</div>
-      </div>
-    </article>`;
-}
-function gardenArt() {
-  return `${gardenAnswer()}<aside class="garden-press">
-    <span class="garden-tag">pressed</span>
-    <h4 style="font-family:var(--display);font-style:italic;font-size:28px;margin:8px 0">Armor Tail</h4>
-    <p style="color:var(--mute)">A leaf that will not let the fast wind through. Priority dies at the stem.</p>
-    <img class="sprite-lg garden-breathe" src="${S.farigiraf}" alt="" />
-  </aside>`;
-}
-function gardenTeams() {
-  return `<div class="garden-bed">${PARTY.map((p) => `<div class="garden-plant"><img class="sprite garden-breathe" src="${p.img}" alt="" /><div>${p.name}</div></div>`).join("")}</div>`;
-}
-function gardenHist() {
-  return `<div class="garden-seeds">
-    <div class="garden-seed"><i></i>Fake Out and Farigiraf</div>
-    <div class="garden-seed"><i></i>Roaring Moon</div>
-    <div class="garden-seed"><i></i>The Gen 5 crit</div>
-  </div>`;
-}
-function gardenAuth() {
-  return `<div class="garden-auth"><h3>Leave your name in the bark.</h3><p style="color:var(--mute)">A six-digit ring will grow in your inbox.</p></div>`;
-}
-function gardenVoice() {
-  return `<div class="garden-voice"><div><div class="moths"><i></i><i></i><i></i></div><p>The grove is listening.</p></div></div>`;
-}
-function gardenWeb(screen) {
-  const body = { empty: gardenEmpty(), streaming: gardenStream(), answer: gardenAnswer(), artifact: gardenArt(), teams: gardenTeams(), history: gardenHist(), auth: gardenAuth(), voice: gardenVoice() }[screen];
-  return `<div class="garden-web">
-    <aside class="garden-rings"><i class="on"></i><i></i><i></i><i></i><i></i></aside>
-    <div class="garden-path">
-      <div class="garden-top">National Dex, under the moon</div>
-      <div class="garden-thread">${body}</div>
-      ${screen === "auth" || screen === "voice" ? "" : gardenComposer()}
-    </div>
-  </div>`;
-}
-function gardenIOS(screen) {
-  const body = { empty: gardenEmpty(), streaming: gardenStream(), answer: gardenAnswer(), artifact: gardenArt(), teams: gardenTeams(), history: gardenHist(), auth: gardenAuth(), voice: gardenVoice() }[screen];
-  return `<div class="garden-ios ios-safe">
-    <header class="garden-ios-head"><span>Oak</span><div class="garden-moon"></div></header>
-    <div class="garden-thread">${body}</div>
-    ${screen === "auth" || screen === "voice" ? "" : gardenComposer()}
-    ${tabs(["grow", "rings", "bed", "mark"], screen === "teams" ? "bed" : screen === "history" ? "rings" : screen === "auth" ? "mark" : "grow", "garden-ios-tabs")}
-  </div>`;
-}
-
-/* ---------- BOX ONE ---------- */
+/* ---------- BOX ONE (kept) ---------- */
 function boxComposer() {
   return `<div class="box-party"><span class="prompt">Ask Box 1</span><span class="box-send">↑</span></div>`;
 }
@@ -756,9 +338,6 @@ function boxArt() {
     <div class="box-types">${typeChip("Psychic", "#f85888", "box")}${typeChip("Normal", "#a8a878", "box")}</div>
     <h4 style="margin:8px 0 4px">Armor Tail</h4>
     <p style="color:var(--mute)">Summary: priority moves aimed at this Pokémon fail. First Impression, Fake Out, Aqua Jet, Extreme Speed.</p>
-    <div style="margin-top:10px">
-      ${["HP","Atk","Def","SpA","SpD","Spe"].map((s, i) => `<div style="display:flex;gap:8px;align-items:center;font-size:11px;margin:4px 0"><span style="width:28px;color:var(--mute)">${s}</span><div style="flex:1;height:6px;background:#e7ecf4;border-radius:99px"><div style="width:${[70,80,72,90,72,60][i]}%;height:100%;background:var(--cursor);border-radius:99px"></div></div></div>`).join("")}
-    </div>
   </aside>`;
 }
 function boxTeams() {
@@ -803,25 +382,380 @@ function boxIOS(screen) {
   </div>`;
 }
 
-/* ---------- compare ---------- */
+/* ---------- THE DEX ---------- */
+function dexLCD(kind) {
+  if (kind === "blank") {
+    return `<div class="dex-lcd"><div class="dex-scan"></div><div class="dex-lcd-label">STANDBY</div></div>`;
+  }
+  if (kind === "scan") {
+    return `<div class="dex-lcd is-scan"><div class="dex-scan"></div><div class="dex-lcd-label">SEARCHING</div></div>`;
+  }
+  return `<div class="dex-lcd"><img src="${S.farigiraf}" alt="" /><div class="dex-lcd-no">NO. 0981</div></div>`;
+}
+function dexYellow(text, withStats) {
+  const stats = withStats ? `<span>HT 10'06"</span><span>WT 352.7 lbs</span>` : "";
+  return `<div class="dex-yellow">${stats}<span>${text}</span></div>`;
+}
+function dexEmpty() {
+  return `<div class="dex-empty">
+    <p class="dex-ready">Ready.</p>
+    <p class="dex-hint">Point it at a question. It will identify what it can, then speak the entry.</p>
+    <div class="dex-starters">
+      <button type="button">Fake Out / Farigiraf</button>
+      <button type="button">Roaring Moon, where</button>
+      <button type="button">Gen 5 crits</button>
+      <button type="button">OU Stealth Rock</button>
+    </div>
+  </div>`;
+}
+function dexStream() {
+  return `<div class="dex-ask">${Q}</div>
+    ${dexLCD("scan")}
+    <p class="dex-speak">Identifying… Armor Tail. Fake Out. Priority table.</p>`;
+}
+function dexAnswer() {
+  return `<div class="dex-ask">${Q}</div>
+    ${dexLCD("sprite")}
+    <article class="dex-entry">
+      <h4>Farigiraf.</h4>
+      <p class="dex-cat">The Long Neck Pokémon.</p>
+      <p class="dex-fact">${A}</p>
+      <p class="dex-why">${WHY}</p>
+      <p class="dex-src">Inferred from move priority and Armor Tail. National Dex.</p>
+    </article>`;
+}
+function dexArt() {
+  return `${dexAnswer()}<aside class="dex-panel">
+    <div class="dex-lcd-label">DATA</div>
+    <h4>Armor Tail</h4>
+    <p>Opposing Pokémon cannot use priority moves against this Pokémon or its allies. Fake Out, Extreme Speed, Aqua Jet, First Impression.</p>
+    ${dexYellow("ABILITY")}
+  </aside>`;
+}
+function dexTeams() {
+  return `<div class="dex-party">${PARTY.map((p) => `<div class="dex-mon"><img src="${p.img}" alt="" /><b>${p.name}</b></div>`).join("")}</div>`;
+}
+function dexHist() {
+  return `<ol class="dex-list">
+    <li><em>0981</em> Farigiraf · Fake Out</li>
+    <li><em>0967</em> Cyclizar · location</li>
+    <li><em>—</em> Gen 5 critical hits</li>
+    <li><em>—</em> OU Stealth Rock</li>
+  </ol>`;
+}
+function dexAuth() {
+  return `<div class="dex-auth">
+    <div class="dex-lid-mark">POKÉDEX</div>
+    <p>This Pokédex is registered to</p>
+    <div class="dex-field">you@oak.app</div>
+    <div class="dex-id">ID 4 8 1 — — —</div>
+  </div>`;
+}
+function dexVoice() {
+  return `<div class="dex-voice">
+    ${dexLCD("sprite")}
+    <p class="dex-cat">Dexter is speaking.</p>
+    <div class="dex-yellow is-live"><span class="dex-pulse"></span> LISTENING</div>
+  </div>`;
+}
+function dexButtons(screen) {
+  const on = screen === "teams" ? "PARTY" : screen === "history" ? "LIST" : screen === "auth" ? "ID" : "DEX";
+  return `<div class="dex-btns">
+    ${["DEX", "LIST", "PARTY", "ID"].map((t) => `<button type="button" class="${t === on ? "is-on" : ""}">${t}</button>`).join("")}
+  </div>`;
+}
+function dexWeb(screen) {
+  const body = { empty: dexEmpty(), streaming: dexStream(), answer: dexAnswer(), artifact: dexArt(), teams: dexTeams(), history: dexHist(), auth: dexAuth(), voice: dexVoice() }[screen];
+  return `<div class="dex-web">
+    <aside class="dex-hinge">
+      <div class="dex-hinge-red"></div>
+      <div class="dex-hinge-label">OAK<br/>HANDY505</div>
+    </aside>
+    <div class="dex-well">
+      <header class="dex-top"><span>POKÉDEX</span><span>NATIONAL</span></header>
+      <div class="dex-thread">${body}</div>
+      ${screen === "auth" || screen === "voice" ? "" : dexYellow("ASK", screen === "answer" || screen === "artifact")}
+      ${dexButtons(screen)}
+    </div>
+  </div>`;
+}
+function dexIOS(screen) {
+  const closed = screen === "empty";
+  const body = { empty: dexEmpty(), streaming: dexStream(), answer: dexAnswer(), artifact: dexArt(), teams: dexTeams(), history: dexHist(), auth: dexAuth(), voice: dexVoice() }[screen];
+  return `<div class="dex-ios ios-safe ${closed ? "is-closed" : ""}">
+    <div class="dex-lid">${closed ? `<div class="dex-lid-face"><span>POKÉDEX</span><i></i></div>` : ""}</div>
+    <header class="dex-top"><span>POKÉDEX</span><span>NAT</span></header>
+    <div class="dex-thread">${body}</div>
+    ${screen === "auth" || screen === "voice" ? "" : dexYellow("ASK", screen === "answer" || screen === "artifact")}
+    ${dexButtons(screen)}
+  </div>`;
+}
+
+/* ---------- DAYLIGHT ---------- */
+function dayComposer() {
+  return `<div class="day-composer"><span>Ask Oak</span><span class="day-go">Send</span></div>`;
+}
+function dayEmpty() {
+  return `<div class="day-empty">
+    <h3>What do you want to know?</h3>
+    <p>Mechanics, locations, teams, damage. Oak will show its work.</p>
+    <div class="day-starts">
+      <span>Does Fake Out work on Farigiraf?</span>
+      <span>Where does Roaring Moon spawn?</span>
+      <span>What changed in Gen 5 crits?</span>
+      <span>Who is using Stealth Rock in OU?</span>
+    </div>
+  </div>`;
+}
+function dayStream() {
+  return `<div class="day-q">${Q}</div>
+    <div class="day-bar"></div>
+    <p class="day-status">Looking up Farigiraf, Fake Out, Armor Tail</p>`;
+}
+function dayAnswer() {
+  return `<div class="day-q">${Q}</div>
+    <article class="day-card">
+      <div class="day-types">${typeChip("Psychic", "#f85888", "quiet")}${typeChip("Normal", "#a8a878", "quiet")}</div>
+      <h4>${A}</h4>
+      <p>${WHY}</p>
+      <p class="day-note">Inferred. National Dex.</p>
+      <div class="day-subj"><img class="sprite" src="${S.farigiraf}" alt="" /><div><b>Farigiraf</b><br/>Armor Tail</div></div>
+    </article>`;
+}
+function dayArt() {
+  return `${dayAnswer()}<aside class="day-sheet">
+    <h4>Armor Tail</h4>
+    <p>Priority moves aimed at this Pokémon or its ally fail. Protect still works.</p>
+    <img class="sprite-lg" src="${S.farigiraf}" alt="" />
+  </aside>`;
+}
+function dayTeams() {
+  return `<div class="day-list">${PARTY.map((p) => `<div class="day-row"><img class="sprite-sm" src="${p.img}" alt="" /><div><b>${p.name}</b><span>${p.types}</span></div></div>`).join("")}</div>`;
+}
+function dayHist() {
+  return `<div class="day-list">
+    <div class="day-row"><div><b>Fake Out / Farigiraf</b><span>Today</span></div></div>
+    <div class="day-row"><div><b>Roaring Moon</b><span>Yesterday</span></div></div>
+    <div class="day-row"><div><b>Gen 5 crits</b><span>Yesterday</span></div></div>
+  </div>`;
+}
+function dayAuth() {
+  return `<div class="day-empty"><h3>Sign in</h3><p>Email a six-digit code. History and teams stay with the account.</p>
+    <div class="day-composer"><span>you@oak.app</span><span class="day-go">Send</span></div></div>`;
+}
+function dayVoice() {
+  return `<div class="day-voice"><div class="day-dot"></div><p>Listening</p></div>`;
+}
+function dayWeb(screen) {
+  const body = { empty: dayEmpty(), streaming: dayStream(), answer: dayAnswer(), artifact: dayArt(), teams: dayTeams(), history: dayHist(), auth: dayAuth(), voice: dayVoice() }[screen];
+  return `<div class="day-web">
+    <aside class="day-nav">
+      <b>Oak</b>
+      <span class="${["empty","streaming","answer","artifact","voice"].includes(screen) ? "is-on" : ""}">Chat</span>
+      <span class="${screen === "history" ? "is-on" : ""}">History</span>
+      <span class="${screen === "teams" ? "is-on" : ""}">Teams</span>
+      <span class="${screen === "auth" ? "is-on" : ""}">Account</span>
+    </aside>
+    <div class="day-main">
+      <header class="day-top"><span>National Dex</span></header>
+      <div class="day-thread">${body}</div>
+      ${screen === "auth" || screen === "voice" ? "" : dayComposer()}
+    </div>
+  </div>`;
+}
+function dayIOS(screen) {
+  const body = { empty: dayEmpty(), streaming: dayStream(), answer: dayAnswer(), artifact: dayArt(), teams: dayTeams(), history: dayHist(), auth: dayAuth(), voice: dayVoice() }[screen];
+  return `<div class="day-ios ios-safe">
+    <header class="day-top"><span>Oak</span><span>NatDex</span></header>
+    <div class="day-thread">${body}</div>
+    ${screen === "auth" || screen === "voice" ? "" : dayComposer()}
+    ${tabs(["Chat", "Teams", "History", "You"], screen === "teams" ? "Teams" : screen === "history" ? "History" : screen === "auth" ? "You" : "Chat", "day-ios-tabs")}
+  </div>`;
+}
+
+/* ---------- INDEX ---------- */
+function idxComposer() {
+  return `<div class="idx-composer"><span>Query</span><b>Enter</b></div>`;
+}
+function idxEmpty() {
+  return `<div class="idx-empty">
+    <h3>Index</h3>
+    <p>Ask a mechanics, location, or team question. Answers come back as a lead plus a table.</p>
+    <ul>
+      <li>Fake Out on Farigiraf</li>
+      <li>Roaring Moon location</li>
+      <li>Gen 5 critical hits</li>
+      <li>OU Stealth Rock users</li>
+    </ul>
+  </div>`;
+}
+function idxStream() {
+  return `<div class="idx-q">${Q}</div>
+    <pre class="idx-log">resolve  farigiraf
+get_move  fake-out
+get_ability  armor-tail</pre>`;
+}
+function idxAnswer() {
+  return `<div class="idx-q">${Q}</div>
+    <h4>${A}</h4>
+    <p class="idx-why">${WHY}</p>
+    <table class="idx-table">
+      <tr><th>Move</th><td>Fake Out</td></tr>
+      <tr><th>Priority</th><td>+3</td></tr>
+      <tr><th>Ability</th><td>Armor Tail</td></tr>
+      <tr><th>Result</th><td>Move does not execute</td></tr>
+      <tr><th>Call</th><td>Inferred</td></tr>
+    </table>
+    <div class="idx-subj"><img class="sprite-sm" src="${S.farigiraf}" alt="" /> Farigiraf · #0981 · National Dex</div>`;
+}
+function idxArt() {
+  return `${idxAnswer()}<aside class="idx-side">
+    <h4>Armor Tail</h4>
+    <table class="idx-table">
+      <tr><th>Blocks</th><td>priority &gt; 0</td></tr>
+      <tr><th>Allies</th><td>yes</td></tr>
+      <tr><th>Protect</th><td>unaffected</td></tr>
+    </table>
+  </aside>`;
+}
+function idxTeams() {
+  return `<table class="idx-table">${PARTY.map((p) => `<tr><th>${p.n}</th><td><img class="sprite-sm" src="${p.img}" alt="" /> ${p.name}</td><td>${p.types}</td></tr>`).join("")}</table>`;
+}
+function idxHist() {
+  return `<table class="idx-table">
+    <tr><th>15 Aug</th><td>Fake Out / Farigiraf</td><td>NatDex</td></tr>
+    <tr><th>14 Aug</th><td>Roaring Moon</td><td>SV</td></tr>
+    <tr><th>14 Aug</th><td>Gen 5 crits</td><td>Gen 5</td></tr>
+  </table>`;
+}
+function idxAuth() {
+  return `<div class="idx-empty"><h3>Sign in</h3><p>Email, then a six-digit code.</p><div class="idx-composer"><span>you@oak.app</span><b>Send</b></div></div>`;
+}
+function idxVoice() {
+  return `<div class="idx-voice"><p>mic · open</p><h3>−18 dB</h3></div>`;
+}
+function idxWeb(screen) {
+  const body = { empty: idxEmpty(), streaming: idxStream(), answer: idxAnswer(), artifact: idxArt(), teams: idxTeams(), history: idxHist(), auth: idxAuth(), voice: idxVoice() }[screen];
+  return `<div class="idx-web">
+    <aside class="idx-rail">
+      <b>Oak</b>
+      <span class="is-on">Chat</span>
+      <span>History</span>
+      <span>Teams</span>
+    </aside>
+    <div class="idx-main">
+      <header class="idx-top">National Dex</header>
+      <div class="idx-thread">${body}</div>
+      ${screen === "auth" || screen === "voice" ? "" : idxComposer()}
+    </div>
+  </div>`;
+}
+function idxIOS(screen) {
+  const body = { empty: idxEmpty(), streaming: idxStream(), answer: idxAnswer(), artifact: idxArt(), teams: idxTeams(), history: idxHist(), auth: idxAuth(), voice: idxVoice() }[screen];
+  return `<div class="idx-ios ios-safe">
+    <header class="idx-top">Oak · NatDex</header>
+    <div class="idx-thread">${body}</div>
+    ${screen === "auth" || screen === "voice" ? "" : idxComposer()}
+    ${tabs(["Chat", "Teams", "Index", "You"], screen === "teams" ? "Teams" : screen === "history" ? "Index" : screen === "auth" ? "You" : "Chat", "idx-ios-tabs")}
+  </div>`;
+}
+
+/* ---------- GUIDE ---------- */
+function guideComposer() {
+  return `<div class="guide-composer"><span>Look up</span><span>Go</span></div>`;
+}
+function guideEmpty() {
+  return `<div class="guide-empty">
+    <p class="guide-ch">National Dex</p>
+    <h3>Field guide</h3>
+    <p>A short entry, then the mechanics. Scope is the chapter.</p>
+    <ol>
+      <li>Fake Out and Farigiraf</li>
+      <li>Roaring Moon</li>
+      <li>Critical hits, Gen 5</li>
+      <li>Stealth Rock in OU</li>
+    </ol>
+  </div>`;
+}
+function guideStream() {
+  return `<div class="guide-q">${Q}</div>
+    <p class="guide-cap">Looking up Armor Tail.</p>`;
+}
+function guideAnswer() {
+  return `<div class="guide-q">${Q}</div>
+    <figure class="guide-plate">
+      <img class="sprite-lg" src="${S.farigiraf}" alt="" />
+      <figcaption>Farigiraf · Long Neck · Psychic / Normal · #0981</figcaption>
+    </figure>
+    <h4>${A}</h4>
+    <p>${WHY}</p>
+    <p class="guide-cap">Inferred. Sources: Fake Out priority, Armor Tail text.</p>`;
+}
+function guideArt() {
+  return `${guideAnswer()}<aside class="guide-sheet">
+    <figure class="guide-plate">
+      <figcaption>Plate · Armor Tail</figcaption>
+    </figure>
+    <p>Priority moves against this Pokémon or its ally fail.</p>
+  </aside>`;
+}
+function guideTeams() {
+  return `<div class="guide-plates">${PARTY.map((p) => `<figure class="guide-plate sm"><img src="${p.img}" alt="" /><figcaption>${p.name}</figcaption></figure>`).join("")}</div>`;
+}
+function guideHist() {
+  return `<ol class="guide-toc">
+    <li>Fake Out and Farigiraf</li>
+    <li>Roaring Moon</li>
+    <li>Critical hits, Gen 5</li>
+  </ol>`;
+}
+function guideAuth() {
+  return `<div class="guide-empty"><h3>Your copy</h3><p>Sign in to keep chapters and teams.</p>
+    <div class="guide-composer"><span>you@oak.app</span><span>Go</span></div></div>`;
+}
+function guideVoice() {
+  return `<div class="guide-voice"><p class="guide-ch">Listening</p><h3>Speak a name.</h3></div>`;
+}
+function guideWeb(screen) {
+  const body = { empty: guideEmpty(), streaming: guideStream(), answer: guideAnswer(), artifact: guideArt(), teams: guideTeams(), history: guideHist(), auth: guideAuth(), voice: guideVoice() }[screen];
+  return `<div class="guide-web">
+    <aside class="guide-rail">
+      <span class="guide-ch">Ch.</span>
+      <b>National Dex</b>
+      <span>Scarlet / Violet</span>
+      <span>Champions</span>
+      <span>Johto</span>
+    </aside>
+    <div class="guide-page">
+      <div class="guide-thread">${body}</div>
+      ${screen === "auth" || screen === "voice" ? "" : guideComposer()}
+    </div>
+  </div>`;
+}
+function guideIOS(screen) {
+  const body = { empty: guideEmpty(), streaming: guideStream(), answer: guideAnswer(), artifact: guideArt(), teams: guideTeams(), history: guideHist(), auth: guideAuth(), voice: guideVoice() }[screen];
+  return `<div class="guide-ios ios-safe">
+    <header class="guide-ios-head"><span>Oak</span><span class="guide-ch">NatDex</span></header>
+    <div class="guide-thread">${body}</div>
+    ${screen === "auth" || screen === "voice" ? "" : guideComposer()}
+    ${tabs(["Guide", "Party", "Contents", "You"], screen === "teams" ? "Party" : screen === "history" ? "Contents" : screen === "auth" ? "You" : "Guide", "guide-ios-tabs")}
+  </div>`;
+}
+
+/* ---------- compare + stage ---------- */
 function compareView() {
   const cards = {
-    shift: `<div class="compare-mini play" data-world="shift">${shiftAnswer()}</div>`,
-    climate: `<div class="compare-mini play" data-world="climate" style="position:relative;overflow:hidden"><div class="climate-dust"></div>${climateAnswer()}</div>`,
-    press: `<div class="compare-mini play" data-world="press">${pressAnswer()}</div>`,
-    garden: `<div class="compare-mini play" data-world="garden">${gardenAnswer()}</div>`,
     box: `<div class="compare-mini play" data-world="box">${boxAnswer()}</div>`,
+    dex: `<div class="compare-mini play" data-world="dex">${dexAnswer()}</div>`,
+    day: `<div class="compare-mini play" data-world="day">${dayAnswer()}</div>`,
+    index: `<div class="compare-mini play" data-world="index">${idxAnswer()}</div>`,
+    guide: `<div class="compare-mini play" data-world="guide">${guideAnswer()}</div>`,
   };
   return `<div class="compare-grid">${WORLDS.map((w) => `<div class="compare-col"><h5>${w.name}</h5>${cards[w.id]}</div>`).join("")}</div>`;
 }
 
-/* ---------- render stage ---------- */
-const WEB = { shift: shiftWeb, climate: climateWeb, press: pressWeb, garden: gardenWeb, box: boxWeb };
-const IOS = { shift: shiftIOS, climate: climateIOS, press: pressIOS, garden: gardenIOS, box: boxIOS };
-
-function skyFor(world, screen) {
-  return world === "climate" ? climateSky(screen) : "";
-}
+const WEB = { box: boxWeb, dex: dexWeb, day: dayWeb, index: idxWeb, guide: guideWeb };
+const IOS = { box: boxIOS, dex: dexIOS, day: dayIOS, index: idxIOS, guide: guideIOS };
 
 function renderStage() {
   const stage = $("stage");
@@ -831,12 +765,7 @@ function renderStage() {
   }
   const w = state.world;
   const s = state.screen;
-  const sky = skyFor(w, s);
-  if (state.plat === "ios") {
-    stage.innerHTML = phone(w, sky, IOS[w](s));
-  } else {
-    stage.innerHTML = webFrame(w, sky, WEB[w](s));
-  }
+  stage.innerHTML = state.plat === "ios" ? phone(w, IOS[w](s)) : webFrame(w, WEB[w](s));
 }
 
 function replay() {
@@ -903,7 +832,7 @@ function bind() {
   document.addEventListener("keydown", (e) => {
     if ($("lab").hidden) return;
     const idx = WORLDS.findIndex((w) => w.id === state.world);
-    if (e.key === "1" || e.key === "2" || e.key === "3" || e.key === "4" || e.key === "5") {
+    if (e.key >= "1" && e.key <= "5") {
       state.world = WORLDS[Number(e.key) - 1].id;
       renderLabChrome();
       renderStage();
