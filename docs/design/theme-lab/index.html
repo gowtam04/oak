@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Oak · five worlds</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Manrope:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,16..72,400;0,16..72,600;1,16..72,500&family=Oswald:wght@500;600;700&family=Outfit:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="lab.css" />
+</head>
+<body>
+  <div id="picker" class="picker">
+    <header class="picker-head">
+      <p class="picker-kicker">Oak · theme lab</p>
+      <h1>Five worlds. One product.</h1>
+      <p class="picker-lede">
+        Oak is a games assistant that reasons on top of data. Not a merch store, not a kids app, not another chat skin.
+        These five directions start from that fact and go in opposite ways. Pick one, then walk every screen on web and iOS.
+      </p>
+    </header>
+    <div class="picker-grid" id="picker-grid"></div>
+    <p class="picker-foot">Nothing here is the current app. Previous directions (warm paper desk, red hardware instrument) are not in this set.</p>
+  </div>
+
+  <div id="lab" class="lab" hidden>
+    <header class="lab-bar">
+      <button class="lab-back" id="btn-back" type="button">Worlds</button>
+      <nav class="lab-worlds" id="lab-worlds" aria-label="Worlds"></nav>
+      <div class="lab-right">
+        <div class="seg" id="plat-seg" role="group" aria-label="Platform">
+          <button type="button" data-plat="web" class="is-on">Web</button>
+          <button type="button" data-plat="ios">iOS</button>
+        </div>
+        <button class="lab-ghost" id="btn-replay" type="button">Replay motion</button>
+        <button class="lab-ghost" id="btn-doctrine" type="button">Doctrine</button>
+      </div>
+    </header>
+    <nav class="lab-screens" id="lab-screens" aria-label="Screens"></nav>
+    <div class="lab-body">
+      <main class="stage" id="stage"></main>
+      <aside class="doctrine" id="doctrine" hidden></aside>
+    </div>
+  </div>
+
+  <script src="lab.js"></script>
+</body>
+</html>
