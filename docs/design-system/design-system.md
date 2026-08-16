@@ -1,5 +1,10 @@
 # Oak — Design System
 
+> **Superseded (2026-08-16).** Do not implement from this file. The current
+> language is **Signal**: [`../design/signal.md`](../design/signal.md) and
+> [`../design/soul.md`](../design/soul.md). This document is the old warm-paper
+> / Fredoka system and is kept as history.
+
 > The visual language for Oak. Frontend teammates should read this **before**
 > starting any UI work, alongside the `frontend-design` skill. This document
 > provides the *what* (the constraints — tokens, scales, component rules); the

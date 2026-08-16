@@ -1,5 +1,8 @@
 # UI Design Strategy — Oak · "Instrument"
 
+> **Superseded (2026-08-16).** Instrument was not picked. Implement **Signal**:
+> [`signal.md`](./signal.md) and [`soul.md`](./soul.md). This file is history.
+
 > Fable design pass · 2026-08-12 · commit `c7cfc15`
 > Seen via: live production web (oak.gowtam.ai, light + dark, guest session) and a fresh
 > simulator build of the iOS app (screenshots below); Android reviewed by parity doctrine

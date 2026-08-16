@@ -4,6 +4,9 @@ Open `index.html` or serve this folder.
 
 Box One is unchanged. Night Shift, Climate, Press Box, and Night Garden are gone.
 
+**Implement from:** [`../signal.md`](../signal.md) (full guide) and
+[`../soul.md`](../soul.md) (short contract). Signal is the picked direction.
+
 ## Signal (the hybrid)
 
 Daylight structure + Index fact table + true Pokéball red (`#E3350D`) as a signal, not a costume. Red is Send, the live pip, the active mark, and the period in `Oak.`. Not a header slab. Not a clamshell.

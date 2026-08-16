@@ -442,7 +442,7 @@ on Redis being up.
 | [`docs/architecture/design.md`](docs/architecture/design.md)             | Technical design — stack, data store, ingest pipeline, file structure, interfaces, build phases.        |
 | [`docs/features/`](docs/features/)                                       | Per-feature requirements + design: account creation, chat history, team builder, artifact viewer, admin panel, generation scope, [oak-v2 (whole-games)](docs/features/oak-v2/), [voice mode](docs/features/voice-mode/), the [iOS app](docs/features/iphone-app/) and the [Android app](docs/features/android-app/). |
 | [`docs/agent-design/generation-scope-addendum.md`](docs/agent-design/generation-scope-addendum.md) | How the multi-generation scope (Gen 9 + Champions + Gens 5–8) amends the frozen agent-design contract. |
-| [`docs/design-system/`](docs/design-system/)                             | Visual language — color, typography, spacing, component patterns.                                       |
+| [`docs/design/signal.md`](docs/design/signal.md)                         | Visual language to implement (**Signal**). Short contract: [`docs/design/soul.md`](docs/design/soul.md). |
 | [`docs/eval-reports/`](docs/eval-reports/)                               | Judged eval runs (incl. a Grok-vs-Claude A/B).                                                           |
 
 > The architecture doc predates some implementation choices — notably the move
