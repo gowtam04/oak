@@ -74,7 +74,7 @@ img { max-width: 100%; display: block; }
 }
 .picker-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
 }
 .picker-foot {
@@ -296,6 +296,9 @@ img { max-width: 100%; display: block; }
   grid-template-columns: repeat(5, minmax(220px, 1fr));
   gap: 14px;
   width: min(1400px, 98vw);
+}
+.compare-grid.six {
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
 }
 .compare-col { min-width: 0; }
 .compare-col h5 {
@@ -1124,3 +1127,202 @@ img { max-width: 100%; display: block; }
 }
 .guide-voice { padding-top: 40px; }
 .phone .guide-thread h4, .phone .guide-empty h3 { font-size: 20px; }
+
+/* =========================================================================
+   SIGNAL
+   ========================================================================= */
+
+.web-frame[data-world="sig"],
+.phone-screen[data-world="sig"],
+.compare-mini[data-world="sig"] {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --ink: #1b2430;
+  --mute: #5b6b7c;
+  --line: #e3e8ef;
+  --red: #e3350d;
+  --red-soft: #fde8e3;
+  --display: "Figtree", sans-serif;
+  --mono: "IBM Plex Mono", monospace;
+  font-family: var(--display);
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.sig-web { display: grid; grid-template-columns: 200px 1fr; height: 100%; }
+.sig-nav {
+  padding: 20px 14px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sig-nav b { font-size: 18px; margin: 0 8px 16px; letter-spacing: -0.03em; white-space: nowrap; }
+.sig-nav b span, .sig-ios .sig-top b span { color: var(--red); }
+.sig-nav span {
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--mute);
+}
+.sig-nav span.is-on {
+  background: #fff;
+  color: var(--ink);
+  border-radius: 0 8px 8px 0;
+  box-shadow: inset 2px 0 0 var(--red);
+}
+.sig-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.sig-top {
+  padding: 16px 22px 8px;
+  color: var(--mute);
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.sig-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--mute);
+}
+.sig-scope i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--red);
+  display: inline-block;
+}
+.sig-thread { flex: 1; overflow: auto; padding: 8px 22px; min-height: 0; }
+.sig-composer {
+  margin: 8px 18px 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  color: var(--mute);
+}
+.sig-go {
+  color: #fff;
+  background: var(--red);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.sig-go:active { transform: scale(0.98); }
+.sig-empty { max-width: 520px; padding-top: 24px; }
+.sig-empty h3 { font: 600 28px/1.15 var(--display); margin: 0 0 8px; }
+.sig-empty p { color: var(--mute); margin: 0 0 18px; }
+.sig-starts { display: flex; flex-direction: column; gap: 8px; }
+.sig-starts span {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.play .sig-card { animation: rise 280ms var(--ease-snap) both; }
+.sig-q { color: var(--mute); margin: 0 0 12px; }
+.sig-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+.sig-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.sig-card h4 { font: 600 22px/1.25 var(--display); margin: 0 0 8px; }
+.sig-card p { margin: 0 0 8px; color: var(--mute); line-height: 1.5; }
+.sig-note { font-size: 13px; }
+.sig-note em { font-style: normal; font-weight: 600; color: var(--red); }
+.sig-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0 12px;
+  font-size: 13px;
+}
+.sig-table th {
+  text-align: left;
+  font: 500 12px/1 var(--mono);
+  color: var(--mute);
+  width: 28%;
+  padding: 6px 8px 6px 0;
+  border-top: 1px solid var(--line);
+  font-weight: 500;
+}
+.sig-table td {
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  font: 400 13px/1.3 var(--mono);
+}
+.sig-subj { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+.sig-subj span { display: block; color: var(--mute); font-size: 13px; }
+.sig-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--mute);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.sig-live i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--red);
+  animation: blink 1.2s steps(2) infinite;
+}
+.sig-bar {
+  height: 2px;
+  background: var(--red);
+  width: 24%;
+  animation: bar 1.4s var(--ease-out) infinite;
+}
+.sig-list { display: flex; flex-direction: column; gap: 6px; }
+.sig-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.sig-row.is-on { box-shadow: inset 2px 0 0 var(--red); }
+.sig-row span { display: block; color: var(--mute); font-size: 13px; }
+.sig-sheet {
+  position: absolute; top: 48px; right: 0; bottom: 0; width: 320px;
+  background: #fff;
+  border-left: 1px solid var(--line);
+  padding: 18px;
+}
+.web-frame:has(.sig-sheet) .sig-thread { padding-right: 340px; }
+.sig-ios { height: 100%; display: flex; flex-direction: column; }
+.sig-ios .sig-top {
+  padding: 0 16px 8px;
+  font-size: 18px;
+  color: var(--ink);
+}
+.sig-ios .sig-top b { font-size: 18px; }
+.sig-ios .sig-thread { padding: 6px 16px; }
+.sig-ios .sig-composer { margin: 6px 12px 8px; }
+.sig-ios-tabs {
+  position: absolute; left: 0; right: 0; bottom: 18px;
+  display: flex; justify-content: space-around;
+  padding: 10px 0 12px;
+  background: rgb(246 247 249 / 92%);
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--mute);
+}
+.sig-ios-tabs .on { color: var(--red); font-weight: 600; }
+.sig-ios .sig-sheet {
+  position: absolute; inset: auto 10px 88px 10px;
+  width: auto; height: 52%; top: auto;
+  border-radius: 16px; border: 1px solid var(--line);
+}
+.sig-voice { height: 100%; display: grid; place-items: center; text-align: center; }
+.sig-dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--red);
+  margin: 0 auto 10px;
+  animation: blink 1.2s steps(2) infinite;
+}
+.phone .sig-empty h3, .phone .sig-card h4 { font-size: 22px; }

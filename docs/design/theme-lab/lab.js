@@ -15,6 +15,39 @@ const WHY = "Fake Out has priority +3. Armor Tail (and Queenly Majesty / Dazzlin
 
 const WORLDS = [
   {
+    id: "sig",
+    name: "Signal",
+    thesis: "Daylight bones, Index facts, Pokéball red only where something acts.",
+    hero: "css:linear-gradient(180deg,#f6f7f9 0%,#ffffff 55%,#fde8e3 100%)",
+    swatches: ["#f6f7f9", "#ffffff", "#E3350D", "#1b2430", "#e3e8ef"],
+    fonts: "Figtree + IBM Plex Mono",
+    why: "Daylight felt like any calm SaaS app because the brand color was Box One indigo. Index felt like an admin table. Signal keeps Daylight's air, cards, and native iOS chrome, borrows Index's compact fact table for mechanics, and puts true Pokéball red (#E3350D) only on Send, the live pip, the active mark, and the wordmark. Not a red header. Not a clamshell. Not cream.",
+    palette: [
+      ["Day", "#F6F7F9"],
+      ["Card", "#FFFFFF"],
+      ["Pokéball red", "#E3350D"],
+      ["Ink", "#1B2430"],
+      ["Rule", "#E3E8EF"],
+    ],
+    type: "Figtree 400/600 like Daylight. Plex Mono only inside the fact table. Radius 12. Red is never a fill on a large surface.",
+    motion: [
+      "Same 8px / 280ms rise as Daylight.",
+      "Streaming is a 2px red bar and a 6px red pip. No scanlines, no ding.",
+      "Send is red. Press is 0.98 scale.",
+      "Active nav is ink plus a 2px red mark, not a red pill.",
+    ],
+    micro: [
+      "Wordmark Oak with a red period. That is the brand.",
+      "Mechanics answers get a four-row fact table under the lead.",
+      "Inferred is a single red-ink line, not a banner or a stamp.",
+      "Scope is a quiet chip with a red LED dot.",
+      "Type badges stay full chroma. They are the other color in the room.",
+    ],
+    web: "Daylight rail. Red mark on the active item. White answer plate. Fact table. Red Send.",
+    ios: "Native tabs. Selected tab is red. No red status bar. Composer Send is red.",
+    refuse: "Red header slab, red user bubbles, cream well, blue hardware buttons, indigo as brand, stadium crawl.",
+  },
+  {
     id: "box",
     name: "Box One",
     thesis: "Everything lives in a PC box. Scope is wallpaper. Teams are party slots.",
@@ -188,10 +221,10 @@ const SCREENS = [
   ["history", "History"],
   ["auth", "Sign in"],
   ["voice", "Voice"],
-  ["compare", "All five"],
+  ["compare", "All"],
 ];
 
-const state = { world: "box", screen: "answer", plat: "web", doctrine: false, view: "picker" };
+const state = { world: "sig", screen: "answer", plat: "web", doctrine: false, view: "picker" };
 
 const $ = (id) => document.getElementById(id);
 
@@ -573,6 +606,100 @@ function dayIOS(screen) {
   </div>`;
 }
 
+/* ---------- SIGNAL ---------- */
+function sigComposer() {
+  return `<div class="sig-composer"><span>Ask Oak</span><span class="sig-go">Send</span></div>`;
+}
+function sigEmpty() {
+  return `<div class="sig-empty">
+    <h3>What do you want to know?</h3>
+    <p>Mechanics, locations, teams, damage. Oak will show its work.</p>
+    <div class="sig-starts">
+      <span>Does Fake Out work on Farigiraf?</span>
+      <span>Where does Roaring Moon spawn?</span>
+      <span>What changed in Gen 5 crits?</span>
+      <span>Who is using Stealth Rock in OU?</span>
+    </div>
+  </div>`;
+}
+function sigStream() {
+  return `<div class="sig-q">${Q}</div>
+    <div class="sig-live"><i></i> Looking up Farigiraf, Fake Out, Armor Tail</div>
+    <div class="sig-bar"></div>`;
+}
+function sigAnswer() {
+  return `<div class="sig-q">${Q}</div>
+    <article class="sig-card">
+      <div class="sig-meta">
+        ${typeChip("Psychic", "#f85888", "quiet")}${typeChip("Normal", "#a8a878", "quiet")}
+      </div>
+      <h4>${A}</h4>
+      <p>${WHY}</p>
+      <p class="sig-note"><em>Inferred</em> from move priority and Armor Tail.</p>
+      <table class="sig-table">
+        <tr><th>Move</th><td>Fake Out</td></tr>
+        <tr><th>Priority</th><td>+3</td></tr>
+        <tr><th>Ability</th><td>Armor Tail</td></tr>
+        <tr><th>Result</th><td>Does not execute</td></tr>
+      </table>
+      <div class="sig-subj"><img class="sprite" src="${S.farigiraf}" alt="" /><div><b>Farigiraf</b><span>Armor Tail · #0981</span></div></div>
+    </article>`;
+}
+function sigArt() {
+  return `${sigAnswer()}<aside class="sig-sheet">
+    <h4>Armor Tail</h4>
+    <p>Priority moves aimed at this Pokémon or its ally fail. Protect still works.</p>
+    <table class="sig-table">
+      <tr><th>Blocks</th><td>priority &gt; 0</td></tr>
+      <tr><th>Allies</th><td>yes</td></tr>
+    </table>
+    <img class="sprite-lg" src="${S.farigiraf}" alt="" />
+  </aside>`;
+}
+function sigTeams() {
+  return `<div class="sig-list">${PARTY.map((p) => `<div class="sig-row"><img class="sprite-sm" src="${p.img}" alt="" /><div><b>${p.name}</b><span>${p.types}</span></div></div>`).join("")}</div>`;
+}
+function sigHist() {
+  return `<div class="sig-list">
+    <div class="sig-row is-on"><div><b>Fake Out / Farigiraf</b><span>Today · NatDex</span></div></div>
+    <div class="sig-row"><div><b>Roaring Moon</b><span>Yesterday · SV</span></div></div>
+    <div class="sig-row"><div><b>Gen 5 crits</b><span>Yesterday · Gen 5</span></div></div>
+  </div>`;
+}
+function sigAuth() {
+  return `<div class="sig-empty"><h3>Sign in</h3><p>Email a six-digit code. History and teams stay with the account.</p>
+    ${sigComposer()}</div>`;
+}
+function sigVoice() {
+  return `<div class="sig-voice"><div class="sig-dot"></div><p>Listening</p></div>`;
+}
+function sigWeb(screen) {
+  const body = { empty: sigEmpty(), streaming: sigStream(), answer: sigAnswer(), artifact: sigArt(), teams: sigTeams(), history: sigHist(), auth: sigAuth(), voice: sigVoice() }[screen];
+  return `<div class="sig-web">
+    <aside class="sig-nav">
+      <b>Oak<span>.</span></b>
+      <span class="${["empty","streaming","answer","artifact","voice"].includes(screen) ? "is-on" : ""}">Chat</span>
+      <span class="${screen === "history" ? "is-on" : ""}">History</span>
+      <span class="${screen === "teams" ? "is-on" : ""}">Teams</span>
+      <span class="${screen === "auth" ? "is-on" : ""}">Account</span>
+    </aside>
+    <div class="sig-main">
+      <header class="sig-top"><span class="sig-scope"><i></i>National Dex</span></header>
+      <div class="sig-thread">${body}</div>
+      ${screen === "auth" || screen === "voice" ? "" : sigComposer()}
+    </div>
+  </div>`;
+}
+function sigIOS(screen) {
+  const body = { empty: sigEmpty(), streaming: sigStream(), answer: sigAnswer(), artifact: sigArt(), teams: sigTeams(), history: sigHist(), auth: sigAuth(), voice: sigVoice() }[screen];
+  return `<div class="sig-ios ios-safe">
+    <header class="sig-top"><b>Oak<span>.</span></b><span class="sig-scope"><i></i>NatDex</span></header>
+    <div class="sig-thread">${body}</div>
+    ${screen === "auth" || screen === "voice" ? "" : sigComposer()}
+    ${tabs(["Chat", "Teams", "History", "You"], screen === "teams" ? "Teams" : screen === "history" ? "History" : screen === "auth" ? "You" : "Chat", "sig-ios-tabs")}
+  </div>`;
+}
+
 /* ---------- INDEX ---------- */
 function idxComposer() {
   return `<div class="idx-composer"><span>Query</span><b>Enter</b></div>`;
@@ -745,17 +872,18 @@ function guideIOS(screen) {
 /* ---------- compare + stage ---------- */
 function compareView() {
   const cards = {
+    sig: `<div class="compare-mini play" data-world="sig">${sigAnswer()}</div>`,
     box: `<div class="compare-mini play" data-world="box">${boxAnswer()}</div>`,
     dex: `<div class="compare-mini play" data-world="dex">${dexAnswer()}</div>`,
     day: `<div class="compare-mini play" data-world="day">${dayAnswer()}</div>`,
     index: `<div class="compare-mini play" data-world="index">${idxAnswer()}</div>`,
     guide: `<div class="compare-mini play" data-world="guide">${guideAnswer()}</div>`,
   };
-  return `<div class="compare-grid">${WORLDS.map((w) => `<div class="compare-col"><h5>${w.name}</h5>${cards[w.id]}</div>`).join("")}</div>`;
+  return `<div class="compare-grid six">${WORLDS.map((w) => `<div class="compare-col"><h5>${w.name}</h5>${cards[w.id]}</div>`).join("")}</div>`;
 }
 
-const WEB = { box: boxWeb, dex: dexWeb, day: dayWeb, index: idxWeb, guide: guideWeb };
-const IOS = { box: boxIOS, dex: dexIOS, day: dayIOS, index: idxIOS, guide: guideIOS };
+const WEB = { sig: sigWeb, box: boxWeb, dex: dexWeb, day: dayWeb, index: idxWeb, guide: guideWeb };
+const IOS = { sig: sigIOS, box: boxIOS, dex: dexIOS, day: dayIOS, index: idxIOS, guide: guideIOS };
 
 function renderStage() {
   const stage = $("stage");
@@ -832,7 +960,7 @@ function bind() {
   document.addEventListener("keydown", (e) => {
     if ($("lab").hidden) return;
     const idx = WORLDS.findIndex((w) => w.id === state.world);
-    if (e.key >= "1" && e.key <= "5") {
+    if (e.key >= "1" && e.key <= "6") {
       state.world = WORLDS[Number(e.key) - 1].id;
       renderLabChrome();
       renderStage();

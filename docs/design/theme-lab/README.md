@@ -4,6 +4,10 @@ Open `index.html` or serve this folder.
 
 Box One is unchanged. Night Shift, Climate, Press Box, and Night Garden are gone.
 
+## Signal (the hybrid)
+
+Daylight structure + Index fact table + true Pokéball red (`#E3350D`) as a signal, not a costume. Red is Send, the live pip, the active mark, and the period in `Oak.`. Not a header slab. Not a clamshell.
+
 ## What changed
 
 The first four replacements were too much world. This pass keeps one theatrical object (the live Pokédex) and three quiet product languages.
