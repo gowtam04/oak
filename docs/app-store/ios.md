@@ -59,7 +59,22 @@ type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,regulation,showdown
 
 ## What's New (this release)
 
-**1.0.3 (build 36)** — uploaded to App Store Connect 2026-08-13; awaiting review submission.
+**1.1 (build 38)** — TestFlight upload 2026-08-16; Dex hop, subject-sprite tap, profile edge, and the incoming thinking plate. ASC version still 1.1 (created with build 37). What's New written from changes since 1.0.2 (the last version that shipped). 1.0.3 was TestFlight-only and never submitted.
+
+```
+What's new in 1.1
+
+• Retry an answer, edit a typo, or undo a send — no retyping
+• Copy answers as readable text, share a public link, or export a chat
+• Pin turns, fork a thread, and organize history with folders
+• @mention a saved team and tap follow-up chips to keep going
+• A calmer look — quieter chrome, clearer answer cards
+```
+**~340 / 4000 chars.**
+
+Covered since 1.0.2: Chat QoL (`d718812` — retry/edit/undo, human copy, public share, export, pins/forks/folders, @mention, follow-up chips, slashes, persist scope + MRU) and the Signal visual refresh (supersedes the unshipped 1.0.3 Instrument TestFlight notes). Omitted as too internal or small: Grok 4.6 default, Dex blank-browse fix.
+
+**1.0.3 (build 36)** — TestFlight only; train never submitted.
 
 ```
 What's new in 1.0.3
@@ -68,7 +83,6 @@ What's new in 1.0.3
 • Clearer answer cards, tables, and chat layout
 • Same Dex, teams, and calculator — just easier to read
 ```
-**~180 / 4000 chars.**
 
 **1.0.2 (build 34)** — approved; train closed.
 
