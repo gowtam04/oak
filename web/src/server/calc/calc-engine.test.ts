@@ -22,7 +22,13 @@ import {
   describe,
   expect,
   it,
+  vi,
 } from "vitest";
+
+// installAsSingleton → resolve-index → @/data/db (`server-only`). Same harness
+// mock as the other DB-backed node suites; this file otherwise never loads the
+// Next server graph.
+vi.mock("server-only", () => ({}));
 
 import {
   ingest_meta,
