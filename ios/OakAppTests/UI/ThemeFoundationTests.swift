@@ -81,6 +81,10 @@ struct ThemeFoundationTests {
     _ = Color.clear.oakTypeGlowWell(primary: "dragon", secondary: "ground")
     _ = Color.clear.oakSpecimenPlate(.mechanics)
     _ = Color.clear.oakSpecimenPlate(.typed(primary: "fire", secondary: nil))
+    _ = Color.clear.oakSpecimenPlate(
+      .typed(primary: "dragon", secondary: "ghost"),
+      showsLeadingEdge: false
+    )
     #expect(Bool(true))
   }
 

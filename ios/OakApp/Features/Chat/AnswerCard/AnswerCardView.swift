@@ -275,6 +275,7 @@ struct AnswerCardView: View {
             onOpenEntity(.pokemon, subject.name)
           } label: {
             SubjectsView(subjects: [subject])
+              .contentShape(Rectangle())
           }
           .buttonStyle(OakPressableButtonStyle())
           .accessibilityHint("Opens \(subject.name)'s full profile")

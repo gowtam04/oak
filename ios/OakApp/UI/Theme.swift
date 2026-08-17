@@ -645,8 +645,20 @@ extension View {
   ///   to `true` (always shown); the answer card's one-shot "reading latches"
   ///   finalize moment (soul.md §3) passes a `@State` flag here and animates it
   ///   0→1 so the type-light fades in once the turn finalizes.
-  func oakSpecimenPlate(_ atmosphere: Theme.PlateAtmosphere, revealed: Bool = true) -> some View {
-    modifier(OakSpecimenPlateModifier(atmosphere: atmosphere, revealed: revealed))
+  /// - Parameter showsLeadingEdge: When `false`, skip the 3pt type-color leading
+  ///   capsule (full-page Dex/artifact profiles). Fill, radial glow, and border stay.
+  func oakSpecimenPlate(
+    _ atmosphere: Theme.PlateAtmosphere,
+    revealed: Bool = true,
+    showsLeadingEdge: Bool = true
+  ) -> some View {
+    modifier(
+      OakSpecimenPlateModifier(
+        atmosphere: atmosphere,
+        revealed: revealed,
+        showsLeadingEdge: showsLeadingEdge
+      )
+    )
   }
 }
 
@@ -656,6 +668,7 @@ private struct OakSpecimenPlateModifier: ViewModifier {
   @Environment(\.colorScheme) private var colorScheme
   let atmosphere: Theme.PlateAtmosphere
   var revealed: Bool = true
+  var showsLeadingEdge: Bool = true
 
   func body(content: Content) -> some View {
     let shape = RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
@@ -693,8 +706,10 @@ private struct OakSpecimenPlateModifier: ViewModifier {
           .clipShape(shape)
         }
         .overlay(alignment: .leading) {
-          plateEdgeLight(isDark: isDark)
-            .opacity(revealed ? 1 : 0)
+          if showsLeadingEdge {
+            plateEdgeLight(isDark: isDark)
+              .opacity(revealed ? 1 : 0)
+          }
         }
         .overlay {
           shape.strokeBorder(borderColor(isDark: isDark), lineWidth: 1)

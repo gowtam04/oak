@@ -48,11 +48,6 @@ struct ChatView: View {
   /// once (staggered fade), rather than snapping in with the hero.
   @State private var emptyStateAppeared = false
 
-  /// When the current in-flight turn began, for the field-notes trail's elapsed timer
-  /// (§4.03). Set the first frame streaming becomes active, cleared when it ends —
-  /// pure view-layer presentation, so the elapsed reads live without touching the VM.
-  @State private var streamStartedAt: Date?
-
   /// A single scale pulse on the send button, fired when an example chip is tapped so
   /// the eye lands where the action is (§4.01). Skipped under Reduce Motion.
   @State private var sendPulse = false
@@ -124,11 +119,6 @@ struct ChatView: View {
     // (M-AC-UI9.3). Fires only when the newest turn is an assistant answer.
     .onChange(of: model.turns.count) { _, _ in
       if case .assistant = model.turns.last?.content { Haptics.success() }
-    }
-    // Stamp/clear the trail's elapsed-timer origin as a turn starts/ends — view-layer
-    // only, so the timer never reaches into the VM's private `turnStartedAt`.
-    .onChange(of: model.isStreaming) { _, streaming in
-      streamStartedAt = streaming ? Date() : nil
     }
     .navigationTitle("Oak")
     .navigationBarTitleDisplayMode(.inline)
@@ -514,31 +504,15 @@ struct ChatView: View {
     model.send()
   }
 
-  /// The live streaming section: the field-notes trail (with its elapsed timer), then
-  /// either the answer skeleton holding the landing zone (§4.03) or, once prose
-  /// arrives, the streamed markdown (which the terminal answer later replaces,
-  /// authoritatively). A `TimelineView` ticks the trail's elapsed seconds each second
-  /// without a stored counter.
+  /// One incoming plate: status + sunken bars while empty, streamed markdown
+  /// once tokens arrive (the terminal answer later replaces it authoritatively).
   private var inProgressView: some View {
-    TimelineView(.periodic(from: .now, by: 1)) { context in
-      let elapsed = streamStartedAt.map { max(0, Int(context.date.timeIntervalSince($0))) }
-      VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-        StreamingStatusView(
-          phase: model.streamingPhase,
-          activities: model.toolActivities,
-          reconnecting: model.reconnecting,
-          elapsedSeconds: elapsed
-        )
-        if !model.streamingText.isEmpty {
-          MarkdownBlockView(model.streamingText)
-            .font(Theme.body(.body))
-            .foregroundStyle(Theme.textPrimary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-          AnswerSkeleton()
-        }
-      }
-    }
+    IncomingAnswerPlate(
+      phase: model.streamingPhase,
+      activities: model.toolActivities,
+      reconnecting: model.reconnecting,
+      streamingText: model.streamingText
+    )
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 

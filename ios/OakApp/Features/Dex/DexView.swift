@@ -49,25 +49,37 @@ struct DexView: View {
       }
     }
     .task {
-      if model == nil {
-        let initial = appState.lastUsedScope ?? .nationalDex
-        let vm = DexViewModel(dexLookup: services.dexLookup, format: initial)
-        model = vm
-        vm.start()
-      }
+      ensureModel()
+      consumePendingDestination()
     }
-    .onChange(of: appState.pendingDestination) { _, destination in
-      if case let .dex(query) = destination {
-        if let query {
-          let name = query.trimmingCharacters(in: .whitespacesAndNewlines)
-          model?.query = name
-          if !name.isEmpty {
-            path.append(DexEntityRoute(kind: .pokemon, query: name))
-          }
-        }
-        appState.pendingDestination = nil
-      }
+    .onAppear {
+      ensureModel()
+      consumePendingDestination()
     }
+    .onChange(of: appState.pendingDestination) { _, _ in
+      consumePendingDestination()
+    }
+  }
+
+  /// TabView lazily creates this tab after RootView has already written
+  /// `pendingDestination`, so `onChange` alone never fires on first hop.
+  private func consumePendingDestination() {
+    guard let hop = PendingDexHop.consume(appState.pendingDestination) else { return }
+    model?.query = hop.query
+    if let route = hop.route {
+      var next = NavigationPath()
+      next.append(route)
+      path = next
+    }
+    appState.pendingDestination = nil
+  }
+
+  private func ensureModel() {
+    guard model == nil else { return }
+    let initial = appState.lastUsedScope ?? .nationalDex
+    let vm = DexViewModel(dexLookup: services.dexLookup, format: initial)
+    model = vm
+    vm.start()
   }
 
   @ViewBuilder

@@ -34,4 +34,28 @@ enum DexSection: String, CaseIterable, Identifiable, Hashable, Sendable {
 struct DexEntityRoute: Hashable, Sendable {
   let kind: EntityKind
   let query: String
+
+  /// Pokémon profile hop from an "Open X in Dex" chip query. `nil` when empty after trim.
+  static func pokemonPage(named query: String) -> DexEntityRoute? {
+    let name = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !name.isEmpty else { return nil }
+    return DexEntityRoute(kind: .pokemon, query: name)
+  }
+}
+
+/// Pure consume of a Dex-tab hop from ``AppDestination``.
+///
+/// TabView may create ``DexView`` after `pendingDestination` is already set, so
+/// the view must apply this from both `onAppear` and `onChange`.
+struct PendingDexHop: Equatable, Sendable {
+  /// Trimmed search-field text (may be empty when the hop is just "open Dex").
+  let query: String
+  /// Pokémon detail to push, or `nil` when `query` is empty.
+  let route: DexEntityRoute?
+
+  static func consume(_ destination: AppDestination?) -> PendingDexHop? {
+    guard case let .dex(query) = destination else { return nil }
+    let name = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    return PendingDexHop(query: name, route: DexEntityRoute.pokemonPage(named: name))
+  }
 }
