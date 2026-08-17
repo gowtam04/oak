@@ -10,18 +10,18 @@ describe("ReceiptsFooter", () => {
   const citations = CANONICAL_ANSWER.citations;
   const markdown = CANONICAL_ANSWER.reasoning_markdown;
 
-  it("renders a single RECEIPTS disclosure with the source count", () => {
+  it("renders a Why · Sources disclosure with the source count", () => {
     render(
       <ReceiptsFooter reasoningMarkdown={markdown} citations={citations} />,
     );
     const details = screen.getByTestId("receipts-footer") as HTMLDetailsElement;
     expect(details.tagName).toBe("DETAILS");
     expect(screen.getByTestId("receipts-summary")).toHaveTextContent(
-      "RECEIPTS · 2 SOURCES",
+      "Why · Sources (2)",
     );
   });
 
-  it("uses singular SOURCE when there is exactly one citation", () => {
+  it("still names Sources when there is exactly one citation", () => {
     render(
       <ReceiptsFooter
         reasoningMarkdown={markdown}
@@ -29,7 +29,7 @@ describe("ReceiptsFooter", () => {
       />,
     );
     expect(screen.getByTestId("receipts-summary")).toHaveTextContent(
-      "RECEIPTS · 1 SOURCE",
+      "Why · Sources (1)",
     );
   });
 

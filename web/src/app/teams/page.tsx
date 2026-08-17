@@ -27,6 +27,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import AppNav from "@/components/nav/AppNav";
+import OakWordmark from "@/components/brand/OakWordmark";
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useTeams } from "@/lib/hooks/use-teams";
 import type { TeamDetail } from "@/lib/api/teams-client";
@@ -234,7 +235,7 @@ export default function TeamsPage() {
             className="teams-page__wordmark"
             aria-label="Oak — back to chat"
           >
-            Oak
+            <OakWordmark />
           </Link>
         </div>
         <div className="teams-page__band-controls">

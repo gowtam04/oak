@@ -134,15 +134,16 @@ struct EntityDetailView: View {
     pokemonHeader(data)
 
     abilitiesSection(data.abilities)
-    baseStatsSection(data.baseStats, total: data.baseStatTotal)
+    baseStatsSection(data.baseStats, total: data.baseStatTotal, primaryType: data.types.first ?? "normal")
     matchupsSection(data.matchups)
     movepoolSection(data.movepool)
   }
 
   /// The full-width Pokémon hero band: type-glow artwork well (SubjectsView quality)
-  /// over a dual-type wash, plus display name, mono dex, and tappable type chips.
-  /// Wash/glow are enhancement only — chips carry typing as color **and** label
-  /// (M-AC-UI9.3). Soul.md Phase 2.1 artifact continuation.
+  /// over a neutral band lit by a single primary-type radial glow (Phase 2 plate-
+  /// glow language, `Theme.typeGlowBand`), plus display name, mono dex, and
+  /// tappable type chips. Glow is enhancement only — chips carry typing as color
+  /// **and** label (M-AC-UI9.3). Soul.md Phase 2.1 artifact continuation.
   private func pokemonHeader(_ data: PokemonArtifactData) -> some View {
     let primary = data.types.first ?? "normal"
     let secondary = data.types.count > 1 ? data.types[1] : nil
@@ -171,15 +172,16 @@ struct EntityDetailView: View {
     .padding(.vertical, 20)
     .padding(.horizontal, 16)
     .background(
-      Theme.typeGradient(primary: primary, secondary: secondary),
+      Theme.typeGlowBand(primary),
       in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
     )
   }
 
   /// A tinted header band for the non-Pokémon kinds — a left-aligned title (and, for a move, its
-  /// type/damage-class chips) over a faint diagonal wash. Callers pass the wash: a move uses its
-  /// own type gradient, a type uses its type gradient, and abilities/items use the neutral accent
-  /// wash (they have no single type to key off). Radius matches the Pokémon hero (`Radius.lg`).
+  /// type/damage-class chips) over a neutral band with a single radial type glow (Phase 2 plate-
+  /// glow language). Callers pass the background: a move/type uses `Theme.typeGlowBand`, and
+  /// abilities/items use the neutral accent wash (they have no single type to key off). Radius
+  /// matches the Pokémon hero (`Radius.lg`).
   private func headerBand<Background: ShapeStyle, Content: View>(
     background: Background, @ViewBuilder content: () -> Content
   ) -> some View {
@@ -214,15 +216,17 @@ struct EntityDetailView: View {
       }
       return out
     }()
+    // No "Abilities" section head: each row already self-labels
+    // ("Ability"/"Hidden"), so a head above them would just repeat it
+    // (instrumentLabel prune, Phase 3).
     return VStack(alignment: .leading, spacing: 6) {
-      sectionHeader("Abilities", systemImage: "sparkles")
       ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
         infoRow(label: row.0, value: row.1)
       }
     }
   }
 
-  private func baseStatsSection(_ stats: BaseStats, total: Int) -> some View {
+  private func baseStatsSection(_ stats: BaseStats, total: Int, primaryType: String) -> some View {
     let rows: [(String, Int)] = [
       ("HP", stats.hp), ("Atk", stats.atk), ("Def", stats.def),
       ("SpA", stats.spa), ("SpD", stats.spd), ("Spe", stats.spe),
@@ -230,7 +234,7 @@ struct EntityDetailView: View {
     return VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
       sectionHeader("Base stats", systemImage: "chart.bar")
       ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-        StatBar(label: row.0, value: row.1, index: index)
+        StatBar(label: row.0, value: row.1, primaryType: primaryType, index: index)
       }
       // BST summary in the instrument/mono voice — reinforces the data register.
       HStack(alignment: .firstTextBaseline) {
@@ -253,8 +257,11 @@ struct EntityDetailView: View {
     let quadWeak = Set(matchups.quadWeakTo ?? [])
     let quadResist = Set(matchups.quadResists ?? [])
     if !matchups.weakTo.isEmpty || !matchups.resists.isEmpty || !matchups.immuneTo.isEmpty {
+      // No "Defensive matchups" section head: "Weak to"/"Resists"/"Immune to"
+      // below are already self-explanatory, and a Pokémon profile has no
+      // adjacent Offensive section to disambiguate against (instrumentLabel
+      // prune, Phase 3).
       VStack(alignment: .leading, spacing: 10) {
-        sectionHeader("Defensive matchups", systemImage: "shield.lefthalf.filled")
         matchupRow("Weak to", matchups.weakTo, marked: quadWeak, mark: "×4")
         matchupRow("Resists", matchups.resists, marked: quadResist, mark: "×¼")
         matchupRow("Immune to", matchups.immuneTo, marked: [], mark: "")
@@ -338,7 +345,7 @@ struct EntityDetailView: View {
   @ViewBuilder
   private func moveBody(_ data: MoveArtifactData) -> some View {
     VStack(alignment: .leading, spacing: 14) {
-      headerBand(background: Theme.typeGradient(data.type)) {
+      headerBand(background: Theme.typeGlowBand(data.type)) {
         Text(data.displayName)
           .font(Theme.display(.title2))
           .foregroundStyle(Theme.textPrimary)
@@ -427,9 +434,7 @@ struct EntityDetailView: View {
   private func typeBody(_ data: TypeArtifactData) -> some View {
     VStack(alignment: .leading, spacing: 14) {
       headerBand(
-        background: Theme.typeGradient(
-          primary: data.types.first ?? "normal", secondary: data.types.dropFirst().first
-        )
+        background: Theme.typeGlowBand(data.types.first ?? "normal")
       ) {
         flow {
           ForEach(data.types, id: \.self) { type in
@@ -482,9 +487,13 @@ struct EntityDetailView: View {
       if !artifact.citations.isEmpty {
         ForEach(Array(artifact.citations.enumerated()), id: \.offset) { _, citation in
           Label {
+            // Real reading text (a citation sentence) — bumped from the faintest
+            // tier to `textSecondary` for dark-mode AA (Phase 3 §6: `textMuted`
+            // is web's `--text-faint`, correct only for decorative glyphs/labels,
+            // not body-critical prose).
             Text("\(displayCitationSource(citation.source)) — \(citation.detail)")
               .font(Theme.body(.caption2))
-              .foregroundStyle(Theme.textMuted)
+              .foregroundStyle(Theme.textSecondary)
               .fixedSize(horizontal: false, vertical: true)
           } icon: {
             Image(systemName: "doc.text")
@@ -654,17 +663,23 @@ struct EntityDetailView: View {
 // MARK: - Stat bar
 
 /// One base-stat row: a label, a value, and a proportional bar. The numeric value carries the
-/// data; the bar's length **and** color are reinforcement, so meaning never rests on them alone
-/// (M-AC-UI9.3) — VoiceOver reads the plain `"\(label) \(value)"`.
+/// data; the bar's length is reinforcement, so meaning never rests on it alone (M-AC-UI9.3) —
+/// VoiceOver reads the plain `"\(label) \(value)"`.
 ///
 /// On first appearance the bar fills from 0 to its value and the number counts up
 /// (`.numericText()`), staggered per row so the six stats cascade (`Theme.Motion.staggered`).
-/// The fill color is banded by value (danger < 60, warning 60–89, success 90–119, azure ≥ 120)
-/// purely as an at-a-glance enhancement. Under Reduce Motion (constraint 2) the bar and number
-/// snap to their final state with no fill animation or count-up.
+/// Track and fill are tinted by the entity's PRIMARY TYPE color (soul.md Phase 2 type-light —
+/// content carries color, not a value-banded traffic-light ramp): a faint type wash over the
+/// sunken well reads as the channel, a full-chroma type fill reads as the readout. The old
+/// value-band semantics (danger < 60, warning 60–89, success 90–119, azure ≥ 120) still carry
+/// real "how good is this stat" information for a battle-math reader, so they survive as a tiny
+/// threshold-colored dot beside the numeral rather than owning the whole bar. Under Reduce
+/// Motion (constraint 2) the bar and number snap to their final state with no fill animation or
+/// count-up.
 private struct StatBar: View {
   let label: String
   let value: Int
+  let primaryType: String
   var index: Int = 0
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -675,8 +690,9 @@ private struct StatBar: View {
   /// stay on-scale.
   private static let ceiling = 255.0
 
-  /// The at-a-glance value band — reinforcement only; the number is the source of truth.
-  private var barColor: Color {
+  /// The at-a-glance value band, demoted to a small dot marker beside the numeral now that the
+  /// bar itself carries the type color — reinforcement only; the number is the source of truth.
+  private var thresholdColor: Color {
     switch value {
     case ..<60: return Theme.danger
     case 60..<90: return Theme.warning
@@ -691,21 +707,33 @@ private struct StatBar: View {
         .font(Theme.body(.caption, weight: .semibold))
         .foregroundStyle(Theme.textSecondary)
         .frame(width: 40, alignment: .leading)
-      // Numeral right-aligned in mono footnote; `.monospacedDigit()` locks width so
-      // numerals never jump between 1-digit and 3-digit values (M-AC-UI9.3).
-      Text(String(displayValue))
-        .font(Theme.mono(.footnote))
-        .monospacedDigit()
-        .contentTransition(.numericText())
-        .foregroundStyle(Theme.textPrimary)
-        .frame(width: 36, alignment: .trailing)
+      HStack(spacing: 4) {
+        // Numeral in mono footnote; `.monospacedDigit()` locks width so numerals
+        // never jump between 1-digit and 3-digit values (M-AC-UI9.3).
+        Text(String(displayValue))
+          .font(Theme.mono(.footnote))
+          .monospacedDigit()
+          .contentTransition(.numericText())
+          .foregroundStyle(Theme.textPrimary)
+          .frame(width: 30, alignment: .trailing)
+        // The old value-band color, kept as a small marker (not the whole bar) so
+        // the "is this stat good" signal survives (M-AC-UI9.3: color + a distinct
+        // shape/position, never color alone).
+        Circle()
+          .fill(thresholdColor)
+          .frame(width: 5, height: 5)
+          .accessibilityHidden(true)
+      }
+      .frame(width: 42, alignment: .trailing)
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
-          // Track in surfaceSunken — recessed well reads as the empty channel.
+          // Sunken well is the channel; a faint type wash over it reads as the
+          // type-lit track (soul.md Phase 2 — content carries color).
           Capsule().fill(Theme.surfaceSunken)
-          // Fill color by value ramp (reinforcement only — numeral is truth).
+          Capsule().fill(Theme.type(primaryType).opacity(0.16))
+          // Full-chroma type fill by value — the readout itself.
           Capsule()
-            .fill(barColor)
+            .fill(Theme.type(primaryType))
             .frame(width: proxy.size.width * fillFraction)
         }
       }

@@ -84,7 +84,7 @@ export default function AppNav({ pathname, onNewChat, children }: AppNavProps) {
       {children != null && <div className="app-nav__slot">{children}</div>}
 
       <nav className="app-nav__reference" aria-label="Reference">
-        <div className="app-nav__ref-heading">Reference</div>
+        <div className="ilabel app-nav__ref-heading">Reference</div>
         {REFERENCE_NAV_ITEMS.map((item) => {
           const active = isNavActive(item.href, pathname);
           return (

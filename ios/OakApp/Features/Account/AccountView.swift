@@ -6,9 +6,8 @@ import SwiftUI
 /// was removed — scope is chosen per conversation via the header scope chip
 /// (`ChatView`), matching web (which also dropped its default toggle).
 ///
-/// Pushed from the More tab's list (nav restructure: Chat / Teams / More), so this
-/// view no longer owns a `NavigationStack` — it supplies the `Form` and title, and
-/// ``MoreView`` supplies the stack.
+/// Hosted as a first-class tab root (Chat / Teams / Dex / Account). The tab wraps
+/// this view in a `NavigationStack`; this view supplies the `Form` and title.
 ///
 /// The view owns its ``AccountViewModel`` (`@State`) and drives it from `Task`s;
 /// all logic and copy live in the view model. Layout uses Dynamic-Type styles and
@@ -26,12 +25,15 @@ import SwiftUI
 /// in text (M-AC-UI9.3).
 struct AccountView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(UpdateViewModel.self) private var updateModel
   @State private var model: AccountViewModel
 
   /// Drives the sign-in sheet (presented over the guest state).
   @State private var showingSignIn = false
   /// Drives the destructive account-deletion confirmation.
   @State private var showingDeleteConfirm = false
+  /// Drives the manual "Check for updates" status alert.
+  @State private var showingUpdateStatus = false
 
   init(model: AccountViewModel) {
     _model = State(initialValue: model)
@@ -62,6 +64,9 @@ struct AccountView: View {
     .onChange(of: model.isSignedIn) { _, signedIn in
       if signedIn { showingSignIn = false }
     }
+    .onChange(of: updateModel.manualMessage) { _, message in
+      showingUpdateStatus = message != nil
+    }
     .alert("Delete account?", isPresented: $showingDeleteConfirm) {
       Button("Delete account", role: .destructive) {
         Task { await model.deleteAccount() }
@@ -70,6 +75,18 @@ struct AccountView: View {
     } message: {
       Text(AccountViewModel.deletionWarning)
     }
+    .alert(
+      "Updates",
+      isPresented: $showingUpdateStatus,
+      actions: {
+        Button("OK", role: .cancel) {
+          updateModel.dismissManualMessage()
+        }
+      },
+      message: {
+        Text(updateModel.manualMessage ?? "")
+      }
+    )
   }
 
   // MARK: Profile header card
@@ -222,6 +239,19 @@ struct AccountView: View {
       Link(destination: Self.supportURL) {
         actionLabel(title: "Support", systemImage: "questionmark.circle")
       }
+      Button {
+        Task { await updateModel.checkManually() }
+      } label: {
+        HStack {
+          actionLabel(title: "Check for updates", systemImage: "arrow.down.app")
+          if updateModel.isChecking {
+            Spacer()
+            ProgressView()
+          }
+        }
+      }
+      .disabled(updateModel.isChecking)
+      .accessibilityHint("Checks the App Store for a newer version of Oak.")
       LabeledContent {
         Text(Self.versionString)
           .font(Theme.mono(.subheadline))
@@ -302,18 +332,28 @@ private struct PreviewAccountAuthService: AuthService {
 
 #Preview("Guest") {
   let state = AppState()
+  let updates = UpdateViewModel(
+    service: PreviewStubUpdateService(),
+    store: InMemoryUpdatePromptStore()
+  )
   return NavigationStack {
     AccountView(model: AccountViewModel(auth: PreviewAccountAuthService(), appState: state))
   }
   .environment(state)
+  .environment(updates)
 }
 
 #Preview("Signed in") {
   let state = AppState()
   state.completeSignIn(email: "ash@pallet.town")
+  let updates = UpdateViewModel(
+    service: PreviewStubUpdateService(),
+    store: InMemoryUpdatePromptStore()
+  )
   return NavigationStack {
     AccountView(model: AccountViewModel(auth: PreviewAccountAuthService(), appState: state))
   }
   .environment(state)
+  .environment(updates)
 }
 #endif

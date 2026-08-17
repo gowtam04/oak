@@ -2,8 +2,8 @@ package ai.gowtam.oak.ui
 
 import android.provider.Settings
 import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
@@ -24,13 +24,13 @@ import androidx.compose.ui.unit.dp
 /**
  * Oak's brand expression over Android / Material 3.
  *
- * Colors are sourced from the web design system (`web/src/app/globals.css`) and
- * re-expressed natively, mirroring the iOS `Theme` (`ios/OakApp/UI/Theme.swift`).
+ * Colors are sourced from Signal (`docs/design/signal.md`) and re-expressed
+ * natively, mirroring the iOS `Theme` (`ios/OakApp/UI/Theme.swift`).
  * Material's [ColorScheme] carries the surface/text/primary ramp so components get
  * Material contrast + dark-mode behavior for free; the *extended* Oak tokens that
- * Material has no slot for (the accent hover/active variants, sunflower, azure, the
- * four semantic colors, the muted/faint text steps) ride a companion [OakColors]
- * over [LocalOakColors].
+ * Material has no slot for (the accent hover/active variants, azure, the four
+ * semantic colors, the muted/faint text steps, `--on-red`) ride a companion
+ * [OakColors] over [LocalOakColors].
  *
  * Color is never the sole carrier of meaning — that pairing with text/icon is the
  * calling view's responsibility; the theme only supplies the palette and ramp.
@@ -70,8 +70,8 @@ data class OakColors(
     val accentHover: Color,
     val accentActive: Color,
     val accentSoft: Color,
-    val sunflower: Color,
-    val sunflowerSoft: Color,
+    /** Text/icon on a solid red fill (`--on-red`). Dark red is too bright for white. */
+    val onRed: Color,
     val azure: Color,
     val azureSoft: Color,
     val success: Color,
@@ -93,60 +93,58 @@ data class OakColors(
     val scrim: Color,
 )
 
-/** Light-mode extended tokens (`:root` in globals.css). */
+/** Light-mode extended tokens (Signal `--*` ramp). */
 val OakLightColors = OakColors(
-    accent = Color(0xFFEE5A5A),
-    accentHover = Color(0xFFE04545),
-    accentActive = Color(0xFFC93B3B),
-    accentSoft = Color(0xFFFCEBEB),
-    sunflower = Color(0xFFF5A524),
-    sunflowerSoft = Color(0xFFFDF1DC),
-    azure = Color(0xFF3AA0E3),
-    azureSoft = Color(0xFFE6F2FB),
-    success = Color(0xFF2FB573),
-    successSoft = Color(0xFFE3F6EC),
-    warning = Color(0xFFF08C00),
-    warningSoft = Color(0xFFFDEFD9),
-    danger = Color(0xFFE0394A),
-    dangerSoft = Color(0xFFFCE8EA),
-    info = Color(0xFF3AA0E3),
+    accent = Color(0xFFE3350D),
+    accentHover = Color(0xFFC92E0B),
+    accentActive = Color(0xFFB02A0A),
+    accentSoft = Color(0xFFFDE8E3),
+    onRed = Color(0xFFFFFFFF),
+    azure = Color(0xFF2B7DD1),
+    azureSoft = Color(0xFFE5F0FA),
+    success = Color(0xFF1F9D61),
+    successSoft = Color(0xFFE4F4EC),
+    warning = Color(0xFFE08700),
+    warningSoft = Color(0xFFFBF0DC),
+    danger = Color(0xFFD6303F),
+    dangerSoft = Color(0xFFFAE7E9),
+    info = Color(0xFF2B7DD1),
     surfaceRaised = Color(0xFFFFFFFF),
-    surfaceSunken = Color(0xFFF7F1EB),
-    border = Color(0xFFE9E0D8),
-    borderStrong = Color(0xFFD8CCC1),
-    textStrong = Color(0xFF2A2521),
-    text = Color(0xFF3D362F),
-    textMuted = Color(0xFF6E625A),
-    textFaint = Color(0xFF94867A),
-    scrim = Color(0x662A2521),
+    surfaceSunken = Color(0xFFEEF0F3),
+    border = Color(0xFFE3E8EF),
+    borderStrong = Color(0xFFD0D6DE),
+    textStrong = Color(0xFF1B2430),
+    text = Color(0xFF2A3340),
+    textMuted = Color(0xFF5B6B7C),
+    textFaint = Color(0xFF8A94A0),
+    scrim = Color(0x66131517),
 )
 
-/** Dark-mode extended tokens (`[data-theme="dark"]` in globals.css). */
+/** Dark-mode extended tokens (Signal `--*` ramp). */
 val OakDarkColors = OakColors(
-    accent = Color(0xFFFF6B6B),
-    accentHover = Color(0xFFFF7E7E),
-    accentActive = Color(0xFFF25C5C),
-    accentSoft = Color(0xFF3A1E1E),
-    sunflower = Color(0xFFF8B73E),
-    sunflowerSoft = Color(0xFF3A2E14),
-    azure = Color(0xFF5BB4EF),
-    azureSoft = Color(0xFF16263A),
-    success = Color(0xFF46C98A),
-    successSoft = Color(0xFF10301F),
-    warning = Color(0xFFFBA53B),
-    warningSoft = Color(0xFF3A2A0F),
-    danger = Color(0xFFFF5C6B),
-    dangerSoft = Color(0xFF3A1518),
-    info = Color(0xFF5BB4EF),
-    surfaceRaised = Color(0xFF2A2420),
-    surfaceSunken = Color(0xFF12100E),
-    border = Color(0xFF3A332E),
-    borderStrong = Color(0xFF4E453F),
-    textStrong = Color(0xFFF5EFE9),
-    text = Color(0xFFE4DAD0),
-    textMuted = Color(0xFFB7A99C),
-    textFaint = Color(0xFF8A7D72),
-    scrim = Color(0x99080605),
+    accent = Color(0xFFFF4A22),
+    accentHover = Color(0xFFFF5F3C),
+    accentActive = Color(0xFFE8431E),
+    accentSoft = Color(0xFF33170F),
+    onRed = Color(0xFF1B1410),
+    azure = Color(0xFF55A0E8),
+    azureSoft = Color(0xFF142433),
+    success = Color(0xFF34C27F),
+    successSoft = Color(0xFF0E2B1D),
+    warning = Color(0xFFF0A030),
+    warningSoft = Color(0xFF33260F),
+    danger = Color(0xFFF04A58),
+    dangerSoft = Color(0xFF331417),
+    info = Color(0xFF55A0E8),
+    surfaceRaised = Color(0xFF22262C),
+    surfaceSunken = Color(0xFF0E1013),
+    border = Color(0xFF2A3038),
+    borderStrong = Color(0xFF3A434C),
+    textStrong = Color(0xFFF2F4F6),
+    text = Color(0xFFD5DAE0),
+    textMuted = Color(0xFF8B949E),
+    textFaint = Color(0xFF6A737D),
+    scrim = Color(0x99000000),
 )
 
 /**
@@ -161,79 +159,79 @@ val LocalOakColors = staticCompositionLocalOf { OakLightColors }
 // ---------------------------------------------------------------------------
 
 private val OakLightColorScheme: ColorScheme = lightColorScheme(
-    primary = Color(0xFFEE5A5A),
+    primary = Color(0xFFE3350D),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFFCEBEB),
-    onPrimaryContainer = Color(0xFF2A2521),
-    secondary = Color(0xFF3AA0E3),
+    primaryContainer = Color(0xFFFDE8E3),
+    onPrimaryContainer = Color(0xFF1B2430),
+    secondary = Color(0xFF2B7DD1),
     onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFE6F2FB),
-    onSecondaryContainer = Color(0xFF2A2521),
-    tertiary = Color(0xFFF5A524),
-    onTertiary = Color(0xFF2A2521),
-    tertiaryContainer = Color(0xFFFDF1DC),
-    onTertiaryContainer = Color(0xFF2A2521),
-    background = Color(0xFFFBF7F4),
-    onBackground = Color(0xFF3D362F),
+    secondaryContainer = Color(0xFFE5F0FA),
+    onSecondaryContainer = Color(0xFF131517),
+    tertiary = Color(0xFFE08700),
+    onTertiary = Color(0xFF131517),
+    tertiaryContainer = Color(0xFFFBF0DC),
+    onTertiaryContainer = Color(0xFF131517),
+    background = Color(0xFFF6F7F9),
+    onBackground = Color(0xFF2A3340),
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF3D362F),
-    surfaceVariant = Color(0xFFF7F1EB),
-    onSurfaceVariant = Color(0xFF6E625A),
+    onSurface = Color(0xFF2A3340),
+    surfaceVariant = Color(0xFFEEF0F3),
+    onSurfaceVariant = Color(0xFF5B6B7C),
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFBF7F4),
-    surfaceContainer = Color(0xFFF7F1EB),
-    surfaceContainerHigh = Color(0xFFF3ECE6),
-    surfaceContainerHighest = Color(0xFFE9E0D8),
-    outline = Color(0xFFD8CCC1),
-    outlineVariant = Color(0xFFE9E0D8),
-    error = Color(0xFFE0394A),
+    surfaceContainerLow = Color(0xFFFFFFFF),
+    surfaceContainer = Color(0xFFF6F7F9),
+    surfaceContainerHigh = Color(0xFFEEF0F3),
+    surfaceContainerHighest = Color(0xFFE3E8EF),
+    outline = Color(0xFFD0D6DE),
+    outlineVariant = Color(0xFFE3E8EF),
+    error = Color(0xFFD6303F),
     onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFCE8EA),
-    onErrorContainer = Color(0xFF2A2521),
+    errorContainer = Color(0xFFFAE7E9),
+    onErrorContainer = Color(0xFF131517),
 )
 
 private val OakDarkColorScheme: ColorScheme = darkColorScheme(
-    primary = Color(0xFFFF6B6B),
-    onPrimary = Color(0xFF2A1010),
-    primaryContainer = Color(0xFF3A1E1E),
-    onPrimaryContainer = Color(0xFFF5EFE9),
-    secondary = Color(0xFF5BB4EF),
+    primary = Color(0xFFFF4A22),
+    onPrimary = Color(0xFF1B1410),
+    primaryContainer = Color(0xFF33170F),
+    onPrimaryContainer = Color(0xFFF2F4F5),
+    secondary = Color(0xFF55A0E8),
     onSecondary = Color(0xFF0C1620),
-    secondaryContainer = Color(0xFF16263A),
-    onSecondaryContainer = Color(0xFFF5EFE9),
-    tertiary = Color(0xFFF8B73E),
-    onTertiary = Color(0xFF2A1E0A),
-    tertiaryContainer = Color(0xFF3A2E14),
-    onTertiaryContainer = Color(0xFFF5EFE9),
-    background = Color(0xFF161311),
-    onBackground = Color(0xFFE4DAD0),
-    surface = Color(0xFF211C19),
-    onSurface = Color(0xFFE4DAD0),
-    surfaceVariant = Color(0xFF12100E),
-    onSurfaceVariant = Color(0xFFB7A99C),
-    surfaceContainerLowest = Color(0xFF12100E),
-    surfaceContainerLow = Color(0xFF1B1714),
-    surfaceContainer = Color(0xFF211C19),
-    surfaceContainerHigh = Color(0xFF2A2420),
-    surfaceContainerHighest = Color(0xFF332D29),
-    outline = Color(0xFF4E453F),
-    outlineVariant = Color(0xFF3A332E),
-    error = Color(0xFFFF5C6B),
-    onError = Color(0xFF2A1010),
-    errorContainer = Color(0xFF3A1518),
-    onErrorContainer = Color(0xFFF5EFE9),
+    secondaryContainer = Color(0xFF142433),
+    onSecondaryContainer = Color(0xFFF2F4F5),
+    tertiary = Color(0xFFF0A030),
+    onTertiary = Color(0xFF2B1D05),
+    tertiaryContainer = Color(0xFF33260F),
+    onTertiaryContainer = Color(0xFFF2F4F5),
+    background = Color(0xFF121417),
+    onBackground = Color(0xFFD5DAE0),
+    surface = Color(0xFF1A1D22),
+    onSurface = Color(0xFFD5DAE0),
+    surfaceVariant = Color(0xFF0E1013),
+    onSurfaceVariant = Color(0xFF8B949E),
+    surfaceContainerLowest = Color(0xFF0E1013),
+    surfaceContainerLow = Color(0xFF16191E),
+    surfaceContainer = Color(0xFF1A1D22),
+    surfaceContainerHigh = Color(0xFF22262C),
+    surfaceContainerHighest = Color(0xFF2A3038),
+    outline = Color(0xFF3A434C),
+    outlineVariant = Color(0xFF2A3038),
+    error = Color(0xFFF04A58),
+    onError = Color(0xFF2E0D10),
+    errorContainer = Color(0xFF331417),
+    onErrorContainer = Color(0xFFF2F4F5),
 )
 
 // ---------------------------------------------------------------------------
 // Corner radii + spacing tokens (brand favors generous rounding)
 // ---------------------------------------------------------------------------
 
-/** Corner radii, mirroring `--radius-*` in globals.css. */
+/** Corner radii, mirroring Signal `--radius-*`. */
 object OakRadius {
-    val sm = 6.dp
+    val sm = 8.dp
     val md = 10.dp
-    val lg = 16.dp
-    val xl = 24.dp
+    val lg = 12.dp
+    val xl = 16.dp
     val pill = 999.dp
 }
 
@@ -267,27 +265,45 @@ val OakShapes: Shapes = Shapes(
 // ---------------------------------------------------------------------------
 
 /**
- * The shared animation vocabulary. Two springs cover almost everything — [snappy]
- * for direct-manipulation feedback (presses, focus, toggles) and [smooth] for
- * content settling in (bubbles, cards, list reflow). Callers gate every use behind
+ * The shared animation vocabulary. [snappy] and [smooth] cover almost everything —
+ * [snappy] for direct-manipulation feedback (presses, focus, toggles) and [smooth]
+ * for content settling in (bubbles, cards, list reflow). Both are Signal tweens
+ * on [fastEasing] (cubic-bezier(0.2, 0, 0, 1)). Callers gate every use behind
  * [rememberReduceMotion]; with reduce-motion on, movement collapses to an instant
  * change or an opacity crossfade. These tokens are the *what*; the *whether* stays
  * the calling view's decision.
  */
 object OakMotion {
-    /** Direct-feedback spring — fast, lightly damped. */
-    val snappy: AnimationSpec<Float> =
-        spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium)
+    /**
+     * Signal easing — a fast-out, near-linear-in curve for tween-driven chrome
+     * (hover, press, tab, pip). Declared first: [snappy]/[smooth] below capture
+     * it at initialization.
+     */
+    val fastEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
-    /** Content-settling spring — slower, well damped. */
+    /** Fast tween duration (ms) — hover, press, tab, pip (Signal `--motion-fast`). */
+    const val FAST_MILLIS = 180
+
+    /** Base tween duration (ms) — standard content transitions. */
+    const val BASE_MILLIS = 180
+
+    /** Entrance tween duration (ms) — answer plate rise (Signal `--motion-enter`). */
+    const val ENTER_MILLIS = 280
+
+    /** Direct-feedback tween — hover/press (Signal `--motion-fast`). */
+    val snappy: AnimationSpec<Float> =
+        tween(durationMillis = FAST_MILLIS, easing = fastEasing)
+
+    /** Content-settling tween — same ease, [BASE_MILLIS]. */
     val smooth: AnimationSpec<Float> =
-        spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
+        tween(durationMillis = BASE_MILLIS, easing = fastEasing)
 
     /** Entrance/exit fade duration (ms) when motion is allowed. */
     const val FADE_MILLIS = 200
 
-    /** Per-item cascade offset (ms) for staggered batch entrances. */
-    const val STAGGER_STEP_MILLIS = 40
+    /** Per-item cascade offset (ms) for staggered batch entrances (answer-card sections,
+     * the instrument ticker's tool rows). */
+    const val STAGGER_STEP_MILLIS = 60
 }
 
 /**
@@ -324,14 +340,26 @@ object OakType {
     /** The brand color for a type name (e.g. `"fire"`); unknown falls back to Normal. */
     fun color(name: String): Color = solids[name.trim().lowercase()] ?: solids.getValue("normal")
 
+    /**
+     * The fixed ink (text/icon) color for a full-chroma type solid — WHITE for the
+     * five dark solids ([darkInkTypes]) and DARK ([INK_DARK]) for the other thirteen,
+     * so a solid-fill [TypeBadge] always meets contrast without per-type tuning.
+     * Unknown type names fall back to the dark ink (matches [color]'s Normal fallback).
+     */
+    fun ink(name: String): Color =
+        if (name.trim().lowercase() in darkInkTypes) Color.White else INK_DARK
+
     /** Sort index for a type slug in Champions display order; unknown sorts last. */
     fun displayIndex(name: String): Int = displayRank[name.trim().lowercase()] ?: Int.MAX_VALUE
 
     /**
-     * Specimen-plate atmosphere from one primary type and an optional secondary
-     * (soul.md "Plate wash rules"). Light mixes ~8–14% type into [surface]; dark
-     * ~18–28% so the wash still reads. Call [plateWashForTypes] when deriving from
-     * an answer's subject list (handles multi-subject + mechanics).
+     * Specimen-plate **type-light** from one primary type and an optional secondary
+     * (soul.md "Type-light rules" — replaces the old plate-wash-percentage table). The
+     * plate fill itself goes essentially neutral ([surface]); the type reads instead
+     * as a saturated glow radiating from the sprite well ([wellGlow]/[wellGlowSecondary])
+     * plus a solid leading-edge light ([edge]/[edgeSecondary]) the caller renders as a
+     * thin strip along the plate's leading edge. Call [plateWashForTypes] when deriving
+     * from an answer's subject list (handles multi-subject + mechanics).
      */
     fun plateWash(
         primary: String?,
@@ -348,20 +376,17 @@ object OakType {
         }
         val primarySolid = color(primaryName)
         val secondarySolid = secondary?.trim()?.takeIf { it.isNotEmpty() }?.let { color(it) }
-        val primaryMix = if (dark) 0.22f else 0.11f
-        val secondaryMix = if (dark) 0.18f else 0.08f
-        val borderMix = if (dark) 0.32f else 0.28f
         val wellMix = if (dark) 0.28f else 0.16f
-        val fill = lerp(surface, primarySolid, primaryMix)
-        val fillSecondary = secondarySolid?.let { lerp(surface, it, secondaryMix) }
         return PlateWash(
-            fill = fill,
-            fillSecondary = fillSecondary,
-            border = lerp(border, primarySolid, borderMix),
+            fill = surface,
+            fillSecondary = null,
+            border = border,
             wellFill = lerp(surface, primarySolid, wellMix),
             wellBorder = lerp(border, primarySolid, if (dark) 0.28f else 0.22f),
-            wellGlow = primarySolid.copy(alpha = if (dark) 0.32f else 0.28f),
-            wellGlowSecondary = secondarySolid?.copy(alpha = if (dark) 0.18f else 0.15f),
+            wellGlow = primarySolid.copy(alpha = if (dark) 0.40f else 0.30f),
+            wellGlowSecondary = secondarySolid?.copy(alpha = if (dark) 0.28f else 0.20f),
+            edge = primarySolid,
+            edgeSecondary = secondarySolid,
             isMechanics = false,
             isMulti = false,
         )
@@ -369,9 +394,9 @@ object OakType {
 
     /**
      * Derives a [PlateWash] from zero-or-more subjects' type lists:
-     * - empty → mechanics ink plate (sunken paper, strong border)
-     * - multiple subjects → neutral-ish multi plate (light first-type accent only)
-     * - one subject → primary/secondary type wash
+     * - empty → mechanics ink plate (sunken inset, strong border, no type light)
+     * - multiple subjects → neutral plate + one faint multi edge (don't fight dual glows)
+     * - one subject → primary/secondary type-light
      */
     fun plateWashForTypes(
         subjectTypes: List<List<String>>,
@@ -387,15 +412,16 @@ object OakType {
         if (subjectTypes.size > 1) {
             val first = subjectTypes.firstOrNull()?.firstOrNull()
             val accent = first?.let { color(it) }
-            val multiMix = if (dark) 0.12f else 0.05f
             return PlateWash(
-                fill = if (accent != null) lerp(surface, accent, multiMix) else surface,
+                fill = surface,
                 fillSecondary = null,
-                border = if (accent != null) lerp(border, accent, if (dark) 0.18f else 0.12f) else border,
+                border = border,
                 wellFill = surfaceSunken,
                 wellBorder = border,
                 wellGlow = accent?.copy(alpha = if (dark) 0.18f else 0.12f),
                 wellGlowSecondary = null,
+                edge = accent?.copy(alpha = if (dark) 0.55f else 0.45f) ?: Color.Transparent,
+                edgeSecondary = null,
                 isMechanics = false,
                 isMulti = true,
             )
@@ -421,9 +447,18 @@ object OakType {
             wellBorder = borderStrong,
             wellGlow = null,
             wellGlowSecondary = null,
+            edge = Color.Transparent,
+            edgeSecondary = null,
             isMechanics = true,
             isMulti = false,
         )
+
+    /** Dark ink color for [ink]'s 13-type majority (fallback included). */
+    private val INK_DARK = Color(0xFF16181A)
+
+    /** The five type solids dark/saturated enough to need white ink instead. */
+    private val darkInkTypes: Set<String> =
+        setOf("fighting", "poison", "ghost", "dragon", "dark")
 
     private val solids: Map<String, Color> = mapOf(
         "normal" to Color(0xFFA8A77A),
@@ -459,26 +494,34 @@ object OakType {
 
 /**
  * Colors for a type-reactive specimen plate (answer card shell + sprite well).
- * Produced by [OakType.plateWash] / [OakType.plateWashForTypes] per soul.md.
+ * Produced by [OakType.plateWash] / [OakType.plateWashForTypes] per soul.md's
+ * "Type-light rules" — the plate chrome ([fill]/[border]) stays essentially neutral;
+ * the type reads through [wellGlow] (the light source, in the sprite well) and
+ * [edge] (a solid leading-edge light strip the caller renders along the plate's
+ * start edge).
  */
 @Immutable
 data class PlateWash(
-    /** Primary plate fill (type-mixed surface, or sunken for mechanics). */
+    /** Plate fill — neutral (surfaceRaised) for typed/multi plates, sunken for mechanics. */
     val fill: Color,
-    /** Optional secondary fill for dual-type radial/linear blend. */
+    /** Deprecated blend slot, kept for the mechanics vertical-gradient callers; null for typed/multi. */
     val fillSecondary: Color?,
-    /** Plate edge color (type-mixed border, or [OakColors.borderStrong] for mechanics). */
+    /** Plate chrome border — neutral ([OakColors.border]/[OakColors.borderStrong]); the type never tints the frame. */
     val border: Color,
-    /** Sprite-well base fill. */
+    /** Sprite-well base fill (still type-mixed — the well is the light source). */
     val wellFill: Color,
     /** Sprite-well border. */
     val wellBorder: Color,
-    /** Soft type glow for the sprite well center (null when mechanics). */
+    /** Saturated type glow for the sprite well / plate corner (null when mechanics). */
     val wellGlow: Color?,
     /** Optional secondary glow ring for dual-type wells. */
     val wellGlowSecondary: Color?,
+    /** Solid leading-edge light in the primary type color; [Color.Transparent] for mechanics. */
+    val edge: Color,
+    /** Optional secondary edge segment for a dual-type leading-edge light. */
+    val edgeSecondary: Color?,
     /** True when the answer has no subjects — ink / mechanics plate. */
     val isMechanics: Boolean,
-    /** True when multiple subjects share one plate (neutral multi accent). */
+    /** True when multiple subjects share one plate (neutral plate + one faint multi edge). */
     val isMulti: Boolean,
 )

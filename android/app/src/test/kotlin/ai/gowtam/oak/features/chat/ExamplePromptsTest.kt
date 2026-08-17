@@ -7,7 +7,7 @@ import org.junit.Test
 /**
  * Exercises [ExamplePrompts]: the pool has no duplicate entries, and [ExamplePrompts.pick]
  * samples distinct members of the pool without replacement, clamping to the pool size when
- * asked for more than it holds. Also covers filed starters (specimen-desk empty state).
+ * asked for more than it holds. Also covers filed starters (Signal empty chat).
  */
 class ExamplePromptsTest {
 

@@ -94,8 +94,12 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Filter chips — machined pills. Selected (`aria-pressed`) → sunken fill +
-   stronger border (never red; selection ≠ record light here).
+   Filter chips — machined pills. Unselected shows a neutral chip with a solid
+   type-swatch dot; a type chip's SELECTED state goes full-chroma solid — the
+   same recipe as `.type-badge` (solid `--type-*` fill + per-type contrast
+   ink) — so a chosen filter reads as "this type is on," not just a sunken
+   fill. Non-type chips (no `data-type`) keep the neutral sunken-fill selected
+   state (never red; selection ≠ record light here).
    ------------------------------------------------------------------------- */
 
 .ref-toolbar__facets {
@@ -169,6 +173,38 @@
 .ref-chip__swatch[data-type="steel"] { background: var(--type-steel); }
 .ref-chip__swatch[data-type="fairy"] { background: var(--type-fairy); }
 
+/* Selected type chip → full-chroma solid, mirroring `.type-badge`'s recipe
+   (solid fill + per-type contrast-safe ink). The swatch dot disappears into
+   the now-solid fill (its own background would be redundant on a same-hue
+   ground), so it's hidden rather than left as a faint circle. */
+.ref-chip[aria-pressed="true"][data-type] {
+  border-color: transparent;
+}
+
+.ref-chip[aria-pressed="true"][data-type] .ref-chip__swatch {
+  background: currentColor;
+  opacity: 0.35;
+}
+
+.ref-chip[aria-pressed="true"][data-type="normal"] { background: var(--type-normal); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="fire"] { background: var(--type-fire); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="water"] { background: var(--type-water); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="electric"] { background: var(--type-electric); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="grass"] { background: var(--type-grass); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="ice"] { background: var(--type-ice); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="fighting"] { background: var(--type-fighting); color: #ffffff; }
+.ref-chip[aria-pressed="true"][data-type="poison"] { background: var(--type-poison); color: #ffffff; }
+.ref-chip[aria-pressed="true"][data-type="ground"] { background: var(--type-ground); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="flying"] { background: var(--type-flying); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="psychic"] { background: var(--type-psychic); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="bug"] { background: var(--type-bug); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="rock"] { background: var(--type-rock); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="ghost"] { background: var(--type-ghost); color: #ffffff; }
+.ref-chip[aria-pressed="true"][data-type="dragon"] { background: var(--type-dragon); color: #ffffff; }
+.ref-chip[aria-pressed="true"][data-type="dark"] { background: var(--type-dark); color: #ffffff; }
+.ref-chip[aria-pressed="true"][data-type="steel"] { background: var(--type-steel); color: #16181a; }
+.ref-chip[aria-pressed="true"][data-type="fairy"] { background: var(--type-fairy); color: #16181a; }
+
 /* ---------------------------------------------------------------------------
    Sections + instrument group headings. content-visibility lets the browser
    skip layout/paint for the off-screen generation/letter blocks on the long
@@ -224,7 +260,9 @@
   text-align: center;
 }
 
-/* Sunken rounded well the 72px sprite sits on. */
+/* Machined well the 72px sprite sits in — inset shadow + sunken surface, not
+   a flat beige tile. Depth reads as "into the chassis," matching the answer
+   card's sprite well. */
 .ref-pcard__well {
   display: flex;
   align-items: center;
@@ -233,6 +271,7 @@
   height: 88px;
   border-radius: var(--radius-md);
   background: var(--surface-sunken);
+  box-shadow: var(--shadow-well);
 }
 
 .ref-pcard__sprite {

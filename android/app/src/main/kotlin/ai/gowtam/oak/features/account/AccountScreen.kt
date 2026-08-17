@@ -48,6 +48,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import ai.gowtam.oak.ui.OakTopBar
+import ai.gowtam.oak.ui.OakWordmark
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -70,9 +71,9 @@ import kotlinx.coroutines.launch
  * deletion** flow, and about/legal links. Mirrors iOS `AccountView` in
  * structure, re-expressed for Compose/Material 3.
  *
- * Pushed from the More tab ([ai.gowtam.oak.features.more.MoreRoute]) rather than
- * being a tab root itself; [onBack] renders the back affordance for that pushed
- * context.
+ * Hosted as a first-class tab root (Chat / Teams / Dex / Account). [onBack]
+ * renders a back affordance only when this screen is pushed; pass `null` as the
+ * tab root.
  *
  * **Deletion confirmation (D-AC-ACCT2.2 — "requires explicit confirmation"):**
  * a destructive button opens an [AlertDialog] naming exactly what is deleted
@@ -88,8 +89,8 @@ import kotlinx.coroutines.launch
 fun AccountScreen(
     viewModel: AccountViewModel,
     modifier: Modifier = Modifier,
-    /** When non-null, the top bar shows a back arrow calling this — used when this
-     * screen is pushed from the More tab list. `null` for a top-level presentation. */
+    /** When non-null, the top bar shows a back arrow calling this. `null` for the
+     * tab-root presentation. */
     onBack: (() -> Unit)? = null,
 ) {
     val authState by viewModel.authState.collectAsState()
@@ -119,17 +120,16 @@ fun AccountScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            if (onBack != null) {
-                OakTopBar(
-                    title = { Text("Account") },
-                    navigationIcon = {
+            OakTopBar(
+                title = { OakWordmark() },
+                navigationIcon = {
+                    if (onBack != null) {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
-                    },
-                    redThread = false,
-                )
-            }
+                    }
+                },
+            )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->

@@ -63,25 +63,25 @@ enum OakUITest {
 
   // MARK: Visible-label targets (mirror the app's labels)
 
-  /// Tab-bar button labels (`RootView`). The app ships THREE tabs — Chat, Teams, and
-  /// More. History folded into the Chat tab (signed-in users see a conversation list
-  /// there); Account moved under the More tab (nav restructure: Chat / Teams / More),
-  /// reached via the More tab's Account row (``MoreScreen``).
+  /// Tab-bar button labels (`RootView`). The app ships FOUR tabs — Chat, Teams, Dex,
+  /// and Account. History folded into the Chat tab (signed-in users see a conversation
+  /// list there); Account is a first-class tab (no intermediate More list).
   enum Tab {
     static let chat = "Chat"
     static let teams = "Teams"
-    static let more = "More"
-    static let all = [chat, teams, more]
+    static let dex = "Dex"
+    static let account = "Account"
+    static let all = [chat, teams, dex, account]
   }
 
   /// Chat surface (`ChatView` / `ComposerView`).
   enum Chat {
     static let navigationTitle = "Oak"
-    static let composerPlaceholder = "Ask Oak a Pokémon question…"
+    static let composerPlaceholder = "Ask Oak"
     static let sendButton = "Send"
     static let newConversation = "New conversation"
-    /// Blank specimen plate prompt (soul.md empty desk — not the old "Ask Oak" hero).
-    static let emptyState = "What are we looking up?"
+    /// Empty-chat title (Signal — not the old "Ask Oak" / "What are we looking up?").
+    static let emptyState = "What do you want to know?"
     static let attachImage = "Attach image"
     static let retry = "Retry"
   }
@@ -90,24 +90,20 @@ enum OakUITest {
   enum Streaming {
     static let thinking = "Thinking…"
     static let usingTools = "Looking things up…"
+    /// Prefix of the live "Looking up {nouns}" sentence (Signal streaming).
+    static let lookingUpPrefix = "Looking up"
     static let answering = "Writing the answer…"
-    static let all = [thinking, usingTools, answering]
+    static let reconnecting = "Reconnecting…"
+    static let all = [thinking, usingTools, answering, reconnecting]
   }
 
   /// Finalized-answer structural markers (`AnswerCardView` tree).
   enum Answer {
-    static let reasoningDisclosure = "Reasoning"
+    static let reasoningDisclosure = "Why"
     static let openTeamInViewer = "Open team in viewer"
   }
 
-  /// More surface (`MoreView`): the list screen reached from the More tab, whose
-  /// first row pushes ``Account``.
-  enum MoreScreen {
-    static let navigationTitle = "More"
-    static let accountRow = "Account"
-  }
-
-  /// Account / Settings surface (`AccountView`).
+  /// Account / Settings surface (`AccountView`) — first-class tab root.
   enum Account {
     static let navigationTitle = "Account"
     static let signIn = "Sign in"

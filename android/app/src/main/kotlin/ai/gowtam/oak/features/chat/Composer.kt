@@ -1,6 +1,7 @@
 package ai.gowtam.oak.features.chat
 
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberReduceMotion
@@ -12,10 +13,8 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -59,7 +58,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -202,6 +200,46 @@ fun Composer(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.Bottom) {
+            // Surface field. Focus/streaming = 2.dp red outline, no chassis glow.
+            var isFocused by remember { mutableStateOf(false) }
+            val fieldShape = RoundedCornerShape(OakRadius.lg)
+            val outlineActive = isStreaming || isFocused
+            OutlinedTextField(
+                value = composerText,
+                onValueChange = {
+                    // Typing implies the user wants the keyboard, not the attach menu.
+                    if (menuExpanded) menuExpanded = false
+                    onTextChange(it)
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged {
+                        isFocused = it.isFocused
+                        if (it.isFocused && menuExpanded) menuExpanded = false
+                    }
+                    .border(
+                        width = if (outlineActive) 2.dp else 1.dp,
+                        color = if (outlineActive) oak.accent else oak.border,
+                        shape = fieldShape,
+                    ),
+                placeholder = { Text("Ask Oak") },
+                maxLines = 5,
+                shape = fieldShape,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    cursorColor = oak.accent,
+                    focusedTextColor = oak.text,
+                    unfocusedTextColor = oak.text,
+                    focusedPlaceholderColor = oak.textFaint,
+                    unfocusedPlaceholderColor = oak.textFaint,
+                ),
+            )
+
+            // Attach (and voice, when present) stay mute icons immediately left of Send.
             Box {
                 IconButton(
                     onClick = {
@@ -212,7 +250,11 @@ fun Composer(
                     },
                     enabled = canAttachMore,
                 ) {
-                    Icon(Icons.Filled.AttachFile, contentDescription = "Attach image", tint = oak.accent)
+                    Icon(
+                        Icons.Filled.AttachFile,
+                        contentDescription = "Attach image",
+                        tint = if (canAttachMore) oak.textMuted else oak.textFaint,
+                    )
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                     DropdownMenuItem(
@@ -238,59 +280,7 @@ fun Composer(
                 }
             }
 
-            // The composer field is a surface pill. Focus is AZURE (Oak reserves red for
-            // the live/streaming state), so the border + soft glow turn azure while
-            // editing and red only while a turn streams; borderStrong is the idle hairline.
-            var isFocused by remember { mutableStateOf(false) }
-            val fieldAccent = when {
-                isStreaming -> oak.accent
-                isFocused -> oak.azure
-                else -> oak.borderStrong
-            }
-            val glowActive = isStreaming || isFocused
-            OutlinedTextField(
-                value = composerText,
-                onValueChange = {
-                    // Typing implies the user wants the keyboard, not the attach menu.
-                    if (menuExpanded) menuExpanded = false
-                    onTextChange(it)
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .onFocusChanged {
-                        isFocused = it.isFocused
-                        if (it.isFocused && menuExpanded) menuExpanded = false
-                    }
-                    .then(
-                        if (glowActive) {
-                            Modifier.shadow(
-                                elevation = 6.dp,
-                                shape = RoundedCornerShape(OakRadius.lg),
-                                ambientColor = fieldAccent,
-                                spotColor = fieldAccent,
-                            )
-                        } else {
-                            Modifier
-                        },
-                    ),
-                placeholder = { Text("Ask Oak a Pokémon question…") },
-                maxLines = 5,
-                shape = RoundedCornerShape(OakRadius.lg),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = if (isStreaming) oak.accent else oak.azure,
-                    unfocusedBorderColor = if (isStreaming) oak.accent else oak.borderStrong,
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    cursorColor = oak.azure,
-                    focusedTextColor = oak.text,
-                    unfocusedTextColor = oak.text,
-                    focusedPlaceholderColor = oak.textFaint,
-                    unfocusedPlaceholderColor = oak.textFaint,
-                ),
-            )
-
-            SendDisc(
+            SendButton(
                 isStreaming = isStreaming,
                 canSend = canSend,
                 onSend = onSend,
@@ -301,15 +291,13 @@ fun Composer(
 }
 
 /**
- * The 44dp coral send disc (theme-translation spec §4.2). Its state choreography IS
- * the microinteraction: *empty* (nothing to send, not streaming) → the disc shrinks to
- * 0.85 and fills `surfaceSunken` with a faint glyph; *ready* → full-size coral with a
- * white arrow; *press* → 0.94 snappy dip; *streaming* → the circle morphs to a rounded
- * stop square. Scale animates on the snappy spring, collapsing to an instant snap under
- * reduce-motion. The touch target stays ≥48dp via [minimumInteractiveComponentSize].
+ * Signal Send — a 44dp-tall rounded rect (8dp radius), accent fill, `--on-red`
+ * glyph. Not a circular FAB. Press scales to 0.98. Disabled sits on sunken with
+ * a faint glyph. Streaming swaps the arrow for Stop; the shape stays a rounded
+ * rect. Touch target stays ≥48dp via [minimumInteractiveComponentSize].
  */
 @Composable
-private fun SendDisc(
+private fun SendButton(
     isStreaming: Boolean,
     canSend: Boolean,
     onSend: () -> Unit,
@@ -321,28 +309,23 @@ private fun SendDisc(
     val pressed by interactionSource.collectIsPressedAsState()
 
     val enabled = isStreaming || canSend
-    val emptyState = !enabled
-    val targetScale = when {
-        pressed && enabled -> 0.94f
-        emptyState -> 0.85f
-        else -> 1f
-    }
+    val targetScale = if (pressed && enabled) 0.98f else 1f
     val scale by animateFloatAsState(
         targetValue = targetScale,
-        animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessHigh),
-        label = "sendDiscScale",
+        animationSpec = if (reduceMotion) snap() else OakMotion.snappy,
+        label = "sendButtonScale",
     )
-    val discShape = if (isStreaming) RoundedCornerShape(OakRadius.sm) else CircleShape
-    val discFill = if (enabled) oak.accent else oak.surfaceSunken
-    val glyphTint = if (enabled) Color.White else oak.textFaint
+    val shape = RoundedCornerShape(OakRadius.sm)
+    val fill = if (enabled) oak.accent else oak.surfaceSunken
+    val glyphTint = if (enabled) oak.onRed else oak.textFaint
 
     Box(
         modifier = Modifier
             .minimumInteractiveComponentSize()
             .size(44.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(discShape)
-            .background(discFill)
+            .clip(shape)
+            .background(fill)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

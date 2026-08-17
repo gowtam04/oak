@@ -3,7 +3,7 @@
  * reference page (/pokedex, /moves, /abilities, /items, /meta). Mirrors the
  * chat page's header design language (`.chat-page__header` / `.chat-page__title`):
  * a warm `--bg` surface with a 2px `--poke-red` "thread" on top and a hairline
- * bottom, the Fredoka wordmark with its brand-mark chip, and an "Open chat" red
+ * bottom, the display-face wordmark with its brand-mark chip, and an "Open chat" red
  * pill mirroring `.app-nav__newchat`. Red only appears as the thread, the active
  * nav pill, the CTA, and link hover — never as wallpaper (the old red band is
  * retired; reference chrome follows `docs/design/soul.md` desk rules).
@@ -18,6 +18,7 @@
 
 import Link from "next/link";
 
+import OakWordmark from "@/components/brand/OakWordmark";
 import ReferenceNav from "@/components/reference/ReferenceNav";
 
 export default function ReferenceHeader() {
@@ -25,7 +26,7 @@ export default function ReferenceHeader() {
     <header className="ref-header" data-testid="reference-header">
       <div className="ref-header__inner">
         <Link href="/" className="ref-header__wordmark" aria-label="Oak — home">
-          Oak
+          <OakWordmark />
         </Link>
         <ReferenceNav />
         <Link href="/" className="ref-header__chat-link">

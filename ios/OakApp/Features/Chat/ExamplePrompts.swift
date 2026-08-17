@@ -17,9 +17,9 @@
 /// Keep this array, in this order, in sync with the web file. Android mirrors it too,
 /// at `android/app/src/main/kotlin/ai/gowtam/oak/features/chat/ExamplePrompts.kt`.
 ///
-/// **Filed starters** (soul.md empty desk) are a separate, category-tagged set —
-/// Battle / Dex / Rules / Meta with a type-dot — shown on the blank specimen plate
-/// instead of four equal beige pills.
+/// **Filed starters** are a separate, category-tagged set — Battle / Dex / Rules /
+/// Meta — shown as four full-width Signal rows (mute category prefix, no type-dot
+/// hero). `typeDot` stays on the model so the pool stays in sync with web/Android.
 enum ExamplePrompts {
   // MARK: Filed starters (soul.md — Battle / Dex / Rules / Meta)
 

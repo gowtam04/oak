@@ -9,26 +9,22 @@ import UIKit
 /// every field the web renders is represented; nothing is dropped for brevity):
 ///
 ///   1. status badge        ← non-`answered` outcomes only (M-AC-1.3)
-///   2. scope tag            ← `generation_basis` — the always-on masthead tag (TOP)
-///   3. caveat strip         ← `uncertainty_flags[]` + `generation_basis.fallback`/note (TOP)
-///   4. answer markdown      ← `answer_markdown` (always; first paragraph as answerLead)
-///   5. subjects             ← `subjects[]` (+ "Compare in viewer" when ≥2)
-///   6. clarify question     ← `question.options[]` — the "stop and ask" CTA
-///   7. candidates           ← `candidates` (+ "Show all N" when truncated)
-///   8. damage calc          ← `damage_calc` (+ "Open in viewer")
-///   9. team blocks          ← `proposed_team` / `saved_team` (+ warnings)
+///   2. type chips           ← unique `subjects[].types` (solid TypeBadge)
+///   3. answer markdown      ← `answer_markdown` (always; first paragraph as answerLead)
+///   4. inferences           ← `inferences[]` as an Inferred line
+///   5. clarify question     ← `question.options[]` — the "stop and ask" CTA
+///   6. candidates           ← `candidates` (+ "Show all N" when truncated)
+///   7. damage calc          ← `damage_calc` (+ "Open in viewer")
+///   8. team blocks          ← `proposed_team` / `saved_team` (+ warnings)
+///   9. subjects             ← `subjects[]` (+ "Compare in viewer" when ≥2)
 ///  10. suggestions          ← `suggestions[]` (+ status)
-///  11. inferences           ← `inferences[]`
-///  12. receipts footer      ← `reasoning_markdown` + `citations[]` — plate foot
+///  11. caveat strip         ← `uncertainty_flags[]` + `generation_basis.fallback`/note
+///  12. Why / Sources        ← `reasoning_markdown` + `citations[]` — plate foot
 ///
-/// The scope tag and caveat strip are lifted to the TOP to mirror the web
-/// `AnswerCard` (masthead + `CaveatStrip` lead the card): a caveat is read before
-/// the prose it qualifies, and the fallback note + `uncertainty_flags[]` are merged
-/// into ONE `CaveatStripView` (they used to render as two separate blocks near the
-/// bottom).
-///
-/// The whole card is a **specimen plate** (soul.md): type-reactive wash / multi /
-/// mechanics ink chrome from `subjects[].types`, with a RECEIPTS footer at the foot.
+/// Scope is header-only (the chip) — it is not repeated on the answer plate.
+/// Type chips lead the plate; the inferred line sits under the lead; the
+/// uncertainty strip stays (warning, not red). The plate is surface + 12pt
+/// radius + 1pt hairline — no type glow, no 3pt type edge, no latch pip.
 ///
 /// Interactivity: a clarify-option or suggestion tap sends its text **verbatim**
 /// as the next user turn via ``onFollowUp`` (the same UI→agent-input mechanism the
@@ -83,19 +79,12 @@ struct AnswerCardView: View {
   /// ``ArtifactViewModel/openDamageCalc(_:)``; no-op default.
   var onOpenDamageCalc: (DamageCalc) -> Void = { _ in }
 
-  /// Plate atmosphere from the answer's subjects (typed / multi / mechanics ink).
-  private var plateAtmosphere: Theme.PlateAtmosphere {
-    Theme.PlateAtmosphere.resolve(
-      subjectTypes: (answer.subjects ?? []).map(\.types)
-    )
-  }
-
-  /// Feedback after "Copy for agents" (soul.md Phase 3.2).
+  /// Feedback after "Copy for agents".
   @State private var didCopyForAgents = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      // Plate body — everything except the receipts foot tab.
+      // Plate body — everything except the Why / Sources foot tab.
       VStack(alignment: .leading, spacing: 14) {
         ForEach(Array(bodySections.enumerated()), id: \.element) { index, section in
           view(for: section)
@@ -109,7 +98,7 @@ struct AnswerCardView: View {
       .padding(Theme.Spacing.lg)
       .frame(maxWidth: .infinity, alignment: .leading)
 
-      // Full-width RECEIPTS footer (soul.md) — only when reasoning/citations present.
+      // Full-width Why / Sources footer — only when reasoning/citations present.
       if hasReceipts {
         ReceiptsFooterView(
           reasoningMarkdown: answer.reasoningMarkdown,
@@ -128,7 +117,15 @@ struct AnswerCardView: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .oakSpecimenPlate(plateAtmosphere)
+    .background(
+      Theme.surface,
+      in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+    )
+    .overlay {
+      RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+        .strokeBorder(Theme.separator, lineWidth: 1)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
     .contextMenu {
       Button {
         copyForAgents()
@@ -138,7 +135,9 @@ struct AnswerCardView: View {
     }
     // The whole answer reads as one VoiceOver container with ordered children.
     .accessibilityElement(children: .contain)
-    .onAppear { hasAppeared = true }
+    .onAppear {
+      hasAppeared = true
+    }
   }
 
   /// Compact plate-foot strip when there are no receipts to expand.
@@ -180,7 +179,7 @@ struct AnswerCardView: View {
     }
   }
 
-  /// Sections rendered inside the plate body (everything except receipts).
+  /// Sections rendered inside the plate body (everything except Why / Sources).
   private var bodySections: [Section] {
     sections.filter { $0 != .receipts }
   }
@@ -192,7 +191,7 @@ struct AnswerCardView: View {
   /// blocks an answer produces without inspecting the SwiftUI hierarchy.
   enum Section: Hashable {
     case status
-    case scope
+    case typeChips
     case caveat
     case answer
     case subjects
@@ -202,29 +201,28 @@ struct AnswerCardView: View {
     case teams
     case suggestions
     case inferences
-    /// Full-width RECEIPTS footer at the plate foot (soul.md). Present when
-    /// EITHER reasoning OR citations (or both) is non-empty. Replaces the former
-    /// free-floating credibility chip strip.
+    /// Full-width Why / Sources footer at the plate foot. Present when
+    /// EITHER reasoning OR citations (or both) is non-empty.
     case receipts
   }
 
   /// The ordered blocks this card renders for ``answer`` — the single source of
   /// truth `body` iterates. A block is included only when its field is present
   /// (and non-empty after the same trimming its subview applies), so an absent
-  /// field renders nothing. Receipts always trail (plate foot).
+  /// field renders nothing. Why / Sources always trail (plate foot).
   var sections: [Section] {
     var out: [Section] = []
     if hasStatus { out.append(.status) }
-    if hasScope { out.append(.scope) }
-    if hasCaveat { out.append(.caveat) }
+    if hasTypeChips { out.append(.typeChips) }
     if hasAnswerBody { out.append(.answer) }
-    if hasSubjects { out.append(.subjects) }
+    if hasInferences { out.append(.inferences) }
     if hasQuestion { out.append(.question) }
     if hasCandidates { out.append(.candidates) }
     if hasDamageCalc { out.append(.damageCalc) }
     if hasTeams { out.append(.teams) }
+    if hasSubjects { out.append(.subjects) }
     if hasSuggestions { out.append(.suggestions) }
-    if hasInferences { out.append(.inferences) }
+    if hasCaveat { out.append(.caveat) }
     if hasReceipts { out.append(.receipts) }
     return out
   }
@@ -236,8 +234,8 @@ struct AnswerCardView: View {
     switch section {
     case .status:
       statusBadge
-    case .scope:
-      ScopeTagView(generationBasis: answer.generationBasis)
+    case .typeChips:
+      typeChips
     case .caveat:
       CaveatStripView(
         uncertaintyFlags: answer.uncertaintyFlags,
@@ -382,6 +380,36 @@ struct AnswerCardView: View {
     }
   }
 
+  // MARK: Type chips (unique subjects[].types, plate top)
+
+  /// Solid type chips for every unique type on `subjects[]`, subject-then-type
+  /// order. Types are the other color in the room — they sit above the lead.
+  @ViewBuilder
+  private var typeChips: some View {
+    HStack(spacing: 6) {
+      ForEach(uniqueSubjectTypes, id: \.self) { type in
+        TypeBadge(type: type)
+      }
+      Spacer(minLength: 0)
+    }
+    .accessibilityElement(children: .contain)
+  }
+
+  /// Unique type slugs from `subjects[]`, first-seen order.
+  private var uniqueSubjectTypes: [String] {
+    var seen = Set<String>()
+    var out: [String] = []
+    for subject in answer.subjects ?? [] {
+      for type in subject.types {
+        let key = type.lowercased()
+        if seen.insert(key).inserted {
+          out.append(type)
+        }
+      }
+    }
+    return out
+  }
+
   // MARK: Status badge (non-`answered` outcomes)
 
   /// A compact labeled capsule for non-`answered` outcomes: SF symbol + instrument-
@@ -461,16 +489,15 @@ struct AnswerCardView: View {
 
   private var hasSuggestions: Bool { !Self.nonBlank(answer.suggestions).isEmpty }
 
-  /// The receipts footer shows when EITHER reasoning or citations is non-empty.
+  /// The Why / Sources footer shows when EITHER reasoning or citations is non-empty.
   private var hasReceipts: Bool {
     !Self.trimmed(answer.reasoningMarkdown).isEmpty || !answer.citations.isEmpty
   }
 
   private var hasInferences: Bool { !answer.inferences.isEmpty }
 
-  /// The always-on scope tag (``ScopeTagView``) shows whenever the generation string
-  /// is non-blank — the fallback/note are carried by the caveat strip, not here.
-  private var hasScope: Bool { !Self.trimmed(answer.generationBasis.generation).isEmpty }
+  /// Type chips render when any subject carries a type slug.
+  private var hasTypeChips: Bool { !uniqueSubjectTypes.isEmpty }
 
   /// The caveat strip (``CaveatStripView``) shows when there is a generation fallback
   /// OR any non-blank uncertainty flag — the exact `hasFallback || hasFlags` guard of
@@ -494,11 +521,11 @@ struct AnswerCardView: View {
   }
 }
 
-// MARK: - Receipts footer (soul.md)
+// MARK: - Why / Sources footer
 
-/// Full-width plate-foot tab: `RECEIPTS · N SOURCE(S)`. Expands inline to
-/// reasoning markdown + citation list. Replaces free-floating credibility chips
-/// (soul.md "Receipts" / Phase 1 checklist).
+/// Full-width plate-foot tab: `Why` and/or `Sources`. Expands inline to
+/// reasoning markdown + citation list. Same disclosure as the old Receipts
+/// footer — only the visible strings changed.
 ///
 /// Accessibility: a single toggle button with expanded/collapsed value, plus
 /// the expanded content in document order under the card's contain group.
@@ -524,11 +551,26 @@ private struct ReceiptsFooterView: View {
   private var sourceCount: Int { citations.count }
 
   private var tabLabel: String {
-    if sourceCount == 0 {
-      return "Receipts"
+    switch (hasReasoning, sourceCount) {
+    case (true, 0):
+      return "Why"
+    case (false, 1):
+      return "Sources"
+    case (false, let n) where n > 1:
+      return "Sources · \(n)"
+    case (true, 1):
+      return "Why · Sources"
+    case (true, let n) where n > 1:
+      return "Why · \(n) sources"
+    default:
+      return "Why"
     }
-    let noun = sourceCount == 1 ? "source" : "sources"
-    return "Receipts · \(sourceCount) \(noun)"
+  }
+
+  /// VoiceOver + UI-test target: "Why" whenever reasoning is present so the
+  /// disclosure stays findable after the Receipts → Why rename.
+  private var tabAccessibilityLabel: String {
+    hasReasoning ? "Why" : "Sources"
   }
 
   var body: some View {
@@ -539,7 +581,7 @@ private struct ReceiptsFooterView: View {
         } label: {
           HStack(spacing: Theme.Spacing.sm) {
             Text(tabLabel)
-              .instrumentLabel()
+              .font(Theme.body(.caption, weight: .medium))
               .foregroundStyle(Theme.textSecondary)
             Spacer(minLength: 0)
             Image(systemName: "chevron.right")
@@ -553,7 +595,7 @@ private struct ReceiptsFooterView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits([.isButton, .isToggle])
-        .accessibilityLabel(tabLabel)
+        .accessibilityLabel(tabAccessibilityLabel)
         .accessibilityHint("Shows reasoning and cited sources")
         .accessibilityValue(isOpen ? "expanded" : "collapsed")
 
@@ -581,8 +623,8 @@ private struct ReceiptsFooterView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
           if hasReasoning {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-              Text("Reasoning")
-                .instrumentLabel()
+              Text("Why")
+                .font(Theme.body(.caption, weight: .medium))
                 .foregroundStyle(Theme.textMuted)
               MarkdownBlockView(reasoningMarkdown)
                 .font(Theme.body(.footnote))
@@ -594,7 +636,7 @@ private struct ReceiptsFooterView: View {
           if !citations.isEmpty {
             VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
               Text("Sources")
-                .instrumentLabel()
+                .font(Theme.body(.caption, weight: .medium))
                 .foregroundStyle(Theme.textMuted)
               ForEach(Array(citations.enumerated()), id: \.offset) { _, citation in
                 citationRow(citation)

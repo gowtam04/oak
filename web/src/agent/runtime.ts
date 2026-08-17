@@ -105,6 +105,8 @@ export type { AnthropicClientLike, MessageStreamLike };
  *
  * Team-build turns use {@link MAX_ITERATIONS_TEAM_BUILD} instead (see
  * {@link isTeamBuildMessage}) so learnsets + submit fit under the cap.
+ * Roster/catalog turns ({@link isTeamRosterMessage}) stay on this default cap —
+ * they should finish with one pool query, not a full 6-mon build sequence.
  */
 export const MAX_ITERATIONS = 20;
 
@@ -160,6 +162,20 @@ export function providerCallTimeoutMs(): number {
     "OAK_PROVIDER_TIMEOUT_MS",
     DEFAULT_PROVIDER_CALL_TIMEOUT_MS,
   );
+}
+
+/**
+ * Soft time-budget nudge: when this much wall-clock remains on the turn deadline,
+ * inject a once-per-turn submit nudge so the model ships a partial answer before
+ * the hard cut (issue #6). Default leaves ~60s of a 180s turn — under the 90s
+ * per-call timeout so one more streamTurn + submit_answer can still fit.
+ * Overridable via OAK_TIME_NUDGE_REMAINING_MS (test-stubbable).
+ */
+export const TIME_NUDGE_REMAINING_MS = 60_000;
+
+/** Soft time-nudge remaining ms, read at call time (OAK_TIME_NUDGE_REMAINING_MS). */
+export function timeNudgeRemainingMs(): number {
+  return positiveEnvMs("OAK_TIME_NUDGE_REMAINING_MS", TIME_NUDGE_REMAINING_MS);
 }
 
 /** Re-emit budget when a `submit_answer` payload fails schema validation. */
@@ -218,7 +234,8 @@ export const SUBMIT_NUDGE_REMAINING_TEAM_BUILD = 10;
  * High-precision check: does this user message ask Oak to BUILD / suggest a
  * team? Used only to raise the iteration cap and fire an earlier submit nudge —
  * not for routing or scope. Prefers build/suggest verbs so "analyze my team"
- * stays on the default budget.
+ * stays on the default budget. When {@link isTeamRosterMessage} also matches,
+ * the loop treats the turn as roster (catalog) instead — see runWithProvider.
  */
 export function isTeamBuildMessage(message: string): boolean {
   const m = message.toLowerCase().replace(/\s+/g, " ").trim();
@@ -243,6 +260,81 @@ export function isTeamBuildMessage(message: string): boolean {
   }
   if (
     /\b(hyper\s*offense|balanced team|stall team|rain team|sun team|offense team|defensive team)\b/.test(
+      m,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Full-build override cues: if the user asks for a complete team artifact
+ * (sets/moves/full six), roster classification loses even when list language
+ * is present. Precision: only clear complete-team language.
+ */
+function hasFullBuildOverride(m: string): boolean {
+  if (
+    /\b(complete|full|entire)\s+(team|party|six|6)\b/.test(m) ||
+    /\b(6|six)[-\s]?(mon|member|pokemon|pokémon)\b/.test(m) ||
+    /\bwith\s+(full\s+)?(sets|movesets|moves|items)\b/.test(m) ||
+    /\b(movesets?|held items?|ev spreads?|stat points?)\b/.test(m) ||
+    /\bproposed_team\b/.test(m)
+  ) {
+    return true;
+  }
+  // "build me a team with Torkoal" / "team built around X" = full build intent.
+  if (
+    /\b(build|make|create|craft)\b.{0,40}\b(team|party)\b.{0,40}\b(with|around|including)\b/.test(
+      m,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * High-precision check: does this user message ask for a ROSTER / catalog /
+ * role list for an archetype (sun options, who fits rain, staples + roles) —
+ * not a complete legal six with sets? Used to keep the default iteration cap
+ * and fire a roster-specific submit nudge instead of the full-build path.
+ *
+ * Precedence: when both this and {@link isTeamBuildMessage} match, roster wins
+ * unless {@link hasFullBuildOverride} fires. Ambiguous "build me a sun team"
+ * alone stays full-build (this returns false without list/catalog cues).
+ */
+export function isTeamRosterMessage(message: string): boolean {
+  const m = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!m) return false;
+  if (hasFullBuildOverride(m)) return false;
+
+  // Strong catalog / shortlist cues.
+  if (
+    /\b(list of|list all|give me a list|gimme a list)\b/.test(m) ||
+    /\bwho (fits|works|belongs|goes)\b/.test(m) ||
+    /\b(options|candidates|staples)\b/.test(m) ||
+    /\bpokemon that (could |can )?(fit|work|run)\b/.test(m) ||
+    /\bpokémon that (could |can )?(fit|work|run)\b/.test(m) ||
+    /\bwhat pokemon\b/.test(m) ||
+    /\bwhat pokémon\b/.test(m)
+  ) {
+    return true;
+  }
+  // Roles catalog for a team/archetype — not a single-species "what is X's role".
+  if (
+    /\b(roles? they play|what roles?|and (their |why\/?what )?roles?)\b/.test(
+      m,
+    ) &&
+    /\b(team|party|sun|rain|sand|snow|trick room|hyper offense|stall|balanced)\b/.test(
+      m,
+    )
+  ) {
+    return true;
+  }
+  // "who could fit on a sun team" style without explicit "list".
+  if (
+    /\b(fit|fits|fitting)\b.{0,24}\b(on |in |for )?(a |an |the )?(sun|rain|sand|snow|trick room|team|party)\b/.test(
       m,
     )
   ) {
@@ -288,6 +380,19 @@ const BUILD_SUBMIT_NUDGE =
   "moves/abilities/items, use those lists. The server will legalize remaining " +
   "hard violations if needed — your job is to submit a complete team on this " +
   "turn.";
+
+/**
+ * Wrap-up for roster/catalog turns (list who fits + roles). Does NOT demand a
+ * proposed_team — a shortlist with one-line roles is the deliverable.
+ */
+const ROSTER_SUBMIT_NUDGE =
+  "TEAM ROSTER — stop gathering. Do NOT call get_learnset, get_item, " +
+  "get_pokemon, query_pokedex, or any other read tool again. Call " +
+  "submit_answer NOW with status answered and a SHORTLIST of up to 8–12 " +
+  "staples (from tool results you already have) with a one-line role each. " +
+  "Do NOT emit a full 6-member proposed_team unless the user explicitly asked " +
+  "for complete sets. Do NOT invent species outside tool results. A partial " +
+  "high-signal list beats an empty insufficient_data — ship what you have.";
 
 /** Actionable insufficient_data body when a build turn never submitted a team. */
 const TEAM_BUILD_INSUFFICIENT_MARKDOWN =
@@ -1298,16 +1403,25 @@ export async function runWithProvider<TAnswer = OakAnswer>(
   // Provider-neutral tool defs for this run's tool list (loop-invariant).
   const providerToolDefs = toProviderToolDefs(hooks.tools);
 
-  // Team-build turns get a higher iteration cap and an earlier, stronger submit
-  // nudge so Grok's one-tool-per-iteration pattern can still reach submit_answer.
-  const teamBuild = isTeamBuildMessage(message);
+  // Roster/catalog turns (list who fits + roles) stay on the default iteration
+  // cap and get a roster-specific submit nudge — not the full 6-mon build path.
+  // Full team-build turns get a higher cap and an earlier, stronger submit nudge
+  // so Grok's one-tool-per-iteration pattern can still reach submit_answer.
+  // When both detectors match, roster wins (unless full-build override inside
+  // isTeamRosterMessage already lost).
+  const teamRoster = isTeamRosterMessage(message);
+  const teamBuild = !teamRoster && isTeamBuildMessage(message);
   const maxIterations = teamBuild
     ? MAX_ITERATIONS_TEAM_BUILD
     : MAX_ITERATIONS;
   const submitNudgeRemaining = teamBuild
     ? SUBMIT_NUDGE_REMAINING_TEAM_BUILD
     : SUBMIT_NUDGE_REMAINING;
-  const submitNudgeText = teamBuild ? BUILD_SUBMIT_NUDGE : hooks.submitNudge;
+  const submitNudgeText = teamRoster
+    ? ROSTER_SUBMIT_NUDGE
+    : teamBuild
+      ? BUILD_SUBMIT_NUDGE
+      : hooks.submitNudge;
 
   let submitRetries = 0;
   let emptyTurnNudges = 0;
@@ -1687,13 +1801,27 @@ export async function runWithProvider<TAnswer = OakAnswer>(
       transcript.push(m);
     }
 
-    // Late-iteration submit nudge: once we're within submitNudgeRemaining of
-    // the cap and the model is STILL gathering (it reached here, so it called
-    // tools but not a valid submit_answer), remind it to wrap up. Team-build
-    // turns use an earlier/stronger BUILD_SUBMIT_NUDGE. Appended after the
-    // tool_result message as a separate user turn. Fired once.
-    if (!submitNudged && iteration >= maxIterations - submitNudgeRemaining) {
+    // Submit nudge (once per turn): late-iteration OR soft time-budget. The
+    // model is STILL gathering (reached here with tools, no valid submit).
+    // Team-build uses BUILD_SUBMIT_NUDGE; roster uses ROSTER_SUBMIT_NUDGE.
+    // Time path leaves ~timeNudgeRemainingMs() for one more provider call
+    // before the hard turn deadline. One flag prevents double-nudge.
+    const nearIterCap =
+      iteration >= maxIterations - submitNudgeRemaining;
+    const remainingMs = deadlineAt - Date.now();
+    const nearTimeCap = remainingMs <= timeNudgeRemainingMs();
+    if (!submitNudged && (nearIterCap || nearTimeCap)) {
       submitNudged = true;
+      if (nearTimeCap && !nearIterCap) {
+        ctx.logger.info(
+          {
+            event: "oak_time_budget_nudge",
+            remaining_ms: remainingMs,
+            deadline_ms: turnDeadlineMs(),
+          },
+          "oak soft time-budget nudge; asking model to submit now",
+        );
+      }
       transcript.push(provider.buildUserMessage(submitNudgeText));
     }
   }

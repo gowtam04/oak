@@ -1,38 +1,68 @@
 package ai.gowtam.oak.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+
+/**
+ * Signal wordmark — `Oak` plus a red period. Figtree 18sp SemiBold, −0.03em
+ * tracking. No tile, no ring. Used as the Chat / Teams / Account header title
+ * wherever a brand mark currently lives.
+ */
+@Composable
+fun OakWordmark(modifier: Modifier = Modifier) {
+    val oak = LocalOakColors.current
+    val style = MaterialTheme.typography.titleLarge.copy(
+        fontFamily = FigtreeFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 18.sp,
+        letterSpacing = (-0.03).em,
+    )
+    Text(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(color = oak.textStrong)) { append("Oak") }
+            withStyle(SpanStyle(color = oak.accent)) { append(".") }
+        },
+        style = style,
+        modifier = modifier.semantics {
+            heading()
+            contentDescription = "Oak"
+        },
+    )
+}
 
 /**
  * Oak's header band — the branded replacement for a stock Material `TopAppBar`
- * (theme-translation spec §4.1). Instead of Material's tonal surface it paints the
- * **canvas** (background) edge-to-edge, reserves the status-bar strip in the same
- * warm color, pins the 2dp **red thread** accent rule at the top of the content
- * band on root screens, renders the title in Fredoka (via the rewired `titleLarge`),
- * and closes with a hairline `border` rule at the bottom.
+ * (Signal §5). Instead of Material's tonal surface it paints the **canvas**
+ * (background) edge-to-edge, reserves the status-bar strip in the same color,
+ * and closes with a hairline `border` rule at the bottom. No red header slab.
  *
  * Slots pass straight through to [TopAppBar], so existing `semantics { heading() }`
  * titles, navigation icons, and action rows (with their `contentDescription`s) are
- * preserved byte-for-byte — only the chrome changes.
- *
- * @param redThread draw the accent top rule (root screens only; pushed detail
- *   screens pass `false`).
+ * preserved — only the chrome changes.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,17 +71,12 @@ fun OakTopBar(
     modifier: Modifier = Modifier,
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
-    redThread: Boolean = true,
 ) {
     val oak = LocalOakColors.current
     val canvas = MaterialTheme.colorScheme.background
     Column(modifier = modifier.fillMaxWidth().background(canvas)) {
-        // The canvas reaches behind the status bar; the header band (and the red
-        // thread) begin just below it.
+        // The canvas reaches behind the status bar; the header band begins just below it.
         Spacer(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars))
-        if (redThread) {
-            Box(Modifier.fillMaxWidth().height(2.dp).background(oak.accent))
-        }
         TopAppBar(
             title = title,
             navigationIcon = navigationIcon,

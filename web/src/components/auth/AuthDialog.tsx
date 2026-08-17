@@ -272,7 +272,7 @@ export default function AuthDialog({
               data-testid="auth-dialog-title"
               className="auth-dialog__title"
             >
-              {step === "email" ? "Sign in to Oak" : "Enter your code"}
+              {step === "email" ? "Sign in" : "Enter your code"}
             </h2>
           </div>
           <button

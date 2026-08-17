@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
  * native mirror of the web `ComparisonArtifact` and iOS `ComparisonArtifactView`. Like
  * both, it is derived from the committed answer payload (no fetch, M-AC-A4.1) and
  * simply lays the subjects out together, reusing the exact [SubjectCard] the answer
- * itself renders — so the sprites, dex numbers, type badges, and any fallback pill
+ * itself renders — so the sprites, names, mute dex captions, and any fallback pill
  * stay identical to the answer.
  *
  * Phase 2: the comparison sits in a multi-subject specimen plate shell (neutral-ish

@@ -95,6 +95,7 @@ export default function RefToolbar({
                     key={opt.value}
                     type="button"
                     className="ref-chip"
+                    data-type={opt.swatch}
                     aria-pressed={pressed}
                     onClick={() => group.onToggle(opt.value)}
                   >

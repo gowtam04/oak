@@ -93,7 +93,7 @@ describe("AnswerCard — canonical answered payload (all fields)", () => {
     const receipts = screen.getByTestId("receipts-footer");
     expect(receipts).toBeInTheDocument();
     expect(screen.getByTestId("receipts-summary")).toHaveTextContent(
-      "RECEIPTS · 2 SOURCES",
+      "Why · Sources (2)",
     );
     const sources = screen.getByTestId("source-list");
     expect(sources).toBeInTheDocument();
@@ -145,13 +145,13 @@ describe("AnswerCard — canonical answered payload (all fields)", () => {
     );
   });
 
-  it("tags the card with the answer status and a type-reactive plate", () => {
+  it("tags the card with the answer status and subject type chips", () => {
     render(<AnswerCard answer={CANONICAL_ANSWER} />);
     const card = screen.getByTestId("answer-card");
     expect(card).toHaveAttribute("data-status", "answered");
-    // Canonical answer has one subject (Garchomp) → typed plate, not ink/multi.
     expect(card).toHaveAttribute("data-plate", "typed");
-    expect(card.style.getPropertyValue("--plate-a")).toContain("dragon");
+    expect(screen.getByTestId("answer-card-types")).toBeInTheDocument();
+    expect(screen.getByTestId("type-badge-dragon")).toBeInTheDocument();
   });
 });
 

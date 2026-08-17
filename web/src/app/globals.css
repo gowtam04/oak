@@ -1,9 +1,9 @@
 /* ==========================================================================
    Oak — Design System
    Single source of truth. Tokens (light + dark) → base → app shell → components.
-   Implements docs/design-system/design-system.md. Component styles target the
-   existing BEM class names; nothing here references a raw hex outside the token
-   block below. "Playful chrome, precise data."
+   Implements docs/design/signal.md. Component styles target the existing BEM
+   class names; nothing here references a raw hex outside the token block below.
+   Cool daylight neutrals, Pokéball red as a signal, Figtree + IBM Plex Mono.
    ========================================================================== */
 
 /* Cascade layers: only the bare element-tag resets live in @layer base, so any
@@ -16,50 +16,63 @@
    -------------------------------------------------------------------------- */
 :root {
   /* Brand */
-  --poke-red: #ee5a5a;
-  --poke-red-hover: #e04545;
-  --poke-red-active: #c93b3b;
-  --poke-red-soft: #fcebeb;
-  --sunflower: #f5a524;
-  --sunflower-soft: #fdf1dc;
-  --azure: #3aa0e3;
-  --azure-soft: #e6f2fb;
+  --poke-red: #e3350d;
+  --poke-red-hover: #c92e0b;
+  --poke-red-active: #b02a0a;
+  --poke-red-soft: #fde8e3;
+  /* Text ink for a solid --poke-red fill. White clears AA in light mode
+     (4.4:1); dark mode's lifted #FF4A22 record red is too bright for white
+     text (3.4:1, fails AA) so dark swaps to a near-black ink (#1B1410). */
+  --on-red: #ffffff;
+  --azure: #2b7dd1;
+  --azure-soft: #e5f0fa;
 
-  /* Warm neutral ramp (theme-stable) */
+  /* Neutral ramp (cool, theme-stable — Signal §3.1) */
   --neutral-0: #ffffff;
-  --neutral-50: #fbf7f4;
-  --neutral-100: #f3ece6;
-  --neutral-200: #e9e0d8;
-  --neutral-300: #d8ccc1;
-  --neutral-400: #b8a99c;
-  --neutral-500: #94867a;
-  --neutral-600: #6e625a;
-  --neutral-700: #4e453f;
-  --neutral-800: #332d29;
-  --neutral-900: #231f1c;
-  --neutral-950: #161311;
+  --neutral-50: #f6f7f9;
+  --neutral-100: #eef0f3;
+  --neutral-200: #e3e8ef;
+  --neutral-300: #d0d6de;
+  --neutral-400: #b4bcc6;
+  --neutral-500: #8a94a0;
+  --neutral-600: #5b6b7c;
+  --neutral-700: #3d4a58;
+  --neutral-800: #2a3340;
+  --neutral-900: #1b2430;
+  --neutral-950: #121417;
 
   /* Semantic */
-  --success: #2fb573;
-  --success-soft: #e3f6ec;
-  --warning: #f08c00;
-  --warning-soft: #fdefd9;
-  --danger: #e0394a;
-  --danger-soft: #fce8ea;
-  --info: #3aa0e3;
-  --info-soft: #e6f2fb;
+  --success: #1f9d61;
+  --success-soft: #e4f4ec;
+  --warning: #e08700;
+  --warning-soft: #fbf0dc;
+  --danger: #d6303f;
+  --danger-soft: #fae7e9;
+  --info: #2b7dd1;
+  --info-soft: #e5f0fa;
 
-  /* Surfaces / text */
-  --bg: #fbf7f4;
+  /* Surfaces / text (Signal §3.1 light) */
+  --bg: #f6f7f9;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --surface-sunken: #f7f1eb;
-  --border: #e9e0d8;
-  --border-strong: #d8ccc1;
-  --text-strong: #2a2521;
-  --text: #3d362f;
-  --text-muted: #6e625a;
-  --text-faint: #94867a;
+  --surface-sunken: #eef0f3;
+  --border: #e3e8ef;
+  --border-strong: #d0d6de;
+  --text-strong: #1b2430;
+  --text: #2a3340;
+  --text-muted: #5b6b7c;
+  --text-faint: #8a94a0;
+
+  /* Signal aliases — same values, guide names. Prefer these in new CSS. */
+  --red: var(--poke-red);
+  --red-hover: var(--poke-red-hover);
+  --red-active: var(--poke-red-active);
+  --red-soft: var(--poke-red-soft);
+  --ink: var(--text-strong);
+  --sunken: var(--surface-sunken);
+  --line: var(--border);
+  --mute: var(--text-muted);
+  --faint: var(--text-faint);
 
   /* The 18 type solids (theme-stable; the badge recipe adapts per theme) */
   --type-normal: #a8a77a;
@@ -81,11 +94,11 @@
   --type-steel: #b7b7ce;
   --type-fairy: #d685ad;
 
-  /* Radius */
-  --radius-sm: 6px;
+  /* Radius (Signal §3.4) */
+  --radius-sm: 8px;
   --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-pill: 999px;
 
   /* Spacing (4px base) */
@@ -100,23 +113,25 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* Motion */
-  --motion-fast: 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  --motion-base: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  --motion-spring: 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Motion (Signal §3.6) */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --motion-fast: 180ms var(--ease);
+  --motion-base: 180ms var(--ease);
+  --motion-enter: 280ms var(--ease);
+  --motion-spring: 180ms var(--ease);
 
-  /* Shadows (warm-tinted) */
-  --shadow-raised: 0 1px 2px rgba(74, 53, 42, 0.05),
-    0 4px 12px rgba(74, 53, 42, 0.07);
-  --shadow-floating: 0 6px 16px rgba(74, 53, 42, 0.1),
-    0 2px 6px rgba(74, 53, 42, 0.08);
-  --shadow-overlay: 0 16px 40px rgba(74, 53, 42, 0.18);
+  /* Shadows — hairline is the default on plates. Floating uses the Signal tint. */
+  --shadow-raised: 0 1px 2px rgba(27, 36, 48, 0.05),
+    0 8px 22px -14px rgba(27, 36, 48, 0.14);
+  --shadow-floating: 0 12px 32px -16px rgba(27, 36, 48, 0.18);
+  --shadow-overlay: 0 20px 48px -16px rgba(27, 36, 48, 0.28);
+  --shadow-well: inset 0 2px 8px rgba(27, 36, 48, 0.12);
 
-  /* Focus ring: 2px azure with a surface-colored offset */
-  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--azure);
+  /* Focus ring: 2px red with a canvas-colored offset. Azure is fallback only. */
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--poke-red);
 
-  /* Type families (next/font sets the variables on <body>; fallbacks here) */
-  --display: var(--font-display), "Segoe UI", system-ui, sans-serif;
+  /* Type families (next/font sets --font-body / --font-mono on <html>) */
+  --display: var(--font-body), system-ui, -apple-system, sans-serif;
   --body: var(--font-body), system-ui, -apple-system, sans-serif;
   --mono: var(--font-mono), ui-monospace, "SF Mono", monospace;
 
@@ -146,14 +161,13 @@
   /* Layout constants (reading measures + surface widths). Adoption by feature
      surfaces is progressive; --chat-col-max is applied to the thread + composer
      column here, the rest are defined for later tasks. */
-  --measure-prose: 68ch; /* comfortable prose measure */
+  --measure-prose: 62ch; /* Signal body measure */
   --chat-col-max: 760px; /* conversation column */
   --composer-max: 680px; /* composer field column */
-  --artifact-panel-w: 460px; /* artifact side panel */
+  --artifact-panel-w: 320px; /* Signal §5.5 right sheet */
 
-  /* Warm overlay scrim (behind modals / drawers) — replaces cold gray/black
-     rgba so backdrops keep the paper palette. */
-  --scrim: rgba(42, 37, 33, 0.4);
+  /* Neutral ink overlay scrim (behind modals / drawers). */
+  --scrim: rgba(13, 16, 18, 0.45);
 
   /* CSS-only icon set — masked SVGs, tinted via currentColor */
   --brand-mark: url("/oak-app-icon.png");
@@ -174,41 +188,43 @@
    opt-in only, applied when the user toggles it (`data-theme="dark"`).
    -------------------------------------------------------------------------- */
 [data-theme="dark"] {
-  --poke-red: #ff6b6b;
-  --poke-red-hover: #ff7e7e;
-  --poke-red-active: #f25c5c;
-  --poke-red-soft: #3a1e1e;
-  --sunflower: #f8b73e;
-  --sunflower-soft: #3a2e14;
-  --azure: #5bb4ef;
-  --azure-soft: #16263a;
+  --poke-red: #ff4a22;
+  --poke-red-hover: #ff5f3c;
+  --poke-red-active: #e8431e;
+  --poke-red-soft: #33170f;
+  /* AA pass (phase 3): white text on the lifted dark record red is 3.4:1 —
+     fails. This near-black ink reads at 5.7:1. */
+  --on-red: #1b1410;
+  --azure: #55a0e8;
+  --azure-soft: #142433;
 
-  --success: #46c98a;
-  --success-soft: #10301f;
-  --warning: #fba53b;
-  --warning-soft: #3a2a0f;
-  --danger: #ff5c6b;
-  --danger-soft: #3a1518;
-  --info: #5bb4ef;
-  --info-soft: #16263a;
+  --success: #34c27f;
+  --success-soft: #123821;
+  --warning: #f0a030;
+  --warning-soft: #3a2a0d;
+  --danger: #f04a58;
+  --danger-soft: #3a1216;
+  --info: #55a0e8;
+  --info-soft: #142a3e;
 
-  --bg: #161311;
-  --surface: #211c19; /* warm dark card paper (UI §4 screen 10) */
-  --surface-raised: #2a2420; /* one step above --surface; keeps the ramp ordered */
-  --surface-sunken: #12100e; /* deepest — sunken inputs (UI §4 screen 10) */
-  --border: #3a332e;
-  --border-strong: #4e453f;
-  --text-strong: #f5efe9;
-  --text: #e4dad0;
-  --text-muted: #b7a99c;
-  --text-faint: #8a7d72;
+  --bg: #121417;
+  --surface: #1a1d22;
+  --surface-raised: #22262c;
+  --surface-sunken: #0e1013;
+  --border: #2a3038;
+  --border-strong: #3a434c;
+  --text-strong: #f2f4f6;
+  --text: #d5dae0;
+  --text-muted: #8b949e;
+  --text-faint: #6a737d;
 
-  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-floating: 0 6px 16px rgba(0, 0, 0, 0.34), 0 2px 6px rgba(0, 0, 0, 0.28);
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.28);
+  --shadow-floating: 0 12px 32px -16px rgba(0, 0, 0, 0.4);
   --shadow-overlay: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --shadow-well: inset 0 2px 8px rgba(0, 0, 0, 0.4);
 
   /* Deeper scrim in dark mode so overlays still read against the near-black canvas. */
-  --scrim: rgba(8, 6, 5, 0.6);
+  --scrim: rgba(0, 0, 0, 0.6);
 }
 
 /* --------------------------------------------------------------------------
@@ -242,8 +258,8 @@
     background: var(--bg);
     color: var(--text);
     font-family: var(--body);
-    font-size: 0.9375rem;
-    line-height: 1.55;
+    font-size: 0.9375rem; /* 15px */
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
@@ -307,6 +323,17 @@
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
+/* `.readout` — a numeric surface machined into the chassis: inset well +
+   mono tabular figures. Shared by DamageReadout (composed via a selector
+   list below, no markup change) and available for future readouts. */
+.readout {
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-well);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
 
 /* --------------------------------------------------------------------------
    4. App shell — header band · thread · composer
@@ -317,49 +344,23 @@
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
-  background: radial-gradient(
-      120% 60% at 50% -10%,
-      color-mix(in srgb, var(--poke-red) 4%, var(--bg)),
-      var(--bg) 55%
-    )
-    no-repeat;
-}
-/* Subtle desk grain (Phase 3) — ≤4% opacity; off under reduced motion/transparency. */
-.chat-page::before {
-  content: "";
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.29  0 0 0 0 0.21  0 0 0 0 0.16  0 0 0 0.55 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  background-repeat: repeat;
-  background-size: 160px 160px;
-  mix-blend-mode: multiply;
-}
-[data-theme="dark"] .chat-page::before {
-  opacity: 0.04;
-  mix-blend-mode: soft-light;
-}
-.chat-page > * {
-  position: relative;
-  z-index: 1;
-}
-@media (prefers-reduced-motion: reduce) {
-  .chat-page::before {
-    display: none;
-  }
-}
-@media (prefers-reduced-transparency: reduce) {
-  .chat-page::before {
-    display: none;
-  }
+  background: var(--bg);
 }
 
-/* Header demoted to paper (UI §1/§3): warm surface + hairline, with a 2px red
-   "thread" on top as the only accent. Red is no longer wallpaper. Tokenized, so
-   dark mode gets the same paper rule (dark warm surface + hairline + thread),
-   not a saturated band. */
+/* Signal wordmark — Figtree 600 / 18px, period is --red. */
+.oak-wordmark {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.oak-wordmark__period {
+  color: var(--poke-red);
+}
+
+/* Canvas header, hairline only. No red thread. */
 .chat-page__header {
   position: sticky;
   top: 0;
@@ -376,44 +377,24 @@
   padding-left: max(var(--space-10), env(safe-area-inset-left));
   padding-right: max(var(--space-10), env(safe-area-inset-right));
   background: var(--bg);
-  border-top: 2px solid var(--poke-red);
   border-bottom: 1px solid var(--border);
 }
 
 .chat-page__title {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
   margin: 0;
   padding: 0;
   border: 0;
   background: none;
   appearance: none;
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: var(--text-2xl);
-  line-height: 1.2;
-  letter-spacing: 0.01em;
-  color: var(--text-strong);
+  color: inherit;
   text-decoration: none;
   cursor: pointer;
 }
 .chat-page__title:hover,
 .chat-page__title:focus-visible {
   opacity: 0.75;
-}
-.chat-page__title::before {
-  content: "";
-  width: 32px;
-  height: 32px;
-  flex: 0 0 auto;
-  border-radius: 8px;
-  background: var(--brand-mark) center / cover no-repeat;
-  /* Paper-friendly: a hairline ring + soft warm shadow (was a white ring for the
-     red band). The mark's O-ring keeps its own red — the brand's record light. */
-  box-shadow:
-    0 0 0 1px var(--border),
-    0 1px 2px rgba(74, 53, 42, 0.14);
 }
 
 /* Right-side header controls: logical groups wrapped in a cluster, split by a
@@ -517,7 +498,7 @@
    Chrome (border/background) lives on the inner wrapper so the hairline
    border vanishes cleanly at width 0. */
 .chat-page__sidebar {
-  width: 300px;
+  width: 200px;
   flex-shrink: 0;
   min-height: 0;
   overflow: hidden;
@@ -533,9 +514,9 @@
   transition: none;
 }
 .chat-page__sidebar-inner {
-  width: 300px;
+  width: 200px;
   height: 100%;
-  background: var(--surface);
+  background: var(--bg);
   border-right: 1px solid var(--border);
 }
 
@@ -567,7 +548,7 @@
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: var(--poke-red);
-  color: var(--neutral-0);
+  color: var(--on-red);
   font: inherit;
   font-size: var(--text-md);
   font-weight: 600;
@@ -583,62 +564,61 @@
   align-items: center;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  border-left: 3px solid transparent;
-  color: var(--text);
-  font-weight: 600;
+  box-shadow: inset 2px 0 0 transparent;
+  color: var(--text-muted);
+  font-weight: 500;
   font-size: var(--text-md);
   text-decoration: none;
-  transition: background var(--motion-fast);
+  transition: background var(--motion-fast), color var(--motion-fast);
 }
 .app-nav__link:hover {
-  background: var(--surface-sunken);
+  background: var(--surface);
+  color: var(--text-strong);
 }
-/* Active = red left rail + soft red fill, mirroring .conv-row's active
-   language (the border is always 3px, transparent when inactive, so it
-   never shifts the row on activation). */
+/* Active = white row + 2px red inset. Not a red fill rail. */
 .app-nav__link--active {
-  background: var(--poke-red-soft);
-  border-left-color: var(--poke-red);
+  background: var(--surface);
+  box-shadow: inset 2px 0 0 var(--poke-red);
   color: var(--text-strong);
 }
 .app-nav__slot {
   flex: 1;
   min-height: 0;
 }
+/* A labeled mono group — silkscreen heading + a vertical, hairline-separated
+   row list. Was a two-column grid of link fragments; that read as an
+   unfinished footer, not a purposeful section of the rail. */
 .app-nav__reference {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  row-gap: 2px;
-  column-gap: var(--space-2);
+  display: flex;
+  flex-direction: column;
   margin-top: auto;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   border-top: 1px solid var(--border);
 }
 .app-nav__ref-heading {
-  grid-column: 1 / -1;
-  padding: 0 var(--space-1) var(--space-1);
-  font-size: var(--text-2xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-faint);
+  padding: 0 var(--space-1) var(--space-2);
 }
 .app-nav__ref-link {
-  padding: var(--space-1);
+  padding: var(--space-2) var(--space-1);
   color: var(--text-muted);
   font-size: var(--text-sm);
   text-decoration: none;
+  border-top: 1px solid var(--border);
+  transition: color var(--motion-fast);
+}
+.app-nav__ref-link:first-of-type {
+  border-top: none;
 }
 .app-nav__ref-link:hover {
-  text-decoration: underline;
+  color: var(--text-strong);
+  text-decoration: none;
 }
 .app-nav__ref-link[aria-current="page"] {
   color: var(--text-strong);
   font-weight: 600;
 }
 .app-nav__privacy {
-  grid-column: 1 / -1;
-  padding: var(--space-1);
+  padding: var(--space-2) var(--space-1) 0;
   color: var(--text-faint);
   font-size: var(--text-2xs);
   text-decoration: none;
@@ -648,36 +628,36 @@
 }
 
 /* Guest sign-in hint — replaces the history list in the rail's middle slot
-   when signed out (guests have no server history). Mirrors
-   .conv-list__empty*'s layout/copy weight. */
+   when signed out (guests have no server history). One quiet row: muted
+   copy with a red text-button inline, not a centered stack of separate
+   fragments (text block + full pill button) competing for the same space. */
 .chat-page__signin-hint {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
-  height: 100%;
-  padding: var(--space-6) var(--space-3);
-  text-align: center;
+  padding: var(--space-4) var(--space-3);
 }
 .chat-page__signin-hint-text {
   margin: 0;
-  color: var(--text-faint);
+  /* AA pass (phase 3): --text-faint is ~3:1 on --surface in both themes —
+     fine for decorative captions but this is body-critical copy, so it
+     takes --text-muted (~5.6:1 light / ~6.8:1 dark) instead. */
+  color: var(--text-muted);
   font-size: var(--text-sm);
+  line-height: 1.5;
 }
 .chat-page__signin-hint-cta {
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--poke-red);
-  background: var(--poke-red-soft);
+  padding: 0;
+  border: none;
+  background: none;
   color: var(--poke-red);
   font: inherit;
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: background var(--motion-fast);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--motion-fast);
 }
 .chat-page__signin-hint-cta:hover {
-  background: color-mix(in srgb, var(--poke-red-soft) 60%, var(--surface));
+  color: var(--poke-red-hover);
 }
 
 /* The actual scroll container (className on a flex column in page.tsx). Owns
@@ -691,6 +671,51 @@
   min-height: 0;
   overflow-y: auto;
   scroll-padding-bottom: calc(var(--space-16) + var(--space-8));
+}
+
+/* Signal streaming: red pip + mute nouns + 2px bar */
+.sig-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+.sig-live__pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--poke-red);
+  flex: none;
+  animation: sig-pip 1.2s var(--ease) infinite;
+}
+.sig-live__bar {
+  height: 2px;
+  width: 24%;
+  border-radius: 1px;
+  background: var(--poke-red);
+  animation: sig-bar 2.4s var(--ease) infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sig-live__pip,
+  .sig-live__bar {
+    animation: none;
+  }
+  .sig-live__bar {
+    width: 48%;
+  }
+}
+@keyframes sig-pip {
+  0%, 45% { opacity: 1; }
+  55%, 100% { opacity: 0.25; }
+}
+@keyframes sig-bar {
+  from { width: 24%; }
+  to { width: 72%; }
 }
 
 /* Scrolling thread, centered text column */
@@ -729,8 +754,7 @@
   align-items: flex-end;
   gap: var(--space-2);
 }
-/* User desk note (soul.md): sunken paper + thin border + red corner pip.
-   Not a soft-red iMessage/ChatGPT bubble fill. */
+/* User note: sunken fill + hairline. No red bubble, no corner pip. */
 .chat-turn--user .chat-turn__content {
   position: relative;
   max-width: 70%;
@@ -738,21 +762,13 @@
   background: var(--surface-sunken);
   color: var(--text-strong);
   font-size: 0.9375rem;
-  font-weight: 600;
+  font-weight: 500;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  border-bottom-right-radius: var(--radius-sm);
-  box-shadow: var(--shadow-raised);
+  box-shadow: none;
 }
 .chat-turn--user .chat-turn__content::before {
-  content: "";
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--poke-red);
+  content: none;
 }
 /* Thumbnails of images the user attached to their turn (session-only) */
 .chat-turn__images {
@@ -780,116 +796,152 @@
    -------------------------------------------------------------------------- */
 .type-badge {
   --type: var(--type-normal);
+  --type-ink: #16181a;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 10px;
-  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
   font-family: var(--body);
   font-weight: 600;
-  font-size: 0.6875rem;
+  font-size: 11px;
   line-height: 1;
-  letter-spacing: 0.03em;
+  letter-spacing: 0;
   text-transform: capitalize;
   white-space: nowrap;
-  background: color-mix(in srgb, var(--type) 16%, var(--surface));
-  color: color-mix(in srgb, var(--type) 72%, var(--text-strong));
-  border: 1px solid color-mix(in srgb, var(--type) 30%, transparent);
+  background: var(--type);
+  color: var(--type-ink);
+  border: none;
 }
 
-[data-theme="dark"] .type-badge {
-  background: color-mix(in srgb, var(--type) 26%, var(--surface));
-  color: color-mix(in srgb, var(--type) 45%, #ffffff);
-}
-
-.type-badge--normal { --type: var(--type-normal); }
-.type-badge--fire { --type: var(--type-fire); }
-.type-badge--water { --type: var(--type-water); }
-.type-badge--electric { --type: var(--type-electric); }
-.type-badge--grass { --type: var(--type-grass); }
-.type-badge--ice { --type: var(--type-ice); }
-.type-badge--fighting { --type: var(--type-fighting); }
-.type-badge--poison { --type: var(--type-poison); }
-.type-badge--ground { --type: var(--type-ground); }
-.type-badge--flying { --type: var(--type-flying); }
-.type-badge--psychic { --type: var(--type-psychic); }
-.type-badge--bug { --type: var(--type-bug); }
-.type-badge--rock { --type: var(--type-rock); }
-.type-badge--ghost { --type: var(--type-ghost); }
-.type-badge--dragon { --type: var(--type-dragon); }
-.type-badge--dark { --type: var(--type-dark); }
-.type-badge--steel { --type: var(--type-steel); }
-.type-badge--fairy { --type: var(--type-fairy); }
+/* Full-chroma solids are theme-stable — no dark-mode pastel override. Ink is
+   picked per-type for contrast (WCAG-legible white or near-black on the raw
+   type color), not derived from the theme. */
+.type-badge--normal { --type: var(--type-normal); --type-ink: #16181a; }
+.type-badge--fire { --type: var(--type-fire); --type-ink: #16181a; }
+.type-badge--water { --type: var(--type-water); --type-ink: #16181a; }
+.type-badge--electric { --type: var(--type-electric); --type-ink: #16181a; }
+.type-badge--grass { --type: var(--type-grass); --type-ink: #16181a; }
+.type-badge--ice { --type: var(--type-ice); --type-ink: #16181a; }
+.type-badge--fighting { --type: var(--type-fighting); --type-ink: #ffffff; }
+.type-badge--poison { --type: var(--type-poison); --type-ink: #ffffff; }
+.type-badge--ground { --type: var(--type-ground); --type-ink: #16181a; }
+.type-badge--flying { --type: var(--type-flying); --type-ink: #16181a; }
+.type-badge--psychic { --type: var(--type-psychic); --type-ink: #16181a; }
+.type-badge--bug { --type: var(--type-bug); --type-ink: #16181a; }
+.type-badge--rock { --type: var(--type-rock); --type-ink: #16181a; }
+.type-badge--ghost { --type: var(--type-ghost); --type-ink: #ffffff; }
+.type-badge--dragon { --type: var(--type-dragon); --type-ink: #ffffff; }
+.type-badge--dark { --type: var(--type-dark); --type-ink: #ffffff; }
+.type-badge--steel { --type: var(--type-steel); --type-ink: #16181a; }
+.type-badge--fairy { --type: var(--type-fairy); --type-ink: #16181a; }
 
 /* --------------------------------------------------------------------------
-   7. Answer card + its sections — specimen plate (soul.md type wash)
+   7. Answer card + its sections — TYPE-LIGHT plate (soul.md Instrument redesign)
    -------------------------------------------------------------------------- */
-/* Plate mix strengths live on :root so the dev plate tuner can dial them
-   (Phase 3). Dark theme raises the mix so wash still reads (~18–28%). */
+/* Type-light dial values live on :root so the dev plate tuner can dial them.
+   These are the SAME 5 custom properties the old pastel-wash recipe used
+   (PlateTuner.tsx keys are unchanged) but their meaning is remapped for the
+   "type is a light, not a wash" recipe:
+     --plate-radial-a  the plate's own corner glow (answer-card / artifact-viewer)
+     --plate-radial-b  the sprite WELL's glow — the light SOURCE, stronger
+     --plate-wash-a    the streaming skeleton's softer corner glow
+     --plate-wash-b    roster slots' ambient glow
+     --plate-edge      border color-mix strength (the hairline tint under the
+                        bold edge light); also reused as the multi-plate's
+                        faint edge-segment opacity (see .answer-card--multi)
+   Dark theme raises every glow so the light still reads on graphite. */
 :root {
   --plate-radial-a: 12%;
-  --plate-radial-b: 10%;
+  --plate-radial-b: 28%;
   --plate-wash-a: 8%;
-  --plate-wash-b: 6%;
-  --plate-edge: 28%;
+  --plate-wash-b: 16%;
+  --plate-edge: 30%;
 }
 [data-theme="dark"] {
-  --plate-radial-a: 24%;
-  --plate-radial-b: 18%;
-  --plate-wash-a: 18%;
-  --plate-wash-b: 14%;
-  --plate-edge: 32%;
+  --plate-radial-a: 22%;
+  --plate-radial-b: 40%;
+  --plate-wash-a: 16%;
+  --plate-wash-b: 24%;
+  --plate-edge: 38%;
 }
 .answer-card {
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  padding: var(--space-6) var(--space-6) 0;
-  border-radius: var(--radius-xl);
-  border: 1px solid color-mix(in srgb, var(--plate-a) var(--plate-edge), var(--border));
-  background:
-    radial-gradient(
-      90% 70% at 88% 18%,
-      color-mix(in srgb, var(--plate-a) var(--plate-radial-a), transparent),
-      transparent 55%
-    ),
-    radial-gradient(
-      70% 60% at 12% 90%,
-      color-mix(in srgb, var(--plate-b) var(--plate-radial-b), transparent),
-      transparent 50%
-    ),
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--plate-a) var(--plate-wash-a), var(--surface)),
-      color-mix(in srgb, var(--plate-b) var(--plate-wash-b), var(--surface)) 55%,
-      var(--surface)
-    );
-  box-shadow: var(--shadow-floating);
+  gap: var(--space-4);
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: none;
   overflow: hidden;
+  animation: answer-enter var(--motion-enter) both;
 }
-/* Mechanics / no subjects — sunken paper ink plate, no type wash. */
+@media (prefers-reduced-motion: reduce) {
+  .answer-card {
+    animation: none;
+  }
+}
+@keyframes answer-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* Leading-edge light — a 3px inset strip in the primary type color; a linear
+   split at 60/40 folds in the secondary type without a second pseudo-element
+   (single subject collapses to one solid color since --plate-a === --plate-b). */
+.answer-card::before {
+  content: none;
+}
+/* Glow — ONE radial anchored where the sprite well sits (top-right on desktop),
+   layered above the solid surface via its own pseudo-element so the base panel
+   never has to fade (only the light does, for the "reading latches" moment). */
+.answer-card::after {
+  content: none;
+}
+/* Mechanics / no subjects — sunken ink plate. Neutral, no type light. */
 .answer-card--ink {
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
-  background: linear-gradient(180deg, var(--surface-sunken), var(--surface));
-  border-color: var(--border-strong);
-}
-/* Multi-subject: neutral-ish shell + light accent (don't fight dual washes). */
-.answer-card--multi {
-  --plate-radial-a: 8%;
-  --plate-radial-b: 6%;
-  --plate-wash-a: 4%;
-  --plate-wash-b: 3%;
-  --plate-edge: 18%;
+  background: var(--surface);
+  box-shadow: none;
   border-color: var(--border);
 }
-[data-theme="dark"] .answer-card--multi {
-  --plate-radial-a: 14%;
-  --plate-radial-b: 10%;
-  --plate-wash-a: 10%;
-  --plate-wash-b: 7%;
+.answer-card--ink::before,
+.answer-card--ink::after {
+  content: none;
+}
+/* Multi-subject: neutral-ish shell + a faint dual-segment edge (don't fight
+   several glows at once) — no card-corner glow. */
+.answer-card--multi {
+  border-color: var(--border);
+}
+.answer-card--multi::before {
+  /* Faint — reuses the edge dial's own percentage as the segment's opacity. */
+  --latch-opacity: var(--plate-edge);
+}
+.answer-card--multi::after {
+  content: none;
+}
+
+/* "Reading latches" (UI §3 Motion) — the type-light fades in once, on mount,
+   which for `.answer-card` IS the finalize moment (it only ever mounts with a
+   terminal `status`; there is no in-place re-render mid-stream). */
+@keyframes latch-glow {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: var(--latch-opacity, 1);
+  }
 }
 /* Masthead — the slim status row leading every answer card (UI §4 screen 04):
    a status indicator (left) + the turn's scope tag (right, `.ilabel`). */
@@ -909,26 +961,52 @@
 .answer-masthead__status-symbol {
   font-size: 0.9375rem;
   line-height: 1;
+  /* "Reading latches" — the record light (red) blips to the settled status
+     color once, on mount (the masthead only ever mounts at terminal status —
+     the streaming skeleton's own red dot below stands in beforehand). */
+  animation: latch-status 300ms var(--motion-base) both;
 }
 .answer-masthead__status--ok {
   color: var(--success);
 }
+.answer-masthead__status--ok .answer-masthead__status-symbol {
+  --latch-to: var(--success);
+}
 .answer-masthead__status--partial {
   color: color-mix(in srgb, var(--warning) 70%, var(--text-strong));
+}
+.answer-masthead__status--partial .answer-masthead__status-symbol {
+  --latch-to: color-mix(in srgb, var(--warning) 70%, var(--text-strong));
 }
 .answer-masthead__status--insufficient {
   color: var(--text-faint);
 }
+.answer-masthead__status--insufficient .answer-masthead__status-symbol {
+  --latch-to: var(--text-faint);
+}
+@keyframes latch-status {
+  from {
+    color: var(--poke-red);
+  }
+  to {
+    color: var(--latch-to, currentColor);
+  }
+}
 .answer-masthead__scope {
-  color: var(--text-faint);
+  display: none;
+}
+.answer-card__type-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 /* Answer body — the primary read. Measure capped at the comfortable prose
    width (UI §3) — the card itself stays wide; only the text is held narrow. */
 .answer-body__content {
   max-width: var(--measure-prose);
-  font-size: 1rem;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--text);
   /* A long URL / hyphen-free identifier must break rather than widen the card
      past a 390px viewport. Only acts on otherwise-unbreakable tokens. */
@@ -939,15 +1017,14 @@
   font-weight: 700;
 }
 
-/* Answer lead — the first paragraph of every answer is the verdict line (UI
-   §4 screen 04 hero moment). Nunito 700 22px/1.35, a full step above body
-   text; every following paragraph stays plain body copy. */
+/* Answer lead — Figtree 600 / 22. Rest of markdown stays 15/400. */
 .answer-body__content.markdown-body > p:first-child {
-  font-family: var(--body);
-  font-weight: 700;
-  font-size: var(--text-xl);
-  line-height: 1.35;
-  color: var(--text-strong);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--ink);
 }
 
 /* Evidence rail — AnswerBody + subjects[] share a row so sprite cards sit
@@ -1041,6 +1118,7 @@
   font-family: var(--display);
   font-weight: 600;
   line-height: 1.25;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .markdown-body h1 {
@@ -1298,7 +1376,9 @@
 .sprite-card:hover {
   transform: scale(1.03);
 }
-/* Type-glow radial well — not azure default. */
+/* Type-glow radial well — the light SOURCE (soul.md Instrument redesign):
+   an inset well (machined into the chassis) with a saturated glow stronger
+   than the card's own corner light (--plate-radial-b, tuned higher). */
 .sprite-card__well {
   width: 120px;
   height: 120px;
@@ -1308,12 +1388,12 @@
   background:
     radial-gradient(
       circle at 50% 45%,
-      color-mix(in srgb, var(--plate-a) 28%, transparent),
+      color-mix(in srgb, var(--plate-a) var(--plate-radial-b), transparent),
       transparent 65%
     ),
-    color-mix(in srgb, var(--plate-a) 10%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--plate-a) 22%, var(--border));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--plate-b) 15%, transparent);
+    var(--surface-sunken);
+  border: 1px solid color-mix(in srgb, var(--plate-a) 32%, var(--border-strong));
+  box-shadow: var(--shadow-well);
 }
 .sprite-card__sprite-link {
   display: block;
@@ -1341,6 +1421,7 @@
   font-weight: 500;
   font-size: 1.125rem;
   line-height: 1.35;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
   text-transform: capitalize;
 }
@@ -1584,31 +1665,22 @@
   /* Anchor the attach/Send buttons to the bottom as the textarea auto-grows. */
   align-items: flex-end;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  padding: 12px 16px;
   background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-pill);
-  box-shadow: var(--shadow-floating);
-  transition: border-color var(--motion-fast),
-    box-shadow var(--motion-base), transform var(--motion-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
 }
-/* The PILL owns focus — an azure ring per the foundation. The inner textarea's
-   own focus ring is suppressed below so the two don't fight (screen 11). The
-   border does NOT turn red on focus; red is reserved for the live/streaming
-   state (`--live`). */
+/* Focus = 2px red ring, 2px canvas offset. No lift, no glow. */
 .composer__field:focus-within {
-  border-color: var(--azure);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-floating),
-    0 0 0 4px color-mix(in srgb, var(--azure) 20%, transparent);
+  border-color: var(--poke-red);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--poke-red);
 }
-/* Live (streaming) state — red border + glow, matching the red Stop button. The
-   record-light red only appears while a turn is actually in flight. */
 .composer__field--live,
 .composer__field--live:focus-within {
   border-color: var(--poke-red);
-  box-shadow: var(--shadow-floating),
-    0 0 0 4px color-mix(in srgb, var(--poke-red) 18%, transparent);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--poke-red);
 }
 
 /* Leading Poké Ball icon — faint, brightens to red on focus */
@@ -1757,40 +1829,36 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
+  min-width: 44px;
   height: 44px;
+  padding: 0 14px;
   flex: none;
-  font-size: 0; /* hide "Send" text node; accessible name preserved */
-  color: var(--neutral-0);
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--on-red);
   background: var(--poke-red);
   border: none;
-  border-radius: var(--radius-pill);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--poke-red) 40%, transparent);
-  transition: background var(--motion-fast),
-    transform var(--motion-spring), opacity var(--motion-fast);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  transition: background var(--motion-fast), transform var(--motion-fast);
 }
 .composer__send::before {
-  content: "";
-  width: 20px;
-  height: 20px;
-  background: currentColor;
-  -webkit-mask: var(--icon-send) center / contain no-repeat;
-  mask: var(--icon-send) center / contain no-repeat;
+  content: none;
 }
 .composer__send:hover:not(:disabled) {
   background: var(--poke-red-hover);
-  transform: scale(1.06);
 }
 .composer__send:active:not(:disabled) {
   background: var(--poke-red-active);
-  transform: scale(0.94);
+  transform: scale(0.98);
 }
 .composer__send:disabled {
-  /* token-based so it mutes in BOTH themes (not a fixed light grey) */
   background: var(--surface-sunken);
   color: var(--text-faint);
   box-shadow: none;
-  transform: scale(0.85);
+  transform: none;
   cursor: not-allowed;
 }
 
@@ -2086,31 +2154,34 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-4);
-  background: var(--azure-soft);
-  border: 1px solid color-mix(in srgb, var(--azure) 35%, transparent);
-  border-radius: var(--radius-md);
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 .inference-callout__title {
-  color: color-mix(in srgb, var(--azure) 55%, var(--text-strong));
+  display: none;
+}
+.inference-callout__line {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+.inference-callout__word {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--poke-red);
 }
 .inference-callout__item {
   position: relative;
-  padding-left: 26px;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: var(--text);
+  padding-left: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 .inference-callout__item::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 1px;
-  width: 16px;
-  height: 16px;
-  background: var(--azure);
-  -webkit-mask: var(--icon-bulb) center / contain no-repeat;
-  mask: var(--icon-bulb) center / contain no-repeat;
+  content: none;
 }
 .inference-callout__confidence {
   display: inline-block;
@@ -2126,7 +2197,7 @@
   background: var(--success);
 }
 .inference-callout__confidence--medium {
-  background: var(--sunflower);
+  background: var(--warning);
   color: var(--text-strong);
 }
 .inference-callout__confidence--low {
@@ -2149,16 +2220,17 @@
   gap: var(--space-3);
   padding: var(--space-5);
   background: var(--surface-sunken);
-  border: 1px solid var(--border);
+  box-shadow: var(--shadow-well);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
 }
 .damage-readout__estimate-tag {
   align-self: flex-start;
   padding: 2px 10px;
   border-radius: var(--radius-pill);
-  background: var(--sunflower-soft);
-  color: color-mix(in srgb, var(--sunflower) 45%, var(--text-strong));
-  border: 1px solid color-mix(in srgb, var(--sunflower) 40%, transparent);
+  background: var(--warning-soft);
+  color: color-mix(in srgb, var(--warning) 45%, var(--text-strong));
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -2178,9 +2250,11 @@
 /* `.ilabel` in markup (DamageReadout.tsx) supplies the mono/uppercase/tracked
    instrument voice; no key-specific override needed. */
 .damage-readout__result-value {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: var(--text-xl);
+  font-weight: 700;
   line-height: 1.2;
+  font-variant-numeric: tabular-nums;
   color: var(--text-strong);
 }
 .damage-readout__breakdown {
@@ -2352,7 +2426,8 @@
   align-items: baseline;
   gap: var(--space-2);
   margin: 0;
-  font-size: 0.8125rem;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
   line-height: 1.4;
   color: var(--text-muted);
   animation: turn-in var(--motion-base) both;
@@ -2360,8 +2435,13 @@
 .chat-thread__note--done {
   color: var(--text-faint);
 }
+/* Active row = the record light — status glyph + label read in red while the
+   loop is live on this call (soul.md "Red's jobs" #2). */
 .chat-thread__note--active {
-  color: var(--text-strong);
+  color: var(--poke-red);
+}
+.chat-thread__note--active .chat-thread__note-tool {
+  color: var(--poke-red);
 }
 .chat-thread__note-tool {
   flex: none;
@@ -2393,8 +2473,11 @@
     linear-gradient(180deg, var(--poke-red) 0 50%, var(--neutral-0) 50% 100%);
   animation: pokeball-spin 0.9s linear infinite;
 }
+/* Dim success tick once a call has moved on (soul.md — completed readouts
+   settle, only the active one stays bright). */
 .chat-thread__note-glyph[data-state="done"] {
   background: var(--success);
+  opacity: 0.6;
   -webkit-mask: var(--icon-check) center / 13px 13px no-repeat;
   mask: var(--icon-check) center / 13px 13px no-repeat;
   --icon-check: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5 13l4 4L19 7'/></svg>");
@@ -2483,49 +2566,63 @@
 
 /* Answer skeleton — masthead bar + prose lines with a soft opacity pulse; holds
    the layout so the streamed answer replaces it in place with no jump. */
-/* Streaming skeleton — mild type wash when activity hints a type (Phase 2);
-   else subtle sunken desk tint. Uses the same --plate-* recipe as answer plates. */
+/* Streaming skeleton — a softer echo of the answer-card's type-light when
+   activity hints a type; else a plain raised panel. No leading-edge light
+   (that's reserved for the confirmed terminal answer) — just a faint glow. */
 .chat-thread__skeleton {
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
-  --plate-radial-a: 8%;
-  --plate-radial-b: 6%;
-  --plate-wash-a: 5%;
-  --plate-wash-b: 4%;
-  --plate-edge: 18%;
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-5) var(--space-6);
-  border-radius: var(--radius-xl);
-  border: 1px solid color-mix(in srgb, var(--plate-a) var(--plate-edge), var(--border));
-  background:
-    radial-gradient(
-      90% 70% at 88% 18%,
-      color-mix(in srgb, var(--plate-a) var(--plate-radial-a), transparent),
-      transparent 55%
-    ),
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--plate-a) var(--plate-wash-a), var(--surface-sunken)),
-      color-mix(in srgb, var(--plate-b) var(--plate-wash-b), var(--surface)) 55%,
-      var(--surface)
-    );
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
   box-shadow: var(--shadow-raised);
+  overflow: hidden;
+}
+.chat-thread__skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    90% 70% at 88% 18%,
+    color-mix(in srgb, var(--plate-a) var(--plate-wash-a), transparent),
+    transparent 60%
+  );
 }
 .chat-thread__skeleton--desk {
-  background: linear-gradient(180deg, var(--surface-sunken), var(--surface));
+  background: var(--surface-raised);
   border-color: var(--border);
+}
+.chat-thread__skeleton--desk::after {
+  content: none;
 }
 .chat-thread__skeleton-masthead,
 .chat-thread__skeleton-line {
-  background: color-mix(in srgb, var(--plate-a) 6%, var(--surface-sunken));
+  position: relative;
+  background: var(--surface-sunken);
   border-radius: var(--radius-sm);
   animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
 }
-.chat-thread__skeleton--desk .chat-thread__skeleton-masthead,
-.chat-thread__skeleton--desk .chat-thread__skeleton-line {
-  background: var(--surface-sunken);
+/* Record light — a glowing red dot beside the masthead placeholder while a
+   turn is live (soul.md "LED scope stamp" / "reading latches": red while
+   streaming, latches to the resolved status color once the card finalizes). */
+.chat-thread__skeleton-masthead::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--poke-red);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--poke-red) 55%, transparent);
+  animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
 }
 .chat-thread__skeleton-masthead {
   height: 1.6rem;
@@ -2578,8 +2675,8 @@
   font-weight: 600;
   cursor: pointer;
   transition:
-    background 120ms ease,
-    color 120ms ease;
+    background var(--motion-fast),
+    color var(--motion-fast);
 }
 .chat-thread__error-retry:hover {
   background: var(--danger);
@@ -2611,43 +2708,19 @@
   gap: var(--space-5);
 }
 
-/* Blank specimen plate — dashed border + faint grid, desk not AI-hero. */
+/* Empty chat — title, mute sub, four starter rows. No STANDBY plate. */
 .blank-plate {
   position: relative;
   overflow: hidden;
-  min-height: 280px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-5) var(--space-5) var(--space-4);
-  background: var(--surface);
-  border: 1.5px dashed color-mix(in srgb, var(--border-strong) 80%, var(--poke-red) 20%);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-raised);
-}
-.blank-plate::before {
-  content: "";
-  position: absolute;
-  inset: 12px;
-  border-radius: calc(var(--radius-xl) - 8px);
-  background-image:
-    linear-gradient(
-      to right,
-      color-mix(in srgb, var(--border) 70%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      to bottom,
-      color-mix(in srgb, var(--border) 70%, transparent) 1px,
-      transparent 1px
-    );
-  background-size: 24px 24px;
-  opacity: 0.45;
-  pointer-events: none;
-}
-.blank-plate > * {
-  position: relative;
-  z-index: 1;
+  padding: 24px 0 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 .blank-plate__top {
   display: flex;
@@ -2656,8 +2729,31 @@
   gap: var(--space-2);
   flex-wrap: wrap;
 }
+/* LED scope stamp — inset well chip + a glowing red record dot, standing in
+   for "the device is on, waiting" (soul.md "Standby readout"). */
 .blank-plate__ilabel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2) var(--space-1) 18px;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-well);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   color: var(--text-faint);
+}
+.blank-plate__ilabel::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--poke-red);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--poke-red) 55%, transparent);
 }
 .blank-plate__scope {
   margin: 0;
@@ -2666,19 +2762,19 @@
   margin: 0;
 }
 .blank-plate__prompt {
-  margin: var(--space-2) 0 0;
-  font-family: var(--body);
-  font-size: 1.125rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.35;
-  color: var(--text-strong);
+  margin: 0;
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--ink);
 }
 .blank-plate__sub {
-  margin: 0;
-  max-width: 36ch;
-  font-size: var(--text-sm);
-  line-height: 1.45;
+  margin: 0 0 18px;
+  max-width: 46ch;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--text-muted);
 }
 
@@ -2701,7 +2797,7 @@
   -webkit-backdrop-filter: none;
 }
 
-/* Filed starters — category + type-dot + text (not equal beige pills). */
+/* Signal starters — four full-width surface rows, optional mute prefix. */
 .starters {
   display: flex;
   flex-direction: column;
@@ -2709,51 +2805,44 @@
   margin-top: var(--space-1);
 }
 .starters__label {
-  margin-bottom: 2px;
-  color: var(--text-faint);
+  display: none;
 }
 .starter {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 10px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px 14px;
   text-align: left;
   font: inherit;
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
   color: var(--text-strong);
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: border-color var(--motion-fast), transform var(--motion-fast),
-    background var(--motion-fast);
+  transition: border-color var(--motion-fast), background var(--motion-fast);
 }
 .starter:hover {
   border-color: var(--border-strong);
   background: var(--surface);
-  transform: translateY(-1px);
 }
 .starter:active {
-  transform: scale(0.99);
+  transform: none;
 }
 .starter__cat {
   flex: none;
-  width: 52px;
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
+  font-family: var(--body);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted);
 }
 .starter__dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-faint);
+  display: none;
 }
 .starter__text {
   flex: 1;
@@ -2791,6 +2880,7 @@
   margin: 0 0 var(--space-3);
   font-family: var(--display);
   font-size: var(--text-lg);
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 
@@ -2913,8 +3003,24 @@
     animation: none !important;
     opacity: 0.7;
   }
+  .chat-thread__skeleton-masthead::before {
+    animation: none !important;
+    opacity: 0.8;
+  }
   .chat-thread__summary-caret {
     transition: none;
+  }
+  /* "Reading latches" — instant swap, no fade/color-blip. */
+  .answer-card::before,
+  .answer-card::after,
+  .answer-masthead__status-symbol {
+    animation: none !important;
+    opacity: var(--latch-opacity, 1);
+  }
+  .answer-masthead__status--ok .answer-masthead__status-symbol,
+  .answer-masthead__status--partial .answer-masthead__status-symbol,
+  .answer-masthead__status--insufficient .answer-masthead__status-symbol {
+    color: var(--latch-to);
   }
   .chat-page__sidebar {
     transition: none;
@@ -3028,16 +3134,24 @@
 .scope-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 6px;
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
-  background: var(--surface-sunken);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-muted);
-  font-size: var(--text-xs);
-  font-weight: 600;
+  font-family: var(--body);
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1;
   white-space: nowrap;
+}
+.scope-chip__led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--poke-red);
+  flex: none;
 }
 button.scope-chip {
   cursor: pointer;
@@ -3054,7 +3168,7 @@ button.scope-chip:disabled {
   opacity: 0.5;
 }
 button.scope-chip:focus-visible {
-  outline: 2px solid var(--azure);
+  outline: 2px solid var(--poke-red);
   outline-offset: 2px;
 }
 .scope-chip__caret {
@@ -3097,9 +3211,11 @@ button.scope-chip:focus-visible {
 .scope-chip__menu-label {
   padding: 0 var(--space-2) var(--space-1);
 }
-/* Two-line rows: name + one-line description (screen 02). Selection is the one
-   red language — a soft fill plus a 3px red left rail. */
+/* Two-line rows: name + one-line description (screen 02). Selection is an LED
+   dot beside the name (soul.md "We never" #3 — no red left selection rail),
+   plus a soft fill so the row still reads at a glance. */
 .scope-chip__option {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -3107,7 +3223,6 @@ button.scope-chip:focus-visible {
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   border: none;
-  border-left: 3px solid transparent;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -3128,10 +3243,23 @@ button.scope-chip:focus-visible {
 }
 .scope-chip__option[aria-checked="true"] {
   background: var(--poke-red-soft);
-  border-left-color: var(--poke-red);
 }
 .scope-chip__option[aria-checked="true"] .scope-chip__option-name {
   color: var(--poke-red);
+  padding-left: 14px;
+  position: relative;
+}
+.scope-chip__option[aria-checked="true"] .scope-chip__option-name::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--poke-red);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--poke-red) 55%, transparent);
 }
 
 /* Auth header control — account email + the translucent sign-in/out pills */
@@ -3178,7 +3306,7 @@ button.scope-chip:focus-visible {
 .auth-pill--primary {
   border-color: transparent;
   background: var(--poke-red);
-  color: var(--neutral-0);
+  color: var(--on-red);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--poke-red) 40%, transparent);
 }
 .auth-pill--primary:hover:not(:disabled) {
@@ -3297,7 +3425,7 @@ button.scope-chip:focus-visible {
 .conv-row[data-active] {
   background: var(--surface);
   border-color: var(--border);
-  box-shadow: var(--shadow-raised);
+  box-shadow: inset 2px 0 0 var(--poke-red);
 }
 .conv-row__rename {
   flex: 1;
@@ -3465,6 +3593,7 @@ button.scope-chip:focus-visible {
   font-weight: 600;
   font-size: 22px;
   line-height: 1.3;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .auth-dialog__close {
@@ -3608,7 +3737,7 @@ button.scope-chip:focus-visible {
   border-radius: var(--radius-md);
   border: none;
   background: var(--poke-red);
-  color: var(--neutral-0);
+  color: var(--on-red);
   font-family: var(--body);
   font-weight: 600;
   font-size: 0.9375rem;
@@ -3694,7 +3823,7 @@ button.scope-chip:focus-visible {
 }
 .tm-btn--primary {
   background: var(--poke-red);
-  color: var(--neutral-0);
+  color: var(--on-red);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--poke-red) 40%, transparent);
 }
 .tm-btn--primary:hover:not(:disabled) {
@@ -3733,12 +3862,7 @@ button.scope-chip:focus-visible {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background: radial-gradient(
-      120% 60% at 50% -10%,
-      color-mix(in srgb, var(--poke-red) 4%, var(--bg)),
-      var(--bg) 55%
-    )
-    no-repeat;
+  background: var(--bg);
 }
 .teams-page__band {
   position: sticky;
@@ -3753,10 +3877,7 @@ button.scope-chip:focus-visible {
   padding-bottom: var(--space-4);
   padding-left: max(var(--space-10), env(safe-area-inset-left));
   padding-right: max(var(--space-10), env(safe-area-inset-right));
-  /* Demoted to paper, matching the chat header: warm surface + hairline + a 2px
-     red thread on top. */
   background: var(--bg);
-  border-top: 2px solid var(--poke-red);
   border-bottom: 1px solid var(--border);
 }
 .teams-page__brand {
@@ -3768,26 +3889,8 @@ button.scope-chip:focus-visible {
 .teams-page__wordmark {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: var(--text-2xl);
-  line-height: 1.2;
-  letter-spacing: 0.01em;
-  color: var(--text-strong);
   text-decoration: none;
-}
-.teams-page__wordmark::before {
-  content: "";
-  width: 32px;
-  height: 32px;
-  flex: 0 0 auto;
-  border-radius: 8px;
-  background: var(--brand-mark) center / cover no-repeat;
-  /* Paper-friendly ring (was white-on-red); mark's O-ring keeps its red. */
-  box-shadow:
-    0 0 0 1px var(--border),
-    0 1px 2px rgba(74, 53, 42, 0.14);
+  color: inherit;
 }
 .teams-page__wordmark:hover,
 .teams-page__wordmark:focus-visible {
@@ -3963,6 +4066,7 @@ button.scope-chip:focus-visible {
   font-family: var(--display);
   font-weight: 600;
   font-size: var(--text-lg);
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .teams-page__guest-text {
@@ -3977,7 +4081,7 @@ button.scope-chip:focus-visible {
   min-height: 320px;
   box-shadow: none;
   background: color-mix(in srgb, var(--surface) 60%, transparent);
-  border-style: dashed;
+  border-style: solid;
 }
 .teams-page__placeholder-icon {
   opacity: 0.6;
@@ -4009,7 +4113,7 @@ button.scope-chip:focus-visible {
   padding: var(--space-6) var(--space-4);
   text-align: center;
   background: var(--surface-sunken);
-  border: 1px dashed var(--border-strong);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
 }
 .team-list__empty-icon {
@@ -4145,6 +4249,7 @@ button.scope-chip:focus-visible {
   font-weight: 600;
   font-size: var(--text-2xl) !important;
   line-height: 1.2;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
   box-shadow: none !important;
   transition:
@@ -4178,7 +4283,7 @@ button.scope-chip:focus-visible {
   text-align: center;
   color: var(--text-muted);
   background: var(--surface-sunken);
-  border: 1px dashed var(--border-strong);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
 }
 
@@ -4358,7 +4463,7 @@ button.scope-chip:focus-visible {
   color: var(--text-strong);
 }
 .team-analysis__role-chip--miss {
-  background: color-mix(in srgb, var(--warn, #c48a1a) 22%, transparent);
+  background: color-mix(in srgb, var(--warning, #e08700) 22%, transparent);
   color: var(--text-strong);
 }
 .team-analysis__physpec {
@@ -4399,7 +4504,7 @@ button.scope-chip:focus-visible {
   border-left-color: var(--success, #2a9d5c);
 }
 .team-analysis__threat--soft {
-  border-left-color: var(--warn, #c48a1a);
+  border-left-color: var(--warning, #e08700);
 }
 .team-analysis__threat--unanswered {
   border-left-color: var(--danger, #c44);
@@ -4584,7 +4689,8 @@ button.scope-chip:focus-visible {
   gap: var(--space-3);
 }
 .roster-slot {
-  /* Type edge/glow from --plate-a/--plate-b (soul.md Phase 2 party tray). */
+  /* Filled slot = type edge + a small glow (soul.md "six sockets in a
+     device" — the party tray). --plate-a/--plate-b set per-slot in TSX. */
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
   display: flex;
@@ -4594,15 +4700,11 @@ button.scope-chip:focus-visible {
   position: relative;
   min-height: 148px;
   padding: var(--space-4) var(--space-2) var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--plate-a) 28%, var(--border));
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: radial-gradient(
-    120% 80% at 50% 20%,
-    color-mix(in srgb, var(--plate-a) 12%, var(--surface)),
-    var(--surface) 74%
-  );
+  background: var(--surface);
   box-shadow:
-    0 0 14px color-mix(in srgb, var(--plate-a) 14%, transparent),
+    0 0 10px color-mix(in srgb, var(--plate-a) var(--plate-wash-b), transparent),
     var(--shadow-raised);
   cursor: pointer;
   transition:
@@ -4611,10 +4713,21 @@ button.scope-chip:focus-visible {
     background var(--motion-fast),
     transform var(--motion-spring);
 }
+/* Leading-edge light, same recipe as the answer plate — small, top-inset. */
+.roster-slot::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--plate-a) 0 60%, var(--plate-b) 60% 100%);
+}
 .roster-slot:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 0 18px color-mix(in srgb, var(--plate-a) 18%, transparent),
+    0 0 14px color-mix(in srgb, var(--plate-a) var(--plate-wash-b), transparent),
     var(--shadow-floating);
 }
 /* Selection = red record-light ring (not a left list rail). */
@@ -4628,15 +4741,19 @@ button.scope-chip:focus-visible {
   );
   transform: translateY(-2px);
 }
-/* Empty / unknown-type filled slots: neutral dashed or plain surface. */
+/* Empty / unknown-type filled slots: a solid hairline socket machined into
+   the chassis (inset well) — no type edge, no dashed placeholder. */
 .roster-slot[data-empty="true"] {
-  border-style: dashed;
+  border-style: solid;
   border-color: var(--border);
-  background: transparent;
-  box-shadow: none;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-well);
+}
+.roster-slot[data-empty="true"]::before {
+  content: none;
 }
 .roster-slot[data-empty="true"][data-selected="true"] {
-  border-style: dashed;
+  border-style: solid;
   border-color: var(--poke-red);
   box-shadow: 0 0 0 1px var(--poke-red);
   background: radial-gradient(
@@ -4666,12 +4783,12 @@ button.scope-chip:focus-visible {
   object-fit: contain;
   image-rendering: -webkit-optimize-contrast;
 }
-/* The ONE legitimate dashed border — an empty slot's "not yet" pokeball. */
+/* An empty slot's "not yet" pokeball — solid outline, no dashed placeholders. */
 .roster-slot__sprite-empty {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  border: 2px dashed var(--border-strong);
+  border: 2px solid var(--border-strong);
   background: var(--icon-pokeball) center / 28px no-repeat;
   opacity: 0.55;
 }
@@ -4680,7 +4797,7 @@ button.scope-chip:focus-visible {
   height: 32px;
   border-radius: 50%;
   background: var(--surface);
-  border: 2px dashed var(--border-strong);
+  border: 2px solid var(--border-strong);
 }
 .roster-slot__name {
   font-family: var(--body);
@@ -4729,15 +4846,18 @@ button.scope-chip:focus-visible {
   height: 6px;
   flex: none;
   border-radius: 50%;
-  background: var(--sunflower);
+  background: var(--text-muted);
 }
 .roster-slot--add {
   justify-content: center;
-  border-style: dashed;
+  border-style: solid;
   border-color: var(--border);
   background: transparent;
   box-shadow: none;
   color: var(--text-muted);
+}
+.roster-slot--add::before {
+  content: none;
 }
 .roster-slot--add:hover {
   border-color: var(--poke-red);
@@ -4865,6 +4985,7 @@ button.scope-chip:focus-visible {
   font-family: var(--display);
   font-weight: 600;
   font-size: 1.25rem;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .team-member-panel__types {
@@ -4907,14 +5028,15 @@ button.scope-chip:focus-visible {
   color: var(--text-strong);
 }
 /* Grouped surface sections with instrument (mono small-caps) group labels
-   (UI §4 screen 07: MOVES / NATURE & LEVEL / STAT POINTS). The .ilabel utility
-   supplies the type; these just handle layout + the group-label color. */
+   (UI §4 screen 07: MOVES / STAT POINTS — the NATURE & LEVEL group label was
+   pruned, phase 3 ilabel pass: its fields are each already self-labeled).
+   The .ilabel utility supplies the type; these just handle layout + the
+   group-label color. */
 .team-member-panel__group {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
-.team-member-panel__group-label,
 .team-member-panel__moves-legend,
 .team-member-panel__stats-title {
   color: var(--text-faint);
@@ -5091,7 +5213,7 @@ button.scope-chip:focus-visible {
   background: linear-gradient(90deg, var(--success), color-mix(in srgb, var(--success) 70%, var(--azure)));
 }
 .tm-stat[data-effect="hindered"] .tm-stat__bar-fill {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--danger) 70%, var(--sunflower)), var(--danger));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--danger) 70%, var(--warning)), var(--danger));
 }
 .tm-stat__final {
   position: relative;
@@ -5099,7 +5221,8 @@ button.scope-chip:focus-visible {
   padding-inline: var(--space-2);
   font-family: var(--mono);
   font-weight: 700;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
   color: var(--text-strong);
 }
 
@@ -5258,6 +5381,7 @@ button.scope-chip:focus-visible {
   font-weight: 600;
   font-size: var(--text-lg);
   line-height: 1.3;
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .import-dialog__close,
@@ -5340,7 +5464,7 @@ button.scope-chip:focus-visible {
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: var(--poke-red);
-  color: var(--neutral-0);
+  color: var(--on-red);
   font-family: var(--body);
   font-weight: 700;
   font-size: var(--text-sm);
@@ -5381,6 +5505,7 @@ button.scope-chip:focus-visible {
   font-family: var(--display);
   font-weight: 600;
   font-size: var(--text-lg);
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 .proposed-team__format {
@@ -5448,7 +5573,7 @@ button.scope-chip:focus-visible {
 }
 .proposed-team__save-new {
   background: var(--poke-red);
-  color: var(--neutral-0);
+  color: var(--on-red);
   border-color: transparent;
 }
 .proposed-team__save-new:hover:not(:disabled) {
@@ -6306,7 +6431,7 @@ button.scope-chip:focus-visible {
   border: none;
   border-radius: var(--radius-pill);
   background: var(--poke-red);
-  color: var(--neutral-0);
+  color: var(--on-red);
   font-weight: 600;
   cursor: pointer;
   transition: background var(--motion-fast);

@@ -131,6 +131,17 @@ describe("createResolveIndex().resolve", () => {
     expect(matches[0]!.slug).toBe("farigiraf");
   });
 
+  it("list() without a limit returns every entity of that kind (full Dex browse)", () => {
+    const allPokemon = NAMES.filter((n) => n.kind === "pokemon");
+    const { matches } = index.list("pokemon");
+    expect(matches).toHaveLength(allPokemon.length);
+    expect(matches.every((m) => m.kind === "pokemon")).toBe(true);
+    const names = matches.map((m) => m.display_name);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+    // Cap must not apply when limit is omitted — more than a 50-row window.
+    expect(matches.length).toBeGreaterThan(0);
+  });
+
   it("honours the limit", () => {
     const { matches } = index.resolve("a", "any", 2);
     expect(matches.length).toBeLessThanOrEqual(2);

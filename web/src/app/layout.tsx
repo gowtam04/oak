@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Fredoka, Nunito_Sans, JetBrains_Mono } from "next/font/google";
+import { Figtree, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import "../components/artifact/artifact-viewer.css";
 
@@ -38,33 +38,34 @@ export const metadata: Metadata = {
 // non-zero (the header/composer pad themselves with it). `viewportFit: "cover"`
 // is the prerequisite for any safe-area handling. We deliberately do NOT cap
 // zoom (no maximumScale/userScalable) — that would break WCAG 1.4.4. themeColor
-// tints the browser chrome to match the app background; it's a static light
-// value (not a `prefers-color-scheme` media pair) since light is the
-// unconditional default regardless of OS preference — dark is opt-in only via
-// the in-app toggle, which a static viewport export can't react to anyway.
+// tints the browser chrome to match the app background. This is a media pair
+// keyed to `prefers-color-scheme` rather than the in-app `data-theme` toggle —
+// Oak's dark mode is opt-in via the toggle, not OS-driven, so this tracks the
+// OS preference rather than the actual active theme. That's an accepted
+// mismatch: the browser chrome may not match the toggled-in-app theme, but it
+// always matches *a* plausible theme rather than staying hardcoded light.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#fbf7f4",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#121417" },
+    { media: "(prefers-color-scheme: light)", color: "#F6F7F9" },
+  ],
 };
 
-// Display / body / mono — exposed as CSS variables consumed by globals.css.
-const fredoka = Fredoka({
+// One sans (Figtree) + one mono (IBM Plex Mono). Figtree is exposed as
+// --font-body; globals.css aliases --font-display to the same face so we do
+// not download the family twice. next/font self-hosts — no Google Fonts <link>.
+const figtree = Figtree({
   subsets: ["latin"],
-  weight: ["500", "600"],
-  variable: "--font-display",
-  display: "swap",
-});
-const nunitoSans = Nunito_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600"],
   variable: "--font-body",
   display: "swap",
 });
-const jetBrainsMono = JetBrains_Mono({
+const ibmPlexMono = IBM_Plex_Mono({
   subsets: ["latin"],
-  weight: ["500", "600"],
+  weight: ["400", "500"],
   variable: "--font-mono",
   display: "swap",
 });
@@ -80,7 +81,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${fredoka.variable} ${nunitoSans.variable} ${jetBrainsMono.variable}`}
+      className={`${figtree.variable} ${ibmPlexMono.variable}`}
       suppressHydrationWarning
     >
       <head>

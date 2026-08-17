@@ -32,6 +32,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/data/db";
 import { auth_event, turn_record } from "@/data/schema";
 import type { AgentMode } from "@/agent/types";
+import type { ClientPlatform } from "@/lib/client-platform";
 import type { ToolTraceEntry } from "@/server/logger";
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,12 @@ export interface TurnRecordInput {
   citationCount: number;
   turnLatencyMs: number;
   imagesCount: number;
+  /**
+   * First-party client platform from `X-Oak-Client` (`web` | `ios` | `android`).
+   * Optional/null for rate_limited rows without a header, eval, and legacy call
+   * sites — stored as NULL, never defaulted to "web".
+   */
+  client?: ClientPlatform | null;
   promptText: string;
   answerText: string | null;
   answer: unknown | null; // OakAnswer; the repo JSON.stringifies into answer_json
@@ -102,6 +109,7 @@ export async function recordTurn(input: TurnRecordInput): Promise<void> {
     citation_count: int(input.citationCount),
     turn_latency_ms: int(input.turnLatencyMs),
     images_count: int(input.imagesCount),
+    client: input.client ?? null,
     prompt_text: input.promptText,
     answer_text: input.answerText,
     answer_json: input.answer == null ? null : JSON.stringify(input.answer),

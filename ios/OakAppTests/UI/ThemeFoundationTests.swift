@@ -19,8 +19,9 @@ struct ThemeFoundationTests {
   @Test
   func staggeredDelaysBaseByStepTimesIndex() {
     // staggered(index) == base delayed by step·index (index 0 == a zero delay).
+    // step defaults to 0.06 (60ms) — the instrument ticker's cascade stagger.
     #expect(Theme.Motion.staggered(0) == Theme.Motion.smooth.delay(0))
-    #expect(Theme.Motion.staggered(3) == Theme.Motion.smooth.delay(0.04 * 3))
+    #expect(Theme.Motion.staggered(3) == Theme.Motion.smooth.delay(0.06 * 3))
     #expect(
       Theme.Motion.staggered(2, base: Theme.Motion.snappy, step: 0.1)
         == Theme.Motion.snappy.delay(0.1 * 2)
@@ -37,9 +38,9 @@ struct ThemeFoundationTests {
   @Test
   func shadowTokensCarryTheSpecifiedOffsets() {
     #expect(Theme.Shadow.card.key.y == 1)
-    #expect(Theme.Shadow.card.ambient.y == 8)
+    #expect(Theme.Shadow.card.ambient.y == 6)
     #expect(Theme.Shadow.raised.key.y == 2)
-    #expect(Theme.Shadow.raised.ambient.y == 12)
+    #expect(Theme.Shadow.raised.ambient.y == 10)
   }
 
   @Test
@@ -80,7 +81,6 @@ struct ThemeFoundationTests {
     _ = Color.clear.oakTypeGlowWell(primary: "dragon", secondary: "ground")
     _ = Color.clear.oakSpecimenPlate(.mechanics)
     _ = Color.clear.oakSpecimenPlate(.typed(primary: "fire", secondary: nil))
-    _ = Color.clear.oakDeskGrain()
     #expect(Bool(true))
   }
 
@@ -103,6 +103,8 @@ struct ThemeFoundationTests {
     _ = OakSpinner(size: 32)
     _ = OakBrandMark()
     _ = OakBrandMark(size: 64)
+    _ = OakWordmarkLockup()
+    _ = OakWordmarkLockup(showsWordmark: false)
     _ = SkeletonBlock()
     _ = SkeletonBlock(width: 120, height: 14)
     _ = SkeletonListRow()
@@ -114,6 +116,7 @@ struct ThemeFoundationTests {
     _ = Color.clear.oakCard()
     _ = Color.clear.oakCard(radius: Theme.Radius.md, tint: Theme.type("water"))
     _ = Color.clear.oakShadow(.card)
+    _ = Color.clear.oakInsetWell()
     _ = Color.clear.shimmer()
     _ = Color.clear.shimmer(active: false)
     _ = OakPressableButtonStyle()

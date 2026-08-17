@@ -118,7 +118,7 @@ flowchart TB
     end
 
     subgraph providers["LLMProvider seam — src/agent/providers/"]
-        GROK["Grok 4.3 (xAI Responses)<br/>primary / default"]
+        GROK["Grok 4.6 (xAI Responses)<br/>primary / default"]
         CLA["Claude"]
         GPT["GPT-5.5"]
     end
@@ -190,8 +190,9 @@ frontend, API, agent loop, and the ingest CLI.
 - **Agent** — a provider-agnostic tool-loop over **20 tools** that return
   structured facts; the model reasons on top and emits a Zod-validated
   `OakAnswer`.
-- **Models** — **xAI Grok 4.3** (native Responses API) is the primary/default,
-  with **Claude Sonnet 5**, **Claude Sonnet 4.6**, and **GPT-5.5** selectable.
+- **Models** — **xAI Grok 4.6** (native Responses API) is the primary/default,
+  with **Grok 4.5**, **Grok 4.3**, **Claude Sonnet 5**, **Claude Sonnet 4.6**,
+  and **GPT-5.5** selectable.
   The active model is **operator-controlled** via the admin panel's **Settings**
   tab (a Postgres-backed selection, no secret or restart needed) — there is no
   end-user model picker.
@@ -323,10 +324,10 @@ npm run db:migrate && npm run ingest && npm run dev
 
 ## Models
 
-Five models plug into one provider-agnostic loop across three providers.
-**Grok 4.3** (xAI's native Responses API) is the default; **Grok 4.5**,
-**Claude Sonnet 5**, **Claude Sonnet 4.6**, and **GPT-5.5** are drop-in
-alternatives. The active model is chosen by the operator, not the end user —
+Six models plug into one provider-agnostic loop across three providers.
+**Grok 4.6** (xAI's native Responses API) is the default; **Grok 4.5**,
+**Grok 4.3**, **Claude Sonnet 5**, **Claude Sonnet 4.6**, and **GPT-5.5** are
+drop-in alternatives. The active model is chosen by the operator, not the end user —
 via the admin panel's **Settings** tab (`/admin/settings`), which writes the
 selection to Postgres (`app_setting`) and is read fresh on every turn:
 
@@ -337,7 +338,7 @@ Admin → Settings → pick a model → Save
 Switching takes effect on the next turn — no secret change, no rebuild, no
 restart. A model whose provider API key isn't configured shows as disabled in
 the picker, and selecting it is rejected server-side with a 409. If the stored
-selection is ever missing or invalid, resolution fails soft to `grok-4.3`.
+selection is ever missing or invalid, resolution fails soft to `grok-4.6`.
 
 All three providers share **one canonical prompt body** — the active scope's
 facts (Champions regulation or a mainline gen profile) are injected as a
@@ -441,7 +442,7 @@ on Redis being up.
 | [`docs/architecture/design.md`](docs/architecture/design.md)             | Technical design — stack, data store, ingest pipeline, file structure, interfaces, build phases.        |
 | [`docs/features/`](docs/features/)                                       | Per-feature requirements + design: account creation, chat history, team builder, artifact viewer, admin panel, generation scope, [oak-v2 (whole-games)](docs/features/oak-v2/), [voice mode](docs/features/voice-mode/), the [iOS app](docs/features/iphone-app/) and the [Android app](docs/features/android-app/). |
 | [`docs/agent-design/generation-scope-addendum.md`](docs/agent-design/generation-scope-addendum.md) | How the multi-generation scope (Gen 9 + Champions + Gens 5–8) amends the frozen agent-design contract. |
-| [`docs/design-system/`](docs/design-system/)                             | Visual language — color, typography, spacing, component patterns.                                       |
+| [`docs/design/signal.md`](docs/design/signal.md)                         | Visual language to implement (**Signal**). Short contract: [`docs/design/soul.md`](docs/design/soul.md). |
 | [`docs/eval-reports/`](docs/eval-reports/)                               | Judged eval runs (incl. a Grok-vs-Claude A/B).                                                           |
 
 > The architecture doc predates some implementation choices — notably the move

@@ -259,12 +259,23 @@ export interface HeavyUserRow {
 // ---------------------------------------------------------------------------
 
 /**
+ * First-party client platforms that may appear on a conversation thread
+ * (from `turn_record.client` / `X-Oak-Client`). Keep in lock-step with
+ * `@/lib/client-platform`.
+ */
+export type ClientPlatform = "web" | "ios" | "android";
+
+/**
  * Cross-account conversation list projection (ADMIN-US-9). Like the user-facing
  * `ConversationSummary` but carries the owning account so the operator can see
  * whose thread it is (ADMIN-BR-4 owner-only full read access). `accountId: null`
  * is a synthetic guest-session pseudo-conversation, reconstructed from that
  * session's `turn_record` rows rather than a real `conversation` row (mirrors
  * the `TurnSummary`/`HeavyUserRow` guest convention elsewhere in this file).
+ *
+ * `clients` is the distinct set of platforms that recorded turns on this
+ * thread (from `turn_record.client`). Empty when unknown (legacy rows, list
+ * browser which does not join client data).
  */
 export interface ConversationSummary {
   id: string;
@@ -275,6 +286,8 @@ export interface ConversationSummary {
   messageCount: number;
   createdAt: number;
   updatedAt: number;
+  /** Distinct platforms on this thread; empty = unknown / not loaded. */
+  clients: ClientPlatform[];
 }
 
 /**

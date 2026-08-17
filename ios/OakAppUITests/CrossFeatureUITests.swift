@@ -38,21 +38,15 @@ final class CrossFeatureUITests: XCTestCase {
     composer.tap()
     composer.typeText("Is Garchomp weak to Ice?")
     app.buttons[OakUITest.Chat.sendButton].tap()
+    let whyButton = app.buttons[OakUITest.Answer.reasoningDisclosure]
+    let whyText = app.staticTexts[OakUITest.Answer.reasoningDisclosure]
     XCTAssertTrue(
-      app.staticTexts[OakUITest.Answer.reasoningDisclosure].waitForExistence(timeout: 60),
+      whyButton.waitForExistence(timeout: 60) || whyText.waitForExistence(timeout: 1),
       "Guest answer should finalize before sign-in."
     )
 
-    // Sign in from More → Account (nav restructure: Chat / Teams / More).
-    XCTAssertTrue(goToTab(OakUITest.Tab.more, in: app), "More tab unreachable.")
-    let accountRow = app.staticTexts[OakUITest.MoreScreen.accountRow]
-    let accountRowReachable = accountRow.waitForExistence(timeout: 10)
-    try XCTSkipUnless(
-      accountRowReachable,
-      "Account row not reachable — wire MoreView into RootView, then run live (CP5)."
-    )
-    accountRow.tap()
-
+    // Sign in from the Account tab (Chat / Teams / Dex / Account).
+    XCTAssertTrue(goToTab(OakUITest.Tab.account, in: app), "Account tab unreachable.")
     let signIn = app.buttons[OakUITest.Account.signIn]
     let signInReachable = signIn.waitForExistence(timeout: 10)
     try XCTSkipUnless(

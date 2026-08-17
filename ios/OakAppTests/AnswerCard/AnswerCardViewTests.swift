@@ -17,8 +17,9 @@ import Testing
 /// the per-subview "field present vs absent" structure tests.
 ///
 /// Note: the former `.reasoning` / `.citations` / `.credibility` chip strip is now
-/// a single `.receipts` plate-foot footer (soul.md "Receipts"). Tests updated
-/// accordingly.
+/// a single `.receipts` plate-foot footer, labeled Why / Sources. Scope is
+/// header-only (not on the plate). Type chips lead when `subjects[].types` is
+/// present.
 ///
 /// `@MainActor` because `View` members are main-actor isolated (reading `sections`
 /// off a `View` value is main-actor work).
@@ -186,9 +187,8 @@ struct AnswerCardViewTests {
     #expect(sections(makeAnswer(suggestions: ["Gible"])).contains(.suggestions))
   }
 
-  // MARK: Receipts footer — present when reasoning OR citations is non-empty.
-  // Replaces the former credibility chip strip; both content types share one
-  // plate-foot tab (soul.md "Receipts").
+  // MARK: Why / Sources footer — present when reasoning OR citations is non-empty.
+  // Both content types share one plate-foot tab (labeled Why / Sources).
 
   @Test
   func receiptsPresentWhenReasoningNonBlank() {
@@ -243,24 +243,31 @@ struct AnswerCardViewTests {
     #expect(sections(makeAnswer(inferences: [inference])).contains(.inferences))
   }
 
-  // MARK: Scope tag (always-on when the generation string is non-blank)
+  // MARK: Type chips (unique subjects[].types, plate top)
 
   @Test
-  func scopeTagPresentWhenGenerationNonBlank() {
-    // Blank generation → no scope tag (even if fallback → still a caveat, no tag).
-    let blank = GenerationBasis(generation: "  ", fallback: false, note: nil)
-    #expect(!sections(makeAnswer(generationBasis: blank)).contains(.scope))
+  func typeChipsPresentWhenASubjectHasTypes() {
+    #expect(!sections(makeAnswer(subjects: nil)).contains(.typeChips))
+    #expect(!sections(makeAnswer(subjects: [])).contains(.typeChips))
+    let untyped = Subject(
+      name: "MissingNo",
+      dexNumber: 0,
+      spriteUrl: "",
+      types: [],
+      isFallback: false,
+      sourceGeneration: nil
+    )
+    #expect(!sections(makeAnswer(subjects: [untyped])).contains(.typeChips))
+    #expect(sections(makeAnswer(subjects: [sampleSubject])).contains(.typeChips))
+  }
 
+  // MARK: Scope is header-only — never on the answer plate
+
+  @Test
+  func scopeTagNeverRendersOnTheAnswerPlate() {
     let named = GenerationBasis(generation: "Gen 9 (Scarlet/Violet)", fallback: false, note: nil)
-    #expect(sections(makeAnswer(generationBasis: named)).contains(.scope))
-
-    // A fallback still shows the (neutral) scope tag when the generation is named;
-    // the caveat strip carries the fallback note separately.
-    let fallbackNamed = GenerationBasis(generation: "Gen 8 (Sword/Shield)", fallback: true, note: nil)
-    #expect(sections(makeAnswer(generationBasis: fallbackNamed)).contains(.scope))
-
-    let fallbackBlank = GenerationBasis(generation: "  ", fallback: true, note: nil)
-    #expect(!sections(makeAnswer(generationBasis: fallbackBlank)).contains(.scope))
+    // Named generation used to add `.scope`; Signal keeps scope in the header.
+    #expect(sections(makeAnswer(generationBasis: named)) == [.answer])
   }
 
   // MARK: Caveat strip (fallback OR any non-blank uncertainty flag — the web
@@ -306,16 +313,16 @@ struct AnswerCardViewTests {
     #expect(
       sections(answer) == [
         .status,
-        .scope,
-        .caveat,
+        .typeChips,
         .answer,
-        .subjects,
+        .inferences,
         .question,
         .candidates,
         .damageCalc,
         .teams,
+        .subjects,
         .suggestions,
-        .inferences,
+        .caveat,
         .receipts,
       ]
     )
@@ -326,21 +333,20 @@ struct AnswerCardViewTests {
   @Test
   func answeredFullFixtureFansOutEveryBlock() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
-    // `answered` ⇒ no status badge. The fixture carries a named (non-fallback)
-    // generation → scope tag, and one uncertainty flag → caveat; both lifted to top.
-    // reasoning + citations present → receipts footer (plate foot).
+    // `answered` ⇒ no status badge. Subjects carry types → type chips at top.
+    // Inferences sit under the lead. Caveat + Why/Sources trail.
     #expect(
       sections(answer) == [
-        .scope,
-        .caveat,
+        .typeChips,
         .answer,
-        .subjects,
+        .inferences,
         .question,
         .candidates,
         .damageCalc,
         .teams,
+        .subjects,
         .suggestions,
-        .inferences,
+        .caveat,
         .receipts,
       ]
     )
@@ -349,29 +355,28 @@ struct AnswerCardViewTests {
   @Test
   func clarificationFixtureShowsStatusScopeAnswerQuestionReceipts() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_clarification.json")
-    // Named generation, no fallback, no flags → scope tag but no caveat.
-    // Has reasoning → receipts footer.
+    // Named generation is header-only. Has reasoning → Why/Sources footer.
     #expect(
-      sections(answer) == [.status, .scope, .answer, .question, .receipts]
+      sections(answer) == [.status, .answer, .question, .receipts]
     )
   }
 
   @Test
   func resolutionFailedFixtureShowsStatusScopeAnswerSuggestionsReceipts() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_resolution_failed.json")
-    // Has reasoning → receipts footer.
+    // Has reasoning → Why/Sources footer. Scope stays in the header.
     #expect(
-      sections(answer) == [.status, .scope, .answer, .suggestions, .receipts]
+      sections(answer) == [.status, .answer, .suggestions, .receipts]
     )
   }
 
   @Test
   func insufficientDataFixtureShowsStatusScopeCaveatAnswerReceipts() throws {
     let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_insufficient_data.json")
-    // The fixture is a generation fallback with a flag → caveat present at top.
-    // reasoning + citations both present → receipts footer.
+    // The fixture is a generation fallback with a flag → caveat after the body.
+    // reasoning + citations both present → Why/Sources footer.
     #expect(
-      sections(answer) == [.status, .scope, .caveat, .answer, .receipts]
+      sections(answer) == [.status, .answer, .caveat, .receipts]
     )
   }
 

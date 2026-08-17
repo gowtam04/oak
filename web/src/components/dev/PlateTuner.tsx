@@ -1,32 +1,34 @@
 "use client";
 
 /**
- * Dev-only plate wash intensity tuner (soul.md Phase 3 / Eve "build dials").
+ * Dev-only type-light intensity tuner (soul.md Instrument redesign / Eve
+ * "build dials").
  *
  * Visible when `process.env.NODE_ENV === "development"` OR `?plateTuner=1`.
- * Adjusts CSS custom properties that drive specimen-plate wash mix strengths
- * on `.answer-card` / `.artifact-viewer`. Must not appear for normal production
- * users (query-param opt-in only outside dev).
+ * Adjusts CSS custom properties that drive the type-light glow/edge
+ * intensities on `.answer-card` / `.artifact-viewer` / the sprite well /
+ * the streaming skeleton (globals.css §7). Must not appear for normal
+ * production users (query-param opt-in only outside dev).
  */
 
 import { useEffect, useState } from "react";
 
 const ROOT_VARS = [
-  { key: "--plate-wash-a", label: "Wash A", min: 0, max: 30, step: 1, unit: "%" },
-  { key: "--plate-wash-b", label: "Wash B", min: 0, max: 24, step: 1, unit: "%" },
-  { key: "--plate-radial-a", label: "Radial A", min: 0, max: 40, step: 1, unit: "%" },
-  { key: "--plate-radial-b", label: "Radial B", min: 0, max: 32, step: 1, unit: "%" },
+  { key: "--plate-radial-a", label: "Card glow", min: 0, max: 40, step: 1, unit: "%" },
+  { key: "--plate-radial-b", label: "Well glow", min: 0, max: 60, step: 1, unit: "%" },
+  { key: "--plate-wash-a", label: "Skeleton glow", min: 0, max: 30, step: 1, unit: "%" },
+  { key: "--plate-wash-b", label: "Ambient tint", min: 0, max: 40, step: 1, unit: "%" },
   { key: "--plate-edge", label: "Edge", min: 8, max: 50, step: 1, unit: "%" },
 ] as const;
 
 type VarKey = (typeof ROOT_VARS)[number]["key"];
 
 const DEFAULTS: Record<VarKey, number> = {
-  "--plate-wash-a": 8,
-  "--plate-wash-b": 6,
   "--plate-radial-a": 12,
-  "--plate-radial-b": 10,
-  "--plate-edge": 28,
+  "--plate-radial-b": 28,
+  "--plate-wash-a": 8,
+  "--plate-wash-b": 16,
+  "--plate-edge": 30,
 };
 
 function shouldShowTuner(): boolean {

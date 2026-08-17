@@ -3,7 +3,7 @@ import SwiftUI
 /// Oak's shared button system, mirroring the web `.tm-btn` family (§4.5). One
 /// pill grammar, four intents:
 ///
-/// - **primary** — red fill, white Nunito 700, a subtle red-tinted shadow. The
+/// - **primary** — red fill, white Inter 700, a subtle red-tinted shadow. The
 ///   page's main action (send-to-teams, sign in, retry).
 /// - **secondary** — `surface` fill with a `borderStrong` hairline; an azure
 ///   press tint (interaction = azure). The default for supporting actions.
@@ -77,7 +77,7 @@ struct OakButtonStyle: ButtonStyle {
 }
 
 /// Oak's suggestion/example **chip** grammar (§4.6): a `surface` pill with a
-/// `borderStrong` hairline and Nunito 600 label. On press it tints — **red-soft**
+/// `borderStrong` hairline and Inter 600 label. On press it tints — **red-soft**
 /// for empty-state chips (brand), **azure-soft** for in-thread chips
 /// (interaction) — and scales 0.97 snappy (dropped under Reduce Motion). Lighter
 /// than `OakButtonStyle`; used where a cloud of tappable prompts reads as chips,

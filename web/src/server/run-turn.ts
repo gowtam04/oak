@@ -30,6 +30,7 @@ import type {
 } from "@/agent/types";
 import type { Account } from "@/data/repos/accounts-repo";
 import { formatForMode, type Format } from "@/data/formats";
+import type { ClientPlatform } from "@/lib/client-platform";
 import type { ScopeEvent } from "@/lib/sse/sse-types";
 import { logger, type TurnTrace } from "@/server/logger";
 import { appendTurn } from "@/server/session-store";
@@ -60,6 +61,11 @@ export interface RunTurnParams {
   images: ImageAttachment[];
   /** Operator-selected active model (admin Settings selection, `app_setting`). */
   activeModel: ModelKey;
+  /**
+   * First-party client platform from `X-Oak-Client` (null when absent/invalid).
+   * Stored on the admin `turn_record` only — never an LLM-visible tool input.
+   */
+  client?: ClientPlatform | null;
 }
 
 /**
@@ -81,6 +87,7 @@ export async function runTurn(params: RunTurnParams): Promise<void> {
     proposedTeam,
     images,
     activeModel,
+    client = null,
   } = params;
 
   // Fire-and-forget recording-fault logger (ADMIN-BR-3) — a `turn_record` write
@@ -230,6 +237,7 @@ export async function runTurn(params: RunTurnParams): Promise<void> {
           traceRef.current?.citation_count ?? answer.citations.length,
         turnLatencyMs: traceRef.current?.turn_latency_ms ?? 0,
         imagesCount: images.length,
+        client,
         promptText: message,
         answerText: answer.answer_markdown,
         answer,

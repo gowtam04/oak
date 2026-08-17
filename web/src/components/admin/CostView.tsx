@@ -90,7 +90,7 @@ function sectionTitle(text: string): ReactElement {
 const MUTED_STATE: CSSProperties = {
   padding: "var(--space-8, 2rem)",
   textAlign: "center",
-  color: "var(--text-faint, #94867a)",
+  color: "var(--text-faint, #8a9096)",
 };
 
 export default function CostView({ data, loading = false, error = null }: CostViewProps) {
@@ -134,7 +134,7 @@ function CostBody({ data }: { data: CostResponse }) {
   const costSeries: ChartSeries = {
     key: "estUsd",
     label: "Estimated cost",
-    color: "var(--success, #2fb573)",
+    color: "var(--success, #1f9d61)",
     points: domain.map((t) => ({ t, value: estByT.get(t) ?? 0 })),
   };
 
@@ -196,7 +196,7 @@ function CostBody({ data }: { data: CostResponse }) {
         style={{
           margin: 0,
           fontSize: "var(--text-sm, 0.85rem)",
-          color: "var(--text-muted, #6e625a)",
+          color: "var(--text-muted, #5f656c)",
         }}
       >
         Dollar figures are <strong>estimates</strong> from a static per-model
@@ -249,7 +249,7 @@ function CostBody({ data }: { data: CostResponse }) {
             style={{
               margin: 0,
               fontSize: "var(--text-xs, 0.75rem)",
-              color: "var(--text-faint, #94867a)",
+              color: "var(--text-faint, #8a9096)",
             }}
           >
             Models marked <em>unpriced</em> have no entry in the price table, so

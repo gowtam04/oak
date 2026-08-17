@@ -114,22 +114,26 @@ export class ResolveIndex {
   }
 
   /**
-   * List the entities of one `kind` (alphabetical by display name), capped at
-   * `limit`. Backs the picker's "show options on focus" with no query — there is
-   * nothing to rank, so order is just the friendly name. `score` is a constant 1.
+   * List the entities of one `kind` (alphabetical by display name). Pass a
+   * positive `limit` to cap the listing (typeahead focus previews); omit it to
+   * return the full kind — the Dex tab blank-browse path. There is nothing to
+   * rank, so order is just the friendly name. `score` is a constant 1.
    */
-  list(kind: ResolveKind = "any", limit = 50): ResolveEntityOutput {
-    const matches = this.rows
+  list(kind: ResolveKind = "any", limit?: number): ResolveEntityOutput {
+    const sorted = this.rows
       .filter((r) => kind === "any" || r.kind === kind)
       .slice()
-      .sort((a, b) => a.display_name.localeCompare(b.display_name))
-      .slice(0, Math.max(0, limit))
-      .map((r) => ({
-        kind: r.kind,
-        slug: r.slug,
-        display_name: r.display_name,
-        score: 1,
-      }));
+      .sort((a, b) => a.display_name.localeCompare(b.display_name));
+    const capped =
+      limit === undefined
+        ? sorted
+        : sorted.slice(0, Math.max(0, limit));
+    const matches = capped.map((r) => ({
+      kind: r.kind,
+      slug: r.slug,
+      display_name: r.display_name,
+      score: 1,
+    }));
     return { matches };
   }
 
@@ -233,12 +237,13 @@ export async function resolveEntity(
 }
 
 /**
- * List entities of one `kind` for `format`, alphabetical, capped at `limit` —
- * backs the picker's "show options on focus" (empty query). Never throws.
+ * List entities of one `kind` for `format`, alphabetical. Pass a positive
+ * `limit` to cap; omit `limit` for the full kind (Dex blank browse / full
+ * picker listing). Never throws.
  */
 export async function listEntities(
   kind: ResolveKind = "any",
-  limit = 50,
+  limit?: number,
   format: Format = "scarlet-violet",
 ): Promise<ResolveEntityOutput> {
   return (await getIndex(format)).list(kind, limit);

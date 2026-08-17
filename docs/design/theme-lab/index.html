@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Oak · theme lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Outfit:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="lab.css" />
+</head>
+<body>
+  <div id="picker" class="picker">
+    <header class="picker-head">
+      <p class="picker-kicker">Oak · theme lab</p>
+      <h1>Six directions. Signal is the hybrid.</h1>
+      <p class="picker-lede">
+        Daylight plus Index, leaning Daylight, with true Pokéball red as a signal instead of indigo.
+        The Dex stays for reference. It is still the costume version.
+      </p>
+    </header>
+    <div class="picker-grid" id="picker-grid"></div>
+    <p class="picker-foot">Signal is the recommendation. Compare it to Daylight and Index. The Dex is still here if you want the costume.</p>
+  </div>
+
+  <div id="lab" class="lab" hidden>
+    <header class="lab-bar">
+      <button class="lab-back" id="btn-back" type="button">Worlds</button>
+      <nav class="lab-worlds" id="lab-worlds" aria-label="Worlds"></nav>
+      <div class="lab-right">
+        <div class="seg" id="plat-seg" role="group" aria-label="Platform">
+          <button type="button" data-plat="web" class="is-on">Web</button>
+          <button type="button" data-plat="ios">iOS</button>
+        </div>
+        <button class="lab-ghost" id="btn-replay" type="button">Replay motion</button>
+        <button class="lab-ghost" id="btn-doctrine" type="button">Doctrine</button>
+      </div>
+    </header>
+    <nav class="lab-screens" id="lab-screens" aria-label="Screens"></nav>
+    <div class="lab-body">
+      <main class="stage" id="stage"></main>
+      <aside class="doctrine" id="doctrine" hidden></aside>
+    </div>
+  </div>
+
+  <script src="lab.js"></script>
+</body>
+</html>

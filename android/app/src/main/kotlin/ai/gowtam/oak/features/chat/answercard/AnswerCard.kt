@@ -5,8 +5,7 @@ import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
-import ai.gowtam.oak.ui.OakType
-import ai.gowtam.oak.ui.PlateWash
+import ai.gowtam.oak.ui.TypeBadge
 import ai.gowtam.oak.ui.rememberReduceMotion
 import ai.gowtam.oak.wire.DamageCalc
 import ai.gowtam.oak.wire.EntityKind
@@ -20,9 +19,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -44,8 +44,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
@@ -62,33 +60,33 @@ import kotlinx.coroutines.launch
 
 /**
  * The top-level renderer for a single finalized [OakAnswer] — the native mirror of the
- * iOS `AnswerCardView` and web `AnswerCard`. Phase 1 specimen desk: wraps content in a
- * **type-reactive plate shell** (wash/edge from `subjects[].types`, or mechanics ink
- * plate when there are no subjects) and unifies reasoning + citations into a full-width
- * RECEIPTS footer (`docs/design/soul.md`).
+ * iOS `AnswerCardView` and web `AnswerCard`. Signal plate (`docs/design/signal.md`
+ * §6.3): surface + 12.dp + 1.dp outline. No type-lit glow, no scope tag (the LED
+ * lives in the header).
  *
  * It fans each field of the payload out to its mapped leaf subview, **rendering a
  * subview only when its field is present** (the render-if-present rule), in one fixed
  * reading order:
  *
- *   1. status badge   — non-`answered` outcomes only
- *   2. scope tag       — `generation_basis` masthead
+ *   1. type chips      — unique `subjects[].types` (visual; not a `section:*` tag)
+ *   2. status badge    — non-`answered` outcomes only
  *   3. caveat strip    — merged `uncertainty_flags` + `generation_basis.fallback`/note
- *   4. answer markdown — `answer_markdown` (always)
- *   5. subjects        — per-subject cards (+ "Compare in viewer" when ≥ 2)
- *   6. clarify question— options (each label sent verbatim on tap)
- *   7. candidates table
- *   8. damage calc
- *   9. team blocks     — proposed/saved team + warnings
- *  10. suggestions
- *  11. reasoning       — via RECEIPTS footer (testTag `section:reasoning`)
- *  12. citations       — via RECEIPTS footer (testTag `section:citations`)
- *  13. inferences      — after receipts, dashed border, confidence badges
+ *   4. answer markdown — `answer_markdown` (always; first paragraph is the 22sp lead)
+ *   5. inferences      — one-line `Inferred` (testTag `section:inferences`)
+ *   6. subjects        — sprite 72 + name 600 + mute `#dex`
+ *   7. clarify question
+ *   8. candidates table
+ *   9. damage calc     — two-column hairline fact table
+ *  10. team blocks
+ *  11. suggestions
+ *  12. reasoning       — via Why / Sources footer (testTag `section:reasoning`)
+ *  13. citations       — via Why / Sources footer (testTag `section:citations`)
  *
  * Which blocks render is exposed as the pure [answerSections] list so the orchestration
  * is unit-testable without inspecting the Compose tree; the body renders exactly that
  * list. Each section carries a stable `testTag` (`section:<name>`) for the render test.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AnswerCard(
     answer: OakAnswer,
@@ -96,55 +94,28 @@ fun AnswerCard(
     actions: AnswerCardActions = AnswerCardActions(),
 ) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
     val reduceMotion = rememberReduceMotion()
-    val wash: PlateWash = remember(
-        answer.subjects,
-        dark,
-        oak.surfaceRaised,
-        oak.surfaceSunken,
-        oak.border,
-        oak.borderStrong,
-    ) {
-        OakType.plateWashForTypes(
-            subjectTypes = answer.subjects.orEmpty().map { it.types },
-            surface = oak.surfaceRaised,
-            surfaceSunken = oak.surfaceSunken,
-            border = oak.border,
-            borderStrong = oak.borderStrong,
-            dark = dark,
-        )
-    }
-    val plateShape = RoundedCornerShape(OakRadius.xl)
-    val plateBrush = remember(wash, oak.surfaceRaised, oak.surfaceSunken) {
-        when {
-            wash.fillSecondary != null ->
-                Brush.linearGradient(listOf(wash.fill, wash.fillSecondary, oak.surfaceRaised))
-            wash.isMechanics ->
-                Brush.verticalGradient(listOf(oak.surfaceSunken, oak.surfaceRaised))
-            else ->
-                Brush.linearGradient(listOf(wash.fill, oak.surfaceRaised))
-        }
-    }
+    val plateShape = RoundedCornerShape(OakRadius.lg)
     val sections = answerSections(answer)
     val bodySections = sections.filter {
-        it != AnswerSection.REASONING &&
-            it != AnswerSection.CITATIONS &&
-            it != AnswerSection.INFERENCES
+        it != AnswerSection.REASONING && it != AnswerSection.CITATIONS
     }
     val hasReceipts = sections.any {
         it == AnswerSection.REASONING || it == AnswerSection.CITATIONS
     }
-    val hasInferences = sections.contains(AnswerSection.INFERENCES)
+    val subjectTypes = remember(answer.subjects) {
+        linkedSetOf<String>().apply {
+            for (subject in answer.subjects.orEmpty()) addAll(subject.types)
+        }.toList()
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .testTag(TAG_ANSWER_CARD)
-            .then(if (dark) Modifier else Modifier.shadow(6.dp, plateShape))
             .clip(plateShape)
-            .background(plateBrush, plateShape)
-            .border(1.dp, wash.border, plateShape),
+            .background(MaterialTheme.colorScheme.surface, plateShape)
+            .border(1.dp, oak.border, plateShape),
     ) {
         Column(
             modifier = Modifier
@@ -153,12 +124,21 @@ fun AnswerCard(
                     start = OakSpacing.lg,
                     end = OakSpacing.lg,
                     top = OakSpacing.lg,
-                    bottom = if (hasReceipts || hasInferences) OakSpacing.md else OakSpacing.lg,
+                    bottom = if (hasReceipts) OakSpacing.md else OakSpacing.lg,
                 ),
             verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
         ) {
+            if (subjectTypes.isNotEmpty()) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    for (type in subjectTypes) {
+                        TypeBadge(type = type)
+                    }
+                }
+            }
             for (section in bodySections) {
-                // Use the original index from the full sections list for entrance stagger.
                 val originalIndex = sections.indexOf(section)
                 val sectionModifier = Modifier
                     .fillMaxWidth()
@@ -166,9 +146,10 @@ fun AnswerCard(
                     .sectionEntrance(index = originalIndex, reduceMotion = reduceMotion)
                 when (section) {
                     AnswerSection.STATUS -> StatusBadge(answer.status, sectionModifier)
-                    AnswerSection.SCOPE -> ScopeTag(answer.generationBasis, sectionModifier)
+                    AnswerSection.SCOPE -> Unit
                     AnswerSection.CAVEAT -> CaveatStrip(answer.uncertaintyFlags, answer.generationBasis, sectionModifier)
                     AnswerSection.ANSWER -> AnswerBody(answer.answerMarkdown, sectionModifier)
+                    AnswerSection.INFERENCES -> Inferences(answer.inferences, sectionModifier)
                     AnswerSection.SUBJECTS -> Subjects(
                         subjects = answer.subjects.orEmpty(),
                         onOpenEntity = actions.onOpenEntity,
@@ -210,11 +191,9 @@ fun AnswerCard(
                     )
                     AnswerSection.REASONING,
                     AnswerSection.CITATIONS,
-                    AnswerSection.INFERENCES,
                     -> Unit
                 }
             }
-            // Machine strip — not a new AnswerSection (keeps section:* tags / order stable).
             CopyForAgentsRow(answer = answer)
         }
         if (hasReceipts) {
@@ -225,22 +204,9 @@ fun AnswerCard(
                 reasoningMarkdown = answer.reasoningMarkdown.takeIf { it.isNotBlank() },
                 citations = answer.citations,
                 onOpenEntity = actions.onOpenEntity,
-                edgeColor = wash.wellGlow,
                 modifier = Modifier
                     .fillMaxWidth()
                     .sectionEntrance(index = receiptsIndex, reduceMotion = reduceMotion),
-            )
-        }
-        if (hasInferences) {
-            val inferencesIndex = sections.indexOf(AnswerSection.INFERENCES).coerceAtLeast(0)
-            Inferences(
-                inferences = answer.inferences,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = OakSpacing.lg)
-                    .padding(top = if (hasReceipts) OakSpacing.md else 0.dp, bottom = OakSpacing.lg)
-                    .testTag(AnswerSection.INFERENCES.testTag)
-                    .sectionEntrance(index = inferencesIndex, reduceMotion = reduceMotion),
             )
         }
     }
@@ -286,15 +252,15 @@ enum class AnswerSection(val testTag: String) {
  * The ordered blocks the card renders for [answer] — the single source of truth the
  * body iterates. A block is included only when its field is present (and non-empty
  * after the same trimming its subview applies), so an absent field renders nothing.
- * Pure and side-effect-free; mirrors the iOS `sections` predicate set exactly.
+ * Pure and side-effect-free. Scope is header-only (Signal) and is never listed.
  */
 fun answerSections(answer: OakAnswer): List<AnswerSection> = buildList {
     if (answer.status != OakAnswer.Status.Answered) add(AnswerSection.STATUS)
-    if (answer.generationBasis.generation.isNotBlank()) add(AnswerSection.SCOPE)
     if (answer.generationBasis.fallback || nonBlank(answer.uncertaintyFlags).isNotEmpty()) {
         add(AnswerSection.CAVEAT)
     }
     add(AnswerSection.ANSWER) // the answer prose always renders
+    if (answer.inferences.isNotEmpty()) add(AnswerSection.INFERENCES)
     if (!answer.subjects.isNullOrEmpty()) add(AnswerSection.SUBJECTS)
     if (!answer.question?.options.isNullOrEmpty()) add(AnswerSection.QUESTION)
     if (!answer.candidates?.shown.isNullOrEmpty()) add(AnswerSection.CANDIDATES)
@@ -303,7 +269,6 @@ fun answerSections(answer: OakAnswer): List<AnswerSection> = buildList {
     if (nonBlank(answer.suggestions).isNotEmpty()) add(AnswerSection.SUGGESTIONS)
     if (answer.reasoningMarkdown.isNotBlank()) add(AnswerSection.REASONING)
     if (answer.citations.isNotEmpty()) add(AnswerSection.CITATIONS)
-    if (answer.inferences.isNotEmpty()) add(AnswerSection.INFERENCES)
 }
 
 /** Non-blank, trimmed entries of an optional string list (matches each subview's guard). */
@@ -312,16 +277,20 @@ internal fun nonBlank(values: List<String>?): List<String> =
 
 internal const val TAG_ANSWER_CARD = "answer-card"
 
-/** The answer prose — the required bottom-line of every turn, rendered as GFM blocks. */
+/** The answer prose — first paragraph is the 22sp Figtree 600 lead. */
 @Composable
 private fun AnswerBody(markdown: String, modifier: Modifier = Modifier) {
-    ai.gowtam.oak.ui.MarkdownBlockView(markdown = markdown, modifier = modifier)
+    ai.gowtam.oak.ui.MarkdownBlockView(
+        markdown = markdown,
+        modifier = modifier,
+        leadFirstParagraph = true,
+    )
 }
 
 /**
  * "Copy for agents" machine export (soul.md Phase 3): writes [oakAnswerAgentMarkdown]
- * to the system clipboard. Sits below body sections / above RECEIPTS so human plate
- * content stays primary; not a section:* block.
+ * to the system clipboard. Sits below body sections / above Why · Sources so
+ * human plate content stays primary; not a section:* block.
  */
 @Composable
 private fun CopyForAgentsRow(answer: OakAnswer) {

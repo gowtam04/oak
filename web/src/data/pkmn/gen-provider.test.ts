@@ -130,6 +130,26 @@ describe("loadFormat", () => {
       expect(mega.forme).toBe("Mega-X");
       expect(standardIds.has("charizardmegax")).toBe(true);
     });
+
+    // Gen 9 marks Legends Z-A megas isNonstandard "Future" (not SV-legal). They
+    // must still index so /pokedex shows every mega — same path as classic Past megas.
+    it("includes Z-A / Future megas (Raichu-Mega-X/Y, Delphox-Mega) in the roster", () => {
+      for (const id of ["raichumegax", "raichumegay", "delphoxmega"]) {
+        const sp = standard.dex.species.get(id);
+        expect(sp.exists).toBe(true);
+        expect(sp.isNonstandard).toBe("Future");
+        expect(standardIds.has(id)).toBe(true);
+      }
+    });
+
+    it("indexes Future mega stones and mega-exclusive abilities on Gen 9", () => {
+      const itemIds = new Set(standard.items.map((i) => i.id as string));
+      expect(itemIds.has("raichunitex")).toBe(true);
+      expect(itemIds.has("raichunitey")).toBe(true);
+      const abilityIds = new Set(standard.abilities.map((a) => a.id as string));
+      // Mega Sol is Meganium-Mega's ability; Future on Gen 9.
+      expect(abilityIds.has("megasol")).toBe(true);
+    });
   });
 
   describe("champions (Dex.mod + FormatsData legality gate)", () => {
@@ -183,11 +203,11 @@ describe("loadFormat", () => {
 
     it("EXCLUDES later-generation species (they surface as 'Future' and are dropped)", () => {
       // Absent from the gen-7 roster…
-      for (const id of ["grookey", "sprigatito", "koraidon"]) {
+      for (const id of ["grookey", "sprigatito", "koraidon", "raichumegax"]) {
         expect(gen7Ids.has(id)).toBe(false);
       }
       // …because the gen-7 dex marks them isNonstandard === "Future", which
-      // isRealSpecies now filters out (documents the exclusion mechanism).
+      // isRealSpecies filters out on gen ≤8 (documents the exclusion mechanism).
       const grookey = gen7.dex.species.get("grookey");
       expect(grookey.exists).toBe(true);
       expect(grookey.isNonstandard).toBe("Future");
@@ -233,6 +253,12 @@ describe("loadFormat", () => {
         "darmanitangalarzen",
         "venusaurmega",
       ]) {
+        expect(natdexIds.has(id)).toBe(true);
+      }
+    });
+
+    it("includes Z-A / Future megas (same Gen-9 roster as scarlet-violet)", () => {
+      for (const id of ["raichumegax", "raichumegay", "delphoxmega", "greninjamega"]) {
         expect(natdexIds.has(id)).toBe(true);
       }
     });
@@ -293,6 +319,12 @@ describe("loadFormat", () => {
     it("national-dex still includes Absolite (Past, not Future, on the Gen 9 dex — BR-1)", () => {
       const natdexItemIds: Set<string> = new Set(natdex.items.map((i) => i.id));
       expect(natdexItemIds.has("absolite")).toBe(true);
+    });
+
+    it("national-dex also includes Future Z-A mega stones (Gen-9 allowFuture)", () => {
+      const natdexItemIds: Set<string> = new Set(natdex.items.map((i) => i.id));
+      expect(natdexItemIds.has("raichunitex")).toBe(true);
+      expect(natdexItemIds.has("delphoxite")).toBe(true);
     });
   });
 

@@ -43,7 +43,7 @@ export interface ResolvedModel {
 /**
  * Per-key server wiring. `apiModelId`/`effort` only — provider kind comes from
  * the client-safe {@link MODELS} registry (single source). Defaults per provider
- * docs: GPT-5.5 → medium, Grok 4.3 → high (its max).
+ * docs: GPT-5.5 → medium, Grok 4.6 → high (its max).
  */
 const MODEL_CONFIG: Record<
   ModelKey,
@@ -80,6 +80,13 @@ const MODEL_CONFIG: Record<
   // Same Responses-API knobs as Grok 4.3 (native GrokProvider).
   "grok-4.5": {
     apiModelId: () => "grok-4.5",
+    effort: "high",
+    temperature: 0.2,
+    maxOutputTokens: 32000,
+    parallelToolCalls: false,
+  },
+  "grok-4.6": {
+    apiModelId: () => "grok-4.6",
     effort: "high",
     temperature: 0.2,
     maxOutputTokens: 32000,

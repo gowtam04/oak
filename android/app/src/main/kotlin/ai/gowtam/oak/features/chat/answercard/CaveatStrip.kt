@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.dp
  * The caller gates it on `fallback || any non-blank flag` (via [answerSections]); it is
  * drawn here only when there is something to say. It is the SOLID warning strip (a
  * triangle icon + "Uncertainty" + the text — never color alone), distinct from the
- * inferences' dashed edge.
+ * inferences' azure-tinted styling.
  */
 @Composable
 fun CaveatStrip(

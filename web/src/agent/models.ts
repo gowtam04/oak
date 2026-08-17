@@ -1,6 +1,6 @@
 /**
  * Model registry — the single source of truth for the LLMs the app can run on
- * (Grok 4.3 / Grok 4.5 / Claude Sonnet 5 / Claude Sonnet 4.6 / GPT-5.5).
+ * (Grok 4.6 / Grok 4.5 / Grok 4.3 / Claude Sonnet 5 / Claude Sonnet 4.6 / GPT-5.5).
  *
  * There is no per-turn picker: activation is OPERATOR-controlled via the admin
  * Settings panel — the selection is written to Postgres (`app_setting`) and
@@ -28,8 +28,9 @@ export type ProviderKind = "anthropic" | "openai" | "xai";
  * never a human-facing string beyond {@link label}.
  */
 export type ModelKey =
-  | "grok-4.3"
+  | "grok-4.6"
   | "grok-4.5"
+  | "grok-4.3"
   | "claude-sonnet-5"
   | "claude-sonnet-4.6"
   | "gpt-5.5";
@@ -42,13 +43,14 @@ export interface ModelOption {
 }
 
 /**
- * Every model the app can run on, in stable order. Grok 4.3 is first (the
+ * Every model the app can run on, in stable order. Grok 4.6 is first (the
  * primary/default). Adding a model is a one-line change here + a factory entry
  * + a pricing entry.
  */
 export const MODELS: readonly ModelOption[] = [
-  { key: "grok-4.3", label: "xAI Grok 4.3", provider: "xai" },
+  { key: "grok-4.6", label: "xAI Grok 4.6", provider: "xai" },
   { key: "grok-4.5", label: "xAI Grok 4.5", provider: "xai" },
+  { key: "grok-4.3", label: "xAI Grok 4.3", provider: "xai" },
   { key: "claude-sonnet-5", label: "Claude Sonnet 5", provider: "anthropic" },
   {
     key: "claude-sonnet-4.6",
@@ -60,13 +62,13 @@ export const MODELS: readonly ModelOption[] = [
 
 /**
  * The default model — used when no admin Settings selection is stored (or the
- * stored value is invalid) and as every validation fallback. Grok 4.3 is the
+ * stored value is invalid) and as every validation fallback. Grok 4.6 is the
  * primary model the app is designed around; its native provider is the
  * first-class path (Claude/GPT remain fully supported, selected via the admin
  * Settings panel). Because XAI_API_KEY is required at boot, the default is
  * always configured, so falling back to it is always safe.
  */
-export const DEFAULT_MODEL_KEY: ModelKey = "grok-4.3";
+export const DEFAULT_MODEL_KEY: ModelKey = "grok-4.6";
 
 /**
  * Type guard for a known model key (validates the stored admin Settings value

@@ -536,6 +536,12 @@ export const turn_record = pgTable(
     turn_latency_ms: integer("turn_latency_ms").notNull().default(0),
     /** Attached image count; image bytes are NEVER stored. */
     images_count: integer("images_count").notNull().default(0),
+    /**
+     * Client platform that issued the turn (`web` | `ios` | `android`), from
+     * the `X-Oak-Client` request header. NULL for legacy rows (pre-column) and
+     * for requests that omitted/sent an invalid header — never invent a default.
+     */
+    client: text("client"),
     /** The user message (searchable; empty when image-only). */
     prompt_text: text("prompt_text").notNull().default(""),
     /** `answer_markdown` (searchable; null for "rate_limited"). */

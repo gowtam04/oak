@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -81,25 +83,40 @@ internal fun TypeEdgeSlot(
         null
     }
     val shape = RoundedCornerShape(OakRadius.md)
-    val glowColors = if (wash != null) {
-        buildList {
-            wash.wellGlow?.let { add(it) }
-            wash.wellGlowSecondary?.let { add(it) }
-            add(wash.wellFill)
-            add(wash.wellFill.copy(alpha = 0f))
-        }
-    } else {
-        listOf(oak.surfaceSunken, oak.surfaceSunken.copy(alpha = 0f))
-    }
-    val edge = wash?.wellBorder ?: oak.border
     Box(
         modifier = modifier
             .size(size)
             .clip(shape)
-            .background(Brush.radialGradient(glowColors), shape)
-            .border(1.5.dp, edge, shape),
+            .background(oak.surfaceSunken, shape),
         contentAlignment = Alignment.Center,
     ) {
+        if (wash != null) {
+            // Filled slot — a lit socket: the type glow as the light source + a solid
+            // type-edge ring (soul.md "party slots read as six sockets in a device").
+            val glowColors = buildList {
+                wash.wellGlow?.let { add(it) }
+                wash.wellGlowSecondary?.let { add(it) }
+                add(Color.Transparent)
+            }
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(shape)
+                    .background(Brush.radialGradient(glowColors), shape)
+                    .border(1.5.dp, wash.edge, shape),
+            )
+        } else {
+            // Empty slot — a quiet sunken socket: hairline border, no false type color,
+            // plus a faint darker top edge line for a subtle inset feel.
+            Box(modifier = Modifier.matchParentSize().clip(shape).border(1.dp, oak.border, shape))
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(oak.textStrong.copy(alpha = 0.06f)),
+            )
+        }
         SpriteImage(url = spriteUrl, name = name, size = size * 0.78f)
     }
 }

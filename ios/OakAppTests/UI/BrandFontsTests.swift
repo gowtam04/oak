@@ -11,18 +11,16 @@ import UIKit
 /// OakApp target (TEST_HOST), so the app's registered fonts are available.
 struct BrandFontsTests {
 
-  /// The eight PostScript names `Theme` requests via `Font.custom`. If any of
-  /// these resolves to `nil`, the corresponding `.ttf` isn't in `UIAppFonts` (or
-  /// its PostScript name differs) and the app is silently rendering system fonts.
+  /// The five Signal PostScript names `Theme` requests via `Font.custom`. If
+  /// any of these resolves to `nil`, the corresponding `.ttf` isn't in
+  /// `UIAppFonts` (or its PostScript name differs) and the app is silently
+  /// rendering system fonts.
   static let postScriptNames = [
-    "Fredoka-Medium",
-    "Fredoka-SemiBold",
-    "NunitoSans-Regular",
-    "NunitoSans-Medium",
-    "NunitoSans-SemiBold",
-    "NunitoSans-Bold",
-    "JetBrainsMono-Medium",
-    "JetBrainsMono-SemiBold",
+    "Figtree-Regular",
+    "Figtree-Medium",
+    "Figtree-SemiBold",
+    "IBMPlexMono-Regular",
+    "IBMPlexMono-Medium",
   ]
 
   @Test(arguments: postScriptNames)

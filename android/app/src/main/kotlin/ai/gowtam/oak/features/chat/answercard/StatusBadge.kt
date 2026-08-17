@@ -1,9 +1,17 @@
 package ai.gowtam.oak.features.chat.answercard
 
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakMotion
+import ai.gowtam.oak.ui.rememberReduceMotion
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.HelpOutline
@@ -14,10 +22,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ai.gowtam.oak.ui.OakSpacing
@@ -60,3 +77,42 @@ private fun statusPresentation(
     // rather than a hard-failed decode.
     is OakAnswer.Status.Unknown -> Triple(Icons.Filled.Info, titleizeNonNull(status.raw), info)
 }
+
+/**
+ * The masthead status LED — soul.md "the reading latches": a small dot that blips
+ * `oak.accent` (the live/record-light red, matching [StreamingStatus]'s in-flight
+ * icon) then settles into the answer's resolved status tint over 300ms the instant
+ * an already-finalized [AnswerCard] first mounts (this is the ANDROID equivalent of a
+ * live streaming→answered transition — the card itself only ever renders a finalized
+ * answer, so the "latch" plays as a one-shot mount animation, the visual handoff from
+ * the streaming ticker's accent-tinted icon into the settled plate). Always mounted —
+ * never gated on status — so [answerSections]'s render-if-present rule for
+ * [StatusBadge] (label + icon, non-`answered` only) is untouched. Instant, no
+ * animation, under [rememberReduceMotion].
+ */
+@Composable
+fun StatusLed(status: OakAnswer.Status, modifier: Modifier = Modifier) {
+    val oak = LocalOakColors.current
+    val reduceMotion = rememberReduceMotion()
+    val (_, label, tint) = statusPresentation(status, oak.success, oak.info, oak.warning)
+    val settled = if (status == OakAnswer.Status.Answered) oak.success else tint
+    var latched by remember { mutableStateOf(reduceMotion) }
+    LaunchedEffect(Unit) {
+        if (!reduceMotion) latched = true
+    }
+    val dotColor by animateColorAsState(
+        targetValue = if (latched) settled else oak.accent,
+        animationSpec = if (reduceMotion) snap() else tween(300, easing = OakMotion.fastEasing),
+        label = "statusLed",
+    )
+    Box(
+        modifier = modifier
+            .testTag(TAG_STATUS_LED)
+            .size(8.dp)
+            .clip(CircleShape)
+            .background(dotColor)
+            .semantics { contentDescription = "Status: $label" },
+    )
+}
+
+internal const val TAG_STATUS_LED = "status-led"

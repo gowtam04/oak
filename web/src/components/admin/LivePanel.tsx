@@ -254,7 +254,7 @@ export default function LivePanel({
           display: "flex",
           alignItems: "center",
           gap: "var(--space-2, 8px)",
-          color: "var(--text-muted, #6e625a)",
+          color: "var(--text-muted, #5f656c)",
           fontSize: "var(--text-sm, 13px)",
         }}
       >
@@ -266,15 +266,15 @@ export default function LivePanel({
             height: 8,
             borderRadius: "var(--radius-pill, 999px)",
             background: error
-              ? "var(--warning, #f08c00)"
-              : "var(--success, #2fb573)",
+              ? "var(--warning, #e08700)"
+              : "var(--success, #1f9d61)",
             display: "inline-block",
           }}
         />
         <span data-testid="live-panel-status-text">{statusText}</span>
         <span
           className="live-panel__cadence"
-          style={{ color: "var(--text-faint, #94867a)" }}
+          style={{ color: "var(--text-faint, #8a9096)" }}
         >
           · auto-refreshing every {pollSeconds}s
         </span>
@@ -287,9 +287,9 @@ export default function LivePanel({
           role="status"
           style={{
             padding: "var(--space-2, 8px) var(--space-3, 12px)",
-            border: "1px solid var(--warning, #f08c00)",
+            border: "1px solid var(--warning, #e08700)",
             borderRadius: "var(--radius-md, 8px)",
-            color: "var(--warning, #f08c00)",
+            color: "var(--warning, #e08700)",
             fontSize: "var(--text-sm, 13px)",
           }}
         >
@@ -331,7 +331,7 @@ export default function LivePanel({
           style={{
             padding: "var(--space-8, 48px)",
             textAlign: "center",
-            color: "var(--text-faint, #94867a)",
+            color: "var(--text-faint, #8a9096)",
           }}
         >
           Loading live activity…
@@ -343,7 +343,7 @@ export default function LivePanel({
           style={{
             padding: "var(--space-8, 48px)",
             textAlign: "center",
-            color: "var(--text-faint, #94867a)",
+            color: "var(--text-faint, #8a9096)",
           }}
         >
           No live activity to show yet.

@@ -93,7 +93,7 @@ struct ComposerView: View {
           voiceControl(model: model)
         }
 
-        TextField("Ask Oak a Pokémon question…", text: $model.composerText, axis: .vertical)
+        TextField("Ask Oak", text: $model.composerText, axis: .vertical)
           .font(Theme.body(.body))
           .lineLimit(1...5)
           .textFieldStyle(.plain)
@@ -101,31 +101,33 @@ struct ComposerView: View {
           .padding(.horizontal, Theme.Spacing.md)
           .padding(.vertical, Theme.Spacing.sm)
           .background(Theme.surfaceSunken, in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
-          // Focus grammar (§4.2): the border + soft glow turn **azure** while
-          // focused (interaction), and **red** while a turn streams (the live
-          // state) — so red stays meaningful. Color changes, kept under Reduce
-          // Motion.
+          // Rest: hairline. Focus: 2pt red stroke offset 2pt on canvas — no
+          // chassis glow / record-ready halo.
           .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.lg)
-              .strokeBorder(fieldBorderColor, lineWidth: fieldBorderWidth)
+            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+              .strokeBorder(Theme.separator, lineWidth: 1)
           }
-          .shadow(color: fieldGlowColor, radius: 6)
+          .overlay {
+            if isInputFocused {
+              RoundedRectangle(cornerRadius: Theme.Radius.lg + 4, style: .continuous)
+                .strokeBorder(Theme.accent, lineWidth: 2)
+                .padding(-4)
+            }
+          }
           .animation(Theme.Motion.snappy, value: isInputFocused)
-          .animation(Theme.Motion.snappy, value: model.isStreaming)
 
         sendButton
       }
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
-    // A frosted bar lifted off the thread: the keyboard blur (`.ultraThinMaterial`)
-    // tinted toward Oak's **canvas** so it reads warm paper, not cool system gray,
-    // against the cream thread (§4.2). A themed hairline top edge and (light mode
-    // only) a faint upward shadow; dark mode leans on the hairline alone.
+    // A quiet chassis bar lifted off the thread (Instrument redesign): a flat
+    // `canvas` fill (no frosted-glass material — the bar reads as part of the
+    // device, not a floating pane) plus a themed hairline top edge and (light
+    // mode only) a faint upward shadow; dark mode leans on the hairline alone.
     .background {
       Rectangle()
-        .fill(.ultraThinMaterial)
-        .overlay(Theme.canvas.opacity(0.7))
+        .fill(Theme.canvas.opacity(0.92))
         .overlay(alignment: .top) {
           Rectangle().fill(Theme.separator).frame(height: 1)
         }
@@ -202,27 +204,6 @@ struct ComposerView: View {
     }
   }
 
-  // MARK: Composer field focus grammar (§4.2)
-
-  /// Red while streaming (the live state), azure while focused (interaction),
-  /// hairline otherwise. Red is never the focus color.
-  private var fieldBorderColor: Color {
-    if model.isStreaming { return Theme.accent }
-    if isInputFocused { return Theme.azure }
-    return Theme.separator
-  }
-
-  private var fieldBorderWidth: CGFloat {
-    model.isStreaming || isInputFocused ? 1.5 : 1
-  }
-
-  /// The soft focus/live glow — azure when focused, red when streaming, none at rest.
-  private var fieldGlowColor: Color {
-    if model.isStreaming { return Theme.accent.opacity(0.28) }
-    if isInputFocused { return Theme.azure.opacity(0.28) }
-    return .clear
-  }
-
   // MARK: Derived attach state
 
   private var remainingSlots: Int {
@@ -261,7 +242,7 @@ struct ComposerView: View {
         .symbolRenderingMode(.hierarchical)
         .frame(width: 38, height: 38)
     }
-    .tint(Theme.accent)
+    .tint(Theme.textSecondary)
     .disabled(!canAttachMore)
     .accessibilityLabel("Attach image")
   }
@@ -364,9 +345,8 @@ struct ComposerView: View {
 
   // MARK: Send
 
-  /// Whether the send disc is in its filled-coral active state: a turn is
-  /// streaming (tap = stop) or there's something to send.
-  private var discActive: Bool {
+  /// Whether Send can fire (or Stop, while a turn streams).
+  private var sendActive: Bool {
     model.isStreaming || model.canSend
   }
 
@@ -384,24 +364,27 @@ struct ComposerView: View {
         model.send()
       }
     } label: {
-      // The 44pt send disc (§4.2). Active (has text, or streaming so a tap stops
-      // the turn) → coral fill, white glyph, full size. Empty → the disc shrinks
-      // to 0.85 and fills `surfaceSunken` with a faint glyph, reading as "nothing
-      // to send yet." The glyph morphs to `stop.fill` while a turn streams.
-      Image(systemName: model.isStreaming ? "stop.fill" : "arrow.up")
-        .font(.system(.headline, design: .rounded).weight(.semibold))
-        .foregroundStyle(discActive ? Color.white : Theme.textMuted)
-        .frame(width: 44, height: 44)
-        .background(discActive ? Theme.accent : Theme.surfaceSunken, in: Circle())
-        .contentTransition(.symbolEffect(.replace))
-        // One-shot pulse when an example chip fills the composer (§4.01); otherwise
-        // full size when active, 0.85 when empty.
-        .scaleEffect(isPulsing ? 1.18 : (discActive ? 1 : 0.85))
+      // Compact 44pt rounded-rect — not a circular disc, not full-bar width.
+      HStack(spacing: 4) {
+        Image(systemName: model.isStreaming ? "stop.fill" : "arrow.up")
+          .font(.system(size: 14, weight: .semibold))
+          .contentTransition(.symbolEffect(.replace))
+        Text(model.isStreaming ? "Stop" : "Send")
+          .font(Theme.body(.subheadline, weight: .semibold))
+      }
+      .foregroundStyle(Theme.onRed)
+      .padding(.horizontal, Theme.Spacing.md)
+      .frame(height: 44)
+      .background(
+        Theme.accent,
+        in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+      )
+      .scaleEffect(isPulsing ? 1.04 : 1)
     }
-    .buttonStyle(OakPressableButtonStyle())
-    .disabled(!model.isStreaming && !model.canSend)
+    .buttonStyle(OakSendButtonStyle())
+    .disabled(!sendActive)
+    .opacity(sendActive ? 1 : 0.5)
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.isStreaming)
-    .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.canSend)
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: isPulsing)
     // A chip tap toggles `sendPulse`; bump the scale on, then release it a beat later
     // so the button springs once. Skipped entirely under Reduce Motion.
@@ -455,6 +438,25 @@ struct ComposerView: View {
 
   private static let capReachedNote =
     "You can attach up to \(ChatViewModel.maxAttachedImages) images."
+}
+
+/// Press scale 0.98 on the red Send button only (Signal). Reduce Motion
+/// drops the scale; the fill stays the press cue.
+private struct OakSendButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    SendPressLabel(configuration: configuration)
+  }
+
+  private struct SendPressLabel: View {
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+      configuration.label
+        .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+        .animation(Theme.Motion.snappy, value: configuration.isPressed)
+    }
+  }
 }
 
 #if DEBUG

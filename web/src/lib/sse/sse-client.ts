@@ -710,7 +710,11 @@ export function useSseClient(): UseSseClientReturn {
       try {
         response = await fetch("/api/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            // First-party platform identity for admin turn_record.client.
+            "X-Oak-Client": "web",
+          },
           body: JSON.stringify(body),
           signal: controller.signal,
         });

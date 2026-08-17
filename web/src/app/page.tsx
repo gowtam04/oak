@@ -11,6 +11,7 @@ import AuthDialog from "@/components/auth/AuthDialog";
 import ConversationList from "@/components/history/ConversationList";
 import AppNav from "@/components/nav/AppNav";
 import SidebarToggle from "@/components/controls/SidebarToggle";
+import OakWordmark from "@/components/brand/OakWordmark";
 import ScopeChip from "@/components/controls/ScopeChip";
 import VoiceOverlay from "@/components/voice/VoiceOverlay";
 import SavedTeamAutoOpen from "@/components/teams/SavedTeamAutoOpen";
@@ -592,7 +593,7 @@ export default function Home() {
             aria-label="Oak — reload"
             onClick={() => window.location.reload()}
           >
-            Oak
+            <OakWordmark />
           </button>
         </div>
         <div className="chat-page__header-cluster" ref={headerClusterRef}>
@@ -687,15 +688,15 @@ export default function Home() {
                     data-testid="history-signin-hint"
                   >
                     <p className="chat-page__signin-hint-text">
-                      Sign in to save chat history
+                      Sign in to save chat history{" "}
+                      <button
+                        type="button"
+                        className="chat-page__signin-hint-cta"
+                        onClick={() => setAuthDialogOpen(true)}
+                      >
+                        Sign in
+                      </button>
                     </p>
-                    <button
-                      type="button"
-                      className="chat-page__signin-hint-cta"
-                      onClick={() => setAuthDialogOpen(true)}
-                    >
-                      Sign in
-                    </button>
                   </div>
                 )}
               </AppNav>
@@ -733,16 +734,6 @@ export default function Home() {
               // slots: the empty-state hero (desktop) here, or bottom-docked
               // below. `heroComposer` is the sole switch, so it never mounts twice.
               composerSlot={heroComposer ? composer : undefined}
-              scopeChipSlot={
-                heroComposer ? (
-                  <ScopeChip
-                    format={displayFormat}
-                    onSelect={setScopeSeed}
-                    disabled={status === "thinking"}
-                    testId="scope-chip-hero"
-                  />
-                ) : undefined
-              }
             />
 
             {showEmptyState && <LandingSection />}

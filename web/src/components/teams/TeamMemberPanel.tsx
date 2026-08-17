@@ -507,10 +507,10 @@ export default function TeamMemberPanel({
         </table>
       </fieldset>
 
+      {/* No group head here (ilabel prune, phase 3): "Nature", "Tera type",
+          and "Level" are each already labeled by their own field below —
+          the group label just concatenated names that were already visible. */}
       <div className="team-member-panel__group">
-        <span className="ilabel team-member-panel__group-label">
-          Nature &amp; Level
-        </span>
         <div className="team-member-panel__meta-grid">
         <PickerField label="Nature" htmlFor={id("nature")}>
           <EntityPicker

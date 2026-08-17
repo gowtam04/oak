@@ -57,7 +57,7 @@
   flex: 0 0 auto;
   border-radius: 7px;
   background: var(--brand-mark) center / cover no-repeat;
-  box-shadow: 0 1px 2px rgba(74, 53, 42, 0.14);
+  box-shadow: 0 1px 2px rgba(13, 16, 18, 0.14);
 }
 
 .admin-shell__controls {
@@ -113,11 +113,12 @@
   flex: 0 0 auto;
   border-radius: 8px;
   background: var(--brand-mark) center / cover no-repeat;
-  box-shadow: 0 1px 2px rgba(74, 53, 42, 0.14);
+  box-shadow: 0 1px 2px rgba(13, 16, 18, 0.14);
 }
 
 .admin-login__wordmark {
   font-size: var(--text-xl);
+  letter-spacing: -0.02em;
   color: var(--text-strong);
 }
 
@@ -934,7 +935,7 @@
 }
 
 .settings-view__row--active {
-  border-color: var(--accent, #4a6bd6);
+  border-color: var(--info, #2b7dd1);
 }
 
 .settings-view__row--unconfigured {

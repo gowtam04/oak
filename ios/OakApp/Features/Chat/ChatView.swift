@@ -18,8 +18,10 @@ import UIKit
 /// onto the Chat tab's stack). Two flags adapt it to those contexts:
 /// ``showsNewConversationButton`` hides the toolbar's New-conversation button for a
 /// pushed signed-in thread (where "New Chat" lives on the list and Back returns to
-/// it), and ``signInAction`` — set for a guest only — renders the "Sign in to save
-/// your conversations" nudge above the thread (accounts-and-access.md M-ACCT-US-1).
+/// it), and ``signInAction`` — set for a guest only — renders a quiet "Sign in to
+/// save your conversations" row inside the scrollable thread, above the empty
+/// state when empty and at the top of the scroll otherwise (accounts-and-access.md
+/// M-ACCT-US-1) — not a full-width band under the header.
 struct ChatView: View {
   @State private var model: ChatViewModel
 
@@ -102,10 +104,6 @@ struct ChatView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      if let signInAction {
-        signInNudge(action: signInAction)
-          .transition(bannerTransition)
-      }
       thread
       Divider()
       if let banner = model.errorBanner {
@@ -135,14 +133,12 @@ struct ChatView: View {
     .navigationTitle("Oak")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
-      // The brand tile (§4.1) leading, so the Chat root reads as Oak the instant it
-      // opens. Tile-only: iOS 26 crops a wide toolbar item to a circular glass
-      // chip, so the full "Oak" wordmark lives in the empty-state hero instead.
-      // Only on the root (guest single thread); a pushed signed-in thread keeps the
-      // system back button leading.
+      // Signal wordmark (`Oak.` + red period) leading, so the Chat root reads as
+      // Oak the instant it opens. Only on the root (guest single thread); a
+      // pushed signed-in thread keeps the system back button leading.
       if showsNewConversationButton {
         ToolbarItem(placement: .topBarLeading) {
-          OakWordmarkLockup(showsWordmark: false)
+          OakWordmarkLockup()
         }
       }
       // The scope control (GS-C): the header's visible counterpart to the `scope`
@@ -235,9 +231,15 @@ struct ChatView: View {
         }
       }
     } label: {
-      HStack(spacing: 3) {
+      HStack(spacing: 6) {
+        // Always-on 6pt scope LED — Signal's header mark, not a "changed from
+        // default" indicator.
+        Circle()
+          .fill(Theme.accent)
+          .frame(width: 6, height: 6)
+          .accessibilityHidden(true)
         Text(model.displayFormat.shortLabel)
-          .font(Theme.body(.footnote, weight: .semibold))
+          .font(Theme.body(.caption, weight: .medium))
         Image(systemName: "chevron.down")
           .font(.system(size: 9, weight: .bold))
       }
@@ -280,29 +282,31 @@ struct ChatView: View {
 
   // MARK: Sign-in nudge (guest)
 
-  /// A quiet one-line card inviting a guest to sign in so their conversations persist
-  /// (accounts-and-access.md M-ACCT-US-1). Shown only in the guest single-thread
-  /// context; the "Sign in" button presents the sign-in sheet via ``signInAction``.
-  /// De-pinked per §4.01 — a `surface` card with the icon + text in `textSecondary`,
-  /// red reserved for the "Sign in" action alone. An icon paired with text so meaning
-  /// is never carried by color alone (M-AC-UI9.3).
+  /// A single quiet row inviting a guest to sign in so their conversations persist
+  /// (accounts-and-access.md M-ACCT-US-1). Lives INSIDE the scrollable thread area
+  /// (above the empty state when empty, top of the scroll otherwise) — **not** a
+  /// full-width band under the header (soul.md: red is a record light, not
+  /// wallpaper; chrome stays quiet). Muted footnote text + an inline red
+  /// text-button; a small icloud glyph pairs with the text so the invitation isn't
+  /// carried by the red button color alone (M-AC-UI9.3). No surface fill, no
+  /// padding beyond breathing room — it reads as a caption, not a card.
   @ViewBuilder
   private func signInNudge(action: @escaping () -> Void) -> some View {
-    HStack(spacing: Theme.Spacing.sm) {
-      Image(systemName: "icloud.and.arrow.up")
+    HStack(spacing: 6) {
+      Image(systemName: "icloud")
+        .font(.system(size: 11, weight: .medium))
         .foregroundStyle(Theme.textSecondary)
+        .accessibilityHidden(true)
       Text("Sign in to save your conversations")
         .font(Theme.body(.footnote))
         .foregroundStyle(Theme.textSecondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
       Button("Sign in", action: action)
-        .font(Theme.display(.footnote))
+        .font(Theme.display(.footnote, weight: .semibold))
         .buttonStyle(.borderless)
         .tint(Theme.accent)
     }
-    .padding(Theme.Spacing.md)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Theme.surface)
+    .padding(.vertical, Theme.Spacing.xs)
   }
 
   // MARK: Thread
@@ -311,18 +315,28 @@ struct ChatView: View {
     ScrollViewReader { proxy in
       GeometryReader { geo in
         ScrollView {
-          // Two compositions per §3's rule: the EMPTY state is a CENTERED
-          // composition (the brand cluster + chips sit mid-viewport), while a
-          // conversation is bottom-anchored — a greedy top Spacer pushes a short
-          // thread down against the composer instead of stranding it at the top
-          // with a void beneath. Both pin content to at least the viewport height;
-          // once a thread outgrows the viewport it scrolls normally.
+          // Empty chat is top-aligned (title + starter rows). A conversation is
+          // bottom-anchored — a greedy top Spacer pushes a short thread down
+          // against the composer. Both pin content to at least the viewport
+          // height; once a thread outgrows the viewport it scrolls normally.
           if model.turns.isEmpty && !model.isStreaming {
-            emptyState
-              .padding(Theme.Spacing.lg)
-              .frame(minHeight: geo.size.height, alignment: .center)
+            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+              if let signInAction {
+                signInNudge(action: signInAction)
+                  .frame(maxWidth: Self.plateMaxWidth, alignment: .leading)
+                  .frame(maxWidth: .infinity)
+              }
+              emptyState
+            }
+            .padding(Theme.Spacing.lg)
+            .frame(minHeight: geo.size.height, alignment: .top)
           } else {
             VStack(spacing: 0) {
+              if let signInAction {
+                signInNudge(action: signInAction)
+                  .padding(.horizontal, Theme.Spacing.lg)
+                  .padding(.top, Theme.Spacing.sm)
+              }
               Spacer(minLength: 0)
               LazyVStack(alignment: .leading, spacing: Theme.Spacing.lg) {
                 ForEach(model.turns) { turn in
@@ -344,10 +358,7 @@ struct ChatView: View {
             .frame(minHeight: geo.size.height, alignment: .bottom)
           }
         }
-        .background {
-          Theme.canvas
-            .oakDeskGrain()
-        }
+        .background(Theme.canvas)
         .scrollDismissesKeyboard(.interactively)
         // Keep the newest content in view as turns/tokens arrive (M-AC-2.2).
         .onChange(of: model.turns.count) { _, _ in scrollToBottom(proxy) }
@@ -416,108 +427,56 @@ struct ChatView: View {
             .foregroundStyle(Theme.textPrimary)
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-          // Soft desk tint + optional mild type wash from tool labels (§4.03 / soul.md 2.3).
-          AnswerSkeleton(
-            washType: Theme.streamingWashType(
-              from: model.toolActivities.map(\.label)
-            )
-          )
+          AnswerSkeleton()
         }
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  /// Blank specimen plate empty desk (soul.md): dashed/grid plate, `NEW ENTRY`,
-  /// "What are we looking up?", scope stamp from `displayFormat`, and filed
-  /// starters (Battle / Dex / Rules / Meta with type-dots). **Not** a centered
-  /// logo / "Ask Oak" AI-hero composition.
+  /// Signal empty chat: large title, mute sub, four full-width starter rows.
+  /// Scope LED lives in the header only — not repeated on this plate.
   private var emptyState: some View {
     blankSpecimenPlate
       .frame(maxWidth: Self.plateMaxWidth)
       .frame(maxWidth: .infinity)
-      .padding(.horizontal, Theme.Spacing.sm)
       .onAppear {
         filedStarters = ExamplePrompts.pickFiledStarters()
         emptyStateAppeared = true
       }
   }
 
-  /// Max width the blank plate snaps to so it reads as a desk specimen, not a
-  /// full-bleed hero.
-  private static let plateMaxWidth: CGFloat = 420
+  /// Max width the empty-chat column snaps to.
+  private static let plateMaxWidth: CGFloat = 520
 
-  /// The blank specimen plate: dashed border, subtle grid, NEW ENTRY + scope stamp,
-  /// prompt, subcopy, and filed starters.
+  /// Title + sub + starter rows. No Standby label, no LED well, no type-dot
+  /// hero composition.
   private var blankSpecimenPlate: some View {
-    VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-      HStack(alignment: .center) {
-        Text("New entry")
-          .instrumentLabel()
-          .foregroundStyle(Theme.textSecondary)
-          .accessibilityAddTraits(.isHeader)
-        Spacer(minLength: Theme.Spacing.sm)
-        Text(model.displayFormat.displayLabel)
-          .instrumentLabel()
-          .foregroundStyle(Theme.textStrong)
-          .padding(.horizontal, 10)
-          .padding(.vertical, 5)
-          .background(
-            Theme.accent.opacity(0.08),
-            in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
-          )
-          .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
-              .strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1)
-          }
-          .accessibilityLabel("Scope: \(model.displayFormat.displayLabel)")
-      }
-
-      Text("What are we looking up?")
-        .font(Theme.body(.title3, weight: .bold))
+    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+      Text("What do you want to know?")
+        .font(Theme.display(.title))
         .foregroundStyle(Theme.textStrong)
         .fixedSize(horizontal: false, vertical: true)
+        .accessibilityAddTraits(.isHeader)
         .accessibilityIdentifier("empty-desk-prompt")
 
-      Text("Open a specimen. Every answer carries receipts — reasoning, sources, and the generation it is based on.")
+      Text("Mechanics, locations, teams, damage. Oak will show its work.")
         .font(Theme.body(.subheadline))
         .foregroundStyle(Theme.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
+        .padding(.bottom, Theme.Spacing.sm)
 
       VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-        Text("Filed starters")
-          .instrumentLabel()
-          .foregroundStyle(Theme.textMuted)
-          .padding(.top, Theme.Spacing.xs)
         ForEach(Array(filedStarters.enumerated()), id: \.element.id) { index, starter in
           filedStarterRow(starter, index: index)
         }
       }
     }
-    .padding(Theme.Spacing.lg)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background {
-      ZStack {
-        Theme.surface
-        // Subtle desk grid (soul.md blank plate).
-        BlankPlateGrid()
-          .opacity(0.45)
-          .padding(12)
-      }
-    }
-    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous))
-    .overlay {
-      RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
-        // Dashed plate edge — border with a faint accent mix (prototype blank-plate).
-        .strokeBorder(
-          Theme.borderStrong.opacity(0.85),
-          style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-        )
-    }
-    .oakShadow(.card)
+    .padding(.top, Theme.Spacing.xl)
   }
 
-  /// One filed starter row: type-dot + category instrument label + prompt.
+  /// One starter row: mute category prefix + prompt. Surface + hairline, r10.
   /// Tapping sends the prompt as the next user turn and pulses send.
   private func filedStarterRow(
     _ starter: ExamplePrompts.FiledStarter,
@@ -531,17 +490,12 @@ struct ChatView: View {
       }
       sendFollowUp(starter.prompt)
     } label: {
-      HStack(spacing: Theme.Spacing.sm) {
-        Circle()
-          .fill(Theme.type(starter.typeDot))
-          .frame(width: 8, height: 8)
-          .accessibilityHidden(true)
+      HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.sm) {
         Text(starter.category.rawValue)
-          .instrumentLabel(.caption2)
+          .font(Theme.body(.caption, weight: .medium))
           .foregroundStyle(Theme.textMuted)
-          .frame(width: 52, alignment: .leading)
         Text(starter.prompt)
-          .font(Theme.body(.subheadline, weight: .semibold))
+          .font(Theme.body(.subheadline, weight: .medium))
           .foregroundStyle(Theme.textStrong)
           .multilineTextAlignment(.leading)
           .fixedSize(horizontal: false, vertical: true)
@@ -550,12 +504,12 @@ struct ChatView: View {
       .padding(.horizontal, Theme.Spacing.md)
       .padding(.vertical, 10)
       .background(
-        Theme.surface.opacity(0.7),
+        Theme.surface,
         in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
       )
       .overlay {
         RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-          .strokeBorder(Theme.border, lineWidth: 1)
+          .strokeBorder(Theme.separator, lineWidth: 1)
       }
     }
     .buttonStyle(OakPressableButtonStyle())
@@ -566,8 +520,8 @@ struct ChatView: View {
     .accessibilityHint("Sends this as your next message")
   }
 
-  /// The entrance transition for the error banner / sign-in nudge — a slide up from
-  /// the composer seam, degrading to a plain crossfade under Reduce Motion.
+  /// The entrance transition for the error banner — a slide up from the composer
+  /// seam, degrading to a plain crossfade under Reduce Motion.
   private var bannerTransition: AnyTransition {
     reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
   }
@@ -611,10 +565,10 @@ struct ChatView: View {
   }
 }
 
-// MARK: - User note (soul.md — sunken paper + red corner pip)
+// MARK: - User note (sunken + hairline; no red bubble, no corner pip)
 
-/// A user's desk note, trailing-aligned. Sunken/neutral paper + thin border +
-/// small red corner pip — **not** an accent-filled iMessage/ChatGPT bubble.
+/// A user's note, trailing-aligned. Sunken fill + hairline — **not** an
+/// accent-filled iMessage/ChatGPT bubble and **not** a red-pipped instrument card.
 private struct UserMessageView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let text: String
@@ -626,25 +580,14 @@ private struct UserMessageView: View {
       VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
         if !text.isEmpty {
           Text(text)
-            .font(Theme.body(.body, weight: .semibold))
+            .font(Theme.body(.body, weight: .medium))
             .foregroundStyle(Theme.textStrong)
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.vertical, Theme.Spacing.md)
-            // Room for the corner pip so it doesn't collide with the last glyph.
-            .padding(.trailing, Theme.Spacing.sm)
             .background(Theme.surfaceSunken, in: noteShape)
             .overlay {
-              noteShape.strokeBorder(Theme.border, lineWidth: 1)
+              noteShape.strokeBorder(Theme.separator, lineWidth: 1)
             }
-            .overlay(alignment: .topTrailing) {
-              // Small red corner pip — record-light accent (soul.md user note).
-              Circle()
-                .fill(Theme.accent)
-                .frame(width: 6, height: 6)
-                .padding(8)
-                .accessibilityHidden(true)
-            }
-            .oakShadow(.card)
         }
         if imageCount > 0 {
           Label("\(imageCount) image(s) attached", systemImage: "photo")
@@ -656,16 +599,8 @@ private struct UserMessageView: View {
     .transition(entrance)
   }
 
-  /// Asymmetric corners — the bottom-trailing corner tucks in (`Radius.sm`) so the
-  /// note reads as anchored to the sender's edge; the rest stay `Radius.lg`.
-  private var noteShape: UnevenRoundedRectangle {
-    UnevenRoundedRectangle(
-      topLeadingRadius: Theme.Radius.lg,
-      bottomLeadingRadius: Theme.Radius.lg,
-      bottomTrailingRadius: Theme.Radius.sm,
-      topTrailingRadius: Theme.Radius.lg,
-      style: .continuous
-    )
+  private var noteShape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
   }
 
   /// Pops in from the sending corner (scale + rise + fade); Reduce Motion keeps only
@@ -678,33 +613,6 @@ private struct UserMessageView: View {
         .combined(with: .offset(y: 8)),
       removal: .opacity
     )
-  }
-}
-
-// MARK: - Blank plate grid
-
-/// A light desk grid drawn inside the blank specimen plate (decorative only).
-private struct BlankPlateGrid: View {
-  var body: some View {
-    Canvas { context, size in
-      let step: CGFloat = 24
-      var path = Path()
-      var x: CGFloat = 0
-      while x <= size.width {
-        path.move(to: CGPoint(x: x, y: 0))
-        path.addLine(to: CGPoint(x: x, y: size.height))
-        x += step
-      }
-      var y: CGFloat = 0
-      while y <= size.height {
-        path.move(to: CGPoint(x: 0, y: y))
-        path.addLine(to: CGPoint(x: size.width, y: y))
-        y += step
-      }
-      context.stroke(path, with: .color(Theme.border.opacity(0.7)), lineWidth: 1)
-    }
-    .allowsHitTesting(false)
-    .accessibilityHidden(true)
   }
 }
 

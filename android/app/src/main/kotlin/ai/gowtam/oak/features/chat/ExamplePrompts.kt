@@ -3,9 +3,9 @@ package ai.gowtam.oak.features.chat
 /**
  * Starter prompts for the fresh-thread empty state ([EmptyState]).
  *
- * Phase 1 specimen desk (`docs/design/soul.md`) shows **filed starters** — four
- * category rows (Battle / Dex / Rules / Meta) with an optional type-dot — not
- * equal beige pills. [pickFiled] returns one prompt per category.
+ * Signal empty chat (`docs/design/signal.md` §6.1) shows **filed starters** —
+ * four full-width category rows (Battle / Dex / Rules / Meta). [pickFiled]
+ * returns one prompt per category.
  *
  * The flat [pool] remains the full curated set (synced with
  * `web/src/lib/example-prompts.ts` / `ios/OakApp/Features/Chat/ExamplePrompts.swift`)
@@ -166,7 +166,7 @@ object ExamplePrompts {
     /**
      * One filed starter per category (Battle → Dex → Rules → Meta), each sampled
      * at random from that category's entries in [filedPool]. Stable category order
-     * so the empty desk always reads the same instrument layout.
+     * so the empty chat always shows the same Battle → Dex → Rules → Meta order.
      */
     fun pickFiled(): List<FiledStarter> =
         Category.entries.map { category ->

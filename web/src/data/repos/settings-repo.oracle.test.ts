@@ -8,7 +8,7 @@
  * repo, and neutralize `server-only` (it throws under the vitest node env).
  *
  * Coverage (plan Phase 1):
- *   - empty table → default (grok-4.3, source "default", null audit fields).
+ *   - empty table → default (grok-4.6, source "default", null audit fields).
  *   - set → get roundtrip records source "db" + audit fields.
  *   - a second set overwrites (upsert) and bumps audit fields.
  *   - a hand-inserted invalid value fails soft to the default.
@@ -50,10 +50,10 @@ beforeEach(async () => {
 });
 
 describe("resolveActiveModel", () => {
-  it("defaults to grok-4.3 when the table is empty", async () => {
+  it("defaults to grok-4.6 when the table is empty", async () => {
     const setting = await repo.resolveActiveModel();
     expect(setting).toEqual({
-      key: "grok-4.3",
+      key: "grok-4.6",
       source: "default",
       updatedBy: null,
       updatedAt: null,
@@ -61,7 +61,7 @@ describe("resolveActiveModel", () => {
   });
 
   it("getActiveModelKey returns the default key directly when empty", async () => {
-    expect(await repo.getActiveModelKey()).toBe("grok-4.3");
+    expect(await repo.getActiveModelKey()).toBe("grok-4.6");
   });
 });
 
@@ -113,7 +113,7 @@ describe("fail-soft degradation", () => {
 
     const setting = await repo.resolveActiveModel();
     expect(setting).toEqual({
-      key: "grok-4.3",
+      key: "grok-4.6",
       source: "default",
       updatedBy: null,
       updatedAt: null,
@@ -124,7 +124,7 @@ describe("fail-soft degradation", () => {
     await fix.db.execute(sql`DROP TABLE app_setting`);
     try {
       await expect(repo.resolveActiveModel()).resolves.toEqual({
-        key: "grok-4.3",
+        key: "grok-4.6",
         source: "default",
         updatedBy: null,
         updatedAt: null,

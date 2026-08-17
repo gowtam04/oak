@@ -54,13 +54,17 @@ struct ServiceContainer: Sendable {
   /// Signed-in only.
   let voice: any VoiceService
 
+  /// Soft-update seam (App Store Lookup). Backed by ``LiveUpdateService`` in
+  /// production — a separate host from the Oak API, no Bearer token.
+  let updates: any UpdateService
+
   /// The production wiring (real `Live…` services).
   ///
   /// All services share **one** ``TokenStore`` (the Keychain) and **one**
   /// ``OakAPIClient`` (the `URLSession`, base URL, and Bearer-header policy), so a
   /// token written on `verify` is read identically by every authed request and the
   /// chat byte stream alike. ``SSEClient`` borrows the same client for the chat
-  /// stream.
+  /// stream. ``updates`` is independent (iTunes Lookup).
   static func live() -> ServiceContainer {
     let tokenStore = TokenStore()
     let api = OakAPIClient(baseURL: BaseURL.current, tokenStore: tokenStore)
@@ -72,7 +76,8 @@ struct ServiceContainer: Sendable {
       teams: LiveTeamService(apiClient: api),
       dexLookup: LiveDexLookupService(apiClient: api),
       teamsAssistant: LiveTeamsAssistantService(sseClient: SSEClient(apiClient: api)),
-      voice: LiveVoiceService(apiClient: api)
+      voice: LiveVoiceService(apiClient: api),
+      updates: LiveUpdateService()
     )
   }
 
@@ -91,7 +96,8 @@ struct ServiceContainer: Sendable {
       teams: PreviewStubTeamService(),
       dexLookup: EmptyDexLookupService(),
       teamsAssistant: PreviewStubTeamsAssistantService(),
-      voice: PreviewStubVoiceService()
+      voice: PreviewStubVoiceService(),
+      updates: PreviewStubUpdateService()
     )
     #else
     live()
@@ -285,6 +291,12 @@ struct PreviewStubVoiceService: VoiceService {
   }
 
   func postTranscript(sessionId: String, format: Format, userText: String, assistantText: String) async {}
+}
+
+/// No-network ``UpdateService`` for SwiftUI previews: always reports up-to-date so
+/// the soft-update sheet never appears over a canvas preview.
+struct PreviewStubUpdateService: UpdateService {
+  func checkForUpdate(localVersion: String) async -> UpdateCheckResult { .upToDate }
 }
 
 #endif

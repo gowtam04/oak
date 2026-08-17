@@ -136,7 +136,11 @@ class OakApiClient(
         val url = resolveUrl(endpoint)
         val requestBody = endpoint.body?.toRequestBody(JSON_MEDIA_TYPE)
 
-        val builder = Request.Builder().url(url).header("Accept", accept)
+        val builder = Request.Builder()
+            .url(url)
+            .header("Accept", accept)
+            // First-party platform identity for admin turn_record.client.
+            .header("X-Oak-Client", "android")
         if (endpoint.requiresAuth && token != null) {
             builder.header("Authorization", "Bearer $token")
         }

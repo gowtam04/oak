@@ -10,9 +10,9 @@ import SwiftUI
 /// system semantic colors so it adapts to light/dark and text size; error text is
 /// paired with an icon so color is never the sole signal (M-AC-UI9.3).
 ///
-/// Chrome (UI-polish P6): a custom `ScrollView` layout replaces the `Form` — a brand
-/// header (`OakBrandMark`), a floating email field, a filled-capsule CTA with an
-/// in-button spinner, and a six-box code entry. The **code boxes** are a purely
+/// Chrome: a custom `ScrollView` layout replaces the `Form` — a `Sign in` title,
+/// a floating email field, a filled-capsule CTA with an in-button spinner, and a
+/// six-box code entry. The **code boxes** are a purely
 /// visual layer over a single, near-invisible real `TextField` that keeps
 /// `.textContentType(.oneTimeCode)` + `.keyboardType(.numberPad)`, so system OTP
 /// autofill and the number pad keep working exactly as before; the boxes just render
@@ -82,9 +82,9 @@ struct AuthView: View {
 
   private var header: some View {
     VStack(spacing: 12) {
-      OakBrandMark(size: 72)
-      Text("Sign in to Oak")
-        .font(Theme.display(.title2))
+      Text("Sign in")
+        .font(Theme.display(.title))
+        .foregroundStyle(Theme.textStrong)
       Text("Save your conversations and teams")
         .font(Theme.body(.subheadline))
         .foregroundStyle(Theme.textSecondary)

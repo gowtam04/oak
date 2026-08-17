@@ -9,11 +9,11 @@ import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakTopBar
+import ai.gowtam.oak.ui.OakWordmark
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberHaptics
 import ai.gowtam.oak.ui.rememberReduceMotion
 import ai.gowtam.oak.wire.Format
-import android.content.res.Configuration
 import android.os.SystemClock
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -22,7 +22,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,8 +44,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.WarningAmber
@@ -72,22 +69,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
-import kotlin.math.floor
 
 /**
  * The chat thread screen (chat-experience.md M-CHAT-US-1/2/3/4; component-design.md
@@ -112,9 +104,10 @@ fun ChatScreen(
     artifactViewModel: ArtifactViewModel,
     modifier: Modifier = Modifier,
     showsNewConversationButton: Boolean = true,
-    /** When non-null, renders the guest "Sign in to save your conversations" nudge
-     * above the thread; the "Sign in" button calls this (it presents the sign-in
-     * sheet). `null` for a signed-in thread — mirrors iOS `ChatView.signInAction`. */
+    /** When non-null, renders the guest "Sign in to save your conversations" nudge as
+     * the first row inside the scrollable transcript; the "Sign in" button calls this
+     * (it presents the sign-in sheet). `null` for a signed-in thread — mirrors iOS
+     * `ChatView.signInAction`. */
     signInAction: (() -> Unit)? = null,
     /** When non-null, the top bar shows a back arrow calling this instead of the
      * app title alone — used for a pushed/resumed signed-in thread so there is an
@@ -215,7 +208,7 @@ fun ChatScreen(
         modifier = modifier,
         topBar = {
             OakTopBar(
-                title = { Text("Oak", modifier = Modifier.semantics { heading() }) },
+                title = { OakWordmark() },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -238,39 +231,27 @@ fun ChatScreen(
             )
         },
     ) { innerPadding ->
-        // Landscape on a phone leaves very little vertical room once the top bar,
-        // composer, and bottom nav (all fixed-height chrome, unchanged from portrait)
-        // are subtracted — the sign-in nudge alone was costing the transcript's
-        // LazyColumn ~190px out of a ~733px content area, squeezing it down to an
-        // unusably (and on some builds, unrenderably) short sliver. It stays available
-        // in portrait and via the Account tab either way, so hiding it here in
-        // landscape trades a non-essential nudge for a transcript that's actually
-        // visible and scrollable.
-        val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val reduceMotion = rememberReduceMotion()
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            if (signInAction != null && !isLandscape) {
-                SignInNudge(onSignIn = signInAction)
-            }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    // Subtle desk grain (soul.md Phase 3 — optional paper texture).
-                    // Static dots only; skipped under reduce-motion for a11y/perf.
-                    .deskGrain(enabled = !reduceMotion, ink = oak.textFaint),
-            ) {
+            Box(modifier = Modifier.weight(1f)) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(OakSpacing.lg),
                     verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
                 ) {
+                    // A single quiet row inside the scroll, not a full-width band under
+                    // the header (soul.md / fable-ui-strategy.md §4 "01 — iOS Home") —
+                    // it now scrolls with the transcript instead of permanently costing
+                    // fixed viewport height (the old landscape-only hide is gone since
+                    // there's no fixed band left to squeeze the list).
+                    if (signInAction != null) {
+                        item(key = "sign-in-nudge") {
+                            SignInNudge(onSignIn = signInAction)
+                        }
+                    }
                     if (showEmptyState) {
                         item(key = "empty-state") {
-                            EmptyState(
-                                format = uiState.displayFormat,
-                                onExampleTap = viewModel::sendFollowUp,
-                            )
+                            EmptyState(onExampleTap = viewModel::sendFollowUp)
                         }
                     }
                     items(uiState.turns, key = { it.id }) { turn ->
@@ -348,13 +329,20 @@ private fun ScopeChip(format: Format, enabled: Boolean, onClick: () -> Unit) {
             .border(1.dp, oak.border, chipShape)
             .then(if (enabled) Modifier.clickableChip(onClick) else Modifier)
             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Signal scope LED — always on, not only when scope ≠ national-dex.
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(oak.accent),
+        )
         Text(
             text = format.shortLabel,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = if (enabled) oak.textStrong else oak.textMuted,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            color = oak.textMuted,
         )
         Icon(
             Icons.Filled.KeyboardArrowDown,
@@ -412,39 +400,15 @@ private fun ScopePickerSheet(current: Format, onSelect: (Format) -> Unit) {
                         color = oak.textStrong,
                     )
                     if (selected) {
-                        Icon(Icons.Filled.Check, contentDescription = "Selected", tint = oak.accent)
+                        // Selected row: a red LED dot, not a checkmark (soul.md — the
+                        // record light reads "active"/"selected" across the app).
+                        LedDot(
+                            dotSize = 8.dp,
+                            haloSize = 14.dp,
+                            modifier = Modifier.semantics { contentDescription = "Selected" },
+                        )
                     }
                 }
-            }
-        }
-    }
-}
-
-/**
- * Very light paper grain for the chat canvas — deterministic pseudo-random dots
- * so recomposition does not flicker. Web is primary for grain; Android keeps this
- * subtle (≈3% ink) and omit under [enabled] = false (reduce-motion).
- */
-private fun Modifier.deskGrain(enabled: Boolean, ink: Color): Modifier {
-    if (!enabled) return this
-    return this.drawBehind {
-        val step = 14.dp.toPx()
-        val cols = floor(size.width / step).toInt().coerceAtLeast(1)
-        val rows = floor(size.height / step).toInt().coerceAtLeast(1)
-        val dot = 1.1.dp.toPx()
-        val color = ink.copy(alpha = 0.045f)
-        for (row in 0..rows) {
-            for (col in 0..cols) {
-                // Sparse: only ~1/5 cells get a speck (hash of cell coords).
-                val h = (row * 73856093) xor (col * 19349663)
-                if (h and 0x7 != 0) continue
-                val ox = ((h ushr 3) and 7) / 7f * step * 0.35f
-                val oy = ((h ushr 6) and 7) / 7f * step * 0.35f
-                drawCircle(
-                    color = color,
-                    radius = dot,
-                    center = Offset(col * step + ox, row * step + oy),
-                )
             }
         }
     }
@@ -465,19 +429,13 @@ private fun TurnRow(turn: ChatTurnItem, actions: AnswerCardActions) {
 @Composable
 private fun UserMessageRow(turn: ChatTurnItem.User) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
-    // Desk note (soul.md): sunken/neutral paper + thin border + small red corner pip —
-    // never an accent-filled iMessage bubble.
-    val noteShape = RoundedCornerShape(
-        topStart = OakRadius.lg, topEnd = OakRadius.lg,
-        bottomEnd = OakRadius.sm, bottomStart = OakRadius.lg,
-    )
+    // Signal user note: sunken fill + hairline, ink text. No red bubble, no corner pip.
+    val noteShape = RoundedCornerShape(OakRadius.lg)
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(max = 320.dp)) {
             if (turn.text.isNotEmpty()) {
                 Box(
                     modifier = Modifier
-                        .then(if (dark) Modifier else Modifier.shadow(2.dp, noteShape))
                         .clip(noteShape)
                         .background(oak.surfaceSunken)
                         .border(1.dp, oak.border, noteShape)
@@ -486,16 +444,7 @@ private fun UserMessageRow(turn: ChatTurnItem.User) {
                     Text(
                         text = turn.text,
                         color = oak.textStrong,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier.padding(end = 10.dp),
-                    )
-                    // Red record-light corner pip (soul.md "User note").
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(oak.accent),
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                 }
             }
@@ -538,28 +487,26 @@ private fun InProgressRow(
 // ---------------------------------------------------------------------------
 
 /**
- * A slim banner inviting a guest to sign in so their conversations persist
+ * A quiet row inviting a guest to sign in so their conversations persist
  * (accounts-and-access.md M-ACCT-US-1; history-and-teams.md D-HIST-1 — the guest's
  * "history affordance" for a surface that, once signed in, becomes the saved-
- * conversation list). Icon + text so meaning is never carried by color alone.
- * Mirrors iOS `ChatView.signInNudge`.
+ * conversation list). Demoted from a full-width accent-wash band to a single muted
+ * text row + inline accent text-button living inside the scrollable transcript
+ * (fable-ui-strategy.md §4 "01 — iOS Home": "not a full-width band under the
+ * header"). Mirrors iOS `ChatView.signInNudge`.
  */
 @Composable
 private fun SignInNudge(onSignIn: () -> Unit) {
     val oak = LocalOakColors.current
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(oak.accent.copy(alpha = 0.10f))
-            .padding(OakSpacing.md),
-        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.CloudUpload, contentDescription = null, tint = oak.accent, modifier = Modifier.height(18.dp))
         Text(
             text = "Sign in to save your conversations",
             style = MaterialTheme.typography.bodySmall,
-            color = oak.textStrong,
+            color = oak.textMuted,
             modifier = Modifier.weight(1f),
         )
         TextButton(onClick = onSignIn) { Text("Sign in", color = oak.accent) }
@@ -595,90 +542,72 @@ private fun ErrorBannerRow(banner: ErrorBanner, onRetry: () -> Unit) {
 }
 
 // ---------------------------------------------------------------------------
-// Empty state — blank specimen plate + filed starters (soul.md)
+// Empty state — Signal hero + filed starter rows
 // ---------------------------------------------------------------------------
 
 /**
- * Blank specimen plate on the desk: dashed/grid plate, `NEW ENTRY` label, live scope
- * stamp, prompt line, and four **filed starters** (Battle / Dex / Rules / Meta with
- * type-dots) — not a centered "Ask Oak" hero with equal pills (`docs/design/soul.md`).
+ * Empty-thread hero (`docs/design/signal.md` §6.1): large title, one mute
+ * sentence, four full-width starter rows. Scope LED lives in the header only —
+ * no STANDBY plate, no LED well, no centered logo.
  * Starters are sampled once per composition via [ExamplePrompts.pickFiled].
  */
 @Composable
-private fun EmptyState(format: Format, onExampleTap: (String) -> Unit) {
+private fun EmptyState(onExampleTap: (String) -> Unit) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
     val starters = remember { ExamplePrompts.pickFiled() }
-    val plateShape = RoundedCornerShape(OakRadius.xl)
-    // Soft red in the plate edge (prototype mixes border-strong with poke-red).
-    val dashBorder = lerp(oak.borderStrong, oak.accent, 0.20f)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = OakSpacing.md, bottom = OakSpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(if (dark) Modifier else Modifier.shadow(4.dp, plateShape))
-                .clip(plateShape)
-                .background(MaterialTheme.colorScheme.surface)
-                .border(1.5.dp, dashBorder, plateShape)
-                .padding(OakSpacing.lg),
-            verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "NEW ENTRY",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = oak.textMuted,
-                )
-                // Scope stamp — mirrors the active format (read-only; chip in header is interactive).
-                Text(
-                    text = format.displayLabel.uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = oak.textStrong,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(OakRadius.sm))
-                        .background(oak.accent.copy(alpha = 0.08f))
-                        .border(1.dp, oak.accent.copy(alpha = 0.35f), RoundedCornerShape(OakRadius.sm))
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                )
-            }
-            Text(
-                text = "What are we looking up?",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = oak.textStrong,
-                modifier = Modifier.semantics { heading() },
-            )
-            Text(
-                text = "Open a specimen. Every answer carries receipts — reasoning, sources, and the generation it is based on.",
-                style = MaterialTheme.typography.bodySmall,
-                color = oak.textMuted,
-            )
-            Text(
-                text = "FILED STARTERS",
-                style = MaterialTheme.typography.labelSmall,
-                color = oak.textFaint,
-                modifier = Modifier.padding(top = OakSpacing.xs),
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
-                for (starter in starters) {
-                    FiledStarterRow(starter = starter, onClick = { onExampleTap(starter.prompt) })
-                }
+        Text(
+            text = "What do you want to know?",
+            style = MaterialTheme.typography.displaySmall,
+            color = oak.textStrong,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(
+            text = "Mechanics, locations, teams, damage. Oak will show its work.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = oak.textMuted,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
+            for (starter in starters) {
+                FiledStarterRow(starter = starter, onClick = { onExampleTap(starter.prompt) })
             }
         }
     }
 }
 
 /**
- * One filed-starter row: type-dot + mono category + prompt text. Full-width, not a
- * centered equal pill.
+ * The Instrument "record light" LED: a solid `oak.accent` dot with a soft halo behind
+ * it (a larger, low-alpha same-color disc — cheap, no `RenderEffect` blur needed).
+ * Shared by the empty-state scope stamp and the scope picker's selected row.
+ */
+@Composable
+private fun LedDot(modifier: Modifier = Modifier, dotSize: Dp = 6.dp, haloSize: Dp = 10.dp) {
+    val oak = LocalOakColors.current
+    Box(modifier = modifier.size(haloSize), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .size(haloSize)
+                .clip(CircleShape)
+                .background(oak.accent.copy(alpha = 0.35f)),
+        )
+        Box(
+            modifier = Modifier
+                .size(dotSize)
+                .clip(CircleShape)
+                .background(oak.accent),
+        )
+    }
+}
+
+/**
+ * One filed-starter row: mute category prefix + prompt. Surface, 10.dp radius,
+ * hairline. Text only — no type-dot, no equal hero chip.
  */
 @Composable
 private fun FiledStarterRow(starter: ExamplePrompts.FiledStarter, onClick: () -> Unit) {
@@ -692,34 +621,27 @@ private fun FiledStarterRow(starter: ExamplePrompts.FiledStarter, onClick: () ->
         label = "filedStarterScale",
     )
     val shape = RoundedCornerShape(OakRadius.md)
-    val typeColor = ai.gowtam.oak.ui.OakType.color(starter.typeDot)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
-            .background(if (pressed) MaterialTheme.colorScheme.surface else oak.surfaceRaised.copy(alpha = 0.70f))
-            .border(1.dp, if (pressed) oak.borderStrong else oak.border, shape)
+            .background(MaterialTheme.colorScheme.surface, shape)
+            .border(1.dp, oak.border, shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = OakSpacing.md, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(typeColor),
-        )
         Text(
-            text = starter.category.label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = oak.textFaint,
-            modifier = Modifier.widthIn(min = 52.dp),
+            text = starter.category.label,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+            color = oak.textMuted,
+            modifier = Modifier.widthIn(min = 48.dp),
         )
         Text(
             text = starter.prompt,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             color = oak.textStrong,
             modifier = Modifier.weight(1f),
         )

@@ -88,20 +88,8 @@ export default function ScopeChip({
         data-testid={testId}
         data-format={format}
         title={`Answers are scoped to ${label}`}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          padding: "var(--space-1) var(--space-2)",
-          borderRadius: "var(--radius-pill)",
-          border: "1px solid var(--border)",
-          background: "var(--surface-sunken)",
-          color: "var(--text-muted)",
-          fontSize: "var(--text-xs)",
-          fontWeight: 600,
-          lineHeight: 1,
-          whiteSpace: "nowrap",
-        }}
       >
+        <span className="scope-chip__led" aria-hidden="true" />
         {label}
       </span>
     );
@@ -192,6 +180,7 @@ function InteractiveScopeChip({
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
       >
+        <span className="scope-chip__led" aria-hidden="true" />
         {label}
         <span className="scope-chip__caret" aria-hidden="true">
           ▾

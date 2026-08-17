@@ -438,21 +438,23 @@ describe("settings", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as AdminSettingsResponse;
 
-    expect(body.activeModel).toBe("grok-4.3");
+    expect(body.activeModel).toBe("grok-4.6");
     expect(body.source).toBe("default");
     expect(body.updatedBy).toBeNull();
     expect(body.updatedAt).toBeNull();
 
     expect(body.models.map((m) => m.key)).toEqual([
-      "grok-4.3",
+      "grok-4.6",
       "grok-4.5",
+      "grok-4.3",
       "claude-sonnet-5",
       "claude-sonnet-4.6",
       "gpt-5.5",
     ]);
     const byKey = new Map(body.models.map((m) => [m.key, m]));
-    expect(byKey.get("grok-4.3")!.configured).toBe(true);
+    expect(byKey.get("grok-4.6")!.configured).toBe(true);
     expect(byKey.get("grok-4.5")!.configured).toBe(true);
+    expect(byKey.get("grok-4.3")!.configured).toBe(true);
     expect(byKey.get("claude-sonnet-5")!.configured).toBe(true);
     expect(byKey.get("claude-sonnet-4.6")!.configured).toBe(true);
     expect(byKey.get("gpt-5.5")!.configured).toBe(false);

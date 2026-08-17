@@ -67,7 +67,7 @@ struct MarkdownBlockView: View {
   }
 
   /// Heading type ramp, scaled to chat-card sizing (h1 is a section title, not a
-  /// hero). `display(_:)` is Fredoka SemiBold — Oak's heading voice. Color is
+  /// hero). `display(_:)` is Space Grotesk SemiBold — Oak's heading voice. Color is
   /// left to inherit so a heading inside muted reasoning text stays muted.
   private func headingFont(_ level: Int) -> Font {
     switch level {
@@ -116,9 +116,11 @@ private struct MarkdownListView: View {
 /// - Card chrome lives on the grid *inside* the scroll view, and the grid is
 ///   `fixedSize(horizontal:)` so the *table* hugs content (no full-width blank
 ///   right chrome).
-/// - Cells still use `maxWidth: .infinity` so they fill their *column* — otherwise
-///   zebra/header washes only paint text bounds and columns look gappy
-///   (short labels leave unpainted column space between Move and Usage, etc.).
+/// - Cells use `maxWidth`/`maxHeight: .infinity` so they fill their *grid cell*
+///   — otherwise zebra/header washes only paint text bounds: columns look gappy
+///   (short labels leave unpainted space between Move and Usage) and rows break
+///   into left-only gray strips when sibling cells differ in height (sprite vs
+///   type chips — same class of bug as the candidates table).
 /// Wide tables still scroll. (`CandidatesTableView` stays full-width — multi-stat
 /// candidate grids are meant to use the horizontal space.)
 private struct MarkdownTableView: View {
@@ -193,10 +195,11 @@ private struct MarkdownTableView: View {
     content()
       .padding(.horizontal, 12)
       .padding(.vertical, 8)
-      // Fill the Grid column (so header/zebra washes form continuous bands),
-      // not the scroll viewport — the grid's fixedSize keeps ideal column
-      // widths content-derived.
-      .frame(maxWidth: .infinity, alignment: alignment)
+      // Fill the Grid cell (column + row) so header/zebra washes form continuous
+      // bands — not the scroll viewport. Without maxHeight, short cells only paint
+      // content height while taller siblings fill the row (left-only zebra strips).
+      // The grid's fixedSize keeps ideal column widths content-derived.
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
       .background(background)
   }
 }
