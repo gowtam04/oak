@@ -16,7 +16,7 @@ Per explicit decision: the words "Pokémon"/"Pokédex" never appear in the App N
 
 - **Privacy Policy must go live** at `oak.gowtam.ai/privacy` — the iOS app's Account screen already links there. Apple requires a real, reachable URL at submission time.
 - **Support URL** points to `www.gowtam.ai/#contact` (an existing, live page) — referenced in the Description's contact line. Confirm the `#contact` section is reachable before submission.
-- **App Icon is still a placeholder** in `ios/OakApp/Resources/Assets.xcassets/AppIcon.appiconset` — needs a final design; the screenshot guide deliberately stays icon-agnostic so it isn't blocked on this.
+- **App Icon** is the daylight `O.` lockup in `ios/OakApp/Resources/Assets.xcassets/AppIcon.appiconset` (same mark as `web/public/oak-app-icon.svg`). The screenshot guide stays icon-agnostic so frames do not bake a home-screen chrome.
 
 ## What to sanity-check first
 

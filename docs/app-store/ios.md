@@ -90,4 +90,4 @@ What's new in 1.0.3
 
 - **Privacy Policy URL** — `AccountView` already links to `oak.gowtam.ai/privacy`. Apple requires a live URL at submission; confirm it resolves before submitting.
 - **Support URL** — points to `www.gowtam.ai/#contact` (an existing, live page), referenced above in the Description's contact line. Confirm the `#contact` section is reachable before submission.
-- **App Icon** — still a placeholder in `Assets.xcassets/AppIcon.appiconset`; needs a final design before screenshots/marketing assets that show the icon can be finalized.
+- **App Icon** — daylight `O.` lockup in `Assets.xcassets/AppIcon.appiconset` (ink oval + red period on `#F6F7F9`). Same mark as web/Android.
