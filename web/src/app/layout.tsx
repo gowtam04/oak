@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
+import { Figtree, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import "../components/artifact/artifact-viewer.css";
 
@@ -49,27 +49,23 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#101214" },
-    { media: "(prefers-color-scheme: light)", color: "#EEF0F1" },
+    { media: "(prefers-color-scheme: dark)", color: "#121417" },
+    { media: "(prefers-color-scheme: light)", color: "#F6F7F9" },
   ],
 };
 
-// Display / body / mono — exposed as CSS variables consumed by globals.css.
-const spaceGrotesk = Space_Grotesk({
+// One sans (Figtree) + one mono (IBM Plex Mono). Figtree is exposed as
+// --font-body; globals.css aliases --font-display to the same face so we do
+// not download the family twice. next/font self-hosts — no Google Fonts <link>.
+const figtree = Figtree({
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-display",
-  display: "swap",
-});
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600"],
   variable: "--font-body",
   display: "swap",
 });
-const jetBrainsMono = JetBrains_Mono({
+const ibmPlexMono = IBM_Plex_Mono({
   subsets: ["latin"],
-  weight: ["500", "600"],
+  weight: ["400", "500"],
   variable: "--font-mono",
   display: "swap",
 });
@@ -85,7 +81,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${spaceGrotesk.variable} ${inter.variable} ${jetBrainsMono.variable}`}
+      className={`${figtree.variable} ${ibmPlexMono.variable}`}
       suppressHydrationWarning
     >
       <head>

@@ -1,9 +1,9 @@
 /* ==========================================================================
    Oak — Design System
    Single source of truth. Tokens (light + dark) → base → app shell → components.
-   Implements docs/design-system/design-system.md. Component styles target the
-   existing BEM class names; nothing here references a raw hex outside the token
-   block below. "Playful chrome, precise data."
+   Implements docs/design/signal.md. Component styles target the existing BEM
+   class names; nothing here references a raw hex outside the token block below.
+   Cool daylight neutrals, Pokéball red as a signal, Figtree + IBM Plex Mono.
    ========================================================================== */
 
 /* Cascade layers: only the bare element-tag resets live in @layer base, so any
@@ -19,27 +19,27 @@
   --poke-red: #e3350d;
   --poke-red-hover: #c92e0b;
   --poke-red-active: #b02a0a;
-  --poke-red-soft: #fbe9e4;
+  --poke-red-soft: #fde8e3;
   /* Text ink for a solid --poke-red fill. White clears AA in light mode
      (4.4:1); dark mode's lifted #FF4A22 record red is too bright for white
-     text (3.4:1, fails AA) so dark swaps to a near-black ink (5.7:1). */
-  --on-red: var(--neutral-0);
+     text (3.4:1, fails AA) so dark swaps to a near-black ink (#1B1410). */
+  --on-red: #ffffff;
   --azure: #2b7dd1;
   --azure-soft: #e5f0fa;
 
-  /* Neutral ramp (theme-stable) */
+  /* Neutral ramp (cool, theme-stable — Signal §3.1) */
   --neutral-0: #ffffff;
-  --neutral-50: #f9fafa;
-  --neutral-100: #eef0f1;
-  --neutral-200: #e3e6e8;
-  --neutral-300: #d3d7da;
-  --neutral-400: #b9bec3;
-  --neutral-500: #8a9096;
-  --neutral-600: #5f656c;
-  --neutral-700: #4d5257;
-  --neutral-800: #2e3236;
-  --neutral-900: #1d2023;
-  --neutral-950: #131517;
+  --neutral-50: #f6f7f9;
+  --neutral-100: #eef0f3;
+  --neutral-200: #e3e8ef;
+  --neutral-300: #d0d6de;
+  --neutral-400: #b4bcc6;
+  --neutral-500: #8a94a0;
+  --neutral-600: #5b6b7c;
+  --neutral-700: #3d4a58;
+  --neutral-800: #2a3340;
+  --neutral-900: #1b2430;
+  --neutral-950: #121417;
 
   /* Semantic */
   --success: #1f9d61;
@@ -51,17 +51,28 @@
   --info: #2b7dd1;
   --info-soft: #e5f0fa;
 
-  /* Surfaces / text */
-  --bg: #eef0f1;
-  --surface: #f9fafa;
+  /* Surfaces / text (Signal §3.1 light) */
+  --bg: #f6f7f9;
+  --surface: #ffffff;
   --surface-raised: #ffffff;
-  --surface-sunken: #e3e6e8;
-  --border: #d3d7da;
-  --border-strong: #b9bec3;
-  --text-strong: #131517;
-  --text: #24282b;
-  --text-muted: #5f656c;
-  --text-faint: #8a9096;
+  --surface-sunken: #eef0f3;
+  --border: #e3e8ef;
+  --border-strong: #d0d6de;
+  --text-strong: #1b2430;
+  --text: #2a3340;
+  --text-muted: #5b6b7c;
+  --text-faint: #8a94a0;
+
+  /* Signal aliases — same values, guide names. Prefer these in new CSS. */
+  --red: var(--poke-red);
+  --red-hover: var(--poke-red-hover);
+  --red-active: var(--poke-red-active);
+  --red-soft: var(--poke-red-soft);
+  --ink: var(--text-strong);
+  --sunken: var(--surface-sunken);
+  --line: var(--border);
+  --mute: var(--text-muted);
+  --faint: var(--text-faint);
 
   /* The 18 type solids (theme-stable; the badge recipe adapts per theme) */
   --type-normal: #a8a77a;
@@ -83,9 +94,9 @@
   --type-steel: #b7b7ce;
   --type-fairy: #d685ad;
 
-  /* Radius */
-  --radius-sm: 5px;
-  --radius-md: 9px;
+  /* Radius (Signal §3.4) */
+  --radius-sm: 8px;
+  --radius-md: 10px;
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-pill: 999px;
@@ -102,24 +113,25 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* Motion */
-  --motion-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
-  --motion-base: 180ms cubic-bezier(0.2, 0, 0, 1);
-  --motion-spring: 220ms cubic-bezier(0.2, 0, 0, 1);
+  /* Motion (Signal §3.6) */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --motion-fast: 180ms var(--ease);
+  --motion-base: 180ms var(--ease);
+  --motion-enter: 280ms var(--ease);
+  --motion-spring: 180ms var(--ease);
 
-  /* Shadows (cool ink-tinted) */
-  --shadow-raised: 0 1px 2px rgba(13, 16, 18, 0.05),
-    0 8px 22px -14px rgba(13, 16, 18, 0.18);
-  --shadow-floating: 0 2px 4px rgba(13, 16, 18, 0.06),
-    0 12px 32px -16px rgba(13, 16, 18, 0.22);
-  --shadow-overlay: 0 20px 48px -16px rgba(13, 16, 18, 0.3);
-  --shadow-well: inset 0 2px 8px rgba(13, 16, 18, 0.16);
+  /* Shadows — hairline is the default on plates. Floating uses the Signal tint. */
+  --shadow-raised: 0 1px 2px rgba(27, 36, 48, 0.05),
+    0 8px 22px -14px rgba(27, 36, 48, 0.14);
+  --shadow-floating: 0 12px 32px -16px rgba(27, 36, 48, 0.18);
+  --shadow-overlay: 0 20px 48px -16px rgba(27, 36, 48, 0.28);
+  --shadow-well: inset 0 2px 8px rgba(27, 36, 48, 0.12);
 
-  /* Focus ring: 2px info blue with a surface-colored offset */
-  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--info);
+  /* Focus ring: 2px red with a canvas-colored offset. Azure is fallback only. */
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--poke-red);
 
-  /* Type families (next/font sets the variables on <body>; fallbacks here) */
-  --display: var(--font-display), system-ui, -apple-system, sans-serif;
+  /* Type families (next/font sets --font-body / --font-mono on <html>) */
+  --display: var(--font-body), system-ui, -apple-system, sans-serif;
   --body: var(--font-body), system-ui, -apple-system, sans-serif;
   --mono: var(--font-mono), ui-monospace, "SF Mono", monospace;
 
@@ -149,7 +161,7 @@
   /* Layout constants (reading measures + surface widths). Adoption by feature
      surfaces is progressive; --chat-col-max is applied to the thread + composer
      column here, the rest are defined for later tasks. */
-  --measure-prose: 68ch; /* comfortable prose measure */
+  --measure-prose: 62ch; /* Signal body measure */
   --chat-col-max: 760px; /* conversation column */
   --composer-max: 680px; /* composer field column */
   --artifact-panel-w: 460px; /* artifact side panel */
@@ -182,7 +194,7 @@
   --poke-red-soft: #33170f;
   /* AA pass (phase 3): white text on the lifted dark record red is 3.4:1 —
      fails. This near-black ink reads at 5.7:1. */
-  --on-red: #1a0a05;
+  --on-red: #1b1410;
   --azure: #55a0e8;
   --azure-soft: #142433;
 
@@ -195,21 +207,21 @@
   --info: #55a0e8;
   --info-soft: #142a3e;
 
-  --bg: #101214; /* device dark chassis (Instrument) */
-  --surface: #16191b;
-  --surface-raised: #1d2124; /* one step above --surface; keeps the ramp ordered */
-  --surface-sunken: #0b0d0e; /* deepest — sunken inputs */
-  --border: #2a2e32;
-  --border-strong: #3a3f44;
-  --text-strong: #f2f4f5;
-  --text: #dde1e3;
-  --text-muted: #9ba1a7;
-  --text-faint: #6e747a;
+  --bg: #121417;
+  --surface: #1a1d22;
+  --surface-raised: #22262c;
+  --surface-sunken: #0e1013;
+  --border: #2a3038;
+  --border-strong: #3a434c;
+  --text-strong: #f2f4f6;
+  --text: #d5dae0;
+  --text-muted: #8b949e;
+  --text-faint: #6a737d;
 
-  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-floating: 0 6px 16px rgba(0, 0, 0, 0.34), 0 2px 6px rgba(0, 0, 0, 0.28);
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.28);
+  --shadow-floating: 0 12px 32px -16px rgba(0, 0, 0, 0.4);
   --shadow-overlay: 0 16px 40px rgba(0, 0, 0, 0.45);
-  --shadow-well: inset 0 2px 8px rgba(0, 0, 0, 0.45);
+  --shadow-well: inset 0 2px 8px rgba(0, 0, 0, 0.4);
 
   /* Deeper scrim in dark mode so overlays still read against the near-black canvas. */
   --scrim: rgba(0, 0, 0, 0.6);
@@ -246,8 +258,8 @@
     background: var(--bg);
     color: var(--text);
     font-family: var(--body);
-    font-size: 0.9375rem;
-    line-height: 1.55;
+    font-size: 0.9375rem; /* 15px */
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
