@@ -1,86 +1,309 @@
 import SwiftUI
 
-/// The live in-progress status line: a red verb, mute rest, and three soft
-/// stepping dots. No plate, no pip, no record tick, no fake progress bar.
-/// Friendly nouns come from ``ToolTrail`` — raw tool ids never render.
-///
-/// Purely presentational — it takes the reducer's coarse ``ChatViewModel/StreamingPhase``
-/// and the tool-activity list and renders them. Dynamic-Type styles and semantic
-/// colors adapt to text size and light/dark.
+/// Expandable thinking trace: sparkle + shimmering "Thinking", then one row
+/// per live tool call (spinner on the in-flight row, check on done). Collapses
+/// to "Thought for N seconds" once tokens start. Friendly nouns come from
+/// ``ToolTrail`` — raw tool ids never render.
 struct StreamingStatusView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let phase: ChatViewModel.StreamingPhase
   let activities: [ChatViewModel.ToolActivity]
   /// When true, an auto-reconnect is pending/in flight after a backgrounding drop —
-  /// the status line shows "Reconnecting" instead of the phase, matching web's UI.
+  /// the header shows "Reconnecting" instead of the phase, matching web's UI.
   var reconnecting: Bool = false
-  /// Kept so existing call sites compile. The incoming plate no longer shows a timer.
+  /// Stream start, used to freeze "Thought for N seconds" when tokens arrive.
+  var startedAt: Date? = nil
+  /// True once `answer_markdown` tokens have started — header settles, list
+  /// auto-collapses.
+  var settled: Bool = false
+  /// Kept so existing call sites compile. Prefer ``startedAt``.
   var elapsedSeconds: Int? = nil
+
+  @State private var userOpen: Bool?
+  @State private var frozenElapsed: Int?
+  @State private var spinAngle: Double = 0
 
   var body: some View {
     if phase != .idle {
-      HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.xs) {
-        statusText
-          .fixedSize(horizontal: false, vertical: true)
-          .contentTransition(.opacity)
-        SteppingDots(frozen: reduceMotion)
+      VStack(alignment: .leading, spacing: 2) {
+        header
+        if open, !rows.isEmpty {
+          rowList
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .animation(reduceMotion ? nil : Theme.Motion.smooth, value: phase)
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel(accessibilitySentence)
+      .animation(reduceMotion ? nil : Theme.Motion.enter, value: open)
+      .animation(reduceMotion ? nil : Theme.Motion.smooth, value: headerText)
+      .onAppear(perform: captureFreeze)
+      .onChange(of: settled) { _, _ in captureFreeze() }
+      .onChange(of: sceneKey) { _, _ in userOpen = nil }
+      .accessibilityElement(children: .contain)
     }
   }
 
-  private var copy: (verb: String, rest: String) {
-    StreamingStatusCopy.parts(
-      phase: phase,
-      activities: activities.map { (tool: $0.tool, label: $0.label) },
-      reconnecting: reconnecting
+  private var pairs: [(tool: String, label: String)] {
+    activities.map { (tool: $0.tool, label: $0.label) }
+  }
+
+  private var rows: [ThinkingTraceCopy.Row] {
+    reconnecting ? [] : ThinkingTraceCopy.rows(activities: pairs, settled: settled)
+  }
+
+  private var autoOpen: Bool {
+    !rows.isEmpty && !settled && !reconnecting
+  }
+
+  private var open: Bool { userOpen ?? autoOpen }
+
+  private var sceneKey: String {
+    "\(reconnecting ? 1 : 0):\(settled ? 1 : 0):\(rows.isEmpty ? 0 : 1)"
+  }
+
+  private var live: Bool { ThinkingTraceCopy.header(reconnecting: reconnecting, settled: settled).live }
+
+  private var headerText: String {
+    ThinkingTraceCopy.header(
+      reconnecting: reconnecting,
+      settled: settled,
+      elapsedSeconds: displayedElapsed
+    ).text
+  }
+
+  private var displayedElapsed: Int {
+    if let frozenElapsed { return frozenElapsed }
+    if let elapsedSeconds { return elapsedSeconds }
+    guard let startedAt else { return 0 }
+    return max(0, Int(Date().timeIntervalSince(startedAt)))
+  }
+
+  private func captureFreeze() {
+    guard settled, frozenElapsed == nil else {
+      if !settled { frozenElapsed = nil }
+      return
+    }
+    if let elapsedSeconds {
+      frozenElapsed = elapsedSeconds
+    } else if let startedAt {
+      frozenElapsed = max(0, Int(Date().timeIntervalSince(startedAt)))
+    } else {
+      frozenElapsed = 0
+    }
+  }
+
+  @ViewBuilder
+  private var header: some View {
+    let label = HStack(spacing: Theme.Spacing.sm) {
+      SparkleMark()
+        .fill(live ? Theme.textSecondary : Theme.textMuted)
+        .frame(width: 16, height: 16)
+      headerLabel
+      if !rows.isEmpty {
+        Image(systemName: "chevron.down")
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundStyle(Theme.textMuted)
+          .rotationEffect(.degrees(open ? 180 : 0))
+      }
+    }
+
+    if rows.isEmpty {
+      label
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(headerText)
+        .accessibilityAddTraits(.updatesFrequently)
+    } else {
+      Button {
+        userOpen = !open
+      } label: {
+        label
+      }
+      .buttonStyle(.plain)
+      .padding(.vertical, 4)
+      .accessibilityLabel(headerText)
+      .accessibilityHint(open ? "Collapse steps" : "Expand steps")
+      .accessibilityAddTraits(.isButton)
+    }
+  }
+
+  @ViewBuilder
+  private var headerLabel: some View {
+    if live && !reduceMotion {
+      TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
+        let t = context.date.timeIntervalSinceReferenceDate
+          .truncatingRemainder(dividingBy: 1.4) / 1.4
+        Text(headerText)
+          .font(Theme.body(.subheadline, weight: .medium))
+          .foregroundStyle(shimmerGradient(phase: t))
+      }
+    } else {
+      Text(headerText)
+        .font(Theme.body(.subheadline, weight: .medium))
+        .foregroundStyle(Theme.textSecondary)
+    }
+  }
+
+  private func shimmerGradient(phase: Double) -> LinearGradient {
+    LinearGradient(
+      stops: [
+        .init(color: Theme.textMuted, location: 0),
+        .init(color: Theme.textStrong, location: 0.5),
+        .init(color: Theme.textMuted, location: 1),
+      ],
+      startPoint: UnitPoint(x: -1 + phase * 2, y: 0.5),
+      endPoint: UnitPoint(x: phase * 2, y: 0.5)
     )
   }
 
-  private var accessibilitySentence: String {
-    StreamingStatusCopy.accessibilityLabel(
-      phase: phase,
-      activities: activities.map { (tool: $0.tool, label: $0.label) },
-      reconnecting: reconnecting
-    )
+  private var rowList: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+        HStack(spacing: Theme.Spacing.sm) {
+          if row.active {
+            spinningRing
+          } else {
+            Image(systemName: "checkmark")
+              .font(.system(size: 11, weight: .semibold))
+              .foregroundStyle(Theme.textMuted)
+              .frame(width: 14, height: 14)
+          }
+          Text(row.primary)
+            .font(Theme.body(.footnote, weight: .medium))
+            .foregroundStyle(Theme.textStrong)
+            .lineLimit(1)
+          if let secondary = row.secondary {
+            Spacer(minLength: Theme.Spacing.sm)
+            Text(secondary)
+              .font(Theme.body(.caption))
+              .foregroundStyle(Theme.textMuted)
+              .lineLimit(1)
+          }
+        }
+        .frame(minHeight: 28)
+        .padding(.horizontal, 6)
+        .opacity(reduceMotion ? 1 : 1)
+        .transition(.opacity.combined(with: .offset(y: 4)))
+        .animation(
+          reduceMotion ? nil : Theme.Motion.staggered(index, base: Theme.Motion.enter, step: 0.12),
+          value: rows.count
+        )
+      }
+    }
+    .padding(.leading, 20)
+    .padding(.vertical, 4)
+    .overlay(alignment: .leading) {
+      Rectangle()
+        .fill(Theme.separator)
+        .frame(width: 1)
+        .padding(.leading, 10)
+        .padding(.vertical, 2)
+    }
+    .accessibilityElement(children: .combine)
   }
 
-  private var statusText: Text {
-    let verb = Text(copy.verb)
-      .font(Theme.body(.subheadline, weight: .semibold))
-      .foregroundStyle(Theme.accent)
-    if copy.rest.isEmpty { return verb }
-    return verb + Text(" \(copy.rest)")
-      .font(Theme.body(.subheadline))
-      .foregroundStyle(Theme.textSecondary)
+  private var spinningRing: some View {
+    Circle()
+      .trim(from: 0, to: 0.72)
+      .stroke(Theme.textSecondary, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+      .frame(width: 12, height: 12)
+      .rotationEffect(.degrees(reduceMotion ? 0 : spinAngle))
+      .onAppear {
+        guard !reduceMotion else { return }
+        withAnimation(.linear(duration: 0.7).repeatForever(autoreverses: false)) {
+          spinAngle = 360
+        }
+      }
+      .accessibilityHidden(true)
+  }
+}
+
+/// Four-pointed sparkle matching the web thinking-trace mark.
+private struct SparkleMark: Shape {
+  func path(in rect: CGRect) -> Path {
+    let sx = rect.width / 24
+    let sy = rect.height / 24
+    let ox = rect.minX
+    let oy = rect.minY
+    var path = Path()
+    path.move(to: CGPoint(x: ox + 12 * sx, y: oy + 2 * sy))
+    path.addLine(to: CGPoint(x: ox + 14.4 * sx, y: oy + 9.2 * sy))
+    path.addLine(to: CGPoint(x: ox + 22 * sx, y: oy + 12 * sy))
+    path.addLine(to: CGPoint(x: ox + 14.4 * sx, y: oy + 14.8 * sy))
+    path.addLine(to: CGPoint(x: ox + 12 * sx, y: oy + 22 * sy))
+    path.addLine(to: CGPoint(x: ox + 9.6 * sx, y: oy + 14.8 * sy))
+    path.addLine(to: CGPoint(x: ox + 2 * sx, y: oy + 12 * sy))
+    path.addLine(to: CGPoint(x: ox + 9.6 * sx, y: oy + 9.2 * sy))
+    path.closeSubpath()
+    return path
   }
 }
 
 // MARK: - Copy (pure, testable)
 
-/// Splits the live status sentence into a red verb and mute rest so the incoming
-/// plate can style them independently.
+/// Header + row mapping for the thinking trace. Lock-step with web
+/// `thinking-trace.ts` and Android `thinkingHeader` / `traceRows`.
+enum ThinkingTraceCopy {
+  struct Row: Equatable {
+    var tool: String
+    var primary: String
+    var secondary: String?
+    var active: Bool
+  }
+
+  struct Header: Equatable {
+    var live: Bool
+    var text: String
+  }
+
+  static func header(
+    reconnecting: Bool,
+    settled: Bool,
+    elapsedSeconds: Int? = nil
+  ) -> Header {
+    if reconnecting { return Header(live: true, text: "Reconnecting") }
+    if !settled { return Header(live: true, text: "Thinking") }
+    return Header(live: false, text: thoughtFor(elapsedSeconds))
+  }
+
+  static func thoughtFor(_ elapsedSeconds: Int?) -> String {
+    let n = elapsedSeconds ?? 0
+    if n <= 0 { return "Thought for a moment" }
+    if n == 1 { return "Thought for 1 second" }
+    return "Thought for \(n) seconds"
+  }
+
+  static func rows(
+    activities: [(tool: String, label: String)],
+    settled: Bool
+  ) -> [Row] {
+    let visible = activities.filter { $0.tool != "reasoning" && $0.tool != "submit_answer" && $0.tool != "submit_builder_answer" }
+    return visible.enumerated().map { index, activity in
+      let cleaned = ToolTrail.strippingLeadingEmoji(activity.label)
+      return Row(
+        tool: activity.tool,
+        primary: ToolTrail.friendlyNoun(activity.tool),
+        secondary: ToolTrail.subject(from: cleaned),
+        active: !settled && index == visible.count - 1
+      )
+    }
+  }
+}
+
+/// Legacy verb/rest split — kept so older tests and call sites still compile.
+/// New chrome uses ``ThinkingTraceCopy``.
 enum StreamingStatusCopy {
   static func parts(
     phase: ChatViewModel.StreamingPhase,
     activities: [(tool: String, label: String)],
     reconnecting: Bool
   ) -> (verb: String, rest: String) {
-    if reconnecting { return ("Reconnecting", "") }
-    switch phase {
-    case .idle:
-      return ("", "")
-    case .thinking:
-      return ("Thinking", "through your question")
-    case .usingTools:
-      let nouns = ToolTrail.streamingNouns(activities: activities)
-      return ("Looking up", nouns.joined(separator: ", "))
-    case .answering:
-      return ("Writing", "the answer")
-    }
+    let settled = phase == .answering
+    let header = ThinkingTraceCopy.header(
+      reconnecting: reconnecting,
+      settled: settled,
+      elapsedSeconds: nil
+    )
+    return (header.text, "")
   }
 
   static func accessibilityLabel(
@@ -88,59 +311,7 @@ enum StreamingStatusCopy {
     activities: [(tool: String, label: String)],
     reconnecting: Bool
   ) -> String {
-    let copy = parts(phase: phase, activities: activities, reconnecting: reconnecting)
-    if copy.verb.isEmpty { return "" }
-    if copy.rest.isEmpty { return copy.verb }
-    return "\(copy.verb) \(copy.rest)"
-  }
-}
-
-// MARK: - Stepping dots
-
-/// Three red-tinted dots that step opacity in a 2s wave, peaking at 62%.
-/// Reduce Motion freezes them at mid-opacity — no blink, no ping-pong.
-private struct SteppingDots: View {
-  let frozen: Bool
-
-  var body: some View {
-    HStack(spacing: 4) {
-      if frozen {
-        ForEach(0..<3, id: \.self) { _ in
-          Circle()
-            .fill(Theme.accent)
-            .frame(width: 3, height: 3)
-            .opacity(0.45)
-        }
-      } else {
-        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
-          let t = context.date.timeIntervalSinceReferenceDate
-          HStack(spacing: 4) {
-            ForEach(0..<3, id: \.self) { index in
-              Circle()
-                .fill(Theme.accent)
-                .frame(width: 3, height: 3)
-                .opacity(Self.opacity(at: t, index: index))
-            }
-          }
-        }
-      }
-    }
-    .accessibilityHidden(true)
-  }
-
-  /// Matches the web `chat-incoming-dots` keyframes (2s, delays 0 / 0.22 / 0.44).
-  private static func opacity(at time: TimeInterval, index: Int) -> Double {
-    let cycle = 2.0
-    let delay = Double(index) * 0.22
-    let phase = ((time - delay).truncatingRemainder(dividingBy: cycle) + cycle)
-      .truncatingRemainder(dividingBy: cycle) / cycle
-    let low = 0.16
-    let high = 0.62
-    if phase < 0.18 { return low }
-    if phase < 0.40 { return low + (high - low) * ((phase - 0.18) / 0.22) }
-    if phase < 0.52 { return high }
-    if phase < 0.74 { return high + (low - high) * ((phase - 0.52) / 0.22) }
-    return low
+    parts(phase: phase, activities: activities, reconnecting: reconnecting).verb
   }
 }
 
@@ -380,7 +551,9 @@ enum ToolTrail {
     activities: [
       .init(tool: "resolve_entity", label: "🔍 Resolving “Farigiraf”…"),
       .init(tool: "get_move", label: "Looking up Fake Out…"),
-    ]
+    ],
+    startedAt: Date().addingTimeInterval(-4),
+    settled: true
   )
   .padding()
 }

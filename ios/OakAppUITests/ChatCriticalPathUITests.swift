@@ -43,7 +43,7 @@ final class ChatCriticalPathUITests: XCTestCase {
       NSPredicate(
         format: "label IN %@ OR label BEGINSWITH %@",
         OakUITest.Streaming.all,
-        OakUITest.Streaming.lookingUpPrefix
+        OakUITest.Streaming.thoughtPrefix
       )
     ).firstMatch
     XCTAssertTrue(

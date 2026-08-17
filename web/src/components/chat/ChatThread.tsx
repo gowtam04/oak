@@ -15,42 +15,10 @@ import type { Format } from "@/data/formats";
 import FollowUpChipRow from "./FollowUpChipRow";
 import PinStrip from "./PinStrip";
 import TurnActions from "./TurnActions";
+import ThinkingTrace from "./ThinkingTrace";
+import { instrumentToken } from "@/lib/chat/thinking-trace";
 
-/**
- * Tool -> friendly instrument word (TestFlight feedback AH1b0N09K — raw wire
- * tool names like `GET_EVOLUTION_CHAIN`/`RUN_SQL` leaked into the streaming
- * chips). Pinned by the canonical cross-platform copy table (§1) — iOS/Android
- * mirror this vocabulary exactly. `.ilabel` uppercases visually via CSS
- * (`text-transform: uppercase`), so the map stores natural case.
- */
-const INSTRUMENT_TOKENS: Record<string, string> = {
-  resolve_entity: "Dex lookup",
-  query_pokedex: "Pokédex search",
-  get_pokemon: "Pokémon",
-  get_move: "Move",
-  get_ability: "Ability",
-  get_item: "Item",
-  get_type_matchups: "Type matchups",
-  get_evolution_chain: "Evolution",
-  compute_stat: "Stats",
-  estimate_damage: "Damage calc",
-  get_usage_stats: "Usage",
-  get_meta_usage: "Usage",
-  get_encounters: "Locations",
-  get_learnset: "Movepool",
-  get_team: "Teams",
-  list_teams: "Teams",
-  save_team: "Teams",
-  run_sql: "Game data",
-  search_wiki: "Wiki",
-  submit_answer: "Answer",
-  submit_builder_answer: "Teams",
-};
-const UNKNOWN_INSTRUMENT_TOKEN = "Lookup";
-
-export function instrumentToken(tool: string): string {
-  return INSTRUMENT_TOKENS[tool] ?? UNKNOWN_INSTRUMENT_TOKEN;
-}
+export { instrumentToken };
 
 function chipsForAnswer(
   answer: import("@/components/types").OakAnswer,
@@ -67,20 +35,12 @@ function chipsForAnswer(
 }
 
 /**
- * One "field note" chip in the streaming trail: the mono instrument word
- * mapped from the tool name (e.g. `get_pokemon` -> "Pokémon", via
- * `instrumentToken`) beside the human-readable subject, with a pokeball
- * micro-spinner while in flight (the latest, unfinished call) or a tick once
- * the loop has moved on. Presentation only — data comes straight from the
- * `tool_activity` SSE payload the client already accumulates.
- */
-/**
  * ChatThread — renders the committed conversation (user + assistant turns) in
  * order, plus the streaming status while `status === "streaming"`:
- *   - a quiet sentence while the turn is live and no tokens have arrived:
- *     red verb + mute rest + three soft dots. No plate, no sheen, no glow.
- *   - once prose begins streaming (`answer_start`), the sentence hides and the
- *     existing streaming-answer plate rises in.
+ *   - an expandable thinking trace (shimmering "Thinking", then one row per
+ *     `tool_activity`) while the turn is live. No plate, no sheen, no glow.
+ *   - once prose begins streaming (`answer_start`), the trace collapses to
+ *     "Thought for N seconds" and the streaming-answer plate rises in.
  *   - a transport-fault affordance when `status === "error"` and
  *     `transportError` is set (in-domain failures arrive as normal answer cards,
  *     never here — sse-client.ts / integration.md); it replaces the status in
@@ -200,18 +160,6 @@ export default function ChatThread({
     // Optional-call: scrollIntoView is absent in jsdom (tests) — no-op there.
     if (pinnedRef.current) bottomRef.current?.scrollIntoView?.({ block: "end" });
   }, [turns, streamingMarkdown, status]);
-
-  const hasActivity = activity.length > 0;
-  const incomingVerb = hasActivity
-    ? "Looking up"
-    : reconnecting
-      ? "Reconnecting"
-      : "Thinking";
-  const incomingRest = hasActivity
-    ? ` ${[...new Set(activity.map((a) => instrumentToken(a.tool)))].join(", ")}`
-    : reconnecting
-      ? ""
-      : " through your question";
 
   const lastUserId = [...turns].reverse().find((t) => t.role === "user")?.id;
   const lastAssistantId = [...turns]
@@ -392,35 +340,24 @@ export default function ChatThread({
         ),
       )}
 
-      {/* Quiet sentence — red verb + mute rest + soft dots until tokens arrive. */}
-      {status === "streaming" && !streamingMarkdown && (
+      {status === "streaming" && (
         <div
-          className="chat-turn chat-turn--assistant chat-thread__skeleton"
-          data-testid="answer-skeleton"
+          className={
+            "chat-turn chat-turn--assistant chat-thread__incoming" +
+            (streamingMarkdown ? " chat-thread__streaming" : " chat-thread__skeleton")
+          }
+          data-testid={streamingMarkdown ? undefined : "answer-skeleton"}
         >
-          <div className="chat-incoming__status" aria-live="polite">
-            <span
-              data-testid={hasActivity ? "field-note" : "progress-thinking"}
-            >
-              <strong className="verb">{incomingVerb}</strong>
-              {incomingRest}
-              <span className="dots" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-              </span>
-            </span>
-          </div>
-        </div>
-      )}
-
-      {status === "streaming" && streamingMarkdown && (
-        <div
-          className="chat-turn chat-turn--assistant chat-thread__streaming"
-          data-testid="streaming-answer"
-          aria-live="polite"
-        >
-          <Markdown markdown={streamingMarkdown} />
+          <ThinkingTrace
+            activity={activity}
+            reconnecting={reconnecting}
+            settled={Boolean(streamingMarkdown)}
+          />
+          {streamingMarkdown ? (
+            <div data-testid="streaming-answer" aria-live="polite">
+              <Markdown markdown={streamingMarkdown} />
+            </div>
+          ) : null}
         </div>
       )}
 

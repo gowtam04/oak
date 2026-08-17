@@ -504,14 +504,15 @@ struct ChatView: View {
     model.send()
   }
 
-  /// Quiet sentence while empty, then a rising answer plate once tokens
+  /// Thinking trace while empty, then a rising answer plate once tokens
   /// arrive (the terminal answer later replaces it authoritatively).
   private var inProgressView: some View {
     IncomingAnswerPlate(
       phase: model.streamingPhase,
       activities: model.toolActivities,
       reconnecting: model.reconnecting,
-      streamingText: model.streamingText
+      streamingText: model.streamingText,
+      startedAt: model.streamStartedAt
     )
     .frame(maxWidth: .infinity, alignment: .leading)
   }

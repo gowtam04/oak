@@ -2398,233 +2398,180 @@
 }
 
 /* --------------------------------------------------------------------------
-   16. Progress / loading — the Poké Ball spinner
+   16. Thinking trace — expandable Steps (live tool_activity rows)
    -------------------------------------------------------------------------- */
-/* Streaming "field notes" trail (specimen desk / soul.md): the agent's
-   tool-loop rendered as a cascading stack of instrument chips + an answer
-   skeleton, collapsing to a summary chip once prose streams. */
-.chat-thread__progress {
+.chat-thread__incoming {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-1) 0;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 2px 0 4px;
 }
-.chat-thread__trail {
+.thinking-trace {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-}
-.chat-thread__notes {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-/* One field-note chip: status glyph · mono tool token · human-readable subject.
-   Each enters with the shared turn-in cascade on mount (the live trail's chips
-   arrive seconds apart, so their real timing IS the stagger). */
-.chat-thread__note {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin: 0;
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  line-height: 1.4;
-  color: var(--text-muted);
-  animation: turn-in var(--motion-base) both;
-}
-.chat-thread__note--done {
-  color: var(--text-faint);
-}
-/* Active row = the record light — status glyph + label read in red while the
-   loop is live on this call (soul.md "Red's jobs" #2). */
-.chat-thread__note--active {
-  color: var(--poke-red);
-}
-.chat-thread__note--active .chat-thread__note-tool {
-  color: var(--poke-red);
-}
-.chat-thread__note-tool {
-  flex: none;
-}
-.chat-thread__note-desc {
+  align-items: flex-start;
   min-width: 0;
+  max-width: 100%;
 }
-.chat-thread__note--active .chat-thread__note-desc {
-  font-weight: 600;
-}
-/* Status glyph — pokeball micro-spinner while in flight, a tick once done. */
-.chat-thread__note-glyph {
-  flex: none;
-  align-self: center;
-  width: 15px;
-  height: 15px;
-}
-.chat-thread__note-glyph[data-state="active"] {
-  border-radius: 50%;
-  border: 1.5px solid var(--text-strong);
-  background:
-    radial-gradient(
-        circle at center,
-        var(--neutral-0) 0 2.4px,
-        var(--text-strong) 2.4px 3.4px,
-        transparent 3.4px
-      ),
-    linear-gradient(var(--text-strong) 0 0) center / 100% 1.5px no-repeat,
-    linear-gradient(180deg, var(--poke-red) 0 50%, var(--neutral-0) 50% 100%);
-  animation: pokeball-spin 0.9s linear infinite;
-}
-/* Dim success tick once a call has moved on (soul.md — completed readouts
-   settle, only the active one stays bright). */
-.chat-thread__note-glyph[data-state="done"] {
-  background: var(--success);
-  opacity: 0.6;
-  -webkit-mask: var(--icon-check) center / 13px 13px no-repeat;
-  mask: var(--icon-check) center / 13px 13px no-repeat;
-  --icon-check: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5 13l4 4L19 7'/></svg>");
-}
-@keyframes pokeball-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.chat-thread__elapsed {
-  font-size: 0.75rem;
-  color: var(--text-faint);
-  padding-left: calc(15px + var(--space-2));
-}
-
-/* Batch reveal (expanding the collapsed summary shows every note at once): here
-   the 60ms stagger is a real simultaneous cascade, so apply it via nth-child. */
-.chat-thread__notes--batch .chat-thread__note:nth-child(2) {
-  animation-delay: 60ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(3) {
-  animation-delay: 120ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(4) {
-  animation-delay: 180ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(5) {
-  animation-delay: 240ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(6) {
-  animation-delay: 300ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(7) {
-  animation-delay: 360ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(n + 8) {
-  animation-delay: 420ms;
-}
-
-/* Collapsed summary chip pinned above the streaming answer. */
-.chat-thread__summary {
-  align-self: flex-start;
+.thinking-trace__header {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   margin: 0;
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface-sunken);
+  padding: 4px 6px;
+  margin-left: -6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--text-muted);
+  font: inherit;
+  cursor: default;
+  text-align: left;
+}
+button.thinking-trace__header {
   cursor: pointer;
-  animation: turn-in var(--motion-base) both;
-  transition: background var(--motion-fast), border-color var(--motion-fast);
 }
-.chat-thread__summary:hover {
-  background: var(--surface);
-  border-color: var(--border-strong);
+button.thinking-trace__header:hover {
+  background: var(--surface-sunken);
 }
-.chat-thread__summary:focus-visible {
-  outline: 2px solid var(--azure);
+.thinking-trace__header:focus-visible {
+  outline: 2px solid var(--poke-red);
   outline-offset: 2px;
 }
-.chat-thread__summary-sep {
-  color: var(--text-faint);
+.thinking-trace__sparkle {
+  flex: none;
+  fill: var(--text-muted);
 }
-.chat-thread__summary-time {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+.thinking-trace__sparkle[data-live="false"] {
+  fill: var(--text-faint);
 }
-.chat-thread__summary-caret {
-  width: 0;
-  height: 0;
-  margin-left: var(--space-1);
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-top: 5px solid var(--text-faint);
-  transition: transform var(--motion-fast);
-}
-.chat-thread__summary-caret[data-open="true"] {
-  transform: rotate(180deg);
-}
-.chat-thread__trail--collapsed .chat-thread__notes {
-  margin-top: var(--space-2);
-}
-
-/* Quiet thinking sentence — red verb + mute rest + three soft dots.
-   No plate, no sheen, no glow. The streaming answer plate rises in later. */
-.chat-thread__skeleton {
-  position: relative;
-  display: flex;
-  align-items: baseline;
-  padding: 2px 0 4px;
-}
-.chat-incoming__status {
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-  min-height: 20px;
-  color: var(--text-muted);
+.thinking-trace__label {
   font-family: var(--body);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: -0.01em;
   line-height: 1.4;
+  white-space: nowrap;
+  color: var(--text-muted);
 }
-.chat-thread__skeleton .verb {
-  color: var(--poke-red);
-  font-weight: 650;
+.thinking-trace__label--live {
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    var(--text-faint) 35%,
+    var(--ink) 50%,
+    var(--text-faint) 65%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: thinking-shimmer 1.4s linear infinite;
 }
-.chat-thread__skeleton .dots {
-  display: inline-flex;
+@keyframes thinking-shimmer {
+  to {
+    background-position: -100% 0;
+  }
+}
+.thinking-trace__caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--text-faint);
+  transition: transform var(--motion-base);
+}
+.thinking-trace__caret[data-open="true"] {
+  transform: rotate(180deg);
+}
+.thinking-trace__body {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  width: 100%;
+  transition:
+    grid-template-rows var(--motion-enter),
+    opacity var(--motion-enter);
+}
+.thinking-trace__body[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.thinking-trace__clip {
+  overflow: hidden;
+  min-height: 0;
+}
+.thinking-trace__rows {
+  position: relative;
+  margin: 2px 0 0;
+  padding: 4px 0 4px 20px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
-  margin-left: 5px;
-  transform: translateY(-1px);
 }
-.chat-thread__skeleton .dots i {
-  width: 3px;
-  height: 3px;
+.thinking-trace__rows::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.thinking-trace__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: 2px 6px;
+  animation: thinking-row-in var(--motion-enter) both;
+}
+@keyframes thinking-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.thinking-trace__spin {
+  flex: none;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--poke-red);
-  opacity: 0.16;
-  animation: chat-incoming-dots 2s var(--ease) infinite;
+  border: 1.5px solid var(--border-strong);
+  border-top-color: var(--text-muted);
+  animation: thinking-spin 700ms linear infinite;
 }
-.chat-thread__skeleton .dots i:nth-child(2) {
-  animation-delay: 0.22s;
+@keyframes thinking-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
-.chat-thread__skeleton .dots i:nth-child(3) {
-  animation-delay: 0.44s;
+.thinking-trace__check {
+  flex: none;
+  color: var(--text-faint);
 }
-@keyframes chat-incoming-dots {
-  0%,
-  18% {
-    opacity: 0.16;
-  }
-  40%,
-  52% {
-    opacity: 0.62;
-  }
-  74%,
-  100% {
-    opacity: 0.16;
-  }
+.thinking-trace__primary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.thinking-trace__row--active .thinking-trace__primary {
+  color: var(--text);
+}
+.thinking-trace__secondary {
+  flex: none;
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-faint);
 }
 
 /* Transport error — distinct from in-domain answer statuses */
@@ -2972,22 +2919,25 @@
   .composer__send:disabled {
     transform: none;
   }
-  /* Streaming trail: keep the pokeball spinner turning (it signals liveness),
-     but drop the note cascade and the summary chip's entrance. Quiet sentence:
-     freeze the stepping dots at mid-opacity. */
-  .chat-thread__note,
-  .chat-thread__summary {
+  /* Thinking trace: freeze the shimmer and row cascade; keep the live
+     spinner as a static ring (liveness still reads from the header). */
+  .thinking-trace__label--live {
+    animation: none !important;
+    color: var(--text-muted);
+    background: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+  }
+  .thinking-trace__row,
+  .thinking-trace__spin {
     animation: none !important;
   }
-  .chat-thread__skeleton .dots i {
-    animation: none !important;
-    opacity: 0.45;
+  .thinking-trace__body,
+  .thinking-trace__caret {
+    transition: none !important;
   }
   .chat-thread__streaming {
     animation: none !important;
-  }
-  .chat-thread__summary-caret {
-    transition: none;
   }
   /* "Reading latches" — instant swap, no fade/color-blip. */
   .answer-card::before,

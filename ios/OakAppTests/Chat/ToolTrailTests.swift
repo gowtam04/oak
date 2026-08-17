@@ -208,35 +208,47 @@ struct ToolTrailTests {
   // MARK: Incoming-plate status copy (verb + rest)
 
   @Test
-  func thinkingCopySplitsVerbAndRest() {
-    let copy = StreamingStatusCopy.parts(phase: .thinking, activities: [], reconnecting: false)
-    #expect(copy.verb == "Thinking")
-    #expect(copy.rest == "through your question")
+  func thinkingHeaderIsLiveUntilSettled() {
     #expect(
-      StreamingStatusCopy.accessibilityLabel(phase: .thinking, activities: [], reconnecting: false)
-        == "Thinking through your question"
+      ThinkingTraceCopy.header(reconnecting: false, settled: false, elapsedSeconds: 3)
+        == .init(live: true, text: "Thinking")
+    )
+    #expect(
+      ThinkingTraceCopy.header(reconnecting: false, settled: true, elapsedSeconds: 4)
+        == .init(live: false, text: "Thought for 4 seconds")
+    )
+    #expect(ThinkingTraceCopy.thoughtFor(1) == "Thought for 1 second")
+    #expect(ThinkingTraceCopy.thoughtFor(0) == "Thought for a moment")
+    #expect(
+      ThinkingTraceCopy.header(reconnecting: true, settled: false)
+        == .init(live: true, text: "Reconnecting")
     )
   }
 
   @Test
-  func toolsCopyUsesStreamingNouns() {
-    let copy = StreamingStatusCopy.parts(
-      phase: .usingTools,
+  func thinkingRowsMapFriendlyNounsAndSubjects() {
+    let rows = ThinkingTraceCopy.rows(
       activities: [
         (tool: "resolve_entity", label: "🔍 Resolving “Farigiraf”…"),
         (tool: "get_move", label: "Looking up Fake Out…"),
+        (tool: "submit_answer", label: "✍️ Composing the answer…"),
       ],
-      reconnecting: false
+      settled: false
     )
-    #expect(copy.verb == "Looking up")
-    #expect(copy.rest == "Farigiraf, Fake Out")
+    #expect(rows.count == 2)
+    #expect(rows[0].primary == "Dex lookup")
+    #expect(rows[0].secondary == "Farigiraf")
+    #expect(rows[0].active == false)
+    #expect(rows[1].primary == "Move")
+    #expect(rows[1].secondary == "Fake Out")
+    #expect(rows[1].active == true)
+    #expect(!rows.contains { $0.tool == "submit_answer" })
   }
 
   @Test
   func answeringAndReconnectCopy() {
     let writing = StreamingStatusCopy.parts(phase: .answering, activities: [], reconnecting: false)
-    #expect(writing.verb == "Writing")
-    #expect(writing.rest == "the answer")
+    #expect(writing.verb == "Thought for a moment")
     let reconnect = StreamingStatusCopy.parts(
       phase: .thinking, activities: [], reconnecting: true
     )
