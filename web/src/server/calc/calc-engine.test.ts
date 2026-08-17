@@ -36,7 +36,10 @@ import {
   reference_cache,
   searchable_names,
 } from "@/data/schema";
-import { POKEMON_SEED } from "../../../test/fixtures/tools-fixture";
+import {
+  POKEMON_SEED,
+  REFERENCE_CACHE_SEED,
+} from "../../../test/fixtures/tools-fixture";
 import {
   createPgSchema,
   installAsSingleton,
@@ -140,6 +143,40 @@ beforeAll(async () => {
         resource_key: "move/earthquake",
         resource_kind: "move",
         payload: JSON.stringify(EARTHQUAKE),
+        endpoint_url: "@pkmn/dex (Pokémon Showdown)",
+        fetched_at: 0,
+      });
+      const groundChart = REFERENCE_CACHE_SEED.find(
+        (r) => r.resource_key === "type/ground",
+      );
+      if (groundChart) {
+        await db.insert(reference_cache).values({
+          format: "gen-1",
+          resource_key: groundChart.resource_key,
+          resource_kind: groundChart.resource_kind,
+          payload: JSON.stringify(groundChart.payload),
+          endpoint_url: groundChart.endpoint_url,
+          fetched_at: 0,
+        });
+      }
+      await db.insert(reference_cache).values({
+        format: SV,
+        resource_key: "type/fire",
+        resource_kind: "type",
+        payload: JSON.stringify({
+          found: true,
+          types: ["fire"],
+          offensive: {
+            super_effective_against: ["grass", "ice", "bug", "steel"],
+            not_very_effective_against: ["fire", "water", "rock", "dragon"],
+            no_effect_against: [],
+          },
+          defensive: {
+            weak_to: ["water", "ground", "rock"],
+            resists: ["fire", "grass", "ice", "bug", "steel", "fairy"],
+            immune_to: [],
+          },
+        }),
         endpoint_url: "@pkmn/dex (Pokémon Showdown)",
         fetched_at: 0,
       });
@@ -280,11 +317,13 @@ describe("runCalc — old-gen caveat (CALC-BR-6, CALC-AC-6.3, ADR-14)", () => {
     expect(result.estimate.is_estimate).toBe(true);
     expect(result.estimate.min_damage).toBeGreaterThan(0);
     expect(result.caveat).toBeTruthy();
-    expect(typeof result.caveat).toBe("string");
-    // ADR-14 names `modern_estimate`; a user-visible sentence is also allowed.
-    expect(
-      result.caveat === "modern_estimate" || result.caveat.length > 0,
-    ).toBe(true);
+    if (result.ok && result.caveat) {
+      expect(typeof result.caveat).toBe("string");
+      // ADR-14 names `modern_estimate`; a user-visible sentence is also allowed.
+      expect(
+        result.caveat === "modern_estimate" || result.caveat.length > 0,
+      ).toBe(true);
+    }
   });
 });
 
@@ -314,5 +353,68 @@ describe("runCalc — common_spreads only on default defender EVs (CALC-AC-5.2)"
     expect(result).toMatchObject({ ok: true });
     if (!result.ok) return;
     expect(result.common_spreads).toBeUndefined();
+  });
+});
+
+describe("runCalc — type chart honesty (CALC-BR-3, CALC-AC-5.3)", () => {
+  it("returns incomplete when the move type chart is missing — does not invent 1×", async () => {
+    const result = await runCalc(
+      scenario({
+        attacker: { species: "ninetales" },
+        move: { slug: "flamethrower", type: "fairy" },
+      }),
+    );
+    expect(result).toMatchObject({ ok: false, error: "incomplete" });
+    expect("estimate" in result ? result.estimate : undefined).toBeUndefined();
+  });
+});
+
+describe("runCalc — sand/snow are defensive stat boosts (CALC-BR-3)", () => {
+  it("snow boosts Ice-type defender Def (physical hit deals less)", async () => {
+    const sides = {
+      attacker: { species: "garchomp" },
+      defender: { species: "farigiraf", tera: "ice" },
+      move: { slug: "earthquake" },
+    };
+    const clear = await runCalc(scenario(sides));
+    const snow = await runCalc(
+      scenario({ ...sides, field: { weather: "snow" } }),
+    );
+    expect(clear).toMatchObject({ ok: true });
+    expect(snow).toMatchObject({ ok: true });
+    if (!clear.ok || !snow.ok) return;
+    expect(snow.applied.weather).toBe("snow");
+    expect(snow.applied.other_modifier).toBe(clear.applied.other_modifier);
+    expect(snow.estimate.max_damage).toBeLessThan(clear.estimate.max_damage);
+  });
+
+  it("sand boosts Rock-type defender SpD (special hit deals less)", async () => {
+    const sides = {
+      attacker: { species: "ninetales" },
+      defender: { species: "farigiraf", tera: "rock" },
+      move: { slug: "flamethrower" },
+    };
+    const clear = await runCalc(scenario(sides));
+    const sand = await runCalc(
+      scenario({ ...sides, field: { weather: "sand" } }),
+    );
+    expect(clear).toMatchObject({ ok: true });
+    expect(sand).toMatchObject({ ok: true });
+    if (!clear.ok || !sand.ok) return;
+    expect(sand.applied.weather).toBe("sand");
+    expect(sand.applied.other_modifier).toBe(clear.applied.other_modifier);
+    expect(sand.estimate.max_damage).toBeLessThan(clear.estimate.max_damage);
+  });
+
+  it("sand does not invent an offensive Rock boost on a physical Ground hit", async () => {
+    const clear = await runCalc(scenario());
+    const sand = await runCalc(scenario({ field: { weather: "sand" } }));
+    expect(clear).toMatchObject({ ok: true });
+    expect(sand).toMatchObject({ ok: true });
+    if (!clear.ok || !sand.ok) return;
+    expect(sand.applied.weather).toBe("sand");
+    expect(sand.applied.other_modifier).toBe(clear.applied.other_modifier);
+    expect(sand.estimate.min_damage).toBe(clear.estimate.min_damage);
+    expect(sand.estimate.max_damage).toBe(clear.estimate.max_damage);
   });
 });

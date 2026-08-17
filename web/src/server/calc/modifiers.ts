@@ -5,9 +5,10 @@
  * pretending they applied. Named leftovers (ability / item not in the catalog)
  * go in `unsupported[]` and do not fold into the multiplier.
  *
- * This is an honest subset, not Smogon-calc parity. Sand/snow apply as an
- * offensive type boost for the matching move type (Rock / Ice) so the catalog
- * knobs are observable on `other_modifier`.
+ * This is an honest subset, not Smogon-calc parity. Sun/rain change
+ * `other_modifier` for Fire/Water. Sand and snow are catalog weather (recorded
+ * on `applied.weather`) but do **not** change `other_modifier` — they are
+ * defensive stat boosts applied in the engine (Rock +50% SpD / Ice +50% Def).
  */
 
 export type CalcCategory = "physical" | "special" | "status";
@@ -101,10 +102,10 @@ export function resolveModifiers(
       else if (moveType === "fire") other *= WEATHER_CUT;
       applied.weather = "rain";
     } else if (weather === "sand") {
-      if (moveType === "rock") other *= WEATHER_BOOST;
+      // Rock-type defenders get +50% SpD — applied on the stat in the engine.
       applied.weather = "sand";
     } else if (weather === "snow") {
-      if (moveType === "ice") other *= WEATHER_BOOST;
+      // Ice-type defenders get +50% Def — applied on the stat in the engine.
       applied.weather = "snow";
     } else {
       unsupported.push(input.weather!);
