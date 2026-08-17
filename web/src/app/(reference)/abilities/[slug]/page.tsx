@@ -4,6 +4,10 @@
  * an "Ask Oak" CTA.
  *
  * Detail route config + dynamic-import + notFound rules: see /pokedex/[slug].
+ *
+ * `?format=<Format>` selects which scope's profile is shown (shareable). An
+ * invalid or unavailable format soft-falls back to the default SV-first chain.
+ * Canonical SEO URL stays `/abilities/{slug}` without the query.
  */
 
 import type { Metadata } from "next";
@@ -14,6 +18,7 @@ import RefRosterList from "@/components/reference/RefRosterList";
 import type { RefRosterGroup } from "@/components/reference/RefRosterList";
 import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
+import { isFormat, type Format } from "@/data/formats";
 import {
   buildAbilityDescription,
   buildAbilityTitle,
@@ -32,14 +37,24 @@ function holderGroups(data: AbilityPageData): RefRosterGroup[] {
   return [{ heading: `Pokémon with ${data.displayName}`, entries }];
 }
 
+/** Parse `?format=` into a known Format, or undefined when missing/invalid. */
+function parseFormatParam(raw: string | string[] | undefined): Format | undefined {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || !isFormat(value)) return undefined;
+  return value;
+}
+
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ format?: string | string[] }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const preferred = parseFormatParam((await searchParams).format);
   const { loadAbilityPage } = await import("@/data/reference-pages");
-  const data = await loadAbilityPage(slug);
+  const data = await loadAbilityPage(slug, preferred);
   if (!data) return {};
   return {
     title: buildAbilityTitle(data),
@@ -50,12 +65,15 @@ export async function generateMetadata({
 
 export default async function AbilityDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ format?: string | string[] }>;
 }) {
   const { slug } = await params;
+  const preferred = parseFormatParam((await searchParams).format);
   const { loadAbilityPage } = await import("@/data/reference-pages");
-  const data = await loadAbilityPage(slug);
+  const data = await loadAbilityPage(slug, preferred);
   if (!data) notFound();
 
   const effect = data.effectFull || data.effectShort;
@@ -85,7 +103,11 @@ export default async function AbilityDetailPage({
 
       <section className="ref-card ref-detail-section">
         <h2 className="ref-detail-section__title">Availability</h2>
-        <FormatChips formats={data.availability} />
+        <FormatChips
+          formats={data.availability}
+          activeFormat={data.sourceFormat}
+          hrefFor={(f) => `/abilities/${slug}?format=${f}`}
+        />
       </section>
 
       <section className="ref-card ref-detail-section">

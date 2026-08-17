@@ -4,6 +4,10 @@
  * form, linked), and an "Ask Oak" CTA.
  *
  * Detail route config + dynamic-import + notFound rules: see /pokedex/[slug].
+ *
+ * `?format=<Format>` selects which scope's profile is shown (shareable). An
+ * invalid or unavailable format soft-falls back to the default SV-first chain.
+ * Canonical SEO URL stays `/items/{slug}` without the query.
  */
 
 import type { Metadata } from "next";
@@ -12,10 +16,18 @@ import { notFound } from "next/navigation";
 
 import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
+import { isFormat, type Format } from "@/data/formats";
 import { buildItemDescription, buildItemTitle } from "@/data/reference-metadata";
 
 export const runtime = "nodejs";
 export const revalidate = 86400;
+
+/** Parse `?format=` into a known Format, or undefined when missing/invalid. */
+function parseFormatParam(raw: string | string[] | undefined): Format | undefined {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || !isFormat(value)) return undefined;
+  return value;
+}
 
 /** Title-case a slug ("mystic-water" → "Mystic Water"). */
 function titleCase(slug: string): string {
@@ -27,12 +39,15 @@ function titleCase(slug: string): string {
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ format?: string | string[] }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const preferred = parseFormatParam((await searchParams).format);
   const { loadItemPage } = await import("@/data/reference-pages");
-  const data = await loadItemPage(slug);
+  const data = await loadItemPage(slug, preferred);
   if (!data) return {};
   return {
     title: buildItemTitle(data),
@@ -43,12 +58,15 @@ export async function generateMetadata({
 
 export default async function ItemDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ format?: string | string[] }>;
 }) {
   const { slug } = await params;
+  const preferred = parseFormatParam((await searchParams).format);
   const { loadItemPage } = await import("@/data/reference-pages");
-  const data = await loadItemPage(slug);
+  const data = await loadItemPage(slug, preferred);
   if (!data) notFound();
 
   const effect = data.effectFull || data.effectShort;
@@ -78,7 +96,11 @@ export default async function ItemDetailPage({
 
       <section className="ref-card ref-detail-section">
         <h2 className="ref-detail-section__title">Availability</h2>
-        <FormatChips formats={data.availability} />
+        <FormatChips
+          formats={data.availability}
+          activeFormat={data.sourceFormat}
+          hrefFor={(f) => `/items/${slug}?format=${f}`}
+        />
       </section>
 
       {data.requiredBy.length > 0 && (
