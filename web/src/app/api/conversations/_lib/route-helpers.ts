@@ -33,6 +33,13 @@ export async function folderRepo(): Promise<
   return import("@/data/repos/folder-repo");
 }
 
+/** Artifact-pin repo, loaded at request time (server-only). */
+export async function artifactPinRepo(): Promise<
+  typeof import("@/data/repos/artifact-pin-repo")
+> {
+  return import("@/data/repos/artifact-pin-repo");
+}
+
 /** Repo errors stamped with `.code` (folder_limit, pin_limit, …). */
 export function errorCode(err: unknown): string | undefined {
   if (err && typeof err === "object" && "code" in err) {
