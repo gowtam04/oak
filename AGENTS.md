@@ -305,3 +305,53 @@ A commit that fixes a feedback item **must** flip that item's ledger row to
 `fixed (<commit>, build N)` in the same commit. Run the sync script promptly
 when new feedback arrives — ASC's screenshot/crash-log asset URLs expire
 (~30 days), so unsynced feedback loses its assets permanently.
+
+## Cursor Cloud specific instructions
+
+Scope: this section is the web app in `web/` (the iOS/Android clients need Xcode /
+the Android SDK, which are not part of this Linux Cloud environment). All commands
+below are the ones already documented in the root `README.md` "Scripts" table and
+the `## Commands` section above — this section only records the **non-obvious**
+Cloud caveats, not a second copy of those commands.
+
+- **The startup update script only runs `npm ci` in `web/`.** Everything else
+  (Docker daemon, Postgres/Redis, migrations, ingest, the dev server) is a runtime
+  service, not a dependency refresh, so it is intentionally left out of the update
+  script — start those yourself per the notes below.
+- **A Docker daemon is required and is NOT in the default Cloud image.** `npm test`
+  / `npm run test:node` use Testcontainers (ephemeral `postgres:16` + `redis:7`),
+  and local dev needs a Postgres + Redis. Install Docker with the docker-in-docker
+  recipe from the Cloud environment setup instructions (fuse-overlayfs storage
+  driver + `features.containerd-snapshotter:false` for Docker 29, iptables-legacy),
+  start `dockerd`, then `chmod 666 /var/run/docker.sock` so the `ubuntu` user can
+  reach it. `typecheck`, `lint`, and `npm run test:components` (jsdom) need **no**
+  Docker.
+- **For local dev, run Postgres + Redis as plain containers** matching the compose
+  versions and ports, then point the app at them via `web/.env.local` (gitignored):
+  `docker run -d --name oak-db -e POSTGRES_USER=oak -e POSTGRES_PASSWORD=oak -e POSTGRES_DB=oak -p 5432:5432 postgres:16-alpine`
+  and `docker run -d --name oak-redis -p 6379:6379 redis:7-alpine`. Then
+  `npm run db:migrate` and `npm run ingest` (ingest is fully offline and fast,
+  ~15s, building all eleven `@pkmn` formats). Re-run `db:migrate` + `ingest` after
+  any schema change. `docker compose -f docker-compose.dev.yml` also works but
+  builds the heavier `Dockerfile.dev` web image.
+- **GOTCHA — never export `REDIS_URL` (or `DATABASE_URL`) into the shell before
+  `npm run test:node`.** The state-tier tests (`rate-limit`, `redis`,
+  `session-store`, `otp-throttle`) assert the in-process fallback and Testcontainers
+  injects its own DB URIs; a stray exported `REDIS_URL` flips those stores to the
+  Redis backend and fails ~24 otherwise-passing tests. Keep the test shell clean;
+  set `DATABASE_URL`/`REDIS_URL`/`XAI_API_KEY` only inline for the `tsx` scripts
+  (`db:migrate`, `ingest`) or in `web/.env.local` for `next dev` — `tsx` does not
+  auto-load `.env.local`, but Next does.
+- **Real chat/LLM answers need a valid `XAI_API_KEY` secret.** With only a
+  placeholder key the app boots, all reference pages (`/pokedex`, `/moves`,
+  `/abilities`, `/items`) render real ingested data, and `/api/chat` streams the
+  `turn` + `scope` events — but the model call then returns
+  `model_provider_error` (clean 503/400). Set `XAI_API_KEY` as a Cloud secret to
+  exercise the agent end-to-end. `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` are optional
+  (only to make Claude/GPT selectable); `npm run eval` additionally needs a real
+  `ANTHROPIC_API_KEY` (the judge).
+- **One pre-existing jsdom test failure is unrelated to the environment:**
+  `test/answercard.fullstack.test.tsx > tags the card with the answer status and
+  subject type chips` fails with a "multiple elements (type-badge-dragon)"
+  collision on a clean checkout. The node project (2485 tests) and the rest of the
+  jsdom project pass.
