@@ -23,7 +23,7 @@
  */
 
 import { sql } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { OakAnswer } from "@/agent/schemas";
 import type { OnProgress } from "@/agent/types";
@@ -917,5 +917,63 @@ describe("POST /api/chat — scope MRU on completed signed-in turn (SCOPE-BR-2)"
     );
     await new Promise((r) => setTimeout(r, 30));
     expect(await mruRepo.list(ACCT_A)).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// Answer-cards P4 — abortVoiceCompile before startTurn (VOICE-BR-5)
+// ===========================================================================
+
+describe("POST /api/chat — abortVoiceCompile before startTurn (VOICE-BR-5)", () => {
+  afterEach(async () => {
+    const hydrate = await import("@/server/voice/hydrate-store").catch(
+      () => null,
+    );
+    hydrate?._resetStoreForTests();
+  });
+
+  it("aborts an in-flight voice hydrate then proceeds; does not 409 from hydrate (VOICE-BR-5)", async () => {
+    const hydrate = await import("@/server/voice/hydrate-store");
+    signedIn(ACCT_A);
+    const sessionId = "voice-hydrate-chat";
+    await seedSignedInPair(sessionId, "spoken question", "spoken answer");
+    const msgs = await convRepo.getMessages(ACCT_A, sessionId);
+    const asstId = msgs[1]!.id;
+
+    hydrate.setHydrateRunning(sessionId, asstId);
+    expect(hydrate.getHydrate(sessionId)?.status).toBe("running");
+
+    const order: string[] = [];
+    const abortSpy = vi.spyOn(hydrate, "abortVoiceCompile").mockImplementation(
+      ((id: string) => {
+        order.push("abort");
+        abortSpy.mockRestore();
+        hydrate.abortVoiceCompile(id);
+      }) as typeof hydrate.abortVoiceCompile,
+    );
+    const turnStore = await import("@/server/turn-store");
+    const startSpy = vi.spyOn(turnStore, "startTurn").mockImplementation(
+      ((meta: Parameters<typeof turnStore.startTurn>[0]) => {
+        order.push("start");
+        startSpy.mockRestore();
+        return turnStore.startTurn(meta);
+      }) as typeof turnStore.startTurn,
+    );
+
+    const res = await post({
+      session_id: sessionId,
+      message: "follow up in text",
+    });
+    expect(res.status).toBe(200);
+    const text = await readBody(res);
+    expect(text).not.toContain("turn_in_progress");
+    expect(mockRunOak).toHaveBeenCalled();
+
+    expect(order[0]).toBe("abort");
+    expect(order).toContain("start");
+    expect(hydrate.getHydrate(sessionId)?.status).not.toBe("running");
+
+    abortSpy.mockRestore();
+    startSpy.mockRestore();
   });
 });

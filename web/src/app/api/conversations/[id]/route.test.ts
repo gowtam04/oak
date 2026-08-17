@@ -13,6 +13,10 @@
  *   - PATCH also accepts `archived` / `folder_id` (null unfiles; foreign
  *     folder → 404).
  *
+ * Answer-cards pins (PIN-US-1 API) are additive on GET only:
+ *   - `pinnedArtifacts: { id, kind, title, created_at }[]`
+ *   - Do not assert `hydrate` here (parent glue later).
+ *
  * Real migrated Postgres (Testcontainers) so the route's repo runs for real
  * against the `@/data/db` singleton; only `getCurrentAccount` is mocked.
  */
@@ -44,6 +48,7 @@ let fix: PgFixture;
 let route: typeof import("./route");
 let convRepo: typeof import("@/data/repos/conversation-repo");
 let folderRepo: typeof import("@/data/repos/folder-repo");
+let pinRepo: typeof import("@/data/repos/artifact-pin-repo");
 
 const ANSWER: OakAnswer = {
   status: "answered",
@@ -60,6 +65,7 @@ beforeAll(async () => {
   route = await import("./route");
   convRepo = await import("@/data/repos/conversation-repo");
   folderRepo = await import("@/data/repos/folder-repo");
+  pinRepo = await import("@/data/repos/artifact-pin-repo");
 }, 60_000);
 
 afterAll(async () => {
@@ -68,7 +74,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await fix.db.execute(
-    sql`TRUNCATE TABLE team, conversation, conversation_message, conversation_folder RESTART IDENTITY`,
+    sql`TRUNCATE TABLE conversation_artifact_pin, team, conversation, conversation_message, conversation_folder RESTART IDENTITY`,
   );
   cu.getCurrentAccount.mockReset();
   await resetTurnStore();
@@ -301,4 +307,81 @@ describe("PATCH /api/conversations/[id] — archived / folder_id", () => {
     expect((await convRepo.getConversation(ACCT_A, "c"))?.archived).toBe(false);
   });
 });
+
+// --- GET pinnedArtifacts (PIN-US-1 API) — additive, not hydrate -------------
+
+describe("GET /api/conversations/[id] — pinnedArtifacts (PIN-US-1)", () => {
+  it("defaults to an empty pin strip", async () => {
+    signedIn(ACCT_A);
+    await seedConv(ACCT_A, "c", SV);
+
+    const body = await (await route.GET(new Request("http://t"), idCtx("c"))).json();
+    expect(body.pinnedArtifacts).toEqual([]);
+  });
+
+  it("lists artifact-pin summaries without snapshots (PIN-AC-1.1, PIN-BR-1)", async () => {
+    signedIn(ACCT_A);
+    await seedConv(ACCT_A, "c", SV);
+    const first = await pinRepo.insert({
+      accountId: ACCT_A,
+      conversationId: "c",
+      kind: "calc",
+      title: "EQ vs Toxapex",
+      snapshot: {
+        v: 1,
+        kind: "calc",
+        scenario: { format: SV, attacker: "garchomp" },
+        result: { min_damage: 40, max_damage: 48 },
+      },
+    });
+    const second = await pinRepo.insert({
+      accountId: ACCT_A,
+      conversationId: "c",
+      kind: "comparison",
+      title: "Chomp vs Apex",
+      snapshot: {
+        v: 1,
+        kind: "comparison",
+        left: { name: "Garchomp", format: SV },
+        right: { name: "Toxapex", format: SV },
+      },
+    });
+
+    const body = await (await route.GET(new Request("http://t"), idCtx("c"))).json();
+    expect(body.pinnedArtifacts).toEqual([
+      {
+        id: first.id,
+        kind: "calc",
+        title: "EQ vs Toxapex",
+        created_at: expect.any(Number),
+      },
+      {
+        id: second.id,
+        kind: "comparison",
+        title: "Chomp vs Apex",
+        created_at: expect.any(Number),
+      },
+    ]);
+    for (const pin of body.pinnedArtifacts as unknown[]) {
+      expect(pin).not.toHaveProperty("snapshot");
+    }
+  });
+
+  it("does not leak another conversation's pins onto this GET", async () => {
+    signedIn(ACCT_A);
+    await seedConv(ACCT_A, "c", SV);
+    await seedConv(ACCT_A, "other", SV);
+    await pinRepo.insert({
+      accountId: ACCT_A,
+      conversationId: "other",
+      kind: "team_sheet",
+      title: "Other thread",
+      snapshot: { v: 1, kind: "team_sheet", format: SV, team: { members: [] } },
+    });
+
+    const body = await (await route.GET(new Request("http://t"), idCtx("c"))).json();
+    expect(body.pinnedArtifacts).toEqual([]);
+  });
+});
+
 

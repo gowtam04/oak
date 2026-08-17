@@ -3,31 +3,36 @@ import Testing
 
 @testable import OakApp
 
-/// Phase 7 lockstep oracle — leading-token slash parse on send.
+/// Phase 5/7 lockstep oracle — leading-token slash parse on send.
 ///
 /// Clones `web/src/lib/chat/slash-commands.test.ts`. The parser only
 /// classifies; it does not POST `/api/chat`.
 ///
-/// Fails to compile until `SlashCommands` exists
-/// (`ios/OakApp/Features/Chat/SlashCommands.swift`).
-///
 /// Expected API (web `parseSlashCommand`):
 ///   `SlashCommands.parse(_ text: String, hasUsagePage: Bool) -> SlashCommand`
-///   `SlashCommand.navigate(target:)` | `.message`
+///   `SlashCommand.navigate(target:)` | `.calc(rest:)` | `.message`
 ///   `SlashCommand.Target` = `new` | `team` | `dex` | `usage`
+///
+/// `/calc` is a handled slash in this pack (CALC-AC-3.4 / ADR-4). `rest` is
+/// the substring after `/calc`, trimmed. Empty rest → open overlay, current
+/// scope. Non-empty rest is still `.calc` (unresolved tokens are a UI concern,
+/// CALC-AC-3.3). `/compare` stays a normal message (CMP-BR-3).
+///
+/// Fails to compile until `SlashCommand` grows `.calc(rest:)`
+/// (`ios/OakApp/Features/Chat/SlashCommands.swift`).
 ///
 /// iOS has no usage surface — callers pass `hasUsagePage: false`.
 /// `/usage` is therefore a normal message (SLASH-AC-1.4 / SLASH-AC-1.5).
 /// No palette / shortcuts (NAV-US-1/2 are web-only).
 ///
-/// Known leading tokens: `/new`, `/team`, `/dex`, and `/usage` only when
-/// `hasUsagePage == true`. First whitespace-delimited token wins; args stay
-/// on the navigate result (client routes `/team {name}` / `/dex {name}`).
-/// Unknown slashes — including `/calc`, `/compare`, and `/usage` when the
-/// client has no usage page — are ordinary messages.
+/// Known leading tokens: `/new`, `/team`, `/dex`, `/calc`, and `/usage` only
+/// when `hasUsagePage == true`. First whitespace-delimited token wins; args
+/// stay on the navigate result (client routes `/team {name}` / `/dex {name}`).
+/// Unknown slashes — including `/compare` and `/usage` when the client has no
+/// usage page — are ordinary messages.
 ///
-/// Requirement refs: SLASH-US-1, SLASH-AC-1.1..1.6, SLASH-BR-1, SLASH-BR-2.
-/// ADR-10.
+/// Requirement refs: SLASH-US-1, SLASH-AC-1.1..1.6, SLASH-BR-1, SLASH-BR-2,
+/// CALC-US-3, CALC-AC-3.1..3.4, CALC-BR-4. ADR-4, ADR-10.
 struct SlashCommandsTests {
 
   /// Web lockstep option — usage page exists.
@@ -104,23 +109,73 @@ struct SlashCommandsTests {
     #expect(parse("/usage ou", hasUsagePage: nativeHasUsagePage) == .message)
   }
 
+  // MARK: CALC-US-3 / CALC-AC-3.1–3.4 / CALC-BR-4 — /calc is handled
+
+  @Test
+  func treatsBareCalcAsHandledCalcWithEmptyRest() {
+    #expect(parse("/calc", hasUsagePage: webHasUsagePage) == .calc(rest: ""))
+    #expect(parse("/calc", hasUsagePage: nativeHasUsagePage) == .calc(rest: ""))
+  }
+
+  @Test
+  func treatsCalcWithArgsAsHandledCalcCarryingTrimmedRest() {
+    #expect(
+      parse("/calc garchomp earthquake vs farigiraf", hasUsagePage: webHasUsagePage)
+        == .calc(rest: "garchomp earthquake vs farigiraf")
+    )
+    #expect(
+      parse("/calc garchomp earthquake vs farigiraf", hasUsagePage: nativeHasUsagePage)
+        == .calc(rest: "garchomp earthquake vs farigiraf")
+    )
+    #expect(
+      parse("/calc garchomp earthquake vs gholdengo", hasUsagePage: nativeHasUsagePage)
+        == .calc(rest: "garchomp earthquake vs gholdengo")
+    )
+  }
+
+  @Test
+  func trimsWhitespaceAroundCalcRest() {
+    #expect(
+      parse("  /calc   garchomp earthquake vs farigiraf  ", hasUsagePage: nativeHasUsagePage)
+        == .calc(rest: "garchomp earthquake vs farigiraf")
+    )
+    #expect(parse("/calc   ", hasUsagePage: nativeHasUsagePage) == .calc(rest: ""))
+    #expect(
+      parse("/calc\tgarchomp earthquake", hasUsagePage: nativeHasUsagePage)
+        == .calc(rest: "garchomp earthquake")
+    )
+  }
+
+  @Test
+  func treatsHandledCalcAsNotAChatTurn() {
+    let result = parse("/calc garchomp earthquake vs farigiraf", hasUsagePage: nativeHasUsagePage)
+    #expect(result == .calc(rest: "garchomp earthquake vs farigiraf"))
+    if case .message = result {
+      Issue.record("handled /calc must not be a message turn (CALC-BR-4)")
+    }
+    if case .navigate = result {
+      Issue.record("handled /calc must not navigate (CALC-AC-3.4)")
+    }
+    let labels = Mirror(reflecting: result).children.compactMap(\.label)
+    #expect(!labels.contains("post"))
+  }
+
   // MARK: SLASH-AC-1.5 / SLASH-BR-1 — unknown slashes are messages
 
   @Test
-  func treatsUnknownSlashesIncludingCalcAndCompareAsMessages() {
-    #expect(parse("/calc", hasUsagePage: webHasUsagePage) == .message)
-    #expect(parse("/calc garchomp earthquake", hasUsagePage: webHasUsagePage) == .message)
+  func treatsUnknownSlashesIncludingCompareAsMessages() {
     #expect(parse("/compare", hasUsagePage: webHasUsagePage) == .message)
     #expect(parse("/compare garchomp dragonite", hasUsagePage: webHasUsagePage) == .message)
     #expect(parse("/foo", hasUsagePage: webHasUsagePage) == .message)
     #expect(parse("/teams", hasUsagePage: webHasUsagePage) == .message)
     #expect(parse("/", hasUsagePage: webHasUsagePage) == .message)
     #expect(parse("/newish", hasUsagePage: webHasUsagePage) == .message)
+    #expect(parse("/calcish", hasUsagePage: webHasUsagePage) == .message)
 
-    #expect(parse("/calc", hasUsagePage: nativeHasUsagePage) == .message)
     #expect(parse("/compare", hasUsagePage: nativeHasUsagePage) == .message)
     #expect(parse("/usage", hasUsagePage: nativeHasUsagePage) == .message)
     #expect(parse("/newish", hasUsagePage: nativeHasUsagePage) == .message)
+    #expect(parse("/calcish", hasUsagePage: nativeHasUsagePage) == .message)
   }
 
   // MARK: SLASH-AC-1.6 — leading token only
@@ -131,7 +186,9 @@ struct SlashCommandsTests {
     #expect(parse("what about /team later", hasUsagePage: webHasUsagePage) == .message)
     #expect(parse("see /dex garchomp", hasUsagePage: webHasUsagePage) == .message)
     #expect(parse("check /usage", hasUsagePage: webHasUsagePage) == .message)
+    #expect(parse("please open /calc", hasUsagePage: webHasUsagePage) == .message)
     #expect(parse("please open /new", hasUsagePage: nativeHasUsagePage) == .message)
+    #expect(parse("run /calc garchomp later", hasUsagePage: nativeHasUsagePage) == .message)
   }
 
   @Test

@@ -29,6 +29,7 @@ import {
   mintEphemeralToken,
   voiceToolDefs,
 } from "@/server/voice/voice-session";
+import { oakAnswerSchema } from "@/agent/schemas";
 import {
   VOICE_IDLE_TIMEOUT_MS,
   VOICE_MAX_SESSION_MS,
@@ -162,5 +163,25 @@ describe("buildSessionBootstrap", () => {
     expect(digest).not.toContain("turn 0 ");
     // A recent turn survives.
     expect(digest).toContain("turn 29 ");
+  });
+});
+
+describe("synthesizeVoiceAnswer — origin stamp (VOICE-AC-1.2, VOICE-BR-3)", () => {
+  it("stamps origin: \"voice\" on the thin spoken card (VOICE-AC-1.2)", async () => {
+    const vs = await import("@/server/voice/voice-session");
+    const synthesize = (
+      vs as {
+        synthesizeVoiceAnswer?: (
+          assistantText: string,
+          format: string,
+        ) => unknown;
+      }
+    ).synthesizeVoiceAnswer;
+    expect(typeof synthesize).toBe("function");
+    const parsed = oakAnswerSchema.parse(
+      synthesize!("Jolly maximizes its Speed.", "champions"),
+    );
+    expect(parsed.origin).toBe("voice");
+    expect(parsed.answer_markdown).toBe("Jolly maximizes its Speed.");
   });
 });

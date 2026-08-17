@@ -4,18 +4,21 @@
  * iOS `SlashCommandsTests` and Android `SlashCommandsTest` must clone these
  * cases. The parser only classifies; it does not POST `/api/chat`.
  *
- * Requirement refs: SLASH-US-1, SLASH-AC-1.1..1.6, SLASH-BR-1, SLASH-BR-2.
- * ADR-10.
+ * Requirement refs: SLASH-US-1, SLASH-AC-1.1..1.6, SLASH-BR-1, SLASH-BR-2,
+ * CALC-US-3, CALC-AC-3.1–3.4, CALC-BR-4. Chat QoL ADR-10; this pack ADR-4
+ * (`/calc` is a handled slash — supersedes SLASH-BR-1 for `/calc` only).
  *
  *   parseSlashCommand(text, { hasUsagePage: boolean }):
  *     | { type: "navigate"; target: "new" | "team" | "dex" | "usage" }
+ *     | { type: "calc"; rest: string }
  *     | { type: "message" }
  *
- * Known leading tokens: `/new`, `/team`, `/dex`, and `/usage` only when
- * `hasUsagePage === true`. First whitespace-delimited token wins; args stay
- * on the navigate result (client routes `/team {name}` / `/dex {name}`).
- * Unknown slashes — including `/calc`, `/compare`, and `/usage` when the
- * client has no usage page — are ordinary messages.
+ * Known leading tokens: `/new`, `/team`, `/dex`, `/calc`, and `/usage` only
+ * when `hasUsagePage === true`. First whitespace-delimited token wins; args
+ * stay on the navigate result (client routes `/team {name}` / `/dex {name}`).
+ * `/calc` rest is the substring after `/calc`, trimmed (empty rest is ok).
+ * `/compare` stays an ordinary message (CMP-BR-3). Unknown slashes — and
+ * `/usage` when the client has no usage page — are ordinary messages.
  */
 
 import { describe, expect, it } from "vitest";
@@ -78,15 +81,46 @@ describe("parseSlashCommand", () => {
     expect(parseSlashCommand("/usage ou", NATIVE)).toEqual({ type: "message" });
   });
 
-  it("treats unknown slashes including /calc and /compare as messages (SLASH-AC-1.5 / SLASH-BR-1)", () => {
-    expect(parseSlashCommand("/calc", WEB)).toEqual({ type: "message" });
-    expect(parseSlashCommand("/calc garchomp earthquake", WEB)).toEqual({
+  it("handles /calc as a calc command, not a message (CALC-AC-3.1, CALC-AC-3.4, CALC-BR-4, ADR-4)", () => {
+    expect(parseSlashCommand("/calc", WEB)).toEqual({ type: "calc", rest: "" });
+    expect(parseSlashCommand("/calc", NATIVE)).toEqual({ type: "calc", rest: "" });
+    expect(parseSlashCommand("  /calc", WEB)).toEqual({ type: "calc", rest: "" });
+    expect(parseSlashCommand("/calc   ", WEB)).toEqual({ type: "calc", rest: "" });
+  });
+
+  it("captures /calc rest after the token, trimmed (CALC-AC-3.2, CALC-AC-3.3)", () => {
+    expect(parseSlashCommand("/calc foo vs bar", WEB)).toEqual({
+      type: "calc",
+      rest: "foo vs bar",
+    });
+    expect(
+      parseSlashCommand("/calc garchomp earthquake vs gholdengo", WEB),
+    ).toEqual({
+      type: "calc",
+      rest: "garchomp earthquake vs gholdengo",
+    });
+    expect(parseSlashCommand("\t/calc   foo vs bar", NATIVE)).toEqual({
+      type: "calc",
+      rest: "foo vs bar",
+    });
+  });
+
+  it("does not treat /calcish or a mid-sentence /calc as handled (CALC-AC-3.4)", () => {
+    expect(parseSlashCommand("/calcish", WEB)).toEqual({ type: "message" });
+    expect(parseSlashCommand("please /calc", WEB)).toEqual({ type: "message" });
+    expect(parseSlashCommand("open /calc garchomp", WEB)).toEqual({
       type: "message",
     });
+  });
+
+  it("treats /compare as a message — no standalone Compare (CMP-BR-3, ADR-4)", () => {
     expect(parseSlashCommand("/compare", WEB)).toEqual({ type: "message" });
     expect(parseSlashCommand("/compare garchomp dragonite", WEB)).toEqual({
       type: "message",
     });
+  });
+
+  it("treats unknown slashes as messages (SLASH-AC-1.5 / SLASH-BR-1)", () => {
     expect(parseSlashCommand("/foo", WEB)).toEqual({ type: "message" });
     expect(parseSlashCommand("/teams", WEB)).toEqual({ type: "message" });
     expect(parseSlashCommand("/", WEB)).toEqual({ type: "message" });
@@ -130,10 +164,15 @@ describe("parseSlashCommand", () => {
     });
   });
 
-  it("classifies only — a handled slash is not a chat turn (SLASH-BR-2)", () => {
-    const result = parseSlashCommand("/new", WEB);
-    expect(result).toEqual({ type: "navigate", target: "new" });
-    expect(result).not.toHaveProperty("post");
-    expect(result).not.toHaveProperty("message");
+  it("classifies only — a handled slash is not a chat turn (SLASH-BR-2, CALC-BR-4)", () => {
+    const nav = parseSlashCommand("/new", WEB);
+    expect(nav).toEqual({ type: "navigate", target: "new" });
+    expect(nav).not.toHaveProperty("post");
+    expect(nav).not.toHaveProperty("message");
+
+    const calc = parseSlashCommand("/calc foo vs bar", WEB);
+    expect(calc).toEqual({ type: "calc", rest: "foo vs bar" });
+    expect(calc).not.toHaveProperty("post");
+    expect(calc).not.toEqual({ type: "message" });
   });
 });

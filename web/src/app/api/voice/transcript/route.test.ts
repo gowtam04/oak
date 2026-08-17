@@ -18,6 +18,11 @@ const cu = vi.hoisted(() => ({
 }));
 vi.mock("@/server/auth/current-user", () => cu);
 
+const compile = vi.hoisted(() => ({
+  runVoiceCompile: vi.fn(async () => {}),
+}));
+vi.mock("@/server/voice/run-voice-compile", () => compile);
+
 import { _resetStoreForTests as resetRateLimit } from "@/server/rate-limit";
 import { oakAnswerSchema } from "@/agent/schemas";
 import {
@@ -50,6 +55,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
   cu.getCurrentAccount.mockReset();
+  compile.runVoiceCompile.mockReset();
+  compile.runVoiceCompile.mockResolvedValue(undefined);
   await resetRateLimit();
 });
 afterEach(() => resetRateLimit());
@@ -127,5 +134,72 @@ describe("POST /api/voice/transcript", () => {
       );
       expect(parsed.data.generation_basis.generation).toBe("champions");
     }
+  });
+});
+
+describe("POST /api/voice/transcript — compile is fire-and-forget (VOICE-BR-1, VOICE-AC-2.1)", () => {
+  afterEach(async () => {
+    const hydrate = await import("@/server/voice/hydrate-store").catch(
+      () => null,
+    );
+    hydrate?._resetStoreForTests();
+  });
+
+  it("returns the existing 200 without waiting for compile to finish (VOICE-BR-1)", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    let release!: () => void;
+    const hung = new Promise<void>((r) => {
+      release = r;
+    });
+    compile.runVoiceCompile.mockReturnValue(hung);
+
+    const sessionId = `conv-nofinish-${Date.now()}`;
+    const res = await post(
+      body({
+        session_id: sessionId,
+        user_text: "How fast is Dragapult?",
+        assistant_text: "Base one-forty-two Speed — very fast.",
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(compile.runVoiceCompile).toHaveBeenCalled();
+    // Compile is still pending — the 200 must not have awaited it.
+    const stored = await repo.getMessages(ACCT, sessionId);
+    expect(stored).toHaveLength(2);
+    release();
+  });
+
+  it("starts hydrate running for the persisted assistant message (VOICE-AC-2.1)", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    compile.runVoiceCompile.mockReturnValue(new Promise(() => {}));
+
+    const sessionId = `conv-hydrate-run-${Date.now()}`;
+    const res = await post(
+      body({
+        session_id: sessionId,
+        user_text: "How fast is Dragapult?",
+        assistant_text: "Base one-forty-two Speed — very fast.",
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const stored = await repo.getMessages(ACCT, sessionId);
+    expect(stored).toHaveLength(2);
+    const asstId = stored[1]!.id;
+
+    const hydrate = await import("@/server/voice/hydrate-store");
+    expect(hydrate.getHydrate(sessionId)).toEqual({
+      assistant_message_id: asstId,
+      status: "running",
+    });
+    expect(compile.runVoiceCompile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: sessionId,
+        assistantMessageId: asstId,
+      }),
+    );
   });
 });
