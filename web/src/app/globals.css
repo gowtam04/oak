@@ -2564,85 +2564,138 @@
   margin-top: var(--space-2);
 }
 
-/* Answer skeleton — masthead bar + prose lines with a soft opacity pulse; holds
-   the layout so the streamed answer replaces it in place with no jump. */
-/* Streaming skeleton — a softer echo of the answer-card's type-light when
-   activity hints a type; else a plain raised panel. No leading-edge light
-   (that's reserved for the confirmed terminal answer) — just a faint glow. */
+/* Incoming thinking plate — unsigned brand-red type-light until tokens arrive.
+   Red lives in the verb, the corner glow, and a write-sheen on sunken bars.
+   No pip, no left record tick, no fake .sig-live__bar (that class stays for
+   VoiceOverlay). */
 .chat-thread__skeleton {
-  --plate-a: var(--neutral-500);
-  --plate-b: var(--neutral-600);
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-5) var(--space-6);
+  gap: 10px;
+  padding: var(--space-4) var(--space-4) 18px;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: var(--surface-raised);
+  border: 1px solid color-mix(in srgb, var(--poke-red) 18%, var(--border));
+  background:
+    radial-gradient(
+      120% 90% at 92% 0%,
+      color-mix(in srgb, var(--poke-red) 22%, transparent),
+      transparent 58%
+    ),
+    var(--surface-raised);
   box-shadow: var(--shadow-raised);
   overflow: hidden;
 }
-.chat-thread__skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    90% 70% at 88% 18%,
-    color-mix(in srgb, var(--plate-a) var(--plate-wash-a), transparent),
-    transparent 60%
-  );
+.chat-incoming__status {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  min-height: 20px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
 }
-.chat-thread__skeleton--desk {
-  background: var(--surface-raised);
-  border-color: var(--border);
+.chat-thread__skeleton .verb {
+  color: var(--poke-red);
+  font-weight: 650;
 }
-.chat-thread__skeleton--desk::after {
-  content: none;
+.chat-thread__skeleton .dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 5px;
+  transform: translateY(-1px);
+}
+.chat-thread__skeleton .dots i {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: var(--poke-red);
+  opacity: 0.2;
+  animation: chat-incoming-dots 1.2s var(--ease) infinite;
+}
+.chat-thread__skeleton .dots i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.chat-thread__skeleton .dots i:nth-child(3) {
+  animation-delay: 0.32s;
 }
 .chat-thread__skeleton-masthead,
 .chat-thread__skeleton-line {
   position: relative;
+  height: 12px;
+  border-radius: 7px;
   background: var(--surface-sunken);
-  border-radius: var(--radius-sm);
-  animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
+  overflow: hidden;
 }
-/* Record light — a glowing red dot beside the masthead placeholder while a
-   turn is live (soul.md "LED scope stamp" / "reading latches": red while
-   streaming, latches to the resolved status color once the card finalizes). */
-.chat-thread__skeleton-masthead::before {
+.chat-thread__skeleton-masthead::after,
+.chat-thread__skeleton-line::after {
   content: "";
   position: absolute;
-  left: -14px;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 50%;
-  background: var(--poke-red);
-  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--poke-red) 55%, transparent);
-  animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
+  inset: 0 auto 0 -45%;
+  width: 46%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--poke-red) 28%, transparent),
+    transparent
+  );
+  animation: chat-incoming-write 1.8s var(--ease) infinite;
 }
 .chat-thread__skeleton-masthead {
-  height: 1.6rem;
-  width: 62%;
-  margin-bottom: var(--space-1);
-  border-radius: var(--radius-md);
+  height: 18px;
+  width: 66%;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--poke-red) 16%, var(--surface-sunken)),
+    var(--surface-sunken) 70%
+  );
 }
-.chat-thread__skeleton-line {
-  height: 0.85rem;
+.chat-thread__skeleton-masthead::after {
+  animation-delay: 0ms;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--poke-red) 55%, transparent),
+    transparent
+  );
+}
+.chat-thread__skeleton-line:nth-of-type(3)::after {
+  animation-delay: 90ms;
+}
+.chat-thread__skeleton-line:nth-of-type(4)::after {
+  animation-delay: 180ms;
 }
 .chat-thread__skeleton-line--short {
-  width: 45%;
+  width: 46%;
 }
-@keyframes chat-skeleton-pulse {
+.chat-thread__skeleton-line--short::after {
+  animation-delay: 270ms;
+}
+@keyframes chat-incoming-dots {
   0%,
-  100% {
-    opacity: 0.55;
+  20% {
+    opacity: 0.22;
   }
-  50% {
-    opacity: 0.9;
+  35%,
+  55% {
+    opacity: 0.95;
+  }
+  70%,
+  100% {
+    opacity: 0.22;
+  }
+}
+@keyframes chat-incoming-write {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(340%);
   }
 }
 
@@ -2992,20 +3045,21 @@
     transform: none;
   }
   /* Streaming trail: keep the pokeball spinner turning (it signals liveness),
-     but drop the note cascade, the summary chip's entrance, and the skeleton
-     pulse — motion for feedback stays, decorative motion goes. */
+     but drop the note cascade and the summary chip's entrance. Incoming plate:
+     freeze the write-sheen and stepping dots at mid-opacity. */
   .chat-thread__note,
   .chat-thread__summary {
     animation: none !important;
   }
-  .chat-thread__skeleton-masthead,
-  .chat-thread__skeleton-line {
+  .chat-thread__skeleton .dots i {
     animation: none !important;
-    opacity: 0.7;
+    opacity: 0.55;
   }
-  .chat-thread__skeleton-masthead::before {
+  .chat-thread__skeleton-masthead::after,
+  .chat-thread__skeleton-line::after {
     animation: none !important;
-    opacity: 0.8;
+    left: 30%;
+    opacity: 0.5;
   }
   .chat-thread__summary-caret {
     transition: none;

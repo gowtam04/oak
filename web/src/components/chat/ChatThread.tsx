@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChatThreadProps } from "@/components/types";
 import AnswerCard from "@/components/answer-card/AnswerCard";
 import Markdown from "@/components/Markdown";
-import { plateHintFromToolLabels } from "@/lib/plate-types";
 import {
   STARTER_ENTRIES,
   pickRandomStarters,
@@ -79,15 +78,11 @@ function chipsForAnswer(
  * ChatThread — renders the committed conversation (user + assistant turns) in
  * order, plus the streaming "field notes" experience while `status ===
  * "streaming"` (specimen desk field notes / soul.md):
- *   - a vertical trail of instrument chips, one per accumulated `tool_activity`
- *     event (mono tool token + subject); the latest carries the pokeball micro-
- *     spinner, completed ones a tick. Before the first tool it's a single
- *     "thinking" chip; a live elapsed-seconds counter sits below, in mono.
- *   - an answer-card skeleton (masthead bar + prose lines, soft pulse) shown the
- *     instant a turn starts, holding the layout so real content doesn't jump in.
- *   - once prose begins streaming (`answer_start`), the trail collapses to one
- *     compact summary chip ("6 lookups · 12s") pinned above the streaming card,
- *     re-expandable to the full trail — continuity, not deletion.
+ *   - one unsigned incoming plate while the turn is live and no tokens have
+ *     arrived: a red verb + mute rest + stepping dots, then sunken bars with a
+ *     red write-sheen. No pip, no fake progress bar, no type-wash.
+ *   - once prose begins streaming (`answer_start`), the plate hides and the
+ *     existing streaming-answer block takes its place.
  *   - a transport-fault affordance when `status === "error"` and
  *     `transportError` is set (in-domain failures arrive as normal answer cards,
  *     never here — sse-client.ts / integration.md); it replaces the skeleton in
@@ -208,22 +203,17 @@ export default function ChatThread({
     if (pinnedRef.current) bottomRef.current?.scrollIntoView?.({ block: "end" });
   }, [turns, streamingMarkdown, status]);
 
-  // Liveness heartbeat: while the turn is in flight, count wall-clock seconds so
-  // a slow turn (long model "thinking" before the first tool, or while composing)
-  // visibly keeps moving instead of reading as stuck. Computed from a start
-  // timestamp rather than incremented, so a throttled/backgrounded tab stays
-  // accurate. Resets whenever the turn ends.
-  // Also restart when a reconnect begins/ends so the counter measures the
-  // current attempt, not the cumulative wall-clock across a suspended gap (which
-  // would read as "stuck").
   const hasActivity = activity.length > 0;
-  const skeletonPlate = useMemo(
-    () => plateHintFromToolLabels(activity.map((a) => a.label)),
-    [activity],
-  );
-  const thinkingLabel = reconnecting
-    ? "Reconnecting…"
-    : "Thinking through your question…";
+  const incomingVerb = hasActivity
+    ? "Looking up"
+    : reconnecting
+      ? "Reconnecting"
+      : "Thinking";
+  const incomingRest = hasActivity
+    ? ` ${[...new Set(activity.map((a) => instrumentToken(a.tool)))].join(", ")}`
+    : reconnecting
+      ? ""
+      : " through your question";
 
   const lastUserId = [...turns].reverse().find((t) => t.role === "user")?.id;
   const lastAssistantId = [...turns]
@@ -404,46 +394,35 @@ export default function ChatThread({
         ),
       )}
 
-      {status === "streaming" && (
-        <div className="chat-thread__progress" data-testid="progress">
-          <div className="sig-live" aria-live="polite">
-            <i className="sig-live__pip" aria-hidden="true" />
-            <span
-              className="sig-live__text"
-              data-testid={hasActivity ? "field-note" : "progress-thinking"}
-            >
-              {hasActivity
-                ? `Looking up ${[...new Set(activity.map((a) => instrumentToken(a.tool)))].join(", ")}`
-                : thinkingLabel}
-            </span>
-          </div>
-          <div className="sig-live__bar" aria-hidden="true" />
-        </div>
-      )}
-
-      {/* Answer skeleton — shown the instant a turn starts (before prose), so the
-          shape of what's coming holds the layout and the streamed answer (or the
-          error strip) replaces it in place with no jump. Mild type wash when
-          activity labels confidently name a type; else sunken desk tint. */}
+      {/* Incoming plate — one unsigned red specimen card while the turn is live
+          and no tokens have arrived. Status + sunken bars hide as soon as
+          streamed markdown exists. */}
       {status === "streaming" && !streamingMarkdown && (
         <div
-          className={[
-            "chat-turn",
-            "chat-turn--assistant",
-            "chat-thread__skeleton",
-            skeletonPlate ? "" : "chat-thread__skeleton--desk",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          style={skeletonPlate?.style}
+          className="chat-turn chat-turn--assistant chat-thread__skeleton"
           data-testid="answer-skeleton"
-          data-plate={skeletonPlate?.kind ?? "desk"}
-          aria-hidden="true"
+          data-unsigned
         >
-          <div className="chat-thread__skeleton-masthead" />
-          <div className="chat-thread__skeleton-line" />
-          <div className="chat-thread__skeleton-line" />
-          <div className="chat-thread__skeleton-line chat-thread__skeleton-line--short" />
+          <div className="chat-incoming__status" aria-live="polite">
+            <span
+              data-testid={hasActivity ? "field-note" : "progress-thinking"}
+            >
+              <strong className="verb">{incomingVerb}</strong>
+              {incomingRest}
+              <span className="dots" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+            </span>
+          </div>
+          <div className="chat-thread__skeleton-masthead" aria-hidden="true" />
+          <div className="chat-thread__skeleton-line" aria-hidden="true" />
+          <div className="chat-thread__skeleton-line" aria-hidden="true" />
+          <div
+            className="chat-thread__skeleton-line chat-thread__skeleton-line--short"
+            aria-hidden="true"
+          />
         </div>
       )}
 
