@@ -198,7 +198,6 @@ a.ref-card:hover,
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
-  border-top: 2px solid var(--poke-red);
   border-bottom: 1px solid var(--border);
 }
 
@@ -216,35 +215,16 @@ a.ref-card:hover,
   padding-right: max(var(--space-6), env(safe-area-inset-right));
 }
 
-/* Space Grotesk wordmark + brand-mark chip — mirrors `.chat-page__title`. */
 .ref-header__wordmark {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: var(--text-2xl);
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  color: var(--text-strong);
   text-decoration: none;
+  color: inherit;
 }
 
 .ref-header__wordmark:hover,
 .ref-header__wordmark:focus-visible {
   opacity: 0.75;
-}
-
-.ref-header__wordmark::before {
-  content: "";
-  width: 32px;
-  height: 32px;
-  flex: 0 0 auto;
-  border-radius: 8px;
-  background: var(--brand-mark) center / cover no-repeat;
-  /* Hairline ring + the shared warm raised shadow (the mark's O-ring keeps its
-     own red — the brand's record light). */
-  box-shadow: 0 0 0 1px var(--border), var(--shadow-raised);
 }
 
 .ref-header__nav {

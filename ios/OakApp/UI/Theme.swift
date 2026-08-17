@@ -232,7 +232,7 @@ enum Theme {
   }
 
   /// The legible ink color for text/labels set directly on a full-chroma
-  /// `type(_:)` fill (e.g. `TypeBadge`'s solid capsule). White for the darker
+  /// `type(_:)` fill (e.g. `TypeBadge`'s solid 8pt chip). White for the darker
   /// type solids, near-black for the lighter ones — a fixed per-type contrast
   /// table rather than a computed luminance check, so it's theme-stable.
   static func typeInk(_ name: String) -> Color {

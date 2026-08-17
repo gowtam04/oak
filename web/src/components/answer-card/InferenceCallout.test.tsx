@@ -44,10 +44,12 @@ describe("InferenceCallout", () => {
     );
   });
 
-  it("renders an `.ilabel` title above the callout items", () => {
+  it("leads with the word Inferred in red", () => {
     render(<InferenceCallout inferences={[INFERENCE_SPEED]} />);
-    const title = screen.getByText("Oak's deductions");
-    expect(title.className).toContain("ilabel");
+    const word = screen.getAllByText("Inferred")[0];
+    expect(word).toBeInTheDocument();
+    expect(word.className).toContain("inference-callout__word");
+    expect(screen.queryByText("Oak's deductions")).toBeNull();
   });
 
   it("renders the optional note when present", () => {

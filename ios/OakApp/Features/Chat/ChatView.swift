@@ -133,14 +133,12 @@ struct ChatView: View {
     .navigationTitle("Oak")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
-      // The brand tile (§4.1) leading, so the Chat root reads as Oak the instant it
-      // opens. Tile-only: iOS 26 crops a wide toolbar item to a circular glass
-      // chip, so the full "Oak" wordmark lives in the empty-state hero instead.
-      // Only on the root (guest single thread); a pushed signed-in thread keeps the
-      // system back button leading.
+      // Signal wordmark (`Oak.` + red period) leading, so the Chat root reads as
+      // Oak the instant it opens. Only on the root (guest single thread); a
+      // pushed signed-in thread keeps the system back button leading.
       if showsNewConversationButton {
         ToolbarItem(placement: .topBarLeading) {
-          OakWordmarkLockup(showsWordmark: false)
+          OakWordmarkLockup()
         }
       }
       // The scope control (GS-C): the header's visible counterpart to the `scope`
@@ -233,19 +231,15 @@ struct ChatView: View {
         }
       }
     } label: {
-      HStack(spacing: 3) {
-        // The system menu can't be customized to mark the selected row, so a
-        // small record-light dot on the chip itself signals "scope changed from
-        // the default" — tasteful in place of a checkmark we can't reach.
-        if model.displayFormat != .nationalDex {
-          Circle()
-            .fill(Theme.accent)
-            .frame(width: 5, height: 5)
-            .shadow(color: Theme.accent.opacity(0.5), radius: 3)
-            .accessibilityHidden(true)
-        }
+      HStack(spacing: 6) {
+        // Always-on 6pt scope LED — Signal's header mark, not a "changed from
+        // default" indicator.
+        Circle()
+          .fill(Theme.accent)
+          .frame(width: 6, height: 6)
+          .accessibilityHidden(true)
         Text(model.displayFormat.shortLabel)
-          .font(Theme.body(.footnote, weight: .semibold))
+          .font(Theme.body(.caption, weight: .medium))
         Image(systemName: "chevron.down")
           .font(.system(size: 9, weight: .bold))
       }

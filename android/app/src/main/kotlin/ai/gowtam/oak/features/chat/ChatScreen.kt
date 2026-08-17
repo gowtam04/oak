@@ -10,6 +10,7 @@ import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakTopBar
+import ai.gowtam.oak.ui.OakWordmark
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberHaptics
 import ai.gowtam.oak.ui.rememberReduceMotion
@@ -211,7 +212,7 @@ fun ChatScreen(
         modifier = modifier,
         topBar = {
             OakTopBar(
-                title = { Text("Oak", modifier = Modifier.semantics { heading() }) },
+                title = { OakWordmark() },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -335,13 +336,20 @@ private fun ScopeChip(format: Format, enabled: Boolean, onClick: () -> Unit) {
             .border(1.dp, oak.border, chipShape)
             .then(if (enabled) Modifier.clickableChip(onClick) else Modifier)
             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Signal scope LED — always on, not only when scope ≠ national-dex.
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(oak.accent),
+        )
         Text(
             text = format.shortLabel,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = if (enabled) oak.textStrong else oak.textMuted,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            color = oak.textMuted,
         )
         Icon(
             Icons.Filled.KeyboardArrowDown,

@@ -63,22 +63,25 @@ describe("ChatThread — in-flight streaming bubble", () => {
 });
 
 describe("ChatThread — empty-state blank specimen plate", () => {
-  it("renders a blank plate with STANDBY + prompt (not a logo hero)", () => {
+  it("renders a Signal empty hero (not STANDBY, not a logo)", () => {
     render(<ChatThread {...props({ turns: [], status: "idle" })} />);
     expect(screen.getByTestId("blank-plate")).toBeInTheDocument();
-    expect(screen.getByText("STANDBY")).toBeInTheDocument();
+    expect(screen.queryByText("STANDBY")).toBeNull();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "What are we looking up?",
+      "What do you want to know?",
     );
-    // No centered wordmark hero.
+    expect(
+      screen.getByText(
+        "Mechanics, locations, teams, damage. Oak will show its work.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Oak")).not.toBeInTheDocument();
   });
 
-  it("renders exactly 6 filed starters from the prompt pool with categories", () => {
+  it("renders exactly 4 starter rows from the prompt pool with categories", () => {
     render(<ChatThread {...props({ turns: [], status: "idle" })} />);
     const chips = screen.getAllByTestId("chat-empty-example");
-    // After mount the effect swaps the deterministic first-6 for a random 6.
-    expect(chips).toHaveLength(6);
+    expect(chips).toHaveLength(4);
     const categories = new Set(["Battle", "Dex", "Rules", "Meta"]);
     for (const chip of chips) {
       const prompt = chip.getAttribute("data-prompt");
@@ -87,13 +90,11 @@ describe("ChatThread — empty-state blank specimen plate", () => {
       expect(categories.has(chip.getAttribute("data-category") ?? "")).toBe(
         true,
       );
-      // Category label + prompt text both present (not equal bare chips).
       expect(chip.querySelector(".starter__cat")).toBeTruthy();
       expect(chip.querySelector(".starter__text")?.textContent).toBe(prompt);
     }
-    // No duplicates within the shown set (sampled without replacement).
     const shown = chips.map((c) => c.getAttribute("data-prompt"));
-    expect(new Set(shown).size).toBe(6);
+    expect(new Set(shown).size).toBe(4);
   });
 
   it("shows no empty plate once the conversation has turns", () => {
@@ -112,7 +113,7 @@ describe("ChatThread — empty-state blank specimen plate", () => {
     expect(screen.queryByTestId("chat-empty-scope-hint")).toBeNull();
   });
 
-  it("renders the scope stamp when scopeChipSlot is provided", () => {
+  it("does not clone the scope chip onto the empty plate", () => {
     render(
       <ChatThread
         {...props({
@@ -122,31 +123,25 @@ describe("ChatThread — empty-state blank specimen plate", () => {
         })}
       />,
     );
-    const hint = screen.getByTestId("chat-empty-scope-hint");
-    expect(hint).toBeInTheDocument();
-    expect(hint).not.toHaveTextContent("Answers default to");
-    expect(within(hint).getByTestId("scope-chip-slot")).toBeInTheDocument();
+    expect(screen.queryByTestId("chat-empty-scope-hint")).toBeNull();
+    expect(screen.queryByTestId("scope-chip-slot")).toBeNull();
   });
 });
 
 describe("ChatThread — empty-state composer promotion (screen 01)", () => {
-  it("renders the composer + scope chip slots inside the plate when provided (desktop)", () => {
+  it("renders the composer slot inside the empty hero when provided (desktop)", () => {
     render(
       <ChatThread
         {...props({
           turns: [],
           status: "idle",
           composerSlot: <div data-testid="hero-composer-slot" />,
-          scopeChipSlot: <span data-testid="hero-scope-slot" />,
         })}
       />,
     );
     const empty = screen.getByTestId("chat-empty");
-    // The hero variant class drives the wider, composer-holding composition.
     expect(empty.className).toContain("chat-empty--hero");
-    // Both slots render inside the blank plate.
     expect(within(empty).getByTestId("hero-composer-slot")).toBeInTheDocument();
-    expect(within(empty).getByTestId("hero-scope-slot")).toBeInTheDocument();
     expect(within(empty).getByTestId("blank-plate")).toBeInTheDocument();
   });
 

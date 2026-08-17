@@ -46,6 +46,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import ai.gowtam.oak.ui.OakTopBar
+import ai.gowtam.oak.ui.OakWordmark
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,8 +57,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -126,18 +125,26 @@ private fun TeamsSignInPrompt(services: ServiceContainer, appState: AppState, mo
     var showSignIn by remember { mutableStateOf(false) }
     val oak = LocalOakColors.current
 
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(OakSpacing.md)) {
-            Icon(Icons.Filled.Groups, contentDescription = null, tint = oak.accent, modifier = Modifier.size(64.dp))
-            Text("Sign in to build teams", style = MaterialTheme.typography.titleLarge)
-            Text(
-                text = "Saved teams, the team builder, and Showdown import/export unlock with a free account.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = oak.textMuted,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = OakSpacing.xl),
-            )
-            OakButton(onClick = { showSignIn = true }) { Text("Sign in") }
+    Scaffold(
+        modifier = modifier,
+        topBar = { OakTopBar(title = { OakWordmark() }) },
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(OakSpacing.md)) {
+                Icon(Icons.Filled.Groups, contentDescription = null, tint = oak.accent, modifier = Modifier.size(64.dp))
+                Text("Sign in to build teams", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = "Saved teams, the team builder, and Showdown import/export unlock with a free account.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = oak.textMuted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = OakSpacing.xl),
+                )
+                OakButton(onClick = { showSignIn = true }) { Text("Sign in") }
+            }
         }
     }
 
@@ -167,7 +174,7 @@ private fun TeamsListScreen(
         modifier = modifier,
         topBar = {
             OakTopBar(
-                title = { Text("Teams", modifier = Modifier.semantics { heading() }) },
+                title = { OakWordmark() },
                 navigationIcon = {
                     Box {
                         IconButton(onClick = { showFilterMenu = true }) { Icon(Icons.Filled.FilterList, contentDescription = "Filter") }

@@ -18,6 +18,7 @@
 
 import Link from "next/link";
 
+import OakWordmark from "@/components/brand/OakWordmark";
 import ReferenceNav from "@/components/reference/ReferenceNav";
 
 export default function ReferenceHeader() {
@@ -25,7 +26,7 @@ export default function ReferenceHeader() {
     <header className="ref-header" data-testid="reference-header">
       <div className="ref-header__inner">
         <Link href="/" className="ref-header__wordmark" aria-label="Oak — home">
-          Oak
+          <OakWordmark />
         </Link>
         <ReferenceNav />
         <Link href="/" className="ref-header__chat-link">

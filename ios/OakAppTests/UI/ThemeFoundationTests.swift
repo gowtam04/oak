@@ -103,6 +103,8 @@ struct ThemeFoundationTests {
     _ = OakSpinner(size: 32)
     _ = OakBrandMark()
     _ = OakBrandMark(size: 64)
+    _ = OakWordmarkLockup()
+    _ = OakWordmarkLockup(showsWordmark: false)
     _ = SkeletonBlock()
     _ = SkeletonBlock(width: 120, height: 14)
     _ = SkeletonListRow()

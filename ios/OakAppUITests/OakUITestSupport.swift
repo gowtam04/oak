@@ -77,7 +77,7 @@ enum OakUITest {
   /// Chat surface (`ChatView` / `ComposerView`).
   enum Chat {
     static let navigationTitle = "Oak"
-    static let composerPlaceholder = "Ask Oak a Pokémon question…"
+    static let composerPlaceholder = "Ask Oak"
     static let sendButton = "Send"
     static let newConversation = "New conversation"
     /// Blank specimen plate prompt (soul.md empty desk — not the old "Ask Oak" hero).

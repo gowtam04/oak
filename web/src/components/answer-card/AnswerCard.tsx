@@ -14,6 +14,7 @@ import ReceiptsFooter from "@/components/answer-card/ReceiptsFooter";
 import ProposedTeamCard from "@/components/teams/ProposedTeamCard";
 import SavedTeamCard from "@/components/teams/SavedTeamCard";
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
+import TypeBadge from "@/components/TypeBadge";
 import { plateFromSubjects } from "@/lib/plate-types";
 
 /**
@@ -82,22 +83,27 @@ export default function AnswerCard({
   const { openStructured } = useArtifactViewer();
 
   const plate = plateFromSubjects(subjects);
-  const plateClass = ["answer-card", plate.className].filter(Boolean).join(" ");
+  const plateClass = ["answer-card"].filter(Boolean).join(" ");
+  const subjectTypes = [
+    ...new Set((subjects ?? []).flatMap((s) => s.types)),
+  ];
 
   return (
     <div
       className={plateClass}
-      style={plate.style}
       data-testid="answer-card"
       data-status={status}
       data-plate={plate.kind}
     >
-      <Masthead status={status} generationBasis={generation_basis} />
+      {subjectTypes.length > 0 && (
+        <div className="answer-card__type-row" data-testid="answer-card-types">
+          {subjectTypes.map((type) => (
+            <TypeBadge key={type} type={type} />
+          ))}
+        </div>
+      )}
 
-      <CaveatStrip
-        uncertaintyFlags={uncertainty_flags ?? []}
-        generationBasis={generation_basis}
-      />
+      <Masthead status={status} generationBasis={generation_basis} />
 
       <div
         className="answer-card__evidence-rail"
@@ -173,6 +179,11 @@ export default function AnswerCard({
       )}
 
       <InferenceCallout inferences={inferences} />
+
+      <CaveatStrip
+        uncertaintyFlags={uncertainty_flags ?? []}
+        generationBasis={generation_basis}
+      />
 
       {suggestions && suggestions.length > 0 && (
         <SuggestionChips

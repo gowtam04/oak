@@ -128,7 +128,6 @@ export default function ChatThread({
   onFollowUp,
   imagePreviews,
   composerSlot,
-  scopeChipSlot,
 }: ChatThreadProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
 
@@ -140,10 +139,10 @@ export default function ChatThread({
   // hydration-mismatch); the post-mount effect then swaps in the random set.
   // Each starter carries category + optional type-dot (specimen desk, soul.md).
   const [examples, setExamples] = useState<StarterPrompt[]>(() =>
-    STARTER_ENTRIES.slice(0, 6),
+    STARTER_ENTRIES.slice(0, 4),
   );
   useEffect(() => {
-    if (showEmptyState) setExamples(pickRandomStarters(6));
+    if (showEmptyState) setExamples(pickRandomStarters(4));
   }, [showEmptyState]);
 
   // Auto-scroll to the newest content (new turn / streamed token) — important on
@@ -244,25 +243,10 @@ export default function ChatThread({
           className={"chat-empty" + (composerSlot ? " chat-empty--hero" : "")}
           data-testid="chat-empty"
         >
-          {/* Standby readout — raised panel, LED scope stamp, starters
-              (soul.md). No centered logo / equal chips cloud. */}
           <div className="blank-plate" data-testid="blank-plate">
-            <div className="blank-plate__top">
-              <span className="ilabel blank-plate__ilabel">STANDBY</span>
-              {scopeChipSlot && (
-                <div
-                  className="blank-plate__scope"
-                  data-testid="chat-empty-scope-hint"
-                >
-                  {scopeChipSlot}
-                </div>
-              )}
-            </div>
-
-            <h1 className="blank-plate__prompt">What are we looking up?</h1>
+            <h1 className="blank-plate__prompt">What do you want to know?</h1>
             <p className="blank-plate__sub">
-              Every answer carries its receipts — reasoning, sources, and the
-              generation it is based on.
+              Mechanics, locations, teams, damage. Oak will show its work.
             </p>
 
             {/* Composer promoted into the plate on desktop empty state; on
@@ -273,7 +257,6 @@ export default function ChatThread({
             )}
 
             <div className="starters" data-testid="filed-starters">
-              <span className="ilabel starters__label">Starters</span>
               {examples.map((entry) => (
                 <button
                   key={entry.text}
@@ -284,16 +267,6 @@ export default function ChatThread({
                   data-prompt={entry.text}
                   data-category={entry.category}
                 >
-                  <span
-                    className="starter__dot"
-                    style={
-                      entry.type
-                        ? { background: `var(--type-${entry.type})` }
-                        : undefined
-                    }
-                    data-type={entry.type}
-                    aria-hidden="true"
-                  />
                   <span className="starter__cat">{entry.category}</span>
                   <span className="starter__text">{entry.text}</span>
                 </button>

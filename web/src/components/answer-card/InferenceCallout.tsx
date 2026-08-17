@@ -34,28 +34,30 @@ export default function InferenceCallout({
 
   return (
     <div className="inference-callout" data-testid="inference-callout">
-      <span className="inference-callout__title ilabel">
-        Oak&apos;s deductions
-      </span>
       {inferences.map((inference, i) => (
         <div
           key={i}
           className={`inference-callout__item inference-callout__item--${inference.confidence}`}
           data-testid={`inference-item-${i}`}
         >
+          <p className="inference-callout__line">
+            <em className="inference-callout__word">Inferred</em>
+            {inference.note
+              ? ` from ${inference.note.replace(/^from\s+/i, "")}.`
+              : ` from ${inference.claim}`}
+          </p>
           <span
             className={`inference-callout__confidence inference-callout__confidence--${inference.confidence}`}
             data-testid={`inference-confidence-${i}`}
           >
             {confidenceLabel(inference.confidence)}
-          </span>{" "}
+          </span>
           <span className="inference-callout__claim">{inference.claim}</span>
           {inference.note && (
             <span
               className="inference-callout__note"
               data-testid={`inference-note-${i}`}
             >
-              {" — "}
               {inference.note}
             </span>
           )}

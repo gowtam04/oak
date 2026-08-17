@@ -20,8 +20,7 @@ export interface ReceiptsFooterProps {
 }
 
 /**
- * ReceiptsFooter — full-width specimen-plate foot tab that unifies reasoning +
- * citations under one expandable: `RECEIPTS · N SOURCE(S)` (soul.md).
+ * ReceiptsFooter — Why + Sources disclosure (Signal). Same data, new labels.
  *
  * Expands inline to reasoning markdown and the citation list. Keeps the same
  * citation entity-link / safe-url behavior as SourceList (B-4, FE-01).
@@ -43,7 +42,7 @@ export default function ReceiptsFooter({
     "idle",
   );
   const n = citations.length;
-  const label = `RECEIPTS · ${n} SOURCE${n === 1 ? "" : "S"}`;
+  const label = n > 0 ? `Why · Sources (${n})` : "Why";
 
   function handleToggle(e: React.SyntheticEvent<HTMLDetailsElement>) {
     setExpanded((e.target as HTMLDetailsElement).open);
@@ -118,7 +117,7 @@ export default function ReceiptsFooter({
             className="receipts__block reasoning-block"
             data-testid="reasoning-block"
           >
-            <span className="ilabel receipts__block-label">Reasoning</span>
+            <span className="receipts__block-label">Why</span>
             <div
               className="reasoning-block__content"
               data-testid="reasoning-block-content"
