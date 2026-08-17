@@ -87,18 +87,19 @@ export async function insert(args: {
   const snapshotJson = JSON.stringify(args.snapshot);
 
   await db.transaction(async (tx) => {
-    const countRows = await tx
-      .select({ n: sql<number>`count(*)`.mapWith(Number) })
+    // Lock this conversation's existing pins so two concurrent inserts at the
+    // cap cannot both commit (PIN-BR-3). Insert first, then count; over-cap
+    // throws and rolls the new row back.
+    await tx
+      .select({ id: conversation_artifact_pin.id })
       .from(conversation_artifact_pin)
       .where(
         and(
           eq(conversation_artifact_pin.account_id, args.accountId),
           eq(conversation_artifact_pin.conversation_id, args.conversationId),
         ),
-      );
-    if ((countRows[0]?.n ?? 0) >= PIN_CAP) {
-      throw codedError("pin_cap");
-    }
+      )
+      .for("update");
 
     await tx.insert(conversation_artifact_pin).values({
       id,
@@ -109,6 +110,19 @@ export async function insert(args: {
       snapshot_json: snapshotJson,
       created_at: Date.now(),
     });
+
+    const countRows = await tx
+      .select({ n: sql<number>`count(*)`.mapWith(Number) })
+      .from(conversation_artifact_pin)
+      .where(
+        and(
+          eq(conversation_artifact_pin.account_id, args.accountId),
+          eq(conversation_artifact_pin.conversation_id, args.conversationId),
+        ),
+      );
+    if ((countRows[0]?.n ?? 0) > PIN_CAP) {
+      throw codedError("pin_cap");
+    }
   });
 
   return { id };

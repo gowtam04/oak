@@ -17,6 +17,7 @@ import { notFound } from "next/navigation";
 import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
 import { isFormat, type Format } from "@/data/formats";
+import { scopeLabel } from "@/lib/scope/scope-label";
 import { buildItemDescription, buildItemTitle } from "@/data/reference-metadata";
 
 export const runtime = "nodejs";
@@ -69,6 +70,8 @@ export default async function ItemDetailPage({
   const data = await loadItemPage(slug, preferred);
   if (!data) notFound();
 
+  const formatSelected =
+    preferred != null && data.sourceFormat === preferred;
   const effect = data.effectFull || data.effectShort;
 
   return (
@@ -86,6 +89,13 @@ export default async function ItemDetailPage({
           <h1 className="ref-detail-hero__title">{data.displayName}</h1>
         </div>
       </div>
+
+      {formatSelected && (
+        <p className="ref-intro ref-detail-intro">
+          Showing {scopeLabel(data.sourceFormat)} data. Select another scope
+          below to compare generations.
+        </p>
+      )}
 
       {effect && (
         <section className="ref-card ref-detail-section">
@@ -109,7 +119,9 @@ export default async function ItemDetailPage({
           <ul className="ref-formats">
             {data.requiredBy.map((r) => (
               <li key={r.slug} className="ref-formats__chip">
-                <a href={`/pokedex/${r.slug}`}>{r.displayName}</a>
+                <a href={`/pokedex/${r.slug}?format=${data.sourceFormat}`}>
+                  {r.displayName}
+                </a>
               </li>
             ))}
           </ul>

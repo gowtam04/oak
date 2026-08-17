@@ -19,6 +19,7 @@ import type { RefRosterGroup } from "@/components/reference/RefRosterList";
 import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
 import { isFormat, type Format } from "@/data/formats";
+import { scopeLabel } from "@/lib/scope/scope-label";
 import {
   buildAbilityDescription,
   buildAbilityTitle,
@@ -33,7 +34,10 @@ function holderGroups(data: AbilityPageData): RefRosterGroup[] {
   if (data.learnedBy.length === 0) return [];
   const entries = [...data.learnedBy]
     .sort((a, b) => a.displayName.localeCompare(b.displayName))
-    .map((h) => ({ href: `/pokedex/${h.slug}`, primary: h.displayName }));
+    .map((h) => ({
+      href: `/pokedex/${h.slug}?format=${data.sourceFormat}`,
+      primary: h.displayName,
+    }));
   return [{ heading: `Pokémon with ${data.displayName}`, entries }];
 }
 
@@ -76,6 +80,8 @@ export default async function AbilityDetailPage({
   const data = await loadAbilityPage(slug, preferred);
   if (!data) notFound();
 
+  const formatSelected =
+    preferred != null && data.sourceFormat === preferred;
   const effect = data.effectFull || data.effectShort;
 
   return (
@@ -93,6 +99,13 @@ export default async function AbilityDetailPage({
           <h1 className="ref-detail-hero__title">{data.displayName}</h1>
         </div>
       </div>
+
+      {formatSelected && (
+        <p className="ref-intro ref-detail-intro">
+          Showing {scopeLabel(data.sourceFormat)} data. Select another scope
+          below to compare generations.
+        </p>
+      )}
 
       {effect && (
         <section className="ref-card ref-detail-section">
