@@ -281,6 +281,8 @@ class ChatViewModel(
                 publish()
                 return
             }
+            // P8 owns calc overlay dispatch. Fall through so `/calc` still sends.
+            is SlashCommand.Calc -> Unit
             SlashCommand.Message -> Unit
         }
 

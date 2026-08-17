@@ -290,6 +290,8 @@ final class ChatViewModel {
         handleSlash(target, argument: SlashCommands.argument(text))
         composerText = ""
         return
+      case .calc:
+        return
       case .message:
         break
       }
