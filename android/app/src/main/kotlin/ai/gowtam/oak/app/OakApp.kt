@@ -54,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 private enum class OakTab(val label: String) {
@@ -113,7 +114,7 @@ fun OakApp(
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = oak.accent,
                                 selectedTextColor = oak.accent,
-                                indicatorColor = oak.accentSoft,
+                                indicatorColor = Color.Transparent,
                                 unselectedIconColor = oak.textMuted,
                                 unselectedTextColor = oak.textMuted,
                             ),

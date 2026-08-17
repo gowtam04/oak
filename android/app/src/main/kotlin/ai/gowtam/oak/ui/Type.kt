@@ -9,100 +9,99 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 /**
- * Oak's brand typefaces (mirrors the web design system's Space Grotesk / Inter /
- * JetBrains Mono trio in `web/src/app/globals.css`). The static TTFs live under
- * `res/font/` (OFL, license files bundled in `assets/fonts-licenses/`).
+ * Oak's brand typefaces (Signal: Figtree + IBM Plex Mono; `docs/design/signal.md`
+ * §3.2). The static TTFs live under `res/font/` (OFL, license files bundled in
+ * `assets/fonts-licenses/`).
  *
- * "Instrument chrome, precise data": Space Grotesk (geometric, engraved) carries
- * display voice — the wordmark, screen titles, markdown headings, entity names; Inter
- * carries all prose/rows/buttons/chips; JetBrains Mono is the *instrument* face —
- * engraved caps labels, dex numbers, stat/damage numerals, code, the tool trail.
+ * One sans, one mono. Figtree carries display, lead, prose, rows, buttons, and
+ * chrome labels. IBM Plex Mono appears only in fact tables, damage breakdowns,
+ * and source keys — applied per call-site via [PlexMonoFamily] (exported as
+ * [JetBrainsMonoFamily] this phase so existing sites compile).
  *
  * Every role still sizes in `sp`, so the whole ramp scales with the user's system
  * font-size setting.
  */
 
-/** Display face — the wordmark, screen/section titles, markdown headings, entity names. */
-val SpaceGroteskFamily = FontFamily(
-    Font(R.font.space_grotesk_medium, FontWeight.Medium),
-    Font(R.font.space_grotesk_semibold, FontWeight.SemiBold),
-    Font(R.font.space_grotesk_bold, FontWeight.Bold),
+/** Signal sans — wordmark, titles, lead, body, chips, chrome labels. */
+val FigtreeFamily = FontFamily(
+    Font(R.font.figtree_regular, FontWeight.Normal),
+    Font(R.font.figtree_medium, FontWeight.Medium),
+    Font(R.font.figtree_semibold, FontWeight.SemiBold),
 )
 
-/** Body face — prose, rows, buttons, chips, the answer lead. */
-val InterFamily = FontFamily(
-    Font(R.font.inter_regular, FontWeight.Normal),
-    Font(R.font.inter_medium, FontWeight.Medium),
-    Font(R.font.inter_semibold, FontWeight.SemiBold),
-    Font(R.font.inter_bold, FontWeight.Bold),
+/** Signal mono — fact tables, damage, source keys. */
+val PlexMonoFamily = FontFamily(
+    Font(R.font.ibm_plex_mono_regular, FontWeight.Normal),
+    Font(R.font.ibm_plex_mono_medium, FontWeight.Medium),
 )
 
-/** Instrument face — engraved labels, dex/stat/damage numerals, code, tool trail. */
-val JetBrainsMonoFamily = FontFamily(
-    Font(R.font.jetbrains_mono_medium, FontWeight.Medium),
-    Font(R.font.jetbrains_mono_semibold, FontWeight.SemiBold),
-)
+/** Alias — Figtree this phase so existing display call-sites compile. */
+val SpaceGroteskFamily = FigtreeFamily
+
+/** Alias — Figtree this phase so existing body call-sites compile. */
+val InterFamily = FigtreeFamily
+
+/** Alias — Plex this phase so existing table/damage call-sites compile. */
+val JetBrainsMonoFamily = PlexMonoFamily
 
 /**
  * Oak's type ramp, keyed to the web `--text-*` scale (11 / 12 / 13 / 14 / 18 / 22 / 28)
- * and the role table in the theme-translation spec (§3.1). Roles fall into three voices:
+ * and Signal §3.2. Roles fall into two voices:
  *
- * - **Space Grotesk (display):** `displaySmall` (wordmark/hero), `headlineSmall` /
- *   `titleLarge` (screen + section titles), and `headlineMedium` (the *answer lead* —
- *   the Instrument redesign makes the lead a display moment, not body prose).
- *   Rendered at SemiBold; display roles ≥18sp carry a tightened `-0.02em` tracking.
- * - **Inter (body):** the rest of the body/label roles carry prose (400),
- *   rows/secondary (600), and controls.
- * - **JetBrains Mono (instrument):** `labelSmall` is the engraved instrument label —
- *   11sp SemiBold, tracked; numerals are applied per call-site via [JetBrainsMonoFamily].
+ * - **Figtree (sans):** `displaySmall` (wordmark/hero), `headlineSmall` /
+ *   `titleLarge` (screen + section titles), `headlineMedium` (answer lead),
+ *   and the rest of the body/label roles (prose, rows, controls). Display
+ *   roles ≥18sp keep a tightened `-0.02em` tracking.
+ * - **labelSmall** is Figtree Medium — Signal reserves mono for fact tables
+ *   only; numerals still opt in per call-site via [JetBrainsMonoFamily].
  */
 private val displayTracking = (-0.02).em
 
 val OakTypography: Typography = Typography().let { base ->
     base.copy(
-        // Space Grotesk — display voice
+        // Figtree — display voice
         displaySmall = base.displaySmall.copy(
-            fontFamily = SpaceGroteskFamily, fontWeight = FontWeight.SemiBold, fontSize = 28.sp,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 28.sp,
             letterSpacing = displayTracking,
         ),
         headlineSmall = base.headlineSmall.copy(
-            fontFamily = SpaceGroteskFamily, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
             letterSpacing = displayTracking,
         ),
         titleLarge = base.titleLarge.copy(
-            fontFamily = SpaceGroteskFamily, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
             letterSpacing = displayTracking,
         ),
-        // Space Grotesk — the answer lead is now a display moment
+        // Figtree — the answer lead
         headlineMedium = base.headlineMedium.copy(
-            fontFamily = SpaceGroteskFamily, fontWeight = FontWeight.SemiBold, fontSize = 22.sp,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 22.sp,
             letterSpacing = displayTracking,
         ),
-        // Inter — body voice
+        // Figtree — body voice
         titleMedium = base.titleMedium.copy(
-            fontFamily = InterFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
         ),
         titleSmall = base.titleSmall.copy(
-            fontFamily = InterFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
         ),
         bodyLarge = base.bodyLarge.copy(
-            fontFamily = InterFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp,
         ),
         bodyMedium = base.bodyMedium.copy(
-            fontFamily = InterFamily, fontWeight = FontWeight.Normal, fontSize = 14.sp,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.Normal, fontSize = 14.sp,
         ),
         bodySmall = base.bodySmall.copy(
-            fontFamily = InterFamily, fontWeight = FontWeight.Normal, fontSize = 13.sp,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.Normal, fontSize = 13.sp,
         ),
         labelLarge = base.labelLarge.copy(
-            fontFamily = InterFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
         ),
         labelMedium = base.labelMedium.copy(
-            fontFamily = InterFamily, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
         ),
-        // JetBrains Mono — the engraved instrument label
+        // Figtree Medium — chrome/meta labels; mono is call-site only
         labelSmall = base.labelSmall.copy(
-            fontFamily = JetBrainsMonoFamily, fontWeight = FontWeight.SemiBold,
+            fontFamily = FigtreeFamily, fontWeight = FontWeight.Medium,
             fontSize = 11.sp, letterSpacing = 0.88.sp,
         ),
     )

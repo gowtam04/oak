@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatThreadProps } from "@/components/types";
-import type { ToolActivityEvent } from "@/lib/sse/sse-types";
 import AnswerCard from "@/components/answer-card/AnswerCard";
 import Markdown from "@/components/Markdown";
 import { plateHintFromToolLabels } from "@/lib/plate-types";
@@ -11,18 +10,6 @@ import {
   pickRandomStarters,
   type StarterPrompt,
 } from "@/lib/example-prompts";
-
-/**
- * The tool_activity label carries a leading status emoji (🔍/📊/…) as its own
- * decoration. An instrument-ticker row renders its own spinner/tick glyph instead,
- * so we strip the leading pictographic run (emoji + optional variation selector /
- * ZWJ sequence) and let the mono tool token carry the "which tool" signal. Falls
- * back to the raw label if stripping would empty it.
- */
-const EMOJI_PREFIX = /^[\p{Extended_Pictographic}️‍]+\s*/u;
-function noteDescription(label: string): string {
-  return label.replace(EMOJI_PREFIX, "").trimStart() || label;
-}
 
 /**
  * Tool -> friendly instrument word (TestFlight feedback AH1b0N09K — raw wire
@@ -68,33 +55,6 @@ export function instrumentToken(tool: string): string {
  * the loop has moved on. Presentation only — data comes straight from the
  * `tool_activity` SSE payload the client already accumulates.
  */
-function FieldNote({
-  activity,
-  state,
-}: {
-  activity: ToolActivityEvent;
-  state: "active" | "done";
-}) {
-  return (
-    <li
-      className={`chat-thread__note chat-thread__note--${state}`}
-      data-testid="field-note"
-    >
-      <span
-        className="chat-thread__note-glyph"
-        data-state={state}
-        aria-hidden="true"
-      />
-      <span className="ilabel chat-thread__note-tool">
-        {instrumentToken(activity.tool)}
-      </span>
-      <span className="chat-thread__note-desc">
-        {noteDescription(activity.label)}
-      </span>
-    </li>
-  );
-}
-
 /**
  * ChatThread — renders the committed conversation (user + assistant turns) in
  * order, plus the streaming "field notes" experience while `status ===
@@ -128,7 +88,6 @@ export default function ChatThread({
   onFollowUp,
   imagePreviews,
   composerSlot,
-  scopeChipSlot,
 }: ChatThreadProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
 
@@ -140,10 +99,10 @@ export default function ChatThread({
   // hydration-mismatch); the post-mount effect then swaps in the random set.
   // Each starter carries category + optional type-dot (specimen desk, soul.md).
   const [examples, setExamples] = useState<StarterPrompt[]>(() =>
-    STARTER_ENTRIES.slice(0, 6),
+    STARTER_ENTRIES.slice(0, 4),
   );
   useEffect(() => {
-    if (showEmptyState) setExamples(pickRandomStarters(6));
+    if (showEmptyState) setExamples(pickRandomStarters(4));
   }, [showEmptyState]);
 
   // Auto-scroll to the newest content (new turn / streamed token) — important on
@@ -195,44 +154,11 @@ export default function ChatThread({
   // Also restart when a reconnect begins/ends so the counter measures the
   // current attempt, not the cumulative wall-clock across a suspended gap (which
   // would read as "stuck").
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  useEffect(() => {
-    if (status !== "streaming") {
-      setElapsedSeconds(0);
-      return;
-    }
-    setElapsedSeconds(0);
-    const startedAt = Date.now();
-    const id = setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [status, reconnecting]);
-
-  // Once prose streams, the trail collapses to a summary chip; the user can
-  // re-expand it to re-show every field note. Reset the toggle whenever the turn
-  // ends so the next turn starts collapsed.
-  const [trailExpanded, setTrailExpanded] = useState(false);
-  useEffect(() => {
-    if (status !== "streaming") setTrailExpanded(false);
-  }, [status]);
-
-  // The instrument ticker: while working (no prose yet) it's shown in full with
-  // the latest row live-spinning; once prose streams it collapses. Before the
-  // first tool lands there are no activities — a lone "thinking" row stands in.
   const hasActivity = activity.length > 0;
-  const lastIndex = activity.length - 1;
-  const collapsed = Boolean(streamingMarkdown);
-
-  // Early type-light for the skeleton (Phase 2): best-effort type hint from
-  // tool-activity labels. Conservative — prefer the neutral ink-plate inset over
-  // guessing the wrong type.
   const skeletonPlate = useMemo(
     () => plateHintFromToolLabels(activity.map((a) => a.label)),
     [activity],
   );
-
-  const lookupCount = activity.length;
   const thinkingLabel = reconnecting
     ? "Reconnecting…"
     : "Thinking through your question…";
@@ -244,25 +170,10 @@ export default function ChatThread({
           className={"chat-empty" + (composerSlot ? " chat-empty--hero" : "")}
           data-testid="chat-empty"
         >
-          {/* Standby readout — raised panel, LED scope stamp, starters
-              (soul.md). No centered logo / equal chips cloud. */}
           <div className="blank-plate" data-testid="blank-plate">
-            <div className="blank-plate__top">
-              <span className="ilabel blank-plate__ilabel">STANDBY</span>
-              {scopeChipSlot && (
-                <div
-                  className="blank-plate__scope"
-                  data-testid="chat-empty-scope-hint"
-                >
-                  {scopeChipSlot}
-                </div>
-              )}
-            </div>
-
-            <h1 className="blank-plate__prompt">What are we looking up?</h1>
+            <h1 className="blank-plate__prompt">What do you want to know?</h1>
             <p className="blank-plate__sub">
-              Every answer carries its receipts — reasoning, sources, and the
-              generation it is based on.
+              Mechanics, locations, teams, damage. Oak will show its work.
             </p>
 
             {/* Composer promoted into the plate on desktop empty state; on
@@ -273,7 +184,6 @@ export default function ChatThread({
             )}
 
             <div className="starters" data-testid="filed-starters">
-              <span className="ilabel starters__label">Starters</span>
               {examples.map((entry) => (
                 <button
                   key={entry.text}
@@ -284,16 +194,6 @@ export default function ChatThread({
                   data-prompt={entry.text}
                   data-category={entry.category}
                 >
-                  <span
-                    className="starter__dot"
-                    style={
-                      entry.type
-                        ? { background: `var(--type-${entry.type})` }
-                        : undefined
-                    }
-                    data-type={entry.type}
-                    aria-hidden="true"
-                  />
                   <span className="starter__cat">{entry.category}</span>
                   <span className="starter__text">{entry.text}</span>
                 </button>
@@ -347,96 +247,18 @@ export default function ChatThread({
 
       {status === "streaming" && (
         <div className="chat-thread__progress" data-testid="progress">
-          {collapsed ? (
-            // Prose is streaming — the trail folds into one summary chip pinned
-            // above the answer, re-expandable to the full field-notes trail.
-            hasActivity && (
-              <div className="chat-thread__trail chat-thread__trail--collapsed">
-                <button
-                  type="button"
-                  className="chat-thread__summary"
-                  data-testid="trail-summary"
-                  aria-expanded={trailExpanded}
-                  onClick={() => setTrailExpanded((v) => !v)}
-                >
-                  <span
-                    className="chat-thread__note-glyph"
-                    data-state="done"
-                    aria-hidden="true"
-                  />
-                  <span className="ilabel chat-thread__summary-count">
-                    {lookupCount} {lookupCount === 1 ? "lookup" : "lookups"}
-                  </span>
-                  <span className="chat-thread__summary-sep" aria-hidden="true">
-                    ·
-                  </span>
-                  <span className="mono-num chat-thread__summary-time">
-                    {elapsedSeconds}s
-                  </span>
-                  <span
-                    className="chat-thread__summary-caret"
-                    data-open={trailExpanded}
-                    aria-hidden="true"
-                  />
-                </button>
-                {trailExpanded && (
-                  <ol
-                    className="chat-thread__notes chat-thread__notes--batch"
-                    data-testid="trail-full"
-                  >
-                    {activity.map((a, i) => (
-                      <FieldNote key={i} activity={a} state="done" />
-                    ))}
-                  </ol>
-                )}
-              </div>
-            )
-          ) : (
-            // Still working — the live trail. Latest chip spins; the rest tick.
-            <div className="chat-thread__trail">
-              {hasActivity ? (
-                <ol
-                  className="chat-thread__notes"
-                  data-testid="trail-full"
-                  aria-live="polite"
-                >
-                  {activity.map((a, i) => (
-                    <FieldNote
-                      key={i}
-                      activity={a}
-                      state={
-                        !reconnecting && i === lastIndex ? "active" : "done"
-                      }
-                    />
-                  ))}
-                </ol>
-              ) : (
-                <p
-                  className="chat-thread__note chat-thread__note--active chat-thread__note--thinking"
-                  data-testid="progress-thinking"
-                  aria-live="polite"
-                >
-                  <span
-                    className="chat-thread__note-glyph"
-                    data-state="active"
-                    aria-hidden="true"
-                  />
-                  <span className="chat-thread__note-desc">
-                    {thinkingLabel}
-                  </span>
-                </p>
-              )}
-              {elapsedSeconds >= 3 && (
-                <span
-                  className="chat-thread__elapsed mono-num"
-                  data-testid="progress-elapsed"
-                  aria-hidden="true"
-                >
-                  {elapsedSeconds}s
-                </span>
-              )}
-            </div>
-          )}
+          <div className="sig-live" aria-live="polite">
+            <i className="sig-live__pip" aria-hidden="true" />
+            <span
+              className="sig-live__text"
+              data-testid={hasActivity ? "field-note" : "progress-thinking"}
+            >
+              {hasActivity
+                ? `Looking up ${[...new Set(activity.map((a) => instrumentToken(a.tool)))].join(", ")}`
+                : thinkingLabel}
+            </span>
+          </div>
+          <div className="sig-live__bar" aria-hidden="true" />
         </div>
       )}
 

@@ -24,13 +24,13 @@ import androidx.compose.ui.unit.dp
 /**
  * Oak's brand expression over Android / Material 3.
  *
- * Colors are sourced from the web design system (`web/src/app/globals.css`) and
- * re-expressed natively, mirroring the iOS `Theme` (`ios/OakApp/UI/Theme.swift`).
+ * Colors are sourced from Signal (`docs/design/signal.md`) and re-expressed
+ * natively, mirroring the iOS `Theme` (`ios/OakApp/UI/Theme.swift`).
  * Material's [ColorScheme] carries the surface/text/primary ramp so components get
  * Material contrast + dark-mode behavior for free; the *extended* Oak tokens that
  * Material has no slot for (the accent hover/active variants, azure, the four
- * semantic colors, the muted/faint text steps) ride a companion [OakColors] over
- * [LocalOakColors].
+ * semantic colors, the muted/faint text steps, `--on-red`) ride a companion
+ * [OakColors] over [LocalOakColors].
  *
  * Color is never the sole carrier of meaning — that pairing with text/icon is the
  * calling view's responsibility; the theme only supplies the palette and ramp.
@@ -70,6 +70,8 @@ data class OakColors(
     val accentHover: Color,
     val accentActive: Color,
     val accentSoft: Color,
+    /** Text/icon on a solid red fill (`--on-red`). Dark red is too bright for white. */
+    val onRed: Color,
     val azure: Color,
     val azureSoft: Color,
     val success: Color,
@@ -91,12 +93,13 @@ data class OakColors(
     val scrim: Color,
 )
 
-/** Light-mode extended tokens (`:root` in globals.css). */
+/** Light-mode extended tokens (Signal `--*` ramp). */
 val OakLightColors = OakColors(
     accent = Color(0xFFE3350D),
     accentHover = Color(0xFFC92E0B),
     accentActive = Color(0xFFB02A0A),
-    accentSoft = Color(0xFFFBE9E4),
+    accentSoft = Color(0xFFFDE8E3),
+    onRed = Color(0xFFFFFFFF),
     azure = Color(0xFF2B7DD1),
     azureSoft = Color(0xFFE5F0FA),
     success = Color(0xFF1F9D61),
@@ -107,22 +110,23 @@ val OakLightColors = OakColors(
     dangerSoft = Color(0xFFFAE7E9),
     info = Color(0xFF2B7DD1),
     surfaceRaised = Color(0xFFFFFFFF),
-    surfaceSunken = Color(0xFFE3E6E8),
-    border = Color(0xFFD3D7DA),
-    borderStrong = Color(0xFFB9BEC3),
-    textStrong = Color(0xFF131517),
-    text = Color(0xFF24282B),
-    textMuted = Color(0xFF5F656C),
-    textFaint = Color(0xFF8A9096),
+    surfaceSunken = Color(0xFFEEF0F3),
+    border = Color(0xFFE3E8EF),
+    borderStrong = Color(0xFFD0D6DE),
+    textStrong = Color(0xFF1B2430),
+    text = Color(0xFF2A3340),
+    textMuted = Color(0xFF5B6B7C),
+    textFaint = Color(0xFF8A94A0),
     scrim = Color(0x66131517),
 )
 
-/** Dark-mode extended tokens (`[data-theme="dark"]` in globals.css). */
+/** Dark-mode extended tokens (Signal `--*` ramp). */
 val OakDarkColors = OakColors(
     accent = Color(0xFFFF4A22),
     accentHover = Color(0xFFFF5F3C),
     accentActive = Color(0xFFE8431E),
     accentSoft = Color(0xFF33170F),
+    onRed = Color(0xFF1B1410),
     azure = Color(0xFF55A0E8),
     azureSoft = Color(0xFF142433),
     success = Color(0xFF34C27F),
@@ -132,14 +136,14 @@ val OakDarkColors = OakColors(
     danger = Color(0xFFF04A58),
     dangerSoft = Color(0xFF331417),
     info = Color(0xFF55A0E8),
-    surfaceRaised = Color(0xFF1D2124),
-    surfaceSunken = Color(0xFF0B0D0E),
-    border = Color(0xFF2A2E32),
-    borderStrong = Color(0xFF3A3F44),
-    textStrong = Color(0xFFF2F4F5),
-    text = Color(0xFFDDE1E3),
-    textMuted = Color(0xFF9BA1A7),
-    textFaint = Color(0xFF6E747A),
+    surfaceRaised = Color(0xFF22262C),
+    surfaceSunken = Color(0xFF0E1013),
+    border = Color(0xFF2A3038),
+    borderStrong = Color(0xFF3A434C),
+    textStrong = Color(0xFFF2F4F6),
+    text = Color(0xFFD5DAE0),
+    textMuted = Color(0xFF8B949E),
+    textFaint = Color(0xFF6A737D),
     scrim = Color(0x99000000),
 )
 
@@ -157,8 +161,8 @@ val LocalOakColors = staticCompositionLocalOf { OakLightColors }
 private val OakLightColorScheme: ColorScheme = lightColorScheme(
     primary = Color(0xFFE3350D),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFFBE9E4),
-    onPrimaryContainer = Color(0xFF131517),
+    primaryContainer = Color(0xFFFDE8E3),
+    onPrimaryContainer = Color(0xFF1B2430),
     secondary = Color(0xFF2B7DD1),
     onSecondary = Color(0xFFFFFFFF),
     secondaryContainer = Color(0xFFE5F0FA),
@@ -167,19 +171,19 @@ private val OakLightColorScheme: ColorScheme = lightColorScheme(
     onTertiary = Color(0xFF131517),
     tertiaryContainer = Color(0xFFFBF0DC),
     onTertiaryContainer = Color(0xFF131517),
-    background = Color(0xFFEEF0F1),
-    onBackground = Color(0xFF24282B),
-    surface = Color(0xFFF9FAFA),
-    onSurface = Color(0xFF24282B),
-    surfaceVariant = Color(0xFFE3E6E8),
-    onSurfaceVariant = Color(0xFF5F656C),
+    background = Color(0xFFF6F7F9),
+    onBackground = Color(0xFF2A3340),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF2A3340),
+    surfaceVariant = Color(0xFFEEF0F3),
+    onSurfaceVariant = Color(0xFF5B6B7C),
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF9FAFA),
-    surfaceContainer = Color(0xFFEEF0F1),
-    surfaceContainerHigh = Color(0xFFE3E6E8),
-    surfaceContainerHighest = Color(0xFFD3D7DA),
-    outline = Color(0xFFB9BEC3),
-    outlineVariant = Color(0xFFD3D7DA),
+    surfaceContainerLow = Color(0xFFFFFFFF),
+    surfaceContainer = Color(0xFFF6F7F9),
+    surfaceContainerHigh = Color(0xFFEEF0F3),
+    surfaceContainerHighest = Color(0xFFE3E8EF),
+    outline = Color(0xFFD0D6DE),
+    outlineVariant = Color(0xFFE3E8EF),
     error = Color(0xFFD6303F),
     onError = Color(0xFFFFFFFF),
     errorContainer = Color(0xFFFAE7E9),
@@ -188,7 +192,7 @@ private val OakLightColorScheme: ColorScheme = lightColorScheme(
 
 private val OakDarkColorScheme: ColorScheme = darkColorScheme(
     primary = Color(0xFFFF4A22),
-    onPrimary = Color(0xFF2B0D05),
+    onPrimary = Color(0xFF1B1410),
     primaryContainer = Color(0xFF33170F),
     onPrimaryContainer = Color(0xFFF2F4F5),
     secondary = Color(0xFF55A0E8),
@@ -199,19 +203,19 @@ private val OakDarkColorScheme: ColorScheme = darkColorScheme(
     onTertiary = Color(0xFF2B1D05),
     tertiaryContainer = Color(0xFF33260F),
     onTertiaryContainer = Color(0xFFF2F4F5),
-    background = Color(0xFF101214),
-    onBackground = Color(0xFFDDE1E3),
-    surface = Color(0xFF16191B),
-    onSurface = Color(0xFFDDE1E3),
-    surfaceVariant = Color(0xFF0B0D0E),
-    onSurfaceVariant = Color(0xFF9BA1A7),
-    surfaceContainerLowest = Color(0xFF0B0D0E),
-    surfaceContainerLow = Color(0xFF141719),
-    surfaceContainer = Color(0xFF16191B),
-    surfaceContainerHigh = Color(0xFF1D2124),
-    surfaceContainerHighest = Color(0xFF23272B),
-    outline = Color(0xFF3A3F44),
-    outlineVariant = Color(0xFF2A2E32),
+    background = Color(0xFF121417),
+    onBackground = Color(0xFFD5DAE0),
+    surface = Color(0xFF1A1D22),
+    onSurface = Color(0xFFD5DAE0),
+    surfaceVariant = Color(0xFF0E1013),
+    onSurfaceVariant = Color(0xFF8B949E),
+    surfaceContainerLowest = Color(0xFF0E1013),
+    surfaceContainerLow = Color(0xFF16191E),
+    surfaceContainer = Color(0xFF1A1D22),
+    surfaceContainerHigh = Color(0xFF22262C),
+    surfaceContainerHighest = Color(0xFF2A3038),
+    outline = Color(0xFF3A434C),
+    outlineVariant = Color(0xFF2A3038),
     error = Color(0xFFF04A58),
     onError = Color(0xFF2E0D10),
     errorContainer = Color(0xFF331417),
@@ -222,10 +226,10 @@ private val OakDarkColorScheme: ColorScheme = darkColorScheme(
 // Corner radii + spacing tokens (brand favors generous rounding)
 // ---------------------------------------------------------------------------
 
-/** Corner radii, mirroring `--radius-*` in globals.css. */
+/** Corner radii, mirroring Signal `--radius-*`. */
 object OakRadius {
-    val sm = 5.dp
-    val md = 9.dp
+    val sm = 8.dp
+    val md = 10.dp
     val lg = 12.dp
     val xl = 16.dp
     val pill = 999.dp
@@ -263,32 +267,34 @@ val OakShapes: Shapes = Shapes(
 /**
  * The shared animation vocabulary. [snappy] and [smooth] cover almost everything —
  * [snappy] for direct-manipulation feedback (presses, focus, toggles) and [smooth]
- * for content settling in (bubbles, cards, list reflow). Both are Instrument-precise
- * TWEENS on [fastEasing] (Phase 2 retired the overshoot springs everywhere except the
- * Poké Ball spinner and the composer send-disc, which keep their franchise-native
- * personality by design). Callers gate every use behind [rememberReduceMotion]; with
- * reduce-motion on, movement collapses to an instant change or an opacity crossfade.
- * These tokens are the *what*; the *whether* stays the calling view's decision.
+ * for content settling in (bubbles, cards, list reflow). Both are Signal tweens
+ * on [fastEasing] (cubic-bezier(0.2, 0, 0, 1)). Callers gate every use behind
+ * [rememberReduceMotion]; with reduce-motion on, movement collapses to an instant
+ * change or an opacity crossfade. These tokens are the *what*; the *whether* stays
+ * the calling view's decision.
  */
 object OakMotion {
     /**
-     * Instrument-precise easing — a fast-out, near-linear-in curve for tween-driven
-     * transitions that need a deliberate, mechanical feel rather than a spring's
-     * overshoot. Declared first: [snappy]/[smooth] below capture it at initialization.
+     * Signal easing — a fast-out, near-linear-in curve for tween-driven chrome
+     * (hover, press, tab, pip). Declared first: [snappy]/[smooth] below capture
+     * it at initialization.
      */
     val fastEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
-    /** Fast tween duration (ms) — direct-feedback transitions (Phase 2). */
-    const val FAST_MILLIS = 120
+    /** Fast tween duration (ms) — hover, press, tab, pip (Signal `--motion-fast`). */
+    const val FAST_MILLIS = 180
 
-    /** Base tween duration (ms) — standard content transitions (Phase 2). */
+    /** Base tween duration (ms) — standard content transitions. */
     const val BASE_MILLIS = 180
 
-    /** Direct-feedback tween — fast, mechanical (Phase 2: replaces the overshoot spring). */
+    /** Entrance tween duration (ms) — answer plate rise (Signal `--motion-enter`). */
+    const val ENTER_MILLIS = 280
+
+    /** Direct-feedback tween — hover/press (Signal `--motion-fast`). */
     val snappy: AnimationSpec<Float> =
         tween(durationMillis = FAST_MILLIS, easing = fastEasing)
 
-    /** Content-settling tween — slower, mechanical (Phase 2: replaces the overshoot spring). */
+    /** Content-settling tween — same ease, [BASE_MILLIS]. */
     val smooth: AnimationSpec<Float> =
         tween(durationMillis = BASE_MILLIS, easing = fastEasing)
 

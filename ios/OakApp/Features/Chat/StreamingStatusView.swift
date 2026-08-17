@@ -1,25 +1,15 @@
 import SwiftUI
 
 /// The live in-progress indicator shown while a turn streams (chat-experience.md
-/// M-CHAT-US-4): a tool-activity ticker plus a "thinking"/"answering" state, so the
-/// wait feels responsive and the reasoning is visible — Oak's **field-notes trail**,
-/// the signature moment of the product (specimen desk field notes / soul.md).
+/// M-CHAT-US-4): a 7pt red pip, a mute Figtree sentence of friendly nouns, and a
+/// 2pt red bar that eases ~24% → 72%.
 ///
-/// Two shapes, chosen by `phase`:
-///   - while Oak works (`thinking`/`usingTools`): the full trail — a phase line with
-///     an elapsed timer, then one mono "instrument" row per tool call, the active row
-///     shimmering and completed rows muted with a tick;
-///   - once prose starts (`answering`): the trail **collapses to one summary chip**
-///     ("N LOOKUPS · Xs") docked above the answer — the work becomes the receipt,
-///     nothing is deleted (§4.03, §3 Motion continuity).
+/// No instrument ticker, no `N LOOKUPS` chip, no spinner. Reconnecting copy is
+/// kept. Friendly nouns come from ``ToolTrail`` — raw tool ids never render.
 ///
 /// Purely presentational — it takes the reducer's coarse ``ChatViewModel/StreamingPhase``
-/// and the tool-activity list and renders them. The server sends web-oriented labels
-/// that may carry leading emoji (`runtime.ts` emits `🤔 Reasoning…`); the client strips
-/// them and maps tool identity → SF Symbol via ``ToolTrail`` so the row shows a single
-/// vector glyph and emoji-free mono text. Meaning is carried by text + an SF Symbol +
-/// the spinner, never color alone (M-AC-UI9.3); Dynamic-Type styles and semantic colors
-/// adapt to text size and light/dark.
+/// and the tool-activity list and renders them. Dynamic-Type styles and semantic
+/// colors adapt to text size and light/dark.
 struct StreamingStatusView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let phase: ChatViewModel.StreamingPhase
@@ -27,156 +17,76 @@ struct StreamingStatusView: View {
   /// When true, an auto-reconnect is pending/in flight after a backgrounding drop — the
   /// status line shows "Reconnecting…" instead of the phase, matching web's UI.
   var reconnecting: Bool = false
-  /// Whole seconds elapsed since the turn began, rendered mono in the card header.
-  /// Driven by the parent's per-turn timer (`nil` ⇒ the header timer is hidden).
+  /// Kept so existing call sites compile. Signal streaming no longer shows a timer.
   var elapsedSeconds: Int? = nil
 
-  var body: some View {
-    if phase == .answering {
-      // Continuity: the trail has collapsed into its receipt chip above the answer.
-      summaryChip
-        .transition(collapseTransition)
-    } else if phase != .idle {
-      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-        statusLine
+  /// Pip blink phase (1 = on, 0.2 = dim). Solid under Reduce Motion.
+  @State private var pipLit = true
+  /// Live bar width as a fraction of the row (0.24 → 0.72).
+  @State private var barProgress: CGFloat = 0.24
 
-        // The recent tool-activity ticker (newest last). Kept across answer_start so
-        // the user can see what Oak looked up before it started writing.
-        if !activities.isEmpty {
-          VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            ForEach(Array(activities.enumerated()), id: \.element.id) { index, activity in
-              activityRow(activity, completed: isCompleted(index), active: isActive(index))
-                .transition(activityTransition)
-            }
-          }
-          .animation(reduceMotion ? nil : Theme.Motion.snappy, value: activities.count)
-          .accessibilityElement(children: .combine)
+  var body: some View {
+    if phase != .idle {
+      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+        HStack(spacing: Theme.Spacing.sm) {
+          Circle()
+            .fill(Theme.accent)
+            .frame(width: 7, height: 7)
+            .opacity(reduceMotion || pipLit ? 1 : 0.2)
+            .accessibilityHidden(true)
+          Text(statusSentence)
+            .font(Theme.body(.subheadline))
+            .foregroundStyle(Theme.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .contentTransition(.opacity)
         }
+        .animation(reduceMotion ? nil : Theme.Motion.smooth, value: phase)
+
+        GeometryReader { geo in
+          Capsule()
+            .fill(Theme.accent)
+            .frame(width: max(2, geo.size.width * barProgress), height: 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(height: 2)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(Theme.Spacing.md)
-      .oakCard(radius: Theme.Radius.md)
-      .transition(collapseTransition)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(statusSentence)
+      .onAppear { startMotion() }
     }
   }
 
-  /// The headline status: the brand spinner, a phase icon, a phase label that
-  /// crossfades on change and shimmers while streaming, and a right-aligned mono
-  /// elapsed timer (§4.03).
-  @ViewBuilder
-  private var statusLine: some View {
-    HStack(spacing: Theme.Spacing.sm) {
-      OakSpinner(size: 18)
-      Image(systemName: phaseIcon)
-        .foregroundStyle(Theme.accent)
-        .imageScale(.small)
-      Text(phaseLabel)
-        .font(Theme.display(.subheadline))
-        .foregroundStyle(Theme.textPrimary)
-        .contentTransition(.opacity)
-        .shimmer(active: !reduceMotion)
-      Spacer(minLength: Theme.Spacing.sm)
-      if let elapsedSeconds {
-        Text("\(elapsedSeconds)s")
-          .font(Theme.mono(.caption2))
-          .monospacedDigit()
-          .foregroundStyle(Theme.textSecondary)
-          .accessibilityLabel("\(elapsedSeconds) seconds elapsed")
-      }
-    }
-    .animation(reduceMotion ? nil : Theme.Motion.smooth, value: phase)
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel(phaseLabel)
-  }
-
-  /// One tool-activity line as a mono readout row (soul.md instrument ticker): a
-  /// per-tool SF Symbol + a `Theme.mono(.caption)` label (never a raw tool id —
-  /// ``ToolTrail/rowLabel(tool:label:)`` always resolves a friendly noun). The
-  /// active (last, pre-answer) row's glyph is the **record light** — tinted
-  /// `Theme.accent` — and its label shimmers; a completed row dims its glyph and
-  /// label to `textMuted` and gains a trailing success tick. Text is the primary
-  /// meaning carrier — the icon/tint is enhancement (M-AC-UI9.3).
-  private func activityRow(
-    _ activity: ChatViewModel.ToolActivity,
-    completed: Bool,
-    active: Bool
-  ) -> some View {
-    HStack(spacing: Theme.Spacing.sm) {
-      Image(systemName: ToolTrail.symbol(for: activity.tool))
-        .foregroundStyle(completed ? Theme.textMuted : Theme.accent)
-        .imageScale(.small)
-        .frame(width: 18)
-        // Bounce the icon as new activity arrives; frozen under Reduce Motion.
-        .symbolEffect(.bounce, value: reduceMotion ? 0 : activities.count)
-      Text(ToolTrail.rowLabel(tool: activity.tool, label: activity.label))
-        .font(Theme.mono(.caption))
-        .foregroundStyle(completed ? Theme.textMuted : Theme.textSecondary)
-        .lineLimit(1)
-        .truncationMode(.tail)
-        .shimmer(active: active && !reduceMotion)
-      if completed {
-        Image(systemName: "checkmark")
-          .font(.caption2.weight(.semibold))
-          .foregroundStyle(Theme.success)
-          .accessibilityHidden(true)
-      }
-    }
-  }
-
-  /// The collapse-to-chip receipt (§4.03): a single quiet `surfaceSunken` capsule
-  /// summarising the trail as `N LOOKUPS · Xs`, docked above the answer content.
-  /// Static/non-interactive for now.
-  @ViewBuilder
-  private var summaryChip: some View {
-    Text(ToolTrail.summaryLabel(count: activities.count, seconds: elapsedSeconds))
-      .instrumentLabel()
-      .foregroundStyle(Theme.textSecondary)
-      .padding(.horizontal, Theme.Spacing.md)
-      .padding(.vertical, Theme.Spacing.xs)
-      .background(Theme.surfaceSunken, in: Capsule())
-      .accessibilityElement()
-      .accessibilityLabel(ToolTrail.summaryAccessibilityLabel(count: activities.count, seconds: elapsedSeconds))
-  }
-
-  /// A tool line is "completed" once it isn't the newest in-flight lookup: every line
-  /// but the last while tools run, and all lines once the answer is being written.
-  private func isCompleted(_ index: Int) -> Bool {
-    if phase == .answering { return true }
-    return index < activities.count - 1
-  }
-
-  /// The active line is the newest one while tools run (never during `answering`).
-  private func isActive(_ index: Int) -> Bool {
-    guard phase != .answering else { return false }
-    return index == activities.count - 1
-  }
-
-  private var activityTransition: AnyTransition {
-    reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
-  }
-
-  /// The trail↔chip continuity move: a `smooth` blend under normal motion, a plain
-  /// crossfade under Reduce Motion (§3 Motion).
-  private var collapseTransition: AnyTransition {
-    reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96))
-  }
-
-  private var phaseLabel: String {
+  /// Mute sentence: reconnecting, thinking, looking up {nouns}, or writing.
+  private var statusSentence: String {
     if reconnecting { return "Reconnecting…" }
     switch phase {
-    case .idle: return ""
-    case .thinking: return "Thinking…"
-    case .usingTools: return "Looking things up…"
-    case .answering: return "Writing the answer…"
+    case .idle:
+      return ""
+    case .thinking:
+      return "Thinking…"
+    case .usingTools:
+      return ToolTrail.streamingSentence(
+        activities: activities.map { (tool: $0.tool, label: $0.label) }
+      )
+    case .answering:
+      return "Writing the answer…"
     }
   }
 
-  private var phaseIcon: String {
-    if reconnecting { return "arrow.clockwise" }
-    switch phase {
-    case .idle, .thinking: return "brain"
-    case .usingTools: return "magnifyingglass"
-    case .answering: return "text.append"
+  private func startMotion() {
+    guard !reduceMotion else {
+      pipLit = true
+      barProgress = 0.24
+      return
+    }
+    // 1.2s step blink (0.6s each way). Solid pip under Reduce Motion.
+    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+      pipLit = false
+    }
+    // 2pt bar eases 24% → 72% and back while the turn is live.
+    withAnimation(.timingCurve(0.2, 0, 0, 1, duration: 1.4).repeatForever(autoreverses: true)) {
+      barProgress = 0.72
     }
   }
 }
@@ -261,6 +171,33 @@ enum ToolTrail {
     return cleaned.isEmpty ? friendlyNoun(tool) : cleaned
   }
 
+  /// Mute streaming sentence: `Looking up {Farigiraf, Fake Out, Armor Tail}`.
+  /// Uses extracted subjects when the label names one; otherwise the friendly
+  /// noun. Never emits a raw tool id. Empty / reasoning-only → "Looking things
+  /// up…".
+  static func streamingSentence(activities: [(tool: String, label: String)]) -> String {
+    let nouns = streamingNouns(activities: activities)
+    if nouns.isEmpty { return "Looking things up…" }
+    return "Looking up \(nouns.joined(separator: ", "))"
+  }
+
+  /// Unique friendly nouns / subjects for the live status line, first-seen order.
+  static func streamingNouns(activities: [(tool: String, label: String)]) -> [String] {
+    var seen = Set<String>()
+    var out: [String] = []
+    for activity in activities {
+      if activity.tool == "reasoning" || activity.tool == "submit_answer" {
+        continue
+      }
+      let cleaned = strippingLeadingEmoji(activity.label)
+      let noun = subject(from: cleaned) ?? friendlyNoun(activity.tool)
+      if seen.insert(noun).inserted {
+        out.append(noun)
+      }
+    }
+    return out
+  }
+
   /// The collapse-to-chip summary text: `N LOOKUPS · Xs` (`.instrumentLabel()` caps
   /// it). The seconds clause is dropped when no timer is available.
   static func summaryLabel(count: Int, seconds: Int?) -> String {
@@ -306,32 +243,40 @@ enum ToolTrail {
 
   /// Extracts the subject entity from a cleaned label when one is clearly present:
   /// a “curly-quoted” or "straight-quoted" phrase (resolve/search/sql labels), else
-  /// the last capitalised run in a "Looking up X" / "Reading the X ability" phrase.
-  /// Returns `nil` when nothing reads as a distinct subject, so the caller falls back
-  /// to the cleaned label.
-  private static func subject(from cleaned: String) -> String? {
+  /// the last capitalised word-run in a "Looking up X" / "Looking up Fake Out"
+  /// phrase. Returns `nil` when nothing reads as a distinct subject, so the caller
+  /// falls back to the cleaned label / friendly noun.
+  static func subject(from cleaned: String) -> String? {
     // Quoted subject: “…”, "…", or ‟…”.
     if let quoted = firstQuoted(in: cleaned) {
       let trimmed = quoted.trimmingCharacters(in: .whitespaces)
       return trimmed.isEmpty ? nil : trimmed
     }
-    // Trailing capitalised entity, e.g. "Looking up Garchomp" or "Looking up the
-    // move Will-O-Wisp". Trim a trailing "…"/"'s …" possessive and grab the last
-    // capitalised word-run.
+    // Last contiguous capitalised run, e.g. "Looking up Garchomp", "Looking up
+    // Fake Out", "Looking up the move Will-O-Wisp".
     let words = cleaned
       .trimmingCharacters(in: CharacterSet(charactersIn: "….'s "))
       .split(whereSeparator: { $0 == " " })
       .map(String.init)
-    let capitalised = words.filter { word in
-      guard let first = word.first else { return false }
-      return first.isUppercase
+    var lastRun: [String] = []
+    var lastRunStart = -1
+    var currentRun: [String] = []
+    var currentStart = -1
+    for (index, word) in words.enumerated() {
+      if let first = word.first, first.isUppercase {
+        if currentRun.isEmpty { currentStart = index }
+        currentRun.append(word)
+        lastRun = currentRun
+        lastRunStart = currentStart
+      } else {
+        currentRun = []
+      }
     }
-    // The first word of a label is a sentence-initial capital ("Looking", "Reading")
-    // — a real subject is a *later* capitalised run. Require at least two words so we
-    // never mistake the sentence lead for a subject.
-    guard words.count > 1, let last = capitalised.last, capitalised.count >= 1,
-      last != words.first else { return nil }
-    return last
+    // A real subject is a later capitalised run — never the sentence-initial
+    // "Looking" / "Reading" on its own.
+    guard !lastRun.isEmpty else { return nil }
+    if lastRun.count == 1, lastRunStart == 0 { return nil }
+    return lastRun.joined(separator: " ")
   }
 
   /// The first substring wrapped in a matched quote pair (curly or straight).
@@ -363,27 +308,26 @@ enum ToolTrail {
   StreamingStatusView(
     phase: .usingTools,
     activities: [
-      .init(tool: "resolve_entity", label: "🔍 Resolving “Garchomp”…"),
-      .init(tool: "get_pokemon", label: "📇 Looking up Garchomp…"),
-    ],
-    elapsedSeconds: 4
+      .init(tool: "resolve_entity", label: "🔍 Resolving “Farigiraf”…"),
+      .init(tool: "get_move", label: "Looking up Fake Out…"),
+      .init(tool: "get_ability", label: "Looking up Armor Tail…"),
+    ]
   )
   .padding()
 }
 
 #Preview("Thinking") {
-  StreamingStatusView(phase: .thinking, activities: [], elapsedSeconds: 1)
+  StreamingStatusView(phase: .thinking, activities: [])
     .padding()
 }
 
-#Preview("Collapsed chip") {
+#Preview("Writing") {
   StreamingStatusView(
     phase: .answering,
     activities: [
-      .init(tool: "resolve_entity", label: "🔍 Resolving “Garchomp”…"),
-      .init(tool: "get_pokemon", label: "📇 Looking up Garchomp…"),
-    ],
-    elapsedSeconds: 6
+      .init(tool: "resolve_entity", label: "🔍 Resolving “Farigiraf”…"),
+      .init(tool: "get_move", label: "Looking up Fake Out…"),
+    ]
   )
   .padding()
 }

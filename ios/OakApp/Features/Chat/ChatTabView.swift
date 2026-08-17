@@ -59,13 +59,11 @@ struct ChatTabView: View {
         // (one-handed reach); this is its action.
         onNewChat: { path.append(.new) }
       )
-      .oakRedThread()
-      // Inline title with a custom Space Grotesk principal view. Root cause of the
+      // Inline title with a custom Figtree principal view. Root cause of the
       // old phantom band: the screen used the default (large) title display mode,
-      // and our global largeTitleTextAttributes custom Space Grotesk UIFont
-      // doesn't render on iOS 26's large-title band — it reserved the tall band
-      // but drew nothing. Inline mode removes the band; the principal view
-      // guarantees the Space Grotesk face.
+      // and a custom largeTitleTextAttributes UIFont doesn't render on iOS 26's
+      // large-title band — it reserved the tall band but drew nothing. Inline
+      // mode removes the band; the principal view guarantees the Figtree face.
       .navigationTitle("Chats")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -80,7 +78,6 @@ struct ChatTabView: View {
         // New Chat from a pushed saved thread seeds a fresh `.new` route (mirrors the
         // post-sign-in seeding above) so it opens as a new pushed thread.
         ChatThreadScreen(source: route, onNewChat: { path = [.new] })
-          .oakRedThread()
       }
     }
   }
@@ -94,7 +91,6 @@ struct ChatTabView: View {
         showsNewConversationButton: true,
         signInAction: { showSignIn = true }
       )
-      .oakRedThread()
     }
     .sheet(isPresented: $showSignIn) {
       AuthView(model: AuthViewModel(auth: services.auth, appState: appState))

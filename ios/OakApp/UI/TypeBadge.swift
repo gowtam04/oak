@@ -10,9 +10,9 @@ import SwiftUI
 /// everywhere it appears.
 ///
 /// The type's name is always shown as text, so color is not the sole carrier of
-/// meaning (M-AC-UI9.3). Typography uses `Theme.mono` (the instrument voice) —
-/// a Dynamic Type text style, so the chip grows with the user's preferred size
-/// instead of clipping (M-AC-UI9.2).
+/// meaning (M-AC-UI9.3). Typography is Figtree 600 / 11 (`Theme.body` caption2
+/// semibold) — a Dynamic Type text style, so the chip grows with the user's
+/// preferred size instead of clipping (M-AC-UI9.2).
 struct TypeBadge: View {
   /// The lowercase type slug, e.g. `"fire"` (one of the 18 `TYPE_NAMES`).
   let type: String
@@ -25,13 +25,15 @@ struct TypeBadge: View {
   var body: some View {
     let color = Theme.type(type)
     Text(label)
-      .font(Theme.mono(.caption2, weight: .semibold))
-      .tracking(0.4)
+      .font(Theme.body(.caption2, weight: .semibold))
       .lineLimit(1)
-      .padding(.horizontal, 10)
-      .padding(.vertical, 3)
+      .padding(.horizontal, 8)
+      .padding(.vertical, 2)
       .foregroundStyle(Theme.typeInk(type))
-      .background(color, in: Capsule())
+      .background(
+        color,
+        in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+      )
       .accessibilityElement(children: .ignore)
       .accessibilityLabel("\(label) type")
   }

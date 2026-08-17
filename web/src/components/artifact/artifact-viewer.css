@@ -23,36 +23,20 @@
   flex: 0 0 min(45%, var(--artifact-panel-w));
   width: min(45%, var(--artifact-panel-w));
   max-width: min(45%, var(--artifact-panel-w));
-  min-width: 420px;
+  min-width: 0;
   align-self: stretch;
   max-height: 100%;
   overflow: hidden;
-  /* A whisper of type tint under the bold 3px edge light below. */
-  border: 1px solid color-mix(in srgb, var(--plate-a) var(--plate-edge), var(--border));
-  border-radius: var(--radius-lg);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-floating);
+  border: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--surface);
+  box-shadow: none;
+  min-width: 0;
 }
-.artifact-viewer::before {
-  content: "";
-  position: absolute;
-  top: 10px;
-  bottom: 10px;
-  left: 0;
-  width: 3px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, var(--plate-a) 0 60%, var(--plate-b) 60% 100%);
-}
+.artifact-viewer::before,
 .artifact-viewer::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    90% 70% at 88% 18%,
-    color-mix(in srgb, var(--plate-a) var(--plate-radial-a), transparent),
-    transparent 60%
-  );
+  content: none;
 }
 /* Ink plate (mechanics / ability / item / loading) — sunken well, no type light. */
 .artifact-viewer.answer-card--ink {

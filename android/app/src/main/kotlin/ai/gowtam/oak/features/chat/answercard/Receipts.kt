@@ -1,6 +1,5 @@
 package ai.gowtam.oak.features.chat.answercard
 
-import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakSpacing
@@ -42,12 +41,10 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
- * Full-width RECEIPTS plate footer — unifies reasoning + citations into one
- * expandable drawer (`docs/design/soul.md`). Tab label:
- * `RECEIPTS · N SOURCE(S)`. Closed by default.
+ * Why + Sources disclosure (Signal). Unifies reasoning + citations into one
+ * expandable drawer. Tab label: `Why · Sources (N)` or `Why`. Closed by default.
  *
  * Keeps stable instrumentation tags [AnswerSection.REASONING] /
  * [AnswerSection.CITATIONS] on always-mounted section shells so
@@ -66,15 +63,10 @@ fun ReceiptsFooter(
     var expanded by remember { mutableStateOf(false) }
     val hasReasoning = !reasoningMarkdown.isNullOrBlank()
     val sourceCount = citations.size
-    val label = buildString {
-        append("RECEIPTS")
-        if (sourceCount > 0) {
-            append(" · ")
-            append(sourceCount)
-            append(if (sourceCount == 1) " SOURCE" else " SOURCES")
-        } else if (hasReasoning) {
-            append(" · REASONING")
-        }
+    val label = when {
+        sourceCount > 0 -> "Why · Sources ($sourceCount)"
+        hasReasoning -> "Why"
+        else -> "Sources"
     }
     val topBorder = edgeColor?.copy(alpha = 0.35f) ?: oak.border
 
@@ -104,12 +96,8 @@ fun ReceiptsFooter(
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = JetBrainsMonoFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.88.sp,
-                ),
-                color = oak.text,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = oak.textStrong,
             )
             Icon(
                 imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
@@ -134,9 +122,9 @@ fun ReceiptsFooter(
                             .padding(bottom = if (citations.isEmpty()) OakSpacing.md else OakSpacing.sm),
                     ) {
                         Text(
-                            text = "REASONING",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = oak.textFaint,
+                            text = "Why",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = oak.textMuted,
                         )
                         MarkdownBlockView(
                             markdown = reasoningMarkdown!!,
@@ -163,9 +151,9 @@ fun ReceiptsFooter(
                         verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
                     ) {
                         Text(
-                            text = "SOURCES",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = oak.textFaint,
+                            text = "Sources",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = oak.textMuted,
                         )
                         for (citation in citations) {
                             ReceiptCitationRow(citation, onOpenEntity)

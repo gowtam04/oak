@@ -128,6 +128,12 @@ struct ToolTrailTests {
   }
 
   @Test
+  func parsesMultiWordCapitalisedSubject() {
+    #expect(ToolTrail.subject(from: "Looking up Fake Out") == "Fake Out")
+    #expect(ToolTrail.subject(from: "Looking up Armor Tail") == "Armor Tail")
+  }
+
+  @Test
   func fallsBackToCleanedLabelWhenNoSubject() {
     // "Reasoning…" has no distinct subject — fall back to the cleaned label.
     #expect(ToolTrail.rowLabel(tool: "reasoning", label: "🤔 Reasoning…") == "Reasoning…")
@@ -163,5 +169,39 @@ struct ToolTrailTests {
     #expect(ToolTrail.summaryAccessibilityLabel(count: 1, seconds: 3) == "1 lookup in 3 seconds")
     #expect(ToolTrail.summaryAccessibilityLabel(count: 4, seconds: 6) == "4 lookups in 6 seconds")
     #expect(ToolTrail.summaryAccessibilityLabel(count: 2, seconds: nil) == "2 lookups")
+  }
+
+  // MARK: Streaming sentence (friendly nouns, never raw tool ids)
+
+  @Test
+  func streamingSentenceUsesSubjectsNotToolIds() {
+    #expect(
+      ToolTrail.streamingSentence(activities: [
+        (tool: "resolve_entity", label: "🔍 Resolving “Farigiraf”…"),
+        (tool: "get_move", label: "Looking up Fake Out…"),
+        (tool: "get_ability", label: "Looking up Armor Tail…"),
+      ]) == "Looking up Farigiraf, Fake Out, Armor Tail"
+    )
+  }
+
+  @Test
+  func streamingSentenceFallsBackToLookingThingsUpWhenEmpty() {
+    #expect(ToolTrail.streamingSentence(activities: []) == "Looking things up…")
+    #expect(
+      ToolTrail.streamingSentence(activities: [
+        (tool: "reasoning", label: "🤔 Reasoning…")
+      ]) == "Looking things up…"
+    )
+  }
+
+  @Test
+  func streamingSentenceNeverEmitsRawToolIds() {
+    let sentence = ToolTrail.streamingSentence(activities: [
+      (tool: "get_move", label: ""),
+      (tool: "get_pokemon", label: ""),
+    ])
+    #expect(sentence == "Looking up Move, Pokémon")
+    #expect(!sentence.contains("get_move"))
+    #expect(!sentence.contains("get_pokemon"))
   }
 }

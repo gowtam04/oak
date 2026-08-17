@@ -27,7 +27,7 @@ final class ChatStreamFixVerificationTests: XCTestCase {
     XCTAssertTrue(send.waitForExistence(timeout: 5), "send button not found")
     send.tap()
 
-    // Success = a finalized answer card renders (its "Reasoning" disclosure appears).
+    // Success = a finalized answer card renders (its "Why" disclosure appears).
     // Failure (the bug) = the recoverable error banner shows.
     let reasoningButton = app.buttons[OakUITest.Answer.reasoningDisclosure]
     let reasoningText = app.staticTexts[OakUITest.Answer.reasoningDisclosure]

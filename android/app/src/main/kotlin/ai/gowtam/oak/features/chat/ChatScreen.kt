@@ -4,12 +4,12 @@ import ai.gowtam.oak.features.artifact.ArtifactSheet
 import ai.gowtam.oak.features.artifact.ArtifactViewModel
 import ai.gowtam.oak.features.chat.answercard.AnswerCard
 import ai.gowtam.oak.features.chat.answercard.AnswerCardActions
-import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakTopBar
+import ai.gowtam.oak.ui.OakWordmark
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberHaptics
 import ai.gowtam.oak.ui.rememberReduceMotion
@@ -22,7 +22,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,9 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -211,7 +208,7 @@ fun ChatScreen(
         modifier = modifier,
         topBar = {
             OakTopBar(
-                title = { Text("Oak", modifier = Modifier.semantics { heading() }) },
+                title = { OakWordmark() },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -254,10 +251,7 @@ fun ChatScreen(
                     }
                     if (showEmptyState) {
                         item(key = "empty-state") {
-                            EmptyState(
-                                format = uiState.displayFormat,
-                                onExampleTap = viewModel::sendFollowUp,
-                            )
+                            EmptyState(onExampleTap = viewModel::sendFollowUp)
                         }
                     }
                     items(uiState.turns, key = { it.id }) { turn ->
@@ -335,13 +329,20 @@ private fun ScopeChip(format: Format, enabled: Boolean, onClick: () -> Unit) {
             .border(1.dp, oak.border, chipShape)
             .then(if (enabled) Modifier.clickableChip(onClick) else Modifier)
             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Signal scope LED — always on, not only when scope ≠ national-dex.
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(oak.accent),
+        )
         Text(
             text = format.shortLabel,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = if (enabled) oak.textStrong else oak.textMuted,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+            color = oak.textMuted,
         )
         Icon(
             Icons.Filled.KeyboardArrowDown,
@@ -428,19 +429,13 @@ private fun TurnRow(turn: ChatTurnItem, actions: AnswerCardActions) {
 @Composable
 private fun UserMessageRow(turn: ChatTurnItem.User) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
-    // Desk note (soul.md): sunken/neutral paper + thin border + small red corner pip —
-    // never an accent-filled iMessage bubble.
-    val noteShape = RoundedCornerShape(
-        topStart = OakRadius.lg, topEnd = OakRadius.lg,
-        bottomEnd = OakRadius.sm, bottomStart = OakRadius.lg,
-    )
+    // Signal user note: sunken fill + hairline, ink text. No red bubble, no corner pip.
+    val noteShape = RoundedCornerShape(OakRadius.lg)
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(max = 320.dp)) {
             if (turn.text.isNotEmpty()) {
                 Box(
                     modifier = Modifier
-                        .then(if (dark) Modifier else Modifier.shadow(2.dp, noteShape))
                         .clip(noteShape)
                         .background(oak.surfaceSunken)
                         .border(1.dp, oak.border, noteShape)
@@ -449,16 +444,7 @@ private fun UserMessageRow(turn: ChatTurnItem.User) {
                     Text(
                         text = turn.text,
                         color = oak.textStrong,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                        modifier = Modifier.padding(end = 10.dp),
-                    )
-                    // Red record-light corner pip (soul.md "User note").
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(oak.accent),
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                 }
             }
@@ -556,92 +542,40 @@ private fun ErrorBannerRow(banner: ErrorBanner, onRetry: () -> Unit) {
 }
 
 // ---------------------------------------------------------------------------
-// Empty state — standby readout + filed starters (soul.md)
+// Empty state — Signal hero + filed starter rows
 // ---------------------------------------------------------------------------
 
 /**
- * Standby readout: a raised panel, `STANDBY` label, live scope stamp (LED), prompt
- * line, and four **filed starters** (Battle / Dex / Rules / Meta with type-dots) — not
- * a centered "Ask Oak" hero with equal pills (`docs/design/soul.md`).
+ * Empty-thread hero (`docs/design/signal.md` §6.1): large title, one mute
+ * sentence, four full-width starter rows. Scope LED lives in the header only —
+ * no STANDBY plate, no LED well, no centered logo.
  * Starters are sampled once per composition via [ExamplePrompts.pickFiled].
  */
 @Composable
-private fun EmptyState(format: Format, onExampleTap: (String) -> Unit) {
+private fun EmptyState(onExampleTap: (String) -> Unit) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
     val starters = remember { ExamplePrompts.pickFiled() }
-    val plateShape = RoundedCornerShape(OakRadius.xl)
-    // Soft red in the plate edge — the accent is far more saturated post-Instrument,
-    // so the mix fraction is lighter than the old paper-era border tint.
-    val plateEdge = lerp(oak.borderStrong, oak.accent, 0.12f)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = OakSpacing.md, bottom = OakSpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(if (dark) Modifier else Modifier.shadow(4.dp, plateShape))
-                .clip(plateShape)
-                .background(MaterialTheme.colorScheme.surface)
-                .border(1.5.dp, plateEdge, plateShape)
-                .padding(OakSpacing.lg),
-            verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "STANDBY",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = oak.textMuted,
-                )
-                // LED scope stamp (soul.md): a sunken inset well, mono label, and a
-                // glowing red LED reading the active format — mirrors the active
-                // format (read-only; the chip in the header is the interactive control).
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(OakRadius.sm))
-                        .background(oak.surfaceSunken)
-                        .border(1.dp, oak.borderStrong, RoundedCornerShape(OakRadius.sm))
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    LedDot()
-                    Text(
-                        text = format.displayLabel.uppercase(),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        fontFamily = JetBrainsMonoFamily,
-                        color = oak.textStrong,
-                    )
-                }
-            }
-            Text(
-                text = "What are we looking up?",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = oak.textStrong,
-                modifier = Modifier.semantics { heading() },
-            )
-            Text(
-                text = "Every answer carries its receipts — reasoning, sources, and the generation it is based on.",
-                style = MaterialTheme.typography.bodySmall,
-                color = oak.textMuted,
-            )
-            Text(
-                text = "STARTERS",
-                style = MaterialTheme.typography.labelSmall,
-                color = oak.textFaint,
-                modifier = Modifier.padding(top = OakSpacing.xs),
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
-                for (starter in starters) {
-                    FiledStarterRow(starter = starter, onClick = { onExampleTap(starter.prompt) })
-                }
+        Text(
+            text = "What do you want to know?",
+            style = MaterialTheme.typography.displaySmall,
+            color = oak.textStrong,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(
+            text = "Mechanics, locations, teams, damage. Oak will show its work.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = oak.textMuted,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
+            for (starter in starters) {
+                FiledStarterRow(starter = starter, onClick = { onExampleTap(starter.prompt) })
             }
         }
     }
@@ -672,8 +606,8 @@ private fun LedDot(modifier: Modifier = Modifier, dotSize: Dp = 6.dp, haloSize: 
 }
 
 /**
- * One filed-starter row: type-dot + mono category + prompt text. Full-width, not a
- * centered equal pill.
+ * One filed-starter row: mute category prefix + prompt. Surface, 10.dp radius,
+ * hairline. Text only — no type-dot, no equal hero chip.
  */
 @Composable
 private fun FiledStarterRow(starter: ExamplePrompts.FiledStarter, onClick: () -> Unit) {
@@ -687,34 +621,27 @@ private fun FiledStarterRow(starter: ExamplePrompts.FiledStarter, onClick: () ->
         label = "filedStarterScale",
     )
     val shape = RoundedCornerShape(OakRadius.md)
-    val typeColor = ai.gowtam.oak.ui.OakType.color(starter.typeDot)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
-            .background(if (pressed) MaterialTheme.colorScheme.surface else oak.surfaceRaised.copy(alpha = 0.70f))
-            .border(1.dp, if (pressed) oak.borderStrong else oak.border, shape)
+            .background(MaterialTheme.colorScheme.surface, shape)
+            .border(1.dp, oak.border, shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = OakSpacing.md, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(typeColor),
-        )
         Text(
-            text = starter.category.label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = oak.textFaint,
-            modifier = Modifier.widthIn(min = 52.dp),
+            text = starter.category.label,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+            color = oak.textMuted,
+            modifier = Modifier.widthIn(min = 48.dp),
         )
         Text(
             text = starter.prompt,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             color = oak.textStrong,
             modifier = Modifier.weight(1f),
         )

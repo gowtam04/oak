@@ -3,23 +3,24 @@ import UIKit
 
 /// Oak's brand expression over iOS.
 ///
-/// Colors are sourced from the web design system (`web/src/app/globals.css`) and
-/// re-expressed natively. Brand/semantic colors adapt to light & dark via a
-/// dynamic `UIColor` provider. Surfaces use a **cool neutral ramp** — a field
-/// instrument identity (`canvas` #EEF0F1 / #101214, `surface` #F9FAFA / #16191B,
-/// `surfaceSunken` #E3E6E8 / #0B0D0E) reconciled 1:1 with the web tokens.
+/// Colors are sourced from Signal (`docs/design/signal.md`) and re-expressed
+/// natively. Brand/semantic colors adapt to light & dark via a dynamic
+/// `UIColor` provider. Surfaces use a **cool daylight ramp** (`canvas`
+/// #F6F7F9 / #121417, `surface` #FFFFFF / #1A1D22, `surfaceSunken`
+/// #EEF0F3 / #0E1013) reconciled 1:1 with the web tokens.
 ///
-/// Text and separator use the web's **neutral ink ramp** (adaptive themed
-/// colors, e.g. `textPrimary` #24282B / #DDE1E3, `separator` #D3D7DA / #2A2E32)
+/// Text and separator use Signal's **cool ink ramp** (adaptive themed
+/// colors, e.g. `textPrimary` #2A3340 / #D5DAE0, `separator` #E3E8EF / #2A3038)
 /// rather than Apple's cool-gray system semantics — the temperature match is
 /// part of "feels like Oak." Contrast was designed into the ramp; Dynamic Type
 /// still scales via the custom-font `relativeTo:` anchors (M-AC-UI1.2–1.4).
 ///
-/// Typography is the loudest brand carrier: `display()` is **Space Grotesk**,
-/// `body()` is **Inter**, `mono()`/`instrument()` are **JetBrains Mono**,
-/// each `Font.custom(_:size:relativeTo:)` so Dynamic Type keeps scaling. Custom
-/// fonts don't synthesize weights reliably, so the weight-aware overloads switch
-/// the PostScript face per weight rather than calling `.weight()`.
+/// Typography is the loudest brand carrier: `display()`/`body()` are
+/// **Figtree**, `mono()` is **IBM Plex Mono** (fact tables only),
+/// `instrument()` is **Figtree Medium**. Each `Font.custom(_:size:relativeTo:)`
+/// so Dynamic Type keeps scaling. Custom fonts don't synthesize weights
+/// reliably, so the weight-aware overloads switch the PostScript face per
+/// weight rather than calling `.weight()`.
 ///
 /// Color is never the sole carrier of meaning (M-AC-UI9.3) — that pairing with
 /// text/icon is the calling view's responsibility; `Theme` only supplies the
@@ -43,58 +44,60 @@ enum Theme {
 
   // MARK: Soft tints (faint fills for chips, callouts, selection washes)
 
-  /// Faint accent fill — empty-state chip press, red callouts.
-  static let accentSoft = adaptive(light: 0xFBE9E4, dark: 0x33170F)
+  /// Faint accent fill — focus halo behind red only. Never a card fill.
+  static let accentSoft = adaptive(light: 0xFDE8E3, dark: 0x33170F)
   /// Faint azure fill — interaction focus glow, in-thread chip press, links.
   static let azureSoft = adaptive(light: 0xE5F0FA, dark: 0x142433)
   static let successSoft = adaptive(light: 0xE4F4EC, dark: 0x0E2B1D)
   static let warningSoft = adaptive(light: 0xFBF0DC, dark: 0x33260F)
   static let dangerSoft = adaptive(light: 0xFAE7E9, dark: 0x331417)
 
-  /// The user chat bubble's sunken-note fill — a cool, quiet note rather than a
-  /// warm pink-tinted paper. Paired with an accent-tinted corner pip and
-  /// `textPrimary` ink (§4.3).
-  static let userBubble = adaptive(light: 0xE9EBED, dark: 0x1A1E21)
+  /// The user chat bubble's sunken-note fill — same as `surfaceSunken`.
+  /// No red bubble. No corner pip.
+  static let userBubble = adaptive(light: 0xEEF0F3, dark: 0x0E1013)
 
-  // MARK: Surfaces (cool neutral ramp — field instrument identity)
+  /// Text/icon on a solid red fill. Dark red is too bright for white (fails AA).
+  static let onRed = adaptive(light: 0xFFFFFF, dark: 0x1B1410)
+
+  // MARK: Surfaces (cool daylight ramp — Signal)
 
   /// The screen/chat canvas — the base layer every screen sits on.
-  /// Light: #EEF0F1 (cool paper); dark: #101214 (cool near-black).
-  static let canvas = adaptive(light: 0xEEF0F1, dark: 0x101214)
+  /// Light: #F6F7F9; dark: #121417 (cool near-black).
+  static let canvas = adaptive(light: 0xF6F7F9, dark: 0x121417)
 
   /// Legacy alias for `canvas` — kept so existing call sites resolve without edits.
   /// Prefer `canvas` for new call sites.
   static let background = canvas
 
   /// Card / modal surface — lifts one level above `canvas`.
-  /// Light: #F9FAFA; dark: #16191B.
-  static let surface = adaptive(light: 0xF9FAFA, dark: 0x16191B)
+  /// Light: #FFFFFF; dark: #1A1D22.
+  static let surface = adaptive(light: 0xFFFFFF, dark: 0x1A1D22)
 
   /// Floating / tooltip surface — lifts above `surface`.
-  /// Light: #FFFFFF; dark: #1D2124.
-  static let surfaceRaised = adaptive(light: 0xFFFFFF, dark: 0x1D2124)
+  /// Light: #FFFFFF; dark: #22262C.
+  static let surfaceRaised = adaptive(light: 0xFFFFFF, dark: 0x22262C)
 
   /// Recessed well — inputs, search bars, inner wells.
-  /// Light: #E3E6E8; dark: #0B0D0E.
-  static let surfaceSunken = adaptive(light: 0xE3E6E8, dark: 0x0B0D0E)
+  /// Light: #EEF0F3; dark: #0E1013.
+  static let surfaceSunken = adaptive(light: 0xEEF0F3, dark: 0x0E1013)
 
-  // MARK: Text & separator (cool ink ramp — mirrors the web tokens)
+  // MARK: Text & separator (cool ink ramp — Signal tokens)
 
-  /// Hairline dividers, card borders. Web `--border`.
-  static let separator = adaptive(light: 0xD3D7DA, dark: 0x2A2E32)
+  /// Hairline dividers, card borders. Signal `--line`.
+  static let separator = adaptive(light: 0xE3E8EF, dark: 0x2A3038)
   /// Alias of `separator` for call sites that read a "border" role.
   static let border = separator
   /// A stronger hairline — button/composer outlines, emphasized edges.
-  static let borderStrong = adaptive(light: 0xB9BEC3, dark: 0x3A3F44)
+  static let borderStrong = adaptive(light: 0xD0D6DE, dark: 0x3A434C)
 
-  /// Emphasized ink — headings, wordmark, verdict. Web `--text-strong`.
-  static let textStrong = adaptive(light: 0x131517, dark: 0xF2F4F5)
-  /// Default body ink. Web `--text`.
-  static let textPrimary = adaptive(light: 0x24282B, dark: 0xDDE1E3)
-  /// Secondary rows / captions. Web `--text-muted`.
-  static let textSecondary = adaptive(light: 0x5F656C, dark: 0x9BA1A7)
-  /// Faint labels / disabled ink. Web `--text-faint`.
-  static let textMuted = adaptive(light: 0x8A9096, dark: 0x6E747A)
+  /// Emphasized ink — headings, wordmark, verdict. Signal `--ink`.
+  static let textStrong = adaptive(light: 0x1B2430, dark: 0xF2F4F6)
+  /// Default body ink. Signal `--text`.
+  static let textPrimary = adaptive(light: 0x2A3340, dark: 0xD5DAE0)
+  /// Secondary rows / captions. Signal `--mute`.
+  static let textSecondary = adaptive(light: 0x5B6B7C, dark: 0x8B949E)
+  /// Faint labels / disabled ink. Signal `--faint`.
+  static let textMuted = adaptive(light: 0x8A94A0, dark: 0x6A737D)
 
   /// Overlay scrim behind sheets/dialogs — neutral ink, semi-opaque.
   static let scrim = Color(
@@ -105,11 +108,11 @@ enum Theme {
     }
   )
 
-  // MARK: Corner radii (brand favors generous rounding)
+  // MARK: Corner radii (Signal: 8 / 10 / 12 / 16 / pill)
 
   enum Radius {
-    static let sm: CGFloat = 5
-    static let md: CGFloat = 9
+    static let sm: CGFloat = 8
+    static let md: CGFloat = 10
     static let lg: CGFloat = 12
     static let xl: CGFloat = 16
     static let pill: CGFloat = 999
@@ -165,62 +168,57 @@ enum Theme {
     }
   }
 
-  /// Display face — **Space Grotesk SemiBold** for the instrument chrome:
-  /// wordmark, screen titles, markdown headings, entity names.
+  /// Display face — **Figtree SemiBold** for chrome: wordmark, screen
+  /// titles, markdown headings, entity names.
   static func display(_ style: Font.TextStyle = .title) -> Font {
-    .custom("SpaceGrotesk-SemiBold", size: pointSize(for: style), relativeTo: style)
+    .custom("Figtree-SemiBold", size: pointSize(for: style), relativeTo: style)
   }
 
-  /// Display face at an explicit weight — medium / semibold / bold — since
-  /// custom fonts don't take `.weight()`.
+  /// Display face at an explicit weight — regular / medium / semibold —
+  /// since custom fonts don't take `.weight()`. Bold maps to SemiBold; Bold
+  /// is not bundled.
   static func display(_ style: Font.TextStyle, weight: Weight) -> Font {
-    let face: String
-    switch weight {
-    case .regular, .medium: face = "SpaceGrotesk-Medium"
-    case .semibold: face = "SpaceGrotesk-SemiBold"
-    case .bold: face = "SpaceGrotesk-Bold"
-    }
-    return .custom(face, size: pointSize(for: style), relativeTo: style)
+    .custom(figtreeFace(weight), size: pointSize(for: style), relativeTo: style)
   }
 
-  /// Body face — **Inter**. `weight` switches the static face (regular /
-  /// medium / semibold / bold) since custom fonts don't take `.weight()`.
+  /// Body face — **Figtree**. `weight` switches the static face (regular /
+  /// medium / semibold; bold → SemiBold) since custom fonts don't take
+  /// `.weight()`.
   static func body(_ style: Font.TextStyle = .body, weight: Weight = .regular) -> Font {
-    .custom(interFace(weight), size: pointSize(for: style), relativeTo: style)
+    .custom(figtreeFace(weight), size: pointSize(for: style), relativeTo: style)
   }
 
-  /// Monospaced face — **JetBrains Mono** for "precise data" (stats, dex
-  /// numbers, damage rolls). `weight` switches Medium ↔ SemiBold.
+  /// Monospaced face — **IBM Plex Mono** for fact tables, damage
+  /// breakdowns, and source keys only. `weight` switches Regular ↔ Medium
+  /// (semibold/bold → Medium).
   static func mono(_ style: Font.TextStyle = .body, weight: Weight = .medium) -> Font {
     let face = (weight == .semibold || weight == .bold)
-      ? "JetBrainsMono-SemiBold" : "JetBrainsMono-Medium"
+      ? "IBMPlexMono-Medium" : "IBMPlexMono-Regular"
     return .custom(face, size: pointSize(for: style), relativeTo: style)
   }
 
   /// Answer-lead role — the verdict at the top of every answer card.
-  /// **Space Grotesk SemiBold 22** relative to `.title3`, so it scales with
+  /// **Figtree SemiBold 22** relative to `.title3`, so it scales with
   /// Dynamic Type. It is the largest text in any conversation — the editorial
   /// masthead.
   static func answerLead() -> Font {
-    .custom("SpaceGrotesk-SemiBold", size: 22, relativeTo: .title3)
+    .custom("Figtree-SemiBold", size: 22, relativeTo: .title3)
   }
 
-  /// Instrument voice — **JetBrains Mono SemiBold**, typically `.caption2`
-  /// (11 pt base). Uppercase with 0.8pt tracking (see `instrumentLabel` View
-  /// extension) for scope tags (`CHAMPIONS · REG M-B`), tool-trail labels
-  /// (`GET_POKEMON · GARCHOMP`), section heads (`BASE STATS`, `SOURCES · 1`),
-  /// and dex-number captions. Pass a wider `style` for more breathing room.
+  /// Meta / caption voice — **Figtree Medium**, typically `.caption2`
+  /// (11 pt base). Signal: mono is reserved for fact tables; instrument
+  /// chrome uses the sans. See `instrumentLabel` for the leftover uppercase
+  /// + tracking wrapper (unchanged this phase).
   static func instrument(_ style: Font.TextStyle = .caption2) -> Font {
-    .custom("JetBrainsMono-SemiBold", size: pointSize(for: style), relativeTo: style)
+    .custom("Figtree-Medium", size: pointSize(for: style), relativeTo: style)
   }
 
-  /// Inter PostScript face for a `Weight`.
-  private static func interFace(_ weight: Weight) -> String {
+  /// Figtree PostScript face for a `Weight`. Bold maps to SemiBold.
+  private static func figtreeFace(_ weight: Weight) -> String {
     switch weight {
-    case .regular: "Inter-Regular"
-    case .medium: "Inter-Medium"
-    case .semibold: "Inter-SemiBold"
-    case .bold: "Inter-Bold"
+    case .regular: "Figtree-Regular"
+    case .medium: "Figtree-Medium"
+    case .semibold, .bold: "Figtree-SemiBold"
     }
   }
 
@@ -234,7 +232,7 @@ enum Theme {
   }
 
   /// The legible ink color for text/labels set directly on a full-chroma
-  /// `type(_:)` fill (e.g. `TypeBadge`'s solid capsule). White for the darker
+  /// `type(_:)` fill (e.g. `TypeBadge`'s solid 8pt chip). White for the darker
   /// type solids, near-black for the lighter ones — a fixed per-type contrast
   /// table rather than a computed luminance check, so it's theme-stable.
   static func typeInk(_ name: String) -> Color {
@@ -330,11 +328,11 @@ enum Theme {
   /// Dynamic `UIColor` versions of the tokens the UIKit bar appearance needs
   /// (`configureWithOpaqueBackground` takes `UIColor`, not SwiftUI `Color`).
   /// Kept in lock-step with the SwiftUI tokens above.
-  static let uiCanvas = uiAdaptive(light: 0xEEF0F1, dark: 0x101214)
-  static let uiSeparator = uiAdaptive(light: 0xD3D7DA, dark: 0x2A2E32)
+  static let uiCanvas = uiAdaptive(light: 0xF6F7F9, dark: 0x121417)
+  static let uiSeparator = uiAdaptive(light: 0xE3E8EF, dark: 0x2A3038)
   static let uiAccent = uiAdaptive(light: 0xE3350D, dark: 0xFF4A22)
-  static let uiTextSecondary = uiAdaptive(light: 0x5F656C, dark: 0x9BA1A7)
-  static let uiTextStrong = uiAdaptive(light: 0x131517, dark: 0xF2F4F5)
+  static let uiTextSecondary = uiAdaptive(light: 0x5B6B7C, dark: 0x8B949E)
+  static let uiTextStrong = uiAdaptive(light: 0x1B2430, dark: 0xF2F4F6)
 
   private static func uiAdaptive(light: UInt32, dark: UInt32) -> UIColor {
     UIColor { traits in
@@ -411,26 +409,29 @@ extension Theme {
 // MARK: - Motion (Theme.Motion)
 
 extension Theme {
-  /// The shared animation vocabulary — mechanical and decisive
-  /// (`cubic-bezier(.2, 0, 0, 1)`), not the old overshoot springs: `snappy` for
-  /// direct-manipulation feedback (presses, focus, toggles) and `smooth` for
-  /// content settling in (bubbles, cards, list reflow), plus a `staggered`
-  /// helper for cascade-in sequences. The overshoot spring is retired except for
-  /// the Poké Ball spinner, which keeps its personality (franchise-native, not
-  /// slop — soul.md §3 Motion).
+  /// The shared animation vocabulary — Signal ease
+  /// (`cubic-bezier(.2, 0, 0, 1)`), not overshoot springs: `snappy` for
+  /// direct-manipulation feedback (presses, focus, toggles), `smooth`/`enter`
+  /// for content settling in (answer plate rise, bubbles, cards, list reflow),
+  /// plus a `staggered` helper for cascade-in sequences. The overshoot spring
+  /// is retired except for the Poké Ball spinner.
   ///
   /// Callers gate every use behind `@Environment(\.accessibilityReduceMotion)`
   /// (constraint 2): with Reduce Motion on, movement/scale becomes an opacity
   /// crossfade or is dropped. These tokens are the *what*; the *whether* stays
   /// the calling view's decision.
   enum Motion {
-    /// Direct-feedback curve — 120ms, `cubic-bezier(.2, 0, 0, 1)`. Presses,
-    /// focus, toggles.
-    static let snappy: Animation = .timingCurve(0.2, 0, 0, 1, duration: 0.12)
+    /// Direct-feedback curve — 180ms, `cubic-bezier(.2, 0, 0, 1)`. Presses,
+    /// focus, toggles, pip. Signal `--motion-fast`.
+    static let snappy: Animation = .timingCurve(0.2, 0, 0, 1, duration: 0.18)
 
-    /// Content-settling curve — 180ms, `cubic-bezier(.2, 0, 0, 1)`. Bubbles,
-    /// cards, reflow.
-    static let smooth: Animation = .timingCurve(0.2, 0, 0, 1, duration: 0.18)
+    /// Content-settling curve — 280ms, `cubic-bezier(.2, 0, 0, 1)`. Bubbles,
+    /// cards, reflow. Maps to Signal `--motion-enter` so `snappy` stays
+    /// distinct from `smooth` (ThemeFoundationTests).
+    static let smooth: Animation = .timingCurve(0.2, 0, 0, 1, duration: 0.28)
+
+    /// Answer-plate rise — 280ms, same curve as `smooth`. Signal `--motion-enter`.
+    static let enter: Animation = .timingCurve(0.2, 0, 0, 1, duration: 0.28)
 
     /// `base` delayed by `step × index` — the per-item offset that turns a batch
     /// appearance into a cascade. Index 0 plays immediately. `step` defaults to
@@ -956,14 +957,11 @@ private func oakInsetWellIllusion(shape: RoundedRectangle, isDark: Bool) -> some
 // MARK: - Instrument voice (View extension)
 
 extension View {
-  /// Applies the "instrument" typographic voice: `Theme.instrument(style)` +
-  /// 0.8 pt letter-spacing + uppercase transform.
+  /// Applies the leftover "instrument" typographic voice: `Theme.instrument(style)`
+  /// (Figtree Medium) + 0.8 pt letter-spacing + uppercase transform.
   ///
-  /// Use for scope tags (`CHAMPIONS · REG M-B`), tool-trail labels
-  /// (`GET_POKEMON · GARCHOMP`), section heads (`BASE STATS`, `SOURCES · 1`),
-  /// and dex-number captions. The mono + caps + tight tracking combination
-  /// reads as engraved instrument output, tying data labels across every surface
-  /// into one recognisable voice.
+  /// Use for scope tags, tool-trail labels, section heads, and dex-number
+  /// captions. Tracking and case are unchanged this phase.
   ///
   /// - Parameter style: The Dynamic Type style to pass through to
   ///   `Theme.instrument`. Defaults to `.caption2` (11 pt base).

@@ -44,7 +44,6 @@ struct TeamsListView: View {
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(Theme.canvas)
-      .oakRedThread()
       .navigationTitle("Teams")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {

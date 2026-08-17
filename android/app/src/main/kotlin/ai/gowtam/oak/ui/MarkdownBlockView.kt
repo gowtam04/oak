@@ -48,14 +48,19 @@ import androidx.compose.ui.unit.sp
 fun MarkdownBlockView(
     markdown: String,
     modifier: Modifier = Modifier,
+    /** When true, the first paragraph is the Signal answer lead (22sp / 600 / ink). */
+    leadFirstParagraph: Boolean = false,
 ) {
     val blocks = MarkdownBlocks.parse(markdown)
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
+        var leadApplied = false
         for (block in blocks) {
-            BlockView(block)
+            val asLead = leadFirstParagraph && !leadApplied && block is MdBlock.Paragraph
+            if (asLead) leadApplied = true
+            BlockView(block, lead = asLead)
         }
     }
 }
@@ -80,7 +85,7 @@ fun MarkdownText(
 }
 
 @Composable
-private fun BlockView(block: MdBlock) {
+private fun BlockView(block: MdBlock, lead: Boolean = false) {
     val oak = LocalOakColors.current
     when (block) {
         is MdBlock.Heading -> Text(
@@ -92,7 +97,12 @@ private fun BlockView(block: MdBlock) {
 
         is MdBlock.Paragraph -> Text(
             text = parseInline(block.text, linkColor = oak.azure, codeBackground = oak.textStrong.copy(alpha = 0.08f)),
-            style = MaterialTheme.typography.bodyLarge,
+            style = if (lead) {
+                MaterialTheme.typography.headlineMedium
+            } else {
+                MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp)
+            },
+            color = if (lead) oak.textStrong else oak.text,
             modifier = Modifier.fillMaxWidth(),
         )
 

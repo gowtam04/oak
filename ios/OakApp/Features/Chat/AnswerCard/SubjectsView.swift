@@ -1,20 +1,13 @@
 import SwiftUI
 
 /// Renders an answer's `subjects[]` — the primary entities the answer is about —
-/// as a stack of sprite cards (sprite, display name, optional Dex number, type
-/// badges, and a fallback flag when the data is pre-Gen-9).
+/// as a stack of subject rows (sprite ~72, name 600, mute `#dex` caption, and a
+/// fallback flag when the data is pre-Gen-9). Type chips live at the top of the
+/// answer plate, not on this row.
 ///
 /// Native mirror of the web `SpriteCard` (`web/src/components/answer-card/
-/// SpriteCard.tsx`): the sprite comes from the answer payload (`SpriteImage`
-/// handles placeholder/failure), types render as `TypeBadge` chips (color **and**
-/// label — never color alone, M-AC-UI9.3), and `is_fallback` surfaces an explicit,
-/// icon+text warning pill (BR-1: pre-Gen-9 data used as a fallback).
-///
-/// Renders **nothing** when there are no subjects (the field is absent on most
-/// answers). Layout is vertical (sprite beside name/badges) with a `@ScaledMetric`
-/// sprite, so it reflows under Dynamic Type and light/dark without horizontal
-/// clipping (M-AC-1.4). Tapping a subject to open its artifact is wired in a later
-/// phase; this view is display-only.
+/// SpriteCard.tsx`) for data; Signal drops the type-glow well. `SpriteImage`
+/// handles placeholder/failure. Renders **nothing** when there are no subjects.
 struct SubjectsView: View {
   let subjects: [Subject]
 
@@ -31,8 +24,8 @@ struct SubjectsView: View {
 
 // MARK: - One subject
 
-/// A single sprite card: the sprite on a subtle "Pokédex screen" wash, beside the
-/// name + Dex number, an optional fallback pill, and the type badges.
+/// A single subject row: sprite ~72, name 600, mute `#dex` caption. Type chips
+/// live at the top of the answer plate, not here; no type-glow well.
 private struct SubjectCard: View {
   let subject: Subject
 
@@ -41,55 +34,30 @@ private struct SubjectCard: View {
   /// size is appropriate — `@ScaledMetric` keeps it proportional.
   @ScaledMetric(relativeTo: .body) private var spriteSize: CGFloat = 72
 
-  /// The card's tint anchor — the subject's own type color, primary type first.
-  private var primaryType: String { subject.types.first ?? "normal" }
-  private var secondaryType: String? { subject.types.count > 1 ? subject.types[1] : nil }
-
   var body: some View {
-    HStack(alignment: .top, spacing: Theme.Spacing.md) {
-      // Stronger type-glow sprite well (soul.md specimen well / Phase 1–2).
+    HStack(alignment: .center, spacing: Theme.Spacing.md) {
       SpriteImage(url: URL(string: subject.spriteUrl), name: subject.name, size: spriteSize)
-        .padding(Theme.Spacing.sm)
-        .oakTypeGlowWell(
-          primary: primaryType,
-          secondary: secondaryType,
-          glowEndRadius: spriteSize * 0.85
-        )
 
-      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-        nameRow
+      VStack(alignment: .leading, spacing: 2) {
+        Text(subject.name)
+          .font(Theme.body(.headline, weight: .semibold))
+          .foregroundStyle(Theme.textPrimary)
+          .fixedSize(horizontal: false, vertical: true)
+        if let dex = subject.dexNumber {
+          Text(dexLabel(dex))
+            .font(Theme.body(.footnote, weight: .medium))
+            .foregroundStyle(Theme.textSecondary)
+        }
         if subject.isFallback {
           fallbackPill
+            .padding(.top, Theme.Spacing.xs)
         }
-        typeBadges
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .padding(Theme.Spacing.md)
     .frame(maxWidth: .infinity, alignment: .leading)
-    // Instrument redesign (Phase 2): the card goes neutral — no type wash on the
-    // card itself — the sprite well (`oakTypeGlowWell` above) carries the light.
-    .oakCard()
-    // One combined VoiceOver label so the card reads as a single, ordered unit
-    // (M-AC-UI9.1) instead of disjoint sprite/badge fragments.
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(accessibilityLabel)
-  }
-
-  // MARK: Name + dex
-
-  private var nameRow: some View {
-    HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.sm) {
-      Text(subject.name)
-        .font(Theme.display(.headline))
-        .foregroundStyle(Theme.textPrimary)
-      if let dex = subject.dexNumber {
-        Text(dexLabel(dex))
-          .instrumentLabel(.caption2)
-          .foregroundStyle(Theme.textMuted)
-      }
-    }
-    .fixedSize(horizontal: false, vertical: true)
   }
 
   // MARK: Fallback flag (icon + text + color — never color alone, M-AC-UI9.3)
@@ -104,16 +72,6 @@ private struct SubjectCard: View {
         Theme.warning.opacity(0.14),
         in: Capsule()
       )
-  }
-
-  // MARK: Type badges (primary type first)
-
-  private var typeBadges: some View {
-    HStack(spacing: Theme.Spacing.sm) {
-      ForEach(subject.types, id: \.self) { type in
-        TypeBadge(type: type)
-      }
-    }
   }
 
   // MARK: Helpers

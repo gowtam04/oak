@@ -271,8 +271,8 @@ export default function Composer({
               100,
             );
           }}
-          placeholder="Ask a Pokémon question…"
-          aria-label="Ask a Pokémon question"
+          placeholder="Ask Oak"
+          aria-label="Ask Oak"
           disabled={disabled}
         />
         {streaming ? (

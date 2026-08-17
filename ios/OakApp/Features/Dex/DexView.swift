@@ -117,7 +117,6 @@ struct DexView: View {
       }
     }
     .background(Theme.canvas)
-    .oakRedThread()
   }
 
   private func sectionChips(model: DexViewModel) -> some View {
