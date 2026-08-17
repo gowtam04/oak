@@ -20,8 +20,8 @@ import { z } from "zod";
 
 import { readJsonBodyWithLimit } from "@/server/body-limit";
 import { checkRateLimit, type RateLimitConfig } from "@/server/rate-limit";
-import { basisForFormat, FORMATS, type Format } from "@/data/formats";
-import { oakAnswerSchema, type OakAnswer } from "@/agent/schemas";
+import { FORMATS, type Format } from "@/data/formats";
+import { oakAnswerSchema } from "@/agent/schemas";
 import { logger } from "@/server/logger";
 
 export const runtime = "nodejs";
@@ -51,32 +51,6 @@ function jsonError(status: number, error: string, message: string): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
-}
-
-/**
- * Build the minimal schema-valid `answered` OakAnswer for a voice turn. Voice
- * speech carries no structured citations/inferences, so those are empty; the
- * basis is stamped from the turn's format so a gen-scoped (or Champions) voice
- * turn reports the right generation, not a hardcoded gen-9 (mirrors runtime.ts's
- * fallback synthesizers).
- */
-function synthesizeVoiceAnswer(
-  assistantText: string,
-  format: Format,
-): OakAnswer {
-  return {
-    status: "answered",
-    answer_markdown: assistantText,
-    reasoning_markdown:
-      "This answer was spoken in voice mode, so it carries no structured " +
-      "citations or inferences.",
-    citations: [],
-    inferences: [],
-    generation_basis: {
-      generation: basisForFormat(format),
-      fallback: false,
-    },
-  };
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -142,6 +116,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 3) SYNTHESIZE + VALIDATE — the stored answer_json must always parse.
+  const { synthesizeVoiceAnswer } = await import("@/server/voice/voice-session");
   const candidate = synthesizeVoiceAnswer(assistant_text, format);
   const validated = oakAnswerSchema.safeParse(candidate);
   if (!validated.success) {
@@ -164,15 +139,16 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 4) PERSIST — the same signed-in turn-pair write /api/chat uses.
+  const repo = await import("@/data/repos/conversation-repo");
+  const assistantTurnId = repo.newTurnId();
   try {
-    const repo = await import("@/data/repos/conversation-repo");
     await repo.appendTurnPair({
       accountId: account.id,
       conversationId: session_id,
       format,
       userTurnId: repo.newTurnId(),
       userMessage: user_text,
-      assistantTurnId: repo.newTurnId(),
+      assistantTurnId,
       answer: validated.data,
       now: Date.now(),
     });
@@ -190,6 +166,43 @@ export async function POST(req: Request): Promise<Response> {
       500,
       "internal_error",
       "Could not record the voice turn. Please try again.",
+    );
+  }
+
+  // 5) Hydrate fire-and-forget (VOICE-BR-1) — 200 without waiting.
+  try {
+    const { setHydrateRunning } = await import("@/server/voice/hydrate-store");
+    setHydrateRunning(session_id, assistantTurnId);
+    const { runVoiceCompile } = await import("@/server/voice/run-voice-compile");
+    void runVoiceCompile({
+      accountId: account.id,
+      conversationId: session_id,
+      assistantMessageId: assistantTurnId,
+      sessionId: session_id,
+      userText: user_text,
+      assistantText: assistant_text,
+      format,
+    }).catch((err) => {
+      logger.error(
+        {
+          event: "voice_compile_failed",
+          account_id: account.id,
+          session_id,
+          assistant_message_id: assistantTurnId,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "oak_voice_compile_failed",
+      );
+    });
+  } catch (err) {
+    logger.error(
+      {
+        event: "voice_compile_start_failed",
+        account_id: account.id,
+        session_id,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "oak_voice_compile_start_failed",
     );
   }
 
