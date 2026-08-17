@@ -76,17 +76,15 @@ function chipsForAnswer(
  */
 /**
  * ChatThread — renders the committed conversation (user + assistant turns) in
- * order, plus the streaming "field notes" experience while `status ===
- * "streaming"` (specimen desk field notes / soul.md):
- *   - one unsigned incoming plate while the turn is live and no tokens have
- *     arrived: a red verb + mute rest + stepping dots, then sunken bars with a
- *     red write-sheen. No pip, no fake progress bar, no type-wash.
- *   - once prose begins streaming (`answer_start`), the plate hides and the
- *     existing streaming-answer block takes its place.
+ * order, plus the streaming status while `status === "streaming"`:
+ *   - a quiet sentence while the turn is live and no tokens have arrived:
+ *     red verb + mute rest + three soft dots. No plate, no sheen, no glow.
+ *   - once prose begins streaming (`answer_start`), the sentence hides and the
+ *     existing streaming-answer plate rises in.
  *   - a transport-fault affordance when `status === "error"` and
  *     `transportError` is set (in-domain failures arrive as normal answer cards,
- *     never here — sse-client.ts / integration.md); it replaces the skeleton in
- *     place, no layout jump.
+ *     never here — sse-client.ts / integration.md); it replaces the status in
+ *     place.
  *
  * Each assistant turn is rendered through `AnswerCard`, with `onFollowUp`
  * threaded down so suggestion-chip / candidate-row clicks POST a follow-up turn
@@ -394,14 +392,11 @@ export default function ChatThread({
         ),
       )}
 
-      {/* Incoming plate — one unsigned red specimen card while the turn is live
-          and no tokens have arrived. Status + sunken bars hide as soon as
-          streamed markdown exists. */}
+      {/* Quiet sentence — red verb + mute rest + soft dots until tokens arrive. */}
       {status === "streaming" && !streamingMarkdown && (
         <div
           className="chat-turn chat-turn--assistant chat-thread__skeleton"
           data-testid="answer-skeleton"
-          data-unsigned
         >
           <div className="chat-incoming__status" aria-live="polite">
             <span
@@ -416,13 +411,6 @@ export default function ChatThread({
               </span>
             </span>
           </div>
-          <div className="chat-thread__skeleton-masthead" aria-hidden="true" />
-          <div className="chat-thread__skeleton-line" aria-hidden="true" />
-          <div className="chat-thread__skeleton-line" aria-hidden="true" />
-          <div
-            className="chat-thread__skeleton-line chat-thread__skeleton-line--short"
-            aria-hidden="true"
-          />
         </div>
       )}
 

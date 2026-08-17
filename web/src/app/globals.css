@@ -1328,6 +1328,7 @@
   font-size: 1rem;
   line-height: 1.6;
   color: var(--text);
+  animation: answer-enter var(--motion-enter) both;
 }
 .chat-thread__streaming .markdown-body p:last-child::after {
   content: "";
@@ -1350,6 +1351,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .chat-thread__streaming {
+    animation: none;
+  }
   .chat-thread__streaming .markdown-body p:last-child::after {
     animation: none;
   }
@@ -2564,34 +2568,19 @@
   margin-top: var(--space-2);
 }
 
-/* Incoming thinking plate — unsigned brand-red type-light until tokens arrive.
-   Red lives in the verb, the corner glow, and a write-sheen on sunken bars.
-   No pip, no left record tick, no fake .sig-live__bar (that class stays for
-   VoiceOverlay). */
+/* Quiet thinking sentence — red verb + mute rest + three soft dots.
+   No plate, no sheen, no glow. The streaming answer plate rises in later. */
 .chat-thread__skeleton {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: var(--space-4) var(--space-4) 18px;
-  border-radius: var(--radius-lg);
-  border: 1px solid color-mix(in srgb, var(--poke-red) 18%, var(--border));
-  background:
-    radial-gradient(
-      120% 90% at 92% 0%,
-      color-mix(in srgb, var(--poke-red) 22%, transparent),
-      transparent 58%
-    ),
-    var(--surface-raised);
-  box-shadow: var(--shadow-raised);
-  overflow: hidden;
+  align-items: baseline;
+  padding: 2px 0 4px;
 }
 .chat-incoming__status {
   display: flex;
   align-items: baseline;
   gap: 2px;
   min-height: 20px;
-  margin-bottom: 6px;
   color: var(--text-muted);
   font-family: var(--body);
   font-size: 14px;
@@ -2605,97 +2594,36 @@
 }
 .chat-thread__skeleton .dots {
   display: inline-flex;
-  gap: 3px;
+  gap: 4px;
   margin-left: 5px;
   transform: translateY(-1px);
 }
 .chat-thread__skeleton .dots i {
-  width: 3.5px;
-  height: 3.5px;
+  width: 3px;
+  height: 3px;
   border-radius: 50%;
   background: var(--poke-red);
-  opacity: 0.2;
-  animation: chat-incoming-dots 1.2s var(--ease) infinite;
+  opacity: 0.16;
+  animation: chat-incoming-dots 2s var(--ease) infinite;
 }
 .chat-thread__skeleton .dots i:nth-child(2) {
-  animation-delay: 0.16s;
+  animation-delay: 0.22s;
 }
 .chat-thread__skeleton .dots i:nth-child(3) {
-  animation-delay: 0.32s;
-}
-.chat-thread__skeleton-masthead,
-.chat-thread__skeleton-line {
-  position: relative;
-  height: 12px;
-  border-radius: 7px;
-  background: var(--surface-sunken);
-  overflow: hidden;
-}
-.chat-thread__skeleton-masthead::after,
-.chat-thread__skeleton-line::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 -45%;
-  width: 46%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--poke-red) 28%, transparent),
-    transparent
-  );
-  animation: chat-incoming-write 1.8s var(--ease) infinite;
-}
-.chat-thread__skeleton-masthead {
-  height: 18px;
-  width: 66%;
-  border-radius: 8px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--poke-red) 16%, var(--surface-sunken)),
-    var(--surface-sunken) 70%
-  );
-}
-.chat-thread__skeleton-masthead::after {
-  animation-delay: 0ms;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--poke-red) 55%, transparent),
-    transparent
-  );
-}
-.chat-thread__skeleton-line:nth-of-type(3)::after {
-  animation-delay: 90ms;
-}
-.chat-thread__skeleton-line:nth-of-type(4)::after {
-  animation-delay: 180ms;
-}
-.chat-thread__skeleton-line--short {
-  width: 46%;
-}
-.chat-thread__skeleton-line--short::after {
-  animation-delay: 270ms;
+  animation-delay: 0.44s;
 }
 @keyframes chat-incoming-dots {
   0%,
-  20% {
-    opacity: 0.22;
+  18% {
+    opacity: 0.16;
   }
-  35%,
-  55% {
-    opacity: 0.95;
+  40%,
+  52% {
+    opacity: 0.62;
   }
-  70%,
+  74%,
   100% {
-    opacity: 0.22;
-  }
-}
-@keyframes chat-incoming-write {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(340%);
+    opacity: 0.16;
   }
 }
 
@@ -3045,21 +2973,18 @@
     transform: none;
   }
   /* Streaming trail: keep the pokeball spinner turning (it signals liveness),
-     but drop the note cascade and the summary chip's entrance. Incoming plate:
-     freeze the write-sheen and stepping dots at mid-opacity. */
+     but drop the note cascade and the summary chip's entrance. Quiet sentence:
+     freeze the stepping dots at mid-opacity. */
   .chat-thread__note,
   .chat-thread__summary {
     animation: none !important;
   }
   .chat-thread__skeleton .dots i {
     animation: none !important;
-    opacity: 0.55;
+    opacity: 0.45;
   }
-  .chat-thread__skeleton-masthead::after,
-  .chat-thread__skeleton-line::after {
+  .chat-thread__streaming {
     animation: none !important;
-    left: 30%;
-    opacity: 0.5;
   }
   .chat-thread__summary-caret {
     transition: none;

@@ -504,8 +504,8 @@ struct ChatView: View {
     model.send()
   }
 
-  /// One incoming plate: status + sunken bars while empty, streamed markdown
-  /// once tokens arrive (the terminal answer later replaces it authoritatively).
+  /// Quiet sentence while empty, then a rising answer plate once tokens
+  /// arrive (the terminal answer later replaces it authoritatively).
   private var inProgressView: some View {
     IncomingAnswerPlate(
       phase: model.streamingPhase,

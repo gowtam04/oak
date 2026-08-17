@@ -284,28 +284,33 @@ describe("ChatThread — streaming field-notes trail", () => {
     expect(instrumentToken("totally_unknown")).toBe("Lookup");
   });
 
-  it("shows the answer skeleton while working, before prose streams", () => {
+  it("shows the quiet thinking sentence while working, before prose streams", () => {
     render(
       <ChatThread {...props({ status: "streaming", activity: twoTools })} />,
     );
     expect(screen.getByTestId("answer-skeleton")).toBeInTheDocument();
     expect(screen.getByTestId("field-note")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("answer-skeleton").querySelector(
+        ".chat-thread__skeleton-masthead, .chat-thread__skeleton-line",
+      ),
+    ).toBeNull();
   });
 
-  it("uses an unsigned red plate, not a type-wash, while thinking", () => {
+  it("does not paint a plate or type-wash while thinking", () => {
     render(
       <ChatThread {...props({ status: "streaming", activity: twoTools })} />,
     );
-    const skeleton = screen.getByTestId("answer-skeleton");
-    expect(skeleton).toHaveAttribute("data-unsigned");
-    expect(skeleton.getAttribute("data-plate")).toBeNull();
-    expect(skeleton.className).not.toContain("chat-thread__skeleton--desk");
+    const status = screen.getByTestId("answer-skeleton");
+    expect(status).not.toHaveAttribute("data-unsigned");
+    expect(status.getAttribute("data-plate")).toBeNull();
+    expect(status.className).not.toContain("chat-thread__skeleton--desk");
     expect(
-      (skeleton as HTMLElement).style.getPropertyValue("--plate-a"),
+      (status as HTMLElement).style.getPropertyValue("--plate-a"),
     ).toBe("");
   });
 
-  it("stays unsigned even when activity labels name a type", () => {
+  it("stays plateless even when activity labels name a type", () => {
     render(
       <ChatThread
         {...props({
@@ -319,24 +324,23 @@ describe("ChatThread — streaming field-notes trail", () => {
         })}
       />,
     );
-    const skeleton = screen.getByTestId("answer-skeleton");
-    expect(skeleton).toHaveAttribute("data-unsigned");
-    expect(skeleton.getAttribute("data-plate")).toBeNull();
+    const status = screen.getByTestId("answer-skeleton");
+    expect(status).not.toHaveAttribute("data-unsigned");
+    expect(status.getAttribute("data-plate")).toBeNull();
     expect(
-      (skeleton as HTMLElement).style.getPropertyValue("--plate-a"),
+      (status as HTMLElement).style.getPropertyValue("--plate-a"),
     ).toBe("");
   });
 
-  it("falls back to a generic thinking chip before the first tool runs", () => {
+  it("falls back to a generic thinking sentence before the first tool runs", () => {
     render(<ChatThread {...props({ status: "streaming" })} />);
     expect(screen.getByTestId("progress-thinking")).toHaveTextContent(
       "Thinking through your question",
     );
-    // Skeleton still holds the layout even before the first tool lands.
     expect(screen.getByTestId("answer-skeleton")).toBeInTheDocument();
   });
 
-  it("hides the incoming plate once prose starts streaming", () => {
+  it("hides the thinking sentence once prose starts streaming", () => {
     render(
       <ChatThread
         {...props({

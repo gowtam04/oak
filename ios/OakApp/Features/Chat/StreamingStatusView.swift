@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The live in-progress status line: a red verb, mute rest, and three stepping
-/// dots. No pip, no record tick, no fake progress bar. Friendly nouns come from
-/// ``ToolTrail`` — raw tool ids never render.
+/// The live in-progress status line: a red verb, mute rest, and three soft
+/// stepping dots. No plate, no pip, no record tick, no fake progress bar.
+/// Friendly nouns come from ``ToolTrail`` — raw tool ids never render.
 ///
 /// Purely presentational — it takes the reducer's coarse ``ChatViewModel/StreamingPhase``
 /// and the tool-activity list and renders them. Dynamic-Type styles and semantic
@@ -97,35 +97,50 @@ enum StreamingStatusCopy {
 
 // MARK: - Stepping dots
 
-/// Three red-tinted dots that step opacity in sequence. Reduce Motion freezes
-/// them at mid-opacity — no blink, no ping-pong.
+/// Three red-tinted dots that step opacity in a 2s wave, peaking at 62%.
+/// Reduce Motion freezes them at mid-opacity — no blink, no ping-pong.
 private struct SteppingDots: View {
   let frozen: Bool
 
   var body: some View {
-    HStack(spacing: 3) {
+    HStack(spacing: 4) {
       if frozen {
         ForEach(0..<3, id: \.self) { _ in
           Circle()
             .fill(Theme.accent)
-            .frame(width: 4, height: 4)
+            .frame(width: 3, height: 3)
             .opacity(0.45)
         }
       } else {
-        TimelineView(.periodic(from: .now, by: 0.32)) { context in
-          let step = Int(context.date.timeIntervalSinceReferenceDate / 0.32) % 3
-          HStack(spacing: 3) {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { context in
+          let t = context.date.timeIntervalSinceReferenceDate
+          HStack(spacing: 4) {
             ForEach(0..<3, id: \.self) { index in
               Circle()
                 .fill(Theme.accent)
-                .frame(width: 4, height: 4)
-                .opacity(index == step ? 1 : 0.22)
+                .frame(width: 3, height: 3)
+                .opacity(Self.opacity(at: t, index: index))
             }
           }
         }
       }
     }
     .accessibilityHidden(true)
+  }
+
+  /// Matches the web `chat-incoming-dots` keyframes (2s, delays 0 / 0.22 / 0.44).
+  private static func opacity(at time: TimeInterval, index: Int) -> Double {
+    let cycle = 2.0
+    let delay = Double(index) * 0.22
+    let phase = ((time - delay).truncatingRemainder(dividingBy: cycle) + cycle)
+      .truncatingRemainder(dividingBy: cycle) / cycle
+    let low = 0.16
+    let high = 0.62
+    if phase < 0.18 { return low }
+    if phase < 0.40 { return low + (high - low) * ((phase - 0.18) / 0.22) }
+    if phase < 0.52 { return high }
+    if phase < 0.74 { return high + (low - high) * ((phase - 0.52) / 0.22) }
+    return low
   }
 }
 
