@@ -123,6 +123,19 @@ export function getHydrateSignal(
   return store().get(conversationId)?.controller.signal;
 }
 
+/**
+ * True when `signal` is still this conversation's current compile generation.
+ * A Retry/`setHydrateRunning` swap yields a new controller — the replaced
+ * compile must not write or mark failed (VOICE-BR-5).
+ */
+export function isCurrentHydrateSignal(
+  conversationId: string,
+  signal: AbortSignal | undefined,
+): boolean {
+  if (!signal) return false;
+  return store().get(conversationId)?.controller.signal === signal;
+}
+
 /** Test-only: drop every entry and pin the clock at 0 for TTL cases. */
 export function _resetStoreForTests(): void {
   store().clear();

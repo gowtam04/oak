@@ -140,10 +140,16 @@ function submitStream(
     return {
       async *[Symbol.asyncIterator]() {
         if (opts?.hang) await opts.hang;
+        if (req.signal?.aborted) {
+          throw Object.assign(new Error("aborted"), { name: "AbortError" });
+        }
         for (const e of events) yield e;
       },
       async final() {
         if (opts?.hang) await opts.hang;
+        if (req.signal?.aborted) {
+          throw Object.assign(new Error("aborted"), { name: "AbortError" });
+        }
         return final;
       },
     };
@@ -418,5 +424,57 @@ describe("runVoiceCompile — abort mid-flight does not write (VOICE-BR-5)", () 
     const parsed = oakAnswerSchema.parse(JSON.parse(after[1]!.answerJson!));
     expect(parsed.answer_markdown).toBe(THIN_TEXT);
     expect(parsed.citations).toEqual([]);
+  });
+
+  it("replaced compile does not mark the new hydrate failed (VOICE-US-3, VOICE-BR-5)", async () => {
+    ensureLoaded();
+    const conversationId = "conv-compile-replace";
+    const { asstId } = await seedThin(conversationId);
+    hydrate.setHydrateRunning(conversationId, asstId);
+
+    let releaseA!: () => void;
+    const hangA = new Promise<void>((r) => {
+      releaseA = r;
+    });
+    let sawA = false;
+    const { provider: providerA } = submitStream(FULL, {
+      hang: hangA,
+      onRequest: () => {
+        sawA = true;
+      },
+    });
+    factory.providerFor.mockReturnValue(providerA);
+
+    const pendingA = compile.runVoiceCompile({
+      accountId: ACCT,
+      conversationId,
+      assistantMessageId: asstId,
+      sessionId: conversationId,
+      userText: "What's Garchomp's best nature?",
+      assistantText: THIN_TEXT,
+      format: "champions",
+    });
+
+    for (let i = 0; i < 200 && !sawA; i++) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(sawA).toBe(true);
+
+    // Retry / replace: abort A, install B's generation.
+    hydrate.setHydrateRunning(conversationId, asstId);
+    expect(hydrate.getHydrate(conversationId)).toEqual({
+      assistant_message_id: asstId,
+      status: "running",
+    });
+
+    releaseA();
+    await pendingA.catch(() => undefined);
+
+    expect(hydrate.getHydrate(conversationId)).toEqual({
+      assistant_message_id: asstId,
+      status: "running",
+    });
+    const after = await repo.getMessages(ACCT, conversationId);
+    expect(after[1]!.textContent).toBe(THIN_TEXT);
   });
 });

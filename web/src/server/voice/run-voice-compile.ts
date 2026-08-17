@@ -18,6 +18,7 @@ import type { Format } from "@/data/formats";
 import { logger } from "@/server/logger";
 import {
   getHydrateSignal,
+  isCurrentHydrateSignal,
   setHydrateFailed,
   clearHydrate,
 } from "@/server/voice/hydrate-store";
@@ -40,15 +41,17 @@ function forceVoiceOrigin(answer: unknown): unknown {
   return { ...(answer as Record<string, unknown>), origin: "voice" };
 }
 
-function isAborted(conversationId: string): boolean {
-  return getHydrateSignal(conversationId)?.aborted === true;
-}
-
-async function failHydrate(
+/**
+ * Own this conversation's hydrate only if `mine` is still the store's
+ * current generation. A Retry swap aborts `mine` and installs a new
+ * controller — the replaced compile must not write or mark failed.
+ */
+function stillCurrent(
   conversationId: string,
-  assistantMessageId: string,
-): Promise<void> {
-  setHydrateFailed(conversationId, assistantMessageId);
+  mine: AbortSignal | undefined,
+): boolean {
+  if (!mine) return getHydrateSignal(conversationId) === undefined;
+  return isCurrentHydrateSignal(conversationId, mine);
 }
 
 /**
@@ -66,20 +69,32 @@ export async function runVoiceCompile(args: RunVoiceCompileArgs): Promise<void> 
     format,
   } = args;
 
-  const markFailed = () => failHydrate(conversationId, assistantMessageId);
+  // Capture THIS compile's generation before any await (VOICE-BR-5).
+  const mine = getHydrateSignal(conversationId);
+
+  const failIfCurrent = (): void => {
+    if (stillCurrent(conversationId, mine)) {
+      setHydrateFailed(conversationId, assistantMessageId);
+    }
+  };
+
+  const stopIfSupersededOrAborted = (): boolean => {
+    if (mine?.aborted || !stillCurrent(conversationId, mine)) {
+      failIfCurrent();
+      return true;
+    }
+    return false;
+  };
 
   try {
-    if (isAborted(conversationId)) {
-      await markFailed();
-      return;
-    }
+    if (stopIfSupersededOrAborted()) return;
 
     const { activeModelKey, providerFor, isModelConfigured } = await import(
       "@/agent/providers/factory"
     );
     const modelKey = await activeModelKey();
     if (!isModelConfigured(modelKey)) {
-      await markFailed();
+      failIfCurrent();
       return;
     }
     const provider = providerFor(modelKey);
@@ -92,7 +107,6 @@ export async function runVoiceCompile(args: RunVoiceCompileArgs): Promise<void> 
       trace,
     });
     const transcript = provider.createTranscript([], userMessage);
-    const signal = getHydrateSignal(conversationId);
 
     const stream = provider.streamTurn({
       system,
@@ -104,7 +118,7 @@ export async function runVoiceCompile(args: RunVoiceCompileArgs): Promise<void> 
         },
       ],
       transcript,
-      signal,
+      signal: mine,
       // ADR-7: thinking off (single tool; avoid thinking + forced-choice 400).
       effort: "none",
       thinking: false,
@@ -114,21 +128,15 @@ export async function runVoiceCompile(args: RunVoiceCompileArgs): Promise<void> 
     });
 
     for await (const _event of stream) {
-      if (isAborted(conversationId)) {
-        await markFailed();
-        return;
-      }
+      if (stopIfSupersededOrAborted()) return;
     }
     const final = await stream.final();
 
-    if (isAborted(conversationId)) {
-      await markFailed();
-      return;
-    }
+    if (stopIfSupersededOrAborted()) return;
 
     const submit = final.toolCalls.find((c) => c.name === "submit_answer");
     if (!submit) {
-      await markFailed();
+      failIfCurrent();
       return;
     }
 
@@ -136,15 +144,12 @@ export async function runVoiceCompile(args: RunVoiceCompileArgs): Promise<void> 
     const stamped = forceVoiceOrigin(sanitized);
     const parsed = oakAnswerSchema.safeParse(stamped);
     if (!parsed.success) {
-      await markFailed();
+      failIfCurrent();
       return;
     }
     const answer: OakAnswer = { ...parsed.data, origin: "voice" };
 
-    if (isAborted(conversationId)) {
-      await markFailed();
-      return;
-    }
+    if (stopIfSupersededOrAborted()) return;
 
     const repo = await import("@/data/repos/conversation-repo");
     await repo.updateAssistantAnswer(
@@ -154,16 +159,14 @@ export async function runVoiceCompile(args: RunVoiceCompileArgs): Promise<void> 
       answer,
     );
 
-    if (isAborted(conversationId)) {
-      // Chat send won the race after the write started; leave whatever landed
-      // and keep failed so Retry stays available if the row is still thin.
-      await markFailed();
-      return;
+    // Committed. Clear if we still own this generation — even if a late
+    // abortVoiceCompile marked failed after the write (do not re-fail).
+    if (stillCurrent(conversationId, mine)) {
+      clearHydrate(conversationId);
     }
-    clearHydrate(conversationId);
   } catch (err) {
-    if (isAborted(conversationId)) {
-      await markFailed();
+    if (mine?.aborted || !stillCurrent(conversationId, mine)) {
+      failIfCurrent();
       return;
     }
     logger.error(
@@ -176,6 +179,6 @@ export async function runVoiceCompile(args: RunVoiceCompileArgs): Promise<void> 
       },
       "oak_voice_compile_failed",
     );
-    await markFailed();
+    failIfCurrent();
   }
 }
