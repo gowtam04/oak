@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
-/** Signal streaming copy: friendly nouns, never raw tool ids. */
+/** Incoming-plate streaming copy: red verb + mute rest, never raw tool ids. */
 class StreamingHeuristicTest {
 
     @Test
@@ -20,8 +20,8 @@ class StreamingHeuristicTest {
     }
 
     @Test
-    fun `sentence uses unique friendly nouns, never raw GET ids`() {
-        val sentence = streamingStatusSentence(
+    fun `tools split is Looking up plus unique friendly nouns`() {
+        val copy = streamingStatusCopy(
             phase = StreamingPhase.USING_TOOLS,
             activities = listOf(
                 ToolActivity(tool = "resolve_entity", label = "GET_RESOLVE_ENTITY"),
@@ -30,28 +30,38 @@ class StreamingHeuristicTest {
             ),
             reconnecting = false,
         )
-        assertEquals("Looking up Dex lookup, Pokémon", sentence)
-        assertFalse(sentence.contains("GET_"))
-        assertFalse(sentence.contains("get_pokemon"))
+        assertEquals("Looking up", copy.verb)
+        assertEquals("Dex lookup, Pokémon", copy.rest)
+        assertEquals("Looking up Dex lookup, Pokémon", copy.sentence)
+        assertFalse(copy.sentence.contains("GET_"))
+        assertFalse(copy.sentence.contains("get_pokemon"))
     }
 
     @Test
-    fun `thinking with no tools uses the mute thinking line`() {
-        assertEquals(
-            "Thinking through your question…",
-            streamingStatusSentence(StreamingPhase.THINKING, emptyList(), reconnecting = false),
-        )
+    fun `thinking splits into red Thinking plus mute rest`() {
+        val copy = streamingStatusCopy(StreamingPhase.THINKING, emptyList(), reconnecting = false)
+        assertEquals("Thinking", copy.verb)
+        assertEquals("through your question", copy.rest)
+        assertEquals("Thinking through your question", copy.sentence)
     }
 
     @Test
-    fun `reconnecting wins over activity`() {
-        assertEquals(
-            "Reconnecting…",
-            streamingStatusSentence(
-                StreamingPhase.USING_TOOLS,
-                listOf(ToolActivity(tool = "get_pokemon", label = "Garchomp")),
-                reconnecting = true,
-            ),
+    fun `tools with no nouns uses Looking things up`() {
+        val copy = streamingStatusCopy(StreamingPhase.USING_TOOLS, emptyList(), reconnecting = false)
+        assertEquals("Looking", copy.verb)
+        assertEquals("things up", copy.rest)
+        assertEquals("Looking things up", streamingStatusSentence(StreamingPhase.USING_TOOLS, emptyList(), false))
+    }
+
+    @Test
+    fun `reconnecting wins over activity and has no rest`() {
+        val copy = streamingStatusCopy(
+            StreamingPhase.USING_TOOLS,
+            listOf(ToolActivity(tool = "get_pokemon", label = "Garchomp")),
+            reconnecting = true,
         )
+        assertEquals("Reconnecting", copy.verb)
+        assertEquals("", copy.rest)
+        assertEquals("Reconnecting", copy.sentence)
     }
 }

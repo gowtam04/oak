@@ -8,7 +8,6 @@ import ai.gowtam.oak.features.share.shareExportedFile
 import ai.gowtam.oak.ui.LocalOakColors
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
-import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakTopBar
@@ -658,12 +657,13 @@ private fun InProgressRow(
     streamingText: String,
     elapsedSeconds: Int? = null,
 ) {
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(OakSpacing.md)) {
-        StreamingStatus(phase = phase, activities = activities, reconnecting = reconnecting, elapsedSeconds = elapsedSeconds)
-        if (streamingText.isNotEmpty()) {
-            MarkdownBlockView(markdown = streamingText, modifier = Modifier.fillMaxWidth())
-        }
-    }
+    IncomingAnswerPlate(
+        phase = phase,
+        activities = activities,
+        reconnecting = reconnecting,
+        streamingText = streamingText,
+        elapsedSeconds = elapsedSeconds,
+    )
 }
 
 // ---------------------------------------------------------------------------
