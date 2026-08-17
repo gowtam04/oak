@@ -2,7 +2,7 @@
 
 Covers **iOS only**. There is no Android target in this repo (no `android/` directory), so no Google Play listing was produced.
 
-**Store name:** `Oak – AI Battle Coach` · **Subtitle:** `Team Builder & Calculator`. The bare name "Oak" was taken in the App Store, so a descriptor was appended — this changes only the App Store *display name*, not the bundle id (`us.optiwise.oak`), the `oak.gowtam.ai` domain, or the in-app "Oak" assistant persona.
+**Store name:** `Oak – AI Coach` · **Subtitle:** `Team Builder & Calculator`. The bare name "Oak" was taken in the App Store, so a descriptor was appended — this changes only the App Store *display name*, not the bundle id (`ai.gowtam.oak`), the `oak.gowtam.ai` domain, or the in-app "Oak" assistant persona. Home screen stays `Oak`.
 
 - [`ios.md`](./ios.md) — App Store Connect fields (Name, Subtitle, Promotional Text, Description, Keywords, What's New) with character counts.
 - [`aso-keywords.md`](./aso-keywords.md) — keyword research: Tier 1/2/3 terms, the literal iOS Keywords string, and competitor analysis (ProDex, Prokedex, Bulbapedia).

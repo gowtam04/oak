@@ -5,9 +5,9 @@ Category: **Reference**. Age rating: **4+**. Price: **Free, no in-app purchases.
 ## App Name (30 chars max)
 
 ```
-Oak – AI Battle Coach
+Oak – AI Coach
 ```
-**21 / 30 chars.** The bare name "Oak" was unavailable in the App Store, so a short descriptor was appended to make the store name unique. The bundle id (`us.optiwise.oak`), the `oak.gowtam.ai` domain, and the in-app "Oak" assistant persona are all unchanged — only the *store display name* carries the descriptor, so no code change is required. "AI Battle Coach" also pulls double duty for ASO: it puts `ai`, `battle`, and `coach` into Apple's most heavily-weighted field (the bare "Oak" wasted it on 3 characters) and names Oak's category-defining wedge — it *coaches*: it reasons and explains, rather than just computing like the manual-tool competitors (ChampDex, VGC Helper). Separator is an en dash; swap for `:` or `|` to taste (all stay ≤30). (App Store name availability is only confirmed at name-reservation time in App Store Connect — "Battle Coach" is a generic phrase, so collision risk is low.)
+**13 / 30 chars.** Renamed from `Oak – AI Battle Coach` on the 1.1 listing (2026-08-16). Drops "Battle" so in-game / whole-games questions still fit the store name, and keeps the wedge: Oak *coaches* — it reasons and explains — rather than just looking up. The home-screen name stays `Oak` (`CFBundleDisplayName`); only the App Store display name changed. `battle` moved into the Keywords field so "battle calculator" still combines with the subtitle.
 
 ## Subtitle (30 chars max)
 
@@ -53,9 +53,9 @@ Questions or feedback? Reach us at www.gowtam.ai/#contact.
 ## Keywords (100 chars max, hidden, comma-separated, no spaces)
 
 ```
-type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,regulation,showdown,import,reasoning
+type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,battle,showdown,import,reasoning,chat
 ```
-**97 / 100 chars.** Rebuilt for the new App Name/Subtitle: dropped `builder` (now in the Subtitle), `ai` (now in the App Name), and the two lowest-value terms `stat` and `trainer`; added `weakness`, `coverage`, and `speed` — high-intent terms matching the type-matchup and speed-tier features the direct competitors lead with. Full rationale + the deliberately-ceded `vgc` note in `aso-keywords.md`.
+**98 / 100 chars.** After the 1.1 rename, `battle` left the App Name so it is back in Keywords (to keep "battle calculator" with the subtitle). `chat` uses the leftover budget. Dropped `regulation` to fit. Full rationale in `aso-keywords.md`.
 
 ## What's New (this release)
 

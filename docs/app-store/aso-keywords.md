@@ -4,10 +4,10 @@
 
 ## App Name + Subtitle (the indexed pair this strategy is built around)
 
-- **App Name:** `Oak – AI Battle Coach` (21/30) → indexes `oak`, `ai`, `battle`, `coach`.
+- **App Name:** `Oak – AI Coach` (13/30) → indexes `oak`, `ai`, `coach`.
 - **Subtitle:** `Team Builder & Calculator` (25/30) → indexes `team`, `builder`, `calculator`.
 
-The bare name "Oak" was taken in the App Store; appending "AI Battle Coach" both makes the store name unique and recovers Apple's most heavily-weighted field, which the old "Oak solo" name left almost empty. Everything below — Tier tables and the Keywords string — is constructed to **avoid re-spending characters** on words already indexed by these two fields (Apple combines terms across the App Name, Subtitle, and Keywords field, and handles plurals automatically).
+The bare name "Oak" was taken in the App Store; the descriptor makes the store name unique and fills Apple's most heavily-weighted field. `battle` used to live in the name (`Oak – AI Battle Coach`); it now lives in Keywords so "battle calculator" still combines with the subtitle. Everything below avoids re-spending characters on words already indexed by these two fields (Apple combines terms across App Name, Subtitle, and Keywords, and handles plurals automatically).
 
 ## Deliberate tradeoff — read this first
 
@@ -28,7 +28,7 @@ The two closest competitors are direct functional matches — free companion app
 | Term | Where it's captured | Rationale | Competition |
 |---|---|---|---|
 | team builder | **Subtitle** (exact phrase) | Oak's most concrete, marketable feature (full competitive sets, Showdown-format import/export) | Medium — every competitor has a builder, but few pair it with a reasoning chat |
-| battle calculator | **App Name "battle" × Subtitle "calculator"** (cross-field) | Matches Oak's damage/battle-math reasoning and the artifact-viewer calc | Medium |
+| battle calculator | **Keywords `battle` × Subtitle "calculator"** (cross-field) | Matches Oak's damage/battle-math reasoning and the artifact-viewer calc. `battle` sat in the old App Name; it moved here when the store name became `Oak – AI Coach`. | Medium |
 | type chart | Keywords `type` + `chart` | Common, well-understood search term for the type-matchup feature | Medium-heavy (generic reference apps win here too) |
 | moveset | Keywords `moveset` | Direct match to the learnset/moveset-filtering capability | Light-medium |
 | tera | Keywords `tera` | Current-gen mechanic Oak's builder and reasoning fully support; lower competition since it's recent | Light |
@@ -43,8 +43,8 @@ The two closest competitors are direct functional matches — free companion app
 | type weakness | Keywords `type` + `weakness` | High-intent variant of the type-chart query ("weakness chart"), distinct from "coverage" |
 | ev iv calculator | Keywords `ev` + `iv` × Subtitle `calculator` | Specific competitive-breeding/stat search; Oak's builder covers EVs/IVs explicitly |
 | showdown import | Keywords `showdown` + `import` | Captures users bringing a team string in from a calculator/friend — a frequent real workflow |
-| regulation format | Keywords `regulation` | Matches the Champions-style format toggle — a feature static dex apps don't have at all |
-| reasoning / ai chat | Keywords `reasoning` × App Name `ai` | Oak's category-defining differentiator (cited reasoning vs. plain lookup); low competition because almost no competitor frames itself this way. Note: the standalone word "chat" is no longer indexed anywhere (it left with the old "Battle Chat" name idea) — `reasoning` + `ai` carry the intent; add "chat" to the Keywords field if you'd rather index it explicitly. |
+| regulation format | *(dropped from Keywords in 1.1 to free `battle`)* | Still a real feature; not worth 10 keyword characters once `battle` had to come back. |
+| reasoning / ai chat | Keywords `reasoning` + `chat` × App Name `ai` | Oak's category-defining differentiator (cited reasoning vs. plain lookup). `chat` is now indexed explicitly. |
 
 ## Tier 3 — cede (don't waste field space)
 
@@ -55,18 +55,18 @@ The two closest competitors are direct functional matches — free companion app
 | creature collector | Generic genre term, heavy competition from non-Pokémon monster-collecting games; too broad to win. |
 | game guide | Dominated by large multi-title guide apps; not a fight worth picking. |
 
-## iOS Keyword field — literal string (97 / 100 chars)
+## iOS Keyword field — literal string (98 / 100 chars)
 
 ```
-type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,regulation,showdown,import,reasoning
+type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,battle,showdown,import,reasoning,chat
 ```
 
 Notes on construction:
 - No spaces after commas (each saved character matters at this budget).
 - Singular forms only (`stat`→ omitted, `moveset` not `movesets`) — Apple matches plurals automatically.
-- **Deliberately omits every word already indexed via the App Name (`Oak – AI Battle Coach` → `oak`, `ai`, `battle`, `coach`) or Subtitle (`Team Builder & Calculator` → `team`, `builder`, `calculator`)** so no field space is wasted on duplication. This is why `builder` and `ai` — present in the old string — were dropped.
-- **Changes from the previous string:** dropped `builder` (now in the Subtitle), `ai` (now in the App Name), and the two lowest-value terms `stat` and `trainer`; added `weakness`, `coverage`, and `speed` to match the type-matchup and speed-tier features the direct competitors lead with.
-- Adjacent placement of `type`/`chart`/`weakness`/`coverage` lets Apple's auto-combination produce "type chart", "type weakness", "type coverage" alongside cross-field combinations with the Subtitle/App Name ("team builder", "battle calculator", "damage calculator", "speed calculator", "ev iv calculator").
+- **Deliberately omits every word already indexed via the App Name (`Oak – AI Coach` → `oak`, `ai`, `coach`) or Subtitle (`Team Builder & Calculator` → `team`, `builder`, `calculator`)** so no field space is wasted on duplication.
+- **1.1 rename delta:** added `battle` (left the App Name) and `chat`; dropped `regulation` to stay under 100.
+- Adjacent placement of `type`/`chart`/`weakness`/`coverage` lets Apple's auto-combination produce "type chart", "type weakness", "type coverage" alongside cross-field combinations with the Subtitle/Keywords ("team builder", "battle calculator", "damage calculator", "speed calculator", "ev iv calculator").
 - `showdown` refers to the third-party Showdown battle-simulator text format (a Smogon-community convention, not a Nintendo trademark) — kept because it's the literal name of the import/export format Oak's team builder supports.
 
 ## Google Play guidance

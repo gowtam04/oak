@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Oak Signal — App Store frames</title>
+  <style>
+    @font-face { font-family: Figtree; src: url("fonts/Figtree-Regular.ttf"); font-weight: 400; }
+    @font-face { font-family: Figtree; src: url("fonts/Figtree-Medium.ttf"); font-weight: 500; }
+    @font-face { font-family: Figtree; src: url("fonts/Figtree-SemiBold.ttf"); font-weight: 600; }
+    @font-face { font-family: Plex; src: url("fonts/IBMPlexMono-Regular.ttf"); font-weight: 400; }
+    @font-face { font-family: Plex; src: url("fonts/IBMPlexMono-Medium.ttf"); font-weight: 500; }
+
+    :root {
+      --bg: #F6F7F9;
+      --surface: #FFFFFF;
+      --sunken: #EEF0F3;
+      --line: #E3E8EF;
+      --ink: #1B2430;
+      --text: #2A3340;
+      --mute: #5B6B7C;
+      --faint: #8A94A0;
+      --red: #E3350D;
+      --on-red: #FFFFFF;
+      --dragon: #6F35FC;
+      --ground: #E2BF65;
+      --steel: #B7B7CE;
+      --water: #6390F0;
+      --fire: #EE8130;
+      --fairy: #D685AD;
+      --ghost: #735797;
+      --dark: #705746;
+      --electric: #F7D02C;
+      --chip-ink: #16181A;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+    body { font-family: Figtree, system-ui, sans-serif; color: var(--ink); }
+
+    .frame { width: 100vw; height: 100vh; position: relative; background: var(--bg); }
+    .copy {
+      position: absolute; top: 4.6vh; left: 7vw; right: 7vw;
+      text-align: center; z-index: 4;
+    }
+    .copy h1 {
+      font-weight: 600; letter-spacing: -0.03em; line-height: 1.05;
+      font-size: clamp(56px, 7.1vw, 92px); color: var(--ink);
+    }
+    .copy p {
+      margin-top: 18px; font-weight: 500; color: var(--mute);
+      font-size: clamp(26px, 2.7vw, 36px); line-height: 1.28;
+    }
+
+    .stage {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      padding-top: 15.8vh;
+    }
+    .phone {
+      --w: min(70vw, 820px);
+      width: var(--w);
+      height: calc(var(--w) * 2.164);
+      position: relative;
+      border-radius: calc(var(--w) * 0.12);
+      background: #1a1d22;
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.35) inset,
+        0 40px 80px -24px rgba(27,36,48,0.28);
+      padding: calc(var(--w) * 0.018);
+    }
+    .screen {
+      position: absolute; inset: calc(var(--w) * 0.018);
+      border-radius: calc(var(--w) * 0.104);
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .island {
+      position: absolute; top: 1.7%; left: 50%; transform: translateX(-50%);
+      width: 28%; height: 3.05%; border-radius: 999px; background: #050608; z-index: 8;
+    }
+    .app { position: absolute; inset: 0; display: flex; flex-direction: column; }
+    #ui { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .status {
+      height: 7.4%;
+      display: flex; align-items: flex-end; justify-content: space-between;
+      padding: 0 7.4% 1.4%;
+      font-size: calc(var(--w) * 0.034); font-weight: 600; color: var(--ink);
+    }
+    .status .icons { letter-spacing: 0.18em; font-size: calc(var(--w) * 0.028); color: var(--ink); }
+    .header {
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.6% 5.4% 2.2%;
+    }
+    .wordmark { font-weight: 600; font-size: calc(var(--w) * 0.048); letter-spacing: -0.03em; }
+    .wordmark i { color: var(--red); font-style: normal; }
+    .scope {
+      display: inline-flex; align-items: center; gap: 8px;
+      color: var(--mute); font-weight: 500; font-size: calc(var(--w) * 0.028);
+    }
+    .led { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
+    .new {
+      width: calc(var(--w) * 0.086); height: calc(var(--w) * 0.086);
+      border-radius: 50%; border: 1px solid var(--line); background: var(--surface);
+      display: grid; place-items: center; color: var(--ink); font-size: calc(var(--w) * 0.038);
+    }
+    .body { flex: 1; min-height: 0; padding: 0 5.2% 3%; overflow: hidden; }
+    .note {
+      margin-left: auto; max-width: 78%;
+      background: var(--sunken); border: 1px solid var(--line);
+      border-radius: 12px; padding: 3.1% 3.6%;
+      font-size: calc(var(--w) * 0.032); line-height: 1.35; color: var(--ink);
+    }
+    .plate {
+      margin-top: 3.2%;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      padding: 4.2% 4.4% 3.8%;
+    }
+    .lead { font-weight: 600; font-size: calc(var(--w) * 0.044); letter-spacing: -0.02em; line-height: 1.22; }
+    .prose { margin-top: 2.4%; color: var(--text); font-size: calc(var(--w) * 0.03); line-height: 1.45; }
+    .facts { margin-top: 3.4%; }
+    .fact {
+      display: grid; grid-template-columns: 1fr auto; gap: 12px;
+      padding: 2.1% 0; border-top: 1px solid var(--line);
+      font-family: Plex, ui-monospace, monospace;
+    }
+    .fact:first-child { border-top: 0; }
+    .fact .k { color: var(--mute); font-size: calc(var(--w) * 0.024); font-weight: 500; }
+    .fact .v { color: var(--ink); font-size: calc(var(--w) * 0.026); }
+    .subject {
+      margin-top: 3.2%; display: flex; align-items: center; gap: 3.4%;
+    }
+    .sprite {
+      width: calc(var(--w) * 0.148); height: calc(var(--w) * 0.148);
+      border-radius: 10px; background: var(--sunken);
+      display: grid; place-items: center; overflow: hidden;
+    }
+    .sprite img { width: 86%; image-rendering: pixelated; }
+    .name { font-weight: 600; font-size: calc(var(--w) * 0.034); }
+    .dex { color: var(--mute); font-weight: 500; font-size: calc(var(--w) * 0.024); margin-left: 6px; }
+    .types { display: flex; gap: 6px; margin-top: 7px; }
+    .type {
+      font-size: calc(var(--w) * 0.022); font-weight: 600;
+      padding: 3px 9px; border-radius: 8px; color: var(--chip-ink);
+    }
+    .type.dragon { background: var(--dragon); color: #fff; }
+    .type.ground { background: var(--ground); }
+    .type.steel { background: var(--steel); }
+    .type.water { background: var(--water); }
+    .type.fire { background: var(--fire); }
+    .type.fairy { background: var(--fairy); }
+    .type.ghost { background: var(--ghost); color: #fff; }
+    .type.dark { background: var(--dark); color: #fff; }
+    .type.electric { background: var(--electric); }
+    .type.grass { background: #7AC74C; }
+    .inferred { margin-top: 3%; font-size: calc(var(--w) * 0.026); color: var(--mute); }
+    .inferred b { color: var(--red); font-weight: 600; }
+    .meta-row { display: flex; gap: 8px; margin-top: 3.2%; }
+    .pill {
+      border: 1px solid var(--line); background: var(--surface); color: var(--mute);
+      border-radius: 999px; padding: 0.7em 1em;
+      font-size: calc(var(--w) * 0.022); font-weight: 500;
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2.8%; }
+    .chip {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 999px; padding: 0.7em 1em;
+      font-size: calc(var(--w) * 0.024); font-weight: 500; color: var(--text);
+    }
+    .composer {
+      flex-shrink: 0;
+      margin: 0 5.2% 2.2%;
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      padding: 2.4% 2.6%;
+    }
+    .composer .ph { flex: 1; color: var(--faint); font-size: calc(var(--w) * 0.028); font-weight: 500; }
+    .send {
+      width: calc(var(--w) * 0.086); height: calc(var(--w) * 0.086);
+      border-radius: 10px; background: var(--red); color: var(--on-red);
+      display: grid; place-items: center; font-weight: 600; font-size: calc(var(--w) * 0.036);
+    }
+    .tabs {
+      flex-shrink: 0;
+      height: 10.4%;
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      background: rgba(246,247,249,0.96);
+      border-top: 1px solid var(--line);
+      padding-bottom: 2.6%;
+    }
+    .tab {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 4px; color: var(--mute); font-size: calc(var(--w) * 0.022); font-weight: 500;
+    }
+    .tab.on { color: var(--red); }
+    .tab .ic { font-size: calc(var(--w) * 0.042); line-height: 1; }
+
+    .title-lg {
+      flex-shrink: 0;
+      padding: 1% 5.4% 2%;
+      font-weight: 600; font-size: calc(var(--w) * 0.072); letter-spacing: -0.03em;
+    }
+    .title-sub {
+      flex-shrink: 0;
+      padding: 0 5.4% 2.4%;
+      color: var(--mute); font-weight: 500; font-size: calc(var(--w) * 0.028);
+    }
+    .row {
+      display: flex; align-items: center; gap: 3.4%;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+      padding: 3% 3.4%; margin-bottom: 2.4%;
+    }
+    .row .who { flex: 1; }
+    .row .who strong { display: block; font-size: calc(var(--w) * 0.032); font-weight: 600; }
+    .row .who span { color: var(--mute); font-size: calc(var(--w) * 0.024); font-weight: 500; }
+    .menu {
+      margin-top: 2.4%;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      box-shadow: 0 12px 32px -16px rgba(27,36,48,0.18);
+      overflow: hidden;
+    }
+    .menu button {
+      width: 100%; text-align: left; border: 0; background: transparent;
+      padding: 3.2% 4%; font: 500 calc(var(--w) * 0.03)/1.2 Figtree, sans-serif;
+      color: var(--ink); border-top: 1px solid var(--line);
+    }
+    .menu button:first-child { border-top: 0; }
+    .picker {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+      overflow: hidden; margin-top: 2%;
+    }
+    .pick {
+      display: flex; align-items: center; gap: 12px;
+      padding: 3.6% 4.2%; border-top: 1px solid var(--line);
+      font-size: calc(var(--w) * 0.032); font-weight: 500;
+    }
+    .pick.head {
+      display: block; padding: 3.2% 4.2% 1.2%; border-top: 1px solid var(--line);
+      color: var(--faint); font-size: calc(var(--w) * 0.022); letter-spacing: 0.06em;
+      text-transform: uppercase; font-weight: 600;
+    }
+    .pick.head:first-child { border-top: 0; }
+    .pick.on .lab { font-weight: 600; }
+    .bar { width: 3px; height: 16px; border-radius: 99px; background: transparent; flex: 0 0 3px; }
+    .pick.on .bar { background: var(--red); }
+    .sheet {
+      position: absolute; left: 0; right: 0; bottom: 10.4%;
+      height: 54%; background: var(--surface);
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -18px 40px -20px rgba(27,36,48,0.28);
+      padding: 3.2% 5.4% 2%;
+      z-index: 5;
+    }
+    .grab { width: 42px; height: 5px; border-radius: 99px; background: var(--line); margin: 0 auto 3.4%; }
+    .starters .row { margin-bottom: 2.2%; }
+    .cat { color: var(--mute); font-size: calc(var(--w) * 0.022); font-weight: 500; margin-bottom: 3px; }
+    .banner {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 0 0 3%; color: var(--mute); font-size: calc(var(--w) * 0.024); font-weight: 500;
+    }
+    .banner a { color: var(--red); font-weight: 600; text-decoration: none; }
+    .dim { position: absolute; inset: 0; background: rgba(27,36,48,0.18); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="frame" id="frame">
+    <div class="copy">
+      <h1 id="h"></h1>
+      <p id="s"></p>
+    </div>
+    <div class="stage">
+      <div class="phone">
+        <div class="screen">
+          <div class="island"></div>
+          <div class="app">
+            <div class="status"><span>9:41</span><span class="icons">●●●● ●</span></div>
+            <div id="ui"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const frames = {
+      1: {
+        h: "Answers, with the why",
+        s: "Reasoning, sources, and a clear flag when something is inferred.",
+        ui: `
+          <div class="header">
+            <div class="wordmark">Oak<i>.</i></div>
+            <div class="scope"><span class="led"></span>National Dex</div>
+            <div class="new">✎</div>
+          </div>
+          <div class="body">
+            <div class="banner">Guest · chats stay on this device <a>Sign in</a></div>
+            <div class="note">Does Garchomp outspeed Dragapult at +1?</div>
+            <div class="plate">
+              <div class="lead">Not without a scarf or a bigger Speed investment.</div>
+              <div class="prose">Dragapult’s 142 base Speed still wins the unboosted race. A +1 Garchomp needs 252 Speed and a boosting nature to get close — and still loses to a similarly invested Dragapult.</div>
+              <div class="facts">
+                <div class="fact"><span class="k">Garchomp base Spe</span><span class="v">102</span></div>
+                <div class="fact"><span class="k">Dragapult base Spe</span><span class="v">142</span></div>
+                <div class="fact"><span class="k">+1 Garchomp, 252 Jolly</span><span class="v">253</span></div>
+              </div>
+              <div class="subject">
+                <div class="sprite"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/445.png" alt=""></div>
+                <div>
+                  <div><span class="name">Garchomp</span><span class="dex">#0445</span></div>
+                  <div class="types"><span class="type dragon">Dragon</span><span class="type ground">Ground</span></div>
+                </div>
+              </div>
+              <div class="inferred"><b>Inferred</b> from base stats at level 50 — no EV spread was given for Dragapult.</div>
+              <div class="meta-row"><span class="pill">Why</span><span class="pill">Sources · 2</span></div>
+            </div>
+          </div>
+          <div class="composer"><div class="ph">Ask Oak…</div><div class="send">↑</div></div>
+          <div class="tabs">
+            <div class="tab on"><div class="ic">▣</div>Chat</div>
+            <div class="tab"><div class="ic">▦</div>Teams</div>
+            <div class="tab"><div class="ic">▤</div>Dex</div>
+            <div class="tab"><div class="ic">●</div>Account</div>
+          </div>`
+      },
+      2: {
+        h: "Build a full team",
+        s: "Species, item, moves, nature, EVs, IVs — then save it for chat.",
+        ui: `
+          <div class="title-lg">Reg H Balance</div>
+          <div class="title-sub">6 / 6 · National Dex</div>
+          <div class="body" style="padding-top:0">
+            ${[
+              [445,"Garchomp","Jolly · Choice Scarf","dragon","ground"],
+              [887,"Dragapult","Timid · Choice Specs","dragon","ghost"],
+              [1008,"Miraidon","Modest · Choice Specs","electric","dragon"],
+              [1000,"Gholdengo","Timid · Air Balloon","steel","ghost"],
+              [983,"Kingambit","Adamant · Leftovers","dark","steel"],
+              [908,"Meowscarada","Jolly · Choice Band","grass","dark"],
+            ].map(([n,name,meta,a,b]) => `
+              <div class="row">
+                <div class="sprite"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${n}.png" alt=""></div>
+                <div class="who"><strong>${name}</strong><span>${meta}</span></div>
+                <div class="types"><span class="type ${a}">${a[0].toUpperCase()+a.slice(1)}</span></div>
+              </div>`).join("")}
+          </div>
+          <div class="tabs">
+            <div class="tab"><div class="ic">▣</div>Chat</div>
+            <div class="tab on"><div class="ic">▦</div>Teams</div>
+            <div class="tab"><div class="ic">▤</div>Dex</div>
+            <div class="tab"><div class="ic">●</div>Account</div>
+          </div>`
+      },
+      3: {
+        h: "Retry, share, keep going",
+        s: "Edit a typo, copy a clean answer, or share a public link.",
+        ui: `
+          <div class="header">
+            <div class="wordmark">Oak<i>.</i></div>
+            <div class="scope"><span class="led"></span>National Dex</div>
+            <div class="new">✎</div>
+          </div>
+          <div class="body">
+            <div class="note">Best Tera for Kingambit into Flutter Mane?</div>
+            <div class="plate">
+              <div class="lead">Tera Dark keeps the STAB and the immunity.</div>
+              <div class="prose">Flutter Mane’s Fairy STAB is the problem. Tera Dark keeps Kowtow Cleave and Sucker Punch, and it turns Fairy into a resist instead of a KO.</div>
+              <div class="subject">
+                <div class="sprite"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/983.png" alt=""></div>
+                <div>
+                  <div><span class="name">Kingambit</span><span class="dex">#0983</span></div>
+                  <div class="types"><span class="type dark">Dark</span><span class="type steel">Steel</span></div>
+                </div>
+              </div>
+              <div class="chips">
+                <span class="chip">Open Kingambit in Dex</span>
+                <span class="chip">Switch to Champions</span>
+              </div>
+              <div class="menu">
+                <button>Copy as human text</button>
+                <button>Share</button>
+                <button>Pin</button>
+                <button>Retry</button>
+              </div>
+            </div>
+          </div>
+          <div class="composer"><div class="ph">Ask Oak…</div><div class="send">↑</div></div>
+          <div class="tabs">
+            <div class="tab on"><div class="ic">▣</div>Chat</div>
+            <div class="tab"><div class="ic">▦</div>Teams</div>
+            <div class="tab"><div class="ic">▤</div>Dex</div>
+            <div class="tab"><div class="ic">●</div>Account</div>
+          </div>`
+      },
+      4: {
+        h: "One tap, new ruleset",
+        s: "Scope sticks the moment you pick it — chat, Dex, and teams follow.",
+        ui: `
+          <div class="header">
+            <div class="wordmark">Oak<i>.</i></div>
+            <div class="scope"><span class="led"></span>National Dex</div>
+            <div class="new">✎</div>
+          </div>
+          <div class="body">
+            <div class="picker">
+              <div class="pick head">Recent</div>
+              <div class="pick on"><span class="bar"></span><span class="lab">National Dex</span></div>
+              <div class="pick"><span class="bar"></span><span class="lab">Champions</span></div>
+              <div class="pick head">All scopes</div>
+              <div class="pick"><span class="bar"></span><span class="lab">Scarlet &amp; Violet</span></div>
+              <div class="pick"><span class="bar"></span><span class="lab">Sword &amp; Shield</span></div>
+              <div class="pick"><span class="bar"></span><span class="lab">Ultra Sun / Ultra Moon</span></div>
+              <div class="pick"><span class="bar"></span><span class="lab">XY / ORAS</span></div>
+              <div class="pick"><span class="bar"></span><span class="lab">Black 2 / White 2</span></div>
+            </div>
+          </div>
+          <div class="composer"><div class="ph">Ask Oak…</div><div class="send">↑</div></div>
+          <div class="tabs">
+            <div class="tab on"><div class="ic">▣</div>Chat</div>
+            <div class="tab"><div class="ic">▦</div>Teams</div>
+            <div class="tab"><div class="ic">▤</div>Dex</div>
+            <div class="tab"><div class="ic">●</div>Account</div>
+          </div>`
+      },
+      5: {
+        h: "See the math",
+        s: "Open a species, move, or calc without leaving the thread.",
+        ui: `
+          <div class="header">
+            <div class="wordmark">Oak<i>.</i></div>
+            <div class="scope"><span class="led"></span>National Dex</div>
+            <div class="new">✎</div>
+          </div>
+          <div class="body" style="opacity:.38">
+            <div class="note">How much does Choice Band Outrage do to Flutter Mane?</div>
+            <div class="plate"><div class="lead">It KOs from full after Stealth Rock.</div></div>
+          </div>
+          <div class="composer"><div class="ph">Ask Oak…</div><div class="send">↑</div></div>
+          <div class="tabs">
+            <div class="tab on"><div class="ic">▣</div>Chat</div>
+            <div class="tab"><div class="ic">▦</div>Teams</div>
+            <div class="tab"><div class="ic">▤</div>Dex</div>
+            <div class="tab"><div class="ic">●</div>Account</div>
+          </div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="subject" style="margin-top:0">
+              <div class="sprite"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/445.png" alt=""></div>
+              <div>
+                <div><span class="name">Garchomp</span><span class="dex">#0445</span></div>
+                <div class="types"><span class="type dragon">Dragon</span><span class="type ground">Ground</span></div>
+              </div>
+            </div>
+            <div class="facts">
+              <div class="fact"><span class="k">Move</span><span class="v">Outrage</span></div>
+              <div class="fact"><span class="k">Item</span><span class="v">Choice Band</span></div>
+              <div class="fact"><span class="k">Roll</span><span class="v">108 – 128%</span></div>
+              <div class="fact"><span class="k">After rocks</span><span class="v">OHKO</span></div>
+              <div class="fact"><span class="k">Defender</span><span class="v">Flutter Mane</span></div>
+            </div>
+            <div class="inferred" style="margin-top:12px"><b>Inferred</b> level 50, 252 Atk Adamant vs 0/0 Flutter Mane.</div>
+          </div>
+          ` 
+      },
+      6: {
+        h: "Start now. Sign in later.",
+        s: "Ask as a guest. Save chats and teams when you want them.",
+        ui: `
+          <div class="header">
+            <div class="wordmark">Oak<i>.</i></div>
+            <div class="scope"><span class="led"></span>National Dex</div>
+            <div class="new">✎</div>
+          </div>
+          <div class="body starters">
+            <div class="banner">Guest · chats stay on this device <a>Sign in</a></div>
+            <div class="row">
+              <div class="who"><div class="cat">Battle</div><strong>Who outspeeds Dragapult after one Dragon Dance?</strong></div>
+            </div>
+            <div class="row">
+              <div class="who"><div class="cat">Dex</div><strong>What does Armor Tail actually block?</strong></div>
+            </div>
+            <div class="row">
+              <div class="who"><div class="cat">Rules</div><strong>Is Terapagos legal in the current regulation?</strong></div>
+            </div>
+            <div class="row">
+              <div class="who"><div class="cat">Meta</div><strong>What’s seeing the most usage in Champions right now?</strong></div>
+            </div>
+          </div>
+          <div class="composer"><div class="ph">Ask Oak…</div><div class="send">↑</div></div>
+          <div class="tabs">
+            <div class="tab on"><div class="ic">▣</div>Chat</div>
+            <div class="tab"><div class="ic">▦</div>Teams</div>
+            <div class="tab"><div class="ic">▤</div>Dex</div>
+            <div class="tab"><div class="ic">●</div>Account</div>
+          </div>`
+      }
+    };
+
+    const id = new URLSearchParams(location.search).get("frame") || "1";
+    const f = frames[id] || frames[1];
+    document.getElementById("h").textContent = f.h;
+    document.getElementById("s").textContent = f.s;
+    document.getElementById("ui").innerHTML = f.ui;
+  </script>
+</body>
+</html>

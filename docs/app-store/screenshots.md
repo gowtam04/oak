@@ -1,29 +1,23 @@
 # Oak — App Store Screenshot Guide (iOS)
 
-6 frames, ordered competitive-first (team building / battle math leads, casual Q&A and onboarding support it) per the agreed audience priority. Written as a production spec for a designer or an image-generation workflow — no trademarked wording appears anywhere in this guide, consistent with the rest of `docs/app-store/`.
+6 frames for **1.1**, rebuilt in **Signal** (`docs/design/signal.md`). Source renderer: `docs/app-store/generated-screenshots/signal/render.html`. Uploaded PNGs live in `generated-screenshots/signal/flat-1290/` (6.7") and `1284x2778/` (6.5"). Promo preview: `generated-screenshots/signal/oak-1.1-preview.mp4` (26s, 886×1920).
+
+No trademarked wording in marketing headlines. In-app UI may show species names, as the product does.
 
 ## Global style notes (apply to every frame)
 
-- **Color palette** (from `docs/design-system/design-system.md`, used purely as color — never named in any on-screen text):
-  - Primary ("brand red"): `#EE5A5A` (light) / `#FF6B6B` (dark)
-  - Secondary ("brand gold"): `#F5A524` (light) / `#F8B73E` (dark)
-  - Accent ("brand azure"): `#3AA0E3` (light) / `#5BB4EF` (dark)
-  - Neutral background: warm off-white `#FBF7EE` / dark mode near-black `#1C1A18`
-  - 18-color type-badge palette (small pill-shaped tags) recurs in Frame 5 — keep these vivid against neutral backgrounds so they read as the app's signature motif.
-- **Typography**: geometric/rounded sans-serif (system-feel, like SF Pro Rounded), medium-to-bold weight for headlines, regular weight for subheadlines and in-app UI text.
-- **Mood across the set**: friendly and confident, with a precise, data-trustworthy undertone — playful chrome around precise data, never silly or cluttered.
-- **Device mockup**: generic iPhone Pro-style frame (no real-device photography, no third-party logos). Vary tilt/position per frame for rhythm, per the notes below.
-- **Loading/activity motif**: where a frame needs to suggest "the agent is working," use a simple dual-tone circular spinner (red/white split) — a generic loading indicator, not any franchise-specific iconography.
+- **Signal palette**: canvas `#F6F7F9`, plates `#FFFFFF`, hairline `#E3E8EF`, ink `#1B2430`, mute `#5B6B7C`, red `#E3350D` only on Send, the wordmark period, the scope LED, and the word *Inferred*.
+- **Typography**: Figtree 600 headlines / 400–500 body. IBM Plex Mono only in fact tables.
+- **Mood**: calm daylight. No cream, no gold wash, no red header, no Instrument chassis.
+- **Device**: generic black iPhone with Dynamic Island, no tilt.
+- **Tabs**: Chat / Teams / Dex / Account — match `RootView`.
 
 ## Screenshot dimensions
 
-- Portrait sets:
-  - **1242×2688 px**
-  - **1284×2778 px**
-- Landscape equivalents, if a future composition ever needs them:
-  - **2688×1242 px**
-  - **2778×1284 px**
-- Oak is iPhone-only (no iPad target in v1) — do not prepare iPad-sized frames.
+- **1290×2796** — 6.7" (`APP_IPHONE_67`)
+- **1284×2778** — 6.5" (`APP_IPHONE_65`)
+- App preview: **886×1920**, 15–30s, H.264 High 4.0, AAC stereo
+- iPhone only — no iPad set
 
 ---
 
