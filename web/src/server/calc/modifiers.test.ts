@@ -9,16 +9,18 @@
  *   - Screens: Reflect, Light Screen (and off)
  *   - Items: Life Orb, Choice Band, Choice Specs, Expert Belt
  *
- * Each listed item / weather / screen must contribute a real multiplier — not
- * `1.0` pretending it applied. Named leftovers (ability / item / knob) go in
- * `unsupported[]` and must NOT be folded into `other_modifier` as
- * 1.0-pretending-it-applied.
+ * Offensive catalog knobs (sun/rain, screens, listed items) must contribute a
+ * real multiplier — not `1.0` pretending they applied. Sand/snow are catalog
+ * weather recorded on `applied.weather` but do not change `other_modifier`
+ * (they boost defender SpD/Def in the engine). Named leftovers go in
+ * `unsupported[]` and must NOT be folded into `other_modifier`.
  *
  * Export under test: `resolveModifiers` (architecture file `modifiers.ts`;
  * exact name was unspecified — this is the name the engine will call).
  *
- * Do not require Smogon-calc parity; only that catalog knobs change the
- * multiplier and unsupported names stay honest.
+ * Do not require Smogon-calc parity; offensive catalog knobs change the
+ * multiplier, sand/snow stay honest as defensive engine-side boosts, and
+ * unsupported names stay listed.
  *
  * Requirement refs: CALC-US-4, CALC-AC-4.2, CALC-AC-4.3, CALC-BR-3.
  */
@@ -95,17 +97,19 @@ describe("resolveModifiers — documented catalog (CALC-BR-3)", () => {
     );
   });
 
-  it("applies sand as a real weather multiplier (catalog knob, not 1.0 pretending)", () => {
+  it("records sand as catalog weather without an offensive Rock boost (CALC-BR-3)", () => {
     const result = resolveModifiers({ weather: "sand", moveType: "rock" });
-    expect(result.other_modifier).not.toBe(1);
+    expect(result.other_modifier).toBe(1);
+    expect(result.applied.weather).toBe("sand");
     expect(result.unsupported.map((s) => s.toLowerCase())).not.toContain(
       "sand",
     );
   });
 
-  it("applies snow as a real weather multiplier (catalog knob, not 1.0 pretending)", () => {
+  it("records snow as catalog weather without an offensive Ice boost (CALC-BR-3)", () => {
     const result = resolveModifiers({ weather: "snow", moveType: "ice" });
-    expect(result.other_modifier).not.toBe(1);
+    expect(result.other_modifier).toBe(1);
+    expect(result.applied.weather).toBe("snow");
     expect(result.unsupported.map((s) => s.toLowerCase())).not.toContain(
       "snow",
     );

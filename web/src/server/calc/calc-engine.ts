@@ -4,6 +4,10 @@
  * No model (CALC-BR-1). Incomplete input never invents a 0 roll (CALC-BR-8).
  * Old gens (1–4) still run the modern formulas and return `caveat` (ADR-14).
  *
+ * Sand/snow are defensive: Rock +50% SpD / Ice +50% Def (not offensive
+ * `other_modifier`). A missing `type/{moveType}` chart is incomplete — never
+ * invent 1× (CALC-BR-3).
+ *
  * Common defensive spreads (CALC-AC-5.2) — only when defender EVs are omitted:
  *   min   — 0 HP / 0 Def (or SpD), neutral nature
  *   bulky — 252 HP / 252 Def (or SpD), neutral nature
@@ -203,15 +207,35 @@ async function loadOffensive(
 }
 
 function typeMultiplier(
-  offensive: OffensiveProfile | null,
+  offensive: OffensiveProfile,
   defenderType: string,
 ): number {
-  if (!offensive) return 1;
   const t = defenderType.toLowerCase();
   if (offensive.no_effect_against.includes(t)) return 0;
   if (offensive.super_effective_against.includes(t)) return 2;
   if (offensive.not_very_effective_against.includes(t)) return 0.5;
   return 1;
+}
+
+/** Sand: Rock defenders +50% SpD. Snow: Ice defenders +50% Def. */
+const WEATHER_DEF_BOOST = 1.5;
+
+function applyWeatherDefense(
+  defense: number,
+  weather: string | undefined,
+  defenderTypes: string[],
+  defKey: NatureStat,
+): number {
+  const w = weather?.trim().toLowerCase();
+  if (!w || w === "none") return defense;
+  const types = new Set(defenderTypes.map((t) => t.toLowerCase()));
+  if (w === "sand" && types.has("rock") && defKey === "spd") {
+    return Math.floor(defense * WEATHER_DEF_BOOST);
+  }
+  if (w === "snow" && types.has("ice") && defKey === "def") {
+    return Math.floor(defense * WEATHER_DEF_BOOST);
+  }
+  return defense;
 }
 
 function computeOne(
@@ -452,16 +476,31 @@ async function rollDamage(
   const typesDef = defenderTypes(defender, defSide.tera);
   const stab = typesAtk.includes(move.type);
   const offensive = await loadOffensive(db, format, move.type);
+  if (!offensive) {
+    return {
+      ok: false,
+      error: "incomplete",
+      detail: `type chart missing for ${move.type}`,
+    };
+  }
   const type_effectiveness = typesDef.reduce(
     (acc, t) => acc * typeMultiplier(offensive, t),
     1,
+  );
+
+  const weather = field?.weather;
+  const defenseAfterWeather = applyWeatherDefense(
+    defense,
+    weather,
+    typesDef,
+    defKey,
   );
 
   return finishEstimate({
     level,
     power: move.power,
     attack,
-    defense,
+    defense: defenseAfterWeather,
     hp,
     stab,
     type_effectiveness,
