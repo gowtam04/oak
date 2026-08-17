@@ -251,23 +251,14 @@ describe("ChatThread — streaming field-notes trail", () => {
     },
   ];
 
-  it("renders one field-note chip per accumulated tool_activity, latest live", () => {
+  it("shows a Looking up sentence of friendly nouns, never raw tool ids", () => {
     render(
       <ChatThread {...props({ status: "streaming", activity: twoTools })} />,
     );
-    const notes = screen.getAllByTestId("field-note");
-    expect(notes).toHaveLength(2);
-    // The mono tool token is a friendly instrument word derived from the
-    // payload's `tool` field — never the raw wire tool name (AH1b0N09K).
-    expect(notes[0]).toHaveTextContent("Dex lookup");
-    expect(notes[1]).toHaveTextContent("Pokémon");
-    // The leading status emoji is stripped; the subject text remains.
-    expect(notes[1]).toHaveTextContent("Fetching Garchomp");
-    expect(notes[1].textContent).not.toContain("📊");
-    // The latest chip is live (spinner); the earlier one is a completed tick.
-    expect(notes[0].className).toContain("chat-thread__note--done");
-    expect(notes[1].className).toContain("chat-thread__note--active");
-    // No generic thinking placeholder once a tool has run.
+    const note = screen.getByTestId("field-note");
+    expect(note).toHaveTextContent("Looking up Dex lookup, Pokémon");
+    expect(note.textContent).not.toContain("resolve_entity");
+    expect(note.textContent).not.toContain("get_pokemon");
     expect(screen.queryByTestId("progress-thinking")).toBeNull();
   });
 
@@ -281,7 +272,7 @@ describe("ChatThread — streaming field-notes trail", () => {
       />,
     );
     const note = screen.getByTestId("field-note");
-    expect(note).toHaveTextContent("Lookup");
+    expect(note).toHaveTextContent("Looking up Lookup");
     expect(note.textContent).not.toContain("SOME_FUTURE_TOOL");
   });
 
@@ -298,8 +289,7 @@ describe("ChatThread — streaming field-notes trail", () => {
       <ChatThread {...props({ status: "streaming", activity: twoTools })} />,
     );
     expect(screen.getByTestId("answer-skeleton")).toBeInTheDocument();
-    // The full trail is visible (not yet collapsed).
-    expect(screen.getByTestId("trail-full")).toBeInTheDocument();
+    expect(screen.getByTestId("field-note")).toBeInTheDocument();
   });
 
   it("applies a desk tint skeleton when activity labels name no type", () => {
@@ -342,7 +332,7 @@ describe("ChatThread — streaming field-notes trail", () => {
     expect(screen.getByTestId("answer-skeleton")).toBeInTheDocument();
   });
 
-  it("collapses the trail to a summary chip once prose starts streaming", () => {
+  it("keeps the Looking up line once prose starts streaming", () => {
     render(
       <ChatThread
         {...props({
@@ -352,50 +342,8 @@ describe("ChatThread — streaming field-notes trail", () => {
         })}
       />,
     );
-    // The trail folds to a compact summary chip ("2 lookups · Ns").
-    const summary = screen.getByTestId("trail-summary");
-    expect(summary).toHaveTextContent("2 lookups");
-    // The full trail is hidden until expanded, and the skeleton is gone.
-    expect(screen.queryByTestId("trail-full")).toBeNull();
+    expect(screen.getByTestId("field-note")).toHaveTextContent("Looking up");
     expect(screen.queryByTestId("answer-skeleton")).toBeNull();
-    // The streamed answer takes the skeleton's place.
     expect(screen.getByTestId("streaming-answer")).toBeInTheDocument();
-  });
-
-  it("re-expands the full trail when the summary chip is toggled", () => {
-    render(
-      <ChatThread
-        {...props({
-          status: "streaming",
-          activity: twoTools,
-          streamingMarkdown: "Only **Garchomp** qualifies.",
-        })}
-      />,
-    );
-    const summary = screen.getByTestId("trail-summary");
-    expect(summary).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(summary);
-    expect(summary).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getAllByTestId("field-note")).toHaveLength(2);
-    // Toggling again re-collapses it.
-    fireEvent.click(summary);
-    expect(screen.queryByTestId("trail-full")).toBeNull();
-  });
-
-  it("reveals the elapsed-time counter only after a few seconds, in mono", () => {
-    vi.useFakeTimers();
-    try {
-      render(<ChatThread {...props({ status: "streaming" })} />);
-      // Hidden initially so a fast turn never flashes a "0s" badge.
-      expect(screen.queryByTestId("progress-elapsed")).toBeNull();
-      act(() => {
-        vi.advanceTimersByTime(3000);
-      });
-      const elapsed = screen.getByTestId("progress-elapsed");
-      expect(elapsed).toHaveTextContent("3s");
-      expect(elapsed.className).toContain("mono-num");
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });

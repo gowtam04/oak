@@ -53,17 +53,18 @@ describe("ConversationRow", () => {
     expect(h.onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the OPEN stamp only when active (specimen-desk plate)", () => {
+  it("marks the open row without an OPEN stamp", () => {
     setup({}, { active: false });
-    expect(screen.queryByTestId("conv-row-open")).toBeNull();
+    expect(screen.getByTestId("conversation-row")).not.toHaveAttribute(
+      "data-active",
+    );
     cleanup();
     setup({}, { active: true });
-    const stamp = screen.getByTestId("conv-row-open");
-    expect(stamp).toHaveTextContent("OPEN");
     expect(screen.getByTestId("conversation-row")).toHaveAttribute(
       "data-active",
       "true",
     );
+    expect(screen.queryByTestId("conv-row-open")).toBeNull();
   });
 
 

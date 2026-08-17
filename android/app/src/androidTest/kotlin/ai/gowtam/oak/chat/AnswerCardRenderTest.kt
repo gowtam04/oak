@@ -86,23 +86,19 @@ class AnswerCardRenderTest {
     }
 
     @Test
-    fun aMinimalAnsweredCardShowsOnlyTheAlwaysOnScopeTagAndTheAnswerBody() {
+    fun aMinimalAnsweredCardShowsOnlyTheAnswerBody() {
         val answer = minimalAnswer(OakAnswer.Status.Answered)
 
         composeTestRule.setContent {
             OakTheme { AnswerCard(answer = answer) }
         }
 
-        // `generation_basis.generation` is a REQUIRED, non-blank field on every real
-        // OakAnswer (web/src/agent/schemas.ts) — component-design.md gates the scope
-        // tag on "generation non-blank", which every genuine payload satisfies. So a
-        // realistic "minimal" answer (this fixture) always shows the scope tag; it is
-        // not one of the truly optional (render-if-present) blocks. Every field that
-        // IS actually optional (status badge, caveat, subjects, …) is correctly absent.
+        // Signal plate: scope lives in the header LED, not on the card. A minimal
+        // answered payload therefore shows only the always-on answer body.
         composeTestRule.onNodeWithTag("section:answer").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("section:scope").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("section:scope").assertDoesNotExist()
         composeTestRule.onNodeWithTag("section:status").assertDoesNotExist()
-        assertEquals(listOf(AnswerSection.SCOPE, AnswerSection.ANSWER), answerSections(answer))
+        assertEquals(listOf(AnswerSection.ANSWER), answerSections(answer))
     }
 
     @Test
@@ -252,9 +248,9 @@ class AnswerCardRenderTest {
         /** component-design.md "AnswerCard render order" — the authoritative sequence. */
         val EXPECTED_FULL_ORDER = listOf(
             "section:status",
-            "section:scope",
             "section:caveat",
             "section:answer",
+            "section:inferences",
             "section:subjects",
             "section:question",
             "section:candidates",
@@ -263,7 +259,6 @@ class AnswerCardRenderTest {
             "section:suggestions",
             "section:reasoning",
             "section:citations",
-            "section:inferences",
         )
     }
 }

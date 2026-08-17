@@ -156,7 +156,8 @@ describe("VoiceOverlay", () => {
       await tick();
     });
     const ticker = screen.getByTestId("voice-tools");
-    expect(ticker).toHaveTextContent("GET_MOVE");
+    expect(ticker).toHaveTextContent("get move");
+    expect(ticker.textContent).not.toContain("GET_MOVE");
   });
 
   it("shows an error message on a non-timeout server error", async () => {

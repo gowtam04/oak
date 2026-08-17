@@ -10,7 +10,6 @@ import ai.gowtam.oak.wire.DamageCalc
 import ai.gowtam.oak.wire.JsonScalar
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,13 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Functions
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,27 +32,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
- * Renders an answer's `damage_calc` — Oak's worked damage figure, always marked a
- * non-authoritative ESTIMATE (an "ESTIMATE" pill + a warning-tinted border, never color
- * alone). Below the marker it shows the `result`, the `assumptions`, and an optional
- * `breakdown` disclosure. Free-form maps render in stable key-sorted order. Mirrors the
- * iOS `DamageCalcView`; named `DamageCalcBlock` to avoid clashing with the wire type.
+ * Renders an answer's `damage_calc` as a Signal two-column hairline fact table
+ * (`docs/design/signal.md` §4). Rows come only from the payload (`result` then
+ * `assumptions`) — nothing is invented. Plex Mono 12/13. Optional `breakdown`
+ * stays a disclosure. Named `DamageCalcBlock` to avoid clashing with the wire type.
  *
- * [showOpenInViewerButton] defaults to `true` for the answer card's own rendering; the
- * artifact viewer (P7) reuses this same composable for its damage-calc artifact and
- * passes `false`, since the button's destination (this same content) is already what's
- * on screen there.
+ * [showOpenInViewerButton] defaults to `true` for the answer card; the artifact
+ * viewer (P7) reuses this composable and passes `false`.
  */
 @Composable
 fun DamageCalcBlock(
@@ -66,59 +59,40 @@ fun DamageCalcBlock(
 ) {
     val oak = LocalOakColors.current
     var breakdownExpanded by remember { mutableStateOf(false) }
+    val rows = remember(damageCalc.result, damageCalc.assumptions) {
+        sortedEntries(damageCalc.result) + sortedEntries(damageCalc.assumptions)
+    }
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(lerp(oak.surfaceRaised, oak.warning, 0.06f), RoundedCornerShape(OakRadius.md))
-            .border(1.dp, oak.warning.copy(alpha = 0.4f), RoundedCornerShape(OakRadius.md))
-            .padding(OakSpacing.md),
-        verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Bolt, contentDescription = null, tint = oak.textStrong, modifier = Modifier.size(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
             Text(
-                text = "  Damage",
+                text = "Damage",
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = oak.textStrong,
-                modifier = Modifier.weight(1f).semantics { heading() },
+                modifier = Modifier.semantics { heading() },
             )
-            Text(
-                text = "± ESTIMATE",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = oak.warning,
-                modifier = Modifier
-                    .background(oak.warning.copy(alpha = 0.15f), RoundedCornerShape(OakRadius.pill))
-                    .padding(horizontal = OakSpacing.sm, vertical = 3.dp),
-            )
-        }
-
-        if (damageCalc.result.isNotEmpty()) {
-            // Inset readout (soul.md): the headline damage figures sit in a machined
-            // sunken well of their own, larger mono tabular numerals + mono captions —
-            // the single most "instrument" moment in the answer card.
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(oak.surfaceSunken, RoundedCornerShape(OakRadius.md))
-                    .border(1.dp, oak.border, RoundedCornerShape(OakRadius.md))
-                    .padding(OakSpacing.md),
-                verticalArrangement = Arrangement.spacedBy(OakSpacing.xs),
-            ) {
-                for ((key, value) in sortedEntries(damageCalc.result)) {
-                    ReadoutRow(humanize(key), scalarDisplayText(value))
-                }
+            if (damageCalc.isEstimate) {
+                Text(
+                    text = "Estimate",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                    color = oak.warning,
+                )
             }
         }
 
-        if (damageCalc.assumptions.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = "Assumptions",
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = oak.textMuted,
-                )
-                for ((key, value) in sortedEntries(damageCalc.assumptions)) {
-                    ScalarRow(humanize(key), scalarDisplayText(value), emphasized = false)
+        if (rows.isNotEmpty()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                rows.forEachIndexed { index, (key, value) ->
+                    FactRow(label = humanize(key), value = scalarDisplayText(value))
+                    if (index < rows.lastIndex) {
+                        HorizontalDivider(color = oak.border, thickness = 1.dp)
+                    }
                 }
             }
         }
@@ -138,7 +112,6 @@ fun DamageCalcBlock(
                     horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Filled.Functions, contentDescription = null, tint = oak.textMuted, modifier = Modifier.size(16.dp))
                     Text(
                         text = "Show the math",
                         style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
@@ -175,40 +148,33 @@ fun DamageCalcBlock(
     }
 }
 
-/** One line of the inset damage readout: a mono caption + a large mono tabular figure. */
 @Composable
-private fun ReadoutRow(label: String, value: String) {
+private fun FactRow(label: String, value: String) {
     val oak = LocalOakColors.current
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = JetBrainsMonoFamily,
-            color = oak.textMuted,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-            fontFamily = JetBrainsMonoFamily,
-            color = oak.textStrong,
-        )
-    }
-}
-
-@Composable
-private fun ScalarRow(label: String, value: String, emphasized: Boolean) {
-    val oak = LocalOakColors.current
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
+    ) {
         Text(
             text = label,
-            style = if (emphasized) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontFamily = JetBrainsMonoFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp,
+            ),
             color = oak.textMuted,
+            modifier = Modifier.weight(1f),
         )
         Text(
             text = value,
-            style = (if (emphasized) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodySmall)
-                .copy(fontWeight = if (emphasized) FontWeight.SemiBold else FontWeight.Normal),
-            fontFamily = JetBrainsMonoFamily,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontFamily = JetBrainsMonoFamily,
+                fontWeight = FontWeight.Normal,
+                fontSize = 13.sp,
+            ),
             color = oak.textStrong,
         )
     }

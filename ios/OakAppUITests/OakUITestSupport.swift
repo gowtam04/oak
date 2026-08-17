@@ -80,8 +80,8 @@ enum OakUITest {
     static let composerPlaceholder = "Ask Oak"
     static let sendButton = "Send"
     static let newConversation = "New conversation"
-    /// Blank specimen plate prompt (soul.md empty desk — not the old "Ask Oak" hero).
-    static let emptyState = "What are we looking up?"
+    /// Empty-chat title (Signal — not the old "Ask Oak" / "What are we looking up?").
+    static let emptyState = "What do you want to know?"
     static let attachImage = "Attach image"
     static let retry = "Retry"
   }
@@ -90,13 +90,16 @@ enum OakUITest {
   enum Streaming {
     static let thinking = "Thinking…"
     static let usingTools = "Looking things up…"
+    /// Prefix of the live "Looking up {nouns}" sentence (Signal streaming).
+    static let lookingUpPrefix = "Looking up"
     static let answering = "Writing the answer…"
-    static let all = [thinking, usingTools, answering]
+    static let reconnecting = "Reconnecting…"
+    static let all = [thinking, usingTools, answering, reconnecting]
   }
 
   /// Finalized-answer structural markers (`AnswerCardView` tree).
   enum Answer {
-    static let reasoningDisclosure = "Reasoning"
+    static let reasoningDisclosure = "Why"
     static let openTeamInViewer = "Open team in viewer"
   }
 

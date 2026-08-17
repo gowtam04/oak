@@ -40,20 +40,24 @@ final class ChatCriticalPathUITests: XCTestCase {
     // M-NFR-2 — first visible feedback (a streaming phase or a tool-activity row)
     // shows up before the answer is complete. We accept any of the phase labels.
     let firstFeedback = app.staticTexts.matching(
-      NSPredicate(format: "label IN %@", OakUITest.Streaming.all)
+      NSPredicate(
+        format: "label IN %@ OR label BEGINSWITH %@",
+        OakUITest.Streaming.all,
+        OakUITest.Streaming.lookingUpPrefix
+      )
     ).firstMatch
     XCTAssertTrue(
       firstFeedback.waitForExistence(timeout: 12),
       "Expected in-progress streaming feedback shortly after send (M-NFR-2)."
     )
 
-    // M-SUCCESS-3 — a finalized answer renders with its reasoning structure. The
-    // collapsible "Reasoning" disclosure is a stable structural marker that the full
-    // field-by-field AnswerCard rendered (rather than a flat string).
-    let reasoning = app.staticTexts[OakUITest.Answer.reasoningDisclosure]
+    // M-SUCCESS-3 — a finalized answer renders with its Why / Sources footer.
+    // The disclosure is a button labeled "Why" (and a "Why" heading once expanded).
+    let whyButton = app.buttons[OakUITest.Answer.reasoningDisclosure]
+    let whyText = app.staticTexts[OakUITest.Answer.reasoningDisclosure]
     XCTAssertTrue(
-      reasoning.waitForExistence(timeout: 60),
-      "Expected a finalized answer with its reasoning structure (M-SUCCESS-3)."
+      whyButton.waitForExistence(timeout: 60) || whyText.waitForExistence(timeout: 1),
+      "Expected a finalized answer with its Why / Sources structure (M-SUCCESS-3)."
     )
 
     XCTAssertEqual(

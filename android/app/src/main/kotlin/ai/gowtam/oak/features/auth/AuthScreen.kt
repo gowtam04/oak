@@ -5,7 +5,6 @@ import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
-import ai.gowtam.oak.ui.SpaceGroteskFamily
 import ai.gowtam.oak.ui.rememberReduceMotion
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.keyframes
@@ -24,8 +23,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -33,8 +30,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.BasicAlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -106,8 +101,8 @@ fun AuthScreen(viewModel: AuthViewModel, modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Sign in to Oak",
-            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = SpaceGroteskFamily),
+            text = "Sign in",
+            style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.semantics { heading() },
         )

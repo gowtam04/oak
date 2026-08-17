@@ -163,15 +163,13 @@ export default function VoiceOverlay({
           ×
         </button>
 
-        <div
-          className={
-            "voice-orb" +
-            (listening ? " voice-orb--listening" : "") +
-            (speaking ? " voice-orb--speaking" : "")
-          }
-          aria-hidden="true"
-        >
-          <MicGlyph />
+        <div className="sig-live" aria-hidden="true">
+          <i
+            className={
+              "sig-live__pip" +
+              (listening || speaking ? " sig-live__pip--live" : "")
+            }
+          />
         </div>
 
         <p className="voice-overlay__phase" data-testid="voice-phase" aria-live="polite">
@@ -206,7 +204,7 @@ export default function VoiceOverlay({
           <ul className="voice-tools" data-testid="voice-tools">
             {tools.map((t) => (
               <li key={t.id} className="voice-tools__item" data-testid="voice-tool">
-                <span className="ilabel voice-tools__tool">{t.tool.toUpperCase()}</span>
+                <span className="voice-tools__tool">{t.tool.replaceAll("_", " ")}</span>
                 <span className="voice-tools__desc">{noteText(t.label)}</span>
               </li>
             ))}

@@ -38,8 +38,10 @@ final class CrossFeatureUITests: XCTestCase {
     composer.tap()
     composer.typeText("Is Garchomp weak to Ice?")
     app.buttons[OakUITest.Chat.sendButton].tap()
+    let whyButton = app.buttons[OakUITest.Answer.reasoningDisclosure]
+    let whyText = app.staticTexts[OakUITest.Answer.reasoningDisclosure]
     XCTAssertTrue(
-      app.staticTexts[OakUITest.Answer.reasoningDisclosure].waitForExistence(timeout: 60),
+      whyButton.waitForExistence(timeout: 60) || whyText.waitForExistence(timeout: 1),
       "Guest answer should finalize before sign-in."
     )
 

@@ -164,7 +164,7 @@
   --measure-prose: 62ch; /* Signal body measure */
   --chat-col-max: 760px; /* conversation column */
   --composer-max: 680px; /* composer field column */
-  --artifact-panel-w: 460px; /* artifact side panel */
+  --artifact-panel-w: 320px; /* Signal §5.5 right sheet */
 
   /* Neutral ink overlay scrim (behind modals / drawers). */
   --scrim: rgba(13, 16, 18, 0.45);
@@ -671,6 +671,51 @@
   min-height: 0;
   overflow-y: auto;
   scroll-padding-bottom: calc(var(--space-16) + var(--space-8));
+}
+
+/* Signal streaming: red pip + mute nouns + 2px bar */
+.sig-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+.sig-live__pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--poke-red);
+  flex: none;
+  animation: sig-pip 1.2s var(--ease) infinite;
+}
+.sig-live__bar {
+  height: 2px;
+  width: 24%;
+  border-radius: 1px;
+  background: var(--poke-red);
+  animation: sig-bar 2.4s var(--ease) infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sig-live__pip,
+  .sig-live__bar {
+    animation: none;
+  }
+  .sig-live__bar {
+    width: 48%;
+  }
+}
+@keyframes sig-pip {
+  0%, 45% { opacity: 1; }
+  55%, 100% { opacity: 0.25; }
+}
+@keyframes sig-bar {
+  from { width: 24%; }
+  to { width: 72%; }
 }
 
 /* Scrolling thread, centered text column */
@@ -3380,7 +3425,7 @@ button.scope-chip:focus-visible {
 .conv-row[data-active] {
   background: var(--surface);
   border-color: var(--border);
-  box-shadow: var(--shadow-raised);
+  box-shadow: inset 2px 0 0 var(--poke-red);
 }
 .conv-row__rename {
   flex: 1;

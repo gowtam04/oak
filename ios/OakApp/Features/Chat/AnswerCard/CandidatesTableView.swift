@@ -193,7 +193,7 @@ struct CandidatesTableView: View {
         let isSorted = column.id == sortedColumnID
         cell(background: background, accentWash: isSorted, alignment: .trailing) {
           Text(column.value(row))
-            .font(Theme.mono(.subheadline, weight: isSorted ? .semibold : .medium))
+            .font(Theme.mono(.footnote, weight: isSorted ? .medium : .regular))
             .monospacedDigit()
             .foregroundStyle(isSorted ? Theme.textPrimary : Theme.textSecondary)
         }
@@ -258,7 +258,7 @@ struct CandidatesTableView: View {
 
   private func headerLabel(_ text: String) -> some View {
     Text(text)
-      .instrumentLabel()
+      .font(Theme.mono(.caption, weight: .medium))
       .foregroundStyle(Theme.textSecondary)
   }
 
@@ -274,7 +274,7 @@ struct CandidatesTableView: View {
     }
     // instrumentLabel is JBM SemiBold; the caret + ink color carry the sort
     // (custom mono doesn't take an extra weight bump).
-    .instrumentLabel()
+    .font(Theme.mono(.caption, weight: .medium))
     .foregroundStyle(isSorted ? Theme.textPrimary : Theme.textSecondary)
   }
 

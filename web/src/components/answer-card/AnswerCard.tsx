@@ -45,7 +45,7 @@ import { plateFromSubjects } from "@/lib/plate-types";
  *  - `AnswerBody` + `subjects[]` share an "evidence rail" row so sprite cards
  *    sit beside the prose instead of stranding it (media object, stacks on
  *    narrow viewports).
- *  - Reasoning + sources live in one full-width `RECEIPTS · N SOURCE(S)` footer.
+ *  - Reasoning + sources live in a Why / Sources disclosure.
  */
 export default function AnswerCard({
   answer,
