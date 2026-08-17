@@ -8,49 +8,75 @@ import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberReduceMotion
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
- * Live turn chrome: a quiet status sentence while no tokens have arrived,
- * then a neutral answer plate once [streamingText] is non-empty. No pip,
- * no record tick, no fake 24–72% bar, no unsigned red glow.
+ * Live turn chrome: expandable thinking trace, then a neutral answer plate
+ * once [streamingText] is non-empty. The trace stays visible (collapsed to
+ * "Thought for N seconds") above the plate.
  *
- * [elapsedSeconds] is accepted for call-site stability and is not shown.
+ * [elapsedSeconds] is the wall-clock age of the stream; it is frozen into the
+ * header the moment tokens start.
  */
 @Composable
 fun IncomingAnswerPlate(
@@ -59,41 +85,51 @@ fun IncomingAnswerPlate(
     reconnecting: Boolean,
     streamingText: String,
     modifier: Modifier = Modifier,
-    @Suppress("UNUSED_PARAMETER") elapsedSeconds: Int? = null,
+    elapsedSeconds: Int? = null,
 ) {
     if (phase == StreamingPhase.IDLE && streamingText.isEmpty()) return
     val reduceMotion = rememberReduceMotion()
     val awaitingTokens = streamingText.isEmpty()
-    if (awaitingTokens) {
-        StreamingStatus(
-            phase = phase,
-            activities = activities,
-            reconnecting = reconnecting,
-            modifier = modifier,
-        )
-        return
+    var frozenElapsed by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(awaitingTokens, elapsedSeconds) {
+        if (!awaitingTokens && frozenElapsed == null) {
+            frozenElapsed = elapsedSeconds ?: 0
+        }
+        if (awaitingTokens) frozenElapsed = null
     }
-    val enter = if (reduceMotion) {
-        fadeIn(animationSpec = snap())
-    } else {
-        fadeIn(
-            animationSpec = tween(
-                durationMillis = OakMotion.ENTER_MILLIS,
-                easing = OakMotion.fastEasing,
-            ),
-        ) + slideInVertically(
-            animationSpec = tween(
-                durationMillis = OakMotion.ENTER_MILLIS,
-                easing = OakMotion.fastEasing,
-            ),
-        ) { 8 }
-    }
-    AnimatedVisibility(
-        visible = true,
-        enter = enter,
-        modifier = modifier,
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
-        StreamingAnswerPlate(streamingText = streamingText)
+        if (phase != StreamingPhase.IDLE) {
+            StreamingStatus(
+                phase = phase,
+                activities = activities,
+                reconnecting = reconnecting,
+                settled = !awaitingTokens,
+                elapsedSeconds = frozenElapsed ?: elapsedSeconds,
+            )
+        }
+        if (!awaitingTokens) {
+            val enter = if (reduceMotion) {
+                fadeIn(animationSpec = snap())
+            } else {
+                fadeIn(
+                    animationSpec = tween(
+                        durationMillis = OakMotion.ENTER_MILLIS,
+                        easing = OakMotion.fastEasing,
+                    ),
+                ) + slideInVertically(
+                    animationSpec = tween(
+                        durationMillis = OakMotion.ENTER_MILLIS,
+                        easing = OakMotion.fastEasing,
+                    ),
+                ) { 8 }
+            }
+            AnimatedVisibility(visible = true, enter = enter) {
+                StreamingAnswerPlate(streamingText = streamingText)
+            }
+        }
     }
 }
 
@@ -114,8 +150,8 @@ private fun StreamingAnswerPlate(streamingText: String) {
 }
 
 /**
- * Status sentence: accent verb + mute rest + three soft stepping dots.
- * Renders nothing when idle.
+ * Expandable thinking trace: sparkle + shimmering "Thinking", then one row
+ * per live tool call. Collapses to "Thought for N seconds" once tokens start.
  */
 @Composable
 fun StreamingStatus(
@@ -123,81 +159,280 @@ fun StreamingStatus(
     activities: List<ToolActivity>,
     reconnecting: Boolean,
     modifier: Modifier = Modifier,
+    settled: Boolean = false,
+    elapsedSeconds: Int? = null,
 ) {
     if (phase == StreamingPhase.IDLE) return
     val oak = LocalOakColors.current
     val reduceMotion = rememberReduceMotion()
-    val copy = streamingStatusCopy(phase, activities, reconnecting)
-    val sentence = copy.sentence
+    val rows = if (reconnecting) emptyList() else traceRows(activities, settled)
+    val header = thinkingHeader(reconnecting, settled, elapsedSeconds)
+    var userOpen by remember { mutableStateOf<Boolean?>(null) }
+    val autoOpen = rows.isNotEmpty() && !settled && !reconnecting
+    val open = userOpen ?: autoOpen
+    val scene = "${if (reconnecting) 1 else 0}:${if (settled) 1 else 0}:${if (rows.isEmpty()) 0 else 1}"
+    LaunchedEffect(scene) { userOpen = null }
 
-    Row(
+    val expandAnim = if (reduceMotion) {
+        fadeIn(snap()) + expandVertically(snap())
+    } else {
+        fadeIn(tween(OakMotion.ENTER_MILLIS, easing = OakMotion.fastEasing)) +
+            expandVertically(tween(OakMotion.ENTER_MILLIS, easing = OakMotion.fastEasing))
+    }
+    val collapseAnim = if (reduceMotion) {
+        fadeOut(snap()) + shrinkVertically(snap())
+    } else {
+        fadeOut(tween(OakMotion.FAST_MILLIS, easing = OakMotion.fastEasing)) +
+            shrinkVertically(tween(OakMotion.FAST_MILLIS, easing = OakMotion.fastEasing))
+    }
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .semantics(mergeDescendants = true) {
                 liveRegion = LiveRegionMode.Polite
-                contentDescription = sentence
+                contentDescription = header.text
             },
-        horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = buildAnnotatedString {
-                withStyle(SpanStyle(color = oak.accent, fontWeight = FontWeight.SemiBold)) {
-                    append(copy.verb)
-                }
-                if (copy.rest.isNotEmpty()) {
-                    withStyle(SpanStyle(color = oak.textMuted, fontWeight = FontWeight.Medium)) {
-                        append(" ")
-                        append(copy.rest)
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(OakRadius.sm))
+                .then(
+                    if (rows.isNotEmpty()) {
+                        Modifier.clickable { userOpen = !open }
+                    } else {
+                        Modifier
+                    },
+                )
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+        ) {
+            SparkleIcon(
+                color = if (header.live) oak.textMuted else oak.textFaint,
+                modifier = Modifier.size(16.dp),
+            )
+            ShimmerLabel(
+                text = header.text,
+                live = header.live && !reduceMotion,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                ),
+            )
+            if (rows.isNotEmpty()) {
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = oak.textFaint,
+                    modifier = Modifier
+                        .size(14.dp)
+                        .rotate(if (open) 180f else 0f),
+                )
+            }
+        }
+        AnimatedVisibility(
+            visible = open && rows.isNotEmpty(),
+            enter = expandAnim,
+            exit = collapseAnim,
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+                    .padding(start = 10.dp, top = 2.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 4.dp, bottom = 4.dp)
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(oak.border),
+                )
+                Column(
+                    modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    rows.forEach { row ->
+                        TraceRowView(row = row, reduceMotion = reduceMotion)
                     }
                 }
-            },
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        SteppingDots(color = oak.accent, reduceMotion = reduceMotion)
+            }
+        }
     }
 }
 
 @Composable
-private fun SteppingDots(
-    color: Color,
-    reduceMotion: Boolean,
-) {
-    val transition = rememberInfiniteTransition(label = "incomingDots")
-    val cycle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = DOT_CYCLE_MILLIS, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "incomingDotCycle",
-    )
+private fun TraceRowView(row: TraceRow, reduceMotion: Boolean) {
+    val oak = LocalOakColors.current
     Row(
-        modifier = Modifier.clearAndSetSemantics { },
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
-        repeat(3) { index ->
-            val alpha = if (reduceMotion) DOT_REDUCED_ALPHA else dotOpacity(cycle, index)
-            Box(
-                modifier = Modifier
-                    .size(3.dp)
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = alpha)),
+        if (row.active) {
+            SpinningRing(color = oak.textMuted, reduceMotion = reduceMotion)
+        } else {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = oak.textFaint,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+        Text(
+            text = row.primary,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.5.sp,
+            ),
+            color = oak.textStrong,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (row.secondary != null) {
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = row.secondary,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                color = oak.textFaint,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
 }
 
-/** Verb + mute rest for the incoming status line. Dots are visual, not in [sentence]. */
+@Composable
+private fun ShimmerLabel(text: String, live: Boolean, style: TextStyle) {
+    val oak = LocalOakColors.current
+    if (!live) {
+        Text(text = text, style = style, color = oak.textMuted)
+        return
+    }
+    val transition = rememberInfiniteTransition(label = "thinkShimmer")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1_400, easing = LinearEasing),
+        ),
+        label = "thinkShimmerPhase",
+    )
+    var widthPx by remember { mutableFloatStateOf(1f) }
+    val brush = Brush.linearGradient(
+        colors = listOf(oak.textFaint, oak.textStrong, oak.textFaint),
+        start = Offset(widthPx * (phase * 2f - 1.5f), 0f),
+        end = Offset(widthPx * (phase * 2f - 0.5f), 0f),
+    )
+    Text(
+        text = text,
+        style = style.copy(brush = brush),
+        modifier = Modifier.onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) },
+    )
+}
+
+@Composable
+private fun SpinningRing(color: Color, reduceMotion: Boolean) {
+    val transition = rememberInfiniteTransition(label = "thinkSpin")
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 700, easing = LinearEasing),
+        ),
+        label = "thinkSpinAngle",
+    )
+    Canvas(
+        modifier = Modifier
+            .size(12.dp)
+            .rotate(if (reduceMotion) 0f else angle),
+    ) {
+        drawArc(
+            color = color,
+            startAngle = -90f,
+            sweepAngle = 260f,
+            useCenter = false,
+            style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round),
+        )
+    }
+}
+
+@Composable
+private fun SparkleIcon(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val sx = size.width / 24f
+        val sy = size.height / 24f
+        val path = Path().apply {
+            moveTo(12f * sx, 2f * sy)
+            lineTo(14.4f * sx, 9.2f * sy)
+            lineTo(22f * sx, 12f * sy)
+            lineTo(14.4f * sx, 14.8f * sy)
+            lineTo(12f * sx, 22f * sy)
+            lineTo(9.6f * sx, 14.8f * sy)
+            lineTo(2f * sx, 12f * sy)
+            lineTo(9.6f * sx, 9.2f * sy)
+            close()
+        }
+        drawPath(path, SolidColor(color))
+    }
+}
+
+/** Verb + mute rest for legacy callers. New chrome uses [thinkingHeader]. */
 internal data class StreamingStatusCopy(
     val verb: String,
     val rest: String,
 ) {
     val sentence: String
         get() = if (rest.isEmpty()) verb else "$verb $rest"
+}
+
+internal data class ThinkingHeader(
+    val live: Boolean,
+    val text: String,
+)
+
+internal data class TraceRow(
+    val tool: String,
+    val primary: String,
+    val secondary: String?,
+    val active: Boolean,
+)
+
+internal fun thinkingHeader(
+    reconnecting: Boolean,
+    settled: Boolean,
+    elapsedSeconds: Int?,
+): ThinkingHeader {
+    if (reconnecting) return ThinkingHeader(live = true, text = "Reconnecting")
+    if (!settled) return ThinkingHeader(live = true, text = "Thinking")
+    return ThinkingHeader(live = false, text = thoughtFor(elapsedSeconds))
+}
+
+internal fun thoughtFor(elapsedSeconds: Int?): String {
+    val n = elapsedSeconds ?: 0
+    return when {
+        n <= 0 -> "Thought for a moment"
+        n == 1 -> "Thought for 1 second"
+        else -> "Thought for $n seconds"
+    }
+}
+
+internal fun traceRows(activities: List<ToolActivity>, settled: Boolean): List<TraceRow> {
+    val visible = activities.filter { it.tool !in HIDDEN_TOOLS }
+    return visible.mapIndexed { index, activity ->
+        val cleaned = stripLeadingEmoji(activity.label)
+        TraceRow(
+            tool = activity.tool,
+            primary = instrumentToken(activity.tool),
+            secondary = subjectFromLabel(cleaned),
+            active = !settled && index == visible.lastIndex,
+        )
+    }
 }
 
 /**
@@ -209,17 +444,9 @@ internal fun streamingStatusCopy(
     activities: List<ToolActivity>,
     reconnecting: Boolean,
 ): StreamingStatusCopy {
-    if (reconnecting) return StreamingStatusCopy(verb = "Reconnecting", rest = "")
-    val nouns = activities.map { instrumentToken(it.tool) }.distinct()
-    if (nouns.isNotEmpty()) {
-        return StreamingStatusCopy(verb = "Looking up", rest = nouns.joinToString(", "))
-    }
-    return when (phase) {
-        StreamingPhase.IDLE -> StreamingStatusCopy(verb = "", rest = "")
-        StreamingPhase.THINKING -> StreamingStatusCopy(verb = "Thinking", rest = "through your question")
-        StreamingPhase.USING_TOOLS -> StreamingStatusCopy(verb = "Looking", rest = "things up")
-        StreamingPhase.ANSWERING -> StreamingStatusCopy(verb = "Writing", rest = "the answer")
-    }
+    val settled = phase == StreamingPhase.ANSWERING
+    val header = thinkingHeader(reconnecting, settled, elapsedSeconds = null)
+    return StreamingStatusCopy(verb = header.text, rest = "")
 }
 
 /** Combined mute sentence — same words as [streamingStatusCopy], no ellipsis. */
@@ -236,25 +463,59 @@ internal fun streamingStatusSentence(
  */
 internal fun instrumentToken(tool: String): String = INSTRUMENT_TOKENS[tool] ?: UNKNOWN_INSTRUMENT_TOKEN
 
+internal fun stripLeadingEmoji(label: String): String {
+    val stripped = EMOJI_PREFIX.replace(label, "")
+    return stripped.trim()
+}
+
+internal fun subjectFromLabel(cleaned: String): String? {
+    firstQuoted(cleaned)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    val words = cleaned.trimEnd('…', '.', ' ').split(Regex("\\s+")).filter { it.isNotEmpty() }
+    var lastRun = emptyList<String>()
+    var lastRunStart = -1
+    var currentRun = mutableListOf<String>()
+    var currentStart = -1
+    words.forEachIndexed { index, word ->
+        val first = word.firstOrNull()
+        if (first != null && first.isUpperCase()) {
+            if (currentRun.isEmpty()) currentStart = index
+            currentRun.add(word)
+            lastRun = currentRun.toList()
+            lastRunStart = currentStart
+        } else {
+            currentRun = mutableListOf()
+        }
+    }
+    if (lastRun.isEmpty()) return null
+    if (lastRun.size == 1 && lastRunStart == 0) return null
+    return lastRun.joinToString(" ")
+}
+
+private fun firstQuoted(text: String): String? {
+    val pairs = mapOf('“' to '”', '"' to '"', '‟' to '”', '‘' to '’')
+    var closer: Char? = null
+    val buf = StringBuilder()
+    for (ch in text) {
+        val expected = closer
+        if (expected != null) {
+            if (ch == expected) return buf.toString()
+            buf.append(ch)
+        } else {
+            val close = pairs[ch]
+            if (close != null) {
+                closer = close
+                buf.clear()
+            }
+        }
+    }
+    return null
+}
+
 private const val UNKNOWN_INSTRUMENT_TOKEN = "Lookup"
 
-private const val DOT_CYCLE_MILLIS = 2_000
-private const val DOT_DELAY_FRACTION = 0.11f
-private const val DOT_REDUCED_ALPHA = 0.45f
+private val HIDDEN_TOOLS = setOf("reasoning", "submit_answer", "submit_builder_answer")
 
-/** Matches the web `chat-incoming-dots` keyframes (2s, delays 0 / 0.22 / 0.44). */
-private fun dotOpacity(cycle: Float, index: Int): Float {
-    val phase = ((cycle - index * DOT_DELAY_FRACTION) % 1f + 1f) % 1f
-    val low = 0.16f
-    val high = 0.62f
-    return when {
-        phase < 0.18f -> low
-        phase < 0.40f -> low + (high - low) * ((phase - 0.18f) / 0.22f)
-        phase < 0.52f -> high
-        phase < 0.74f -> high + (low - high) * ((phase - 0.52f) / 0.22f)
-        else -> low
-    }
-}
+private val EMOJI_PREFIX = Regex("^[\\p{So}\\p{Cn}\\uFE0F\\u200D\\s]+")
 
 private val INSTRUMENT_TOKENS: Map<String, String> = mapOf(
     "resolve_entity" to "Dex lookup",

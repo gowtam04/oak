@@ -172,8 +172,11 @@ final class ChatViewModel {
   private static let resumeBackoff: Duration = .milliseconds(400)
 
   /// When the current turn's stream started (set on ``send()``), for the quick-stop
-  /// window. `nil` when no turn is in flight.
+  /// window and the thinking-trace elapsed clock. `nil` when no turn is in flight.
   private var turnStartedAt: Date?
+
+  /// Public start time for the in-flight thinking trace. `nil` when idle.
+  var streamStartedAt: Date? { turnStartedAt }
 
   /// True while a reattach is pending or in flight — the turn stays "in flight" and
   /// the status view shows "Reconnecting…" instead of a dead-end error. Cleared once

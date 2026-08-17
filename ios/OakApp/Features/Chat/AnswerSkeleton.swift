@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Live turn chrome: a quiet status sentence while no tokens have arrived,
-/// then a neutral answer plate once `streamingText` is non-empty.
+/// Live turn chrome: expandable thinking trace, then a neutral answer plate
+/// once `streamingText` is non-empty. The trace stays visible (collapsed to
+/// "Thought for N seconds") above the plate.
 struct IncomingAnswerPlate: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -9,18 +10,22 @@ struct IncomingAnswerPlate: View {
   let activities: [ChatViewModel.ToolActivity]
   var reconnecting: Bool = false
   let streamingText: String
+  var startedAt: Date? = nil
 
   private var awaitingTokens: Bool { streamingText.isEmpty }
 
   var body: some View {
-    Group {
-      if awaitingTokens {
+    VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+      if phase != .idle {
         StreamingStatusView(
           phase: phase,
           activities: activities,
-          reconnecting: reconnecting
+          reconnecting: reconnecting,
+          startedAt: startedAt,
+          settled: !awaitingTokens
         )
-      } else {
+      }
+      if !awaitingTokens {
         MarkdownBlockView(streamingText)
           .font(Theme.body(.body))
           .foregroundStyle(Theme.textPrimary)
@@ -54,19 +59,24 @@ struct IncomingAnswerPlate: View {
     IncomingAnswerPlate(
       phase: .thinking,
       activities: [],
-      streamingText: ""
+      streamingText: "",
+      startedAt: Date()
     )
     IncomingAnswerPlate(
       phase: .usingTools,
       activities: [
         .init(tool: "get_pokemon", label: "Looking up Dragapult…"),
       ],
-      streamingText: ""
+      streamingText: "",
+      startedAt: Date().addingTimeInterval(-3)
     )
     IncomingAnswerPlate(
       phase: .answering,
-      activities: [],
-      streamingText: "**Dragapult** is a Dragon/Ghost glass cannon."
+      activities: [
+        .init(tool: "get_pokemon", label: "Looking up Dragapult…"),
+      ],
+      streamingText: "**Dragapult** is a Dragon/Ghost glass cannon.",
+      startedAt: Date().addingTimeInterval(-4)
     )
   }
   .padding()

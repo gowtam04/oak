@@ -251,14 +251,18 @@ describe("ChatThread — streaming field-notes trail", () => {
     },
   ];
 
-  it("shows a Looking up sentence of friendly nouns, never raw tool ids", () => {
+  it("renders friendly step nouns, never raw tool ids", () => {
     render(
       <ChatThread {...props({ status: "streaming", activity: twoTools })} />,
     );
     const note = screen.getByTestId("field-note");
-    expect(note).toHaveTextContent("Looking up Dex lookup, Pokémon");
-    expect(note.textContent).not.toContain("resolve_entity");
-    expect(note.textContent).not.toContain("get_pokemon");
+    expect(note).toHaveTextContent("Thinking");
+    const trace = screen.getByTestId("thinking-trace");
+    expect(trace).toHaveTextContent("Dex lookup");
+    expect(trace).toHaveTextContent("Pokémon");
+    expect(trace).toHaveTextContent("Garchomp");
+    expect(trace.textContent).not.toContain("resolve_entity");
+    expect(trace.textContent).not.toContain("get_pokemon");
     expect(screen.queryByTestId("progress-thinking")).toBeNull();
   });
 
@@ -271,9 +275,10 @@ describe("ChatThread — streaming field-notes trail", () => {
         })}
       />,
     );
-    const note = screen.getByTestId("field-note");
-    expect(note).toHaveTextContent("Looking up Lookup");
-    expect(note.textContent).not.toContain("SOME_FUTURE_TOOL");
+    const trace = screen.getByTestId("thinking-trace");
+    expect(trace).toHaveTextContent("Lookup");
+    expect(trace.textContent).not.toContain("SOME_FUTURE_TOOL");
+    expect(trace.textContent).not.toContain("some_future_tool");
   });
 
   it("exposes instrumentToken with the full copy-table mapping", () => {
@@ -332,15 +337,14 @@ describe("ChatThread — streaming field-notes trail", () => {
     ).toBe("");
   });
 
-  it("falls back to a generic thinking sentence before the first tool runs", () => {
+  it("falls back to a shimmering Thinking header before the first tool runs", () => {
     render(<ChatThread {...props({ status: "streaming" })} />);
-    expect(screen.getByTestId("progress-thinking")).toHaveTextContent(
-      "Thinking through your question",
-    );
+    expect(screen.getByTestId("progress-thinking")).toHaveTextContent("Thinking");
     expect(screen.getByTestId("answer-skeleton")).toBeInTheDocument();
+    expect(screen.queryByRole("listitem")).toBeNull();
   });
 
-  it("hides the thinking sentence once prose starts streaming", () => {
+  it("keeps a collapsed Thought-for header once prose starts streaming", () => {
     render(
       <ChatThread
         {...props({
@@ -350,8 +354,13 @@ describe("ChatThread — streaming field-notes trail", () => {
         })}
       />,
     );
-    expect(screen.queryByTestId("field-note")).toBeNull();
+    const header = screen.getByTestId("field-note");
+    expect(header).toHaveTextContent(/Thought for/);
+    expect(header).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("answer-skeleton")).toBeNull();
     expect(screen.getByTestId("streaming-answer")).toBeInTheDocument();
+    fireEvent.click(header);
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("thinking-trace")).toHaveTextContent("Pokémon");
   });
 });
