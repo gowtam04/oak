@@ -88,12 +88,12 @@ enum OakUITest {
 
   /// Streaming status phases (`StreamingStatusView`).
   enum Streaming {
-    static let thinking = "Thinking…"
-    static let usingTools = "Looking things up…"
+    static let thinking = "Thinking through your question"
+    static let usingTools = "Looking up"
     /// Prefix of the live "Looking up {nouns}" sentence (Signal streaming).
     static let lookingUpPrefix = "Looking up"
-    static let answering = "Writing the answer…"
-    static let reconnecting = "Reconnecting…"
+    static let answering = "Writing the answer"
+    static let reconnecting = "Reconnecting"
     static let all = [thinking, usingTools, answering, reconnecting]
   }
 

@@ -204,4 +204,43 @@ struct ToolTrailTests {
     #expect(!sentence.contains("get_move"))
     #expect(!sentence.contains("get_pokemon"))
   }
+
+  // MARK: Incoming-plate status copy (verb + rest)
+
+  @Test
+  func thinkingCopySplitsVerbAndRest() {
+    let copy = StreamingStatusCopy.parts(phase: .thinking, activities: [], reconnecting: false)
+    #expect(copy.verb == "Thinking")
+    #expect(copy.rest == "through your question")
+    #expect(
+      StreamingStatusCopy.accessibilityLabel(phase: .thinking, activities: [], reconnecting: false)
+        == "Thinking through your question"
+    )
+  }
+
+  @Test
+  func toolsCopyUsesStreamingNouns() {
+    let copy = StreamingStatusCopy.parts(
+      phase: .usingTools,
+      activities: [
+        (tool: "resolve_entity", label: "🔍 Resolving “Farigiraf”…"),
+        (tool: "get_move", label: "Looking up Fake Out…"),
+      ],
+      reconnecting: false
+    )
+    #expect(copy.verb == "Looking up")
+    #expect(copy.rest == "Farigiraf, Fake Out")
+  }
+
+  @Test
+  func answeringAndReconnectCopy() {
+    let writing = StreamingStatusCopy.parts(phase: .answering, activities: [], reconnecting: false)
+    #expect(writing.verb == "Writing")
+    #expect(writing.rest == "the answer")
+    let reconnect = StreamingStatusCopy.parts(
+      phase: .thinking, activities: [], reconnecting: true
+    )
+    #expect(reconnect.verb == "Reconnecting")
+    #expect(reconnect.rest == "")
+  }
 }

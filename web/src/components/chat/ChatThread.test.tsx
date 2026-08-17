@@ -292,16 +292,20 @@ describe("ChatThread — streaming field-notes trail", () => {
     expect(screen.getByTestId("field-note")).toBeInTheDocument();
   });
 
-  it("applies a desk tint skeleton when activity labels name no type", () => {
+  it("uses an unsigned red plate, not a type-wash, while thinking", () => {
     render(
       <ChatThread {...props({ status: "streaming", activity: twoTools })} />,
     );
     const skeleton = screen.getByTestId("answer-skeleton");
-    expect(skeleton.getAttribute("data-plate")).toBe("desk");
-    expect(skeleton.className).toContain("chat-thread__skeleton--desk");
+    expect(skeleton).toHaveAttribute("data-unsigned");
+    expect(skeleton.getAttribute("data-plate")).toBeNull();
+    expect(skeleton.className).not.toContain("chat-thread__skeleton--desk");
+    expect(
+      (skeleton as HTMLElement).style.getPropertyValue("--plate-a"),
+    ).toBe("");
   });
 
-  it("applies a mild type wash when activity labels name a single type", () => {
+  it("stays unsigned even when activity labels name a type", () => {
     render(
       <ChatThread
         {...props({
@@ -316,11 +320,11 @@ describe("ChatThread — streaming field-notes trail", () => {
       />,
     );
     const skeleton = screen.getByTestId("answer-skeleton");
-    expect(skeleton.getAttribute("data-plate")).toBe("typed");
-    expect(skeleton.className).not.toContain("chat-thread__skeleton--desk");
+    expect(skeleton).toHaveAttribute("data-unsigned");
+    expect(skeleton.getAttribute("data-plate")).toBeNull();
     expect(
       (skeleton as HTMLElement).style.getPropertyValue("--plate-a"),
-    ).toBe("var(--type-dragon)");
+    ).toBe("");
   });
 
   it("falls back to a generic thinking chip before the first tool runs", () => {
@@ -332,7 +336,7 @@ describe("ChatThread — streaming field-notes trail", () => {
     expect(screen.getByTestId("answer-skeleton")).toBeInTheDocument();
   });
 
-  it("keeps the Looking up line once prose starts streaming", () => {
+  it("hides the incoming plate once prose starts streaming", () => {
     render(
       <ChatThread
         {...props({
@@ -342,7 +346,7 @@ describe("ChatThread — streaming field-notes trail", () => {
         })}
       />,
     );
-    expect(screen.getByTestId("field-note")).toHaveTextContent("Looking up");
+    expect(screen.queryByTestId("field-note")).toBeNull();
     expect(screen.queryByTestId("answer-skeleton")).toBeNull();
     expect(screen.getByTestId("streaming-answer")).toBeInTheDocument();
   });

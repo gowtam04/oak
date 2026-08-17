@@ -1,11 +1,8 @@
 import SwiftUI
 
-/// The live in-progress indicator shown while a turn streams (chat-experience.md
-/// M-CHAT-US-4): a 7pt red pip, a mute Figtree sentence of friendly nouns, and a
-/// 2pt red bar that eases ~24% → 72%.
-///
-/// No instrument ticker, no `N LOOKUPS` chip, no spinner. Reconnecting copy is
-/// kept. Friendly nouns come from ``ToolTrail`` — raw tool ids never render.
+/// The live in-progress status line: a red verb, mute rest, and three stepping
+/// dots. No pip, no record tick, no fake progress bar. Friendly nouns come from
+/// ``ToolTrail`` — raw tool ids never render.
 ///
 /// Purely presentational — it takes the reducer's coarse ``ChatViewModel/StreamingPhase``
 /// and the tool-activity list and renders them. Dynamic-Type styles and semantic
@@ -14,80 +11,121 @@ struct StreamingStatusView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let phase: ChatViewModel.StreamingPhase
   let activities: [ChatViewModel.ToolActivity]
-  /// When true, an auto-reconnect is pending/in flight after a backgrounding drop — the
-  /// status line shows "Reconnecting…" instead of the phase, matching web's UI.
+  /// When true, an auto-reconnect is pending/in flight after a backgrounding drop —
+  /// the status line shows "Reconnecting" instead of the phase, matching web's UI.
   var reconnecting: Bool = false
-  /// Kept so existing call sites compile. Signal streaming no longer shows a timer.
+  /// Kept so existing call sites compile. The incoming plate no longer shows a timer.
   var elapsedSeconds: Int? = nil
-
-  /// Pip blink phase (1 = on, 0.2 = dim). Solid under Reduce Motion.
-  @State private var pipLit = true
-  /// Live bar width as a fraction of the row (0.24 → 0.72).
-  @State private var barProgress: CGFloat = 0.24
 
   var body: some View {
     if phase != .idle {
-      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-        HStack(spacing: Theme.Spacing.sm) {
-          Circle()
-            .fill(Theme.accent)
-            .frame(width: 7, height: 7)
-            .opacity(reduceMotion || pipLit ? 1 : 0.2)
-            .accessibilityHidden(true)
-          Text(statusSentence)
-            .font(Theme.body(.subheadline))
-            .foregroundStyle(Theme.textSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .contentTransition(.opacity)
-        }
-        .animation(reduceMotion ? nil : Theme.Motion.smooth, value: phase)
-
-        GeometryReader { geo in
-          Capsule()
-            .fill(Theme.accent)
-            .frame(width: max(2, geo.size.width * barProgress), height: 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(height: 2)
+      HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.xs) {
+        statusText
+          .fixedSize(horizontal: false, vertical: true)
+          .contentTransition(.opacity)
+        SteppingDots(frozen: reduceMotion)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
+      .animation(reduceMotion ? nil : Theme.Motion.smooth, value: phase)
       .accessibilityElement(children: .ignore)
-      .accessibilityLabel(statusSentence)
-      .onAppear { startMotion() }
+      .accessibilityLabel(accessibilitySentence)
     }
   }
 
-  /// Mute sentence: reconnecting, thinking, looking up {nouns}, or writing.
-  private var statusSentence: String {
-    if reconnecting { return "Reconnecting…" }
+  private var copy: (verb: String, rest: String) {
+    StreamingStatusCopy.parts(
+      phase: phase,
+      activities: activities.map { (tool: $0.tool, label: $0.label) },
+      reconnecting: reconnecting
+    )
+  }
+
+  private var accessibilitySentence: String {
+    StreamingStatusCopy.accessibilityLabel(
+      phase: phase,
+      activities: activities.map { (tool: $0.tool, label: $0.label) },
+      reconnecting: reconnecting
+    )
+  }
+
+  private var statusText: Text {
+    let verb = Text(copy.verb)
+      .font(Theme.body(.subheadline, weight: .semibold))
+      .foregroundStyle(Theme.accent)
+    if copy.rest.isEmpty { return verb }
+    return verb + Text(" \(copy.rest)")
+      .font(Theme.body(.subheadline))
+      .foregroundStyle(Theme.textSecondary)
+  }
+}
+
+// MARK: - Copy (pure, testable)
+
+/// Splits the live status sentence into a red verb and mute rest so the incoming
+/// plate can style them independently.
+enum StreamingStatusCopy {
+  static func parts(
+    phase: ChatViewModel.StreamingPhase,
+    activities: [(tool: String, label: String)],
+    reconnecting: Bool
+  ) -> (verb: String, rest: String) {
+    if reconnecting { return ("Reconnecting", "") }
     switch phase {
     case .idle:
-      return ""
+      return ("", "")
     case .thinking:
-      return "Thinking…"
+      return ("Thinking", "through your question")
     case .usingTools:
-      return ToolTrail.streamingSentence(
-        activities: activities.map { (tool: $0.tool, label: $0.label) }
-      )
+      let nouns = ToolTrail.streamingNouns(activities: activities)
+      return ("Looking up", nouns.joined(separator: ", "))
     case .answering:
-      return "Writing the answer…"
+      return ("Writing", "the answer")
     }
   }
 
-  private func startMotion() {
-    guard !reduceMotion else {
-      pipLit = true
-      barProgress = 0.24
-      return
+  static func accessibilityLabel(
+    phase: ChatViewModel.StreamingPhase,
+    activities: [(tool: String, label: String)],
+    reconnecting: Bool
+  ) -> String {
+    let copy = parts(phase: phase, activities: activities, reconnecting: reconnecting)
+    if copy.verb.isEmpty { return "" }
+    if copy.rest.isEmpty { return copy.verb }
+    return "\(copy.verb) \(copy.rest)"
+  }
+}
+
+// MARK: - Stepping dots
+
+/// Three red-tinted dots that step opacity in sequence. Reduce Motion freezes
+/// them at mid-opacity — no blink, no ping-pong.
+private struct SteppingDots: View {
+  let frozen: Bool
+
+  var body: some View {
+    HStack(spacing: 3) {
+      if frozen {
+        ForEach(0..<3, id: \.self) { _ in
+          Circle()
+            .fill(Theme.accent)
+            .frame(width: 4, height: 4)
+            .opacity(0.45)
+        }
+      } else {
+        TimelineView(.periodic(from: .now, by: 0.32)) { context in
+          let step = Int(context.date.timeIntervalSinceReferenceDate / 0.32) % 3
+          HStack(spacing: 3) {
+            ForEach(0..<3, id: \.self) { index in
+              Circle()
+                .fill(Theme.accent)
+                .frame(width: 4, height: 4)
+                .opacity(index == step ? 1 : 0.22)
+            }
+          }
+        }
+      }
     }
-    // 1.2s step blink (0.6s each way). Solid pip under Reduce Motion.
-    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-      pipLit = false
-    }
-    // 2pt bar eases 24% → 72% and back while the turn is live.
-    withAnimation(.timingCurve(0.2, 0, 0, 1, duration: 1.4).repeatForever(autoreverses: true)) {
-      barProgress = 0.72
-    }
+    .accessibilityHidden(true)
   }
 }
 
@@ -330,5 +368,10 @@ enum ToolTrail {
     ]
   )
   .padding()
+}
+
+#Preview("Reconnecting") {
+  StreamingStatusView(phase: .thinking, activities: [], reconnecting: true)
+    .padding()
 }
 #endif

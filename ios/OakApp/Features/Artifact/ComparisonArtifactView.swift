@@ -40,7 +40,7 @@ struct ComparisonArtifactView: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(Theme.Spacing.lg)
-      .oakSpecimenPlate(plateAtmosphere)
+      .oakSpecimenPlate(plateAtmosphere, showsLeadingEdge: false)
       .padding(.horizontal, Theme.Spacing.sm)
       .padding(.vertical, Theme.Spacing.sm)
     }
