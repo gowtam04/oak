@@ -243,6 +243,11 @@ export const account = pgTable(
      * still wins when resuming an existing thread.
      */
     last_used_scope: text("last_used_scope"),
+    /**
+     * Compact vs full answer-card preference (`'full' | 'compact'`).
+     * NULL = full (COMPACT-BR-2). Guests have no server row.
+     */
+    answer_density: text("answer_density"),
   },
   (t) => [
     // Unique normalized email enforces BR-A1 ("exactly one account per email")
@@ -489,6 +494,42 @@ export const shared_answer = pgTable(
   },
   (t) => [
     index("shared_answer_account_created_idx").on(t.account_id, t.created_at),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// conversation_artifact_pin — versioned artifact snapshots (PIN-BR-1–5)
+// Cap 5 is enforced in the repo, not a DB check (addressable `pin_cap`).
+// ---------------------------------------------------------------------------
+export const conversation_artifact_pin = pgTable(
+  "conversation_artifact_pin",
+  {
+    /** UUID. */
+    id: text("id").primaryKey(),
+    /** Logical FK → account.id; other-account ≡ missing (AUTH-BR-2). */
+    account_id: text("account_id").notNull(),
+    /** Logical FK → conversation.id. */
+    conversation_id: text("conversation_id").notNull(),
+    /** `'team_sheet' | 'comparison' | 'calc'`. */
+    kind: text("kind").notNull(),
+    /** Strip label, ≤ 80. */
+    title: text("title").notNull(),
+    /** Versioned snapshot JSON (PIN-BR-1 — never re-fetched). */
+    snapshot_json: text("snapshot_json").notNull(),
+    /** Epoch ms. */
+    created_at: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    index("conversation_artifact_pin_account_conv_created_idx").on(
+      t.account_id,
+      t.conversation_id,
+      t.created_at,
+    ),
+    uniqueIndex("conversation_artifact_pin_account_conv_id_unique").on(
+      t.account_id,
+      t.conversation_id,
+      t.id,
+    ),
   ],
 );
 

@@ -633,6 +633,15 @@ export const citationSchema = z
         "User-visible, plain player language describing the fact relied on. No internal tool, table, or column names and no SQL — say where it came from in plain English (e.g. 'Oak's complete Pokédex records').",
       ),
     endpoint_url: z.string().optional(),
+    // Optional highlight target. Invalid / extra-keyed anchors are stripped by
+    // sanitizeCitationAnchors before parse (CIT-BR-3) — they must never fail
+    // submit_answer. Absent → no highlight (CIT-AC-1.2).
+    anchor: z
+      .object({
+        target: z.enum(["answer_span", "fact_row"]),
+        id: z.string(),
+      })
+      .optional(),
   })
   .strict();
 
@@ -805,6 +814,9 @@ export const oakAnswerSchema = z
     // the proposal is clean. Drives the "illegal in this format" badges in the
     // proposed-team card + viewer. Previously stored answers (no key) stay valid.
     proposed_team_warnings: z.array(teamWarningSchema).optional(),
+    // SERVER-OWNED (VOICE-AC-1.2). Stamped on voice cards; the model must not
+    // emit it — sanitizeCitationAnchors strips a model-authored value.
+    origin: z.literal("voice").optional(),
   })
   .strict();
 

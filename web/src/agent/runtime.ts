@@ -57,6 +57,7 @@ import {
   type PokemonProfile,
 } from "@/agent/schemas";
 import { enrichAnswer } from "@/agent/enrich-answer";
+import { sanitizeCitationAnchors } from "@/agent/sanitize-citation-anchors";
 import type {
   AgentContext,
   AgentMode,
@@ -1669,7 +1670,9 @@ export async function runWithProvider<TAnswer = OakAnswer>(
 
       if (call.name === hooks.submitToolName) {
         const started = Date.now();
-        const parsed = hooks.answerSchema.safeParse(call.input);
+        const parsed = hooks.answerSchema.safeParse(
+          sanitizeCitationAnchors(call.input),
+        );
         if (parsed.success) {
           // Domain-validate the schema-valid answer via the hook (for Oak:
           // roster legality of a proposed_team — see validateOakAnswer). The

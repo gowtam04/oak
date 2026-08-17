@@ -40,7 +40,12 @@ import {
 } from "drizzle-orm";
 
 import { db } from "@/data/db";
-import { conversation, conversation_folder, conversation_message } from "@/data/schema";
+import {
+  conversation,
+  conversation_artifact_pin,
+  conversation_folder,
+  conversation_message,
+} from "@/data/schema";
 import type { Format } from "@/data/formats";
 import { deriveTitle } from "@/server/history/derive-title";
 import type { ChatTurn } from "@/components/types";
@@ -467,6 +472,16 @@ export async function deleteConversation(
   id: string,
 ): Promise<void> {
   await db.transaction(async (tx) => {
+    // Pins first (PIN-BR-5). Filtered by accountId so a wrong-owner call is a
+    // no-op on another account's pins, matching the conversation delete.
+    await tx
+      .delete(conversation_artifact_pin)
+      .where(
+        and(
+          eq(conversation_artifact_pin.account_id, accountId),
+          eq(conversation_artifact_pin.conversation_id, id),
+        ),
+      );
     await tx
       .delete(conversation_message)
       .where(
@@ -481,6 +496,32 @@ export async function deleteConversation(
         and(eq(conversation.account_id, accountId), eq(conversation.id, id)),
       );
   });
+}
+
+/**
+ * Overwrite one assistant row's `answer_json` + `text_content` in place
+ * (voice compile). Same id / seq. Wrong account or missing row → no-op.
+ */
+export async function updateAssistantAnswer(
+  accountId: string,
+  conversationId: string,
+  assistantMessageId: string,
+  answer: OakAnswer,
+): Promise<void> {
+  await db
+    .update(conversation_message)
+    .set({
+      answer_json: JSON.stringify(answer),
+      text_content: answer.answer_markdown,
+    })
+    .where(
+      and(
+        eq(conversation_message.account_id, accountId),
+        eq(conversation_message.conversation_id, conversationId),
+        eq(conversation_message.id, assistantMessageId),
+        eq(conversation_message.role, "assistant"),
+      ),
+    );
 }
 
 /**
