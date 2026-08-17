@@ -42,11 +42,14 @@ import { db } from "@/data/db";
 import { isFormat, type Format } from "@/data/formats";
 import {
   account,
+  account_scope_mru,
   auth_event,
   auth_session,
   conversation,
+  conversation_folder,
   conversation_message,
   otp_code,
+  shared_answer,
   team,
   turn_record,
 } from "@/data/schema";
@@ -312,7 +315,8 @@ export async function deleteExpiredSessions(now: number): Promise<number> {
  * `ON DELETE CASCADE` — see schema.ts), so every dependent row is removed
  * explicitly inside ONE transaction, in FK-safe (child-before-parent) order:
  *
- *   conversation_message → conversation → team → auth_session → turn_record
+ *   shared_answer → account_scope_mru → conversation_folder
+ *   → conversation_message → conversation → team → auth_session → turn_record
  *   (all by account_id) → auth_event (by account_id OR the account's email)
  *   → otp_code (by the account's email) → account (by id)
  *
@@ -342,6 +346,18 @@ export async function deleteAccount(accountId: string): Promise<void> {
       .where(eq(account.id, accountId))
       .limit(1);
     const email = rows[0]?.email;
+
+    // Chat-qol dependents first (folder_id is a logical FK; shares/mru/folders
+    // must go before conversation delete — CQ-OQ-1).
+    await tx
+      .delete(shared_answer)
+      .where(eq(shared_answer.account_id, accountId));
+    await tx
+      .delete(account_scope_mru)
+      .where(eq(account_scope_mru.account_id, accountId));
+    await tx
+      .delete(conversation_folder)
+      .where(eq(conversation_folder.account_id, accountId));
 
     await tx
       .delete(conversation_message)

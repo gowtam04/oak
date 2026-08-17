@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { ConversationSummary } from "@/lib/api/history-client";
+import type { Folder } from "@/lib/api/folder-client";
 import { scopeLabelShort } from "@/lib/scope/scope-label";
 import type { Format } from "@/data/formats";
 
@@ -25,6 +26,11 @@ export interface ConversationRowProps {
   onRename: (title: string) => void;
   onPin: (pinned: boolean) => void;
   onDelete: () => void;
+  onArchive?: (archived: boolean) => void;
+  onMoveToFolder?: (folderId: string | null) => void;
+  onToggleSelect?: () => void;
+  selected?: boolean;
+  folders?: Folder[];
 }
 
 /** Compact relative time, e.g. "just now", "5m", "3h", "2d", else a date. */
@@ -47,11 +53,18 @@ export default function ConversationRow({
   onRename,
   onPin,
   onDelete,
+  onArchive,
+  onMoveToFolder,
+  onToggleSelect,
+  selected = false,
+  folders,
 }: ConversationRowProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(conversation.title);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [folderOpen, setFolderOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const archived = Boolean(conversation.archived);
 
   useEffect(() => {
     if (editing) {
@@ -73,6 +86,15 @@ export default function ConversationRow({
       data-testid="conversation-row"
       data-active={active || undefined}
     >
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          className="conv-row__select"
+          checked={selected}
+          onChange={onToggleSelect}
+          aria-label="Select conversation"
+        />
+      )}
       {editing ? (
         <input
           ref={inputRef}
@@ -167,6 +189,64 @@ export default function ConversationRow({
               >
                 🗑
               </button>
+              {onArchive && (
+                <button
+                  type="button"
+                  className="conv-row__icon-btn conv-row__icon-btn--wide"
+                  onClick={() => onArchive(!archived)}
+                  aria-label={
+                    archived
+                      ? "Unarchive conversation"
+                      : "Archive conversation"
+                  }
+                  title={archived ? "Unarchive" : "Archive"}
+                >
+                  {archived ? "Unarchive" : "Archive"}
+                </button>
+              )}
+              {onMoveToFolder && folders && folders.length > 0 && (
+                <span className="conv-row__folder">
+                  <button
+                    type="button"
+                    className="conv-row__icon-btn conv-row__icon-btn--wide"
+                    onClick={() => setFolderOpen((o) => !o)}
+                    aria-haspopup="menu"
+                    aria-expanded={folderOpen}
+                    aria-label="Move to folder"
+                  >
+                    File
+                  </button>
+                  {folderOpen && (
+                    <div className="conv-row__folder-menu" role="menu">
+                      {folders.map((folder) => (
+                        <button
+                          key={folder.id}
+                          type="button"
+                          role="menuitem"
+                          className="conv-row__folder-item"
+                          onClick={() => {
+                            onMoveToFolder(folder.id);
+                            setFolderOpen(false);
+                          }}
+                        >
+                          {folder.name}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="conv-row__folder-item"
+                        onClick={() => {
+                          onMoveToFolder(null);
+                          setFolderOpen(false);
+                        }}
+                      >
+                        Unfiled
+                      </button>
+                    </div>
+                  )}
+                </span>
+              )}
             </>
           )}
         </div>

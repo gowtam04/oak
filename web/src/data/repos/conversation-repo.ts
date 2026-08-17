@@ -25,10 +25,22 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { and, asc, desc, eq, exists, ilike, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { db } from "@/data/db";
-import { conversation, conversation_message } from "@/data/schema";
+import { conversation, conversation_folder, conversation_message } from "@/data/schema";
 import type { Format } from "@/data/formats";
 import { deriveTitle } from "@/server/history/derive-title";
 import type { ChatTurn } from "@/components/types";
@@ -45,6 +57,8 @@ export interface Conversation {
   title: string;
   format: string; // a Format literal — "national-dex" (default) | "champions" | "scarlet-violet" | "gen-1"…"gen-8"
   pinned: boolean;
+  archived: boolean;
+  folderId: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -55,6 +69,8 @@ export interface ConversationSummary {
   title: string;
   format: string;
   pinned: boolean;
+  archived: boolean;
+  folderId: string | null;
   updatedAt: number;
 }
 
@@ -81,6 +97,15 @@ function likePattern(q: string): string {
   return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
+function codedError(code: string, message = code): Error {
+  const err = new Error(message);
+  (err as Error & { code: string }).code = code;
+  return err;
+}
+
+const PIN_LIMIT = 50;
+const FORK_TITLE_MAX = 120;
+
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------
@@ -92,14 +117,34 @@ function likePattern(q: string): string {
  */
 export async function listConversations(
   accountId: string,
-  opts?: { q?: string; format?: string },
+  opts?: {
+    q?: string;
+    format?: string;
+    folder_id?: string;
+    archived?: boolean;
+    include_archived?: boolean;
+  },
 ): Promise<ConversationSummary[]> {
   const conditions = [eq(conversation.account_id, accountId)];
 
   const format = opts?.format?.trim();
   if (format) conditions.push(eq(conversation.format, format));
 
+  const folderId = opts?.folder_id;
+  if (folderId === "unfiled") {
+    conditions.push(isNull(conversation.folder_id));
+  } else if (folderId) {
+    conditions.push(eq(conversation.folder_id, folderId));
+  }
+
   const q = opts?.q?.trim();
+  if (opts?.archived === true) {
+    conditions.push(eq(conversation.archived, 1));
+  } else if (!(q && opts?.include_archived)) {
+    // Default list (ORG-BR-3) and search without include_archived hide archived.
+    conditions.push(eq(conversation.archived, 0));
+  }
+
   if (q) {
     const pattern = likePattern(q);
     // Title hit OR a message-text hit (correlated EXISTS over this
@@ -125,13 +170,19 @@ export async function listConversations(
       title: conversation.title,
       format: conversation.format,
       pinned: conversation.pinned,
+      archived: conversation.archived,
+      folderId: conversation.folder_id,
       updatedAt: conversation.updated_at,
     })
     .from(conversation)
     .where(and(...conditions))
     .orderBy(desc(conversation.pinned), desc(conversation.updated_at));
 
-  return rows.map((r) => ({ ...r, pinned: r.pinned === 1 }));
+  return rows.map((r) => ({
+    ...r,
+    pinned: r.pinned === 1,
+    archived: r.archived === 1,
+  }));
 }
 
 /** Get a conversation's metadata, or `null` if missing / not this account's. */
@@ -146,6 +197,8 @@ export async function getConversation(
       title: conversation.title,
       format: conversation.format,
       pinned: conversation.pinned,
+      archived: conversation.archived,
+      folderId: conversation.folder_id,
       createdAt: conversation.created_at,
       updatedAt: conversation.updated_at,
     })
@@ -153,7 +206,9 @@ export async function getConversation(
     .where(and(eq(conversation.account_id, accountId), eq(conversation.id, id)))
     .limit(1);
   const row = rows[0];
-  return row ? { ...row, pinned: row.pinned === 1 } : null;
+  return row
+    ? { ...row, pinned: row.pinned === 1, archived: row.archived === 1 }
+    : null;
 }
 
 /** Get a conversation's turns in `seq` order, or `[]` if missing / not owned. */
@@ -426,6 +481,413 @@ export async function deleteConversation(
         and(eq(conversation.account_id, accountId), eq(conversation.id, id)),
       );
   });
+}
+
+/**
+ * Replace the last completed user+assistant pair in place (REC-BR-2).
+ * Reuses the same two seq values, bumps updated_at, does not change title.
+ */
+export async function replaceLastPair(
+  accountId: string,
+  conversationId: string,
+  userText: string,
+  answer: OakAnswer,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const existing = await tx
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(
+        and(
+          eq(conversation.account_id, accountId),
+          eq(conversation.id, conversationId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (existing.length === 0) {
+      throw new Error("conversation not found");
+    }
+
+    const lastTwo = await tx
+      .select({
+        id: conversation_message.id,
+        role: conversation_message.role,
+        seq: conversation_message.seq,
+      })
+      .from(conversation_message)
+      .where(
+        and(
+          eq(conversation_message.account_id, accountId),
+          eq(conversation_message.conversation_id, conversationId),
+        ),
+      )
+      .orderBy(desc(conversation_message.seq))
+      .limit(2);
+
+    const newest = lastTwo[0];
+    const older = lastTwo[1];
+    if (
+      lastTwo.length < 2 ||
+      older.role !== "user" ||
+      newest.role !== "assistant"
+    ) {
+      throw codedError("nothing_to_replace");
+    }
+
+    const userSeq = older.seq;
+    const assistantSeq = newest.seq;
+    const now = Date.now();
+
+    await tx
+      .delete(conversation_message)
+      .where(
+        and(
+          eq(conversation_message.account_id, accountId),
+          eq(conversation_message.conversation_id, conversationId),
+          inArray(conversation_message.id, [older.id, newest.id]),
+        ),
+      );
+
+    await tx.insert(conversation_message).values([
+      {
+        id: randomUUID(),
+        conversation_id: conversationId,
+        account_id: accountId,
+        seq: userSeq,
+        role: "user",
+        text_content: userText,
+        answer_json: null,
+        created_at: now,
+      },
+      {
+        id: randomUUID(),
+        conversation_id: conversationId,
+        account_id: accountId,
+        seq: assistantSeq,
+        role: "assistant",
+        text_content: answer.answer_markdown,
+        answer_json: JSON.stringify(answer),
+        created_at: now,
+      },
+    ]);
+
+    await tx
+      .update(conversation)
+      .set({ updated_at: now })
+      .where(
+        and(
+          eq(conversation.account_id, accountId),
+          eq(conversation.id, conversationId),
+        ),
+      );
+  });
+}
+
+/** Archive / unarchive. No-op if not this account's. */
+export async function setArchived(
+  accountId: string,
+  conversationId: string,
+  archived: boolean,
+): Promise<void> {
+  await db
+    .update(conversation)
+    .set({ archived: archived ? 1 : 0 })
+    .where(
+      and(
+        eq(conversation.account_id, accountId),
+        eq(conversation.id, conversationId),
+      ),
+    );
+}
+
+/**
+ * File a conversation in a folder, or unfile (`folderId` null).
+ * Refuses another account's folder. No-op if the conversation is not owned.
+ */
+export async function setFolder(
+  accountId: string,
+  conversationId: string,
+  folderId: string | null,
+): Promise<void> {
+  const owned = await db
+    .select({ id: conversation.id })
+    .from(conversation)
+    .where(
+      and(
+        eq(conversation.account_id, accountId),
+        eq(conversation.id, conversationId),
+      ),
+    )
+    .limit(1);
+  if (owned.length === 0) {
+    return;
+  }
+
+  if (folderId !== null) {
+    const folder = await db
+      .select({ id: conversation_folder.id })
+      .from(conversation_folder)
+      .where(
+        and(
+          eq(conversation_folder.account_id, accountId),
+          eq(conversation_folder.id, folderId),
+        ),
+      )
+      .limit(1);
+    if (folder.length === 0) {
+      throw new Error("folder not found");
+    }
+  }
+
+  await db
+    .update(conversation)
+    .set({ folder_id: folderId })
+    .where(
+      and(
+        eq(conversation.account_id, accountId),
+        eq(conversation.id, conversationId),
+      ),
+    );
+}
+
+export async function bulkUpdate(
+  accountId: string,
+  input: {
+    ids: string[];
+    action: "delete" | "archive" | "unarchive" | "move";
+    folder_id?: string | null;
+  },
+): Promise<{ updated: string[]; skipped: string[] }> {
+  const updated: string[] = [];
+  const skipped: string[] = [];
+  if (input.ids.length === 0) {
+    return { updated, skipped };
+  }
+
+  const ownedRows = await db
+    .select({ id: conversation.id })
+    .from(conversation)
+    .where(
+      and(
+        eq(conversation.account_id, accountId),
+        inArray(conversation.id, input.ids),
+      ),
+    );
+  const owned = new Set(ownedRows.map((r) => r.id));
+
+  if (input.action === "move" && input.folder_id) {
+    const folder = await db
+      .select({ id: conversation_folder.id })
+      .from(conversation_folder)
+      .where(
+        and(
+          eq(conversation_folder.account_id, accountId),
+          eq(conversation_folder.id, input.folder_id),
+        ),
+      )
+      .limit(1);
+    if (folder.length === 0) {
+      return { updated, skipped: [...input.ids] };
+    }
+  }
+
+  for (const id of input.ids) {
+    if (!owned.has(id)) {
+      skipped.push(id);
+      continue;
+    }
+    if (input.action === "delete") {
+      await deleteConversation(accountId, id);
+    } else if (input.action === "archive") {
+      await setArchived(accountId, id, true);
+    } else if (input.action === "unarchive") {
+      await setArchived(accountId, id, false);
+    } else {
+      await db
+        .update(conversation)
+        .set({ folder_id: input.folder_id ?? null })
+        .where(
+          and(eq(conversation.account_id, accountId), eq(conversation.id, id)),
+        );
+    }
+    updated.push(id);
+  }
+  return { updated, skipped };
+}
+
+export async function forkConversation(
+  accountId: string,
+  sourceId: string,
+  throughAssistantMessageId: string,
+  newId: string,
+): Promise<{ id: string; title: string }> {
+  return db.transaction(async (tx) => {
+    const sourceRows = await tx
+      .select({
+        title: conversation.title,
+        format: conversation.format,
+      })
+      .from(conversation)
+      .where(
+        and(
+          eq(conversation.account_id, accountId),
+          eq(conversation.id, sourceId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    const source = sourceRows[0];
+    if (!source) {
+      throw new Error("conversation not found");
+    }
+
+    const throughRows = await tx
+      .select({
+        seq: conversation_message.seq,
+        role: conversation_message.role,
+      })
+      .from(conversation_message)
+      .where(
+        and(
+          eq(conversation_message.account_id, accountId),
+          eq(conversation_message.conversation_id, sourceId),
+          eq(conversation_message.id, throughAssistantMessageId),
+        ),
+      )
+      .limit(1);
+    const through = throughRows[0];
+    if (!through || through.role !== "assistant") {
+      throw new Error("fork point not found");
+    }
+
+    const prefix = await tx
+      .select({
+        seq: conversation_message.seq,
+        role: conversation_message.role,
+        textContent: conversation_message.text_content,
+        answerJson: conversation_message.answer_json,
+        pinned: conversation_message.pinned,
+      })
+      .from(conversation_message)
+      .where(
+        and(
+          eq(conversation_message.account_id, accountId),
+          eq(conversation_message.conversation_id, sourceId),
+          lte(conversation_message.seq, through.seq),
+        ),
+      )
+      .orderBy(asc(conversation_message.seq));
+
+    const title = `${source.title} (fork)`.slice(0, FORK_TITLE_MAX);
+    const now = Date.now();
+    await tx.insert(conversation).values({
+      id: newId,
+      account_id: accountId,
+      title,
+      format: source.format,
+      pinned: 0,
+      archived: 0,
+      folder_id: null,
+      created_at: now,
+      updated_at: now,
+    });
+
+    if (prefix.length > 0) {
+      await tx.insert(conversation_message).values(
+        prefix.map((m) => ({
+          id: randomUUID(),
+          conversation_id: newId,
+          account_id: accountId,
+          seq: m.seq,
+          role: m.role,
+          text_content: m.textContent,
+          answer_json: m.answerJson,
+          pinned: m.pinned,
+          created_at: now,
+        })),
+      );
+    }
+
+    return { id: newId, title };
+  });
+}
+
+export async function setMessagePinned(
+  accountId: string,
+  conversationId: string,
+  messageId: string,
+  pinned: boolean,
+): Promise<void> {
+  const rows = await db
+    .select({
+      id: conversation_message.id,
+      role: conversation_message.role,
+      pinned: conversation_message.pinned,
+    })
+    .from(conversation_message)
+    .where(
+      and(
+        eq(conversation_message.account_id, accountId),
+        eq(conversation_message.conversation_id, conversationId),
+        eq(conversation_message.id, messageId),
+      ),
+    )
+    .limit(1);
+  const row = rows[0];
+  if (!row) {
+    throw new Error("message not found");
+  }
+  if (row.role !== "assistant") {
+    throw new Error("only assistant messages can be pinned");
+  }
+
+  if (pinned && row.pinned !== 1) {
+    const countRows = await db
+      .select({ n: sql<number>`count(*)`.mapWith(Number) })
+      .from(conversation_message)
+      .where(
+        and(
+          eq(conversation_message.account_id, accountId),
+          eq(conversation_message.conversation_id, conversationId),
+          eq(conversation_message.role, "assistant"),
+          eq(conversation_message.pinned, 1),
+        ),
+      );
+    if ((countRows[0]?.n ?? 0) >= PIN_LIMIT) {
+      throw codedError("pin_limit");
+    }
+  }
+
+  await db
+    .update(conversation_message)
+    .set({ pinned: pinned ? 1 : 0 })
+    .where(
+      and(
+        eq(conversation_message.account_id, accountId),
+        eq(conversation_message.conversation_id, conversationId),
+        eq(conversation_message.id, messageId),
+      ),
+    );
+}
+
+export async function listPinnedMessageIds(
+  accountId: string,
+  conversationId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ id: conversation_message.id })
+    .from(conversation_message)
+    .where(
+      and(
+        eq(conversation_message.account_id, accountId),
+        eq(conversation_message.conversation_id, conversationId),
+        eq(conversation_message.role, "assistant"),
+        eq(conversation_message.pinned, 1),
+      ),
+    )
+    .orderBy(asc(conversation_message.seq));
+  return rows.map((r) => r.id);
 }
 
 /** A fresh server-minted turn id for the append path (not a client turn id). */

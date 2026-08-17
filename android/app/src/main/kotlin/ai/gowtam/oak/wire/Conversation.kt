@@ -36,6 +36,10 @@ data class ConversationSummary(
     val pinned: Boolean,
     /** Epoch-ms of last activity. Wire key is camelCase. */
     val updatedAt: Long,
+    /** Hidden from the default list (ORG-US-2). Absent on older payloads. */
+    val archived: Boolean = false,
+    /** One folder or unfiled (ORG-US-1). Absent on older payloads. */
+    val folderId: String? = null,
 )
 
 /**
@@ -57,6 +61,10 @@ data class ConversationDetail(
      * is gone. `null` ⇒ nothing in flight; absent on older servers ⇒ decodes to `null`.
      */
     @SerialName("active_turn") val activeTurn: ActiveTurn? = null,
+    val archived: Boolean = false,
+    val folderId: String? = null,
+    /** Assistant message ids in thread (seq) order. */
+    val pinnedMessageIds: List<String> = emptyList(),
 )
 
 /** The `active_turn` field of [ConversationDetail] — just the running turn's id. */

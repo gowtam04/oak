@@ -29,6 +29,7 @@ struct RootView: View {
 
   /// The selected tab, tracked so tab changes can fire haptics + a symbol bounce.
   @State private var selection: AppTab = .chat
+  @State private var presentedShareId: String?
 
   /// The four root destinations. Named `AppTab` to avoid colliding with SwiftUI's
   /// `Tab`; `Hashable` so it can back the `TabView(selection:)`.
@@ -87,6 +88,31 @@ struct RootView: View {
         Task { await appState.importGuestThread(using: services.history) }
       }
     }
+    .onChange(of: appState.pendingDestination) { _, destination in
+      guard let destination else { return }
+      switch destination {
+      case .teams, .team:
+        selection = .teams
+      case .dex:
+        selection = .dex
+      case .conversation:
+        selection = .chat
+      case let .share(id):
+        presentedShareId = id
+        appState.pendingDestination = nil
+      }
+    }
+    .sheet(item: Binding(
+      get: { presentedShareId.map { IdentifiedShare(id: $0) } },
+      set: { presentedShareId = $0?.id }
+    )) { item in
+      ShareSnapshotView(shareId: item.id)
+    }
+    .onOpenURL { url in
+      if let id = Self.shareId(from: url) {
+        presentedShareId = id
+      }
+    }
     .sheet(
       item: Binding(
         get: { updateModel.pendingSoftUpdate },
@@ -104,6 +130,20 @@ struct RootView: View {
         onNotNow: { updateModel.dismissSoftUpdate() }
       )
     }
+  }
+}
+
+private struct IdentifiedShare: Identifiable {
+  let id: String
+}
+
+extension RootView {
+  /// `/a/{id}` on the Oak origin (public share links).
+  static func shareId(from url: URL) -> String? {
+    let parts = url.pathComponents.filter { $0 != "/" }
+    guard parts.count >= 2, parts[0] == "a" else { return nil }
+    let id = parts[1]
+    return id.isEmpty ? nil : id
   }
 }
 

@@ -60,9 +60,11 @@ targets:
       - path: OakApp
     settings:
       base:
+        PRODUCT_NAME: OakApp
         PRODUCT_BUNDLE_IDENTIFIER: ai.gowtam.oak
         INFOPLIST_FILE: OakApp/Resources/Info.plist
         GENERATE_INFOPLIST_FILE: "NO"
+        ENABLE_TESTABILITY: "YES"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
@@ -99,8 +101,11 @@ targets:
       - target: OakApp
     settings:
       base:
+        PRODUCT_NAME: OakAppTests
         PRODUCT_BUNDLE_IDENTIFIER: ai.gowtam.oak.OakAppTests
         GENERATE_INFOPLIST_FILE: "YES"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/OakApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OakApp"
 
   OakAppUITests:
     type: bundle.ui-testing
@@ -112,6 +117,7 @@ targets:
       - target: OakApp
     settings:
       base:
+        PRODUCT_NAME: OakAppUITests
         PRODUCT_BUNDLE_IDENTIFIER: ai.gowtam.oak.OakAppUITests
         GENERATE_INFOPLIST_FILE: "YES"
 

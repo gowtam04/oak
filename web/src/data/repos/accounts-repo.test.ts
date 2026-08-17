@@ -56,10 +56,11 @@ afterAll(async () => {
 // One migrated schema for the whole file (the singleton db is captured once);
 // reset the tables between tests so each starts clean. The chat-history + team
 // tables are included because deleteAccount cascades into them, as are the
-// admin-panel usage-recording tables (turn_record, auth_event).
+// admin-panel usage-recording tables (turn_record, auth_event) and the
+// chat-qol tables (shared_answer, account_scope_mru, conversation_folder).
 beforeEach(async () => {
   await fix.db.execute(
-    sql`TRUNCATE TABLE account, auth_session, otp_code, conversation, conversation_message, team, turn_record, auth_event RESTART IDENTITY`,
+    sql`TRUNCATE TABLE account, auth_session, otp_code, conversation, conversation_message, team, turn_record, auth_event, shared_answer, account_scope_mru, conversation_folder RESTART IDENTITY`,
   );
 });
 
@@ -377,14 +378,30 @@ describe("deleteAccount (cascade)", () => {
           sql`SELECT count(*)::int AS n FROM auth_event WHERE email = ${email} AND account_id IS NULL`,
         ),
       ),
+      sharedAnswer: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM shared_answer WHERE account_id = ${accountId}`,
+        ),
+      ),
+      scopeMru: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM account_scope_mru WHERE account_id = ${accountId}`,
+        ),
+      ),
+      folder: n(
+        await fix.db.execute(
+          sql`SELECT count(*)::int AS n FROM conversation_folder WHERE account_id = ${accountId}`,
+        ),
+      ),
     };
   }
 
   /**
    * Seed an account plus one row in every cascade table (2 messages, 1
-   * turn_record, and 2 auth_event rows: one "otp_requested" recorded BEFORE
+   * turn_record, 2 auth_event rows: one "otp_requested" recorded BEFORE
    * the account existed — email set, account_id NULL — and one "otp_verified"
-   * recorded with the account_id set).
+   * recorded with the account_id set; plus one folder, one MRU row, and one
+   * live share — CQ-OQ-1).
    */
   async function seedFullAccount(email: string) {
     const accountId = randomUUID();
@@ -436,6 +453,20 @@ describe("deleteAccount (cascade)", () => {
       sql`INSERT INTO auth_event (id, type, email, account_id, created_flag, created_at)
           VALUES (${randomUUID()}, 'otp_verified', ${email}, ${accountId}, 0, ${t})`,
     );
+    await fix.db.execute(
+      sql`INSERT INTO conversation_folder (id, account_id, name, created_at)
+          VALUES (${randomUUID()}, ${accountId}, 'VGC', ${t})`,
+    );
+    await fix.db.execute(
+      sql`INSERT INTO account_scope_mru (account_id, format, last_used_at)
+          VALUES (${accountId}, 'national-dex', ${t})`,
+    );
+    await fix.db.execute(
+      sql`INSERT INTO shared_answer
+            (id, account_id, conversation_id, conversation_title, question_text, answer_json, created_at, revoked_at)
+          VALUES
+            (${randomUUID()}, ${accountId}, ${convId}, 'Chat', 'hi', '{}', ${t}, NULL)`,
+    );
     return { accountId, email };
   }
 
@@ -449,6 +480,9 @@ describe("deleteAccount (cascade)", () => {
     turnRecord: 1,
     authEventByAccount: 1,
     authEventByEmail: 1,
+    sharedAnswer: 1,
+    scopeMru: 1,
+    folder: 1,
   };
   const EMPTY = {
     account: 0,
@@ -460,9 +494,12 @@ describe("deleteAccount (cascade)", () => {
     turnRecord: 0,
     authEventByAccount: 0,
     authEventByEmail: 0,
+    sharedAnswer: 0,
+    scopeMru: 0,
+    folder: 0,
   };
 
-  it("removes EVERY account-scoped row across all eight cascade tables", async () => {
+  it("removes EVERY account-scoped row including shares, folders, and MRU (CQ-OQ-1, AUTH-BR-5)", async () => {
     const { accountId, email } = await seedFullAccount(EMAIL);
     expect(await snapshot(accountId, email)).toEqual(FULL);
 

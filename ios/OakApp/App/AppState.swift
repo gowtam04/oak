@@ -38,6 +38,12 @@ final class AppState {
   /// and never-chatted accounts. Mirrors web's `lastUsedScope` (`page.tsx`).
   var lastUsedScope: Format?
 
+  /// Signed-in MRU scopes (SCOPE-US-2), most recent first. Empty for guests.
+  var lastUsedScopes: [Format] = []
+
+  /// A pending in-app hop (slash / chip / share URL). Consumed by ``RootView``.
+  var pendingDestination: AppDestination?
+
   /// Pending server-side turns keyed by conversation id (`session_id`) → the
   /// server-minted `turn_id` still generating for that thread
   /// (background-turns/design.md §6 / §6.2). It lives here — not on the chat view
@@ -82,8 +88,10 @@ extension AppState {
       // Seed the new-chat chip from the account preference (signed-in only).
       if case .signedIn = snapshot.state {
         lastUsedScope = snapshot.lastUsedScope
+        lastUsedScopes = snapshot.lastUsedScopes
       } else {
         lastUsedScope = nil
+        lastUsedScopes = []
       }
     } catch {
       Log.auth.error("session restore failed; remaining a guest")
@@ -145,6 +153,8 @@ extension AppState {
     authState = .guest
     activeConversationId = nil
     lastUsedScope = nil
+    lastUsedScopes = []
+    pendingDestination = nil
     // Drop any pending-turn pointers — they belonged to the now-signed-out account
     // (or the prior guest session) and must not drive a reattach after the reset.
     pendingTurns.removeAll()
@@ -218,6 +228,15 @@ private extension GuestTurn {
 enum AuthState: Equatable, Sendable {
   case guest
   case signedIn(email: String)
+}
+
+/// In-app navigation requested by a slash, follow-up chip, or share URL.
+enum AppDestination: Equatable, Sendable {
+  case teams(query: String?)
+  case team(id: String)
+  case dex(query: String?)
+  case conversation(id: String)
+  case share(id: String)
 }
 
 /// One turn of the in-memory guest thread (session-only, never persisted).

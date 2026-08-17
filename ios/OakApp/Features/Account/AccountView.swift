@@ -26,6 +26,7 @@ import SwiftUI
 struct AccountView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(UpdateViewModel.self) private var updateModel
+  @Environment(\.services) private var services
   @State private var model: AccountViewModel
 
   /// Drives the sign-in sheet (presented over the guest state).
@@ -47,6 +48,7 @@ struct AccountView: View {
         errorSection(message)
       }
       if model.isSignedIn {
+        sharedByMeSection
         dangerSection
       }
       aboutSection
@@ -196,6 +198,19 @@ struct AccountView: View {
       }
     } footer: {
       Text(model.tierDescription)
+    }
+  }
+
+  @ViewBuilder
+  private var sharedByMeSection: some View {
+    Section {
+      NavigationLink {
+        SharedByMeView(shares: services.shares)
+      } label: {
+        actionLabel(title: "Shared by me", systemImage: "link")
+      }
+    } footer: {
+      Text("Public answer links you've created. Revoke any time.")
     }
   }
 

@@ -56,6 +56,18 @@ struct DexView: View {
         vm.start()
       }
     }
+    .onChange(of: appState.pendingDestination) { _, destination in
+      if case let .dex(query) = destination {
+        if let query {
+          let name = query.trimmingCharacters(in: .whitespacesAndNewlines)
+          model?.query = name
+          if !name.isEmpty {
+            path.append(DexEntityRoute(kind: .pokemon, query: name))
+          }
+        }
+        appState.pendingDestination = nil
+      }
+    }
   }
 
   @ViewBuilder

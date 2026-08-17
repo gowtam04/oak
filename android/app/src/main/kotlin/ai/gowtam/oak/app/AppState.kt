@@ -112,6 +112,58 @@ class AppState {
         _lastUsedScope.value = format
     }
 
+    private val _lastUsedScopes = MutableStateFlow<List<Format>>(emptyList())
+
+    /**
+     * Signed-in MRU scopes (SCOPE-US-2), most recent first. Empty for guests.
+     */
+    val lastUsedScopes: StateFlow<List<Format>> = _lastUsedScopes.asStateFlow()
+
+    fun setLastUsedScopes(formats: List<Format>) {
+        _lastUsedScopes.value = formats
+    }
+
+    /**
+     * One-shot hop to Dex / Teams from a slash, chip, or empty-desk row.
+     * Consumed by [OakApp] so Chat does not own tab navigation.
+     */
+    sealed interface SurfaceRequest {
+        data object None : SurfaceRequest
+        data class Dex(val query: String?) : SurfaceRequest
+        data class Teams(val id: String? = null, val name: String? = null) : SurfaceRequest
+        data class ShareSnapshot(val id: String) : SurfaceRequest
+    }
+
+    private val _surfaceRequest = MutableStateFlow<SurfaceRequest>(SurfaceRequest.None)
+    val surfaceRequest: StateFlow<SurfaceRequest> = _surfaceRequest.asStateFlow()
+
+    fun requestDex(query: String?) {
+        _surfaceRequest.value = SurfaceRequest.Dex(query)
+    }
+
+    fun requestTeams(id: String? = null, name: String? = null) {
+        _surfaceRequest.value = SurfaceRequest.Teams(id, name)
+    }
+
+    fun requestShareSnapshot(id: String) {
+        _surfaceRequest.value = SurfaceRequest.ShareSnapshot(id)
+    }
+
+    fun consumeSurfaceRequest() {
+        _surfaceRequest.value = SurfaceRequest.None
+    }
+
+    /**
+     * A public share whose proposed team should be imported after the viewer
+     * signs in (SHARE-AC-5.2 / ADR-12).
+     */
+    private val _pendingShareImportId = MutableStateFlow<String?>(null)
+    val pendingShareImportId: StateFlow<String?> = _pendingShareImportId.asStateFlow()
+
+    fun setPendingShareImport(id: String?) {
+        _pendingShareImportId.value = id
+    }
+
     // -------------------------------------------------------------------
     // Pending durable turns (background-turns/design.md §6.3)
     // -------------------------------------------------------------------
@@ -151,8 +203,13 @@ class AppState {
         try {
             val snapshot = auth.me()
             _authState.value = snapshot.state
-            _lastUsedScope.value =
-                if (snapshot.state is AuthState.SignedIn) snapshot.lastUsedScope else null
+            if (snapshot.state is AuthState.SignedIn) {
+                _lastUsedScope.value = snapshot.lastUsedScope
+                _lastUsedScopes.value = snapshot.lastUsedScopes
+            } else {
+                _lastUsedScope.value = null
+                _lastUsedScopes.value = emptyList()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "session restore failed; remaining a guest (${e::class.simpleName})")
         }
@@ -238,7 +295,9 @@ class AppState {
     private fun resetToGuest() {
         _authState.value = AuthState.Guest
         _lastUsedScope.value = null
+        _lastUsedScopes.value = emptyList()
         _activeConversationId.value = null
+        _surfaceRequest.value = SurfaceRequest.None
     }
 
     // -------------------------------------------------------------------

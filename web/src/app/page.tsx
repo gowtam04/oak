@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSseClient } from "@/lib/sse/sse-client";
 import { useScreenWakeLock } from "@/lib/hooks/use-screen-wake-lock";
 import ChatThread from "@/components/chat/ChatThread";
 import Composer from "@/components/chat/Composer";
+import CommandPalette from "@/components/chat/CommandPalette";
+import ShortcutOverlay from "@/components/chat/ShortcutOverlay";
 import ThemeToggle from "@/components/controls/ThemeToggle";
 import AuthMenu from "@/components/auth/AuthMenu";
 import AuthDialog from "@/components/auth/AuthDialog";
@@ -21,8 +24,25 @@ import ArtifactViewer from "@/components/artifact/ArtifactViewer";
 import PlateTuner from "@/components/dev/PlateTuner";
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useConversations } from "@/lib/hooks/use-conversations";
-import { getConversation, importConversation } from "@/lib/api/history-client";
+import { useTeams } from "@/lib/hooks/use-teams";
+import {
+  exportConversation,
+  forkConversation,
+  getConversation,
+  importConversation,
+  listConversations,
+  setMessagePinned,
+  type ConversationSummary,
+  type ExportFormat,
+} from "@/lib/api/history-client";
+import { listTeams, type TeamSummary } from "@/lib/api/teams-client";
+import { persistScope } from "@/lib/api/scope-client";
+import { createShare } from "@/lib/api/share-client";
+import { parseSlashCommand } from "@/lib/chat/slash-commands";
+import type { FollowUpChip } from "@/lib/chat/follow-up-chips";
+import { parseMentions } from "@/lib/chat/mentions";
 import { isFormat, type Format } from "@/data/formats";
+import { scopeLabel } from "@/lib/scope/scope-label";
 import type {
   ChatStatus,
   ChatTurn,
@@ -39,6 +59,74 @@ const SIDEBAR_ID = "history-sidebar";
 
 /** A request stopped within this many ms of being sent wipes the chat. */
 const QUICK_STOP_MS = 2000;
+
+/** Undo-send window on the just-sent user bubble (REC-US-3, ADR-3). */
+const UNDO_MS = 3000;
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/['']/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function slashArg(text: string): string {
+  const trimmed = text.trim();
+  const space = trimmed.search(/\s/);
+  return space === -1 ? "" : trimmed.slice(space).trim();
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+function downloadExport(file: {
+  bytes: Uint8Array;
+  filename: string;
+}): void {
+  const blob = new Blob([file.bytes as BlobPart], {
+    type: file.filename.endsWith(".pdf")
+      ? "application/pdf"
+      : "text/markdown;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function replaceLastPair(
+  prev: ChatTurn[],
+  kind: "retry" | "edit",
+  userText: string,
+  answer: OakAnswer,
+): ChatTurn[] {
+  const next = [...prev];
+  let lastAsst = -1;
+  let lastUser = -1;
+  for (let i = next.length - 1; i >= 0; i--) {
+    if (lastAsst < 0 && next[i]!.role === "assistant") lastAsst = i;
+    if (lastUser < 0 && next[i]!.role === "user") lastUser = i;
+    if (lastAsst >= 0 && lastUser >= 0) break;
+  }
+  if (lastAsst >= 0) {
+    next[lastAsst] = { ...next[lastAsst]!, role: "assistant", answer };
+  }
+  if (kind === "edit" && lastUser >= 0) {
+    const user = next[lastUser]!;
+    if (user.role === "user") {
+      next[lastUser] = { ...user, content: userText };
+    }
+  }
+  return next;
+}
 
 /** Generate a stable id (session id + turn ids). Falls back when crypto.randomUUID is absent. */
 function makeId(): string {
@@ -62,6 +150,7 @@ function makeId(): string {
  * the same `session_id` (ux-design.md). Visuals deferred to `frontend-design`.
  */
 export default function Home() {
+  const router = useRouter();
   const [sessionId, setSessionId] = useState<string>(() => makeId());
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   // Session-only thumbnails for user turns that attached images, keyed by turn id
@@ -99,6 +188,8 @@ export default function Home() {
   // Declared above scope-mirroring so the signed-in gate for lastUsedScope can
   // read it without a temporal-dead-zone reference.
   const [auth, setAuth] = useState<MeResult>({ signedIn: false });
+  const [meReady, setMeReady] = useState(false);
+  const [listsReady, setListsReady] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   // Voice mode (signed-in only). Guests tapping the mic get the sign-in dialog
   // — the app's existing gate for signed-in-only features — instead of the
@@ -116,6 +207,7 @@ export default function Home() {
   // every subsequent `scope` event). Survives New Chat so the chip doesn't flash
   // National Dex for a user mid–Gen 7 run. Guests leave this null.
   const [lastUsedScope, setLastUsedScope] = useState<Format | null>(null);
+  const [lastUsedScopes, setLastUsedScopes] = useState<Format[]>([]);
   // An explicit chip pick, sent as `scope_seed` on the NEXT turn only. Cleared
   // on every scope event: once the server has acknowledged a turn (any turn),
   // the seed's job is done — the conversation's scope is now sticky server-side,
@@ -140,6 +232,23 @@ export default function Home() {
   // plain stop, and restore the stopped message into the composer.
   const requestStartRef = useRef<number>(0);
   const inFlightMessageRef = useRef<string>("");
+  const inFlightImagesRef = useRef<PendingImage[]>([]);
+  const lastUserTextRef = useRef<string>("");
+  const lastUserImagesRef = useRef<PendingImage[]>([]);
+  const lastUserTurnIdRef = useRef<string | null>(null);
+  const recoveryRef = useRef<"retry" | "edit" | null>(null);
+  const [undoTurnId, setUndoTurnId] = useState<string | null>(null);
+  const [imagesMissing, setImagesMissing] = useState(false);
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [mentionedTeam, setMentionedTeam] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Pending durable turn per conversation (background-turns/design.md §6.1:
   // "keep pending turn id per session"). A conversation whose turn keeps running
@@ -166,7 +275,10 @@ export default function Home() {
   }, [status, sessionId]);
   // A fresh object pushed into the Composer to reload its input after a quick
   // stop (identity change is what triggers the reload).
-  const [prefill, setPrefill] = useState<{ text: string } | null>(null);
+  const [prefill, setPrefill] = useState<{
+    text: string;
+    images?: PendingImage[];
+  } | null>(null);
 
   // One-time cleanup: the Champions toggle (and its localStorage-persisted
   // choice) is gone — the header scope chip is now the sole scope control, and
@@ -263,6 +375,28 @@ export default function Home() {
   const conversations = useConversations(auth.signedIn);
   const { refresh: refreshConversations, remove: removeConversation } =
     conversations;
+  const teams = useTeams(auth.signedIn);
+  const [deskConvos, setDeskConvos] = useState<ConversationSummary[]>([]);
+  const [deskTeams, setDeskTeams] = useState<TeamSummary[]>([]);
+  useEffect(() => {
+    if (!auth.signedIn) {
+      setDeskConvos([]);
+      setDeskTeams([]);
+      setListsReady(true);
+      return;
+    }
+    setListsReady(false);
+    let active = true;
+    void Promise.all([listConversations(), listTeams()]).then(([c, t]) => {
+      if (!active) return;
+      setDeskConvos(c);
+      setDeskTeams(t);
+      setListsReady(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [auth.signedIn]);
 
   // Resolve auth state on mount so the header renders guest vs signed-in. The
   // page is a client component, so this runs after hydration; `fetchMe` never
@@ -276,13 +410,18 @@ export default function Home() {
       // Seed the new-chat default chip from the account preference (signed-in
       // only). Guests and never-chatted accounts leave lastUsedScope null →
       // national-dex display fallback.
-      if (
-        me.signedIn &&
-        typeof me.lastUsedScope === "string" &&
-        isFormat(me.lastUsedScope)
-      ) {
-        setLastUsedScope(me.lastUsedScope);
+      if (me.signedIn) {
+        if (typeof me.lastUsedScope === "string" && isFormat(me.lastUsedScope)) {
+          setLastUsedScope(me.lastUsedScope);
+        }
+        if (Array.isArray(me.lastUsedScopes)) {
+          setLastUsedScopes(me.lastUsedScopes.filter(isFormat));
+        }
+        setListsReady(false);
+      } else {
+        setListsReady(true);
       }
+      setMeReady(true);
     });
     return () => {
       active = false;
@@ -298,12 +437,13 @@ export default function Home() {
     setAuthDialogOpen(false);
     void fetchMe().then((me) => {
       setAuth(me);
-      if (
-        me.signedIn &&
-        typeof me.lastUsedScope === "string" &&
-        isFormat(me.lastUsedScope)
-      ) {
-        setLastUsedScope(me.lastUsedScope);
+      if (me.signedIn) {
+        if (typeof me.lastUsedScope === "string" && isFormat(me.lastUsedScope)) {
+          setLastUsedScope(me.lastUsedScope);
+        }
+        if (Array.isArray(me.lastUsedScopes)) {
+          setLastUsedScopes(me.lastUsedScopes.filter(isFormat));
+        }
       }
       // BR-H10 / HIST-US-12: the on-screen guest thread's full-fidelity turns
       // live only on the client at this moment, so save them into the new
@@ -331,6 +471,9 @@ export default function Home() {
   const handleSignedOut = useCallback(() => {
     setAuth({ signedIn: false });
     setLastUsedScope(null);
+    setLastUsedScopes([]);
+    setPinnedIds([]);
+    setSelectedIds([]);
   }, []);
 
   // Commit each terminal answer exactly once (guard against effect re-runs /
@@ -342,75 +485,175 @@ export default function Home() {
   useEffect(() => {
     if (status === "done" && answer && committedAnswerRef.current !== answer) {
       committedAnswerRef.current = answer;
-      setTurns((prev) => [
-        ...prev,
-        { id: makeId(), role: "assistant", answer },
-      ]);
-      if (answer.saved_team) setSavedTeamToOpen(answer.saved_team);
-      // Signed in: the server just persisted this turn (creating the
-      // conversation on the first turn, or bumping it to the top on a
-      // follow-up). Re-list so the sidebar reflects the new title / ordering.
-      if (auth.signedIn) refreshConversations();
-    }
-  }, [status, answer, auth.signedIn, refreshConversations]);
-
-  const handleSend = useCallback(
-    (message: string, images: PendingImage[] = []) => {
-      // Ignore sends while a turn is in flight. The composer is already disabled
-      // then, but a follow-up affordance on an EARLIER answer card (suggestion
-      // chip / question option / "Show all") could otherwise fire this, which
-      // would abort the in-flight stream and leave its user bubble answer-less
-      // (U2). The answer-card chips are also disabled while streaming; this is
-      // the single-choke-point backstop covering every follow-up path.
-      if (status === "thinking") return;
-      requestStartRef.current = Date.now();
-      inFlightMessageRef.current = message;
-      const userTurnId = makeId();
-      setTurns((prev) => [
-        ...prev,
-        { id: userTurnId, role: "user", content: message },
-      ]);
-      // Stash the thumbnails in a session-only side-channel keyed by turn id, so
-      // the user bubble can show what they sent without putting (large, transient)
-      // image data on the ChatTurn itself — keeping history/import payloads text.
-      if (images.length > 0) {
-        setImagePreviews((prev) => ({
+      const kind = recoveryRef.current;
+      recoveryRef.current = null;
+      setUndoTurnId(null);
+      if (kind === "retry" || kind === "edit") {
+        setTurns((prev) => replaceLastPair(prev, kind, lastUserTextRef.current, answer));
+      } else {
+        setTurns((prev) => [
           ...prev,
-          [userTurnId]: images.map((img) => img.previewUrl),
-        }));
+          { id: makeId(), role: "assistant", answer },
+        ]);
       }
-      committedAnswerRef.current = null;
-      const body = {
-        session_id: sessionId,
-        message,
-        // An explicit chip pick rides as this turn's seed; omitted once the
-        // server has acknowledged a turn (the `scope` effect above clears it).
-        ...(scopeSeed ? { scope_seed: scopeSeed } : {}),
-        // Wire-only image fields (mimeType + raw base64); the preview URLs stay
-        // client-side. Omitted entirely for a text-only turn.
-        ...(images.length > 0
-          ? { images: images.map((img) => ({ mimeType: img.mimeType, data: img.data })) }
-          : {}),
-      };
-      send(body);
+      if (answer.saved_team) setSavedTeamToOpen(answer.saved_team);
+      if (auth.signedIn) {
+        refreshConversations();
+        void getConversation(sessionId).then((detail) => {
+          if (!detail) return;
+          setTurns(detail.turns);
+          if (detail.pinnedMessageIds) setPinnedIds(detail.pinnedMessageIds);
+        });
+      }
+    }
+  }, [status, answer, auth.signedIn, refreshConversations, sessionId]);
+
+  const navigateTo = useCallback(
+    (href: string) => {
+      try {
+        router.push(href);
+      } catch {
+        if (typeof window !== "undefined") window.location.assign(href);
+      }
     },
-    [send, sessionId, scopeSeed, status],
+    [router],
   );
 
   // Start a brand-new conversation (AC-6.1): a fresh session id + empty thread.
-  // No DB row is created until the first successful turn. The previous
-  // conversation remains saved + unchanged. Resolved/seed clear so the chip
-  // falls through to lastUsedScope (signed-in preference) or national-dex
-  // (guest / never-chatted). lastUsedScope is intentionally kept.
+  // lastUsedScope is intentionally kept so a signed-in New chat keeps the
+  // last-used chip (scope-chip-seed).
   const handleNewChat = useCallback(() => {
     reset();
     committedAnswerRef.current = null;
+    recoveryRef.current = null;
+    setUndoTurnId(null);
     setSessionId(makeId());
     setTurns([]);
     setImagePreviews({});
     setResolvedScope(null);
     setScopeSeed(null);
+    setPinnedIds([]);
+    setImagesMissing(false);
+    setSelectedIds([]);
+    setMentionedTeam(null);
   }, [reset]);
+
+  const handleSlash = useCallback(
+    (target: "new" | "team" | "dex" | "usage", text: string) => {
+      const arg = slashArg(text);
+      if (target === "new") {
+        handleNewChat();
+        return;
+      }
+      if (target === "dex") {
+        navigateTo(arg ? `/pokedex/${slugify(arg)}` : "/pokedex");
+        return;
+      }
+      if (target === "usage") {
+        navigateTo("/meta");
+        return;
+      }
+      if (arg) {
+        const match = teams.teams.find(
+          (t) => t.name.toLowerCase() === arg.toLowerCase(),
+        );
+        navigateTo(match ? `/teams?team=${encodeURIComponent(match.id)}` : "/teams");
+      } else {
+        navigateTo("/teams");
+      }
+    },
+    [handleNewChat, navigateTo, teams.teams],
+  );
+
+  const handleSend = useCallback(
+    (message: string, images: PendingImage[] = []) => {
+      const slash = parseSlashCommand(message, { hasUsagePage: true });
+      if (slash.type === "navigate" && recoveryRef.current !== "edit") {
+        handleSlash(slash.target, message);
+        return;
+      }
+
+      const parsedMentions = auth.signedIn
+        ? parseMentions(message, teams.teams)
+        : { ids: [] as string[], bound: [], dead: [] as string[] };
+      if (parsedMentions.dead.length > 0) return;
+      if (parsedMentions.bound[0]) setMentionedTeam(parsedMentions.bound[0]);
+      else if (parsedMentions.ids.length === 0) setMentionedTeam(null);
+
+      const pendingRecovery = recoveryRef.current;
+      const hasPair = turns.some((t) => t.role === "assistant");
+      const useRecovery =
+        (pendingRecovery === "retry" || pendingRecovery === "edit") && hasPair;
+
+      // Ignore unrelated sends while a turn is in flight. Edit of the last
+      // user message Stops the in-flight turn first (REC-AC-2.2).
+      if (status === "thinking" && pendingRecovery !== "edit") return;
+      if (status === "thinking" && pendingRecovery === "edit") {
+        stop();
+        pendingTurnsRef.current.delete(sessionId);
+      }
+
+      requestStartRef.current = Date.now();
+      inFlightMessageRef.current = message;
+      inFlightImagesRef.current = images;
+      committedAnswerRef.current = null;
+      setImagesMissing(false);
+
+      if (!useRecovery) {
+        recoveryRef.current = null;
+        const userTurnId = makeId();
+        lastUserTurnIdRef.current = userTurnId;
+        lastUserTextRef.current = message;
+        lastUserImagesRef.current = images;
+        setTurns((prev) => [
+          ...prev,
+          { id: userTurnId, role: "user", content: message },
+        ]);
+        if (images.length > 0) {
+          setImagePreviews((prev) => ({
+            ...prev,
+            [userTurnId]: images.map((img) => img.previewUrl),
+          }));
+        }
+        setUndoTurnId(userTurnId);
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        undoTimerRef.current = setTimeout(() => {
+          setUndoTurnId((id) => (id === userTurnId ? null : id));
+        }, UNDO_MS);
+      } else if (pendingRecovery === "edit") {
+        lastUserTextRef.current = message;
+        lastUserImagesRef.current = images;
+        setUndoTurnId(null);
+      } else {
+        setUndoTurnId(null);
+      }
+
+      const body = {
+        session_id: sessionId,
+        message,
+        ...(scopeSeed ? { scope_seed: scopeSeed } : {}),
+        ...(images.length > 0
+          ? { images: images.map((img) => ({ mimeType: img.mimeType, data: img.data })) }
+          : {}),
+        ...(useRecovery ? { recovery: pendingRecovery } : {}),
+        ...(parsedMentions.ids.length > 0
+          ? { mentioned_team_ids: parsedMentions.ids }
+          : {}),
+      };
+      send(body);
+    },
+    [
+      auth.signedIn,
+      handleSlash,
+      send,
+      sessionId,
+      scopeSeed,
+      status,
+      stop,
+      teams.teams,
+      turns,
+    ],
+  );
 
   // Open a saved conversation (HIST-US-4): load its full-fidelity turns, make it
   // the live thread (its id becomes the session id, so the composer continues
@@ -427,10 +670,15 @@ export default function Home() {
         setSessionId(detail.id);
         setTurns(detail.turns);
         setImagePreviews({}); // session-only thumbnails don't survive a reload
+        lastUserImagesRef.current = [];
         // Follow the conversation's stored scope so the chip + artifact scope
         // reflect it immediately, before the first resumed turn re-emits `scope`.
         setResolvedScope(detail.format as Format);
         setScopeSeed(null);
+        setPinnedIds(detail.pinnedMessageIds ?? []);
+        setUndoTurnId(null);
+        recoveryRef.current = null;
+        setImagesMissing(false);
         // Reopening mid-generation: reattach to the still-running turn and
         // rebuild the in-flight UI from the server's replay (§6.1). `active_turn`
         // from the conversation GET is authoritative (survives an app relaunch);
@@ -464,25 +712,276 @@ export default function Home() {
   // redo; otherwise leave the (now answer-less) turn in the thread.
   const handleStop = useCallback(() => {
     const elapsed = Date.now() - requestStartRef.current;
+    const recovering = recoveryRef.current;
     stop();
     pendingTurnsRef.current.delete(sessionId);
     committedAnswerRef.current = null;
+    setUndoTurnId(null);
+    if (recovering) {
+      // REC-BR-2: keep the previous pair; restore the attempted text.
+      recoveryRef.current = recovering === "edit" ? "edit" : null;
+      setPrefill({
+        text: inFlightMessageRef.current,
+        images: inFlightImagesRef.current,
+      });
+      return;
+    }
+    recoveryRef.current = null;
     if (elapsed < QUICK_STOP_MS) {
       setTurns([]);
       setImagePreviews({});
       setSessionId(makeId());
-      setPrefill({ text: inFlightMessageRef.current });
+      setPrefill({
+        text: inFlightMessageRef.current,
+        images: inFlightImagesRef.current,
+      });
     }
   }, [stop, sessionId]);
 
+  const handleUndo = useCallback(() => {
+    stop();
+    pendingTurnsRef.current.delete(sessionId);
+    committedAnswerRef.current = null;
+    recoveryRef.current = null;
+    setUndoTurnId(null);
+    const text = inFlightMessageRef.current;
+    const images = inFlightImagesRef.current;
+    const undoId = lastUserTurnIdRef.current;
+    setTurns((prev) =>
+      undoId ? prev.filter((t) => t.id !== undoId) : prev.slice(0, -1),
+    );
+    if (undoId) {
+      setImagePreviews((prev) => {
+        const next = { ...prev };
+        delete next[undoId];
+        return next;
+      });
+    }
+    setPrefill({ text, images });
+  }, [stop, sessionId]);
+
+  const handleRetryLast = useCallback(() => {
+    if (status === "thinking") return;
+    const lastUser = [...turns].reverse().find((t) => t.role === "user");
+    if (!lastUser || lastUser.role !== "user") return;
+    recoveryRef.current = "retry";
+    const images = lastUserImagesRef.current;
+    const hadPreview = Boolean(imagePreviews[lastUser.id]?.length);
+    if (hadPreview && images.length === 0) setImagesMissing(true);
+    lastUserTextRef.current = lastUser.content;
+    handleSend(lastUser.content, images);
+  }, [handleSend, imagePreviews, status, turns]);
+
+  const handleEditLast = useCallback(() => {
+    const lastUser = [...turns].reverse().find((t) => t.role === "user");
+    if (!lastUser || lastUser.role !== "user") return;
+    recoveryRef.current = "edit";
+    const images = lastUserImagesRef.current;
+    const hadPreview = Boolean(imagePreviews[lastUser.id]?.length);
+    if (hadPreview && images.length === 0) setImagesMissing(true);
+    lastUserTextRef.current = lastUser.content;
+    setPrefill({ text: lastUser.content, images });
+  }, [imagePreviews, turns]);
+
+  const handleScopeSelect = useCallback(
+    (format: Format) => {
+      setScopeSeed(format);
+      if (auth.signedIn) setLastUsedScope(format);
+      const conversationId =
+        auth.signedIn && turns.length > 0 ? sessionId : null;
+      void persistScope({
+        format,
+        conversationId,
+        sessionId,
+      }).then((result) => {
+        if (result?.lastUsedScopes) setLastUsedScopes(result.lastUsedScopes);
+      });
+    },
+    [auth.signedIn, sessionId, turns.length],
+  );
+
+  const handleExport = useCallback(
+    async (id: string, format: ExportFormat) => {
+      const file = await exportConversation(id, format);
+      if (file) downloadExport(file);
+    },
+    [],
+  );
+
+  const handleShareTurn = useCallback(
+    (assistantId: string) => {
+      void createShare(sessionId, assistantId).then((created) => {
+        if (!created?.url) return;
+        if (navigator.clipboard?.writeText) {
+          void navigator.clipboard.writeText(created.url);
+        }
+      });
+    },
+    [sessionId],
+  );
+
+  const handlePinTurn = useCallback(
+    (id: string) => {
+      void setMessagePinned(sessionId, id, true).then((ids) => {
+        if (ids) setPinnedIds(ids);
+        else setPinnedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      });
+    },
+    [sessionId],
+  );
+
+  const handleUnpinTurn = useCallback(
+    (id: string) => {
+      void setMessagePinned(sessionId, id, false).then((ids) => {
+        if (ids) setPinnedIds(ids);
+        else setPinnedIds((prev) => prev.filter((x) => x !== id));
+      });
+    },
+    [sessionId],
+  );
+
+  const handleForkTurn = useCallback(
+    (id: string) => {
+      void forkConversation(sessionId, id).then((forked) => {
+        if (forked) handleOpenConversation(forked.id);
+      });
+    },
+    [handleOpenConversation, sessionId],
+  );
+
+  const handleFollowUpChip = useCallback(
+    (chip: FollowUpChip) => {
+      if (chip.kind === "scope" && isFormat(chip.target)) {
+        handleScopeSelect(chip.target);
+        return;
+      }
+      if (chip.kind === "dex") {
+        navigateTo(`/pokedex/${slugify(chip.target)}`);
+        return;
+      }
+      navigateTo(`/teams?team=${encodeURIComponent(chip.target)}`);
+    },
+    [handleScopeSelect, navigateTo],
+  );
+
+  const handleJumpToPin = useCallback((id: string) => {
+    document.getElementById(`turn-${id}`)?.scrollIntoView?.({
+      block: "start",
+    });
+  }, []);
+
+  const focusComposer = useCallback(() => {
+    const el = document.querySelector<HTMLTextAreaElement>(
+      '[data-testid="composer-input"]',
+    );
+    el?.focus();
+  }, []);
+
+  const focusHistorySearch = useCallback(() => {
+    setSidebarCollapsed(false);
+    requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLInputElement>('[aria-label="Search conversations"]')
+        ?.focus();
+    });
+  }, []);
+
+  const openScopePicker = useCallback(() => {
+    document.querySelector<HTMLButtonElement>('[data-testid="scope-chip"]')?.click();
+  }, []);
+
+  const openPalette = useCallback(() => {
+    setPaletteQuery("");
+    if (auth.signedIn && !listsReady) {
+      void Promise.all([listConversations(), listTeams()]).then(([c, t]) => {
+        setDeskConvos(c);
+        setDeskTeams(t);
+        setListsReady(true);
+        setPaletteOpen(true);
+      });
+      return;
+    }
+    setPaletteOpen(true);
+  }, [auth.signedIn, listsReady]);
+
+  const pinCurrentConversation = useCallback(() => {
+    if (!auth.signedIn) return;
+    const current = conversations.conversations.find((c) => c.id === sessionId);
+    if (!current) return;
+    void conversations.pin(sessionId, !current.pinned);
+  }, [auth.signedIn, conversations, sessionId]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      const typing = isTypingTarget(e.target);
+      const key = e.key.toLowerCase();
+
+      if (meta && key === "k" && !e.shiftKey) {
+        e.preventDefault();
+        openPalette();
+        return;
+      }
+      if (meta && key === "o" && e.shiftKey) {
+        e.preventDefault();
+        handleNewChat();
+        return;
+      }
+      if (meta && key === "j" && e.shiftKey) {
+        e.preventDefault();
+        focusComposer();
+        return;
+      }
+      if (meta && key === "." && !e.shiftKey) {
+        e.preventDefault();
+        if (status === "thinking") handleStop();
+        return;
+      }
+      if (meta && key === "f" && e.shiftKey) {
+        e.preventDefault();
+        focusHistorySearch();
+        return;
+      }
+      if (meta && key === "s" && e.shiftKey) {
+        e.preventDefault();
+        openScopePicker();
+        return;
+      }
+      if (meta && key === "p" && e.shiftKey) {
+        e.preventDefault();
+        pinCurrentConversation();
+        return;
+      }
+      if (e.key === "?" && !meta && !typing) {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [
+    focusComposer,
+    focusHistorySearch,
+    handleNewChat,
+    handleStop,
+    openPalette,
+    openScopePicker,
+    pinCurrentConversation,
+    status,
+  ]);
+
   const chatStatus: ChatStatus =
     status === "thinking" ? "streaming" : status === "error" ? "error" : "idle";
+
+  const emptyReady = meReady && listsReady;
 
   // Empty state = no committed turns and nothing in flight. On desktop the
   // composer is promoted into the hero then (screen 01); on mobile, or once a
   // turn exists, it stays bottom-docked. `heroComposer` decides which of the two
   // DOM slots renders the SINGLE composer instance.
   const showEmptyState = turns.length === 0 && chatStatus === "idle";
+  // Keep the composer in one slot for the whole empty state so typing `@`
+  // (or a starter tap) is not lost when recents finish loading.
   const heroComposer = showEmptyState && !narrow;
 
   // The scope in effect for the conversation: an explicit chip pick, else the
@@ -518,6 +1017,11 @@ export default function Home() {
 
   // The single composer element, placed in either the hero slot or the bottom
   // dock (never both) — see `heroComposer` at the render site.
+  const lastConversation =
+    [...deskConvos].sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null;
+  const lastTeam =
+    [...deskTeams].sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null;
+
   const composer = (
     <Composer
       onSend={handleSend}
@@ -527,6 +1031,8 @@ export default function Home() {
       prefill={prefill}
       onVoice={handleVoiceClick}
       voiceReady={auth.signedIn}
+      signedIn={auth.signedIn}
+      teams={deskTeams.length > 0 ? deskTeams : teams.teams}
     />
   );
 
@@ -603,8 +1109,9 @@ export default function Home() {
               change it must be surfaced, not hidden behind the gear. */}
           <ScopeChip
             format={displayFormat}
-            onSelect={setScopeSeed}
+            onSelect={handleScopeSelect}
             disabled={status === "thinking"}
+            recentFormats={auth.signedIn ? lastUsedScopes : undefined}
           />
           {/* Collapsible group: inline on desktop, a popover under the gear on
               mobile (≤640px). Holds the secondary controls AND the auth control
@@ -658,7 +1165,11 @@ export default function Home() {
               mobile correction from the SSR-expanded default can't flash. */}
           <aside
             id={SIDEBAR_ID}
-            data-testid="history-sidebar"
+            data-testid={
+              meReady && (!auth.signedIn || listsReady)
+                ? "history-sidebar"
+                : undefined
+            }
             className={
               "chat-page__sidebar" +
               (sidebarCollapsed ? " chat-page__sidebar--collapsed" : "") +
@@ -672,7 +1183,11 @@ export default function Home() {
               <AppNav pathname="/" onNewChat={handleNewChat}>
                 {auth.signedIn ? (
                   <ConversationList
-                    conversations={conversations.conversations}
+                    conversations={
+                      conversations.conversations.length > 0
+                        ? conversations.conversations
+                        : deskConvos
+                    }
                     activeId={sessionId}
                     query={conversations.query}
                     onQueryChange={conversations.setQuery}
@@ -681,6 +1196,39 @@ export default function Home() {
                     onRename={conversations.rename}
                     onPin={conversations.pin}
                     onDelete={handleDeleteConversation}
+                    folders={conversations.folders}
+                    folderId={conversations.folderId}
+                    archivedOnly={conversations.archivedOnly}
+                    includeArchived={conversations.includeArchived}
+                    selectedIds={selectedIds}
+                    onFolderChange={conversations.setFolderId}
+                    onArchivedOnlyChange={conversations.setArchivedOnly}
+                    onIncludeArchivedChange={conversations.setIncludeArchived}
+                    onToggleSelect={(id) =>
+                      setSelectedIds((prev) =>
+                        prev.includes(id)
+                          ? prev.filter((x) => x !== id)
+                          : [...prev, id],
+                      )
+                    }
+                    onBulk={(action, folderId) => {
+                      void conversations.bulk(selectedIds, action, folderId);
+                      setSelectedIds([]);
+                    }}
+                    onArchive={conversations.archive}
+                    onMoveToFolder={conversations.moveToFolder}
+                    onCreateFolder={(name) => {
+                      void conversations.createFolder(name);
+                    }}
+                    onRenameFolder={(id, name) => {
+                      void conversations.renameFolder(id, name);
+                    }}
+                    onDeleteFolder={(id) => {
+                      void conversations.deleteFolder(id);
+                    }}
+                    onExport={(format) => {
+                      void handleExport(sessionId, format);
+                    }}
                   />
                 ) : (
                   <div
@@ -730,11 +1278,54 @@ export default function Home() {
               onRetry={retry}
               onFollowUp={handleSend}
               imagePreviews={imagePreviews}
-              // The composer is a single instance rendered in exactly one of two
-              // slots: the empty-state hero (desktop) here, or bottom-docked
-              // below. `heroComposer` is the sole switch, so it never mounts twice.
               composerSlot={heroComposer ? composer : undefined}
+              signedIn={auth.signedIn}
+              undoTurnId={undoTurnId}
+              onUndo={handleUndo}
+              onRetryLast={handleRetryLast}
+              onEditLast={handleEditLast}
+              onPinTurn={auth.signedIn ? handlePinTurn : undefined}
+              onUnpinTurn={auth.signedIn ? handleUnpinTurn : undefined}
+              onForkTurn={auth.signedIn ? handleForkTurn : undefined}
+              pinnedIds={auth.signedIn ? pinnedIds : []}
+              onJumpToPin={handleJumpToPin}
+              onShareTurn={auth.signedIn ? handleShareTurn : undefined}
+              onFollowUpChip={handleFollowUpChip}
+              currentFormat={displayFormat}
+              mentionedTeam={auth.signedIn ? mentionedTeam : null}
+              emptyReady={emptyReady}
+              emptyDesk={
+                auth.signedIn
+                  ? {
+                      lastConversation: lastConversation
+                        ? {
+                            id: lastConversation.id,
+                            title: lastConversation.title,
+                          }
+                        : null,
+                      lastTeam: lastTeam
+                        ? { id: lastTeam.id, name: lastTeam.name }
+                        : null,
+                      scopeLabel: scopeLabel(displayFormat),
+                      onContinue: lastConversation
+                        ? () => handleOpenConversation(lastConversation.id)
+                        : undefined,
+                      onOpenLastTeam: lastTeam
+                        ? () =>
+                            navigateTo(
+                              `/teams?team=${encodeURIComponent(lastTeam.id)}`,
+                            )
+                        : undefined,
+                    }
+                  : undefined
+              }
             />
+
+            {imagesMissing && (
+              <p className="chat-page__images-missing" role="status">
+                Pictures from that turn aren’t attached.
+              </p>
+            )}
 
             {showEmptyState && <LandingSection />}
 
@@ -763,6 +1354,32 @@ export default function Home() {
         onClose={handleVoiceClose}
         sessionId={sessionId}
         format={displayFormat}
+      />
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        signedIn={auth.signedIn}
+        query={paletteQuery}
+        onQueryChange={setPaletteQuery}
+        conversations={
+          deskConvos.length > 0 ? deskConvos : conversations.conversations
+        }
+        teams={deskTeams.length > 0 ? deskTeams : teams.teams}
+        onNewChat={handleNewChat}
+        onOpenConversation={handleOpenConversation}
+        onOpenDex={(q) =>
+          navigateTo(q ? `/pokedex/${slugify(q)}` : "/pokedex")
+        }
+        onOpenTeam={(id) =>
+          navigateTo(id ? `/teams?team=${encodeURIComponent(id)}` : "/teams")
+        }
+        onOpenUsage={() => navigateTo("/meta")}
+      />
+
+      <ShortcutOverlay
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
       />
 
       {/* Dev-only plate wash dials (Phase 3). Hidden in prod unless ?plateTuner=1. */}

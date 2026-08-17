@@ -56,17 +56,27 @@ final class FakeChatService: ChatService, @unchecked Sendable {
   private(set) var lastStopTurnId: String?
   private(set) var lastStopSessionId: String?
 
+  private(set) var lastRecovery: ChatRecovery?
+  private(set) var lastMentionedTeamIds: [String]?
+  private(set) var persistScopeCount = 0
+  private(set) var lastPersistedScope: Format?
+  var persistScopeResult: [Format] = []
+
   func send(
     sessionId: String,
     message: String,
     images: [UIImage],
-    scopeSeed: Format?
+    scopeSeed: Format?,
+    recovery: ChatRecovery?,
+    mentionedTeamIds: [String]?
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     sendCount += 1
     lastSessionId = sessionId
     lastMessage = message
     lastScopeSeed = scopeSeed
     lastImageCount = images.count
+    lastRecovery = recovery
+    lastMentionedTeamIds = mentionedTeamIds
 
     let events: [SSEEvent]
     let error: OakError?
@@ -112,5 +122,15 @@ final class FakeChatService: ChatService, @unchecked Sendable {
     stopCount += 1
     lastStopTurnId = turnId
     lastStopSessionId = sessionId
+  }
+
+  func persistScope(
+    format: Format,
+    conversationId: String?,
+    sessionId: String
+  ) async throws -> [Format] {
+    persistScopeCount += 1
+    lastPersistedScope = format
+    return persistScopeResult
   }
 }

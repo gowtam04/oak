@@ -289,3 +289,46 @@ describe("Composer — image attachments", () => {
     expect(within(strip).getAllByRole("img")).toHaveLength(1);
   });
 });
+
+describe("Composer — dead @mention (MEN-AC-1.3)", () => {
+  const TEAMS = [{ id: "team-rain", name: "Rain Offense" }];
+
+  it("blocks send and highlights an unbound @token", () => {
+    const onSend = vi.fn();
+    render(
+      <Composer
+        {...props({ onSend })}
+        signedIn
+        teams={TEAMS}
+      />,
+    );
+    fireEvent.change(screen.getByTestId("composer-input"), {
+      target: { value: "rate @GhostCore" },
+    });
+    fireEvent.submit(screen.getByTestId("composer"));
+    expect(onSend).not.toHaveBeenCalled();
+    const alert = screen.getByTestId("mention-dead");
+    expect(alert).toHaveTextContent("@GhostCore");
+    expect(screen.getByTestId("composer-input")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+  });
+
+  it("sends when every @mention resolves to a saved team", () => {
+    const onSend = vi.fn();
+    render(
+      <Composer
+        {...props({ onSend })}
+        signedIn
+        teams={TEAMS}
+      />,
+    );
+    fireEvent.change(screen.getByTestId("composer-input"), {
+      target: { value: "rate @Rain Offense" },
+    });
+    fireEvent.submit(screen.getByTestId("composer"));
+    expect(onSend).toHaveBeenCalledWith("rate @Rain Offense", []);
+    expect(screen.queryByTestId("mention-dead")).toBeNull();
+  });
+});

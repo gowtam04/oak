@@ -36,7 +36,12 @@ import { randomUUID } from "node:crypto";
 
 import { proposedTeamSchema, type ProposedTeam } from "@/agent/schemas";
 import { modelLabel } from "@/agent/models";
-import type { AgentMode, ChatMessage, ImageAttachment } from "@/agent/types";
+import type {
+  AgentMode,
+  BoundTeam,
+  ChatMessage,
+  ImageAttachment,
+} from "@/agent/types";
 import type { Account } from "@/data/repos/accounts-repo";
 import {
   CHAMPIONS_FORMAT,
@@ -87,6 +92,9 @@ export const dynamic = "force-dynamic";
  */
 const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 
+/** Composer @mentions: max 6 unique team UUIDs per turn (ADR-5). */
+const MAX_MENTIONED_TEAM_IDS = 6;
+
 // ---------------------------------------------------------------------------
 // Small JSON-error helper for the pre-stream rejection paths
 // ---------------------------------------------------------------------------
@@ -111,13 +119,48 @@ function jsonError(
 // Body validation
 // ---------------------------------------------------------------------------
 
+function parseRecovery(value: unknown): "retry" | "edit" | undefined {
+  return value === "retry" || value === "edit" ? value : undefined;
+}
+
+/** First-occurrence unique string ids, capped at {@link MAX_MENTIONED_TEAM_IDS}. */
+function parseMentionedTeamIds(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string" || item.length === 0) continue;
+    if (seen.has(item)) continue;
+    seen.add(item);
+    ids.push(item);
+    if (ids.length >= MAX_MENTIONED_TEAM_IDS) break;
+  }
+  return ids;
+}
+
+function lastPairIsUserAssistant(
+  messages: readonly { role: string }[],
+): boolean {
+  if (messages.length < 2) return false;
+  return (
+    messages[messages.length - 2]!.role === "user" &&
+    messages[messages.length - 1]!.role === "assistant"
+  );
+}
+
 function parseBody(
   value: unknown,
   hasImages: boolean,
 ): ChatRequestBody | null {
   if (typeof value !== "object" || value === null) return null;
-  const { session_id, message, champions_mode, scope_seed } =
-    value as Record<string, unknown>;
+  const {
+    session_id,
+    message,
+    champions_mode,
+    scope_seed,
+    recovery,
+    mentioned_team_ids,
+  } = value as Record<string, unknown>;
   if (typeof session_id !== "string" || session_id.length === 0) return null;
   // The message must be a string, but may be EMPTY when one or more images are
   // attached (an image-only "what is this?" upload). Text-only turns still
@@ -131,8 +174,8 @@ function parseBody(
   // silently dropped (defensive additive field), never a 400.
   // The answering model is NOT taken from the body — it is operator-controlled
   // via the admin Settings selection (resolved server-side below). Any `model`
-  // field a client happens to send is ignored. Saved teams are referenced by name in
-  // chat (resolved live via list_teams/get_team), so the body carries no team id.
+  // field a client happens to send is ignored. `mentioned_team_ids` are the
+  // @mention UUIDs bound this turn; a legacy `active_team_id` is ignored.
   return {
     session_id,
     message,
@@ -142,6 +185,8 @@ function parseBody(
       typeof scope_seed === "string" && isFormat(scope_seed)
         ? scope_seed
         : undefined,
+    recovery: parseRecovery(recovery),
+    mentioned_team_ids: parseMentionedTeamIds(mentioned_team_ids),
   };
 }
 
@@ -350,6 +395,10 @@ export async function POST(req: Request): Promise<Response> {
   // the CURRENT stored format, which `stickyFormat` holds).
   let stickyFormat: Format | undefined;
   let existingConversation = false;
+  // Last stored pair is user+assistant — required before a recovery turn
+  // starts (ADR-4). Checked against the untrimmed source (DB or session
+  // store), not the context-budget trim.
+  let replaceableLastPair = false;
   if (account) {
     try {
       const repo = await import("@/data/repos/conversation-repo");
@@ -358,6 +407,7 @@ export async function POST(req: Request): Promise<Response> {
         existingConversation = true;
         stickyFormat = conv.format as Format; // BR-H6′ — sticky, switchable below
         const stored = await repo.getMessages(account.id, session_id);
+        replaceableLastPair = lastPairIsUserAssistant(stored);
         history = trimMessages(
           stored.map((m) => ({ role: m.role, content: m.textContent })),
         );
@@ -394,7 +444,38 @@ export async function POST(req: Request): Promise<Response> {
   } else {
     await trim(session_id);
     history = [...(await getHistory(session_id))];
+    replaceableLastPair = lastPairIsUserAssistant(history);
     stickyFormat = await getSessionScope(session_id); // guest sticky scope (GS-D3)
+  }
+
+  // 3a′. Mentions (MEN-BR-1..4, AUTH-BR-4) + recovery (ADR-4) — reject BEFORE
+  //     any sticky-scope persist (conversation format / last_used_scope /
+  //     session scope) and BEFORE startTurn. History is loaded; a dead mention
+  //     or nothing-to-replace must not write scope.
+  const mentionIds = body.mentioned_team_ids ?? [];
+  let boundTeams: BoundTeam[] = [];
+  if (mentionIds.length > 0) {
+    if (!account) {
+      return new Response(
+        JSON.stringify({ error: "unbound_mention", id: mentionIds[0] }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    const { resolveBoundTeams } = await import("@/server/chat/bound-teams");
+    const resolved = await resolveBoundTeams(account.id, mentionIds);
+    if (!resolved.ok) {
+      return new Response(
+        JSON.stringify({ error: "unbound_mention", id: resolved.id }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    boundTeams = resolved.teams;
+  }
+  if (body.recovery !== undefined && !replaceableLastPair) {
+    return new Response(JSON.stringify({ error: "nothing_to_replace" }), {
+      status: 409,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   // 3b. Resolve THIS turn's data scope (generation-scope GS-B / §3.4 step 3).
@@ -622,6 +703,8 @@ export async function POST(req: Request): Promise<Response> {
     images,
     activeModel,
     client,
+    recovery: body.recovery,
+    boundTeams,
   });
   return response;
 }

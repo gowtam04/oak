@@ -84,6 +84,19 @@ struct ComposerView: View {
           .frame(maxWidth: .infinity, alignment: .leading)
           .accessibilityLabel(attachNote)
       }
+      if let missing = model.missingImagesNote {
+        Text(missing)
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.warning)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      if !model.deadMentionIds.isEmpty {
+        Text("That @mention isn't one of your teams. Remove it to send.")
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.danger)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      MentionAutocomplete(suggestions: model.mentionSuggestions, onPick: model.insertMention)
 
       thumbnailRow(model: model)
 
@@ -145,6 +158,7 @@ struct ComposerView: View {
     }
     .onChange(of: model.composerText) { _, _ in
       isAttachDialogPresented = false
+      model.updateMentionQuery()
     }
     .confirmationDialog("Attach Image", isPresented: $isAttachDialogPresented, titleVisibility: .hidden) {
       Button("Photo Library") {

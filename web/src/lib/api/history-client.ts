@@ -19,6 +19,9 @@ export interface ConversationSummary {
   format: string;
   pinned: boolean;
   updatedAt: number;
+  /** Organize (chat-qol). Absent on older payloads. */
+  archived?: boolean;
+  folderId?: string | null;
 }
 
 /** Full conversation, turns rehydrated to the same shape the thread renders. */
@@ -28,6 +31,10 @@ export interface ConversationDetail {
   format: string;
   pinned: boolean;
   turns: ChatTurn[];
+  archived?: boolean;
+  folderId?: string | null;
+  /** Assistant message ids in thread (seq) order. */
+  pinnedMessageIds?: string[];
   /**
    * The conversation's live durable turn, if one is still generating server-side
    * (background-turns/design.md §5.4 / §6.1). A live registry lookup by
@@ -36,6 +43,13 @@ export interface ConversationDetail {
    * pending-turn pointer is gone). `null`/absent ⇒ no running turn.
    */
   active_turn?: { turn_id: string } | null;
+}
+
+export type BulkAction = "delete" | "archive" | "unarchive" | "move";
+
+export interface BulkUpdateResult {
+  updated: string[];
+  skipped: string[];
 }
 
 const JSON_HEADERS: Record<string, string> = {
@@ -63,11 +77,20 @@ async function readJsonBody(res: Response): Promise<Record<string, unknown>> {
 export async function listConversations(opts?: {
   q?: string;
   format?: string;
+  folder_id?: string;
+  archived?: boolean | 0 | 1;
+  include_archived?: boolean | 1;
 }): Promise<ConversationSummary[]> {
   try {
     const params = new URLSearchParams();
     if (opts?.q) params.set("q", opts.q);
     if (opts?.format) params.set("format", opts.format);
+    if (opts?.folder_id) params.set("folder_id", opts.folder_id);
+    if (opts?.archived === true || opts?.archived === 1) params.set("archived", "1");
+    else if (opts?.archived === false || opts?.archived === 0) params.set("archived", "0");
+    if (opts?.include_archived === true || opts?.include_archived === 1) {
+      params.set("include_archived", "1");
+    }
     const qs = params.toString();
     const res = await fetch(`/api/conversations${qs ? `?${qs}` : ""}`, {
       method: "GET",
@@ -106,7 +129,12 @@ export async function getConversation(
 /** Internal: PATCH a conversation; returns whether it succeeded. */
 async function patch(
   id: string,
-  payload: { title?: string; pinned?: boolean },
+  payload: {
+    title?: string;
+    pinned?: boolean;
+    archived?: boolean;
+    folder_id?: string | null;
+  },
 ): Promise<boolean> {
   try {
     const res = await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
@@ -129,6 +157,16 @@ export function renameConversation(id: string, title: string): Promise<boolean> 
 /** `PATCH` pin / unpin (HIST-US-9). */
 export function setPinned(id: string, pinned: boolean): Promise<boolean> {
   return patch(id, { pinned });
+}
+
+/** `PATCH` archive / unarchive (ORG-US-2). */
+export function setArchived(id: string, archived: boolean): Promise<boolean> {
+  return patch(id, { archived });
+}
+
+/** `PATCH` file into a folder, or unfile (`null`) (ORG-US-1). */
+export function setFolder(id: string, folderId: string | null): Promise<boolean> {
+  return patch(id, { folder_id: folderId });
 }
 
 /**
@@ -176,6 +214,148 @@ export async function importConversation(
     if (!res.ok) return null;
     const body = await readJsonBody(res);
     return typeof body.id === "string" ? body.id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `POST /api/conversations/bulk` — delete / archive / unarchive / move many
+ * (ORG-US-3). Failure / guest / transport → `null`.
+ */
+export async function bulkUpdate(
+  ids: string[],
+  action: BulkAction,
+  folderId?: string | null,
+): Promise<BulkUpdateResult | null> {
+  try {
+    const res = await fetch("/api/conversations/bulk", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      credentials: "same-origin",
+      body: JSON.stringify({
+        ids,
+        action,
+        ...(folderId !== undefined ? { folder_id: folderId } : {}),
+      }),
+    });
+    if (!res.ok) return null;
+    const body = await readJsonBody(res);
+    return Array.isArray(body.updated) && Array.isArray(body.skipped)
+      ? { updated: body.updated as string[], skipped: body.skipped as string[] }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `POST /api/conversations/:id/fork` — copy the prefix through an assistant
+ * card into a new conversation (FORK-US-1). Returns `{ id, title }` or `null`.
+ */
+export async function forkConversation(
+  id: string,
+  throughMessageId: string,
+): Promise<{ id: string; title: string } | null> {
+  try {
+    const res = await fetch(
+      `/api/conversations/${encodeURIComponent(id)}/fork`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        credentials: "same-origin",
+        body: JSON.stringify({ through_message_id: throughMessageId }),
+      },
+    );
+    if (!res.ok) return null;
+    const body = await readJsonBody(res);
+    return typeof body.id === "string" && typeof body.title === "string"
+      ? { id: body.id, title: body.title }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `POST /api/conversations/:id/pins` — pin / unpin an assistant turn
+ * (PIN-US-1). Returns the conversation's pinned ids in thread order, or `null`.
+ */
+export async function setMessagePinned(
+  conversationId: string,
+  messageId: string,
+  pinned: boolean,
+): Promise<string[] | null> {
+  try {
+    const res = await fetch(
+      `/api/conversations/${encodeURIComponent(conversationId)}/pins`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        credentials: "same-origin",
+        body: JSON.stringify({ message_id: messageId, pinned }),
+      },
+    );
+    if (!res.ok) return null;
+    const body = await readJsonBody(res);
+    return Array.isArray(body.pinnedMessageIds)
+      ? (body.pinnedMessageIds as string[])
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export type ExportFormat = "md" | "pdf";
+
+export interface ConversationExport {
+  bytes: Uint8Array;
+  filename: string;
+}
+
+/** Pull the attachment name from `Content-Disposition`, preferring filename*. */
+function filenameFromDisposition(
+  header: string | null,
+  fallback: string,
+): string {
+  if (!header) return fallback;
+  const star = /filename\*=(?:UTF-8''|utf-8'')([^;]+)/i.exec(header);
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1].trim());
+    } catch {
+      /* fall through */
+    }
+  }
+  const quoted = /filename="([^"]+)"/i.exec(header);
+  if (quoted?.[1]) return quoted[1];
+  const bare = /filename=([^;]+)/i.exec(header);
+  if (bare?.[1]) return bare[1].trim().replace(/^"|"$/g, "");
+  return fallback;
+}
+
+/**
+ * `GET /api/conversations/:id/export?format=md|pdf` — download bytes + filename
+ * (EXP-US-1/2). Failure / guest / empty → `null`.
+ */
+export async function exportConversation(
+  id: string,
+  format: ExportFormat,
+): Promise<ConversationExport | null> {
+  try {
+    const res = await fetch(
+      `/api/conversations/${encodeURIComponent(id)}/export?format=${format}`,
+      { method: "GET", credentials: "same-origin" },
+    );
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    return {
+      bytes: new Uint8Array(buf),
+      filename: filenameFromDisposition(
+        res.headers.get("Content-Disposition"),
+        `conversation.${format}`,
+      ),
+    };
   } catch {
     return null;
   }

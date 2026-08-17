@@ -97,6 +97,29 @@ fun TeamsRoute(services: ServiceContainer, appState: AppState, modifier: Modifie
 
     BackHandler(enabled = destination == 1) { backToList() }
 
+    val surface by appState.surfaceRequest.collectAsState()
+    LaunchedEffect(surface) {
+        val req = surface as? ai.gowtam.oak.app.AppState.SurfaceRequest.Teams ?: return@LaunchedEffect
+        val id = req.id
+        if (id != null) {
+            openEditor(
+                listViewModel.makeEditor(
+                    TeamSummary(
+                        id = id,
+                        name = req.name ?: "Team",
+                        format = Format.NationalDex,
+                        memberCount = 0,
+                        incomplete = true,
+                        species = emptyList(),
+                        updatedAt = 0L,
+                    ),
+                ),
+                loadOnAppear = true,
+            )
+        }
+        appState.consumeSurfaceRequest()
+    }
+
     val activeEditor = editorViewModel
     if (destination == 1 && activeEditor != null) {
         TeamEditor(

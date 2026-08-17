@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 
 @testable import OakApp
 
@@ -363,8 +364,8 @@ struct ChatViewModelTests {
 
   @Test
   func quickStopWipesThreadAndRestoresComposer() {
-    // A stop within the quick-stop window discards the just-sent turn and restores its
-    // message for a redo (web `handleStop`: wipes ALL turns + rotates the session).
+    // Undo (Stop within 3s) discards the just-sent user bubble and restores
+    // composer state. Prior turns stay; the session is not rotated (ADR-3).
     let fake = FakeChatService()
     fake.scriptedEvents = []                 // stream stays "in flight" (never awaited)
     let appState = AppState()                // guest
@@ -380,12 +381,11 @@ struct ChatViewModelTests {
     vm.performStop(now: Date())               // within quickStopThreshold
 
     #expect(vm.isStreaming == false)
-    #expect(vm.turns.isEmpty)                 // whole thread wiped
-    #expect(vm.sessionId != firstSession)     // session rotated
+    #expect(vm.turns.isEmpty)                 // just-sent bubble removed
+    #expect(vm.sessionId == firstSession)     // session kept
     #expect(vm.composerText == "Garchomp moveset?")  // text restored for redo
     #expect(vm.errorBanner == nil)            // a user-initiated stop is NOT an error
-    #expect(appState.guestThread.isEmpty)     // guest mirror cleared with the thread
-    #expect(appState.activeConversationId == nil)
+    #expect(appState.guestThread.isEmpty)     // guest mirror popped the user turn
   }
 
   @Test
@@ -535,7 +535,7 @@ struct ChatViewModelTests {
     vm.performStop(now: Date())
     #expect(vm.isStreaming == false)   // UI finalized immediately
     #expect(fake.stopCount == 0)       // deferred — no id to POST to yet
-    #expect(vm.sessionId != originalSession)  // quick stop rotated the session
+    #expect(vm.sessionId == originalSession)  // undo does not rotate the session
 
     // The `turn` frame finally arrives (delivered by the still-alive read): now the stop
     // fires with the captured id, against the ORIGINAL session (guest authorization).
@@ -544,7 +544,7 @@ struct ChatViewModelTests {
 
     #expect(fake.stopCount == 1)
     #expect(fake.lastStopTurnId == "turn-late")
-    #expect(fake.lastStopSessionId == originalSession)  // NOT the rotated session
+    #expect(fake.lastStopSessionId == originalSession)
     #expect(vm.streamTask == nil)      // connection torn down after the deferred stop
   }
 
@@ -844,6 +844,182 @@ struct ChatViewModelTests {
   }
 
   // MARK: Streaming phase (the "working vs done" signal)
+
+  @Test
+  func slashNewDoesNotStartATurn() {
+    let fake = FakeChatService()
+    let vm = makeViewModel(fake: fake)
+    vm.composerText = "/new"
+    vm.send()
+    #expect(fake.sendCount == 0)
+    #expect(vm.turns.isEmpty)
+    #expect(vm.composerText == "")
+  }
+
+  @Test
+  func retryLastAnswerSendsRecoveryRetryWithoutAppendingAUserTurn() async throws {
+    let fake = FakeChatService()
+    fake.scriptedEvents = [
+      .answer(try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")),
+    ]
+    let vm = makeViewModel(fake: fake)
+    vm.composerText = "Tell me about Garchomp"
+    vm.send()
+    await vm.streamTask?.value
+    #expect(vm.turns.count == 2)
+
+    fake.scriptedEvents = [
+      .answer(try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")),
+    ]
+    vm.retryLastAnswer()
+    await vm.streamTask?.value
+
+    #expect(fake.lastRecovery == .retry)
+    #expect(fake.lastMessage == "Tell me about Garchomp")
+    #expect(vm.turns.count == 2)
+    if case .assistant = vm.turns.last?.content {
+      // replaced in place
+    } else {
+      Issue.record("expected the last turn to stay an assistant card")
+    }
+  }
+
+  @Test
+  func editTargetsLastUserAfterCompletedPair() async throws {
+    let fake = FakeChatService()
+    fake.scriptedEvents = [
+      .answer(try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")),
+    ]
+    let vm = makeViewModel(fake: fake)
+    vm.composerText = "Tell me about Garchomp"
+    vm.send()
+    await vm.streamTask?.value
+
+    #expect(vm.turns.count == 2)
+    #expect(vm.lastUserTurnId == vm.turns.first?.id)
+    #expect(vm.isLastUser(vm.turns[0]))
+    #expect(!vm.isLastUser(vm.turns[1]))
+    #expect(vm.isLastAssistant(vm.turns[1]))
+    #expect(vm.canEditLastUser)
+
+    vm.beginEditLast()
+    #expect(vm.composerText == "Tell me about Garchomp")
+    #expect(vm.isEditingLast)
+  }
+
+  @Test
+  func beginEditLastRestoresInMemoryImages() async throws {
+    let fake = FakeChatService()
+    fake.scriptedEvents = [
+      .answer(try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")),
+    ]
+    let vm = makeViewModel(fake: fake)
+    let image = UIImage(systemName: "photo") ?? UIImage()
+    #expect(vm.attachImages([image]) == 1)
+    vm.composerText = "what is this?"
+    vm.send()
+    await vm.streamTask?.value
+    #expect(vm.pendingImages.isEmpty)
+
+    vm.beginEditLast()
+    #expect(vm.pendingImages.count == 1)
+    #expect(vm.missingImagesNote == nil)
+  }
+
+  @Test
+  func freeTypedMentionBindsSavedTeamId() async {
+    let fake = FakeChatService()
+    let teams = FakeTeamService(seed: [
+      Team(
+        id: "team-rain-1",
+        name: "Rain Offense",
+        format: .scarletViolet,
+        members: [],
+        createdAt: 1,
+        updatedAt: 1
+      ),
+    ])
+    let appState = AppState()
+    appState.completeSignIn(email: "ash@pallet.town")
+    let vm = ChatViewModel(
+      chat: fake,
+      appState: appState,
+      teams: teams,
+      usesBackgroundGrace: false
+    )
+    await vm.loadMentionTeams()
+
+    vm.composerText = "How does @Rain Offense look?"
+    vm.send()
+
+    #expect(fake.sendCount == 1)
+    #expect(fake.lastMentionedTeamIds == ["team-rain-1"])
+    #expect(vm.deadMentionIds.isEmpty)
+  }
+
+  @Test
+  func unmatchedAtTokenBlocksSend() async {
+    let fake = FakeChatService()
+    let teams = FakeTeamService(seed: [
+      Team(
+        id: "team-rain-1",
+        name: "Rain Offense",
+        format: .scarletViolet,
+        members: [],
+        createdAt: 1,
+        updatedAt: 1
+      ),
+    ])
+    let appState = AppState()
+    appState.completeSignIn(email: "ash@pallet.town")
+    let vm = ChatViewModel(
+      chat: fake,
+      appState: appState,
+      teams: teams,
+      usesBackgroundGrace: false
+    )
+    await vm.loadMentionTeams()
+
+    vm.composerText = "Ask @notateam about rain"
+    vm.send()
+
+    #expect(fake.sendCount == 0)
+    #expect(vm.deadMentionIds.contains("notateam"))
+    #expect(vm.composerText == "Ask @notateam about rain")
+  }
+
+  @Test
+  func slashIsNotInterceptedWhileEditing() async throws {
+    let fake = FakeChatService()
+    fake.scriptedEvents = [
+      .answer(try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")),
+    ]
+    let vm = makeViewModel(fake: fake)
+    vm.composerText = "first"
+    vm.send()
+    await vm.streamTask?.value
+
+    vm.beginEditLast()
+    vm.composerText = "/new"
+    fake.scriptedEvents = [
+      .answer(try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")),
+    ]
+    vm.send()
+    await vm.streamTask?.value
+
+    #expect(fake.sendCount == 2)
+    #expect(fake.lastRecovery == .edit)
+    #expect(fake.lastMessage == "/new")
+  }
+
+  @Test
+  func guestFollowUpChipsOmitTeam() throws {
+    let vm = makeViewModel(fake: FakeChatService())
+    let answer = try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")
+    // Force a saved-team hop if the fixture has none — still no team chip for guests.
+    let chips = vm.followUpChips(for: answer)
+    #expect(chips.filter { $0.kind == .team }.isEmpty)
+  }
 
   @Test
   func streamingPhaseReflectsProgress() {

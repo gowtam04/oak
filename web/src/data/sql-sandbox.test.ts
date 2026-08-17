@@ -49,6 +49,9 @@ describe("sql-sandbox — deny-list (no DB access)", () => {
     "SELECT * FROM otp_code",
     "SELECT id FROM conversation",
     "SELECT * FROM conversation_message",
+    "SELECT * FROM conversation_folder",
+    "SELECT format FROM account_scope_mru",
+    "SELECT * FROM shared_answer",
     "SELECT name FROM team",
     "SELECT * FROM turn_record",
     "SELECT * FROM auth_event",
@@ -74,6 +77,15 @@ describe("sql-sandbox — deny-list (no DB access)", () => {
     );
     expect(referencesRestrictedTable("SELECT accounts FROM x")).toBe(false);
     expect(referencesRestrictedTable("SELECT * FROM natdex_species")).toBe(false);
+    // Underscore-suffixed chat-qol tables are their own identifiers;
+    // `\bconversation\b` / `\baccount\b` do not match them.
+    expect(referencesRestrictedTable("SELECT * FROM conversation_folder")).toBe(
+      true,
+    );
+    expect(referencesRestrictedTable("SELECT * FROM account_scope_mru")).toBe(
+      true,
+    );
+    expect(referencesRestrictedTable("SELECT * FROM shared_answer")).toBe(true);
   });
 });
 

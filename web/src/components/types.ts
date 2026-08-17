@@ -369,7 +369,7 @@ export interface ComposerProps {
    * time so the same text can be re-applied — the Composer reloads its value
    * whenever this object's identity changes. Null leaves the input untouched.
    */
-  prefill?: { text: string } | null;
+  prefill?: { text: string; images?: PendingImage[] } | null;
 }
 
 // ---------------------------------------------------------------------------

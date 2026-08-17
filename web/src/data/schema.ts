@@ -350,6 +350,12 @@ export const conversation = pgTable(
     format: text("format").notNull(),
     /** 0/1; pinned conversations group above the rest (HIST-US-9). */
     pinned: integer("pinned").notNull().default(0),
+    /**
+     * Logical FK → conversation_folder.id. NULL = unfiled (ORG-BR-1).
+     */
+    folder_id: text("folder_id"),
+    /** 0/1; archived conversations are hidden from the default list (ORG-BR-2). */
+    archived: integer("archived").notNull().default(0),
     /** Epoch ms the conversation was created. */
     created_at: bigint("created_at", { mode: "number" }).notNull(),
     /** Epoch ms of last activity — drives most-recently-active list ordering. */
@@ -359,6 +365,8 @@ export const conversation = pgTable(
     // Per-account list query: ORDER BY pinned DESC, updated_at DESC, scoped to
     // account_id. account_id leads so the filter uses the index prefix.
     index("conversation_account_updated_idx").on(t.account_id, t.updated_at),
+    index("conversation_account_folder_idx").on(t.account_id, t.folder_id),
+    index("conversation_account_archived_idx").on(t.account_id, t.archived),
   ],
 );
 
@@ -393,6 +401,10 @@ export const conversation_message = pgTable(
      * powers exact re-render (BR-H3). TEXT JSON, like reference_cache.payload.
      */
     answer_json: text("answer_json"),
+    /**
+     * 0/1; meaningful on assistant rows only (PIN-BR-1). Default 0.
+     */
+    pinned: integer("pinned").notNull().default(0),
     /** Epoch ms the turn was stored. */
     created_at: bigint("created_at", { mode: "number" }).notNull(),
   },
@@ -406,6 +418,77 @@ export const conversation_message = pgTable(
     ),
     // Isolation / cleanup queries by owning account.
     index("message_account_idx").on(t.account_id),
+  ],
+);
+
+// ===========================================================================
+// Chat QoL — folders, scope MRU, public-share snapshots
+// (docs/features/chat-qol § Data Model)
+//
+// Additive tables. Logical FKs only. Epoch-ms bigint, 0/1 integers.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// conversation_folder — per-account named folders (ORG-BR-1)
+// ---------------------------------------------------------------------------
+export const conversation_folder = pgTable(
+  "conversation_folder",
+  {
+    /** UUID. */
+    id: text("id").primaryKey(),
+    /** Logical FK → account.id. */
+    account_id: text("account_id").notNull(),
+    /** 1–40 chars; unique per account ILIKE. */
+    name: text("name").notNull(),
+    /** Epoch ms. */
+    created_at: bigint("created_at", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("conversation_folder_account_name_unique").on(
+      t.account_id,
+      sql`lower(${t.name})`,
+    ),
+    index("conversation_folder_account_name_idx").on(t.account_id, t.name),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// account_scope_mru — last-used timestamp per (account, format)
+// ---------------------------------------------------------------------------
+export const account_scope_mru = pgTable(
+  "account_scope_mru",
+  {
+    account_id: text("account_id").notNull(),
+    /** One of the eleven Format literals. */
+    format: text("format").notNull(),
+    /** Epoch ms of last chip pick or resolved sent turn. */
+    last_used_at: bigint("last_used_at", { mode: "number" }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.account_id, t.format] })],
+);
+
+// ---------------------------------------------------------------------------
+// shared_answer — immutable public-share snapshot (SHARE-BR-2)
+// ---------------------------------------------------------------------------
+export const shared_answer = pgTable(
+  "shared_answer",
+  {
+    /** nanoid(21). */
+    id: text("id").primaryKey(),
+    /** Logical FK → account.id (owner; revoke / deleteAccount). */
+    account_id: text("account_id").notNull(),
+    /** Informational; conversation delete does not touch this row. */
+    conversation_id: text("conversation_id"),
+    conversation_title: text("conversation_title").notNull(),
+    question_text: text("question_text").notNull(),
+    /** Full OakAnswer JSON, snapshotted at create time. */
+    answer_json: text("answer_json").notNull(),
+    created_at: bigint("created_at", { mode: "number" }).notNull(),
+    /** NULL = live. Set on revoke; never restored. */
+    revoked_at: bigint("revoked_at", { mode: "number" }),
+  },
+  (t) => [
+    index("shared_answer_account_created_idx").on(t.account_id, t.created_at),
   ],
 );
 

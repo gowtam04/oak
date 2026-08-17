@@ -46,6 +46,11 @@ actor OakAPIClient {
     _ = try await perform(endpoint)
   }
 
+  /// Performs a request and returns the validated 2xx body bytes (export files).
+  func sendData(_ endpoint: Endpoint) async throws -> Data {
+    try await perform(endpoint)
+  }
+
   /// Opens a streaming (SSE) connection for `endpoint` and returns the raw byte
   /// stream once the response status is 2xx. Used only by ``SSEClient`` for
   /// `POST /api/chat`: it attaches the Bearer header + base URL exactly like a

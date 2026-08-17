@@ -79,8 +79,13 @@ struct AnswerCardView: View {
   /// ``ArtifactViewModel/openDamageCalc(_:)``; no-op default.
   var onOpenDamageCalc: (DamageCalc) -> Void = { _ in }
 
+  /// Copies the human-readable projection (COPY-US-1). Optional so existing
+  /// call sites keep working; when set, the card also offers human copy.
+  var onCopyHuman: () -> Void = {}
+
   /// Feedback after "Copy for agents".
   @State private var didCopyForAgents = false
+  @State private var didCopyHuman = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -128,6 +133,11 @@ struct AnswerCardView: View {
     .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
     .contextMenu {
       Button {
+        copyHuman()
+      } label: {
+        Label("Copy as human text", systemImage: "doc.on.doc")
+      }
+      Button {
         copyForAgents()
       } label: {
         Label("Copy for agents", systemImage: "doc.on.clipboard")
@@ -144,7 +154,7 @@ struct AnswerCardView: View {
   private var copyForAgentsStrip: some View {
     Button(action: copyForAgents) {
       HStack(spacing: Theme.Spacing.sm) {
-        Text(didCopyForAgents ? "Copied" : "Copy for agents")
+        Text(didCopyHuman ? "Copied" : didCopyForAgents ? "Copied" : "Copy for agents")
           .instrumentLabel()
           .foregroundStyle(didCopyForAgents ? Theme.success : Theme.textSecondary)
         Spacer(minLength: 0)
@@ -176,6 +186,17 @@ struct AnswerCardView: View {
     Task { @MainActor in
       try? await Task.sleep(for: .seconds(2))
       didCopyForAgents = false
+    }
+  }
+
+  private func copyHuman() {
+    UIPasteboard.general.string = OakAnswerHumanMarkdown.build(answer)
+    onCopyHuman()
+    Haptics.tap()
+    didCopyHuman = true
+    Task { @MainActor in
+      try? await Task.sleep(for: .seconds(2))
+      didCopyHuman = false
     }
   }
 

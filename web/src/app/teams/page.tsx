@@ -66,6 +66,12 @@ export default function TeamsPage() {
 
   const teams = useTeams(auth.signedIn);
   const { setFormatFilter } = teams;
+  // Share import lands on `/teams?team=<id>`. Read from location (not
+  // useSearchParams) so jsdom page tests don't need a Next router mock.
+  const [deepLinkTeamId, setDeepLinkTeamId] = useState<string | null>(null);
+  useEffect(() => {
+    setDeepLinkTeamId(new URLSearchParams(window.location.search).get("team"));
+  }, []);
 
   // List defaults to ALL formats so a team saved from chat (e.g. Champions) is
   // visible without hunting for a filter. Create/import use the selected format,
@@ -104,8 +110,22 @@ export default function TeamsPage() {
   useEffect(() => {
     autoSelectedRef.current = false;
   }, [format]);
+  // `/teams?team=<id>` — share import (and any other deep link) wins over the
+  // first-team auto-select so the just-created team is the one that opens.
+  const openedDeepLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!auth.signedIn || !deepLinkTeamId) return;
+    if (openedDeepLink.current === deepLinkTeamId) return;
+    openedDeepLink.current = deepLinkTeamId;
+    autoSelectedRef.current = true;
+    void openTeam(deepLinkTeamId);
+  }, [auth.signedIn, deepLinkTeamId, openTeam]);
   useEffect(() => {
     if (autoSelectedRef.current) return;
+    if (deepLinkTeamId) {
+      autoSelectedRef.current = true;
+      return;
+    }
     if (selected) {
       autoSelectedRef.current = true;
       return;
@@ -115,7 +135,7 @@ export default function TeamsPage() {
       autoSelectedRef.current = true;
       void openTeam(first.id);
     }
-  }, [teams.teams, selected, openTeam]);
+  }, [teams.teams, selected, openTeam, deepLinkTeamId]);
 
   // Sprites/types/base-stats are resolved inside TeamEditor for its LIVE members
   // (so a just-added/edited Mega or alternate form shows immediately) — the page

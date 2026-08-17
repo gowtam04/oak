@@ -33,7 +33,26 @@ data class ChatRequest(
      * sticky scope, else the champions default.
      */
     @SerialName("scope_seed") val scopeSeed: Format? = null,
+    /**
+     * Replace last pair on success (`retry` / `edit`). Omit for a normal append
+     * (chat-qol ADR-4).
+     */
+    val recovery: ChatRecovery? = null,
+    /**
+     * Stable team UUIDs to bind this turn. Max 6, unique. Guests must not send
+     * this (server 400 `unbound_mention`).
+     */
+    @SerialName("mentioned_team_ids") val mentionedTeamIds: List<String>? = null,
 )
+
+/**
+ * `ChatRequestBody.recovery` — retry or edit the last pair (REC-US-1/2).
+ */
+@Serializable
+enum class ChatRecovery {
+    @SerialName("retry") Retry,
+    @SerialName("edit") Edit,
+}
 
 /**
  * One image attached to a chat message (wire shape). `data` is RAW base64 with

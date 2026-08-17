@@ -14,8 +14,12 @@ import ai.gowtam.oak.services.LiveAuthService
 import ai.gowtam.oak.services.LiveChatService
 import ai.gowtam.oak.services.LiveDexLookupService
 import ai.gowtam.oak.services.LiveHistoryService
+import ai.gowtam.oak.services.LiveScopeService
+import ai.gowtam.oak.services.LiveShareService
 import ai.gowtam.oak.services.LiveTeamService
 import ai.gowtam.oak.services.LiveTeamsAssistantService
+import ai.gowtam.oak.services.ScopeService
+import ai.gowtam.oak.services.ShareService
 import ai.gowtam.oak.services.TeamService
 import ai.gowtam.oak.services.TeamsAssistantService
 import android.content.Context
@@ -42,6 +46,8 @@ data class ServiceContainer(
     val dexLookup: DexLookupService,
     /** The team-builder assistant seam (signed-in only). Backed by [LiveTeamsAssistantService]. */
     val teamsAssistant: TeamsAssistantService,
+    val scope: ScopeService,
+    val shares: ShareService,
 ) {
     companion object {
         /**
@@ -63,6 +69,8 @@ data class ServiceContainer(
                 teams = LiveTeamService(apiClient),
                 dexLookup = LiveDexLookupService(apiClient),
                 teamsAssistant = LiveTeamsAssistantService(sseClient),
+                scope = LiveScopeService(apiClient),
+                shares = LiveShareService(apiClient),
             )
         }
     }

@@ -12,7 +12,7 @@
  */
 
 import type { Logger } from "pino";
-import type { GenFormat } from "@/data/formats"; // type-only; keeps this module pure (no runtime cycle)
+import type { Format, GenFormat } from "@/data/formats"; // type-only; keeps this module pure (no runtime cycle)
 import type { ModelKey } from "@/agent/models";
 import type { JsonSchema, OakAnswer } from "@/agent/schemas";
 import type { TurnTrace } from "@/server/logger";
@@ -60,6 +60,17 @@ export type DbCtx = {
 export interface ImageAttachment {
   mimeType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
   data: string;
+}
+
+/**
+ * A saved team the user @mentioned on this turn. Server-resolved via
+ * `getTeam(accountId, id)` (never name-matched) and bound onto
+ * {@link AgentContext.boundTeams} for the turn only.
+ */
+export interface BoundTeam {
+  id: string;
+  name: string;
+  format: Format;
 }
 
 /**
@@ -128,6 +139,13 @@ export interface AgentContext {
    * a text-only turn (the providers then keep `content` a plain string).
    */
   images?: ImageAttachment[];
+  /**
+   * Saved teams the user @mentioned on THIS turn (server-resolved ids). Bound
+   * by the route after `getTeam`; ephemeral — never persisted, never a 21st
+   * tool. The model sees them via an uncached prompt segment and loads full
+   * members with existing `get_team`. `undefined`/empty ⇒ none.
+   */
+  boundTeams?: BoundTeam[];
   /**
    * Optional per-turn completion sink (admin-panel recording — design.md AD-2,
    * ADMIN-BR-3). The runtime calls this exactly ONCE in `finalize()`, right after

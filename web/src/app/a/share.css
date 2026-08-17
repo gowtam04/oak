@@ -1,0 +1,103 @@
+/* Public share page (`/a/[id]`) — dedicated chrome, not the signed-in app shell. */
+
+.share-page {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.share-page__header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+
+.share-page__header-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-top: max(var(--space-4), env(safe-area-inset-top));
+  padding-bottom: var(--space-4);
+  padding-left: max(var(--space-6), env(safe-area-inset-left));
+  padding-right: max(var(--space-6), env(safe-area-inset-right));
+}
+
+.share-page__wordmark {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.share-page__wordmark:hover,
+.share-page__wordmark:focus-visible {
+  opacity: 0.75;
+}
+
+.share-page__kicker {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.share-page__main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-6) max(var(--space-6), env(safe-area-inset-left))
+    max(var(--space-8), env(safe-area-inset-bottom))
+    max(var(--space-6), env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.share-page__question {
+  margin: 0;
+  font-family: var(--body);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-strong);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.share-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.share-page__unavailable {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  background: var(--bg);
+}
+
+.share-page__unavailable-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.share-page__unavailable-body {
+  margin: 0;
+  max-width: 28rem;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}

@@ -9,15 +9,26 @@ import ai.gowtam.oak.services.ChatService
 import ai.gowtam.oak.services.MeSnapshot
 import ai.gowtam.oak.services.DexLookupService
 import ai.gowtam.oak.services.HistoryService
+import ai.gowtam.oak.services.ScopeService
+import ai.gowtam.oak.services.ShareService
 import ai.gowtam.oak.services.SourceImage
 import ai.gowtam.oak.services.TeamService
 import ai.gowtam.oak.services.TeamsAssistantService
 import ai.gowtam.oak.wire.BuilderAnswer
 import ai.gowtam.oak.wire.BuilderSseEvent
+import ai.gowtam.oak.wire.BulkAction
+import ai.gowtam.oak.wire.BulkUpdateResult
+import ai.gowtam.oak.wire.ChatRecovery
 import ai.gowtam.oak.wire.ChatRequest
 import ai.gowtam.oak.wire.ChatTurn
 import ai.gowtam.oak.wire.ConversationDetail
 import ai.gowtam.oak.wire.ConversationSummary
+import ai.gowtam.oak.wire.CreatedShare
+import ai.gowtam.oak.wire.Folder
+import ai.gowtam.oak.wire.ForkResult
+import ai.gowtam.oak.wire.PersistScopeResult
+import ai.gowtam.oak.wire.PublicShare
+import ai.gowtam.oak.wire.ShareListItem
 import ai.gowtam.oak.wire.DexSpriteRef
 import ai.gowtam.oak.wire.EntityArtifact
 import ai.gowtam.oak.wire.EntityKind
@@ -108,15 +119,32 @@ class FakeChatService(
     val resumeCalls = mutableListOf<Pair<String, String>>()
     val stopCalls = mutableListOf<Pair<String, String>>()
 
-    data class Quadruple(val sessionId: String, val message: String, val images: List<SourceImage>, val scopeSeed: Format?)
+    data class Quadruple(
+        val sessionId: String,
+        val message: String,
+        val images: List<SourceImage>,
+        val scopeSeed: Format?,
+        val recovery: ChatRecovery? = null,
+        val mentionedTeamIds: List<String>? = null,
+    )
 
     override fun send(
         sessionId: String,
         message: String,
         images: List<SourceImage>,
         scopeSeed: Format?,
+    ): Flow<ai.gowtam.oak.wire.SseEvent> =
+        send(sessionId, message, images, scopeSeed, recovery = null, mentionedTeamIds = null)
+
+    override fun send(
+        sessionId: String,
+        message: String,
+        images: List<SourceImage>,
+        scopeSeed: Format?,
+        recovery: ChatRecovery?,
+        mentionedTeamIds: List<String>?,
     ): Flow<ai.gowtam.oak.wire.SseEvent> {
-        sendWithImagesCalls += Quadruple(sessionId, message, images, scopeSeed)
+        sendWithImagesCalls += Quadruple(sessionId, message, images, scopeSeed, recovery, mentionedTeamIds)
         return scriptedFlow()
     }
 
@@ -166,11 +194,97 @@ class FakeHistoryService(
     val setPinnedCalls = mutableListOf<Pair<String, Boolean>>()
     val deleteCalls = mutableListOf<String>()
     val importCalls = mutableListOf<Triple<String, Format, List<ChatTurn>>>()
+    val listFoldersCalls = mutableListOf<Unit>()
+    val setArchivedCalls = mutableListOf<Pair<String, Boolean>>()
+    val setFolderCalls = mutableListOf<Pair<String, String?>>()
+    val bulkCalls = mutableListOf<Triple<List<String>, BulkAction, String?>>()
+    val forkCalls = mutableListOf<Pair<String, String>>()
+    val pinCalls = mutableListOf<Triple<String, String, Boolean>>()
+    var folders: List<Folder> = emptyList()
+    var bulkResult: BulkUpdateResult = BulkUpdateResult()
+    var forkResult: ForkResult = ForkResult(id = "fork-1", title = "Fork")
+    var pinnedMessageIds: List<String> = emptyList()
 
     override suspend fun list(query: String?, format: Format?): List<ConversationSummary> {
         listCalls += query to format
         listError?.let { throw it }
         return listResult
+    }
+
+    override suspend fun list(
+        query: String?,
+        format: Format?,
+        folderId: String?,
+        archived: Boolean?,
+        includeArchived: Boolean,
+    ): List<ConversationSummary> {
+        listCalls += query to format
+        listError?.let { throw it }
+        return listResult.filter { row ->
+            val folderOk = folderId == null ||
+                (folderId == "unfiled" && row.folderId == null) ||
+                row.folderId == folderId
+            val archiveOk = when {
+                includeArchived -> true
+                archived == true -> row.archived
+                else -> !row.archived
+            }
+            folderOk && archiveOk
+        }
+    }
+
+    override suspend fun setArchived(id: String, archived: Boolean) {
+        setArchivedCalls += id to archived
+    }
+
+    override suspend fun setFolder(id: String, folderId: String?) {
+        setFolderCalls += id to folderId
+    }
+
+    override suspend fun listFolders(): List<Folder> {
+        listFoldersCalls += Unit
+        return folders
+    }
+
+    override suspend fun createFolder(name: String): Folder {
+        val folder = Folder(id = "folder-${folders.size + 1}", name = name, createdAt = 0L)
+        folders = folders + folder
+        return folder
+    }
+
+    override suspend fun renameFolder(id: String, name: String): Folder {
+        val updated = folders.first { it.id == id }.copy(name = name)
+        folders = folders.map { if (it.id == id) updated else it }
+        return updated
+    }
+
+    override suspend fun deleteFolder(id: String) {
+        folders = folders.filterNot { it.id == id }
+        listResult = listResult.map { if (it.folderId == id) it.copy(folderId = null) else it }
+    }
+
+    override suspend fun bulkUpdate(ids: List<String>, action: BulkAction, folderId: String?): BulkUpdateResult {
+        bulkCalls += Triple(ids, action, folderId)
+        return bulkResult
+    }
+
+    override suspend fun fork(id: String, throughMessageId: String): ForkResult {
+        forkCalls += id to throughMessageId
+        return forkResult
+    }
+
+    override suspend fun export(id: String, format: String): Pair<ByteArray, String> {
+        return ByteArray(0) to "conversation.$format"
+    }
+
+    override suspend fun setMessagePinned(conversationId: String, messageId: String, pinned: Boolean): List<String> {
+        pinCalls += Triple(conversationId, messageId, pinned)
+        pinnedMessageIds = if (pinned) {
+            (pinnedMessageIds + messageId).distinct()
+        } else {
+            pinnedMessageIds.filterNot { it == messageId }
+        }
+        return pinnedMessageIds
     }
 
     override suspend fun get(id: String): ConversationDetail {
@@ -375,5 +489,62 @@ class FakeTeamsAssistantService(
             error?.let { throw it }
             scriptedEvents.forEach { emit(it) }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ScopeService / ShareService
+// ---------------------------------------------------------------------------
+
+class FakeScopeService(
+    var result: PersistScopeResult = PersistScopeResult(format = Format.NationalDex),
+    var error: OakError? = null,
+) : ScopeService {
+    val persistCalls = mutableListOf<Triple<Format, String?, String>>()
+
+    override suspend fun persist(format: Format, conversationId: String?, sessionId: String): PersistScopeResult {
+        persistCalls += Triple(format, conversationId, sessionId)
+        error?.let { throw it }
+        return result.copy(format = format)
+    }
+}
+
+class FakeShareService(
+    var created: CreatedShare = CreatedShare(id = "share-1", url = "https://oak.gowtam.ai/a/share-1"),
+    var listResult: List<ShareListItem> = emptyList(),
+    var publicResult: PublicShare? = null,
+    var importTeamId: String = "team-imported",
+    var error: OakError? = null,
+) : ShareService {
+    val createCalls = mutableListOf<Pair<String, String>>()
+    val revokeCalls = mutableListOf<String>()
+    val publicCalls = mutableListOf<String>()
+
+    override suspend fun create(conversationId: String, assistantMessageId: String): CreatedShare {
+        createCalls += conversationId to assistantMessageId
+        error?.let { throw it }
+        return created
+    }
+
+    override suspend fun list(): List<ShareListItem> {
+        error?.let { throw it }
+        return listResult
+    }
+
+    override suspend fun revoke(id: String) {
+        revokeCalls += id
+        error?.let { throw it }
+        listResult = listResult.filterNot { it.id == id }
+    }
+
+    override suspend fun getPublic(id: String): PublicShare {
+        publicCalls += id
+        error?.let { throw it }
+        return publicResult ?: throw OakError.Http(404, "not_found", "Share not found")
+    }
+
+    override suspend fun importTeam(id: String): String {
+        error?.let { throw it }
+        return importTeamId
     }
 }

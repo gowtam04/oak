@@ -38,6 +38,14 @@ fun DexRoute(services: ServiceContainer, appState: AppState, modifier: Modifier 
     // Saveable stack of "kind|query" strings so rotation restores the path.
     val stack = rememberSaveable(saver = dexStackSaver()) { mutableStateListOf<DexEntityRoute>() }
 
+    val surface by appState.surfaceRequest.collectAsState()
+    LaunchedEffect(surface) {
+        val req = surface as? ai.gowtam.oak.app.AppState.SurfaceRequest.Dex ?: return@LaunchedEffect
+        val query = req.query
+        if (!query.isNullOrBlank()) stack.add(DexEntityRoute(EntityKind.POKEMON, query))
+        appState.consumeSurfaceRequest()
+    }
+
     BackHandler(enabled = stack.isNotEmpty()) {
         stack.removeAt(stack.lastIndex)
         if (stack.isEmpty()) viewModel.clearDetail()

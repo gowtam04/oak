@@ -148,16 +148,30 @@ struct ChatView: View {
       ToolbarItem(placement: .principal) {
         scopeChip
       }
-      if showsNewConversationButton || onNewConversation != nil {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button {
-            if let onNewConversation {
-              onNewConversation()
-            } else {
-              model.startNewConversation()
+      ToolbarItem(placement: .topBarTrailing) {
+        HStack(spacing: 12) {
+          if model.isSignedIn, !model.turns.isEmpty {
+            Menu {
+              Button("Export Markdown") {
+                Task { await exportThread(.markdown) }
+              }
+              Button("Export PDF") {
+                Task { await exportThread(.pdf) }
+              }
+            } label: {
+              Label("Export", systemImage: "square.and.arrow.up")
             }
-          } label: {
-            Label("New conversation", systemImage: "square.and.pencil")
+          }
+          if showsNewConversationButton || onNewConversation != nil {
+            Button {
+              if let onNewConversation {
+                onNewConversation()
+              } else {
+                model.startNewConversation()
+              }
+            } label: {
+              Label("New conversation", systemImage: "square.and.pencil")
+            }
           }
         }
       }
@@ -169,7 +183,10 @@ struct ChatView: View {
     .onDisappear { model.detach() }
     // Returning to the thread: if a turn is still generating for it but the socket has
     // dropped, reattach to its live stream and rebuild the in-flight UI from the replay.
-    .onAppear { model.reattachIfNeeded() }
+    .onAppear {
+      model.reattachIfNeeded()
+      Task { await model.loadMentionTeams() }
+    }
     // Background: take a short grace window so a nearly-done turn finishes streaming.
     // Foreground: reattach to a still-running turn whose socket dropped.
     .onChange(of: scenePhase) { _, newPhase in
@@ -226,8 +243,18 @@ struct ChatView: View {
           set: { model.selectScope($0) }
         )
       ) {
-        ForEach(Format.knownCases, id: \.self) { format in
-          Text(format.displayLabel).tag(format)
+        let mru = appState.lastUsedScopes
+        if !mru.isEmpty, case .signedIn = appState.authState {
+          Section("Recent") {
+            ForEach(mru, id: \.self) { format in
+              Text(format.displayLabel).tag(format)
+            }
+          }
+        }
+        Section {
+          ForEach(Format.knownCases.filter { !mru.contains($0) || mru.isEmpty || appState.authState == .guest }, id: \.self) { format in
+            Text(format.displayLabel).tag(format)
+          }
         }
       }
     } label: {
@@ -337,6 +364,19 @@ struct ChatView: View {
                   .padding(.horizontal, Theme.Spacing.lg)
                   .padding(.top, Theme.Spacing.sm)
               }
+              PinStripView(
+                pins: pinItems,
+                onJump: { id in
+                  if let turn = model.turns.first(where: { $0.serverMessageId == id }) {
+                    withAnimation { proxy.scrollTo(turn.id, anchor: .top) }
+                  }
+                },
+                onUnpin: { id in
+                  if let turn = model.turns.first(where: { $0.serverMessageId == id }) {
+                    Task { await model.pinTurn(turn) }
+                  }
+                }
+              )
               Spacer(minLength: 0)
               LazyVStack(alignment: .leading, spacing: Theme.Spacing.lg) {
                 ForEach(model.turns) { turn in
@@ -370,33 +410,101 @@ struct ChatView: View {
 
   @ViewBuilder
   private func turnView(_ turn: ChatViewModel.ChatTurnItem) -> some View {
+    let isLastUser = model.isLastUser(turn)
+    let isLastAssistant = model.isLastAssistant(turn)
     switch turn.content {
     case let .user(text, imageCount):
-      UserMessageView(text: text, imageCount: imageCount)
-    case let .assistant(answer):
-      // The full field-by-field card. A clarify-option / suggestion tap sends its
-      // text verbatim as the next user turn; tapping a candidate / subject / type or
-      // a proposed/saved team opens it in the artifact viewer (M-ART-US-1/2/3).
-      AnswerCardView(
-        answer: answer,
-        onFollowUp: sendFollowUp,
-        onOpenSavedTeam: { ref in
-          Task { await artifactModel?.openSavedTeam(id: ref.id, name: ref.name) }
-        },
-        onOpenEntity: { kind, query in
-          Task { await artifactModel?.openEntity(kind: kind, query: query) }
-        },
-        onOpenProposedTeam: { team, warnings in
-          artifactModel?.openProposedTeam(team, warnings: warnings)
-        },
-        onOpenComparison: { subjects in
-          artifactModel?.openComparison(subjects)
-        },
-        onOpenDamageCalc: { damageCalc in
-          artifactModel?.openDamageCalc(damageCalc)
+      VStack(alignment: .trailing, spacing: 6) {
+        UserMessageView(text: text, imageCount: imageCount)
+        HStack {
+          if isLastUser, model.canUndoSend {
+            Button("Undo") { model.undoSend() }
+              .font(Theme.body(.caption, weight: .semibold))
+          }
+          if isLastUser, model.canEditLastUser {
+            TurnActions(
+              isAssistant: false,
+              isLastCard: true,
+              isSignedIn: model.isSignedIn,
+              isPinned: false,
+              onRetry: nil,
+              onEdit: { model.beginEditLast() },
+              onCopyHuman: {},
+              onCopyAgents: nil,
+              onShare: nil,
+              onPin: nil,
+              onFork: nil
+            )
+          }
         }
-      )
+      }
+    case let .assistant(answer):
+      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+        // The full field-by-field card. A clarify-option / suggestion tap sends its
+        // text verbatim as the next user turn; tapping a candidate / subject / type or
+        // a proposed/saved team opens it in the artifact viewer (M-ART-US-1/2/3).
+        AnswerCardView(
+          answer: answer,
+          onFollowUp: sendFollowUp,
+          onOpenSavedTeam: { ref in
+            Task { await artifactModel?.openSavedTeam(id: ref.id, name: ref.name) }
+          },
+          onOpenEntity: { kind, query in
+            Task { await artifactModel?.openEntity(kind: kind, query: query) }
+          },
+          onOpenProposedTeam: { team, warnings in
+            artifactModel?.openProposedTeam(team, warnings: warnings)
+          },
+          onOpenComparison: { subjects in
+            artifactModel?.openComparison(subjects)
+          },
+          onOpenDamageCalc: { damageCalc in
+            artifactModel?.openDamageCalc(damageCalc)
+          },
+          onCopyHuman: {
+            UIPasteboard.general.string = OakAnswerHumanMarkdown.build(answer)
+          }
+        )
+        TurnActions(
+          isAssistant: true,
+          isLastCard: isLastAssistant && !model.isStreaming,
+          isSignedIn: model.isSignedIn,
+          isPinned: turn.serverMessageId.map { model.pinnedMessageIds.contains($0) } ?? false,
+          onRetry: (isLastAssistant && model.canRetryLastAnswer) ? { model.retryLastAnswer() } : nil,
+          onEdit: nil,
+          onCopyHuman: {
+            UIPasteboard.general.string = OakAnswerHumanMarkdown.build(answer)
+          },
+          onCopyAgents: {
+            UIPasteboard.general.string = OakAnswerAgentMarkdown.build(answer)
+          },
+          onShare: model.isSignedIn ? { Task { await share(turn) } } : nil,
+          onPin: model.isSignedIn ? { Task { await model.pinTurn(turn) } } : nil,
+          onFork: model.isSignedIn ? { Task { await model.forkFrom(turn) } } : nil
+        )
+        FollowUpChipRow(chips: model.followUpChips(for: answer), onTap: model.handleChip)
+      }
     }
+  }
+
+  private var pinItems: [PinStripView.PinItem] {
+    model.pinnedMessageIds.compactMap { id in
+      guard let turn = model.turns.first(where: { $0.serverMessageId == id }),
+            case let .assistant(answer) = turn.content
+      else { return nil }
+      let title = answer.subjects?.first?.name ?? "Pinned answer"
+      return PinStripView.PinItem(messageId: id, title: title)
+    }
+  }
+
+  private func share(_ turn: ChatViewModel.ChatTurnItem) async {
+    guard let url = await model.shareTurn(turn) else { return }
+    SystemShare.present(items: [url])
+  }
+
+  private func exportThread(_ format: ConversationExportFormat) async {
+    guard let url = await model.exportConversation(as: format) else { return }
+    SystemShare.present(items: [url])
   }
 
   /// Sends `text` verbatim as the next user message (clarify options + suggestion
@@ -443,6 +551,10 @@ struct ChatView: View {
       .onAppear {
         filedStarters = ExamplePrompts.pickFiledStarters()
         emptyStateAppeared = true
+        Task {
+          await model.loadEmptyDeskRecents()
+          await model.loadMentionTeams()
+        }
       }
   }
 
@@ -466,6 +578,11 @@ struct ChatView: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(.bottom, Theme.Spacing.sm)
 
+      if model.isSignedIn {
+        emptyDeskRecents
+          .padding(.bottom, Theme.Spacing.sm)
+      }
+
       VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
         ForEach(Array(filedStarters.enumerated()), id: \.element.id) { index, starter in
           filedStarterRow(starter, index: index)
@@ -474,6 +591,35 @@ struct ChatView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.top, Theme.Spacing.xl)
+  }
+
+  @ViewBuilder
+  private var emptyDeskRecents: some View {
+    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+      if let recent = model.recentConversation {
+        Button {
+          appState.pendingDestination = .conversation(id: recent.id)
+        } label: {
+          Label("Continue \(recent.title)", systemImage: "clock.arrow.circlepath")
+            .font(Theme.body(.subheadline, weight: .medium))
+            .foregroundStyle(Theme.textStrong)
+        }
+        .buttonStyle(.plain)
+      }
+      if let team = model.recentTeam {
+        Button {
+          appState.pendingDestination = .team(id: team.id)
+        } label: {
+          Label("Open \(team.name)", systemImage: "square.grid.3x2")
+            .font(Theme.body(.subheadline, weight: .medium))
+            .foregroundStyle(Theme.textStrong)
+        }
+        .buttonStyle(.plain)
+      }
+      Text("Scope: \(model.displayFormat.shortLabel)")
+        .font(Theme.body(.caption))
+        .foregroundStyle(Theme.textMuted)
+    }
   }
 
   /// One starter row: mute category prefix + prompt. Surface + hairline, r10.
@@ -645,7 +791,9 @@ struct PreviewChatService: ChatService {
     sessionId: String,
     message: String,
     images: [UIImage],
-    scopeSeed: Format?
+    scopeSeed: Format?,
+    recovery: ChatRecovery?,
+    mentionedTeamIds: [String]?
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     AsyncThrowingStream { continuation in
       let answer = OakAnswer(
@@ -678,6 +826,12 @@ struct PreviewChatService: ChatService {
   }
 
   func stop(turnId: String, sessionId: String) async throws {}
+
+  func persistScope(
+    format: Format,
+    conversationId: String?,
+    sessionId: String
+  ) async throws -> [Format] { [] }
 }
 
 #Preview("Chat") {

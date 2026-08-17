@@ -78,6 +78,18 @@ export interface ChatRequestBody {
    * intent) but BELOW an in-message signal. Optional — omitted means "no pick".
    */
   scope_seed?: Format;
+  /**
+   * Replace the last completed user+assistant pair on a successful answer
+   * (retry/edit). Omit for a normal append. The last messages must already be a
+   * user then assistant pair — otherwise the route 409s `nothing_to_replace`.
+   */
+  recovery?: "retry" | "edit";
+  /**
+   * Stable team UUIDs to bind onto this turn (composer @mentions). Max 6,
+   * unique. Guests cannot mention; any id that fails `getTeam` is 400
+   * `unbound_mention` before the turn starts.
+   */
+  mentioned_team_ids?: string[];
 }
 
 /**

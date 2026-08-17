@@ -12,15 +12,29 @@ vi.mock("@/lib/api/history-client", () => ({
   renameConversation: vi.fn(),
   setPinned: vi.fn(),
   deleteConversation: vi.fn(),
+  setArchived: vi.fn(),
+  setFolder: vi.fn(),
+  bulkUpdate: vi.fn(),
+}));
+
+vi.mock("@/lib/api/folder-client", () => ({
+  listFolders: vi.fn().mockResolvedValue([]),
+  createFolder: vi.fn(),
+  renameFolder: vi.fn(),
+  deleteFolder: vi.fn(),
 }));
 
 import {
+  bulkUpdate,
+  deleteConversation,
   listConversations,
   renameConversation,
+  setArchived,
+  setFolder,
   setPinned,
-  deleteConversation,
   type ConversationSummary,
 } from "@/lib/api/history-client";
+import { createFolder, listFolders } from "@/lib/api/folder-client";
 import { useConversations } from "@/lib/hooks/use-conversations";
 
 const SUMMARY: ConversationSummary = {
@@ -36,6 +50,15 @@ beforeEach(() => {
   vi.mocked(renameConversation).mockResolvedValue(true);
   vi.mocked(setPinned).mockResolvedValue(true);
   vi.mocked(deleteConversation).mockResolvedValue(true);
+  vi.mocked(setArchived).mockResolvedValue(true);
+  vi.mocked(setFolder).mockResolvedValue(true);
+  vi.mocked(bulkUpdate).mockResolvedValue({ updated: ["c1"], skipped: [] });
+  vi.mocked(listFolders).mockResolvedValue([]);
+  vi.mocked(createFolder).mockResolvedValue({
+    id: "f1",
+    name: "VGC",
+    createdAt: 1,
+  });
 });
 
 afterEach(() => {
@@ -124,5 +147,84 @@ describe("useConversations", () => {
 
     act(() => result.current.refresh());
     await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(1));
+  });
+
+  it("passes folder / archive filters through to listConversations", async () => {
+    const { result } = renderHook(() => useConversations(true));
+    await waitFor(() => expect(result.current.conversations).toHaveLength(1));
+
+    act(() => result.current.setFolderId("f1"));
+    await waitFor(() =>
+      expect(listConversations).toHaveBeenCalledWith({
+        q: undefined,
+        folder_id: "f1",
+      }),
+    );
+
+    act(() => result.current.setArchivedOnly(true));
+    await waitFor(() =>
+      expect(listConversations).toHaveBeenCalledWith({
+        q: undefined,
+        folder_id: "f1",
+        archived: true,
+      }),
+    );
+
+    act(() => result.current.setIncludeArchived(true));
+    await waitFor(() =>
+      expect(listConversations).toHaveBeenCalledWith({
+        q: undefined,
+        folder_id: "f1",
+        archived: true,
+        include_archived: true,
+      }),
+    );
+  });
+
+  it("archive removes the row from the default list and calls the API", async () => {
+    const { result } = renderHook(() => useConversations(true));
+    await waitFor(() => expect(result.current.conversations).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.archive("c1", true);
+    });
+    expect(setArchived).toHaveBeenCalledWith("c1", true);
+    expect(result.current.conversations).toEqual([]);
+  });
+
+  it("moveToFolder updates folderId and calls the API", async () => {
+    const { result } = renderHook(() => useConversations(true));
+    await waitFor(() => expect(result.current.conversations).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.moveToFolder("c1", "f1");
+    });
+    expect(setFolder).toHaveBeenCalledWith("c1", "f1");
+    expect(result.current.conversations[0].folderId).toBe("f1");
+  });
+
+  it("bulk delete filters the rows and calls bulkUpdate", async () => {
+    const { result } = renderHook(() => useConversations(true));
+    await waitFor(() => expect(result.current.conversations).toHaveLength(1));
+    vi.mocked(listConversations).mockClear();
+
+    await act(async () => {
+      await result.current.bulk(["c1"], "delete");
+    });
+    expect(bulkUpdate).toHaveBeenCalledWith(["c1"], "delete", undefined);
+    expect(result.current.conversations).toEqual([]);
+  });
+
+  it("createFolder appends the folder on success", async () => {
+    const { result } = renderHook(() => useConversations(true));
+    await waitFor(() => expect(result.current.conversations).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.createFolder("VGC");
+    });
+    expect(createFolder).toHaveBeenCalledWith("VGC");
+    expect(result.current.folders).toEqual([
+      { id: "f1", name: "VGC", createdAt: 1 },
+    ]);
   });
 });

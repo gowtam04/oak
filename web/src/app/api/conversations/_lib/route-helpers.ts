@@ -25,3 +25,19 @@ export async function conversationRepo(): Promise<
 > {
   return import("@/data/repos/conversation-repo");
 }
+
+/** The folder repo, loaded at request time (server-only). */
+export async function folderRepo(): Promise<
+  typeof import("@/data/repos/folder-repo")
+> {
+  return import("@/data/repos/folder-repo");
+}
+
+/** Repo errors stamped with `.code` (folder_limit, pin_limit, …). */
+export function errorCode(err: unknown): string | undefined {
+  if (err && typeof err === "object" && "code" in err) {
+    const code = (err as { code: unknown }).code;
+    if (typeof code === "string") return code;
+  }
+  return undefined;
+}

@@ -78,6 +78,9 @@ class OakApiClient(
         perform(endpoint)
     }
 
+    /** Performs [endpoint] and returns the raw 2xx body (exports, attachments). */
+    suspend fun sendBytes(endpoint: Endpoint): ByteArray = perform(endpoint)
+
     /**
      * Opens a streaming (SSE) connection for [endpoint] and returns the raw
      * [Response] once the status is 2xx — the body is left open (not

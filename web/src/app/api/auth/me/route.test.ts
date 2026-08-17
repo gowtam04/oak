@@ -1,12 +1,15 @@
 /**
  * Route-adapter tests for GET /api/auth/me (account-creation design.md
- * § API Design; AUTH-US-1, AC-1.2, BR-A11).
+ * § API Design; AUTH-US-1, AC-1.2, BR-A11; chat-qol api-design.md + ADR-8).
  *
  * The route is a THIN adapter; these tests pin both states: a resolved account →
- * `{ signedIn: true, email }`, and a guest (`getCurrentAccount` returns null) →
- * `{ signedIn: false }` — always 200, never an error path (guests are
- * first-class, BR-A11). `current-user` is mocked so neither cookie nor DB is
- * needed.
+ * `{ signedIn: true, email, lastUsedScope?, lastUsedScopes }`, and a guest
+ * (`getCurrentAccount` returns null) → `{ signedIn: false }` — always 200,
+ * never an error path (guests are first-class, BR-A11). `current-user` and
+ * `scope-mru-repo.list` are mocked so neither cookie nor DB is needed.
+ *
+ * `lastUsedScopes` is additive (SCOPE-US-2): signed-in bodies include the MRU
+ * list (may be `[]`); guests omit it. Singular `lastUsedScope` stays as today.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,14 +21,23 @@ const cu = vi.hoisted(() => ({
 }));
 vi.mock("@/server/auth/current-user", () => cu);
 
+const mru = vi.hoisted(() => ({
+  list: vi.fn<(accountId: string) => Promise<string[]>>(),
+}));
+vi.mock("@/data/repos/scope-mru-repo", () => ({
+  list: (...args: [string]) => mru.list(...args),
+}));
+
 import { GET } from "./route";
 
 beforeEach(() => {
   cu.getCurrentAccount.mockReset();
+  mru.list.mockReset();
+  mru.list.mockResolvedValue([]);
 });
 
 describe("GET /api/auth/me", () => {
-  it("reports a signed-in account → 200 { signedIn: true, email }", async () => {
+  it("reports a signed-in account → 200 { signedIn: true, email, lastUsedScopes: [] }", async () => {
     cu.getCurrentAccount.mockResolvedValue({
       id: "acct-1",
       email: "ash@pallet.town",
@@ -39,7 +51,9 @@ describe("GET /api/auth/me", () => {
     expect(await res.json()).toEqual({
       signedIn: true,
       email: "ash@pallet.town",
+      lastUsedScopes: [],
     });
+    expect(mru.list).toHaveBeenCalledWith("acct-1");
   });
 
   it("includes lastUsedScope when the account has a remembered preference", async () => {
@@ -57,7 +71,47 @@ describe("GET /api/auth/me", () => {
       signedIn: true,
       email: "ash@pallet.town",
       lastUsedScope: "gen-7",
+      lastUsedScopes: [],
     });
+  });
+
+  it("includes lastUsedScopes in MRU order (SCOPE-US-2, SCOPE-AC-2.1)", async () => {
+    cu.getCurrentAccount.mockResolvedValue({
+      id: "acct-1",
+      email: "ash@pallet.town",
+      createdAt: 1_700_000_000_000,
+      lastUsedScope: "gen-7",
+    });
+    mru.list.mockResolvedValue(["gen-7", "scarlet-violet", "national-dex"]);
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      signedIn: true,
+      email: "ash@pallet.town",
+      lastUsedScope: "gen-7",
+      lastUsedScopes: ["gen-7", "scarlet-violet", "national-dex"],
+    });
+    expect(mru.list).toHaveBeenCalledWith("acct-1");
+  });
+
+  it("does not put a never-picked scope in lastUsedScopes (SCOPE-AC-2.3)", async () => {
+    cu.getCurrentAccount.mockResolvedValue({
+      id: "acct-1",
+      email: "ash@pallet.town",
+      createdAt: 1_700_000_000_000,
+      lastUsedScope: "champions",
+    });
+    // Only Champions has been picked/resolved — gen-1 is not in the MRU group.
+    mru.list.mockResolvedValue(["champions"]);
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { lastUsedScopes: string[] };
+    expect(body.lastUsedScopes).toEqual(["champions"]);
+    expect(body.lastUsedScopes).not.toContain("gen-1");
   });
 
   it("reports a guest → 200 { signedIn: false } (never errors — BR-A11)", async () => {
@@ -67,5 +121,46 @@ describe("GET /api/auth/me", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ signedIn: false });
+    expect(mru.list).not.toHaveBeenCalled();
+  });
+
+  it("fail-softs lastUsedScopes to [] when list throws (never 500s /me)", async () => {
+    cu.getCurrentAccount.mockResolvedValue({
+      id: "acct-1",
+      email: "ash@pallet.town",
+      createdAt: 1_700_000_000_000,
+      lastUsedScope: "gen-7",
+    });
+    mru.list.mockRejectedValue(new Error("db down"));
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      signedIn: true,
+      email: "ash@pallet.town",
+      lastUsedScope: "gen-7",
+      lastUsedScopes: [],
+    });
+  });
+
+  it("drops unknown formats from lastUsedScopes", async () => {
+    cu.getCurrentAccount.mockResolvedValue({
+      id: "acct-1",
+      email: "ash@pallet.town",
+      createdAt: 1_700_000_000_000,
+      lastUsedScope: "gen-7",
+    });
+    mru.list.mockResolvedValue(["gen-7", "gen9ou", "national-dex"]);
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      signedIn: true,
+      email: "ash@pallet.town",
+      lastUsedScope: "gen-7",
+      lastUsedScopes: ["gen-7", "national-dex"],
+    });
   });
 });

@@ -22,6 +22,7 @@ import { ProviderTransportError } from "@/agent/providers/errors";
 import type { ProposedTeam } from "@/agent/schemas";
 import type {
   AgentMode,
+  BoundTeam,
   ChatMessage,
   ImageAttachment,
   OnAnswerDelta,
@@ -33,7 +34,7 @@ import { formatForMode, type Format } from "@/data/formats";
 import type { ClientPlatform } from "@/lib/client-platform";
 import type { ScopeEvent } from "@/lib/sse/sse-types";
 import { logger, type TurnTrace } from "@/server/logger";
-import { appendTurn } from "@/server/session-store";
+import { appendTurn, replaceLastPair } from "@/server/session-store";
 import { publish, type TurnRecord } from "@/server/turn-store";
 
 export interface RunTurnParams {
@@ -66,6 +67,16 @@ export interface RunTurnParams {
    * Stored on the admin `turn_record` only — never an LLM-visible tool input.
    */
   client?: ClientPlatform | null;
+  /**
+   * Retry/edit: on a successful answer, replace the last user+assistant pair
+   * instead of appending. Omit for a normal append. Stop/error never write.
+   */
+  recovery?: "retry" | "edit";
+  /**
+   * @mentioned teams already resolved by the route (MEN-BR-1). Bound onto
+   * `AgentContext.boundTeams` for this turn only.
+   */
+  boundTeams?: BoundTeam[];
 }
 
 /**
@@ -88,6 +99,8 @@ export async function runTurn(params: RunTurnParams): Promise<void> {
     images,
     activeModel,
     client = null,
+    recovery,
+    boundTeams,
   } = params;
 
   // Fire-and-forget recording-fault logger (ADMIN-BR-3) — a `turn_record` write
@@ -124,6 +137,8 @@ export async function runTurn(params: RunTurnParams): Promise<void> {
       accountId: account?.id,
       proposedTeam,
       images: images.length > 0 ? images : undefined,
+      boundTeams:
+        boundTeams && boundTeams.length > 0 ? boundTeams : undefined,
       // The ONLY aborter is explicit stop (BT-4) — a client disconnect never
       // reaches here (design §5.2 step 2). Binding the turn's own signal, NOT
       // any request signal, is the whole feature.
@@ -179,16 +194,25 @@ export async function runTurn(params: RunTurnParams): Promise<void> {
     if (account) {
       try {
         const repo = await import("@/data/repos/conversation-repo");
-        await repo.appendTurnPair({
-          accountId: account.id,
-          conversationId: sessionId,
-          format: formatForMode(mode),
-          userTurnId: repo.newTurnId(),
-          userMessage: userTurnText,
-          assistantTurnId: repo.newTurnId(),
-          answer,
-          now: Date.now(),
-        });
+        if (recovery) {
+          await repo.replaceLastPair(
+            account.id,
+            sessionId,
+            userTurnText,
+            answer,
+          );
+        } else {
+          await repo.appendTurnPair({
+            accountId: account.id,
+            conversationId: sessionId,
+            format: formatForMode(mode),
+            userTurnId: repo.newTurnId(),
+            userMessage: userTurnText,
+            assistantTurnId: repo.newTurnId(),
+            answer,
+            now: Date.now(),
+          });
+        }
       } catch (err) {
         logger.error(
           {
@@ -203,11 +227,56 @@ export async function runTurn(params: RunTurnParams): Promise<void> {
       }
     } else {
       // GUEST: in-memory session store (fail-soft in the store itself).
-      await appendTurn(sessionId, { role: "user", content: userTurnText });
-      await appendTurn(sessionId, {
-        role: "assistant",
-        content: answer.answer_markdown,
-      });
+      try {
+        if (recovery) {
+          await replaceLastPair(
+            sessionId,
+            userTurnText,
+            answer.answer_markdown,
+          );
+        } else {
+          await appendTurn(sessionId, { role: "user", content: userTurnText });
+          await appendTurn(sessionId, {
+            role: "assistant",
+            content: answer.answer_markdown,
+          });
+        }
+      } catch (err) {
+        logger.error(
+          {
+            event: "chat_persist_failed",
+            request_id: requestId,
+            session_id: sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "oak_chat_persist_failed",
+        );
+      }
+    }
+
+    // SCOPE-BR-2: signed-in completed turn upserts the resolved format into
+    // the account's scope MRU. Fire-and-forget — never on the critical path;
+    // guests have no MRU.
+    if (account) {
+      const acctId = account.id;
+      const logMruFailure = (err: unknown): void => {
+        logger.error(
+          {
+            event: "scope_mru_touch_failed",
+            request_id: requestId,
+            account_id: acctId,
+            session_id: sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "oak_scope_mru_touch_failed",
+        );
+      };
+      try {
+        const mru = await import("@/data/repos/scope-mru-repo");
+        void mru.touch(acctId, format, Date.now()).catch(logMruFailure);
+      } catch (err) {
+        logMruFailure(err);
+      }
     }
 
     // Non-blocking admin recording (ADMIN-BR-3, AD-2/AD-3): one turn_record per

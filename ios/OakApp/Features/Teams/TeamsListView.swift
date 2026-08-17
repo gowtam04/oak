@@ -76,6 +76,32 @@ struct TeamsListView: View {
         showSignIn = false
       }
     }
+    .onChange(of: appState.pendingDestination) { _, destination in
+      switch destination {
+      case let .team(id):
+        editorTarget = .existing(
+          TeamSummary(
+            id: id,
+            name: "Team",
+            format: .nationalDex,
+            memberCount: 0,
+            incomplete: false,
+            species: [],
+            updatedAt: 0
+          )
+        )
+        appState.pendingDestination = nil
+      case let .teams(query):
+        if let query, let match = model.teams.first(where: {
+          $0.name.localizedCaseInsensitiveContains(query)
+        }) {
+          editorTarget = .existing(match)
+        }
+        appState.pendingDestination = nil
+      default:
+        break
+      }
+    }
   }
 
   // MARK: List

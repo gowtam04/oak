@@ -205,6 +205,11 @@ fun AccountScreen(
                 )
             }
 
+            if (authState is AuthState.SignedIn) {
+                Spacer(Modifier.height(OakSpacing.lg))
+                SharedByMe()
+            }
+
             Spacer(Modifier.height(OakSpacing.xl))
             Text(text = "About", style = MaterialTheme.typography.titleSmall, color = colors.textMuted)
             Spacer(Modifier.height(OakSpacing.sm))

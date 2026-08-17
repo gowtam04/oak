@@ -1344,7 +1344,11 @@ const DEFAULT_OAK_HOOKS: AnswerRunHooks<OakAnswer> = {
   submitToolName: "submit_answer",
   answerSchema: oakAnswerSchema,
   buildSystem: (providerKind, ctx) =>
-    buildSystemSegments({ provider: providerKind, mode: ctx.mode }),
+    buildSystemSegments({
+      provider: providerKind,
+      mode: ctx.mode,
+      boundTeams: ctx.boundTeams,
+    }),
   validateAnswer: validateOakAnswer,
   enrich: enrichAnswer,
   salvageAnswer: salvageOakAnswer,

@@ -4,7 +4,8 @@
  * Since Oak v2 P3 (prompt collapse) there is ONE canonical Markdown domain body
  * (`./domain`) for a turn's scope, wrapped by a thin per-provider style. These
  * pins guard the collapse invariants:
- *  - exactly ONE cache breakpoint, on the LAST segment, for every provider;
+ *  - exactly ONE cache breakpoint, on the LAST *cached* segment, for every
+ *    provider (bound-teams is appended after that prefix and must not take it);
  *  - Claude AND Grok are byte-identical pass-throughs of `[systemPrompt, fewShot]`;
  *  - OpenAI still injects its AGENT_CONTRACT / OUTPUT_CONTRACT (Markdown/stop);
  *  - the single body front-loads submit_answer-terminates-the-turn + GFM;
@@ -20,6 +21,7 @@ import { describe, expect, it } from "vitest";
 import { buildSystemSegments } from "@/agent/prompts";
 import { domainForMode } from "@/agent/prompts/domain";
 import { MAINLINE_GEN_INFO } from "@/agent/prompts/gen-info";
+import type { BoundTeam } from "@/agent/types";
 import type { SystemSegment } from "@/agent/providers/types";
 
 const PROVIDERS = ["anthropic", "openai", "xai"] as const;
@@ -40,6 +42,16 @@ function bodyText(
     .join("\n");
 }
 
+const SAMPLE_BOUND_TEAMS: BoundTeam[] = [
+  { id: "11111111-1111-4111-8111-111111111111", name: "Rain", format: "scarlet-violet" },
+];
+
+function prefixThroughBreakpoint(segments: SystemSegment[]): SystemSegment[] {
+  const idx = segments.findIndex((s) => s.cacheBreakpoint);
+  expect(idx).toBeGreaterThanOrEqual(0);
+  return segments.slice(0, idx + 1);
+}
+
 describe("buildSystemSegments — cache breakpoint invariant", () => {
   for (const provider of PROVIDERS) {
     it(`places exactly one breakpoint on the last segment (${provider})`, () => {
@@ -50,6 +62,57 @@ describe("buildSystemSegments — cache breakpoint invariant", () => {
       // A gen scope builds its own per-scope prefix — same breakpoint invariant.
       oneBreakpointOnLast(buildSystemSegments({ provider, mode: "gen-7" }));
       oneBreakpointOnLast(buildSystemSegments({ provider, mode: "gen-1" }));
+    });
+  }
+});
+
+describe("buildSystemSegments — bound-teams extra segment (ADR-5)", () => {
+  for (const provider of PROVIDERS) {
+    it(`prefix through the flagged segment is byte-identical with/without boundTeams (${provider})`, () => {
+      const plain = buildSystemSegments({ provider, mode: "standard" });
+      const bound = buildSystemSegments({
+        provider,
+        mode: "standard",
+        boundTeams: SAMPLE_BOUND_TEAMS,
+      });
+      expect(prefixThroughBreakpoint(bound)).toEqual(
+        prefixThroughBreakpoint(plain),
+      );
+    });
+
+    it(`keeps exactly one breakpoint on the prefix last segment (${provider})`, () => {
+      const bound = buildSystemSegments({
+        provider,
+        mode: "standard",
+        boundTeams: SAMPLE_BOUND_TEAMS,
+      });
+      const prefix = prefixThroughBreakpoint(bound);
+      const flagged = bound.filter((s) => s.cacheBreakpoint);
+      expect(flagged).toHaveLength(1);
+      expect(prefix[prefix.length - 1]?.cacheBreakpoint).toBe(true);
+      for (const s of prefix.slice(0, -1)) expect(s.cacheBreakpoint).toBeFalsy();
+    });
+
+    it(`appends an uncached extra segment that names get_team (${provider})`, () => {
+      const bound = buildSystemSegments({
+        provider,
+        mode: "standard",
+        boundTeams: SAMPLE_BOUND_TEAMS,
+      });
+      const extra = bound[bound.length - 1];
+      expect(extra).toBeDefined();
+      expect(extra!.cacheBreakpoint).toBeFalsy();
+      expect(extra!.text).toContain("get_team");
+      expect(bound.length).toBe(
+        buildSystemSegments({ provider, mode: "standard" }).length + 1,
+      );
+    });
+
+    it(`omits the extra segment when boundTeams is empty (${provider})`, () => {
+      const plain = buildSystemSegments({ provider, mode: "standard" });
+      expect(
+        buildSystemSegments({ provider, mode: "standard", boundTeams: [] }),
+      ).toEqual(plain);
     });
   }
 });

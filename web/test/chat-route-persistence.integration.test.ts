@@ -13,6 +13,10 @@
  *   - a resumed conversation's mode follows its stored format (BR-H6),
  *   - an aborted turn persists nothing,
  *   - the guest path persists nothing to the DB.
+ *
+ * Chat-qol Phase 2 adds recovery persist (replaceLastPair vs appendTurnPair)
+ * and the signed-in completed-turn MRU touch (SCOPE-BR-2). Mentions have no
+ * persist side effects and are covered in route.test.ts.
  */
 
 import { randomUUID } from "node:crypto";
@@ -57,12 +61,22 @@ vi.mock("@/agent/context", () => ({
 
 import { POST } from "@/app/api/chat/route";
 import { _resetStoreForTests } from "@/server/rate-limit";
-import { _resetStoreForTests as resetTurnStore } from "@/server/turn-store";
+import {
+  appendTurn,
+  getHistory,
+  _resetStoreForTests as resetSessionStore,
+} from "@/server/session-store";
+import {
+  _resetStoreForTests as resetTurnStore,
+  findRunningBySession,
+  stopTurn,
+} from "@/server/turn-store";
 import { createPgSchema, installAsSingleton, type PgFixture } from "./support/pg";
 
 let fix: PgFixture;
 type Repo = typeof import("@/data/repos/conversation-repo");
 let repo: Repo;
+let mruRepo: typeof import("@/data/repos/scope-mru-repo");
 
 const ACCT: Account = {
   id: "acct-persist",
@@ -88,6 +102,7 @@ beforeAll(async () => {
   fix = await createPgSchema({ seed: "none" });
   await installAsSingleton(fix);
   repo = await import("@/data/repos/conversation-repo");
+  mruRepo = await import("@/data/repos/scope-mru-repo");
 }, 60_000);
 
 afterAll(async () => {
@@ -98,6 +113,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   await _resetStoreForTests();
   await resetTurnStore();
+  await resetSessionStore();
   capturedHistories.length = 0;
   capturedModes.length = 0;
   nextAnswer = makeAnswer("default answer");
@@ -107,7 +123,7 @@ beforeEach(async () => {
     return nextAnswer;
   });
   await fix.db.execute(
-    sql`TRUNCATE TABLE conversation, conversation_message, account RESTART IDENTITY`,
+    sql`TRUNCATE TABLE conversation, conversation_message, account, account_scope_mru RESTART IDENTITY`,
   );
   // Seed the signed-in account row so last_used_scope writes land (no FK, but
   // updateLastUsedScope is a real UPDATE against account.id).
@@ -122,7 +138,14 @@ beforeEach(async () => {
 // ---------------------------------------------------------------------------
 
 async function post(
-  body: { session_id: string; message: string; champions_mode?: boolean },
+  body: {
+    session_id: string;
+    message: string;
+    champions_mode?: boolean;
+    scope_seed?: string;
+    recovery?: "retry" | "edit";
+    mentioned_team_ids?: string[];
+  },
   init?: { signal?: AbortSignal },
 ): Promise<Response> {
   const res = await POST(
@@ -404,5 +427,238 @@ describe("guest path", () => {
     await post({ session_id: sid, message: "guest question" });
     // No account → no DB write. (Listing under the seeded account stays empty.)
     expect(await repo.listConversations(ACCT.id)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat-qol Phase 2 — recovery persist via DB after mocked runOak
+// REC-US-1..3, REC-BR-1..8, ADR-2, ADR-4
+// ---------------------------------------------------------------------------
+
+async function seedPair(
+  sid: string,
+  userMessage: string,
+  answerMarkdown: string,
+  now = 1000,
+): Promise<void> {
+  await repo.appendTurnPair({
+    accountId: ACCT.id,
+    conversationId: sid,
+    format: "national-dex",
+    userTurnId: repo.newTurnId(),
+    userMessage,
+    assistantTurnId: repo.newTurnId(),
+    answer: makeAnswer(answerMarkdown),
+    now,
+  });
+}
+
+async function pollUntil<T>(
+  read: () => Promise<T>,
+  pred: (value: T) => boolean,
+  ticks = 50,
+): Promise<T> {
+  let value = await read();
+  for (let i = 0; i < ticks && !pred(value); i++) {
+    await new Promise((r) => setTimeout(r, 10));
+    value = await read();
+  }
+  return value;
+}
+
+describe("signed-in recovery persist (REC-BR-2, ADR-2, ADR-4)", () => {
+  it("recovery retry + success calls replaceLastPair — still exactly one pair (REC-US-1, REC-BR-2)", async () => {
+    const sid = randomUUID();
+    await seedPair(sid, "What beats Garchomp?", "Ice types.");
+    nextAnswer = makeAnswer("Ice and Fairy.");
+
+    const res = await post({
+      session_id: sid,
+      message: "What beats Garchomp?",
+      recovery: "retry",
+    });
+    expect(res.status).toBe(200);
+
+    const stored = await repo.getMessages(ACCT.id, sid);
+    expect(stored.map((t) => [t.seq, t.role, t.textContent])).toEqual([
+      [0, "user", "What beats Garchomp?"],
+      [1, "assistant", "Ice and Fairy."],
+    ]);
+    expect(stored.filter((t) => t.textContent === "Ice types.")).toHaveLength(0);
+  });
+
+  it("recovery edit + success replaces the last user text and the assistant answer (REC-US-2)", async () => {
+    const sid = randomUUID();
+    await seedPair(sid, "What beats Garchomp?", "Ice types.");
+    nextAnswer = makeAnswer("In Gen 7, Ice and Fairy.");
+
+    const res = await post({
+      session_id: sid,
+      message: "What beats Garchomp in gen 7?",
+      recovery: "edit",
+    });
+    expect(res.status).toBe(200);
+
+    const stored = await repo.getMessages(ACCT.id, sid);
+    expect(stored.map((t) => [t.seq, t.role, t.textContent])).toEqual([
+      [0, "user", "What beats Garchomp in gen 7?"],
+      [1, "assistant", "In Gen 7, Ice and Fairy."],
+    ]);
+  });
+
+  it("omitted recovery still appends (existing path)", async () => {
+    const sid = randomUUID();
+    await seedPair(sid, "first question", "first answer");
+    nextAnswer = makeAnswer("second answer");
+
+    await post({ session_id: sid, message: "second question" });
+
+    const stored = await repo.getMessages(ACCT.id, sid);
+    expect(stored.map((t) => [t.seq, t.role, t.textContent])).toEqual([
+      [0, "user", "first question"],
+      [1, "assistant", "first answer"],
+      [2, "user", "second question"],
+      [3, "assistant", "second answer"],
+    ]);
+  });
+
+  it("recovery + transport error leaves the old pair (REC-BR-2)", async () => {
+    const sid = randomUUID();
+    await seedPair(sid, "What beats Garchomp?", "Ice types.");
+    mockRunOak.mockReset();
+    mockRunOak.mockRejectedValueOnce(new Error("provider down"));
+
+    const res = await post({
+      session_id: sid,
+      message: "What beats Garchomp?",
+      recovery: "retry",
+    });
+    expect(res.status).toBe(200);
+
+    const stored = await repo.getMessages(ACCT.id, sid);
+    expect(stored.map((t) => t.textContent)).toEqual([
+      "What beats Garchomp?",
+      "Ice types.",
+    ]);
+  });
+
+  it("recovery + stop leaves the old pair (REC-BR-2, REC-BR-4, REC-US-3)", async () => {
+    const sid = randomUUID();
+    await seedPair(sid, "What beats Garchomp?", "Ice types.");
+
+    let resolveOak: ((answer: OakAnswer) => void) | undefined;
+    mockRunOak.mockReset();
+    mockRunOak.mockImplementation(
+      () =>
+        new Promise<OakAnswer>((resolve) => {
+          resolveOak = resolve;
+        }),
+    );
+
+    const res = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sid,
+          message: "What beats Garchomp?",
+          recovery: "retry",
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    for (let i = 0; i < 200 && !findRunningBySession(sid); i++) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    const running = findRunningBySession(sid);
+    expect(running).toBeDefined();
+    stopTurn(running!);
+    resolveOak?.(makeAnswer("should not persist"));
+    await res.text();
+
+    const stored = await repo.getMessages(ACCT.id, sid);
+    expect(stored.map((t) => t.textContent)).toEqual([
+      "What beats Garchomp?",
+      "Ice types.",
+    ]);
+  });
+
+  it("recovery with no last user+assistant pair is 409 nothing_to_replace (ADR-4)", async () => {
+    const sid = randomUUID();
+    const res = await POST(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sid,
+          message: "What beats Garchomp?",
+          recovery: "retry",
+        }),
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ error: "nothing_to_replace" }),
+    );
+    expect(await repo.getConversation(ACCT.id, sid)).toBeNull();
+    expect(mockRunOak).not.toHaveBeenCalled();
+  });
+});
+
+describe("guest recovery persist (REC-BR-8, ADR-2)", () => {
+  it("recovery set + success replaces the last session-store pair, not the DB", async () => {
+    meMock.mockResolvedValue(null);
+    const sid = randomUUID();
+    await appendTurn(sid, { role: "user", content: "What beats Garchomp?" });
+    await appendTurn(sid, { role: "assistant", content: "Ice types." });
+    nextAnswer = makeAnswer("Ice and Fairy.");
+
+    const res = await post({
+      session_id: sid,
+      message: "What beats Garchomp really?",
+      recovery: "edit",
+    });
+    expect(res.status).toBe(200);
+
+    expect(await getHistory(sid)).toEqual([
+      { role: "user", content: "What beats Garchomp really?" },
+      { role: "assistant", content: "Ice and Fairy." },
+    ]);
+    expect(await repo.listConversations(ACCT.id)).toEqual([]);
+  });
+
+  it("omitted recovery still appends in the session store", async () => {
+    meMock.mockResolvedValue(null);
+    const sid = randomUUID();
+    await appendTurn(sid, { role: "user", content: "q1" });
+    await appendTurn(sid, { role: "assistant", content: "a1" });
+    nextAnswer = makeAnswer("a2");
+
+    await post({ session_id: sid, message: "q2" });
+
+    expect(await getHistory(sid)).toEqual([
+      { role: "user", content: "q1" },
+      { role: "assistant", content: "a1" },
+      { role: "user", content: "q2" },
+      { role: "assistant", content: "a2" },
+    ]);
+  });
+});
+
+describe("signed-in completed turn MRU (SCOPE-BR-2)", () => {
+  it("touches the resolved format so scope-mru-repo.list sees it", async () => {
+    const sid = randomUUID();
+    await post({
+      session_id: sid,
+      message: "hi",
+      scope_seed: "gen-7",
+    });
+
+    const listed = await pollUntil(
+      () => mruRepo.list(ACCT.id),
+      (formats) => formats[0] === "gen-7",
+    );
+    expect(listed[0]).toBe("gen-7");
   });
 });

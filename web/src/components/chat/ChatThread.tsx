@@ -10,6 +10,12 @@ import {
   pickRandomStarters,
   type StarterPrompt,
 } from "@/lib/example-prompts";
+import { deriveFollowUpChips, type FollowUpChip } from "@/lib/chat/follow-up-chips";
+import { impliedFormatFromAnswer } from "@/lib/chat/implied-format";
+import type { Format } from "@/data/formats";
+import FollowUpChipRow from "./FollowUpChipRow";
+import PinStrip from "./PinStrip";
+import TurnActions from "./TurnActions";
 
 /**
  * Tool -> friendly instrument word (TestFlight feedback AH1b0N09K — raw wire
@@ -47,6 +53,20 @@ export function instrumentToken(tool: string): string {
   return INSTRUMENT_TOKENS[tool] ?? UNKNOWN_INSTRUMENT_TOKEN;
 }
 
+function chipsForAnswer(
+  answer: import("@/components/types").OakAnswer,
+  currentFormat: Format | undefined,
+  mentionedTeam: { id: string; name: string } | null,
+  signedIn: boolean,
+): FollowUpChip[] {
+  const chips = deriveFollowUpChips({
+    answer,
+    impliedFormat: impliedFormatFromAnswer(answer, currentFormat),
+    mentionedTeam: signedIn ? (mentionedTeam ?? undefined) : undefined,
+  });
+  return signedIn ? chips : chips.filter((c) => c.kind !== "team");
+}
+
 /**
  * One "field note" chip in the streaming trail: the mono instrument word
  * mapped from the tool name (e.g. `get_pokemon` -> "Pokémon", via
@@ -77,6 +97,32 @@ export function instrumentToken(tool: string): string {
  * threaded down so suggestion-chip / candidate-row clicks POST a follow-up turn
  * on the same session. Visual styling deferred to the `frontend-design` skill.
  */
+export interface ChatThreadQolProps {
+  signedIn?: boolean;
+  undoTurnId?: string | null;
+  onUndo?: () => void;
+  onRetryLast?: () => void;
+  onEditLast?: () => void;
+  onPinTurn?: (id: string) => void;
+  onUnpinTurn?: (id: string) => void;
+  onForkTurn?: (id: string) => void;
+  pinnedIds?: string[];
+  onJumpToPin?: (id: string) => void;
+  onShareTurn?: (id: string) => void;
+  onFollowUpChip?: (chip: FollowUpChip) => void;
+  currentFormat?: Format;
+  mentionedTeam?: { id: string; name: string } | null;
+  /** When false, hold the empty plate until recents are ready (EMPTY-US-1). */
+  emptyReady?: boolean;
+  emptyDesk?: {
+    lastConversation?: { id: string; title: string } | null;
+    lastTeam?: { id: string; name: string } | null;
+    scopeLabel?: string;
+    onContinue?: () => void;
+    onOpenLastTeam?: () => void;
+  };
+}
+
 export default function ChatThread({
   turns,
   activity,
@@ -88,7 +134,23 @@ export default function ChatThread({
   onFollowUp,
   imagePreviews,
   composerSlot,
-}: ChatThreadProps) {
+  signedIn = false,
+  undoTurnId = null,
+  onUndo,
+  onRetryLast,
+  onEditLast,
+  onPinTurn,
+  onUnpinTurn,
+  onForkTurn,
+  pinnedIds = [],
+  onJumpToPin,
+  onShareTurn,
+  onFollowUpChip,
+  currentFormat,
+  mentionedTeam = null,
+  emptyReady = true,
+  emptyDesk,
+}: ChatThreadProps & ChatThreadQolProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
 
   // Empty-state filed starters: show a fresh random 6 each time the empty state
@@ -163,12 +225,27 @@ export default function ChatThread({
     ? "Reconnecting…"
     : "Thinking through your question…";
 
+  const lastUserId = [...turns].reverse().find((t) => t.role === "user")?.id;
+  const lastAssistantId = [...turns]
+    .reverse()
+    .find((t) => t.role === "assistant")?.id;
+  const pinnedIdSet = new Set(pinnedIds);
+  const pins = pinnedIds.flatMap((id) => {
+    const turn = turns.find((t) => t.id === id && t.role === "assistant");
+    if (!turn || turn.role !== "assistant") return [];
+    const label =
+      turn.answer.subjects?.[0]?.name ??
+      turn.answer.answer_markdown.split("\n")[0]?.slice(0, 48) ??
+      "Pinned turn";
+    return [{ id, label }];
+  });
+
   return (
     <div className="chat-thread" data-testid="chat-thread">
       {showEmptyState && (
         <div
           className={"chat-empty" + (composerSlot ? " chat-empty--hero" : "")}
-          data-testid="chat-empty"
+          data-testid={emptyReady ? "chat-empty" : undefined}
         >
           <div className="blank-plate" data-testid="blank-plate">
             <h1 className="blank-plate__prompt">What do you want to know?</h1>
@@ -181,6 +258,39 @@ export default function ChatThread({
                 stays bottom-docked. */}
             {composerSlot && (
               <div className="chat-empty__composer">{composerSlot}</div>
+            )}
+
+            {signedIn && emptyDesk && (
+              <div className="empty-desk">
+                {emptyDesk.lastConversation && (
+                  <button
+                    type="button"
+                    className="empty-desk__row"
+                    data-testid="empty-desk-continue"
+                    onClick={emptyDesk.onContinue}
+                  >
+                    Continue {emptyDesk.lastConversation.title}
+                  </button>
+                )}
+                {emptyDesk.lastTeam && (
+                  <button
+                    type="button"
+                    className="empty-desk__row"
+                    data-testid="empty-desk-last-team"
+                    onClick={emptyDesk.onOpenLastTeam}
+                  >
+                    {emptyDesk.lastTeam.name}
+                  </button>
+                )}
+                {emptyDesk.scopeLabel && (
+                  <div
+                    className="empty-desk__row empty-desk__row--static"
+                    data-testid="empty-desk-scope"
+                  >
+                    {emptyDesk.scopeLabel}
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="starters" data-testid="filed-starters">
@@ -203,10 +313,15 @@ export default function ChatThread({
         </div>
       )}
 
+      {pins.length > 0 && onJumpToPin && (
+        <PinStrip pins={pins} onJump={onJumpToPin} />
+      )}
+
       {turns.map((turn) =>
         turn.role === "user" ? (
           <div
             key={turn.id}
+            id={`turn-${turn.id}`}
             className="chat-turn chat-turn--user"
             data-testid="user-turn"
           >
@@ -229,10 +344,27 @@ export default function ChatThread({
             {turn.content ? (
               <div className="chat-turn__content">{turn.content}</div>
             ) : null}
+            {undoTurnId === turn.id && onUndo && (
+              <button
+                type="button"
+                className="chat-turn__undo"
+                onClick={onUndo}
+              >
+                Undo
+              </button>
+            )}
+            <TurnActions
+              role="user"
+              isLast={turn.id === lastUserId}
+              signedIn={signedIn}
+              streaming={status === "streaming"}
+              onEdit={onEditLast}
+            />
           </div>
         ) : (
           <div
             key={turn.id}
+            id={`turn-${turn.id}`}
             className="chat-turn chat-turn--assistant"
             data-testid="assistant-turn"
           >
@@ -240,7 +372,34 @@ export default function ChatThread({
               answer={turn.answer}
               onFollowUp={onFollowUp}
               disabled={status === "streaming"}
+              signedIn={signedIn}
+              onShare={
+                onShareTurn ? () => onShareTurn(turn.id) : undefined
+              }
             />
+            <TurnActions
+              role="assistant"
+              isLast={turn.id === lastAssistantId}
+              signedIn={signedIn}
+              streaming={status === "streaming"}
+              pinned={pinnedIdSet.has(turn.id)}
+              onRetry={onRetryLast}
+              onPin={onPinTurn ? () => onPinTurn(turn.id) : undefined}
+              onUnpin={onUnpinTurn ? () => onUnpinTurn(turn.id) : undefined}
+              onFork={onForkTurn ? () => onForkTurn(turn.id) : undefined}
+            />
+            {onFollowUpChip && (
+              <FollowUpChipRow
+                chips={chipsForAnswer(
+                  turn.answer,
+                  currentFormat,
+                  signedIn ? mentionedTeam : null,
+                  signedIn,
+                )}
+                onSelect={onFollowUpChip}
+                disabled={status === "streaming"}
+              />
+            )}
           </div>
         ),
       )}

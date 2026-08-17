@@ -1,7 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { signOut } from "@/lib/api/auth-client";
+import { listShares, revokeShare, type ShareListItem } from "@/lib/api/share-client";
+import SharedByMe from "@/components/account/SharedByMe";
+import ShortcutOverlay from "@/components/chat/ShortcutOverlay";
 
 /**
  * AuthMenu — the header auth control (account-creation design.md § File Structure
@@ -41,6 +44,17 @@ export default function AuthMenu({
   onSignedOut,
 }: AuthMenuProps) {
   const [busy, setBusy] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [shares, setShares] = useState<ShareListItem[]>([]);
+
+  const refreshShares = useCallback(() => {
+    void listShares().then(setShares);
+  }, []);
+
+  useEffect(() => {
+    if (accountOpen && signedIn) refreshShares();
+  }, [accountOpen, signedIn, refreshShares]);
 
   async function handleSignOut() {
     if (busy) return;
@@ -84,12 +98,45 @@ export default function AuthMenu({
       <button
         type="button"
         className="auth-pill"
+        data-testid="auth-account-button"
+        onClick={() => setAccountOpen((o) => !o)}
+        aria-expanded={accountOpen}
+      >
+        Account
+      </button>
+      <button
+        type="button"
+        className="auth-pill"
         data-testid="auth-signout-button"
         onClick={handleSignOut}
         disabled={busy}
       >
         {busy ? "Signing out…" : "Sign out"}
       </button>
+      {accountOpen && (
+        <div className="auth-menu__account" data-testid="account-panel">
+          <h2 className="auth-menu__account-title">Shared by me</h2>
+          <SharedByMe
+            shares={shares}
+            onRevoke={(id) => {
+              void revokeShare(id).then((ok) => {
+                if (ok) setShares((prev) => prev.filter((s) => s.id !== id));
+              });
+            }}
+          />
+          <button
+            type="button"
+            className="auth-menu__shortcuts"
+            onClick={() => setShortcutsOpen(true)}
+          >
+            Keyboard shortcuts
+          </button>
+        </div>
+      )}
+      <ShortcutOverlay
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
     </div>
   );
 }

@@ -34,6 +34,10 @@ struct ConversationSummary: Decodable, Sendable, Identifiable, Hashable {
   let pinned: Bool
   /// Epoch-ms of last activity. Wire key is camelCase `updatedAt`.
   let updatedAt: Int64
+  /// Hidden from the default list (ORG-US-2). Defaults false for older payloads.
+  var archived: Bool = false
+  /// Folder membership; `nil` = unfiled (ORG-US-1).
+  var folderId: String? = nil
 
   enum CodingKeys: String, CodingKey {
     case id
@@ -41,6 +45,37 @@ struct ConversationSummary: Decodable, Sendable, Identifiable, Hashable {
     case format
     case pinned
     case updatedAt
+    case archived
+    case folderId
+  }
+
+  init(
+    id: String,
+    title: String,
+    format: Format,
+    pinned: Bool,
+    updatedAt: Int64,
+    archived: Bool = false,
+    folderId: String? = nil
+  ) {
+    self.id = id
+    self.title = title
+    self.format = format
+    self.pinned = pinned
+    self.updatedAt = updatedAt
+    self.archived = archived
+    self.folderId = folderId
+  }
+
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    title = try container.decode(String.self, forKey: .title)
+    format = try container.decode(Format.self, forKey: .format)
+    pinned = try container.decode(Bool.self, forKey: .pinned)
+    updatedAt = try container.decode(Int64.self, forKey: .updatedAt)
+    archived = try container.decodeIfPresent(Bool.self, forKey: .archived) ?? false
+    folderId = try container.decodeIfPresent(String.self, forKey: .folderId)
   }
 }
 
@@ -61,6 +96,10 @@ struct ConversationDetail: Decodable, Sendable {
   /// EXCLUDES a `let` property that has a default from decoding) while letting existing
   /// constructors (previews/tests) omit it.
   var activeTurn: ActiveTurn? = nil
+  var archived: Bool = false
+  var folderId: String? = nil
+  /// Assistant message ids in thread order (PIN-US-1). Empty when none / omitted.
+  var pinnedMessageIds: [String] = []
 
   enum CodingKeys: String, CodingKey {
     case id
@@ -69,6 +108,44 @@ struct ConversationDetail: Decodable, Sendable {
     case pinned
     case turns
     case activeTurn = "active_turn"
+    case archived
+    case folderId
+    case pinnedMessageIds
+  }
+
+  init(
+    id: String,
+    title: String,
+    format: Format,
+    pinned: Bool,
+    turns: [ChatTurn],
+    activeTurn: ActiveTurn? = nil,
+    archived: Bool = false,
+    folderId: String? = nil,
+    pinnedMessageIds: [String] = []
+  ) {
+    self.id = id
+    self.title = title
+    self.format = format
+    self.pinned = pinned
+    self.turns = turns
+    self.activeTurn = activeTurn
+    self.archived = archived
+    self.folderId = folderId
+    self.pinnedMessageIds = pinnedMessageIds
+  }
+
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    title = try container.decode(String.self, forKey: .title)
+    format = try container.decode(Format.self, forKey: .format)
+    pinned = try container.decode(Bool.self, forKey: .pinned)
+    turns = try container.decode([ChatTurn].self, forKey: .turns)
+    activeTurn = try container.decodeIfPresent(ActiveTurn.self, forKey: .activeTurn)
+    archived = try container.decodeIfPresent(Bool.self, forKey: .archived) ?? false
+    folderId = try container.decodeIfPresent(String.self, forKey: .folderId)
+    pinnedMessageIds = try container.decodeIfPresent([String].self, forKey: .pinnedMessageIds) ?? []
   }
 }
 

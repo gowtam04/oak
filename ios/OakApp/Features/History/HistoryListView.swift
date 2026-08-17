@@ -38,6 +38,13 @@ struct ConversationListView: View {
   /// user returns (web `[data-active]` parity). In-memory only — no persistence.
   @State private var lastOpenedId: String?
 
+  @State private var showingBulkDeleteConfirm = false
+  @State private var showingNewFolder = false
+  @State private var newFolderName = ""
+  @State private var folderToDelete: ConversationFolder?
+  @State private var folderToRename: ConversationFolder?
+  @State private var folderRenameText = ""
+
   /// Drives the custom search pill's focus grammar (azure border + glow).
   @FocusState private var searchFocused: Bool
 
@@ -55,6 +62,7 @@ struct ConversationListView: View {
     @Bindable var model = model
     VStack(spacing: 0) {
       searchField($model.searchQuery)
+      includeArchivedToggle
       if let filter = model.formatFilter {
         activeFilterPill(filter)
       }
@@ -63,9 +71,68 @@ struct ConversationListView: View {
     .background(Theme.canvas)
     .overlay(alignment: .bottomTrailing) { newChatFAB }
     .toolbar {
-      ToolbarItem(placement: .topBarTrailing) {
-        formatFilterMenu
+      ToolbarItem(placement: .topBarLeading) {
+        organizeMenu
       }
+      ToolbarItem(placement: .topBarTrailing) {
+        HStack {
+          Button(model.isSelecting ? "Done" : "Select") {
+            model.isSelecting.toggle()
+            if !model.isSelecting { /* selection cleared on Done via bulk */ }
+          }
+          formatFilterMenu
+        }
+      }
+    }
+    .safeAreaInset(edge: .bottom) {
+      if model.isSelecting, !model.selectedIds.isEmpty {
+        bulkBar
+      }
+    }
+    .alert("Delete conversations?", isPresented: $showingBulkDeleteConfirm) {
+      Button("Delete", role: .destructive) {
+        Task { await model.bulk(.delete) }
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("This permanently removes \(model.selectedIds.count) conversation(s).")
+    }
+    .alert("New folder", isPresented: $showingNewFolder) {
+      TextField("Name", text: $newFolderName)
+      Button("Create") {
+        let name = newFolderName
+        newFolderName = ""
+        Task { await model.createFolder(named: name) }
+      }
+      Button("Cancel", role: .cancel) { newFolderName = "" }
+    }
+    .alert("Rename folder", isPresented: Binding(
+      get: { folderToRename != nil },
+      set: { if !$0 { folderToRename = nil } }
+    )) {
+      TextField("Name", text: $folderRenameText)
+      Button("Save") {
+        if let folder = folderToRename {
+          let name = folderRenameText
+          Task { await model.renameFolder(folder, to: name) }
+        }
+        folderToRename = nil
+      }
+      Button("Cancel", role: .cancel) { folderToRename = nil }
+    }
+    .alert("Delete folder?", isPresented: Binding(
+      get: { folderToDelete != nil },
+      set: { if !$0 { folderToDelete = nil } }
+    )) {
+      Button("Delete folder", role: .destructive) {
+        if let folder = folderToDelete {
+          Task { await model.deleteFolder(folder) }
+        }
+        folderToDelete = nil
+      }
+      Button("Cancel", role: .cancel) { folderToDelete = nil }
+    } message: {
+      Text("Conversations in this folder become unfiled. They are not deleted.")
     }
     // Initial load; pull-to-refresh and search/filter changes re-fetch on their own.
     .task { await model.reload() }
@@ -125,6 +192,20 @@ struct ConversationListView: View {
     .padding(.top, Theme.Spacing.sm)
     .padding(.bottom, model.formatFilter == nil ? Theme.Spacing.sm : Theme.Spacing.xs)
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: searchFocused)
+  }
+
+  /// Search-only opt-in to include archived threads (ORG-AC-2.4).
+  @ViewBuilder
+  private var includeArchivedToggle: some View {
+    if !(model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+      Toggle("Include archived", isOn: $model.includeArchivedInSearch)
+        .font(Theme.body(.caption))
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.bottom, Theme.Spacing.xs)
+        .onChange(of: model.includeArchivedInSearch) { _, _ in
+          Task { await model.search() }
+        }
+    }
   }
 
   // MARK: Active filter cue (dismissible scope pill, §5.4)
@@ -236,10 +317,20 @@ struct ConversationListView: View {
     // Never a red left selection rail. Pinned is still the pin glyph only.
     let isActive = conversation.id == lastOpenedId
     Button {
-      lastOpenedId = conversation.id
-      onSelect(conversation)
+      if model.isSelecting {
+        model.toggleSelected(conversation.id)
+      } else {
+        lastOpenedId = conversation.id
+        onSelect(conversation)
+      }
     } label: {
-      ConversationRow(conversation: conversation, isOpen: isActive)
+      HStack {
+        if model.isSelecting {
+          Image(systemName: model.selectedIds.contains(conversation.id) ? "checkmark.circle.fill" : "circle")
+            .foregroundStyle(Theme.accent)
+        }
+        ConversationRow(conversation: conversation, isOpen: isActive)
+      }
     }
     .buttonStyle(.plain)
     .listRowInsets(
@@ -275,6 +366,11 @@ struct ConversationListView: View {
       } label: {
         Label("Delete", systemImage: "trash")
       }
+      Button {
+        Task { await model.archive(conversation) }
+      } label: {
+        Label(conversation.archived ? "Unarchive" : "Archive", systemImage: "archivebox")
+      }
     }
     .swipeActions(edge: .leading) {
       Button {
@@ -302,12 +398,87 @@ struct ConversationListView: View {
           systemImage: conversation.pinned ? "pin.slash" : "pin"
         )
       }
+      Button {
+        Task { await model.archive(conversation) }
+      } label: {
+        Label(conversation.archived ? "Unarchive" : "Archive", systemImage: "archivebox")
+      }
+      Menu("Move to folder") {
+        Button("Unfiled") {
+          Task { await model.move(conversation, to: nil) }
+        }
+        ForEach(model.folders) { folder in
+          Button(folder.name) {
+            Task { await model.move(conversation, to: folder.id) }
+          }
+        }
+      }
+      Menu("Export") {
+        Button("Markdown") {
+          Task { await export(conversation, as: .markdown) }
+        }
+        Button("PDF") {
+          Task { await export(conversation, as: .pdf) }
+        }
+      }
       Button(role: .destructive) {
         Task { await model.delete(conversation) }
       } label: {
         Label("Delete", systemImage: "trash")
       }
     }
+  }
+
+  private var organizeMenu: some View {
+    Menu {
+      Button("All") { Task { await model.showAll() } }
+      Button("Unfiled") { Task { await model.showUnfiled() } }
+      ForEach(model.folders) { folder in
+        Button(folder.name) { Task { await model.showFolder(folder.id) } }
+      }
+      Button("Archive") { Task { await model.showArchive() } }
+      Divider()
+      Button("New folder") { showingNewFolder = true }
+      if let current = model.folders.first(where: { $0.id == model.folderFilter }) {
+        Button("Rename “\(current.name)”") {
+          folderRenameText = current.name
+          folderToRename = current
+        }
+        Button("Delete “\(current.name)”", role: .destructive) {
+          folderToDelete = current
+        }
+      }
+    } label: {
+      Label(
+        FolderSupport.filterLabel(
+          showingArchive: model.showingArchive,
+          folderFilter: model.folderFilter,
+          folders: model.folders
+        ),
+        systemImage: "folder"
+      )
+    }
+  }
+
+  private var bulkBar: some View {
+    HStack {
+      Button("Archive") { Task { await model.bulk(model.showingArchive ? .unarchive : .archive) } }
+      Menu("Move") {
+        Button("Unfiled") { Task { await model.bulk(.move, folderId: nil) } }
+        ForEach(model.folders) { folder in
+          Button(folder.name) { Task { await model.bulk(.move, folderId: folder.id) } }
+        }
+      }
+      Spacer()
+      Button("Delete", role: .destructive) { showingBulkDeleteConfirm = true }
+    }
+    .padding()
+    .background(Theme.surface)
+  }
+
+  private func export(_ conversation: ConversationSummary, as format: ConversationExportFormat) async {
+    guard let url = await model.export(conversation, as: format) else { return }
+    SystemShare.present(items: [url])
   }
 
   /// Eight skeleton rows shown while the first page is loading, replacing the
@@ -477,7 +648,13 @@ private struct ConversationRow: View {
 /// A preview-only ``HistoryService`` returning a small static list without the
 /// network, so the canvas renders the conversation list. Confined to this file.
 private struct PreviewHistoryService: HistoryService {
-  func list(query: String?, format: Format?) async throws -> [ConversationSummary] {
+  func list(
+    query: String?,
+    format: Format?,
+    folderId: String?,
+    archived: Bool?,
+    includeArchived: Bool
+  ) async throws -> [ConversationSummary] {
     [
       ConversationSummary(
         id: "1", title: "Garchomp's best moveset",
@@ -496,6 +673,22 @@ private struct PreviewHistoryService: HistoryService {
   func setPinned(id: String, pinned: Bool) async throws {}
   func delete(id: String) async throws {}
   func importGuestThread(sessionId: String, format: Format, turns: [ChatTurn]) async throws -> String? { nil }
+  func listFolders() async throws -> [ConversationFolder] { [] }
+  func createFolder(name: String) async throws -> ConversationFolder {
+    ConversationFolder(id: "f1", name: name, createdAt: 0)
+  }
+  func renameFolder(id: String, name: String) async throws {}
+  func deleteFolder(id: String) async throws {}
+  func setArchived(id: String, archived: Bool) async throws {}
+  func setFolder(id: String, folderId: String?) async throws {}
+  func bulkUpdate(ids: [String], action: BulkConversationAction, folderId: String?) async throws -> BulkUpdateResponse {
+    BulkUpdateResponse(updated: ids, skipped: [])
+  }
+  func setTurnPinned(conversationId: String, messageId: String, pinned: Bool) async throws -> [String] { [] }
+  func fork(conversationId: String, throughMessageId: String) async throws -> ForkResponse {
+    ForkResponse(id: "fork", title: "Preview (fork)")
+  }
+  func exportConversation(id: String, format: ConversationExportFormat) async throws -> Data { Data() }
 }
 
 #Preview("Conversations") {

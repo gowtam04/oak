@@ -16,12 +16,17 @@
  * `getCurrentAccount`, `runOak`, and `createAgentContext` are mocked (no model /
  * network) — `createAgentContext` is mocked so we can CAPTURE the options it was
  * bound with.
+ *
+ * Chat-qol Phase 2 (recovery + mentions) is additional describes at the bottom:
+ * `recovery` replace-vs-append, 409 `nothing_to_replace`, mention 400s before
+ * `startTurn`, `ctx.boundTeams`, guest session-store replace, SCOPE-BR-2 MRU.
  */
 
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { OakAnswer } from "@/agent/schemas";
+import type { OnProgress } from "@/agent/types";
 import type { TurnTrace } from "@/server/logger";
 
 vi.mock("server-only", () => ({}));
@@ -60,13 +65,26 @@ import {
   checkRateLimit,
   GUEST_CONFIG,
 } from "@/server/rate-limit";
-import { _resetStoreForTests as resetTurnStore } from "@/server/turn-store";
+import {
+  appendTurn,
+  getHistory,
+  getSessionScope,
+  setSessionScope,
+  _resetStoreForTests as resetSessionStore,
+} from "@/server/session-store";
+import {
+  _resetStoreForTests as resetTurnStore,
+  findRunningBySession,
+  stopTurn,
+} from "@/server/turn-store";
 
 const ACCT_A = "acct-a";
 
 let fix: PgFixture;
 let route: typeof import("./route");
 let convRepo: typeof import("@/data/repos/conversation-repo");
+let teamRepo: typeof import("@/data/repos/team-repo");
+let mruRepo: typeof import("@/data/repos/scope-mru-repo");
 
 const ANSWER: OakAnswer = {
   status: "answered",
@@ -102,6 +120,8 @@ beforeAll(async () => {
   await installAsSingleton(fix);
   route = await import("./route");
   convRepo = await import("@/data/repos/conversation-repo");
+  teamRepo = await import("@/data/repos/team-repo");
+  mruRepo = await import("@/data/repos/scope-mru-repo");
 }, 60_000);
 
 afterAll(async () => {
@@ -110,7 +130,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await fix.db.execute(
-    sql`TRUNCATE TABLE team, conversation, conversation_message RESTART IDENTITY`,
+    sql`TRUNCATE TABLE team, conversation, conversation_message, account_scope_mru, account RESTART IDENTITY`,
   );
   cu.getCurrentAccount.mockReset();
   mockRunOak.mockReset();
@@ -134,6 +154,7 @@ beforeEach(async () => {
       requestId: "test-req",
       mode: options.mode,
       accountId: options.accountId,
+      boundTeams: options.boundTeams,
       logger: { info() {}, warn() {}, error() {}, child: () => ({}) },
     };
   });
@@ -144,6 +165,7 @@ beforeEach(async () => {
   usage.recordAuthEvent.mockResolvedValue(undefined);
   await _resetStoreForTests();
   await resetTurnStore();
+  await resetSessionStore();
 });
 
 // --- Helpers ---------------------------------------------------------------
@@ -380,5 +402,520 @@ describe("POST /api/chat — turn recording", () => {
     const tooLong = await post({ session_id: "rl2", message: "x".repeat(2_001) });
     expect(tooLong.status).toBe(413);
     expect(usage.recordTurn).not.toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
+// Chat-qol Phase 2 — mentions (MEN-US-1, MEN-BR-1..4, AUTH-BR-4)
+// ===========================================================================
+
+const MISSING_TEAM_ID = "00000000-0000-4000-8000-000000000001";
+
+async function seedOwnedTeam(
+  accountId: string,
+  name: string,
+  format: "scarlet-violet" | "champions" = "scarlet-violet",
+): Promise<{ id: string; name: string; format: string }> {
+  return teamRepo.createTeam({
+    accountId,
+    format,
+    name,
+    members: [],
+    now: Date.now(),
+  });
+}
+
+async function seedSignedInPair(
+  conversationId: string,
+  userMessage: string,
+  answerMarkdown: string,
+): Promise<void> {
+  await convRepo.appendTurnPair({
+    accountId: ACCT_A,
+    conversationId,
+    format: "national-dex",
+    userTurnId: convRepo.newTurnId(),
+    userMessage,
+    assistantTurnId: convRepo.newTurnId(),
+    answer: {
+      ...ANSWER,
+      answer_markdown: answerMarkdown,
+    },
+    now: Date.now(),
+  });
+}
+
+function deferRunOak(): {
+  resolve: (a?: OakAnswer) => void;
+  onProgressReady: () => Promise<void>;
+} {
+  let resolveFn: (a: OakAnswer) => void = () => {};
+  let captured: OnProgress | null = null;
+  const promise = new Promise<OakAnswer>((resolve) => {
+    resolveFn = resolve;
+  });
+  mockRunOak.mockImplementation(
+    async (
+      _message: string,
+      _history: unknown,
+      ctx: { onTurnComplete?: (trace: TurnTrace) => void },
+      onProgress?: OnProgress,
+    ) => {
+      captured = onProgress ?? null;
+      const answer = await promise;
+      ctx.onTurnComplete?.(FAKE_TRACE);
+      return answer;
+    },
+  );
+  return {
+    resolve: (a = ANSWER) => resolveFn(a),
+    onProgressReady: async () => {
+      for (let i = 0; i < 200 && captured === null; i++) {
+        await new Promise((r) => setTimeout(r, 5));
+      }
+    },
+  };
+}
+
+async function jsonBody(res: Response): Promise<Record<string, unknown>> {
+  return (await res.json()) as Record<string, unknown>;
+}
+
+describe("POST /api/chat — mentions (MEN-US-1, MEN-BR-1..4, AUTH-BR-4)", () => {
+  it("guest + non-empty mentioned_team_ids is 400 unbound_mention before startTurn (MEN-BR-4)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+
+    const res = await post({
+      session_id: "guest-mention",
+      message: "try @Rain",
+      mentioned_team_ids: [MISSING_TEAM_ID],
+    });
+
+    expect(res.status).toBe(400);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({
+        error: "unbound_mention",
+        id: MISSING_TEAM_ID,
+      }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("guest-mention")).toBeUndefined();
+  });
+
+  it("guest + empty mentioned_team_ids is not a mention and still starts (MEN-BR-4)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+
+    const res = await post({
+      session_id: "guest-empty-ids",
+      message: "hi",
+      mentioned_team_ids: [],
+    });
+    expect(res.status).toBe(200);
+    await drain(res);
+    expect(mockRunOak).toHaveBeenCalled();
+  });
+
+  it("a missing team id is 400 unbound_mention before startTurn (MEN-BR-2)", async () => {
+    signedIn(ACCT_A);
+
+    const res = await post({
+      session_id: "miss-mention",
+      message: "use @Gone",
+      mentioned_team_ids: [MISSING_TEAM_ID],
+    });
+
+    expect(res.status).toBe(400);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({
+        error: "unbound_mention",
+        id: MISSING_TEAM_ID,
+      }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("miss-mention")).toBeUndefined();
+  });
+
+  it("a foreign account's team is unbound (AUTH-BR-4, MEN-BR-2)", async () => {
+    signedIn(ACCT_A);
+    const foreign = await seedOwnedTeam("acct-b", "Not yours");
+
+    const res = await post({
+      session_id: "foreign-mention",
+      message: "use @Not yours",
+      mentioned_team_ids: [foreign.id],
+    });
+
+    expect(res.status).toBe(400);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({
+        error: "unbound_mention",
+        id: foreign.id,
+      }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("foreign-mention")).toBeUndefined();
+  });
+
+  it("any miss in a mixed list 400s that id and never startTurn (MEN-BR-2)", async () => {
+    signedIn(ACCT_A);
+    const owned = await seedOwnedTeam(ACCT_A, "Rain");
+
+    const res = await post({
+      session_id: "mixed-mention",
+      message: "use @Rain and @Gone",
+      mentioned_team_ids: [owned.id, MISSING_TEAM_ID],
+    });
+
+    expect(res.status).toBe(400);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({
+        error: "unbound_mention",
+        id: MISSING_TEAM_ID,
+      }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("mixed-mention")).toBeUndefined();
+  });
+
+  it("owned mentions bind onto ctx.boundTeams — no 21st tool (MEN-US-1, MEN-BR-1, MEN-BR-3)", async () => {
+    signedIn(ACCT_A);
+    const rain = await seedOwnedTeam(ACCT_A, "Rain", "scarlet-violet");
+    const cup = await seedOwnedTeam(ACCT_A, "Worlds cup", "champions");
+
+    const res = await post({
+      session_id: "bind-mention",
+      message: "compare @Rain and @Worlds cup",
+      mentioned_team_ids: [rain.id, cup.id],
+    });
+    expect(res.status).toBe(200);
+    await drain(res);
+
+    expect(captured.options).not.toBeNull();
+    expect(captured.options).toHaveProperty("boundTeams");
+    expect(captured.options!.boundTeams).toEqual([
+      { id: rain.id, name: "Rain", format: "scarlet-violet" },
+      { id: cup.id, name: "Worlds cup", format: "champions" },
+    ]);
+    // Mentions ride ctx.boundTeams + existing get_team — they are not a new tool.
+    expect(captured.options).not.toHaveProperty("activeTeam");
+  });
+
+  it("does not add a 21st tool for mentions (ADR-5)", async () => {
+    const { tools } = await import("@/agent/tools");
+    expect(tools).toHaveLength(20);
+    expect(tools.map((t) => t.name)).not.toContain("get_bound_teams");
+  });
+
+  it("dead mention + scope_seed does not persist last_used_scope, conversation format, or session scope", async () => {
+    // Signed-in: existing thread + account preference must stay put.
+    await fix.db.execute(sql`
+      INSERT INTO account (id, email, created_at, last_used_scope)
+      VALUES (${ACCT_A}, ${`${ACCT_A}@x.test`}, 0, ${"national-dex"})
+      ON CONFLICT (id) DO UPDATE SET last_used_scope = ${"national-dex"}
+    `);
+    signedIn(ACCT_A, { lastUsedScope: "national-dex" });
+    await seedSignedInPair("dead-mention-scope", "prior q", "prior a");
+
+    const signed = await post({
+      session_id: "dead-mention-scope",
+      message: "use @Gone in gen 7",
+      scope_seed: "gen-7",
+      mentioned_team_ids: [MISSING_TEAM_ID],
+    });
+    expect(signed.status).toBe(400);
+    expect(await jsonBody(signed)).toEqual(
+      expect.objectContaining({
+        error: "unbound_mention",
+        id: MISSING_TEAM_ID,
+      }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("dead-mention-scope")).toBeUndefined();
+
+    const accounts = await import("@/data/repos/accounts-repo");
+    expect(
+      (await accounts.findAccountByEmail(`${ACCT_A}@x.test`))?.lastUsedScope,
+    ).toBe("national-dex");
+    expect(
+      (await convRepo.getConversation(ACCT_A, "dead-mention-scope"))?.format,
+    ).toBe("national-dex");
+
+    // Guest: session sticky scope must stay put too.
+    cu.getCurrentAccount.mockResolvedValue(null);
+    mockRunOak.mockClear();
+    await setSessionScope("guest-dead-mention-scope", "national-dex");
+    const guest = await post({
+      session_id: "guest-dead-mention-scope",
+      message: "use @Gone",
+      scope_seed: "gen-7",
+      mentioned_team_ids: [MISSING_TEAM_ID],
+    });
+    expect(guest.status).toBe(400);
+    expect(await jsonBody(guest)).toEqual(
+      expect.objectContaining({
+        error: "unbound_mention",
+        id: MISSING_TEAM_ID,
+      }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("guest-dead-mention-scope")).toBeUndefined();
+    expect(await getSessionScope("guest-dead-mention-scope")).toBe(
+      "national-dex",
+    );
+  });
+});
+
+// ===========================================================================
+// Chat-qol Phase 2 — recovery persist (REC-US-1..3, REC-BR-1..8, ADR-2/4)
+// ===========================================================================
+
+describe("POST /api/chat — recovery persist (REC-US-1..3, REC-BR-1..8)", () => {
+  it("recovery retry on success replaces the last pair — exactly one current pair (REC-US-1, REC-BR-2)", async () => {
+    signedIn(ACCT_A);
+    await seedSignedInPair("rec-retry", "What beats Garchomp?", "Ice types.");
+
+    const res = await post({
+      session_id: "rec-retry",
+      message: "What beats Garchomp?",
+      recovery: "retry",
+    });
+    expect(res.status).toBe(200);
+    await drain(res);
+
+    const stored = await convRepo.getMessages(ACCT_A, "rec-retry");
+    expect(stored.map((t) => [t.seq, t.role, t.textContent])).toEqual([
+      [0, "user", "What beats Garchomp?"],
+      [1, "assistant", ANSWER.answer_markdown],
+    ]);
+    expect(stored).toHaveLength(2);
+  });
+
+  it("recovery edit on success replaces the last pair with the new user text (REC-US-2, REC-BR-2)", async () => {
+    signedIn(ACCT_A);
+    await seedSignedInPair("rec-edit", "What beats Garchomp?", "Ice types.");
+
+    const res = await post({
+      session_id: "rec-edit",
+      message: "What beats Garchomp in gen 7?",
+      recovery: "edit",
+    });
+    expect(res.status).toBe(200);
+    await drain(res);
+
+    const stored = await convRepo.getMessages(ACCT_A, "rec-edit");
+    expect(stored.map((t) => [t.seq, t.role, t.textContent])).toEqual([
+      [0, "user", "What beats Garchomp in gen 7?"],
+      [1, "assistant", ANSWER.answer_markdown],
+    ]);
+  });
+
+  it("omitted recovery still appends a new pair (ADR-4)", async () => {
+    signedIn(ACCT_A);
+    await seedSignedInPair("rec-append", "first question", "first answer");
+
+    const res = await post({
+      session_id: "rec-append",
+      message: "second question",
+    });
+    expect(res.status).toBe(200);
+    await drain(res);
+
+    const stored = await convRepo.getMessages(ACCT_A, "rec-append");
+    expect(stored.map((t) => [t.seq, t.role, t.textContent])).toEqual([
+      [0, "user", "first question"],
+      [1, "assistant", "first answer"],
+      [2, "user", "second question"],
+      [3, "assistant", ANSWER.answer_markdown],
+    ]);
+  });
+
+  it("recovery with no completed user+assistant pair is 409 nothing_to_replace before startTurn (ADR-4)", async () => {
+    signedIn(ACCT_A);
+
+    const res = await post({
+      session_id: "rec-empty",
+      message: "What beats Garchomp?",
+      recovery: "retry",
+    });
+
+    expect(res.status).toBe(409);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({ error: "nothing_to_replace" }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("rec-empty")).toBeUndefined();
+  });
+
+  it("recovery when the last messages are not user+assistant is 409 nothing_to_replace (ADR-4)", async () => {
+    signedIn(ACCT_A);
+    await seedSignedInPair("rec-trailing", "q1", "a1");
+    await fix.db.execute(
+      sql`INSERT INTO conversation_message (id, conversation_id, account_id, seq, role, text_content, answer_json, created_at)
+          VALUES (${"00000000-0000-4000-8000-000000000099"}, ${"rec-trailing"}, ${ACCT_A}, 2, 'user', 'trailing user', NULL, ${Date.now()})`,
+    );
+
+    const res = await post({
+      session_id: "rec-trailing",
+      message: "edited",
+      recovery: "edit",
+    });
+
+    expect(res.status).toBe(409);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({ error: "nothing_to_replace" }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("rec-trailing")).toBeUndefined();
+
+    const stored = await convRepo.getMessages(ACCT_A, "rec-trailing");
+    expect(stored.map((t) => t.textContent)).toEqual(["q1", "a1", "trailing user"]);
+  });
+
+  it("recovery still 409s turn_in_progress and does not start a second turn (REC-BR-3)", async () => {
+    signedIn(ACCT_A);
+    await seedSignedInPair("rec-inflight", "q", "a");
+    const d = deferRunOak();
+
+    const first = await post({
+      session_id: "rec-inflight",
+      message: "q",
+      recovery: "retry",
+    });
+    expect(first.status).toBe(200);
+    await d.onProgressReady();
+
+    const clash = await post({
+      session_id: "rec-inflight",
+      message: "q",
+      recovery: "retry",
+    });
+    expect(clash.status).toBe(409);
+    expect(await jsonBody(clash)).toEqual(
+      expect.objectContaining({ code: "turn_in_progress" }),
+    );
+
+    d.resolve();
+    await drain(first);
+  });
+
+  it("a stopped recovery leaves the old pair in place (REC-US-1/2, REC-BR-2, REC-BR-4, REC-US-3)", async () => {
+    signedIn(ACCT_A);
+    await seedSignedInPair("rec-stop", "What beats Garchomp?", "Ice types.");
+    const d = deferRunOak();
+
+    const res = await post({
+      session_id: "rec-stop",
+      message: "What beats Garchomp?",
+      recovery: "retry",
+    });
+    expect(res.status).toBe(200);
+    await d.onProgressReady();
+
+    const running = findRunningBySession("rec-stop");
+    expect(running).toBeDefined();
+    stopTurn(running!);
+
+    d.resolve();
+    await drain(res);
+
+    const stored = await convRepo.getMessages(ACCT_A, "rec-stop");
+    expect(stored.map((t) => [t.role, t.textContent])).toEqual([
+      ["user", "What beats Garchomp?"],
+      ["assistant", "Ice types."],
+    ]);
+  });
+
+  it("a transport-error recovery leaves the old pair in place (REC-BR-2)", async () => {
+    signedIn(ACCT_A);
+    await seedSignedInPair("rec-err", "What beats Garchomp?", "Ice types.");
+    mockRunOak.mockReset();
+    mockRunOak.mockRejectedValueOnce(new Error("provider down"));
+
+    const res = await post({
+      session_id: "rec-err",
+      message: "What beats Garchomp?",
+      recovery: "retry",
+    });
+    expect(res.status).toBe(200);
+    await drain(res);
+
+    const stored = await convRepo.getMessages(ACCT_A, "rec-err");
+    expect(stored.map((t) => [t.role, t.textContent])).toEqual([
+      ["user", "What beats Garchomp?"],
+      ["assistant", "Ice types."],
+    ]);
+  });
+
+  it("guest recovery on success replaces the last session-store pair (REC-BR-8, ADR-2)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+    await appendTurn("guest-rec", { role: "user", content: "What beats Garchomp?" });
+    await appendTurn("guest-rec", { role: "assistant", content: "Ice types." });
+
+    const res = await post({
+      session_id: "guest-rec",
+      message: "What beats Garchomp really?",
+      recovery: "edit",
+    });
+    expect(res.status).toBe(200);
+    await drain(res);
+
+    expect(await getHistory("guest-rec")).toEqual([
+      { role: "user", content: "What beats Garchomp really?" },
+      { role: "assistant", content: ANSWER.answer_markdown },
+    ]);
+  });
+
+  it("guest recovery with no pair is 409 nothing_to_replace (REC-BR-8, ADR-4)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+
+    const res = await post({
+      session_id: "guest-rec-empty",
+      message: "hi",
+      recovery: "retry",
+    });
+    expect(res.status).toBe(409);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({ error: "nothing_to_replace" }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("guest-rec-empty")).toBeUndefined();
+    expect(await getHistory("guest-rec-empty")).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// Chat-qol Phase 2 — MRU touch on a signed-in completed turn (SCOPE-BR-2)
+// ===========================================================================
+
+describe("POST /api/chat — scope MRU on completed signed-in turn (SCOPE-BR-2)", () => {
+  it("fire-and-forget touches the resolved format after a successful signed-in turn", async () => {
+    signedIn(ACCT_A);
+    const res = await post({
+      session_id: "mru-touch",
+      message: "hi",
+      scope_seed: "gen-7",
+    });
+    expect(res.status).toBe(200);
+    await drain(res);
+
+    let listed = await mruRepo.list(ACCT_A);
+    for (let i = 0; i < 50 && listed[0] !== "gen-7"; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+      listed = await mruRepo.list(ACCT_A);
+    }
+    expect(listed[0]).toBe("gen-7");
+  });
+
+  it("a guest completed turn does not write an account MRU row (SCOPE-BR-2)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+    await drain(
+      await post({
+        session_id: "mru-guest",
+        message: "hi",
+        scope_seed: "gen-7",
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    expect(await mruRepo.list(ACCT_A)).toEqual([]);
   });
 });

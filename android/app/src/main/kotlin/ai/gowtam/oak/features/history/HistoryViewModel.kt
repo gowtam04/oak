@@ -2,7 +2,9 @@ package ai.gowtam.oak.features.history
 
 import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.services.HistoryService
+import ai.gowtam.oak.wire.BulkAction
 import ai.gowtam.oak.wire.ConversationSummary
+import ai.gowtam.oak.wire.Folder
 import ai.gowtam.oak.wire.Format
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
@@ -54,6 +56,14 @@ class HistoryViewModel(
         val searchQuery: String = "",
         /** The active format filter; `null` = all formats. Applied server-side via `?format=`. */
         val formatFilter: Format? = null,
+        val folders: List<Folder> = emptyList(),
+        /** `null` = all non-archived; `"unfiled"`; or a folder id. */
+        val folderFilter: String? = null,
+        val showArchived: Boolean = false,
+        val selectedIds: Set<String> = emptySet(),
+        val selecting: Boolean = false,
+        /** Explicit search opt-in to include archived (ORG-BR-5). */
+        val includeArchivedInSearch: Boolean = false,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -71,8 +81,16 @@ class HistoryViewModel(
     suspend fun reload() {
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         try {
-            val result = history.list(query = trimmedQuery(), format = _uiState.value.formatFilter)
-            _uiState.update { it.copy(conversations = result, isLoading = false) }
+            val state = _uiState.value
+            val result = history.list(
+                query = trimmedQuery(),
+                format = state.formatFilter,
+                folderId = state.folderFilter,
+                archived = if (state.showArchived) true else false,
+                includeArchived = state.includeArchivedInSearch && state.searchQuery.isNotBlank(),
+            )
+            val folders = runCatching { history.listFolders() }.getOrDefault(state.folders)
+            _uiState.update { it.copy(conversations = result, folders = folders, isLoading = false) }
         } catch (e: OakError) {
             _uiState.update { it.copy(isLoading = false, errorMessage = message(e)) }
         } catch (e: Exception) {
@@ -98,6 +116,12 @@ class HistoryViewModel(
     suspend fun search() {
         searchDebounceJob?.cancel()
         reload()
+    }
+
+    suspend fun setIncludeArchivedInSearch(include: Boolean) {
+        if (include == _uiState.value.includeArchivedInSearch) return
+        _uiState.update { it.copy(includeArchivedInSearch = include) }
+        if (_uiState.value.searchQuery.isNotBlank()) reload()
     }
 
     /** Switches the format filter and re-fetches. A no-op when unchanged. */
@@ -170,6 +194,127 @@ class HistoryViewModel(
     /** Clears the current error banner. */
     fun dismissError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    suspend fun setFolderFilter(folderId: String?) {
+        if (folderId == _uiState.value.folderFilter) return
+        _uiState.update { it.copy(folderFilter = folderId, showArchived = false) }
+        reload()
+    }
+
+    suspend fun setShowArchived(show: Boolean) {
+        if (show == _uiState.value.showArchived) return
+        _uiState.update { it.copy(showArchived = show, folderFilter = null) }
+        reload()
+    }
+
+    suspend fun archive(summary: ConversationSummary, archived: Boolean) {
+        replaceLocal(summary.copy(archived = archived))
+        if (archived && !_uiState.value.showArchived) {
+            _uiState.update { it.copy(conversations = it.conversations.filterNot { c -> c.id == summary.id }) }
+        }
+        try {
+            history.setArchived(summary.id, archived)
+        } catch (e: OakError) {
+            replaceLocal(summary)
+            _uiState.update { it.copy(errorMessage = message(e)) }
+        } catch (e: Exception) {
+            replaceLocal(summary)
+            _uiState.update { it.copy(errorMessage = GENERIC_MESSAGE) }
+        }
+    }
+
+    suspend fun moveToFolder(summary: ConversationSummary, folderId: String?) {
+        replaceLocal(summary.copy(folderId = folderId))
+        try {
+            history.setFolder(summary.id, folderId)
+        } catch (e: OakError) {
+            replaceLocal(summary)
+            _uiState.update { it.copy(errorMessage = message(e)) }
+        } catch (e: Exception) {
+            replaceLocal(summary)
+            _uiState.update { it.copy(errorMessage = GENERIC_MESSAGE) }
+        }
+    }
+
+    suspend fun createFolder(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        try {
+            val folder = history.createFolder(trimmed)
+            _uiState.update { it.copy(folders = it.folders + folder) }
+        } catch (e: OakError) {
+            _uiState.update { it.copy(errorMessage = message(e)) }
+        } catch (e: Exception) {
+            _uiState.update { it.copy(errorMessage = GENERIC_MESSAGE) }
+        }
+    }
+
+    suspend fun renameFolder(folder: Folder, name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        try {
+            val updated = history.renameFolder(folder.id, trimmed)
+            _uiState.update { it.copy(folders = it.folders.map { f -> if (f.id == folder.id) updated else f }) }
+        } catch (e: OakError) {
+            _uiState.update { it.copy(errorMessage = message(e)) }
+        }
+    }
+
+    suspend fun deleteFolder(folder: Folder) {
+        try {
+            history.deleteFolder(folder.id)
+            _uiState.update {
+                it.copy(
+                    folders = it.folders.filterNot { f -> f.id == folder.id },
+                    folderFilter = if (it.folderFilter == folder.id) null else it.folderFilter,
+                    conversations = it.conversations.map { c ->
+                        if (c.folderId == folder.id) c.copy(folderId = null) else c
+                    },
+                )
+            }
+        } catch (e: OakError) {
+            _uiState.update { it.copy(errorMessage = message(e)) }
+        }
+    }
+
+    fun toggleSelecting() {
+        _uiState.update {
+            it.copy(selecting = !it.selecting, selectedIds = if (it.selecting) emptySet() else it.selectedIds)
+        }
+    }
+
+    fun toggleSelected(id: String) {
+        _uiState.update {
+            val next = if (id in it.selectedIds) it.selectedIds - id else it.selectedIds + id
+            it.copy(selectedIds = next, selecting = true)
+        }
+    }
+
+    suspend fun export(id: String, format: String): Pair<ByteArray, String>? {
+        return try {
+            history.export(id, format)
+        } catch (e: OakError) {
+            _uiState.update { it.copy(errorMessage = message(e)) }
+            null
+        } catch (e: Exception) {
+            _uiState.update { it.copy(errorMessage = GENERIC_MESSAGE) }
+            null
+        }
+    }
+
+    suspend fun bulk(action: BulkAction, folderId: String? = null) {
+        val ids = _uiState.value.selectedIds.toList()
+        if (ids.isEmpty()) return
+        try {
+            history.bulkUpdate(ids, action, folderId)
+            _uiState.update { it.copy(selectedIds = emptySet(), selecting = false) }
+            reload()
+        } catch (e: OakError) {
+            _uiState.update { it.copy(errorMessage = message(e)) }
+        } catch (e: Exception) {
+            _uiState.update { it.copy(errorMessage = GENERIC_MESSAGE) }
+        }
     }
 
     private fun trimmedQuery(): String? {

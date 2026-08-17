@@ -60,11 +60,21 @@ struct MeSnapshot: Equatable, Sendable {
   let state: AuthState
   /// Present only when signed in and the account has a stored preference.
   let lastUsedScope: Format?
+  /// Signed-in MRU scopes (SCOPE-US-2). Empty for guests / never-used accounts.
+  let lastUsedScopes: [Format]
 
-  static let guest = MeSnapshot(state: .guest, lastUsedScope: nil)
+  static let guest = MeSnapshot(state: .guest, lastUsedScope: nil, lastUsedScopes: [])
 
-  static func signedIn(email: String, lastUsedScope: Format? = nil) -> MeSnapshot {
-    MeSnapshot(state: .signedIn(email: email), lastUsedScope: lastUsedScope)
+  static func signedIn(
+    email: String,
+    lastUsedScope: Format? = nil,
+    lastUsedScopes: [Format] = []
+  ) -> MeSnapshot {
+    MeSnapshot(
+      state: .signedIn(email: email),
+      lastUsedScope: lastUsedScope,
+      lastUsedScopes: lastUsedScopes
+    )
   }
 }
 
@@ -118,7 +128,12 @@ struct LiveAuthService: AuthService {
         if case .unknown = format { return nil }
         return format
       }
-      return .signedIn(email: email, lastUsedScope: scope)
+      let scopes = (response.lastUsedScopes ?? []).compactMap { raw -> Format? in
+        let format = Format(rawValue: raw)
+        if case .unknown = format { return nil }
+        return format
+      }
+      return .signedIn(email: email, lastUsedScope: scope, lastUsedScopes: scopes)
     }
     return .guest
   }

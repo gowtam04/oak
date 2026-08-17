@@ -61,10 +61,13 @@ const READONLY_ROLE = "oak_readonly";
  */
 const DENIED_TABLES = [
   "account",
+  "account_scope_mru",
   "auth_session",
   "otp_code",
   "conversation",
+  "conversation_folder",
   "conversation_message",
+  "shared_answer",
   "team",
   "turn_record",
   "auth_event",

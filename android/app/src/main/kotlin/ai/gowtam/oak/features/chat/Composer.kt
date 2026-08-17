@@ -99,6 +99,11 @@ fun Composer(
     onSend: () -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
+    mentionQuery: String? = null,
+    mentionSuggestions: List<ai.gowtam.oak.wire.TeamSummary> = emptyList(),
+    onPickMention: (ai.gowtam.oak.wire.TeamSummary) -> Unit = {},
+    deadMentions: List<String> = emptyList(),
+    missingImagesNote: String? = null,
 ) {
     val oak = LocalOakColors.current
     val context = LocalContext.current
@@ -164,6 +169,22 @@ fun Composer(
         attachNote?.let {
             Text(text = it, style = MaterialTheme.typography.bodySmall, color = oak.textMuted, modifier = Modifier.fillMaxWidth())
         }
+        missingImagesNote?.let {
+            Text(text = it, style = MaterialTheme.typography.bodySmall, color = oak.textMuted, modifier = Modifier.fillMaxWidth())
+        }
+        if (deadMentions.isNotEmpty()) {
+            Text(
+                text = "Unknown @mention: ${deadMentions.joinToString(", ")}. Fix or remove it to send.",
+                style = MaterialTheme.typography.bodySmall,
+                color = oak.danger,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        MentionAutocomplete(
+            suggestions = mentionSuggestions,
+            query = mentionQuery,
+            onPick = onPickMention,
+        )
 
         if (pendingImages.isNotEmpty()) {
             Row(

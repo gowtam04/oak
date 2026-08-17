@@ -38,9 +38,27 @@ struct ChatRequestEncodingTests {
     #expect(object["images"] == nil)
     // The deprecated field is gone entirely — never emitted.
     #expect(object["champions_mode"] == nil)
+    #expect(object["recovery"] == nil)
+    #expect(object["mentioned_team_ids"] == nil)
     // No camelCase leakage of the renamed keys.
     #expect(object["sessionId"] == nil)
     #expect(object["scopeSeed"] == nil)
+  }
+
+  @Test
+  func recoveryAndMentionedTeamIdsEncodeSnakeCase() throws {
+    let request = ChatRequest(
+      sessionId: "sess-rec",
+      message: "retry this",
+      images: nil,
+      scopeSeed: nil,
+      recovery: .retry,
+      mentionedTeamIds: ["team-1", "team-2"]
+    )
+    let object = try encodedObject(request)
+    #expect(object["recovery"] as? String == "retry")
+    #expect(object["mentioned_team_ids"] as? [String] == ["team-1", "team-2"])
+    #expect(object["mentionedTeamIds"] == nil)
   }
 
   /// An image-bearing turn may carry an empty `message`; a scope pick encodes as

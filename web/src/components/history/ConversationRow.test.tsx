@@ -133,3 +133,59 @@ describe("ConversationRow", () => {
     expect(screen.getByTestId("format-badge")).toHaveTextContent("Champions");
   });
 });
+
+describe("ConversationRow — archive / folder / select (ORG-US-1..3)", () => {
+  function setupQol(
+    over: Partial<ConversationSummary> = {},
+    extra: Record<string, unknown> = {},
+  ) {
+    const handlers = {
+      onOpen: vi.fn(),
+      onRename: vi.fn(),
+      onPin: vi.fn(),
+      onDelete: vi.fn(),
+      onArchive: vi.fn(),
+      onMoveToFolder: vi.fn(),
+      onToggleSelect: vi.fn(),
+    };
+    render(
+      <ConversationRow
+        {...({
+          conversation: summary(over),
+          active: false,
+          ...handlers,
+          ...extra,
+        } as Parameters<typeof ConversationRow>[0])}
+      />,
+    );
+    return handlers;
+  }
+
+  it("archives a live conversation without a destructive confirm (ORG-AC-2.1)", () => {
+    const h = setupQol({ archived: false });
+    fireEvent.click(screen.getByRole("button", { name: /archive conversation/i }));
+    expect(h.onArchive).toHaveBeenCalledWith(true);
+  });
+
+  it("unarchives from the Archive view (ORG-AC-2.2)", () => {
+    const h = setupQol({ archived: true });
+    fireEvent.click(screen.getByRole("button", { name: /unarchive conversation/i }));
+    expect(h.onArchive).toHaveBeenCalledWith(false);
+  });
+
+  it("moves the row into a folder (ORG-AC-1.2)", () => {
+    const h = setupQol(
+      { folderId: null },
+      { folders: [{ id: "f-vgc", name: "VGC", createdAt: 1 }] },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /move to folder|file in folder/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "VGC" }));
+    expect(h.onMoveToFolder).toHaveBeenCalledWith("f-vgc");
+  });
+
+  it("toggles multi-select for bulk actions (ORG-AC-3.1)", () => {
+    const h = setupQol();
+    fireEvent.click(screen.getByRole("checkbox", { name: /select conversation/i }));
+    expect(h.onToggleSelect).toHaveBeenCalledTimes(1);
+  });
+});

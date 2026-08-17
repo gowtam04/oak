@@ -39,7 +39,16 @@ class MainActivity : ComponentActivity() {
     private val chatViewModel: ChatViewModel by lazy {
         ViewModelProvider(
             this,
-            factoryOf { ChatViewModel(oakApplication.services.chat, oakApplication.appState) },
+            factoryOf {
+                ChatViewModel(
+                    chat = oakApplication.services.chat,
+                    appState = oakApplication.appState,
+                    history = oakApplication.services.history,
+                    teams = oakApplication.services.teams,
+                    scope = oakApplication.services.scope,
+                    shares = oakApplication.services.shares,
+                )
+            },
         )[ChatViewModel::class.java]
     }
 
@@ -55,6 +64,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val services = oakApplication.services
         val appState = oakApplication.appState
+
+        handleShareIntent(intent, appState)
 
         setContent {
             LaunchedEffect(services) { appState.restoreSession(services.auth) }
@@ -75,6 +86,20 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleShareIntent(intent, oakApplication.appState)
+    }
+}
+
+private fun handleShareIntent(intent: android.content.Intent, appState: AppState) {
+    val data = intent.data ?: return
+    val path = data.path ?: return
+    val prefix = "/a/"
+    if (!path.startsWith(prefix)) return
+    val id = path.removePrefix(prefix).trim('/')
+    if (id.isNotEmpty()) appState.requestShareSnapshot(id)
 }
 
 /** A minimal [ViewModelProvider.Factory] built from a plain constructor lambda, so

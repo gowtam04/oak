@@ -46,6 +46,18 @@ struct ChatTabView: View {
         path = [.new]
       }
     }
+    .onChange(of: appState.pendingDestination) { _, destination in
+      if case let .conversation(id) = destination {
+        path = [.existing(ConversationSummary(
+          id: id,
+          title: "Conversation",
+          format: appState.lastUsedScope ?? .nationalDex,
+          pinned: false,
+          updatedAt: 0
+        ))]
+        appState.pendingDestination = nil
+      }
+    }
   }
 
   // MARK: Signed-in — saved-conversation list + pushed threads
@@ -87,7 +99,13 @@ struct ChatTabView: View {
   private var guestHome: some View {
     NavigationStack {
       ChatView(
-        model: ChatViewModel(chat: services.chat, appState: appState),
+        model: ChatViewModel(
+          chat: services.chat,
+          appState: appState,
+          history: services.history,
+          teams: services.teams,
+          shares: services.shares
+        ),
         showsNewConversationButton: true,
         signInAction: { showSignIn = true }
       )

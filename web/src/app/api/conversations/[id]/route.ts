@@ -3,8 +3,9 @@
  * (docs/features/chat-history § API Design; HIST-US-4, HIST-US-7, HIST-US-8,
  * HIST-US-9, AC-4.1, AC-4.2, AC-8.1, BR-H1, BR-H8).
  *
- *   GET    → 200 { id, title, format, pinned, turns: ChatTurn[] }
- *   PATCH  → 200 { ok: true }   body { title?, pinned? }
+ *   GET    → 200 { id, title, format, pinned, archived, folderId,
+ *                  pinnedMessageIds, turns: ChatTurn[] }
+ *   PATCH  → 200 { ok: true }   body { title?, pinned?, archived?, folder_id? }
  *   DELETE → 200 { ok: true }   permanent
  *
  * Isolation (BR-H1): a conversation that belongs to another account is
@@ -66,18 +67,23 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
   const { findRunningByConversation } = await import("@/server/turn-store");
   const running = findRunningByConversation(account.id, id);
 
+  const pinnedMessageIds = await repo.listPinnedMessageIds(account.id, id);
+
   return json(200, {
     id: conv.id,
     title: conv.title,
     format: conv.format,
     pinned: conv.pinned,
+    archived: conv.archived,
+    folderId: conv.folderId,
+    pinnedMessageIds,
     turns,
     active_turn: running ? { turn_id: running.turnId } : null,
   });
 }
 
 // ---------------------------------------------------------------------------
-// PATCH — rename and/or pin
+// PATCH — rename, pin, archive, folder
 // ---------------------------------------------------------------------------
 
 export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {
@@ -92,11 +98,13 @@ export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {
 
   const hasTitle = body.title !== undefined;
   const hasPinned = body.pinned !== undefined;
-  if (!hasTitle && !hasPinned) {
+  const hasArchived = body.archived !== undefined;
+  const hasFolderId = body.folder_id !== undefined;
+  if (!hasTitle && !hasPinned && !hasArchived && !hasFolderId) {
     return jsonError(
       400,
       "invalid_request",
-      "Provide at least one of { title, pinned }.",
+      "Provide at least one of { title, pinned, archived, folder_id }.",
     );
   }
 
@@ -123,6 +131,26 @@ export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {
     pinned = body.pinned;
   }
 
+  let archived: boolean | undefined;
+  if (hasArchived) {
+    if (typeof body.archived !== "boolean") {
+      return jsonError(400, "invalid_request", "archived must be a boolean.");
+    }
+    archived = body.archived;
+  }
+
+  let folderId: string | null | undefined;
+  if (hasFolderId) {
+    if (body.folder_id !== null && typeof body.folder_id !== "string") {
+      return jsonError(
+        400,
+        "invalid_request",
+        "folder_id must be a string or null.",
+      );
+    }
+    folderId = body.folder_id;
+  }
+
   const repo = await conversationRepo();
   // Ownership check up front so a not-owned id is a 404 (BR-H1), not a silent
   // no-op masquerading as success.
@@ -131,6 +159,17 @@ export async function PATCH(req: Request, ctx: Ctx): Promise<Response> {
 
   if (title !== undefined) await repo.renameConversation(account.id, id, title);
   if (pinned !== undefined) await repo.setPinned(account.id, id, pinned);
+  if (archived !== undefined) await repo.setArchived(account.id, id, archived);
+  if (folderId !== undefined) {
+    try {
+      await repo.setFolder(account.id, id, folderId);
+    } catch (err) {
+      if (err instanceof Error && err.message === "folder not found") {
+        return NOT_FOUND();
+      }
+      throw err;
+    }
+  }
 
   return json(200, { ok: true });
 }

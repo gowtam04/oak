@@ -71,6 +71,11 @@ type ScopeChipProps = {
   disabled?: boolean;
   /** Base for this instance's `data-testid`s (default `"scope-chip"`). */
   testId?: string;
+  /**
+   * Signed-in MRU formats, newest first (SCOPE-US-2). Listed above the
+   * remaining scopes in release-date order. Guests / empty ⇒ no MRU group.
+   */
+  recentFormats?: Format[];
 };
 
 export default function ScopeChip({
@@ -78,6 +83,7 @@ export default function ScopeChip({
   onSelect,
   disabled = false,
   testId = "scope-chip",
+  recentFormats,
 }: ScopeChipProps) {
   const label = scopeLabel(format);
 
@@ -102,6 +108,7 @@ export default function ScopeChip({
       onSelect={onSelect}
       disabled={disabled}
       testId={testId}
+      recentFormats={recentFormats}
     />
   );
 }
@@ -112,12 +119,14 @@ function InteractiveScopeChip({
   onSelect,
   disabled,
   testId,
+  recentFormats,
 }: {
   format: Format;
   label: string;
   onSelect: (format: Format) => void;
   disabled: boolean;
   testId: string;
+  recentFormats?: Format[];
 }) {
   const [open, setOpen] = useState(false);
   const [pulse, setPulse] = useState(false);
@@ -166,6 +175,28 @@ function InteractiveScopeChip({
     setOpen(false);
   }
 
+  const recents = (recentFormats ?? []).filter((f, i, all) => {
+    return SCOPE_PICKER_ORDER.includes(f) && all.indexOf(f) === i;
+  });
+  const rest = SCOPE_PICKER_ORDER.filter((f) => !recents.includes(f));
+
+  function option(f: Format) {
+    return (
+      <button
+        key={f}
+        type="button"
+        role="menuitemradio"
+        aria-checked={f === format}
+        className="scope-chip__option"
+        data-testid={`${testId}-option-${f}`}
+        onClick={() => pick(f)}
+      >
+        <span className="scope-chip__option-name">{scopeLabelShort(f)}</span>
+        <span className="scope-chip__option-desc">{SCOPE_DESCRIPTIONS[f]}</span>
+      </button>
+    );
+  }
+
   return (
     <div ref={containerRef} className="scope-chip-container">
       <button
@@ -193,24 +224,13 @@ function InteractiveScopeChip({
           data-testid={`${testId}-menu`}
         >
           <span className="ilabel scope-chip__menu-label">Answer scope</span>
-          {SCOPE_PICKER_ORDER.map((f) => (
-            <button
-              key={f}
-              type="button"
-              role="menuitemradio"
-              aria-checked={f === format}
-              className="scope-chip__option"
-              data-testid={`${testId}-option-${f}`}
-              onClick={() => pick(f)}
-            >
-              <span className="scope-chip__option-name">
-                {scopeLabelShort(f)}
-              </span>
-              <span className="scope-chip__option-desc">
-                {SCOPE_DESCRIPTIONS[f]}
-              </span>
-            </button>
-          ))}
+          {recents.length > 0 && (
+            <div className="scope-chip__mru" data-testid={`${testId}-mru`}>
+              <span className="scope-chip__mru-label">Recent</span>
+              {recents.map(option)}
+            </div>
+          )}
+          {rest.map(option)}
         </div>
       )}
     </div>

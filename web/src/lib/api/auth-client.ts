@@ -19,6 +19,8 @@
  * client never sees it (BR-A2 — raw token never client-visible).
  */
 
+import { isFormat } from "@/data/formats";
+
 export interface RequestCodeResult {
   ok: boolean;
   status: number;
@@ -42,6 +44,12 @@ export interface MeResult {
    * Absent for guests and for accounts that have never resolved a turn.
    */
   lastUsedScope?: string;
+  /**
+   * Signed-in MRU scopes, newest first (SCOPE-US-2 / ADR-8). Absent for
+   * guests. May be `[]` when the account has no chip-pick / resolved-turn
+   * history yet (or when the server fail-softed a list fault).
+   */
+  lastUsedScopes?: string[];
 }
 
 const JSON_HEADERS: Record<string, string> = {
@@ -151,9 +159,9 @@ export async function signOut(): Promise<void> {
 
 /**
  * `GET /api/auth/me` — resolve the current auth state on mount so the page can
- * render guest vs signed-in (AC-1.2). A guest, an unknown/expired cookie, or any
- * transport fault all resolve to `{ signedIn: false }` (BR-A11 — guests are
- * first-class, never an error path).
+ * render guest vs signed-in (AC-1.2) and seed the scope-chip MRU. A guest, an
+ * unknown/expired cookie, or any transport fault all resolve to
+ * `{ signedIn: false }` (BR-A11 — guests are first-class, never an error path).
  */
 export async function fetchMe(): Promise<MeResult> {
   try {
@@ -168,6 +176,13 @@ export async function fetchMe(): Promise<MeResult> {
         email: body.email,
         ...(typeof body.lastUsedScope === "string"
           ? { lastUsedScope: body.lastUsedScope }
+          : {}),
+        ...(Array.isArray(body.lastUsedScopes)
+          ? {
+              lastUsedScopes: body.lastUsedScopes.filter(
+                (f): f is string => typeof f === "string" && isFormat(f),
+              ),
+            }
           : {}),
       };
     }

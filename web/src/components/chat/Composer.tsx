@@ -14,6 +14,10 @@ import {
   filesToPendingImages,
   MAX_ATTACHMENTS,
 } from "@/lib/image-attachments";
+import MentionAutocomplete, {
+  type MentionTeam,
+} from "./MentionAutocomplete";
+import { parseMentions } from "@/lib/chat/mentions";
 
 /** Max auto-grow height (px) for the textarea before it starts scrolling. */
 const MAX_INPUT_PX = 160;
@@ -31,6 +35,30 @@ const MAX_INPUT_PX = 160;
  * Enter submits and Shift+Enter inserts a newline on desktop; on touch devices
  * (coarse pointer) Enter always inserts a newline and Send is the only submit.
  */
+/** `@Name` token just before the caret, if the user is mid-mention. */
+function activeMention(
+  text: string,
+  caret: number,
+): { start: number; query: string } | null {
+  const before = text.slice(0, caret);
+  const at = before.lastIndexOf("@");
+  if (at < 0) return null;
+  if (at > 0 && !/\s/.test(before[at - 1]!)) return null;
+  const query = before.slice(at + 1);
+  if (query.includes("\n")) return null;
+  return { start: at, query };
+}
+
+/** Fallback when the caret position is stale (jsdom `change` events). */
+function mentionFromAt(
+  text: string,
+): { start: number; query: string } | null {
+  const match = /(^|\s)@([^\s@]*)$/.exec(text);
+  if (!match || match.index == null) return null;
+  const at = text.lastIndexOf("@");
+  return { start: at, query: match[2] ?? "" };
+}
+
 export default function Composer({
   onSend,
   disabled = false,
@@ -39,24 +67,36 @@ export default function Composer({
   prefill = null,
   onVoice,
   voiceReady = false,
+  signedIn = false,
+  teams = [],
 }: ComposerProps & {
   /** Open voice mode; when absent the mic button is not rendered. The parent
    *  decides signed-in (open overlay) vs signed-out (sign-in nudge). */
   onVoice?: () => void;
   /** True when voice is available (signed in) — tunes the button's label. */
   voiceReady?: boolean;
+  /** Signed-in @mention list (MEN-US-1). Guests omit this. */
+  signedIn?: boolean;
+  teams?: MentionTeam[];
 }) {
   const [value, setValue] = useState("");
+  const [caret, setCaret] = useState(0);
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [deadMentions, setDeadMentions] = useState<string[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reload the input whenever the parent pushes a fresh `prefill` object (e.g.
-  // restoring the message after a quick Stop). Keyed on object identity so the
-  // same text can be re-applied across separate stops.
+  // restoring the message after a quick Stop / Undo). Keyed on object identity
+  // so the same text can be re-applied across separate stops.
   useEffect(() => {
-    if (prefill) setValue(prefill.text);
+    if (prefill) {
+      setValue(prefill.text);
+      if ("images" in prefill && Array.isArray(prefill.images)) {
+        setPendingImages(prefill.images);
+      }
+    }
   }, [prefill]);
 
   // Auto-grow the textarea to fit its content, capped at MAX_INPUT_PX (past
@@ -153,6 +193,14 @@ export default function Composer({
     if (disabled) return;
     const trimmed = value.trim();
     if (trimmed.length === 0 && pendingImages.length === 0) return;
+    if (signedIn) {
+      const parsed = parseMentions(trimmed, teams);
+      if (parsed.dead.length > 0) {
+        setDeadMentions(parsed.dead);
+        return;
+      }
+      setDeadMentions([]);
+    }
     onSend(trimmed, pendingImages);
     setValue("");
     setPendingImages([]);
@@ -180,6 +228,26 @@ export default function Composer({
 
   const atCapacity = pendingImages.length >= MAX_ATTACHMENTS;
   const nothingToSend = value.trim().length === 0 && pendingImages.length === 0;
+  const mentionCaret = inputRef.current?.selectionStart ?? caret;
+  const mention = signedIn
+    ? (activeMention(value, mentionCaret) ??
+      activeMention(value, value.length) ??
+      mentionFromAt(value))
+    : null;
+
+  function insertMention(team: MentionTeam) {
+    if (!mention) return;
+    const before = value.slice(0, mention.start);
+    const after = value.slice(mention.start + 1 + mention.query.length);
+    const next = `${before}@${team.name} ${after}`;
+    setValue(next);
+    setCaret(before.length + team.name.length + 2);
+    requestAnimationFrame(() => {
+      const pos = before.length + team.name.length + 2;
+      inputRef.current?.setSelectionRange(pos, pos);
+      inputRef.current?.focus();
+    });
+  }
 
   return (
     <form className="composer" data-testid="composer" onSubmit={handleSubmit}>
@@ -213,8 +281,23 @@ export default function Composer({
           {attachError}
         </div>
       )}
+      {deadMentions.length > 0 && (
+        <div
+          className="composer__dead"
+          data-testid="mention-dead"
+          role="alert"
+        >
+          Unknown team{" "}
+          {deadMentions.map((token) => `@${token}`).join(", ")}. Fix or
+          remove it to send.
+        </div>
+      )}
       <div
-        className={"composer__field" + (streaming ? " composer__field--live" : "")}
+        className={
+          "composer__field" +
+          (streaming ? " composer__field--live" : "") +
+          (deadMentions.length > 0 ? " composer__field--dead-mention" : "")
+        }
       >
         <button
           className="composer__attach"
@@ -260,7 +343,15 @@ export default function Composer({
           rows={1}
           enterKeyHint="enter"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setCaret(e.target.selectionStart ?? e.target.value.length);
+            if (deadMentions.length > 0) setDeadMentions([]);
+          }}
+          aria-invalid={deadMentions.length > 0 || undefined}
+          onSelect={(e) => {
+            setCaret(e.currentTarget.selectionStart ?? 0);
+          }}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onFocus={() => {
@@ -296,6 +387,13 @@ export default function Composer({
           </button>
         )}
       </div>
+      {mention && (
+        <MentionAutocomplete
+          query={mention.query}
+          teams={teams}
+          onSelect={insertMention}
+        />
+      )}
     </form>
   );
 }

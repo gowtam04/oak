@@ -34,6 +34,8 @@ data class MeResponse(
     val signedIn: Boolean,
     val email: String? = null,
     val lastUsedScope: String? = null,
+    /** Signed-in MRU scopes (SCOPE-US-2). Absent for guests / older servers. */
+    val lastUsedScopes: List<String>? = null,
 )
 
 /**

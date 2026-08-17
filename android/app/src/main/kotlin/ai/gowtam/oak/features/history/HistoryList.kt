@@ -1,11 +1,14 @@
 package ai.gowtam.oak.features.history
 
+import ai.gowtam.oak.features.share.shareExportedFile
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberReduceMotion
+import ai.gowtam.oak.wire.BulkAction
 import ai.gowtam.oak.wire.ConversationSummary
+import ai.gowtam.oak.wire.Folder
 import ai.gowtam.oak.wire.Format
 import android.text.format.DateUtils
 import androidx.compose.animation.core.animateFloatAsState
@@ -81,6 +84,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
@@ -108,6 +112,8 @@ fun HistoryScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
+    val oak = LocalOakColors.current
+    val context = LocalContext.current
 
     // Initial load; pull-to-refresh and search/filter changes re-fetch on their own.
     LaunchedEffect(Unit) { viewModel.reload() }
@@ -126,6 +132,13 @@ fun HistoryScreen(
                         current = uiState.formatFilter,
                         onSelect = { format -> scope.launch { viewModel.setFormatFilter(format) } },
                     )
+                    IconButton(onClick = viewModel::toggleSelecting) {
+                        Icon(
+                            if (uiState.selecting) Icons.Filled.Close else Icons.Filled.Check,
+                            contentDescription = if (uiState.selecting) "Cancel select" else "Select",
+                            tint = if (uiState.selecting) oak.accent else oak.textMuted,
+                        )
+                    }
                 },
             )
         },
@@ -143,6 +156,24 @@ fun HistoryScreen(
                     onClear = { scope.launch { viewModel.setFormatFilter(null) } },
                 )
             }
+            OrganizeStrip(
+                folders = uiState.folders,
+                folderFilter = uiState.folderFilter,
+                showArchived = uiState.showArchived,
+                selecting = uiState.selecting,
+                selectedCount = uiState.selectedIds.size,
+                searchActive = uiState.searchQuery.isNotBlank(),
+                includeArchivedInSearch = uiState.includeArchivedInSearch,
+                onAll = { scope.launch { viewModel.setFolderFilter(null); viewModel.setShowArchived(false) } },
+                onUnfiled = { scope.launch { viewModel.setFolderFilter("unfiled") } },
+                onFolder = { scope.launch { viewModel.setFolderFilter(it) } },
+                onArchive = { scope.launch { viewModel.setShowArchived(true) } },
+                onCreateFolder = { scope.launch { viewModel.createFolder(it) } },
+                onBulkArchive = { scope.launch { viewModel.bulk(if (uiState.showArchived) BulkAction.Unarchive else BulkAction.Archive) } },
+                onBulkDelete = { scope.launch { viewModel.bulk(BulkAction.Delete) } },
+                onBulkMove = { folderId -> scope.launch { viewModel.bulk(BulkAction.Move, folderId) } },
+                onToggleIncludeArchived = { scope.launch { viewModel.setIncludeArchivedInSearch(!uiState.includeArchivedInSearch) } },
+            )
             Box(modifier = Modifier.weight(1f)) {
                 HistoryListContent(
                     uiState = uiState,
@@ -151,6 +182,18 @@ fun HistoryScreen(
                     onTogglePin = { scope.launch { viewModel.togglePin(it) } },
                     onRequestRename = { renameTarget = it },
                     onDelete = { scope.launch { viewModel.delete(it) } },
+                    onArchive = { scope.launch { viewModel.archive(it, !it.archived) } },
+                    folders = uiState.folders,
+                    onMoveToFolder = { summary, folderId -> scope.launch { viewModel.moveToFolder(summary, folderId) } },
+                    onExport = { summary, format ->
+                        scope.launch {
+                            val result = viewModel.export(summary.id, format) ?: return@launch
+                            shareExportedFile(context, result.first, result.second)
+                        }
+                    },
+                    selecting = uiState.selecting,
+                    selectedIds = uiState.selectedIds,
+                    onToggleSelected = viewModel::toggleSelected,
                     onRefresh = { scope.launch { viewModel.reload() } },
                     onDismissError = viewModel::dismissError,
                 )
@@ -348,6 +391,13 @@ private fun HistoryListContent(
     onTogglePin: (ConversationSummary) -> Unit,
     onRequestRename: (ConversationSummary) -> Unit,
     onDelete: (ConversationSummary) -> Unit,
+    onArchive: (ConversationSummary) -> Unit,
+    folders: List<Folder>,
+    onMoveToFolder: (ConversationSummary, String?) -> Unit,
+    onExport: (ConversationSummary, String) -> Unit,
+    selecting: Boolean,
+    selectedIds: Set<String>,
+    onToggleSelected: (String) -> Unit,
     onRefresh: () -> Unit,
     onDismissError: () -> Unit,
 ) {
@@ -369,11 +419,11 @@ private fun HistoryListContent(
                 if (pinned.isNotEmpty()) {
                     item(key = "pinned-header") { SectionHeader("Pinned") }
                     items(pinned, key = { it.id }) { conversation ->
-                        ConversationRow(conversation, conversation.id == activeConversationId, onSelect, onTogglePin, onRequestRename, onDelete)
+                        ConversationRow(conversation, conversation.id == activeConversationId, onSelect, onTogglePin, onRequestRename, onDelete, onArchive, folders, onMoveToFolder, onExport, selecting, conversation.id in selectedIds, onToggleSelected)
                     }
                 }
                 items(others, key = { it.id }) { conversation ->
-                    ConversationRow(conversation, conversation.id == activeConversationId, onSelect, onTogglePin, onRequestRename, onDelete)
+                    ConversationRow(conversation, conversation.id == activeConversationId, onSelect, onTogglePin, onRequestRename, onDelete, onArchive, folders, onMoveToFolder, onExport, selecting, conversation.id in selectedIds, onToggleSelected)
                 }
             }
         }
@@ -411,6 +461,13 @@ private fun ConversationRow(
     onTogglePin: (ConversationSummary) -> Unit,
     onRequestRename: (ConversationSummary) -> Unit,
     onDelete: (ConversationSummary) -> Unit,
+    onArchive: (ConversationSummary) -> Unit,
+    folders: List<Folder>,
+    onMoveToFolder: (ConversationSummary, String?) -> Unit,
+    onExport: (ConversationSummary, String) -> Unit,
+    selecting: Boolean,
+    selected: Boolean,
+    onToggleSelected: (String) -> Unit,
 ) {
     val oak = LocalOakColors.current
     val dismissState = rememberSwipeToDismissBoxState(
@@ -464,7 +521,7 @@ private fun ConversationRow(
                             .background(Color.Transparent)
                     },
                 )
-                .clickable { onSelect(conversation) }
+                .clickable { if (selecting) onToggleSelected(conversation.id) else onSelect(conversation) }
                 .padding(horizontal = OakSpacing.md, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -531,6 +588,28 @@ private fun ConversationRow(
                         onClick = { showMenu = false; onTogglePin(conversation) },
                     )
                     DropdownMenuItem(
+                        text = { Text(if (conversation.archived) "Unarchive" else "Archive") },
+                        onClick = { showMenu = false; onArchive(conversation) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Move to Unfiled") },
+                        onClick = { showMenu = false; onMoveToFolder(conversation, null) },
+                    )
+                    folders.forEach { folder ->
+                        DropdownMenuItem(
+                            text = { Text("Move to ${folder.name}") },
+                            onClick = { showMenu = false; onMoveToFolder(conversation, folder.id) },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Export Markdown") },
+                        onClick = { showMenu = false; onExport(conversation, "md") },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Export PDF") },
+                        onClick = { showMenu = false; onExport(conversation, "pdf") },
+                    )
+                    DropdownMenuItem(
                         text = { Text("Delete") },
                         leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = oak.danger) },
                         onClick = { showMenu = false; onDelete(conversation) },
@@ -539,6 +618,89 @@ private fun ConversationRow(
             }
         }
     }
+}
+
+@Composable
+private fun OrganizeStrip(
+    folders: List<Folder>,
+    folderFilter: String?,
+    showArchived: Boolean,
+    selecting: Boolean,
+    selectedCount: Int,
+    searchActive: Boolean,
+    includeArchivedInSearch: Boolean,
+    onAll: () -> Unit,
+    onUnfiled: () -> Unit,
+    onFolder: (String) -> Unit,
+    onArchive: () -> Unit,
+    onCreateFolder: (String) -> Unit,
+    onBulkArchive: () -> Unit,
+    onBulkDelete: () -> Unit,
+    onBulkMove: (String?) -> Unit,
+    onToggleIncludeArchived: () -> Unit,
+) {
+    val oak = LocalOakColors.current
+    var newFolder by remember { mutableStateOf(false) }
+    var folderName by remember { mutableStateOf("") }
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = OakSpacing.lg, vertical = OakSpacing.xs)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+            FilterChip(label = "All", selected = folderFilter == null && !showArchived, onClick = onAll)
+            FilterChip(label = "Unfiled", selected = folderFilter == "unfiled", onClick = onUnfiled)
+            FilterChip(label = "Archive", selected = showArchived, onClick = onArchive)
+            folders.forEach { folder ->
+                FilterChip(label = folder.name, selected = folderFilter == folder.id, onClick = { onFolder(folder.id) })
+            }
+            FilterChip(label = "+ Folder", selected = false, onClick = { newFolder = true })
+            if (searchActive) {
+                FilterChip(
+                    label = if (includeArchivedInSearch) "Including archived" else "Include archived",
+                    selected = includeArchivedInSearch,
+                    onClick = onToggleIncludeArchived,
+                )
+            }
+        }
+        if (selecting && selectedCount > 0) {
+            Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), modifier = Modifier.padding(top = OakSpacing.xs)) {
+                TextButton(onClick = onBulkArchive) { Text(if (showArchived) "Unarchive" else "Archive", color = oak.accent) }
+                TextButton(onClick = onBulkDelete) { Text("Delete", color = oak.danger) }
+                TextButton(onClick = { onBulkMove(null) }) { Text("Unfile", color = oak.accent) }
+                folders.forEach { folder ->
+                    TextButton(onClick = { onBulkMove(folder.id) }) { Text(folder.name, color = oak.accent) }
+                }
+            }
+        }
+    }
+    if (newFolder) {
+        AlertDialog(
+            onDismissRequest = { newFolder = false },
+            title = { Text("New folder") },
+            text = { OutlinedTextField(value = folderName, onValueChange = { folderName = it }, singleLine = true, label = { Text("Name") }) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onCreateFolder(folderName)
+                    folderName = ""
+                    newFolder = false
+                }) { Text("Create", color = oak.accent) }
+            },
+            dismissButton = { TextButton(onClick = { newFolder = false }) { Text("Cancel", color = oak.textMuted) } },
+        )
+    }
+}
+
+@Composable
+private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val oak = LocalOakColors.current
+    val shape = RoundedCornerShape(OakRadius.pill)
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (selected) oak.accent else oak.textMuted,
+        modifier = Modifier
+            .clip(shape)
+            .background(if (selected) oak.accentSoft else oak.surfaceSunken)
+            .clickable(onClick = onClick)
+            .padding(horizontal = OakSpacing.sm, vertical = 4.dp),
+    )
 }
 
 @Composable

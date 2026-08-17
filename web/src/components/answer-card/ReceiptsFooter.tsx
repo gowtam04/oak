@@ -8,6 +8,7 @@ import { parseCitationSource } from "@/components/artifact/parse-citation";
 import { displayCitationSource } from "@/components/artifact/citation-display";
 import { safeHttpUrl } from "@/lib/safe-url";
 import { oakAnswerToAgentMarkdown } from "@/lib/oak-answer-agent-md";
+import { oakAnswerToHumanMarkdown } from "@/lib/oak-answer-human-md";
 
 export interface ReceiptsFooterProps {
   reasoningMarkdown: string;
@@ -17,6 +18,9 @@ export interface ReceiptsFooterProps {
   answer?: OakAnswer;
   /** Expanded on first render (default: false → collapsed). */
   defaultExpanded?: boolean;
+  /** Signed-in only — snapshot this card to a public URL (SHARE-US-1). */
+  signedIn?: boolean;
+  onShare?: () => void;
 }
 
 /**
@@ -36,11 +40,16 @@ export default function ReceiptsFooter({
   citations,
   answer,
   defaultExpanded = false,
+  signedIn = false,
+  onShare,
 }: ReceiptsFooterProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle",
   );
+  const [humanCopyState, setHumanCopyState] = useState<
+    "idle" | "copied" | "failed"
+  >("idle");
   const n = citations.length;
   const label = n > 0 ? `Why · Sources (${n})` : "Why";
 
@@ -48,36 +57,59 @@ export default function ReceiptsFooter({
     setExpanded((e.target as HTMLDetailsElement).open);
   }
 
+  const copyText = useCallback(async (md: string): Promise<boolean> => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(md);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = md;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const handleCopyForAgents = useCallback(
     async (e: React.MouseEvent) => {
       // Don't toggle the details when clicking the copy control.
       e.preventDefault();
       e.stopPropagation();
       if (!answer) return;
-      const md = oakAnswerToAgentMarkdown(answer);
-      try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(md);
-        } else {
-          // Fallback for older environments / restricted contexts.
-          const ta = document.createElement("textarea");
-          ta.value = md;
-          ta.setAttribute("readonly", "");
-          ta.style.position = "fixed";
-          ta.style.left = "-9999px";
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand("copy");
-          document.body.removeChild(ta);
-        }
-        setCopyState("copied");
-        window.setTimeout(() => setCopyState("idle"), 1800);
-      } catch {
-        setCopyState("failed");
-        window.setTimeout(() => setCopyState("idle"), 2200);
-      }
+      const ok = await copyText(oakAnswerToAgentMarkdown(answer));
+      setCopyState(ok ? "copied" : "failed");
+      window.setTimeout(() => setCopyState("idle"), ok ? 1800 : 2200);
     },
-    [answer],
+    [answer, copyText],
+  );
+
+  const handleCopyHuman = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!answer) return;
+      const ok = await copyText(oakAnswerToHumanMarkdown(answer));
+      setHumanCopyState(ok ? "copied" : "failed");
+      window.setTimeout(() => setHumanCopyState("idle"), ok ? 1800 : 2200);
+    },
+    [answer, copyText],
+  );
+
+  const handleShare = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onShare?.();
+    },
+    [onShare],
   );
 
   const copyLabel =
@@ -86,6 +118,12 @@ export default function ReceiptsFooter({
       : copyState === "failed"
         ? "Copy failed"
         : "Copy for agents";
+  const humanLabel =
+    humanCopyState === "copied"
+      ? "Copied"
+      : humanCopyState === "failed"
+        ? "Copy failed"
+        : "Copy as human text";
 
   return (
     <details
@@ -98,15 +136,34 @@ export default function ReceiptsFooter({
         <span className="ilabel receipts__label">{label}</span>
         <span className="receipts__tab-end">
           {answer && (
-            <button
-              type="button"
-              className="receipts__copy-agents"
-              data-testid="copy-for-agents"
-              data-copy-state={copyState}
-              onClick={handleCopyForAgents}
-            >
-              {copyLabel}
-            </button>
+            <>
+              <button
+                type="button"
+                className="receipts__copy-agents"
+                data-copy-state={humanCopyState}
+                onClick={handleCopyHuman}
+              >
+                {humanLabel}
+              </button>
+              <button
+                type="button"
+                className="receipts__copy-agents"
+                data-testid="copy-for-agents"
+                data-copy-state={copyState}
+                onClick={handleCopyForAgents}
+              >
+                {copyLabel}
+              </button>
+              {signedIn && onShare && (
+                <button
+                  type="button"
+                  className="receipts__copy-agents"
+                  onClick={handleShare}
+                >
+                  Share
+                </button>
+              )}
+            </>
           )}
           <span className="receipts__chevron" aria-hidden="true" />
         </span>

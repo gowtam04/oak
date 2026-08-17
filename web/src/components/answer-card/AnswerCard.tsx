@@ -51,7 +51,9 @@ export default function AnswerCard({
   answer,
   onFollowUp,
   disabled = false,
-}: AnswerCardProps) {
+  signedIn = false,
+  onShare,
+}: AnswerCardProps & { signedIn?: boolean; onShare?: () => void }) {
   const {
     status,
     answer_markdown,
@@ -198,6 +200,8 @@ export default function AnswerCard({
         reasoningMarkdown={reasoning_markdown}
         citations={citations}
         answer={answer}
+        signedIn={signedIn}
+        onShare={onShare}
       />
     </div>
   );

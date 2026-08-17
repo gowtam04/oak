@@ -152,7 +152,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 24 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse + 1 app settings)", async () => {
+  it("creates all 27 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse + 1 app settings + 3 chat-qol)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
@@ -193,12 +193,16 @@ describe("Drizzle migration — table creation", () => {
         // Generic operator-controlled key/value settings (multi-model switch,
         // NOT format-scoped) — added by the 0013 migration.
         "app_setting",
+        // Chat QoL (folders / scope MRU / public shares) — added by the 0019 migration.
+        "conversation_folder",
+        "account_scope_mru",
+        "shared_answer",
       ]),
     );
-    // Exactly 24 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
+    // Exactly 27 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
     // + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse
-    // + 1 app settings).
-    expect(tables).toHaveLength(24);
+    // + 1 app settings + 3 chat-qol).
+    expect(tables).toHaveLength(27);
   });
 
   it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {
@@ -209,6 +213,8 @@ describe("Drizzle migration — table creation", () => {
         "title",
         "format",
         "pinned",
+        "folder_id",
+        "archived",
         "created_at",
         "updated_at",
       ]),
@@ -216,7 +222,7 @@ describe("Drizzle migration — table creation", () => {
     // The 0003 team-builder `active_team_id` column was dropped in 0004 (saved
     // teams are now referenced by name in chat, not bound to a conversation).
     expect(await columnNames(db, "conversation")).not.toContain("active_team_id");
-    expect(await columnNames(db, "conversation")).toHaveLength(7);
+    expect(await columnNames(db, "conversation")).toHaveLength(9);
     expect(await pkColumns(db, "conversation")).toEqual(["id"]);
 
     expect(await columnNames(db, "conversation_message")).toEqual(
@@ -228,14 +234,17 @@ describe("Drizzle migration — table creation", () => {
         "role",
         "text_content",
         "answer_json",
+        "pinned",
         "created_at",
       ]),
     );
-    expect(await columnNames(db, "conversation_message")).toHaveLength(8);
+    expect(await columnNames(db, "conversation_message")).toHaveLength(9);
     expect(await pkColumns(db, "conversation_message")).toEqual(["id"]);
 
     const indexes = await indexNames(db);
     expect(indexes).toContain("conversation_account_updated_idx");
+    expect(indexes).toContain("conversation_account_folder_idx");
+    expect(indexes).toContain("conversation_account_archived_idx");
     expect(indexes).toContain("message_conversation_seq_idx"); // UNIQUE (seq backstop)
     expect(indexes).toContain("message_account_idx");
   });
@@ -419,6 +428,45 @@ describe("Drizzle migration — table creation", () => {
     const indexes = await indexNames(db);
     // Backs the per-account list (ORDER BY updated_at DESC, scoped by account_id).
     expect(indexes).toContain("team_account_updated_idx");
+  });
+
+  it("migration creates the 3 chat-qol tables with the correct columns, PKs, and indexes", async () => {
+    expect(await columnNames(db, "conversation_folder")).toEqual(
+      expect.arrayContaining(["id", "account_id", "name", "created_at"]),
+    );
+    expect(await columnNames(db, "conversation_folder")).toHaveLength(4);
+    expect(await pkColumns(db, "conversation_folder")).toEqual(["id"]);
+
+    expect(await columnNames(db, "account_scope_mru")).toEqual(
+      expect.arrayContaining(["account_id", "format", "last_used_at"]),
+    );
+    expect(await columnNames(db, "account_scope_mru")).toHaveLength(3);
+    expect(await pkColumns(db, "account_scope_mru")).toEqual([
+      "account_id",
+      "format",
+    ]);
+
+    expect(await columnNames(db, "shared_answer")).toEqual(
+      expect.arrayContaining([
+        "id",
+        "account_id",
+        "conversation_id",
+        "conversation_title",
+        "question_text",
+        "answer_json",
+        "created_at",
+        "revoked_at",
+      ]),
+    );
+    expect(await columnNames(db, "shared_answer")).toHaveLength(8);
+    expect(await pkColumns(db, "shared_answer")).toEqual(["id"]);
+
+    const indexes = await indexNames(db);
+    expect(indexes).toContain("conversation_folder_account_name_unique");
+    expect(indexes).toContain("conversation_folder_account_name_idx");
+    expect(indexes).toContain("conversation_account_folder_idx");
+    expect(indexes).toContain("conversation_account_archived_idx");
+    expect(indexes).toContain("shared_answer_account_created_idx");
   });
 });
 

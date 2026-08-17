@@ -8,11 +8,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  bulkUpdate,
   deleteConversation,
+  exportConversation,
+  forkConversation,
   getConversation,
   importConversation,
   listConversations,
   renameConversation,
+  setArchived,
+  setFolder,
+  setMessagePinned,
   setPinned,
 } from "@/lib/api/history-client";
 import type { OakAnswer } from "@/components/types";
@@ -61,6 +67,22 @@ describe("listConversations", () => {
     const url = String(calls[0][0]);
     expect(url).toContain("q=garchomp");
     expect(url).toContain("format=champions");
+  });
+
+  it("passes folder_id / archived / include_archived as query params", async () => {
+    const fetchMock = vi.fn(async () => res(200, { conversations: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await listConversations({
+      folder_id: "unfiled",
+      archived: true,
+      include_archived: true,
+    });
+    const url = String(
+      (fetchMock.mock.calls as unknown as Array<[string, RequestInit?]>)[0][0],
+    );
+    expect(url).toContain("folder_id=unfiled");
+    expect(url).toContain("archived=1");
+    expect(url).toContain("include_archived=1");
   });
 
   it("returns [] on a malformed body / error / network throw", async () => {
@@ -156,5 +178,152 @@ describe("importConversation", () => {
       throw new Error("network");
     });
     expect(await importConversation("s", [], "champions")).toBeNull();
+  });
+});
+
+describe("setArchived / setFolder", () => {
+  it("PATCHes archived and folder_id (including null unfile)", async () => {
+    const fetchMock = vi.fn(async () => res(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit?]>;
+
+    expect(await setArchived("id1", true)).toBe(true);
+    expect(JSON.parse(calls[0][1]!.body as string)).toEqual({ archived: true });
+
+    expect(await setFolder("id1", "f1")).toBe(true);
+    expect(JSON.parse(calls[1][1]!.body as string)).toEqual({ folder_id: "f1" });
+
+    expect(await setFolder("id1", null)).toBe(true);
+    expect(JSON.parse(calls[2][1]!.body as string)).toEqual({ folder_id: null });
+  });
+});
+
+describe("bulkUpdate", () => {
+  it("sends folder_id only when the caller passed string | null", async () => {
+    const fetchMock = vi.fn(async () =>
+      res(200, { updated: ["a"], skipped: [] }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit?]>;
+
+    expect(await bulkUpdate(["a"], "archive")).toEqual({
+      updated: ["a"],
+      skipped: [],
+    });
+    expect(JSON.parse(calls[0][1]!.body as string)).toEqual({
+      ids: ["a"],
+      action: "archive",
+    });
+
+    expect(await bulkUpdate(["a"], "move", "f1")).toEqual({
+      updated: ["a"],
+      skipped: [],
+    });
+    expect(JSON.parse(calls[1][1]!.body as string)).toEqual({
+      ids: ["a"],
+      action: "move",
+      folder_id: "f1",
+    });
+
+    expect(await bulkUpdate(["a"], "move", null)).toEqual({
+      updated: ["a"],
+      skipped: [],
+    });
+    expect(JSON.parse(calls[2][1]!.body as string)).toEqual({
+      ids: ["a"],
+      action: "move",
+      folder_id: null,
+    });
+
+    expect(await bulkUpdate(["a"], "move")).toEqual({
+      updated: ["a"],
+      skipped: [],
+    });
+    expect(JSON.parse(calls[3][1]!.body as string)).toEqual({
+      ids: ["a"],
+      action: "move",
+    });
+    expect(JSON.parse(calls[3][1]!.body as string)).not.toHaveProperty("folder_id");
+  });
+
+  it("returns null on a non-ok response / throw", async () => {
+    stubFetch(async () => res(400, { code: "invalid_request" }));
+    expect(await bulkUpdate(["a"], "delete")).toBeNull();
+    stubFetch(async () => {
+      throw new Error("network");
+    });
+    expect(await bulkUpdate(["a"], "delete")).toBeNull();
+  });
+});
+
+describe("forkConversation / setMessagePinned", () => {
+  it("returns the created fork and the pin list", async () => {
+    stubFetch(async () => res(201, { id: "new", title: "rain team (fork)" }));
+    expect(await forkConversation("src", "asst-1")).toEqual({
+      id: "new",
+      title: "rain team (fork)",
+    });
+
+    stubFetch(async () => res(200, { pinnedMessageIds: ["m1", "m2"] }));
+    expect(await setMessagePinned("c", "m2", true)).toEqual(["m1", "m2"]);
+  });
+
+  it("returns null on failure / throw", async () => {
+    stubFetch(async () => res(404, { code: "not_found" }));
+    expect(await forkConversation("src", "m")).toBeNull();
+    stubFetch(async () => {
+      throw new Error("network");
+    });
+    expect(await setMessagePinned("c", "m", false)).toBeNull();
+  });
+});
+
+describe("exportConversation", () => {
+  function exportRes(
+    status: number,
+    bytes: Uint8Array,
+    disposition?: string,
+  ): Response {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === "content-disposition" ? (disposition ?? null) : null,
+      },
+    } as unknown as Response;
+  }
+
+  it("returns bytes + filename from Content-Disposition", async () => {
+    const bytes = new TextEncoder().encode("# rain team");
+    stubFetch(async () =>
+      exportRes(
+        200,
+        bytes,
+        'attachment; filename="rain-team.md"; filename*=UTF-8\'\'rain%20team.md',
+      ),
+    );
+    const out = await exportConversation("c1", "md");
+    expect(out?.filename).toBe("rain team.md");
+    expect(out && new TextDecoder().decode(out.bytes)).toBe("# rain team");
+  });
+
+  it("falls back to conversation.{format} when the header is missing", async () => {
+    stubFetch(async () => exportRes(200, new Uint8Array([1, 2, 3])));
+    const out = await exportConversation("c1", "pdf");
+    expect(out).toEqual({
+      bytes: new Uint8Array([1, 2, 3]),
+      filename: "conversation.pdf",
+    });
+  });
+
+  it("returns null on a non-ok response / throw", async () => {
+    stubFetch(async () => exportRes(401, new Uint8Array()));
+    expect(await exportConversation("c1", "md")).toBeNull();
+    stubFetch(async () => {
+      throw new Error("network");
+    });
+    expect(await exportConversation("c1", "pdf")).toBeNull();
   });
 });

@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
@@ -151,5 +152,56 @@ describe("ScopeChip", () => {
       fireEvent.keyDown(document, { key: "Escape" });
       expect(screen.queryByTestId("scope-chip-menu")).not.toBeInTheDocument();
     });
+  });
+});
+
+describe("ScopeChip — MRU group (SCOPE-US-2)", () => {
+  type ChipQolProps = ComponentProps<typeof ScopeChip> & {
+    recentFormats?: string[];
+  };
+
+  function renderChip(over: Partial<ChipQolProps> = {}) {
+    const props: ChipQolProps = {
+      format: "national-dex",
+      onSelect: vi.fn(),
+      ...over,
+    };
+    render(<ScopeChip {...(props as ComponentProps<typeof ScopeChip>)} />);
+    fireEvent.click(screen.getByTestId("scope-chip"));
+  }
+
+  it("lists recent formats first, then the rest in release-date order (SCOPE-AC-2.1)", () => {
+    renderChip({ recentFormats: ["gen-7", "champions"] });
+    const options = screen
+      .getAllByRole("menuitemradio")
+      .map((el) =>
+        el.getAttribute("data-testid")?.replace("scope-chip-option-", ""),
+      );
+    expect(options[0]).toBe("gen-7");
+    expect(options[1]).toBe("champions");
+    const rest = options.slice(2);
+    const expectedRest = SCOPE_PICKER_ORDER.filter(
+      (f) => f !== "gen-7" && f !== "champions",
+    );
+    expect(rest).toEqual([...expectedRest]);
+    expect(screen.getByTestId("scope-chip-mru")).toBeInTheDocument();
+  });
+
+  it("does not put a never-picked scope in the MRU group (SCOPE-AC-2.3)", () => {
+    renderChip({ recentFormats: ["gen-7"] });
+    const mru = screen.getByTestId("scope-chip-mru");
+    expect(mru).toHaveTextContent(scopeLabelShort("gen-7"));
+    expect(mru).not.toHaveTextContent(scopeLabelShort("gen-1"));
+  });
+
+  it("stays release-date order when no recents are provided (SCOPE-AC-2.2)", () => {
+    renderChip();
+    const options = screen
+      .getAllByRole("menuitemradio")
+      .map((el) =>
+        el.getAttribute("data-testid")?.replace("scope-chip-option-", ""),
+      );
+    expect(options).toEqual([...SCOPE_PICKER_ORDER]);
+    expect(screen.queryByTestId("scope-chip-mru")).toBeNull();
   });
 });

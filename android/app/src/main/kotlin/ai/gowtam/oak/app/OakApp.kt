@@ -10,6 +10,8 @@ import ai.gowtam.oak.features.chat.ChatViewModel
 import ai.gowtam.oak.features.dex.DexRoute
 import ai.gowtam.oak.features.history.HistoryScreen
 import ai.gowtam.oak.features.history.HistoryViewModel
+import ai.gowtam.oak.features.share.ShareSnapshotScreen
+import ai.gowtam.oak.features.share.ShareSnapshotViewModel
 import ai.gowtam.oak.features.teams.TeamsRoute
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.ConnectionBanner
@@ -20,6 +22,7 @@ import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberReduceMotion
 import ai.gowtam.oak.wire.ConversationSummary
+import ai.gowtam.oak.wire.Format
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -51,11 +54,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 private enum class OakTab(val label: String) {
     Chat("Chat"),
@@ -86,8 +91,22 @@ fun OakApp(
 ) {
     var selectedTab by remember { mutableStateOf(OakTab.Chat) }
     val authState by appState.authState.collectAsState()
+    val surface by appState.surfaceRequest.collectAsState()
     val connectionStatus by rememberConnectionStatus()
     val reduceMotion = rememberReduceMotion()
+    var shareSnapshotId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(surface) {
+        when (val req = surface) {
+            is AppState.SurfaceRequest.Dex -> selectedTab = OakTab.Dex
+            is AppState.SurfaceRequest.Teams -> selectedTab = OakTab.Teams
+            is AppState.SurfaceRequest.ShareSnapshot -> {
+                shareSnapshotId = req.id
+                appState.consumeSurfaceRequest()
+            }
+            AppState.SurfaceRequest.None -> Unit
+        }
+    }
 
     LaunchedEffect(appState, services) {
         appState.authState.collect { state ->
@@ -167,6 +186,50 @@ fun OakApp(
                     }
                 }
             }
+        }
+    }
+
+    val snapshotId = shareSnapshotId
+    val importScope = rememberCoroutineScope()
+    if (snapshotId != null) {
+        val shareVm = remember(services) { ShareSnapshotViewModel(services.shares) }
+        var showShareSignIn by remember { mutableStateOf(false) }
+        ShareSnapshotScreen(
+            viewModel = shareVm,
+            shareId = snapshotId,
+            onBack = { shareSnapshotId = null },
+            onOpenInOak = { snap ->
+                if (snap.answer.proposedTeam == null) {
+                    shareSnapshotId = null
+                    selectedTab = OakTab.Chat
+                } else if (authState is AuthState.SignedIn) {
+                    shareSnapshotId = null
+                    importScope.launch {
+                        runCatching { services.shares.importTeam(snap.id) }
+                            .onSuccess { appState.requestTeams(id = it) }
+                        selectedTab = OakTab.Teams
+                    }
+                } else {
+                    appState.setPendingShareImport(snap.id)
+                    showShareSignIn = true
+                }
+            },
+        )
+        if (showShareSignIn) {
+            val authViewModel = remember(services, appState) { AuthViewModel(services.auth, appState) }
+            AuthDialog(viewModel = authViewModel, onDismissRequest = { showShareSignIn = false })
+        }
+    }
+
+    val pendingImport by appState.pendingShareImportId.collectAsState()
+    LaunchedEffect(authState, pendingImport) {
+        val id = pendingImport
+        if (authState is AuthState.SignedIn && id != null) {
+            appState.setPendingShareImport(null)
+            shareSnapshotId = null
+            runCatching { services.shares.importTeam(id) }
+                .onSuccess { appState.requestTeams(id = it) }
+            selectedTab = OakTab.Teams
         }
     }
 }
@@ -272,6 +335,30 @@ private fun SignedInChatHome(
                 artifactViewModel = artifactViewModel,
                 showsNewConversationButton = false,
                 onBack = { route = ChatTabRoute.ConversationList },
+                onOpenTeam = { id, name -> appState.requestTeams(id, name) },
+                onResumeConversation = { id ->
+                    route = ChatTabRoute.Existing(
+                        ConversationSummary(
+                            id = id,
+                            title = "Conversation",
+                            format = Format.NationalDex,
+                            pinned = false,
+                            updatedAt = 0L,
+                        ),
+                    )
+                },
+                onForked = { id ->
+                    lastOpenedConversationId = id
+                    route = ChatTabRoute.Existing(
+                        ConversationSummary(
+                            id = id,
+                            title = "Fork",
+                            format = Format.NationalDex,
+                            pinned = false,
+                            updatedAt = 0L,
+                        ),
+                    )
+                },
             )
         }
 
@@ -279,9 +366,22 @@ private fun SignedInChatHome(
             ExistingConversationThread(
                 summary = current.summary,
                 services = services,
+                appState = appState,
                 chatViewModel = chatViewModel,
                 artifactViewModel = artifactViewModel,
                 onBack = { route = ChatTabRoute.ConversationList },
+                onForked = { id ->
+                    lastOpenedConversationId = id
+                    route = ChatTabRoute.Existing(
+                        ConversationSummary(
+                            id = id,
+                            title = "Fork",
+                            format = Format.NationalDex,
+                            pinned = false,
+                            updatedAt = 0L,
+                        ),
+                    )
+                },
             )
         }
     }
@@ -298,9 +398,11 @@ private fun SignedInChatHome(
 private fun ExistingConversationThread(
     summary: ConversationSummary,
     services: ServiceContainer,
+    appState: AppState,
     chatViewModel: ChatViewModel,
     artifactViewModel: ArtifactViewModel,
     onBack: () -> Unit,
+    onForked: (String) -> Unit = {},
 ) {
     var isLoaded by remember(summary.id) { mutableStateOf(false) }
     var loadError by remember(summary.id) { mutableStateOf<String?>(null) }
@@ -318,6 +420,7 @@ private fun ExistingConversationThread(
                 // A durable turn still generating server-side (survives an app relaunch,
                 // when the client's own pending pointer is gone) — reattach on open.
                 activeTurnId = detail.activeTurn?.turnId,
+                pinnedMessageIds = detail.pinnedMessageIds,
             )
             isLoaded = true
         } catch (e: Exception) {
@@ -331,6 +434,8 @@ private fun ExistingConversationThread(
             artifactViewModel = artifactViewModel,
             showsNewConversationButton = false,
             onBack = onBack,
+            onOpenTeam = { id, name -> appState.requestTeams(id, name) },
+            onForked = onForked,
         )
         loadError != null -> LoadErrorState(message = loadError!!, onRetry = { retryToken++ }, onBack = onBack)
         else -> LoadingState()
