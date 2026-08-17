@@ -2,15 +2,17 @@
  * Classify a composer send as a leading slash command or a normal message
  * (SLASH-US-1 / ADR-10). The parser only classifies — it does not POST.
  *
- * Known tokens: `/new`, `/team`, `/dex`, and `/usage` only when the client
- * has a usage page. Unknown slashes (including `/calc` / `/compare`) are
- * ordinary messages.
+ * Known tokens: `/new`, `/team`, `/dex`, `/calc`, and `/usage` only when
+ * the client has a usage page. `/calc` is a handled slash (ADR-4) — it
+ * does not POST `/api/chat`. `/compare` stays an ordinary message
+ * (CMP-BR-3). Unknown slashes are ordinary messages.
  */
 
 export type SlashNavigateTarget = "new" | "team" | "dex" | "usage";
 
 export type SlashCommandResult =
   | { type: "navigate"; target: SlashNavigateTarget }
+  | { type: "calc"; rest: string }
   | { type: "message" };
 
 export interface ParseSlashCommandOptions {
@@ -20,7 +22,8 @@ export interface ParseSlashCommandOptions {
 
 /**
  * Leading-token parse. First whitespace-delimited token after leading
- * whitespace wins. Exact token match only (`/newish` is a message).
+ * whitespace wins. Exact token match only (`/newish` / `/calcish` are
+ * messages). `/calc` rest is the substring after the token, trimmed.
  */
 export function parseSlashCommand(
   text: string,
@@ -30,6 +33,10 @@ export function parseSlashCommand(
   if (token === "/new") return { type: "navigate", target: "new" };
   if (token === "/team") return { type: "navigate", target: "team" };
   if (token === "/dex") return { type: "navigate", target: "dex" };
+  if (token === "/calc") {
+    const trimmed = text.trimStart();
+    return { type: "calc", rest: trimmed.slice(token.length).trim() };
+  }
   if (token === "/usage" && hasUsagePage) {
     return { type: "navigate", target: "usage" };
   }
