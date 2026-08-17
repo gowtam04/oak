@@ -4,9 +4,10 @@
  *
  * It sits ON TOP of `entity-profile.ts` (the artifact assembler): each detail
  * loader resolves an entity through `assembleEntityProfile`. By default it walks
- * a fixed scarlet-violet → champions → gen-8 … gen-5 fallback chain; when the
- * Pokédex page passes an optional preferred format (`?format=`), that scope is
- * tried first and only the fallback chain runs if the species is missing there.
+ * a fixed scarlet-violet → champions → gen-8 … gen-5 fallback chain; when a
+ * detail page passes an optional preferred format (`?format=` on Pokémon,
+ * move, ability, or item), that scope is tried first and only the fallback
+ * chain runs if the entity is missing there.
  * The scope that wins becomes `sourceFormat`. Detail loaders additionally batch
  * in cross-scope availability, evolution edges, ability effect prose, learnset
  * enrichment, and — when Champions is relevant for the displayed view —
@@ -134,7 +135,8 @@ async function singletonDb(): Promise<OakDb> {
 
 /**
  * Resolve an entity to its `ok` artifact envelope + the scope it came from.
- * When `preferredFormat` is set (Pokédex `?format=`), that scope is tried first;
+ * When `preferredFormat` is set (`?format=` on Pokémon / move / ability / item),
+ * that scope is tried first;
  * on a miss the loader soft-falls back to {@link DETAIL_FALLBACK} so an invalid
  * or unavailable format never blanks a valid slug. Without a preferred format
  * the fallback chain alone runs (unchanged SV-first behavior). Throws
@@ -348,8 +350,14 @@ export async function loadPokemonPageUncached(
 export async function loadMovePageUncached(
   slug: string,
   db: OakDb,
+  preferredFormat?: Format,
 ): Promise<MovePageData | null> {
-  const resolved = await resolveEntityProfile("move", slug, db);
+  const resolved = await resolveEntityProfile(
+    "move",
+    slug,
+    db,
+    preferredFormat,
+  );
   if (!resolved || resolved.ok.kind !== "move") return null;
   const { ok, sourceFormat } = resolved;
   const data = ok.data;
@@ -381,8 +389,14 @@ export async function loadMovePageUncached(
 export async function loadAbilityPageUncached(
   slug: string,
   db: OakDb,
+  preferredFormat?: Format,
 ): Promise<AbilityPageData | null> {
-  const resolved = await resolveEntityProfile("ability", slug, db);
+  const resolved = await resolveEntityProfile(
+    "ability",
+    slug,
+    db,
+    preferredFormat,
+  );
   if (!resolved || resolved.ok.kind !== "ability") return null;
   const { ok, sourceFormat } = resolved;
   const data = ok.data;
@@ -406,8 +420,14 @@ export async function loadAbilityPageUncached(
 export async function loadItemPageUncached(
   slug: string,
   db: OakDb,
+  preferredFormat?: Format,
 ): Promise<ItemPageData | null> {
-  const resolved = await resolveEntityProfile("item", slug, db);
+  const resolved = await resolveEntityProfile(
+    "item",
+    slug,
+    db,
+    preferredFormat,
+  );
   if (!resolved || resolved.ok.kind !== "item") return null;
   const { ok, sourceFormat } = resolved;
   const data = ok.data;
@@ -562,16 +582,25 @@ export const loadPokemonPage = cache(
     loadPokemonPageUncached(slug, await singletonDb(), preferredFormat),
 );
 export const loadMovePage = cache(
-  async (slug: string): Promise<MovePageData | null> =>
-    loadMovePageUncached(slug, await singletonDb()),
+  async (
+    slug: string,
+    preferredFormat?: Format,
+  ): Promise<MovePageData | null> =>
+    loadMovePageUncached(slug, await singletonDb(), preferredFormat),
 );
 export const loadAbilityPage = cache(
-  async (slug: string): Promise<AbilityPageData | null> =>
-    loadAbilityPageUncached(slug, await singletonDb()),
+  async (
+    slug: string,
+    preferredFormat?: Format,
+  ): Promise<AbilityPageData | null> =>
+    loadAbilityPageUncached(slug, await singletonDb(), preferredFormat),
 );
 export const loadItemPage = cache(
-  async (slug: string): Promise<ItemPageData | null> =>
-    loadItemPageUncached(slug, await singletonDb()),
+  async (
+    slug: string,
+    preferredFormat?: Format,
+  ): Promise<ItemPageData | null> =>
+    loadItemPageUncached(slug, await singletonDb(), preferredFormat),
 );
 
 /** `referenceLastModified` — deduped per request for the sitemap. */

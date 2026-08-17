@@ -5,6 +5,10 @@
  * and an "Ask Oak" CTA.
  *
  * Detail route config + dynamic-import + notFound rules: see /pokedex/[slug].
+ *
+ * `?format=<Format>` selects which scope's profile is shown (shareable). An
+ * invalid or unavailable format soft-falls back to the default SV-first chain.
+ * Canonical SEO URL stays `/moves/{slug}` without the query.
  */
 
 import type { Metadata } from "next";
@@ -20,6 +24,7 @@ import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
 import TypeBadge from "@/components/TypeBadge";
 import type { TypeName } from "@/agent/schemas";
+import { isFormat, type Format } from "@/data/formats";
 import { buildMoveDescription, buildMoveTitle } from "@/data/reference-metadata";
 import type { LearnerRow } from "@/lib/reference-pages-types";
 
@@ -70,14 +75,24 @@ function learnerGroups(learners: LearnerRow[]): RefRosterGroup[] {
     .map((heading) => ({ heading, entries: byMethod.get(heading)! }));
 }
 
+/** Parse `?format=` into a known Format, or undefined when missing/invalid. */
+function parseFormatParam(raw: string | string[] | undefined): Format | undefined {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value || !isFormat(value)) return undefined;
+  return value;
+}
+
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ format?: string | string[] }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const preferred = parseFormatParam((await searchParams).format);
   const { loadMovePage } = await import("@/data/reference-pages");
-  const data = await loadMovePage(slug);
+  const data = await loadMovePage(slug, preferred);
   if (!data) return {};
   return {
     title: buildMoveTitle(data),
@@ -88,12 +103,15 @@ export async function generateMetadata({
 
 export default async function MoveDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ format?: string | string[] }>;
 }) {
   const { slug } = await params;
+  const preferred = parseFormatParam((await searchParams).format);
   const { loadMovePage } = await import("@/data/reference-pages");
-  const data = await loadMovePage(slug);
+  const data = await loadMovePage(slug, preferred);
   if (!data) notFound();
 
   const facts: { label: string; value: string }[] = [
@@ -152,7 +170,11 @@ export default async function MoveDetailPage({
 
       <section className="ref-card ref-detail-section">
         <h2 className="ref-detail-section__title">Availability</h2>
-        <FormatChips formats={data.availability} />
+        <FormatChips
+          formats={data.availability}
+          activeFormat={data.sourceFormat}
+          hrefFor={(f) => `/moves/${slug}?format=${f}`}
+        />
       </section>
 
       <section className="ref-card ref-detail-section">
