@@ -116,7 +116,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await fix.db.execute(
-    sql`TRUNCATE TABLE conversation, conversation_message, conversation_folder RESTART IDENTITY`,
+    sql`TRUNCATE TABLE conversation, conversation_message, conversation_folder, conversation_artifact_pin RESTART IDENTITY`,
   );
 });
 
@@ -1095,5 +1095,130 @@ describe("message pins", () => {
     await expect(repo.setMessagePinned(ACCT_B, id, asst, true)).rejects.toThrow();
     expect(await repo.listPinnedMessageIds(ACCT_A, id)).toEqual([]);
     expect(await repo.listPinnedMessageIds(ACCT_B, id)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateAssistantAnswer — same-row overwrite (voice compile / P1)
+// Architecture: overwrite that assistant row's answer_json / text_content,
+// same ids, same seq. Does not append a new pair.
+// ---------------------------------------------------------------------------
+
+type ArtifactCardsRepo = ChatQolRepo & {
+  updateAssistantAnswer: (
+    accountId: string,
+    conversationId: string,
+    assistantMessageId: string,
+    answer: OakAnswer,
+  ) => Promise<void>;
+};
+
+describe("updateAssistantAnswer", () => {
+  const cards = (): ArtifactCardsRepo => repo as ArtifactCardsRepo;
+
+  it("replaces answer_json and text_content on the existing assistant row; does not append a pair", async () => {
+    const id = randomUUID();
+    await append(ACCT_A, id, SV, "first question", "thin spoken", 1000);
+    await append(ACCT_A, id, SV, "second question", "later card", 2000);
+
+    const before = await repo.getMessages(ACCT_A, id);
+    const userIds = await messageIds(id, "user");
+    const asstIds = await messageIds(id, "assistant");
+    expect(before.map((t) => t.seq)).toEqual([0, 1, 2, 3]);
+
+    const upgraded = makeAnswer("full hydrated card");
+    await cards().updateAssistantAnswer(ACCT_A, id, asstIds[0], upgraded);
+
+    const after = await repo.getMessages(ACCT_A, id);
+    expect(after).toHaveLength(4);
+    expect(after.map((t) => [t.seq, t.role])).toEqual([
+      [0, "user"],
+      [1, "assistant"],
+      [2, "user"],
+      [3, "assistant"],
+    ]);
+    expect(after[1].textContent).toBe("full hydrated card");
+    expect(JSON.parse(after[1].answerJson!).answer_markdown).toBe(
+      "full hydrated card",
+    );
+    expect(after[3].textContent).toBe("later card");
+    expect(await messageIds(id, "user")).toEqual(userIds);
+    expect(await messageIds(id, "assistant")).toEqual(asstIds);
+  });
+
+  it("wrong account is a no-op / not found — owner's row is unchanged", async () => {
+    const id = randomUUID();
+    await append(ACCT_A, id, SV, "private", "secret", 1000);
+    const [asst] = await messageIds(id, "assistant");
+
+    await cards()
+      .updateAssistantAnswer(ACCT_B, id, asst, makeAnswer("hijacked"))
+      .catch(() => undefined);
+
+    const turns = await repo.getMessages(ACCT_A, id);
+    expect(turns).toHaveLength(2);
+    expect(turns[1].textContent).toBe("secret");
+    expect(JSON.parse(turns[1].answerJson!).answer_markdown).toBe("secret");
+    expect(await repo.getConversation(ACCT_B, id)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteConversation removes artifact pins (PIN-BR-5)
+// ---------------------------------------------------------------------------
+
+describe("deleteConversation — artifact pins (PIN-BR-5)", () => {
+  it("removes pins for that conversation and leaves another thread's pins", async () => {
+    const doomed = randomUUID();
+    const keep = randomUUID();
+    await append(ACCT_A, doomed, SV, "doomed", "x", 1000);
+    await append(ACCT_A, keep, SV, "keep", "x", 2000);
+
+    const pins = await import("./artifact-pin-repo");
+    await pins.insert({
+      accountId: ACCT_A,
+      conversationId: doomed,
+      kind: "calc",
+      title: "doomed calc",
+      snapshot: { v: 1, kind: "calc", scenario: {}, result: {} },
+    });
+    const kept = await pins.insert({
+      accountId: ACCT_A,
+      conversationId: keep,
+      kind: "comparison",
+      title: "kept compare",
+      snapshot: {
+        v: 1,
+        kind: "comparison",
+        left: { name: "A" },
+        right: { name: "B" },
+      },
+    });
+
+    await repo.deleteConversation(ACCT_A, doomed);
+
+    expect(await repo.getConversation(ACCT_A, doomed)).toBeNull();
+    expect(await pins.list(ACCT_A, doomed)).toEqual([]);
+    expect((await pins.list(ACCT_A, keep)).map((p: { id: string }) => p.id)).toEqual(
+      [kept.id],
+    );
+  });
+
+  it("does not delete another account's pins when deleteConversation is called with the wrong owner", async () => {
+    const id = randomUUID();
+    await append(ACCT_A, id, SV, "A's thread", "x", 1000);
+    const pins = await import("./artifact-pin-repo");
+    const created = await pins.insert({
+      accountId: ACCT_A,
+      conversationId: id,
+      kind: "team_sheet",
+      title: "Rain",
+      snapshot: { v: 1, kind: "team_sheet", format: SV, team: { members: [] } },
+    });
+
+    await repo.deleteConversation(ACCT_B, id);
+
+    expect(await repo.getConversation(ACCT_A, id)).not.toBeNull();
+    expect(await pins.get(ACCT_A, id, created.id)).not.toBeNull();
   });
 });

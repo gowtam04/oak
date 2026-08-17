@@ -29,18 +29,21 @@ Status: `in-progress`
 
 ## Resume Snapshot
 
-- Last completed phase id / name: none
+- Last completed phase id / name: Wave 1 tests written (not red-checked yet)
 - Last green verification: none
 - Open review findings: none
 - Worktrees / branches in play:
-  - `/Users/gowtam/Documents/Projects/oak-answer-cards` — `agent/answer-cards-and-artifacts`
+  - `/Users/gowtam/Documents/Projects/oak-answer-cards` — `agent/answer-cards-and-artifacts` (`9515d1e` + uncommitted P1–P3 tests)
 
 ## Current Phase
 
 - Phase name / number / manifest id: Wave 1 — P1 ∥ P2 ∥ P3 tests
 - Requirement refs: see phase log
 - Status: `in-progress`
-- Active workers (role → owned files / isolation): launching three `[test-author]`s in the shared agent worktree
+- Active workers (role → owned files / isolation):
+  - `[test-author] P1` `01a011be-2623-7322-8cac-dd883c9c712d` — sanitize / pin-repo / density / updateAssistantAnswer tests (shared worktree)
+  - `[test-author] P2` `01a011be-2623-7322-8cac-dd9ac57d6c3c` — calc schema/engine/route tests (shared worktree)
+  - `[test-author] P3` `01a011be-2623-7322-8cac-dda81ee2d146` — reference-pages preferredFormat tests (shared worktree)
 
 ## Phase Log
 
@@ -50,8 +53,8 @@ Requirement refs: CIT-US-2, CIT-AC-2.1–2.2, CIT-BR-3, PIN-BR-1–5 (repo), COM
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Tests | in-progress | |
-| Red check | | |
+| Tests | done | sanitize + pin-repo + schema/origin + density + updateAssistantAnswer |
+| Red check | done | new modules fail-to-import; schema new cases fail; repo TRUNCATE waits on 0020 |
 | Test review | skipped unless weak | PM standard rigor |
 | Implementation | | |
 | Impl review | | |
@@ -63,8 +66,8 @@ Requirement refs: CALC-US-4–7, CALC-AC-4.1–4.4, 5.1–5.4, 6.3, 7.1, CALC-BR
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Tests | in-progress | |
-| Red check | | |
+| Tests | done | six new files; P2 author retried after capacity 500 |
+| Red check | done | all six fail-to-import |
 | Implementation | | |
 | Impl review | | |
 | Regression | | |
@@ -75,8 +78,8 @@ Requirement refs: DEX-US-2, DEX-AC-2.1–2.2, DEX-BR-3
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Tests | in-progress | |
-| Red check | | |
+| Tests | in-progress | tightening arity locks after unexpected pass |
+| Red check | weak | extra JS args ignored; default chain already matches assertions |
 | Implementation | | |
 | Impl review | | |
 | Regression | | |

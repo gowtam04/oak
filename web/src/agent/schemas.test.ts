@@ -238,3 +238,94 @@ describe("submit_answer JSON Schema — xAI strict-safe (P3a)", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// citation.anchor + origin (answer-cards P1; CIT-US-2, CIT-AC-2.2, VOICE-AC-1.2)
+// Additive optional fields on the existing .strict() schemas. Invalid anchors
+// are the sanitize gate (CIT-BR-3), not a schema reject — see
+// sanitize-citation-anchors.test.ts.
+// ---------------------------------------------------------------------------
+
+describe("oakAnswerSchema — citation.anchor (CIT-US-2, CIT-AC-2.2)", () => {
+  it("parses a stored answer WITHOUT citation.anchor (CIT-AC-2.2 backward compatible)", () => {
+    const parsed = oakAnswerSchema.safeParse({
+      ...BASE_ANSWER,
+      citations: [{ source: "pokemon/garchomp", detail: "base Speed 102" }],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.citations[0]).not.toHaveProperty("anchor");
+    }
+  });
+
+  it("parses a valid answer_span anchor (CIT-US-2)", () => {
+    const parsed = oakAnswerSchema.safeParse({
+      ...BASE_ANSWER,
+      citations: [
+        {
+          source: "pokemon/garchomp",
+          detail: "base Speed 102",
+          anchor: { target: "answer_span", id: "c0" },
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      const citation = parsed.data.citations[0] as { anchor?: unknown };
+      expect(citation.anchor).toEqual({
+        target: "answer_span",
+        id: "c0",
+      });
+    }
+  });
+
+  it("parses a valid fact_row anchor (CIT-US-2)", () => {
+    const parsed = oakAnswerSchema.safeParse({
+      ...BASE_ANSWER,
+      citations: [
+        {
+          source: "pokemon/garchomp",
+          detail: "base Speed 102",
+          anchor: { target: "fact_row", id: "Garchomp" },
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      const citation = parsed.data.citations[0] as { anchor?: unknown };
+      expect(citation.anchor).toEqual({
+        target: "fact_row",
+        id: "Garchomp",
+      });
+    }
+  });
+
+  it("still parses an unmapped citation — missing link is not a failed turn (CIT-AC-2.1, CIT-BR-3)", () => {
+    const parsed = oakAnswerSchema.safeParse({
+      ...BASE_ANSWER,
+      citations: [{ source: "pokemon/garchomp", detail: "base Speed 102" }],
+    });
+    expect(parsed.success).toBe(true);
+  });
+});
+
+describe("oakAnswerSchema — origin (VOICE-AC-1.2)", () => {
+  it("parses a stored answer WITHOUT origin (backward compatible)", () => {
+    const parsed = oakAnswerSchema.safeParse(BASE_ANSWER);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect((parsed.data as { origin?: unknown }).origin).toBeUndefined();
+    }
+  });
+
+  it("parses origin: \"voice\" (server-stamped voice card)", () => {
+    const parsed = oakAnswerSchema.safeParse({
+      ...BASE_ANSWER,
+      origin: "voice",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect((parsed.data as { origin?: unknown }).origin).toBe("voice");
+    }
+  });
+});
