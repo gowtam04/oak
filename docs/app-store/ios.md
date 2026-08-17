@@ -59,6 +59,8 @@ type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,battle,showdown,imp
 
 ## What's New (this release)
 
+**1.1 (build 39)** — TestFlight upload 2026-08-17; quieter thinking sentence (no unsigned plate / sheen). ASC version still 1.1.
+
 **1.1 (build 38)** — TestFlight upload 2026-08-16; Dex hop, subject-sprite tap, profile edge, and the incoming thinking plate. ASC version still 1.1 (created with build 37). What's New written from changes since 1.0.2 (the last version that shipped). 1.0.3 was TestFlight-only and never submitted.
 
 ```
