@@ -81,6 +81,11 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     created_at: pin.createdAt,
   }));
 
+  // Fail-soft: running/failed compile for this conversation. `done` is omitted
+  // (P4 hydrate-store clears on success). Parent glue after P4 + P5-http.
+  const { getHydrate } = await import("@/server/voice/hydrate-store");
+  const hydrate = getHydrate(id);
+
   return json(200, {
     id: conv.id,
     title: conv.title,
@@ -90,6 +95,7 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     folderId: conv.folderId,
     pinnedMessageIds,
     pinnedArtifacts,
+    ...(hydrate ? { hydrate } : {}),
     turns,
     active_turn: running ? { turn_id: running.turnId } : null,
   });
