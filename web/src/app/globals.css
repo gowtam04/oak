@@ -5596,6 +5596,7 @@ button.scope-chip:focus-visible {
   gap: var(--space-2);
   align-items: center;
 }
+.proposed-team__add,
 .proposed-team__open-viewer,
 .proposed-team__save-new,
 .proposed-team__showdown,

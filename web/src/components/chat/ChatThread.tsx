@@ -82,6 +82,7 @@ export interface ChatThreadQolProps {
   onHydrateRetry?: (turnId: string) => void;
   onOpenCalculator?: (
     calc: import("@/components/types").DamageCalc,
+    format: import("@/data/formats").Format,
   ) => void;
 }
 

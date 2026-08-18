@@ -27,6 +27,10 @@ import {
   type PlateVars,
 } from "@/lib/plate-types";
 import type { Subject } from "@/agent/schemas";
+import {
+  diffPokemonProfiles,
+  type PokemonCompareProfile,
+} from "@/lib/pokemon-compare";
 
 import { useArtifactViewer } from "./useArtifactViewer";
 import type { ArtifactView } from "./types";
@@ -162,12 +166,55 @@ function EntityRenderer({
   }
 }
 
-function ArtifactBody({ view }: { view: ArtifactView }): React.JSX.Element {
+function profileFromPokemonOk(
+  response: Extract<EntityArtifactOk, { kind: "pokemon" }>,
+): PokemonCompareProfile {
+  const data = response.data;
+  const matchups = data.matchups;
+  return {
+    format: response.format,
+    name: data.display_name,
+    types: data.types,
+    abilities: {
+      slot1: data.abilities.slot1,
+      slot2: data.abilities.slot2 ?? null,
+      hidden: data.abilities.hidden ?? null,
+    },
+    stats: data.base_stats,
+    movepool: data.movepool.flatMap((group) =>
+      group.moves.map((move) => move.slug),
+    ),
+    matchups: {
+      defensive: {
+        weak_to: matchups.weak_to ?? [],
+        resists: matchups.resists ?? [],
+        immune_to: matchups.immune_to ?? [],
+      },
+      offensive: {
+        super_effective_against: [],
+        not_very_effective_against: [],
+        no_effect_against: [],
+      },
+    },
+  };
+}
+
+function ArtifactBody({
+  view,
+  signedIn,
+}: {
+  view: ArtifactView;
+  signedIn: boolean;
+}): React.JSX.Element {
   const { openEntity } = useArtifactViewer();
 
   if (view.type === "structured") {
     return view.artifact.kind === "comparison" ? (
-      <ComparisonArtifact subjects={view.artifact.subjects} />
+      <ComparisonArtifact
+        subjects={view.artifact.subjects}
+        signedIn={signedIn}
+        diff={view.artifact.diff}
+      />
     ) : (
       <DamageCalcArtifact damageCalc={view.artifact.damageCalc} />
     );
@@ -461,7 +508,11 @@ export default function ArtifactViewer({
     };
     setCompareOpen(false);
     setCompareError(null);
-    openStructured({ kind: "comparison", subjects: [left, right] });
+    const diff = diffPokemonProfiles(
+      profileFromPokemonOk(entityOk),
+      profileFromPokemonOk(other),
+    );
+    openStructured({ kind: "comparison", subjects: [left, right], diff });
   }
 
   return (
@@ -607,7 +658,7 @@ export default function ArtifactViewer({
       </header>
 
       <div className="artifact-viewer__body" data-testid="artifact-viewer-body">
-        <ArtifactBody view={current} />
+        <ArtifactBody view={current} signedIn={signedIn} />
       </div>
       {addOpen && entityOk?.kind === "pokemon" && (
         <AddToTeamPicker

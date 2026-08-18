@@ -175,6 +175,20 @@ describe("ProposedTeamCard", () => {
   });
 });
 
+describe("ProposedTeamCard — Add to team (ADD-US-1)", () => {
+  it("shows Add to team on each member when signed in (ADD-AC-1.1)", () => {
+    render(<ProposedTeamCard proposedTeam={proposed()} signedIn />);
+    expect(screen.getAllByRole("button", { name: /add to team/i })).toHaveLength(
+      2,
+    );
+  });
+
+  it("hides Add to team for guests (ADD-AC-1.2, AUTH-BR-1)", () => {
+    render(<ProposedTeamCard proposedTeam={proposed()} signedIn={false} />);
+    expect(screen.queryByRole("button", { name: /add to team/i })).toBeNull();
+  });
+});
+
 describe("ProposedTeamCard — Copy Showdown paste (PASTE-US-1)", () => {
   it("copies only the Showdown paste, not the full human markdown (PASTE-AC-1.1, PASTE-BR-2)", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);

@@ -104,7 +104,12 @@ export function ArtifactViewerProvider({
     const id = ++idRef.current;
     const artifact: StructuredArtifact =
       input.kind === "comparison"
-        ? { kind: "comparison", format: fmt, subjects: input.subjects }
+        ? {
+            kind: "comparison",
+            format: fmt,
+            subjects: input.subjects,
+            ...(input.diff ? { diff: input.diff } : {}),
+          }
         : { kind: "damage-calc", format: fmt, damageCalc: input.damageCalc };
     setStack((prev) => [...prev, { id, type: "structured", artifact }]);
   }, []);

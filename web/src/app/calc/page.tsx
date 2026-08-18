@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import AppNav from "@/components/nav/AppNav";
 import OakWordmark from "@/components/brand/OakWordmark";
@@ -16,6 +17,7 @@ import { isFormat, type Format } from "@/data/formats";
 import { calcScenarioSchema, type CalcScenario } from "@/lib/calc/calc-schema";
 
 const SCENARIO_KEY = "oak-calc-scenario";
+export const CALC_EXPLAIN_KEY = "oak-calc-explain";
 
 function readStoredScenario(): CalcScenario | null {
   if (typeof window === "undefined") return null;
@@ -30,6 +32,7 @@ function readStoredScenario(): CalcScenario | null {
 }
 
 export default function CalcPage() {
+  const router = useRouter();
   const [format, setFormat] = useState<Format>("national-dex");
   const [scenario, setScenario] = useState<CalcScenario | undefined>(undefined);
 
@@ -62,7 +65,18 @@ export default function CalcPage() {
         <AppNav pathname="/calc" />
         <div className="calc-page__main">
           <h1 className="calc-page__heading">Calculator</h1>
-          <CalculatorPanel format={format} scenario={scenario} />
+          <CalculatorPanel
+            format={format}
+            scenario={scenario}
+            onExplain={(message) => {
+              try {
+                window.sessionStorage.setItem(CALC_EXPLAIN_KEY, message);
+              } catch {
+                /* private mode */
+              }
+              router.push("/");
+            }}
+          />
         </div>
       </div>
     </main>

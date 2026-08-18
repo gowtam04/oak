@@ -290,6 +290,7 @@ function CalcSideFields({
   onChange: (patch: Partial<CalcSide>) => void;
 }) {
   const evs = side.evs ?? {};
+  const ivs = side.ivs ?? {};
   const species = sideSpecies(side);
 
   const evInputs = useMemo(
@@ -315,6 +316,32 @@ function CalcSideFields({
         </label>
       )),
     [evs, onChange],
+  );
+
+  const ivInputs = useMemo(
+    () =>
+      EV_KEYS.map((key) => (
+        <label key={key} className="calculator-label">
+          {key.toUpperCase()}
+          <input
+            type="number"
+            min={0}
+            max={31}
+            value={typeof ivs[key] === "number" ? ivs[key] : ""}
+            onChange={(e) => {
+              const n = e.target.value === "" ? undefined : Number(e.target.value);
+              onChange({
+                ivs: {
+                  ...ivs,
+                  ...(n === undefined || Number.isNaN(n) ? {} : { [key]: n }),
+                },
+              });
+            }}
+            aria-label={`${title} ${key} IVs`}
+          />
+        </label>
+      )),
+    [ivs, onChange, title],
   );
 
   return (
@@ -395,7 +422,10 @@ function CalcSideFields({
           }}
         />
       </label>
+      <span className="ilabel">EVs</span>
       <div className="calculator-evs">{evInputs}</div>
+      <span className="ilabel">IVs</span>
+      <div className="calculator-evs">{ivInputs}</div>
     </section>
   );
 }

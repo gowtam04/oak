@@ -62,6 +62,11 @@ export default function AuthMenu({
     if (accountOpen && signedIn) refreshShares();
   }, [accountOpen, signedIn, refreshShares]);
 
+  function handleDensity(next: "full" | "compact") {
+    onAnswerDensityChange?.(next);
+    if (signedIn) void updateAnswerDensity(next);
+  }
+
   async function handleSignOut() {
     if (busy) return;
     setBusy(true);
@@ -86,6 +91,32 @@ export default function AuthMenu({
         >
           Sign in
         </button>
+        <fieldset
+          className="auth-menu__density"
+          data-testid="guest-answer-density"
+        >
+          <legend>Answer density</legend>
+          <label>
+            <input
+              type="radio"
+              name="guest-answer-density"
+              value="full"
+              checked={(answerDensity ?? "full") === "full"}
+              onChange={() => handleDensity("full")}
+            />{" "}
+            Full
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="guest-answer-density"
+              value="compact"
+              checked={answerDensity === "compact"}
+              onChange={() => handleDensity("compact")}
+            />{" "}
+            Compact
+          </label>
+        </fieldset>
       </div>
     );
   }
@@ -129,10 +160,7 @@ export default function AuthMenu({
                 name="answer-density"
                 value="full"
                 checked={(answerDensity ?? "full") === "full"}
-                onChange={() => {
-                  onAnswerDensityChange?.("full");
-                  void updateAnswerDensity("full");
-                }}
+                onChange={() => handleDensity("full")}
               />{" "}
               Full
             </label>
@@ -142,10 +170,7 @@ export default function AuthMenu({
                 name="answer-density"
                 value="compact"
                 checked={answerDensity === "compact"}
-                onChange={() => {
-                  onAnswerDensityChange?.("compact");
-                  void updateAnswerDensity("compact");
-                }}
+                onChange={() => handleDensity("compact")}
               />{" "}
               Compact
             </label>

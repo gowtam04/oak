@@ -53,6 +53,7 @@ export default function AddToTeamPicker({
     members: TeamMember[];
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -66,9 +67,13 @@ export default function AddToTeamPicker({
 
   async function writeAndGo(teamId: string, members: TeamMember[], slot: number) {
     setBusy(true);
+    setError(null);
     const saved = await updateTeam(teamId, { members });
     setBusy(false);
-    if (!saved) return;
+    if (!saved) {
+      setError("Couldn't update that team. It may have been deleted.");
+      return;
+    }
     router.push(editorHref(teamId, slot));
     onClose();
   }
@@ -76,9 +81,13 @@ export default function AddToTeamPicker({
   async function handlePick(team: TeamSummary) {
     if (busy) return;
     setBusy(true);
+    setError(null);
     const detail = await getTeam(team.id);
     setBusy(false);
-    if (!detail) return;
+    if (!detail) {
+      setError("That team is gone.");
+      return;
+    }
     const members = padMembers(detail.members);
     const placed = placeSpeciesOnTeam(members, incoming, { type: "first_empty" });
     if (!placed.ok) {
@@ -101,6 +110,7 @@ export default function AddToTeamPicker({
   async function handleCreate() {
     if (busy) return;
     setBusy(true);
+    setError(null);
     const members = padMembers([]);
     members[0] = incoming;
     const saved = await createTeam({
@@ -109,7 +119,10 @@ export default function AddToTeamPicker({
       name: titleizeSlug(incoming.species, "New team"),
     });
     setBusy(false);
-    if (!saved) return;
+    if (!saved) {
+      setError("Couldn't create a new team.");
+      return;
+    }
     router.push(editorHref(saved.id, 0));
     onClose();
   }
@@ -138,7 +151,8 @@ export default function AddToTeamPicker({
         {replace ? (
           <div data-testid="add-to-team-replace">
             <p className="add-to-team__hint">
-              {replace.name} is full. Choose a member to replace.
+              {replace.name} is full (6/6). Choose a member to replace, or
+              cancel to leave the team unchanged.
             </p>
             <ol className="add-to-team__replace-list">
               {replace.members.map((m, i) => (
@@ -164,6 +178,11 @@ export default function AddToTeamPicker({
             >
               Cancel
             </button>
+            {error && (
+              <p className="add-to-team__error" role="status">
+                {error}
+              </p>
+            )}
           </div>
         ) : (
           <>
@@ -182,7 +201,9 @@ export default function AddToTeamPicker({
                       <span className="add-to-team__team-name">{team.name}</span>
                       <span className="add-to-team__team-meta">
                         {formatLabel(team.format)} ·{" "}
-                        {full ? "Full" : `${team.memberCount} open`}
+                        {full
+                          ? "Full (6/6)"
+                          : `${team.memberCount}/6 · open slots`}
                       </span>
                     </button>
                   </li>
@@ -197,6 +218,11 @@ export default function AddToTeamPicker({
             >
               Create new team
             </button>
+            {error && (
+              <p className="add-to-team__error" role="status">
+                {error}
+              </p>
+            )}
           </>
         )}
       </div>

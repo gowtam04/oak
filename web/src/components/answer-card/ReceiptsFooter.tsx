@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Citation, OakAnswer } from "@/components/types";
 import Markdown from "@/components/Markdown";
 import EntityLink from "@/components/artifact/EntityLink";
@@ -47,6 +47,9 @@ export default function ReceiptsFooter({
   onCitationActivate,
 }: ReceiptsFooterProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  useEffect(() => {
+    setExpanded(defaultExpanded);
+  }, [defaultExpanded]);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle",
   );

@@ -19,7 +19,15 @@ import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 import { parseCitationSource } from "@/components/artifact/parse-citation";
 import TypeBadge from "@/components/TypeBadge";
 import { plateFromSubjects } from "@/lib/plate-types";
-import type { Format } from "@/data/formats";
+import { isFormat, type Format } from "@/data/formats";
+
+function formatFromAnswer(
+  generation: string,
+  fallback: Format,
+): Format {
+  if (generation === "gen-9") return "scarlet-violet";
+  return isFormat(generation) ? generation : fallback;
+}
 
 /**
  * AnswerCard — the top-level renderer for a single `OakAnswer` (T11 /
@@ -68,7 +76,7 @@ export default function AnswerCard({
   density?: "full" | "compact";
   hydrate?: { status: "running" | "failed" };
   onHydrateRetry?: () => void;
-  onOpenCalculator?: (calc: DamageCalc) => void;
+  onOpenCalculator?: (calc: DamageCalc, format: Format) => void;
   format?: Format;
 }) {
   const {
@@ -223,6 +231,7 @@ export default function AnswerCard({
         <ProposedTeamCard
           proposedTeam={proposed_team}
           warnings={proposed_team_warnings}
+          signedIn={signedIn}
         />
       )}
 
@@ -246,7 +255,15 @@ export default function AnswerCard({
         <div className="answer-card__damage">
           <DamageReadout
             damageCalc={damage_calc}
-            onOpenCalculator={onOpenCalculator}
+            onOpenCalculator={
+              onOpenCalculator
+                ? (calc) =>
+                    onOpenCalculator(
+                      calc,
+                      formatFromAnswer(generation_basis.generation, format),
+                    )
+                : undefined
+            }
           />
           <button
             type="button"

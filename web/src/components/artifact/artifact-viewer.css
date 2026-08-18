@@ -593,6 +593,41 @@
   flex-wrap: wrap;
   gap: var(--space-3);
 }
+.comparison-artifact__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.comparison-artifact__format {
+  align-self: flex-start;
+}
+.comparison-artifact__diff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.comparison-artifact__stats {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+.comparison-artifact__stats th,
+.comparison-artifact__stats td {
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.comparison-artifact__diff-title {
+  margin: 0 0 var(--space-1);
+  font-size: 0.85rem;
+}
+.comparison-artifact__diff-block p,
+.comparison-artifact__speed {
+  margin: 0;
+  font-size: 0.8125rem;
+}
 
 /* ---- Team artifact (detailed team view) -------------------------------- */
 .team-artifact {

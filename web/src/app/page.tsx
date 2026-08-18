@@ -62,6 +62,17 @@ import type {
 } from "@/components/types";
 
 const CALC_SCENARIO_KEY = "oak-calc-scenario";
+const CALC_EXPLAIN_KEY = "oak-calc-explain";
+const GUEST_DENSITY_KEY = "oak-answer-density";
+
+function readGuestDensity(): "full" | "compact" {
+  try {
+    const value = window.localStorage.getItem(GUEST_DENSITY_KEY);
+    return value === "compact" ? "compact" : "full";
+  } catch {
+    return "full";
+  }
+}
 
 function ArtifactPinHost({
   signedIn,
@@ -286,6 +297,7 @@ export default function Home() {
   // Declared above scope-mirroring so the signed-in gate for lastUsedScope can
   // read it without a temporal-dead-zone reference.
   const [auth, setAuth] = useState<MeResult>({ signedIn: false });
+  const [guestDensity, setGuestDensity] = useState<"full" | "compact">("full");
   const [meReady, setMeReady] = useState(false);
   const [listsReady, setListsReady] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
@@ -531,6 +543,7 @@ export default function Home() {
         setListsReady(false);
       } else {
         setListsReady(true);
+        setGuestDensity(readGuestDensity());
       }
       setMeReady(true);
     });
@@ -775,6 +788,19 @@ export default function Home() {
       turns,
     ],
   );
+
+  const sendRef = useRef(handleSend);
+  sendRef.current = handleSend;
+  useEffect(() => {
+    try {
+      const message = window.sessionStorage.getItem(CALC_EXPLAIN_KEY);
+      if (!message) return;
+      window.sessionStorage.removeItem(CALC_EXPLAIN_KEY);
+      sendRef.current(message);
+    } catch {
+      /* private mode */
+    }
+  }, []);
 
   // Open a saved conversation (HIST-US-4): load its full-fidelity turns, make it
   // the live thread (its id becomes the session id, so the composer continues
@@ -1126,12 +1152,12 @@ export default function Home() {
   // Mic button tapped. Signed in → open the voice overlay at the current
   // display scope; guest → the sign-in dialog (the existing signed-in gate).
   const handleOpenCalculator = useCallback(
-    (calc: DamageCalc) => {
+    (calc: DamageCalc, hopFormat: Format) => {
       setCalcRest("");
-      setCalcScenario(scenarioFromDamageCalc(calc, displayFormat));
+      setCalcScenario(scenarioFromDamageCalc(calc, hopFormat));
       setCalcOpen(true);
     },
-    [displayFormat],
+    [],
   );
 
   const handleHydrateRetry = useCallback(
@@ -1322,10 +1348,21 @@ export default function Home() {
               email={auth.email}
               onSignInClick={() => setAuthDialogOpen(true)}
               onSignedOut={handleSignedOut}
-              answerDensity={auth.answerDensity}
-              onAnswerDensityChange={(density) =>
-                setAuth((prev) => ({ ...prev, answerDensity: density }))
+              answerDensity={
+                auth.signedIn ? auth.answerDensity : guestDensity
               }
+              onAnswerDensityChange={(density) => {
+                if (auth.signedIn) {
+                  setAuth((prev) => ({ ...prev, answerDensity: density }));
+                  return;
+                }
+                setGuestDensity(density);
+                try {
+                  window.localStorage.setItem(GUEST_DENSITY_KEY, density);
+                } catch {
+                  /* private mode */
+                }
+              }}
             />
           </div>
           {/* Mobile-only trigger for the control popover (CSS hides it ≥640px). */}
@@ -1497,7 +1534,9 @@ export default function Home() {
               onFollowUpChip={handleFollowUpChip}
               currentFormat={displayFormat}
               mentionedTeam={auth.signedIn ? mentionedTeam : null}
-              density={auth.answerDensity ?? "full"}
+              density={
+                auth.signedIn ? (auth.answerDensity ?? "full") : guestDensity
+              }
               hydrate={hydrate}
               onHydrateRetry={
                 auth.signedIn ? handleHydrateRetry : undefined

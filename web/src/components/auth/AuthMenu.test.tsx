@@ -189,6 +189,23 @@ describe("AuthMenu — compact/full default (COMPACT-US-2)", () => {
       <AuthMenu signedIn={false} onSignInClick={vi.fn()} onSignedOut={vi.fn()} />,
     );
     expect(screen.queryByTestId("answer-density")).toBeNull();
-    expect(screen.queryByRole("radio", { name: /^compact$/i })).toBeNull();
+  });
+
+  it("offers a device-local compact/full control and does not PATCH (COMPACT-BR-4)", async () => {
+    const onChange = vi.fn();
+    render(
+      <AuthMenu
+        signedIn={false}
+        onSignInClick={vi.fn()}
+        onSignedOut={vi.fn()}
+        onAnswerDensityChange={onChange}
+      />,
+    );
+    const group = screen.getByTestId("guest-answer-density");
+    expect(group).toBeInTheDocument();
+    densityMock.mockClear();
+    fireEvent.click(screen.getByRole("radio", { name: /^compact$/i }));
+    expect(onChange).toHaveBeenCalledWith("compact");
+    expect(densityMock).not.toHaveBeenCalled();
   });
 });
