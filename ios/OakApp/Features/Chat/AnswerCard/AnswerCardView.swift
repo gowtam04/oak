@@ -38,6 +38,8 @@ import UIKit
 /// renders exactly `sections`, and the tests assert presence/absence/order over it.
 struct AnswerCardView: View {
   let answer: OakAnswer
+  var density: AnswerDensity = .full
+  var receiptsExpanded: Bool = false
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -103,8 +105,9 @@ struct AnswerCardView: View {
       .padding(Theme.Spacing.lg)
       .frame(maxWidth: .infinity, alignment: .leading)
 
-      // Full-width Why / Sources footer — only when reasoning/citations present.
-      if hasReceipts {
+      // Full-width Why / Sources footer — only when reasoning/citations present
+      // and compact mode hasn't collapsed them (COMPACT-BR-1).
+      if showsReceipts {
         ReceiptsFooterView(
           reasoningMarkdown: answer.reasoningMarkdown,
           citations: answer.citations,
@@ -244,7 +247,7 @@ struct AnswerCardView: View {
     if hasSubjects { out.append(.subjects) }
     if hasSuggestions { out.append(.suggestions) }
     if hasCaveat { out.append(.caveat) }
-    if hasReceipts { out.append(.receipts) }
+    if showsReceipts { out.append(.receipts) }
     return out
   }
 
@@ -323,11 +326,11 @@ struct AnswerCardView: View {
           Button {
             onOpenDamageCalc(damageCalc)
           } label: {
-            Label("Open in viewer", systemImage: "rectangle.portrait.and.arrow.right")
+            Label("Open in calculator", systemImage: "function")
               .font(Theme.display(.footnote))
           }
           .buttonStyle(.oakSecondary)
-          .accessibilityHint("Opens the damage calculation as a full artifact")
+          .accessibilityHint("Opens this matchup in the calculator")
         }
       }
     case .teams:
@@ -350,6 +353,17 @@ struct AnswerCardView: View {
           }
           .buttonStyle(.oakSecondary)
           .accessibilityHint("Opens the proposed team as a full artifact")
+          if Self.showsShowdownCopy(for: answer) {
+            Button {
+              UIPasteboard.general.string = proposedTeamToShowdownPaste(proposed)
+              Haptics.tap()
+            } label: {
+              Label("Copy Showdown paste", systemImage: "square.on.square")
+                .font(Theme.display(.footnote))
+            }
+            .buttonStyle(.oakSecondary)
+            .accessibilityHint("Copies the proposed team as Showdown text")
+          }
         }
       }
     case .suggestions:
@@ -516,6 +530,15 @@ struct AnswerCardView: View {
     !Self.trimmed(answer.reasoningMarkdown).isEmpty || !answer.citations.isEmpty
   }
 
+  /// Compact hides reasoning/sources unless this card is expanded (COMPACT-BR-1).
+  private var showsReceipts: Bool {
+    hasReceipts && (density == .full || receiptsExpanded)
+  }
+
+  static func showsShowdownCopy(for answer: OakAnswer) -> Bool {
+    answer.proposedTeam != nil
+  }
+
   private var hasInferences: Bool { !answer.inferences.isEmpty }
 
   /// Type chips render when any subject carries a type slug.
@@ -540,6 +563,30 @@ struct AnswerCardView: View {
     (values ?? [])
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
       .filter { !$0.isEmpty }
+  }
+}
+
+enum CitationHighlightTarget: Equatable, Sendable {
+  case answerSpan(id: String)
+  case factRow(id: String)
+}
+
+/// Highlight only when the citation carries an anchor AND the matching span/row
+/// is present (CIT-BR-1 / CIT-BR-2).
+func citationHighlightTarget(citation: Citation, answer: OakAnswer) -> CitationHighlightTarget? {
+  guard let anchor = citation.anchor else { return nil }
+  switch anchor.target {
+  case .answerSpan:
+    let open = "<!-- span:\(anchor.id) -->"
+    let close = "<!-- /span:\(anchor.id) -->"
+    guard answer.answerMarkdown.contains(open), answer.answerMarkdown.contains(close) else {
+      return nil
+    }
+    return .answerSpan(id: anchor.id)
+  case .factRow:
+    let names = answer.candidates?.shown.map(\.name) ?? []
+    guard names.contains(anchor.id) else { return nil }
+    return .factRow(id: anchor.id)
   }
 }
 

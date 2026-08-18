@@ -44,6 +44,7 @@ struct AccountView: View {
     Form {
       profileHeaderSection
       accountSection
+      appearanceSection
       if let message = model.errorMessage {
         errorSection(message)
       }
@@ -202,6 +203,24 @@ struct AccountView: View {
   }
 
   @ViewBuilder
+  private var appearanceSection: some View {
+    Section {
+      Picker(
+        "Answer cards",
+        selection: Binding(
+          get: { model.answerDensity },
+          set: { next in Task { await model.setAnswerDensity(next) } }
+        )
+      ) {
+        Text("Full").tag(AnswerDensity.full)
+        Text("Compact").tag(AnswerDensity.compact)
+      }
+    } footer: {
+      Text("Compact hides Why / Sources on answer cards. Facts and caveats stay visible.")
+    }
+  }
+
+  @ViewBuilder
   private var sharedByMeSection: some View {
     Section {
       NavigationLink {
@@ -343,6 +362,7 @@ private struct PreviewAccountAuthService: AuthService {
   func me() async throws -> MeSnapshot { .guest }
   func signOut() async throws {}
   func deleteAccount() async throws {}
+  func setAnswerDensity(_ density: AnswerDensity) async throws -> AnswerDensity { density }
 }
 
 #Preview("Guest") {

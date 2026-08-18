@@ -61,6 +61,12 @@ struct ServiceContainer: Sendable {
   /// production — a separate host from the Oak API, no Bearer token.
   let updates: any UpdateService
 
+  /// `POST /api/calc` — public estimate engine.
+  let calc: any CalcService
+
+  /// Conversation artifact pins (signed-in).
+  let artifactPins: any ArtifactPinService
+
   /// The production wiring (real `Live…` services).
   ///
   /// All services share **one** ``TokenStore`` (the Keychain) and **one**
@@ -81,7 +87,9 @@ struct ServiceContainer: Sendable {
       dexLookup: LiveDexLookupService(apiClient: api),
       teamsAssistant: LiveTeamsAssistantService(sseClient: SSEClient(apiClient: api)),
       voice: LiveVoiceService(apiClient: api),
-      updates: LiveUpdateService()
+      updates: LiveUpdateService(),
+      calc: LiveCalcService(apiClient: api),
+      artifactPins: LiveArtifactPinService(apiClient: api)
     )
   }
 
@@ -102,7 +110,9 @@ struct ServiceContainer: Sendable {
       dexLookup: EmptyDexLookupService(),
       teamsAssistant: PreviewStubTeamsAssistantService(),
       voice: PreviewStubVoiceService(),
-      updates: PreviewStubUpdateService()
+      updates: PreviewStubUpdateService(),
+      calc: PreviewStubCalcService(),
+      artifactPins: PreviewStubArtifactPinService()
     )
     #else
     live()
@@ -151,6 +161,8 @@ struct PreviewStubAuthService: AuthService {
   func signOut() async throws {}
 
   func deleteAccount() async throws {}
+
+  func setAnswerDensity(_ density: AnswerDensity) async throws -> AnswerDensity { density }
 }
 
 /// No-network ``HistoryService`` for SwiftUI previews: an empty conversation list,
@@ -341,6 +353,28 @@ struct PreviewStubVoiceService: VoiceService {
   }
 
   func postTranscript(sessionId: String, format: Format, userText: String, assistantText: String) async {}
+
+  func hydrate(conversationId: String, assistantMessageId: String) async throws -> VoiceHydrateResponse {
+    VoiceHydrateResponse(status: .running)
+  }
+}
+
+struct PreviewStubCalcService: CalcService {
+  func estimate(_ scenario: CalcScenario) async -> CalcResult? { nil }
+}
+
+struct PreviewStubArtifactPinService: ArtifactPinService {
+  func list(conversationId: String) async -> [PinnedArtifactSummary] { [] }
+  func create(
+    conversationId: String,
+    kind: ArtifactPinKind,
+    title: String,
+    snapshot: Artifact
+  ) async -> ArtifactPinCreateResult {
+    .failure(.failed)
+  }
+  func get(conversationId: String, pinId: String) async -> Artifact? { nil }
+  func delete(conversationId: String, pinId: String) async -> [PinnedArtifactSummary] { [] }
 }
 
 /// No-network ``UpdateService`` for SwiftUI previews: always reports up-to-date so
