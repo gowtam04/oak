@@ -1,10 +1,15 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useState, type CSSProperties } from "react";
 import type { SpriteCardProps } from "@/components/types";
 import TypeBadge from "@/components/TypeBadge";
 import SpriteImg from "@/components/SpriteImg";
 import EntityLink from "@/components/artifact/EntityLink";
+import AddToTeamPicker from "@/components/teams/AddToTeamPicker";
+import { blankMember } from "@/data/teams/place-on-team";
 import { oakMediaDexSpriteUrl } from "@/lib/sprites";
 import { typeCssVar } from "@/lib/plate-types";
+import type { Format } from "@/data/formats";
 
 /**
  * SpriteCard — renders one entry from `subjects[]`: sprite image, display
@@ -22,7 +27,20 @@ import { typeCssVar } from "@/lib/plate-types";
  * Specimen desk: the well glows from the subject's types via `--plate-a` /
  * `--plate-b` (not the azure default).
  */
-export default function SpriteCard({ subject }: SpriteCardProps) {
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/['']/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export default function SpriteCard({
+  subject,
+  signedIn = false,
+  format = "national-dex",
+}: SpriteCardProps & { signedIn?: boolean; format?: Format }) {
   const {
     name,
     dex_number,
@@ -31,6 +49,7 @@ export default function SpriteCard({ subject }: SpriteCardProps) {
     is_fallback,
     source_generation,
   } = subject;
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const plateStyle = {
     ["--plate-a" as string]: typeCssVar(types[0]),
@@ -101,7 +120,23 @@ export default function SpriteCard({ subject }: SpriteCardProps) {
             </EntityLink>
           ))}
         </div>
+        {signedIn && (
+          <button
+            type="button"
+            className="sprite-card__add"
+            onClick={() => setPickerOpen(true)}
+          >
+            Add to team
+          </button>
+        )}
       </div>
+      {signedIn && pickerOpen && (
+        <AddToTeamPicker
+          incoming={{ ...blankMember(), species: slugify(name) }}
+          format={format}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }
