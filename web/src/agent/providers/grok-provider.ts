@@ -18,8 +18,10 @@
  *    Completions' nested `{ type:"function", function:{...} }`. `strict:false` lets
  *    the OakAnswer schema's optional/default fields through (xAI applies its own
  *    lenient-strict validation; the loop's Zod re-emit budget is the safety net).
- *  - Reasoning is requested explicitly as `reasoning:{ effort:"high" }` — grok-4.3
- *    defaults to "low", which is too shallow for battle-math. `parallel_tool_calls`
+ *  - Reasoning is requested explicitly as `reasoning:{ effort }` — chat
+ *    defaults to constructor `"high"` (grok-4.3's `"low"` is too shallow for
+ *    battle-math). `TurnRequest.effort` overrides per turn so voice compile
+ *    can pass `"none"` (ADR-7). `parallel_tool_calls`
  *    is disabled so `submit_answer` can't ride alongside a data tool, and
  *    `max_output_tokens` is raised so a full candidate list can't truncate the
  *    submit_answer JSON.
@@ -213,6 +215,7 @@ export class GrokProvider implements LLMProvider {
       tools,
       input,
       previousResponseId: useChain ? this.lastResponseId : null,
+      effort: req.effort,
     });
     const created = this.client.responses.create(body, { signal: req.signal });
 
@@ -278,6 +281,7 @@ export class GrokProvider implements LLMProvider {
     tools: RTool[];
     input: RInputItem[];
     previousResponseId: string | null;
+    effort?: ReasoningEffort;
   }): OpenAI.Responses.ResponseCreateParamsStreaming {
     // xAI rejects `instructions` together with `previous_response_id` (prod 400:
     // "Argument not supported: instructions and previous_response_id together").
@@ -291,7 +295,7 @@ export class GrokProvider implements LLMProvider {
       tool_choice: "auto",
       parallel_tool_calls: this.parallelToolCalls,
       max_output_tokens: this.maxOutputTokens,
-      reasoning: { effort: this.effort },
+      reasoning: { effort: args.effort ?? this.effort },
       // store:true is required for previous_response_id chaining. When stateful
       // is false we still set store:false so nothing is retained server-side.
       store: this.stateful,

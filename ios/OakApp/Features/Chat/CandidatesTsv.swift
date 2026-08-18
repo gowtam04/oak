@@ -6,14 +6,14 @@ import Foundation
 /// set (after sort / filter / in-table pin). Hidden remainder is never included
 /// (TBL-BR-1). Empty input → empty string (TBL-AC-4.4).
 ///
-/// Portable column contract (spreadsheet paste, TBL-AC-4.1):
-/// `Name\tTypes\tHP\tAtk\tDef\tSpA\tSpD\tSpe[\tAbility]`
+/// Portable column contract (spreadsheet paste, TBL-AC-4.1 / TBL-AC-4.3):
+/// `Name\tTypes\tHP\tAttack\tDefense\tSpA\tSpD\tSpeed[\tAbility]`
 /// Types join with `/`. Ability column is present only when any visible row
 /// names an ability. `\n` line endings. Header first, then one line per row
 /// in the given order. `key_stats` columns are used only when no row has
-/// `base_stats`.
+/// `base_stats`. Lockstep with web `candidates-tsv.ts` (long stat names).
 
-private let baseStatHeaders = ["HP", "Atk", "Def", "SpA", "SpD", "Spe"]
+private let baseStatHeaders = ["HP", "Attack", "Defense", "SpA", "SpD", "Speed"]
 
 /// Spreadsheet paste of the currently visible candidate table.
 func candidatesToTsv(_ visibleRows: [CandidateRow]) -> String {

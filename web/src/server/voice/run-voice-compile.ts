@@ -121,10 +121,6 @@ export async function runVoiceCompile(args: RunVoiceCompileArgs): Promise<void> 
       signal: mine,
       // ADR-7: thinking off (single tool; avoid thinking + forced-choice 400).
       effort: "none",
-      thinking: false,
-    } as Parameters<typeof provider.streamTurn>[0] & {
-      effort: "none";
-      thinking: false;
     });
 
     for await (const _event of stream) {

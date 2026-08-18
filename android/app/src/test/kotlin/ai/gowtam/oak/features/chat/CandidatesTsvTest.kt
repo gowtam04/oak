@@ -21,8 +21,8 @@ import org.junit.Test
  * / in-table pin). It does not fetch hidden remainder (`N` of `M` stays
  * honest — TBL-BR-1). Empty input → empty string (UI explains; TBL-AC-4.4).
  *
- * Portable column contract (spreadsheet paste, TBL-AC-4.1):
- *   `Name\tTypes\tHP\tAtk\tDef\tSpA\tSpD\tSpe[\tAbility]`
+ * Portable column contract (spreadsheet paste, TBL-AC-4.1 / TBL-AC-4.3):
+ *   `Name\tTypes\tHP\tAttack\tDefense\tSpA\tSpD\tSpeed[\tAbility]`
  * Types join with `/`. Ability column is present only when any visible row
  * names an ability. `\n` line endings. Header first, then one line per row
  * in the given order.
@@ -77,7 +77,7 @@ class CandidatesTsvTest {
             listOf(row("Garchomp", listOf("dragon", "ground"), garchompStats, "rough-skin")),
         )
         val lines = tsv.split('\n')
-        assertEquals("Name\tTypes\tHP\tAtk\tDef\tSpA\tSpD\tSpe\tAbility", lines.first())
+        assertEquals("Name\tTypes\tHP\tAttack\tDefense\tSpA\tSpD\tSpeed\tAbility", lines.first())
         assertTrue(lines.contains("Garchomp\tdragon/ground\t108\t130\t95\t80\t85\t102\trough-skin"))
         assertTrue(tsv.contains("\t"))
         assertFalse(tsv.contains(","))
@@ -89,7 +89,7 @@ class CandidatesTsvTest {
             listOf(row("Garchomp", listOf("dragon", "ground"), garchompStats)),
         )
         val header = tsv.split('\n').first()
-        assertEquals("Name\tTypes\tHP\tAtk\tDef\tSpA\tSpD\tSpe", header)
+        assertEquals("Name\tTypes\tHP\tAttack\tDefense\tSpA\tSpD\tSpeed", header)
         assertFalse(header.contains("Ability"))
     }
 

@@ -265,12 +265,7 @@ describe("runVoiceCompile — tools + thinking (ADR-7)", () => {
     expect(streamTurn).toHaveBeenCalled();
     expect(captured).toBeDefined();
     expect(captured!.tools.map((t) => t.name)).toEqual(["submit_answer"]);
-    const effort = (captured as TurnRequest & { effort?: string }).effort ?? "none";
-    const thinking = (captured as TurnRequest & { thinking?: unknown }).thinking;
-    expect(effort).toBe("none");
-    expect(thinking === undefined || thinking === false || thinking === "off").toBe(
-      true,
-    );
+    expect(captured!.effort).toBe("none");
   });
 
   it("feeds the in-process tool-trace into the compile turn (ADR-7, ADR-8)", async () => {

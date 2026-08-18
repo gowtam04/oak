@@ -15,8 +15,8 @@ import Testing
 /// / in-table pin). It does not fetch hidden remainder (`N` of `M` stays
 /// honest — TBL-BR-1). Empty input → empty string (UI explains; TBL-AC-4.4).
 ///
-/// Portable column contract (spreadsheet paste, TBL-AC-4.1):
-///   `Name\tTypes\tHP\tAtk\tDef\tSpA\tSpD\tSpe[\tAbility]`
+/// Portable column contract (spreadsheet paste, TBL-AC-4.1 / TBL-AC-4.3):
+///   `Name\tTypes\tHP\tAttack\tDefense\tSpA\tSpD\tSpeed[\tAbility]`
 /// Types join with `/`. Ability column is present only when any visible row
 /// names an ability. `\n` line endings. Header first, then one line per row
 /// in the given order.
@@ -86,7 +86,7 @@ struct CandidatesTsvTests {
       row("Garchomp", types: ["dragon", "ground"], stats: garchompStats, ability: "rough-skin")
     ])
     let lines = tsv.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-    #expect(lines.first == "Name\tTypes\tHP\tAtk\tDef\tSpA\tSpD\tSpe\tAbility")
+    #expect(lines.first == "Name\tTypes\tHP\tAttack\tDefense\tSpA\tSpD\tSpeed\tAbility")
     #expect(lines.contains("Garchomp\tdragon/ground\t108\t130\t95\t80\t85\t102\trough-skin"))
     #expect(tsv.contains("\t"))
     #expect(!tsv.contains(","))
@@ -98,7 +98,7 @@ struct CandidatesTsvTests {
       row("Garchomp", types: ["dragon", "ground"], stats: garchompStats)
     ])
     let header = tsv.split(separator: "\n", omittingEmptySubsequences: false).first.map(String.init)
-    #expect(header == "Name\tTypes\tHP\tAtk\tDef\tSpA\tSpD\tSpe")
+    #expect(header == "Name\tTypes\tHP\tAttack\tDefense\tSpA\tSpD\tSpeed")
     #expect(!(header ?? "").contains("Ability"))
   }
 

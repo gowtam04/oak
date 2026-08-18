@@ -14,14 +14,14 @@ import ai.gowtam.oak.wire.JsonScalar
 
 private val STAT_ORDER = listOf("hp", "attack", "defense", "special_attack", "special_defense", "speed")
 
-/** Spreadsheet-paste labels — match the candidate table (Atk/Def/Spe). */
+/** Spreadsheet-paste labels — lockstep with web `candidates-tsv.ts` (TBL-AC-4.3). */
 private val STAT_LABELS = mapOf(
     "hp" to "HP",
-    "attack" to "Atk",
-    "defense" to "Def",
+    "attack" to "Attack",
+    "defense" to "Defense",
     "special_attack" to "SpA",
     "special_defense" to "SpD",
-    "speed" to "Spe",
+    "speed" to "Speed",
 )
 
 /** Spreadsheet paste of the currently visible candidate table. */
