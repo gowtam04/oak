@@ -21,6 +21,8 @@ export interface ReceiptsFooterProps {
   /** Signed-in only — snapshot this card to a public URL (SHARE-US-1). */
   signedIn?: boolean;
   onShare?: () => void;
+  /** Citation tap — highlight the linked claim and open the source (CIT-BR-1). */
+  onCitationActivate?: (citation: Citation) => void;
 }
 
 /**
@@ -42,6 +44,7 @@ export default function ReceiptsFooter({
   defaultExpanded = false,
   signedIn = false,
   onShare,
+  onCitationActivate,
 }: ReceiptsFooterProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
@@ -205,6 +208,7 @@ export default function ReceiptsFooter({
                   key={i}
                   className="source-list__item"
                   data-testid={`citation-${i}`}
+                  onClick={() => onCitationActivate?.(citation)}
                 >
                   {parsed ? (
                     <EntityLink

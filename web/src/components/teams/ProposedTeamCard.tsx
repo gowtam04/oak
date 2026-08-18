@@ -12,6 +12,7 @@ import {
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 import TeamWarnings from "@/components/teams/TeamWarnings";
 import { formatLabel, titleizeSlug } from "@/components/teams/display-names";
+import { proposedTeamToShowdownPaste } from "@/lib/proposed-team-showdown";
 
 /** Title-case a slug-ish id (`great-tusk` → `Great Tusk`) for this card. */
 function titleize(value: string | null): string {
@@ -44,6 +45,7 @@ export default function ProposedTeamCard({
   const [existing, setExisting] = useState<TeamSummary[]>([]);
   const [targetId, setTargetId] = useState<string>("");
   const [state, setState] = useState<ApplyState>({ kind: "idle" });
+  const [copied, setCopied] = useState(false);
   const { openTeam } = useArtifactViewer();
 
   // Offer apply-existing only for same-format teams the account already owns.
@@ -88,6 +90,17 @@ export default function ProposedTeamCard({
   }
 
   const busy = state.kind === "saving";
+
+  async function handleCopyShowdown() {
+    const paste = proposedTeamToShowdownPaste(proposedTeam);
+    try {
+      await navigator.clipboard.writeText(paste);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <section className="proposed-team" data-testid="proposed-team">
@@ -152,6 +165,14 @@ export default function ProposedTeamCard({
           onClick={() => void handleSaveNew()}
         >
           Save as new team
+        </button>
+
+        <button
+          type="button"
+          className="proposed-team__showdown"
+          onClick={() => void handleCopyShowdown()}
+        >
+          {copied ? "Copied" : "Copy Showdown paste"}
         </button>
 
         {existing.length > 0 && (

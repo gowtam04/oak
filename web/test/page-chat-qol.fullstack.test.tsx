@@ -566,11 +566,24 @@ describe("Home — slash intercept (SLASH-US-1, ADR-10)", () => {
     expect(screen.getByTestId("chat-empty")).toBeInTheDocument();
   });
 
+  it("opens the calculator overlay for /calc without POSTing a chat turn (CALC-AC-3.1)", async () => {
+    render(<Home />);
+    await screen.findByTestId("composer");
+    fireEvent.change(screen.getByTestId("composer-input"), {
+      target: { value: "/calc garchomp earthquake" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("composer-send"));
+    });
+    expect(chatBodies).toHaveLength(0);
+    expect(screen.getByTestId("calculator-overlay")).toBeInTheDocument();
+  });
+
   it("sends an unknown slash as a normal message (SLASH-AC-1.5)", async () => {
     render(<Home />);
     await screen.findByTestId("composer");
-    await send("/calc garchomp earthquake", 1);
-    expect(chatBodies.at(-1)?.message).toBe("/calc garchomp earthquake");
+    await send("/compare garchomp dragonite", 1);
+    expect(chatBodies.at(-1)?.message).toBe("/compare garchomp dragonite");
     expect(chatBodies.at(-1)?.recovery).toBeUndefined();
   });
 

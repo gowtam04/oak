@@ -26,6 +26,7 @@ export interface AppNavItem {
 /** The app's own pages, rendered at the top of the rail. */
 export const PRIMARY_NAV_ITEMS: readonly AppNavItem[] = [
   { label: "Teams", href: "/teams" },
+  { label: "Calculator", href: "/calc" },
 ];
 
 /** The programmatic reference pages, rendered as a quiet footer group. */
