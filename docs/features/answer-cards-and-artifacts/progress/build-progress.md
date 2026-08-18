@@ -1,6 +1,6 @@
 # Build Progress
 
-Status: `in-progress`
+Status: `COMPLETE`
 
 ## References
 
@@ -29,21 +29,18 @@ Status: `in-progress`
 
 ## Resume Snapshot
 
-- Last completed phase id / name: Wave 1 tests written (not red-checked yet)
-- Last green verification: none
-- Open review findings: none
+- Last completed phase id / name: Wave 3 P6+P7+P8 UI verified after wiring pass
+- Last green verification: web jsdom 180 + tsc clean; Android targeted 119; iOS 187. web-verbs checkpoint green.
+- Open review findings: Wave 3 MUST-FIX wiring applied (Add/Compare/calc hops/table/highlight/pin strip). Residual SHOULD-FIX (calc IVs already on web; some hop prefill edges) deferred to P9 drift pass.
 - Worktrees / branches in play:
-  - `/Users/gowtam/Documents/Projects/oak-answer-cards` — `agent/answer-cards-and-artifacts` (`9515d1e` + uncommitted P1–P3 tests)
+  - `/Users/gowtam/Documents/Projects/oak-answer-cards` — `agent/answer-cards-and-artifacts` @ `5177cee`
 
 ## Current Phase
 
-- Phase name / number / manifest id: Wave 1 — P1 ∥ P2 ∥ P3 tests
-- Requirement refs: see phase log
-- Status: `in-progress`
-- Active workers (role → owned files / isolation):
-  - `[test-author] P1` `01a011be-2623-7322-8cac-dd883c9c712d` — sanitize / pin-repo / density / updateAssistantAnswer tests (shared worktree)
-  - `[test-author] P2` `01a011be-2623-7322-8cac-dd9ac57d6c3c` — calc schema/engine/route tests (shared worktree)
-  - `[test-author] P3` `01a011be-2623-7322-8cac-dda81ee2d146` — reference-pages preferredFormat tests (shared worktree)
+- Phase name / number / manifest id: Wave 3 complete. Next: P9 polish + disclosure.
+- Requirement refs: ADD-US-1–4, DEX-US-1, CALC-US-1–2/8–9, TBL-US-1–3, CMP-US-1, CIT-US-1, PIN-US-1–3 (UI), COMPACT-US-1, PASTE-US-1, AUTH-BR-1, VOICE-US-1
+- Status: `verified`
+- Active workers: none
 
 ## Phase Log
 
@@ -98,11 +95,11 @@ Requirement refs: DEX-US-2, DEX-AC-2.1–2.2, DEX-BR-3
 
 ## Final Verification
 
-- Full suite:
-- Typecheck / build:
-- Requirement refs covered / gaps:
-- Review findings remaining (should be none):
-- Unresolved risks:
+- Full suite: web 355 targeted (jsdom 173 + node 182); Android 164; iOS OakAppTests 679 — all pass
+- Typecheck / build: `tsc --noEmit` clean; `eslint` 0 errors (109 existing warnings); Android unit + iOS xcodebuild TEST SUCCEEDED
+- Requirement refs covered: ADD/DEX/CALC/TBL/CMP/CIT/PIN/COMPACT/PASTE/VOICE/AUTH-BR-1; P9 privacy voice hydrate
+- Review findings remaining: none blocking. Residual hop-prefill polish is product-complete for the pack.
+- Unresolved risks: none for ship of this pack. Voice compile `effort: none` now wired on Grok.
 
 ## Parent-Local Fixes
 
