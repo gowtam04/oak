@@ -190,6 +190,16 @@ private fun ProposedCard(
             Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp), tint = oak.accent)
             Text(text = "Open team in viewer", color = oak.accent)
         }
+        val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+        val paste = ai.gowtam.oak.features.chat.proposedTeamToShowdownPaste(team)
+        if (paste.isNotEmpty()) {
+            OakButton(
+                onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(paste)) },
+                style = OakButtonStyle.Secondary,
+            ) {
+                Text(text = "Copy Showdown", color = oak.accent)
+            }
+        }
     }
 }
 

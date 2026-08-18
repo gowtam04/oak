@@ -103,7 +103,11 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ArtifactSheet(viewModel: ArtifactViewModel, modifier: Modifier = Modifier) {
+fun ArtifactSheet(
+    viewModel: ArtifactViewModel,
+    modifier: Modifier = Modifier,
+    onOpenInDex: (DexHop) -> Unit = {},
+) {
     val stack by viewModel.stack.collectAsState()
     val current = stack.lastOrNull() ?: return
     val canGoBack = stack.size > 1
@@ -140,6 +144,7 @@ fun ArtifactSheet(viewModel: ArtifactViewModel, modifier: Modifier = Modifier) {
         }
 
         ArtifactTopBar(title = current.title, canGoBack = canGoBack, onBack = viewModel::back, onClose = ::closeSheet)
+        ArtifactActionRow(viewModel, onOpenInDex)
 
         Box(modifier = Modifier.weight(1f, fill = false)) {
             AnimatedContent(
@@ -170,6 +175,30 @@ fun ArtifactSheet(viewModel: ArtifactViewModel, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------------------
 // Chrome
 // ---------------------------------------------------------------------------
+
+@Composable
+private fun ArtifactActionRow(viewModel: ArtifactViewModel, onOpenInDex: (DexHop) -> Unit) {
+    val oak = LocalOakColors.current
+    val hop = viewModel.dexHop()
+    if (hop == null && !viewModel.canPin) return
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = OakSpacing.md),
+        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+    ) {
+        if (hop != null) {
+            androidx.compose.material3.TextButton(onClick = { onOpenInDex(hop) }) {
+                Text("Open in Dex", color = oak.accent)
+            }
+        }
+        if (viewModel.canPin) {
+            androidx.compose.material3.TextButton(onClick = viewModel::pin) {
+                Text("Pin", color = oak.accent)
+            }
+        }
+    }
+}
 
 @Composable
 private fun ArtifactTopBar(title: String, canGoBack: Boolean, onBack: () -> Unit, onClose: () -> Unit) {

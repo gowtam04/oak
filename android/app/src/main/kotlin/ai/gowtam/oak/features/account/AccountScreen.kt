@@ -141,6 +141,30 @@ fun AccountScreen(
         ) {
             ProfileHeader(isSignedIn = authState is AuthState.SignedIn, email = viewModel.email, tierTitle = viewModel.tierTitle)
             Spacer(Modifier.height(OakSpacing.lg))
+            val density by viewModel.answerDensity.collectAsState()
+            SectionCard {
+                ActionRow(
+                    icon = Icons.Filled.Info,
+                    title = if (density is ai.gowtam.oak.wire.AnswerDensity.Compact) {
+                        "Answers: Compact"
+                    } else {
+                        "Answers: Full"
+                    },
+                    enabled = true,
+                    onClick = {
+                        scope.launch {
+                            viewModel.setAnswerDensity(
+                                if (density is ai.gowtam.oak.wire.AnswerDensity.Compact) {
+                                    ai.gowtam.oak.wire.AnswerDensity.Full
+                                } else {
+                                    ai.gowtam.oak.wire.AnswerDensity.Compact
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+            Spacer(Modifier.height(OakSpacing.lg))
 
             SectionCard {
                 if (authState is AuthState.SignedIn) {

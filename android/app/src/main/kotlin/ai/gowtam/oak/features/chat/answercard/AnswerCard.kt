@@ -7,6 +7,11 @@ import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.TypeBadge
 import ai.gowtam.oak.ui.rememberReduceMotion
+import ai.gowtam.oak.wire.AnswerDensity
+import ai.gowtam.oak.wire.CandidateRow
+import ai.gowtam.oak.wire.Candidates
+import ai.gowtam.oak.wire.Citation
+import ai.gowtam.oak.wire.CitationAnchor
 import ai.gowtam.oak.wire.DamageCalc
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.OakAnswer
@@ -92,11 +97,12 @@ fun AnswerCard(
     answer: OakAnswer,
     modifier: Modifier = Modifier,
     actions: AnswerCardActions = AnswerCardActions(),
+    density: AnswerDensity = AnswerDensity.Full,
 ) {
     val oak = LocalOakColors.current
     val reduceMotion = rememberReduceMotion()
     val plateShape = RoundedCornerShape(OakRadius.lg)
-    val sections = answerSections(answer)
+    val sections = answerSections(answer, density)
     val bodySections = sections.filter {
         it != AnswerSection.REASONING && it != AnswerSection.CITATIONS
     }
@@ -254,22 +260,77 @@ enum class AnswerSection(val testTag: String) {
  * after the same trimming its subview applies), so an absent field renders nothing.
  * Pure and side-effect-free. Scope is header-only (Signal) and is never listed.
  */
-fun answerSections(answer: OakAnswer): List<AnswerSection> = buildList {
-    if (answer.status != OakAnswer.Status.Answered) add(AnswerSection.STATUS)
-    if (answer.generationBasis.fallback || nonBlank(answer.uncertaintyFlags).isNotEmpty()) {
-        add(AnswerSection.CAVEAT)
+fun answerSections(
+    answer: OakAnswer,
+    density: AnswerDensity = AnswerDensity.Full,
+): List<AnswerSection> {
+    val sections = buildList {
+        if (answer.status != OakAnswer.Status.Answered) add(AnswerSection.STATUS)
+        if (answer.generationBasis.fallback || nonBlank(answer.uncertaintyFlags).isNotEmpty()) {
+            add(AnswerSection.CAVEAT)
+        }
+        add(AnswerSection.ANSWER) // the answer prose always renders
+        if (answer.inferences.isNotEmpty()) add(AnswerSection.INFERENCES)
+        if (!answer.subjects.isNullOrEmpty()) add(AnswerSection.SUBJECTS)
+        if (!answer.question?.options.isNullOrEmpty()) add(AnswerSection.QUESTION)
+        if (!answer.candidates?.shown.isNullOrEmpty()) add(AnswerSection.CANDIDATES)
+        if (answer.damageCalc != null) add(AnswerSection.DAMAGE)
+        if (answer.proposedTeam != null || answer.savedTeam != null) add(AnswerSection.TEAMS)
+        if (nonBlank(answer.suggestions).isNotEmpty()) add(AnswerSection.SUGGESTIONS)
+        if (answer.reasoningMarkdown.isNotBlank()) add(AnswerSection.REASONING)
+        if (answer.citations.isNotEmpty()) add(AnswerSection.CITATIONS)
     }
-    add(AnswerSection.ANSWER) // the answer prose always renders
-    if (answer.inferences.isNotEmpty()) add(AnswerSection.INFERENCES)
-    if (!answer.subjects.isNullOrEmpty()) add(AnswerSection.SUBJECTS)
-    if (!answer.question?.options.isNullOrEmpty()) add(AnswerSection.QUESTION)
-    if (!answer.candidates?.shown.isNullOrEmpty()) add(AnswerSection.CANDIDATES)
-    if (answer.damageCalc != null) add(AnswerSection.DAMAGE)
-    if (answer.proposedTeam != null || answer.savedTeam != null) add(AnswerSection.TEAMS)
-    if (nonBlank(answer.suggestions).isNotEmpty()) add(AnswerSection.SUGGESTIONS)
-    if (answer.reasoningMarkdown.isNotBlank()) add(AnswerSection.REASONING)
-    if (answer.citations.isNotEmpty()) add(AnswerSection.CITATIONS)
+    if (density == AnswerDensity.Compact) {
+        return sections.filter { it != AnswerSection.REASONING && it != AnswerSection.CITATIONS }
+    }
+    return sections
 }
+
+data class CandidateTableQuery(
+    val typeFilter: String? = null,
+    val nameQuery: String? = null,
+    val pinnedNames: Set<String> = emptySet(),
+    val sortColumn: String? = null,
+    val sortAscending: Boolean = true,
+)
+
+fun shownCandidateRows(candidates: Candidates, query: CandidateTableQuery): List<CandidateRow> {
+    fun matches(row: CandidateRow): Boolean {
+        val type = query.typeFilter
+        if (type != null && row.types.none { it.equals(type, ignoreCase = true) }) return false
+        val name = query.nameQuery
+        if (name != null && !row.name.contains(name, ignoreCase = true)) return false
+        return true
+    }
+    val extraPinned = candidates.shown.filter { it.name in query.pinnedNames && !matches(it) }
+    val matched = candidates.shown.filter(::matches)
+    val visible = extraPinned + matched
+    val column = query.sortColumn ?: return visible
+    val sorted = visible.sortedBy { candidateSortValue(it, column) }
+    return if (query.sortAscending) sorted else sorted.asReversed()
+}
+
+private fun candidateSortValue(row: CandidateRow, column: String): Int {
+    val stats = row.baseStats
+    if (stats != null) {
+        return when (column.lowercase()) {
+            "hp" -> stats.hp
+            "atk", "attack" -> stats.atk
+            "def", "defense" -> stats.def
+            "spa", "special_attack" -> stats.spa
+            "spd", "special_defense" -> stats.spd
+            "spe", "speed" -> stats.spe
+            else -> Int.MIN_VALUE
+        }
+    }
+    return when (val scalar = row.keyStats?.get(column)) {
+        is ai.gowtam.oak.wire.JsonScalar.IntVal -> scalar.v.toInt()
+        is ai.gowtam.oak.wire.JsonScalar.DoubleVal -> scalar.v.toInt()
+        else -> Int.MIN_VALUE
+    }
+}
+
+fun citationHighlight(citation: Citation): CitationAnchor? = citation.anchor
 
 /** Non-blank, trimmed entries of an optional string list (matches each subview's guard). */
 internal fun nonBlank(values: List<String>?): List<String> =

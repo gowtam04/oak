@@ -1,11 +1,14 @@
 package ai.gowtam.oak.features.artifact
 
+import ai.gowtam.oak.services.ArtifactPinService
 import ai.gowtam.oak.services.ArtifactService
+import ai.gowtam.oak.services.CreatePinResult
 import ai.gowtam.oak.wire.DamageCalc
 import ai.gowtam.oak.wire.EntityArtifact
 import ai.gowtam.oak.wire.EntityArtifactOk
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.Format
+import ai.gowtam.oak.wire.PinnedArtifactSummary
 import ai.gowtam.oak.wire.ProposedTeam
 import ai.gowtam.oak.wire.SavedTeamRef
 import ai.gowtam.oak.wire.Subject
@@ -46,6 +49,9 @@ import kotlinx.coroutines.launch
 class ArtifactViewModel(
     private val service: ArtifactService,
     initialFormat: Format,
+    private val signedIn: Boolean = false,
+    private val pins: ArtifactPinService? = null,
+    private val conversationId: String? = null,
 ) : ViewModel() {
 
     private val _stack = MutableStateFlow<List<Artifact>>(emptyList())
@@ -202,6 +208,108 @@ class ArtifactViewModel(
         if (newFormat == format) return
         format = newFormat
         dismiss()
+    }
+
+    // ---- P8: Dex hop / Compare with… / Pin ----
+
+    private val _pinError = MutableStateFlow<String?>(null)
+    val pinError: StateFlow<String?> = _pinError.asStateFlow()
+
+    private val _pinnedArtifacts = MutableStateFlow<List<PinnedArtifactSummary>>(emptyList())
+    val pinnedArtifacts: StateFlow<List<PinnedArtifactSummary>> = _pinnedArtifacts.asStateFlow()
+
+    private var lastPinId: String? = null
+
+    val canOpenInDex: Boolean get() = dexHop() != null
+
+    val canCompare: Boolean
+        get() {
+            val entity = (current?.content as? ArtifactContent.Entity)?.v ?: return false
+            return entity.kind == EntityKind.POKEMON
+        }
+
+    val canPin: Boolean
+        get() = signedIn && pinKind() != null
+
+    fun dexHop(): DexHop? {
+        val entity = (current?.content as? ArtifactContent.Entity)?.v ?: return null
+        if (entity.kind == EntityKind.TYPE || entity.kind is EntityKind.Unknown) return null
+        return DexHop(
+            kind = entity.kind,
+            query = entity.resolved.slug,
+            format = entity.format,
+        )
+    }
+
+    fun compareWith(query: String, format: Format) {
+        if (!canCompare) return
+        viewModelScope.launch {
+            val result = service.entity(EntityKind.POKEMON, query, format)
+            val ok = (result as? EntityArtifact.Ok)?.v ?: return@launch
+            val pokemon = ok.data as? ai.gowtam.oak.wire.EntityData.Pokemon ?: return@launch
+            val subject = Subject(
+                name = pokemon.v.displayName,
+                spriteUrl = pokemon.v.spriteUrl,
+                types = pokemon.v.types,
+                isFallback = ok.isFallback,
+            )
+            val left = (current?.content as? ArtifactContent.Entity)?.v
+            val leftSubject = if (left != null) {
+                val data = left.data as? ai.gowtam.oak.wire.EntityData.Pokemon
+                Subject(
+                    name = data?.v?.displayName ?: left.resolved.displayName,
+                    spriteUrl = data?.v?.spriteUrl.orEmpty(),
+                    types = data?.v?.types.orEmpty(),
+                    isFallback = left.isFallback,
+                )
+            } else {
+                Subject(name = query, spriteUrl = "", types = emptyList(), isFallback = false)
+            }
+            push(Artifact(title = "Comparison", content = ArtifactContent.Comparison(listOf(leftSubject, subject))))
+        }
+    }
+
+    fun pin() {
+        val kind = pinKind() ?: return
+        val conv = conversationId ?: return
+        val pinService = pins ?: return
+        val title = current?.title ?: kind.rawValue
+        viewModelScope.launch {
+            when (val result = pinService.create(conv, kind, title, snapshot = current?.content)) {
+                is CreatePinResult.Ok -> {
+                    lastPinId = result.pin.id
+                    _pinnedArtifacts.value = result.pinnedArtifacts
+                    _pinError.value = null
+                }
+                is CreatePinResult.Cap -> {
+                    _pinError.value = "Pin cap is ${result.max}"
+                }
+                is CreatePinResult.Error -> {
+                    _pinError.value = result.message
+                }
+            }
+        }
+    }
+
+    fun unpin() {
+        val conv = conversationId ?: return
+        val pinService = pins ?: return
+        val pinId = lastPinId ?: _pinnedArtifacts.value.lastOrNull()?.id ?: return
+        viewModelScope.launch {
+            val remaining = pinService.delete(conv, pinId)
+            if (remaining != null) {
+                _pinnedArtifacts.value = remaining
+                lastPinId = null
+                _pinError.value = null
+            }
+        }
+    }
+
+    private fun pinKind(): ArtifactPinKind? = when (current?.content) {
+        is ArtifactContent.TeamSheet -> ArtifactPinKind.TeamSheet
+        is ArtifactContent.Comparison -> ArtifactPinKind.Comparison
+        is ArtifactContent.DamageCalcContent -> ArtifactPinKind.Calc
+        else -> null
     }
 
     // ---- Internals ----

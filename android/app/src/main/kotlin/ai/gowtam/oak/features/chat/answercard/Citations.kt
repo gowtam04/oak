@@ -50,6 +50,7 @@ fun Citations(
     citations: List<Citation>,
     modifier: Modifier = Modifier,
     onOpenEntity: (EntityKind, String) -> Unit = { _, _ -> },
+    onHighlight: (ai.gowtam.oak.wire.CitationAnchor) -> Unit = {},
 ) {
     val oak = LocalOakColors.current
     var expanded by remember { mutableStateOf(false) }
@@ -100,7 +101,7 @@ fun Citations(
                 verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
             ) {
                 for (citation in citations) {
-                    CitationRow(citation, onOpenEntity)
+                    CitationRow(citation, onOpenEntity, onHighlight)
                 }
             }
         }
@@ -108,7 +109,11 @@ fun Citations(
 }
 
 @Composable
-private fun CitationRow(citation: Citation, onOpenEntity: (EntityKind, String) -> Unit) {
+private fun CitationRow(
+    citation: Citation,
+    onOpenEntity: (EntityKind, String) -> Unit,
+    onHighlight: (ai.gowtam.oak.wire.CitationAnchor) -> Unit,
+) {
     val oak = LocalOakColors.current
     val parsed = parseCitationSource(citation.source)
     Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.Top) {
@@ -125,9 +130,12 @@ private fun CitationRow(citation: Citation, onOpenEntity: (EntityKind, String) -
                 color = if (parsed != null) oak.azure else oak.textStrong,
                 modifier = if (parsed != null) {
                     val (kind, query) = parsed
-                    Modifier.clickable { onOpenEntity(kind, query) }
+                    Modifier.clickable {
+                        citationHighlight(citation)?.let(onHighlight)
+                        onOpenEntity(kind, query)
+                    }
                 } else {
-                    Modifier
+                    Modifier.clickable { citationHighlight(citation)?.let(onHighlight) }
                 },
             )
             Text(text = citation.detail, style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
