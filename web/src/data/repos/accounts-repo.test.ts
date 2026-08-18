@@ -56,11 +56,12 @@ afterAll(async () => {
 // One migrated schema for the whole file (the singleton db is captured once);
 // reset the tables between tests so each starts clean. The chat-history + team
 // tables are included because deleteAccount cascades into them, as are the
-// admin-panel usage-recording tables (turn_record, auth_event) and the
-// chat-qol tables (shared_answer, account_scope_mru, conversation_folder).
+// admin-panel usage-recording tables (turn_record, auth_event), the
+// chat-qol tables (shared_answer, account_scope_mru, conversation_folder),
+// and answer-cards pins (conversation_artifact_pin).
 beforeEach(async () => {
   await fix.db.execute(
-    sql`TRUNCATE TABLE account, auth_session, otp_code, conversation, conversation_message, team, turn_record, auth_event, shared_answer, account_scope_mru, conversation_folder RESTART IDENTITY`,
+    sql`TRUNCATE TABLE account, auth_session, otp_code, conversation, conversation_message, team, turn_record, auth_event, shared_answer, account_scope_mru, conversation_folder, conversation_artifact_pin RESTART IDENTITY`,
   );
 });
 
@@ -535,5 +536,102 @@ describe("deleteAccount (cascade)", () => {
     await repo.deleteAccount(accountId);
 
     expect(await repo.findAccountByEmail(EMAIL)).toBeNull();
+  });
+
+  it("removes conversation artifact pins with the account (PIN-BR-5)", async () => {
+    const { accountId } = await seedFullAccount(EMAIL);
+    const convRes = await fix.db.execute(
+      sql`SELECT id FROM conversation WHERE account_id = ${accountId}`,
+    );
+    const conversationId = (convRes.rows[0] as { id: string }).id;
+    const pins = await import("./artifact-pin-repo");
+    await pins.insert({
+      accountId,
+      conversationId,
+      kind: "calc",
+      title: "EQ vs Toxapex",
+      snapshot: {
+        v: 1,
+        kind: "calc",
+        scenario: { format: "scarlet-violet" },
+        result: { min_damage: 1, max_damage: 2 },
+      },
+    });
+    expect(await pins.list(accountId, conversationId)).toHaveLength(1);
+
+    await repo.deleteAccount(accountId);
+
+    expect(await pins.list(accountId, conversationId)).toEqual([]);
+    const leftover = await fix.db.execute(
+      sql`SELECT count(*)::int AS n FROM conversation_artifact_pin WHERE account_id = ${accountId}`,
+    );
+    expect((leftover.rows[0] as { n: number }).n).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// answer_density — compact/full preference (COMPACT-BR-2, COMPACT-BR-4)
+// Architecture name: updateAnswerDensity, matching updateLastUsedScope.
+// NULL / absent = full. Column only — guests have no server row (COMPACT-BR-4).
+// ---------------------------------------------------------------------------
+
+type DensityRepo = Repo & {
+  updateAnswerDensity: (
+    accountId: string,
+    density: "full" | "compact",
+  ) => Promise<void>;
+};
+
+type AccountDensity = {
+  answerDensity?: "full" | "compact" | null;
+};
+
+describe("answer_density (COMPACT-BR-2, COMPACT-BR-4)", () => {
+  const densityRepo = (): DensityRepo => repo as DensityRepo;
+
+  it("created account has null/absent answerDensity meaning full (COMPACT-BR-2)", async () => {
+    const id = randomUUID();
+    const created = (await repo.createAccount(EMAIL, id, 1)) as AccountDensity;
+    expect(created.answerDensity ?? null).toBeNull();
+
+    const found = (await repo.findAccountByEmail(EMAIL)) as AccountDensity | null;
+    expect(found).not.toBeNull();
+    expect(found?.answerDensity ?? null).toBeNull();
+  });
+
+  it("updateAnswerDensity persists compact and full (COMPACT-BR-2)", async () => {
+    const id = randomUUID();
+    await repo.createAccount(EMAIL, id, 1);
+
+    await densityRepo().updateAnswerDensity(id, "compact");
+    expect(
+      ((await repo.findAccountByEmail(EMAIL)) as AccountDensity | null)
+        ?.answerDensity,
+    ).toBe("compact");
+
+    await densityRepo().updateAnswerDensity(id, "full");
+    expect(
+      ((await repo.findAccountByEmail(EMAIL)) as AccountDensity | null)
+        ?.answerDensity,
+    ).toBe("full");
+  });
+
+  it("updateAnswerDensity is account-scoped (AUTH-BR-2)", async () => {
+    const a = randomUUID();
+    const b = randomUUID();
+    await repo.createAccount("ash@pallet.town", a, 1);
+    await repo.createAccount("misty@cerulean.gym", b, 1);
+
+    await densityRepo().updateAnswerDensity(a, "compact");
+
+    expect(
+      ((await repo.findAccountByEmail("ash@pallet.town")) as AccountDensity | null)
+        ?.answerDensity,
+    ).toBe("compact");
+    expect(
+      (
+        (await repo.findAccountByEmail("misty@cerulean.gym")) as AccountDensity | null
+      )?.answerDensity ?? null,
+    ).toBeNull();
   });
 });

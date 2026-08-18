@@ -45,6 +45,12 @@ describe("operator-access-disclosure (privacy copy)", () => {
     expect(text).toMatch(/whether you are signed in or using Oak as a guest/i);
   });
 
+  it("discloses that a voice turn may later hold a full structured answer", () => {
+    const text = renderedText();
+    expect(text).toMatch(/voice turn may later hold a full structured answer/i);
+    expect(text).toMatch(/same way as a text-chat answer/i);
+  });
+
   it("discloses that auth events are recorded", () => {
     const text = renderedText();
     expect(text).toContain("One record per sign-in event");

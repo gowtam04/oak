@@ -74,6 +74,16 @@ export interface ChatThreadQolProps {
     onContinue?: () => void;
     onOpenLastTeam?: () => void;
   };
+  density?: "full" | "compact";
+  hydrate?: {
+    status: "running" | "failed";
+    assistant_message_id?: string;
+  } | null;
+  onHydrateRetry?: (turnId: string) => void;
+  onOpenCalculator?: (
+    calc: import("@/components/types").DamageCalc,
+    format: import("@/data/formats").Format,
+  ) => void;
 }
 
 export default function ChatThread({
@@ -103,6 +113,10 @@ export default function ChatThread({
   mentionedTeam = null,
   emptyReady = true,
   emptyDesk,
+  density = "full",
+  hydrate = null,
+  onHydrateRetry,
+  onOpenCalculator,
 }: ChatThreadProps & ChatThreadQolProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
 
@@ -312,6 +326,19 @@ export default function ChatThread({
               onShare={
                 onShareTurn ? () => onShareTurn(turn.id) : undefined
               }
+              density={density}
+              format={currentFormat}
+              hydrate={
+                hydrate &&
+                (!hydrate.assistant_message_id ||
+                  hydrate.assistant_message_id === turn.id)
+                  ? { status: hydrate.status }
+                  : undefined
+              }
+              onHydrateRetry={
+                onHydrateRetry ? () => onHydrateRetry(turn.id) : undefined
+              }
+              onOpenCalculator={onOpenCalculator}
             />
             <TurnActions
               role="assistant"

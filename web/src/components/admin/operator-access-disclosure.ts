@@ -18,6 +18,8 @@
  * Operator-access copy must disclose (honest, plain copy):
  *  - Oak persists ONE record per chat turn — the user's message text AND Oak's
  *    answer — for EVERY turn, signed-in AND guest (ADMIN-BR-6/7, AD-3).
+ *  - A voice turn may later hold a full structured answer (same operator
+ *    read as text chat). Do not describe voice as transcript-only.
  *  - Oak persists one record per auth event (code requested/verified/failed).
  *  - These records are retained INDEFINITELY (no prune job — AD-3).
  *  - The single owner/operator can READ them, including guest and account
@@ -41,7 +43,8 @@ where it is failing — Oak keeps an internal operational record of activity:
   and game format used, token counts, timing, and the tools Oak called. This
   happens for every turn, whether you are signed in or using Oak as a guest. (The
   images themselves are never stored — Oak keeps only a count of how many images a
-  message included.)
+  message included.) A voice turn may later hold a full structured answer, which
+  the operator can read the same way as a text-chat answer.
 - **One record per sign-in event.** When a one-time sign-in code is requested,
   verified, or fails to send, Oak stores a small record of that event — the email
   involved and the outcome.

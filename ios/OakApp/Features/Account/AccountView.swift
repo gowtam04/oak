@@ -27,6 +27,7 @@ struct AccountView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(UpdateViewModel.self) private var updateModel
   @Environment(\.services) private var services
+  @Environment(AppState.self) private var appState
   @State private var model: AccountViewModel
 
   /// Drives the sign-in sheet (presented over the guest state).
@@ -44,6 +45,7 @@ struct AccountView: View {
     Form {
       profileHeaderSection
       accountSection
+      appearanceSection
       if let message = model.errorMessage {
         errorSection(message)
       }
@@ -202,6 +204,30 @@ struct AccountView: View {
   }
 
   @ViewBuilder
+  private var appearanceSection: some View {
+    Section {
+      Button {
+        appState.pendingDestination = .calculator(nil)
+      } label: {
+        actionLabel(title: "Calculator", systemImage: "function")
+      }
+      .accessibilityHint("Opens the damage calculator")
+      Picker(
+        "Answer cards",
+        selection: Binding(
+          get: { model.answerDensity },
+          set: { next in Task { await model.setAnswerDensity(next) } }
+        )
+      ) {
+        Text("Full").tag(AnswerDensity.full)
+        Text("Compact").tag(AnswerDensity.compact)
+      }
+    } footer: {
+      Text("Compact hides Why / Sources on answer cards. Facts and caveats stay visible.")
+    }
+  }
+
+  @ViewBuilder
   private var sharedByMeSection: some View {
     Section {
       NavigationLink {
@@ -343,6 +369,7 @@ private struct PreviewAccountAuthService: AuthService {
   func me() async throws -> MeSnapshot { .guest }
   func signOut() async throws {}
   func deleteAccount() async throws {}
+  func setAnswerDensity(_ density: AnswerDensity) async throws -> AnswerDensity { density }
 }
 
 #Preview("Guest") {

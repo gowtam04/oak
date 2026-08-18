@@ -30,6 +30,7 @@ struct RootView: View {
   /// The selected tab, tracked so tab changes can fire haptics + a symbol bounce.
   @State private var selection: AppTab = .chat
   @State private var presentedShareId: String?
+  @State private var calculatorCover: CalculatorCover?
 
   /// The four root destinations. Named `AppTab` to avoid colliding with SwiftUI's
   /// `Tab`; `Hashable` so it can back the `TabView(selection:)`.
@@ -72,6 +73,7 @@ struct RootView: View {
       }
     }
     .tint(Theme.accent)
+    .environment(\.showsAddToTeam, isSignedIn)
     .onChange(of: selection) { _, _ in Haptics.tap() }
     .task {
       await appState.restoreSession(using: services.auth)
@@ -93,8 +95,11 @@ struct RootView: View {
       switch destination {
       case .teams, .team:
         selection = .teams
-      case .dex:
+      case .dex, .dexHop:
         selection = .dex
+      case let .calculator(scenario):
+        calculatorCover = CalculatorCover(scenario: scenario)
+        appState.pendingDestination = nil
       case .conversation:
         selection = .chat
       case let .share(id):
@@ -129,6 +134,85 @@ struct RootView: View {
         onUpdate: { updateModel.openStore() },
         onNotNow: { updateModel.dismissSoftUpdate() }
       )
+    }
+    .fullScreenCover(item: $calculatorCover) { cover in
+      CalculatorDestinationView(
+        calc: services.calc,
+        format: cover.scenario?.format ?? appState.lastUsedScope ?? .nationalDex,
+        scenario: cover.scenario,
+        onExplain: { prompt in
+          appState.pendingChatSend = prompt
+          calculatorCover = nil
+          selection = .chat
+        },
+        onDismiss: { calculatorCover = nil }
+      )
+    }
+    .sheet(isPresented: addToTeamPresented) {
+      if let incoming = appState.pendingAddToTeam {
+        AddToTeamSheet(
+          model: AddToTeamViewModel(
+            teams: services.teams,
+            isSignedIn: true,
+            conversationFormat: appState.lastUsedScope ?? .nationalDex,
+            incoming: incoming
+          ),
+          onOpened: { id, _ in
+            appState.pendingAddToTeam = nil
+            appState.pendingDestination = .team(id: id)
+          }
+        )
+      }
+    }
+  }
+
+  private var isSignedIn: Bool {
+    if case .signedIn = appState.authState { return true }
+    return false
+  }
+
+  private var addToTeamPresented: Binding<Bool> {
+    Binding(
+      get: { isSignedIn && appState.pendingAddToTeam != nil },
+      set: { if !$0 { appState.pendingAddToTeam = nil } }
+    )
+  }
+}
+
+private struct CalculatorCover: Identifiable {
+  let id = UUID()
+  let scenario: CalcScenario?
+}
+
+/// Full-screen first-class calculator (CALC-AC-1.2). Carries the overlay scenario
+/// on Expand so the form is not reset.
+private struct CalculatorDestinationView: View {
+  let calc: any CalcService
+  let format: Format
+  let scenario: CalcScenario?
+  var onExplain: (String) -> Void
+  var onDismiss: () -> Void
+
+  @State private var model: CalculatorViewModel?
+
+  var body: some View {
+    Group {
+      if let model {
+        CalculatorView(
+          model: model,
+          onExplain: { onExplain($0) },
+          onDismiss: onDismiss
+        )
+      } else {
+        ProgressView()
+      }
+    }
+    .onAppear {
+      let vm = CalculatorViewModel(calc: calc, format: format, presentation: .fullScreen)
+      if let scenario {
+        vm.applyPrefill(scenario)
+      }
+      model = vm
     }
   }
 }

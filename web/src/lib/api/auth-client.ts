@@ -50,6 +50,11 @@ export interface MeResult {
    * history yet (or when the server fail-softed a list fault).
    */
   lastUsedScopes?: string[];
+  /**
+   * Signed-in compact/full preference (COMPACT-US-2 / ADR-9). Absent for
+   * guests and for accounts that have never PATCHed (NULL = full).
+   */
+  answerDensity?: "full" | "compact";
 }
 
 const JSON_HEADERS: Record<string, string> = {
@@ -183,6 +188,9 @@ export async function fetchMe(): Promise<MeResult> {
                 (f): f is string => typeof f === "string" && isFormat(f),
               ),
             }
+          : {}),
+        ...(body.answerDensity === "full" || body.answerDensity === "compact"
+          ? { answerDensity: body.answerDensity }
           : {}),
       };
     }

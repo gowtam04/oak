@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { CandidateTableProps, CandidateRow } from "@/components/types";
 import TypeBadge from "@/components/TypeBadge";
 import SpriteImg from "@/components/SpriteImg";
 import EntityLink from "@/components/artifact/EntityLink";
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 import { oakMediaDexSpriteUrl } from "@/lib/sprites";
+import { candidatesToTsv } from "@/lib/candidates-tsv";
+import AddToTeamPicker from "@/components/teams/AddToTeamPicker";
+import { blankMember } from "@/data/teams/place-on-team";
+import type { Format } from "@/data/formats";
 
 /** Fixed display order for the six base stats (HP, Attack, Defense, SpA, SpD, Speed). */
 const STAT_ORDER = [
@@ -61,32 +65,86 @@ function formatSort(sort: string): { field: string; arrow: string } {
   return { field: label, arrow };
 }
 
+function statValue(row: CandidateRow, key: (typeof STAT_ORDER)[number]): number {
+  if (row.base_stats && typeof row.base_stats[key] === "number") {
+    return row.base_stats[key];
+  }
+  const fallback = row.key_stats?.[key];
+  return typeof fallback === "number" ? fallback : 0;
+}
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/['']/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export type CandidateTableP6Props = CandidateTableProps & {
+  signedIn?: boolean;
+  format?: Format;
+};
+
 /**
  * CandidateTable — renders the `candidates` result set for filter/superlative
- * answers (US-1/2/3).
- *
- * Always shows an honest "N of M" header when `candidates.truncated` is true
- * (the displayed `shown.length` vs. `total_count`).  Every row is clickable and
- * opens that Pokémon's artifact in the viewer (AV-US-1).
- *
- * Visual styling (grid vs table, column widths, hover states) deferred to
- * `frontend-design`.
+ * answers (US-1/2/3), plus local shown-set tools (TBL-US-1–4).
  */
 export default function CandidateTable({
   candidates,
   onShowAll,
   disabled = false,
-}: CandidateTableProps) {
+  signedIn = false,
+  format = "national-dex",
+}: CandidateTableP6Props) {
   const { total_count, truncated, shown, sort, hidden_rows } = candidates;
 
-  // When the server enriched a truncated list with its hidden rows, "Show all"
-  // expands in place (no follow-up chat turn); the follow-up fallback via
-  // onShowAll is kept only for answers WITHOUT hidden_rows (>200-row sets, older
-  // history, non-web clients).
   const canExpandLocally = truncated && (hidden_rows?.length ?? 0) > 0;
   const [expanded, setExpanded] = useState(false);
+  const [sortKey, setSortKey] = useState<(typeof STAT_ORDER)[number] | null>(
+    null,
+  );
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [nameSearch, setNameSearch] = useState("");
+  const [pinned, setPinned] = useState<Set<string>>(new Set());
+  const [copyEmpty, setCopyEmpty] = useState(false);
+  const [addIncoming, setAddIncoming] = useState<string | null>(null);
 
-  const rows = expanded && hidden_rows ? [...shown, ...hidden_rows] : shown;
+  const baseRows = expanded && hidden_rows ? [...shown, ...hidden_rows] : shown;
+
+  const typesInSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const row of baseRows) for (const t of row.types) set.add(t);
+    return [...set].sort();
+  }, [baseRows]);
+
+  const visible = useMemo(() => {
+    const working = [...baseRows];
+    if (sortKey) {
+      working.sort((a, b) => {
+        const delta = statValue(a, sortKey) - statValue(b, sortKey);
+        return sortDir === "asc" ? delta : -delta;
+      });
+    }
+    const nameQ = nameSearch.trim().toLowerCase();
+    const matches = working.filter((row) => {
+      if (typeFilter && !row.types.some((t) => t === typeFilter)) return false;
+      if (nameQ && !row.name.toLowerCase().includes(nameQ)) return false;
+      return true;
+    });
+    const pinnedRows = working.filter((row) => pinned.has(row.name));
+    const rest = matches.filter((row) => !pinned.has(row.name));
+    const seen = new Set<string>();
+    const out: CandidateRow[] = [];
+    for (const row of [...pinnedRows, ...rest]) {
+      if (seen.has(row.name)) continue;
+      seen.add(row.name);
+      out.push(row);
+    }
+    return out;
+  }, [baseRows, sortKey, sortDir, typeFilter, nameSearch, pinned]);
 
   const countLabel =
     truncated && !expanded
@@ -95,18 +153,44 @@ export default function CandidateTable({
 
   const sortDisplay = sort ? formatSort(sort) : null;
 
-  const hasAbilityColumn = rows.some((row) => row.ability != null);
-  const hasStats = rows.some(
+  const hasAbilityColumn = baseRows.some((row) => row.ability != null);
+  const hasStats = baseRows.some(
     (row) =>
       row.base_stats != null ||
       (row.key_stats != null && Object.keys(row.key_stats).length > 0),
   );
 
-  // Show the button while truncated and not yet locally expanded; local
-  // expansion needs no onShowAll handler, the follow-up fallback does.
   const showAllVisible =
     truncated && !expanded && (canExpandLocally || onShowAll != null);
   const handleShowAll = canExpandLocally ? () => setExpanded(true) : onShowAll;
+
+  function toggleSort(key: (typeof STAT_ORDER)[number]) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  function togglePin(name: string) {
+    setPinned((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  function copyTsv() {
+    const tsv = candidatesToTsv(visible);
+    if (!tsv) {
+      setCopyEmpty(true);
+      return;
+    }
+    setCopyEmpty(false);
+    void navigator.clipboard?.writeText(tsv);
+  }
 
   return (
     <div className="candidate-table" data-testid="candidate-table">
@@ -147,6 +231,60 @@ export default function CandidateTable({
         )}
       </div>
 
+      <div className="candidate-table__tools">
+        <div className="candidate-table__sorts">
+          {STAT_ORDER.map((key) => (
+            <button
+              type="button"
+              key={key}
+              className="candidate-table__sort-btn"
+              data-testid={`candidate-sort-${key}`}
+              onClick={() => toggleSort(key)}
+            >
+              {STAT_LABELS[key]}
+            </button>
+          ))}
+        </div>
+        <label className="candidate-table__filter">
+          Type
+          <select
+            data-testid="candidate-table-type-filter"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="">All</option>
+            {typesInSet.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="candidate-table__filter">
+          Name
+          <input
+            type="search"
+            data-testid="candidate-table-name-search"
+            value={nameSearch}
+            onChange={(e) => setNameSearch(e.target.value)}
+            placeholder="Search names"
+          />
+        </label>
+        <button
+          type="button"
+          className="candidate-table__tsv"
+          data-testid="candidate-table-copy-tsv"
+          onClick={copyTsv}
+        >
+          Copy for spreadsheet
+        </button>
+        {copyEmpty && (
+          <span data-testid="candidate-table-copy-empty">
+            No rows to copy.
+          </span>
+        )}
+      </div>
+
       <div className="candidate-table__scroll">
         <table className="candidate-table__table">
           <thead>
@@ -157,48 +295,63 @@ export default function CandidateTable({
               {hasAbilityColumn && (
                 <th className="ilabel" scope="col">Ability</th>
               )}
+              <th className="ilabel" scope="col">
+                Pin
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => (
-              <CandidateRow
+            {visible.map((row, i) => (
+              <CandidateRowView
                 key={`${row.name}-${i}`}
                 row={row}
                 index={i}
                 hasStats={hasStats}
                 hasAbilityColumn={hasAbilityColumn}
+                pinned={pinned.has(row.name)}
+                onTogglePin={() => togglePin(row.name)}
+                signedIn={signedIn}
+                onAdd={() => setAddIncoming(row.name)}
               />
             ))}
           </tbody>
         </table>
       </div>
+
+      {signedIn && addIncoming && (
+        <AddToTeamPicker
+          incoming={{ ...blankMember(), species: slugify(addIncoming) }}
+          format={format}
+          onClose={() => setAddIncoming(null)}
+        />
+      )}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Internal row component
-// ---------------------------------------------------------------------------
-
-interface CandidateRowProps {
+interface CandidateRowViewProps {
   row: CandidateRow;
   index: number;
   hasStats: boolean;
   hasAbilityColumn: boolean;
+  pinned: boolean;
+  onTogglePin: () => void;
+  signedIn: boolean;
+  onAdd: () => void;
 }
 
-function CandidateRow({
+function CandidateRowView({
   row,
   index,
   hasStats,
   hasAbilityColumn,
-}: CandidateRowProps) {
+  pinned,
+  onTogglePin,
+  signedIn,
+  onAdd,
+}: CandidateRowViewProps) {
   const { openEntity } = useArtifactViewer();
 
-  // The whole row opens that Pokémon's artifact (AV-US-1). The name/type
-  // EntityLinks below are still real <button>s — they preserve keyboard access
-  // and (via their own stopPropagation) keep a type-chip click scoped to the
-  // type artifact rather than re-opening the row's Pokémon.
   return (
     <tr
       className="candidate-table__row candidate-table__row--clickable"
@@ -252,14 +405,12 @@ function CandidateRow({
         <td className="candidate-table__stats-cell">
           <div className="candidate-table__stats-grid">
             {row.base_stats != null
-              ? // Full six stats, always in the fixed competitive order.
-                STAT_ORDER.map((k) => (
+              ? STAT_ORDER.map((k) => (
                   <span key={k} className="candidate-table__stat-item mono-num">
                     {STAT_LABELS[k]}: {row.base_stats![k]}
                   </span>
                 ))
-              : // Fallback for older/edge answers that only carry key_stats.
-                row.key_stats != null &&
+              : row.key_stats != null &&
                 Object.entries(row.key_stats).map(([k, v]) => (
                   <span key={k} className="candidate-table__stat-item mono-num">
                     {k}: {String(v)}
@@ -271,6 +422,32 @@ function CandidateRow({
       {hasAbilityColumn && (
         <td className="candidate-table__ability-cell">{row.ability ?? "—"}</td>
       )}
+      <td className="candidate-table__pin-cell">
+        <button
+          type="button"
+          className="candidate-table__row-pin"
+          data-testid={`candidate-row-pin-${index}`}
+          aria-pressed={pinned}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTogglePin();
+          }}
+        >
+          {pinned ? "Unpin" : "Pin"}
+        </button>
+        {signedIn && (
+          <button
+            type="button"
+            className="candidate-table__add"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdd();
+            }}
+          >
+            Add to team
+          </button>
+        )}
+      </td>
     </tr>
   );
 }

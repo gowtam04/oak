@@ -43,6 +43,10 @@ protocol AuthService: Sendable {
   /// than an already-orphaned token) propagates so the UI does not falsely claim
   /// deletion.
   func deleteAccount() async throws
+
+  /// `PATCH /api/account/preferences` — persist compact/full (COMPACT-US-2).
+  /// Guests have no server row (COMPACT-BR-4); callers skip this.
+  func setAnswerDensity(_ density: AnswerDensity) async throws -> AnswerDensity
 }
 
 /// The result of a successful ``AuthService/verify(email:code:)``.
@@ -165,6 +169,29 @@ struct LiveAuthService: AuthService {
     // token intact, so the account is genuinely gone before we clear it.
     await tokenStore.clear()
   }
+
+  func setAnswerDensity(_ density: AnswerDensity) async throws -> AnswerDensity {
+    let endpoint = Endpoint(
+      method: .patch,
+      path: "/api/account/preferences",
+      body: PreferencesBody(answerDensity: density),
+      requiresAuth: true
+    )
+    let response = try await apiClient.send(endpoint, as: PreferencesResponse.self)
+    return response.answerDensity
+  }
+}
+
+private struct PreferencesBody: Encodable, Sendable {
+  let answerDensity: AnswerDensity
+
+  enum CodingKeys: String, CodingKey {
+    case answerDensity = "answer_density"
+  }
+}
+
+private struct PreferencesResponse: Decodable, Sendable {
+  let answerDensity: AnswerDensity
 }
 
 /// `POST /api/auth/request-code` body. `email` is identical on the wire, so no

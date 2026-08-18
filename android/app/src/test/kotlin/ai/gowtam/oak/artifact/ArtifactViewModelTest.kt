@@ -1,13 +1,17 @@
 package ai.gowtam.oak.artifact
 
 import ai.gowtam.oak.features.artifact.ArtifactContent
+import ai.gowtam.oak.features.artifact.ArtifactPinKind
 import ai.gowtam.oak.features.artifact.ArtifactViewModel
+import ai.gowtam.oak.features.artifact.DexHop
+import ai.gowtam.oak.support.FakeArtifactPinService
 import ai.gowtam.oak.support.FakeArtifactService
 import ai.gowtam.oak.support.MainDispatcherRule
 import ai.gowtam.oak.support.fakeTeam
 import ai.gowtam.oak.wire.Abilities
 import ai.gowtam.oak.wire.BaseStats
 import ai.gowtam.oak.wire.DamageCalc
+import ai.gowtam.oak.wire.DamageClass
 import ai.gowtam.oak.wire.DefensiveProfile
 import ai.gowtam.oak.wire.EntityArtifact
 import ai.gowtam.oak.wire.EntityArtifactNotFound
@@ -17,6 +21,8 @@ import ai.gowtam.oak.wire.EntityData
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.JsonScalar
+import ai.gowtam.oak.wire.MoveArtifactData
+import ai.gowtam.oak.wire.OffensiveProfile
 import ai.gowtam.oak.wire.PokemonArtifactData
 import ai.gowtam.oak.wire.ProposedTeam
 import ai.gowtam.oak.wire.ResolvedEntity
@@ -25,6 +31,7 @@ import ai.gowtam.oak.wire.StatSpread
 import ai.gowtam.oak.wire.Subject
 import ai.gowtam.oak.wire.TeamMember
 import ai.gowtam.oak.wire.TeamWarning
+import ai.gowtam.oak.wire.TypeArtifactData
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -53,8 +60,19 @@ class ArtifactViewModelTest {
 
     private fun advanceUntilIdle() = mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
 
-    private fun newModel(service: FakeArtifactService = FakeArtifactService(), format: Format = Format.Champions) =
-        ArtifactViewModel(service, format)
+    private fun newModel(
+        service: FakeArtifactService = FakeArtifactService(),
+        format: Format = Format.Champions,
+        signedIn: Boolean = false,
+        pins: FakeArtifactPinService? = null,
+        conversationId: String? = null,
+    ) = ArtifactViewModel(
+        service,
+        format,
+        signedIn = signedIn,
+        pins = pins,
+        conversationId = conversationId,
+    )
 
     private fun pokemonOk(name: String = "Garchomp", slug: String = "garchomp") = EntityArtifactOk(
         kind = EntityKind.POKEMON,
@@ -307,5 +325,240 @@ class ArtifactViewModelTest {
 
         assertTrue(vm.isPresented)
         assertEquals(1, vm.stack.value.size)
+    }
+
+    // -------------------------------------------------------------------
+    // P8 — Dex hop / Compare with… / Pin (DEX-US-1, CMP-US-1, PIN-US-1)
+    //
+    // New constructor extras are optional with defaults so existing tests keep
+    // compiling once they land:
+    //   signedIn: Boolean = false
+    //   pins: ArtifactPinService? = null
+    //   conversationId: String? = null
+    //   canOpenInDex / dexHop(): DexHop(kind, query, format)
+    //   canCompare / compareWith(query, format)
+    //   canPin / pin() / unpin()
+    //   pinError: StateFlow<String?>
+    //   pinnedArtifacts: StateFlow<List<PinnedArtifactSummary>>
+    //   ArtifactPinKind { TeamSheet("team_sheet"), Comparison("comparison"), Calc("calc") }
+    // -------------------------------------------------------------------
+
+    // -------------------------------------------------------------------
+    // DEX-US-1 / DEX-US-2 / DEX-BR-2 / DEX-BR-3 — Open in Dex
+    // -------------------------------------------------------------------
+
+    private fun moveOk() = EntityArtifactOk(
+        kind = EntityKind.MOVE,
+        format = Format.Gen5,
+        resolved = ResolvedEntity(slug = "earthquake", displayName = "Earthquake"),
+        generation = "Gen 5",
+        isFallback = false,
+        fallbackNote = null,
+        citations = emptyList(),
+        data = EntityData.Move(
+            MoveArtifactData(
+                displayName = "Earthquake",
+                type = "ground",
+                damageClass = DamageClass.PHYSICAL,
+                power = 100,
+                accuracy = 100,
+                pp = 10,
+                priority = 0,
+                target = "all-opponents",
+                effectShort = "Hits all adjacent foes.",
+                effectFull = "Hits all adjacent foes.",
+            ),
+        ),
+    )
+
+    private fun typeOk() = EntityArtifactOk(
+        kind = EntityKind.TYPE,
+        format = Format.Champions,
+        resolved = ResolvedEntity(slug = "dragon", displayName = "Dragon"),
+        generation = "Gen 9 (champions)",
+        isFallback = false,
+        fallbackNote = null,
+        citations = emptyList(),
+        data = EntityData.Type(
+            TypeArtifactData(
+                types = listOf("dragon"),
+                offensive = OffensiveProfile(
+                    superEffectiveAgainst = listOf("dragon"),
+                    notVeryEffectiveAgainst = listOf("steel"),
+                    noEffectAgainst = listOf("fairy"),
+                ),
+                defensive = DefensiveProfile(weakTo = listOf("ice"), resists = listOf("fire"), immuneTo = emptyList()),
+            ),
+        ),
+    )
+
+    @Test
+    fun openInDexOnAPokemonUsesTheArtifactFormatNotTheBrowseScope() = runTest(mainDispatcherRule.dispatcher) {
+        val tagged = pokemonOk().copy(format = Format.Gen5, generation = "Gen 5")
+        val service = FakeArtifactService(entityResult = EntityArtifact.Ok(tagged))
+        val vm = newModel(service, format = Format.Gen5)
+        vm.openEntity(EntityKind.POKEMON, "Garchomp")
+        advanceUntilIdle()
+
+        assertTrue(vm.canOpenInDex)
+        val hop = vm.dexHop()
+        assertEquals(DexHop(kind = EntityKind.POKEMON, query = "garchomp", format = Format.Gen5), hop)
+    }
+
+    @Test
+    fun openInDexIsOfferedOnMoveAbilityAndItem() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeArtifactService(entityResult = EntityArtifact.Ok(moveOk()))
+        val vm = newModel(service, format = Format.Gen5)
+        vm.openEntity(EntityKind.MOVE, "earthquake")
+        advanceUntilIdle()
+
+        assertTrue(vm.canOpenInDex)
+        assertEquals(EntityKind.MOVE, vm.dexHop()!!.kind)
+        assertEquals(Format.Gen5, vm.dexHop()!!.format)
+    }
+
+    @Test
+    fun aTypeArtifactHasNoOpenInDex() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeArtifactService(entityResult = EntityArtifact.Ok(typeOk()))
+        val vm = newModel(service)
+        vm.openEntity(EntityKind.TYPE, "dragon")
+        advanceUntilIdle()
+
+        assertFalse(vm.canOpenInDex)
+        assertNull(vm.dexHop())
+    }
+
+    @Test
+    fun anUnavailableArtifactHasNoDexHop() = runTest(mainDispatcherRule.dispatcher) {
+        val vm = newModel(FakeArtifactService(entityResult = null))
+        vm.openEntity(EntityKind.POKEMON, "missingno")
+        advanceUntilIdle()
+
+        assertFalse(vm.canOpenInDex)
+        assertNull(vm.dexHop())
+    }
+
+    // -------------------------------------------------------------------
+    // CMP-US-1 / CMP-BR-4 — Compare with… is not a chat turn
+    // -------------------------------------------------------------------
+
+    @Test
+    fun compareWithFetchesTheSecondSubjectAndOpensAComparison() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeArtifactService(entityResult = EntityArtifact.Ok(pokemonOk()))
+        val vm = newModel(service)
+        vm.openEntity(EntityKind.POKEMON, "Garchomp")
+        advanceUntilIdle()
+        val before = vm.current
+        service.entityCalls.clear()
+
+        vm.compareWith(query = "dragapult", format = Format.ScarletViolet)
+        advanceUntilIdle()
+
+        assertTrue(vm.current!!.content is ArtifactContent.Comparison)
+        assertEquals(listOf(Triple(EntityKind.POKEMON, "dragapult", Format.ScarletViolet)), service.entityCalls)
+        assertTrue(vm.canGoBack)
+        assertEquals(before!!.id, vm.stack.value.first().id)
+    }
+
+    @Test
+    fun compareWithIsOnlyOnAPokemonArtifact() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeArtifactService(entityResult = EntityArtifact.Ok(moveOk()))
+        val vm = newModel(service, format = Format.Gen5)
+        vm.openEntity(EntityKind.MOVE, "earthquake")
+        advanceUntilIdle()
+        assertFalse(vm.canCompare)
+
+        val typeService = FakeArtifactService(entityResult = EntityArtifact.Ok(typeOk()))
+        val typeVm = newModel(typeService)
+        typeVm.openEntity(EntityKind.TYPE, "dragon")
+        advanceUntilIdle()
+        assertFalse(typeVm.canCompare)
+    }
+
+    @Test
+    fun anUnresolvedCompareSubjectLeavesTheCurrentArtifact() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeArtifactService(entityResult = EntityArtifact.Ok(pokemonOk()))
+        val vm = newModel(service)
+        vm.openEntity(EntityKind.POKEMON, "Garchomp")
+        advanceUntilIdle()
+        val openId = vm.current!!.id
+        service.entityResult = null
+
+        vm.compareWith(query = "zzzzz", format = Format.Champions)
+        advanceUntilIdle()
+
+        assertEquals(openId, vm.current!!.id)
+        assertTrue(vm.current!!.content is ArtifactContent.Entity)
+    }
+
+    // -------------------------------------------------------------------
+    // PIN-US-1 / PIN-BR-2 / AUTH-BR-1 — Pin on rich kinds only
+    // -------------------------------------------------------------------
+
+    @Test
+    fun aGuestNeverSeesPinEvenOnARichArtifact() {
+        val vm = newModel(signedIn = false)
+        vm.openProposedTeam(
+            ProposedTeam(name = "Sun", format = Format.Champions, members = emptyList()),
+            warnings = emptyList(),
+        )
+        assertFalse(vm.canPin)
+        vm.openComparison(listOf(Subject(name = "Garchomp", spriteUrl = "", types = listOf("dragon"), isFallback = false)))
+        assertFalse(vm.canPin)
+        vm.openDamageCalc(DamageCalc(assumptions = emptyMap(), result = emptyMap(), isEstimate = true))
+        assertFalse(vm.canPin)
+    }
+
+    @Test
+    fun aSignedInUserCanPinTeamComparisonAndCalcButNotEntities() = runTest(mainDispatcherRule.dispatcher) {
+        val service = FakeArtifactService(entityResult = EntityArtifact.Ok(pokemonOk()))
+        val vm = newModel(service, signedIn = true, conversationId = "conv-1", pins = FakeArtifactPinService())
+        vm.openEntity(EntityKind.POKEMON, "Garchomp")
+        advanceUntilIdle()
+        assertFalse(vm.canPin)
+
+        vm.openProposedTeam(
+            ProposedTeam(name = "Sun", format = Format.Champions, members = emptyList()),
+            warnings = emptyList(),
+        )
+        assertTrue(vm.canPin)
+
+        vm.openComparison(listOf(Subject(name = "Garchomp", spriteUrl = "", types = listOf("dragon"), isFallback = false)))
+        assertTrue(vm.canPin)
+
+        vm.openDamageCalc(DamageCalc(assumptions = emptyMap(), result = emptyMap(), isEstimate = true))
+        assertTrue(vm.canPin)
+    }
+
+    @Test
+    fun pinPostsASnapshotAndUnpinRemovesIt() = runTest(mainDispatcherRule.dispatcher) {
+        val pins = FakeArtifactPinService()
+        val vm = newModel(signedIn = true, conversationId = "conv-1", pins = pins)
+        vm.openDamageCalc(DamageCalc(assumptions = emptyMap(), result = emptyMap(), isEstimate = true))
+
+        vm.pin()
+        advanceUntilIdle()
+
+        assertEquals(1, pins.createCalls.size)
+        assertEquals("conv-1", pins.createCalls.single().conversationId)
+        assertEquals(ArtifactPinKind.Calc, pins.createCalls.single().kind)
+
+        vm.unpin()
+        advanceUntilIdle()
+        assertEquals(1, pins.deleteCalls.size)
+    }
+
+    @Test
+    fun aSixthPinIsRefusedAndTheStripIsUnchanged() = runTest(mainDispatcherRule.dispatcher) {
+        val pins = FakeArtifactPinService(createResult = FakeArtifactPinService.CreateResult.Cap)
+        val vm = newModel(signedIn = true, conversationId = "conv-1", pins = pins)
+        vm.openDamageCalc(DamageCalc(assumptions = emptyMap(), result = emptyMap(), isEstimate = true))
+
+        vm.pin()
+        advanceUntilIdle()
+
+        assertEquals(1, pins.createCalls.size)
+        assertTrue(vm.pinError.value?.contains("5") == true || vm.pinError.value?.contains("cap") == true)
+        assertTrue(vm.pinnedArtifacts.value.isEmpty())
     }
 }

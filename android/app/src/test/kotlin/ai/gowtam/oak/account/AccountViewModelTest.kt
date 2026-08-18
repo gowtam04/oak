@@ -6,6 +6,8 @@ import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.services.Account
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.support.FakeAuthService
+import ai.gowtam.oak.support.FakePreferencesService
+import ai.gowtam.oak.wire.AnswerDensity
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -199,5 +201,59 @@ class AccountViewModelTest {
 
         assertTrue(model.isSignedIn)
         assertEquals("ash@pallet.town", model.email)
+    }
+
+    // -------------------------------------------------------------------
+    // COMPACT-US-1 / COMPACT-US-2 — compact / full default
+    //
+    // Fails to compile until P8 adds:
+    //   wire.AnswerDensity { Full, Compact }
+    //   AccountViewModel(auth, appState, preferences: PreferencesService? = null)
+    //   answerDensity: StateFlow<AnswerDensity>   — factory default Full
+    //   setAnswerDensity(density)                 — guest local; signed-in PATCH
+    // -------------------------------------------------------------------
+
+    @Test
+    fun aNeverSetPreferenceDefaultsToFull() {
+        val model = AccountViewModel(FakeAuthService(), AppState())
+        assertEquals(AnswerDensity.Full, model.answerDensity.value)
+    }
+
+    @Test
+    fun settingCompactUpdatesAlreadyRenderedCardsOnThisClient() = runTest {
+        val model = AccountViewModel(FakeAuthService(), AppState())
+
+        model.setAnswerDensity(AnswerDensity.Compact)
+
+        assertEquals(AnswerDensity.Compact, model.answerDensity.value)
+    }
+
+    @Test
+    fun aGuestWriteStaysDeviceOnlyAndDoesNotPatchTheServer() = runTest {
+        val prefs = FakePreferencesService()
+        val model = AccountViewModel(FakeAuthService(), AppState(), preferences = prefs)
+        assertFalse(model.isSignedIn)
+
+        model.setAnswerDensity(AnswerDensity.Compact)
+
+        assertEquals(AnswerDensity.Compact, model.answerDensity.value)
+        assertTrue(prefs.patchCalls.isEmpty())
+    }
+
+    @Test
+    fun aSignedInWritePatchesAccountPreferences() = runTest {
+        val appState = AppState()
+        appState.completeSignIn("ash@pallet.town")
+        val prefs = FakePreferencesService()
+        val model = AccountViewModel(FakeAuthService(), appState, preferences = prefs)
+
+        model.setAnswerDensity(AnswerDensity.Compact)
+
+        assertEquals(listOf(AnswerDensity.Compact), prefs.patchCalls)
+        assertEquals(AnswerDensity.Compact, model.answerDensity.value)
+
+        model.setAnswerDensity(AnswerDensity.Full)
+        assertEquals(listOf(AnswerDensity.Compact, AnswerDensity.Full), prefs.patchCalls)
+        assertEquals(AnswerDensity.Full, model.answerDensity.value)
     }
 }

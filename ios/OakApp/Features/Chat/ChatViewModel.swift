@@ -117,11 +117,21 @@ final class ChatViewModel {
 
   // MARK: Dependencies + identity
 
+  /// Overlay hop from `/calc` or a damage-block Open (CALC-US-3).
+  private(set) var calculatorHop: CalculatorHop?
+  var isCalculatorPresented: Bool { calculatorHop != nil }
+
+  var showsAddToTeam: Bool { isSignedIn }
+  var showsPinArtifact: Bool { isSignedIn }
+
+  private var voiceHydrateByMessageId: [String: VoiceHydrateStatus] = [:]
+
   private let chat: any ChatService
   private let appState: AppState
   private let history: (any HistoryService)?
   private let teams: (any TeamService)?
   private let shares: (any ShareService)?
+  private let voice: (any VoiceService)?
 
   /// The client thread id sent as `session_id` (equals the conversation id on
   /// resume). Rotated by ``startNewConversation()`` so a new thread has no prior
@@ -202,6 +212,7 @@ final class ChatViewModel {
     history: (any HistoryService)? = nil,
     teams: (any TeamService)? = nil,
     shares: (any ShareService)? = nil,
+    voice: (any VoiceService)? = nil,
     usesBackgroundGrace: Bool = true
   ) {
     self.chat = chat
@@ -209,6 +220,7 @@ final class ChatViewModel {
     self.history = history
     self.teams = teams
     self.shares = shares
+    self.voice = voice
     self.usesBackgroundGrace = usesBackgroundGrace
     self.sessionId = appState.activeConversationId ?? UUID().uuidString
   }
@@ -288,6 +300,10 @@ final class ChatViewModel {
       switch SlashCommands.parse(text, hasUsagePage: false) {
       case .navigate(let target):
         handleSlash(target, argument: SlashCommands.argument(text))
+        composerText = ""
+        return
+      case .calc(let rest):
+        openCalculator(rest: rest)
         composerText = ""
         return
       case .message:
@@ -1136,6 +1152,71 @@ final class ChatViewModel {
        appState.guestThread[last].role == .assistant
     {
       appState.guestThread[last] = GuestTurn(content: .assistant(answer: answer))
+    }
+  }
+
+  func openCalculator(
+    rest: String,
+    scenario: CalcScenario? = nil,
+    kind: CalculatorHop.Kind = .overlay
+  ) {
+    calculatorHop = CalculatorHop(
+      kind: kind,
+      rest: rest,
+      format: scenario?.format ?? displayFormat,
+      scenario: scenario
+    )
+  }
+
+  func dismissCalculator() {
+    calculatorHop = nil
+  }
+
+  func explainCalculator() {
+    guard calculatorHop != nil else { return }
+    let scenario = parseCalcSlashRest(calculatorHop?.rest ?? "", format: calculatorHop?.format ?? displayFormat)
+      ?? CalcScenario(
+        format: calculatorHop?.format ?? displayFormat,
+        attacker: CalcSide(),
+        defender: CalcSide(),
+        move: CalcMove()
+      )
+    composerText = explainCalcPrompt(
+      scenario: scenario,
+      result: .failure(CalcFailure(error: .incomplete))
+    )
+    send()
+  }
+
+  func retryVoiceHydrate(assistantMessageId: String) async {
+    guard let voice else { return }
+    do {
+      let response = try await voice.hydrate(
+        conversationId: sessionId,
+        assistantMessageId: assistantMessageId
+      )
+      applyVoiceHydrate(assistantMessageId: assistantMessageId, status: response.status)
+    } catch {
+      applyVoiceHydrate(assistantMessageId: assistantMessageId, status: .failed)
+    }
+  }
+
+  func applyVoiceHydrate(assistantMessageId: String, status: VoiceHydrateStatus) {
+    voiceHydrateByMessageId[assistantMessageId] = status
+  }
+
+  func showsVoiceMic(for answer: OakAnswer) -> Bool {
+    answer.origin == .voice
+  }
+
+  func voiceHydrateBanner(for item: ChatTurnItem) -> VoiceHydrateBanner? {
+    guard let id = item.serverMessageId, let status = voiceHydrateByMessageId[id] else {
+      return nil
+    }
+    switch status {
+    case .running: return .finishing
+    case .failed: return .retry
+    case .succeeded: return nil
     }
   }
 

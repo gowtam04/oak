@@ -61,6 +61,44 @@ struct DexViewModelTests {
 
     #expect(fake.searchCalls.last?.format == .gen7)
   }
+
+  // MARK: Artifact hop — format write before push (DEX-US-2 / DEX-BR-3)
+
+  @Test
+  func applyArtifactHopWritesFormatBeforeQueuingTheEntityRoute() async {
+    let fake = FakeDexLookupService()
+    fake.searchResults["move:"] = [
+      SearchMatch(slug: "earthquake", displayName: "Earthquake", kind: .move),
+    ]
+    let model = DexViewModel(dexLookup: fake, format: .nationalDex)
+    model.start()
+    await waitUntil { !model.isLoading }
+
+    model.applyArtifactHop(
+      DexArtifactHop(kind: .move, query: "earthquake", format: .gen5)
+    )
+    await waitUntil { model.format == .gen5 && !model.isLoading }
+
+    #expect(model.format == .gen5)
+    #expect(model.section == .move)
+    #expect(model.pendingRoute == DexEntityRoute(kind: .move, query: "earthquake"))
+    #expect(fake.searchCalls.last?.format == .gen5)
+    #expect(fake.searchCalls.last?.kind == .move)
+  }
+
+  @Test
+  func applyArtifactHopDoesNotSilentlyFallBackToNationalDex() async {
+    let fake = FakeDexLookupService()
+    let model = DexViewModel(dexLookup: fake, format: .nationalDex)
+
+    model.applyArtifactHop(
+      DexArtifactHop(kind: .pokemon, query: "Garchomp", format: .gen5)
+    )
+
+    #expect(model.format == .gen5)
+    #expect(model.pendingRoute?.kind == .pokemon)
+    #expect(model.pendingRoute?.query == "Garchomp")
+  }
 }
 
 /// Poll until `predicate` is true or a short timeout elapses (view-model Tasks

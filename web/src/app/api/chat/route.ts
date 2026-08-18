@@ -632,6 +632,10 @@ export async function POST(req: Request): Promise<Response> {
   //      - global in-process safety cap → 503 `server_busy`.
   //    The owner key is the SAME identity the rate limiter uses (`acct:<id>` /
   //    `ip:<clientIp>`), so the two spend controls stay aligned.
+  //    Voice hydrate is NOT a turn-store lock (VOICE-BR-5): abort it first so
+  //    a real send never 409s from an in-flight compile.
+  const { abortVoiceCompile } = await import("@/server/voice/hydrate-store");
+  abortVoiceCompile(session_id);
   const started = startTurn({
     sessionId: session_id,
     accountId: account?.id ?? null,

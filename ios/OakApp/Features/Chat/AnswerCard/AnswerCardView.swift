@@ -38,8 +38,12 @@ import UIKit
 /// renders exactly `sections`, and the tests assert presence/absence/order over it.
 struct AnswerCardView: View {
   let answer: OakAnswer
+  var density: AnswerDensity = .full
+  var receiptsExpanded: Bool = false
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var localReceiptsExpanded = false
+  @State private var highlighted: CitationHighlightTarget?
 
   /// Flips once, on this view instance's first appearance, to drive the one-shot
   /// entrance cascade below — never reset, so re-layout/scroll never re-plays it.
@@ -103,12 +107,14 @@ struct AnswerCardView: View {
       .padding(Theme.Spacing.lg)
       .frame(maxWidth: .infinity, alignment: .leading)
 
-      // Full-width Why / Sources footer — only when reasoning/citations present.
-      if hasReceipts {
+      // Full-width Why / Sources footer — only when reasoning/citations present
+      // and compact mode hasn't collapsed them (COMPACT-BR-1).
+      if showsReceipts {
         ReceiptsFooterView(
           reasoningMarkdown: answer.reasoningMarkdown,
           citations: answer.citations,
           onOpenEntity: onOpenEntity,
+          onActivateCitation: activateCitation,
           onCopyForAgents: copyForAgents
         )
         .opacity(hasAppeared ? 1 : 0)
@@ -116,6 +122,27 @@ struct AnswerCardView: View {
           reduceMotion ? nil : Theme.Motion.staggered(bodySections.count),
           value: hasAppeared
         )
+      } else if hasReceipts && density == .compact {
+        Button {
+          localReceiptsExpanded = true
+        } label: {
+          HStack {
+            Text("Show Why / Sources")
+              .font(Theme.body(.caption, weight: .medium))
+              .foregroundStyle(Theme.textSecondary)
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+              .font(.system(size: 11, weight: .semibold))
+              .foregroundStyle(Theme.textMuted)
+          }
+          .padding(.horizontal, Theme.Spacing.lg)
+          .padding(.vertical, Theme.Spacing.md)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(Theme.surfaceSunken.opacity(0.65))
+        .accessibilityLabel("Show Why / Sources")
+        .accessibilityHint("Expands reasoning and sources on this card only")
       } else {
         // No receipts: still expose machine export on the plate foot strip.
         copyForAgentsStrip
@@ -244,7 +271,7 @@ struct AnswerCardView: View {
     if hasSubjects { out.append(.subjects) }
     if hasSuggestions { out.append(.suggestions) }
     if hasCaveat { out.append(.caveat) }
-    if hasReceipts { out.append(.receipts) }
+    if showsReceipts { out.append(.receipts) }
     return out
   }
 
@@ -271,14 +298,17 @@ struct AnswerCardView: View {
       VStack(alignment: .leading, spacing: 10) {
         let subjects = answer.subjects ?? []
         ForEach(Array(subjects.enumerated()), id: \.offset) { _, subject in
-          Button {
-            onOpenEntity(.pokemon, subject.name)
-          } label: {
-            SubjectsView(subjects: [subject])
-              .contentShape(Rectangle())
+          VStack(alignment: .leading, spacing: 6) {
+            Button {
+              onOpenEntity(.pokemon, subject.name)
+            } label: {
+              SubjectsView(subjects: [subject])
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(OakPressableButtonStyle())
+            .accessibilityHint("Opens \(subject.name)'s full profile")
+            AddToTeamButton(incoming: incomingTeamMember(species: subject.name), compact: true)
           }
-          .buttonStyle(OakPressableButtonStyle())
-          .accessibilityHint("Opens \(subject.name)'s full profile")
         }
         // A side-by-side comparison is offered once there are ≥2 subjects (mirrors
         // web's "Compare in viewer"); it opens a structured artifact from THIS
@@ -303,6 +333,10 @@ struct AnswerCardView: View {
         // opens that type — both pushed onto the viewer's back stack via the host.
         CandidatesTableView(
           candidates: candidates,
+          highlightedRow: {
+            if case .factRow(let id) = highlighted { return id }
+            return nil
+          }(),
           onOpenPokemon: { onOpenEntity(.pokemon, $0) },
           onOpenType: { onOpenEntity(.type, $0) },
           // Truncated sets offer a "Show all N" follow-up, sending the exact
@@ -323,11 +357,11 @@ struct AnswerCardView: View {
           Button {
             onOpenDamageCalc(damageCalc)
           } label: {
-            Label("Open in viewer", systemImage: "rectangle.portrait.and.arrow.right")
+            Label("Open in calculator", systemImage: "function")
               .font(Theme.display(.footnote))
           }
           .buttonStyle(.oakSecondary)
-          .accessibilityHint("Opens the damage calculation as a full artifact")
+          .accessibilityHint("Opens this matchup in the calculator")
         }
       }
     case .teams:
@@ -350,6 +384,17 @@ struct AnswerCardView: View {
           }
           .buttonStyle(.oakSecondary)
           .accessibilityHint("Opens the proposed team as a full artifact")
+          if Self.showsShowdownCopy(for: answer) {
+            Button {
+              UIPasteboard.general.string = proposedTeamToShowdownPaste(proposed)
+              Haptics.tap()
+            } label: {
+              Label("Copy Showdown paste", systemImage: "square.on.square")
+                .font(Theme.display(.footnote))
+            }
+            .buttonStyle(.oakSecondary)
+            .accessibilityHint("Copies the proposed team as Showdown text")
+          }
         }
       }
     case .suggestions:
@@ -376,7 +421,7 @@ struct AnswerCardView: View {
   /// upgraded (design §4.04 "first paragraph lead" judgment call).
   @ViewBuilder
   private var answerContent: some View {
-    let blocks = MarkdownBlocks.parse(answer.answerMarkdown)
+    let blocks = MarkdownBlocks.parse(highlightedAnswerMarkdown)
     if case let .paragraph(leadText) = blocks.first {
       // Lead paragraph → answerLead; remainder (if any) falls back to body.
       VStack(alignment: .leading, spacing: 8) {
@@ -395,7 +440,7 @@ struct AnswerCardView: View {
       }
     } else {
       // First block is not a plain paragraph — render everything at body size.
-      MarkdownBlockView(answer.answerMarkdown)
+      MarkdownBlockView(highlightedAnswerMarkdown)
         .font(Theme.body(.body))
         .foregroundStyle(Theme.textPrimary)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -516,6 +561,38 @@ struct AnswerCardView: View {
     !Self.trimmed(answer.reasoningMarkdown).isEmpty || !answer.citations.isEmpty
   }
 
+  /// Compact hides reasoning/sources unless this card is expanded (COMPACT-BR-1).
+  private var showsReceipts: Bool {
+    hasReceipts && (density == .full || receiptsExpanded || localReceiptsExpanded)
+  }
+
+  private func activateCitation(_ citation: Citation) {
+    highlighted = citationHighlightTarget(citation: citation, answer: answer)
+    if let parsed = parseCitationSource(citation.source) {
+      onOpenEntity(parsed.kind, parsed.query)
+    }
+  }
+
+  static func showsShowdownCopy(for answer: OakAnswer) -> Bool {
+    answer.proposedTeam != nil
+  }
+
+  /// Wraps a linked `<!-- span:id -->` in a visible highlight mark (CIT-US-1).
+  private var highlightedAnswerMarkdown: String {
+    guard case .answerSpan(let id) = highlighted else { return answer.answerMarkdown }
+    let open = "<!-- span:\(id) -->"
+    let close = "<!-- /span:\(id) -->"
+    guard let openRange = answer.answerMarkdown.range(of: open),
+          let closeRange = answer.answerMarkdown.range(of: close),
+          openRange.upperBound <= closeRange.lowerBound
+    else { return answer.answerMarkdown }
+    let inner = answer.answerMarkdown[openRange.upperBound..<closeRange.lowerBound]
+    return answer.answerMarkdown.replacingCharacters(
+      in: openRange.lowerBound..<closeRange.upperBound,
+      with: "**\(inner)**"
+    )
+  }
+
   private var hasInferences: Bool { !answer.inferences.isEmpty }
 
   /// Type chips render when any subject carries a type slug.
@@ -543,6 +620,30 @@ struct AnswerCardView: View {
   }
 }
 
+enum CitationHighlightTarget: Equatable, Sendable {
+  case answerSpan(id: String)
+  case factRow(id: String)
+}
+
+/// Highlight only when the citation carries an anchor AND the matching span/row
+/// is present (CIT-BR-1 / CIT-BR-2).
+func citationHighlightTarget(citation: Citation, answer: OakAnswer) -> CitationHighlightTarget? {
+  guard let anchor = citation.anchor else { return nil }
+  switch anchor.target {
+  case .answerSpan:
+    let open = "<!-- span:\(anchor.id) -->"
+    let close = "<!-- /span:\(anchor.id) -->"
+    guard answer.answerMarkdown.contains(open), answer.answerMarkdown.contains(close) else {
+      return nil
+    }
+    return .answerSpan(id: anchor.id)
+  case .factRow:
+    let names = answer.candidates?.shown.map(\.name) ?? []
+    guard names.contains(anchor.id) else { return nil }
+    return .factRow(id: anchor.id)
+  }
+}
+
 // MARK: - Why / Sources footer
 
 /// Full-width plate-foot tab: `Why` and/or `Sources`. Expands inline to
@@ -558,6 +659,7 @@ private struct ReceiptsFooterView: View {
   /// Opens a citation's source entity (e.g. `move/outrage`) in the artifact
   /// viewer. Defaults to a no-op so the footer renders in isolation.
   var onOpenEntity: (EntityKind, String) -> Void = { _, _ in }
+  var onActivateCitation: (Citation) -> Void = { _ in }
 
   /// Copies distilled agent markdown to the pasteboard (soul.md Phase 3.2).
   var onCopyForAgents: () -> Void = {}
@@ -700,7 +802,7 @@ private struct ReceiptsFooterView: View {
       VStack(alignment: .leading, spacing: 2) {
         if let parsed = parseCitationSource(citation.source) {
           Button {
-            onOpenEntity(parsed.kind, parsed.query)
+            onActivateCitation(citation)
           } label: {
             Text(displayCitationSource(citation.source))
               .font(Theme.body(.footnote, weight: .semibold))
@@ -723,6 +825,8 @@ private struct ReceiptsFooterView: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    .contentShape(Rectangle())
+    .onTapGesture { onActivateCitation(citation) }
   }
 
   @ViewBuilder

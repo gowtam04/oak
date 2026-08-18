@@ -17,6 +17,10 @@ struct ArtifactSheetView: View {
   let model: ArtifactViewModel
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(AppState.self) private var appState
+  @State private var compareSpecies = ""
+  @State private var compareFormat: Format = .nationalDex
+  @State private var showingCompare = false
   /// Mirrors the back-stack depth of the *previous* render so the drill transition can tell a
   /// push (depth grew → new content slides in from the trailing edge) from a back (depth shrank →
   /// from the leading edge). Updated in `.onChange` after each swap, so during the render that
@@ -55,11 +59,75 @@ struct ArtifactSheetView: View {
           }
         }
         ToolbarItem(placement: .topBarTrailing) {
-          Button("Done") {
-            model.dismiss()
+          HStack(spacing: 12) {
+            if model.canOpenInDex {
+              Button {
+                if let hop = model.openInDex() {
+                  appState.pendingDestination = .dexHop(hop)
+                }
+              } label: {
+                Label("Open in Dex", systemImage: "books.vertical")
+              }
+              .accessibilityLabel("Open in Dex")
+            }
+            if case .entity(let ok)? = model.current?.content, ok.kind == .pokemon {
+              Button {
+                compareFormat = model.requestFormat
+                showingCompare = true
+              } label: {
+                Label("Compare with…", systemImage: "rectangle.split.2x1")
+              }
+            }
+            if model.canPin {
+              Button {
+                Task { _ = await model.pin() }
+              } label: {
+                Label("Pin", systemImage: "pin")
+              }
+            }
+            Button("Done") {
+              model.dismiss()
+            }
           }
         }
       }
+    }
+    .sheet(isPresented: $showingCompare) {
+      NavigationStack {
+        Form {
+          TextField("Species", text: $compareSpecies)
+            .textInputAutocapitalization(.never)
+          Picker("Scope", selection: $compareFormat) {
+            ForEach(Format.knownCases, id: \.self) { format in
+              Text(format.displayLabel).tag(format)
+            }
+          }
+          if let message = model.compareErrorMessage {
+            Text(message).foregroundStyle(Theme.warning)
+          }
+        }
+        .navigationTitle("Compare with…")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") { showingCompare = false }
+          }
+          ToolbarItem(placement: .confirmationAction) {
+            Button("Compare") {
+              let species = compareSpecies
+              Task {
+                await model.compareWith(species: species, format: compareFormat)
+                if model.compareErrorMessage == nil {
+                  compareSpecies = ""
+                  showingCompare = false
+                }
+              }
+            }
+            .disabled(compareSpecies.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          }
+        }
+      }
+      .presentationDetents([.medium])
     }
     .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
@@ -97,7 +165,7 @@ struct ArtifactSheetView: View {
         Task { await model.openEntity(kind: .pokemon, query: species) }
       }
     case .comparison(let subjects):
-      ComparisonArtifactView(subjects: subjects) { species in
+      ComparisonArtifactView(subjects: subjects, diff: model.lastCompareDiff) { species in
         Task { await model.openEntity(kind: .pokemon, query: species) }
       }
     case .damageCalc(let damageCalc):
@@ -356,6 +424,7 @@ private struct TeamArtifactDetail: View {
           }
           .buttonStyle(.plain)
           .accessibilityHint("Opens \(titleize(species))")
+          AddToTeamButton(incoming: member, compact: true)
         }
         if let detail = abilityTeraLine(member) {
           Text(detail)

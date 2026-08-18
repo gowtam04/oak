@@ -5,22 +5,33 @@ import ai.gowtam.oak.app.GuestTurn
 import ai.gowtam.oak.networking.ImageRejectReason
 import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.networking.TurnInProgressSignal
+import ai.gowtam.oak.features.calc.explainCalcPrompt
+import ai.gowtam.oak.features.calc.parseCalcSlashRest
+import ai.gowtam.oak.services.ArtifactPinService
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.services.BitmapSourceImage
+import ai.gowtam.oak.services.CalcService
 import ai.gowtam.oak.services.ChatService
 import ai.gowtam.oak.services.HistoryService
 import ai.gowtam.oak.services.ScopeService
 import ai.gowtam.oak.services.ShareService
 import ai.gowtam.oak.services.SourceImage
 import ai.gowtam.oak.services.TeamService
+import ai.gowtam.oak.services.VoiceHydrateService
+import ai.gowtam.oak.wire.CalcMove
+import ai.gowtam.oak.wire.CalcResult
+import ai.gowtam.oak.wire.CalcScenario
+import ai.gowtam.oak.wire.CalcSide
 import ai.gowtam.oak.wire.ChatRecovery
 import ai.gowtam.oak.wire.ChatTurn
 import ai.gowtam.oak.wire.CreatedShare
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.OakAnswer
+import ai.gowtam.oak.wire.PinnedArtifactSummary
 import ai.gowtam.oak.wire.ScopeSource
 import ai.gowtam.oak.wire.SseEvent
 import ai.gowtam.oak.wire.TeamSummary
+import ai.gowtam.oak.wire.VoiceHydrateStatus
 import android.graphics.Bitmap
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
@@ -72,6 +83,9 @@ class ChatViewModel(
     private val teams: TeamService? = null,
     private val scope: ScopeService? = null,
     private val shares: ShareService? = null,
+    private val calc: CalcService? = null,
+    private val hydrate: VoiceHydrateService? = null,
+    private val pins: ArtifactPinService? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -115,6 +129,10 @@ class ChatViewModel(
     private var missingImagesNote: String? = null
     private var lastShareUrl: String? = null
     private var emptyDeskRecents: EmptyDeskRecents? = null
+    private var calcOverlay: CalcOverlayState? = null
+    private var hydrateBanner: HydrateBanner? = null
+    private var hydrateAssistantId: String? = null
+    private var pinnedArtifacts: List<PinnedArtifactSummary> = emptyList()
 
     // ---- State-machine bookkeeping (NOT part of [uiState]) ----
 
@@ -229,6 +247,12 @@ class ChatViewModel(
             } else {
                 emptyList()
             },
+            calcOverlay = calcOverlay,
+            canAddToTeam = appState.authState.value is AuthState.SignedIn,
+            canPin = appState.authState.value is AuthState.SignedIn,
+            hydrateBanner = hydrateBanner,
+            showsHydrateRetry = hydrateBanner == HydrateBanner.Failed,
+            pinnedArtifacts = pinnedArtifacts,
         )
     }
 
@@ -278,6 +302,23 @@ class ChatViewModel(
                 handleSlash(slash.target, slashArgs(text))
                 composerText = ""
                 mentionQuery = null
+                publish()
+                return
+            }
+            is SlashCommand.Calc -> {
+                val format = displayFormat()
+                calcOverlay = CalcOverlayState(
+                    scenario = parseCalcSlashRest(slash.rest, format) ?: CalcScenario(
+                        format = format,
+                        attacker = CalcSide(),
+                        defender = CalcSide(),
+                        move = CalcMove(),
+                    ),
+                    rest = slash.rest,
+                )
+                composerText = ""
+                mentionQuery = null
+                errorBanner = null
                 publish()
                 return
             }
@@ -512,6 +553,53 @@ class ChatViewModel(
     }
 
     /** Apply a follow-up chip (CHIP-US-1). */
+    fun openCalculator(scenario: CalcScenario) {
+        calcOverlay = CalcOverlayState(scenario = scenario, rest = "")
+        publish()
+    }
+
+    fun dismissCalculator() {
+        calcOverlay = null
+        publish()
+    }
+
+    fun expandCalculator() {
+        val overlay = calcOverlay ?: return
+        appState.requestCalculator(overlay.scenario)
+        calcOverlay = null
+        publish()
+    }
+
+    fun explainCalculator() {
+        val overlay = calcOverlay ?: return
+        val prompt = explainCalcPrompt(overlay.scenario, CalcResult.Error(error = "incomplete"))
+        sendFollowUp(prompt)
+    }
+
+    fun unpinArtifact(pinId: String) {
+        val conversationId = sessionId
+        val service = pins ?: return
+        viewModelScope.launch {
+            val remaining = service.delete(conversationId, pinId)
+            if (remaining != null) {
+                pinnedArtifacts = remaining
+                publish()
+            }
+        }
+    }
+
+    fun retryHydrate() {
+        if (hydrateBanner != HydrateBanner.Failed) return
+        val conversationId = sessionId
+        val assistantId = hydrateAssistantId ?: return
+        val service = hydrate ?: return
+        viewModelScope.launch {
+            service.retry(conversationId, assistantId)
+            hydrateBanner = HydrateBanner.Finishing
+            publish()
+        }
+    }
+
     fun activateChip(chip: FollowUpChip) {
         when (chip.kind) {
             FollowUpChip.Kind.Scope -> Format.fromRaw(chip.target).takeUnless { it is Format.Unknown }?.let { selectScope(it) }
@@ -673,6 +761,8 @@ class ChatViewModel(
         turns: List<ChatTurn>,
         activeTurnId: String? = null,
         pinnedMessageIds: List<String> = emptyList(),
+        hydrate: VoiceHydrateStatus? = null,
+        pinnedArtifacts: List<PinnedArtifactSummary> = emptyList(),
     ) {
         // Close the socket for the PREVIOUS conversation without cancelling its durable
         // turn — its pending pointer stays in AppState (keyed by the old session id), so
@@ -696,6 +786,13 @@ class ChatViewModel(
             }
         }
         this.pinnedMessageIds = pinnedMessageIds
+        this.pinnedArtifacts = pinnedArtifacts
+        hydrateAssistantId = hydrate?.assistantMessageId
+        hydrateBanner = when (hydrate?.status) {
+            VoiceHydrateStatus.Status.Running -> HydrateBanner.Finishing
+            VoiceHydrateStatus.Status.Failed -> HydrateBanner.Failed
+            else -> null
+        }
         followUpChips = (this.turns.lastOrNull() as? ChatTurnItem.Assistant)
             ?.let { chipsFor(it.answer) }
             .orEmpty()
@@ -1446,7 +1543,24 @@ data class ChatUiState(
     val emptyDeskRecents: EmptyDeskRecents? = null,
     val editingLast: Boolean = false,
     val lastUsedScopes: List<Format> = emptyList(),
+    val calcOverlay: CalcOverlayState? = null,
+    val canAddToTeam: Boolean = false,
+    val canPin: Boolean = false,
+    val hydrateBanner: HydrateBanner? = null,
+    val showsHydrateRetry: Boolean = false,
+    val pinnedArtifacts: List<PinnedArtifactSummary> = emptyList(),
 )
+
+@Immutable
+data class CalcOverlayState(
+    val scenario: CalcScenario,
+    val rest: String = "",
+)
+
+sealed interface HydrateBanner {
+    data object Finishing : HydrateBanner
+    data object Failed : HydrateBanner
+}
 
 /** Signed-in empty-desk continue-last rows (EMPTY-US-1). */
 @Immutable
@@ -1480,7 +1594,9 @@ sealed interface ChatTurnItem {
         override val id: String = UUID.randomUUID().toString(),
         val answer: OakAnswer,
         val serverId: String? = null,
-    ) : ChatTurnItem
+    ) : ChatTurnItem {
+        val isVoiceOrigin: Boolean get() = answer.origin == "voice"
+    }
 }
 
 /** One live tool-activity item (`tool_activity` event), shown while the loop runs. */

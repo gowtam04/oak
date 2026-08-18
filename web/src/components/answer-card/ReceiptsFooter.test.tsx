@@ -70,7 +70,7 @@ describe("ReceiptsFooter", () => {
     expect(screen.getByTestId("citation-0")).toBeInTheDocument();
   });
 
-  it("honours controlled open state after defaultExpanded", () => {
+  it("follows defaultExpanded when the account density changes (COMPACT-AC-2.1)", () => {
     const { rerender } = render(
       <ReceiptsFooter reasoningMarkdown={markdown} citations={citations} />,
     );
@@ -84,10 +84,9 @@ describe("ReceiptsFooter", () => {
         defaultExpanded
       />,
     );
-    // defaultExpanded only applies on first mount; re-render keeps prior state.
     expect(
       (screen.getByTestId("receipts-footer") as HTMLDetailsElement).open,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("hides Copy for agents when no answer is provided", () => {

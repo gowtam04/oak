@@ -43,6 +43,8 @@ fun ComparisonView(
     subjects: List<Subject>,
     onOpen: (String) -> Unit,
     modifier: Modifier = Modifier,
+    diff: PokemonCompareDiff? = null,
+    onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)? = null,
 ) {
     val oak = LocalOakColors.current
     val dark = isSystemInDarkTheme()
@@ -88,7 +90,69 @@ fun ComparisonView(
         verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
         for (subject in subjects) {
-            SubjectCard(subject = subject, onClick = { onOpen(subject.name) })
+            Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+                SubjectCard(subject = subject, onClick = { onOpen(subject.name) })
+                if (onAddToTeam != null) {
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            onAddToTeam(ai.gowtam.oak.features.teams.incomingMemberFromSubject(subject))
+                        },
+                    ) {
+                        androidx.compose.material3.Text("Add to team", color = oak.accent)
+                    }
+                }
+            }
+        }
+        if (diff != null) {
+            CompareDiffBlock(diff)
         }
     }
+}
+
+@Composable
+private fun CompareDiffBlock(diff: PokemonCompareDiff) {
+    val oak = LocalOakColors.current
+    androidx.compose.material3.Text(
+        "${diff.left.displayName} (${diff.left.format.shortLabel}) vs ${diff.right.displayName} (${diff.right.format.shortLabel})",
+        color = oak.textStrong,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+    )
+    StatDiffRow("HP", diff.stats.left.hp, diff.stats.right.hp)
+    StatDiffRow("Atk", diff.stats.left.atk, diff.stats.right.atk)
+    StatDiffRow("Def", diff.stats.left.def, diff.stats.right.def)
+    StatDiffRow("SpA", diff.stats.left.spa, diff.stats.right.spa)
+    StatDiffRow("SpD", diff.stats.left.spd, diff.stats.right.spd)
+    StatDiffRow("Spe", diff.stats.left.spe, diff.stats.right.spe)
+    SetDiffRow("Types", diff.types)
+    SetDiffRow("Abilities", diff.abilities)
+    androidx.compose.material3.Text(
+        "Speed @ L${diff.speed.defaultLevel}: ${diff.speed.leftValue} vs ${diff.speed.rightValue}",
+        color = oak.textMuted,
+    )
+    SetDiffRow("Movepool", diff.movepool)
+    SetDiffRow("Weak to", diff.matchups.weakTo)
+    SetDiffRow("Resists", diff.matchups.resists)
+    SetDiffRow("Immune", diff.matchups.immuneTo)
+}
+
+@Composable
+private fun StatDiffRow(label: String, left: Int, right: Int) {
+    val oak = LocalOakColors.current
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        androidx.compose.material3.Text(label, color = oak.textMuted)
+        androidx.compose.material3.Text("$left  ·  $right", color = oak.textStrong)
+    }
+}
+
+@Composable
+private fun SetDiffRow(label: String, set: PokemonCompareSetDiff) {
+    val oak = LocalOakColors.current
+    androidx.compose.material3.Text(
+        "$label — only ${set.onlyLeft.joinToString().ifBlank { "—" }} / shared ${set.shared.joinToString().ifBlank { "—" }} / only ${set.onlyRight.joinToString().ifBlank { "—" }}",
+        color = oak.textMuted,
+        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+    )
 }

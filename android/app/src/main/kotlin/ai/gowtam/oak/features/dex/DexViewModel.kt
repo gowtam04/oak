@@ -89,6 +89,18 @@ class DexViewModel(
         }
     }
 
+    /**
+     * Writes [format] first so [loadDetail] fetches under the artifact's tagged
+     * scope, not the Dex browse scope (DEX-US-2 / DEX-BR-3).
+     */
+    fun applyHop(kind: EntityKind, query: String, format: Format) {
+        if (format != _list.value.format) {
+            _list.update { it.copy(format = format) }
+        }
+        reloadImmediate()
+        loadDetail(kind, query)
+    }
+
     fun clearDetail() {
         detailJob?.cancel()
         _detail.value = null

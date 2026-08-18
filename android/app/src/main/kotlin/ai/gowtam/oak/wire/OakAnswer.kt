@@ -38,6 +38,8 @@ data class OakAnswer(
     @SerialName("proposed_team") val proposedTeam: ProposedTeam? = null,
     @SerialName("saved_team") val savedTeam: SavedTeamRef? = null,
     @SerialName("proposed_team_warnings") val proposedTeamWarnings: List<TeamWarning>? = null,
+    /** Server-owned. `"voice"` on a spoken turn (VOICE-AC-1.2). */
+    val origin: String? = null,
 ) {
     /**
      * The outcome of the turn. Drives which optional blocks the UI expects.
@@ -100,6 +102,7 @@ data class Citation(
     val source: String,
     val detail: String,
     @SerialName("endpoint_url") val endpointUrl: String? = null,
+    val anchor: CitationAnchor? = null,
 )
 
 /** A claim the agent deduced rather than read directly (mirrors `inferenceSchema`). */

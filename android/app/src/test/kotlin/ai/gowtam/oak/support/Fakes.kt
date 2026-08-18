@@ -548,3 +548,139 @@ class FakeShareService(
         return importTeamId
     }
 }
+
+// ---------------------------------------------------------------------------
+// P8 answer-cards fakes (compile-fail until the production interfaces land)
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /api/calc` — never-throw. Configure [result] (`null` = transport fold).
+ * Requirement refs: CALC-BR-1.
+ */
+class FakeCalcService(
+    var result: ai.gowtam.oak.wire.CalcResult? = null,
+) : ai.gowtam.oak.services.CalcService {
+    val estimateCalls = mutableListOf<ai.gowtam.oak.wire.CalcScenario>()
+
+    override suspend fun estimate(scenario: ai.gowtam.oak.wire.CalcScenario): ai.gowtam.oak.wire.CalcResult? {
+        estimateCalls += scenario
+        return result
+    }
+}
+
+/**
+ * `POST /api/voice/hydrate` retry. Android has no mic session — this is the
+ * history-path Retry only (VOICE-AC-3.1).
+ */
+class FakeVoiceHydrateService(
+    var status: ai.gowtam.oak.wire.VoiceHydrateStatus = ai.gowtam.oak.wire.VoiceHydrateStatus(
+        assistantMessageId = "a1",
+        status = ai.gowtam.oak.wire.VoiceHydrateStatus.Status.Running,
+    ),
+) : ai.gowtam.oak.services.VoiceHydrateService {
+    val retryCalls = mutableListOf<Pair<String, String>>()
+
+    override suspend fun retry(
+        conversationId: String,
+        assistantMessageId: String,
+    ): ai.gowtam.oak.wire.VoiceHydrateStatus {
+        retryCalls += conversationId to assistantMessageId
+        return status.copy(
+            assistantMessageId = assistantMessageId,
+            status = ai.gowtam.oak.wire.VoiceHydrateStatus.Status.Running,
+        )
+    }
+}
+
+/**
+ * Conversation pin strip (`/api/conversations/:id/artifact-pins`).
+ * Requirement refs: PIN-US-1, PIN-AC-3.1, AUTH-BR-1.
+ */
+class FakeArtifactPinService(
+    var listResult: List<ai.gowtam.oak.wire.PinnedArtifactSummary> = emptyList(),
+    var createResult: CreateResult = CreateResult.Ok,
+) : ai.gowtam.oak.services.ArtifactPinService {
+    data class CreateCall(
+        val conversationId: String,
+        val kind: ai.gowtam.oak.features.artifact.ArtifactPinKind,
+        val title: String,
+    )
+
+    sealed interface CreateResult {
+        data object Ok : CreateResult
+        data object Cap : CreateResult
+        data object Error : CreateResult
+    }
+
+    val createCalls = mutableListOf<CreateCall>()
+    val deleteCalls = mutableListOf<Pair<String, String>>()
+    val getCalls = mutableListOf<Pair<String, String>>()
+    private val snapshots = mutableMapOf<String, Any?>()
+
+    override suspend fun list(conversationId: String): List<ai.gowtam.oak.wire.PinnedArtifactSummary> = listResult
+
+    override suspend fun create(
+        conversationId: String,
+        kind: ai.gowtam.oak.features.artifact.ArtifactPinKind,
+        title: String,
+        snapshot: Any?,
+    ): ai.gowtam.oak.services.CreatePinResult {
+        createCalls += CreateCall(conversationId, kind, title)
+        return when (createResult) {
+            CreateResult.Ok -> {
+                val pin = ai.gowtam.oak.wire.PinnedArtifactSummary(
+                    id = "pin-${createCalls.size}",
+                    kind = kind.rawValue,
+                    title = title,
+                    createdAt = 0L,
+                )
+                listResult = listResult + pin
+                snapshots[pin.id] = snapshot
+                ai.gowtam.oak.services.CreatePinResult.Ok(pin, listResult)
+            }
+            CreateResult.Cap -> ai.gowtam.oak.services.CreatePinResult.Cap(max = 5)
+            CreateResult.Error -> ai.gowtam.oak.services.CreatePinResult.Error("couldnt_pin")
+        }
+    }
+
+    override suspend fun get(conversationId: String, pinId: String): ai.gowtam.oak.services.PinnedArtifact? {
+        getCalls += conversationId to pinId
+        val summary = listResult.firstOrNull { it.id == pinId } ?: return null
+        val snapshot = when (val stored = snapshots[pinId]) {
+            is kotlinx.serialization.json.JsonElement -> stored
+            is ai.gowtam.oak.features.artifact.PinSnapshotBody ->
+                ai.gowtam.oak.wire.OakJson.encodeToJsonElement(
+                    ai.gowtam.oak.features.artifact.PinSnapshotBody.serializer(),
+                    stored,
+                )
+            else -> null
+        }
+        return ai.gowtam.oak.services.PinnedArtifact(
+            id = summary.id,
+            kind = summary.kind,
+            title = summary.title,
+            snapshot = snapshot,
+        )
+    }
+
+    override suspend fun delete(conversationId: String, pinId: String): List<ai.gowtam.oak.wire.PinnedArtifactSummary>? {
+        deleteCalls += conversationId to pinId
+        listResult = listResult.filterNot { it.id == pinId }
+        return listResult
+    }
+}
+
+/**
+ * `PATCH /api/account/preferences` — signed-in compact/full (COMPACT-US-2).
+ * Guest writes must not call [setAnswerDensity].
+ */
+class FakePreferencesService : ai.gowtam.oak.services.PreferencesService {
+    val patchCalls = mutableListOf<ai.gowtam.oak.wire.AnswerDensity>()
+    var lastWritten: ai.gowtam.oak.wire.AnswerDensity? = null
+
+    override suspend fun setAnswerDensity(density: ai.gowtam.oak.wire.AnswerDensity): ai.gowtam.oak.wire.AnswerDensity {
+        patchCalls += density
+        lastWritten = density
+        return density
+    }
+}

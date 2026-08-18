@@ -63,6 +63,9 @@ the design intent.
 - **Artifact viewer** — answers can open rich, interactive side-panel artifacts
   (Pokémon, moves, abilities, items, teams, comparisons, damage calcs, type
   matchups) with clickable entity links and citations.
+- **Calculator** — a first-class `/calc` screen (and a chat overlay via the
+  `/calc` slash) for honest damage estimates from Oak's existing formulas.
+  Edits are not asks; **Explain this calc** is a normal chat turn.
 - **Image input (vision)** — attach up to 4 images per turn ("what is this?",
   "rate this team sheet"); all three models are vision-capable.
 - **Multi-generation scope** — the typed competitive tools read one of **eleven

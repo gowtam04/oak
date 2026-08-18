@@ -19,6 +19,11 @@ const cu = vi.hoisted(() => ({
 }));
 vi.mock("@/server/auth/current-user", () => cu);
 
+const traces = vi.hoisted(() => ({
+  appendVoiceTrace: vi.fn(),
+}));
+vi.mock("@/server/voice/tool-trace-store", () => traces);
+
 import { _resetStoreForTests as resetRateLimit } from "@/server/rate-limit";
 import type { VoiceToolResponseBody } from "@/lib/voice/voice-types";
 import {
@@ -140,5 +145,52 @@ describe("POST /api/voice/tool", () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as VoiceToolResponseBody;
     expect((json.output as { error?: string }).error).toBe("not_available_in_standard");
+  });
+});
+
+describe("POST /api/voice/tool — appendVoiceTrace fail-soft (ADR-8)", () => {
+  beforeEach(() => {
+    traces.appendVoiceTrace.mockReset();
+    traces.appendVoiceTrace.mockImplementation(() => undefined);
+  });
+
+  it("buffers name/input/output after a successful dispatch (ADR-8)", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    const res = await post(
+      body({ name: "get_move", arguments: JSON.stringify({ name: "flamethrower" }) }),
+    );
+    expect(res.status).toBe(200);
+    expect(traces.appendVoiceTrace).toHaveBeenCalledTimes(1);
+    expect(traces.appendVoiceTrace).toHaveBeenCalledWith(
+      "sid-1",
+      expect.objectContaining({
+        name: "get_move",
+        input: { name: "flamethrower" },
+        output: expect.objectContaining({
+          found: true,
+          display_name: "Flamethrower",
+        }),
+      }),
+    );
+  });
+
+  it("does not fail the tool response when appendVoiceTrace throws (ADR-8)", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    traces.appendVoiceTrace.mockImplementation(() => {
+      throw new Error("buffer down");
+    });
+    const res = await post(
+      body({ name: "get_move", arguments: JSON.stringify({ name: "flamethrower" }) }),
+    );
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as VoiceToolResponseBody;
+    expect((json.output as { found?: boolean; display_name?: string }).found).toBe(
+      true,
+    );
+    expect(
+      (json.output as { display_name?: string }).display_name,
+    ).toBe("Flamethrower");
   });
 });

@@ -158,6 +158,23 @@ export async function POST(req: Request): Promise<Response> {
       signal: req.signal,
     });
     const output = await dispatch(name, args, ctx);
+    try {
+      const { appendVoiceTrace } = await import(
+        "@/server/voice/tool-trace-store"
+      );
+      appendVoiceTrace(session_id, { name, input: args, output });
+    } catch (traceErr) {
+      logger.warn(
+        {
+          event: "voice_tool_trace_append_failed",
+          request_id: requestId,
+          session_id,
+          tool: name,
+          err: traceErr instanceof Error ? traceErr.message : String(traceErr),
+        },
+        "oak_voice_tool_trace_append_failed",
+      );
+    }
     return jsonOk({ output });
   } catch (err) {
     logger.error(

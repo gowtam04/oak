@@ -42,7 +42,14 @@ fun DexRoute(services: ServiceContainer, appState: AppState, modifier: Modifier 
     LaunchedEffect(surface) {
         val req = surface as? ai.gowtam.oak.app.AppState.SurfaceRequest.Dex ?: return@LaunchedEffect
         val query = req.query
-        if (!query.isNullOrBlank()) stack.add(DexEntityRoute(EntityKind.POKEMON, query))
+        if (!query.isNullOrBlank()) {
+            val kind = req.kind ?: EntityKind.POKEMON
+            val format = req.format
+            if (format != null) {
+                viewModel.applyHop(kind, query, format)
+            }
+            stack.add(DexEntityRoute(kind, query))
+        }
         appState.consumeSurfaceRequest()
     }
 

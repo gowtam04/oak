@@ -21,6 +21,10 @@ final class FakeAuthService: AuthService, @unchecked Sendable {
   /// a failed server revoke that must not block returning to guest.
   var signOutError: OakError?
   var deleteResult: Result<Void, OakError> = .success(())
+  /// Signed-in compact/full PATCH recording (COMPACT-US-2). Extra method —
+  /// ``AccountViewModel/setAnswerDensity`` is expected to call this only when
+  /// signed in (guests stay device-local, COMPACT-BR-4).
+  var setAnswerDensityResult: Result<AnswerDensity, OakError> = .success(.compact)
 
   // MARK: Recording
 
@@ -32,6 +36,8 @@ final class FakeAuthService: AuthService, @unchecked Sendable {
   private(set) var lastRequestedEmail: String?
   private(set) var lastVerifiedEmail: String?
   private(set) var lastVerifiedCode: String?
+  private(set) var setAnswerDensityCount = 0
+  private(set) var lastSetAnswerDensity: AnswerDensity?
 
   /// Models the Keychain token: set by a successful ``verify`` (or seeded by a
   /// test to model an already-signed-in device), cleared by ``signOut`` /
@@ -72,5 +78,11 @@ final class FakeAuthService: AuthService, @unchecked Sendable {
     deleteCount += 1
     try deleteResult.get()
     storedToken = nil
+  }
+
+  func setAnswerDensity(_ density: AnswerDensity) async throws -> AnswerDensity {
+    setAnswerDensityCount += 1
+    lastSetAnswerDensity = density
+    return try setAnswerDensityResult.get()
   }
 }

@@ -2,6 +2,7 @@ package ai.gowtam.oak.features.artifact
 
 import ai.gowtam.oak.features.chat.answercard.DamageCalcBlock
 import ai.gowtam.oak.features.chat.answercard.titleizeNonNull
+import ai.gowtam.oak.features.teams.incomingMemberFromProfile
 import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
@@ -103,7 +104,12 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ArtifactSheet(viewModel: ArtifactViewModel, modifier: Modifier = Modifier) {
+fun ArtifactSheet(
+    viewModel: ArtifactViewModel,
+    modifier: Modifier = Modifier,
+    onOpenInDex: (DexHop) -> Unit = {},
+    onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)? = null,
+) {
     val stack by viewModel.stack.collectAsState()
     val current = stack.lastOrNull() ?: return
     val canGoBack = stack.size > 1
@@ -140,6 +146,7 @@ fun ArtifactSheet(viewModel: ArtifactViewModel, modifier: Modifier = Modifier) {
         }
 
         ArtifactTopBar(title = current.title, canGoBack = canGoBack, onBack = viewModel::back, onClose = ::closeSheet)
+        ArtifactActionRow(viewModel, onOpenInDex, onAddToTeam)
 
         Box(modifier = Modifier.weight(1f, fill = false)) {
             AnimatedContent(
@@ -161,6 +168,7 @@ fun ArtifactSheet(viewModel: ArtifactViewModel, modifier: Modifier = Modifier) {
                     content = artifact.content,
                     requestFormat = viewModel.activeFormat,
                     onOpen = viewModel::openEntity,
+                    onAddToTeam = onAddToTeam,
                 )
             }
         }
@@ -170,6 +178,84 @@ fun ArtifactSheet(viewModel: ArtifactViewModel, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------------------
 // Chrome
 // ---------------------------------------------------------------------------
+
+@Composable
+private fun ArtifactActionRow(
+    viewModel: ArtifactViewModel,
+    onOpenInDex: (DexHop) -> Unit,
+    onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)?,
+) {
+    val oak = LocalOakColors.current
+    val hop = viewModel.dexHop()
+    var showCompare by remember { mutableStateOf(false) }
+    var compareQuery by remember { mutableStateOf("") }
+    var compareFormat by remember { mutableStateOf(viewModel.activeFormat) }
+    if (hop == null && !viewModel.canPin && !viewModel.canCompare && onAddToTeam == null) return
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = OakSpacing.md)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
+            if (hop != null) {
+                androidx.compose.material3.TextButton(onClick = { onOpenInDex(hop) }) {
+                    Text("Open in Dex", color = oak.accent)
+                }
+            }
+            if (viewModel.canCompare) {
+                androidx.compose.material3.TextButton(onClick = { showCompare = true }) {
+                    Text("Compare with…", color = oak.accent)
+                }
+            }
+            if (onAddToTeam != null && viewModel.canCompare) {
+                val entity = (viewModel.current?.content as? ArtifactContent.Entity)?.v
+                val pokemon = entity?.data as? ai.gowtam.oak.wire.EntityData.Pokemon
+                if (pokemon != null) {
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            onAddToTeam(
+                                incomingMemberFromProfile(pokemon.v, entity.resolved.slug),
+                            )
+                        },
+                    ) {
+                        Text("Add to team", color = oak.accent)
+                    }
+                }
+            }
+            if (viewModel.canPin) {
+                androidx.compose.material3.TextButton(onClick = viewModel::pin) {
+                    Text("Pin", color = oak.accent)
+                }
+            }
+        }
+        if (showCompare) {
+            androidx.compose.material3.OutlinedTextField(
+                value = compareQuery,
+                onValueChange = { compareQuery = it },
+                label = { Text("Species") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+                for (format in listOf(viewModel.activeFormat, Format.ScarletViolet, Format.NationalDex, Format.Gen5).distinct()) {
+                    androidx.compose.material3.FilterChip(
+                        selected = compareFormat == format,
+                        onClick = { compareFormat = format },
+                        label = { Text(format.shortLabel) },
+                    )
+                }
+            }
+            Row {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        if (compareQuery.isNotBlank()) {
+                            viewModel.compareWith(compareQuery.trim(), compareFormat)
+                            showCompare = false
+                            compareQuery = ""
+                        }
+                    },
+                ) { Text("Compare") }
+                androidx.compose.material3.TextButton(onClick = { showCompare = false }) { Text("Cancel") }
+            }
+        }
+    }
+}
 
 @Composable
 private fun ArtifactTopBar(title: String, canGoBack: Boolean, onBack: () -> Unit, onClose: () -> Unit) {
@@ -209,12 +295,18 @@ private fun ArtifactContentDispatch(
     content: ArtifactContent,
     requestFormat: Format,
     onOpen: (EntityKind, String) -> Unit,
+    onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)? = null,
 ) {
     when (content) {
         ArtifactContent.Loading -> LoadingView()
         is ArtifactContent.Entity -> EntityDetail(artifact = content.v, requestFormat = requestFormat, onOpen = onOpen)
         is ArtifactContent.TeamSheet -> TeamArtifactDetail(team = content.v, onOpenSpecies = { onOpen(EntityKind.POKEMON, it) })
-        is ArtifactContent.Comparison -> ComparisonView(subjects = content.subjects, onOpen = { onOpen(EntityKind.POKEMON, it) })
+        is ArtifactContent.Comparison -> ComparisonView(
+            subjects = content.subjects,
+            onOpen = { onOpen(EntityKind.POKEMON, it) },
+            diff = content.diff,
+            onAddToTeam = onAddToTeam,
+        )
         is ArtifactContent.DamageCalcContent -> DamageCalcViewport(content.v)
         is ArtifactContent.Unavailable -> MissView(
             title = "Couldn't open ${content.query}",

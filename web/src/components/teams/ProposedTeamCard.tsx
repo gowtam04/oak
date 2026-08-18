@@ -12,6 +12,9 @@ import {
 import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 import TeamWarnings from "@/components/teams/TeamWarnings";
 import { formatLabel, titleizeSlug } from "@/components/teams/display-names";
+import { proposedTeamToShowdownPaste } from "@/lib/proposed-team-showdown";
+import AddToTeamPicker from "@/components/teams/AddToTeamPicker";
+import type { TeamMember } from "@/data/teams/team-schema";
 
 /** Title-case a slug-ish id (`great-tusk` → `Great Tusk`) for this card. */
 function titleize(value: string | null): string {
@@ -39,11 +42,14 @@ type ApplyState =
 export default function ProposedTeamCard({
   proposedTeam,
   warnings = [],
-}: ProposedTeamCardProps) {
+  signedIn = false,
+}: ProposedTeamCardProps & { signedIn?: boolean }) {
   const { name, format, members } = proposedTeam;
   const [existing, setExisting] = useState<TeamSummary[]>([]);
   const [targetId, setTargetId] = useState<string>("");
   const [state, setState] = useState<ApplyState>({ kind: "idle" });
+  const [copied, setCopied] = useState(false);
+  const [addMember, setAddMember] = useState<TeamMember | null>(null);
   const { openTeam } = useArtifactViewer();
 
   // Offer apply-existing only for same-format teams the account already owns.
@@ -89,6 +95,17 @@ export default function ProposedTeamCard({
 
   const busy = state.kind === "saving";
 
+  async function handleCopyShowdown() {
+    const paste = proposedTeamToShowdownPaste(proposedTeam);
+    try {
+      await navigator.clipboard.writeText(paste);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
     <section className="proposed-team" data-testid="proposed-team">
       <header className="proposed-team__header">
@@ -122,6 +139,15 @@ export default function ProposedTeamCard({
                 — {m.moves.map(titleize).join(", ")}
               </span>
             )}
+            {signedIn && m.species && (
+              <button
+                type="button"
+                className="proposed-team__add"
+                onClick={() => setAddMember(m)}
+              >
+                Add to team
+              </button>
+            )}
           </li>
         ))}
       </ol>
@@ -152,6 +178,14 @@ export default function ProposedTeamCard({
           onClick={() => void handleSaveNew()}
         >
           Save as new team
+        </button>
+
+        <button
+          type="button"
+          className="proposed-team__showdown"
+          onClick={() => void handleCopyShowdown()}
+        >
+          {copied ? "Copied" : "Copy Showdown paste"}
         </button>
 
         {existing.length > 0 && (
@@ -195,6 +229,14 @@ export default function ProposedTeamCard({
         >
           {state.message}
         </p>
+      )}
+
+      {signedIn && addMember && (
+        <AddToTeamPicker
+          incoming={addMember}
+          format={format}
+          onClose={() => setAddMember(null)}
+        />
       )}
     </section>
   );

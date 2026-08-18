@@ -5,6 +5,8 @@ import ai.gowtam.oak.features.auth.AuthViewModel
 import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.services.AuthService
 import ai.gowtam.oak.services.AuthState
+import ai.gowtam.oak.services.PreferencesService
+import ai.gowtam.oak.wire.AnswerDensity
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +33,7 @@ import kotlinx.coroutines.flow.update
 class AccountViewModel(
     private val auth: AuthService,
     val appState: AppState,
+    private val preferences: PreferencesService? = null,
 ) : ViewModel() {
 
     /** Busy/error state for the sign-out and delete-account actions. */
@@ -76,6 +79,21 @@ class AccountViewModel(
      * server-side and must not be hard-coded into the client. */
     val tierDescription: String
         get() = if (isSignedIn) SIGNED_IN_TIER_DESCRIPTION else GUEST_TIER_DESCRIPTION
+
+    private val _answerDensity = MutableStateFlow<AnswerDensity>(AnswerDensity.Full)
+    val answerDensity: StateFlow<AnswerDensity> = _answerDensity.asStateFlow()
+
+    /**
+     * Compact/full default (COMPACT-US-1/2). Guest writes stay device-only;
+     * signed-in PATCH `/api/account/preferences`.
+     */
+    suspend fun setAnswerDensity(density: AnswerDensity) {
+        _answerDensity.value = density
+        appState.setAnswerDensity(density)
+        if (isSignedIn) {
+            preferences?.setAnswerDensity(density)
+        }
+    }
 
     // -------------------------------------------------------------------
     // Actions

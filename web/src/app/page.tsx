@@ -21,7 +21,16 @@ import SavedTeamAutoOpen from "@/components/teams/SavedTeamAutoOpen";
 import LandingSection from "@/components/landing/LandingSection";
 import { ArtifactViewerProvider } from "@/components/artifact/ArtifactViewerProvider";
 import ArtifactViewer from "@/components/artifact/ArtifactViewer";
+import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
+import PinnedArtifactStrip from "@/components/artifact/PinnedArtifactStrip";
+import CalculatorOverlay from "@/components/calc/CalculatorOverlay";
 import PlateTuner from "@/components/dev/PlateTuner";
+import {
+  deletePinnedArtifact,
+  getPinnedArtifact,
+  type PinnedArtifactSummary,
+} from "@/lib/api/artifact-pin-client";
+import type { CalcScenario } from "@/lib/calc/calc-schema";
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useConversations } from "@/lib/hooks/use-conversations";
 import { useTeams } from "@/lib/hooks/use-teams";
@@ -46,10 +55,110 @@ import { scopeLabel } from "@/lib/scope/scope-label";
 import type {
   ChatStatus,
   ChatTurn,
+  DamageCalc,
   OakAnswer,
   PendingImage,
   SavedTeam,
 } from "@/components/types";
+
+const CALC_SCENARIO_KEY = "oak-calc-scenario";
+const CALC_EXPLAIN_KEY = "oak-calc-explain";
+const GUEST_DENSITY_KEY = "oak-answer-density";
+
+function readGuestDensity(): "full" | "compact" {
+  try {
+    const value = window.localStorage.getItem(GUEST_DENSITY_KEY);
+    return value === "compact" ? "compact" : "full";
+  } catch {
+    return "full";
+  }
+}
+
+function ArtifactPinHost({
+  signedIn,
+  conversationId,
+  pins,
+  capError,
+  onUnpin,
+}: {
+  signedIn: boolean;
+  conversationId: string;
+  pins: PinnedArtifactSummary[];
+  capError: boolean;
+  onUnpin: (id: string) => void;
+}) {
+  const { openStructured, openTeam } = useArtifactViewer();
+  return (
+    <PinnedArtifactStrip
+      signedIn={signedIn}
+      pins={pins}
+      capError={capError}
+      onOpen={(pin) => {
+        void getPinnedArtifact(conversationId, pin.id).then((full) => {
+          if (!full) return;
+          const snap = full.snapshot as Record<string, unknown> | null;
+          if (!snap) return;
+          if (full.kind === "comparison") {
+            const subjects = (snap.subjects ??
+              (snap.kind === "comparison" ? snap.subjects : null)) as
+              | import("@/components/types").OakAnswer["subjects"]
+              | undefined;
+            if (subjects) openStructured({ kind: "comparison", subjects });
+            return;
+          }
+          if (full.kind === "calc") {
+            const damageCalc = (snap.damageCalc ??
+              (snap.kind === "damage-calc" ? snap.damageCalc : null)) as
+              | DamageCalc
+              | undefined;
+            if (damageCalc) {
+              openStructured({ kind: "damage-calc", damageCalc });
+            }
+            return;
+          }
+          const team = (snap.team ?? snap) as {
+            name?: string;
+            format?: string;
+            members?: import("@/data/teams/team-schema").TeamMember[];
+          };
+          if (team?.name && team.format && Array.isArray(team.members)) {
+            openTeam({
+              team: {
+                name: team.name,
+                format: team.format,
+                members: team.members,
+              },
+            });
+          }
+        });
+      }}
+      onUnpin={onUnpin}
+    />
+  );
+}
+
+function scenarioFromDamageCalc(
+  calc: DamageCalc,
+  format: Format,
+): CalcScenario {
+  const a = calc.assumptions as Record<string, unknown>;
+  const species = (key: string) =>
+    typeof a[key] === "string" ? (a[key] as string) : undefined;
+  const move = species("move");
+  return {
+    format,
+    attacker: {
+      species: species("attacker"),
+      level: typeof a.level === "number" ? a.level : undefined,
+      nature: species("nature"),
+    },
+    defender: {
+      species: species("defender"),
+      level: typeof a.level === "number" ? a.level : undefined,
+    },
+    move: { slug: move, name: move },
+  };
+}
 
 /** localStorage key for the persisted history-sidebar collapsed choice. */
 const SIDEBAR_STORAGE_KEY = "oak-sidebar-collapsed";
@@ -188,6 +297,7 @@ export default function Home() {
   // Declared above scope-mirroring so the signed-in gate for lastUsedScope can
   // read it without a temporal-dead-zone reference.
   const [auth, setAuth] = useState<MeResult>({ signedIn: false });
+  const [guestDensity, setGuestDensity] = useState<"full" | "compact">("full");
   const [meReady, setMeReady] = useState(false);
   const [listsReady, setListsReady] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
@@ -195,6 +305,19 @@ export default function Home() {
   // — the app's existing gate for signed-in-only features — instead of the
   // overlay. The endpoints 401 regardless, so this is UX, not the security line.
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [calcRest, setCalcRest] = useState("");
+  const [calcScenario, setCalcScenario] = useState<CalcScenario | undefined>(
+    undefined,
+  );
+  const [artifactPins, setArtifactPins] = useState<PinnedArtifactSummary[]>(
+    [],
+  );
+  const [pinCapError, setPinCapError] = useState(false);
+  const [hydrate, setHydrate] = useState<{
+    status: "running" | "failed";
+    assistant_message_id?: string;
+  } | null>(null);
 
   // Server-resolved scope for the conversation (GS-C). The hook's `scope` is the
   // per-turn `scope` SSE frame — `null` on a fresh send and until that frame
@@ -420,6 +543,7 @@ export default function Home() {
         setListsReady(false);
       } else {
         setListsReady(true);
+        setGuestDensity(readGuestDensity());
       }
       setMeReady(true);
     });
@@ -533,6 +657,10 @@ export default function Home() {
     setResolvedScope(null);
     setScopeSeed(null);
     setPinnedIds([]);
+    setArtifactPins([]);
+    setPinCapError(false);
+    setHydrate(null);
+    setCalcOpen(false);
     setImagesMissing(false);
     setSelectedIds([]);
     setMentionedTeam(null);
@@ -570,6 +698,12 @@ export default function Home() {
       const slash = parseSlashCommand(message, { hasUsagePage: true });
       if (slash.type === "navigate" && recoveryRef.current !== "edit") {
         handleSlash(slash.target, message);
+        return;
+      }
+      if (slash.type === "calc" && recoveryRef.current !== "edit") {
+        setCalcRest(slash.rest);
+        setCalcScenario(undefined);
+        setCalcOpen(true);
         return;
       }
 
@@ -655,6 +789,19 @@ export default function Home() {
     ],
   );
 
+  const sendRef = useRef(handleSend);
+  sendRef.current = handleSend;
+  useEffect(() => {
+    try {
+      const message = window.sessionStorage.getItem(CALC_EXPLAIN_KEY);
+      if (!message) return;
+      window.sessionStorage.removeItem(CALC_EXPLAIN_KEY);
+      sendRef.current(message);
+    } catch {
+      /* private mode */
+    }
+  }, []);
+
   // Open a saved conversation (HIST-US-4): load its full-fidelity turns, make it
   // the live thread (its id becomes the session id, so the composer continues
   // it), and follow its stored format (AC-5.4).
@@ -676,6 +823,16 @@ export default function Home() {
         setResolvedScope(detail.format as Format);
         setScopeSeed(null);
         setPinnedIds(detail.pinnedMessageIds ?? []);
+        const extra = detail as typeof detail & {
+          pinnedArtifacts?: PinnedArtifactSummary[];
+          hydrate?: {
+            status: "running" | "failed";
+            assistant_message_id?: string;
+          };
+        };
+        setArtifactPins(extra.pinnedArtifacts ?? []);
+        setPinCapError(false);
+        setHydrate(extra.hydrate ?? null);
         setUndoTurnId(null);
         recoveryRef.current = null;
         setImagesMissing(false);
@@ -994,6 +1151,64 @@ export default function Home() {
 
   // Mic button tapped. Signed in → open the voice overlay at the current
   // display scope; guest → the sign-in dialog (the existing signed-in gate).
+  const handleOpenCalculator = useCallback(
+    (calc: DamageCalc, hopFormat: Format) => {
+      setCalcRest("");
+      setCalcScenario(scenarioFromDamageCalc(calc, hopFormat));
+      setCalcOpen(true);
+    },
+    [],
+  );
+
+  const handleHydrateRetry = useCallback(
+    (turnId: string) => {
+      if (!auth.signedIn) return;
+      setHydrate({ status: "running", assistant_message_id: turnId });
+      void fetch("/api/voice/hydrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          conversation_id: sessionId,
+          assistant_message_id: turnId,
+        }),
+      }).then(async (res) => {
+        if (!res.ok) {
+          setHydrate({ status: "failed", assistant_message_id: turnId });
+          return;
+        }
+        setHydrate({ status: "running", assistant_message_id: turnId });
+      });
+    },
+    [auth.signedIn, sessionId],
+  );
+
+  useEffect(() => {
+    if (!hydrate || hydrate.status !== "running" || !hydrate.assistant_message_id) {
+      return;
+    }
+    const asstId = hydrate.assistant_message_id;
+    const timer = window.setInterval(() => {
+      void fetch(
+        `/api/voice/hydrate?conversation_id=${encodeURIComponent(sessionId)}&assistant_message_id=${encodeURIComponent(asstId)}`,
+        { credentials: "same-origin" },
+      ).then(async (res) => {
+        if (res.status === 404) {
+          const detail = await getConversation(sessionId);
+          if (detail) setTurns(detail.turns);
+          setHydrate(null);
+          return;
+        }
+        if (!res.ok) return;
+        const body = (await res.json()) as { status?: string };
+        if (body.status === "failed") {
+          setHydrate({ status: "failed", assistant_message_id: asstId });
+        }
+      });
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [hydrate, sessionId]);
+
   const handleVoiceClick = useCallback(() => {
     if (!auth.signedIn) {
       setAuthDialogOpen(true);
@@ -1133,6 +1348,21 @@ export default function Home() {
               email={auth.email}
               onSignInClick={() => setAuthDialogOpen(true)}
               onSignedOut={handleSignedOut}
+              answerDensity={
+                auth.signedIn ? auth.answerDensity : guestDensity
+              }
+              onAnswerDensityChange={(density) => {
+                if (auth.signedIn) {
+                  setAuth((prev) => ({ ...prev, answerDensity: density }));
+                  return;
+                }
+                setGuestDensity(density);
+                try {
+                  window.localStorage.setItem(GUEST_DENSITY_KEY, density);
+                } catch {
+                  /* private mode */
+                }
+              }}
             />
           </div>
           {/* Mobile-only trigger for the control popover (CSS hides it ≥640px). */}
@@ -1268,6 +1498,17 @@ export default function Home() {
           )}
 
           <div className="chat-page__main">
+            <ArtifactPinHost
+              signedIn={auth.signedIn}
+              conversationId={sessionId}
+              pins={artifactPins}
+              capError={pinCapError}
+              onUnpin={(id) => {
+                void deletePinnedArtifact(sessionId, id).then((remaining) => {
+                  if (remaining) setArtifactPins(remaining);
+                });
+              }}
+            />
             <ChatThread
               turns={turns}
               activity={activities}
@@ -1293,6 +1534,14 @@ export default function Home() {
               onFollowUpChip={handleFollowUpChip}
               currentFormat={displayFormat}
               mentionedTeam={auth.signedIn ? mentionedTeam : null}
+              density={
+                auth.signedIn ? (auth.answerDensity ?? "full") : guestDensity
+              }
+              hydrate={hydrate}
+              onHydrateRetry={
+                auth.signedIn ? handleHydrateRetry : undefined
+              }
+              onOpenCalculator={handleOpenCalculator}
               emptyReady={emptyReady}
               emptyDesk={
                 auth.signedIn
@@ -1337,7 +1586,18 @@ export default function Home() {
 
           {/* Docked side panel (full-screen overlay on mobile); hidden until an
               artifact is opened, at which point the chat reflows (AV-US-7). */}
-          <ArtifactViewer />
+          <ArtifactViewer
+            signedIn={auth.signedIn}
+            conversationId={auth.signedIn ? sessionId : undefined}
+            onPinResult={(result) => {
+              if (result.ok) {
+                setArtifactPins(result.pins);
+                setPinCapError(false);
+              } else {
+                setPinCapError(true);
+              }
+            }}
+          />
         </ArtifactViewerProvider>
       </div>
 
@@ -1355,6 +1615,29 @@ export default function Home() {
         sessionId={sessionId}
         format={displayFormat}
       />
+
+      <CalculatorOverlay
+        open={calcOpen}
+        format={displayFormat}
+        slashRest={calcRest}
+        scenario={calcScenario}
+        onExplain={(message) => handleSend(message)}
+        onDismiss={() => setCalcOpen(false)}
+        onExpand={(scenario) => {
+          try {
+            window.sessionStorage.setItem(
+              CALC_SCENARIO_KEY,
+              JSON.stringify(scenario),
+            );
+          } catch {
+            /* private mode */
+          }
+          setCalcOpen(false);
+          navigateTo("/calc");
+        }}
+      />
+
+
 
       <CommandPalette
         open={paletteOpen}

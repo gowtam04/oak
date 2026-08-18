@@ -7,7 +7,7 @@
  * expired/unknown/orphaned token — is the first-class `{ signedIn: false }` case
  * (never an error, BR-A11), so this always returns 200.
  *
- *   - account resolved → 200 { signedIn: true, email, lastUsedScope?, lastUsedScopes }
+ *   - account resolved → 200 { signedIn: true, email, lastUsedScope?, lastUsedScopes, answerDensity? }
  *   - null (guest)     → 200 { signedIn: false }
  *
  * `lastUsedScope` is the signed-in account's remembered game scope for new
@@ -18,6 +18,10 @@
  * `lastUsedScopes` (plural, SCOPE-US-2 / ADR-8) is the signed-in MRU list
  * newest-first (may be `[]`). Guests omit it. Singular `lastUsedScope` stays.
  * A list() fault fail-softs to `[]` so MRU never 500s the auth bootstrap.
+ *
+ * `answerDensity` is additive (COMPACT-US-2 / ADR-9): `"full" | "compact"`.
+ * Omitted when the column is NULL so existing clients stay exact
+ * (NULL = full, COMPACT-BR-2). Guests omit it (COMPACT-BR-4).
  */
 
 import { json } from "../_lib/http";
@@ -46,10 +50,15 @@ export async function GET(): Promise<Response> {
     return json(200, { signedIn: false });
   }
   const lastUsedScopes = await lastUsedScopesFor(account.id);
+  const answerDensity =
+    account.answerDensity === "full" || account.answerDensity === "compact"
+      ? account.answerDensity
+      : undefined;
   return json(200, {
     signedIn: true,
     email: account.email,
     ...(account.lastUsedScope ? { lastUsedScope: account.lastUsedScope } : {}),
     lastUsedScopes,
+    ...(answerDensity ? { answerDensity } : {}),
   });
 }

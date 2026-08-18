@@ -31,6 +31,7 @@ import type { OakDb } from "@/data/db";
 import {
   loadAbilitiesIndexUncached,
   loadAbilityPageUncached,
+  loadItemPageUncached,
   loadItemsIndexUncached,
   loadMovePageUncached,
   loadMovesIndexUncached,
@@ -239,6 +240,44 @@ describe("reference-pages loaders (tools fixture)", () => {
     it("returns null for an unknown move", async () => {
       expect(await loadMovePageUncached("no-such-move", db)).toBeNull();
     });
+
+    // Gap: no tools-fixture move is seeded in two formats with different
+    // stats, so there is no garchomp-style "preferred wins over SV default"
+    // probe. hidden-power (gen-7 only) + flamethrower (SV only) lock
+    // try-preferred-then-soft-fallback instead. JS drops a third argument
+    // on arity-2, so the arity lock below is the intended red until the
+    // loader actually accepts preferredFormat.
+
+    it("declares preferredFormat as a third parameter (DEX-BR-3)", () => {
+      expect(loadMovePageUncached.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("preferredFormat gen-7 on hidden-power keeps that scope (DEX-AC-2.1, DEX-BR-3)", async () => {
+      const page = await loadMovePageUncached("hidden-power", db, "gen-7");
+      expect(page).not.toBeNull();
+      expect(page!.sourceFormat).toBe("gen-7");
+      expect(page!.type).toBe("normal");
+      expect(page!.damageClass).toBe("special");
+    });
+
+    it("preferredFormat gen-5 on gen-7-only hidden-power soft-falls back and does not claim gen-5 (DEX-AC-2.2, DEX-BR-3)", async () => {
+      // hidden-power has no gen-5 row. Soft-fall back to the default chain
+      // (same as Pokédex `?format=`); sourceFormat is the winning scope, not
+      // the missing preferred. Must not present gen-7 data as gen-5.
+      const page = await loadMovePageUncached("hidden-power", db, "gen-5");
+      expect(page).not.toBeNull();
+      expect(page!.sourceFormat).not.toBe("gen-5");
+      expect(page!.sourceFormat).toBe("gen-7");
+    });
+
+    it("preferredFormat gen-5 on SV-only flamethrower does not claim gen-5 (DEX-AC-2.2, DEX-BR-3)", async () => {
+      // flamethrower is seeded only under scarlet-violet. `?format=gen-5`
+      // must not silently label that SV profile as gen-5 data.
+      const page = await loadMovePageUncached("flamethrower", db, "gen-5");
+      expect(page).not.toBeNull();
+      expect(page!.sourceFormat).not.toBe("gen-5");
+      expect(page!.sourceFormat).toBe("scarlet-violet");
+    });
   });
 
   describe("loadAbilityPageUncached", () => {
@@ -246,6 +285,34 @@ describe("reference-pages loaders (tools fixture)", () => {
       // The tools fixture has no ability reference_cache rows, so the ability
       // detail can't be assembled in any scope → null.
       expect(await loadAbilityPageUncached("rough-skin", db)).toBeNull();
+    });
+
+    it("declares preferredFormat as a third parameter (DEX-BR-3)", () => {
+      expect(loadAbilityPageUncached.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("accepts preferredFormat and does not invent that sourceFormat on a miss (DEX-AC-2.2, DEX-BR-3)", async () => {
+      // Third-arg signature lock (mirrors loadPokemonPageUncached). No
+      // ability reference row in any scope — null, not a fake gen-5 page.
+      const page = await loadAbilityPageUncached("rough-skin", db, "gen-5");
+      expect(page).toBeNull();
+      expect(page?.sourceFormat).not.toBe("gen-5");
+    });
+  });
+
+  describe("loadItemPageUncached", () => {
+    it("declares preferredFormat as a third parameter (DEX-BR-3)", () => {
+      expect(loadItemPageUncached.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("accepts preferredFormat and does not invent that sourceFormat on a miss (DEX-AC-2.2, DEX-BR-3)", async () => {
+      // leftovers is named in the SV items index, but the tools fixture has
+      // no item reference_cache rows in any scope — same as rough-skin.
+      // preferredFormat is still accepted; a miss is null, never a page
+      // tagged as the missing scope.
+      const page = await loadItemPageUncached("leftovers", db, "gen-5");
+      expect(page).toBeNull();
+      expect(page?.sourceFormat).not.toBe("gen-5");
     });
   });
 

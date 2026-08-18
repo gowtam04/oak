@@ -4,7 +4,7 @@
  * HIST-US-9, AC-4.1, AC-4.2, AC-8.1, BR-H1, BR-H8).
  *
  *   GET    → 200 { id, title, format, pinned, archived, folderId,
- *                  pinnedMessageIds, turns: ChatTurn[] }
+ *                  pinnedMessageIds, pinnedArtifacts, turns: ChatTurn[] }
  *   PATCH  → 200 { ok: true }   body { title?, pinned?, archived?, folder_id? }
  *   DELETE → 200 { ok: true }   permanent
  *
@@ -16,7 +16,11 @@
 import { json, jsonError, readJsonObject } from "@/app/api/auth/_lib/http";
 import type { ChatTurn } from "@/components/types";
 import type { OakAnswer } from "@/agent/schemas";
-import { currentAccount, conversationRepo } from "../_lib/route-helpers";
+import {
+  artifactPinRepo,
+  currentAccount,
+  conversationRepo,
+} from "../_lib/route-helpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +73,19 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
 
   const pinnedMessageIds = await repo.listPinnedMessageIds(account.id, id);
 
+  const pins = await artifactPinRepo();
+  const pinnedArtifacts = (await pins.list(account.id, id)).map((pin) => ({
+    id: pin.id,
+    kind: pin.kind,
+    title: pin.title,
+    created_at: pin.createdAt,
+  }));
+
+  // Fail-soft: running/failed compile for this conversation. `done` is omitted
+  // (P4 hydrate-store clears on success). Parent glue after P4 + P5-http.
+  const { getHydrate } = await import("@/server/voice/hydrate-store");
+  const hydrate = getHydrate(id);
+
   return json(200, {
     id: conv.id,
     title: conv.title,
@@ -77,6 +94,8 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     archived: conv.archived,
     folderId: conv.folderId,
     pinnedMessageIds,
+    pinnedArtifacts,
+    ...(hydrate ? { hydrate } : {}),
     turns,
     active_turn: running ? { turn_id: running.turnId } : null,
   });

@@ -264,6 +264,41 @@ class ChatViewModelReducerTest {
         assertTrue(appState.guestThread.value[1].content is GuestTurn.Content.Assistant)
         assertEquals(Format.Gen5, appState.guestThreadScope.value)
     }
+
+    // -------------------------------------------------------------------
+    // CALC-US-3 / CALC-BR-4 — /calc is not a chat turn (P8 overlay dispatch)
+    // Compiles today (parser already classifies Calc) and fails until send()
+    // stops falling through to POST. Overlay fields live in ChatViewModelAnswerCardsTest.
+    // -------------------------------------------------------------------
+
+    @Test
+    fun slashCalcDoesNotPostAChatTurn() = runTest(mainDispatcherRule.dispatcher) {
+        val chat = FakeChatService()
+        val vm = newModel(chat)
+        vm.setComposerText("/calc")
+
+        vm.send()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(chat.sendWithImagesCalls.isEmpty())
+        assertTrue(chat.sendRequestCalls.isEmpty())
+        assertEquals("", vm.uiState.value.composerText)
+        assertTrue(vm.uiState.value.turns.isEmpty())
+        assertFalse(vm.uiState.value.isStreaming)
+    }
+
+    @Test
+    fun slashCalcWithArgsStillDoesNotPostAChatTurn() = runTest(mainDispatcherRule.dispatcher) {
+        val chat = FakeChatService()
+        val vm = newModel(chat)
+        vm.setComposerText("/calc garchomp earthquake vs gholdengo")
+
+        vm.send()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(chat.sendWithImagesCalls.isEmpty())
+        assertTrue(vm.uiState.value.turns.isEmpty())
+    }
 }
 
 /** Local alias so the test reads naturally without importing the sealed type's cases individually. */

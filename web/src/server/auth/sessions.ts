@@ -167,6 +167,7 @@ async function findAccountById(id: string): Promise<Account | null> {
       email: account.email,
       createdAt: account.created_at,
       lastUsedScope: account.last_used_scope,
+      answerDensity: account.answer_density,
     })
     .from(account)
     .where(eq(account.id, id))
@@ -179,11 +180,19 @@ async function findAccountById(id: string): Promise<Account | null> {
     typeof row.lastUsedScope === "string" && isFormat(row.lastUsedScope)
       ? row.lastUsedScope
       : null;
+  // Same parse as accounts-repo.findAccountByEmail: only `'full' | 'compact'`
+  // survive; NULL / unknown = full (COMPACT-BR-2). Omit when unset so session
+  // toEqual(createAccount(...)) fixtures stay exact.
+  const answerDensity =
+    row.answerDensity === "full" || row.answerDensity === "compact"
+      ? row.answerDensity
+      : null;
   return {
     id: row.id,
     email: row.email,
     createdAt: row.createdAt,
     lastUsedScope,
+    ...(answerDensity !== null ? { answerDensity } : {}),
   };
 }
 

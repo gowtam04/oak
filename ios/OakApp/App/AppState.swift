@@ -44,6 +44,15 @@ final class AppState {
   /// A pending in-app hop (slash / chip / share URL). Consumed by ``RootView``.
   var pendingDestination: AppDestination?
 
+  /// Compact / full answer-card default (COMPACT-US-1). Full is the factory default.
+  var answerDensity: AnswerDensity = .full
+
+  /// Incoming species for the signed-in Add-to-team sheet (ADD-US-1). `nil` when idle.
+  var pendingAddToTeam: TeamMember?
+
+  /// Explain-from-calculator should land as a normal chat send.
+  var pendingChatSend: String?
+
   /// Pending server-side turns keyed by conversation id (`session_id`) → the
   /// server-minted `turn_id` still generating for that thread
   /// (background-turns/design.md §6 / §6.2). It lives here — not on the chat view
@@ -235,6 +244,10 @@ enum AppDestination: Equatable, Sendable {
   case teams(query: String?)
   case team(id: String)
   case dex(query: String?)
+  case dexHop(DexArtifactHop)
+  /// First-class / Expand calculator. Associated scenario is carried into the
+  /// full-screen `CalculatorView` (CALC-AC-1.2 / 2.3) — never a chat bounce.
+  case calculator(CalcScenario?)
   case conversation(id: String)
   case share(id: String)
 }

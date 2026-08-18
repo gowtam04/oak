@@ -10,6 +10,11 @@
  *
  * `lastUsedScopes` is additive (SCOPE-US-2): signed-in bodies include the MRU
  * list (may be `[]`); guests omit it. Singular `lastUsedScope` stays as today.
+ *
+ * `answerDensity` is additive (COMPACT-US-2 / ADR-9): `"full" | "compact"`.
+ * Omit or `"full"` when the account column is NULL (COMPACT-BR-2). Guests
+ * omit it (COMPACT-BR-4). Existing exact `toEqual` fixtures stay valid when
+ * the field is omitted for unset accounts.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -142,6 +147,72 @@ describe("GET /api/auth/me", () => {
       lastUsedScope: "gen-7",
       lastUsedScopes: [],
     });
+  });
+
+  it("includes answerDensity when the account has compact (COMPACT-US-2)", async () => {
+    cu.getCurrentAccount.mockResolvedValue({
+      id: "acct-1",
+      email: "ash@pallet.town",
+      createdAt: 1_700_000_000_000,
+      lastUsedScope: null,
+      answerDensity: "compact",
+    });
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      signedIn: true,
+      email: "ash@pallet.town",
+      lastUsedScopes: [],
+      answerDensity: "compact",
+    });
+  });
+
+  it("includes answerDensity: 'full' when the account stored full (COMPACT-US-2)", async () => {
+    cu.getCurrentAccount.mockResolvedValue({
+      id: "acct-1",
+      email: "ash@pallet.town",
+      createdAt: 1_700_000_000_000,
+      lastUsedScope: null,
+      answerDensity: "full",
+    });
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      signedIn: true,
+      email: "ash@pallet.town",
+      lastUsedScopes: [],
+      answerDensity: "full",
+    });
+  });
+
+  it("omits answerDensity or reports 'full' when the column is NULL (COMPACT-BR-2)", async () => {
+    cu.getCurrentAccount.mockResolvedValue({
+      id: "acct-1",
+      email: "ash@pallet.town",
+      createdAt: 1_700_000_000_000,
+      lastUsedScope: null,
+    });
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { answerDensity?: string };
+    if (body.answerDensity !== undefined) {
+      expect(body.answerDensity).toBe("full");
+    }
+  });
+
+  it("does not put answerDensity on a guest body (COMPACT-BR-4)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ signedIn: false });
   });
 
   it("drops unknown formats from lastUsedScopes", async () => {

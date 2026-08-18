@@ -224,6 +224,9 @@ struct TeamBlocksView: View {
             .foregroundStyle(Theme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
         }
+        if !isEmpty {
+          AddToTeamButton(incoming: member, compact: true)
+        }
       }
       Spacer(minLength: 0)
     }

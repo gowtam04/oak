@@ -47,6 +47,9 @@ class MainActivity : ComponentActivity() {
                     teams = oakApplication.services.teams,
                     scope = oakApplication.services.scope,
                     shares = oakApplication.services.shares,
+                    calc = oakApplication.services.calc,
+                    hydrate = oakApplication.services.hydrate,
+                    pins = oakApplication.services.pins,
                 )
             },
         )[ChatViewModel::class.java]

@@ -4,6 +4,7 @@ import ai.gowtam.oak.features.chat.answercard.uncertaintyFlagLabel
 import ai.gowtam.oak.wire.CandidateRow
 import ai.gowtam.oak.wire.JsonScalar
 import ai.gowtam.oak.wire.OakAnswer
+import ai.gowtam.oak.wire.ProposedTeam
 import ai.gowtam.oak.wire.StatSpread
 import ai.gowtam.oak.wire.TeamMember
 import ai.gowtam.oak.wire.titleizeTeamSlug
@@ -103,9 +104,13 @@ private fun formatCaveats(answer: OakAnswer): String? {
     return lines.joinToString("\n")
 }
 
+/** Showdown paste of a proposed roster — the roster only, not the team name (PASTE-US-1). */
+fun proposedTeamToShowdownPaste(team: ProposedTeam): String =
+    serializeShowdown(team.members.mapNotNull { memberToSet(it) })
+
 private fun formatProposedTeam(answer: OakAnswer): String? {
     val team = answer.proposedTeam ?: return null
-    val paste = serializeShowdown(team.members.mapNotNull { memberToSet(it) })
+    val paste = proposedTeamToShowdownPaste(team)
     return when {
         team.name.isBlank() && paste.isBlank() -> null
         paste.isBlank() -> team.name

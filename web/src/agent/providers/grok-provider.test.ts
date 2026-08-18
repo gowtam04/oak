@@ -186,6 +186,18 @@ describe("GrokProvider — request shape", () => {
     expect(JSON.stringify(body)).not.toContain("cache_control");
   });
 
+  it("honors per-turn effort none without changing the constructor default", () => {
+    const { client, captured } = fakeGrokClient(submitResponseEvents(ANSWER));
+    const provider = makeProvider(client);
+    provider.streamTurn({
+      system: SYSTEM,
+      tools: TOOLS,
+      transcript: provider.createTranscript([], "q"),
+      effort: "none",
+    });
+    expect(captured.body.reasoning).toEqual({ effort: "none" });
+  });
+
   it("omits temperature when none is configured", () => {
     const { client, captured } = fakeGrokClient(submitResponseEvents(ANSWER));
     const provider = makeProvider(client, { temperature: undefined });

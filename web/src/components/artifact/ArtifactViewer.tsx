@@ -14,12 +14,23 @@
 import { useEffect, useRef, useState } from "react";
 
 import CaveatStrip from "@/components/answer-card/CaveatStrip";
+import AddToTeamPicker from "@/components/teams/AddToTeamPicker";
+import EntityPicker from "@/components/teams/EntityPicker";
+import { blankMember } from "@/data/teams/place-on-team";
+import { FORMATS, isFormat, type Format } from "@/data/formats";
+import { createPinnedArtifact } from "@/lib/api/artifact-pin-client";
+import { fetchEntityArtifact } from "@/lib/api/entity-client";
 import type { EntityArtifactOk } from "@/lib/entity-artifact";
 import {
   plateFromSubjects,
   plateFromTypes,
   type PlateVars,
 } from "@/lib/plate-types";
+import type { Subject } from "@/agent/schemas";
+import {
+  diffPokemonProfiles,
+  type PokemonCompareProfile,
+} from "@/lib/pokemon-compare";
 
 import { useArtifactViewer } from "./useArtifactViewer";
 import type { ArtifactView } from "./types";
@@ -32,6 +43,21 @@ import TypeMatchupsArtifact from "./TypeMatchupsArtifact";
 import ComparisonArtifact from "./ComparisonArtifact";
 import DamageCalcArtifact from "./DamageCalcArtifact";
 import TeamArtifact from "./TeamArtifact";
+
+const DEX_PATH: Record<"pokemon" | "move" | "ability" | "item", string> = {
+  pokemon: "/pokedex",
+  move: "/moves",
+  ability: "/abilities",
+  item: "/items",
+};
+
+function dexHref(
+  kind: "pokemon" | "move" | "ability" | "item",
+  slug: string,
+  format: string,
+): string {
+  return `${DEX_PATH[kind]}/${encodeURIComponent(slug)}?format=${encodeURIComponent(format)}`;
+}
 
 /**
  * Specimen-plate wash for the artifact shell (soul.md Phase 2 — continuation
@@ -140,12 +166,55 @@ function EntityRenderer({
   }
 }
 
-function ArtifactBody({ view }: { view: ArtifactView }): React.JSX.Element {
+function profileFromPokemonOk(
+  response: Extract<EntityArtifactOk, { kind: "pokemon" }>,
+): PokemonCompareProfile {
+  const data = response.data;
+  const matchups = data.matchups;
+  return {
+    format: response.format,
+    name: data.display_name,
+    types: data.types,
+    abilities: {
+      slot1: data.abilities.slot1,
+      slot2: data.abilities.slot2 ?? null,
+      hidden: data.abilities.hidden ?? null,
+    },
+    stats: data.base_stats,
+    movepool: data.movepool.flatMap((group) =>
+      group.moves.map((move) => move.slug),
+    ),
+    matchups: {
+      defensive: {
+        weak_to: matchups.weak_to ?? [],
+        resists: matchups.resists ?? [],
+        immune_to: matchups.immune_to ?? [],
+      },
+      offensive: {
+        super_effective_against: [],
+        not_very_effective_against: [],
+        no_effect_against: [],
+      },
+    },
+  };
+}
+
+function ArtifactBody({
+  view,
+  signedIn,
+}: {
+  view: ArtifactView;
+  signedIn: boolean;
+}): React.JSX.Element {
   const { openEntity } = useArtifactViewer();
 
   if (view.type === "structured") {
     return view.artifact.kind === "comparison" ? (
-      <ComparisonArtifact subjects={view.artifact.subjects} />
+      <ComparisonArtifact
+        subjects={view.artifact.subjects}
+        signedIn={signedIn}
+        diff={view.artifact.diff}
+      />
     ) : (
       <DamageCalcArtifact damageCalc={view.artifact.damageCalc} />
     );
@@ -259,10 +328,29 @@ function ArtifactBody({ view }: { view: ArtifactView }): React.JSX.Element {
   );
 }
 
-export default function ArtifactViewer(): React.JSX.Element | null {
-  const { isOpen, current, canGoBack, back, close } = useArtifactViewer();
+export default function ArtifactViewer({
+  signedIn = false,
+  conversationId,
+  onPinResult,
+}: {
+  signedIn?: boolean;
+  conversationId?: string;
+  onPinResult?: (
+    result:
+      | { ok: true; pins: import("@/lib/api/artifact-pin-client").PinnedArtifactSummary[] }
+      | { ok: false; error: "pin_cap" },
+  ) => void;
+} = {}): React.JSX.Element | null {
+  const { isOpen, current, canGoBack, back, close, openStructured } =
+    useArtifactViewer();
   const panelRef = useRef<HTMLElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const [pinCap, setPinCap] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareQ, setCompareQ] = useState("");
+  const [compareFormat, setCompareFormat] = useState<Format | "">("");
+  const [compareError, setCompareError] = useState<string | null>(null);
 
   // Are we in the full-screen-overlay regime (mirrors the CSS 768px breakpoint)?
   // There the panel is a modal dialog; on desktop it's a docked complementary
@@ -344,6 +432,89 @@ export default function ArtifactViewer(): React.JSX.Element | null {
     .filter(Boolean)
     .join(" ");
 
+  const entityOk =
+    current.type === "entity" &&
+    current.phase === "done" &&
+    current.response?.status === "ok"
+      ? current.response
+      : null;
+  const dexKind =
+    entityOk &&
+    (entityOk.kind === "pokemon" ||
+      entityOk.kind === "move" ||
+      entityOk.kind === "ability" ||
+      entityOk.kind === "item")
+      ? entityOk.kind
+      : null;
+  const showCompare = entityOk?.kind === "pokemon";
+  const showAdd = signedIn && entityOk?.kind === "pokemon";
+  const pinKind =
+    current.type === "team"
+      ? "team_sheet"
+      : current.type === "structured" && current.artifact.kind === "comparison"
+        ? "comparison"
+        : current.type === "structured" && current.artifact.kind === "damage-calc"
+          ? "calc"
+          : null;
+  const showPin = signedIn && pinKind !== null && Boolean(conversationId);
+
+  async function handlePin() {
+    if (!conversationId || !pinKind || !current) return;
+    const snapshot =
+      current.type === "structured"
+        ? current.artifact
+        : current.type === "team"
+          ? { team: current.detail, title: current.title }
+          : current;
+    const result = await createPinnedArtifact(conversationId, {
+      kind: pinKind,
+      title,
+      snapshot,
+    });
+    if (!result.ok && result.error === "pin_cap") {
+      setPinCap(true);
+      onPinResult?.({ ok: false, error: "pin_cap" });
+    } else if (result.ok) {
+      setPinCap(false);
+      onPinResult?.({ ok: true, pins: result.pinnedArtifacts });
+    }
+  }
+
+  async function handleCompare() {
+    if (!entityOk || entityOk.kind !== "pokemon") return;
+    const q = compareQ.trim();
+    if (!q) return;
+    const fmt: Format = isFormat(compareFormat)
+      ? compareFormat
+      : (entityOk.format as Format);
+    const other = await fetchEntityArtifact("pokemon", q, fmt);
+    if (!other || other.status !== "ok" || other.kind !== "pokemon") {
+      setCompareError("Couldn’t resolve that Pokémon.");
+      return;
+    }
+    const left: Subject = {
+      name: entityOk.data.display_name,
+      types: entityOk.data.types as Subject["types"],
+      sprite_url: entityOk.data.sprite_url,
+      dex_number: entityOk.data.national_dex_number,
+      is_fallback: entityOk.is_fallback,
+    };
+    const right: Subject = {
+      name: other.data.display_name,
+      types: other.data.types as Subject["types"],
+      sprite_url: other.data.sprite_url,
+      dex_number: other.data.national_dex_number,
+      is_fallback: other.is_fallback,
+    };
+    setCompareOpen(false);
+    setCompareError(null);
+    const diff = diffPokemonProfiles(
+      profileFromPokemonOk(entityOk),
+      profileFromPokemonOk(other),
+    );
+    openStructured({ kind: "comparison", subjects: [left, right], diff });
+  }
+
   return (
     <aside
       ref={panelRef}
@@ -389,11 +560,118 @@ export default function ArtifactViewer(): React.JSX.Element | null {
         >
           {formatTag}
         </span>
+        <div className="artifact-viewer__verbs">
+          {dexKind && entityOk && (
+            <a
+              className="artifact-viewer__verb"
+              href={dexHref(
+                dexKind,
+                entityOk.resolved.slug,
+                current.type === "entity"
+                  ? current.request.format
+                  : entityOk.format,
+              )}
+            >
+              Open in Dex
+            </a>
+          )}
+          {showCompare && (
+            <button
+              type="button"
+              className="artifact-viewer__verb"
+              onClick={() => {
+                setCompareOpen((o) => !o);
+                setCompareError(null);
+              }}
+            >
+              Compare with…
+            </button>
+          )}
+          {showAdd && entityOk && (
+            <button
+              type="button"
+              className="artifact-viewer__verb"
+              onClick={() => setAddOpen(true)}
+            >
+              Add to team
+            </button>
+          )}
+          {showPin && (
+            <button
+              type="button"
+              className="artifact-viewer__verb"
+              onClick={() => void handlePin()}
+            >
+              Pin
+            </button>
+          )}
+        </div>
+        {pinCap && (
+          <p className="artifact-viewer__cap" data-testid="pin-cap-message">
+            You can pin 5 artifacts on this conversation. Unpin one to add
+            another.
+          </p>
+        )}
+        {compareOpen && entityOk && (
+          <div className="artifact-viewer__compare">
+            <EntityPicker
+              kind="pokemon"
+              format={
+                isFormat(compareFormat)
+                  ? compareFormat
+                  : (entityOk.format as Format)
+              }
+              value={compareQ}
+              onChange={setCompareQ}
+              placeholder="Other species"
+              ariaLabel="Compare with species"
+              withSprite
+            />
+            <label className="artifact-viewer__compare-format">
+              Scope
+              <select
+                value={compareFormat}
+                onChange={(e) =>
+                  setCompareFormat(
+                    isFormat(e.target.value) ? e.target.value : "",
+                  )
+                }
+              >
+                <option value="">Same scope</option>
+                {FORMATS.map((id) => (
+                  <option key={id} value={id}>
+                    {id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="artifact-viewer__verb"
+              onClick={() => void handleCompare()}
+            >
+              Compare
+            </button>
+            {compareError && <p>{compareError}</p>}
+          </div>
+        )}
       </header>
 
       <div className="artifact-viewer__body" data-testid="artifact-viewer-body">
-        <ArtifactBody view={current} />
+        <ArtifactBody view={current} signedIn={signedIn} />
       </div>
+      {addOpen && entityOk?.kind === "pokemon" && (
+        <AddToTeamPicker
+          incoming={{
+            ...blankMember(),
+            species: entityOk.resolved.slug,
+          }}
+          format={
+            current.type === "entity" ? current.request.format : entityOk.format
+          }
+          onClose={() => setAddOpen(false)}
+        />
+      )}
     </aside>
   );
 }

@@ -3,6 +3,7 @@ package ai.gowtam.oak.app
 import ai.gowtam.oak.services.AuthService
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.services.HistoryService
+import ai.gowtam.oak.wire.AnswerDensity
 import ai.gowtam.oak.wire.ChatTurn
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.OakAnswer
@@ -123,22 +124,38 @@ class AppState {
         _lastUsedScopes.value = formats
     }
 
+    private val _answerDensity = MutableStateFlow<AnswerDensity>(AnswerDensity.Full)
+    val answerDensity: StateFlow<AnswerDensity> = _answerDensity.asStateFlow()
+
+    fun setAnswerDensity(density: AnswerDensity) {
+        _answerDensity.value = density
+    }
+
     /**
      * One-shot hop to Dex / Teams from a slash, chip, or empty-desk row.
      * Consumed by [OakApp] so Chat does not own tab navigation.
      */
     sealed interface SurfaceRequest {
         data object None : SurfaceRequest
-        data class Dex(val query: String?) : SurfaceRequest
+        data class Dex(
+            val query: String?,
+            val kind: ai.gowtam.oak.wire.EntityKind? = null,
+            val format: Format? = null,
+        ) : SurfaceRequest
         data class Teams(val id: String? = null, val name: String? = null) : SurfaceRequest
         data class ShareSnapshot(val id: String) : SurfaceRequest
+        data class Calculator(val scenario: ai.gowtam.oak.wire.CalcScenario?) : SurfaceRequest
     }
 
     private val _surfaceRequest = MutableStateFlow<SurfaceRequest>(SurfaceRequest.None)
     val surfaceRequest: StateFlow<SurfaceRequest> = _surfaceRequest.asStateFlow()
 
-    fun requestDex(query: String?) {
-        _surfaceRequest.value = SurfaceRequest.Dex(query)
+    fun requestDex(
+        query: String?,
+        kind: ai.gowtam.oak.wire.EntityKind? = null,
+        format: Format? = null,
+    ) {
+        _surfaceRequest.value = SurfaceRequest.Dex(query, kind, format)
     }
 
     fun requestTeams(id: String? = null, name: String? = null) {
@@ -147,6 +164,10 @@ class AppState {
 
     fun requestShareSnapshot(id: String) {
         _surfaceRequest.value = SurfaceRequest.ShareSnapshot(id)
+    }
+
+    fun requestCalculator(scenario: ai.gowtam.oak.wire.CalcScenario?) {
+        _surfaceRequest.value = SurfaceRequest.Calculator(scenario)
     }
 
     fun consumeSurfaceRequest() {
