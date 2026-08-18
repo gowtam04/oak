@@ -26,6 +26,16 @@ final class FakeVoiceService: VoiceService, @unchecked Sendable {
   private(set) var postTranscriptCalls:
     [(sessionId: String, format: Format, userText: String, assistantText: String)] = []
 
+  /// `POST /api/voice/hydrate` recording (VOICE-US-3). Extra methods until
+  /// ``VoiceService`` grows `hydrate` — Chat VM tests assert these after
+  /// ``ChatViewModel/retryVoiceHydrate(assistantMessageId:)``.
+  var hydrateResult: Result<VoiceHydrateResponse, OakError> = .success(
+    VoiceHydrateResponse(status: .running)
+  )
+  private(set) var hydrateCount = 0
+  private(set) var lastHydrateConversationId: String?
+  private(set) var lastHydrateAssistantMessageId: String?
+
   func fetchToken(sessionId: String, format: Format) async throws -> VoiceTokenResponse {
     fetchTokenCalls.append((sessionId, format))
     if let tokenError { throw tokenError }
@@ -40,6 +50,13 @@ final class FakeVoiceService: VoiceService, @unchecked Sendable {
 
   func postTranscript(sessionId: String, format: Format, userText: String, assistantText: String) async {
     postTranscriptCalls.append((sessionId, format, userText, assistantText))
+  }
+
+  func hydrate(conversationId: String, assistantMessageId: String) async throws -> VoiceHydrateResponse {
+    hydrateCount += 1
+    lastHydrateConversationId = conversationId
+    lastHydrateAssistantMessageId = assistantMessageId
+    return try hydrateResult.get()
   }
 }
 

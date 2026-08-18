@@ -67,8 +67,13 @@ struct AnswerCardViewTests {
     )
   }
 
-  private func sections(_ answer: OakAnswer) -> [AnswerCardView.Section] {
-    AnswerCardView(answer: answer).sections
+  private func sections(
+    _ answer: OakAnswer,
+    density: AnswerDensity = .full,
+    receiptsExpanded: Bool = false
+  ) -> [AnswerCardView.Section] {
+    AnswerCardView(answer: answer, density: density, receiptsExpanded: receiptsExpanded)
+      .sections
   }
 
   // Reusable non-empty sub-values.
@@ -394,5 +399,127 @@ struct AnswerCardViewTests {
       #expect(blocks.contains(.answer))
       #expect(blocks.first == .status)  // status badge leads a non-answered card
     }
+  }
+
+  // MARK: Compact density (COMPACT-US-1 / COMPACT-BR-1)
+
+  @Test
+  func compactHidesReasoningAndSourcesOnly() {
+    let citation = Citation(source: "PokeAPI", detail: "Base stats", endpointUrl: nil)
+    let answer = makeAnswer(
+      reasoningMarkdown: "Compared Speed.",
+      citations: [citation],
+      inferences: [Inference(claim: "Outspeeds.", confidence: .high, note: nil)],
+      subjects: [sampleSubject],
+      candidates: sampleCandidates,
+      damageCalc: sampleDamage,
+      uncertaintyFlags: ["Estimate only."],
+      proposedTeam: sampleProposedTeam
+    )
+
+    let compact = sections(answer, density: .compact)
+    #expect(!compact.contains(.receipts))
+    #expect(compact.contains(.answer))
+    #expect(compact.contains(.candidates))
+    #expect(compact.contains(.damageCalc))
+    #expect(compact.contains(.teams))
+    #expect(compact.contains(.caveat))
+    #expect(compact.contains(.inferences))
+    #expect(compact.contains(.subjects))
+
+    let full = sections(answer, density: .full)
+    #expect(full.contains(.receipts))
+  }
+
+  @Test
+  func perCardExpandRestoresReceiptsWithoutChangingTheDefault() {
+    let citation = Citation(source: "PokeAPI", detail: "Base stats", endpointUrl: nil)
+    let answer = makeAnswer(
+      reasoningMarkdown: "Compared Speed.",
+      citations: [citation]
+    )
+
+    let expanded = sections(answer, density: .compact, receiptsExpanded: true)
+    #expect(expanded.contains(.receipts))
+    #expect(sections(answer, density: .compact).contains(.receipts) == false)
+  }
+
+  // MARK: Showdown paste (PASTE-US-1 / PASTE-BR-1 / PASTE-BR-2)
+
+  @Test
+  func proposedTeamShowdownPasteMatchesTheHumanMarkdownSection() {
+    let member = TeamMember(
+      species: "garchomp",
+      ability: "rough-skin",
+      item: "life-orb",
+      moves: ["earthquake", "dragon-claw"],
+      nature: "jolly",
+      evs: StatSpread(hp: 0, atk: 252, def: 0, spa: 0, spd: 4, spe: 252),
+      ivs: StatSpread(hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31),
+      teraType: "ground",
+      level: 50,
+      nickname: nil,
+      gender: nil,
+      shiny: nil
+    )
+    let team = ProposedTeam(name: "Sand", format: .scarletViolet, members: [member])
+    let paste = proposedTeamToShowdownPaste(team)
+    let human = OakAnswerHumanMarkdown.build(makeAnswer(proposedTeam: team))
+
+    #expect(!paste.isEmpty)
+    #expect(paste.localizedCaseInsensitiveContains("garchomp"))
+    #expect(paste.localizedCaseInsensitiveContains("life-orb") || paste.contains("Life Orb"))
+    #expect(human.contains(paste) || human.localizedCaseInsensitiveContains("garchomp"))
+    #expect(AnswerCardView.showsShowdownCopy(for: makeAnswer(proposedTeam: team)))
+    #expect(AnswerCardView.showsShowdownCopy(for: makeAnswer()) == false)
+  }
+
+  // MARK: Citation highlight (CIT-US-1 / CIT-BR-1 / CIT-BR-2)
+
+  @Test
+  func citationHighlightRequiresBothTheAnchorAndTheMatchingSpan() {
+    let linked = Citation(
+      source: "pokemon/garchomp",
+      detail: "Base speed 102",
+      endpointUrl: nil,
+      anchor: CitationAnchor(target: .answerSpan, id: "c0")
+    )
+    let unlinked = Citation(
+      source: "pokemon/garchomp",
+      detail: "Base speed 102",
+      endpointUrl: nil
+    )
+    let withSpan = makeAnswer(
+      answerMarkdown: "<!-- span:c0 -->Garchomp is fast.<!-- /span:c0 -->",
+      citations: [linked]
+    )
+    let withoutSpan = makeAnswer(
+      answerMarkdown: "Garchomp is fast.",
+      citations: [linked]
+    )
+
+    #expect(citationHighlightTarget(citation: linked, answer: withSpan) == .answerSpan(id: "c0"))
+    #expect(citationHighlightTarget(citation: linked, answer: withoutSpan) == nil)
+    #expect(citationHighlightTarget(citation: unlinked, answer: withSpan) == nil)
+  }
+
+  @Test
+  func factRowHighlightRequiresAMatchingShownRow() {
+    let citation = Citation(
+      source: "pokemon/dragapult",
+      detail: "Speed row",
+      endpointUrl: nil,
+      anchor: CitationAnchor(target: .factRow, id: "Dragapult")
+    )
+    let withRow = makeAnswer(
+      citations: [citation],
+      candidates: sampleCandidates
+    )
+    let withoutRow = makeAnswer(citations: [citation])
+
+    #expect(
+      citationHighlightTarget(citation: citation, answer: withRow) == .factRow(id: "Dragapult")
+    )
+    #expect(citationHighlightTarget(citation: citation, answer: withoutRow) == nil)
   }
 }

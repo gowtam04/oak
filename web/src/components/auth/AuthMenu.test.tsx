@@ -8,6 +8,7 @@
  * sign-out targets only the current device's session endpoint (AC-5.2).
  */
 
+import type { ComponentProps } from "react";
 import {
   afterEach,
   beforeEach,
@@ -25,7 +26,14 @@ import {
   waitFor,
 } from "@testing-library/react";
 
+import { updateAnswerDensity } from "@/lib/api/preferences-client";
 import AuthMenu from "./AuthMenu";
+
+vi.mock("@/lib/api/preferences-client", () => ({
+  updateAnswerDensity: vi.fn().mockResolvedValue("compact"),
+}));
+
+const densityMock = vi.mocked(updateAnswerDensity);
 
 function mockResponse(status: number, body: unknown): Response {
   return {
@@ -135,5 +143,52 @@ describe("AuthMenu — signed in (AUTH-US-5)", () => {
 
     fireEvent.click(screen.getByTestId("auth-signout-button"));
     await waitFor(() => expect(onSignedOut).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("AuthMenu — compact/full default (COMPACT-US-2)", () => {
+  function renderSignedIn(
+    over: { answerDensity?: "full" | "compact" } = {},
+  ) {
+    const props = {
+      signedIn: true as const,
+      email: "ash@pallet.town",
+      onSignInClick: vi.fn(),
+      onSignedOut: vi.fn(),
+      ...over,
+    };
+    render(<AuthMenu {...(props as ComponentProps<typeof AuthMenu>)} />);
+    fireEvent.click(screen.getByTestId("auth-account-button"));
+  }
+
+  it("shows a named compact/full preference in Account when signed in (COMPACT-AC-2.1)", () => {
+    renderSignedIn();
+    const group = screen.getByTestId("answer-density");
+    expect(group).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /^full$/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("radio", { name: /^compact$/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("defaults to full when the account has never set a preference (COMPACT-AC-1.3)", () => {
+    renderSignedIn();
+    expect(screen.getByRole("radio", { name: /^full$/i })).toBeChecked();
+  });
+
+  it("PATCHes the account preference when compact is chosen (COMPACT-AC-2.1)", async () => {
+    renderSignedIn({ answerDensity: "full" });
+    fireEvent.click(screen.getByRole("radio", { name: /^compact$/i }));
+    await waitFor(() =>
+      expect(densityMock).toHaveBeenCalledWith("compact"),
+    );
+  });
+
+  it("does not show the account density toggle to guests (COMPACT-BR-4, AUTH-BR-1)", () => {
+    render(
+      <AuthMenu signedIn={false} onSignInClick={vi.fn()} onSignedOut={vi.fn()} />,
+    );
+    expect(screen.queryByTestId("answer-density")).toBeNull();
+    expect(screen.queryByRole("radio", { name: /^compact$/i })).toBeNull();
   });
 });

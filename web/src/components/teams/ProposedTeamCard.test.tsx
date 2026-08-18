@@ -17,6 +17,7 @@ vi.mock("@/lib/api/teams-client", () => ({
   listTeams: vi.fn().mockResolvedValue([]),
 }));
 
+import { proposedTeamToShowdownPaste } from "@/lib/proposed-team-showdown";
 import ProposedTeamCard from "./ProposedTeamCard";
 
 const createMock = vi.mocked(createTeam);
@@ -171,5 +172,51 @@ describe("ProposedTeamCard", () => {
   it("renders no legality block for a clean proposal (no warnings)", async () => {
     render(<ProposedTeamCard proposedTeam={proposed()} />);
     expect(screen.queryByTestId("proposed-team-warnings")).toBeNull();
+  });
+});
+
+describe("ProposedTeamCard — Copy Showdown paste (PASTE-US-1)", () => {
+  it("copies only the Showdown paste, not the full human markdown (PASTE-AC-1.1, PASTE-BR-2)", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const team = proposed();
+    render(<ProposedTeamCard proposedTeam={team} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /copy showdown paste/i }),
+    );
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const pasted = writeText.mock.calls[0]![0] as string;
+    expect(pasted).toBe(proposedTeamToShowdownPaste(team));
+    expect(pasted).toMatch(/Great Tusk/i);
+    expect(pasted).not.toContain("# Oak answer");
+    expect(pasted).not.toContain("**Status:**");
+    expect(createMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("confirms success and does not open Teams (PASTE-AC-1.2, PASTE-BR-1)", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<ProposedTeamCard proposedTeam={proposed()} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /copy showdown paste/i }),
+    );
+    expect(
+      await screen.findByText(/copied/i),
+    ).toBeInTheDocument();
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it("is available to guests (PASTE-BR-3)", () => {
+    render(<ProposedTeamCard proposedTeam={proposed()} />);
+    expect(
+      screen.getByRole("button", { name: /copy showdown paste/i }),
+    ).toBeInTheDocument();
   });
 });

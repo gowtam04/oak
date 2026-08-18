@@ -177,4 +177,46 @@ struct AccountViewModelTests {
     #expect(vm.isSignedIn == true)
     #expect(vm.email == "ash@pallet.town")
   }
+
+  // MARK: Compact / full preference (COMPACT-US-1/2, COMPACT-BR-2/4)
+
+  @Test
+  func unansweredPreferenceDefaultsToFull() {
+    let (vm, _, _) = makeVM()
+    #expect(vm.answerDensity == .full)
+  }
+
+  @Test
+  func guestSetDensityIsDeviceOnlyAndDoesNotPatch() async {
+    let (vm, fake, _) = makeVM()
+    #expect(vm.isSignedIn == false)
+
+    await vm.setAnswerDensity(.compact)
+
+    #expect(vm.answerDensity == .compact)
+    #expect(fake.setAnswerDensityCount == 0)
+    #expect(fake.lastSetAnswerDensity == nil)
+  }
+
+  @Test
+  func signedInSetDensityPatchesTheAccountAndUpdatesCards() async {
+    let (vm, fake, _) = makeVM(appState: signedInState())
+
+    await vm.setAnswerDensity(.compact)
+
+    #expect(vm.answerDensity == .compact)
+    #expect(fake.setAnswerDensityCount == 1)
+    #expect(fake.lastSetAnswerDensity == .compact)
+  }
+
+  @Test
+  func signedInCanRestoreFull() async {
+    let (vm, fake, _) = makeVM(appState: signedInState())
+    fake.setAnswerDensityResult = .success(.full)
+
+    await vm.setAnswerDensity(.full)
+
+    #expect(vm.answerDensity == .full)
+    #expect(fake.lastSetAnswerDensity == .full)
+  }
 }

@@ -159,3 +159,15 @@ describe("DamageCalcArtifact", () => {
     expect(screen.getByTestId("damage-readout")).toBeInTheDocument();
   });
 });
+
+describe("renderers — Dex stays on the viewer header (DEX-AC-1.2)", () => {
+  it("does not put Open in Dex on the standalone Pokémon / type renderer", () => {
+    render(<PokemonArtifact data={POKEMON_ARTIFACT.data} />);
+    expect(screen.queryByRole("link", { name: /open in dex/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /open in dex/i })).toBeNull();
+    cleanup();
+    render(<TypeMatchupsArtifact data={TYPE_ARTIFACT.data} />);
+    expect(screen.queryByRole("link", { name: /open in dex/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /open in dex/i })).toBeNull();
+  });
+});

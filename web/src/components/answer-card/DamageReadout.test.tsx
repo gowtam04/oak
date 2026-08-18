@@ -1,10 +1,19 @@
-import { afterEach, describe, it, expect } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import type { ComponentProps } from "react";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 afterEach(() => cleanup());
 import DamageReadout from "./DamageReadout";
 import { DAMAGE_CALC_GARCHOMP } from "@/components/test-fixtures";
 import type { DamageCalc } from "@/components/types";
+
+type DamageReadoutP6Props = ComponentProps<typeof DamageReadout> & {
+  onOpenCalculator?: () => void;
+};
+
+function renderReadout(over: DamageReadoutP6Props) {
+  render(<DamageReadout {...(over as ComponentProps<typeof DamageReadout>)} />);
+}
 
 describe("DamageReadout", () => {
   it("always shows the 'Estimate' tag", () => {
@@ -65,5 +74,25 @@ describe("DamageReadout", () => {
     render(<DamageReadout damageCalc={statCalc} />);
     expect(screen.getByTestId("damage-result")).toHaveTextContent("169");
     expect(screen.getByTestId("damage-result")).toHaveTextContent("speed");
+  });
+});
+
+describe("DamageReadout — Open in calculator (CALC-US-2, CALC-AC-2.1)", () => {
+  it("offers Open in calculator to every user", () => {
+    renderReadout({ damageCalc: DAMAGE_CALC_GARCHOMP });
+    expect(
+      screen.getByRole("button", { name: /open in calculator/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("fires onOpenCalculator with the block's assumptions when activated", () => {
+    const onOpenCalculator = vi.fn();
+    renderReadout({
+      damageCalc: DAMAGE_CALC_GARCHOMP,
+      onOpenCalculator,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /open in calculator/i }));
+    expect(onOpenCalculator).toHaveBeenCalledTimes(1);
+    expect(onOpenCalculator).toHaveBeenCalledWith(DAMAGE_CALC_GARCHOMP);
   });
 });

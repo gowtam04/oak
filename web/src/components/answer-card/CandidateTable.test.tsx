@@ -199,3 +199,156 @@ describe("CandidateTable", () => {
     );
   });
 });
+
+/**
+ * P6 — operate on the shown set only. Sort / filter / in-table pin / TSV
+ * never fetch the hidden remainder (TBL-BR-1). N of M stays the unfiltered
+ * shown vs total.
+ *
+ * Requirement refs: TBL-US-1–4, TBL-AC-1.1–1.2, TBL-AC-2.1–2.4, TBL-AC-3.1–3.2,
+ * TBL-AC-4.1, TBL-AC-4.4, TBL-BR-1.
+ */
+describe("CandidateTable — shown-set tools (TBL-US-1–4)", () => {
+  const fetchSpy = vi.fn();
+
+  afterEach(() => {
+    fetchSpy.mockReset();
+    vi.unstubAllGlobals();
+  });
+
+  it("sorts only the currently shown rows and does not fetch M (TBL-AC-1.1, TBL-BR-1)", () => {
+    vi.stubGlobal("fetch", fetchSpy);
+    render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    // Fixture is already Speed desc: Garchomp (102) then Dragonite (80).
+    expect(screen.getByTestId("candidate-row-0")).toHaveTextContent("Garchomp");
+    fireEvent.click(screen.getByTestId("candidate-sort-speed"));
+    expect(screen.getByTestId("candidate-row-0")).toHaveTextContent("Dragonite");
+    expect(screen.getByTestId("candidate-row-1")).toHaveTextContent("Garchomp");
+    expect(screen.queryByText("Salamence")).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps N of M honest after sort (TBL-AC-1.2)", () => {
+    render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    fireEvent.click(screen.getByTestId("candidate-sort-speed"));
+    expect(screen.getByTestId("candidate-table-count")).toHaveTextContent(
+      "Showing 2 of 50",
+    );
+  });
+
+  it("filters shown rows by type without fetching the remainder (TBL-AC-2.1, TBL-BR-1)", () => {
+    vi.stubGlobal("fetch", fetchSpy);
+    render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    fireEvent.change(screen.getByTestId("candidate-table-type-filter"), {
+      target: { value: "flying" },
+    });
+    expect(screen.getByText("Dragonite")).toBeInTheDocument();
+    expect(screen.queryByText("Garchomp")).toBeNull();
+    expect(screen.queryByText("Salamence")).toBeNull();
+    expect(screen.getByTestId("candidate-table-count")).toHaveTextContent(
+      "Showing 2 of 50",
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("filters shown rows by name fragment (TBL-AC-2.2)", () => {
+    render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    fireEvent.change(screen.getByTestId("candidate-table-name-search"), {
+      target: { value: "garch" },
+    });
+    expect(screen.getByText("Garchomp")).toBeInTheDocument();
+    expect(screen.queryByText("Dragonite")).toBeNull();
+  });
+
+  it("composes type filter AND name search (TBL-AC-2.3)", () => {
+    render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    fireEvent.change(screen.getByTestId("candidate-table-type-filter"), {
+      target: { value: "dragon" },
+    });
+    fireEvent.change(screen.getByTestId("candidate-table-name-search"), {
+      target: { value: "nite" },
+    });
+    expect(screen.getByText("Dragonite")).toBeInTheDocument();
+    expect(screen.queryByText("Garchomp")).toBeNull();
+  });
+
+  it("clearing filters restores the full shown set, still not M (TBL-AC-2.4)", () => {
+    render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    fireEvent.change(screen.getByTestId("candidate-table-type-filter"), {
+      target: { value: "flying" },
+    });
+    fireEvent.change(screen.getByTestId("candidate-table-type-filter"), {
+      target: { value: "" },
+    });
+    expect(screen.getByText("Garchomp")).toBeInTheDocument();
+    expect(screen.getByText("Dragonite")).toBeInTheDocument();
+    expect(screen.queryByText("Salamence")).toBeNull();
+    expect(screen.getByTestId("candidate-table-count")).toHaveTextContent(
+      "Showing 2 of 50",
+    );
+  });
+
+  it("keeps a pinned row visible above filter matches (TBL-AC-3.1)", () => {
+    render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    fireEvent.click(screen.getByTestId("candidate-row-pin-0"));
+    fireEvent.change(screen.getByTestId("candidate-table-type-filter"), {
+      target: { value: "flying" },
+    });
+    expect(screen.getByTestId("candidate-row-0")).toHaveTextContent("Garchomp");
+    expect(screen.getByText("Dragonite")).toBeInTheDocument();
+    expect(screen.getByTestId("candidate-table-count")).toHaveTextContent(
+      "Showing 2 of 50",
+    );
+  });
+
+  it("unpinning returns the row to normal filter rules (TBL-AC-3.2)", () => {
+    render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    fireEvent.click(screen.getByTestId("candidate-row-pin-0"));
+    fireEvent.change(screen.getByTestId("candidate-table-type-filter"), {
+      target: { value: "flying" },
+    });
+    fireEvent.click(screen.getByTestId("candidate-row-pin-0"));
+    expect(screen.queryByText("Garchomp")).toBeNull();
+    expect(screen.getByText("Dragonite")).toBeInTheDocument();
+  });
+
+  it("copies TSV of the currently visible rows (TBL-AC-4.1)", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    fireEvent.change(screen.getByTestId("candidate-table-type-filter"), {
+      target: { value: "flying" },
+    });
+    fireEvent.click(screen.getByTestId("candidate-table-copy-tsv"));
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const tsv = writeText.mock.calls[0]![0] as string;
+    expect(tsv).toContain("Dragonite");
+    expect(tsv).not.toContain("Garchomp");
+    expect(tsv).toContain("\t");
+    expect(tsv).not.toContain(",");
+  });
+
+  it("explains and copies nothing useful when the filtered set is empty (TBL-AC-4.4)", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(<CandidateTable candidates={CANDIDATES_TRUNCATED} />);
+    fireEvent.change(screen.getByTestId("candidate-table-name-search"), {
+      target: { value: "zzz-no-match" },
+    });
+    fireEvent.click(screen.getByTestId("candidate-table-copy-tsv"));
+    expect(screen.getByTestId("candidate-table-copy-empty")).toHaveTextContent(
+      /no rows/i,
+    );
+    if (writeText.mock.calls.length > 0) {
+      expect(writeText.mock.calls[0]![0]).toBe("");
+    }
+  });
+});

@@ -89,6 +89,23 @@ describe("AppNav — landmarks", () => {
   });
 });
 
+describe("AppNav — Calculator destination (CALC-US-1, CALC-AC-1.1–1.2)", () => {
+  it("lists Calculator as a first-class primary destination at /calc", () => {
+    const calc = PRIMARY_NAV_ITEMS.find(
+      (item) => item.href === "/calc" || /calculator/i.test(item.label),
+    );
+    expect(calc).toBeDefined();
+    expect(calc!.href).toBe("/calc");
+    expect(calc!.label).toMatch(/calculator/i);
+
+    render(<AppNav pathname="/calc" />);
+    const link = screen.getByTestId("app-nav-calculator");
+    expect(link).toHaveAttribute("href", "/calc");
+    expect(link).toHaveClass("app-nav__link--active");
+    expect(link).toHaveAttribute("aria-current", "page");
+  });
+});
+
 describe("AppNav — slot", () => {
   it("renders children in the slot when given", () => {
     render(

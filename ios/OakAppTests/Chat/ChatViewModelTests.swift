@@ -1037,4 +1037,233 @@ struct ChatViewModelTests {
     vm.apply(.answerDelta(text: "answer"))
     #expect(vm.streamingPhase == .answering)
   }
+
+  // MARK: /calc dispatch (CALC-US-3 / CALC-BR-4) — handled slash, not a chat turn
+
+  /// Expected ChatViewModel surface (P7 implementer):
+  ///   `isCalculatorPresented`, `calculatorHop` (rest + format + overlay)
+  ///   `openCalculator(rest:)`, `dismissCalculator()`, `explainCalculator()`
+  ///   `showsAddToTeam` / `showsPinArtifact` — false for guests (AUTH-BR-1)
+  ///   `retryVoiceHydrate(assistantMessageId:)` → `POST /api/voice/hydrate`
+  ///   `showsVoiceMic(for:)`, `voiceHydrateBanner(for:)` (VOICE-US-1–3)
+  /// Parser already classifies `.calc` (P5). Dispatch lives here.
+
+  @Test
+  func bareCalcOpensTheOverlayAndDoesNotPostChat() {
+    let fake = FakeChatService()
+    let vm = makeViewModel(fake: fake)
+    vm.selectScope(.gen7)
+    vm.composerText = "/calc"
+
+    vm.send()
+
+    #expect(fake.sendCount == 0)
+    #expect(vm.turns.isEmpty)
+    #expect(vm.isStreaming == false)
+    #expect(vm.composerText == "")
+    #expect(vm.isCalculatorPresented)
+    #expect(vm.calculatorHop?.kind == .overlay)
+    #expect(vm.calculatorHop?.rest == "")
+    #expect(vm.calculatorHop?.format == .gen7)
+    #expect(vm.errorBanner == nil)
+  }
+
+  @Test
+  func calcWithArgsOpensTheOverlayCarryingTrimmedRestAndDoesNotPost() {
+    let fake = FakeChatService()
+    let vm = makeViewModel(fake: fake)
+    vm.composerText = "/calc garchomp earthquake vs gholdengo"
+
+    vm.send()
+
+    #expect(fake.sendCount == 0)
+    #expect(vm.turns.isEmpty)
+    #expect(vm.isCalculatorPresented)
+    #expect(vm.calculatorHop?.rest == "garchomp earthquake vs gholdengo")
+    #expect(vm.errorBanner == nil)
+  }
+
+  @Test
+  func unresolvedCalcTokensStillOpenTheOverlayWithoutAToast() {
+    let fake = FakeChatService()
+    let vm = makeViewModel(fake: fake)
+    vm.composerText = "/calc not-a-species vs also-fake"
+
+    vm.send()
+
+    #expect(fake.sendCount == 0)
+    #expect(vm.isCalculatorPresented)
+    #expect(vm.calculatorHop?.rest == "not-a-species vs also-fake")
+    #expect(vm.errorBanner == nil)
+  }
+
+  @Test
+  func calcMidSentenceIsStillANormalChatTurn() async throws {
+    let fake = FakeChatService()
+    fake.scriptedEvents = [
+      .answer(try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")),
+    ]
+    let vm = makeViewModel(fake: fake)
+    vm.composerText = "please open /calc"
+
+    vm.send()
+    await vm.streamTask?.value
+
+    #expect(fake.sendCount == 1)
+    #expect(fake.lastMessage == "please open /calc")
+    #expect(vm.isCalculatorPresented == false)
+  }
+
+  @Test
+  func explainCalculatorSendsATurnAndLeavesTheOverlayOpen() async throws {
+    let fake = FakeChatService()
+    fake.scriptedEvents = [
+      .answer(try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")),
+    ]
+    let vm = makeViewModel(fake: fake)
+    vm.composerText = "/calc garchomp earthquake vs farigiraf"
+    vm.send()
+    #expect(vm.isCalculatorPresented)
+
+    vm.explainCalculator()
+    await vm.streamTask?.value
+
+    #expect(fake.sendCount == 1)
+    #expect(fake.lastMessage?.hasPrefix("Explain this damage estimate") == true)
+    #expect(vm.isCalculatorPresented)
+    #expect(vm.calculatorHop?.rest == "garchomp earthquake vs farigiraf")
+  }
+
+  // MARK: Guest hide Add / Pin (AUTH-BR-1)
+
+  @Test
+  func guestHidesAddToTeamAndPin() {
+    let vm = makeViewModel(fake: FakeChatService())
+    #expect(vm.isSignedIn == false)
+    #expect(vm.showsAddToTeam == false)
+    #expect(vm.showsPinArtifact == false)
+  }
+
+  @Test
+  func signedInShowsAddToTeamAndPin() {
+    let appState = AppState()
+    appState.completeSignIn(email: "ash@pallet.town")
+    let vm = makeViewModel(fake: FakeChatService(), appState: appState)
+
+    #expect(vm.isSignedIn)
+    #expect(vm.showsAddToTeam)
+    #expect(vm.showsPinArtifact)
+  }
+
+  // MARK: Voice hydrate retry + mic / finishing / Retry (VOICE-US-1–3)
+
+  @Test
+  func retryVoiceHydratePostsTheHydrateEndpoint() async {
+    let fake = FakeChatService()
+    let voice = FakeVoiceService()
+    let appState = AppState()
+    appState.completeSignIn(email: "ash@pallet.town")
+    let vm = ChatViewModel(
+      chat: fake,
+      appState: appState,
+      voice: voice,
+      usesBackgroundGrace: false
+    )
+    vm.loadResumed(
+      conversationId: "conv-voice",
+      format: .nationalDex,
+      turns: [],
+      activeTurnId: nil
+    )
+
+    await vm.retryVoiceHydrate(assistantMessageId: "a-voice-1")
+
+    #expect(voice.hydrateCount == 1)
+    #expect(voice.lastHydrateConversationId == "conv-voice")
+    #expect(voice.lastHydrateAssistantMessageId == "a-voice-1")
+    #expect(fake.sendCount == 0)
+  }
+
+  @Test
+  func hydrateRetryEndpointIsPostVoiceHydrateWithSnakeCaseBody() throws {
+    let endpoint = VoiceEndpoints.hydrate(
+      conversationId: "conv-9",
+      assistantMessageId: "msg-a1"
+    )
+    #expect(endpoint.method == .post)
+    #expect(endpoint.path == "/api/voice/hydrate")
+    #expect(endpoint.requiresAuth == true)
+
+    let request = try endpoint.urlRequest(
+      baseURL: URL(string: "https://oak.example.com")!,
+      token: "tok",
+      encoder: JSONEncoder()
+    )
+    #expect(request.url?.path == "/api/voice/hydrate")
+    let body = try #require(request.httpBody)
+    let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+    #expect(object["conversation_id"] as? String == "conv-9")
+    #expect(object["assistant_message_id"] as? String == "msg-a1")
+  }
+
+  private func spokenAnswer(origin: OakAnswer.Origin? = .voice) -> OakAnswer {
+    OakAnswer(
+      status: .answered,
+      answerMarkdown: "Garchomp is fast.",
+      reasoningMarkdown: "",
+      citations: [],
+      inferences: [],
+      generationBasis: GenerationBasis(generation: "", fallback: false, note: nil),
+      subjects: nil,
+      candidates: nil,
+      damageCalc: nil,
+      suggestions: nil,
+      question: nil,
+      uncertaintyFlags: nil,
+      proposedTeam: nil,
+      savedTeam: nil,
+      proposedTeamWarnings: nil,
+      origin: origin
+    )
+  }
+
+  @Test
+  func voiceOriginShowsAMicGlyph() {
+    let vm = makeViewModel(fake: FakeChatService())
+    #expect(vm.showsVoiceMic(for: spokenAnswer(origin: .voice)))
+    #expect(vm.showsVoiceMic(for: spokenAnswer(origin: nil)) == false)
+  }
+
+  @Test
+  func runningHydrateShowsFinishingBannerOnTheSameTurn() {
+    let vm = makeViewModel(fake: FakeChatService())
+    let spoken = spokenAnswer()
+    let item = ChatViewModel.ChatTurnItem(
+      serverMessageId: "a1",
+      content: .assistant(spoken)
+    )
+
+    vm.applyVoiceHydrate(assistantMessageId: "a1", status: .running)
+
+    #expect(vm.voiceHydrateBanner(for: item) == .finishing)
+    #expect(vm.showsVoiceMic(for: spoken))
+  }
+
+  @Test
+  func failedHydrateKeepsSpokenTextAndOffersRetry() {
+    let vm = makeViewModel(fake: FakeChatService())
+    let spoken = spokenAnswer()
+    let item = ChatViewModel.ChatTurnItem(
+      serverMessageId: "a1",
+      content: .assistant(spoken)
+    )
+
+    vm.applyVoiceHydrate(assistantMessageId: "a1", status: .failed)
+
+    #expect(vm.voiceHydrateBanner(for: item) == .retry)
+    #expect(vm.showsVoiceMic(for: spoken))
+    if case let .assistant(answer) = item.content {
+      #expect(answer.answerMarkdown == "Garchomp is fast.")
+    }
+  }
 }
