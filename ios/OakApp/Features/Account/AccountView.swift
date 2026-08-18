@@ -27,6 +27,7 @@ struct AccountView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(UpdateViewModel.self) private var updateModel
   @Environment(\.services) private var services
+  @Environment(AppState.self) private var appState
   @State private var model: AccountViewModel
 
   /// Drives the sign-in sheet (presented over the guest state).
@@ -205,6 +206,12 @@ struct AccountView: View {
   @ViewBuilder
   private var appearanceSection: some View {
     Section {
+      Button {
+        appState.pendingDestination = .calculator(nil)
+      } label: {
+        actionLabel(title: "Calculator", systemImage: "function")
+      }
+      .accessibilityHint("Opens the damage calculator")
       Picker(
         "Answer cards",
         selection: Binding(

@@ -39,6 +39,7 @@ final class ArtifactViewModel {
 
   private(set) var compareErrorMessage: String?
   private(set) var pinErrorMessage: String?
+  private(set) var lastCompareDiff: PokemonCompareDiff?
   private var lastEntityQuery: String?
   private var lastEntityKind: EntityKind?
 
@@ -125,6 +126,7 @@ final class ArtifactViewModel {
   /// data delivered with the answer (no fetch — mirrors web's `comparison` structured
   /// artifact). Synchronous: the sheet appears instantly.
   func openComparison(_ subjects: [Subject]) {
+    lastCompareDiff = nil
     stack.append(Artifact(title: "Comparison", content: .comparison(subjects: subjects)))
   }
 
@@ -179,6 +181,7 @@ final class ArtifactViewModel {
     lastEntityKind = nil
     compareErrorMessage = nil
     pinErrorMessage = nil
+    lastCompareDiff = nil
   }
 
   // MARK: Open in Dex / Compare / Pin
@@ -198,14 +201,18 @@ final class ArtifactViewModel {
   }
 
   func compareWith(species: String, format: Format?) async {
-    guard case .entity(let first)? = current?.content, case .pokemon = first.kind else { return }
+    guard case .entity(let first)? = current?.content, case .pokemon(let leftData) = first.data else { return }
     compareErrorMessage = nil
     let scope = format ?? self.format
     let result = await service.entity(kind: .pokemon, q: species, format: scope)
-    guard case .ok(let second)? = result, case .pokemon = second.kind else {
+    guard case .ok(let second)? = result, case .pokemon(let rightData) = second.data else {
       compareErrorMessage = "Couldn't find \(species) to compare."
       return
     }
+    lastCompareDiff = diffPokemonProfiles(
+      PokemonCompareSubject(format: first.format, profile: leftData, set: nil, offensive: nil),
+      PokemonCompareSubject(format: scope, profile: rightData, set: nil, offensive: nil)
+    )
     let left = subject(from: first, nameOverride: nil)
     let right = subject(from: second, nameOverride: species)
     stack.append(Artifact(title: "Comparison", content: .comparison(subjects: [left, right].compactMap { $0 })))

@@ -11,6 +11,9 @@ struct CalculatorHop: Equatable, Sendable {
   var kind: Kind
   var rest: String
   var format: Format
+  /// Prefill from a damage block (CALC-AC-2.1). When set, the overlay applies
+  /// this scenario instead of parsing `rest`.
+  var scenario: CalcScenario? = nil
 }
 
 /// Overlay + first-class calculator (CALC-US-1/2/5/8). Opening / editing /
@@ -113,6 +116,35 @@ final class CalculatorViewModel {
 
 /// Best-effort `A [move] vs B` parse for `/calc` rest. Unresolved tokens still
 /// open the overlay (CALC-AC-3.3) — this never errors.
+/// Prefill from an answer `damage_calc` assumptions map (CALC-AC-2.1).
+func scenarioFromDamageCalc(_ calc: DamageCalc, format: Format) -> CalcScenario {
+  let a = calc.assumptions
+  func species(_ key: String) -> String? {
+    switch a[key] {
+    case .string(let value):
+      let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+      return trimmed.isEmpty ? nil : trimmed
+    default:
+      return nil
+    }
+  }
+  func level() -> Int? {
+    switch a["level"] {
+    case .int(let value): return value
+    case .double(let value): return Int(value)
+    default: return nil
+    }
+  }
+  let move = species("move")
+  let lvl = level()
+  return CalcScenario(
+    format: format,
+    attacker: CalcSide(species: species("attacker"), nature: species("nature"), level: lvl),
+    defender: CalcSide(species: species("defender"), level: lvl),
+    move: CalcMove(slug: move, name: move)
+  )
+}
+
 func parseCalcSlashRest(_ rest: String, format: Format) -> CalcScenario? {
   let trimmed = rest.trimmingCharacters(in: .whitespacesAndNewlines)
   guard !trimmed.isEmpty else { return nil }

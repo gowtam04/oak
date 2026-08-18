@@ -14,6 +14,7 @@ import SwiftUI
 /// pushing a new artifact onto the viewer's back stack via ``onOpen``.
 struct ComparisonArtifactView: View {
   let subjects: [Subject]
+  var diff: PokemonCompareDiff? = nil
 
   /// Pushes a Pokémon's full profile when its comparison card is tapped. No-op
   /// default so the view renders in isolation / previews.
@@ -29,13 +30,19 @@ struct ComparisonArtifactView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 12) {
         ForEach(Array(subjects.enumerated()), id: \.offset) { _, subject in
-          Button {
-            onOpen(subject.name)
-          } label: {
-            SubjectsView(subjects: [subject])
+          VStack(alignment: .leading, spacing: 6) {
+            Button {
+              onOpen(subject.name)
+            } label: {
+              SubjectsView(subjects: [subject])
+            }
+            .buttonStyle(OakPressableButtonStyle())
+            .accessibilityHint("Opens \(subject.name)'s full profile")
+            AddToTeamButton(incoming: incomingTeamMember(species: subject.name), compact: true)
           }
-          .buttonStyle(OakPressableButtonStyle())
-          .accessibilityHint("Opens \(subject.name)'s full profile")
+        }
+        if let diff {
+          compareDiffSection(diff)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -45,6 +52,54 @@ struct ComparisonArtifactView: View {
       .padding(.vertical, Theme.Spacing.sm)
     }
     .background(Theme.canvas)
+  }
+
+  @ViewBuilder
+  private func compareDiffSection(_ diff: PokemonCompareDiff) -> some View {
+    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+      Text("Compare")
+        .font(Theme.display(.subheadline))
+      Text("\(diff.left.displayName) (\(diff.left.format.shortLabel)) vs \(diff.right.displayName) (\(diff.right.format.shortLabel))")
+        .font(Theme.body(.footnote))
+        .foregroundStyle(Theme.textSecondary)
+      diffLine("Speed", "\(diff.speed.leftValue) vs \(diff.speed.rightValue)")
+      setLine("Types", diff.types)
+      setLine("Abilities", diff.abilities)
+      setLine("Movepool", diff.movepool)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(Theme.Spacing.md)
+    .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("Comparison of \(diff.left.displayName) and \(diff.right.displayName)")
+  }
+
+  private func diffLine(_ title: String, _ value: String) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(title).font(Theme.body(.caption, weight: .semibold))
+      Text(value).font(Theme.body(.footnote)).foregroundStyle(Theme.textSecondary)
+    }
+  }
+
+  private func setLine(_ title: String, _ set: PokemonCompareSetDiff) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(title).font(Theme.body(.caption, weight: .semibold))
+      if !set.onlyLeft.isEmpty {
+        Text("Only left: \(set.onlyLeft.joined(separator: ", "))")
+          .font(Theme.body(.footnote))
+          .foregroundStyle(Theme.textSecondary)
+      }
+      if !set.onlyRight.isEmpty {
+        Text("Only right: \(set.onlyRight.joined(separator: ", "))")
+          .font(Theme.body(.footnote))
+          .foregroundStyle(Theme.textSecondary)
+      }
+      if !set.shared.isEmpty {
+        Text("Shared: \(set.shared.prefix(8).joined(separator: ", "))")
+          .font(Theme.body(.footnote))
+          .foregroundStyle(Theme.textSecondary)
+      }
+    }
   }
 }
 

@@ -166,6 +166,12 @@ struct EntityDetailView: View {
           .instrumentLabel(.caption)
           .foregroundStyle(Theme.textMuted)
         typeChips(data.types)
+        AddToTeamButton(
+          incoming: incomingTeamMember(
+            species: data.displayName,
+            ability: data.abilities.slot1
+          )
+        )
       }
     }
     .frame(maxWidth: .infinity)

@@ -239,10 +239,11 @@ struct ChatView: View {
             model.send()
           },
           onExpand: {
-            calculator.expandToFullScreen()
-            appState.pendingDestination = .calculator
+            let scenario = calculator.scenario
             model.dismissCalculator()
-          }
+            appState.pendingDestination = .calculator(scenario)
+          },
+          onDismiss: { model.dismissCalculator() }
         )
       }
     }
@@ -256,8 +257,18 @@ struct ChatView: View {
         format: hop.format,
         presentation: hop.kind == .fullScreen ? .fullScreen : .overlay
       )
-      vm.applySlashRest(hop.rest)
+      if let scenario = hop.scenario {
+        vm.applyPrefill(scenario)
+      } else {
+        vm.applySlashRest(hop.rest)
+      }
       calculator = vm
+    }
+    .onChange(of: appState.pendingChatSend) { _, prompt in
+      guard let prompt else { return }
+      appState.pendingChatSend = nil
+      model.composerText = prompt
+      model.send()
     }
     // Host the artifact bottom sheet once at the screen level; pushing an entity
     // opens it, an empty back stack closes it (M-AC-A3.3, M-BR-ART-5).
@@ -517,8 +528,11 @@ struct ChatView: View {
           onOpenComparison: { subjects in
             artifactModel?.openComparison(subjects)
           },
-          onOpenDamageCalc: { _ in
-            model.openCalculator(rest: "")
+          onOpenDamageCalc: { calc in
+            model.openCalculator(
+              rest: "",
+              scenario: scenarioFromDamageCalc(calc, format: model.displayFormat)
+            )
           },
           onCopyHuman: {
             UIPasteboard.general.string = OakAnswerHumanMarkdown.build(answer)

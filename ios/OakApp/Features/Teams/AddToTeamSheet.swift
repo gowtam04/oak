@@ -1,6 +1,90 @@
 import SwiftUI
 import Observation
 
+private struct ShowsAddToTeamKey: EnvironmentKey {
+  static let defaultValue = false
+}
+
+extension EnvironmentValues {
+  /// Signed-in only. Guests never see Add-to-team (AUTH-BR-1).
+  var showsAddToTeam: Bool {
+    get { self[ShowsAddToTeamKey.self] }
+    set { self[ShowsAddToTeamKey.self] = newValue }
+  }
+}
+
+/// Species-only incoming for a sprite / row / comparison cell (ADD-BR-2).
+func incomingTeamMember(
+  species: String,
+  ability: String? = nil,
+  item: String? = nil,
+  moves: [String] = [],
+  nature: String? = nil,
+  teraType: String? = nil,
+  level: Int = 50
+) -> TeamMember {
+  let slug = species
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+    .lowercased()
+    .replacingOccurrences(of: " ", with: "-")
+  return TeamMember(
+    species: slug.isEmpty ? nil : slug,
+    ability: ability,
+    item: item,
+    moves: moves,
+    nature: nature,
+    evs: StatSpread(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0),
+    ivs: StatSpread(hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31),
+    teraType: teraType,
+    level: level,
+    nickname: nil,
+    gender: nil,
+    shiny: nil
+  )
+}
+
+/// Compact Add-to-team verb. Renders nothing for guests.
+struct AddToTeamButton: View {
+  let incoming: TeamMember
+  var compact: Bool = false
+
+  @Environment(\.showsAddToTeam) private var showsAddToTeam
+
+  var body: some View {
+    if showsAddToTeam, incoming.species?.isEmpty == false {
+      AddToTeamButtonInner(incoming: incoming, compact: compact)
+    }
+  }
+}
+
+private struct AddToTeamButtonInner: View {
+  let incoming: TeamMember
+  var compact: Bool = false
+  @Environment(AppState.self) private var appState
+
+  var body: some View {
+    if compact {
+      Button {
+        appState.pendingAddToTeam = incoming
+      } label: {
+        Label("Add to team", systemImage: "plus")
+          .font(Theme.body(.caption, weight: .medium))
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Add to team")
+    } else {
+      Button {
+        appState.pendingAddToTeam = incoming
+      } label: {
+        Label("Add to team", systemImage: "plus.square.on.square")
+          .font(Theme.display(.footnote))
+      }
+      .buttonStyle(.oakSecondary)
+      .accessibilityLabel("Add to team")
+    }
+  }
+}
+
 /// Picker + first-empty / replace / create-new (ADD-US-1–4). Guests never see
 /// the sheet (AUTH-BR-1).
 @MainActor

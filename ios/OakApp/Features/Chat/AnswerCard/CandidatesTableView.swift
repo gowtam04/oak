@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Renders the `candidates` block of an ``OakAnswer`` — the competitive workhorse
 /// result set (`candidatesSchema` in `web/src/agent/schemas.ts`) — as a native,
@@ -28,6 +29,7 @@ struct CandidatesTableView: View {
   /// AV-US-1). Carries the row's display `name`; the chat host routes it to
   /// ``ArtifactViewModel/openEntity(kind:query:)`` with `.pokemon`. No-op default
   /// so the table renders in isolation / previews.
+  var highlightedRow: String? = nil
   var onOpenPokemon: (String) -> Void = { _ in }
 
   /// Opens a tapped type chip's own Type profile (M-AC-A3.1), scoped to the chip so
@@ -52,15 +54,33 @@ struct CandidatesTableView: View {
   /// in `candidates.hiddenRows` — the table then appends them in place with no
   /// follow-up turn (M-AC "Show all" local expansion).
   @State private var expanded = false
+  @State private var tableState = CandidatesTableState(
+    candidates: Candidates(totalCount: 0, truncated: false, sort: nil, shown: [])
+  )
+  @State private var nameQuery = ""
+  @State private var typeFilter: String = ""
 
   /// Whether local expansion is even possible for this payload (the server shipped
   /// the withheld rows inline). Delegates to the pure model helper so the decision
   /// is unit-testable off the view.
   private var hasHiddenRows: Bool { candidates.canExpandLocally }
 
-  /// The rows currently on screen: `shown`, plus the hidden rows once expanded.
+  private var workingCandidates: Candidates {
+    if expanded && hasHiddenRows {
+      return Candidates(
+        totalCount: candidates.totalCount,
+        truncated: false,
+        sort: candidates.sort,
+        shown: candidates.allRows,
+        hiddenRows: nil
+      )
+    }
+    return candidates
+  }
+
+  /// Shown-set after sort / filter / pin (TBL-US-1–4).
   private var displayedRows: [CandidateRow] {
-    expanded && hasHiddenRows ? candidates.allRows : candidates.shown
+    tableState.visibleRows
   }
 
   /// True once every row of the set is on screen (locally expanded), so the footer
@@ -73,13 +93,22 @@ struct CandidatesTableView: View {
     } else {
       VStack(alignment: .leading, spacing: 10) {
         caption
+        tableTools
         table
         if candidates.truncated {
           footer
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
+      .onAppear { resetTableState() }
+      .onChange(of: expanded) { _, _ in resetTableState() }
     }
+  }
+
+  private func resetTableState() {
+    tableState = CandidatesTableState(candidates: workingCandidates)
+    if !nameQuery.isEmpty { tableState.search(name: nameQuery) }
+    if !typeFilter.isEmpty { tableState.filter(type: typeFilter) }
   }
 
   // MARK: Caption
@@ -98,7 +127,57 @@ struct CandidatesTableView: View {
           .foregroundStyle(Theme.textSecondary)
       }
       Spacer(minLength: 0)
+      if !tableState.tsv.isEmpty {
+        Button {
+          UIPasteboard.general.string = tableState.tsv
+          Haptics.tap()
+        } label: {
+          Label("Copy for spreadsheet", systemImage: "tablecells.badge.ellipsis")
+            .font(Theme.body(.caption, weight: .medium))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Copies the visible rows as TSV")
+      }
     }
+  }
+
+  private var tableTools: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      TextField("Search name", text: $nameQuery)
+        .textInputAutocapitalization(.never)
+        .font(Theme.body(.footnote))
+        .onChange(of: nameQuery) { _, value in
+          tableState.search(name: value)
+        }
+      if !availableTypes.isEmpty {
+        Picker("Type", selection: $typeFilter) {
+          Text("All types").tag("")
+          ForEach(availableTypes, id: \.self) { type in
+            Text(type.capitalized).tag(type)
+          }
+        }
+        .onChange(of: typeFilter) { _, value in
+          if value.isEmpty {
+            tableState.clearFilters()
+            if !nameQuery.isEmpty { tableState.search(name: nameQuery) }
+          } else {
+            tableState.filter(type: value)
+            if !nameQuery.isEmpty { tableState.search(name: nameQuery) }
+          }
+        }
+      }
+    }
+  }
+
+  private var availableTypes: [String] {
+    var seen = Set<String>()
+    var out: [String] = []
+    for row in workingCandidates.shown {
+      for type in row.types where seen.insert(type.lowercased()).inserted {
+        out.append(type)
+      }
+    }
+    return out
   }
 
   // MARK: Table
@@ -144,7 +223,15 @@ struct CandidatesTableView: View {
       ForEach(statColumns) { column in
         let isSorted = column.id == sortedColumnID
         cell(background: headerBackground, accentWash: isSorted, alignment: .trailing) {
-          headerStatLabel(column)
+          Button {
+            if let key = sortKey(for: column.id) {
+              tableState.sort(by: key)
+            }
+          } label: {
+            headerStatLabel(column)
+          }
+          .buttonStyle(.plain)
+          .accessibilityHint("Sorts by \(column.label)")
         }
       }
       if showsAbility {
@@ -167,7 +254,8 @@ struct CandidatesTableView: View {
   }
 
   private func dataRow(_ row: CandidateRow, index: Int) -> some View {
-    let background = rowBackground(index)
+    let highlighted = highlightedRow?.caseInsensitiveCompare(row.name) == .orderedSame
+    let background = highlighted ? Theme.accent.opacity(0.14) : rowBackground(index)
     // The whole row (every cell except the types cell) opens that Pokémon's
     // profile (AV-US-1). The types cell owns its own per-chip taps, so a type tap
     // stays scoped to the type — SwiftUI has no event bubbling, so this is the
@@ -227,6 +315,24 @@ struct CandidatesTableView: View {
           Text(dexLabel(dexNumber))
             .font(Theme.mono(.caption2))
             .foregroundStyle(Theme.textSecondary)
+        }
+        HStack(spacing: 8) {
+          Button {
+            if tableState.isPinned(row.name) {
+              tableState.unpinRow(named: row.name)
+            } else {
+              tableState.pinRow(named: row.name)
+            }
+          } label: {
+            Image(systemName: tableState.isPinned(row.name) ? "pin.fill" : "pin")
+              .font(.system(size: 11, weight: .semibold))
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel(tableState.isPinned(row.name) ? "Unpin \(row.name)" : "Pin \(row.name) in table")
+          AddToTeamButton(
+            incoming: incomingTeamMember(species: row.name, ability: row.ability),
+            compact: true
+          )
         }
       }
     }
@@ -299,7 +405,7 @@ struct CandidatesTableView: View {
     if isFullyShown {
       return "Showing all \(candidates.totalCount)."
     }
-    return "Showing \(displayedRows.count) of \(candidates.totalCount) — refine to narrow."
+    return "Showing \(tableState.shownCount) of \(tableState.totalCount) — refine to narrow."
   }
 
   /// The trailing control. Two distinct behaviours, decided by the payload:
@@ -406,8 +512,31 @@ struct CandidatesTableView: View {
   /// column matches when it equals the column key or is that key plus a trailing
   /// direction word — exact matching so `special_defense` never lights up `Def`.
   private var sortedColumnID: String? {
+    if let key = tableState.activeSort {
+      switch key {
+      case .spe: return "speed"
+      case .hp: return "hp"
+      case .atk: return "attack"
+      case .def: return "defense"
+      case .spa: return "special_attack"
+      case .spd: return "special_defense"
+      case .name: return "name"
+      }
+    }
     guard let sort = candidates.sort?.lowercased(), !sort.isEmpty else { return nil }
     return statColumns.first { sort == $0.id || sort.hasPrefix($0.id + " ") }?.id
+  }
+
+  private func sortKey(for columnID: String) -> CandidatesTableState.SortKey? {
+    switch columnID {
+    case "speed", "spe": return .spe
+    case "hp": return .hp
+    case "attack", "atk": return .atk
+    case "defense", "def": return .def
+    case "special_attack", "spa": return .spa
+    case "special_defense", "spd": return .spd
+    default: return .name
+    }
   }
 
   private var sortAscending: Bool {
@@ -645,6 +774,9 @@ struct CandidatesTableState: Equatable, Sendable {
 
   var shownCount: Int { source.shown.count }
   var totalCount: Int { source.totalCount }
+  var activeSort: SortKey? { sortKey }
+
+  func isPinned(_ name: String) -> Bool { pinnedNames.contains(name) }
 
   var visibleRows: [CandidateRow] {
     let pinned = source.shown.filter { pinnedNames.contains($0.name) }

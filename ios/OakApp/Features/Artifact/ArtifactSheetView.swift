@@ -19,6 +19,7 @@ struct ArtifactSheetView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(AppState.self) private var appState
   @State private var compareSpecies = ""
+  @State private var compareFormat: Format = .nationalDex
   @State private var showingCompare = false
   /// Mirrors the back-stack depth of the *previous* render so the drill transition can tell a
   /// push (depth grew → new content slides in from the trailing edge) from a back (depth shrank →
@@ -71,6 +72,7 @@ struct ArtifactSheetView: View {
             }
             if case .entity(let ok)? = model.current?.content, ok.kind == .pokemon {
               Button {
+                compareFormat = model.requestFormat
                 showingCompare = true
               } label: {
                 Label("Compare with…", systemImage: "rectangle.split.2x1")
@@ -90,16 +92,42 @@ struct ArtifactSheetView: View {
         }
       }
     }
-    .alert("Compare with…", isPresented: $showingCompare) {
-      TextField("Species", text: $compareSpecies)
-      Button("Compare") {
-        let species = compareSpecies
-        compareSpecies = ""
-        Task { await model.compareWith(species: species, format: nil) }
+    .sheet(isPresented: $showingCompare) {
+      NavigationStack {
+        Form {
+          TextField("Species", text: $compareSpecies)
+            .textInputAutocapitalization(.never)
+          Picker("Scope", selection: $compareFormat) {
+            ForEach(Format.knownCases, id: \.self) { format in
+              Text(format.displayLabel).tag(format)
+            }
+          }
+          if let message = model.compareErrorMessage {
+            Text(message).foregroundStyle(Theme.warning)
+          }
+        }
+        .navigationTitle("Compare with…")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") { showingCompare = false }
+          }
+          ToolbarItem(placement: .confirmationAction) {
+            Button("Compare") {
+              let species = compareSpecies
+              Task {
+                await model.compareWith(species: species, format: compareFormat)
+                if model.compareErrorMessage == nil {
+                  compareSpecies = ""
+                  showingCompare = false
+                }
+              }
+            }
+            .disabled(compareSpecies.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          }
+        }
       }
-      Button("Cancel", role: .cancel) { compareSpecies = "" }
-    } message: {
-      Text("Pick a second Pokémon. This stays on the current artifact if it can't be found.")
+      .presentationDetents([.medium])
     }
     .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
@@ -137,7 +165,7 @@ struct ArtifactSheetView: View {
         Task { await model.openEntity(kind: .pokemon, query: species) }
       }
     case .comparison(let subjects):
-      ComparisonArtifactView(subjects: subjects) { species in
+      ComparisonArtifactView(subjects: subjects, diff: model.lastCompareDiff) { species in
         Task { await model.openEntity(kind: .pokemon, query: species) }
       }
     case .damageCalc(let damageCalc):
@@ -396,6 +424,7 @@ private struct TeamArtifactDetail: View {
           }
           .buttonStyle(.plain)
           .accessibilityHint("Opens \(titleize(species))")
+          AddToTeamButton(incoming: member, compact: true)
         }
         if let detail = abilityTeraLine(member) {
           Text(detail)

@@ -5,6 +5,7 @@ struct CalculatorView: View {
   @Bindable var model: CalculatorViewModel
   var onExplain: ((String) -> Void)?
   var onExpand: (() -> Void)?
+  var onDismiss: (() -> Void)?
 
   var body: some View {
     NavigationStack {
@@ -26,7 +27,14 @@ struct CalculatorView: View {
       .toolbar {
         if model.presentation == .overlay {
           ToolbarItem(placement: .cancellationAction) {
-            Button("Close") { model.dismiss() }
+            Button("Close") {
+              model.dismiss()
+              onDismiss?()
+            }
+          }
+        } else {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Done") { onDismiss?() }
           }
         }
       }
@@ -45,7 +53,20 @@ struct CalculatorView: View {
   }
 
   private var estimateKey: String {
-    "\(model.scenario.format.rawValue)|\(model.scenario.attacker.species ?? "")|\(model.scenario.defender.species ?? "")|\(model.scenario.move.slug ?? "")|\(model.scenario.move.name ?? "")"
+    let a = model.scenario.attacker
+    let d = model.scenario.defender
+    let field = model.scenario.field
+    return [
+      model.scenario.format.rawValue,
+      a.species ?? "", a.item ?? "", a.ability ?? "", a.nature ?? "", a.tera ?? "",
+      a.level.map(String.init) ?? "",
+      d.species ?? "", d.item ?? "", d.ability ?? "", d.nature ?? "", d.tera ?? "",
+      d.level.map(String.init) ?? "",
+      model.scenario.move.slug ?? "", model.scenario.move.name ?? "",
+      field?.weather?.rawValue ?? "",
+      field?.reflect == true ? "R" : "",
+      field?.lightScreen == true ? "LS" : "",
+    ].joined(separator: "|")
   }
 
   @ViewBuilder
@@ -62,6 +83,21 @@ struct CalculatorView: View {
       TextField("Ability", text: optionalString(side.ability))
         .textInputAutocapitalization(.never)
         .font(Theme.body(.body))
+      TextField("Nature", text: optionalString(side.nature))
+        .textInputAutocapitalization(.never)
+        .font(Theme.body(.body))
+      TextField("Tera", text: optionalString(side.tera))
+        .textInputAutocapitalization(.never)
+        .font(Theme.body(.body))
+      TextField(
+        "Level",
+        text: Binding(
+          get: { side.wrappedValue.level.map(String.init) ?? "" },
+          set: { side.wrappedValue.level = Int($0) }
+        )
+      )
+      .keyboardType(.numberPad)
+      .font(Theme.body(.body))
     }
     .oakCard()
   }

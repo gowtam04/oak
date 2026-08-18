@@ -1155,8 +1155,17 @@ final class ChatViewModel {
     }
   }
 
-  func openCalculator(rest: String) {
-    calculatorHop = CalculatorHop(kind: .overlay, rest: rest, format: displayFormat)
+  func openCalculator(
+    rest: String,
+    scenario: CalcScenario? = nil,
+    kind: CalculatorHop.Kind = .overlay
+  ) {
+    calculatorHop = CalculatorHop(
+      kind: kind,
+      rest: rest,
+      format: scenario?.format ?? displayFormat,
+      scenario: scenario
+    )
   }
 
   func dismissCalculator() {
