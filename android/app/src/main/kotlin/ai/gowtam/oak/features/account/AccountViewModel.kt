@@ -89,6 +89,7 @@ class AccountViewModel(
      */
     suspend fun setAnswerDensity(density: AnswerDensity) {
         _answerDensity.value = density
+        appState.setAnswerDensity(density)
         if (isSignedIn) {
             preferences?.setAnswerDensity(density)
         }

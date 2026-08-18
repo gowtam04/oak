@@ -8,6 +8,9 @@ import ai.gowtam.oak.features.calc.CalculatorOverlay
 import ai.gowtam.oak.features.calc.CalculatorViewModel
 import ai.gowtam.oak.features.chat.answercard.AnswerCard
 import ai.gowtam.oak.features.chat.answercard.AnswerCardActions
+import ai.gowtam.oak.features.teams.AddToTeamSheet
+import ai.gowtam.oak.features.teams.AddToTeamViewModel
+import ai.gowtam.oak.wire.TeamMember
 import ai.gowtam.oak.features.share.shareExportedFile
 import ai.gowtam.oak.ui.LocalOakColors
 import android.content.Intent
@@ -50,6 +53,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Functions
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Photo
@@ -89,6 +93,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The chat thread screen (chat-experience.md M-CHAT-US-1/2/3/4; component-design.md
@@ -128,10 +133,14 @@ fun ChatScreen(
     onResumeConversation: (String) -> Unit = {},
     onForked: (String) -> Unit = {},
     onOpenInDex: (ai.gowtam.oak.features.artifact.DexHop) -> Unit = {},
+    onOpenCalculator: () -> Unit = {},
+    conversationId: String? = null,
+    density: ai.gowtam.oak.wire.AnswerDensity = ai.gowtam.oak.wire.AnswerDensity.Full,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val oak = LocalOakColors.current
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     fun shareUrl(url: String) {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -183,7 +192,16 @@ fun ChatScreen(
     // fetched under the old format.
     LaunchedEffect(uiState.displayFormat) { artifactViewModel.updateFormat(uiState.displayFormat) }
 
-    val cardActions = remember(viewModel, artifactViewModel) {
+    val services = LocalServices.current
+    var addIncoming by remember { mutableStateOf<TeamMember?>(null) }
+    LaunchedEffect(uiState.isSignedIn, conversationId, services) {
+        artifactViewModel.bindSession(
+            signedIn = uiState.isSignedIn,
+            conversationId = conversationId,
+            pins = services?.pins,
+        )
+    }
+    val cardActions = remember(viewModel, artifactViewModel, uiState.canAddToTeam, uiState.displayFormat) {
         AnswerCardActions(
             onFollowUp = viewModel::sendFollowUp,
             onOpenEntity = artifactViewModel::openEntity,
@@ -191,6 +209,9 @@ fun ChatScreen(
             onOpenProposedTeam = artifactViewModel::openProposedTeam,
             onOpenComparison = artifactViewModel::openComparison,
             onOpenDamageCalc = artifactViewModel::openDamageCalc,
+            onOpenCalculator = viewModel::openCalculator,
+            calculatorFormat = uiState.displayFormat,
+            onAddToTeam = if (uiState.canAddToTeam) { member -> addIncoming = member } else null,
         )
     }
 
@@ -257,6 +278,9 @@ fun ChatScreen(
                         enabled = !uiState.isStreaming,
                         onClick = { showScopePicker = true },
                     )
+                    IconButton(onClick = onOpenCalculator) {
+                        Icon(Icons.Filled.Functions, contentDescription = "Calculator")
+                    }
                     if (uiState.isSignedIn && uiState.turns.isNotEmpty()) {
                         var exportOpen by remember { mutableStateOf(false) }
                         Box {
@@ -337,6 +361,7 @@ fun ChatScreen(
                         TurnRow(
                             turn = turn,
                             actions = cardActions,
+                            density = density,
                             isLastUser = turn.id == uiState.lastUserTurnId,
                             isLastAssistant = turn.id == uiState.lastAssistantTurnId,
                             canRetry = uiState.canRetryLast,
@@ -377,8 +402,17 @@ fun ChatScreen(
             if (uiState.pinnedArtifacts.isNotEmpty()) {
                 PinnedArtifactStrip(
                     pins = uiState.pinnedArtifacts,
-                    onOpen = { },
-                    onUnpin = { },
+                    onOpen = { pin ->
+                        val pinService = services?.pins ?: return@PinnedArtifactStrip
+                        val conv = conversationId ?: return@PinnedArtifactStrip
+                        scope.launch {
+                            val detail = pinService.get(conv, pin.id)
+                            if (detail != null) {
+                                artifactViewModel.openPinned(detail.kind, detail.title, detail.snapshot)
+                            }
+                        }
+                    },
+                    onUnpin = { pin -> viewModel.unpinArtifact(pin.id) },
                     modifier = Modifier.padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
                 )
             }
@@ -435,19 +469,37 @@ fun ChatScreen(
     // The artifact bottom sheet overlays the chat (co-visible, not a separate tab —
     // component-design.md "Navigation graph"); it self-hides when its back stack is
     // empty, so it is always safe to host unconditionally.
-    ArtifactSheet(artifactViewModel, onOpenInDex = onOpenInDex)
+    ArtifactSheet(
+        artifactViewModel,
+        onOpenInDex = onOpenInDex,
+        onAddToTeam = if (uiState.canAddToTeam) { member -> addIncoming = member } else null,
+    )
+
+    val incoming = addIncoming
+    if (incoming != null && services != null && uiState.canAddToTeam) {
+        val addVm = remember(incoming) {
+            AddToTeamViewModel(services.teams, incoming, uiState.displayFormat)
+        }
+        AddToTeamSheet(
+            viewModel = addVm,
+            onDismiss = { addIncoming = null },
+            onDone = { teamId, _ ->
+                addIncoming = null
+                onOpenTeam(teamId, null)
+            },
+        )
+    }
 
     val overlay = uiState.calcOverlay
-    val services = LocalServices.current
     if (overlay != null && services != null) {
-        val calcVm = remember(overlay.rest, overlay.scenario.format) {
+        val calcVm = remember(overlay.rest, overlay.scenario) {
             CalculatorViewModel(services.calc, overlay.scenario.format, overlay.scenario)
         }
         CalculatorOverlay(
             viewModel = calcVm,
             onDismiss = viewModel::dismissCalculator,
             onExpand = viewModel::expandCalculator,
-            onExplain = viewModel::explainCalculator,
+            onExplain = { prompt -> viewModel.sendFollowUp(prompt) },
         )
     }
 }
@@ -614,6 +666,7 @@ private fun ScopePickerRow(format: Format, selected: Boolean, onSelect: (Format)
 private fun TurnRow(
     turn: ChatTurnItem,
     actions: AnswerCardActions,
+    density: ai.gowtam.oak.wire.AnswerDensity = ai.gowtam.oak.wire.AnswerDensity.Full,
     isLastUser: Boolean,
     isLastAssistant: Boolean,
     canRetry: Boolean,
@@ -647,7 +700,7 @@ private fun TurnRow(
                         color = LocalOakColors.current.textMuted,
                     )
                 }
-                AnswerCard(answer = turn.answer, actions = actions)
+                AnswerCard(answer = turn.answer, actions = actions, density = density)
                 TurnActions(
                     answer = turn.answer,
                     isLastAssistant = isLastAssistant,

@@ -63,6 +63,8 @@ fun CandidatesTable(
     onOpenType: (String) -> Unit,
     onShowAll: () -> Unit,
     modifier: Modifier = Modifier,
+    onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)? = null,
+    highlightedName: String? = null,
 ) {
     val oak = LocalOakColors.current
     var expandedLocally by rememberSaveable { mutableStateOf(false) }
@@ -111,13 +113,36 @@ fun CandidatesTable(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        val allTypes = remember(candidates) {
+            linkedSetOf<String>().apply { candidates.shown.forEach { addAll(it.types) } }.toList()
+        }
+        if (allTypes.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (type in allTypes) {
+                    Box(
+                        modifier = Modifier.clickable {
+                            typeFilter = if (typeFilter == type) null else type
+                        },
+                    ) {
+                        TypeBadge(type = type)
+                    }
+                }
+            }
+        }
         val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+        var tsvNote by remember { mutableStateOf<String?>(null) }
         TextButton(onClick = {
             val tsv = ai.gowtam.oak.features.chat.candidatesToTsv(displayedRows)
-            if (tsv.isNotEmpty()) clipboard.setText(androidx.compose.ui.text.AnnotatedString(tsv))
+            if (tsv.isEmpty()) {
+                tsvNote = "No visible rows to copy."
+            } else {
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(tsv))
+                tsvNote = "Copied ${displayedRows.size} rows."
+            }
         }) {
             Text("Copy TSV")
         }
+        tsvNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = oak.textMuted) }
 
         Column(
             modifier = Modifier
@@ -129,13 +154,33 @@ fun CandidatesTable(
                 HeaderCell("Pokémon", COL_POKEMON, TextAlign.Start)
                 HeaderCell("Types", COL_TYPES, TextAlign.Start)
                 for (column in statColumns) {
-                    StatHeaderCell(column.label, sorted = column.id == sortedId, ascending = ascending)
+                    Box(
+                        modifier = Modifier.clickable {
+                            if (sortColumn == column.id) {
+                                sortAscending = !sortAscending
+                            } else {
+                                sortColumn = column.id
+                                sortAscending = false
+                            }
+                        },
+                    ) {
+                        StatHeaderCell(
+                            column.label,
+                            sorted = column.id == (sortColumn ?: sortedId),
+                            ascending = if (sortColumn != null) sortAscending else ascending,
+                        )
+                    }
                 }
                 if (showsAbility) HeaderCell("Ability", COL_ABILITY, TextAlign.Start)
             }
             // Rows
             displayedRows.forEachIndexed { index, row ->
-                val rowBackground = if (index % 2 == 0) androidx.compose.ui.graphics.Color.Transparent else oak.textStrong.copy(alpha = 0.04f)
+                val highlighted = row.name == highlightedName || row.name in pinnedNames
+                val rowBackground = when {
+                    highlighted -> oak.warning.copy(alpha = 0.16f)
+                    index % 2 == 0 -> androidx.compose.ui.graphics.Color.Transparent
+                    else -> oak.textStrong.copy(alpha = 0.04f)
+                }
                 Row(modifier = Modifier.background(rowBackground)) {
                     // Pokémon cell (tappable)
                     Box(
@@ -145,6 +190,18 @@ fun CandidatesTable(
                             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = {
+                                pinnedNames = if (row.name in pinnedNames) pinnedNames - row.name else pinnedNames + row.name
+                            }) {
+                                Text(if (row.name in pinnedNames) "Unpin" else "Pin", color = oak.accent)
+                            }
+                            if (onAddToTeam != null) {
+                                TextButton(onClick = {
+                                    onAddToTeam(ai.gowtam.oak.features.teams.incomingMemberFromSpecies(row.name, ability = row.ability))
+                                }) {
+                                    Text("Add", color = oak.accent)
+                                }
+                            }
                             SpriteImage(url = row.spriteUrl, name = row.name, size = 32.dp)
                             Column {
                                 Text(

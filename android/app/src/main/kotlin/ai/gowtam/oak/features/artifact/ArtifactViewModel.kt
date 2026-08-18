@@ -9,11 +9,14 @@ import ai.gowtam.oak.wire.EntityArtifactOk
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.PinnedArtifactSummary
+import ai.gowtam.oak.wire.OakJson
 import ai.gowtam.oak.wire.ProposedTeam
 import ai.gowtam.oak.wire.SavedTeamRef
 import ai.gowtam.oak.wire.Subject
 import ai.gowtam.oak.wire.TeamMember
 import ai.gowtam.oak.wire.TeamWarning
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -49,10 +52,13 @@ import kotlinx.coroutines.launch
 class ArtifactViewModel(
     private val service: ArtifactService,
     initialFormat: Format,
-    private val signedIn: Boolean = false,
-    private val pins: ArtifactPinService? = null,
-    private val conversationId: String? = null,
+    signedIn: Boolean = false,
+    pins: ArtifactPinService? = null,
+    conversationId: String? = null,
 ) : ViewModel() {
+    private var signedIn: Boolean = signedIn
+    private var pins: ArtifactPinService? = pins
+    private var conversationId: String? = conversationId
 
     private val _stack = MutableStateFlow<List<Artifact>>(emptyList())
 
@@ -210,6 +216,16 @@ class ArtifactViewModel(
         dismiss()
     }
 
+    fun bindSession(
+        signedIn: Boolean,
+        conversationId: String?,
+        pins: ArtifactPinService?,
+    ) {
+        this.signedIn = signedIn
+        this.conversationId = conversationId
+        this.pins = pins
+    }
+
     // ---- P8: Dex hop / Compare with… / Pin ----
 
     private val _pinError = MutableStateFlow<String?>(null)
@@ -244,28 +260,60 @@ class ArtifactViewModel(
     fun compareWith(query: String, format: Format) {
         if (!canCompare) return
         viewModelScope.launch {
+            val leftOk = (current?.content as? ArtifactContent.Entity)?.v ?: return@launch
+            val leftPokemon = leftOk.data as? ai.gowtam.oak.wire.EntityData.Pokemon ?: return@launch
             val result = service.entity(EntityKind.POKEMON, query, format)
             val ok = (result as? EntityArtifact.Ok)?.v ?: return@launch
             val pokemon = ok.data as? ai.gowtam.oak.wire.EntityData.Pokemon ?: return@launch
-            val subject = Subject(
+            val leftSubject = Subject(
+                name = leftPokemon.v.displayName,
+                spriteUrl = leftPokemon.v.spriteUrl,
+                types = leftPokemon.v.types,
+                isFallback = leftOk.isFallback,
+                sourceGeneration = leftPokemon.v.sourceGeneration,
+            )
+            val rightSubject = Subject(
                 name = pokemon.v.displayName,
                 spriteUrl = pokemon.v.spriteUrl,
                 types = pokemon.v.types,
                 isFallback = ok.isFallback,
+                sourceGeneration = pokemon.v.sourceGeneration,
             )
-            val left = (current?.content as? ArtifactContent.Entity)?.v
-            val leftSubject = if (left != null) {
-                val data = left.data as? ai.gowtam.oak.wire.EntityData.Pokemon
-                Subject(
-                    name = data?.v?.displayName ?: left.resolved.displayName,
-                    spriteUrl = data?.v?.spriteUrl.orEmpty(),
-                    types = data?.v?.types.orEmpty(),
-                    isFallback = left.isFallback,
-                )
-            } else {
-                Subject(name = query, spriteUrl = "", types = emptyList(), isFallback = false)
+            val diff = diffPokemonProfiles(
+                PokemonCompareSubject(format = leftOk.format, profile = leftPokemon.v),
+                PokemonCompareSubject(format = ok.format, profile = pokemon.v),
+            )
+            push(
+                Artifact(
+                    title = "${leftSubject.name} vs ${rightSubject.name}",
+                    content = ArtifactContent.Comparison(
+                        subjects = listOf(leftSubject, rightSubject),
+                        diff = diff,
+                    ),
+                ),
+            )
+        }
+    }
+
+    fun openPinned(kind: String, title: String, snapshot: JsonElement?) {
+        val decoded = snapshot?.let { runCatching { OakJson.decodeFromJsonElement(PinSnapshotBody.serializer(), it) }.getOrNull() }
+        when (kind) {
+            ArtifactPinKind.Calc.rawValue -> {
+                val calc = decoded?.damageCalc ?: return
+                openDamageCalc(calc)
             }
-            push(Artifact(title = "Comparison", content = ArtifactContent.Comparison(listOf(leftSubject, subject))))
+            ArtifactPinKind.Comparison.rawValue -> {
+                val subjects = decoded?.subjects ?: return
+                openComparison(subjects)
+            }
+            ArtifactPinKind.TeamSheet.rawValue -> {
+                val team = decoded?.team ?: return
+                openProposedTeam(team, decoded.warnings.orEmpty())
+            }
+            else -> Unit
+        }
+        if (title.isNotBlank() && current != null) {
+            // title already set by the open* helpers
         }
     }
 
@@ -274,8 +322,9 @@ class ArtifactViewModel(
         val conv = conversationId ?: return
         val pinService = pins ?: return
         val title = current?.title ?: kind.rawValue
+        val snapshot = pinSnapshotFor(current?.content)
         viewModelScope.launch {
-            when (val result = pinService.create(conv, kind, title, snapshot = current?.content)) {
+            when (val result = pinService.create(conv, kind, title, snapshot = snapshot)) {
                 is CreatePinResult.Ok -> {
                     lastPinId = result.pin.id
                     _pinnedArtifacts.value = result.pinnedArtifacts
@@ -303,6 +352,30 @@ class ArtifactViewModel(
                 _pinError.value = null
             }
         }
+    }
+
+    private fun pinSnapshotFor(content: ArtifactContent?): PinSnapshotBody? = when (content) {
+        is ArtifactContent.DamageCalcContent -> PinSnapshotBody(
+            kind = ArtifactPinKind.Calc.rawValue,
+            title = current?.title ?: "Calc",
+            damageCalc = content.v,
+        )
+        is ArtifactContent.Comparison -> PinSnapshotBody(
+            kind = ArtifactPinKind.Comparison.rawValue,
+            title = current?.title ?: "Comparison",
+            subjects = content.subjects,
+        )
+        is ArtifactContent.TeamSheet -> PinSnapshotBody(
+            kind = ArtifactPinKind.TeamSheet.rawValue,
+            title = content.v.name,
+            team = ai.gowtam.oak.wire.ProposedTeam(
+                name = content.v.name,
+                format = content.v.format,
+                members = content.v.members,
+            ),
+            warnings = content.v.warnings,
+        )
+        else -> null
     }
 
     private fun pinKind(): ArtifactPinKind? = when (current?.content) {
@@ -359,7 +432,10 @@ sealed interface ArtifactContent {
      * A side-by-side comparison of the answer's subjects — rendered from the answer's
      * INLINE payload (no fetch). Mirrors the web `comparison` structured artifact.
      */
-    data class Comparison(val subjects: List<Subject>) : ArtifactContent
+    data class Comparison(
+        val subjects: List<Subject>,
+        val diff: PokemonCompareDiff? = null,
+    ) : ArtifactContent
 
     /**
      * A worked damage calculation — rendered from the answer's INLINE `damage_calc`
@@ -396,4 +472,14 @@ data class TeamArtifact(
     val warnings: List<TeamWarning>,
     /** The team's id when it is a persisted saved team; `null` for an ephemeral proposed team. */
     val savedId: String?,
+)
+
+@kotlinx.serialization.Serializable
+data class PinSnapshotBody(
+    val kind: String,
+    val title: String,
+    val damageCalc: DamageCalc? = null,
+    val subjects: List<Subject>? = null,
+    val team: ProposedTeam? = null,
+    val warnings: List<TeamWarning>? = null,
 )

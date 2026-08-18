@@ -4,9 +4,13 @@ import ai.gowtam.oak.services.CalcService
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.OakTopBar
+import ai.gowtam.oak.wire.CalcField
 import ai.gowtam.oak.wire.CalcResult
 import ai.gowtam.oak.wire.CalcScenario
 import ai.gowtam.oak.wire.Format
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -68,13 +72,13 @@ fun CalculatorOverlay(
     viewModel: CalculatorViewModel,
     onDismiss: () -> Unit,
     onExpand: () -> Unit,
-    onExplain: () -> Unit,
+    onExplain: (String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         CalculatorForm(
             viewModel = viewModel,
-            onExplain = { onExplain() },
+            onExplain = onExplain,
             onExpand = onExpand,
             modifier = Modifier
                 .fillMaxWidth()
@@ -130,6 +134,55 @@ private fun CalculatorForm(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
+        Text("Format", style = MaterialTheme.typography.labelMedium, color = oak.textMuted)
+        Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+            for (format in listOf(Format.NationalDex, Format.Champions, Format.ScarletViolet, Format.Gen5, Format.Gen7)) {
+                FilterChip(
+                    selected = scenario.format == format,
+                    onClick = { viewModel.setFormat(format) },
+                    label = { Text(format.shortLabel) },
+                )
+            }
+        }
+        Text("Weather", style = MaterialTheme.typography.labelMedium, color = oak.textMuted)
+        Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+            for (weather in listOf("none", "sun", "rain", "sand", "snow")) {
+                FilterChip(
+                    selected = (scenario.field?.weather ?: "none") == weather,
+                    onClick = {
+                        val current = scenario.field ?: CalcField()
+                        viewModel.setField(current.copy(weather = weather))
+                    },
+                    label = { Text(weather) },
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("Reflect", color = oak.textStrong)
+            Switch(
+                checked = scenario.field?.reflect == true,
+                onCheckedChange = {
+                    val current = scenario.field ?: CalcField()
+                    viewModel.setField(current.copy(reflect = it))
+                },
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("Light Screen", color = oak.textStrong)
+            Switch(
+                checked = scenario.field?.lightScreen == true,
+                onCheckedChange = {
+                    val current = scenario.field ?: CalcField()
+                    viewModel.setField(current.copy(lightScreen = it))
+                },
+            )
+        }
         when (val result = state.result) {
             is CalcResult.Ok -> {
                 val estimate = result.estimate

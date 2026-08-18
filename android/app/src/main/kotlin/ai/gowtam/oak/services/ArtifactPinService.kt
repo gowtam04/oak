@@ -27,8 +27,18 @@ interface ArtifactPinService {
         snapshot: Any?,
     ): CreatePinResult
 
+    suspend fun get(conversationId: String, pinId: String): PinnedArtifact?
+
     suspend fun delete(conversationId: String, pinId: String): List<PinnedArtifactSummary>?
 }
+
+@Serializable
+data class PinnedArtifact(
+    val id: String,
+    val kind: String,
+    val title: String,
+    val snapshot: JsonElement? = null,
+)
 
 sealed interface CreatePinResult {
     data class Ok(val pin: PinnedArtifactSummary, val pinnedArtifacts: List<PinnedArtifactSummary>) : CreatePinResult
@@ -83,6 +93,20 @@ class LiveArtifactPinService(private val apiClient: OakApiClient) : ArtifactPinS
         }
     }
 
+    override suspend fun get(conversationId: String, pinId: String): PinnedArtifact? {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.GET,
+            path = "/api/conversations/$conversationId/artifact-pins/$pinId",
+            requiresAuth = true,
+        )
+        return try {
+            apiClient.send(endpoint, PinDetailEnvelope.serializer()).pin
+        } catch (e: OakError) {
+            Log.e(TAG, "pin get failed: ${e::class.simpleName}")
+            null
+        }
+    }
+
     override suspend fun delete(conversationId: String, pinId: String): List<PinnedArtifactSummary>? {
         val endpoint = Endpoint(
             method = Endpoint.Method.DELETE,
@@ -100,7 +124,9 @@ class LiveArtifactPinService(private val apiClient: OakApiClient) : ArtifactPinS
     private fun snapshotAsJson(snapshot: Any?): JsonElement = when (snapshot) {
         null -> JsonNull
         is JsonElement -> snapshot
-        is String -> OakJson.encodeToJsonElement(snapshot)
+        is ai.gowtam.oak.features.artifact.PinSnapshotBody ->
+            OakJson.encodeToJsonElement(ai.gowtam.oak.features.artifact.PinSnapshotBody.serializer(), snapshot)
+        is String -> OakJson.parseToJsonElement(snapshot)
         else -> OakJson.encodeToJsonElement(snapshot.toString())
     }
 
@@ -126,4 +152,9 @@ private data class CreatePinEnvelope(
 private data class PinListEnvelope(
     val pins: List<PinnedArtifactSummary> = emptyList(),
     val pinnedArtifacts: List<PinnedArtifactSummary> = emptyList(),
+)
+
+@Serializable
+private data class PinDetailEnvelope(
+    val pin: PinnedArtifact,
 )

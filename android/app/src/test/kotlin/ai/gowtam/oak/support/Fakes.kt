@@ -614,6 +614,8 @@ class FakeArtifactPinService(
 
     val createCalls = mutableListOf<CreateCall>()
     val deleteCalls = mutableListOf<Pair<String, String>>()
+    val getCalls = mutableListOf<Pair<String, String>>()
+    private val snapshots = mutableMapOf<String, Any?>()
 
     override suspend fun list(conversationId: String): List<ai.gowtam.oak.wire.PinnedArtifactSummary> = listResult
 
@@ -633,11 +635,32 @@ class FakeArtifactPinService(
                     createdAt = 0L,
                 )
                 listResult = listResult + pin
+                snapshots[pin.id] = snapshot
                 ai.gowtam.oak.services.CreatePinResult.Ok(pin, listResult)
             }
             CreateResult.Cap -> ai.gowtam.oak.services.CreatePinResult.Cap(max = 5)
             CreateResult.Error -> ai.gowtam.oak.services.CreatePinResult.Error("couldnt_pin")
         }
+    }
+
+    override suspend fun get(conversationId: String, pinId: String): ai.gowtam.oak.services.PinnedArtifact? {
+        getCalls += conversationId to pinId
+        val summary = listResult.firstOrNull { it.id == pinId } ?: return null
+        val snapshot = when (val stored = snapshots[pinId]) {
+            is kotlinx.serialization.json.JsonElement -> stored
+            is ai.gowtam.oak.features.artifact.PinSnapshotBody ->
+                ai.gowtam.oak.wire.OakJson.encodeToJsonElement(
+                    ai.gowtam.oak.features.artifact.PinSnapshotBody.serializer(),
+                    stored,
+                )
+            else -> null
+        }
+        return ai.gowtam.oak.services.PinnedArtifact(
+            id = summary.id,
+            kind = summary.kind,
+            title = summary.title,
+            snapshot = snapshot,
+        )
     }
 
     override suspend fun delete(conversationId: String, pinId: String): List<ai.gowtam.oak.wire.PinnedArtifactSummary>? {

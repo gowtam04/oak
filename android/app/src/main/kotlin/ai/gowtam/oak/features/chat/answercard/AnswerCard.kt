@@ -102,13 +102,17 @@ fun AnswerCard(
     val oak = LocalOakColors.current
     val reduceMotion = rememberReduceMotion()
     val plateShape = RoundedCornerShape(OakRadius.lg)
+    var receiptsExpanded by remember { mutableStateOf(false) }
+    var highlight by remember { mutableStateOf<CitationAnchor?>(null) }
     val sections = answerSections(answer, density)
+    val compactHasHiddenReceipts = density == AnswerDensity.Compact &&
+        (answer.reasoningMarkdown.isNotBlank() || answer.citations.isNotEmpty())
     val bodySections = sections.filter {
         it != AnswerSection.REASONING && it != AnswerSection.CITATIONS
     }
     val hasReceipts = sections.any {
         it == AnswerSection.REASONING || it == AnswerSection.CITATIONS
-    }
+    } || (compactHasHiddenReceipts && receiptsExpanded)
     val subjectTypes = remember(answer.subjects) {
         linkedSetOf<String>().apply {
             for (subject in answer.subjects.orEmpty()) addAll(subject.types)
@@ -154,12 +158,31 @@ fun AnswerCard(
                     AnswerSection.STATUS -> StatusBadge(answer.status, sectionModifier)
                     AnswerSection.SCOPE -> Unit
                     AnswerSection.CAVEAT -> CaveatStrip(answer.uncertaintyFlags, answer.generationBasis, sectionModifier)
-                    AnswerSection.ANSWER -> AnswerBody(answer.answerMarkdown, sectionModifier)
+                    AnswerSection.ANSWER -> {
+                        val spanText = highlight
+                            ?.takeIf { it.target == CitationAnchor.Target.AnswerSpan }
+                            ?.let { extractAnswerSpan(answer.answerMarkdown, it.id) }
+                        Column(sectionModifier, verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
+                            AnswerBody(answer.answerMarkdown)
+                            if (spanText != null) {
+                                Text(
+                                    text = spanText,
+                                    color = oak.textStrong,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(oak.warning.copy(alpha = 0.18f), RoundedCornerShape(OakRadius.sm))
+                                        .padding(OakSpacing.sm)
+                                        .testTag("citation-span-${highlight!!.id}"),
+                                )
+                            }
+                        }
+                    }
                     AnswerSection.INFERENCES -> Inferences(answer.inferences, sectionModifier)
                     AnswerSection.SUBJECTS -> Subjects(
                         subjects = answer.subjects.orEmpty(),
                         onOpenEntity = actions.onOpenEntity,
                         onOpenComparison = actions.onOpenComparison,
+                        onAddToTeam = actions.onAddToTeam,
                         modifier = sectionModifier,
                     )
                     AnswerSection.QUESTION -> ClarifyQuestion(answer.question, actions.onFollowUp, sectionModifier)
@@ -173,11 +196,21 @@ fun AnswerCard(
                                 "Show me all ${c.totalCount} of those, not just the top ${c.shown.size}.",
                             )
                         },
+                        onAddToTeam = actions.onAddToTeam,
+                        highlightedName = highlight?.takeIf { it.target == CitationAnchor.Target.FactRow }?.id,
                         modifier = sectionModifier,
                     )
                     AnswerSection.DAMAGE -> DamageCalcBlock(
                         damageCalc = answer.damageCalc!!,
                         onOpenInViewer = { actions.onOpenDamageCalc(answer.damageCalc!!) },
+                        onOpenInCalculator = {
+                            actions.onOpenCalculator(
+                                ai.gowtam.oak.features.calc.calcScenarioFromDamage(
+                                    answer.damageCalc!!,
+                                    actions.calculatorFormat,
+                                ),
+                            )
+                        },
                         modifier = sectionModifier,
                     )
                     AnswerSection.TEAMS -> TeamBlocks(
@@ -187,6 +220,7 @@ fun AnswerCard(
                         onApply = actions.onApplyTeam,
                         onOpenSavedTeam = actions.onOpenSavedTeam,
                         onOpenProposedTeam = { actions.onOpenProposedTeam(it, answer.proposedTeamWarnings.orEmpty()) },
+                        onAddToTeam = actions.onAddToTeam,
                         modifier = sectionModifier,
                     )
                     AnswerSection.SUGGESTIONS -> Suggestions(
@@ -201,6 +235,11 @@ fun AnswerCard(
                 }
             }
             CopyForAgentsRow(answer = answer)
+            if (compactHasHiddenReceipts && !receiptsExpanded) {
+                androidx.compose.material3.TextButton(onClick = { receiptsExpanded = true }) {
+                    Text("Show why · sources", color = oak.accent)
+                }
+            }
         }
         if (hasReceipts) {
             val receiptsIndex = sections.indexOfFirst {
@@ -209,7 +248,11 @@ fun AnswerCard(
             ReceiptsFooter(
                 reasoningMarkdown = answer.reasoningMarkdown.takeIf { it.isNotBlank() },
                 citations = answer.citations,
-                onOpenEntity = actions.onOpenEntity,
+                onOpenEntity = { kind, query -> actions.onOpenEntity(kind, query) },
+                onHighlight = { citation ->
+                    highlight = citationHighlight(citation, answer)
+                    citationHighlight(citation, answer)?.let(actions.onCitationHighlight)
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .sectionEntrance(index = receiptsIndex, reduceMotion = reduceMotion),
@@ -235,6 +278,12 @@ data class AnswerCardActions(
     val onOpenComparison: (List<Subject>) -> Unit = {},
     /** Opens the answer's damage calculation from its inline data (P7). */
     val onOpenDamageCalc: (DamageCalc) -> Unit = {},
+    /** Opens the standalone calculator prefilled from a damage block (CALC-AC-2.1). */
+    val onOpenCalculator: (ai.gowtam.oak.wire.CalcScenario) -> Unit = {},
+    val calculatorFormat: ai.gowtam.oak.wire.Format = ai.gowtam.oak.wire.Format.NationalDex,
+    /** Signed-in Add-to-team (ADD-US-1). Null = guest hide. */
+    val onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)? = null,
+    val onCitationHighlight: (CitationAnchor) -> Unit = {},
 )
 
 /** One renderable block of the answer card, in fixed reading order. */
@@ -331,6 +380,32 @@ private fun candidateSortValue(row: CandidateRow, column: String): Int {
 }
 
 fun citationHighlight(citation: Citation): CitationAnchor? = citation.anchor
+
+/** Highlight only when the citation is linked AND the matching span/row exists (CIT-US-1). */
+fun citationHighlight(citation: Citation, answer: OakAnswer): CitationAnchor? {
+    val anchor = citation.anchor ?: return null
+    return when (anchor.target) {
+        CitationAnchor.Target.AnswerSpan -> {
+            val open = "<!-- span:${anchor.id} -->"
+            val close = "<!-- /span:${anchor.id} -->"
+            if (answer.answerMarkdown.contains(open) && answer.answerMarkdown.contains(close)) anchor else null
+        }
+        CitationAnchor.Target.FactRow -> {
+            val names = answer.candidates?.shown.orEmpty().map { it.name }
+            if (anchor.id in names) anchor else null
+        }
+        else -> null
+    }
+}
+
+fun extractAnswerSpan(markdown: String, id: String): String? {
+    val open = "<!-- span:$id -->"
+    val close = "<!-- /span:$id -->"
+    val start = markdown.indexOf(open)
+    val end = markdown.indexOf(close)
+    if (start < 0 || end <= start) return null
+    return markdown.substring(start + open.length, end).trim().ifBlank { null }
+}
 
 /** Non-blank, trimmed entries of an optional string list (matches each subview's guard). */
 internal fun nonBlank(values: List<String>?): List<String> =

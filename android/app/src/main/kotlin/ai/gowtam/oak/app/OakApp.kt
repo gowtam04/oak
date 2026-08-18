@@ -37,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Functions
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -66,6 +67,7 @@ private enum class OakTab(val label: String) {
     Chat("Chat"),
     Teams("Teams"),
     Dex("Dex"),
+    Calculator("Calc"),
     Account("Account"),
 }
 
@@ -95,7 +97,6 @@ fun OakApp(
     val connectionStatus by rememberConnectionStatus()
     val reduceMotion = rememberReduceMotion()
     var shareSnapshotId by remember { mutableStateOf<String?>(null) }
-    var showCalculator by remember { mutableStateOf(false) }
     var calculatorScenario by remember { mutableStateOf<ai.gowtam.oak.wire.CalcScenario?>(null) }
 
     LaunchedEffect(surface) {
@@ -108,7 +109,7 @@ fun OakApp(
             }
             is AppState.SurfaceRequest.Calculator -> {
                 calculatorScenario = req.scenario
-                showCalculator = true
+                selectedTab = OakTab.Calculator
                 appState.consumeSurfaceRequest()
             }
             AppState.SurfaceRequest.None -> Unit
@@ -180,9 +181,25 @@ fun OakApp(
                                 authState = authState,
                                 chatViewModel = chatViewModel,
                                 artifactViewModel = artifactViewModel,
+                                onOpenCalculator = {
+                                    calculatorScenario = null
+                                    selectedTab = OakTab.Calculator
+                                },
                             )
                             OakTab.Teams -> TeamsRoute(services = services, appState = appState)
                             OakTab.Dex -> DexRoute(services = services, appState = appState)
+                            OakTab.Calculator -> {
+                                val chatFormat = chatViewModel.uiState.collectAsState().value.displayFormat
+                                ai.gowtam.oak.features.calc.CalculatorScreen(
+                                    calc = services.calc,
+                                    format = calculatorScenario?.format ?: chatFormat,
+                                    initialScenario = calculatorScenario,
+                                    onBack = { selectedTab = OakTab.Chat },
+                                    onExplain = { prompt ->
+                                        chatViewModel.sendFollowUp(prompt)
+                                    },
+                                )
+                            }
                             OakTab.Account -> {
                                 val accountViewModel = remember(services, appState) {
                                     AccountViewModel(services.auth, appState, preferences = services.preferences)
@@ -194,20 +211,6 @@ fun OakApp(
                 }
             }
         }
-    }
-
-    if (showCalculator) {
-        ai.gowtam.oak.features.calc.CalculatorScreen(
-            calc = services.calc,
-            format = calculatorScenario?.format ?: Format.NationalDex,
-            initialScenario = calculatorScenario,
-            onBack = { showCalculator = false },
-            onExplain = { prompt ->
-                showCalculator = false
-                selectedTab = OakTab.Chat
-                chatViewModel.sendFollowUp(prompt)
-            },
-        )
     }
 
     val snapshotId = shareSnapshotId
@@ -259,6 +262,7 @@ private fun OakTab.icon() = when (this) {
     OakTab.Chat -> Icons.AutoMirrored.Filled.Chat
     OakTab.Teams -> Icons.Filled.Groups
     OakTab.Dex -> Icons.AutoMirrored.Filled.MenuBook
+    OakTab.Calculator -> Icons.Filled.Functions
     OakTab.Account -> Icons.Filled.AccountCircle
 }
 
@@ -296,10 +300,11 @@ private fun ChatTab(
     authState: AuthState,
     chatViewModel: ChatViewModel,
     artifactViewModel: ArtifactViewModel,
+    onOpenCalculator: () -> Unit = {},
 ) {
     when (authState) {
-        is AuthState.SignedIn -> SignedInChatHome(services, appState, chatViewModel, artifactViewModel)
-        AuthState.Guest -> GuestChatHome(services, appState, chatViewModel, artifactViewModel)
+        is AuthState.SignedIn -> SignedInChatHome(services, appState, chatViewModel, artifactViewModel, onOpenCalculator)
+        AuthState.Guest -> GuestChatHome(services, appState, chatViewModel, artifactViewModel, onOpenCalculator)
     }
 }
 
@@ -322,12 +327,14 @@ private fun SignedInChatHome(
     appState: AppState,
     chatViewModel: ChatViewModel,
     artifactViewModel: ArtifactViewModel,
+    onOpenCalculator: () -> Unit,
 ) {
     var route by remember { mutableStateOf<ChatTabRoute>(ChatTabRoute.New) }
     // The last conversation the user opened from the list, remembered in-memory so the
     // list can mark that row on return (survives the list⟷thread navigation because this
     // state lives above the route `when`). Not persisted across process death by design.
     var lastOpenedConversationId by remember { mutableStateOf<String?>(null) }
+    val density by appState.answerDensity.collectAsState()
     // System/predictive back pops a pushed thread back to the conversation list,
     // mirroring iOS's NavigationStack pop (Back returns to "Chats").
     BackHandler(enabled = route != ChatTabRoute.ConversationList) {
@@ -358,6 +365,9 @@ private fun SignedInChatHome(
                 onBack = { route = ChatTabRoute.ConversationList },
                 onOpenTeam = { id, name -> appState.requestTeams(id, name) },
                 onOpenInDex = { hop -> appState.requestDex(hop.query, hop.kind, hop.format) },
+                onOpenCalculator = onOpenCalculator,
+                conversationId = appState.activeConversationId.value,
+                density = density,
                 onResumeConversation = { id ->
                     route = ChatTabRoute.Existing(
                         ConversationSummary(
@@ -461,6 +471,9 @@ private fun ExistingConversationThread(
             onOpenTeam = { id, name -> appState.requestTeams(id, name) },
             onForked = onForked,
             onOpenInDex = { hop -> appState.requestDex(hop.query, hop.kind, hop.format) },
+            onOpenCalculator = { appState.requestCalculator(null) },
+            conversationId = summary.id,
+            density = appState.answerDensity.collectAsState().value,
         )
         loadError != null -> LoadErrorState(message = loadError!!, onRetry = { retryToken++ }, onBack = onBack)
         else -> LoadingState()
@@ -504,8 +517,10 @@ private fun GuestChatHome(
     appState: AppState,
     chatViewModel: ChatViewModel,
     artifactViewModel: ArtifactViewModel,
+    onOpenCalculator: () -> Unit,
 ) {
     var showSignIn by remember { mutableStateOf(false) }
+    val density by appState.answerDensity.collectAsState()
 
     ChatScreen(
         viewModel = chatViewModel,
@@ -513,6 +528,9 @@ private fun GuestChatHome(
         showsNewConversationButton = true,
         signInAction = { showSignIn = true },
         onOpenInDex = { hop -> appState.requestDex(hop.query, hop.kind, hop.format) },
+        onOpenCalculator = onOpenCalculator,
+        conversationId = appState.activeConversationId.value,
+        density = density,
     )
 
     if (showSignIn) {

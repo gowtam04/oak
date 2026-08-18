@@ -77,10 +77,11 @@ fun TeamBlocks(
     onOpenSavedTeam: (SavedTeamRef) -> Unit,
     onOpenProposedTeam: (ProposedTeam) -> Unit,
     modifier: Modifier = Modifier,
+    onAddToTeam: ((TeamMember) -> Unit)? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(OakSpacing.md)) {
         if (proposedTeam != null) {
-            ProposedCard(proposedTeam, proposedTeamWarnings, onApply, onOpenProposedTeam)
+            ProposedCard(proposedTeam, proposedTeamWarnings, onApply, onOpenProposedTeam, onAddToTeam)
         }
         if (savedTeam != null) {
             SavedCard(savedTeam, onOpenSavedTeam)
@@ -94,6 +95,7 @@ private fun ProposedCard(
     warnings: List<TeamWarning>,
     onApply: (ProposedTeam) -> Unit,
     onOpenProposedTeam: (ProposedTeam) -> Unit,
+    onAddToTeam: ((TeamMember) -> Unit)?,
 ) {
     val oak = LocalOakColors.current
     val teamService = LocalServices.current?.teams
@@ -127,7 +129,7 @@ private fun ProposedCard(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
-            team.members.forEachIndexed { index, member -> MemberRow(index, member) }
+            team.members.forEachIndexed { index, member -> MemberRow(index, member, onAddToTeam) }
         }
 
         if (warnings.isNotEmpty()) {
@@ -204,7 +206,7 @@ private fun ProposedCard(
 }
 
 @Composable
-private fun MemberRow(index: Int, member: TeamMember) {
+private fun MemberRow(index: Int, member: TeamMember, onAddToTeam: ((TeamMember) -> Unit)?) {
     val oak = LocalOakColors.current
     val isEmpty = member.species.isNullOrBlank()
     val species = if (isEmpty) "Empty slot" else titleize(member.species)
@@ -232,6 +234,11 @@ private fun MemberRow(index: Int, member: TeamMember) {
                     style = MaterialTheme.typography.bodySmall,
                     color = oak.textMuted,
                 )
+            }
+            if (onAddToTeam != null && !isEmpty) {
+                OakButton(onClick = { onAddToTeam(member) }, style = OakButtonStyle.Secondary) {
+                    Text("Add to team", color = oak.accent)
+                }
             }
         }
     }

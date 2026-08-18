@@ -6,6 +6,8 @@ import ai.gowtam.oak.networking.ImageRejectReason
 import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.networking.TurnInProgressSignal
 import ai.gowtam.oak.features.calc.explainCalcPrompt
+import ai.gowtam.oak.features.calc.parseCalcSlashRest
+import ai.gowtam.oak.services.ArtifactPinService
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.services.BitmapSourceImage
 import ai.gowtam.oak.services.CalcService
@@ -83,6 +85,7 @@ class ChatViewModel(
     private val shares: ShareService? = null,
     private val calc: CalcService? = null,
     private val hydrate: VoiceHydrateService? = null,
+    private val pins: ArtifactPinService? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -303,9 +306,10 @@ class ChatViewModel(
                 return
             }
             is SlashCommand.Calc -> {
+                val format = displayFormat()
                 calcOverlay = CalcOverlayState(
-                    scenario = CalcScenario(
-                        format = displayFormat(),
+                    scenario = parseCalcSlashRest(slash.rest, format) ?: CalcScenario(
+                        format = format,
                         attacker = CalcSide(),
                         defender = CalcSide(),
                         move = CalcMove(),
@@ -549,6 +553,11 @@ class ChatViewModel(
     }
 
     /** Apply a follow-up chip (CHIP-US-1). */
+    fun openCalculator(scenario: CalcScenario) {
+        calcOverlay = CalcOverlayState(scenario = scenario, rest = "")
+        publish()
+    }
+
     fun dismissCalculator() {
         calcOverlay = null
         publish()
@@ -565,6 +574,18 @@ class ChatViewModel(
         val overlay = calcOverlay ?: return
         val prompt = explainCalcPrompt(overlay.scenario, CalcResult.Error(error = "incomplete"))
         sendFollowUp(prompt)
+    }
+
+    fun unpinArtifact(pinId: String) {
+        val conversationId = sessionId
+        val service = pins ?: return
+        viewModelScope.launch {
+            val remaining = service.delete(conversationId, pinId)
+            if (remaining != null) {
+                pinnedArtifacts = remaining
+                publish()
+            }
+        }
     }
 
     fun retryHydrate() {

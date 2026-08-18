@@ -3,6 +3,7 @@ package ai.gowtam.oak.app
 import ai.gowtam.oak.services.AuthService
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.services.HistoryService
+import ai.gowtam.oak.wire.AnswerDensity
 import ai.gowtam.oak.wire.ChatTurn
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.OakAnswer
@@ -121,6 +122,13 @@ class AppState {
 
     fun setLastUsedScopes(formats: List<Format>) {
         _lastUsedScopes.value = formats
+    }
+
+    private val _answerDensity = MutableStateFlow<AnswerDensity>(AnswerDensity.Full)
+    val answerDensity: StateFlow<AnswerDensity> = _answerDensity.asStateFlow()
+
+    fun setAnswerDensity(density: AnswerDensity) {
+        _answerDensity.value = density
     }
 
     /**

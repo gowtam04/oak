@@ -56,6 +56,7 @@ fun DamageCalcBlock(
     onOpenInViewer: () -> Unit,
     modifier: Modifier = Modifier,
     showOpenInViewerButton: Boolean = true,
+    onOpenInCalculator: (() -> Unit)? = null,
 ) {
     val oak = LocalOakColors.current
     var breakdownExpanded by remember { mutableStateOf(false) }
@@ -140,6 +141,11 @@ fun DamageCalcBlock(
             }
         }
 
+        if (onOpenInCalculator != null) {
+            OakButton(onClick = onOpenInCalculator, style = OakButtonStyle.Secondary) {
+                Text(text = "Open in calculator", color = oak.accent)
+            }
+        }
         if (showOpenInViewerButton) {
             OakButton(onClick = onOpenInViewer, style = OakButtonStyle.Secondary) {
                 Text(text = "Open in viewer", color = oak.accent)
