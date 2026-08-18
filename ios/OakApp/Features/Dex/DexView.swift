@@ -64,6 +64,17 @@ struct DexView: View {
   /// TabView lazily creates this tab after RootView has already written
   /// `pendingDestination`, so `onChange` alone never fires on first hop.
   private func consumePendingDestination() {
+    if case let .dexHop(artifactHop) = appState.pendingDestination {
+      model?.applyArtifactHop(artifactHop)
+      if let route = model?.pendingRoute {
+        var next = NavigationPath()
+        next.append(route)
+        path = next
+        _ = model?.consumePendingRoute()
+      }
+      appState.pendingDestination = nil
+      return
+    }
     guard let hop = PendingDexHop.consume(appState.pendingDestination) else { return }
     model?.query = hop.query
     if let route = hop.route {

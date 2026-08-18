@@ -619,3 +619,93 @@ private func prettyKey(_ key: String) -> String {
   .padding(16)
 }
 #endif
+
+/// Shown-set table tools (TBL-US-1–4). Sort / filter / row-pin / TSV operate
+/// only on the currently shown rows — never the hidden remainder (TBL-BR-1).
+struct CandidatesTableState: Equatable, Sendable {
+  enum SortKey: Equatable, Sendable {
+    case spe
+    case hp
+    case atk
+    case def
+    case spa
+    case spd
+    case name
+  }
+
+  private let source: Candidates
+  private var typeFilter: String?
+  private var nameQuery: String = ""
+  private var pinnedNames: [String] = []
+  private var sortKey: SortKey?
+
+  init(candidates: Candidates) {
+    self.source = candidates
+  }
+
+  var shownCount: Int { source.shown.count }
+  var totalCount: Int { source.totalCount }
+
+  var visibleRows: [CandidateRow] {
+    let pinned = source.shown.filter { pinnedNames.contains($0.name) }
+    var working = source.shown
+    if let sortKey {
+      working = sortRows(working, by: sortKey)
+    }
+    var filtered = working.filter { row in
+      if pinnedNames.contains(row.name) { return false }
+      if let typeFilter, !row.types.contains(where: { $0.caseInsensitiveCompare(typeFilter) == .orderedSame }) {
+        return false
+      }
+      if !nameQuery.isEmpty, !row.name.localizedCaseInsensitiveContains(nameQuery) {
+        return false
+      }
+      return true
+    }
+    let pinnedVisible = pinned.filter { row in
+      source.shown.contains(where: { $0.name == row.name })
+    }
+    return pinnedVisible + filtered
+  }
+
+  var tsv: String { candidatesToTsv(visibleRows) }
+
+  mutating func sort(by key: SortKey) {
+    sortKey = key
+  }
+
+  mutating func filter(type: String) {
+    typeFilter = type
+  }
+
+  mutating func search(name: String) {
+    nameQuery = name
+  }
+
+  mutating func pinRow(named name: String) {
+    if !pinnedNames.contains(name) { pinnedNames.append(name) }
+  }
+
+  mutating func unpinRow(named name: String) {
+    pinnedNames.removeAll { $0 == name }
+  }
+
+  mutating func clearFilters() {
+    typeFilter = nil
+    nameQuery = ""
+  }
+
+  private func sortRows(_ rows: [CandidateRow], by key: SortKey) -> [CandidateRow] {
+    rows.sorted { lhs, rhs in
+      switch key {
+      case .spe: return (lhs.baseStats?.spe ?? 0) > (rhs.baseStats?.spe ?? 0)
+      case .hp: return (lhs.baseStats?.hp ?? 0) > (rhs.baseStats?.hp ?? 0)
+      case .atk: return (lhs.baseStats?.atk ?? 0) > (rhs.baseStats?.atk ?? 0)
+      case .def: return (lhs.baseStats?.def ?? 0) > (rhs.baseStats?.def ?? 0)
+      case .spa: return (lhs.baseStats?.spa ?? 0) > (rhs.baseStats?.spa ?? 0)
+      case .spd: return (lhs.baseStats?.spd ?? 0) > (rhs.baseStats?.spd ?? 0)
+      case .name: return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+      }
+    }
+  }
+}

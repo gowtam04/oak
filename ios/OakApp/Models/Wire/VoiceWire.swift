@@ -111,3 +111,30 @@ struct VoiceTranscriptRequest: Encodable, Sendable {
     case assistantText = "assistant_text"
   }
 }
+
+// MARK: - POST /api/voice/hydrate
+
+enum VoiceHydrateStatus: String, Codable, Sendable, Equatable {
+  case running
+  case failed
+  case succeeded
+}
+
+enum VoiceHydrateBanner: Equatable, Sendable {
+  case finishing
+  case retry
+}
+
+struct VoiceHydrateRequest: Encodable, Sendable {
+  let conversationId: String
+  let assistantMessageId: String
+
+  private enum CodingKeys: String, CodingKey {
+    case conversationId = "conversation_id"
+    case assistantMessageId = "assistant_message_id"
+  }
+}
+
+struct VoiceHydrateResponse: Decodable, Sendable, Equatable {
+  let status: VoiceHydrateStatus
+}

@@ -93,8 +93,10 @@ struct RootView: View {
       switch destination {
       case .teams, .team:
         selection = .teams
-      case .dex:
+      case .dex, .dexHop:
         selection = .dex
+      case .calculator:
+        selection = .chat
       case .conversation:
         selection = .chat
       case let .share(id):

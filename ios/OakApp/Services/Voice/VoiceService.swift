@@ -27,6 +27,9 @@ protocol VoiceService: Sendable {
   /// never throws — every fault is caught and logged internally so a persist
   /// failure never surfaces to (or blocks) the realtime session.
   func postTranscript(sessionId: String, format: Format, userText: String, assistantText: String) async
+
+  /// `POST /api/voice/hydrate` — retry compile on the same assistant row (VOICE-US-3).
+  func hydrate(conversationId: String, assistantMessageId: String) async throws -> VoiceHydrateResponse
 }
 
 // MARK: - Endpoints
@@ -62,6 +65,18 @@ enum VoiceEndpoints {
         format: format.rawValue,
         userText: userText,
         assistantText: assistantText
+      ),
+      requiresAuth: true
+    )
+  }
+
+  static func hydrate(conversationId: String, assistantMessageId: String) -> Endpoint {
+    Endpoint(
+      method: .post,
+      path: "/api/voice/hydrate",
+      body: VoiceHydrateRequest(
+        conversationId: conversationId,
+        assistantMessageId: assistantMessageId
       ),
       requiresAuth: true
     )
@@ -103,5 +118,12 @@ struct LiveVoiceService: VoiceService {
       // realtime session; it's a best-effort side effect.
       Log.chat.error("voice transcript persist failed")
     }
+  }
+
+  func hydrate(conversationId: String, assistantMessageId: String) async throws -> VoiceHydrateResponse {
+    try await apiClient.send(
+      VoiceEndpoints.hydrate(conversationId: conversationId, assistantMessageId: assistantMessageId),
+      as: VoiceHydrateResponse.self
+    )
   }
 }

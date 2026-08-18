@@ -44,6 +44,9 @@ final class AppState {
   /// A pending in-app hop (slash / chip / share URL). Consumed by ``RootView``.
   var pendingDestination: AppDestination?
 
+  /// Compact / full answer-card default (COMPACT-US-1). Full is the factory default.
+  var answerDensity: AnswerDensity = .full
+
   /// Pending server-side turns keyed by conversation id (`session_id`) → the
   /// server-minted `turn_id` still generating for that thread
   /// (background-turns/design.md §6 / §6.2). It lives here — not on the chat view
@@ -235,6 +238,8 @@ enum AppDestination: Equatable, Sendable {
   case teams(query: String?)
   case team(id: String)
   case dex(query: String?)
+  case dexHop(DexArtifactHop)
+  case calculator
   case conversation(id: String)
   case share(id: String)
 }

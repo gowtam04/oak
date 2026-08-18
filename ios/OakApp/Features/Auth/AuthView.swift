@@ -460,6 +460,7 @@ private struct PreviewAuthService: AuthService {
   func me() async throws -> MeSnapshot { .guest }
   func signOut() async throws {}
   func deleteAccount() async throws {}
+  func setAnswerDensity(_ density: AnswerDensity) async throws -> AnswerDensity { density }
 }
 
 #Preview("Sign in") {

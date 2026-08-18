@@ -64,6 +64,15 @@ struct ChatView: View {
   /// (M-BR-ART-4); rebuilding clears the back stack, which is fine since the sheet is
   /// closed when the composer toggle is reached.
   @State private var artifactModel: ArtifactViewModel?
+  @State private var calculator: CalculatorViewModel?
+  @State private var pinStrip: PinnedArtifactStripViewModel?
+
+  private var calculatorPresented: Binding<Bool> {
+    Binding(
+      get: { model.isCalculatorPresented },
+      set: { if !$0 { model.dismissCalculator() } }
+    )
+  }
 
   /// Drives the voice-mode `.fullScreenCover` (``VoiceLauncher``). Flipped true by
   /// the composer's mic button (only after it's cleared the sign-in + microphone
@@ -99,6 +108,11 @@ struct ChatView: View {
 
   var body: some View {
     VStack(spacing: 0) {
+      if let pinStrip {
+        PinnedArtifactStrip(model: pinStrip) { artifact in
+          artifactModel?.openSnapshot(artifact)
+        }
+      }
       thread
       Divider()
       if let banner = model.errorBanner {
@@ -193,12 +207,57 @@ struct ChatView: View {
     // changes (a chip pick or a resolved `scope` event) so its fixed format
     // re-scopes to the active scope (M-BR-ART-4; web scopes the viewer to
     // `displayFormat` too).
+    .task(id: "\(model.sessionId)-\(model.isSignedIn)") {
+      guard model.isSignedIn else {
+        pinStrip = nil
+        return
+      }
+      let strip = PinnedArtifactStripViewModel(
+        pins: services.artifactPins,
+        isSignedIn: true,
+        conversationId: model.sessionId
+      )
+      pinStrip = strip
+      await strip.load()
+    }
     .task(id: model.displayFormat) {
       let viewer = ArtifactViewModel(
         service: services.artifact,
-        format: model.displayFormat
+        format: model.displayFormat,
+        isSignedIn: model.isSignedIn,
+        pins: services.artifactPins,
+        conversationId: model.sessionId
       )
       artifactModel = viewer
+    }
+    .sheet(isPresented: calculatorPresented) {
+      if let calculator {
+        CalculatorView(
+          model: calculator,
+          onExplain: { prompt in
+            model.composerText = prompt
+            model.send()
+          },
+          onExpand: {
+            calculator.expandToFullScreen()
+            appState.pendingDestination = .calculator
+            model.dismissCalculator()
+          }
+        )
+      }
+    }
+    .onChange(of: model.calculatorHop) { _, hop in
+      guard let hop else {
+        calculator = nil
+        return
+      }
+      let vm = calculator ?? CalculatorViewModel(
+        calc: services.calc,
+        format: hop.format,
+        presentation: hop.kind == .fullScreen ? .fullScreen : .overlay
+      )
+      vm.applySlashRest(hop.rest)
+      calculator = vm
     }
     // Host the artifact bottom sheet once at the screen level; pushing an entity
     // opens it, an empty back stack closes it (M-AC-A3.3, M-BR-ART-5).
@@ -433,8 +492,18 @@ struct ChatView: View {
         // The full field-by-field card. A clarify-option / suggestion tap sends its
         // text verbatim as the next user turn; tapping a candidate / subject / type or
         // a proposed/saved team opens it in the artifact viewer (M-ART-US-1/2/3).
+        if model.showsVoiceMic(for: answer) {
+          Label("Voice turn", systemImage: "mic.fill")
+            .font(Theme.body(.caption, weight: .medium))
+            .foregroundStyle(Theme.textSecondary)
+            .accessibilityLabel("Voice turn")
+        }
+        if let banner = model.voiceHydrateBanner(for: turn) {
+          voiceHydrateBanner(banner, messageId: turn.serverMessageId)
+        }
         AnswerCardView(
           answer: answer,
+          density: appState.answerDensity,
           onFollowUp: sendFollowUp,
           onOpenSavedTeam: { ref in
             Task { await artifactModel?.openSavedTeam(id: ref.id, name: ref.name) }
@@ -448,8 +517,8 @@ struct ChatView: View {
           onOpenComparison: { subjects in
             artifactModel?.openComparison(subjects)
           },
-          onOpenDamageCalc: { damageCalc in
-            artifactModel?.openDamageCalc(damageCalc)
+          onOpenDamageCalc: { _ in
+            model.openCalculator(rest: "")
           },
           onCopyHuman: {
             UIPasteboard.general.string = OakAnswerHumanMarkdown.build(answer)
@@ -502,6 +571,30 @@ struct ChatView: View {
   private func sendFollowUp(_ text: String) {
     model.composerText = text
     model.send()
+  }
+
+  @ViewBuilder
+  private func voiceHydrateBanner(_ banner: VoiceHydrateBanner, messageId: String?) -> some View {
+    HStack {
+      switch banner {
+      case .finishing:
+        Text("Finishing card…")
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.textSecondary)
+      case .retry:
+        Text("Couldn't finish this card.")
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.textSecondary)
+        if let messageId {
+          Button("Retry") {
+            Task { await model.retryVoiceHydrate(assistantMessageId: messageId) }
+          }
+          .font(Theme.body(.caption, weight: .semibold))
+        }
+      }
+      Spacer(minLength: 0)
+    }
+    .accessibilityElement(children: .combine)
   }
 
   /// Thinking trace while empty, then a rising answer plate once tokens

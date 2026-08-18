@@ -23,6 +23,8 @@ final class DexViewModel {
   private(set) var matches: [SearchMatch] = []
   /// True while a search request is in flight (first paint / section switch).
   private(set) var isLoading = false
+  /// Entity route queued by an artifact hop (DEX-US-2). Written after format.
+  private(set) var pendingRoute: DexEntityRoute?
 
   private let dexLookup: any DexLookupService
   private var searchTask: Task<Void, Never>?
@@ -53,6 +55,22 @@ final class DexViewModel {
     guard next != format else { return }
     format = next
     reload()
+  }
+
+  /// Writes format first, then queues the entity route (DEX-BR-3).
+  func applyArtifactHop(_ hop: DexArtifactHop) {
+    format = hop.format
+    if let section = DexSection(entityKind: hop.kind) {
+      self.section = section
+    }
+    pendingRoute = DexEntityRoute(kind: hop.kind, query: hop.query)
+    reload()
+  }
+
+  func consumePendingRoute() -> DexEntityRoute? {
+    let route = pendingRoute
+    pendingRoute = nil
+    return route
   }
 
   /// Cancels any pending debounce and fetches for the current inputs immediately.

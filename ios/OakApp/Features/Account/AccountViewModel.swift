@@ -32,6 +32,9 @@ final class AccountViewModel {
   /// `AppState` flips to guest) or this surfaces a recoverable message.
   private(set) var errorMessage: String?
 
+  /// Compact / full default for answer cards (COMPACT-US-1). Factory default is full.
+  private(set) var answerDensity: AnswerDensity = .full
+
   init(auth: any AuthService, appState: AppState) {
     self.auth = auth
     self.appState = appState
@@ -106,6 +109,19 @@ final class AccountViewModel {
   /// Clears the current error message (e.g. when the user dismisses the banner).
   func dismissError() {
     errorMessage = nil
+  }
+
+  /// Sets the compact/full default. Guests stay device-local (COMPACT-BR-4);
+  /// signed-in accounts PATCH `/api/account/preferences`.
+  func setAnswerDensity(_ density: AnswerDensity) async {
+    answerDensity = density
+    appState.answerDensity = density
+    guard isSignedIn else { return }
+    do {
+      answerDensity = try await auth.setAnswerDensity(density)
+    } catch {
+      errorMessage = "Couldn't save that preference. Try again."
+    }
   }
 
   // MARK: Sign-in handoff

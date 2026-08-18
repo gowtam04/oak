@@ -45,12 +45,14 @@ struct MeResponse: Decodable, Sendable {
   let email: String?
   let lastUsedScope: String?
   var lastUsedScopes: [String]? = nil
+  var answerDensity: AnswerDensity? = nil
 
   enum CodingKeys: String, CodingKey {
     case signedIn
     case email
     case lastUsedScope
     case lastUsedScopes
+    case answerDensity
   }
 }
 

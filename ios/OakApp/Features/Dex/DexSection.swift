@@ -28,6 +28,16 @@ enum DexSection: String, CaseIterable, Identifiable, Hashable, Sendable {
     case .item: return .item
     }
   }
+
+  init?(entityKind: EntityKind) {
+    switch entityKind {
+    case .pokemon: self = .pokemon
+    case .move: self = .move
+    case .ability: self = .ability
+    case .item: self = .item
+    case .type, .unsupported: return nil
+    }
+  }
 }
 
 /// One navigation-stack entry for a Dex entity detail (list row or drill-in).
