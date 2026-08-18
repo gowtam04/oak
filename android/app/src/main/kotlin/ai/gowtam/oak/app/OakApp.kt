@@ -95,6 +95,8 @@ fun OakApp(
     val connectionStatus by rememberConnectionStatus()
     val reduceMotion = rememberReduceMotion()
     var shareSnapshotId by remember { mutableStateOf<String?>(null) }
+    var showCalculator by remember { mutableStateOf(false) }
+    var calculatorScenario by remember { mutableStateOf<ai.gowtam.oak.wire.CalcScenario?>(null) }
 
     LaunchedEffect(surface) {
         when (val req = surface) {
@@ -102,6 +104,11 @@ fun OakApp(
             is AppState.SurfaceRequest.Teams -> selectedTab = OakTab.Teams
             is AppState.SurfaceRequest.ShareSnapshot -> {
                 shareSnapshotId = req.id
+                appState.consumeSurfaceRequest()
+            }
+            is AppState.SurfaceRequest.Calculator -> {
+                calculatorScenario = req.scenario
+                showCalculator = true
                 appState.consumeSurfaceRequest()
             }
             AppState.SurfaceRequest.None -> Unit
@@ -178,7 +185,7 @@ fun OakApp(
                             OakTab.Dex -> DexRoute(services = services, appState = appState)
                             OakTab.Account -> {
                                 val accountViewModel = remember(services, appState) {
-                                    AccountViewModel(services.auth, appState)
+                                    AccountViewModel(services.auth, appState, preferences = services.preferences)
                                 }
                                 AccountScreen(viewModel = accountViewModel, onBack = null)
                             }
@@ -187,6 +194,20 @@ fun OakApp(
                 }
             }
         }
+    }
+
+    if (showCalculator) {
+        ai.gowtam.oak.features.calc.CalculatorScreen(
+            calc = services.calc,
+            format = calculatorScenario?.format ?: Format.NationalDex,
+            initialScenario = calculatorScenario,
+            onBack = { showCalculator = false },
+            onExplain = { prompt ->
+                showCalculator = false
+                selectedTab = OakTab.Chat
+                chatViewModel.sendFollowUp(prompt)
+            },
+        )
     }
 
     val snapshotId = shareSnapshotId
@@ -336,6 +357,7 @@ private fun SignedInChatHome(
                 showsNewConversationButton = false,
                 onBack = { route = ChatTabRoute.ConversationList },
                 onOpenTeam = { id, name -> appState.requestTeams(id, name) },
+                onOpenInDex = { hop -> appState.requestDex(hop.query, hop.kind, hop.format) },
                 onResumeConversation = { id ->
                     route = ChatTabRoute.Existing(
                         ConversationSummary(
@@ -421,6 +443,8 @@ private fun ExistingConversationThread(
                 // when the client's own pending pointer is gone) — reattach on open.
                 activeTurnId = detail.activeTurn?.turnId,
                 pinnedMessageIds = detail.pinnedMessageIds,
+                hydrate = detail.hydrate,
+                pinnedArtifacts = detail.pinnedArtifacts,
             )
             isLoaded = true
         } catch (e: Exception) {
@@ -436,6 +460,7 @@ private fun ExistingConversationThread(
             onBack = onBack,
             onOpenTeam = { id, name -> appState.requestTeams(id, name) },
             onForked = onForked,
+            onOpenInDex = { hop -> appState.requestDex(hop.query, hop.kind, hop.format) },
         )
         loadError != null -> LoadErrorState(message = loadError!!, onRetry = { retryToken++ }, onBack = onBack)
         else -> LoadingState()
@@ -487,6 +512,7 @@ private fun GuestChatHome(
         artifactViewModel = artifactViewModel,
         showsNewConversationButton = true,
         signInAction = { showSignIn = true },
+        onOpenInDex = { hop -> appState.requestDex(hop.query, hop.kind, hop.format) },
     )
 
     if (showSignIn) {

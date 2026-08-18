@@ -129,16 +129,25 @@ class AppState {
      */
     sealed interface SurfaceRequest {
         data object None : SurfaceRequest
-        data class Dex(val query: String?) : SurfaceRequest
+        data class Dex(
+            val query: String?,
+            val kind: ai.gowtam.oak.wire.EntityKind? = null,
+            val format: Format? = null,
+        ) : SurfaceRequest
         data class Teams(val id: String? = null, val name: String? = null) : SurfaceRequest
         data class ShareSnapshot(val id: String) : SurfaceRequest
+        data class Calculator(val scenario: ai.gowtam.oak.wire.CalcScenario?) : SurfaceRequest
     }
 
     private val _surfaceRequest = MutableStateFlow<SurfaceRequest>(SurfaceRequest.None)
     val surfaceRequest: StateFlow<SurfaceRequest> = _surfaceRequest.asStateFlow()
 
-    fun requestDex(query: String?) {
-        _surfaceRequest.value = SurfaceRequest.Dex(query)
+    fun requestDex(
+        query: String?,
+        kind: ai.gowtam.oak.wire.EntityKind? = null,
+        format: Format? = null,
+    ) {
+        _surfaceRequest.value = SurfaceRequest.Dex(query, kind, format)
     }
 
     fun requestTeams(id: String? = null, name: String? = null) {
@@ -147,6 +156,10 @@ class AppState {
 
     fun requestShareSnapshot(id: String) {
         _surfaceRequest.value = SurfaceRequest.ShareSnapshot(id)
+    }
+
+    fun requestCalculator(scenario: ai.gowtam.oak.wire.CalcScenario?) {
+        _surfaceRequest.value = SurfaceRequest.Calculator(scenario)
     }
 
     fun consumeSurfaceRequest() {

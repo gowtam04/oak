@@ -1,7 +1,11 @@
 package ai.gowtam.oak.features.chat
 
+import ai.gowtam.oak.app.LocalServices
 import ai.gowtam.oak.features.artifact.ArtifactSheet
 import ai.gowtam.oak.features.artifact.ArtifactViewModel
+import ai.gowtam.oak.features.artifact.PinnedArtifactStrip
+import ai.gowtam.oak.features.calc.CalculatorOverlay
+import ai.gowtam.oak.features.calc.CalculatorViewModel
 import ai.gowtam.oak.features.chat.answercard.AnswerCard
 import ai.gowtam.oak.features.chat.answercard.AnswerCardActions
 import ai.gowtam.oak.features.share.shareExportedFile
@@ -123,6 +127,7 @@ fun ChatScreen(
     onOpenTeam: (id: String?, name: String?) -> Unit = { _, _ -> },
     onResumeConversation: (String) -> Unit = {},
     onForked: (String) -> Unit = {},
+    onOpenInDex: (ai.gowtam.oak.features.artifact.DexHop) -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val oak = LocalOakColors.current
@@ -369,6 +374,21 @@ fun ChatScreen(
                     }
                 }
             }
+            if (uiState.pinnedArtifacts.isNotEmpty()) {
+                PinnedArtifactStrip(
+                    pins = uiState.pinnedArtifacts,
+                    onOpen = { },
+                    onUnpin = { },
+                    modifier = Modifier.padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
+                )
+            }
+            uiState.hydrateBanner?.let { banner ->
+                HydrateBannerRow(
+                    banner = banner,
+                    showRetry = uiState.showsHydrateRetry,
+                    onRetry = viewModel::retryHydrate,
+                )
+            }
             HorizontalDivider(color = oak.border)
             uiState.errorBanner?.let { banner ->
                 ErrorBannerRow(banner = banner, onRetry = viewModel::retry)
@@ -415,7 +435,49 @@ fun ChatScreen(
     // The artifact bottom sheet overlays the chat (co-visible, not a separate tab —
     // component-design.md "Navigation graph"); it self-hides when its back stack is
     // empty, so it is always safe to host unconditionally.
-    ArtifactSheet(artifactViewModel)
+    ArtifactSheet(artifactViewModel, onOpenInDex = onOpenInDex)
+
+    val overlay = uiState.calcOverlay
+    val services = LocalServices.current
+    if (overlay != null && services != null) {
+        val calcVm = remember(overlay.rest, overlay.scenario.format) {
+            CalculatorViewModel(services.calc, overlay.scenario.format, overlay.scenario)
+        }
+        CalculatorOverlay(
+            viewModel = calcVm,
+            onDismiss = viewModel::dismissCalculator,
+            onExpand = viewModel::expandCalculator,
+            onExplain = viewModel::explainCalculator,
+        )
+    }
+}
+
+@Composable
+private fun HydrateBannerRow(
+    banner: HydrateBanner,
+    showRetry: Boolean,
+    onRetry: () -> Unit,
+) {
+    val oak = LocalOakColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = when (banner) {
+                HydrateBanner.Finishing -> "Finishing card…"
+                HydrateBanner.Failed -> "Couldn't finish this spoken answer."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = oak.textMuted,
+        )
+        if (showRetry) {
+            TextButton(onClick = onRetry) { Text("Retry") }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -578,6 +640,13 @@ private fun TurnRow(
         )
         is ChatTurnItem.Assistant -> {
             Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
+                if (turn.isVoiceOrigin) {
+                    Text(
+                        text = "Spoken",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LocalOakColors.current.textMuted,
+                    )
+                }
                 AnswerCard(answer = turn.answer, actions = actions)
                 TurnActions(
                     answer = turn.answer,

@@ -65,6 +65,8 @@ data class ConversationDetail(
     val folderId: String? = null,
     /** Assistant message ids in thread (seq) order. */
     val pinnedMessageIds: List<String> = emptyList(),
+    val pinnedArtifacts: List<PinnedArtifactSummary> = emptyList(),
+    val hydrate: VoiceHydrateStatus? = null,
 )
 
 /** The `active_turn` field of [ConversationDetail] — just the running turn's id. */

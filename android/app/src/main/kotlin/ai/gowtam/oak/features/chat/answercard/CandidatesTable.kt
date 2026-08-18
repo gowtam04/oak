@@ -66,12 +66,27 @@ fun CandidatesTable(
 ) {
     val oak = LocalOakColors.current
     var expandedLocally by rememberSaveable { mutableStateOf(false) }
+    var typeFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var nameQuery by rememberSaveable { mutableStateOf("") }
+    var pinnedNames by rememberSaveable { mutableStateOf(setOf<String>()) }
+    var sortColumn by rememberSaveable { mutableStateOf<String?>(null) }
+    var sortAscending by rememberSaveable { mutableStateOf(false) }
     val canExpandLocally = !candidates.hiddenRows.isNullOrEmpty()
-    val displayedRows = if (expandedLocally && canExpandLocally) {
-        candidates.shown + candidates.hiddenRows.orEmpty()
+    val source = if (expandedLocally && canExpandLocally) {
+        candidates.copy(shown = candidates.shown + candidates.hiddenRows.orEmpty())
     } else {
-        candidates.shown
+        candidates
     }
+    val displayedRows = shownCandidateRows(
+        source,
+        CandidateTableQuery(
+            typeFilter = typeFilter,
+            nameQuery = nameQuery.takeIf { it.isNotBlank() },
+            pinnedNames = pinnedNames,
+            sortColumn = sortColumn,
+            sortAscending = sortAscending,
+        ),
+    )
     val statColumns = statColumns(displayedRows)
     val showsAbility = displayedRows.any { !it.ability.isNullOrEmpty() }
     val sortedId = sortedColumnId(candidates, statColumns)
@@ -88,6 +103,20 @@ fun CandidatesTable(
             sortLabel(candidates, statColumns, sortedId)?.let {
                 Text(text = "· sorted by $it", style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
             }
+        }
+        androidx.compose.material3.OutlinedTextField(
+            value = nameQuery,
+            onValueChange = { nameQuery = it },
+            label = { Text("Filter names") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+        TextButton(onClick = {
+            val tsv = ai.gowtam.oak.features.chat.candidatesToTsv(displayedRows)
+            if (tsv.isNotEmpty()) clipboard.setText(androidx.compose.ui.text.AnnotatedString(tsv))
+        }) {
+            Text("Copy TSV")
         }
 
         Column(
