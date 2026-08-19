@@ -1,7 +1,7 @@
 /**
  * Unit tests for GrokProvider (native xAI Responses API) with a MOCKED Responses
  * stream — deterministic, never hits the network. Asserts the request shape
- * (FLATTENED function tools, instructions, reasoning.effort high,
+ * (FLATTENED function tools, instructions, reasoning.effort low,
  * parallel_tool_calls false, store false + encrypted-reasoning include), that
  * streamed function-call argument fragments feed the runtime's
  * AnswerMarkdownExtractor to reproduce answer_markdown, the normalized final turn
@@ -131,7 +131,6 @@ function makeProvider(
     {
       apiModelId: "grok-4.3",
       apiKey: "test-key",
-      effort: "high",
       temperature: 0.2,
       maxOutputTokens: 32000,
       parallelToolCalls: false,
@@ -150,7 +149,7 @@ async function drain(
 }
 
 describe("GrokProvider — request shape", () => {
-  it("sends FLATTENED function tools, instructions, reasoning.effort high, store true + encrypted reasoning", () => {
+  it("sends FLATTENED function tools, instructions, reasoning.effort low, store true + encrypted reasoning", () => {
     const { client, captured } = fakeGrokClient(submitResponseEvents(ANSWER));
     const provider = makeProvider(client);
     provider.streamTurn({
@@ -164,7 +163,7 @@ describe("GrokProvider — request shape", () => {
     expect(body.instructions).toBe("SYS BODY\n\nFEW SHOT");
     expect(body.tool_choice).toBe("auto");
     expect(body.parallel_tool_calls).toBe(false);
-    expect(body.reasoning).toEqual({ effort: "high" });
+    expect(body.reasoning).toEqual({ effort: "low" });
     expect(body.max_output_tokens).toBe(32000);
     // store:true enables previous_response_id mid-turn chaining (default).
     expect(body.store).toBe(true);

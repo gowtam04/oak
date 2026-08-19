@@ -1598,7 +1598,7 @@ export async function runWithProvider<TAnswer = OakAnswer>(
           assistantText += event.text;
         } else if (event.type === "thinking_delta" && !reasoningNudged) {
           // Surface a single "reasoning…" tick so a long pre-answer reasoning phase
-          // (e.g. Grok at reasoning_effort:high) reads as progress, not a stall.
+          // (e.g. Grok at reasoning_effort:low) reads as progress, not a stall.
           reasoningNudged = true;
           onProgress?.({ tool: "reasoning", label: "🤔 Reasoning…" });
         }

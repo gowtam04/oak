@@ -130,7 +130,7 @@ export interface TurnRequest {
   signal?: AbortSignal;
   /**
    * Per-turn reasoning override. Grok honors it; chat omits this so the
-   * provider constructor default (`high`) stays in force. Voice compile
+   * provider constructor default (`low`) stays in force. Voice compile
    * passes `"none"` so hydrate does not pay thinking (ADR-7).
    */
   effort?: ReasoningEffort;

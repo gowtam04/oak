@@ -19,8 +19,8 @@
  *    the OakAnswer schema's optional/default fields through (xAI applies its own
  *    lenient-strict validation; the loop's Zod re-emit budget is the safety net).
  *  - Reasoning is requested explicitly as `reasoning:{ effort }` — chat
- *    defaults to constructor `"high"` (grok-4.3's `"low"` is too shallow for
- *    battle-math). `TurnRequest.effort` overrides per turn so voice compile
+ *    defaults to constructor `"low"` (trial; was `"high"` for grok-4.3).
+ *    `TurnRequest.effort` overrides per turn so voice compile
  *    can pass `"none"` (ADR-7). `parallel_tool_calls`
  *    is disabled so `submit_answer` can't ride alongside a data tool, and
  *    `max_output_tokens` is raised so a full candidate list can't truncate the
@@ -80,8 +80,7 @@ export interface GrokProviderConfig {
   apiKey: string;
   /** Base URL override (xAI: https://api.x.ai/v1). */
   baseURL?: string;
-  /** Reasoning effort; mapped to `reasoning.effort`. Defaults to "high" (grok
-   *  defaults to "low"). */
+  /** Reasoning effort; mapped to `reasoning.effort`. Defaults to "low". */
   effort?: ReasoningEffort;
   /** Sampling temperature. Omit to inherit the provider default (0.7 on Grok 4.3
    *  — too random for battle-math, so the factory pins a low value). */
@@ -158,7 +157,7 @@ export class GrokProvider implements LLMProvider {
 
   constructor(config: GrokProviderConfig, client?: GrokResponsesClientLike) {
     this.apiModelId = config.apiModelId;
-    this.effort = config.effort ?? "high";
+    this.effort = config.effort ?? "low";
     this.temperature = config.temperature;
     this.maxOutputTokens = config.maxOutputTokens ?? MAX_TOKENS;
     this.parallelToolCalls = config.parallelToolCalls ?? false;
