@@ -327,6 +327,18 @@ class HumanMarkdownTest {
     }
 
     @Test
+    fun `strips citation span comments from the prose`() {
+        val md = oakAnswerHumanMarkdown(
+            base.copy(
+                answerMarkdown = "<!-- span:c0 -->Garchomp is a Dragon/Ground pseudo-legendary.<!-- /span:c0 -->",
+            ),
+        )
+        assertTrue(md.contains("Garchomp is a Dragon/Ground pseudo-legendary."))
+        assertFalse(md.contains("<!--"))
+        assertFalse(md.contains("span:c0"))
+    }
+
+    @Test
     fun `is a pure projection of the given answer (COPY-BR-1)`() {
         val snapshot = full.copy()
         val md = oakAnswerHumanMarkdown(full)

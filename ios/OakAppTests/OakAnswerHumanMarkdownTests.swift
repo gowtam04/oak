@@ -455,6 +455,18 @@ struct OakAnswerHumanMarkdownTests {
   }
 
   @Test
+  func stripsCitationSpanCommentsFromTheProse() {
+    let md = OakAnswerHumanMarkdown.build(
+      makeAnswer(
+        answerMarkdown: "<!-- span:c0 -->Garchomp is a Dragon/Ground pseudo-legendary.<!-- /span:c0 -->"
+      )
+    )
+    #expect(md.contains("Garchomp is a Dragon/Ground pseudo-legendary."))
+    #expect(!md.contains("<!--"))
+    #expect(!md.contains("span:c0"))
+  }
+
+  @Test
   func isAPureProjectionOfTheGivenAnswer() {
     let snapshot = full
     let md = OakAnswerHumanMarkdown.build(full)

@@ -1,6 +1,7 @@
 package ai.gowtam.oak.features.chat
 
 import ai.gowtam.oak.features.chat.answercard.uncertaintyFlagLabel
+import ai.gowtam.oak.ui.MarkdownBlocks
 import ai.gowtam.oak.wire.CandidateRow
 import ai.gowtam.oak.wire.JsonScalar
 import ai.gowtam.oak.wire.OakAnswer
@@ -18,7 +19,7 @@ import ai.gowtam.oak.wire.titleizeTeamSlug
  */
 fun oakAnswerHumanMarkdown(answer: OakAnswer): String {
     val sections = mutableListOf<String>()
-    val prose = answer.answerMarkdown.trim()
+    val prose = MarkdownBlocks.stripHtmlComments(answer.answerMarkdown).trim()
     if (prose.isNotEmpty()) sections += prose
     formatCandidateTable(answer)?.let { sections += it }
     formatCaveats(answer)?.let { sections += it }

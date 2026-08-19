@@ -1,5 +1,6 @@
 package ai.gowtam.oak.features.chat.answercard
 
+import ai.gowtam.oak.ui.MarkdownBlocks
 import ai.gowtam.oak.wire.OakAnswer
 
 /**
@@ -44,7 +45,7 @@ fun oakAnswerAgentMarkdown(answer: OakAnswer): String = buildString {
     appendLine()
     appendLine("## Answer")
     appendLine()
-    appendLine(answer.answerMarkdown.trim())
+    appendLine(MarkdownBlocks.stripHtmlComments(answer.answerMarkdown).trim())
 
     if (answer.reasoningMarkdown.isNotBlank()) {
         appendLine()

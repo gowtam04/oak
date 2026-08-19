@@ -8,6 +8,7 @@
 
 import type { OakAnswer } from "@/agent/schemas";
 import { labelForUncertaintyFlag } from "@/components/answer-card/uncertainty-labels";
+import { stripHtmlComments } from "@/lib/strip-html-comments";
 import {
   serializeShowdown,
   type ShowdownSet,
@@ -41,7 +42,7 @@ const STAT_LABELS: Record<(typeof STAT_ORDER)[number], string> = {
 export function oakAnswerToHumanMarkdown(answer: OakAnswer): string {
   const sections: string[] = [];
 
-  const prose = answer.answer_markdown.trim();
+  const prose = stripHtmlComments(answer.answer_markdown).trim();
   if (prose) sections.push(prose);
 
   const table = formatCandidateTable(answer);

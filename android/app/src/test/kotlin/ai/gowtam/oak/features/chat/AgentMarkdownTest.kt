@@ -86,4 +86,14 @@ class AgentMarkdownTest {
         assertFalse(md.contains("## Inferences"))
         assertTrue(md.contains("Plain answer."))
     }
+
+    @Test
+    fun `strips citation span comments from the answer body`() {
+        val md = oakAnswerAgentMarkdown(
+            baseAnswer(markdown = "<!-- span:c0 -->Garchomp is a Dragon/Ground pseudo-legendary.<!-- /span:c0 -->"),
+        )
+        assertTrue(md.contains("Garchomp is a Dragon/Ground pseudo-legendary."))
+        assertFalse(md.contains("<!--"))
+        assertFalse(md.contains("span:c0"))
+    }
 }

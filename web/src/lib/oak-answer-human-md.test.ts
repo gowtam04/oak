@@ -293,6 +293,17 @@ describe("oakAnswerToHumanMarkdown", () => {
     expect(human).not.toContain("## Citations");
   });
 
+  it("strips citation-span comments from the prose", () => {
+    const md = oakAnswerToHumanMarkdown({
+      ...BASE,
+      answer_markdown:
+        "<!-- span:c0 -->Garchomp is a Dragon/Ground pseudo-legendary.<!-- /span:c0 -->",
+    });
+    expect(md).toContain("Garchomp is a Dragon/Ground pseudo-legendary.");
+    expect(md).not.toContain("<!--");
+    expect(md).not.toContain("span:c0");
+  });
+
   it("is a pure projection of the given answer (COPY-BR-1)", () => {
     const snapshot = structuredClone(FULL);
     const md = oakAnswerToHumanMarkdown(FULL);

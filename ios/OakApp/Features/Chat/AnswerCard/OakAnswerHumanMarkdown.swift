@@ -33,7 +33,8 @@ enum OakAnswerHumanMarkdown {
   static func build(_ answer: OakAnswer) -> String {
     var sections: [String] = []
 
-    let prose = answer.answerMarkdown.trimmingCharacters(in: .whitespacesAndNewlines)
+    let prose = MarkdownBlocks.stripHtmlComments(answer.answerMarkdown)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
     if !prose.isEmpty { sections.append(prose) }
 
     if let table = formatCandidateTable(answer) { sections.append(table) }

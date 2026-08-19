@@ -85,11 +85,37 @@ data class MdTable(
 object MarkdownBlocks {
 
     /**
+     * Removes HTML comments (`<!-- … -->`) so citation-span markers
+     * (`<!-- span:c0 -->…<!-- /span:c0 -->`) never render as prose.
+     * Fenced code interiors are left intact. A trailing unclosed `<!--`
+     * outside a fence is dropped (streaming-safe). Newlines are normalized
+     * to `\n`.
+     */
+    fun stripHtmlComments(source: String): String {
+        val text = source.replace("\r\n", "\n").replace("\r", "\n")
+        val fences = fencedRanges(text)
+        val out = StringBuilder(text.length)
+        var i = 0
+        while (i < text.length) {
+            val inFence = fences.any { i in it }
+            if (!inFence && text.startsWith("<!--", i)) {
+                val close = text.indexOf("-->", startIndex = i + 4)
+                if (close < 0) break
+                i = close + 3
+                continue
+            }
+            out.append(text[i])
+            i += 1
+        }
+        return out.toString()
+    }
+
+    /**
      * Splits [source] into ordered block elements. Never throws; unrecognized or
      * half-formed input becomes paragraph blocks so no content is lost.
      */
     fun parse(source: String): List<MdBlock> {
-        val normalized = source.replace("\r\n", "\n").replace("\r", "\n")
+        val normalized = stripHtmlComments(source)
         // Keep empty lines: split on '\n' WITHOUT dropping trailing empties.
         val lines = normalized.split("\n")
 
@@ -249,6 +275,52 @@ object MarkdownBlocks {
     // ---- Fences ----
 
     private data class Fence(val char: Char, val language: String?)
+
+    /**
+     * Character ranges of fenced code blocks (opener through closer, or opener
+     * through EOS when unclosed). Used so [stripHtmlComments] does not touch
+     * comments that belong inside a fence.
+     */
+    private fun fencedRanges(source: String): List<IntRange> {
+        val ranges = mutableListOf<IntRange>()
+        var lineStart = 0
+        var fenceStart: Int? = null
+        var fenceChar: Char? = null
+        var i = 0
+
+        fun considerLine(end: Int) {
+            val trimmed = source.substring(lineStart, end).trim()
+            val ch = fenceChar
+            val start = fenceStart
+            if (ch != null && start != null) {
+                if (isClosingFence(trimmed, ch)) {
+                    ranges.add(start until end)
+                    fenceChar = null
+                    fenceStart = null
+                }
+            } else {
+                val info = fenceInfo(trimmed)
+                if (info != null) {
+                    fenceStart = lineStart
+                    fenceChar = info.char
+                }
+            }
+        }
+
+        while (i < source.length) {
+            if (source[i] == '\n') {
+                considerLine(i)
+                lineStart = i + 1
+            }
+            i += 1
+        }
+        considerLine(source.length)
+        val openStart = fenceStart
+        if (openStart != null) {
+            ranges.add(openStart until source.length)
+        }
+        return ranges
+    }
 
     /**
      * Parses a fence opener from a trimmed line, returning the fence character and the

@@ -62,12 +62,37 @@ struct MarkdownTable: Equatable, Sendable {
 /// and never throws — it falls back to a plain paragraph until the block completes.
 enum MarkdownBlocks {
 
+  /// Removes HTML comments (`<!-- … -->`) so citation-span markers
+  /// (`<!-- span:c0 -->…<!-- /span:c0 -->`) never render as prose.
+  /// Fenced code interiors are left intact. A trailing unclosed `<!--`
+  /// outside a fence is dropped (streaming-safe). Newlines are normalized
+  /// to `\n`.
+  static func stripHtmlComments(_ source: String) -> String {
+    let text = source
+      .replacingOccurrences(of: "\r\n", with: "\n")
+      .replacingOccurrences(of: "\r", with: "\n")
+    let fences = fencedRanges(in: text)
+    var result = ""
+    var idx = text.startIndex
+    while idx < text.endIndex {
+      let inFence = fences.contains { $0.contains(idx) }
+      if !inFence, text[idx...].hasPrefix("<!--") {
+        if let close = text.range(of: "-->", range: idx..<text.endIndex) {
+          idx = close.upperBound
+          continue
+        }
+        break
+      }
+      result.append(text[idx])
+      idx = text.index(after: idx)
+    }
+    return result
+  }
+
   /// Splits `source` into ordered block elements. Never throws; unrecognized or
   /// half-formed input becomes paragraph blocks so no content is lost.
   static func parse(_ source: String) -> [MarkdownBlock] {
-    let normalized = source
-      .replacingOccurrences(of: "\r\n", with: "\n")
-      .replacingOccurrences(of: "\r", with: "\n")
+    let normalized = stripHtmlComments(source)
     let lines = normalized.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
     var blocks: [MarkdownBlock] = []
@@ -215,6 +240,44 @@ enum MarkdownBlocks {
   }
 
   // MARK: - Fences
+
+  /// Character ranges of fenced code blocks (opener through closer, or opener
+  /// through EOS when unclosed). Used so ``stripHtmlComments`` does not touch
+  /// comments that belong inside a fence.
+  private static func fencedRanges(in source: String) -> [Range<String.Index>] {
+    var ranges: [Range<String.Index>] = []
+    var lineStart = source.startIndex
+    var fenceStart: String.Index?
+    var fenceChar: Character?
+    var i = source.startIndex
+
+    func considerLine(end: String.Index) {
+      let trimmed = source[lineStart..<end].trimmingCharacters(in: .whitespaces)
+      if let ch = fenceChar, let start = fenceStart {
+        if isClosingFence(trimmed, ch) {
+          ranges.append(start..<end)
+          fenceChar = nil
+          fenceStart = nil
+        }
+      } else if let info = fenceInfo(trimmed) {
+        fenceStart = lineStart
+        fenceChar = info.char
+      }
+    }
+
+    while i < source.endIndex {
+      if source[i] == "\n" {
+        considerLine(end: i)
+        lineStart = source.index(after: i)
+      }
+      i = source.index(after: i)
+    }
+    considerLine(end: source.endIndex)
+    if let start = fenceStart {
+      ranges.append(start..<source.endIndex)
+    }
+    return ranges
+  }
 
   /// Parses a fence opener from a trimmed line, returning the fence character and
   /// the info string (language) if present. Nil when the line is not a fence.

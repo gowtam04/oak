@@ -97,4 +97,15 @@ describe("oakAnswerToAgentMarkdown", () => {
     expect(md).not.toContain("## Reasoning");
     expect(md).toContain("**Status:** insufficient_data");
   });
+
+  it("strips citation-span comments from the answer body", () => {
+    const md = oakAnswerToAgentMarkdown({
+      ...BASE,
+      answer_markdown:
+        "<!-- span:c0 -->Garchomp is a Dragon/Ground pseudo-legendary.<!-- /span:c0 -->",
+    });
+    expect(md).toContain("Garchomp is a Dragon/Ground pseudo-legendary.");
+    expect(md).not.toContain("<!--");
+    expect(md).not.toContain("span:c0");
+  });
 });
