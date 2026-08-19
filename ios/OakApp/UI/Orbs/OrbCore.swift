@@ -117,24 +117,22 @@ enum OrbCore {
     return OrbFrame(dots: visible, lines: lines.filter { $0.a >= 0.02 })
   }
 
-  static func paint(_ frame: OrbFrame, dark: Bool, in context: inout GraphicsContext) {
+  static func paint(_ frame: OrbFrame, tint: Color, in context: inout GraphicsContext) {
     for line in frame.lines {
       let w = min(1, max(0, line.white))
-      let g = dark ? 1 - w : w
       var path = Path()
       path.move(to: CGPoint(x: line.x1, y: line.y1))
       path.addLine(to: CGPoint(x: line.x2, y: line.y2))
       context.stroke(
         path,
-        with: .color(Color(white: g, opacity: line.a)),
+        with: .color(tint.opacity(line.a * (1 - w))),
         lineWidth: line.w
       )
     }
     for d in frame.dots {
       let w = min(1, max(0, d.white))
-      let g = dark ? 1 - w : w
       let rect = CGRect(x: d.x - d.r, y: d.y - d.r, width: d.r * 2, height: d.r * 2)
-      context.fill(Path(ellipseIn: rect), with: .color(Color(white: g, opacity: d.a)))
+      context.fill(Path(ellipseIn: rect), with: .color(tint.opacity(d.a * (1 - w))))
     }
   }
 }

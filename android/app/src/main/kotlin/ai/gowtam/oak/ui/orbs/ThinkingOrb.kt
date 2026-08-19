@@ -1,8 +1,8 @@
 package ai.gowtam.oak.ui.orbs
 
+import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.rememberReduceMotion
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,7 +29,7 @@ fun ThinkingOrb(
     paused: Boolean = false,
     live: Boolean = true,
 ) {
-    val dark = isSystemInDarkTheme()
+    val accent = LocalOakColors.current.accent
     val reduceMotion = rememberReduceMotion()
     val resolved = remember(state, size) { OrbEngine.resolve(state, size) }
     var t by remember(state, size) { mutableDoubleStateOf(if (reduceMotion) 0.6 else 0.0) }
@@ -55,9 +55,8 @@ fun ThinkingOrb(
         val frame = OrbEngine.frame(state, size, if (reduceMotion) 0.6 else t)
         for (line in frame.lines) {
             val w = min(1.0, max(0.0, line.white))
-            val g = if (dark) 1 - w else w
             drawLine(
-                color = Color(g.toFloat(), g.toFloat(), g.toFloat(), line.a.toFloat()),
+                color = accent.copy(alpha = (line.a * (1 - w)).toFloat()),
                 start = Offset(line.x1.toFloat(), line.y1.toFloat()),
                 end = Offset(line.x2.toFloat(), line.y2.toFloat()),
                 strokeWidth = line.w.toFloat(),
@@ -66,9 +65,8 @@ fun ThinkingOrb(
         }
         for (d in frame.dots) {
             val w = min(1.0, max(0.0, d.white))
-            val g = if (dark) 1 - w else w
             drawCircle(
-                color = Color(g.toFloat(), g.toFloat(), g.toFloat(), d.a.toFloat()),
+                color = accent.copy(alpha = (d.a * (1 - w)).toFloat()),
                 radius = d.r.toFloat(),
                 center = Offset(d.x.toFloat(), d.y.toFloat()),
             )

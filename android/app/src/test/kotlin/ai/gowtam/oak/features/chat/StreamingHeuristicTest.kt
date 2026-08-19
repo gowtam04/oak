@@ -51,6 +51,14 @@ class StreamingHeuristicTest {
         assertEquals(OrbState.Solving, orbStateForActivity(reconnecting = false, latestTool = "compute_stat"))
         assertEquals(OrbState.Solving, orbStateForActivity(reconnecting = false, latestTool = "run_sql"))
         assertEquals(OrbState.Breathing, orbStateForActivity(reconnecting = false, latestTool = "submit_answer"))
+        assertEquals(
+            OrbState.Composing,
+            orbStateForActivity(reconnecting = false, latestTool = "get_pokemon", writing = true),
+        )
+        assertEquals(
+            OrbState.Connecting,
+            orbStateForActivity(reconnecting = true, latestTool = "get_pokemon", writing = true),
+        )
     }
 
     @Test

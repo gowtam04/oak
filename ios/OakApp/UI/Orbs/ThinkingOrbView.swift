@@ -2,7 +2,6 @@ import SwiftUI
 
 /// 20pt (or 64pt) dotted thinking mark. Geometry from ``OrbEngine``.
 struct ThinkingOrbView: View {
-  @Environment(\.colorScheme) private var colorScheme
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   let state: OrbState
@@ -19,7 +18,7 @@ struct ThinkingOrbView: View {
         : context.date.timeIntervalSinceReferenceDate * resolved.speed
       Canvas { gc, _ in
         let frame = OrbEngine.frame(state: state, size: size, t: t)
-        OrbCore.paint(frame, dark: colorScheme == .dark, in: &gc)
+        OrbCore.paint(frame, tint: Theme.accent, in: &gc)
       }
     }
     .frame(width: side, height: side)

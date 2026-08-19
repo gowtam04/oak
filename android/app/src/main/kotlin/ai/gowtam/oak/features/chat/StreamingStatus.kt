@@ -168,7 +168,11 @@ fun StreamingStatus(
     val reduceMotion = rememberReduceMotion()
     val rows = if (reconnecting) emptyList() else traceRows(activities, settled)
     val header = thinkingHeader(reconnecting, settled, elapsedSeconds)
-    val desiredOrb = orbStateForActivity(reconnecting, rows.lastOrNull()?.tool)
+    val desiredOrb = orbStateForActivity(
+        reconnecting,
+        rows.lastOrNull()?.tool,
+        writing = settled,
+    )
     var shownOrb by remember { mutableStateOf<OrbState?>(null) }
     val orbState = shownOrb ?: desiredOrb
     LaunchedEffect(desiredOrb) {
@@ -223,8 +227,7 @@ fun StreamingStatus(
         ) {
             ThinkingOrb(
                 state = orbState,
-                paused = settled,
-                live = header.live,
+                live = header.live || orbState == OrbState.Composing,
             )
             ShimmerLabel(
                 text = header.text,
@@ -422,8 +425,13 @@ private val SEARCHING_TOOLS = setOf(
 )
 
 /** Lock-step with web `orbStateForActivity` / iOS `ThinkingTraceCopy.orbState`. */
-internal fun orbStateForActivity(reconnecting: Boolean, latestTool: String?): OrbState {
+internal fun orbStateForActivity(
+    reconnecting: Boolean,
+    latestTool: String?,
+    writing: Boolean = false,
+): OrbState {
     if (reconnecting) return OrbState.Connecting
+    if (writing) return OrbState.Composing
     val tool = latestTool
     if (tool.isNullOrEmpty() || tool in HIDDEN_TOOLS) return OrbState.Breathing
     if (tool in SOLVING_TOOLS) return OrbState.Solving

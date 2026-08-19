@@ -216,6 +216,16 @@ struct ToolTrailTests {
     #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "compute_stat") == .solving)
     #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "run_sql") == .solving)
     #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "submit_answer") == .breathing)
+    #expect(
+      ThinkingTraceCopy.orbState(
+        reconnecting: false, latestTool: "get_pokemon", writing: true
+      ) == .composing
+    )
+    #expect(
+      ThinkingTraceCopy.orbState(
+        reconnecting: true, latestTool: "get_pokemon", writing: true
+      ) == .connecting
+    )
   }
 
   @Test

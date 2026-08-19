@@ -44,11 +44,13 @@ export default function ThinkingTrace({
   const desiredOrb = orbStateForActivity({
     reconnecting,
     latestTool,
+    writing: settled,
   });
   const orbState = useHeldOrbState(desiredOrb);
+  const orbLive = header.live || orbState === "composing";
   const label = (
     <>
-      <ThinkingOrbMark state={orbState} paused={settled} live={header.live} />
+      <ThinkingOrbMark state={orbState} live={orbLive} />
       <span
         className={
           "thinking-trace__label" +

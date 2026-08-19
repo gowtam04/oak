@@ -71,7 +71,11 @@ struct StreamingStatusView: View {
   private var live: Bool { ThinkingTraceCopy.header(reconnecting: reconnecting, settled: settled).live }
 
   private var desiredOrb: OrbState {
-    ThinkingTraceCopy.orbState(reconnecting: reconnecting, latestTool: rows.last?.tool)
+    ThinkingTraceCopy.orbState(
+      reconnecting: reconnecting,
+      latestTool: rows.last?.tool,
+      writing: settled
+    )
   }
 
   private func holdOrbChange(_ next: OrbState) {
@@ -114,7 +118,10 @@ struct StreamingStatusView: View {
   @ViewBuilder
   private var header: some View {
     let label = HStack(spacing: Theme.Spacing.sm) {
-      ThinkingOrbView(state: shownOrb, paused: settled, live: live)
+      ThinkingOrbView(
+        state: shownOrb,
+        live: live || shownOrb == .composing
+      )
       headerLabel
       if !rows.isEmpty {
         Image(systemName: "chevron.down")
@@ -286,8 +293,13 @@ enum ThinkingTraceCopy {
   }
 
   /// Lock-step with web `orbStateForActivity` / Android `orbStateForActivity`.
-  static func orbState(reconnecting: Bool, latestTool: String?) -> OrbState {
+  static func orbState(
+    reconnecting: Bool,
+    latestTool: String?,
+    writing: Bool = false
+  ) -> OrbState {
     if reconnecting { return .connecting }
+    if writing { return .composing }
     guard let tool = latestTool, !tool.isEmpty else { return .breathing }
     if Self.hiddenTools.contains(tool) { return .breathing }
     if Self.solvingTools.contains(tool) { return .solving }

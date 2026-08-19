@@ -1,9 +1,42 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { MODE_DRAWS } from "@/lib/orbs/engine/registry";
+import type { OrbFrame } from "@/lib/orbs/engine/core";
+import { MODE_FRAMES } from "@/lib/orbs/engine/registry";
 import { resolvePreset } from "@/lib/orbs/presets";
 import type { OrbSize, OrbState } from "@/lib/orbs/types";
+
+/** Parse `#rrggbb` from `--poke-red` (or fall back to the light token). */
+function readPokeRed(): { r: number; g: number; b: number } {
+  if (typeof window === "undefined") return { r: 227, g: 53, b: 13 };
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue("--poke-red")
+    .trim();
+  const m = /^#([0-9a-f]{6})$/i.exec(raw);
+  if (!m) return { r: 227, g: 53, b: 13 };
+  const n = parseInt(m[1], 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+/** Depth stays in alpha: near dots (low `white`) are stronger red. */
+function paintTinted(ctx: CanvasRenderingContext2D, frame: OrbFrame, rgb: { r: number; g: number; b: number }) {
+  for (const l of frame.lines) {
+    const w = Math.min(1, Math.max(0, l.white));
+    ctx.strokeStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${(l.a ?? 1) * (1 - w)})`;
+    ctx.lineWidth = l.w;
+    ctx.beginPath();
+    ctx.moveTo(l.x1, l.y1);
+    ctx.lineTo(l.x2, l.y2);
+    ctx.stroke();
+  }
+  for (const d of frame.dots) {
+    const w = Math.min(1, Math.max(0, d.white));
+    ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${(d.a ?? 1) * (1 - w)})`;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
 
 /**
  * 20px (or 64px) canvas mark for the thinking-trace header.
@@ -26,9 +59,6 @@ export default function ThinkingOrbMark({
     const canvas = ref.current;
     if (!canvas) return;
 
-    const readDark = () =>
-      document.documentElement.getAttribute("data-theme") === "dark";
-    let dark = readDark();
     const reduced =
       typeof window !== "undefined" &&
       typeof window.matchMedia === "function" &&
@@ -41,12 +71,13 @@ export default function ThinkingOrbMark({
     if (!ctx) return;
 
     const { mode, speed, opts } = resolvePreset(state, size);
-    const draw = MODE_DRAWS[mode];
+    const drawFrame = MODE_FRAMES[mode];
+    let rgb = readPokeRed();
 
     const frame = (tSec: number) => {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, size, size);
-      draw(ctx, size, tSec, dark, opts);
+      paintTinted(ctx, drawFrame(size, tSec, opts), rgb);
     };
 
     if (reduced) {
@@ -90,7 +121,7 @@ export default function ThinkingOrbMark({
     const themeObs =
       typeof MutationObserver !== "undefined"
         ? new MutationObserver(() => {
-            dark = readDark();
+            rgb = readPokeRed();
             if (paused || reduced) frame((performance.now() / 1000) * speed);
           })
         : null;

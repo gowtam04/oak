@@ -40,8 +40,11 @@ const HIDDEN_TOOLS = new Set([
 export function orbStateForActivity(args: {
   reconnecting: boolean;
   latestTool: string | null;
+  /** Tokens are streaming — Oak is writing the answer. */
+  writing?: boolean;
 }): OrbState {
   if (args.reconnecting) return "connecting";
+  if (args.writing) return "composing";
   const tool = args.latestTool;
   if (!tool || HIDDEN_TOOLS.has(tool)) return "breathing";
   if (SOLVING_TOOLS.has(tool)) return "solving";

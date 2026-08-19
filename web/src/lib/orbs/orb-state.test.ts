@@ -38,6 +38,26 @@ describe("orbStateForActivity", () => {
     ).toBe("solving");
   });
 
+  it("maps writing (tokens streaming) to composing", () => {
+    expect(
+      orbStateForActivity({
+        reconnecting: false,
+        latestTool: "get_pokemon",
+        writing: true,
+      }),
+    ).toBe("composing");
+  });
+
+  it("keeps reconnecting above writing", () => {
+    expect(
+      orbStateForActivity({
+        reconnecting: true,
+        latestTool: "get_pokemon",
+        writing: true,
+      }),
+    ).toBe("connecting");
+  });
+
   it("maps hidden / unknown tools to breathing", () => {
     expect(
       orbStateForActivity({ reconnecting: false, latestTool: "submit_answer" }),
