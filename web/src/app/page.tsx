@@ -25,6 +25,7 @@ import { useArtifactViewer } from "@/components/artifact/useArtifactViewer";
 import PinnedArtifactStrip from "@/components/artifact/PinnedArtifactStrip";
 import CalculatorOverlay from "@/components/calc/CalculatorOverlay";
 import PlateTuner from "@/components/dev/PlateTuner";
+import OrbPlayground from "@/components/dev/OrbPlayground";
 import {
   deletePinnedArtifact,
   getPinnedArtifact,
@@ -1667,6 +1668,7 @@ export default function Home() {
 
       {/* Dev-only plate wash dials (Phase 3). Hidden in prod unless ?plateTuner=1. */}
       <PlateTuner />
+      <OrbPlayground />
     </main>
   );
 }

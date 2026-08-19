@@ -2554,12 +2554,18 @@ button.thinking-trace__header:hover {
   outline: 2px solid var(--poke-red);
   outline-offset: 2px;
 }
-.thinking-trace__sparkle {
+.thinking-trace__orb {
   flex: none;
-  fill: var(--text-muted);
+  display: block;
+  width: 20px;
+  height: 20px;
 }
-.thinking-trace__sparkle[data-live="false"] {
-  fill: var(--text-faint);
+.thinking-trace__orb[data-size="64"] {
+  width: 64px;
+  height: 64px;
+}
+.thinking-trace__orb[data-live="false"] {
+  opacity: 0.55;
 }
 .thinking-trace__label {
   font-family: var(--body);
@@ -6552,6 +6558,88 @@ button.scope-chip:focus-visible {
 .plate-tuner__reset {
   align-self: flex-end;
   margin-top: var(--space-1);
+}
+
+/* Dev thinking-orb playground — ?orbs=1 */
+.orb-playground {
+  position: fixed;
+  left: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-overlay, 1000);
+  width: min(280px, calc(100vw - 2rem));
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-floating);
+  font-size: 0.75rem;
+  color: var(--text);
+}
+.orb-playground__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.orb-playground__title {
+  color: var(--text-muted);
+}
+.orb-playground__toggle {
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 2px var(--space-2);
+  cursor: pointer;
+}
+.orb-playground__toggle:hover {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+.orb-playground__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.orb-playground__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 80px;
+  justify-content: center;
+}
+.orb-playground__caption {
+  color: var(--text-faint);
+  font-family: var(--mono, ui-monospace, monospace);
+}
+.orb-playground__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.orb-playground__chip {
+  font: inherit;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.orb-playground__chip--on,
+.orb-playground__chip:hover {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+.orb-playground__row {
+  display: flex;
+  gap: var(--space-2);
 }
 
 /* ===== Chat QoL (Phase 8) ===== */

@@ -1,5 +1,6 @@
 package ai.gowtam.oak.features.chat
 
+import ai.gowtam.oak.ui.orbs.OrbState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -39,6 +40,17 @@ class StreamingHeuristicTest {
         assertEquals(true, rows[1].active)
         assertFalse(rows.any { it.tool == "submit_answer" })
         assertFalse(rows.any { it.primary.contains("get_") })
+    }
+
+    @Test
+    fun `orb state matches the cross-platform table`() {
+        assertEquals(OrbState.Connecting, orbStateForActivity(reconnecting = true, latestTool = "get_pokemon"))
+        assertEquals(OrbState.Breathing, orbStateForActivity(reconnecting = false, latestTool = null))
+        assertEquals(OrbState.Searching, orbStateForActivity(reconnecting = false, latestTool = "get_pokemon"))
+        assertEquals(OrbState.Searching, orbStateForActivity(reconnecting = false, latestTool = "search_wiki"))
+        assertEquals(OrbState.Solving, orbStateForActivity(reconnecting = false, latestTool = "compute_stat"))
+        assertEquals(OrbState.Solving, orbStateForActivity(reconnecting = false, latestTool = "run_sql"))
+        assertEquals(OrbState.Breathing, orbStateForActivity(reconnecting = false, latestTool = "submit_answer"))
     }
 
     @Test

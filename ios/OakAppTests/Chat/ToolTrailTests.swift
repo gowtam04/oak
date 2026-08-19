@@ -208,6 +208,17 @@ struct ToolTrailTests {
   // MARK: Incoming-plate status copy (verb + rest)
 
   @Test
+  func orbStateMatchesCrossPlatformTable() {
+    #expect(ThinkingTraceCopy.orbState(reconnecting: true, latestTool: "get_pokemon") == .connecting)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: nil) == .breathing)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "get_pokemon") == .searching)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "search_wiki") == .searching)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "compute_stat") == .solving)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "run_sql") == .solving)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "submit_answer") == .breathing)
+  }
+
+  @Test
   func thinkingHeaderIsLiveUntilSettled() {
     #expect(
       ThinkingTraceCopy.header(reconnecting: false, settled: false, elapsedSeconds: 3)

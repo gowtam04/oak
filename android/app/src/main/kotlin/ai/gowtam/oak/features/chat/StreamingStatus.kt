@@ -5,6 +5,8 @@ import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.orbs.OrbState
+import ai.gowtam.oak.ui.orbs.ThinkingOrb
 import ai.gowtam.oak.ui.rememberReduceMotion
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -43,6 +45,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,8 +58,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
@@ -150,7 +151,7 @@ private fun StreamingAnswerPlate(streamingText: String) {
 }
 
 /**
- * Expandable thinking trace: sparkle + shimmering "Thinking", then one row
+ * Expandable thinking trace: dotted orb + shimmering "Thinking", then one row
  * per live tool call. Collapses to "Thought for N seconds" once tokens start.
  */
 @Composable
@@ -167,6 +168,18 @@ fun StreamingStatus(
     val reduceMotion = rememberReduceMotion()
     val rows = if (reconnecting) emptyList() else traceRows(activities, settled)
     val header = thinkingHeader(reconnecting, settled, elapsedSeconds)
+    val desiredOrb = orbStateForActivity(reconnecting, rows.lastOrNull()?.tool)
+    var shownOrb by remember { mutableStateOf<OrbState?>(null) }
+    val orbState = shownOrb ?: desiredOrb
+    LaunchedEffect(desiredOrb) {
+        if (shownOrb == null) {
+            shownOrb = desiredOrb
+            return@LaunchedEffect
+        }
+        if (desiredOrb == shownOrb) return@LaunchedEffect
+        delay(400)
+        shownOrb = desiredOrb
+    }
     var userOpen by remember { mutableStateOf<Boolean?>(null) }
     val autoOpen = rows.isNotEmpty() && !settled && !reconnecting
     val open = userOpen ?: autoOpen
@@ -208,9 +221,10 @@ fun StreamingStatus(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
         ) {
-            SparkleIcon(
-                color = if (header.live) oak.textMuted else oak.textFaint,
-                modifier = Modifier.size(16.dp),
+            ThinkingOrb(
+                state = orbState,
+                paused = settled,
+                live = header.live,
             )
             ShimmerLabel(
                 text = header.text,
@@ -362,26 +376,6 @@ private fun SpinningRing(color: Color, reduceMotion: Boolean) {
     }
 }
 
-@Composable
-private fun SparkleIcon(color: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val sx = size.width / 24f
-        val sy = size.height / 24f
-        val path = Path().apply {
-            moveTo(12f * sx, 2f * sy)
-            lineTo(14.4f * sx, 9.2f * sy)
-            lineTo(22f * sx, 12f * sy)
-            lineTo(14.4f * sx, 14.8f * sy)
-            lineTo(12f * sx, 22f * sy)
-            lineTo(9.6f * sx, 14.8f * sy)
-            lineTo(2f * sx, 12f * sy)
-            lineTo(9.6f * sx, 9.2f * sy)
-            close()
-        }
-        drawPath(path, SolidColor(color))
-    }
-}
-
 /** Verb + mute rest for legacy callers. New chrome uses [thinkingHeader]. */
 internal data class StreamingStatusCopy(
     val verb: String,
@@ -402,6 +396,40 @@ internal data class TraceRow(
     val secondary: String?,
     val active: Boolean,
 )
+
+private val SOLVING_TOOLS = setOf(
+    "compute_stat",
+    "estimate_damage",
+    "run_sql",
+    "get_usage_stats",
+    "get_meta_usage",
+)
+private val SEARCHING_TOOLS = setOf(
+    "resolve_entity",
+    "query_pokedex",
+    "get_pokemon",
+    "get_move",
+    "get_ability",
+    "get_item",
+    "get_type_matchups",
+    "get_evolution_chain",
+    "get_encounters",
+    "get_learnset",
+    "get_team",
+    "list_teams",
+    "save_team",
+    "search_wiki",
+)
+
+/** Lock-step with web `orbStateForActivity` / iOS `ThinkingTraceCopy.orbState`. */
+internal fun orbStateForActivity(reconnecting: Boolean, latestTool: String?): OrbState {
+    if (reconnecting) return OrbState.Connecting
+    val tool = latestTool
+    if (tool.isNullOrEmpty() || tool in HIDDEN_TOOLS) return OrbState.Breathing
+    if (tool in SOLVING_TOOLS) return OrbState.Solving
+    if (tool in SEARCHING_TOOLS) return OrbState.Searching
+    return OrbState.Breathing
+}
 
 internal fun thinkingHeader(
     reconnecting: Boolean,

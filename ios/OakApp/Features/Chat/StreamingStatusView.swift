@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Expandable thinking trace: sparkle + shimmering "Thinking", then one row
+/// Expandable thinking trace: dotted orb + shimmering "Thinking", then one row
 /// per live tool call (spinner on the in-flight row, check on done). Collapses
 /// to "Thought for N seconds" once tokens start. Friendly nouns come from
 /// ``ToolTrail`` — raw tool ids never render.
@@ -22,6 +22,8 @@ struct StreamingStatusView: View {
   @State private var userOpen: Bool?
   @State private var frozenElapsed: Int?
   @State private var spinAngle: Double = 0
+  @State private var shownOrb: OrbState = .breathing
+  @State private var holdWork: DispatchWorkItem?
 
   var body: some View {
     if phase != .idle {
@@ -35,9 +37,15 @@ struct StreamingStatusView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .animation(reduceMotion ? nil : Theme.Motion.enter, value: open)
       .animation(reduceMotion ? nil : Theme.Motion.smooth, value: headerText)
-      .onAppear(perform: captureFreeze)
+      .onAppear {
+        captureFreeze()
+        shownOrb = desiredOrb
+      }
       .onChange(of: settled) { _, _ in captureFreeze() }
       .onChange(of: sceneKey) { _, _ in userOpen = nil }
+      .onChange(of: desiredOrb) { _, next in
+        holdOrbChange(next)
+      }
       .accessibilityElement(children: .contain)
     }
   }
@@ -61,6 +69,18 @@ struct StreamingStatusView: View {
   }
 
   private var live: Bool { ThinkingTraceCopy.header(reconnecting: reconnecting, settled: settled).live }
+
+  private var desiredOrb: OrbState {
+    ThinkingTraceCopy.orbState(reconnecting: reconnecting, latestTool: rows.last?.tool)
+  }
+
+  private func holdOrbChange(_ next: OrbState) {
+    if next == shownOrb { return }
+    holdWork?.cancel()
+    let work = DispatchWorkItem { shownOrb = next }
+    holdWork = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+  }
 
   private var headerText: String {
     ThinkingTraceCopy.header(
@@ -94,9 +114,7 @@ struct StreamingStatusView: View {
   @ViewBuilder
   private var header: some View {
     let label = HStack(spacing: Theme.Spacing.sm) {
-      SparkleMark()
-        .fill(live ? Theme.textSecondary : Theme.textMuted)
-        .frame(width: 16, height: 16)
+      ThinkingOrbView(state: shownOrb, paused: settled, live: live)
       headerLabel
       if !rows.isEmpty {
         Image(systemName: "chevron.down")
@@ -217,27 +235,6 @@ struct StreamingStatusView: View {
   }
 }
 
-/// Four-pointed sparkle matching the web thinking-trace mark.
-private struct SparkleMark: Shape {
-  func path(in rect: CGRect) -> Path {
-    let sx = rect.width / 24
-    let sy = rect.height / 24
-    let ox = rect.minX
-    let oy = rect.minY
-    var path = Path()
-    path.move(to: CGPoint(x: ox + 12 * sx, y: oy + 2 * sy))
-    path.addLine(to: CGPoint(x: ox + 14.4 * sx, y: oy + 9.2 * sy))
-    path.addLine(to: CGPoint(x: ox + 22 * sx, y: oy + 12 * sy))
-    path.addLine(to: CGPoint(x: ox + 14.4 * sx, y: oy + 14.8 * sy))
-    path.addLine(to: CGPoint(x: ox + 12 * sx, y: oy + 22 * sy))
-    path.addLine(to: CGPoint(x: ox + 9.6 * sx, y: oy + 14.8 * sy))
-    path.addLine(to: CGPoint(x: ox + 2 * sx, y: oy + 12 * sy))
-    path.addLine(to: CGPoint(x: ox + 9.6 * sx, y: oy + 9.2 * sy))
-    path.closeSubpath()
-    return path
-  }
-}
-
 // MARK: - Copy (pure, testable)
 
 /// Header + row mapping for the thinking trace. Lock-step with web
@@ -287,6 +284,28 @@ enum ThinkingTraceCopy {
       )
     }
   }
+
+  /// Lock-step with web `orbStateForActivity` / Android `orbStateForActivity`.
+  static func orbState(reconnecting: Bool, latestTool: String?) -> OrbState {
+    if reconnecting { return .connecting }
+    guard let tool = latestTool, !tool.isEmpty else { return .breathing }
+    if Self.hiddenTools.contains(tool) { return .breathing }
+    if Self.solvingTools.contains(tool) { return .solving }
+    if Self.searchingTools.contains(tool) { return .searching }
+    return .breathing
+  }
+
+  private static let hiddenTools: Set<String> = [
+    "reasoning", "submit_answer", "submit_builder_answer",
+  ]
+  private static let solvingTools: Set<String> = [
+    "compute_stat", "estimate_damage", "run_sql", "get_usage_stats", "get_meta_usage",
+  ]
+  private static let searchingTools: Set<String> = [
+    "resolve_entity", "query_pokedex", "get_pokemon", "get_move", "get_ability",
+    "get_item", "get_type_matchups", "get_evolution_chain", "get_encounters",
+    "get_learnset", "get_team", "list_teams", "save_team", "search_wiki",
+  ]
 }
 
 /// Legacy verb/rest split — kept so older tests and call sites still compile.
