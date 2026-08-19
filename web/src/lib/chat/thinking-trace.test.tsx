@@ -10,14 +10,30 @@ import {
 
 describe("instrumentToken", () => {
   it("matches the cross-platform copy table", () => {
-    expect(instrumentToken("resolve_entity")).toBe("Dex lookup");
-    expect(instrumentToken("get_pokemon")).toBe("Pokémon");
-    expect(instrumentToken("get_move")).toBe("Move");
-    expect(instrumentToken("run_sql")).toBe("Game data");
-    expect(instrumentToken("search_wiki")).toBe("Wiki");
-    expect(instrumentToken("get_meta_usage")).toBe("Usage");
+    expect(instrumentToken("resolve_entity")).toBe("Identifying");
+    expect(instrumentToken("query_pokedex")).toBe("Searching Pokédex");
+    expect(instrumentToken("get_pokemon")).toBe("Looking up Pokémon");
+    expect(instrumentToken("get_move")).toBe("Looking up move");
+    expect(instrumentToken("get_ability")).toBe("Reading ability");
+    expect(instrumentToken("get_item")).toBe("Looking up item");
+    expect(instrumentToken("get_type_matchups")).toBe("Checking matchups");
+    expect(instrumentToken("type_matchup")).toBe("Checking matchups");
+    expect(instrumentToken("get_type_chart")).toBe("Checking matchups");
+    expect(instrumentToken("get_evolution_chain")).toBe("Tracing evolution");
+    expect(instrumentToken("compute_stat")).toBe("Computing stats");
+    expect(instrumentToken("estimate_damage")).toBe("Calculating damage");
+    expect(instrumentToken("get_usage_stats")).toBe("Checking live usage");
+    expect(instrumentToken("get_meta_usage")).toBe("Checking ladder usage");
+    expect(instrumentToken("get_encounters")).toBe("Finding locations");
+    expect(instrumentToken("get_learnset")).toBe("Checking learnset");
+    expect(instrumentToken("get_team")).toBe("Reading team");
+    expect(instrumentToken("list_teams")).toBe("Listing teams");
+    expect(instrumentToken("save_team")).toBe("Saving team");
+    expect(instrumentToken("run_sql")).toBe("Querying game data");
+    expect(instrumentToken("search_wiki")).toBe("Searching wiki");
+    expect(instrumentToken("submit_answer")).toBe("Answer");
     expect(instrumentToken("submit_builder_answer")).toBe("Teams");
-    expect(instrumentToken("totally_unknown")).toBe("Lookup");
+    expect(instrumentToken("totally_unknown")).toBe("Looking up");
   });
 });
 
@@ -51,13 +67,13 @@ describe("traceRows", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toEqual({
       tool: "resolve_entity",
-      primary: "Dex lookup",
+      primary: "Identifying",
       secondary: "garchom",
       active: false,
     });
     expect(rows[1]).toEqual({
       tool: "get_pokemon",
-      primary: "Pokémon",
+      primary: "Looking up Pokémon",
       secondary: "Garchomp",
       active: true,
     });
@@ -68,7 +84,7 @@ describe("traceRows", () => {
     const rows = traceRows([
       { tool: "some_future_tool", label: "Doing a thing…" },
     ]);
-    expect(rows[0]?.primary).toBe("Lookup");
+    expect(rows[0]?.primary).toBe("Looking up");
     expect(rows[0]?.primary).not.toMatch(/some_future_tool/i);
   });
 });

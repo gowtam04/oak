@@ -11,14 +11,14 @@ class StreamingHeuristicTest {
 
     @Test
     fun `instrumentToken matches the cross-platform copy table`() {
-        assertEquals("Dex lookup", instrumentToken("resolve_entity"))
-        assertEquals("Pokémon", instrumentToken("get_pokemon"))
-        assertEquals("Move", instrumentToken("get_move"))
-        assertEquals("Game data", instrumentToken("run_sql"))
-        assertEquals("Wiki", instrumentToken("search_wiki"))
-        assertEquals("Usage", instrumentToken("get_meta_usage"))
+        assertEquals("Identifying", instrumentToken("resolve_entity"))
+        assertEquals("Looking up Pokémon", instrumentToken("get_pokemon"))
+        assertEquals("Looking up move", instrumentToken("get_move"))
+        assertEquals("Querying game data", instrumentToken("run_sql"))
+        assertEquals("Searching wiki", instrumentToken("search_wiki"))
+        assertEquals("Checking ladder usage", instrumentToken("get_meta_usage"))
         assertEquals("Teams", instrumentToken("submit_builder_answer"))
-        assertEquals("Lookup", instrumentToken("totally_unknown"))
+        assertEquals("Looking up", instrumentToken("totally_unknown"))
     }
 
     @Test
@@ -32,10 +32,10 @@ class StreamingHeuristicTest {
             settled = false,
         )
         assertEquals(2, rows.size)
-        assertEquals("Dex lookup", rows[0].primary)
+        assertEquals("Identifying", rows[0].primary)
         assertEquals("Farigiraf", rows[0].secondary)
         assertFalse(rows[0].active)
-        assertEquals("Pokémon", rows[1].primary)
+        assertEquals("Looking up Pokémon", rows[1].primary)
         assertEquals("Garchomp", rows[1].secondary)
         assertEquals(true, rows[1].active)
         assertFalse(rows.any { it.tool == "submit_answer" })

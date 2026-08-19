@@ -258,15 +258,15 @@ describe("ChatThread — streaming field-notes trail", () => {
     const note = screen.getByTestId("field-note");
     expect(note).toHaveTextContent("Thinking");
     const trace = screen.getByTestId("thinking-trace");
-    expect(trace).toHaveTextContent("Dex lookup");
-    expect(trace).toHaveTextContent("Pokémon");
+    expect(trace).toHaveTextContent("Identifying");
+    expect(trace).toHaveTextContent("Looking up Pokémon");
     expect(trace).toHaveTextContent("Garchomp");
     expect(trace.textContent).not.toContain("resolve_entity");
     expect(trace.textContent).not.toContain("get_pokemon");
     expect(screen.queryByTestId("progress-thinking")).toBeNull();
   });
 
-  it("falls back to a generic 'Lookup' token for an unrecognized tool", () => {
+  it("falls back to a generic 'Looking up' token for an unrecognized tool", () => {
     render(
       <ChatThread
         {...props({
@@ -276,17 +276,17 @@ describe("ChatThread — streaming field-notes trail", () => {
       />,
     );
     const trace = screen.getByTestId("thinking-trace");
-    expect(trace).toHaveTextContent("Lookup");
+    expect(trace).toHaveTextContent("Looking up");
     expect(trace.textContent).not.toContain("SOME_FUTURE_TOOL");
     expect(trace.textContent).not.toContain("some_future_tool");
   });
 
   it("exposes instrumentToken with the full copy-table mapping", () => {
-    expect(instrumentToken("run_sql")).toBe("Game data");
-    expect(instrumentToken("search_wiki")).toBe("Wiki");
-    expect(instrumentToken("get_meta_usage")).toBe("Usage");
+    expect(instrumentToken("run_sql")).toBe("Querying game data");
+    expect(instrumentToken("search_wiki")).toBe("Searching wiki");
+    expect(instrumentToken("get_meta_usage")).toBe("Checking ladder usage");
     expect(instrumentToken("submit_builder_answer")).toBe("Teams");
-    expect(instrumentToken("totally_unknown")).toBe("Lookup");
+    expect(instrumentToken("totally_unknown")).toBe("Looking up");
   });
 
   it("shows the quiet thinking sentence while working, before prose streams", () => {

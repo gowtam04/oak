@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Expandable thinking trace: dotted orb + shimmering "Thinking", then one row
 /// per live tool call (spinner on the in-flight row, check on done). Collapses
-/// to "Thought for N seconds" once tokens start. Friendly nouns come from
+/// to "Thought for N seconds" once tokens start. Action labels come from
 /// ``ToolTrail`` — raw tool ids never render.
 struct StreamingStatusView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -385,38 +385,41 @@ enum ToolTrail {
     }
   }
 
-  /// Maps a raw tool id to the friendly, non-technical noun users see (the same
-  /// vocabulary as web's `instrumentToken` — copy-tables.md §1). A raw tool id must
-  /// never reach the screen: every caller in this file routes through here,
-  /// including both bare fallback paths in ``rowLabel(tool:label:)``.
+  /// Maps a raw tool id to the action label users see (the same vocabulary as
+  /// web's `instrumentToken`). A raw tool id must never reach the screen: every
+  /// caller in this file routes through here, including both bare fallback
+  /// paths in ``rowLabel(tool:label:)``.
   static func friendlyNoun(_ tool: String) -> String {
     switch tool {
-    case "resolve_entity": return "Dex lookup"
-    case "query_pokedex": return "Pokédex search"
-    case "get_pokemon": return "Pokémon"
-    case "get_move": return "Move"
-    case "get_ability": return "Ability"
-    case "get_item": return "Item"
-    case "get_type_matchups": return "Type matchups"
-    case "get_evolution_chain": return "Evolution"
-    case "compute_stat": return "Stats"
-    case "estimate_damage": return "Damage calc"
-    case "get_usage_stats", "get_meta_usage": return "Usage"
-    case "get_encounters": return "Locations"
-    case "get_learnset": return "Movepool"
-    case "get_team", "list_teams", "save_team": return "Teams"
-    case "run_sql": return "Game data"
-    case "search_wiki": return "Wiki"
+    case "resolve_entity": return "Identifying"
+    case "query_pokedex": return "Searching Pokédex"
+    case "get_pokemon": return "Looking up Pokémon"
+    case "get_move": return "Looking up move"
+    case "get_ability": return "Reading ability"
+    case "get_item": return "Looking up item"
+    case "get_type_matchups", "type_matchup", "get_type_chart": return "Checking matchups"
+    case "get_evolution_chain": return "Tracing evolution"
+    case "compute_stat": return "Computing stats"
+    case "estimate_damage": return "Calculating damage"
+    case "get_usage_stats": return "Checking live usage"
+    case "get_meta_usage": return "Checking ladder usage"
+    case "get_encounters": return "Finding locations"
+    case "get_learnset": return "Checking learnset"
+    case "get_team": return "Reading team"
+    case "list_teams": return "Listing teams"
+    case "save_team": return "Saving team"
+    case "run_sql": return "Querying game data"
+    case "search_wiki": return "Searching wiki"
     case "submit_answer": return "Answer"
     case "submit_builder_answer": return "Teams"
-    default: return "Lookup"
+    default: return "Looking up"
     }
   }
 
   /// The instrument-voice row text. When the label parses into a tool + subject —
-  /// e.g. `get_pokemon` + a resolvable "Garchomp" — it renders `Pokémon ·
+  /// e.g. `get_pokemon` + a resolvable "Garchomp" — it renders `Looking up Pokémon ·
   /// Garchomp`; otherwise it falls back to the cleaned (emoji-stripped) label, or
-  /// the friendly noun when there's no usable label at all. The `.instrumentLabel()`
+  /// the action label when there's no usable label at all. The `.instrumentLabel()`
   /// modifier applies the uppercasing + tracking, so this returns natural-case text.
   static func rowLabel(tool: String, label: String) -> String {
     let cleaned = strippingLeadingEmoji(label)

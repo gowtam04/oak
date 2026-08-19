@@ -472,7 +472,7 @@ internal fun traceRows(activities: List<ToolActivity>, settled: Boolean): List<T
 }
 
 /**
- * Status copy split for the incoming plate. Friendly nouns come from
+ * Status copy split for the incoming plate. Action labels come from
  * [instrumentToken] — never a raw `GET_*` tool id.
  */
 internal fun streamingStatusCopy(
@@ -493,9 +493,9 @@ internal fun streamingStatusSentence(
 ): String = streamingStatusCopy(phase, activities, reconnecting).sentence
 
 /**
- * Tool → friendly noun. Pinned to the cross-platform copy table (web
+ * Tool → action label. Pinned to the cross-platform copy table (web
  * `instrumentToken`, iOS `ToolTrail.friendlyNoun`). Unknown tools become
- * `"Lookup"` — never the raw id.
+ * `"Looking up"` — never the raw id.
  */
 internal fun instrumentToken(tool: String): String = INSTRUMENT_TOKENS[tool] ?: UNKNOWN_INSTRUMENT_TOKEN
 
@@ -547,34 +547,34 @@ private fun firstQuoted(text: String): String? {
     return null
 }
 
-private const val UNKNOWN_INSTRUMENT_TOKEN = "Lookup"
+private const val UNKNOWN_INSTRUMENT_TOKEN = "Looking up"
 
 private val HIDDEN_TOOLS = setOf("reasoning", "submit_answer", "submit_builder_answer")
 
 private val EMOJI_PREFIX = Regex("^[\\p{So}\\p{Cn}\\uFE0F\\u200D\\s]+")
 
 private val INSTRUMENT_TOKENS: Map<String, String> = mapOf(
-    "resolve_entity" to "Dex lookup",
-    "query_pokedex" to "Pokédex search",
-    "get_pokemon" to "Pokémon",
-    "get_move" to "Move",
-    "get_ability" to "Ability",
-    "get_item" to "Item",
-    "get_type_matchups" to "Type matchups",
-    "type_matchup" to "Type matchups",
-    "get_type_chart" to "Type matchups",
-    "get_evolution_chain" to "Evolution",
-    "compute_stat" to "Stats",
-    "estimate_damage" to "Damage calc",
-    "get_usage_stats" to "Usage",
-    "get_meta_usage" to "Usage",
-    "get_encounters" to "Locations",
-    "get_learnset" to "Movepool",
-    "get_team" to "Teams",
-    "list_teams" to "Teams",
-    "save_team" to "Teams",
-    "run_sql" to "Game data",
-    "search_wiki" to "Wiki",
+    "resolve_entity" to "Identifying",
+    "query_pokedex" to "Searching Pokédex",
+    "get_pokemon" to "Looking up Pokémon",
+    "get_move" to "Looking up move",
+    "get_ability" to "Reading ability",
+    "get_item" to "Looking up item",
+    "get_type_matchups" to "Checking matchups",
+    "type_matchup" to "Checking matchups",
+    "get_type_chart" to "Checking matchups",
+    "get_evolution_chain" to "Tracing evolution",
+    "compute_stat" to "Computing stats",
+    "estimate_damage" to "Calculating damage",
+    "get_usage_stats" to "Checking live usage",
+    "get_meta_usage" to "Checking ladder usage",
+    "get_encounters" to "Finding locations",
+    "get_learnset" to "Checking learnset",
+    "get_team" to "Reading team",
+    "list_teams" to "Listing teams",
+    "save_team" to "Saving team",
+    "run_sql" to "Querying game data",
+    "search_wiki" to "Searching wiki",
     "submit_answer" to "Answer",
     "submit_builder_answer" to "Teams",
 )

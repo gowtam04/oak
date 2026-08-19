@@ -30,32 +30,34 @@ const HIDDEN_TOOLS = new Set([
 ]);
 
 const INSTRUMENT_TOKENS: Record<string, string> = {
-  resolve_entity: "Dex lookup",
-  query_pokedex: "Pokédex search",
-  get_pokemon: "Pokémon",
-  get_move: "Move",
-  get_ability: "Ability",
-  get_item: "Item",
-  get_type_matchups: "Type matchups",
-  get_evolution_chain: "Evolution",
-  compute_stat: "Stats",
-  estimate_damage: "Damage calc",
-  get_usage_stats: "Usage",
-  get_meta_usage: "Usage",
-  get_encounters: "Locations",
-  get_learnset: "Movepool",
-  get_team: "Teams",
-  list_teams: "Teams",
-  save_team: "Teams",
-  run_sql: "Game data",
-  search_wiki: "Wiki",
+  resolve_entity: "Identifying",
+  query_pokedex: "Searching Pokédex",
+  get_pokemon: "Looking up Pokémon",
+  get_move: "Looking up move",
+  get_ability: "Reading ability",
+  get_item: "Looking up item",
+  get_type_matchups: "Checking matchups",
+  type_matchup: "Checking matchups",
+  get_type_chart: "Checking matchups",
+  get_evolution_chain: "Tracing evolution",
+  compute_stat: "Computing stats",
+  estimate_damage: "Calculating damage",
+  get_usage_stats: "Checking live usage",
+  get_meta_usage: "Checking ladder usage",
+  get_encounters: "Finding locations",
+  get_learnset: "Checking learnset",
+  get_team: "Reading team",
+  list_teams: "Listing teams",
+  save_team: "Saving team",
+  run_sql: "Querying game data",
+  search_wiki: "Searching wiki",
   submit_answer: "Answer",
   submit_builder_answer: "Teams",
 };
-const UNKNOWN_INSTRUMENT_TOKEN = "Lookup";
+const UNKNOWN_INSTRUMENT_TOKEN = "Looking up";
 
 /**
- * Tool id → friendly noun. Pinned by the canonical cross-platform copy
+ * Tool id → action label. Pinned by the canonical cross-platform copy
  * table. A raw `GET_*` id must never reach the screen.
  */
 export function instrumentToken(tool: string): string {
