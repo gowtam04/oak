@@ -106,19 +106,19 @@ describe("resolveModel", () => {
       key: "grok-4.3",
       provider: "xai",
       apiModelId: "grok-4.3",
-      effort: "high",
+      effort: "low",
     });
     expect(resolveModel("grok-4.5")).toMatchObject({
       key: "grok-4.5",
       provider: "xai",
       apiModelId: "grok-4.5",
-      effort: "high",
+      effort: "low",
     });
     expect(resolveModel("grok-4.6")).toMatchObject({
       key: "grok-4.6",
       provider: "xai",
       apiModelId: "grok-4.6",
-      effort: "high",
+      effort: "low",
     });
   });
 
