@@ -4,10 +4,10 @@
  *
  * Signed-in only (voice is account-scoped: unified history). A guest gets a
  * clean 401 before anything else. Flow: parse+validate body → auth (401) →
- * per-account rate limit (strict — token mints are cheap to abuse) → load the
- * conversation's prior history for the injected digest → mint the ephemeral
- * token from xAI → respond with the token + bootstrap. An xAI mint failure is a
- * clean 502, never a 500.
+ * spend admission (before xAI mint) → per-account rate limit (strict — token
+ * mints are cheap to abuse) → load the conversation's prior history for the
+ * injected digest → mint the ephemeral token from xAI → respond with the token
+ * + bootstrap. An xAI mint failure is a clean 502, never a 500.
  *
  * Env gotcha (same as /api/chat): the env-touching modules (auth, the
  * conversation repo, the voice-session module that reads `@/env`) are
@@ -48,11 +48,49 @@ const requestBodySchema = z
   })
   .strict();
 
-function jsonError(status: number, error: string, message: string): Response {
-  return new Response(JSON.stringify({ error, message }), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+function jsonError(
+  status: number,
+  error: string,
+  message: string,
+  extraHeaders?: Record<string, string>,
+  extraBody?: Record<string, unknown>,
+): Response {
+  return new Response(
+    JSON.stringify({ code: error, error, message, ...extraBody }),
+    {
+      status,
+      headers: { "Content-Type": "application/json", ...extraHeaders },
+    },
+  );
+}
+
+const SPEND_CHECK_FAILED_MESSAGE =
+  "Could not verify usage limits. Please try again.";
+
+function spendRefuseResponse(admit: {
+  code: "account_denied" | "daily_limit" | "spend_check_failed";
+  message?: string;
+  resetAt?: string;
+  retryAfterMs?: number;
+}): Response {
+  const message = admit.message ?? SPEND_CHECK_FAILED_MESSAGE;
+  if (admit.code === "daily_limit") {
+    const headers: Record<string, string> = {};
+    if (typeof admit.retryAfterMs === "number") {
+      headers["Retry-After"] = String(Math.ceil(admit.retryAfterMs / 1000));
+    }
+    return jsonError(
+      429,
+      admit.code,
+      message,
+      headers,
+      admit.resetAt !== undefined ? { reset_at: admit.resetAt } : undefined,
+    );
+  }
+  if (admit.code === "account_denied") {
+    return jsonError(403, admit.code, message);
+  }
+  return jsonError(503, admit.code, message);
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -83,6 +121,33 @@ export async function POST(req: Request): Promise<Response> {
       "sign_in_required",
       "Sign in to use voice mode.",
     );
+  }
+
+  // 1b) Spend admission BEFORE rate limit and BEFORE xAI mint (SC-BR-1).
+  const [{ admitAgentTurn }, { isAdmin }] = await Promise.all([
+    import("@/server/spend-control"),
+    import("@/server/auth/admin"),
+  ]);
+  const admit = await admitAgentTurn({
+    subject: {
+      kind: "account",
+      accountId: account.id,
+      email: account.email,
+    },
+    isAdmin: isAdmin(account),
+    surface: "voice",
+  });
+  if (!admit.ok) {
+    logger.info(
+      {
+        event: "spend_refused",
+        code: admit.code,
+        subject_key: `acct:${account.id}`,
+        session_id,
+      },
+      "oak_spend_refused",
+    );
+    return spendRefuseResponse(admit);
   }
 
   // 2) RATE LIMIT — one signed-in tier, keyed by account.

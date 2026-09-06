@@ -40,6 +40,10 @@ vi.mock("server-only", () => ({}));
 
 const { meMock } = vi.hoisted(() => ({ meMock: vi.fn() }));
 vi.mock("@/server/auth/current-user", () => ({ getCurrentAccount: meMock }));
+vi.mock("@/server/spend-control", () => ({
+  admitAgentTurn: vi.fn(async () => ({ ok: true })),
+  assertNotDenylisted: vi.fn(async () => ({ ok: true })),
+}));
 
 const { mockRunOak, capturedHistories, capturedModes } = vi.hoisted(() => ({
   mockRunOak: vi.fn(),

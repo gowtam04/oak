@@ -39,6 +39,10 @@ const usage = vi.hoisted(() => ({
   recordAuthEvent: vi.fn<(input: unknown) => Promise<void>>(),
 }));
 vi.mock("@/data/repos/usage-repo", () => usage);
+vi.mock("@/server/spend-control", () => ({
+  admitAgentTurn: vi.fn(async () => ({ ok: true })),
+  assertNotDenylisted: vi.fn(async () => ({ ok: true })),
+}));
 
 import { createPgSchema, installAsSingleton, type PgFixture } from "./support/pg";
 import { _resetStoreForTests as resetRateLimit } from "@/server/rate-limit";

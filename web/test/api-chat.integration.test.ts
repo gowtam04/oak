@@ -24,6 +24,10 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/server/auth/current-user", () => ({
   getCurrentAccount: vi.fn(async () => null),
 }));
+vi.mock("@/server/spend-control", () => ({
+  admitAgentTurn: vi.fn(async () => ({ ok: true })),
+  assertNotDenylisted: vi.fn(async () => ({ ok: true })),
+}));
 
 // --- Mock the runtime + context so the route never opens SQLite / hits the model.
 const { mockRunOak } = vi.hoisted(() => ({ mockRunOak: vi.fn() }));

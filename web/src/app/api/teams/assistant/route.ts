@@ -64,11 +64,41 @@ function jsonError(
   code: string,
   message: string,
   extraHeaders?: Record<string, string>,
+  extraBody?: Record<string, unknown>,
 ): Response {
-  return new Response(JSON.stringify({ code, message }), {
+  return new Response(JSON.stringify({ code, message, ...extraBody }), {
     status,
     headers: { "Content-Type": "application/json", ...extraHeaders },
   });
+}
+
+const SPEND_CHECK_FAILED_MESSAGE =
+  "Could not verify usage limits. Please try again.";
+
+function spendRefuseResponse(admit: {
+  code: "account_denied" | "daily_limit" | "spend_check_failed";
+  message?: string;
+  resetAt?: string;
+  retryAfterMs?: number;
+}): Response {
+  const message = admit.message ?? SPEND_CHECK_FAILED_MESSAGE;
+  if (admit.code === "daily_limit") {
+    const headers: Record<string, string> = {};
+    if (typeof admit.retryAfterMs === "number") {
+      headers["Retry-After"] = String(Math.ceil(admit.retryAfterMs / 1000));
+    }
+    return jsonError(
+      429,
+      admit.code,
+      message,
+      headers,
+      admit.resetAt !== undefined ? { reset_at: admit.resetAt } : undefined,
+    );
+  }
+  if (admit.code === "account_denied") {
+    return jsonError(403, admit.code, message);
+  }
+  return jsonError(503, admit.code, message);
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +240,34 @@ export async function POST(req: Request): Promise<Response> {
       "unauthorized",
       "Sign in to use the team-builder assistant.",
     );
+  }
+
+  // 1b) Spend admission (denylist → daily cap) BEFORE the per-minute limiter.
+  const [{ admitAgentTurn }, { isAdmin }] = await Promise.all([
+    import("@/server/spend-control"),
+    import("@/server/auth/admin"),
+  ]);
+  const admit = await admitAgentTurn({
+    subject: {
+      kind: "account",
+      accountId: account.id,
+      email: account.email,
+    },
+    isAdmin: isAdmin(account),
+    surface: "teams_assistant",
+  });
+  if (!admit.ok) {
+    logger.info(
+      {
+        event: "spend_refused",
+        code: admit.code,
+        subject_key: `acct:${account.id}`,
+        request_id: requestId,
+        session_id,
+      },
+      "oak_spend_refused",
+    );
+    return spendRefuseResponse(admit);
   }
 
   // 2) RATE LIMIT — one signed-in tier, keyed by account (no guest branch).

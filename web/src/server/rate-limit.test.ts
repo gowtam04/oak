@@ -55,6 +55,11 @@ vi.mock("@/data/repos/settings-repo", () => ({
   }),
   setActiveModelKey: vi.fn(),
 }));
+// Spend admission is a separate gate; this suite pins per-minute keying only.
+vi.mock("@/server/spend-control", () => ({
+  admitAgentTurn: vi.fn(async () => ({ ok: true })),
+  assertNotDenylisted: vi.fn(async () => ({ ok: true })),
+}));
 vi.mock("@/server/rate-limit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/rate-limit")>();
   return { ...actual, checkRateLimit: vi.fn(actual.checkRateLimit) };

@@ -5,11 +5,12 @@
  *
  * Responsibilities (orchestration, NOT agent internals):
  *   1. Parse + validate the request body ({ session_id, message }).
- *   2. Apply the two orchestration guardrails BEFORE streaming: the input-length
- *      cap and the per-session rate limit (integration.md § Guardrails). These
- *      reject with a plain JSON HTTP error (413 / 429) — they are not in-domain
- *      answer conditions, and rejecting before the stream opens lets the client
- *      see a real HTTP status.
+ *   2. Apply orchestration guardrails BEFORE streaming: spend admission
+ *      (denylist / daily cap), then the input-length cap and the per-session
+ *      rate limit (integration.md § Guardrails). These reject with a plain JSON
+ *      HTTP error (403 / 413 / 429 / 503) — they are not in-domain answer
+ *      conditions, and rejecting before the stream opens lets the client see a
+ *      real HTTP status.
  *   3. Resolve the prior in-session history from the session store (trimming it
  *      to the context budget first), then drive `runOak` with hooks that
  *      stream `tool_activity` events as tools fire and `answer_start`/
@@ -104,11 +105,41 @@ function jsonError(
   code: string,
   message: string,
   extraHeaders?: Record<string, string>,
+  extraBody?: Record<string, unknown>,
 ): Response {
-  return new Response(JSON.stringify({ code, message }), {
+  return new Response(JSON.stringify({ code, message, ...extraBody }), {
     status,
     headers: { "Content-Type": "application/json", ...extraHeaders },
   });
+}
+
+const SPEND_CHECK_FAILED_MESSAGE =
+  "Could not verify usage limits. Please try again.";
+
+function spendRefuseResponse(admit: {
+  code: "account_denied" | "daily_limit" | "spend_check_failed";
+  message?: string;
+  resetAt?: string;
+  retryAfterMs?: number;
+}): Response {
+  const message = admit.message ?? SPEND_CHECK_FAILED_MESSAGE;
+  if (admit.code === "daily_limit") {
+    const headers: Record<string, string> = {};
+    if (typeof admit.retryAfterMs === "number") {
+      headers["Retry-After"] = String(Math.ceil(admit.retryAfterMs / 1000));
+    }
+    return jsonError(
+      429,
+      admit.code,
+      message,
+      headers,
+      admit.resetAt !== undefined ? { reset_at: admit.resetAt } : undefined,
+    );
+  }
+  if (admit.code === "account_denied") {
+    return jsonError(403, admit.code, message);
+  }
+  return jsonError(503, admit.code, message);
 }
 
 // The guest rate-limit identity (`ip:<clientIp(req)>`) is derived by the shared
@@ -278,9 +309,9 @@ export async function POST(req: Request): Promise<Response> {
         ? CHAMPIONS_FORMAT
         : NATDEX_FORMAT;
 
-  // 2. Orchestration guardrails — input-length cap + TIERED rate limit
-  //    (integration.md § Guardrails; account-creation design.md § API Design
-  //    "POST /api/chat (modified)", BR-A8 / AUTH-US-7). Resolve the account from
+  // 2. Orchestration guardrails — spend admission (denylist / daily cap) THEN
+  //    the input-length cap + TIERED per-minute rate limit (integration.md
+  //    § Guardrails; spend-controls SC-BR-7). Resolve the account from
   //    the session cookie BEFORE the gate, then key + configure by auth tier:
   //      signed in → `acct:<id>` + SIGNED_IN_CONFIG (60/60s).
   //      guest     → `ip:<clientIp>` + GUEST_CONFIG (20/60s).
@@ -312,27 +343,23 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const rateLimitKey = account
-    ? `acct:${account.id}`
-    : `ip:${clientIp(req)}`;
+  const ip = clientIp(req);
+  const rateLimitKey = account ? `acct:${account.id}` : `ip:${ip}`;
   const rateLimitConfig = account ? SIGNED_IN_CONFIG : GUEST_CONFIG;
 
-  const gate = await checkRateLimit(rateLimitKey, message, rateLimitConfig);
-  if (!gate.allowed) {
-    if (gate.reason === "input_too_long") {
-      return jsonError(
-        413,
-        "input_too_long",
-        `Message exceeds the ${gate.maxLength}-character limit (got ${gate.actualLength}).`,
-      );
-    }
-    // rate_limited — record the rejected turn as a `turn_record` (design.md AD-4:
-    // "rate_limited" is a recorded-status superset, so the errors/heavy-user views
-    // have a single source). The model is unresolved on this pre-stream branch, so
-    // model/providerModel are null and there is no answer. Fire-and-forget: the
-    // recordTurn promise is NEVER awaited (only the cheap, cached module import is)
-    // and a write fault only logs. input_too_long is a separate rejection and is
-    // deliberately NOT recorded (it never reached the model path).
+  // Rejected-turn recording (rate_limited + spend refusals). Same shape as
+  // today's rate_limited branch: null model/answer, prompt stored. Await the
+  // module import only; never await the INSERT (ADMIN-BR-3). input_too_long is
+  // deliberately NOT recorded. Mode is the best seed available this early
+  // (explicit chip > legacy champions_mode > National Dex) — the gate runs
+  // before history/sticky-scope load.
+  const recordRejectedTurn = async (
+    status:
+      | "rate_limited"
+      | "account_denied"
+      | "daily_limit"
+      | "spend_check_failed",
+  ): Promise<void> => {
     try {
       const { recordTurn } = await import("@/data/repos/usage-repo");
       void recordTurn({
@@ -341,12 +368,8 @@ export async function POST(req: Request): Promise<Response> {
         accountId: account?.id ?? null,
         model: null,
         providerModel: null,
-        // The rate-limit gate runs BEFORE scope resolution (it must stay cheap,
-        // pre-history, before the sticky scope is even loaded), so record the
-        // best seed-derived mode available at this point: explicit chip pick >
-        // legacy champions_mode > the National Dex default.
         mode: modeForFormat(explicitSeed ?? legacySeed ?? NATDEX_FORMAT),
-        status: "rate_limited",
+        status,
         inputTokens: 0,
         outputTokens: 0,
         thinkingTokens: 0,
@@ -363,6 +386,45 @@ export async function POST(req: Request): Promise<Response> {
     } catch (err) {
       logRecordFailure(err);
     }
+  };
+
+  // Spend admission (denylist → daily cap) BEFORE the per-minute limiter.
+  const [{ admitAgentTurn }, { isAdmin }] = await Promise.all([
+    import("@/server/spend-control"),
+    import("@/server/auth/admin"),
+  ]);
+  const admit = await admitAgentTurn({
+    subject: account
+      ? { kind: "account", accountId: account.id, email: account.email }
+      : { kind: "guest", ip },
+    isAdmin: account ? isAdmin(account) : false,
+    surface: "chat",
+  });
+  if (!admit.ok) {
+    logger.info(
+      {
+        event: "spend_refused",
+        code: admit.code,
+        subject_key: rateLimitKey,
+        request_id: requestId,
+        session_id,
+      },
+      "oak_spend_refused",
+    );
+    await recordRejectedTurn(admit.code);
+    return spendRefuseResponse(admit);
+  }
+
+  const gate = await checkRateLimit(rateLimitKey, message, rateLimitConfig);
+  if (!gate.allowed) {
+    if (gate.reason === "input_too_long") {
+      return jsonError(
+        413,
+        "input_too_long",
+        `Message exceeds the ${gate.maxLength}-character limit (got ${gate.actualLength}).`,
+      );
+    }
+    await recordRejectedTurn("rate_limited");
     return jsonError(
       429,
       "rate_limited",

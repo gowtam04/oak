@@ -43,22 +43,25 @@ import type { ToolTraceEntry } from "@/server/logger";
  * Input for {@link recordTurn}. Composed at the chat route from the runtime's
  * `TurnTrace` plus the route's own message/answer/account/mode. `model` /
  * `providerModel` are `string | null` to match the nullable columns: a
- * "rate_limited" row (AD-4) is recorded before the model is resolved, so it has
- * no model, and `answerText` / `answer` are null for it too.
+ * "rate_limited" or spend-control refusal row is recorded before the model is
+ * resolved, so it has no model, and `answerText` / `answer` are null for it too.
  */
 export interface TurnRecordInput {
   id: string; // request_id (turn PK)
   sessionId: string;
   accountId: string | null; // null = guest
-  model: string | null; // ModelKey; null for rate_limited (no model resolved)
-  providerModel: string | null; // trace.model; null for rate_limited
+  model: string | null; // ModelKey; null for rate_limited / spend refusals
+  providerModel: string | null; // trace.model; null for rate_limited / spend refusals
   mode: AgentMode; // "standard" | "champions" | gen scopes (generation-scope feature)
   status:
     | "answered"
     | "clarification_needed"
     | "resolution_failed"
     | "insufficient_data"
-    | "rate_limited";
+    | "rate_limited"
+    | "account_denied"
+    | "daily_limit"
+    | "spend_check_failed";
   inputTokens: number;
   outputTokens: number;
   thinkingTokens: number;
