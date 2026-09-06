@@ -364,3 +364,146 @@ describe("ChatThread — streaming field-notes trail", () => {
     expect(screen.getByTestId("thinking-trace")).toHaveTextContent("Pokémon");
   });
 });
+
+describe("ChatThread — spend-control transport banners (SC-AC-5.4, SC-AC-6.5, SC-BR-14)", () => {
+  const RESET_AT = "2026-09-07T00:00:00.000Z";
+  const ACCOUNT_DENIED_MESSAGE = "This account can't use chat.";
+  const DAILY_LIMIT_MESSAGE = `Daily limit reached. Try again tomorrow (resets at ${RESET_AT} UTC).`;
+  const RATE_LIMITED_MESSAGE =
+    "Too many requests. Please wait a moment and try again.";
+
+  function renderTransportError(
+    error: { code: string; message: string },
+    onRetry: (() => void) | undefined = vi.fn(),
+  ) {
+    return render(
+      <ChatThread
+        {...props({
+          status: "error",
+          transportError: error,
+          onRetry,
+        })}
+      />,
+    );
+  }
+
+  /** Visible banner copy, excluding the Retry control when present. */
+  function bannerMessage(): string {
+    const banner = screen.getByTestId("transport-error");
+    const retry = within(banner).queryByTestId("transport-error-retry");
+    const text = banner.textContent ?? "";
+    if (!retry?.textContent) return text.trim();
+    return text.replace(retry.textContent, "").trim();
+  }
+
+  it("account_denied shows the server message, not the generic wrapper (SC-AC-6.1, SC-BR-14)", () => {
+    renderTransportError({
+      code: "account_denied",
+      message: ACCOUNT_DENIED_MESSAGE,
+    });
+
+    const banner = screen.getByTestId("transport-error");
+    expect(banner).toBeInTheDocument();
+    expect(bannerMessage()).toBe(ACCOUNT_DENIED_MESSAGE);
+    expect(banner).not.toHaveTextContent(/Something went wrong/i);
+  });
+
+  it("account_denied hides Retry even when onRetry is provided (SC-BR-14)", () => {
+    const onRetry = vi.fn();
+    renderTransportError(
+      { code: "account_denied", message: ACCOUNT_DENIED_MESSAGE },
+      onRetry,
+    );
+
+    expect(
+      screen.queryByTestId("transport-error-retry"),
+    ).not.toBeInTheDocument();
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it("daily_limit shows the server reset message, not the generic wrapper (SC-AC-5.2, SC-AC-5.4)", () => {
+    renderTransportError({
+      code: "daily_limit",
+      message: DAILY_LIMIT_MESSAGE,
+    });
+
+    const banner = screen.getByTestId("transport-error");
+    expect(banner).toBeInTheDocument();
+    expect(bannerMessage()).toBe(DAILY_LIMIT_MESSAGE);
+    expect(banner).toHaveTextContent(RESET_AT);
+    expect(banner).toHaveTextContent(/resets at/i);
+    expect(banner).not.toHaveTextContent(/Something went wrong/i);
+  });
+
+  it("daily_limit hides Retry even when onRetry is provided (SC-AC-5.4)", () => {
+    const onRetry = vi.fn();
+    renderTransportError(
+      { code: "daily_limit", message: DAILY_LIMIT_MESSAGE },
+      onRetry,
+    );
+
+    expect(
+      screen.queryByTestId("transport-error-retry"),
+    ).not.toBeInTheDocument();
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it("rate_limited still shows Retry when onRetry is provided", () => {
+    const onRetry = vi.fn();
+    renderTransportError(
+      { code: "rate_limited", message: RATE_LIMITED_MESSAGE },
+      onRetry,
+    );
+
+    expect(screen.getByTestId("transport-error")).toBeInTheDocument();
+    const retry = screen.getByTestId("transport-error-retry");
+    expect(retry).toHaveTextContent("Retry");
+    fireEvent.click(retry);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("a generic transport error still shows Retry when onRetry is provided", () => {
+    const onRetry = vi.fn();
+    renderTransportError(
+      { code: "network_error", message: "Network request failed" },
+      onRetry,
+    );
+
+    expect(screen.getByTestId("transport-error-retry")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("transport-error-retry"));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("account_denied, daily_limit, and rate_limited are distinguishable (SC-AC-6.5, SC-BR-14)", () => {
+    const { unmount: unmountDenied } = renderTransportError({
+      code: "account_denied",
+      message: ACCOUNT_DENIED_MESSAGE,
+    });
+    const denied = bannerMessage();
+    unmountDenied();
+
+    const { unmount: unmountDaily } = renderTransportError({
+      code: "daily_limit",
+      message: DAILY_LIMIT_MESSAGE,
+    });
+    const daily = bannerMessage();
+    unmountDaily();
+
+    renderTransportError({
+      code: "rate_limited",
+      message: RATE_LIMITED_MESSAGE,
+    });
+    const rate = bannerMessage();
+
+    expect(denied).toBe(ACCOUNT_DENIED_MESSAGE);
+    expect(daily).toBe(DAILY_LIMIT_MESSAGE);
+    expect(denied).not.toBe(daily);
+    expect(rate).not.toBe(denied);
+    expect(rate).not.toBe(daily);
+    expect(denied).not.toMatch(/Daily limit reached/i);
+    expect(daily).not.toMatch(/can't use chat/i);
+    expect(rate).not.toMatch(/can't use chat/i);
+    expect(rate).not.toMatch(/Daily limit reached/i);
+    expect(new Set([denied, daily, rate]).size).toBe(3);
+  });
+});

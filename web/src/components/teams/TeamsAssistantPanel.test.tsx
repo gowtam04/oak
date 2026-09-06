@@ -110,6 +110,27 @@ describe("describePatch", () => {
 });
 
 describe("TeamsAssistantPanel", () => {
+  // Spend-control refusals (SC-AC-5.4 / SC-AC-6.2 / SC-AC-6.5): same banner
+  // rules as ChatThread — server copy, no Retry on denylist or daily cap.
+  // lastMessageRef is only set after a send, which is when Retry would appear.
+  const ASSISTANT_DENIED = "This account can't use the teams assistant.";
+  const ASSISTANT_RESET_AT = "2026-09-07T00:00:00.000Z";
+  const ASSISTANT_DAILY = `Daily limit reached. Try again tomorrow (resets at ${ASSISTANT_RESET_AT} UTC).`;
+  const ASSISTANT_RATE =
+    "Too many requests. Please wait a moment and try again.";
+
+  function showErrorAfterSend(message: string) {
+    const { rerender, props } = setup();
+    fireEvent.change(screen.getByTestId("assistant-input"), {
+      target: { value: "help me" },
+    });
+    fireEvent.submit(screen.getByTestId("assistant-input").closest("form")!);
+    fakeAssistant.status = "error";
+    fakeAssistant.error = message;
+    rerender(<TeamsAssistantPanel {...props} />);
+    return screen.getByTestId("assistant-error");
+  }
+
   it("renders the empty-state hint and a composer", () => {
     setup();
     expect(screen.getByTestId("assistant-empty")).toBeInTheDocument();
@@ -196,6 +217,49 @@ describe("TeamsAssistantPanel", () => {
     expect(screen.getByTestId("assistant-error")).toHaveTextContent(
       "transport error",
     );
+  });
+
+  it("account_denied shows the server message and no Retry (SC-AC-6.2, SC-BR-14)", () => {
+    const banner = showErrorAfterSend(ASSISTANT_DENIED);
+    expect(banner).toHaveTextContent(ASSISTANT_DENIED);
+    expect(banner).not.toHaveTextContent(/Something went wrong/i);
+    expect(screen.queryByTestId("assistant-retry")).not.toBeInTheDocument();
+  });
+
+  it("daily_limit shows the server reset message and no Retry (SC-AC-5.4)", () => {
+    const banner = showErrorAfterSend(ASSISTANT_DAILY);
+    expect(banner).toHaveTextContent(ASSISTANT_DAILY);
+    expect(banner).toHaveTextContent(ASSISTANT_RESET_AT);
+    expect(screen.queryByTestId("assistant-retry")).not.toBeInTheDocument();
+  });
+
+  it("a generic transport error still shows Retry after a send", () => {
+    showErrorAfterSend("The assistant hit a transport error.");
+    const retry = screen.getByTestId("assistant-retry");
+    expect(retry).toHaveTextContent("Retry");
+    vi.mocked(fakeAssistant.send).mockClear();
+    fireEvent.click(retry);
+    expect(fakeAssistant.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("account_denied, daily_limit, and rate_limited copy are distinguishable (SC-AC-6.5)", () => {
+    const denied = showErrorAfterSend(ASSISTANT_DENIED).textContent ?? "";
+    cleanup();
+    fakeAssistant.error = null;
+    fakeAssistant.status = "idle";
+    const daily = showErrorAfterSend(ASSISTANT_DAILY).textContent ?? "";
+    cleanup();
+    fakeAssistant.error = null;
+    fakeAssistant.status = "idle";
+    const rate = showErrorAfterSend(ASSISTANT_RATE).textContent ?? "";
+
+    expect(denied).toContain(ASSISTANT_DENIED);
+    expect(daily).toContain(ASSISTANT_DAILY);
+    expect(new Set([denied, daily, rate]).size).toBe(3);
+    expect(denied).not.toMatch(/Daily limit reached/i);
+    expect(daily).not.toMatch(/can't use the teams assistant/i);
+    expect(rate).not.toMatch(/can't use the teams assistant/i);
+    expect(rate).not.toMatch(/Daily limit reached/i);
   });
 
   it("collapses to a rail and expands back", () => {
