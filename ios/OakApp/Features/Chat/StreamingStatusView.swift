@@ -316,7 +316,7 @@ enum ThinkingTraceCopy {
   private static let searchingTools: Set<String> = [
     "resolve_entity", "query_pokedex", "get_pokemon", "get_move", "get_ability",
     "get_item", "get_type_matchups", "get_evolution_chain", "get_encounters",
-    "get_learnset", "get_team", "list_teams", "save_team", "search_wiki",
+    "get_learnset", "lookup_box", "get_team", "list_teams", "save_team", "search_wiki",
   ]
 }
 
@@ -405,6 +405,7 @@ enum ToolTrail {
     case "get_meta_usage": return "Checking ladder usage"
     case "get_encounters": return "Finding locations"
     case "get_learnset": return "Checking learnset"
+    case "lookup_box": return "Looking up box"
     case "get_team": return "Reading team"
     case "list_teams": return "Listing teams"
     case "save_team": return "Saving team"

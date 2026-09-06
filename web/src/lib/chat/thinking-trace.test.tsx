@@ -26,6 +26,7 @@ describe("instrumentToken", () => {
     expect(instrumentToken("get_meta_usage")).toBe("Checking ladder usage");
     expect(instrumentToken("get_encounters")).toBe("Finding locations");
     expect(instrumentToken("get_learnset")).toBe("Checking learnset");
+    expect(instrumentToken("lookup_box")).toBe("Looking up box");
     expect(instrumentToken("get_team")).toBe("Reading team");
     expect(instrumentToken("list_teams")).toBe("Listing teams");
     expect(instrumentToken("save_team")).toBe("Saving team");
