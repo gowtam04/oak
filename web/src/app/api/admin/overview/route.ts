@@ -18,10 +18,13 @@
  *                            non-`answered` turn status (`resolution_failed`,
  *                            `clarification_needed`, `insufficient_data`) plus
  *                            rate-limit rejections (`rate_limited`, recorded as
- *                            turns per AD-4). `tool_error` (overlaps `answered`)
- *                            and `otp_email_failed` (an auth event, not a turn)
- *                            are deliberately excluded from this turn-based rate;
- *                            they remain in the dedicated `/errors` view.
+ *                            turns per AD-4) and spend-control refusals
+ *                            (`account_denied`, `daily_limit`,
+ *                            `spend_check_failed`). `tool_error` (overlaps
+ *                            `answered`) and `otp_email_failed` (an auth event,
+ *                            not a turn) are deliberately excluded from this
+ *                            turn-based rate; they remain in the dedicated
+ *                            `/errors` view.
  *
  * Cost is an ESTIMATE (ADMIN-BR-5 / AD-6): the repo computes it from the static
  * in-code price table and the response carries `estimated: true`.
@@ -71,6 +74,9 @@ const FAILURE_KEYS: ReadonlySet<ErrorCategoryKey> = new Set<ErrorCategoryKey>([
   "clarification_needed",
   "insufficient_data",
   "rate_limited",
+  "account_denied",
+  "daily_limit",
+  "spend_check_failed",
 ]);
 
 /** Parse an epoch-ms query param, falling back on missing/invalid input. */
