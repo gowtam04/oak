@@ -33,6 +33,12 @@
  * the route as exceptions (sse-types.ts: those become an `error` event).
  */
 
+import {
+  extractBoxNames,
+  isBoxBuildMessage,
+  namedForParty,
+  normalizeBoxSpecies,
+} from "@/agent/box-build";
 import { dispatch, tools } from "@/agent/tools";
 import { buildSystemSegments } from "@/agent/prompts";
 import { MAX_TOKENS } from "@/agent/providers/constants";
@@ -117,6 +123,12 @@ export const MAX_ITERATIONS = 20;
  * regularly exhausts {@link MAX_ITERATIONS} before `submit_answer`.
  */
 export const MAX_ITERATIONS_TEAM_BUILD = 28;
+
+/**
+ * Box-build iteration cap (BOX-AC-3.3, BOX-AD-7). A pasted owned list / “make a
+ * party from these” must not run the 20/28 team-build budget.
+ */
+export const MAX_ITERATIONS_BOX_BUILD = 6;
 
 /**
  * Overall wall-clock budget for a single turn (issue #6). The loop is otherwise
@@ -230,6 +242,9 @@ export const SUBMIT_NUDGE_REMAINING = 3;
  * a late submit (and one legalize-reject cycle) still fit.
  */
 export const SUBMIT_NUDGE_REMAINING_TEAM_BUILD = 10;
+
+/** Wrap-up window for box-build turns ({@link MAX_ITERATIONS_BOX_BUILD}). */
+export const SUBMIT_NUDGE_REMAINING_BOX_BUILD = 2;
 
 /**
  * High-precision check: does this user message ask Oak to BUILD / suggest a
@@ -394,6 +409,77 @@ const ROSTER_SUBMIT_NUDGE =
   "Do NOT emit a full 6-member proposed_team unless the user explicitly asked " +
   "for complete sets. Do NOT invent species outside tool results. A partial " +
   "high-signal list beats an empty insufficient_data — ship what you have.";
+
+/**
+ * Wrap-up for box-build turns. Demand a proposed_team from the named box;
+ * do not drop named species.
+ */
+const BOX_BUILD_SUBMIT_NUDGE =
+  "BOX BUILD — stop gathering. Call submit_answer NOW with a proposed_team " +
+  "drawn from the named box. Do not drop named species — keep every Pokémon " +
+  "the user named for the party and warn if data is missing. Do not call " +
+  "run_sql or search_wiki. Members must come from the listed names.";
+
+const BOX_FORBIDDEN_TOOLS = new Set(["run_sql", "search_wiki"]);
+
+/** Hard codes that become warnings (not rejects) on named-for-party members. */
+const BOX_SOFT_ON_NAMED = new Set([
+  "species_illegal",
+  "move_not_in_learnset",
+  "learnset_unavailable",
+]);
+
+type BoxBuildTurn = {
+  message: string;
+  historyTexts: string[];
+};
+
+function boxNameSlugs(box: BoxBuildTurn): Set<string> {
+  const slugs = new Set<string>();
+  for (const text of [box.message, ...box.historyTexts]) {
+    for (const name of extractBoxNames(text)) {
+      const slug = normalizeBoxSpecies(name);
+      if (slug) slugs.add(slug);
+    }
+  }
+  for (const name of namedForParty(box.message, box.historyTexts)) {
+    const slug = normalizeBoxSpecies(name);
+    if (slug) slugs.add(slug);
+  }
+  return slugs;
+}
+
+function keepSpeciesFor(answer: OakAnswer, box: BoxBuildTurn): string[] {
+  const slugs = new Set<string>();
+  for (const name of namedForParty(box.message, box.historyTexts)) {
+    const slug = normalizeBoxSpecies(name);
+    if (slug) slugs.add(slug);
+  }
+  const inBox = new Set<string>();
+  for (const text of [box.message, ...box.historyTexts]) {
+    for (const name of extractBoxNames(text)) {
+      const slug = normalizeBoxSpecies(name);
+      if (slug) inBox.add(slug);
+    }
+  }
+  for (const member of answer.proposed_team?.members ?? []) {
+    if (!member.species) continue;
+    const slug = normalizeBoxSpecies(member.species);
+    if (slug && inBox.has(slug)) slugs.add(slug);
+  }
+  return [...slugs];
+}
+
+function isNamedMemberSlot(
+  warning: TeamWarning,
+  members: { species: string | null }[] | undefined,
+  namedSlugs: Set<string>,
+): boolean {
+  if (warning.slot === undefined || !members) return false;
+  const species = members[warning.slot]?.species;
+  if (!species) return false;
+  return namedSlugs.has(normalizeBoxSpecies(species));
+}
 
 /** Actionable insufficient_data body when a build turn never submitted a team. */
 const TEAM_BUILD_INSUFFICIENT_MARKDOWN =
@@ -1121,6 +1207,7 @@ function stampTeamWarnings(answer: OakAnswer, warnings: TeamWarning[]): void {
 async function applyLegalizedTeam(
   answer: OakAnswer,
   ctx: AgentContext,
+  keepSpecies?: string[],
 ): Promise<OakAnswer> {
   const pt = answer.proposed_team;
   if (!pt) return answer;
@@ -1128,6 +1215,12 @@ async function applyLegalizedTeam(
   const format = formatForMode(ctx.mode);
   const db = ctx.db as unknown as OakDb;
   const hasImages = (ctx.images?.length ?? 0) > 0;
+  const keepSlugs = new Set(
+    (keepSpecies ?? []).map(normalizeBoxSpecies).filter(Boolean),
+  );
+  const skippableNamed = (w: TeamWarning, members: { species: string | null }[]) =>
+    BOX_SOFT_ON_NAMED.has(w.code) && isNamedMemberSlot(w, members, keepSlugs);
+
   const before = await validateTeamDetailed(pt.members, format, db);
   const hardBefore = before.warnings.filter(
     (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
@@ -1141,11 +1234,17 @@ async function applyLegalizedTeam(
     pt.members,
     format,
     db,
+    keepSpecies?.length ? { keepSpecies } : undefined,
   );
   // item_missing after legalize is still a failure for built teams.
-  const stillHard = remainingHard.filter(
-    (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
-  );
+  // Named-for-party species_illegal / learnset misses stay as warnings.
+  const stillHard = remainingHard.filter((w) => {
+    const hard =
+      isHardViolation(w) || (w.code === "item_missing" && !hasImages);
+    if (!hard) return false;
+    if (keepSlugs.size > 0 && skippableNamed(w, members)) return false;
+    return true;
+  });
 
   if (stillHard.length > 0) {
     // Cannot ship a legal complete team — drop the proposal; keep prose.
@@ -1166,17 +1265,20 @@ async function applyLegalizedTeam(
 
   answer.proposed_team = { ...pt, members };
   const after = await validateTeamDetailed(members, format, db);
-  // Soft warnings only (EV caps etc.).
   stampTeamWarnings(
     answer,
-    after.warnings.filter((w) => !isHardViolation(w) && w.code !== "item_missing"),
+    after.warnings.filter((w) => {
+      if (keepSlugs.size > 0 && skippableNamed(w, members)) return true;
+      return !isHardViolation(w) && w.code !== "item_missing";
+    }),
   );
   const note = formatRepairsNote(repairs);
   if (note && repairs.length > 0) {
     answer.answer_markdown = `${answer.answer_markdown.trim()}\n\n${note}`;
   }
-  // Drop the old "may be illegal" flag if present; team is legal now.
-  if (answer.uncertainty_flags) {
+  // Drop the old "may be illegal" flag if present; team is legal now
+  // unless we kept named species_illegal as a warning.
+  if (answer.uncertainty_flags && keepSlugs.size === 0) {
     answer.uncertainty_flags = answer.uncertainty_flags.filter(
       (f) => f !== "team_may_have_illegal_slots",
     );
@@ -1199,6 +1301,7 @@ async function validateOakAnswer(
   answer: OakAnswer,
   ctx: AgentContext,
   rejectionsSoFar: number,
+  box?: BoxBuildTurn,
 ): Promise<AnswerVerdict<OakAnswer>> {
   const pt = answer.proposed_team;
   const format = formatForMode(ctx.mode);
@@ -1213,13 +1316,28 @@ async function validateOakAnswer(
       };
   const teamWarnings = validation.warnings;
   const hasImages = (ctx.images?.length ?? 0) > 0;
-  const hardViolations = teamWarnings.filter(
-    (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
-  );
+  const namedSlugs = box ? boxNameSlugs(box) : null;
+  const hardViolations = teamWarnings.filter((w) => {
+    const hard =
+      isHardViolation(w) || (w.code === "item_missing" && !hasImages);
+    if (!hard) return false;
+    if (
+      namedSlugs &&
+      BOX_SOFT_ON_NAMED.has(w.code) &&
+      isNamedMemberSlot(w, pt?.members, namedSlugs)
+    ) {
+      return false;
+    }
+    return true;
+  });
   if (hardViolations.length > 0) {
     // Budget spent → legalize and accept (never ship hard-illegal slots).
     if (rejectionsSoFar >= MAX_PROPOSED_TEAM_HARD_REJECTIONS) {
-      const legalized = await applyLegalizedTeam(answer, ctx);
+      const legalized = await applyLegalizedTeam(
+        answer,
+        ctx,
+        box ? keepSpeciesFor(answer, box) : undefined,
+      );
       return {
         ok: true,
         annotate: (enriched) => {
@@ -1334,8 +1452,13 @@ async function validateOakAnswer(
 async function salvageOakAnswer(
   answer: OakAnswer,
   ctx: AgentContext,
+  box?: BoxBuildTurn,
 ): Promise<OakAnswer> {
-  return applyLegalizedTeam(answer, ctx);
+  return applyLegalizedTeam(
+    answer,
+    ctx,
+    box ? keepSpeciesFor(answer, box) : undefined,
+  );
 }
 
 /** The original Oak agent behavior, expressed as hooks (the default run). */
@@ -1408,25 +1531,58 @@ export async function runWithProvider<TAnswer = OakAnswer>(
   // Provider-neutral tool defs for this run's tool list (loop-invariant).
   const providerToolDefs = toProviderToolDefs(hooks.tools);
 
-  // Roster/catalog turns (list who fits + roles) stay on the default iteration
-  // cap and get a roster-specific submit nudge — not the full 6-mon build path.
-  // Full team-build turns get a higher cap and an earlier, stronger submit nudge
-  // so Grok's one-tool-per-iteration pattern can still reach submit_answer.
-  // When both detectors match, roster wins (unless full-build override inside
-  // isTeamRosterMessage already lost).
-  const teamRoster = isTeamRosterMessage(message);
-  const teamBuild = !teamRoster && isTeamBuildMessage(message);
-  const maxIterations = teamBuild
-    ? MAX_ITERATIONS_TEAM_BUILD
-    : MAX_ITERATIONS;
-  const submitNudgeRemaining = teamBuild
-    ? SUBMIT_NUDGE_REMAINING_TEAM_BUILD
-    : SUBMIT_NUDGE_REMAINING;
-  const submitNudgeText = teamRoster
-    ? ROSTER_SUBMIT_NUDGE
+  // Box-build wins over roster and full team-build (BOX-BR-1): cap 6, no
+  // SQL/wiki dispatch, keep-named-species. Roster stays on the default cap.
+  // Full team-build gets 28 + an earlier submit nudge. Non-box "build me a
+  // rain team" still uses MAX_ITERATIONS_TEAM_BUILD (BOX-AD-7).
+  const historyTexts = history
+    .filter((m) => m.role === "user")
+    .map((m) => m.content);
+  const boxBuild = isBoxBuildMessage(message, historyTexts);
+  const teamRoster = !boxBuild && isTeamRosterMessage(message);
+  const teamBuild = !boxBuild && !teamRoster && isTeamBuildMessage(message);
+  const boxTurn: BoxBuildTurn | undefined = boxBuild
+    ? { message, historyTexts }
+    : undefined;
+  const maxIterations = boxBuild
+    ? MAX_ITERATIONS_BOX_BUILD
     : teamBuild
-      ? BUILD_SUBMIT_NUDGE
-      : hooks.submitNudge;
+      ? MAX_ITERATIONS_TEAM_BUILD
+      : MAX_ITERATIONS;
+  const submitNudgeRemaining = boxBuild
+    ? SUBMIT_NUDGE_REMAINING_BOX_BUILD
+    : teamBuild
+      ? SUBMIT_NUDGE_REMAINING_TEAM_BUILD
+      : SUBMIT_NUDGE_REMAINING;
+  const submitNudgeText = boxBuild
+    ? BOX_BUILD_SUBMIT_NUDGE
+    : teamRoster
+      ? ROSTER_SUBMIT_NUDGE
+      : teamBuild
+        ? BUILD_SUBMIT_NUDGE
+        : hooks.submitNudge;
+
+  const oakBoxValidate =
+    boxTurn && hooks.validateAnswer === DEFAULT_OAK_HOOKS.validateAnswer;
+  const runValidateAnswer: AnswerRunHooks<TAnswer>["validateAnswer"] =
+    oakBoxValidate
+      ? (answer, c, rejections) =>
+          validateOakAnswer(
+            answer as unknown as OakAnswer,
+            c,
+            rejections,
+            boxTurn,
+          ) as Promise<AnswerVerdict<TAnswer>>
+      : hooks.validateAnswer;
+  const runSalvageAnswer: AnswerRunHooks<TAnswer>["salvageAnswer"] =
+    boxTurn && hooks.salvageAnswer === DEFAULT_OAK_HOOKS.salvageAnswer
+      ? (answer, c) =>
+          salvageOakAnswer(
+            answer as unknown as OakAnswer,
+            c,
+            boxTurn,
+          ) as Promise<TAnswer>
+      : hooks.salvageAnswer;
 
   let submitRetries = 0;
   let emptyTurnNudges = 0;
@@ -1477,8 +1633,8 @@ export async function runWithProvider<TAnswer = OakAnswer>(
   ): Promise<TAnswer> => {
     if (bestEffortAnswer) {
       let enriched = await doEnrich(bestEffortAnswer);
-      if (hooks.salvageAnswer) {
-        enriched = await hooks.salvageAnswer(enriched, ctx);
+      if (runSalvageAnswer) {
+        enriched = await runSalvageAnswer(enriched, ctx);
       } else {
         bestEffortAnnotate?.(enriched);
       }
@@ -1677,7 +1833,7 @@ export async function runWithProvider<TAnswer = OakAnswer>(
           // Domain-validate the schema-valid answer via the hook (for Oak:
           // roster legality of a proposed_team — see validateOakAnswer). The
           // hook owns its retry budget; the loop just counts rejections.
-          const verdict = await hooks.validateAnswer(
+          const verdict = await runValidateAnswer(
             parsed.data,
             ctx,
             answerRejections,
@@ -1743,6 +1899,21 @@ export async function runWithProvider<TAnswer = OakAnswer>(
       // here so one bad tool can't kill the turn — it is fed back so the model
       // can recover or report insufficient_data.
       const started = Date.now();
+      if (boxBuild && BOX_FORBIDDEN_TOOLS.has(call.name)) {
+        state.toolTrace.push({
+          tool: call.name,
+          args: call.input,
+          latency_ms: Date.now() - started,
+          cache_hit: false,
+          error: "forbidden_on_box_build",
+        });
+        toolResults.push({
+          toolCallId: call.id,
+          content: JSON.stringify({ error: "forbidden_on_box_build" }),
+          isError: true,
+        });
+        continue;
+      }
       let result: unknown;
       let errorMessage: string | null = null;
       try {

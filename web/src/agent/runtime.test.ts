@@ -1691,7 +1691,7 @@ describe("box-build hard-reject skip (BOX-AC-1.2, BOX-AC-1.3, BOX-BR-2, BOX-BR-9
     requiredItems: new Map(),
   });
 
-  afterEach(() => {
+  beforeEach(() => {
     vi.mocked(validateTeamDetailed).mockReset();
     vi.mocked(validateTeamDetailed).mockImplementation(defaultValidate);
     vi.mocked(isHardViolation).mockReset();

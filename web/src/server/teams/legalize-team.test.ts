@@ -170,7 +170,6 @@ describe("legalizeTeam keepSpecies (BOX-BR-9, BOX-AC-1.2, BOX-AC-1.3)", () => {
       ],
       SV,
       db,
-      // @ts-expect-error — 4th arg is additive keepSpecies (BOX-BR-9)
       { keepSpecies: ["garchomp"] },
     );
     expect(members).toHaveLength(1);
@@ -194,7 +193,6 @@ describe("legalizeTeam keepSpecies (BOX-BR-9, BOX-AC-1.2, BOX-AC-1.3)", () => {
       ],
       SV,
       db,
-      // @ts-expect-error — 4th arg is additive keepSpecies (BOX-BR-9)
       { keepSpecies: ["garchomp"] },
     );
     expect(members).toHaveLength(1);
@@ -219,7 +217,6 @@ describe("legalizeTeam keepSpecies (BOX-BR-9, BOX-AC-1.2, BOX-AC-1.3)", () => {
       ],
       SV,
       db,
-      // @ts-expect-error — 4th arg is additive keepSpecies (BOX-BR-9)
       { keepSpecies: ["kangaskhan-mega"] },
     );
     expect(members).toHaveLength(1);

@@ -29,7 +29,6 @@ let loadError: unknown = null;
 
 beforeAll(async () => {
   try {
-    // @ts-expect-error — module is created in Phase 2; red until box-build.ts exists
     const mod = (await import("@/agent/box-build")) as Record<string, unknown>;
     isBoxBuildMessage = mod.isBoxBuildMessage as IsBoxBuildMessage;
     extractBoxNames = mod.extractBoxNames as ExtractBoxNames;

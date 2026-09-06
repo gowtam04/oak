@@ -7,11 +7,15 @@
  * Strategy: keep the model's structure (species, spreads, roles) and swap only
  * the illegal fields — items from the format allowlist (admin Champions
  * catalog included), moves from the learnset, abilities from the species'
- * legal slots. Never nulls items/moves to "pass" validation.
+ * legal slots. Never nulls items/moves to "pass" validation, except
+ * `keepSpecies` slots which clear illegal moves instead of filling a legal one.
  *
  * Species-level problems (`species_illegal`, `duplicate_species`) are NOT
  * invented away — legalize leaves those for the caller to drop the proposal
- * if still hard-illegal after repair.
+ * if still hard-illegal after repair. `options.keepSpecies` is the exception
+ * for named-for-party slots: never change those species; clear illegal moves
+ * instead of swapping in a legal filler (BOX-BR-9). Out-of-roster keep
+ * species stay on the team (`remainingHard` may still include species_illegal).
  */
 
 import type { OakDb } from "@/data/db";
@@ -37,6 +41,12 @@ export interface LegalizeResult {
   repairs: TeamRepair[];
   /** Hard violations still present after the repair loop. */
   remainingHard: TeamWarning[];
+}
+
+/** Optional keep-species policy (box-build: never swap named mons). */
+export interface LegalizeOptions {
+  /** Species slugs that must remain on their slots (BOX-BR-9). */
+  keepSpecies?: string[];
 }
 
 /**
@@ -108,16 +118,30 @@ function pickLegalItem(
   return null;
 }
 
+function keepKey(species: string): string {
+  return species.trim().toLowerCase();
+}
+
 /**
  * Repair hard-illegal fields on `members` against `format`. Pure data swap;
  * never throws. Returns the repaired members + a repair log + any remaining
  * hard violations (e.g. illegal species).
+ *
+ * `options.keepSpecies`: those slots never change species; illegal moves are
+ * removed (length decreases) rather than replaced with a legal filler.
  */
 export async function legalizeTeam(
   members: TeamMember[],
   format: Format,
   db: OakDb,
+  options?: LegalizeOptions,
 ): Promise<LegalizeResult> {
+  const keepSet = new Set(
+    (options?.keepSpecies ?? []).map(keepKey).filter(Boolean),
+  );
+  const isKeepSlot = (species: string | null): boolean =>
+    !!species && keepSet.has(keepKey(species));
+
   const out = cloneMembers(members);
   const repairs: TeamRepair[] = [];
 
@@ -203,6 +227,23 @@ export async function legalizeTeam(
 
       if (w.code === "move_not_in_learnset" && member.species) {
         const legal = validation.legalMoves.get(member.species) ?? [];
+        if (isKeepSlot(member.species)) {
+          // Named-for-party: drop illegal moves instead of filling a legal one.
+          const prev = member.moves;
+          const next = prev.filter((m) => legal.includes(m));
+          if (next.length !== prev.length) {
+            member.moves = next;
+            repairs.push({
+              slot,
+              field: w.field ?? "moves",
+              from: prev.join(","),
+              to: next.join(",") || null,
+              reason: "illegal move removed; species kept",
+            });
+            changed = true;
+          }
+          continue;
+        }
         // Parse moves[i] from field when present.
         let moveIndex = 0;
         const match = w.field?.match(/^moves\[(\d+)\]$/);
