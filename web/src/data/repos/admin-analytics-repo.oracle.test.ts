@@ -221,12 +221,16 @@ describe("getErrorBreakdown", () => {
     expect(byKey.get("tool_error")!.count).toBe(2); // tr-02 (1 err) + tr-11 (2 errs) = 2 turns
     expect(byKey.get("otp_email_failed")!.count).toBe(1); // auth_event, in-range
     expect(byKey.get("rate_limited")!.count).toBe(1); // tr-12
+    expect(byKey.get("account_denied")!.count).toBe(0);
+    expect(byKey.get("daily_limit")!.count).toBe(0);
+    expect(byKey.get("spend_check_failed")!.count).toBe(0);
 
     // Rate is count / totalTurns * 100.
     expect(byKey.get("tool_error")!.ratePct).toBeCloseTo((2 / 12) * 100, 9);
     expect(byKey.get("rate_limited")!.ratePct).toBeCloseTo((1 / 12) * 100, 9);
 
-    // Stable display order (mirrors the ErrorCategoryKey union).
+    // Stable display order (mirrors the ErrorCategoryKey union). Spend-control
+    // refusals are additive at count 0 on this fixture (no such turn_record rows).
     expect(categories.map((c) => c.key)).toEqual([
       "resolution_failed",
       "clarification_needed",
@@ -234,6 +238,9 @@ describe("getErrorBreakdown", () => {
       "tool_error",
       "otp_email_failed",
       "rate_limited",
+      "account_denied",
+      "daily_limit",
+      "spend_check_failed",
     ]);
   });
 

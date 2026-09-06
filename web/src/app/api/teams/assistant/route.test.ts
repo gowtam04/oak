@@ -45,6 +45,12 @@ vi.mock("@/agent/teams-assistant/runtime-hooks", () => ({
   buildBuilderHooks: mockBuildBuilderHooks,
 }));
 
+const spend = vi.hoisted(() => ({
+  admitAgentTurn: vi.fn(),
+  assertNotDenylisted: vi.fn(),
+}));
+vi.mock("@/server/spend-control", () => spend);
+
 import {
   _resetStoreForTests as resetRateLimit,
   checkRateLimit,
@@ -109,6 +115,11 @@ beforeEach(async () => {
 
   mockBuildBuilderHooks.mockClear();
 
+  spend.admitAgentTurn.mockReset();
+  spend.admitAgentTurn.mockResolvedValue({ ok: true });
+  spend.assertNotDenylisted.mockReset();
+  spend.assertNotDenylisted.mockResolvedValue({ ok: true });
+
   await resetRateLimit();
   await resetSessionStore();
 });
@@ -120,10 +131,10 @@ afterEach(async () => {
 
 // --- Helpers ---------------------------------------------------------------
 
-function signedIn(id: string): void {
+function signedIn(id: string, opts?: { email?: string }): void {
   cu.getCurrentAccount.mockResolvedValue({
     id,
-    email: `${id}@x.test`,
+    email: opts?.email ?? `${id}@x.test`,
     createdAt: 0,
     lastUsedScope: null,
   });
@@ -291,5 +302,166 @@ describe("POST /api/teams/assistant — history isolation", () => {
       { role: "assistant", content: BUILDER_ANSWER.answer_markdown },
     ]);
     expect(await getHistory("hist-1")).toEqual([]);
+  });
+});
+
+// ===========================================================================
+// Spend controls — same 403/429/503 as chat; shared budget is admitAgentTurn
+// (SC-US-5/6, SC-AC-5.3, SC-AC-6.2, SC-BR-1, SC-BR-14)
+// ===========================================================================
+
+const SPEND_RESET_AT = "2026-09-07T00:00:00.000Z";
+const SPEND_RETRY_AFTER_MS = 45_000;
+const SPEND_DAILY_LIMIT_MESSAGE = `Daily limit reached. Try again tomorrow (resets at ${SPEND_RESET_AT} UTC).`;
+const ASSISTANT_DENIED_MESSAGE = "This account can't use the teams assistant.";
+
+function dailyLimitAdmit() {
+  return {
+    ok: false as const,
+    code: "daily_limit" as const,
+    message: SPEND_DAILY_LIMIT_MESSAGE,
+    resetAt: SPEND_RESET_AT,
+    retryAfterMs: SPEND_RETRY_AFTER_MS,
+  };
+}
+
+async function jsonBody(res: Response): Promise<Record<string, unknown>> {
+  return (await res.json()) as Record<string, unknown>;
+}
+
+describe("POST /api/teams/assistant — spend controls (SC-US-5/6, SC-AC-5.3, SC-AC-6.2, SC-BR-1)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("guest 401 happens before admit and never runs the model", async () => {
+    guest();
+    const res = await post(body());
+    expect(res.status).toBe(401);
+    expect(spend.admitAgentTurn).not.toHaveBeenCalled();
+    expect(mockRunWithProvider).not.toHaveBeenCalled();
+  });
+
+  it("account_denied is 403 and does not run the model (SC-AC-6.2, SC-BR-1, SC-BR-14)", async () => {
+    signedIn(ACCT_A);
+    spend.admitAgentTurn.mockResolvedValue({
+      ok: false,
+      code: "account_denied",
+      message: ASSISTANT_DENIED_MESSAGE,
+    });
+
+    const res = await post(body({ session_id: "sc-denied" }));
+    expect(res.status).toBe(403);
+    expect(await jsonBody(res)).toEqual({
+      code: "account_denied",
+      message: ASSISTANT_DENIED_MESSAGE,
+    });
+    expect(res.headers.get("Retry-After")).toBeNull();
+    expect(mockRunWithProvider).not.toHaveBeenCalled();
+    expect(spend.admitAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: expect.objectContaining({
+          kind: "account",
+          accountId: ACCT_A,
+          email: `${ACCT_A}@x.test`,
+        }),
+        isAdmin: false,
+        surface: "teams_assistant",
+      }),
+    );
+  });
+
+  it("daily_limit is 429 with reset_at + Retry-After and does not run the model (SC-AC-5.2/5.3, SC-BR-1)", async () => {
+    signedIn(ACCT_A);
+    spend.admitAgentTurn.mockResolvedValue(dailyLimitAdmit());
+
+    const res = await post(body({ session_id: "sc-cap" }));
+    expect(res.status).toBe(429);
+    expect(await jsonBody(res)).toEqual({
+      code: "daily_limit",
+      message: SPEND_DAILY_LIMIT_MESSAGE,
+      reset_at: SPEND_RESET_AT,
+    });
+    expect(res.headers.get("Retry-After")).toBe(
+      String(Math.ceil(SPEND_RETRY_AFTER_MS / 1000)),
+    );
+    expect(mockRunWithProvider).not.toHaveBeenCalled();
+  });
+
+  it("spend_check_failed is 503 and does not run the model (SC-BR-1)", async () => {
+    signedIn(ACCT_A);
+    spend.admitAgentTurn.mockResolvedValue({
+      ok: false,
+      code: "spend_check_failed",
+    });
+
+    const res = await post(body({ session_id: "sc-fail" }));
+    expect(res.status).toBe(503);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({ code: "spend_check_failed" }),
+    );
+    expect(mockRunWithProvider).not.toHaveBeenCalled();
+  });
+
+  it("admit ok still runs the builder and calls admit with surface teams_assistant (SC-US-5, SC-AC-5.1, SC-AC-5.3)", async () => {
+    signedIn(ACCT_A);
+    const res = await post(body({ session_id: "sc-ok" }));
+    expect(res.status).toBe(200);
+    await readBody(res);
+    expect(mockRunWithProvider).toHaveBeenCalled();
+    expect(spend.admitAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isAdmin: false,
+        surface: "teams_assistant",
+      }),
+    );
+  });
+
+  it("passes isAdmin: true when the account email is on ADMIN_EMAILS (SC-BR-6 route seam)", async () => {
+    vi.stubEnv("ADMIN_EMAILS", "owner@oak.ai");
+    signedIn(ACCT_A, { email: "owner@oak.ai" });
+
+    const res = await post(body({ session_id: "sc-admin" }));
+    expect(res.status).toBe(200);
+    await readBody(res);
+    expect(mockRunWithProvider).toHaveBeenCalled();
+    expect(spend.admitAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: expect.objectContaining({
+          kind: "account",
+          accountId: ACCT_A,
+          email: "owner@oak.ai",
+        }),
+        isAdmin: true,
+        surface: "teams_assistant",
+      }),
+    );
+  });
+
+  it("per-minute rate_limited is unchanged when admit returns ok (SC-BR-7)", async () => {
+    signedIn(ACCT_A);
+    for (let i = 0; i < TEAMS_ASSISTANT_CONFIG.maxRequestsPerWindow; i++) {
+      await checkRateLimit(`acct:${ACCT_A}`, "x", TEAMS_ASSISTANT_CONFIG);
+    }
+    const res = await post(body({ session_id: "sc-rl" }));
+    expect(res.status).toBe(429);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({ code: "rate_limited" }),
+    );
+    expect(mockRunWithProvider).not.toHaveBeenCalled();
+  });
+
+  it("daily_limit wins over an exhausted per-minute window (admit before checkRateLimit)", async () => {
+    signedIn(ACCT_A);
+    spend.admitAgentTurn.mockResolvedValue(dailyLimitAdmit());
+    for (let i = 0; i < TEAMS_ASSISTANT_CONFIG.maxRequestsPerWindow; i++) {
+      await checkRateLimit(`acct:${ACCT_A}`, "x", TEAMS_ASSISTANT_CONFIG);
+    }
+    const res = await post(body({ session_id: "sc-order-cap" }));
+    expect(res.status).toBe(429);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({ code: "daily_limit", reset_at: SPEND_RESET_AT }),
+    );
+    expect(mockRunWithProvider).not.toHaveBeenCalled();
   });
 });

@@ -59,11 +59,18 @@ const usage = vi.hoisted(() => ({
 }));
 vi.mock("@/data/repos/usage-repo", () => usage);
 
+const spend = vi.hoisted(() => ({
+  admitAgentTurn: vi.fn(),
+  assertNotDenylisted: vi.fn(),
+}));
+vi.mock("@/server/spend-control", () => spend);
+
 import { createPgSchema, installAsSingleton, type PgFixture } from "../../../../test/support/pg";
 import {
   _resetStoreForTests,
   checkRateLimit,
   GUEST_CONFIG,
+  SIGNED_IN_CONFIG,
 } from "@/server/rate-limit";
 import {
   appendTurn,
@@ -163,6 +170,10 @@ beforeEach(async () => {
   usage.recordTurn.mockResolvedValue(undefined);
   usage.recordAuthEvent.mockReset();
   usage.recordAuthEvent.mockResolvedValue(undefined);
+  spend.admitAgentTurn.mockReset();
+  spend.admitAgentTurn.mockResolvedValue({ ok: true });
+  spend.assertNotDenylisted.mockReset();
+  spend.assertNotDenylisted.mockResolvedValue({ ok: true });
   await _resetStoreForTests();
   await resetTurnStore();
   await resetSessionStore();
@@ -172,11 +183,11 @@ beforeEach(async () => {
 
 function signedIn(
   id: string,
-  opts?: { lastUsedScope?: string | null },
+  opts?: { lastUsedScope?: string | null; email?: string },
 ): void {
   cu.getCurrentAccount.mockResolvedValue({
     id,
-    email: `${id}@x.test`,
+    email: opts?.email ?? `${id}@x.test`,
     createdAt: 0,
     lastUsedScope: opts?.lastUsedScope ?? null,
   });
@@ -975,5 +986,300 @@ describe("POST /api/chat — abortVoiceCompile before startTurn (VOICE-BR-5)", (
 
     abortSpy.mockRestore();
     startSpy.mockRestore();
+  });
+});
+
+// ===========================================================================
+// Spend controls — route admission + recording (SC-US-5/6/7, SC-BR-1/3/7/9/14)
+//
+// `admitAgentTurn` is mocked so we can drive AdmitResult without filling 25
+// real rows. Default `{ ok: true }` (beforeEach) keeps existing tests valid
+// once the route calls admit. Tests fail until P2 wires admit before the
+// per-minute limiter and records refusals like today's rate_limited branch.
+//
+// SC-AC-6.4 (denylisted users can still browse history / teams / settings) is
+// a non-agent-route invariant and is not asserted here — those routes never
+// call admitAgentTurn. SC-BR-9 (in-flight turns complete) is the same seam:
+// this gate refuses *new* admissions before startTurn; it does not abort a
+// turn that was already admitted.
+// ===========================================================================
+
+const SPEND_RESET_AT = "2026-09-07T00:00:00.000Z";
+const SPEND_RETRY_AFTER_MS = 45_000;
+const SPEND_DAILY_LIMIT_MESSAGE = `Daily limit reached. Try again tomorrow (resets at ${SPEND_RESET_AT} UTC).`;
+const CHAT_DENIED_MESSAGE = "This account can't use chat.";
+
+function dailyLimitAdmit() {
+  return {
+    ok: false as const,
+    code: "daily_limit" as const,
+    message: SPEND_DAILY_LIMIT_MESSAGE,
+    resetAt: SPEND_RESET_AT,
+    retryAfterMs: SPEND_RETRY_AFTER_MS,
+  };
+}
+
+describe("POST /api/chat — spend controls (SC-US-5/6/7, SC-BR-1/3/7/14)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("account_denied is 403, does not call the model, and records a null-model row (SC-US-6, SC-AC-6.1, SC-BR-1, SC-BR-14)", async () => {
+    signedIn(ACCT_A);
+    spend.admitAgentTurn.mockResolvedValue({
+      ok: false,
+      code: "account_denied",
+      message: CHAT_DENIED_MESSAGE,
+    });
+
+    const res = await post({ session_id: "sc-denied", message: "hello oak" });
+    expect(res.status).toBe(403);
+    expect(await jsonBody(res)).toEqual({
+      code: "account_denied",
+      message: CHAT_DENIED_MESSAGE,
+    });
+    expect(res.headers.get("Retry-After")).toBeNull();
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("sc-denied")).toBeUndefined();
+    expect(usage.recordTurn).toHaveBeenCalledTimes(1);
+    expect(usage.recordTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "sc-denied",
+        accountId: ACCT_A,
+        status: "account_denied",
+        model: null,
+        providerModel: null,
+        answerText: null,
+        answer: null,
+        promptText: "hello oak",
+      }),
+    );
+  });
+
+  it("daily_limit is 429 with reset_at + Retry-After, does not call the model, and records (SC-US-5, SC-AC-5.2, SC-BR-1, SC-BR-14)", async () => {
+    signedIn(ACCT_A);
+    spend.admitAgentTurn.mockResolvedValue(dailyLimitAdmit());
+
+    const res = await post({ session_id: "sc-cap", message: "hello oak" });
+    expect(res.status).toBe(429);
+    expect(await jsonBody(res)).toEqual({
+      code: "daily_limit",
+      message: SPEND_DAILY_LIMIT_MESSAGE,
+      reset_at: SPEND_RESET_AT,
+    });
+    expect(res.headers.get("Retry-After")).toBe(
+      String(Math.ceil(SPEND_RETRY_AFTER_MS / 1000)),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("sc-cap")).toBeUndefined();
+    expect(usage.recordTurn).toHaveBeenCalledTimes(1);
+    expect(usage.recordTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "sc-cap",
+        accountId: ACCT_A,
+        status: "daily_limit",
+        model: null,
+        providerModel: null,
+        answerText: null,
+        answer: null,
+        promptText: "hello oak",
+      }),
+    );
+  });
+
+  it("spend_check_failed is 503, does not call the model, and records (SC-BR-1)", async () => {
+    signedIn(ACCT_A);
+    spend.admitAgentTurn.mockResolvedValue({
+      ok: false,
+      code: "spend_check_failed",
+    });
+
+    const res = await post({ session_id: "sc-fail", message: "hello oak" });
+    expect(res.status).toBe(503);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({ code: "spend_check_failed" }),
+    );
+    expect(res.headers.get("Retry-After")).toBeNull();
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("sc-fail")).toBeUndefined();
+    expect(usage.recordTurn).toHaveBeenCalledTimes(1);
+    expect(usage.recordTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "sc-fail",
+        accountId: ACCT_A,
+        status: "spend_check_failed",
+        model: null,
+        providerModel: null,
+        answerText: null,
+        answer: null,
+        promptText: "hello oak",
+      }),
+    );
+  });
+
+  it("admit ok runs the model for a signed-in account under cap (SC-US-5, SC-AC-5.1)", async () => {
+    signedIn(ACCT_A);
+    const res = await post({ session_id: "sc-ok", message: "hi" });
+    expect(res.status).toBe(200);
+    await drain(res);
+    expect(mockRunOak).toHaveBeenCalled();
+    expect(spend.admitAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: expect.objectContaining({
+          kind: "account",
+          accountId: ACCT_A,
+          email: `${ACCT_A}@x.test`,
+        }),
+        isAdmin: false,
+        surface: "chat",
+      }),
+    );
+  });
+
+  it("admits a guest under subject.kind guest keyed by client IP (SC-US-7, SC-AC-7.1, SC-BR-3)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+    const res = await post(
+      { session_id: "sc-guest-ok", message: "hi" },
+      undefined,
+      { "Fly-Client-IP": "203.0.113.9" },
+    );
+    expect(res.status).toBe(200);
+    await drain(res);
+    expect(mockRunOak).toHaveBeenCalled();
+    expect(spend.admitAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: expect.objectContaining({
+          kind: "guest",
+          ip: "203.0.113.9",
+        }),
+        isAdmin: false,
+        surface: "chat",
+      }),
+    );
+  });
+
+  it("guest daily_limit is 429 with reset_at and does not call the model (SC-US-7, SC-AC-7.2)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+    spend.admitAgentTurn.mockResolvedValue(dailyLimitAdmit());
+
+    const res = await post(
+      { session_id: "sc-guest-cap", message: "hi" },
+      undefined,
+      { "Fly-Client-IP": "203.0.113.9" },
+    );
+    expect(res.status).toBe(429);
+    expect(await jsonBody(res)).toEqual({
+      code: "daily_limit",
+      message: SPEND_DAILY_LIMIT_MESSAGE,
+      reset_at: SPEND_RESET_AT,
+    });
+    expect(res.headers.get("Retry-After")).toBe(
+      String(Math.ceil(SPEND_RETRY_AFTER_MS / 1000)),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(usage.recordTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "sc-guest-cap",
+        accountId: null,
+        status: "daily_limit",
+        model: null,
+        answerText: null,
+        answer: null,
+        promptText: "hi",
+      }),
+    );
+  });
+
+  it("passes isAdmin: true when the account email is on ADMIN_EMAILS (SC-BR-6 route seam)", async () => {
+    vi.stubEnv("ADMIN_EMAILS", "owner@oak.ai");
+    signedIn(ACCT_A, { email: "owner@oak.ai" });
+
+    const res = await post({ session_id: "sc-admin", message: "hi" });
+    expect(res.status).toBe(200);
+    await drain(res);
+    expect(mockRunOak).toHaveBeenCalled();
+    expect(spend.admitAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: expect.objectContaining({
+          kind: "account",
+          accountId: ACCT_A,
+          email: "owner@oak.ai",
+        }),
+        isAdmin: true,
+        surface: "chat",
+      }),
+    );
+  });
+
+  it("per-minute rate_limited is unchanged when admit returns ok (SC-BR-7)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+    for (let i = 0; i < GUEST_CONFIG.maxRequestsPerWindow; i++) {
+      await checkRateLimit("ip:unknown", "x", GUEST_CONFIG);
+    }
+
+    const limited = await post({ session_id: "sc-rl", message: "hi" });
+    expect(limited.status).toBe(429);
+    expect(await jsonBody(limited)).toEqual(
+      expect.objectContaining({ code: "rate_limited" }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(usage.recordTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "sc-rl",
+        status: "rate_limited",
+        accountId: null,
+        model: null,
+        promptText: "hi",
+      }),
+    );
+  });
+
+  it("daily_limit wins over an exhausted per-minute window (admit before checkRateLimit)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+    spend.admitAgentTurn.mockResolvedValue(dailyLimitAdmit());
+    for (let i = 0; i < GUEST_CONFIG.maxRequestsPerWindow; i++) {
+      await checkRateLimit("ip:unknown", "x", GUEST_CONFIG);
+    }
+
+    const res = await post({ session_id: "sc-order-cap", message: "hi" });
+    expect(res.status).toBe(429);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({ code: "daily_limit", reset_at: SPEND_RESET_AT }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+  });
+
+  it("account_denied wins over an exhausted per-minute window (admit before checkRateLimit)", async () => {
+    signedIn(ACCT_A);
+    spend.admitAgentTurn.mockResolvedValue({
+      ok: false,
+      code: "account_denied",
+      message: CHAT_DENIED_MESSAGE,
+    });
+    for (let i = 0; i < SIGNED_IN_CONFIG.maxRequestsPerWindow; i++) {
+      await checkRateLimit(`acct:${ACCT_A}`, "x", SIGNED_IN_CONFIG);
+    }
+
+    const res = await post({ session_id: "sc-order-denied", message: "hi" });
+    expect(res.status).toBe(403);
+    expect(await jsonBody(res)).toEqual({
+      code: "account_denied",
+      message: CHAT_DENIED_MESSAGE,
+    });
+    expect(mockRunOak).not.toHaveBeenCalled();
+  });
+
+  it("a later admit ok after a daily_limit refuse runs the model (SC-AC-5.5)", async () => {
+    signedIn(ACCT_A);
+    spend.admitAgentTurn.mockResolvedValueOnce(dailyLimitAdmit());
+    const refused = await post({ session_id: "sc-nextday-1", message: "hi" });
+    expect(refused.status).toBe(429);
+    expect(mockRunOak).not.toHaveBeenCalled();
+
+    spend.admitAgentTurn.mockResolvedValueOnce({ ok: true });
+    const allowed = await post({ session_id: "sc-nextday-2", message: "hi" });
+    expect(allowed.status).toBe(200);
+    await drain(allowed);
+    expect(mockRunOak).toHaveBeenCalled();
   });
 });

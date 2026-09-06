@@ -214,6 +214,48 @@ describe("TurnDetail", () => {
     const note = screen.getByTestId("turn-detail-no-answer");
     expect(note).toBeInTheDocument();
     expect(note).toHaveTextContent(/rate-limited/i);
+    expect(screen.getByTestId("turn-detail-status")).toHaveTextContent(
+      "Rate limited",
+    );
+    expect(screen.getByTestId("turn-detail-status")).toHaveAttribute(
+      "data-status",
+      "rate_limited",
+    );
+  });
+
+  it("labels account_denied (distinct from rate_limited)", () => {
+    render(
+      <TurnDetail turn={{ ...RATE_LIMITED_TURN, status: "account_denied" }} />,
+    );
+    const badge = screen.getByTestId("turn-detail-status");
+    expect(badge).toHaveAttribute("data-status", "account_denied");
+    expect(badge).toHaveTextContent("Account denied");
+    expect(badge).not.toHaveTextContent("Rate limited");
+    expect(screen.getByTestId("turn-detail-no-answer")).toBeInTheDocument();
+  });
+
+  it("labels daily_limit (distinct from rate_limited)", () => {
+    render(
+      <TurnDetail turn={{ ...RATE_LIMITED_TURN, status: "daily_limit" }} />,
+    );
+    const badge = screen.getByTestId("turn-detail-status");
+    expect(badge).toHaveAttribute("data-status", "daily_limit");
+    expect(badge).toHaveTextContent("Daily limit");
+    expect(badge).not.toHaveTextContent("Rate limited");
+    expect(screen.getByTestId("turn-detail-no-answer")).toBeInTheDocument();
+  });
+
+  it("labels spend_check_failed (distinct from rate_limited)", () => {
+    render(
+      <TurnDetail
+        turn={{ ...RATE_LIMITED_TURN, status: "spend_check_failed" }}
+      />,
+    );
+    const badge = screen.getByTestId("turn-detail-status");
+    expect(badge).toHaveAttribute("data-status", "spend_check_failed");
+    expect(badge).toHaveTextContent("Spend check failed");
+    expect(badge).not.toHaveTextContent("Rate limited");
+    expect(screen.getByTestId("turn-detail-no-answer")).toBeInTheDocument();
   });
 
   it("renders no mutating controls (read-only, ADMIN-BR-2)", () => {

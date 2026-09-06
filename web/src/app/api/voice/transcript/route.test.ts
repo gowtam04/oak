@@ -23,7 +23,17 @@ const compile = vi.hoisted(() => ({
 }));
 vi.mock("@/server/voice/run-voice-compile", () => compile);
 
-import { _resetStoreForTests as resetRateLimit } from "@/server/rate-limit";
+const spend = vi.hoisted(() => ({
+  admitAgentTurn: vi.fn(),
+  assertNotDenylisted: vi.fn(),
+}));
+vi.mock("@/server/spend-control", () => spend);
+
+import {
+  _resetStoreForTests as resetRateLimit,
+  checkRateLimit,
+  type RateLimitConfig,
+} from "@/server/rate-limit";
 import { oakAnswerSchema } from "@/agent/schemas";
 import {
   createPgSchema,
@@ -37,6 +47,13 @@ let fix: PgFixture;
 let loadError: unknown = null;
 
 const ACCT = "acct-voice-tx";
+
+/** Mirror of the route's inline transcript config, for exhausting the window. */
+const TRANSCRIPT_RL: RateLimitConfig = {
+  maxInputLength: 2_000,
+  maxRequestsPerWindow: 30,
+  windowMs: 60_000,
+};
 
 beforeAll(async () => {
   try {
@@ -57,6 +74,10 @@ beforeEach(async () => {
   cu.getCurrentAccount.mockReset();
   compile.runVoiceCompile.mockReset();
   compile.runVoiceCompile.mockResolvedValue(undefined);
+  spend.admitAgentTurn.mockReset();
+  spend.admitAgentTurn.mockResolvedValue({ ok: true });
+  spend.assertNotDenylisted.mockReset();
+  spend.assertNotDenylisted.mockResolvedValue({ ok: true });
   await resetRateLimit();
 });
 afterEach(() => resetRateLimit());
@@ -201,5 +222,108 @@ describe("POST /api/voice/transcript — compile is fire-and-forget (VOICE-BR-1,
         assistantMessageId: asstId,
       }),
     );
+  });
+});
+
+const VOICE_DENIED_MESSAGE = "This account can't use voice.";
+
+describe("POST /api/voice/transcript — spend controls denylist-only (SC-AC-6.3, SC-BR-1)", () => {
+  it("account_denied is 403 with code+error, does not persist, and does not increment (SC-BR-1, SC-BR-14)", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    spend.assertNotDenylisted.mockResolvedValue({
+      ok: false,
+      code: "account_denied",
+      message: VOICE_DENIED_MESSAGE,
+    });
+    const sessionId = `conv-denied-${Date.now()}`;
+
+    const res = await post(
+      body({
+        session_id: sessionId,
+        user_text: "How fast is Dragapult?",
+        assistant_text: "Base one-forty-two Speed — very fast.",
+      }),
+    );
+    expect(res.status).toBe(403);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.code).toBe("account_denied");
+    expect(json.error).toBe("account_denied");
+    expect(json.message).toBe(VOICE_DENIED_MESSAGE);
+    expect(spend.assertNotDenylisted).toHaveBeenCalledWith(`${ACCT}@x.test`);
+    expect(spend.admitAgentTurn).not.toHaveBeenCalled();
+    expect(compile.runVoiceCompile).not.toHaveBeenCalled();
+    expect(await repo.getMessages(ACCT, sessionId)).toEqual([]);
+  });
+
+  it("admit ok still persists and never increments (denylist only)", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    const sessionId = `conv-ok-${Date.now()}`;
+    const res = await post(
+      body({
+        session_id: sessionId,
+        user_text: "How fast is Dragapult?",
+        assistant_text: "Base one-forty-two Speed — very fast.",
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(spend.assertNotDenylisted).toHaveBeenCalledWith(`${ACCT}@x.test`);
+    expect(spend.admitAgentTurn).not.toHaveBeenCalled();
+    expect(await repo.getMessages(ACCT, sessionId)).toHaveLength(2);
+  });
+
+  it("spend_check_failed is 503 with code+error, does not persist, and does not increment", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    spend.assertNotDenylisted.mockResolvedValue({
+      ok: false,
+      code: "spend_check_failed",
+    });
+    const sessionId = `conv-fail-${Date.now()}`;
+
+    const res = await post(
+      body({
+        session_id: sessionId,
+        user_text: "How fast is Dragapult?",
+        assistant_text: "Base one-forty-two Speed — very fast.",
+      }),
+    );
+    expect(res.status).toBe(503);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.code).toBe("spend_check_failed");
+    expect(json.error).toBe("spend_check_failed");
+    expect(spend.admitAgentTurn).not.toHaveBeenCalled();
+    expect(compile.runVoiceCompile).not.toHaveBeenCalled();
+    expect(await repo.getMessages(ACCT, sessionId)).toEqual([]);
+  });
+
+  it("account_denied wins over an exhausted per-minute window (denylist before checkRateLimit)", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    spend.assertNotDenylisted.mockResolvedValue({
+      ok: false,
+      code: "account_denied",
+      message: VOICE_DENIED_MESSAGE,
+    });
+    for (let i = 0; i < TRANSCRIPT_RL.maxRequestsPerWindow; i++) {
+      await checkRateLimit(`acct:${ACCT}`, "", TRANSCRIPT_RL);
+    }
+    const sessionId = `conv-order-${Date.now()}`;
+
+    const res = await post(
+      body({
+        session_id: sessionId,
+        user_text: "How fast is Dragapult?",
+        assistant_text: "Base one-forty-two Speed — very fast.",
+      }),
+    );
+    expect(res.status).toBe(403);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.code).toBe("account_denied");
+    expect(json.error).toBe("account_denied");
+    expect(spend.admitAgentTurn).not.toHaveBeenCalled();
+    expect(compile.runVoiceCompile).not.toHaveBeenCalled();
+    expect(await repo.getMessages(ACCT, sessionId)).toEqual([]);
   });
 });

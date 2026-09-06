@@ -1109,3 +1109,48 @@ export const meta_usage = pgTable(
     index("meta_usage_species_idx").on(t.species),
   ],
 );
+
+// ===========================================================================
+// Spend controls — denylist + UTC-day counters (docs/features/spend-controls)
+//
+// Operator-writable gates checked BEFORE any paid agent start. Neither table
+// is granted to `oak_readonly`; both names are in `sql-sandbox` DENIED_TABLES.
+// Empty denylist at launch (SC-BR-12) — no seed emails. Caps live as
+// `app_setting` keys (`daily_cap_signed` / `daily_cap_guest`), not here.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// account_denylist — blocked signed-in identity by normalized email (SC-BR-2)
+//
+// PK is the email (trim + lowercase), not `account.id`, so a block survives
+// sign-out and a new account row for the same address. No FK to `account` —
+// blocking a not-yet-signed-up email is allowed. `added_by` is audit only.
+// ---------------------------------------------------------------------------
+export const account_denylist = pgTable("account_denylist", {
+  /** Normalized (trim + lowercase) email. PK. */
+  email: text("email").primaryKey(),
+  /** Epoch ms the email was added. */
+  added_at: bigint("added_at", { mode: "number" }).notNull(),
+  /** Admin email that added it; null if unknown. Audit only. */
+  added_by: text("added_by"),
+});
+
+// ---------------------------------------------------------------------------
+// spend_daily_usage — admitted agent-start count per (subject, UTC day)
+//
+// PK (subject_key, day_utc). `subject_key` is `acct:<accountId>` or `ip:<ip>`.
+// Increment is atomic INSERT … ON CONFLICT … WHERE count < cap (SC-AD-2);
+// refusals never insert/increment. No decrement.
+// ---------------------------------------------------------------------------
+export const spend_daily_usage = pgTable(
+  "spend_daily_usage",
+  {
+    /** `acct:<accountId>` or `ip:<clientIp>`. Part of the composite PK. */
+    subject_key: text("subject_key").notNull(),
+    /** UTC calendar day `YYYY-MM-DD`. Part of the composite PK. */
+    day_utc: text("day_utc").notNull(),
+    /** Number of admitted agent starts this day. */
+    admitted_count: integer("admitted_count").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.subject_key, t.day_utc] })],
+);

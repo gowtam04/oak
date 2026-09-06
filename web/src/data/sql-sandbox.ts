@@ -71,6 +71,8 @@ const DENIED_TABLES = [
   "team",
   "turn_record",
   "auth_event",
+  "account_denylist",
+  "spend_daily_usage",
 ];
 
 const DENY_RE = new RegExp(`\\b(?:${DENIED_TABLES.join("|")})\\b`, "i");

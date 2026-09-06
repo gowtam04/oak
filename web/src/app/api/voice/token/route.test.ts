@@ -31,6 +31,12 @@ const repo = vi.hoisted(() => ({
 }));
 vi.mock("@/data/repos/conversation-repo", () => repo);
 
+const spend = vi.hoisted(() => ({
+  admitAgentTurn: vi.fn(),
+  assertNotDenylisted: vi.fn(),
+}));
+vi.mock("@/server/spend-control", () => spend);
+
 import {
   _resetStoreForTests as resetRateLimit,
   checkRateLimit,
@@ -61,6 +67,10 @@ beforeEach(async () => {
   cu.getCurrentAccount.mockReset();
   repo.getMessages.mockReset();
   repo.getMessages.mockResolvedValue([]);
+  spend.admitAgentTurn.mockReset();
+  spend.admitAgentTurn.mockResolvedValue({ ok: true });
+  spend.assertNotDenylisted.mockReset();
+  spend.assertNotDenylisted.mockResolvedValue({ ok: true });
   await resetRateLimit();
   vi.stubGlobal(
     "fetch",
@@ -79,8 +89,13 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-function signedIn(id: string): void {
-  cu.getCurrentAccount.mockResolvedValue({ id, email: `${id}@x.test`, createdAt: 0, lastUsedScope: null });
+function signedIn(id: string, opts?: { email?: string }): void {
+  cu.getCurrentAccount.mockResolvedValue({
+    id,
+    email: opts?.email ?? `${id}@x.test`,
+    createdAt: 0,
+    lastUsedScope: null,
+  });
 }
 function guest(): void {
   cu.getCurrentAccount.mockResolvedValue(null);
@@ -173,5 +188,162 @@ describe("POST /api/voice/token", () => {
     expect(res.status).toBe(502);
     const json = (await res.json()) as { error: string };
     expect(json.error).toBe("voice_upstream_error");
+  });
+});
+
+// ===========================================================================
+// Spend controls — admit BEFORE xAI mint (SC-US-5/6, SC-AC-5.3, SC-AC-6.3,
+// SC-BR-1, SC-BR-14). Voice JSON must send both `code` and `error`.
+// ===========================================================================
+
+const SPEND_RESET_AT = "2026-09-07T00:00:00.000Z";
+const SPEND_RETRY_AFTER_MS = 45_000;
+const SPEND_DAILY_LIMIT_MESSAGE = `Daily limit reached. Try again tomorrow (resets at ${SPEND_RESET_AT} UTC).`;
+const VOICE_DENIED_MESSAGE = "This account can't use voice.";
+
+function dailyLimitAdmit() {
+  return {
+    ok: false as const,
+    code: "daily_limit" as const,
+    message: SPEND_DAILY_LIMIT_MESSAGE,
+    resetAt: SPEND_RESET_AT,
+    retryAfterMs: SPEND_RETRY_AFTER_MS,
+  };
+}
+
+function fetchMock(): ReturnType<typeof vi.fn> {
+  return globalThis.fetch as ReturnType<typeof vi.fn>;
+}
+
+describe("POST /api/voice/token — spend controls (SC-US-5/6, SC-AC-5.3, SC-AC-6.3, SC-BR-1)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("account_denied is 403 with code+error and does not mint (SC-AC-6.3, SC-BR-1, SC-BR-14)", async () => {
+    signedIn(ACCT);
+    spend.admitAgentTurn.mockResolvedValue({
+      ok: false,
+      code: "account_denied",
+      message: VOICE_DENIED_MESSAGE,
+    });
+
+    const res = await post(body());
+    expect(res.status).toBe(403);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.code).toBe("account_denied");
+    expect(json.error).toBe("account_denied");
+    expect(json.message).toBe(VOICE_DENIED_MESSAGE);
+    expect(fetchMock()).not.toHaveBeenCalled();
+    expect(spend.admitAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: expect.objectContaining({
+          kind: "account",
+          accountId: ACCT,
+          email: `${ACCT}@x.test`,
+        }),
+        isAdmin: false,
+        surface: "voice",
+      }),
+    );
+  });
+
+  it("daily_limit is 429 with reset_at + Retry-After, code+error, and does not mint (SC-AC-5.2/5.3, SC-BR-1)", async () => {
+    signedIn(ACCT);
+    spend.admitAgentTurn.mockResolvedValue(dailyLimitAdmit());
+
+    const res = await post(body());
+    expect(res.status).toBe(429);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.code).toBe("daily_limit");
+    expect(json.error).toBe("daily_limit");
+    expect(json.message).toBe(SPEND_DAILY_LIMIT_MESSAGE);
+    expect(json.reset_at).toBe(SPEND_RESET_AT);
+    expect(res.headers.get("Retry-After")).toBe(
+      String(Math.ceil(SPEND_RETRY_AFTER_MS / 1000)),
+    );
+    expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("spend_check_failed is 503 with code+error and does not mint (SC-BR-1)", async () => {
+    signedIn(ACCT);
+    spend.admitAgentTurn.mockResolvedValue({
+      ok: false,
+      code: "spend_check_failed",
+    });
+
+    const res = await post(body());
+    expect(res.status).toBe(503);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.code).toBe("spend_check_failed");
+    expect(json.error).toBe("spend_check_failed");
+    expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("admit ok still mints and calls admit with surface voice (SC-US-5, SC-AC-5.1)", async () => {
+    signedIn(ACCT);
+    const res = await post(body());
+    expect(res.status).toBe(200);
+    expect(fetchMock()).toHaveBeenCalledTimes(1);
+    expect(spend.admitAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isAdmin: false,
+        surface: "voice",
+      }),
+    );
+  });
+
+  it("passes isAdmin: true when the account email is on ADMIN_EMAILS (SC-BR-6 route seam)", async () => {
+    vi.stubEnv("ADMIN_EMAILS", "owner@oak.ai");
+    signedIn(ACCT, { email: "owner@oak.ai" });
+
+    const res = await post(body());
+    expect(res.status).toBe(200);
+    expect(fetchMock()).toHaveBeenCalledTimes(1);
+    expect(spend.admitAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: expect.objectContaining({
+          kind: "account",
+          accountId: ACCT,
+          email: "owner@oak.ai",
+        }),
+        isAdmin: true,
+        surface: "voice",
+      }),
+    );
+  });
+
+  it("per-minute rate_limited is unchanged when admit returns ok (SC-BR-7)", async () => {
+    signedIn(ACCT);
+    for (let i = 0; i < TOKEN_RL.maxRequestsPerWindow; i++) {
+      await checkRateLimit(`acct:${ACCT}`, "", TOKEN_RL);
+    }
+    const res = await post(body());
+    expect(res.status).toBe(429);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe("rate_limited");
+    expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("daily_limit wins over an exhausted per-minute window (admit before checkRateLimit)", async () => {
+    signedIn(ACCT);
+    spend.admitAgentTurn.mockResolvedValue(dailyLimitAdmit());
+    for (let i = 0; i < TOKEN_RL.maxRequestsPerWindow; i++) {
+      await checkRateLimit(`acct:${ACCT}`, "", TOKEN_RL);
+    }
+    const res = await post(body());
+    expect(res.status).toBe(429);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.code).toBe("daily_limit");
+    expect(json.error).toBe("daily_limit");
+    expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("guest 401 happens before admit and never mints", async () => {
+    guest();
+    const res = await post(body());
+    expect(res.status).toBe(401);
+    expect(spend.admitAgentTurn).not.toHaveBeenCalled();
+    expect(fetchMock()).not.toHaveBeenCalled();
   });
 });

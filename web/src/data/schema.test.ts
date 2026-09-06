@@ -152,7 +152,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 27 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse + 1 app settings + 3 chat-qol)", async () => {
+  it("creates all 30 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse + 1 app settings + 3 chat-qol + 1 artifact pin + 2 spend)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
@@ -197,12 +197,18 @@ describe("Drizzle migration — table creation", () => {
         "conversation_folder",
         "account_scope_mru",
         "shared_answer",
+        // Answer-card artifact pins — added by the 0020 migration (already
+        // present in a fully migrated catalog; previously omitted from this list).
+        "conversation_artifact_pin",
+        // Spend controls (denylist + UTC-day counters) — added by the 0021 migration.
+        "account_denylist",
+        "spend_daily_usage",
       ]),
     );
-    // Exactly 27 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
+    // Exactly 30 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
     // + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse
-    // + 1 app settings + 3 chat-qol).
-    expect(tables).toHaveLength(27);
+    // + 1 app settings + 3 chat-qol + 1 artifact pin + 2 spend).
+    expect(tables).toHaveLength(30);
   });
 
   it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {
@@ -253,9 +259,15 @@ describe("Drizzle migration — table creation", () => {
     // migration_applies_auth_tables: account / auth_session / otp_code exist on
     // a fresh schema with the exact columns and primary keys from § Data Model.
     expect(await columnNames(db, "account")).toEqual(
-      expect.arrayContaining(["id", "email", "created_at", "last_used_scope"]),
+      expect.arrayContaining([
+        "id",
+        "email",
+        "created_at",
+        "last_used_scope",
+        "answer_density",
+      ]),
     );
-    expect(await columnNames(db, "account")).toHaveLength(4);
+    expect(await columnNames(db, "account")).toHaveLength(5);
     expect(await pkColumns(db, "account")).toEqual(["id"]);
 
     expect(await columnNames(db, "auth_session")).toEqual(
@@ -467,6 +479,25 @@ describe("Drizzle migration — table creation", () => {
     expect(indexes).toContain("conversation_account_folder_idx");
     expect(indexes).toContain("conversation_account_archived_idx");
     expect(indexes).toContain("shared_answer_account_created_idx");
+  });
+
+  it("migration creates account_denylist with email PK + added_at + added_by", async () => {
+    expect(await columnNames(db, "account_denylist")).toEqual(
+      expect.arrayContaining(["email", "added_at", "added_by"]),
+    );
+    expect(await columnNames(db, "account_denylist")).toHaveLength(3);
+    expect(await pkColumns(db, "account_denylist")).toEqual(["email"]);
+  });
+
+  it("migration creates spend_daily_usage with composite PK (subject_key, day_utc)", async () => {
+    expect(await columnNames(db, "spend_daily_usage")).toEqual(
+      expect.arrayContaining(["subject_key", "day_utc", "admitted_count"]),
+    );
+    expect(await columnNames(db, "spend_daily_usage")).toHaveLength(3);
+    expect(await pkColumns(db, "spend_daily_usage")).toEqual([
+      "subject_key",
+      "day_utc",
+    ]);
   });
 });
 

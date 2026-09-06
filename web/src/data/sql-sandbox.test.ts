@@ -55,6 +55,8 @@ describe("sql-sandbox — deny-list (no DB access)", () => {
     "SELECT name FROM team",
     "SELECT * FROM turn_record",
     "SELECT * FROM auth_event",
+    "SELECT * FROM account_denylist",
+    "SELECT * FROM spend_daily_usage",
     "SELECT p.id FROM pokemon p, account a WHERE a.id = p.id",
   ];
 
@@ -86,6 +88,14 @@ describe("sql-sandbox — deny-list (no DB access)", () => {
       true,
     );
     expect(referencesRestrictedTable("SELECT * FROM shared_answer")).toBe(true);
+    // Spend-control tables are their own identifiers (`\baccount\b` does not
+    // match `account_denylist`); both must be on DENIED_TABLES.
+    expect(referencesRestrictedTable("SELECT * FROM account_denylist")).toBe(
+      true,
+    );
+    expect(referencesRestrictedTable("SELECT * FROM spend_daily_usage")).toBe(
+      true,
+    );
   });
 });
 

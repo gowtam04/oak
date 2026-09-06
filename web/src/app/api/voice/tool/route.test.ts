@@ -24,7 +24,17 @@ const traces = vi.hoisted(() => ({
 }));
 vi.mock("@/server/voice/tool-trace-store", () => traces);
 
-import { _resetStoreForTests as resetRateLimit } from "@/server/rate-limit";
+const spend = vi.hoisted(() => ({
+  admitAgentTurn: vi.fn(),
+  assertNotDenylisted: vi.fn(),
+}));
+vi.mock("@/server/spend-control", () => spend);
+
+import {
+  _resetStoreForTests as resetRateLimit,
+  checkRateLimit,
+  type RateLimitConfig,
+} from "@/server/rate-limit";
 import type { VoiceToolResponseBody } from "@/lib/voice/voice-types";
 import {
   createPgSchema,
@@ -37,6 +47,13 @@ let fix: PgFixture;
 let loadError: unknown = null;
 
 const ACCT = "acct-voice-tool";
+
+/** Mirror of the route's inline tool config, for exhausting the window. */
+const TOOL_RL: RateLimitConfig = {
+  maxInputLength: 2_000,
+  maxRequestsPerWindow: 60,
+  windowMs: 60_000,
+};
 
 beforeAll(async () => {
   try {
@@ -54,6 +71,12 @@ afterAll(async () => {
 
 beforeEach(async () => {
   cu.getCurrentAccount.mockReset();
+  spend.admitAgentTurn.mockReset();
+  spend.admitAgentTurn.mockResolvedValue({ ok: true });
+  spend.assertNotDenylisted.mockReset();
+  spend.assertNotDenylisted.mockResolvedValue({ ok: true });
+  traces.appendVoiceTrace.mockReset();
+  traces.appendVoiceTrace.mockImplementation(() => undefined);
   await resetRateLimit();
 });
 afterEach(() => resetRateLimit());
@@ -192,5 +215,84 @@ describe("POST /api/voice/tool — appendVoiceTrace fail-soft (ADR-8)", () => {
     expect(
       (json.output as { display_name?: string }).display_name,
     ).toBe("Flamethrower");
+  });
+});
+
+const VOICE_DENIED_MESSAGE = "This account can't use voice.";
+
+describe("POST /api/voice/tool — spend controls denylist-only (SC-AC-6.3, SC-BR-1)", () => {
+  it("account_denied is 403 with code+error, does not dispatch, and does not increment (SC-BR-1, SC-BR-14)", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    spend.assertNotDenylisted.mockResolvedValue({
+      ok: false,
+      code: "account_denied",
+      message: VOICE_DENIED_MESSAGE,
+    });
+
+    const res = await post(
+      body({ name: "get_move", arguments: JSON.stringify({ name: "flamethrower" }) }),
+    );
+    expect(res.status).toBe(403);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.code).toBe("account_denied");
+    expect(json.error).toBe("account_denied");
+    expect(json.message).toBe(VOICE_DENIED_MESSAGE);
+    expect(spend.assertNotDenylisted).toHaveBeenCalledWith(`${ACCT}@x.test`);
+    expect(spend.admitAgentTurn).not.toHaveBeenCalled();
+    expect(traces.appendVoiceTrace).not.toHaveBeenCalled();
+  });
+
+  it("admit ok still dispatches and never increments (denylist only)", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    const res = await post(
+      body({ name: "get_move", arguments: JSON.stringify({ name: "flamethrower" }) }),
+    );
+    expect(res.status).toBe(200);
+    expect(spend.assertNotDenylisted).toHaveBeenCalledWith(`${ACCT}@x.test`);
+    expect(spend.admitAgentTurn).not.toHaveBeenCalled();
+  });
+
+  it("spend_check_failed is 503 with code+error, does not dispatch, and does not increment", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    spend.assertNotDenylisted.mockResolvedValue({
+      ok: false,
+      code: "spend_check_failed",
+    });
+
+    const res = await post(
+      body({ name: "get_move", arguments: JSON.stringify({ name: "flamethrower" }) }),
+    );
+    expect(res.status).toBe(503);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.code).toBe("spend_check_failed");
+    expect(json.error).toBe("spend_check_failed");
+    expect(spend.admitAgentTurn).not.toHaveBeenCalled();
+    expect(traces.appendVoiceTrace).not.toHaveBeenCalled();
+  });
+
+  it("account_denied wins over an exhausted per-minute window (denylist before checkRateLimit)", async () => {
+    ensureLoaded();
+    signedIn(ACCT);
+    spend.assertNotDenylisted.mockResolvedValue({
+      ok: false,
+      code: "account_denied",
+      message: VOICE_DENIED_MESSAGE,
+    });
+    for (let i = 0; i < TOOL_RL.maxRequestsPerWindow; i++) {
+      await checkRateLimit(`acct:${ACCT}`, "", TOOL_RL);
+    }
+
+    const res = await post(
+      body({ name: "get_move", arguments: JSON.stringify({ name: "flamethrower" }) }),
+    );
+    expect(res.status).toBe(403);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json.code).toBe("account_denied");
+    expect(json.error).toBe("account_denied");
+    expect(spend.admitAgentTurn).not.toHaveBeenCalled();
+    expect(traces.appendVoiceTrace).not.toHaveBeenCalled();
   });
 });

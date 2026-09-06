@@ -179,4 +179,61 @@ describe("ErrorsView", () => {
     expect(cards[1]).not.toHaveClass("kpi-card--danger");
     expect(cards[1]).not.toHaveClass("kpi-card--warn");
   });
+
+  it("covers spend-control refusal categories in CATEGORY_LABELS and CATEGORY_ORDER", () => {
+    expect(new Set(Object.keys(CATEGORY_LABELS))).toEqual(
+      new Set(CATEGORY_ORDER),
+    );
+    expect(CATEGORY_ORDER).toEqual(
+      expect.arrayContaining([
+        "account_denied",
+        "daily_limit",
+        "spend_check_failed",
+        "rate_limited",
+      ]),
+    );
+    expect(CATEGORY_LABELS.account_denied.length).toBeGreaterThan(0);
+    expect(CATEGORY_LABELS.daily_limit.length).toBeGreaterThan(0);
+    expect(CATEGORY_LABELS.spend_check_failed.length).toBeGreaterThan(0);
+    expect(CATEGORY_LABELS.account_denied).not.toBe(
+      CATEGORY_LABELS.rate_limited,
+    );
+    expect(CATEGORY_LABELS.daily_limit).not.toBe(CATEGORY_LABELS.rate_limited);
+    expect(CATEGORY_LABELS.spend_check_failed).not.toBe(
+      CATEGORY_LABELS.rate_limited,
+    );
+    expect(CATEGORY_LABELS.rate_limited.length).toBeGreaterThan(0);
+  });
+
+  it("links spend-control categories to the Usage explorer status filter", () => {
+    expect(usageHrefForCategory("account_denied", RANGE)).toBe(
+      "/admin/usage?status=account_denied&from=1000&to=2000",
+    );
+    expect(usageHrefForCategory("daily_limit", RANGE)).toBe(
+      "/admin/usage?status=daily_limit&from=1000&to=2000",
+    );
+    expect(usageHrefForCategory("spend_check_failed", RANGE)).toBe(
+      "/admin/usage?status=spend_check_failed&from=1000&to=2000",
+    );
+    expect(usageHrefForCategory("rate_limited", RANGE)).toBe(
+      "/admin/usage?status=rate_limited&from=1000&to=2000",
+    );
+  });
+
+  it("renders spend-control category rows alongside rate_limited", () => {
+    render(<ErrorsView data={FIXTURE} />);
+    expect(
+      screen.getByTestId("errors-category-link-account_denied"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("errors-category-link-daily_limit"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("errors-category-link-spend_check_failed"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("errors-category-link-rate_limited"),
+    ).toBeInTheDocument();
+  });
 });
+
