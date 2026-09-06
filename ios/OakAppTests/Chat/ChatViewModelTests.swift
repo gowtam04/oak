@@ -221,6 +221,61 @@ struct ChatViewModelTests {
     #expect(vm.isStreaming == false)
   }
 
+  // MARK: Spend-control banners (SC-AC-5.4 / SC-AC-6.5 / SC-BR-14)
+
+  @Test
+  func accountDeniedBannerIsNotRetryableAndOmitsGuestRateLimitHint() async {
+    // Denylist copy is the server message; Retry is hidden; the guest
+    // per-minute "sign in to raise the limit" hint must not attach.
+    let fake = FakeChatService()
+    let message = "This account can't use chat."
+    fake.thrownError = .http(status: 403, code: "account_denied", message: message)
+    let vm = makeViewModel(fake: fake)  // AppState defaults to guest
+
+    vm.composerText = "hello"
+    vm.send()
+    await vm.streamTask?.value
+
+    #expect(vm.errorBanner?.message == message)
+    #expect(vm.errorBanner?.isRetryable == false)
+    #expect(vm.errorBanner?.message.contains("Sign in to raise the limit.") != true)
+  }
+
+  @Test
+  func dailyLimitBannerIsNotRetryableAndOmitsGuestRateLimitHint() async {
+    // Daily-cap copy is the server message (includes reset time); Retry is
+    // hidden; guests must not get the per-minute sign-in hint on this path.
+    let fake = FakeChatService()
+    let message =
+      "Daily limit reached. Try again tomorrow (resets at 2026-09-07T00:00:00.000Z UTC)."
+    fake.thrownError = .http(status: 429, code: "daily_limit", message: message)
+    let vm = makeViewModel(fake: fake)  // AppState defaults to guest
+
+    vm.composerText = "hello"
+    vm.send()
+    await vm.streamTask?.value
+
+    #expect(vm.errorBanner?.message == message)
+    #expect(vm.errorBanner?.isRetryable == false)
+    #expect(vm.errorBanner?.message.contains("Sign in to raise the limit.") != true)
+  }
+
+  @Test
+  func perMinuteRateLimitBannerIsRetryableAndGuestsGetSignInHint() async {
+    let fake = FakeChatService()
+    fake.thrownError = .rateLimited(retryAfter: 30)
+    let vm = makeViewModel(fake: fake)  // AppState defaults to guest
+
+    vm.composerText = "hello"
+    vm.send()
+    await vm.streamTask?.value
+
+    #expect(vm.errorBanner?.isRetryable == true)
+    #expect(
+      vm.errorBanner?.message
+        == ChatViewModel.rateLimitMessage(retryAfter: 30) + " Sign in to raise the limit.")
+  }
+
   // MARK: In-domain non-answered statuses render (NOT as errors)
 
   @Test

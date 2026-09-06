@@ -6,8 +6,10 @@ import Testing
 /// Verifies the `(HTTPURLResponse, Data) → success | OakError` mapping
 /// (`OakError.validate`) and the transport-error wrapper (`OakError.transportFailure`)
 /// against the api-design.md table: `2xx` → success, `401` → `.unauthorized`,
-/// `429 (+Retry-After)` → `.rateLimited`, other non-2xx with a `{ code, message }`
-/// envelope → `.http`, and a `URLSession` failure → `.transport`.
+/// `429` with body `code: "rate_limited"` (or no body) → `.rateLimited`,
+/// `429` with body `code: "daily_limit"` and `403` with `{ code, message }` → `.http`,
+/// other non-2xx with a `{ code, message }` envelope → `.http`, and a `URLSession`
+/// failure → `.transport`. Spend-control codes: SC-AC-5.4, SC-AC-6.5, SC-BR-14.
 struct OakErrorMappingTests {
 
   private func response(_ status: Int, headers: [String: String] = [:]) -> HTTPURLResponse {
@@ -55,6 +57,48 @@ struct OakErrorMappingTests {
   func rateLimitedWithoutRetryAfterHasNilDelta() {
     let result = OakError.validate(response(429), data: Data())
     #expect(result == .failure(.rateLimited(retryAfter: nil)))
+  }
+
+  @Test
+  func rateLimited429WithBodyCodeStaysRateLimited() {
+    // Per-minute limiter (SC-BR-7): a 429 whose envelope code is `rate_limited`
+    // must keep the dedicated `.rateLimited` case (Retry-After still parsed).
+    let body = Data(
+      "{\"code\":\"rate_limited\",\"message\":\"Too many requests. Please wait a moment and try again.\"}"
+        .utf8)
+    let result = OakError.validate(response(429, headers: ["Retry-After": "30"]), data: body)
+    #expect(result == .failure(.rateLimited(retryAfter: 30)))
+  }
+
+  @Test
+  func dailyLimit429DoesNotCollapseToRateLimited() {
+    // Daily cap (SC-AC-5.4 / SC-AC-6.5 / SC-BR-14): the server sends 429
+    // `{ code: "daily_limit", message, reset_at }` + Retry-After. That must NOT
+    // become `.rateLimited` — collapsing every 429 would show the per-minute
+    // "too quickly" copy. Parse the body code the same way 403 does.
+    let message =
+      "Daily limit reached. Try again tomorrow (resets at 2026-09-07T00:00:00.000Z UTC)."
+    let body = Data(
+      "{\"code\":\"daily_limit\",\"message\":\"\(message)\",\"reset_at\":\"2026-09-07T00:00:00.000Z\"}"
+        .utf8)
+    let result = OakError.validate(response(429, headers: ["Retry-After": "45"]), data: body)
+    if case .failure(.rateLimited) = result {
+      Issue.record("daily_limit 429 must not collapse to .rateLimited, got \(result)")
+    }
+    #expect(
+      result == .failure(.http(status: 429, code: "daily_limit", message: message)))
+  }
+
+  @Test
+  func accountDenied403MapsToHttpWithCodeAndMessage() {
+    // Denylist (SC-AC-6.1 / SC-AC-6.5 / SC-BR-14): 403 `{ code: "account_denied" }`
+    // is already `.http` today — pin the code and server message so a 429-parse
+    // change cannot swallow them.
+    let message = "This account can't use chat."
+    let body = Data("{\"code\":\"account_denied\",\"message\":\"\(message)\"}".utf8)
+    let result = OakError.validate(response(403), data: body)
+    #expect(
+      result == .failure(.http(status: 403, code: "account_denied", message: message)))
   }
 
   @Test

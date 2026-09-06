@@ -210,7 +210,11 @@ export default function SettingsPage() {
     [applySpend],
   );
 
-  const spend = data?.spend ?? LAUNCH_SPEND;
+  // Launch defaults are a loading placeholder only — never live data. A failed
+  // GET leaves `data` null; keep the spend surface disabled until a successful
+  // load and surface the same error SettingsView already shows.
+  const spend = data?.spend;
+  const spendReady = spend != null;
 
   return (
     <>
@@ -226,12 +230,12 @@ export default function SettingsPage() {
         onSelect={onSelect}
       />
       <SpendControlsView
-        signedCap={spend.signedCap}
-        guestCap={spend.guestCap}
-        denylist={spend.denylist}
-        loading={loading}
+        signedCap={spend?.signedCap ?? LAUNCH_SPEND.signedCap}
+        guestCap={spend?.guestCap ?? LAUNCH_SPEND.guestCap}
+        denylist={spendReady ? spend.denylist : []}
+        loading={loading || !spendReady}
         pending={spendPending}
-        error={spendError}
+        error={spendError ?? (spendReady ? null : error)}
         onSaveCaps={onSaveCaps}
         onAddEmail={onAddEmail}
         onRemoveEmail={onRemoveEmail}

@@ -15,8 +15,9 @@ import type { AdminSpendDenylistEntry } from "@/lib/admin/admin-types";
  * round-tripping every keystroke; they resync when the saved props change.
  *
  * Empty denylist renders `spend-denylist-empty` (SC-AC-3.2, SC-BR-12) — never
- * a placeholder blocked user. Save is a no-op unless both caps are integers
- * ≥ 1 (SC-AC-4.3).
+ * a placeholder blocked user — except while `loading`, so a failed GET the
+ * page keeps in the loading state cannot look like a healthy empty list.
+ * Save is a no-op unless both caps are integers ≥ 1 (SC-AC-4.3).
  */
 
 export interface SpendControlsViewProps {
@@ -179,12 +180,14 @@ export default function SpendControlsView({
       </div>
 
       {denylist.length === 0 ? (
-        <p
-          className="spend-controls-view__empty"
-          data-testid="spend-denylist-empty"
-        >
-          No accounts are denylisted.
-        </p>
+        loading ? null : (
+          <p
+            className="spend-controls-view__empty"
+            data-testid="spend-denylist-empty"
+          >
+            No accounts are denylisted.
+          </p>
+        )
       ) : (
         <table
           className="spend-controls-view__table"

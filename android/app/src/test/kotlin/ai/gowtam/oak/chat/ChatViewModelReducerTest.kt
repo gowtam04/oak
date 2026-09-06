@@ -3,6 +3,8 @@ package ai.gowtam.oak.chat
 import ai.gowtam.oak.app.AppState
 import ai.gowtam.oak.app.GuestTurn
 import ai.gowtam.oak.features.chat.ChatViewModel
+import ai.gowtam.oak.features.chat.ErrorBanner
+import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.support.FakeChatService
 import ai.gowtam.oak.support.MainDispatcherRule
@@ -14,6 +16,7 @@ import ai.gowtam.oak.wire.SseEvent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -298,6 +301,86 @@ class ChatViewModelReducerTest {
 
         assertTrue(chat.sendWithImagesCalls.isEmpty())
         assertTrue(vm.uiState.value.turns.isEmpty())
+    }
+
+    // -------------------------------------------------------------------
+    // Spend-control banners (SC-AC-5.4 / SC-AC-6.5 / SC-BR-14)
+    // Pre-stream HTTP refusals: 403 account_denied, 429 daily_limit (Http,
+    // not RateLimited), 429 rate_limited (RateLimited). Denied/cap hide
+    // Retry and must not append the guest per-minute sign-in hint.
+    // -------------------------------------------------------------------
+
+    @Test
+    fun accountDeniedBannerShowsServerMessageAndIsNotRetryable() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val banner = bannerAfterSend(
+                error = OakError.Http(403, "account_denied", ACCOUNT_DENIED_MESSAGE),
+                signedIn = true,
+            )
+            assertEquals(ACCOUNT_DENIED_MESSAGE, banner.message)
+            assertFalse("account_denied must hide Retry", banner.isRetryable)
+            assertFalse(banner.message.contains(GUEST_SIGN_IN_HINT))
+        }
+
+    @Test
+    fun dailyLimitBannerShowsServerMessageIsNotRetryableAndOmitsGuestSignInHint() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Guests hit the IP daily cap; the per-minute guest hint must not
+            // ride this banner (signing in does not bypass a denylist, and
+            // the daily-cap copy is already distinct).
+            val banner = bannerAfterSend(
+                error = OakError.Http(429, "daily_limit", DAILY_LIMIT_MESSAGE),
+            )
+            assertEquals(DAILY_LIMIT_MESSAGE, banner.message)
+            assertFalse("daily_limit must hide Retry", banner.isRetryable)
+            assertFalse(banner.message.contains(GUEST_SIGN_IN_HINT))
+        }
+
+    @Test
+    fun rateLimitedGuestBannerIsRetryableAndAddsSignInHint() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val banner = bannerAfterSend(error = OakError.RateLimited(retryAfterSeconds = 30))
+            val expected = ChatViewModel.rateLimitMessage(30) + GUEST_SIGN_IN_HINT
+            assertEquals(expected, banner.message)
+            assertTrue(banner.isRetryable)
+        }
+
+    @Test
+    fun spendControlBannersAreThreeDistinctReasons() = runTest(mainDispatcherRule.dispatcher) {
+        val denied = bannerAfterSend(
+            error = OakError.Http(403, "account_denied", ACCOUNT_DENIED_MESSAGE),
+            signedIn = true,
+        )
+        val cap = bannerAfterSend(
+            error = OakError.Http(429, "daily_limit", DAILY_LIMIT_MESSAGE),
+        )
+        val perMinute = bannerAfterSend(error = OakError.RateLimited(retryAfterSeconds = null))
+
+        assertNotEquals(denied.message, cap.message)
+        assertNotEquals(denied.message, perMinute.message)
+        assertNotEquals(cap.message, perMinute.message)
+        assertFalse("account_denied must hide Retry", denied.isRetryable)
+        assertFalse("daily_limit must hide Retry", cap.isRetryable)
+        assertTrue(perMinute.isRetryable)
+    }
+
+    private fun bannerAfterSend(error: OakError, signedIn: Boolean = false): ErrorBanner {
+        val appState = AppState()
+        if (signedIn) appState.completeSignIn("ash@pallet.town")
+        val vm = ChatViewModel(chat = FakeChatService(error = error), appState = appState)
+        vm.setComposerText("hello")
+        vm.send()
+        mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
+        val state = vm.uiState.value
+        assertFalse(state.isStreaming)
+        return checkNotNull(state.errorBanner)
+    }
+
+    private companion object {
+        const val ACCOUNT_DENIED_MESSAGE = "This account can't use chat."
+        const val DAILY_LIMIT_MESSAGE =
+            "Daily limit reached. Try again tomorrow (resets at 2026-09-07T00:00:00.000Z UTC)."
+        const val GUEST_SIGN_IN_HINT = " Sign in to raise the limit."
     }
 }
 

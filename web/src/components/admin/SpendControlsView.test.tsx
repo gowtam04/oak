@@ -173,6 +173,35 @@ describe("SpendControlsView", () => {
     );
   });
 
+  it("shows a load-failure banner instead of a fake empty denylist, with controls disabled", () => {
+    renderView({
+      error: "Failed to load settings.",
+      loading: true,
+      denylist: [],
+    });
+    expect(screen.getByTestId("spend-error")).toHaveTextContent(
+      "Failed to load settings.",
+    );
+    expect(
+      screen.queryByTestId("spend-denylist-empty"),
+    ).not.toBeInTheDocument();
+    expect(
+      (screen.getByTestId("spend-caps-save") as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByTestId("spend-add-submit") as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByTestId("spend-cap-signed") as HTMLInputElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByTestId("spend-cap-guest") as HTMLInputElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByTestId("spend-add-email") as HTMLInputElement).disabled,
+    ).toBe(true);
+  });
+
   it("disables save, add, and remove while pending", () => {
     renderView({ denylist: [...DENYLIST], pending: true });
     expect(
