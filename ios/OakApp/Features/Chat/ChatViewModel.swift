@@ -785,7 +785,11 @@ final class ChatViewModel {
       // not leave a half-rendered answer (M-AC-4.4). The user turn stays in place. An
       // in-band `error` frame is a real model/agent fault (not a connection drop), so
       // it is a genuine terminal — clear the pending turn; it is never reattached.
-      errorBanner = ErrorBanner(message: Self.bannerMessage(code: code, fallback: message), isRetryable: true)
+      // Spend-control refusals (denied/cap) hide Retry even on this path.
+      errorBanner = ErrorBanner(
+        message: Self.bannerMessage(code: code, fallback: message),
+        isRetryable: !Self.hidesRetry(code: code)
+      )
       streamingText = ""
       toolActivities = []
       isStreaming = false
@@ -1037,7 +1041,10 @@ final class ChatViewModel {
   // MARK: Error copy (instance for the guest hint; statics for assertable strings)
 
   /// Maps an ``OakError`` to a banner. Rate-limited guests get the "sign in raises
-  /// the limit" hint (api-design.md "Error Handling").
+  /// the limit" hint (api-design.md "Error Handling") on the per-minute
+  /// ``OakError/rateLimited`` path only — denylist (`account_denied`) and daily
+  /// cap (`daily_limit`) show the server message with Retry hidden (SC-AC-5.4 /
+  /// SC-AC-6.5 / SC-BR-14).
   private func banner(for error: OakError) -> ErrorBanner {
     switch error {
     case .transport:
@@ -1050,8 +1057,11 @@ final class ChatViewModel {
       return ErrorBanner(message: message, isRetryable: true)
     case .unauthorized:
       return ErrorBanner(message: Self.sessionExpiredMessage, isRetryable: false)
-    case let .http(_, _, message):
-      return ErrorBanner(message: message.isEmpty ? Self.genericMessage : message, isRetryable: true)
+    case let .http(_, code, message):
+      return ErrorBanner(
+        message: message.isEmpty ? Self.genericMessage : message,
+        isRetryable: !Self.hidesRetry(code: code)
+      )
     case let .imageRejected(reason):
       // Surface the ACTUAL reason (too large / unsupported / too many) rather than
       // the dead-end generic banner, so a rejected attachment is self-explanatory
@@ -1080,6 +1090,11 @@ final class ChatViewModel {
     case .unsupportedType:
       return "That image couldn't be processed. Try a different one."
     }
+  }
+
+  /// Denylist and daily-cap refusals must not offer Retry (SC-AC-5.4 / SC-BR-14).
+  private static func hidesRetry(code: String) -> Bool {
+    code == "account_denied" || code == "daily_limit"
   }
 
   /// Maps an in-band SSE `error` event to user-facing copy, falling back to the

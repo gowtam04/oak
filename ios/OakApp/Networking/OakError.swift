@@ -15,10 +15,13 @@ enum OakError: Error, Equatable, Sendable {
   /// payload, token, or message).
   case transport(underlying: String)
   /// A non-2xx response carrying the `{ code, message }` envelope (4xx/5xx that
-  /// is neither a 401 nor a 429).
+  /// is neither a 401 nor a per-minute 429 `rate_limited`). Includes 403
+  /// `account_denied` and 429 `daily_limit` (SC-AC-5.4 / SC-BR-14).
   case http(status: Int, code: String, message: String)
-  /// `429 Too Many Requests`; `retryAfter` is parsed from the `Retry-After`
-  /// header when present (seconds, or an HTTP-date converted to a delta).
+  /// `429 Too Many Requests` with body `code: "rate_limited"` (or a missing /
+  /// unknown 429 body). `retryAfter` is parsed from the `Retry-After` header
+  /// when present (seconds, or an HTTP-date converted to a delta). Daily-cap
+  /// `daily_limit` is ``http``, not this case.
   case rateLimited(retryAfter: TimeInterval?)
   /// `401 Unauthorized` on a call that carried (or required) a Bearer token — the
   /// client drops the token, returns to guest, and prompts re-sign-in.
@@ -54,7 +57,9 @@ extension OakError {
   /// (api-design.md "Error Handling"):
   ///   * `2xx`                          → `.success(data)`
   ///   * `401`                          → `.unauthorized`
-  ///   * `429` (+ optional `Retry-After`) → `.rateLimited(retryAfter:)`
+  ///   * `429` `rate_limited` / missing / unknown body
+  ///                                    → `.rateLimited(retryAfter:)`
+  ///   * `429` `daily_limit`            → `.http(status: 429, code, message)`
   ///   * any other non-2xx              → `.http(status:code:message:)` from the
   ///                                       `{ code, message }` envelope
   ///
@@ -68,6 +73,16 @@ extension OakError {
     case 401:
       return .failure(.unauthorized)
     case 429:
+      // Daily cap (SC-AC-5.4 / SC-BR-14): 429 `{ code: "daily_limit" }` is a
+      // quota refusal, not the per-minute limiter. Map it to `.http` so banners
+      // show the server message (reset time) instead of "too quickly".
+      // `rate_limited`, a missing body, or any other/unknown 429 body stay
+      // `.rateLimited`.
+      if let body = try? JSONDecoder().decode(APIErrorBody.self, from: data),
+        body.code == "daily_limit"
+      {
+        return .failure(.http(status: status, code: body.code, message: body.message))
+      }
       return .failure(.rateLimited(retryAfter: retryAfterSeconds(from: response)))
     case 409:
       // A 409 `turn_in_progress` carries the running turn's id — surface it as the
@@ -94,8 +109,8 @@ extension OakError {
     return .transport(underlying: "\(type(of: error))")
   }
 
-  /// Builds an `.http` error from a non-2xx (non-401/429) body, decoding the
-  /// shared `{ code, message }` envelope when present.
+  /// Builds an `.http` error from a non-2xx (non-401 / non-`rate_limited`-429)
+  /// body, decoding the shared `{ code, message }` envelope when present.
   private static func httpError(status: Int, data: Data) -> OakError {
     if let body = try? JSONDecoder().decode(APIErrorBody.self, from: data) {
       return .http(status: status, code: body.code, message: body.message)

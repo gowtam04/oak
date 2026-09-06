@@ -36,6 +36,8 @@ data class TeamsAssistantUiState(
     val streamingMarkdown: String = "",
     /** A transport-fault banner message (in-domain failures ride a normal answer). */
     val errorMessage: String? = null,
+    /** False for denylist / daily-cap refusals so the sheet hides Retry. */
+    val errorIsRetryable: Boolean = true,
     /** Turn ids whose patch has been applied to the draft (drives "Applied ✓"). */
     val appliedTurnIds: Set<Int> = emptySet(),
     /** The most recent Apply's turn id — only THIS turn shows an Undo affordance. */
@@ -110,6 +112,7 @@ class TeamsAssistantViewModel(
                 activity = null,
                 streamingMarkdown = "",
                 errorMessage = null,
+                errorIsRetryable = true,
             )
         }
 
@@ -174,7 +177,7 @@ class TeamsAssistantViewModel(
 
     private suspend fun consume(turnId: Int, message: String, draft: TeamsAssistantDraft) {
         var terminal: BuilderAnswer? = null
-        var inbandError: String? = null
+        var inbandError: BuilderSseEvent.Error? = null
 
         try {
             service.send(sessionId, message, draft).collect { event ->
@@ -183,14 +186,18 @@ class TeamsAssistantViewModel(
                     BuilderSseEvent.AnswerStart -> _uiState.update { it.copy(streamingMarkdown = "") }
                     is BuilderSseEvent.AnswerDelta -> _uiState.update { it.copy(streamingMarkdown = it.streamingMarkdown + event.text) }
                     is BuilderSseEvent.Answer -> terminal = event.answer
-                    is BuilderSseEvent.Error -> inbandError = event.message
+                    is BuilderSseEvent.Error -> inbandError = event
                 }
             }
         } catch (e: CancellationException) {
             // Panel reset / unmount — drop silently (never leaves a banner).
             throw e
         } catch (e: OakError) {
-            finishWithFailure(turnId, TeamEditorViewModel.message(e))
+            finishWithFailure(
+                turnId,
+                TeamEditorViewModel.message(e),
+                isRetryable = e.isRetryableAgentTurn(),
+            )
             return
         } catch (e: Exception) {
             finishWithFailure(turnId, TeamEditorViewModel.GENERIC_MESSAGE)
@@ -208,22 +215,34 @@ class TeamsAssistantViewModel(
                 )
             }
         } else {
-            finishWithFailure(turnId, inbandError ?: "The stream ended without an answer.")
+            val inband = inbandError
+            finishWithFailure(
+                turnId,
+                inband?.message ?: "The stream ended without an answer.",
+                isRetryable = inband == null || !OakError.isSpendControlRefusal(inband.code),
+            )
         }
     }
 
-    /** Drops the in-flight turn and raises a recoverable banner (a retry re-sends
-     * cleanly rather than duplicating a half-turn). */
-    private fun finishWithFailure(turnId: Int, message: String) {
+    /** Drops the in-flight turn and raises a banner (a retry re-sends
+     * cleanly rather than duplicating a half-turn). Spend-control refusals
+     * hide Retry ([errorIsRetryable] false). */
+    private fun finishWithFailure(turnId: Int, message: String, isRetryable: Boolean = true) {
         _uiState.update {
             it.copy(
                 turns = it.turns.filterNot { turn -> turn.id == turnId },
                 errorMessage = message,
+                errorIsRetryable = isRetryable,
                 status = AssistantStatus.ERROR,
                 activity = null,
                 streamingMarkdown = "",
             )
         }
+    }
+
+    private fun OakError.isRetryableAgentTurn(): Boolean = when (this) {
+        is OakError.Http -> !OakError.isSpendControlRefusal(code)
+        else -> true
     }
 
     companion object {

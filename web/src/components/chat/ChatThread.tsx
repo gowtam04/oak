@@ -20,6 +20,11 @@ import { instrumentToken } from "@/lib/chat/thinking-trace";
 
 export { instrumentToken };
 
+/** Denylist / daily-cap refusals are not user-retryable (SC-BR-14, SC-AC-5.4). */
+function isRetryableTransportCode(code: string): boolean {
+  return code !== "account_denied" && code !== "daily_limit";
+}
+
 function chipsForAnswer(
   answer: import("@/components/types").OakAnswer,
   currentFormat: Format | undefined,
@@ -395,9 +400,9 @@ export default function ChatThread({
           role="alert"
         >
           <span className="chat-thread__error-text">
-            Something went wrong ({transportError.code}). Please try again.
+            {transportError.message}
           </span>
-          {onRetry && (
+          {onRetry && isRetryableTransportCode(transportError.code) && (
             <button
               type="button"
               className="chat-thread__error-retry"

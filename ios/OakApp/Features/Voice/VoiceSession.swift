@@ -320,12 +320,22 @@ final class VoiceSession {
   // MARK: Helpers
 
   /// Maps a token-mint failure to user-facing copy. An auth failure (voice is
-  /// signed-in only) points the user at signing in; everything else is generic.
+  /// signed-in only) points the user at signing in; denylist / daily cap show
+  /// the server message (SC-AC-6.3 / SC-AC-5.4 / SC-BR-14); everything else is
+  /// generic so a mint 502 does not leak.
   private static func startFailureMessage(_ error: Error) -> String {
-    if let oak = error as? OakError, case .unauthorized = oak {
-      return "Sign in to use voice mode."
+    guard let oak = error as? OakError else {
+      return "Couldn't start voice mode."
     }
-    return "Couldn't start voice mode."
+    switch oak {
+    case .unauthorized:
+      return "Sign in to use voice mode."
+    case let .http(_, code, message)
+      where (code == "account_denied" || code == "daily_limit") && !message.isEmpty:
+      return message
+    default:
+      return "Couldn't start voice mode."
+    }
   }
 
   /// Folds a thrown tool call into the error object the web sends back as the

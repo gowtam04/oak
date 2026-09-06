@@ -30,6 +30,18 @@ import { titleizeSlug } from "./display-names";
 /** Collapse-state persistence key (a UX nicety, not load-bearing). */
 const COLLAPSE_KEY = "oak-teams-assistant-collapsed";
 
+/** Denylist / daily-cap refusals are not user-retryable (SC-BR-14, SC-AC-5.4). */
+function isRetryableAssistantError(
+  code: string | null | undefined,
+  message: string,
+): boolean {
+  if (code === "account_denied" || code === "daily_limit") return false;
+  return (
+    !/Daily limit reached/i.test(message) &&
+    !/can't use (?:chat|the teams assistant|voice)\b/i.test(message)
+  );
+}
+
 /** Fallback prompts when analysis has not settled yet. */
 const FALLBACK_SUGGESTIONS = [
   "Check my coverage",
@@ -359,16 +371,20 @@ export default function TeamsAssistantPanel({
         {assistant.error && (
           <div className="assistant-panel__error" data-testid="assistant-error">
             <span>{assistant.error}</span>
-            {lastMessageRef.current && (
-              <button
-                type="button"
-                className="tm-btn tm-btn--secondary"
-                onClick={() => sendMessage(lastMessageRef.current)}
-                data-testid="assistant-retry"
-              >
-                Retry
-              </button>
-            )}
+            {lastMessageRef.current &&
+              isRetryableAssistantError(
+                assistant.errorCode,
+                assistant.error,
+              ) && (
+                <button
+                  type="button"
+                  className="tm-btn tm-btn--secondary"
+                  onClick={() => sendMessage(lastMessageRef.current)}
+                  data-testid="assistant-retry"
+                >
+                  Retry
+                </button>
+              )}
           </div>
         )}
       </div>

@@ -136,10 +136,35 @@ export interface UseTeamsAssistantReturn {
   streamingMarkdown: string;
   /** Transport-fault message (in-domain failures ride a normal answer). */
   error: string | null;
+  /** Wire `code` for the current transport fault, when the server sent one. */
+  errorCode?: string | null;
   /** Send one turn. No-ops while a turn is already in flight. */
   send: (message: string, draft: TeamsAssistantDraft) => Promise<void>;
   /** Drop the thread (e.g. when the panel switches to a different team). */
   reset: () => void;
+}
+
+function readJsonError(
+  payload: unknown,
+): { code: string; message: string } | null {
+  if (!payload || typeof payload !== "object") return null;
+  const data = payload as { code?: unknown; message?: unknown };
+  if (typeof data.message !== "string" || data.message.length === 0) {
+    return null;
+  }
+  return {
+    code: typeof data.code === "string" ? data.code : "agent_error",
+    message: data.message,
+  };
+}
+
+class TeamsAssistantTransportError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "TeamsAssistantTransportError";
+    this.code = code;
+  }
 }
 
 export function useTeamsAssistant(): UseTeamsAssistantReturn {
@@ -148,6 +173,7 @@ export function useTeamsAssistant(): UseTeamsAssistantReturn {
   const [activity, setActivity] = useState<string | null>(null);
   const [streamingMarkdown, setStreamingMarkdown] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   // One in-memory conversation per mounted panel (server keeps history under
   // this id, namespaced; a remount starts a fresh thread by design).
@@ -172,6 +198,7 @@ export function useTeamsAssistant(): UseTeamsAssistantReturn {
     setActivity(null);
     setStreamingMarkdown("");
     setError(null);
+    setErrorCode(null);
   }, []);
 
   const send = useCallback(
@@ -190,6 +217,7 @@ export function useTeamsAssistant(): UseTeamsAssistantReturn {
       setActivity(null);
       setStreamingMarkdown("");
       setError(null);
+      setErrorCode(null);
 
       const body: TeamsAssistantRequestBody = {
         session_id: sessionIdRef.current,
@@ -206,18 +234,22 @@ export function useTeamsAssistant(): UseTeamsAssistantReturn {
         });
 
         if (!res.ok || !res.body) {
+          let code = `http_${res.status}`;
           let message = "The assistant is unavailable right now.";
           try {
-            const payload = (await res.json()) as { message?: string };
-            if (payload.message) message = payload.message;
+            const parsed = readJsonError(await res.json());
+            if (parsed) {
+              code = parsed.code;
+              message = parsed.message;
+            }
           } catch {
             // Non-JSON error body — keep the generic message.
           }
-          throw new Error(message);
+          throw new TeamsAssistantTransportError(code, message);
         }
 
         let terminal: BuilderAnswer | null = null;
-        let transportError: string | null = null;
+        let transportError: { code: string; message: string } | null = null;
 
         for await (const event of readTeamsAssistantSseStream(
           res.body,
@@ -232,7 +264,10 @@ export function useTeamsAssistant(): UseTeamsAssistantReturn {
           } else if (event.event === "answer") {
             terminal = event.data.answer;
           } else {
-            transportError = event.data.message;
+            transportError = {
+              code: event.data.code,
+              message: event.data.message,
+            };
           }
         }
 
@@ -243,8 +278,9 @@ export function useTeamsAssistant(): UseTeamsAssistantReturn {
           );
           setStatus("idle");
         } else {
-          throw new Error(
-            transportError ?? "The stream ended without an answer.",
+          throw new TeamsAssistantTransportError(
+            transportError?.code ?? "stream_error",
+            transportError?.message ?? "The stream ended without an answer.",
           );
         }
       } catch (err) {
@@ -255,6 +291,9 @@ export function useTeamsAssistant(): UseTeamsAssistantReturn {
         // Drop the half-finished turn so a retry re-sends cleanly.
         setTurns((prev) => prev.filter((t) => t.id !== id));
         setError(err instanceof Error ? err.message : String(err));
+        setErrorCode(
+          err instanceof TeamsAssistantTransportError ? err.code : null,
+        );
         setStatus("error");
       } finally {
         inFlightRef.current = false;
@@ -265,5 +304,14 @@ export function useTeamsAssistant(): UseTeamsAssistantReturn {
     [],
   );
 
-  return { turns, status, activity, streamingMarkdown, error, send, reset };
+  return {
+    turns,
+    status,
+    activity,
+    streamingMarkdown,
+    error,
+    errorCode,
+    send,
+    reset,
+  };
 }

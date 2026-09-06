@@ -115,7 +115,14 @@ fun TeamsAssistantSheet(
             if (state.status == AssistantStatus.THINKING) {
                 item { PendingBlock(activity = state.activity, streamingMarkdown = state.streamingMarkdown) }
             }
-            state.errorMessage?.let { message -> item { ErrorRow(message, onRetry = viewModel::retry) } }
+            state.errorMessage?.let { message ->
+                item {
+                    ErrorRow(
+                        message,
+                        onRetry = if (state.errorIsRetryable) viewModel::retry else null,
+                    )
+                }
+            }
         }
         HorizontalDivider()
 
@@ -247,7 +254,7 @@ private fun PendingBlock(activity: String?, streamingMarkdown: String) {
 }
 
 @Composable
-private fun ErrorRow(message: String, onRetry: () -> Unit) {
+private fun ErrorRow(message: String, onRetry: (() -> Unit)?) {
     val oak = LocalOakColors.current
     Row(
         modifier = Modifier
@@ -259,7 +266,9 @@ private fun ErrorRow(message: String, onRetry: () -> Unit) {
     ) {
         Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = oak.warning, modifier = Modifier.size(18.dp))
         Text(message, style = MaterialTheme.typography.bodySmall, color = oak.textStrong, modifier = Modifier.weight(1f))
-        TextButton(onClick = onRetry) { Text("Retry") }
+        if (onRetry != null) {
+            TextButton(onClick = onRetry) { Text("Retry") }
+        }
     }
 }
 

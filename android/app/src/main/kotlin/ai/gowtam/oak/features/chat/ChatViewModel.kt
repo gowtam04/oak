@@ -952,9 +952,11 @@ class ChatViewModel(
                 // half-rendered answer. The user turn stays. An in-band `error` frame is
                 // NEVER auto-retried (it's a real model/agent fault, not a connection
                 // drop) — this runs inside `apply`, outside the retry gate.
+                // Spend-control refusals are pre-stream HTTP, but if they ever
+                // arrive in-band they still hide Retry (SC-AC-5.4 / SC-BR-14).
                 errorBanner = ErrorBanner(
                     message = bannerMessage(event.code, event.message),
-                    isRetryable = true,
+                    isRetryable = !OakError.isSpendControlRefusal(event.code),
                 )
                 restoreComposerAfterFailedRecovery()
                 pendingRecovery = null
@@ -1256,8 +1258,10 @@ class ChatViewModel(
     // ---- Error copy ----
 
     /**
-     * Maps an [OakError] to a banner. Rate-limited guests get the "sign in raises the
-     * limit" hint.
+     * Maps an [OakError] to a banner. Per-minute [OakError.RateLimited] guests
+     * get the "sign in raises the limit" hint; denylist / daily-cap [OakError.Http]
+     * refusals show the server message, hide Retry, and never attach that hint
+     * (SC-AC-5.4 / SC-AC-6.5 / SC-BR-14).
      */
     private fun banner(error: OakError): ErrorBanner = when (error) {
         is OakError.Transport -> ErrorBanner(CONNECTION_MESSAGE, isRetryable = true)
@@ -1269,7 +1273,10 @@ class ChatViewModel(
             ErrorBanner(message, isRetryable = true)
         }
         OakError.Unauthorized -> ErrorBanner(SESSION_EXPIRED_MESSAGE, isRetryable = false)
-        is OakError.Http -> ErrorBanner(error.message.ifEmpty { GENERIC_MESSAGE }, isRetryable = true)
+        is OakError.Http -> ErrorBanner(
+            error.message.ifEmpty { GENERIC_MESSAGE },
+            isRetryable = !OakError.isSpendControlRefusal(error.code),
+        )
         is OakError.ImageRejected -> ErrorBanner(imageRejectedMessage(error.reason), isRetryable = true)
         is OakError.Decoding -> ErrorBanner(GENERIC_MESSAGE, isRetryable = true)
     }

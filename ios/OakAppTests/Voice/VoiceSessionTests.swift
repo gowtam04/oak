@@ -140,6 +140,37 @@ struct VoiceSessionTests {
     #expect(h.session.errorMessage == "Sign in to use voice mode.")
   }
 
+  @Test
+  func accountDeniedTokenFailureShowsServerMessage() async {
+    let service = FakeVoiceService()
+    let message = "This account can't use voice."
+    service.tokenError = .http(status: 403, code: "account_denied", message: message)
+    let h = makeHarness(service: service)
+
+    await h.session.start()
+    await settle()
+
+    #expect(h.session.phase == .error)
+    #expect(h.session.errorMessage == message)
+    #expect(h.connection.sent.isEmpty)
+  }
+
+  @Test
+  func dailyLimitTokenFailureShowsServerMessage() async {
+    let service = FakeVoiceService()
+    let message =
+      "Daily limit reached. Try again tomorrow (resets at 2026-09-07T00:00:00.000Z UTC)."
+    service.tokenError = .http(status: 429, code: "daily_limit", message: message)
+    let h = makeHarness(service: service)
+
+    await h.session.start()
+    await settle()
+
+    #expect(h.session.phase == .error)
+    #expect(h.session.errorMessage == message)
+    #expect(h.connection.sent.isEmpty)
+  }
+
   // MARK: Turn phases + barge-in
 
   @Test
