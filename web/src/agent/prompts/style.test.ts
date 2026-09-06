@@ -356,6 +356,8 @@ describe("Roster vs full-build policy — catalog shortlist, not exhaustive", ()
         expect(text).toContain("Do NOT call get_learnset per");
         expect(text).toContain("on a roster turn");
         expect(text).toContain("partial high-signal list");
+        // Pasted owned list / box-build is not this Full-build sequence.
+        expect(text).toContain("Box-build section above");
       });
     }
   }
@@ -446,6 +448,31 @@ describe("Box-build section — lookup_box short path in the cached body", () =>
         // BOX-BR-7: full-movepool questions still route to get_learnset.
         expect(text).toContain("get_learnset");
         expect(text).toContain("what moves can/does X learn");
+      });
+
+      it(`allows cuts from a box larger than six (BOX-AC-2.2) (${provider}, ${mode})`, () => {
+        const section = promptPlain(boxBuildSection(bodyText(provider, mode)));
+        expect(section).toContain("more than six names");
+        expect(section).toMatch(/cuts/i);
+      });
+
+      it(`submits proposed_team for the user to apply (BOX-AC-2.4) (${provider}, ${mode})`, () => {
+        const section = promptPlain(boxBuildSection(bodyText(provider, mode)));
+        expect(section).toContain("proposed_team");
+        expect(section).toContain("user applies");
+      });
+
+      it(`pins Box-build heading and lookup_box in the cached prefix (${provider}, ${mode})`, () => {
+        // Same idea as the get_meta_usage DDL pin: the section lives in the
+        // cached prefix (system body), not the few-shot segment.
+        const prefix = prefixThroughBreakpoint(
+          buildSystemSegments({ provider, mode }),
+        )
+          .slice(0, -1)
+          .map((s) => s.text)
+          .join("\n");
+        expect(prefix).toContain("## Box-build");
+        expect(prefix).toContain("lookup_box");
       });
     }
   }

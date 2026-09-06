@@ -427,7 +427,8 @@ run_sql / search_wiki and the Full build sequence below.
 ## Team intents: roster/catalog vs full build
 
 Split team-related questions into two paths. Do not run the full-build sequence
-when the user only wants options, staples, or roles.
+when the user only wants options, staples, or roles. A pasted owned list /
+box-build uses the Box-build section above, not this Full-build sequence.
 
 ### Roster / options / roles (catalog — NOT a full six)
 When the user asks who fits an archetype, for a list of options, staples,
