@@ -11,7 +11,7 @@
  * propagation branch.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentContext, ChatMessage } from "@/agent/types";
 import type { OakAnswer } from "@/agent/schemas";
@@ -73,8 +73,10 @@ vi.mock("@/server/teams/validate-team", () => ({
     legalItems: ["sitrus-berry", "leftovers", "focus-sash", "life-orb"],
     requiredItems: new Map(),
   })),
-  isHardViolation: (w: { code: string }) =>
-    w.code === "duplicate_item" || w.code === "move_not_in_learnset",
+  isHardViolation: vi.fn(
+    (w: { code: string }) =>
+      w.code === "duplicate_item" || w.code === "move_not_in_learnset",
+  ),
 }));
 
 // On give-up the runtime legalizes rather than shipping illegal slots. Mock a
@@ -96,6 +98,12 @@ vi.mock("@/server/teams/legalize-team", () => ({
   formatRepairsNote: () =>
     "I adjusted a few choices so every set is legal in this format.",
 }));
+
+import { legalizeTeam } from "@/server/teams/legalize-team";
+import {
+  isHardViolation,
+  validateTeamDetailed,
+} from "@/server/teams/validate-team";
 
 import {
   AnswerMarkdownExtractor,
@@ -1430,5 +1438,372 @@ describe("describeToolCall — context-rich progress labels", () => {
     const noQuery = describeToolCall("search_wiki", {});
     expect(noQuery).toMatch(/Searching the wiki/);
     expect(noQuery).not.toContain("search_wiki");
+  });
+});
+
+// --- Box-build loop (team-from-box Phase 2) --------------------------------
+//
+// New runtime exports (MAX_ITERATIONS_BOX_BUILD, SUBMIT_NUDGE_REMAINING_BOX_BUILD)
+// are dynamic-imported so a missing identifier is a red test, not a collection
+// crash of the rest of this file.
+
+const BOX_SIX =
+  "Gengar, Garchomp, Dragonite, Kangaskhan, Tyranitar, Scizor";
+const BOX_FIFTEEN = [
+  "Gengar",
+  "Garchomp",
+  "Dragonite",
+  "Kangaskhan",
+  "Tyranitar",
+  "Scizor",
+  "Magnezone",
+  "Heatran",
+  "Zapdos",
+  "Clefable",
+  "Amoonguss",
+  "Pelipper",
+  "Landorus",
+  "Ferrothorn",
+  "Toxapex",
+].join(", ");
+const BOX_BUILD_AND_TEAM = `${BOX_FIFTEEN}\nbuild a team`;
+
+function loopingToolClient() {
+  const { client, stream, snapshots } = scriptedClient([]);
+  stream.mockImplementation(() =>
+    fakeStream(message([toolUse("query_pokedex", {}, "t")])),
+  );
+  mockDispatch.mockResolvedValue({ ok: true });
+  return { client, stream, snapshots };
+}
+
+describe("box-build loop (BOX-AC-3.3, BOX-BR-1)", () => {
+  let MAX_ITERATIONS_BOX_BUILD: number;
+  let SUBMIT_NUDGE_REMAINING_BOX_BUILD: number;
+  let loadError: unknown = null;
+
+  beforeAll(async () => {
+    try {
+      const mod = (await import("./runtime")) as Record<string, unknown>;
+      const cap = mod.MAX_ITERATIONS_BOX_BUILD;
+      const nudge = mod.SUBMIT_NUDGE_REMAINING_BOX_BUILD;
+      if (typeof cap !== "number" || typeof nudge !== "number") {
+        throw new Error(
+          "Expected MAX_ITERATIONS_BOX_BUILD and SUBMIT_NUDGE_REMAINING_BOX_BUILD exports from runtime.ts",
+        );
+      }
+      MAX_ITERATIONS_BOX_BUILD = cap;
+      SUBMIT_NUDGE_REMAINING_BOX_BUILD = nudge;
+    } catch (e) {
+      loadError = e;
+    }
+  });
+
+  function ensureLoaded(): void {
+    if (loadError) {
+      throw new Error(
+        `box-build runtime exports not loadable yet: ${String(loadError)}`,
+      );
+    }
+  }
+
+  it("exports cap 6 and nudge remaining 2 (BOX-AC-3.3)", () => {
+    ensureLoaded();
+    expect(MAX_ITERATIONS_BOX_BUILD).toBe(6);
+    expect(SUBMIT_NUDGE_REMAINING_BOX_BUILD).toBe(2);
+    expect(MAX_ITERATIONS_BOX_BUILD).not.toBe(MAX_ITERATIONS);
+    expect(MAX_ITERATIONS_BOX_BUILD).not.toBe(MAX_ITERATIONS_TEAM_BUILD);
+  });
+
+  it("a ≥6-name paste uses cap 6, not 20 or 28 (BOX-AC-3.3)", async () => {
+    ensureLoaded();
+    const { client, stream } = loopingToolClient();
+
+    const result = await runOakWith(client, BOX_SIX, [], ctx);
+
+    expect(result.uncertainty_flags).toContain("max_iterations_reached");
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS_BOX_BUILD);
+    expect(stream).toHaveBeenCalledTimes(6);
+    expect(stream.mock.calls.length).not.toBe(MAX_ITERATIONS);
+    expect(stream.mock.calls.length).not.toBe(MAX_ITERATIONS_TEAM_BUILD);
+  });
+
+  it('a 15-name paste + "build a team" still uses cap 6 — box-build wins (BOX-BR-1)', async () => {
+    ensureLoaded();
+    const { client, stream } = loopingToolClient();
+
+    await runOakWith(client, BOX_BUILD_AND_TEAM, [], ctx);
+
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS_BOX_BUILD);
+    expect(stream.mock.calls.length).not.toBe(MAX_ITERATIONS_TEAM_BUILD);
+  });
+
+  it('a mixed "here is my box, make a party" message still uses cap 6 (BOX-AC-4.3)', async () => {
+    ensureLoaded();
+    const { client, stream } = loopingToolClient();
+
+    await runOakWith(
+      client,
+      `here is my box: ${BOX_SIX}, make a party. also what's the weather in Paldea`,
+      [],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS_BOX_BUILD);
+  });
+
+  it('"build me a rain team" still uses MAX_ITERATIONS_TEAM_BUILD (BOX-AC-4.2, BOX-BR-6)', async () => {
+    const { client, stream } = loopingToolClient();
+
+    const result = await runOakWith(client, "build me a rain team", [], ctx);
+
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS_TEAM_BUILD);
+    expect(result.uncertainty_flags).toContain("max_iterations_reached");
+  });
+
+  it('"where do I catch Gengar?" stays on default MAX_ITERATIONS (BOX-AC-4.2)', async () => {
+    const { client, stream } = loopingToolClient();
+
+    await runOakWith(client, "where do I catch Gengar?", [], ctx);
+
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
+    expect(stream.mock.calls.length).not.toBe(6);
+  });
+
+  it("follow-up keep language after a box paste stays on cap 6 (BOX-AC-5.1, BOX-BR-11)", async () => {
+    ensureLoaded();
+    const history: ChatMessage[] = [
+      { role: "user", content: BOX_FIFTEEN },
+      { role: "assistant", content: "Here's a six from your box." },
+    ];
+
+    const { client, stream } = loopingToolClient();
+    await runOakWith(client, "don't drop Kangaskhan", history, ctx);
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS_BOX_BUILD);
+
+    const korean = loopingToolClient();
+    await runOakWith(korean.client, "빼지 마", history, ctx);
+    expect(korean.stream).toHaveBeenCalledTimes(MAX_ITERATIONS_BOX_BUILD);
+  });
+
+  it("nudges at SUBMIT_NUDGE_REMAINING_BOX_BUILD with box-specific text", async () => {
+    ensureLoaded();
+    const { client, stream, snapshots } = scriptedClient(
+      Array.from({ length: MAX_ITERATIONS_TEAM_BUILD }, () =>
+        message([toolUse("query_pokedex", {}, "t")]),
+      ),
+    );
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    await runOakWith(client, BOX_SIX, [], ctx);
+
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS_BOX_BUILD);
+    const fireAt =
+      MAX_ITERATIONS_BOX_BUILD - SUBMIT_NUDGE_REMAINING_BOX_BUILD;
+    const boxNudge = (params: {
+      messages: { role: string; content: unknown }[];
+    }) =>
+      params.messages.filter(
+        (m) =>
+          m.role === "user" &&
+          typeof m.content === "string" &&
+          m.content.includes("proposed_team") &&
+          /do not drop/i.test(m.content),
+      ).length;
+    expect(boxNudge(snapshots[fireAt])).toBe(0);
+    expect(boxNudge(snapshots[fireAt + 1])).toBe(1);
+    expect(snapshots[fireAt + 1].messages.at(-1).content).toMatch(
+      /named/i,
+    );
+  });
+});
+
+describe("box-build dispatch deny (BOX-AC-3.1, BOX-BR-5)", () => {
+  it("does not invoke mockDispatch for run_sql or search_wiki on a box-build", async () => {
+    const { client, snapshots } = scriptedClient([
+      message([
+        toolUse("run_sql", { query: "SELECT 1", purpose: "lookup" }, "t1"),
+        toolUse("search_wiki", { query: "Gengar" }, "t2"),
+      ]),
+      message([toolUse("submit_answer", validAnswer, "t3")]),
+    ]);
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    const result = await runOakWith(client, BOX_SIX, [], ctx);
+
+    expect(result).toEqual(validAnswer);
+    const dispatched = mockDispatch.mock.calls.map((c) => c[0]);
+    expect(dispatched).not.toContain("run_sql");
+    expect(dispatched).not.toContain("search_wiki");
+
+    const toolResults = snapshots[1].messages.at(-1).content;
+    expect(toolResults).toHaveLength(2);
+    expect(toolResults[0]).toMatchObject({
+      type: "tool_result",
+      tool_use_id: "t1",
+    });
+    expect(String(toolResults[0].content)).toMatch(/forbidden_on_box_build/);
+    expect(String(toolResults[1].content)).toMatch(/forbidden_on_box_build/);
+  });
+
+  it("a well-behaved lookup_box + submit_answer turn never dispatches SQL/wiki (BOX-AC-3.1)", async () => {
+    const { client } = scriptedClient([
+      message([
+        toolUse(
+          "lookup_box",
+          { names: ["Gengar", "Garchomp", "Dragonite"] },
+          "t1",
+        ),
+      ]),
+      message([toolUse("submit_answer", validAnswer, "t2")]),
+    ]);
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    await runOakWith(client, BOX_SIX, [], ctx);
+
+    const dispatched = mockDispatch.mock.calls.map((c) => c[0]);
+    expect(dispatched).toEqual(["lookup_box"]);
+    expect(dispatched).not.toContain("run_sql");
+    expect(dispatched).not.toContain("search_wiki");
+  });
+});
+
+describe("box-build hard-reject skip (BOX-AC-1.2, BOX-AC-1.3, BOX-BR-2, BOX-BR-9)", () => {
+  const defaultValidate = async () => ({
+    warnings: [
+      {
+        code: "move_not_in_learnset" as const,
+        slot: 1,
+        field: "moves[0]",
+        message:
+          'Move "thunderbolt" is not in garchomp\'s learnset for this format.',
+      },
+      {
+        code: "duplicate_item" as const,
+        message: 'Item clause: "life-orb" in slots 1, 2.',
+      },
+    ],
+    legalMoves: new Map([
+      ["garchomp", ["dragon-claw", "earthquake", "fire-fang"]],
+    ]),
+    legalAbilities: new Map([["garchomp", ["sand-veil", "rough-skin"]]]),
+    legalItems: ["sitrus-berry", "leftovers", "focus-sash", "life-orb"],
+    requiredItems: new Map(),
+  });
+
+  afterEach(() => {
+    vi.mocked(validateTeamDetailed).mockReset();
+    vi.mocked(validateTeamDetailed).mockImplementation(defaultValidate);
+    vi.mocked(isHardViolation).mockReset();
+    vi.mocked(isHardViolation).mockImplementation(
+      (w: { code: string }) =>
+        w.code === "duplicate_item" || w.code === "move_not_in_learnset",
+    );
+    vi.mocked(legalizeTeam).mockClear();
+  });
+
+  function boxTeamAnswer(
+    species: string,
+    extra: Partial<OakAnswer> = {},
+  ): OakAnswer {
+    return {
+      ...validAnswer,
+      answer_markdown: `Here's a party with ${species}.`,
+      proposed_team: {
+        name: "Box six",
+        format: "scarlet-violet",
+        members: [teamMember(species, "leftovers")],
+      },
+      ...extra,
+    } as OakAnswer;
+  }
+
+  it("does not strip a named member for move_not_in_learnset (BOX-AC-1.2, BOX-BR-2)", async () => {
+    vi.mocked(validateTeamDetailed).mockImplementation(async () => ({
+      warnings: [
+        {
+          code: "move_not_in_learnset",
+          slot: 0,
+          field: "moves[0]",
+          message:
+            'Move "thunderbolt" is not in kangaskhan\'s learnset for this format.',
+        },
+      ],
+      legalMoves: new Map([["kangaskhan", ["fake-out", "return"]]]),
+      legalAbilities: new Map([["kangaskhan", ["early-bird", "scrappy"]]]),
+      legalItems: ["leftovers", "sitrus-berry"],
+      requiredItems: new Map(),
+    }));
+
+    const proposed = boxTeamAnswer("kangaskhan");
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", proposed, "s1")]),
+      message([toolUse("submit_answer", proposed, "s2")]),
+      message([toolUse("submit_answer", proposed, "s3")]),
+    ]);
+
+    const result = await runOakWith(client, BOX_SIX, [], ctx);
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe("answered");
+    expect(result.proposed_team?.members?.[0]).toEqual(
+      expect.objectContaining({ species: "kangaskhan" }),
+    );
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "move_not_in_learnset",
+      ),
+    ).toBe(true);
+    expect(vi.mocked(legalizeTeam)).not.toHaveBeenCalled();
+  });
+
+  it("does not strip a named member for species_illegal (BOX-AC-1.3, BOX-BR-9)", async () => {
+    vi.mocked(isHardViolation).mockImplementation(
+      (w: { code: string }) =>
+        w.code === "duplicate_item" ||
+        w.code === "move_not_in_learnset" ||
+        w.code === "species_illegal",
+    );
+    vi.mocked(validateTeamDetailed).mockImplementation(async () => ({
+      warnings: [
+        {
+          code: "species_illegal",
+          slot: 0,
+          field: "species",
+          message:
+            "kangaskhan-mega is not in this format's roster.",
+        },
+      ],
+      legalMoves: new Map(),
+      legalAbilities: new Map(),
+      legalItems: ["leftovers"],
+      requiredItems: new Map(),
+    }));
+
+    const proposed = boxTeamAnswer("kangaskhan-mega");
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", proposed, "s1")]),
+      message([toolUse("submit_answer", proposed, "s2")]),
+      message([toolUse("submit_answer", proposed, "s3")]),
+    ]);
+
+    const result = await runOakWith(
+      client,
+      "Mega Kangaskhan, Gengar, Garchomp, Dragonite, Tyranitar, Scizor",
+      [],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe("answered");
+    expect(result.proposed_team?.members?.[0]).toEqual(
+      expect.objectContaining({ species: "kangaskhan-mega" }),
+    );
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "species_illegal",
+      ),
+    ).toBe(true);
+    expect(vi.mocked(legalizeTeam)).not.toHaveBeenCalled();
   });
 });

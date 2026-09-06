@@ -6,7 +6,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { OakDb } from "@/data/db";
-import type { StatSpread, TeamMember } from "@/data/teams/team-schema";
+import {
+  HARD_VIOLATION_CODES,
+  isHardViolation as isHardViolationCode,
+  warningCodeSchema,
+  type StatSpread,
+  type TeamMember,
+  type WarningCode,
+} from "@/data/teams/team-schema";
 import { createPgSchema, type PgFixture } from "../../../test/support/pg";
 import { legalizeTeam, formatRepairsNote } from "./legalize-team";
 import { isHardViolation, validateTeam } from "./validate-team";
@@ -150,6 +157,92 @@ describe("legalizeTeam", () => {
     expect(members[0]!.item).toBe("swampertite");
     expect(repairs.some((r) => r.to === "swampertite")).toBe(true);
     expect(remainingHard.filter(isHardViolation)).toHaveLength(0);
+  });
+});
+
+describe("legalizeTeam keepSpecies (BOX-BR-9, BOX-AC-1.2, BOX-AC-1.3)", () => {
+  it("keeps a named species that would otherwise be repaired by swapping", async () => {
+    const { members, remainingHard } = await legalizeTeam(
+      [
+        legalGarchomp({
+          moves: ["earthquake", "dragon-claw", "psychic", "earthquake"],
+        }),
+      ],
+      SV,
+      db,
+      // @ts-expect-error — 4th arg is additive keepSpecies (BOX-BR-9)
+      { keepSpecies: ["garchomp"] },
+    );
+    expect(members).toHaveLength(1);
+    expect(members[0]!.species).toBe("garchomp");
+    expect(members[0]!.species).not.toBe("ninetales");
+    expect(members[0]!.species).not.toBe("swampert-mega");
+    // keepSpecies repairs by clearing the illegal move, not by swapping the mon.
+    expect(members[0]!.moves).not.toContain("psychic");
+    expect(members[0]!.moves).toHaveLength(3);
+    expect(remainingHard.some((w) => w.slot === 0 && w.code === "species_illegal")).toBe(
+      false,
+    );
+  });
+
+  it("clears illegal moves on a keepSpecies slot rather than dropping or replacing the member", async () => {
+    const { members } = await legalizeTeam(
+      [
+        legalGarchomp({
+          moves: ["earthquake", "dragon-claw", "psychic", "earthquake"],
+        }),
+      ],
+      SV,
+      db,
+      // @ts-expect-error — 4th arg is additive keepSpecies (BOX-BR-9)
+      { keepSpecies: ["garchomp"] },
+    );
+    expect(members).toHaveLength(1);
+    expect(members[0]!.species).toBe("garchomp");
+    expect(members[0]!.moves).not.toContain("psychic");
+    expect(members[0]!.moves).toEqual(
+      expect.arrayContaining(["earthquake", "dragon-claw"]),
+    );
+    // Emptied the illegal slot — not swapped in a different legal filler.
+    expect(members[0]!.moves).toHaveLength(3);
+  });
+
+  it("keeps a species not in the roster when it is in keepSpecies (BOX-AC-1.3)", async () => {
+    const { members, remainingHard } = await legalizeTeam(
+      [
+        member({
+          species: "kangaskhan-mega",
+          ability: "parental-bond",
+          item: "kangaskhanite",
+          moves: ["fake-out", "power-up-punch", "sucker-punch", "return"],
+        }),
+      ],
+      SV,
+      db,
+      // @ts-expect-error — 4th arg is additive keepSpecies (BOX-BR-9)
+      { keepSpecies: ["kangaskhan-mega"] },
+    );
+    expect(members).toHaveLength(1);
+    expect(members[0]!.species).toBe("kangaskhan-mega");
+    expect(remainingHard.some((w) => w.code === "species_illegal")).toBe(true);
+  });
+});
+
+describe("learnset_unavailable warning code (BOX-AC-1.2, BOX-BR-9)", () => {
+  it("is a valid soft warning code and is not a hard violation", () => {
+    expect(warningCodeSchema.safeParse("learnset_unavailable").success).toBe(
+      true,
+    );
+    expect(
+      HARD_VIOLATION_CODES.has("learnset_unavailable" as WarningCode),
+    ).toBe(false);
+    expect(
+      isHardViolationCode({
+        code: "learnset_unavailable" as WarningCode,
+        message:
+          "Learnset unavailable for this form in this scope; species kept because you named it.",
+      }),
+    ).toBe(false);
   });
 });
 
