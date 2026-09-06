@@ -48,6 +48,9 @@ export const CATEGORY_LABELS: Record<ErrorCategoryKey, string> = {
   tool_error: "Tool errors",
   otp_email_failed: "OTP delivery failures",
   rate_limited: "Rate-limit rejections",
+  account_denied: "Account denied",
+  daily_limit: "Daily limit",
+  spend_check_failed: "Spend check failed",
 };
 
 /** One-line description giving each category context in the breakdown table. */
@@ -58,6 +61,9 @@ export const CATEGORY_DESCRIPTIONS: Record<ErrorCategoryKey, string> = {
   tool_error: "A tool call inside the turn errored (turn may still have answered).",
   otp_email_failed: "An OTP sign-in code failed to deliver (auth event).",
   rate_limited: "A request was rejected before running by the per-session limit.",
+  account_denied: "A signed-in account was refused because its email is denylisted.",
+  daily_limit: "A request was refused because the daily turn cap was reached.",
+  spend_check_failed: "The spend-control check failed (fail-closed) before the turn ran.",
 };
 
 /**
@@ -73,6 +79,9 @@ export const CATEGORY_ORDER: readonly ErrorCategoryKey[] = [
   "tool_error",
   "otp_email_failed",
   "rate_limited",
+  "account_denied",
+  "daily_limit",
+  "spend_check_failed",
 ];
 
 /**
@@ -90,6 +99,9 @@ const STATUS_CATEGORY_KEYS: ReadonlySet<ErrorCategoryKey> = new Set<ErrorCategor
   "clarification_needed",
   "insufficient_data",
   "rate_limited",
+  "account_denied",
+  "daily_limit",
+  "spend_check_failed",
 ]);
 
 /**

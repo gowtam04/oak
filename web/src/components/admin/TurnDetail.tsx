@@ -44,6 +44,9 @@ const STATUS_LABEL: Record<TurnDetailRecord["status"], string> = {
   resolution_failed: "Resolution failed",
   insufficient_data: "Insufficient data",
   rate_limited: "Rate limited",
+  account_denied: "Account denied",
+  daily_limit: "Daily limit",
+  spend_check_failed: "Spend check failed",
 };
 
 /** epoch-ms → ISO string; tolerant of a 0/NaN value. */

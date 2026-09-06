@@ -61,6 +61,9 @@ const STATUS_LABEL: Record<TurnRecordStatus, string> = {
   resolution_failed: "Resolution failed",
   insufficient_data: "Insufficient data",
   rate_limited: "Rate limited",
+  account_denied: "Account denied",
+  daily_limit: "Daily limit",
+  spend_check_failed: "Spend check failed",
 };
 
 /** Design-token color per status, applied inline (admin.css is not owned here). */
@@ -70,6 +73,9 @@ const STATUS_COLOR_VAR: Record<TurnRecordStatus, string> = {
   resolution_failed: "--danger",
   insufficient_data: "--danger",
   rate_limited: "--warning",
+  account_denied: "--danger",
+  daily_limit: "--warning",
+  spend_check_failed: "--danger",
 };
 
 /** epoch-ms → local HH:MM:SS clock; tolerant of a 0/NaN value. */
