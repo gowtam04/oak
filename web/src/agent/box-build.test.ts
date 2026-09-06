@@ -21,10 +21,12 @@ type NamedForParty = (
   message: string,
   historyTexts?: string[],
 ) => string[];
+type NormalizeBoxSpecies = (name: string) => string;
 
 let isBoxBuildMessage: IsBoxBuildMessage;
 let extractBoxNames: ExtractBoxNames;
 let namedForParty: NamedForParty;
+let normalizeBoxSpecies: NormalizeBoxSpecies;
 let loadError: unknown = null;
 
 beforeAll(async () => {
@@ -33,6 +35,7 @@ beforeAll(async () => {
     isBoxBuildMessage = mod.isBoxBuildMessage as IsBoxBuildMessage;
     extractBoxNames = mod.extractBoxNames as ExtractBoxNames;
     namedForParty = mod.namedForParty as NamedForParty;
+    normalizeBoxSpecies = mod.normalizeBoxSpecies as NormalizeBoxSpecies;
     if (typeof isBoxBuildMessage !== "function") {
       throw new Error(
         "Expected isBoxBuildMessage export from src/agent/box-build.ts",
@@ -46,6 +49,11 @@ beforeAll(async () => {
     if (typeof namedForParty !== "function") {
       throw new Error(
         "Expected namedForParty export from src/agent/box-build.ts",
+      );
+    }
+    if (typeof normalizeBoxSpecies !== "function") {
+      throw new Error(
+        "Expected normalizeBoxSpecies export from src/agent/box-build.ts",
       );
     }
   } catch (e) {
@@ -187,6 +195,36 @@ describe("isBoxBuildMessage (BOX-BR-1, BOX-BR-10, BOX-US-1)", () => {
       expect(isBoxBuildMessage("put it back")).toBe(false);
       expect(isBoxBuildMessage("다시")).toBe(false);
     });
+
+    it('is true for "give Gengar Shadow Ball" after a box paste (BOX-AC-5.2)', () => {
+      ensureLoaded();
+      expect(isBoxBuildMessage("give Gengar Shadow Ball", [SIX_COMMA])).toBe(
+        true,
+      );
+      expect(
+        isBoxBuildMessage("give Gengar Shadow Ball", [FIFTEEN_COMMA]),
+      ).toBe(true);
+    });
+
+    it('is false for "what can Gengar learn?" after a box paste (BOX-AC-4.1)', () => {
+      ensureLoaded();
+      expect(isBoxBuildMessage("what can Gengar learn?", [SIX_COMMA])).toBe(
+        false,
+      );
+      expect(
+        isBoxBuildMessage("what can Gengar learn?", [FIFTEEN_COMMA]),
+      ).toBe(false);
+    });
+
+    it('is false for "build me a rain team" after a box paste (BOX-AC-4.2, BOX-BR-11)', () => {
+      ensureLoaded();
+      expect(isBoxBuildMessage("build me a rain team", [SIX_COMMA])).toBe(
+        false,
+      );
+      expect(isBoxBuildMessage("build me a rain team", [FIFTEEN_COMMA])).toBe(
+        false,
+      );
+    });
   });
 
   describe("negative — not box-build", () => {
@@ -322,6 +360,16 @@ describe("namedForParty (BOX-BR-2, BOX-BR-4, BOX-AC-1.1, BOX-AC-1.4, BOX-AC-2.3)
     );
   });
 
+  it("Korean 빼지 keeps only the adjacent Latin name, not the whole box", () => {
+    ensureLoaded();
+    const fifteen = FIFTEEN_COMMA.split(", ");
+    const names = namedForParty(`${FIFTEEN_COMMA} Kangaskhan 빼지 마`);
+    expect(names).toContain("Kangaskhan");
+    // Would fail if 빼지 dumped extractBoxNames of the 15-name paste.
+    expect(names.filter((n) => fifteen.includes(n))).toEqual(["Kangaskhan"]);
+    expect(names).not.toEqual(expect.arrayContaining(fifteen));
+  });
+
   it("returns the three Latin names for a Korean+Latin mix of ≤6 (BOX-BR-10, BOX-AC-1.1)", () => {
     ensureLoaded();
     expect(
@@ -335,5 +383,24 @@ describe("namedForParty (BOX-BR-2, BOX-BR-4, BOX-AC-1.1, BOX-AC-1.4, BOX-AC-2.3)
     expect(names).toEqual(
       expect.arrayContaining([...SIX_TOKENS, "Kangaskhan"]),
     );
+  });
+});
+
+describe("normalizeBoxSpecies", () => {
+  it("inverts therian / incarnate / eternamax prefixes (extractBoxNames grouping)", () => {
+    ensureLoaded();
+    expect(normalizeBoxSpecies("Therian Landorus")).toBe("landorus-therian");
+    expect(normalizeBoxSpecies("Incarnate Landorus")).toBe(
+      "landorus-incarnate",
+    );
+    expect(normalizeBoxSpecies("Eternamax Eternatus")).toBe(
+      "eternatus-eternamax",
+    );
+  });
+
+  it("still maps Mega / regional prefixes to PokeAPI-style slugs", () => {
+    ensureLoaded();
+    expect(normalizeBoxSpecies("Mega Kangaskhan")).toBe("kangaskhan-mega");
+    expect(normalizeBoxSpecies("Alolan Ninetales")).toBe("ninetales-alola");
   });
 });

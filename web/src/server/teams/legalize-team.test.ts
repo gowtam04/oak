@@ -15,7 +15,11 @@ import {
   type WarningCode,
 } from "@/data/teams/team-schema";
 import { createPgSchema, type PgFixture } from "../../../test/support/pg";
-import { legalizeTeam, formatRepairsNote } from "./legalize-team";
+import {
+  legalizeTeam,
+  formatRepairsNote,
+  LEARNSET_UNAVAILABLE_MESSAGE,
+} from "./legalize-team";
 import { isHardViolation, validateTeam } from "./validate-team";
 
 const SV = "scarlet-violet" as const;
@@ -182,6 +186,9 @@ describe("legalizeTeam keepSpecies (BOX-BR-9, BOX-AC-1.2, BOX-AC-1.3)", () => {
     expect(remainingHard.some((w) => w.slot === 0 && w.code === "species_illegal")).toBe(
       false,
     );
+    expect(remainingHard.some((w) => w.code === "learnset_unavailable")).toBe(
+      false,
+    );
   });
 
   it("clears illegal moves on a keepSpecies slot rather than dropping or replacing the member", async () => {
@@ -221,7 +228,14 @@ describe("legalizeTeam keepSpecies (BOX-BR-9, BOX-AC-1.2, BOX-AC-1.3)", () => {
     );
     expect(members).toHaveLength(1);
     expect(members[0]!.species).toBe("kangaskhan-mega");
+    expect(members[0]!.item).toBe("kangaskhanite");
     expect(remainingHard.some((w) => w.code === "species_illegal")).toBe(true);
+    expect(remainingHard.some((w) => w.code === "learnset_unavailable")).toBe(
+      true,
+    );
+    expect(
+      remainingHard.find((w) => w.code === "learnset_unavailable")?.message,
+    ).toBe(LEARNSET_UNAVAILABLE_MESSAGE);
   });
 });
 

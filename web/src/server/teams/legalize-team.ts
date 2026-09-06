@@ -27,6 +27,10 @@ import {
   type TeamWarning,
 } from "@/server/teams/validate-team";
 
+/** BOX-AC-1.2 / BOX-BR-9 — warn-but-allow when a named form has no learnset. */
+export const LEARNSET_UNAVAILABLE_MESSAGE =
+  "Learnset unavailable for this form in this scope; species kept because you named it.";
+
 /** One field change applied during legalization (for UX honesty copy). */
 export interface TeamRepair {
   slot: number;
@@ -122,6 +126,43 @@ function keepKey(species: string): string {
   return species.trim().toLowerCase();
 }
 
+function learnsetUnavailableWarning(slot: number): TeamWarning {
+  return {
+    code: "learnset_unavailable",
+    slot,
+    field: "moves",
+    message: LEARNSET_UNAVAILABLE_MESSAGE,
+  };
+}
+
+/**
+ * Keep/out-of-roster or empty-learnset named slots get a soft
+ * `learnset_unavailable` warning (BOX-AC-1.2). Attached onto remainingHard so
+ * callers can stamp it; the code is not a hard violation.
+ */
+function attachKeepLearnsetUnavailable(
+  members: TeamMember[],
+  remainingHard: TeamWarning[],
+  legalMoves: Map<string, string[]>,
+  isKeep: (species: string | null) => boolean,
+): TeamWarning[] {
+  const out = [...remainingHard];
+  members.forEach((member, slot) => {
+    if (!member.species || !isKeep(member.species)) return;
+    if (out.some((w) => w.slot === slot && w.code === "learnset_unavailable")) {
+      return;
+    }
+    const speciesIllegal = out.some(
+      (w) => w.slot === slot && w.code === "species_illegal",
+    );
+    const moves = legalMoves.get(member.species);
+    if (speciesIllegal || !moves || moves.length === 0) {
+      out.push(learnsetUnavailableWarning(slot));
+    }
+  });
+  return out;
+}
+
 /**
  * Repair hard-illegal fields on `members` against `format`. Pure data swap;
  * never throws. Returns the repaired members + a repair log + any remaining
@@ -145,6 +186,20 @@ export async function legalizeTeam(
   const out = cloneMembers(members);
   const repairs: TeamRepair[] = [];
 
+  const finish = (
+    remainingHard: TeamWarning[],
+    legalMoves: Map<string, string[]>,
+  ): LegalizeResult => ({
+    members: out,
+    repairs,
+    remainingHard: attachKeepLearnsetUnavailable(
+      out,
+      remainingHard,
+      legalMoves,
+      isKeepSlot,
+    ),
+  });
+
   for (let pass = 0; pass < MAX_LEGALIZE_PASSES; pass++) {
     const validation = await validateTeamDetailed(out, format, db);
     // Also treat item_missing as repairable (built-team completeness).
@@ -152,7 +207,7 @@ export async function legalizeTeam(
       (w) => isHardViolation(w) || w.code === "item_missing",
     );
     if (repairable.length === 0) {
-      return { members: out, repairs, remainingHard: [] };
+      return finish([], validation.legalMoves);
     }
 
     let changed = false;
@@ -182,6 +237,15 @@ export async function legalizeTeam(
       if (!member) continue;
 
       if (w.code === "item_illegal" || w.code === "item_missing") {
+        // Mega stone / missing item on an out-of-roster named keep slot: leave
+        // it. Do not globally skip item_illegal — only when this slot is already
+        // species_illegal.
+        const slotSpeciesIllegal = validation.warnings.some(
+          (other) => other.slot === slot && other.code === "species_illegal",
+        );
+        if (isKeepSlot(member.species) && slotSpeciesIllegal) {
+          continue;
+        }
         const taken = heldByOthers(out, slot);
         // Free the illegal item so we can re-pick it if it's somehow legal for
         // another slot (not needed here) — exclude current illegal from taken.
@@ -314,21 +378,19 @@ export async function legalizeTeam(
 
     if (!changed) {
       // Cannot progress (e.g. species_illegal only).
-      const remainingHard = (
-        await validateTeamDetailed(out, format, db)
-      ).warnings.filter(
+      const last = await validateTeamDetailed(out, format, db);
+      const remainingHard = last.warnings.filter(
         (w) => isHardViolation(w) || w.code === "item_missing",
       );
-      return { members: out, repairs, remainingHard };
+      return finish(remainingHard, last.legalMoves);
     }
   }
 
-  const remainingHard = (
-    await validateTeamDetailed(out, format, db)
-  ).warnings.filter(
+  const last = await validateTeamDetailed(out, format, db);
+  const remainingHard = last.warnings.filter(
     (w) => isHardViolation(w) || w.code === "item_missing",
   );
-  return { members: out, repairs, remainingHard };
+  return finish(remainingHard, last.legalMoves);
 }
 
 /**

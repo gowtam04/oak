@@ -12,9 +12,11 @@
  */
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import type { AgentContext, ChatMessage } from "@/agent/types";
 import type { OakAnswer } from "@/agent/schemas";
+import { AnthropicProvider } from "@/agent/providers/anthropic-provider";
 
 // --- Mock the tool layer so importing the runtime never opens a Postgres pool.
 const { mockDispatch } = vi.hoisted(() => ({ mockDispatch: vi.fn() }));
@@ -97,6 +99,8 @@ vi.mock("@/server/teams/legalize-team", () => ({
   })),
   formatRepairsNote: () =>
     "I adjusted a few choices so every set is legal in this format.",
+  LEARNSET_UNAVAILABLE_MESSAGE:
+    "Learnset unavailable for this form in this scope; species kept because you named it.",
 }));
 
 import { legalizeTeam } from "@/server/teams/legalize-team";
@@ -115,8 +119,10 @@ import {
   MAX_ITERATIONS_TEAM_BUILD,
   MAX_PROPOSED_TEAM_HARD_REJECTIONS,
   runOakWith,
+  runWithProvider,
   SUBMIT_NUDGE_REMAINING,
   SUBMIT_NUDGE_REMAINING_TEAM_BUILD,
+  type AnswerRunHooks,
 } from "./runtime";
 
 // --- Fixtures --------------------------------------------------------------
@@ -1586,6 +1592,37 @@ describe("box-build loop (BOX-AC-3.3, BOX-BR-1)", () => {
     expect(korean.stream).toHaveBeenCalledTimes(MAX_ITERATIONS_BOX_BUILD);
   });
 
+  it('follow-up "give Gengar Shadow Ball" after a box paste stays on cap 6 (BOX-AC-5.2)', async () => {
+    ensureLoaded();
+    const history: ChatMessage[] = [
+      { role: "user", content: BOX_FIFTEEN },
+      { role: "assistant", content: "Here's a six from your box." },
+    ];
+    const { client, stream } = loopingToolClient();
+    await runOakWith(client, "give Gengar Shadow Ball", history, ctx);
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS_BOX_BUILD);
+  });
+
+  it('follow-up "what can Gengar learn?" after a box paste stays on default cap', async () => {
+    const history: ChatMessage[] = [
+      { role: "user", content: BOX_FIFTEEN },
+      { role: "assistant", content: "Here's a six from your box." },
+    ];
+    const { client, stream } = loopingToolClient();
+    await runOakWith(client, "what can Gengar learn?", history, ctx);
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
+  });
+
+  it('follow-up "build me a rain team" after a box paste stays on team-build cap', async () => {
+    const history: ChatMessage[] = [
+      { role: "user", content: BOX_FIFTEEN },
+      { role: "assistant", content: "Here's a six from your box." },
+    ];
+    const { client, stream } = loopingToolClient();
+    await runOakWith(client, "build me a rain team", history, ctx);
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS_TEAM_BUILD);
+  });
+
   it("nudges at SUBMIT_NUDGE_REMAINING_BOX_BUILD with box-specific text", async () => {
     ensureLoaded();
     const { client, stream, snapshots } = scriptedClient(
@@ -1644,6 +1681,25 @@ describe("box-build dispatch deny (BOX-AC-3.1, BOX-BR-5)", () => {
     });
     expect(String(toolResults[0].content)).toMatch(/forbidden_on_box_build/);
     expect(String(toolResults[1].content)).toMatch(/forbidden_on_box_build/);
+  });
+
+  it("does not emit onProgress for denied run_sql / search_wiki on a box-build", async () => {
+    const onProgress = vi.fn();
+    const { client } = scriptedClient([
+      message([
+        toolUse("run_sql", { query: "SELECT 1", purpose: "lookup" }, "t1"),
+        toolUse("search_wiki", { query: "Gengar" }, "t2"),
+      ]),
+      message([toolUse("submit_answer", validAnswer, "t3")]),
+    ]);
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    await runOakWith(client, BOX_SIX, [], ctx, onProgress);
+
+    const tools = onProgress.mock.calls.map((c) => c[0]?.tool);
+    expect(tools).not.toContain("run_sql");
+    expect(tools).not.toContain("search_wiki");
+    expect(tools).toContain("submit_answer");
   });
 
   it("a well-behaved lookup_box + submit_answer turn never dispatches SQL/wiki (BOX-AC-3.1)", async () => {
@@ -1754,6 +1810,11 @@ describe("box-build hard-reject skip (BOX-AC-1.2, BOX-AC-1.3, BOX-BR-2, BOX-BR-9
         (w) => w.code === "move_not_in_learnset",
       ),
     ).toBe(true);
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "learnset_unavailable",
+      ),
+    ).toBe(false);
     expect(vi.mocked(legalizeTeam)).not.toHaveBeenCalled();
   });
 
@@ -1804,6 +1865,217 @@ describe("box-build hard-reject skip (BOX-AC-1.2, BOX-AC-1.3, BOX-BR-2, BOX-BR-9
         (w) => w.code === "species_illegal",
       ),
     ).toBe(true);
+    expect(
+      (result.proposed_team_warnings ?? []).some(
+        (w) => w.code === "learnset_unavailable",
+      ),
+    ).toBe(true);
+    expect(
+      (result.proposed_team_warnings ?? []).find(
+        (w) => w.code === "learnset_unavailable",
+      )?.message,
+    ).toMatch(/Learnset unavailable for this form in this scope; species kept because you named it/);
     expect(vi.mocked(legalizeTeam)).not.toHaveBeenCalled();
+  });
+
+  it("softens item_illegal on a named slot that is already species_illegal (mega stone)", async () => {
+    vi.mocked(isHardViolation).mockImplementation(
+      (w: { code: string }) =>
+        w.code === "item_illegal" || w.code === "species_illegal",
+    );
+    vi.mocked(validateTeamDetailed).mockImplementation(async () => ({
+      warnings: [
+        {
+          code: "species_illegal",
+          slot: 0,
+          field: "species",
+          message: "kangaskhan-mega is not in this format's roster.",
+        },
+        {
+          code: "item_illegal",
+          slot: 0,
+          field: "item",
+          message: 'Item "kangaskhanite" is not legal in this format.',
+        },
+      ],
+      legalMoves: new Map(),
+      legalAbilities: new Map(),
+      legalItems: ["leftovers"],
+      requiredItems: new Map(),
+    }));
+
+    const proposed = boxTeamAnswer("kangaskhan-mega");
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", proposed, "s1")]),
+      message([toolUse("submit_answer", proposed, "s2")]),
+      message([toolUse("submit_answer", proposed, "s3")]),
+    ]);
+
+    const result = await runOakWith(
+      client,
+      "Mega Kangaskhan, Gengar, Garchomp, Dragonite, Tyranitar, Scizor",
+      [],
+      ctx,
+    );
+
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(result.proposed_team?.members?.[0]).toEqual(
+      expect.objectContaining({ species: "kangaskhan-mega" }),
+    );
+    expect(vi.mocked(legalizeTeam)).not.toHaveBeenCalled();
+  });
+
+  it("does not globally soften item_illegal on a named in-roster slot", async () => {
+    vi.mocked(isHardViolation).mockImplementation(
+      (w: { code: string }) => w.code === "item_illegal",
+    );
+    vi.mocked(validateTeamDetailed).mockImplementation(async () => ({
+      warnings: [
+        {
+          code: "item_illegal",
+          slot: 0,
+          field: "item",
+          message: 'Item "choice-band" is not legal in this format.',
+        },
+      ],
+      legalMoves: new Map([["kangaskhan", ["fake-out", "return"]]]),
+      legalAbilities: new Map([["kangaskhan", ["early-bird"]]]),
+      legalItems: ["leftovers", "sitrus-berry"],
+      requiredItems: new Map(),
+    }));
+
+    const proposed = boxTeamAnswer("kangaskhan");
+    const { client, stream } = scriptedClient([
+      message([toolUse("submit_answer", proposed, "s1")]),
+      message([toolUse("submit_answer", proposed, "s2")]),
+      message([toolUse("submit_answer", proposed, "s3")]),
+    ]);
+
+    await runOakWith(client, BOX_SIX, [], ctx);
+
+    expect(stream).toHaveBeenCalledTimes(MAX_PROPOSED_TEAM_HARD_REJECTIONS + 1);
+    expect(vi.mocked(legalizeTeam)).toHaveBeenCalled();
+  });
+
+  it("give-up/legalize on box-build calls legalizeTeam with keepSpecies", async () => {
+    vi.mocked(isHardViolation).mockImplementation(
+      (w: { code: string }) => w.code === "duplicate_item",
+    );
+    vi.mocked(validateTeamDetailed).mockImplementation(async () => ({
+      warnings: [
+        {
+          code: "species_illegal",
+          slot: 0,
+          field: "species",
+          message: "kangaskhan-mega is not in this format's roster.",
+        },
+        {
+          code: "duplicate_item",
+          message: 'Item clause: "life-orb" in slots 0, 1.',
+        },
+      ],
+      legalMoves: new Map(),
+      legalAbilities: new Map(),
+      legalItems: ["leftovers"],
+      requiredItems: new Map(),
+    }));
+
+    const proposed = boxTeamAnswer("kangaskhan-mega");
+    const { client } = scriptedClient([
+      message([toolUse("submit_answer", proposed, "s1")]),
+      message([toolUse("query_pokedex", {}, "q1")]),
+      message([toolUse("query_pokedex", {}, "q2")]),
+      message([toolUse("query_pokedex", {}, "q3")]),
+      message([toolUse("query_pokedex", {}, "q4")]),
+      message([toolUse("query_pokedex", {}, "q5")]),
+    ]);
+    mockDispatch.mockResolvedValue({ ok: true });
+
+    await runOakWith(
+      client,
+      "Mega Kangaskhan, Gengar, Garchomp, Dragonite, Tyranitar, Scizor",
+      [],
+      ctx,
+    );
+
+    expect(vi.mocked(legalizeTeam)).toHaveBeenCalled();
+    const options = vi.mocked(legalizeTeam).mock.calls[0]?.[3] as
+      | { keepSpecies?: string[] }
+      | undefined;
+    expect(options?.keepSpecies).toEqual(
+      expect.arrayContaining(["kangaskhan-mega"]),
+    );
+  });
+});
+
+describe("box-build is main-chat only (submit_answer)", () => {
+  const builderSchema = z.object({ ok: z.boolean() });
+
+  function builderHooks(): AnswerRunHooks<{ ok: boolean }> {
+    return {
+      tools: [
+        {
+          name: "query_pokedex",
+          description: "d",
+          inputSchema: { type: "object" },
+          run: async () => ({ ok: true }),
+        },
+        {
+          name: "submit_builder_answer",
+          description: "d",
+          inputSchema: { type: "object" },
+          run: async () => ({ ok: true }),
+        },
+      ],
+      dispatch: (name, args, c) => mockDispatch(name, args, c),
+      submitToolName: "submit_builder_answer",
+      answerSchema: builderSchema,
+      buildSystem: () => [{ text: "builder", cacheBreakpoint: true }],
+      validateAnswer: async () => ({ ok: true }),
+      synthesizeInsufficient: () => ({ ok: false }),
+      synthesizeFromProse: () => ({ ok: false }),
+      emptyTurnNudge: "empty",
+      submitNudge: "submit",
+    };
+  }
+
+  it("does not use the box-build cap when submitToolName is submit_builder_answer", async () => {
+    const { client, stream } = loopingToolClient();
+    const provider = new AnthropicProvider({}, client);
+    await runWithProvider(
+      provider,
+      BOX_SIX,
+      [],
+      ctx,
+      undefined,
+      undefined,
+      undefined,
+      builderHooks(),
+    );
+    expect(stream).toHaveBeenCalledTimes(MAX_ITERATIONS);
+    expect(stream.mock.calls.length).not.toBe(6);
+  });
+
+  it("does not deny run_sql when submitToolName is submit_builder_answer", async () => {
+    const { client } = scriptedClient([
+      message([
+        toolUse("run_sql", { query: "SELECT 1", purpose: "lookup" }, "t1"),
+      ]),
+      message([toolUse("submit_builder_answer", { ok: true }, "t2")]),
+    ]);
+    mockDispatch.mockResolvedValue({ ok: true });
+    const provider = new AnthropicProvider({}, client);
+    await runWithProvider(
+      provider,
+      BOX_SIX,
+      [],
+      ctx,
+      undefined,
+      undefined,
+      undefined,
+      builderHooks(),
+    );
+    const dispatched = mockDispatch.mock.calls.map((c) => c[0]);
+    expect(dispatched).toContain("run_sql");
   });
 });

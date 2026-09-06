@@ -85,6 +85,7 @@ import {
 import {
   formatRepairsNote,
   legalizeTeam,
+  LEARNSET_UNAVAILABLE_MESSAGE,
 } from "@/server/teams/legalize-team";
 import { logTurn, type ToolTraceEntry, type TurnTrace } from "@/server/logger";
 
@@ -479,6 +480,71 @@ function isNamedMemberSlot(
   const species = members[warning.slot]?.species;
   if (!species) return false;
   return namedSlugs.has(normalizeBoxSpecies(species));
+}
+
+function namedSpeciesIllegalSlots(
+  warnings: TeamWarning[],
+  members: { species: string | null }[] | undefined,
+  namedSlugs: Set<string>,
+): Set<number> {
+  const slots = new Set<number>();
+  for (const w of warnings) {
+    if (w.code !== "species_illegal" || w.slot === undefined) continue;
+    if (isNamedMemberSlot(w, members, namedSlugs)) slots.add(w.slot);
+  }
+  return slots;
+}
+
+/** Named-for-party soft codes, plus item_illegal/item_missing on an already-illegal named species. */
+function isBoxSoftWarning(
+  w: TeamWarning,
+  members: { species: string | null }[] | undefined,
+  namedSlugs: Set<string>,
+  illegalSpeciesSlots: Set<number>,
+): boolean {
+  if (BOX_SOFT_ON_NAMED.has(w.code) && isNamedMemberSlot(w, members, namedSlugs)) {
+    return true;
+  }
+  if (
+    (w.code === "item_illegal" || w.code === "item_missing") &&
+    w.slot !== undefined &&
+    illegalSpeciesSlots.has(w.slot)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function attachLearnsetUnavailable(
+  warnings: TeamWarning[],
+  members: { species: string | null }[],
+  namedSlugs: Set<string>,
+  legalMoves: Map<string, string[]>,
+): TeamWarning[] {
+  if (namedSlugs.size === 0) return warnings;
+  const out = [...warnings];
+  members.forEach((member, slot) => {
+    if (!member.species) return;
+    const slug = normalizeBoxSpecies(member.species);
+    if (!namedSlugs.has(slug)) return;
+    if (out.some((w) => w.slot === slot && w.code === "learnset_unavailable")) {
+      return;
+    }
+    const speciesIllegal = out.some(
+      (w) => w.slot === slot && w.code === "species_illegal",
+    );
+    const moves =
+      legalMoves.get(member.species) ?? legalMoves.get(slug);
+    if (speciesIllegal || !moves || moves.length === 0) {
+      out.push({
+        code: "learnset_unavailable",
+        slot,
+        field: "moves",
+        message: LEARNSET_UNAVAILABLE_MESSAGE,
+      });
+    }
+  });
+  return out;
 }
 
 /** Actionable insufficient_data body when a build turn never submitted a team. */
@@ -1218,15 +1284,21 @@ async function applyLegalizedTeam(
   const keepSlugs = new Set(
     (keepSpecies ?? []).map(normalizeBoxSpecies).filter(Boolean),
   );
-  const skippableNamed = (w: TeamWarning, members: { species: string | null }[]) =>
-    BOX_SOFT_ON_NAMED.has(w.code) && isNamedMemberSlot(w, members, keepSlugs);
 
   const before = await validateTeamDetailed(pt.members, format, db);
   const hardBefore = before.warnings.filter(
     (w) => isHardViolation(w) || (w.code === "item_missing" && !hasImages),
   );
   if (hardBefore.length === 0) {
-    stampTeamWarnings(answer, before.warnings);
+    stampTeamWarnings(
+      answer,
+      attachLearnsetUnavailable(
+        before.warnings,
+        pt.members,
+        keepSlugs,
+        before.legalMoves,
+      ),
+    );
     return answer;
   }
 
@@ -1238,11 +1310,21 @@ async function applyLegalizedTeam(
   );
   // item_missing after legalize is still a failure for built teams.
   // Named-for-party species_illegal / learnset misses stay as warnings.
+  const illegalSpeciesSlots = namedSpeciesIllegalSlots(
+    remainingHard,
+    members,
+    keepSlugs,
+  );
   const stillHard = remainingHard.filter((w) => {
     const hard =
       isHardViolation(w) || (w.code === "item_missing" && !hasImages);
     if (!hard) return false;
-    if (keepSlugs.size > 0 && skippableNamed(w, members)) return false;
+    if (
+      keepSlugs.size > 0 &&
+      isBoxSoftWarning(w, members, keepSlugs, illegalSpeciesSlots)
+    ) {
+      return false;
+    }
     return true;
   });
 
@@ -1265,12 +1347,28 @@ async function applyLegalizedTeam(
 
   answer.proposed_team = { ...pt, members };
   const after = await validateTeamDetailed(members, format, db);
+  const afterIllegalSlots = namedSpeciesIllegalSlots(
+    after.warnings,
+    members,
+    keepSlugs,
+  );
+  const stamped = after.warnings.filter((w) => {
+    if (
+      keepSlugs.size > 0 &&
+      isBoxSoftWarning(w, members, keepSlugs, afterIllegalSlots)
+    ) {
+      return true;
+    }
+    return !isHardViolation(w) && w.code !== "item_missing";
+  });
   stampTeamWarnings(
     answer,
-    after.warnings.filter((w) => {
-      if (keepSlugs.size > 0 && skippableNamed(w, members)) return true;
-      return !isHardViolation(w) && w.code !== "item_missing";
-    }),
+    attachLearnsetUnavailable(
+      stamped,
+      members,
+      keepSlugs,
+      after.legalMoves,
+    ),
   );
   const note = formatRepairsNote(repairs);
   if (note && repairs.length > 0) {
@@ -1317,14 +1415,16 @@ async function validateOakAnswer(
   const teamWarnings = validation.warnings;
   const hasImages = (ctx.images?.length ?? 0) > 0;
   const namedSlugs = box ? boxNameSlugs(box) : null;
+  const illegalSpeciesSlots = namedSlugs
+    ? namedSpeciesIllegalSlots(teamWarnings, pt?.members, namedSlugs)
+    : new Set<number>();
   const hardViolations = teamWarnings.filter((w) => {
     const hard =
       isHardViolation(w) || (w.code === "item_missing" && !hasImages);
     if (!hard) return false;
     if (
       namedSlugs &&
-      BOX_SOFT_ON_NAMED.has(w.code) &&
-      isNamedMemberSlot(w, pt?.members, namedSlugs)
+      isBoxSoftWarning(w, pt?.members, namedSlugs, illegalSpeciesSlots)
     ) {
       return false;
     }
@@ -1440,7 +1540,18 @@ async function validateOakAnswer(
   }
   return {
     ok: true,
-    annotate: (enriched) => stampTeamWarnings(enriched, teamWarnings),
+    annotate: (enriched) =>
+      stampTeamWarnings(
+        enriched,
+        namedSlugs
+          ? attachLearnsetUnavailable(
+              teamWarnings,
+              pt?.members ?? [],
+              namedSlugs,
+              validation.legalMoves,
+            )
+          : teamWarnings,
+      ),
   };
 }
 
@@ -1538,7 +1649,11 @@ export async function runWithProvider<TAnswer = OakAnswer>(
   const historyTexts = history
     .filter((m) => m.role === "user")
     .map((m) => m.content);
-  const boxBuild = isBoxBuildMessage(message, historyTexts);
+  // Box-build cap/deny is main-chat only (submit_answer). Teams Assistant uses
+  // submit_builder_answer — same gate as the Oak-only hard-reject skip.
+  const boxBuild =
+    hooks.submitToolName === "submit_answer" &&
+    isBoxBuildMessage(message, historyTexts);
   const teamRoster = !boxBuild && isTeamRosterMessage(message);
   const teamBuild = !boxBuild && !teamRoster && isTeamBuildMessage(message);
   const boxTurn: BoxBuildTurn | undefined = boxBuild
@@ -1819,6 +1934,25 @@ export async function runWithProvider<TAnswer = OakAnswer>(
     let acceptAnnotate: ((enriched: TAnswer) => void) | null = null;
 
     for (const call of toolCalls) {
+      // Deny SQL/wiki on box-build before progress so the UI shows no SQL/wiki
+      // activity (BOX-AC-3.1). Dispatch is skipped below.
+      if (boxBuild && BOX_FORBIDDEN_TOOLS.has(call.name)) {
+        const started = Date.now();
+        state.toolTrace.push({
+          tool: call.name,
+          args: call.input,
+          latency_ms: Date.now() - started,
+          cache_hit: false,
+          error: "forbidden_on_box_build",
+        });
+        toolResults.push({
+          toolCallId: call.id,
+          content: JSON.stringify({ error: "forbidden_on_box_build" }),
+          isError: true,
+        });
+        continue;
+      }
+
       onProgress?.({
         tool: call.name,
         label: describeToolCall(call.name, call.input),
@@ -1899,21 +2033,6 @@ export async function runWithProvider<TAnswer = OakAnswer>(
       // here so one bad tool can't kill the turn — it is fed back so the model
       // can recover or report insufficient_data.
       const started = Date.now();
-      if (boxBuild && BOX_FORBIDDEN_TOOLS.has(call.name)) {
-        state.toolTrace.push({
-          tool: call.name,
-          args: call.input,
-          latency_ms: Date.now() - started,
-          cache_hit: false,
-          error: "forbidden_on_box_build",
-        });
-        toolResults.push({
-          toolCallId: call.id,
-          content: JSON.stringify({ error: "forbidden_on_box_build" }),
-          isError: true,
-        });
-        continue;
-      }
       let result: unknown;
       let errorMessage: string | null = null;
       try {

@@ -150,6 +150,9 @@ export function normalizeBoxSpecies(name: string): string {
     [/^ultra\s+(.+)$/i, "ultra"],
     [/^origin\s+(.+)$/i, "origin"],
     [/^shadow\s+(.+)$/i, "shadow"],
+    [/^therian\s+(.+)$/i, "therian"],
+    [/^incarnate\s+(.+)$/i, "incarnate"],
+    [/^eternamax\s+(.+)$/i, "eternamax"],
   ];
   for (const [re, suffix] of prefixes) {
     const match = trimmed.match(re);
@@ -248,20 +251,44 @@ function isMovepoolOrLocationAsk(message: string): boolean {
   return false;
 }
 
-function isKeepDropRebuildFollowUp(message: string): boolean {
-  const m = message.toLowerCase().replace(/\s+/g, " ");
-  if (/\bdon'?t\s+drop\b/.test(m)) return true;
-  if (/\bdo\s+not\s+drop\b/.test(m)) return true;
-  if (message.includes("빼지")) return true;
-  if (message.includes("다시")) return true;
-  if (/\bput\s+it\s+back\b/.test(m)) return true;
-  return false;
-}
-
 function hasPartyVerb(message: string): boolean {
   const m = message.toLowerCase();
   if (/\b(?:build|make|party|team|box)\b/.test(m)) return true;
   if (/파티|팀|만들어|만들어줘|빼지/.test(message)) return true;
+  return false;
+}
+
+/**
+ * Ordinary TEAM-US-6 team-build with no owned list ("build me a rain team").
+ * Follow-ups like this after a box paste are a new job, not box-build inherit.
+ */
+function isOrdinaryTeamBuildWithoutOwnedList(
+  message: string,
+  names: string[],
+): boolean {
+  if (names.length > 0) return false;
+  const m = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!m) return false;
+  if (
+    /\b(build|make|create|craft|suggest|propose)\b.{0,48}\b(team|party)\b/.test(
+      m,
+    )
+  ) {
+    return true;
+  }
+  if (/\bhelp me (build|make)\b/.test(m)) return true;
+  if (
+    /\b(want|need|give me|gimme)\b.{0,24}\b(a |an )?(team|party)\b/.test(m)
+  ) {
+    return true;
+  }
+  if (
+    /\b(hyper\s*offense|balanced team|stall team|rain team|sun team|offense team|defensive team)\b/.test(
+      m,
+    )
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -273,17 +300,79 @@ export function isBoxBuildMessage(
   message: string,
   historyTexts?: string[],
 ): boolean {
+  if (!message.trim()) return false;
   if (isMovepoolOrLocationAsk(message)) return false;
-  if (
-    isKeepDropRebuildFollowUp(message) &&
-    (historyTexts ?? []).some((h) => isBoxBuildMessage(h))
-  ) {
+  const names = extractBoxNames(message);
+  // BOX-AC-5.2 / BOX-BR-11: follow-ups about that party stay box-build unless
+  // the current message is a movepool/location/wiki ask (already returned) or
+  // an owned-list-free ordinary team-build.
+  if ((historyTexts ?? []).some((h) => isBoxBuildMessage(h))) {
+    if (isOrdinaryTeamBuildWithoutOwnedList(message, names)) return false;
     return true;
   }
-  const names = extractBoxNames(message);
   if (names.length >= 6) return true;
   if (names.length >= 3 && hasPartyVerb(message)) return true;
   return false;
+}
+
+function stripTrailingHangul(word: string): string {
+  return word.replace(/[\uAC00-\uD7A3]+$/g, "");
+}
+
+/** Last Latin species / forme phrase in `text` (the token adjacent on the left). */
+function nameImmediatelyBefore(text: string): string | null {
+  const words = text
+    .split(/\s+/)
+    .map((w) => stripPunct(stripTrailingHangul(w)))
+    .filter(Boolean);
+  if (words.length === 0) return null;
+  if (words.length >= 3) {
+    const start = words.length - 3;
+    const forme = takeFormePhrase(words, start);
+    if (forme && start + forme.consumed === words.length) return forme.phrase;
+  }
+  if (words.length >= 2) {
+    const start = words.length - 2;
+    const forme = takeFormePhrase(words, start);
+    if (forme && start + forme.consumed === words.length) return forme.phrase;
+  }
+  const last = words[words.length - 1]!;
+  if (isSpeciesWord(last) && !FORM_PREFIXES.has(last.toLowerCase())) return last;
+  return null;
+}
+
+/** First Latin species / forme phrase in `text` (the token adjacent on the right). */
+function nameImmediatelyAfter(text: string): string | null {
+  const cleaned = text.replace(/^[^A-Za-z]+/, "");
+  const words = cleaned.split(/\s+/).map(stripPunct).filter(Boolean);
+  if (words.length === 0) return null;
+  const forme = takeFormePhrase(words, 0);
+  if (forme) return forme.phrase;
+  const first = words[0]!;
+  if (isSpeciesWord(first) && !FORM_PREFIXES.has(first.toLowerCase())) {
+    return first;
+  }
+  return null;
+}
+
+/**
+ * Latin names adjacent to a keep-marker (Korean 빼지), not the whole box list.
+ * Mirrors English `don't drop ${name}`.
+ */
+function namesAdjacentToMarker(message: string, marker: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  let from = 0;
+  while (from < message.length) {
+    const idx = message.indexOf(marker, from);
+    if (idx < 0) break;
+    const before = nameImmediatelyBefore(message.slice(0, idx));
+    if (before) addUnique(out, seen, before);
+    const after = nameImmediatelyAfter(message.slice(idx + marker.length));
+    if (after) addUnique(out, seen, after);
+    from = idx + marker.length;
+  }
+  return out;
 }
 
 function extractKeepNames(message: string): string[] {
@@ -302,7 +391,9 @@ function extractKeepNames(message: string): string[] {
     }
   }
   if (message.includes("빼지")) {
-    for (const name of extractBoxNames(message)) addUnique(out, seen, name);
+    for (const name of namesAdjacentToMarker(message, "빼지")) {
+      addUnique(out, seen, name);
+    }
   }
   return out;
 }
