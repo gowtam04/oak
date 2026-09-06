@@ -62,13 +62,14 @@ import { getLearnsetTool } from "./get-learnset";
 import { runSqlTool } from "./run-sql";
 import { searchWikiTool } from "./search-wiki";
 import { getMetaUsageTool } from "./get-meta-usage.tool";
+import { lookupBoxTool } from "./lookup-box";
 
 /**
- * The 20 tools, in T1..T19 + T21 order (T20 `web_search` was removed 2026-07-03
- * — cost vs. marginal value, and the number stays permanently retired; see
- * CLAUDE.md). T1..T11 are the fixed agent-design contract; T12 (`get_team`)
- * loads a saved team by id and T13 (`save_team`) persists one (team-builder,
- * TEAM-AD-1 / TEAM-AD-7, reconciled into docs/agent-design); T14
+ * The 21 tools, in T1..T19 + T21 + T22 order (T20 `web_search` was removed
+ * 2026-07-03 — cost vs. marginal value, and the number stays permanently
+ * retired; see CLAUDE.md). T1..T11 are the fixed agent-design contract; T12
+ * (`get_team`) loads a saved team by id and T13 (`save_team`) persists one
+ * (team-builder, TEAM-AD-1 / TEAM-AD-7, reconciled into docs/agent-design); T14
  * (`get_encounters`) adds PokeAPI catch-location data (standard mode only); T15
  * (`get_usage_stats`) adds live championsbattledata.com competitive usage
  * (champions mode only); T16 (`list_teams`) lists the user's saved teams so the
@@ -80,13 +81,15 @@ import { getMetaUsageTool } from "./get-meta-usage.tool";
  * self-built Fandom prose corpus for in-game/lore/spin-off/trivia questions;
  * T21 (`get_meta_usage`, B-5) reads STORED monthly Smogon ladder usage (v1
  * gen9ou) — available in every scope (the ladder is explicit input), appended
- * last after search_wiki. The two oak-v2 tools (`run_sql`/`search_wiki`) are
- * gated OUT of voice mode via `VOICE_EXCLUDED_TOOLS`
- * (`@/agent/tools/voice-gating`), not this barrel; `get_meta_usage` is
- * deliberately ADMITTED to voice (a fast DB read, like get_usage_stats). All
- * appended after T11 so the existing T1..T11 order — and thus most of the
- * cached prefix — is unchanged. The list is sent byte-identical for both modes;
- * each mode-gated tool self-gates on `ctx.mode`.
+ * after search_wiki; T22 (`lookup_box`, team-from-box) bulk-looks-up up to 40
+ * names with a compact legal-move subset, appended after T21. The two oak-v2
+ * tools (`run_sql`/`search_wiki`) are gated OUT of voice mode via
+ * `VOICE_EXCLUDED_TOOLS` (`@/agent/tools/voice-gating`), not this barrel;
+ * `get_meta_usage` and `lookup_box` are deliberately ADMITTED to voice (fast
+ * DB reads, like get_usage_stats). All appended after T11 so the existing
+ * T1..T11 order — and thus most of the cached prefix — is unchanged. The list
+ * is sent byte-identical for both modes; each mode-gated tool self-gates on
+ * `ctx.mode`.
  */
 export const tools: ToolDef[] = [
   resolveEntityTool,
@@ -109,6 +112,7 @@ export const tools: ToolDef[] = [
   runSqlTool,
   searchWikiTool,
   getMetaUsageTool,
+  lookupBoxTool,
 ];
 
 /** name -> ToolDef lookup, built once at module load. */

@@ -329,3 +329,187 @@ describe("oakAnswerSchema — origin (VOICE-AC-1.2)", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// lookup_box (T22, team-from-box Phase 1)
+// BOX-AC-3.2 bulk names, BOX-AC-3.4 compact moves, BOX-BR-5 short-path lookup,
+// BOX-BR-7 get_learnset stays the full-movepool API (T1–T21 order unchanged).
+// ---------------------------------------------------------------------------
+
+/** Canonical get_pokemon hit (tools.md T3) — lookup_box embeds this as `pokemon`. */
+const FARIGIRAF_PROFILE = {
+  found: true,
+  display_name: "Farigiraf",
+  national_dex_number: 981,
+  types: ["normal", "psychic"],
+  abilities: {
+    slot1: "cud-chew",
+    slot2: "armor-tail",
+    hidden: "sap-sipper",
+  },
+  base_stats: {
+    hp: 120,
+    attack: 90,
+    defense: 70,
+    special_attack: 110,
+    special_defense: 70,
+    speed: 60,
+  },
+  base_stat_total: 520,
+  sprite_url: "https://.../981.png",
+  artwork_url: "https://.../981_official.png",
+  forms: ["farigiraf"],
+  is_gen9_native: true,
+  source_generation: null,
+};
+
+type ZodSafeParse = { safeParse: (v: unknown) => { success: boolean } };
+
+async function loadLookupBoxSchemas(): Promise<{
+  lookupBoxInputSchema: ZodSafeParse;
+  lookupBoxOutputSchema: ZodSafeParse;
+}> {
+  const schemas = (await import("@/agent/schemas")) as Record<string, unknown>;
+  const lookupBoxInputSchema = schemas.lookupBoxInputSchema as
+    | ZodSafeParse
+    | undefined;
+  const lookupBoxOutputSchema = schemas.lookupBoxOutputSchema as
+    | ZodSafeParse
+    | undefined;
+  if (!lookupBoxInputSchema || !lookupBoxOutputSchema) {
+    throw new Error(
+      "Expected lookupBoxInputSchema and lookupBoxOutputSchema exports from src/agent/schemas.ts",
+    );
+  }
+  return { lookupBoxInputSchema, lookupBoxOutputSchema };
+}
+
+describe("lookup_box I/O (T22, BOX-AC-3.2, BOX-BR-5, BOX-BR-7)", () => {
+  it("appends lookup_box as the last TOOL_NAMES entry; T1–T21 order is unchanged", () => {
+    expect(TOOL_NAMES[16]).toBe("get_learnset");
+    expect(TOOL_NAMES.at(-2)).toBe("get_meta_usage");
+    expect(TOOL_NAMES.at(-1)).toBe("lookup_box");
+    expect(
+      (toolInputJsonSchemas as Record<string, unknown>).lookup_box,
+    ).toBeDefined();
+  });
+
+  it("lookupBoxInputSchema requires 1–40 non-empty names", async () => {
+    const { lookupBoxInputSchema } = await loadLookupBoxSchemas();
+    expect(lookupBoxInputSchema.safeParse({ names: ["Garchomp"] }).success).toBe(
+      true,
+    );
+    expect(
+      lookupBoxInputSchema.safeParse({
+        names: Array.from({ length: 40 }, () => "Garchomp"),
+      }).success,
+    ).toBe(true);
+
+    expect(lookupBoxInputSchema.safeParse({ names: [] }).success).toBe(false);
+    expect(lookupBoxInputSchema.safeParse({ names: [""] }).success).toBe(false);
+    expect(
+      lookupBoxInputSchema.safeParse({
+        names: Array.from({ length: 41 }, () => "Garchomp"),
+      }).success,
+    ).toBe(false);
+    expect(lookupBoxInputSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("lookupBoxInputSchema rejects an extra key (.strict())", async () => {
+    const { lookupBoxInputSchema } = await loadLookupBoxSchemas();
+    expect(
+      lookupBoxInputSchema.safeParse({ names: ["Garchomp"], extra: 1 }).success,
+    ).toBe(false);
+  });
+
+  it("lookupBoxOutputSchema accepts a found hit with unavailable learnset (empty movepool is not a miss)", async () => {
+    const { lookupBoxOutputSchema } = await loadLookupBoxSchemas();
+    const parsed = lookupBoxOutputSchema.safeParse({
+      format: "scarlet-violet",
+      truncated_input: false,
+      results: [
+        {
+          query: "kangaskhan-mega",
+          found: true,
+          pokemon: FARIGIRAF_PROFILE,
+          learnset: {
+            available: false,
+            count: 0,
+            truncated: false,
+            compact_moves: [],
+          },
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("lookupBoxOutputSchema accepts a miss with suggestions and optional exists_in_standard", async () => {
+    const { lookupBoxOutputSchema } = await loadLookupBoxSchemas();
+    expect(
+      lookupBoxOutputSchema.safeParse({
+        format: "scarlet-violet",
+        truncated_input: false,
+        results: [
+          {
+            query: "garchom",
+            found: false,
+            suggestions: ["garchomp"],
+          },
+        ],
+      }).success,
+    ).toBe(true);
+
+    expect(
+      lookupBoxOutputSchema.safeParse({
+        format: "champions",
+        truncated_input: false,
+        results: [
+          {
+            query: "dracovish",
+            found: false,
+            suggestions: ["garchomp"],
+            exists_in_standard: true,
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("lookupBoxOutputSchema accepts compact_moves with null detail fields", async () => {
+    const { lookupBoxOutputSchema } = await loadLookupBoxSchemas();
+    const parsed = lookupBoxOutputSchema.safeParse({
+      format: "scarlet-violet",
+      truncated_input: true,
+      results: [
+        {
+          query: "Garchomp",
+          found: true,
+          pokemon: FARIGIRAF_PROFILE,
+          learnset: {
+            available: true,
+            count: 3,
+            truncated: false,
+            compact_moves: [
+              {
+                slug: "earthquake",
+                method: "machine",
+                type: "ground",
+                category: "physical",
+                power: 100,
+              },
+              {
+                slug: "dragon-claw",
+                method: "level-up",
+                type: null,
+                category: null,
+                power: null,
+              },
+            ],
+          },
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+  });
+});
