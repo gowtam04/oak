@@ -1,10 +1,10 @@
 /**
- * eval/cases.test.ts — structural unit tests for the G1..G60 case definitions.
+ * eval/cases.test.ts — structural unit tests for the G1..G61 case definitions.
  *
  * Owned by: phase "Eval" / track "cases".
  *
  * Tests the STRUCTURE and INTENT of cases.ts without any LLM or DB calls:
- *  - all 60 cases present with unique IDs G1..G60
+ *  - all 61 cases present with unique IDs G1..G61
  *  - every case has the required fields with valid types
  *  - multi-turn input (G19) is correctly shaped
  *  - deterministic subset matches the design.md + Oak v2 §7 spec
@@ -15,6 +15,7 @@
  *  - G26..G54 (Oak v2 §7) map 1:1 to benchmark questions BQ-1..BQ-29
  *  - G56..G59 (national-dex-scope feature) regression-pin whole-dex routing +
  *    LEAST/GREATEST slot-order normalization + form-awareness
+ *  - G61 (team-from-box) keep-and-warn Mega Kangaskhan via lookup_box
  */
 
 import { describe, it, expect } from "vitest";
@@ -46,6 +47,7 @@ const VALID_STATUSES = new Set<string>([
  *  - G26, G32, G35, G44, G47 (Oak v2 §7 run_sql aggregations)
  *  - G56, G57 (national-dex-scope whole-dex-routing + LEAST/GREATEST
  *    slot-order-normalization regression cases)
+ *  - G61 (team-from-box lookup_box keep-and-warn)
  */
 const EXPECTED_DETERMINISTIC_IDS = new Set([
   "G1",
@@ -62,6 +64,7 @@ const EXPECTED_DETERMINISTIC_IDS = new Set([
   "G47",
   "G56",
   "G57",
+  "G61",
 ]);
 
 /** Benchmark-question IDs (docs/features/oak-v2/benchmark-questions.md) that
@@ -110,8 +113,8 @@ describe("eval/cases", () => {
   // Top-level structure
   // -------------------------------------------------------------------------
 
-  it("exports exactly 60 cases", () => {
-    expect(cases).toHaveLength(60);
+  it("exports exactly 61 cases", () => {
+    expect(cases).toHaveLength(61);
   });
 
   it("all IDs follow the G<number> pattern", () => {
@@ -120,17 +123,17 @@ describe("eval/cases", () => {
     }
   });
 
-  it("all IDs G1..G60 are present and unique", () => {
+  it("all IDs G1..G61 are present and unique", () => {
     const ids = new Set(cases.map((c) => c.id));
-    expect(ids.size).toBe(60);
-    for (let n = 1; n <= 60; n++) {
+    expect(ids.size).toBe(61);
+    for (let n = 1; n <= 61; n++) {
       expect(ids.has(`G${n}`), `G${n} should be present`).toBe(true);
     }
   });
 
-  it("caseById indexes all 60 cases", () => {
-    expect(Object.keys(caseById)).toHaveLength(60);
-    for (let n = 1; n <= 60; n++) {
+  it("caseById indexes all 61 cases", () => {
+    expect(Object.keys(caseById)).toHaveLength(61);
+    for (let n = 1; n <= 61; n++) {
       expect(
         caseById[`G${n}`],
         `caseById["G${n}"] should be defined`,
@@ -138,7 +141,7 @@ describe("eval/cases", () => {
     }
   });
 
-  it("cases array order matches G1..G60 numerically", () => {
+  it("cases array order matches G1..G61 numerically", () => {
     for (let i = 0; i < cases.length; i++) {
       const expected = `G${i + 1}`;
       expect(cases[i].id).toBe(expected);
@@ -561,6 +564,9 @@ describe("eval/cases", () => {
       "D8",
       // Non-functional
       "NFR-reliability",
+      "BOX-AC-1.2",
+      "BOX-AC-2.4",
+      "BOX-AC-3.1",
     ];
 
     it.each(keyRequirements)("%s is covered by at least one case", (req) => {
@@ -630,6 +636,39 @@ describe("eval/cases", () => {
     it("G35 (Fire-Fang-Gen-3-bug false premise) rejects the premise, not fabricates one", () => {
       const g35 = getCase("G35");
       expect(g35.expect.mustInclude).toContain("Generation 4");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // G61 — team-from-box keep-and-warn (BOX-AC-1.2 / BOX-AC-2.4 / BOX-AC-3.1)
+  // -------------------------------------------------------------------------
+
+  describe("G61 team-from-box (Mega Kangaskhan keep-and-warn)", () => {
+    it("is deterministic and routes through lookup_box, not SQL/wiki", () => {
+      const g61 = getCase("G61");
+      expect(g61.expect.deterministic).toBe(true);
+      expect(g61.expect.status).toBe("answered");
+      expect(g61.expect.toolEfficiency?.usedTool).toBe("lookup_box");
+      expect(g61.expect.toolEfficiency?.maxPerPokemonFetches).toBe(0);
+    });
+
+    it("requires the named Mega Kangaskhan form plus a learnset warning", () => {
+      const g61 = getCase("G61");
+      expect(g61.expect.mustInclude).toEqual(
+        expect.arrayContaining(["kangaskhan-mega", "Learnset unavailable"]),
+      );
+    });
+
+    it("covers BOX-AC-1.2, BOX-AC-2.4, and BOX-AC-3.1", () => {
+      expect(getCase("G61").covers).toEqual(
+        expect.arrayContaining(["BOX-AC-1.2", "BOX-AC-2.4", "BOX-AC-3.1"]),
+      );
+    });
+
+    it("input is a box-build paste that names Mega Kangaskhan", () => {
+      const input = getCase("G61").input;
+      expect(typeof input).toBe("string");
+      expect((input as string).toLowerCase()).toContain("mega kangaskhan");
     });
   });
 });

@@ -57,6 +57,7 @@ import {
 import type { AgentContext } from "@/agent/types";
 import type {
   Candidates,
+  LookupBoxOutput,
   OakAnswer,
   QueryPokedexResult,
   ResolveEntityOutput,
@@ -64,6 +65,7 @@ import type {
   TypeMatchupsDetail,
   TypeName,
 } from "@/agent/schemas";
+import type { TeamMember } from "@/data/teams/team-schema";
 
 import { runStructural, type AssertResult, type GoldenCase } from "./judge";
 
@@ -482,6 +484,40 @@ function isRunSqlRows(o: unknown): o is RunSqlRows {
   return (
     typeof o === "object" && o !== null && Array.isArray((o as { rows?: unknown }).rows)
   );
+}
+
+/** Is this a successful lookup_box result? */
+function isLookupBoxOutput(o: unknown): o is LookupBoxOutput {
+  return (
+    typeof o === "object" &&
+    o !== null &&
+    Array.isArray((o as { results?: unknown }).results)
+  );
+}
+
+const ZERO_EVS = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
+const MAX_IVS = { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 };
+
+function boxMember(species: string): TeamMember {
+  return {
+    species,
+    ability: null,
+    item: null,
+    moves: [],
+    nature: null,
+    evs: { ...ZERO_EVS },
+    ivs: { ...MAX_IVS },
+    tera_type: null,
+    level: 50,
+  };
+}
+
+function displayToSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/['’.]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -954,6 +990,62 @@ const PLANS: Record<string, DeterministicPlan> = {
         ],
         inferences: [],
         generation_basis: NATDEX_BASIS,
+      };
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // Team-from-box (G61) — one lookup_box over a pasted owned list that
+  // includes Mega Kangaskhan. Keep the named form even if the fixture (or
+  // live index) has no learnset / no row; never call run_sql / search_wiki.
+  // -------------------------------------------------------------------------
+
+  G61: {
+    reads: [
+      {
+        name: "lookup_box",
+        input: {
+          names: [
+            "Mega Kangaskhan",
+            "Garchomp",
+            "Farigiraf",
+            "Ninetales",
+            "Talonflame",
+            "Tauros",
+          ],
+        },
+      },
+    ],
+    compose: (o) => {
+      const KEEP = "kangaskhan-mega";
+      const results = isLookupBoxOutput(o.lookup_box)
+        ? o.lookup_box.results
+        : [];
+      const members: TeamMember[] = [boxMember(KEEP)];
+      const seen = new Set<string>([KEEP]);
+      for (const r of results) {
+        if (members.length >= 6) break;
+        if (!r.found) continue;
+        const slug = displayToSlug(r.pokemon.display_name);
+        if (!slug || seen.has(slug)) continue;
+        seen.add(slug);
+        members.push(boxMember(slug));
+      }
+      const warning =
+        "Learnset unavailable for this form in this scope; species kept because you named it.";
+      return {
+        status: "answered",
+        answer_markdown: `Keeping **${KEEP}** on the proposed team with a warning: ${warning}`,
+        reasoning_markdown:
+          "One lookup_box call over the pasted names. Mega Kangaskhan is named-for-party, so a missing or empty learnset is a warning, not a drop or substitute.",
+        proposed_team: {
+          name: "Box party",
+          format: "scarlet-violet",
+          members,
+        },
+        citations: [],
+        inferences: [],
+        generation_basis: GEN9_BASIS,
       };
     },
   },
