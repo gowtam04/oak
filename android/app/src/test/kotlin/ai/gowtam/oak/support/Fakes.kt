@@ -332,7 +332,7 @@ class FakeTeamService(
     /** Optional per-call script (result / thrown error / a gate to suspend on) — overrides the defaults while non-empty. */
     var analyzeScript: ArrayDeque<AnalyzeStep>? = null,
 ) : TeamService {
-    val listCalls = mutableListOf<Format?>()
+    val listCalls = mutableListOf<Boolean>()
     val getCalls = mutableListOf<String>()
     val createCalls = mutableListOf<Triple<Format, String?, List<TeamMember>?>>()
     val updateCalls = mutableListOf<Triple<String, String?, List<TeamMember>?>>()
@@ -349,10 +349,10 @@ class FakeTeamService(
         val gate: CompletableDeferred<Unit>? = null,
     )
 
-    override suspend fun list(format: Format?): List<TeamSummary> {
-        listCalls += format
+    override suspend fun list(archived: Boolean): List<TeamSummary> {
+        listCalls += archived
         error?.let { throw it }
-        return listResult
+        return listResult.filter { it.format.isArchived == archived }
     }
 
     override suspend fun get(id: String): Pair<Team, List<TeamWarning>> {

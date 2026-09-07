@@ -127,10 +127,6 @@ fun HistoryScreen(
                 // New-chat moved to the floating disc for one-handed reach; the format
                 // filter stays a top-bar affordance and tints accent while a filter is on.
                 actions = {
-                    FilterAction(
-                        current = uiState.formatFilter,
-                        onSelect = { format -> scope.launch { viewModel.setFormatFilter(format) } },
-                    )
                     IconButton(onClick = viewModel::toggleSelecting) {
                         Icon(
                             if (uiState.selecting) Icons.Filled.Close else Icons.Filled.Check,
@@ -149,12 +145,6 @@ fun HistoryScreen(
                 onQueryChange = viewModel::onSearchQueryChange,
                 onSearch = { scope.launch { viewModel.search() } },
             )
-            uiState.formatFilter?.let { active ->
-                ActiveFilterPill(
-                    format = active,
-                    onClear = { scope.launch { viewModel.setFormatFilter(null) } },
-                )
-            }
             OrganizeStrip(
                 folders = uiState.folders,
                 folderFilter = uiState.folderFilter,

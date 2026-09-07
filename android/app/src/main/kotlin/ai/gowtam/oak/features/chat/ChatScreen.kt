@@ -154,7 +154,6 @@ fun ChatScreen(
     }
     val listState = rememberLazyListState()
     var pinJumpId by remember { mutableStateOf<String?>(null) }
-    var showScopePicker by remember { mutableStateOf(false) }
     val haptics = rememberHaptics()
 
     // Haptics are always redundant with a visible cue (the new AnswerCard / the error
@@ -277,11 +276,7 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    ScopeChip(
-                        format = uiState.displayFormat,
-                        enabled = !uiState.isStreaming,
-                        onClick = { showScopePicker = true },
-                    )
+                    RegulationChip(format = uiState.displayFormat)
                     IconButton(onClick = onOpenCalculator) {
                         Icon(Icons.Filled.Functions, contentDescription = "Calculator")
                     }
@@ -450,25 +445,7 @@ fun ChatScreen(
         }
     }
 
-    if (showScopePicker) {
-        val sheetState = rememberModalBottomSheetState()
-        ModalBottomSheet(
-            onDismissRequest = { showScopePicker = false },
-            sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface,
-            scrimColor = oak.scrim,
-            shape = RoundedCornerShape(topStart = OakRadius.xl, topEnd = OakRadius.xl),
-        ) {
-            ScopePickerSheet(
-                current = uiState.displayFormat,
-                mru = uiState.lastUsedScopes,
-                onSelect = { format ->
-                    viewModel.selectScope(format)
-                    showScopePicker = false
-                },
-            )
-        }
-    }
+
 
     // The artifact bottom sheet overlays the chat (co-visible, not a separate tab —
     // component-design.md "Navigation graph"); it self-hides when its back stack is
@@ -541,43 +518,23 @@ private fun HydrateBannerRow(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun ScopeChip(format: Format, enabled: Boolean, onClick: () -> Unit) {
+private fun RegulationChip(format: Format) {
     val oak = LocalOakColors.current
     val chipShape = RoundedCornerShape(OakRadius.pill)
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val fillAlpha = if (pressed && enabled) 0.28f else 0.16f
     Row(
         modifier = Modifier
             .padding(end = OakSpacing.sm)
             .clip(chipShape)
-            .background(oak.onRed.copy(alpha = fillAlpha), chipShape)
+            .background(oak.onRed.copy(alpha = 0.16f), chipShape)
             .border(1.dp, oak.onRed.copy(alpha = 0.45f), chipShape)
-            .then(
-                if (enabled) {
-                    Modifier.clickable(
-                        interactionSource = interaction,
-                        indication = null,
-                        onClick = onClick,
-                    )
-                } else {
-                    Modifier
-                },
-            )
             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = format.shortLabel,
+            text = format.displayLabel,
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = oak.onRed.copy(alpha = if (enabled) 1f else 0.7f),
-        )
-        Icon(
-            Icons.Filled.KeyboardArrowDown,
-            contentDescription = null,
-            tint = oak.onRed.copy(alpha = if (enabled) 1f else 0.7f),
-            modifier = Modifier.height(16.dp),
+            color = oak.onRed,
         )
     }
 }
@@ -907,13 +864,13 @@ private fun EmptyState(
         verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
         Text(
-            text = "What do you want to know?",
+            text = ChatEmptyCopy.headline,
             style = MaterialTheme.typography.displaySmall,
             color = oak.textStrong,
             modifier = Modifier.semantics { heading() },
         )
         Text(
-            text = "Mechanics, locations, teams, damage. Oak will show its work.",
+            text = ChatEmptyCopy.supporting,
             style = MaterialTheme.typography.bodyMedium,
             color = oak.textMuted,
         )
@@ -924,7 +881,7 @@ private fun EmptyState(
             FiledActionRow(label = "Team", title = team.name, onClick = { onOpenTeam(team.id) })
         }
         recents?.let {
-            FiledActionRow(label = "Scope", title = it.scope.shortLabel, onClick = {})
+            FiledActionRow(label = "Regulation", title = it.scope.displayLabel, onClick = {})
         }
         Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
             for (starter in starters) {

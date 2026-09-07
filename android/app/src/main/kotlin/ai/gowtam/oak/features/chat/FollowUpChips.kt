@@ -27,14 +27,7 @@ fun deriveFollowUpChips(
 ): List<FollowUpChip> {
     val chips = mutableListOf<FollowUpChip>()
 
-    if (impliedFormat != null) {
-        chips += FollowUpChip(
-            kind = FollowUpChip.Kind.Scope,
-            label = "Switch to ${impliedFormat.rawValue}.",
-            target = impliedFormat.rawValue,
-        )
-    }
-
+    // Champions-first: never offer switching to another game (CF-UI-AC-1.1).
     val subjects = answer.subjects
     if (!subjects.isNullOrEmpty()) {
         for (subject in subjects.take(DEX_CAP)) {

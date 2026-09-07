@@ -28,10 +28,11 @@ import kotlinx.serialization.Serializable
  */
 interface TeamService {
     /**
-     * Lists the account's teams, most-recently-edited first (`GET /api/teams?format=`).
-     * [format] filters by data scope (`null` = all).
+     * Lists the account's teams, most-recently-edited first.
+     * `GET /api/teams` — living Champions teams.
+     * `GET /api/teams?archived=1` — archived other-format teams.
      */
-    suspend fun list(format: Format?): List<TeamSummary>
+    suspend fun list(archived: Boolean = false): List<TeamSummary>
 
     /**
      * Loads one full team with its members + computed warnings (`GET /api/teams/{id}`).
@@ -91,8 +92,8 @@ interface TeamService {
  */
 class LiveTeamService(private val apiClient: OakApiClient) : TeamService {
 
-    override suspend fun list(format: Format?): List<TeamSummary> {
-        val queryItems = format?.let { listOf("format" to it.rawValue) } ?: emptyList()
+    override suspend fun list(archived: Boolean): List<TeamSummary> {
+        val queryItems = if (archived) listOf("archived" to "1") else emptyList()
         val endpoint = Endpoint(
             method = Endpoint.Method.GET,
             path = "/api/teams",

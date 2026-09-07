@@ -280,7 +280,7 @@ class FollowUpChipsTest {
             assertFalse(chip.label.lowercase().contains("add garchomp to a team"))
             assertFalse(chip.label.lowercase().contains("open this calc"))
         }
-        assertTrue(chips.any { it.kind == FollowUpChip.Kind.Scope })
+        assertEquals(0, chips.count { it.kind == FollowUpChip.Kind.Scope })
         assertTrue(chips.count { it.kind == FollowUpChip.Kind.Dex } <= 3)
         assertEquals(1, chips.count { it.kind == FollowUpChip.Kind.Team })
     }
@@ -322,9 +322,9 @@ class FollowUpChipsTest {
             impliedFormat = Format.ScarletViolet,
             mentionedTeam = MentionedTeam(id = "team-rain-1", name = "Rain Offense"),
         )
-        assertEquals(1, chips.count { it.kind == FollowUpChip.Kind.Scope })
+        assertEquals(0, chips.count { it.kind == FollowUpChip.Kind.Scope })
         assertEquals(3, chips.count { it.kind == FollowUpChip.Kind.Dex })
         assertEquals(1, chips.count { it.kind == FollowUpChip.Kind.Team })
-        assertEquals(5, chips.size)
+        assertEquals(4, chips.size)
     }
 }

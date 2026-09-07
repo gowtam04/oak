@@ -35,11 +35,13 @@ class CalculatorViewModel(
 
     private val _uiState = MutableStateFlow(
         UiState(
-            scenario = initialScenario ?: CalcScenario(
-                format = initialFormat,
-                attacker = CalcSide(),
-                defender = CalcSide(),
-                move = CalcMove(),
+            scenario = championsScenario(
+                initialScenario ?: CalcScenario(
+                    format = Format.Champions,
+                    attacker = CalcSide(),
+                    defender = CalcSide(),
+                    move = CalcMove(),
+                ),
             ),
         ),
     )
@@ -72,7 +74,9 @@ class CalculatorViewModel(
     }
 
     fun setFormat(format: Format) {
-        updateScenario { it.copy(format = format) }
+        // Champions-only: not a generation picker (CF-UI-AC-8.1).
+        if (format != Format.Champions) return
+        updateScenario { it.copy(format = Format.Champions) }
     }
 
     fun explainPrompt(): String? {
@@ -83,8 +87,27 @@ class CalculatorViewModel(
     }
 
     private fun updateScenario(transform: (CalcScenario) -> CalcScenario) {
-        _uiState.update { it.copy(scenario = transform(it.scenario)) }
+        _uiState.update { it.copy(scenario = championsScenario(transform(it.scenario))) }
         scheduleEstimate()
+    }
+
+    companion object {
+        private fun championsScenario(scenario: CalcScenario): CalcScenario {
+            val level = defaultCalcLevel(Format.Champions)
+            return scenario.copy(
+                format = Format.Champions,
+                attacker = scenario.attacker.copy(
+                    tera = null,
+                    ivs = null,
+                    level = scenario.attacker.level?.let { level },
+                ),
+                defender = scenario.defender.copy(
+                    tera = null,
+                    ivs = null,
+                    level = scenario.defender.level?.let { level },
+                ),
+            )
+        }
     }
 
     private fun scheduleEstimate() {

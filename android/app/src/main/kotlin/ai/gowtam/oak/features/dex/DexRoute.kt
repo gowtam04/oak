@@ -23,14 +23,11 @@ import androidx.compose.ui.Modifier
  */
 @Composable
 fun DexRoute(services: ServiceContainer, appState: AppState, modifier: Modifier = Modifier) {
-    val lastUsedScope by appState.lastUsedScope.collectAsState()
-    val initialFormat = lastUsedScope ?: Format.NationalDex
-
     val viewModel = remember(services) {
         DexViewModel(
             dexLookup = services.dexLookup,
             artifact = services.artifact,
-            initialFormat = initialFormat,
+            initialFormat = Format.Champions,
         )
     }
     LaunchedEffect(viewModel) { viewModel.start() }
@@ -40,17 +37,22 @@ fun DexRoute(services: ServiceContainer, appState: AppState, modifier: Modifier 
 
     val surface by appState.surfaceRequest.collectAsState()
     LaunchedEffect(surface) {
-        val req = surface as? ai.gowtam.oak.app.AppState.SurfaceRequest.Dex ?: return@LaunchedEffect
-        val query = req.query
-        if (!query.isNullOrBlank()) {
-            val kind = req.kind ?: EntityKind.POKEMON
-            val format = req.format
-            if (format != null) {
-                viewModel.applyHop(kind, query, format)
+        when (val req = surface) {
+            is ai.gowtam.oak.app.AppState.SurfaceRequest.Dex -> {
+                val query = req.query
+                if (!query.isNullOrBlank()) {
+                    val kind = req.kind ?: EntityKind.POKEMON
+                    viewModel.applyHop(kind, query, Format.Champions)
+                    stack.add(DexEntityRoute(kind, query))
+                }
+                appState.consumeSurfaceRequest()
             }
-            stack.add(DexEntityRoute(kind, query))
+            ai.gowtam.oak.app.AppState.SurfaceRequest.Usage -> {
+                viewModel.selectSection(DexSection.Usage)
+                appState.consumeSurfaceRequest()
+            }
+            else -> Unit
         }
-        appState.consumeSurfaceRequest()
     }
 
     BackHandler(enabled = stack.isNotEmpty()) {
@@ -62,6 +64,7 @@ fun DexRoute(services: ServiceContainer, appState: AppState, modifier: Modifier 
     if (top == null) {
         DexListScreen(
             viewModel = viewModel,
+            usage = services.usage,
             onOpen = { kind, query -> stack.add(DexEntityRoute(kind, query)) },
             modifier = modifier,
         )

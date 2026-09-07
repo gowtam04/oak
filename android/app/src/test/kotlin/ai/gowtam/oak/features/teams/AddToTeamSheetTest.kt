@@ -102,7 +102,7 @@ class AddToTeamSheetTest {
         assertEquals("t1", picker.teams[0].id)
         assertEquals(2, picker.teams[0].memberCount)
         assertEquals(6, picker.teams[1].memberCount)
-        assertEquals(listOf(null), teams.listCalls)
+        assertEquals(listOf(false), teams.listCalls)
     }
 
     @Test

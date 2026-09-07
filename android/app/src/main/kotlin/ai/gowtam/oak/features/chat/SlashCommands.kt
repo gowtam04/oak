@@ -9,8 +9,8 @@ package ai.gowtam.oak.features.chat
  * does not POST `/api/chat`. `/compare` stays an ordinary message
  * (CMP-BR-3). Unknown slashes are ordinary messages.
  *
- * Android has no usage surface in this pack, so [hasUsagePage] defaults to
- * false and `/usage` is an ordinary message.
+ * Android Usage is a Dex section (ADR-6), so [hasUsagePage] defaults to true
+ * and `/usage` navigates.
  */
 sealed interface SlashCommand {
     data class Navigate(val target: Target) : SlashCommand
@@ -20,7 +20,7 @@ sealed interface SlashCommand {
     enum class Target { New, Team, Dex, Usage }
 }
 
-fun parseSlashCommand(text: String, hasUsagePage: Boolean = false): SlashCommand {
+fun parseSlashCommand(text: String, hasUsagePage: Boolean = true): SlashCommand {
     val token = firstToken(text)
     return when (token) {
         "/new" -> SlashCommand.Navigate(SlashCommand.Target.New)

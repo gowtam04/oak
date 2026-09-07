@@ -120,7 +120,7 @@ private fun CalculatorForm(
         verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
         Text(
-            text = "Damage calculator · ${scenario.format.shortLabel}",
+            text = "Damage calculator · Champions · L50 Stat Points",
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color = oak.textStrong,
         )
@@ -152,17 +152,6 @@ private fun CalculatorForm(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
-        Text("Format", style = MaterialTheme.typography.labelMedium, color = oak.textMuted)
-        Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
-            for (format in listOf(Format.NationalDex, Format.Champions, Format.ScarletViolet, Format.Gen5, Format.Gen7)) {
-                FilterChip(
-                    selected = scenario.format == format,
-                    onClick = { viewModel.setFormat(format) },
-                    label = { Text(format.shortLabel) },
-                    colors = enamelFilterChipColors(oak),
-                )
-            }
-        }
         Text("Weather", style = MaterialTheme.typography.labelMedium, color = oak.textMuted)
         Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
             for (weather in listOf("none", "sun", "rain", "sand", "snow")) {

@@ -23,12 +23,14 @@ import ai.gowtam.oak.services.LiveScopeService
 import ai.gowtam.oak.services.LiveShareService
 import ai.gowtam.oak.services.LiveTeamService
 import ai.gowtam.oak.services.LiveTeamsAssistantService
+import ai.gowtam.oak.services.LiveUsageService
 import ai.gowtam.oak.services.LiveVoiceHydrateService
 import ai.gowtam.oak.services.PreferencesService
 import ai.gowtam.oak.services.ScopeService
 import ai.gowtam.oak.services.ShareService
 import ai.gowtam.oak.services.TeamService
 import ai.gowtam.oak.services.TeamsAssistantService
+import ai.gowtam.oak.services.UsageService
 import ai.gowtam.oak.services.VoiceHydrateService
 import android.content.Context
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -60,6 +62,7 @@ data class ServiceContainer(
     val pins: ArtifactPinService,
     val preferences: PreferencesService,
     val hydrate: VoiceHydrateService,
+    val usage: UsageService,
 ) {
     companion object {
         /**
@@ -87,6 +90,7 @@ data class ServiceContainer(
                 pins = LiveArtifactPinService(apiClient),
                 preferences = LivePreferencesService(apiClient),
                 hydrate = LiveVoiceHydrateService(apiClient),
+                usage = LiveUsageService(apiClient),
             )
         }
     }

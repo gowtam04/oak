@@ -24,15 +24,18 @@ import kotlinx.coroutines.launch
 /** The single renderable snapshot the Teams list screen collects. */
 @Immutable
 data class TeamsListUiState(
-    /** The visible team summaries, most-recently-edited first (the server's order). */
-    val teams: List<TeamSummary> = emptyList(),
+    /** Living Champions teams, most-recently-edited first. */
+    val livingTeams: List<TeamSummary> = emptyList(),
+    /** Other-format teams (view + delete only). */
+    val archivedTeams: List<TeamSummary> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    /** The active format filter; `null` = all formats. Applied server-side. */
-    val formatFilter: Format? = null,
     /** Sprite refs keyed by species slug, populated after each reload. */
     val spriteRefs: Map<String, DexSpriteRef> = emptyMap(),
-)
+) {
+    /** Alias for [livingTeams] — the primary list. */
+    val teams: List<TeamSummary> get() = livingTeams
+}
 
 /**
  * The team-library view model (history-and-teams.md D-TEAM-1; component-design.md
@@ -64,9 +67,10 @@ class TeamsListViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             try {
-                val teams = teamService.list(uiState.value.formatFilter)
-                val spriteRefs = fetchSpriteRefs(teams)
-                _uiState.update { it.copy(teams = teams, spriteRefs = spriteRefs) }
+                val living = teamService.list(archived = false)
+                val archived = runCatching { teamService.list(archived = true) }.getOrDefault(emptyList())
+                val spriteRefs = fetchSpriteRefs(living + archived)
+                _uiState.update { it.copy(livingTeams = living, archivedTeams = archived, spriteRefs = spriteRefs) }
             } catch (e: OakError) {
                 _uiState.update { it.copy(errorMessage = TeamEditorViewModel.message(e)) }
             } catch (e: Exception) {
@@ -96,20 +100,19 @@ class TeamsListViewModel(
         }
     }
 
-    /** Switches the format filter and re-fetches. A no-op when unchanged. */
-    fun setFormatFilter(format: Format?) {
-        if (format == uiState.value.formatFilter) return
-        _uiState.update { it.copy(formatFilter = format) }
-        reload()
-    }
+    fun canEdit(summary: TeamSummary): Boolean = !summary.format.isArchived
+    fun canDuplicate(summary: TeamSummary): Boolean = !summary.format.isArchived
+    fun canApplySet(summary: TeamSummary): Boolean = !summary.format.isArchived
+    fun canUseInChat(summary: TeamSummary): Boolean = !summary.format.isArchived
+    fun canDelete(summary: TeamSummary): Boolean = true
 
-    /** Creates a new, empty team in [format] and inserts its summary at the top.
+    /** Creates a new, empty Champions team and inserts its summary at the top.
      * [onCreated] fires with the created [Team] on success, so the caller can hand it
      * straight to the editor. `name == null` ⇒ the server's default name. */
-    fun createTeam(format: Format, name: String? = null, onCreated: (Team) -> Unit = {}) {
+    fun createTeam(name: String? = null, onCreated: (Team) -> Unit = {}) {
         viewModelScope.launch {
             try {
-                val (team, _) = teamService.create(format, name, null)
+                val (team, _) = teamService.create(Format.Champions, name, null)
                 insertOrReplace(team)
                 onCreated(team)
             } catch (e: OakError) {
@@ -120,8 +123,9 @@ class TeamsListViewModel(
         }
     }
 
-    /** Duplicates [summary] and inserts the copy's summary at the top. */
+    /** Duplicates [summary] and inserts the copy's summary at the top. Archived teams cannot be duplicated. */
     fun duplicate(summary: TeamSummary, onDuplicated: (Team) -> Unit = {}) {
+        if (!canDuplicate(summary)) return
         viewModelScope.launch {
             try {
                 val (team, _) = teamService.duplicate(summary.id)
@@ -139,29 +143,52 @@ class TeamsListViewModel(
      * (already gone / not owned) is treated as success — idempotent UX. Any other
      * failure restores the row and surfaces an error. */
     fun delete(summary: TeamSummary) {
-        val snapshot = uiState.value.teams
-        _uiState.update { it.copy(teams = it.teams.filterNot { t -> t.id == summary.id }) }
+        val snapshotLiving = uiState.value.livingTeams
+        val snapshotArchived = uiState.value.archivedTeams
+        _uiState.update {
+            it.copy(
+                livingTeams = it.livingTeams.filterNot { t -> t.id == summary.id },
+                archivedTeams = it.archivedTeams.filterNot { t -> t.id == summary.id },
+            )
+        }
         viewModelScope.launch {
             try {
                 teamService.delete(summary.id)
             } catch (e: OakError.Http) {
-                if (e.status != 404) _uiState.update { it.copy(teams = snapshot, errorMessage = TeamEditorViewModel.message(e)) }
+                if (e.status != 404) {
+                    _uiState.update {
+                        it.copy(
+                            livingTeams = snapshotLiving,
+                            archivedTeams = snapshotArchived,
+                            errorMessage = TeamEditorViewModel.message(e),
+                        )
+                    }
+                }
             } catch (e: OakError) {
-                _uiState.update { it.copy(teams = snapshot, errorMessage = TeamEditorViewModel.message(e)) }
+                _uiState.update {
+                    it.copy(
+                        livingTeams = snapshotLiving,
+                        archivedTeams = snapshotArchived,
+                        errorMessage = TeamEditorViewModel.message(e),
+                    )
+                }
             } catch (e: Exception) {
-                _uiState.update { it.copy(teams = snapshot, errorMessage = TeamEditorViewModel.GENERIC_MESSAGE) }
+                _uiState.update {
+                    it.copy(
+                        livingTeams = snapshotLiving,
+                        archivedTeams = snapshotArchived,
+                        errorMessage = TeamEditorViewModel.GENERIC_MESSAGE,
+                    )
+                }
             }
         }
     }
 
-    /** Imports a Showdown paste into a new saved team and inserts its summary. The
-     * import never fails wholesale — [onResult] fires with the saved team + any
-     * resolve-or-clarify [ImportNote]s on success, or `(null, [])` on a
-     * transport/HTTP failure. */
-    fun importPaste(paste: String, format: Format, onResult: (Team?, List<ImportNote>) -> Unit = { _, _ -> }) {
+    /** Imports a Showdown paste into a new living Champions team. */
+    fun importPaste(paste: String, onResult: (Team?, List<ImportNote>) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
             try {
-                val (team, _, notes) = teamService.importPaste(format, paste)
+                val (team, _, notes) = teamService.importPaste(Format.Champions, paste)
                 insertOrReplace(team)
                 onResult(team, notes)
             } catch (e: OakError) {
@@ -180,8 +207,9 @@ class TeamsListViewModel(
 
     // ---- Child editor factories ----
 
-    /** An editor for a brand-new, unsaved team in [format] (the "+" flow). */
-    fun makeEditor(format: Format): TeamEditorViewModel = TeamEditorViewModel(teamService, dexLookup, format = format)
+    /** An editor for a brand-new, unsaved Champions team (the "+" flow). */
+    fun makeEditor(): TeamEditorViewModel =
+        TeamEditorViewModel(teamService, dexLookup, format = Format.Champions)
 
     /** An editor for an existing team (by summary); the editor's own `load()` fetches
      * the full members + warnings. */
@@ -198,7 +226,13 @@ class TeamsListViewModel(
      * most-recently-edited-first ordering for a freshly created/updated team). */
     private fun insertOrReplace(team: Team) {
         val summary = teamSummaryOf(team)
-        _uiState.update { s -> s.copy(teams = listOf(summary) + s.teams.filterNot { it.id == summary.id }) }
+        _uiState.update { s ->
+            if (summary.format.isArchived) {
+                s.copy(archivedTeams = listOf(summary) + s.archivedTeams.filterNot { it.id == summary.id })
+            } else {
+                s.copy(livingTeams = listOf(summary) + s.livingTeams.filterNot { it.id == summary.id })
+            }
+        }
     }
 
     private fun setError(message: String) {

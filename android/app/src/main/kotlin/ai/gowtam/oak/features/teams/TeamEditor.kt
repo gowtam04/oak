@@ -153,10 +153,12 @@ fun TeamEditor(
                     if (state.teamId != null) {
                         IconButton(onClick = viewModel::exportPaste) { Icon(Icons.Filled.Share, contentDescription = "Export") }
                     }
-                    IconButton(onClick = { showAssistant = true }) { Icon(Icons.Filled.AutoAwesome, contentDescription = "Team assistant") }
+                    if (!viewModel.isReadOnly) {
+                        IconButton(onClick = { showAssistant = true }) { Icon(Icons.Filled.AutoAwesome, contentDescription = "Team assistant") }
+                    }
                     if (state.isSaving) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp).padding(end = OakSpacing.md), strokeWidth = 2.dp, color = oak.onRed)
-                    } else {
+                    } else if (!viewModel.isReadOnly) {
                         LidSaveButton(onClick = viewModel::save)
                     }
                 },
@@ -176,9 +178,14 @@ fun TeamEditor(
                             onValueChange = viewModel::setName,
                             label = { Text("Team name") },
                             modifier = Modifier.fillMaxWidth(),
+                            enabled = !viewModel.isReadOnly,
                         )
                         Text(
-                            text = "Format: ${viewModel.format.displayLabel}",
+                            text = if (viewModel.isReadOnly) {
+                                "Archived · ${viewModel.format.displayLabel}"
+                            } else {
+                                "Format: ${viewModel.format.displayLabel}"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = LocalOakColors.current.textMuted,
                         )
@@ -206,6 +213,11 @@ fun TeamEditor(
                         abilityOptions = viewModel.abilityOptions(member.species),
                         movepoolOptions = viewModel.movepoolOptions(member.id),
                         search = viewModel::searchEntities,
+                        readOnly = viewModel.isReadOnly,
+                        showsTeraField = viewModel.showsTeraField,
+                        showsIvKnobs = viewModel.showsIvKnobs,
+                        showsLevelKnob = viewModel.showsLevelKnob,
+                        showsStatPoints = viewModel.showsStatPoints,
                         onChange = { transform -> viewModel.updateMember(index, transform) },
                         onRemove = { viewModel.removeMember(index) },
                     )
@@ -245,6 +257,20 @@ fun TeamEditor(
                 )
             }
         }
+    }
+
+    state.pendingApplyConfirm?.let {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = viewModel::cancelApplySet,
+            title = { Text("Replace this Pokémon?") },
+            text = { Text("Apply the usage set to this slot?") },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmApplySet) { Text("Replace") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelApplySet) { Text("Cancel") }
+            },
+        )
     }
 
     if (showAssistant) {
@@ -344,6 +370,11 @@ private fun MemberEditorCard(
     abilityOptions: List<PickerOption>,
     movepoolOptions: List<PickerOption>,
     search: suspend (EntityKind, String) -> List<PickerOption>,
+    readOnly: Boolean,
+    showsTeraField: Boolean,
+    showsIvKnobs: Boolean,
+    showsLevelKnob: Boolean,
+    showsStatPoints: Boolean,
     onChange: ((EditableMember) -> EditableMember) -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -362,8 +393,10 @@ private fun MemberEditorCard(
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(headerTitle, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
-            IconButton(onClick = onRemove) {
-                Icon(Icons.Filled.Delete, contentDescription = "Remove Pokémon ${index + 1}", tint = oak.danger)
+            if (!readOnly) {
+                IconButton(onClick = onRemove) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Remove Pokémon ${index + 1}", tint = oak.danger)
+                }
             }
         }
 
@@ -388,7 +421,11 @@ private fun MemberEditorCard(
             onValueChange = { onChange { m -> m.copy(species = it) } },
             placeholder = "Search Pokémon…",
             displayNameOverride = if (spriteRef != null) { { headerTitle } } else null,
+            enabled = !readOnly,
         )
+        if (readOnly && member.species.isNotBlank() && spriteRef == null) {
+            Text(TeamEditorViewModel.OFF_ROSTER_LABEL, style = MaterialTheme.typography.labelSmall, color = oak.warning)
+        }
         EntityPickerField(
             title = "Ability",
             value = member.ability,
@@ -396,7 +433,7 @@ private fun MemberEditorCard(
             search = search,
             onValueChange = { onChange { m -> m.copy(ability = it) } },
             placeholder = if (member.species.isBlank()) "Select a species first" else "Search abilities…",
-            enabled = member.species.isNotBlank(),
+            enabled = !readOnly && member.species.isNotBlank(),
         )
         EntityPickerField(
             title = if (requiredItem != null) "Item (Mega stone)" else "Item",
@@ -405,7 +442,7 @@ private fun MemberEditorCard(
             search = search,
             onValueChange = { onChange { m -> m.copy(item = it) } },
             placeholder = "Search items…",
-            enabled = requiredItem == null,
+            enabled = !readOnly && requiredItem == null,
         )
 
         for (moveIndex in 0 until 4) {
@@ -420,7 +457,7 @@ private fun MemberEditorCard(
                         onChange { m -> m.copy(moves = m.moves.toMutableList().also { list -> if (moveIndex < list.size) list[moveIndex] = newValue }) }
                     },
                     placeholder = if (member.species.isBlank()) "Select a species first" else "Move ${moveIndex + 1}",
-                    enabled = member.species.isNotBlank(),
+                    enabled = !readOnly && member.species.isNotBlank(),
                 )
                 movepoolOptions.find { it.slug == currentMove }?.hint?.let { hint ->
                     Text(hint, style = MaterialTheme.typography.labelSmall, color = oak.textMuted)
@@ -435,36 +472,66 @@ private fun MemberEditorCard(
             search = search,
             onValueChange = { onChange { m -> m.copy(nature = it) } },
             placeholder = "None",
+            enabled = !readOnly,
         )
-        EntityPickerField(
-            title = "Tera type",
-            value = member.teraType,
-            source = PickerSource.Options(TeamEditorViewModel.teraTypes.map { PickerOption(it, titleizeTeamSlug(it)) }),
-            search = search,
-            onValueChange = { onChange { m -> m.copy(teraType = it) } },
-            placeholder = "None",
-        )
+        if (showsTeraField) {
+            EntityPickerField(
+                title = "Tera type",
+                value = member.teraType,
+                source = PickerSource.Options(TeamEditorViewModel.teraTypes.map { PickerOption(it, titleizeTeamSlug(it)) }),
+                search = search,
+                onValueChange = { onChange { m -> m.copy(teraType = it) } },
+                placeholder = "None",
+                enabled = !readOnly,
+            )
+        }
 
-        LevelStepper(level = member.level, onChange = { onChange { m -> m.copy(level = it) } })
+        if (showsLevelKnob) {
+            LevelStepper(level = member.level, onChange = { onChange { m -> m.copy(level = it) } })
+        }
 
-        StatGrid(title = "EVs", spread = member.evs, range = 0..252, step = 4, onChange = { onChange { m -> m.copy(evs = it) } })
-        Text(
-            text = if (member.evTotal > 508) "EV total: ${member.evTotal} / 508 — over the legal budget (saved anyway)" else "EV total: ${member.evTotal} / 508",
-            style = MaterialTheme.typography.labelSmall,
-            color = if (member.evTotal > 508) oak.warning else oak.textMuted,
-        )
-        StatGrid(title = "IVs", spread = member.ivs, range = 0..31, step = 1, onChange = { onChange { m -> m.copy(ivs = it) } })
+        if (showsStatPoints) {
+            StatGrid(
+                title = "Stat Points",
+                spread = member.evs,
+                range = 0..TeamEditorViewModel.STAT_POINT_PER_STAT_MAX,
+                step = 1,
+                enabled = !readOnly,
+                onChange = { onChange { m -> m.copy(evs = it) } },
+            )
+            val overBudget = member.statPointTotal > TeamEditorViewModel.STAT_POINT_BUDGET
+            Text(
+                text = if (overBudget) {
+                    "Stat Points: ${member.statPointTotal} / ${TeamEditorViewModel.STAT_POINT_BUDGET} — over the legal budget (saved anyway)"
+                } else {
+                    "Stat Points: ${member.statPointTotal} / ${TeamEditorViewModel.STAT_POINT_BUDGET}"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (overBudget) oak.warning else oak.textMuted,
+            )
+        } else {
+            StatGrid(title = "EVs", spread = member.evs, range = 0..252, step = 4, enabled = !readOnly, onChange = { onChange { m -> m.copy(evs = it) } })
+            Text(
+                text = if (member.evTotal > 508) "EV total: ${member.evTotal} / 508 — over the legal budget (saved anyway)" else "EV total: ${member.evTotal} / 508",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (member.evTotal > 508) oak.warning else oak.textMuted,
+            )
+        }
+        if (showsIvKnobs) {
+            StatGrid(title = "IVs", spread = member.ivs, range = 0..31, step = 1, enabled = !readOnly, onChange = { onChange { m -> m.copy(ivs = it) } })
+        }
 
         OutlinedTextField(
             value = member.nickname,
             onValueChange = { onChange { m -> m.copy(nickname = it) } },
             label = { Text("Nickname") },
             modifier = Modifier.fillMaxWidth(),
+            enabled = !readOnly,
         )
-        GenderRow(gender = member.gender, onChange = { onChange { m -> m.copy(gender = it) } })
+        GenderRow(gender = member.gender, enabled = !readOnly, onChange = { onChange { m -> m.copy(gender = it) } })
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
             Text("Shiny", modifier = Modifier.weight(1f))
-            Switch(checked = member.shiny, onCheckedChange = { onChange { m -> m.copy(shiny = it) } })
+            Switch(checked = member.shiny, enabled = !readOnly, onCheckedChange = { onChange { m -> m.copy(shiny = it) } })
         }
 
         if (warnings.isNotEmpty()) WarningsBlock(title = null, warnings = warnings)
@@ -484,7 +551,14 @@ private fun LevelStepper(level: Int, onChange: (Int) -> Unit) {
 }
 
 @Composable
-private fun StatGrid(title: String, spread: StatSpread, range: IntRange, step: Int, onChange: (StatSpread) -> Unit) {
+private fun StatGrid(
+    title: String,
+    spread: StatSpread,
+    range: IntRange,
+    step: Int,
+    enabled: Boolean = true,
+    onChange: (StatSpread) -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
     Column {
         Row(
@@ -497,31 +571,35 @@ private fun StatGrid(title: String, spread: StatSpread, range: IntRange, step: I
         }
         if (expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                StatRow("HP", spread.hp, range, step) { onChange(spread.copy(hp = it)) }
-                StatRow("Attack", spread.atk, range, step) { onChange(spread.copy(atk = it)) }
-                StatRow("Defense", spread.def, range, step) { onChange(spread.copy(def = it)) }
-                StatRow("Sp. Atk", spread.spa, range, step) { onChange(spread.copy(spa = it)) }
-                StatRow("Sp. Def", spread.spd, range, step) { onChange(spread.copy(spd = it)) }
-                StatRow("Speed", spread.spe, range, step) { onChange(spread.copy(spe = it)) }
+                StatRow("HP", spread.hp, range, step, enabled) { onChange(spread.copy(hp = it)) }
+                StatRow("Attack", spread.atk, range, step, enabled) { onChange(spread.copy(atk = it)) }
+                StatRow("Defense", spread.def, range, step, enabled) { onChange(spread.copy(def = it)) }
+                StatRow("Sp. Atk", spread.spa, range, step, enabled) { onChange(spread.copy(spa = it)) }
+                StatRow("Sp. Def", spread.spd, range, step, enabled) { onChange(spread.copy(spd = it)) }
+                StatRow("Speed", spread.spe, range, step, enabled) { onChange(spread.copy(spe = it)) }
             }
         }
     }
 }
 
 @Composable
-private fun StatRow(label: String, value: Int, range: IntRange, step: Int, onChange: (Int) -> Unit) {
+private fun StatRow(label: String, value: Int, range: IntRange, step: Int, enabled: Boolean = true, onChange: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodySmall)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { onChange((value - step).coerceIn(range)) }) { Icon(Icons.Filled.Remove, contentDescription = "Decrease $label") }
+            IconButton(enabled = enabled, onClick = { onChange((value - step).coerceIn(range)) }) { Icon(Icons.Filled.Remove, contentDescription = "Decrease $label") }
             Text("$value", modifier = Modifier.width(32.dp), textAlign = TextAlign.Center)
-            IconButton(onClick = { onChange((value + step).coerceIn(range)) }) { Icon(Icons.Filled.Add, contentDescription = "Increase $label") }
+            IconButton(enabled = enabled, onClick = { onChange((value + step).coerceIn(range)) }) { Icon(Icons.Filled.Add, contentDescription = "Increase $label") }
         }
     }
 }
 
 @Composable
-private fun GenderRow(gender: TeamMember.Gender?, onChange: (TeamMember.Gender?) -> Unit) {
+private fun GenderRow(
+    gender: TeamMember.Gender?,
+    enabled: Boolean = true,
+    onChange: (TeamMember.Gender?) -> Unit,
+) {
     val oak = LocalOakColors.current
     val chipShape = RoundedCornerShape(OakRadius.pill)
     val chipColors = FilterChipDefaults.filterChipColors(
@@ -531,10 +609,10 @@ private fun GenderRow(gender: TeamMember.Gender?, onChange: (TeamMember.Gender?)
         selectedLabelColor = oak.azure,
     )
     Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
-        FilterChip(selected = gender == null, onClick = { onChange(null) }, label = { Text("Unspecified") }, shape = chipShape, colors = chipColors)
-        FilterChip(selected = gender == TeamMember.Gender.MALE, onClick = { onChange(TeamMember.Gender.MALE) }, label = { Text("Male") }, shape = chipShape, colors = chipColors)
-        FilterChip(selected = gender == TeamMember.Gender.FEMALE, onClick = { onChange(TeamMember.Gender.FEMALE) }, label = { Text("Female") }, shape = chipShape, colors = chipColors)
-        FilterChip(selected = gender == TeamMember.Gender.NEUTRAL, onClick = { onChange(TeamMember.Gender.NEUTRAL) }, label = { Text("Genderless") }, shape = chipShape, colors = chipColors)
+        FilterChip(selected = gender == null, onClick = { onChange(null) }, enabled = enabled, label = { Text("Unspecified") }, shape = chipShape, colors = chipColors)
+        FilterChip(selected = gender == TeamMember.Gender.MALE, onClick = { onChange(TeamMember.Gender.MALE) }, enabled = enabled, label = { Text("Male") }, shape = chipShape, colors = chipColors)
+        FilterChip(selected = gender == TeamMember.Gender.FEMALE, onClick = { onChange(TeamMember.Gender.FEMALE) }, enabled = enabled, label = { Text("Female") }, shape = chipShape, colors = chipColors)
+        FilterChip(selected = gender == TeamMember.Gender.NEUTRAL, onClick = { onChange(TeamMember.Gender.NEUTRAL) }, enabled = enabled, label = { Text("Genderless") }, shape = chipShape, colors = chipColors)
     }
 }
 

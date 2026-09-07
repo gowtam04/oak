@@ -55,6 +55,9 @@ data class EditableMember(
     /** The six-stat EV total (>508 is warned server-side, never blocked client-side). */
     val evTotal: Int get() = evs.hp + evs.atk + evs.def + evs.spa + evs.spd + evs.spe
 
+    /** Champions Stat Point total — same numbers as [evTotal] on the wire (ADR-7). */
+    val statPointTotal: Int get() = evTotal
+
     /** Converts to the wire [TeamMember]: trimmed-empty strings become `null`, blank
      * move slots are dropped, `shiny` is emitted only when true. */
     fun asTeamMember(): TeamMember {
@@ -133,6 +136,15 @@ data class TeamEditorUiState(
     val isAnalyzing: Boolean = false,
     /** A failed analysis's message; the last good [analysis] is retained alongside it. */
     val analysisError: String? = null,
+    /** Pending replace-confirm when applying a usage set onto a filled slot. */
+    val pendingApplyConfirm: PendingApplyConfirm? = null,
+)
+
+/** Yes/no confirm before a filled slot is replaced by a usage set (CF-TEAM-AC-6.3). */
+@Immutable
+data class PendingApplyConfirm(
+    val slotIndex: Int,
+    val incoming: TeamMember,
 )
 
 /**
@@ -162,6 +174,14 @@ class TeamEditorViewModel private constructor(
 
     private val _uiState = MutableStateFlow(initialState)
     val uiState: StateFlow<TeamEditorUiState> = _uiState.asStateFlow()
+
+    val isReadOnly: Boolean get() = format.isArchived
+    val showsTeraField: Boolean get() = false
+    val showsIvKnobs: Boolean get() = false
+    val showsLevelKnob: Boolean get() = false
+    val showsStatPoints: Boolean get() = true
+    val canDuplicate: Boolean get() = !isReadOnly
+    val canApplySet: Boolean get() = !isReadOnly
 
     /** The pending debounce timer for [scheduleAnalysis]; cancelled/relaunched on each edit. */
     private var analysisDebounceJob: Job? = null
@@ -333,16 +353,19 @@ class TeamEditorViewModel private constructor(
     // ---- Member editing ----
 
     fun setName(name: String) {
+        if (isReadOnly) return
         _uiState.update { it.copy(name = name) }
     }
 
     /** Adds an empty member set; a no-op at the 6-slot cap. */
     fun addMember() {
+        if (isReadOnly) return
         _uiState.update { if (it.members.size < 6) it.copy(members = it.members + EditableMember()) else it }
         scheduleAnalysis()
     }
 
     fun removeMember(index: Int) {
+        if (isReadOnly) return
         _uiState.update { state ->
             if (index in state.members.indices) {
                 state.copy(members = state.members.filterIndexed { i, _ -> i != index })
@@ -353,11 +376,12 @@ class TeamEditorViewModel private constructor(
         scheduleAnalysis()
     }
 
-    val canAddMember: Boolean get() = uiState.value.members.size < 6
+    val canAddMember: Boolean get() = !isReadOnly && uiState.value.members.size < 6
 
     /** Applies [transform] to the member at [index] and, when the species changed,
      * re-resolves that slot's sprite/movepool. */
     fun updateMember(index: Int, transform: (EditableMember) -> EditableMember) {
+        if (isReadOnly) return
         val current = uiState.value.members.getOrNull(index) ?: return
         val updated = transform(current)
         if (updated == current) return
@@ -440,6 +464,7 @@ class TeamEditorViewModel private constructor(
      * warnings**: the request always goes out, and the returned warnings are shown
      * afterward. */
     fun save() {
+        if (isReadOnly) return
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, errorMessage = null) }
             val memberPayload = uiState.value.members.map { it.asTeamMember() }
@@ -528,7 +553,48 @@ class TeamEditorViewModel private constructor(
      * untouched — the patched rows land in the editor's unsaved state and the user still
      * hits Save. The slot edits reuse the exact pure [applyTeamPatch] the server
      * legality-gate ran, so applied ≡ validated. */
+    /**
+     * Applies a live usage set to [slotIndex]. An empty slot fills immediately;
+     * a filled slot asks for yes/no confirm (CF-TEAM-AC-6.3). Tera is stripped
+     * and level forced to 50 (ADR-7).
+     */
+    fun applyUsageSet(slotIndex: Int, incoming: TeamMember) {
+        if (!canApplySet) return
+        val current = uiState.value.members.getOrNull(slotIndex) ?: return
+        if (current.species.isNotBlank()) {
+            _uiState.update { it.copy(pendingApplyConfirm = PendingApplyConfirm(slotIndex, incoming)) }
+            return
+        }
+        writeUsageSet(slotIndex, incoming)
+    }
+
+    fun confirmApplySet() {
+        val pending = uiState.value.pendingApplyConfirm ?: return
+        _uiState.update { it.copy(pendingApplyConfirm = null) }
+        writeUsageSet(pending.slotIndex, pending.incoming)
+    }
+
+    fun cancelApplySet() {
+        _uiState.update { it.copy(pendingApplyConfirm = null) }
+    }
+
+    private fun writeUsageSet(slotIndex: Int, incoming: TeamMember) {
+        val current = uiState.value.members.getOrNull(slotIndex) ?: return
+        val applied = EditableMember.from(incoming).copy(
+            id = current.id,
+            teraType = "",
+            level = LEVEL,
+        )
+        _uiState.update { state ->
+            state.copy(members = state.members.toMutableList().also { it[slotIndex] = applied })
+        }
+        refreshSprites()
+        refreshMovepool(applied.id)
+        scheduleAnalysis()
+    }
+
     fun applyAssistantPatch(patch: TeamPatch) {
+        if (isReadOnly) return
         val patched = applyTeamPatch(draftWireMembers(), patch)
         _uiState.update { state ->
             state.copy(
@@ -575,6 +641,11 @@ class TeamEditorViewModel private constructor(
             "fighting", "poison", "ground", "flying", "psychic", "bug",
             "rock", "ghost", "dragon", "dark", "steel", "fairy",
         )
+
+        const val STAT_POINT_BUDGET = 66
+        const val STAT_POINT_PER_STAT_MAX = 32
+        const val LEVEL = 50
+        const val OFF_ROSTER_LABEL = "not in the Champions roster"
 
         /** Debounce window collapsing rapid draft edits into one analysis request. */
         const val ANALYSIS_DEBOUNCE_MS = 750L
