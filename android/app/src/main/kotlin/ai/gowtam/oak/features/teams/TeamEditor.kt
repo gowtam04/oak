@@ -8,6 +8,7 @@ import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.OakTopBar
 import ai.gowtam.oak.ui.TypeBadge
 import ai.gowtam.oak.wire.AnalyzedMember
 import ai.gowtam.oak.wire.DefenseRow
@@ -20,6 +21,7 @@ import ai.gowtam.oak.wire.TeamWarning
 import ai.gowtam.oak.wire.titleizeTeamSlug
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -68,7 +70,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -80,6 +81,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.heading
@@ -117,6 +120,7 @@ fun TeamEditor(
     var showAssistant by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
+    var selectedSlot by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         if (loadsOnAppear) {
@@ -136,7 +140,8 @@ fun TeamEditor(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
+            val oak = LocalOakColors.current
+            OakTopBar(
                 title = {
                     Text(
                         if (state.savedTeam == null) "New team" else "Edit team",
@@ -150,9 +155,9 @@ fun TeamEditor(
                     }
                     IconButton(onClick = { showAssistant = true }) { Icon(Icons.Filled.AutoAwesome, contentDescription = "Team assistant") }
                     if (state.isSaving) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp).padding(end = OakSpacing.md), strokeWidth = 2.dp, color = LocalOakColors.current.accent)
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp).padding(end = OakSpacing.md), strokeWidth = 2.dp, color = oak.onRed)
                     } else {
-                        TextButton(onClick = viewModel::save) { Text("Save", fontWeight = FontWeight.SemiBold) }
+                        LidSaveButton(onClick = viewModel::save)
                     }
                 },
             )
@@ -181,12 +186,20 @@ fun TeamEditor(
                 }
 
                 if (state.members.isNotEmpty()) {
-                    item { RosterStrip(members = state.members, spriteRefs = state.spriteRefsBySpecies) }
+                    item {
+                        RosterStrip(
+                            members = state.members,
+                            spriteRefs = state.spriteRefsBySpecies,
+                            selectedIndex = selectedSlot.coerceIn(0, state.members.lastIndex),
+                            onSelect = { selectedSlot = it },
+                        )
+                    }
                 }
 
                 itemsIndexed(state.members, key = { _, member -> member.id }) { index, member ->
                     MemberEditorCard(
                         index = index,
+                        selected = index == selectedSlot.coerceIn(0, state.members.lastIndex.coerceAtLeast(0)),
                         member = member,
                         warnings = viewModel.warningsForSlot(index),
                         spriteRef = viewModel.spriteRef(member.species),
@@ -241,6 +254,7 @@ fun TeamEditor(
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface,
             scrimColor = LocalOakColors.current.scrim,
+            tonalElevation = 0.dp,
             shape = RoundedCornerShape(topStart = OakRadius.xl, topEnd = OakRadius.xl),
         ) {
             TeamsAssistantSheet(viewModel = assistantViewModel, onDone = { showAssistant = false })
@@ -266,7 +280,30 @@ fun TeamEditor(
 }
 
 @Composable
-private fun RosterStrip(members: List<EditableMember>, spriteRefs: Map<String, DexSpriteRef>) {
+private fun LidSaveButton(onClick: () -> Unit) {
+    val oak = LocalOakColors.current
+    val shape = RoundedCornerShape(OakRadius.pill)
+    Box(
+        modifier = Modifier
+            .padding(end = OakSpacing.sm)
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.16f), shape)
+            .border(1.dp, Color.White.copy(alpha = 0.45f), shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("Save", color = oak.onRed, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun RosterStrip(
+    members: List<EditableMember>,
+    spriteRefs: Map<String, DexSpriteRef>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.md),
@@ -278,12 +315,18 @@ private fun RosterStrip(members: List<EditableMember>, spriteRefs: Map<String, D
             } else {
                 ref?.displayName ?: titleizeTeamSlug(member.species)
             }
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(60.dp)) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .width(60.dp)
+                    .clickable { onSelect(index) },
+            ) {
                 TypeEdgeSlot(
                     spriteUrl = ref?.spriteUrl,
                     name = label,
                     types = ref?.types.orEmpty(),
                     size = 48.dp,
+                    selected = index == selectedIndex,
                 )
                 Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
@@ -294,6 +337,7 @@ private fun RosterStrip(members: List<EditableMember>, spriteRefs: Map<String, D
 @Composable
 private fun MemberEditorCard(
     index: Int,
+    selected: Boolean,
     member: EditableMember,
     warnings: List<TeamWarning>,
     spriteRef: DexSpriteRef?,
@@ -307,10 +351,12 @@ private fun MemberEditorCard(
     val requiredItem = spriteRef?.requiredItem?.takeIf { it.isNotBlank() }
     val headerTitle = if (member.species.isBlank()) "Pokémon ${index + 1}" else (spriteRef?.displayName ?: titleizeTeamSlug(member.species))
 
+    val cardShape = RoundedCornerShape(OakRadius.md)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(oak.surfaceRaised, RoundedCornerShape(OakRadius.md))
+            .background(MaterialTheme.colorScheme.surface, cardShape)
+            .border(if (selected) 2.dp else 1.dp, if (selected) oak.accent else oak.border, cardShape)
             .padding(OakSpacing.lg),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
@@ -328,6 +374,7 @@ private fun MemberEditorCard(
                     name = headerTitle,
                     types = spriteRef.types,
                     size = 52.dp,
+                    selected = selected,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { spriteRef.types.forEach { TypeBadge(it) } }
             }
@@ -759,13 +806,13 @@ private fun SavedBadge(modifier: Modifier = Modifier) {
 @Composable
 private fun ExportDialog(paste: String, onDismiss: () -> Unit, onCopy: () -> Unit, onShare: () -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column {
-                TopAppBar(
+                OakTopBar(
                     title = { Text("Showdown export", modifier = Modifier.semantics { heading() }) },
                     navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Done") } },
                     actions = {
-                        TextButton(onClick = onCopy) { Text("Copy") }
+                        TextButton(onClick = onCopy) { Text("Copy", color = LocalOakColors.current.onRed) }
                         IconButton(onClick = onShare) { Icon(Icons.Filled.Share, contentDescription = "Share") }
                     },
                 )

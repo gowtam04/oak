@@ -7,7 +7,10 @@ import ai.gowtam.oak.features.auth.AuthViewModel
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.OakTopBar
+import ai.gowtam.oak.ui.OakWordmark
 import ai.gowtam.oak.wire.DexSpriteRef
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.Team
@@ -28,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -45,8 +49,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import ai.gowtam.oak.ui.OakTopBar
-import ai.gowtam.oak.ui.OakWordmark
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,6 +59,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -244,7 +247,10 @@ private fun TeamsListScreen(
                     CircularProgressIndicator(color = LocalOakColors.current.accent)
                 }
                 state.teams.isEmpty() -> EmptyState(formatFilter = state.formatFilter)
-                else -> LazyColumn {
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = OakSpacing.sm),
+                ) {
                     items(state.teams, key = { it.id }) { team ->
                         TeamRow(
                             team = team,
@@ -308,13 +314,18 @@ private fun TeamRow(
 ) {
     val oak = LocalOakColors.current
     var showMenu by remember { mutableStateOf(false) }
+    val rowShape = RoundedCornerShape(OakRadius.md)
 
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = OakSpacing.md, vertical = 4.dp)
+                .clip(rowShape)
+                .background(MaterialTheme.colorScheme.surface, rowShape)
+                .border(1.dp, oak.border, rowShape)
                 .clickable(onClick = onClick)
-                .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.md),
+                .padding(horizontal = OakSpacing.md, vertical = OakSpacing.md),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(OakSpacing.md),
         ) {
@@ -337,7 +348,6 @@ private fun TeamRow(
                 }
             }
         }
-        HorizontalDivider()
     }
 }
 

@@ -41,6 +41,9 @@ struct TeamEditorView: View {
   /// transient "Saved" checkmark overlay (self-clearing after ~1s).
   @State private var showSaveConfirmation = false
 
+  /// Roster strip selection — 2px poke-red ring on the focused party slot.
+  @State private var selectedRosterIndex = 0
+
   /// When `true`, the editor fetches the full team on appear (existing-team path).
   private let loadsOnAppear: Bool
 
@@ -68,7 +71,9 @@ struct TeamEditorView: View {
               RosterStripView(
                 members: model.members,
                 spriteRefs: model.spriteRefsBySpecies,
+                selectedIndex: selectedRosterIndex,
                 onSelect: { index in
+                  selectedRosterIndex = index
                   withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
                     proxy.scrollTo(model.members[index].id, anchor: .top)
                   }
@@ -132,7 +137,12 @@ struct TeamEditorView: View {
       }
       // Member edits flow through direct bindings, so the coverage analysis is (re)scheduled
       // from the view whenever the draft's members change; the view model debounces + coalesces.
-      .onChange(of: model.members) { _, _ in model.scheduleAnalysis() }
+      .onChange(of: model.members) { _, members in
+        model.scheduleAnalysis()
+        if selectedRosterIndex >= members.count {
+          selectedRosterIndex = max(0, members.count - 1)
+        }
+      }
       .scrollContentBackground(.hidden)
       .background(Theme.canvas)
       .listRowBackground(Theme.surface)
@@ -146,24 +156,31 @@ struct TeamEditorView: View {
           } label: {
             Label("Team assistant", systemImage: "sparkles")
           }
+          .foregroundStyle(Theme.onRed)
         }
-        // On iOS 26 liquid glass the two trailing items merge into one capsule,
-        // crowding the sparkle's tap target (TestFlight ANnTYLc). A fixed spacer
-        // splits them into separate capsules; availability-gated because the deploy
-        // target is iOS 18 (ToolbarContentBuilder supports `if #available`).
+        .oakLidItem()
+        // Layout workaround: keep trailing items from merging into one
+        // capsule. Not glass identity — enamel lid chrome stays opaque paint.
         if #available(iOS 26.0, *) {
           ToolbarSpacer(.fixed, placement: .topBarTrailing)
         }
         ToolbarItem(placement: .topBarTrailing) {
           if model.isSaving {
             ProgressView()
+              .tint(Theme.onRed)
           } else {
             Button("Save") {
               Task { await saveAndConfirm() }
             }
-            .fontWeight(.semibold)
+            .font(Theme.body(.subheadline, weight: .semibold))
+            .foregroundStyle(Theme.onRed)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Theme.onRed.opacity(0.16), in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.onRed.opacity(0.45), lineWidth: 1))
           }
         }
+        .oakLidItem()
         if model.teamId != nil {
           ToolbarItem(placement: .topBarLeading) {
             Button {
@@ -607,6 +624,7 @@ private struct MoveFieldRow: View {
 private struct RosterStripView: View {
   let members: [EditableMember]
   let spriteRefs: [String: DexSpriteRef]
+  let selectedIndex: Int
   let onSelect: (Int) -> Void
 
   var body: some View {
@@ -627,12 +645,11 @@ private struct RosterStripView: View {
     .accessibilityLabel("Team roster")
   }
 
-  /// One party slot: type-glow edge when species types are known (soul.md Phase
-  /// 2.2). Selection language stays scroll-to-focus, not a SaaS left rail.
+  /// One party slot. Selected slot gets a 2px poke-red ring (Enamel & Paper
+  /// roster-slot recipe). Empty slots sit in a quiet paper well.
   private func rosterSlot(member: EditableMember, index: Int) -> some View {
     let ref = member.species.isEmpty ? nil : spriteRefs[member.species]
-    let primary = ref?.types.first
-    let secondary = (ref?.types.count ?? 0) > 1 ? ref?.types[1] : nil
+    let selected = index == selectedIndex
     return VStack(spacing: 4) {
       SpriteImage(
         urlString: ref?.spriteUrl,
@@ -640,15 +657,17 @@ private struct RosterStripView: View {
         size: 44
       )
       .padding(6)
-      .background {
-        if primary == nil {
-          RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-            .fill(Theme.surfaceSunken)
-        }
+      .background(
+        Theme.surfaceSunken,
+        in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+          .strokeBorder(selected ? Theme.accent : Theme.border, lineWidth: selected ? 2 : 1)
       }
-      .modifier(RosterTypeEdge(primary: primary, secondary: secondary))
       Text(slotLabel(member, index))
         .font(Theme.body(.caption2))
+        .foregroundStyle(selected ? Theme.accent : Theme.textPrimary)
         .lineLimit(1)
         .frame(width: 60)
     }

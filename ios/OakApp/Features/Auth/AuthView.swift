@@ -58,13 +58,15 @@ struct AuthView: View {
               .transition(.opacity)
           }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 24)
-        .padding(.bottom, 40)
+        .padding(24)
         .frame(maxWidth: .infinity)
+        .oakCard()
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 40)
       }
       .scrollDismissesKeyboard(.interactively)
-      .background(Theme.background)
+      .background(Theme.canvas)
       .navigationTitle("Sign in")
       .navigationBarTitleDisplayMode(.inline)
       // Success ↔ flow crossfade (checkmark draw handled inside successView).
@@ -240,29 +242,29 @@ struct AuthView: View {
   }
 
   /// One digit cell. Renders `model.code`'s character at `index` (display capped at 6
-  /// defensively); the active cell (next empty slot while focused) gets an **azure**
-  /// focus border + soft azure glow (interaction, §5.5); digits pop in with a scale
+  /// defensively); the active cell (next empty slot while focused) gets a **poke-red**
+  /// focus border + 18% red halo. Digits are JetBrains Mono; they pop in with a scale
   /// spring.
   private func digitBox(index: Int) -> some View {
     let digits = Array(model.code.prefix(6))
     let hasDigit = index < digits.count
     let isActive = focusedField == .code && index == digits.count && digits.count < 6
     return RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-      .fill(Theme.surfaceSunken)
+      .fill(Theme.surface)
       .frame(width: 44, height: 56)
       .overlay {
         RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-          .strokeBorder(isActive ? Theme.azure : Theme.separator, lineWidth: isActive ? 2 : 1)
+          .strokeBorder(isActive ? Theme.accent : Theme.borderStrong, lineWidth: isActive ? 2 : 1)
       }
       .overlay {
         if hasDigit {
           Text(String(digits[index]))
-            .font(Theme.mono(.title2))
+            .font(Theme.mono(.title2, weight: .semibold))
             .foregroundStyle(Theme.textPrimary)
             .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
         }
       }
-      .shadow(color: isActive && !reduceMotion ? Theme.azure.opacity(0.30) : .clear, radius: 6)
+      .shadow(color: isActive && !reduceMotion ? Theme.accent.opacity(0.18) : .clear, radius: 4)
       .animation(reduceMotion ? nil : Theme.Motion.snappy, value: model.code)
       .animation(reduceMotion ? nil : Theme.Motion.snappy, value: isActive)
       .accessibilityHidden(true)
@@ -336,7 +338,7 @@ struct AuthView: View {
             .tint(.white)
         }
       }
-      .foregroundStyle(isActive ? .white : Theme.textMuted)
+      .foregroundStyle(isActive ? Theme.onRed : Theme.textMuted)
       .frame(maxWidth: .infinity)
       .padding(.vertical, 14)
       .background(isActive ? Theme.accent : Theme.surfaceSunken, in: Capsule())
@@ -382,9 +384,9 @@ struct AuthView: View {
 
 // MARK: - Floating field chrome
 
-/// The rounded, filled text-field chrome with an animated focus border — **azure**
-/// when focused (interaction, §5.5), separator otherwise; mirrors the composer's
-/// focus treatment. The border transition is dropped under Reduce Motion.
+/// The rounded, filled text-field chrome with an animated focus border — **poke-red**
+/// when focused (composer recipe), hairline otherwise. The border transition is
+/// dropped under Reduce Motion.
 private struct FloatingFieldChrome: ViewModifier {
   let focused: Bool
   let reduceMotion: Bool
@@ -397,11 +399,11 @@ private struct FloatingFieldChrome: ViewModifier {
       .overlay {
         RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
           .strokeBorder(
-            focused ? Theme.azure : Theme.separator,
+            focused ? Theme.accent : Theme.borderStrong,
             lineWidth: focused ? 1.5 : 1
           )
       }
-      .shadow(color: focused ? Theme.azure.opacity(0.28) : .clear, radius: 6)
+      .shadow(color: focused ? Theme.accent.opacity(0.18) : .clear, radius: 4)
       .animation(reduceMotion ? nil : Theme.Motion.snappy, value: focused)
   }
 }

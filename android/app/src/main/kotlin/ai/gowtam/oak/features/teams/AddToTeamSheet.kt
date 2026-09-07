@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -162,6 +163,9 @@ fun AddToTeamSheet(
             onDismiss()
         },
         sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        scrimColor = oak.scrim,
+        tonalElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier

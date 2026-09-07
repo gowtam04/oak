@@ -4,6 +4,7 @@ import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.OakTopBar
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.ImportNote
 import ai.gowtam.oak.wire.Team
@@ -33,7 +34,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,14 +74,14 @@ fun ShowdownImportDialog(
     val oak = LocalOakColors.current
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column {
-                TopAppBar(
+                OakTopBar(
                     title = { Text("Import team", modifier = Modifier.semantics { heading() }) },
                     navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Cancel") } },
                     actions = {
                         when {
-                            isImporting -> CircularProgressIndicator(modifier = Modifier.padding(end = OakSpacing.md), strokeWidth = 2.dp, color = LocalOakColors.current.accent)
+                            isImporting -> CircularProgressIndicator(modifier = Modifier.padding(end = OakSpacing.md), strokeWidth = 2.dp, color = oak.onRed)
                             importedTeam == null -> TextButton(
                                 enabled = paste.isNotBlank(),
                                 onClick = {
@@ -93,8 +93,8 @@ fun ShowdownImportDialog(
                                         if (team != null && resultNotes.isEmpty()) onDismiss()
                                     }
                                 },
-                            ) { Text("Import", fontWeight = FontWeight.SemiBold) }
-                            else -> TextButton(onClick = onDismiss) { Text("Done", fontWeight = FontWeight.SemiBold) }
+                            ) { Text("Import", fontWeight = FontWeight.SemiBold, color = oak.onRed) }
+                            else -> TextButton(onClick = onDismiss) { Text("Done", fontWeight = FontWeight.SemiBold, color = oak.onRed) }
                         }
                     },
                 )

@@ -51,9 +51,11 @@ struct TeamsListView: View {
           ToolbarItem(placement: .topBarLeading) {
             formatFilterMenu
           }
+          .oakLidItem()
           ToolbarItem(placement: .topBarTrailing) {
             addMenu
           }
+          .oakLidItem()
         }
       }
       .navigationDestination(item: $editorTarget) { target in
@@ -142,6 +144,7 @@ struct TeamsListView: View {
             rowMenu(for: team)
           }
           .listRowBackground(Theme.surface)
+          .listRowSeparatorTint(Theme.separator)
         }
       }
       .listStyle(.plain)
