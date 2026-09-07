@@ -59,7 +59,22 @@ type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,battle,showdown,imp
 
 ## What's New (this release)
 
-**1.1 (build 38)** — TestFlight upload 2026-08-16; Dex hop, subject-sprite tap, profile edge, and the incoming thinking plate. ASC version still 1.1 (created with build 37). What's New written from changes since 1.0.2 (the last version that shipped). 1.0.3 was TestFlight-only and never submitted.
+**1.1.1 (build 50)** — submitted 2026-09-07 (`WAITING_FOR_REVIEW`, `releaseType: AFTER_APPROVAL`). ASC version was the 1.1 record (created 2026-08-16, approved then held as `PENDING_DEVELOPER_RELEASE` on build 45); that hold was developer-rejected and retargeted as 1.1.1 so users never got the stale 1.1 binary. What's New covers everything since 1.0.2 (the last version that shipped). 1.0.3 and 1.1 were TestFlight / unreleased.
+
+```
+What's new in 1.1.1
+
+• Retry an answer, edit a typo, or undo a send — no retyping
+• Copy, share, or export a chat; pin turns and organize with folders
+• Place a Pokémon on a team, compare, or open the calculator from an answer
+• Light, Dark, or System appearance — now in Settings
+• A refreshed enamel look, new app icon, and clearer thinking steps
+```
+**348 / 4000 chars.**
+
+Covered since 1.0.2: Chat QoL (`d718812` — retry/edit/undo, copy/share/export, pins/forks/folders, @mention, follow-up chips); answer-card verbs (place-on-team, compare, calculator, artifact pins); Settings tab + Light/Dark/System; enamel-paper refresh + daylight `O.` icon + thinking steps; Dex list sprites. Omitted as too internal or small: spend-control banners, iOS 26 tab-bar inset, starter-prompt pool, HTML-comment hide, Grok 4.6 default.
+
+**1.1 (build 45)** — approved 2026-08-20, never released (`PENDING_DEVELOPER_RELEASE` cancelled 2026-09-07 so 1.1.1 could submit). Prior What's New:
 
 ```
 What's new in 1.1
@@ -70,9 +85,6 @@ What's new in 1.1
 • @mention a saved team and tap follow-up chips to keep going
 • A calmer look — quieter chrome, clearer answer cards
 ```
-**~340 / 4000 chars.**
-
-Covered since 1.0.2: Chat QoL (`d718812` — retry/edit/undo, human copy, public share, export, pins/forks/folders, @mention, follow-up chips, slashes, persist scope + MRU) and the Signal visual refresh (supersedes the unshipped 1.0.3 Instrument TestFlight notes). Omitted as too internal or small: Grok 4.6 default, Dex blank-browse fix.
 
 **1.0.3 (build 36)** — TestFlight only; train never submitted.
 
