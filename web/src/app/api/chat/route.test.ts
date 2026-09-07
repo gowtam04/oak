@@ -29,6 +29,8 @@
  * switch mode). Mentions bind living Champions teams only.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -73,6 +75,7 @@ const spend = vi.hoisted(() => ({
 vi.mock("@/server/spend-control", () => spend);
 
 import { createPgSchema, installAsSingleton, type PgFixture } from "../../../../test/support/pg";
+import { team } from "@/data/schema";
 import {
   _resetStoreForTests,
   checkRateLimit,
@@ -478,9 +481,25 @@ async function seedOwnedTeam(
   name: string,
   format: "scarlet-violet" | "champions" | "gen-7" = "champions",
 ): Promise<{ id: string; name: string; format: string }> {
+  // Living writes always store champions (P4). Archived rows must be inserted
+  // directly so format !== "champions" (ADR-3).
+  if (format !== "champions") {
+    const id = randomUUID();
+    const now = Date.now();
+    await fix.db.insert(team).values({
+      id,
+      account_id: accountId,
+      format,
+      name,
+      members: JSON.stringify([]),
+      created_at: now,
+      updated_at: now,
+    });
+    return { id, format, name };
+  }
   return teamRepo.createTeam({
     accountId,
-    format,
+    format: "champions",
     name,
     members: [],
     now: Date.now(),
