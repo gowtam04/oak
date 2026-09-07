@@ -41,6 +41,12 @@ describe("AppNav — New chat control", () => {
 });
 
 describe("AppNav — primary items", () => {
+  it("includes Usage as a primary destination (CF-USAGE-US-1, ADR-6)", () => {
+    expect(PRIMARY_NAV_ITEMS).toEqual(
+      expect.arrayContaining([{ label: "Usage", href: "/usage" }]),
+    );
+  });
+
   it("renders every primary item with its href", () => {
     render(<AppNav pathname="/" />);
     for (const item of PRIMARY_NAV_ITEMS) {

@@ -102,4 +102,28 @@ describe("sitemap (shards 0-4)", () => {
     const sitemap = (await import("./sitemap")).default;
     await expect(sitemap({ id: 99 })).rejects.toThrow(/unknown sitemap shard/);
   });
+
+  it("shard 0 lists /usage and does not list Smogon OU /meta URLs (CF-USAGE-AC-1.7, ADR-5)", async () => {
+    const sitemap = (await import("./sitemap")).default;
+    const entries = await sitemap({ id: 0 });
+    expect(entries.some((e) => e.url === "https://oak.gowtam.ai/usage")).toBe(
+      true,
+    );
+    expect(
+      entries.every(
+        (e) =>
+          !e.url.includes("/meta/gen9ou") &&
+          !e.url.endsWith("/meta") &&
+          !e.url.includes("/meta/"),
+      ),
+    ).toBe(true);
+  });
+
+  it("generateSitemaps drops the Smogon OU shard (CF-INT-BR-7, ADR-5)", async () => {
+    const { generateSitemaps } = await import("./sitemap");
+    const shards = await generateSitemaps();
+    expect(shards.map((s) => s.id)).not.toContain(5);
+    expect(shards.map((s) => s.id)).toEqual([0, 1, 2, 3, 4]);
+  });
 });
+
