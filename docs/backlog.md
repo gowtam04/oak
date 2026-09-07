@@ -1177,3 +1177,88 @@ grok-heavy vs. claude fixture accounts plausibly flipped.
 `src/server/admin/pricing.ts` (only if the reconciliation itself is wrong).
 
 **Depends on:** Nothing.
+
+---
+
+## B-23 — Prompt audit
+
+**Why:** Oak's defining trait is that it **reasons on top of data**, and the
+system prompt is the contract that makes that happen: tool routing, games-only
+scope, citation/inference rules, `submit_answer` terminates the turn. That
+contract has **accreted** rather than been re-read as a whole. The live body
+started as an 11-tool Gen-9/Champions expert and now teaches **21 tools**,
+**eleven scopes**, warehouse SQL (`run_sql` + embedded DDL), wiki retrieval,
+team-build playbook, box-build, vision, meta usage, and honest degradation
+after T20 `web_search` was removed. Production Grok 4.6 turns sit around
+**~250k input tokens** (most of it cached prefix — see the 2026-09-06
+4.6-vs-4.3 bake-off). Three separate prompt surfaces have to stay consistent
+on facts and routing even though they are **not** byte-identical:
+
+- **Text chat** — the ONE canonical Markdown body (`src/agent/prompts/domain.ts`,
+  ~840 lines) plus `champions.ts` / `gen-info.ts` / `natdex.ts` scope facts,
+  `warehouse-ddl.ts`, thin style wrappers, and few-shot examples.
+- **Voice** — its own brain (`src/agent/prompts/voice.ts` + `voice-compile.ts`),
+  parity-exempt by design (it speaks instead of emitting `OakAnswer`).
+- **Teams assistant** — a second Markdown body
+  (`src/agent/teams-assistant/prompts/domain.ts`) with `submit_builder_answer`.
+
+The last dedicated prompt review (`docs/review/fable/fable-review-09-prompts-parity.md`,
+2026-07-02) predates prompt collapse (the Grok-XML fork is gone), T21/T22, voice
+compile, and the 4.6 default. `docs/agent-design/prompts.md` is already marked
+historical and still describes PokeAPI / Gen-9-only rules. Pin tests
+(`style.test.ts`, `parity.test.ts`) catch structure (segment/breakpoint, format
+labels, tool-name substrings) — they do **not** catch contradictory routing,
+dangling section refs, stale tool counts, or "the model follows the wrong
+paragraph." A dedicated audit is the cheapest way to find those before the next
+tool or scope lands on top.
+
+**Scope:**
+- Inventory every prompt surface the model actually sees (text body + injected
+  `ScopeProfile`, few-shot, style wrappers, warehouse DDL, voice, voice-compile,
+  teams-assistant, any runtime nudges like `SUBMIT_NUDGE`). Cross-check against
+  the live tool barrel (`src/agent/tools/index.ts`), `OakAnswer` /
+  `builderAnswerSchema`, and `formats.ts` — names, counts, and field lists must
+  match code, not memory.
+- Hunt for **contradictions and dead weight**: overlapping tool-routing rules
+  (typed tools vs `run_sql` vs `search_wiki`), team-build playbook vs catalog
+  intents vs box-build, "never `insufficient_data`" vs the real give-up path,
+  games-only / media decline vs wiki corpus leakage, image-as-data vs
+  injection, dangling refs (the old "see Resolve or clarify" class), leftover
+  `domain-grok.ts` / 11-tool / six-scope language in comments and docs.
+- Measure **prefix cost**: which sections are in the cached prefix, which are
+  per-scope, which could move out or shrink without losing routing. The bake-off
+  already flagged that oak-v2 tools + warehouse DDL made the 4.6 prompt much
+  larger than 4.3-era turns.
+- Check **cross-surface drift**: voice and teams-assistant must not disagree
+  with `domain.ts` on substance (Champions regulation, learnset-verify-before-
+  propose, games-only, no live web) even though they may diverge in shape.
+- Write the findings as a short note (candidate: `docs/review/prompt-audit.md`)
+  with keep / rewrite / delete per section. **Fix the cheap correctness bugs
+  in the same change** (stale counts, dangling refs, missing IVs in the
+  complete-set checklist, injection-hardening clause). A structural rewrite
+  of the body is a follow-up, not this item, unless the audit shows the
+  current shape is load-bearing-broken.
+- Pin anything the audit decides is invariant (tool-name list, submit-tool
+  name per surface, "no `web_search`", eleven format labels) so the next
+  accretion can't silently undocument a tool.
+
+**Open questions:**
+- Audit-and-patch vs. a full rewrite of `domain.ts` in the same pass? Default:
+  audit + cheap fixes here; rewrite only if the findings say the body is
+  fighting itself, not just long.
+- How hard to gate a rewrite: deterministic `style`/`parity` tests are
+  necessary but not sufficient — a prompt rewrite should re-run the judged
+  golden subset (at least the smoke slice, ideally G1–G61) on the active
+  model before merge.
+- Is shrinking the cached prefix (DDL on demand, fewer few-shots, shorter
+  playbook) in scope, or a separate cost item after the audit names what
+  is actually unused?
+
+**Touches:** `src/agent/prompts/{domain,champions,gen-info,natdex,warehouse-ddl,voice,voice-compile,style-*}.ts`,
+`src/agent/teams-assistant/prompts/*`, `src/agent/tools/index.ts` (as the
+name/count source of truth), pin tests under `src/agent/prompts/*.test.ts`,
+`docs/agent-design/prompts.md` (mark or refresh), a new findings note under
+`docs/review/`. Eval harness if a rewrite lands.
+
+**Depends on:** Nothing. Benefits from the 2026-09-06 bake-off and the July
+fable prompt review as prior art, not blockers.
