@@ -61,9 +61,10 @@ struct ChatRequestEncodingTests {
     #expect(object["mentionedTeamIds"] == nil)
   }
 
-  /// An image-bearing turn may carry an empty `message`; a scope pick encodes as
-  /// its `Format` rawValue under `scope_seed`; each image keeps camelCase `mimeType`
-  /// and raw base64.
+  /// An image-bearing turn may carry an empty `message`; a Champions seed (if the
+  /// client still sends `scope_seed` at all) encodes as its `Format` rawValue;
+  /// each image keeps camelCase `mimeType` and raw base64. Other-format seeds are
+  /// a decode leftover — ChatViewModel must not send them (CF-CHAT-US-1).
   @Test
   func imageTurnEncodesScopeSeedAndRawBase64Images() throws {
     let request = ChatRequest(
@@ -73,14 +74,14 @@ struct ChatRequestEncodingTests {
         ChatImage(mimeType: "image/jpeg", data: "AQIDBA=="),
         ChatImage(mimeType: "image/png", data: "BQYHCA=="),
       ],
-      scopeSeed: .gen7
+      scopeSeed: .champions
     )
     let object = try encodedObject(request)
 
     #expect(object["session_id"] as? String == "sess-456")
     #expect(object["message"] as? String == "")
     // scope_seed carries the wire rawValue, not a case name.
-    #expect(object["scope_seed"] as? String == "gen-7")
+    #expect(object["scope_seed"] as? String == "champions")
     #expect(object["champions_mode"] == nil)
 
     let images = try #require(object["images"] as? [[String: Any]])

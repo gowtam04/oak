@@ -60,7 +60,7 @@ struct AddToTeamSheetTests {
   private func team(
     id: String,
     name: String = "Team",
-    format: Format = .scarletViolet,
+    format: Format = .champions,
     members: [TeamMember]
   ) -> Team {
     Team(id: id, name: name, format: format, members: members, createdAt: 1, updatedAt: 1)
@@ -69,7 +69,7 @@ struct AddToTeamSheetTests {
   private func makeVM(
     seed: [Team],
     signedIn: Bool = true,
-    format: Format = .scarletViolet,
+    format: Format = .champions,
     incoming: TeamMember? = nil
   ) -> (AddToTeamViewModel, FakeTeamService) {
     let teams = FakeTeamService(seed: seed)
@@ -213,7 +213,7 @@ struct AddToTeamSheetTests {
     await vm.createNewTeam(name: "Gen 5 sand")
 
     #expect(fake.createCount == 1)
-    #expect(fake.lastCreateFormat == .gen5)
+    #expect(fake.lastCreateFormat == .champions)
     #expect(fake.lastCreateName == "Gen 5 sand")
     #expect(fake.lastCreateMembers?.first?.species == "garchomp")
     #expect(vm.openedTeamId != nil)

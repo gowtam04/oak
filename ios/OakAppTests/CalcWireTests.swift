@@ -236,13 +236,14 @@ struct CalcWireTests {
   // MARK: CALC-US-7 / CALC-AC-7.1 / CALC-BR-7 — default level
 
   @Test
-  func defaultLevelIs50ForChampionsAnd100Otherwise() {
+  func defaultLevelIs50ForChampions() {
     #expect(defaultCalcLevel(.champions) == 50)
-    for format in Format.knownCases where format != .champions {
-      #expect(defaultCalcLevel(format) == 100, "\(format.rawValue) defaults to 100")
+    // Champions-first (CF-CALC-US-1): calc is L50 even if a leftover format
+    // string is passed — there is no gen-N / National Dex calc.
+    for format in Format.knownCases {
+      #expect(defaultCalcLevel(format) == 50, "\(format.rawValue) calc is L50")
     }
     #expect(Format.knownCases.contains(.champions))
-    #expect(Format.knownCases.count == 11)
   }
 
   // MARK: CALC-US-8 — explain prompt

@@ -22,4 +22,12 @@ struct DexSectionTests {
   func pokemonTitleUsesAccentedE() {
     #expect(DexSection.pokemon.title == "Pokémon")
   }
+
+  /// ADR-6: iOS Usage is a root tab, not a Dex section (Android puts Usage
+  /// inside Dex). This catalogue stays Pokémon / Moves / Abilities / Items.
+  @Test
+  func usageIsNotADexSection() {
+    #expect(!DexSection.allCases.map(\.rawValue).contains("usage"))
+    #expect(!DexSection.allCases.map(\.rawValue).contains("meta"))
+  }
 }
