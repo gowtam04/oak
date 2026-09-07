@@ -54,7 +54,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await fix.db.execute(
-    sql`TRUNCATE TABLE account_denylist, spend_daily_usage, app_setting`,
+    sql`TRUNCATE TABLE account_denylist, account_cap_exempt, spend_daily_usage, app_setting`,
   );
 });
 
@@ -188,6 +188,66 @@ describe("caps (SC-AC-4.1, SC-AC-4.3, SC-BR-13)", () => {
   });
 });
 
+describe("cap-exempt (SC-US-9, SC-BR-16)", () => {
+  it("normalizes email on add; isCapExempt is case-insensitive; getCapExempt returns lowercase + addedAt + addedBy", async () => {
+    const before = Date.now();
+    await repo.addCapExemptEmail("  Ash@Example.COM  ", "admin@oak.ai");
+    const after = Date.now();
+
+    expect(await repo.isCapExempt("ASH@EXAMPLE.COM")).toBe(true);
+    expect(await repo.isCapExempt("ash@example.com")).toBe(true);
+    expect(await repo.isCapExempt("misty@cerulean.gym")).toBe(false);
+
+    const list = await repo.getCapExempt();
+    expect(list).toHaveLength(1);
+    expect(list[0]!.email).toBe("ash@example.com");
+    expect(list[0]!.addedBy).toBe("admin@oak.ai");
+    expect(list[0]!.addedAt).toBeGreaterThanOrEqual(before);
+    expect(list[0]!.addedAt).toBeLessThanOrEqual(after);
+  });
+
+  it("add is idempotent; remove is idempotent; after remove, isCapExempt is false", async () => {
+    await repo.addCapExemptEmail("Ash@Example.COM", "admin@oak.ai");
+    await repo.addCapExemptEmail("ash@example.com", "admin@oak.ai");
+    expect(await repo.getCapExempt()).toHaveLength(1);
+
+    await repo.removeCapExemptEmail("ASH@EXAMPLE.COM");
+    expect(await repo.isCapExempt("ash@example.com")).toBe(false);
+    expect(await repo.getCapExempt()).toEqual([]);
+
+    await expect(
+      repo.removeCapExemptEmail("ash@example.com"),
+    ).resolves.toBeUndefined();
+    expect(await repo.isCapExempt("ash@example.com")).toBe(false);
+  });
+
+  it("getCapExempt is empty at launch", async () => {
+    expect(await repo.getCapExempt()).toEqual([]);
+  });
+});
+
+describe("recordAdmit (SC-BR-16)", () => {
+  it("increments with no cap: 26th call still admitted and count is 26", async () => {
+    for (let i = 1; i <= 25; i++) {
+      expect(await repo.recordAdmit("acct:exempt", "1970-01-01")).toEqual({
+        count: i,
+      });
+    }
+    expect(await repo.recordAdmit("acct:exempt", "1970-01-01")).toEqual({
+      count: 26,
+    });
+  });
+
+  it("shares the spend_daily_usage row with tryAdmit so a later cap still sees today's count", async () => {
+    await repo.recordAdmit("acct:exempt", "1970-01-01");
+    await repo.recordAdmit("acct:exempt", "1970-01-01");
+    expect(await repo.tryAdmit("acct:exempt", "1970-01-01", 2)).toEqual({
+      admitted: false,
+      count: 2,
+    });
+  });
+});
+
 describe("tryAdmit (SC-BR-4, SC-BR-5, SC-BR-10, SC-BR-11)", () => {
   it("from 0: first call admitted with count 1; at cap the next call is refused and count stays", async () => {
     const first = await repo.tryAdmit("acct:a1", "1970-01-01", 2);
@@ -277,6 +337,21 @@ describe("fail-closed on DB throw (SC-BR-8)", () => {
     } finally {
       await fix.db.execute(sql`
         CREATE TABLE account_denylist (
+          email text PRIMARY KEY NOT NULL,
+          added_at bigint NOT NULL,
+          added_by text
+        )
+      `);
+    }
+  });
+
+  it("isCapExempt rejects when account_cap_exempt is dropped", async () => {
+    await fix.db.execute(sql`DROP TABLE account_cap_exempt`);
+    try {
+      await expect(repo.isCapExempt("ash@example.com")).rejects.toThrow();
+    } finally {
+      await fix.db.execute(sql`
+        CREATE TABLE account_cap_exempt (
           email text PRIMARY KEY NOT NULL,
           added_at bigint NOT NULL,
           added_by text

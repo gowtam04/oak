@@ -1,8 +1,9 @@
 /**
  * src/server/spend-control.ts — server admission gate for paid agent starts.
  *
- * `admitAgentTurn`: denylist (signed-in) → daily cap → atomic increment.
- * Admins short-circuit with no repo calls. Any thrown DB error maps to
+ * `admitAgentTurn`: denylist (signed-in) → cap-exempt (signed-in, still
+ * increments) → daily cap → atomic increment. Admins short-circuit with no
+ * repo calls. Any thrown DB error maps to
  * `{ ok: false, code: "spend_check_failed" }` (fail-closed, SC-BR-8).
  *
  * `assertNotDenylisted`: denylist only (voice tool/transcript). No increment.
@@ -12,7 +13,9 @@ import "server-only";
 
 import {
   getCaps,
+  isCapExempt,
   isDenylisted,
+  recordAdmit,
   tryAdmit,
 } from "@/data/repos/spend-repo";
 
@@ -37,7 +40,7 @@ export type SpendRefuseCode =
   | "spend_check_failed";
 
 export type AdmitResult =
-  | { ok: true; skipped?: "admin" }
+  | { ok: true; skipped?: "admin" | "cap_exempt" }
   | {
       ok: false;
       code: SpendRefuseCode;
@@ -59,9 +62,10 @@ function dailyLimitMessage(resetAt: string): string {
 }
 
 /**
- * Denylist (signed-in) → daily cap → admit (increment).
+ * Denylist (signed-in) → cap-exempt (signed-in) → daily cap → admit.
  * Admins (`isAdmin`) always `{ ok: true, skipped: "admin" }`.
- * Guests: cap only, key `ip:<ip>`.
+ * Cap-exempt accounts `{ ok: true, skipped: "cap_exempt" }` and still
+ * increment via `recordAdmit`. Guests: cap only, key `ip:<ip>`.
  * `surface` selects the denylist copy.
  */
 export async function admitAgentTurn(input: {
@@ -86,6 +90,10 @@ export async function admitAgentTurn(input: {
           code: "account_denied",
           message: DENIED_COPY[surface],
         };
+      }
+      if (await isCapExempt(subject.email)) {
+        await recordAdmit(`acct:${subject.accountId}`, utcDay(nowMs));
+        return { ok: true, skipped: "cap_exempt" };
       }
     }
 

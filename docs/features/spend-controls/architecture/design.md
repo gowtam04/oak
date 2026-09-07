@@ -43,6 +43,19 @@ Traces to SC-US-1..3, SC-BR-2/3/6/12.
 Empty at launch (SC-BR-12). No FK to `account` — blocking a not-yet-signed-up
 email is allowed and still works after they register.
 
+### `account_cap_exempt` (new table)
+
+Traces to SC-US-9, SC-BR-16. Same shape as `account_denylist`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `email` | `text` PK | Normalized (trim + lowercase). Identity, not `account.id`. |
+| `added_at` | `bigint` | Epoch ms. |
+| `added_by` | `text` | Admin email that added it. Audit only. |
+
+Empty at launch. No FK to `account`. Denylist still wins if an email is on
+both lists. Guests are never exempt (the list is email-keyed).
+
 ### `app_setting` keys (existing table)
 
 Traces to SC-US-4, SC-AC-4.1.
@@ -69,8 +82,9 @@ Traces to SC-BR-4/5/10/11.
 PK `(subject_key, day_utc)`. Increment is atomic (see Interface Definitions).
 No decrement. Refusals do not insert/increment.
 
-Do **not** grant these tables to `oak_readonly`. Add both names to
-`DENIED_TABLES` in `src/data/sql-sandbox.ts`.
+Do **not** grant these tables to `oak_readonly`. Add `account_denylist`,
+`account_cap_exempt`, and `spend_daily_usage` to `DENIED_TABLES` in
+`src/data/sql-sandbox.ts`.
 
 ### `turn_record.status` (existing, text)
 
@@ -87,17 +101,19 @@ in addition to today's `rate_limited`. Same recording shape as rate-limit rows
 ### 1. `spend-control` (server admission)
 
 - **Responsibility:** One function, `admitAgentTurn`, that enforces denylist then
-  daily cap then returns a reservation (the increment). Callers never duplicate
-  SQL.
+  cap-exempt then daily cap then returns a reservation (the increment). Callers
+  never duplicate SQL.
 - **Location:** `web/src/server/spend-control.ts`
 - **Depends on:** `spend-repo`, `isAdmin`, `clientIp` (callers pass the IP).
 - **Failure:** any thrown DB error → `{ ok: false, code: "spend_check_failed" }`
   (fail-closed). Admins short-circuit `{ ok: true, skipped: "admin" }` with no
-  increment.
+  increment. Cap-exempt signed-in accounts `{ ok: true, skipped: "cap_exempt" }`
+  and still increment via `recordAdmit` (no cap).
 
 ### 2. `spend-repo` (Postgres)
 
-- **Responsibility:** denylist CRUD, cap get/set, atomic daily increment.
+- **Responsibility:** denylist CRUD, cap-exempt CRUD, cap get/set, atomic
+  daily increment (`tryAdmit`) and unbounded increment (`recordAdmit`).
 - **Location:** `web/src/data/repos/spend-repo.ts`
 - **Depends on:** `@/data/db` via **dynamic import per call** (same pattern as
   `settings-repo.ts` — keep this module out of the static graph of route
@@ -180,6 +196,11 @@ spend: {
     addedAt: number;
     addedBy: string | null;
   }>;
+  capExempt: Array<{
+    email: string;
+    addedAt: number;
+    addedBy: string | null;
+  }>;
 }
 ```
 
@@ -202,12 +223,24 @@ Body: `{ email: string }`. Normalize. 400 if empty/invalid email shape.
 
 Body or query: `{ email: string }`. 200 even if absent (idempotent remove).
 
+### `POST /api/admin/spend/cap-exempt`
+
+Body: `{ email: string }`. Normalize. 400 if empty/invalid email shape.
+Admin emails are allowed (already uncapped; no 409). 200 `{ ok: true, spend }`
+(idempotent add).
+
+### `DELETE /api/admin/spend/cap-exempt`
+
+Body or query: `{ email: string }`. 200 even if absent (idempotent remove).
+
 ## File Structure
 
 **Create**
 
 - `web/drizzle/0021_spend_controls.sql` — `account_denylist` + `spend_daily_usage` + indexes
-- `web/src/data/repos/spend-repo.ts` — denylist + caps + atomic increment
+- `web/drizzle/0022_account_cap_exempt.sql` — `account_cap_exempt`
+- `web/src/data/repos/spend-repo.ts` — denylist + cap-exempt + caps + atomic increment
+- `web/src/app/api/admin/spend/cap-exempt/route.ts`
 - `web/src/data/repos/spend-repo.oracle.test.ts`
 - `web/src/server/spend-control.ts` — `admitAgentTurn`
 - `web/src/server/spend-control.test.ts` — admin skip, order, fail-closed (repo mocked)
@@ -262,7 +295,7 @@ export type SpendRefuseCode =
   | "spend_check_failed";
 
 export type AdmitResult =
-  | { ok: true; skipped?: "admin" }
+  | { ok: true; skipped?: "admin" | "cap_exempt" }
   | {
       ok: false;
       code: SpendRefuseCode;
@@ -274,9 +307,10 @@ export type AdmitResult =
 export type AgentSurface = "chat" | "teams_assistant" | "voice";
 
 /**
- * Denylist (signed-in) → daily cap → admit (increment).
+ * Denylist (signed-in) → cap-exempt (signed-in) → daily cap → admit.
  * Admins (`isAdmin(account)`) always `{ ok: true, skipped: "admin" }`.
- * Guests: cap only, key `ip:<ip>`.
+ * Cap-exempt accounts `{ ok: true, skipped: "cap_exempt" }` and still
+ * increment via `recordAdmit`. Guests: cap only, key `ip:<ip>`.
  * `surface` selects the denylist copy.
  */
 export function admitAgentTurn(input: {
@@ -298,6 +332,11 @@ export function addDenylistEmail(email: string, addedBy: string): Promise<void>;
 export function removeDenylistEmail(email: string): Promise<void>; // idempotent
 export function isDenylisted(email: string): Promise<boolean>;
 
+export function getCapExempt(): Promise<Array<{ email: string; addedAt: number; addedBy: string | null }>>;
+export function addCapExemptEmail(email: string, addedBy: string): Promise<void>; // normalized, idempotent
+export function removeCapExemptEmail(email: string): Promise<void>; // idempotent
+export function isCapExempt(email: string): Promise<boolean>;
+
 export function getCaps(): Promise<{ signedCap: number; guestCap: number }>; // defaults 25/10
 export function setCaps(caps: { signedCap: number; guestCap: number }, updatedBy: string): Promise<void>;
 
@@ -306,6 +345,9 @@ export function setCaps(caps: { signedCap: number; guestCap: number }, updatedBy
  * Returns `{ admitted: true, count }` or `{ admitted: false, count }`.
  */
 export function tryAdmit(subjectKey: string, dayUtc: string, cap: number): Promise<{ admitted: boolean; count: number }>;
+
+/** Unbounded increment for cap-exempt admissions (SC-BR-16). */
+export function recordAdmit(subjectKey: string, dayUtc: string): Promise<{ count: number }>;
 ```
 
 `tryAdmit` SQL (Postgres):

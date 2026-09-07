@@ -566,14 +566,17 @@ export interface AdminSpendDenylistEntry {
 }
 
 /**
- * Operator-controlled spend gates (daily caps + denylist). Shared by
- * `GET /api/admin/settings`, `POST /api/admin/spend/caps` (returned as the
- * body), and `POST /api/admin/spend/denylist` (`{ ok: true, spend }`).
+ * Operator-controlled spend gates (daily caps + denylist + cap-exempt).
+ * Shared by `GET /api/admin/settings`, `POST /api/admin/spend/caps`
+ * (returned as the body), and `POST /api/admin/spend/denylist` /
+ * `POST /api/admin/spend/cap-exempt` (`{ ok: true, spend }`).
  */
 export interface AdminSpendState {
   signedCap: number;
   guestCap: number;
   denylist: AdminSpendDenylistEntry[];
+  /** Signed-in emails that skip the daily turn cap (SC-US-9, SC-BR-16). */
+  capExempt: AdminSpendDenylistEntry[];
 }
 
 /**

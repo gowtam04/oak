@@ -24,11 +24,13 @@ const spend = vi.hoisted(() => ({
   getCaps: vi.fn(),
   setCaps: vi.fn(),
   getDenylist: vi.fn(),
+  getCapExempt: vi.fn(),
 }));
 vi.mock("@/data/repos/spend-repo", () => ({
   getCaps: spend.getCaps,
   setCaps: spend.setCaps,
   getDenylist: spend.getDenylist,
+  getCapExempt: spend.getCapExempt,
 }));
 
 import { POST } from "./route";
@@ -75,9 +77,11 @@ beforeEach(() => {
   spend.getCaps.mockReset();
   spend.setCaps.mockReset();
   spend.getDenylist.mockReset();
+  spend.getCapExempt.mockReset();
   spend.getCaps.mockResolvedValue({ signedCap: 25, guestCap: 10 });
   spend.setCaps.mockResolvedValue(undefined);
   spend.getDenylist.mockResolvedValue([]);
+  spend.getCapExempt.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -152,6 +156,7 @@ describe("POST /api/admin/spend/caps", () => {
       signedCap: 40,
       guestCap: 5,
       denylist,
+      capExempt: [],
     });
     expect(spend.setCaps).toHaveBeenCalledTimes(1);
     expect(spend.setCaps).toHaveBeenCalledWith(

@@ -6,11 +6,12 @@ import type { AdminSpendDenylistEntry } from "@/lib/admin/admin-types";
 
 /**
  * SpendControlsView — the render half of the admin spend-controls surface
- * (denylist + daily caps) composed under Settings (`/admin/settings`).
+ * (denylist + daily caps + cap-exempt) composed under Settings (`/admin/settings`).
  *
  * PURE + CONTROLLED (admin component-test rule): imports no db/repos/runtime
  * and holds no network state. The owning thin page owns `fetch` + POST/DELETE;
- * this view reports intent via `onSaveCaps` / `onAddEmail` / `onRemoveEmail`.
+ * this view reports intent via `onSaveCaps` / `onAddEmail` / `onRemoveEmail`
+ * / `onAddCapExempt` / `onRemoveCapExempt`.
  * Cap fields are local-draft so the operator can edit without the parent
  * round-tripping every keystroke; they resync when the saved props change.
  *
@@ -24,9 +25,12 @@ export interface SpendControlsViewProps {
   signedCap: number;
   guestCap: number;
   denylist: readonly AdminSpendDenylistEntry[];
+  capExempt: readonly AdminSpendDenylistEntry[];
   onSaveCaps: (caps: { signedCap: number; guestCap: number }) => void;
   onAddEmail: (email: string) => void;
   onRemoveEmail: (email: string) => void;
+  onAddCapExempt: (email: string) => void;
+  onRemoveCapExempt: (email: string) => void;
   /** True while the initial GET is in flight. */
   loading?: boolean;
   /** True while a spend write is in flight. */
@@ -60,9 +64,12 @@ export default function SpendControlsView({
   signedCap,
   guestCap,
   denylist,
+  capExempt,
   onSaveCaps,
   onAddEmail,
   onRemoveEmail,
+  onAddCapExempt,
+  onRemoveCapExempt,
   loading = false,
   pending = false,
   error = null,
@@ -70,6 +77,7 @@ export default function SpendControlsView({
   const [signedDraft, setSignedDraft] = useState(String(signedCap));
   const [guestDraft, setGuestDraft] = useState(String(guestCap));
   const [emailDraft, setEmailDraft] = useState("");
+  const [exemptDraft, setExemptDraft] = useState("");
 
   useEffect(() => {
     setSignedDraft(String(signedCap));
@@ -91,6 +99,12 @@ export default function SpendControlsView({
     setEmailDraft("");
   }
 
+  function handleAddExempt(): void {
+    if (exemptDraft.trim() === "") return;
+    onAddCapExempt(exemptDraft);
+    setExemptDraft("");
+  }
+
   return (
     <section
       className="admin-page spend-controls-view"
@@ -99,9 +113,11 @@ export default function SpendControlsView({
       <h2 className="admin-page__title">Spend controls</h2>
 
       <p className="spend-controls-view__intro">
-        Daily turn caps and the account denylist apply on the next admission
-        attempt — no deploy. Allowlisted admin emails cannot be denylisted or
-        capped. The denylist ships empty.
+        Daily turn caps, the account denylist, and the cap-exempt list apply
+        on the next admission attempt — no deploy. Allowlisted admin emails
+        cannot be denylisted and are already uncapped. Cap-exempt accounts
+        skip the daily turn cap but can still be denylisted. Both lists ship
+        empty.
       </p>
 
       {error != null && error !== "" && (
@@ -153,6 +169,8 @@ export default function SpendControlsView({
           Save caps
         </button>
       </div>
+
+      <h3 className="spend-controls-view__heading">Denylist</h3>
 
       <div className="spend-controls-view__add">
         <label className="spend-controls-view__field spend-controls-view__field--grow">
@@ -219,6 +237,81 @@ export default function SpendControlsView({
                     data-testid={`spend-denylist-remove-${row.email}`}
                     disabled={disabled}
                     onClick={() => onRemoveEmail(row.email)}
+                  >
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <h3 className="spend-controls-view__heading">Cap-exempt accounts</h3>
+
+      <div className="spend-controls-view__add">
+        <label className="spend-controls-view__field spend-controls-view__field--grow">
+          <span className="spend-controls-view__label">Cap-exempt email</span>
+          <input
+            type="email"
+            className="spend-controls-view__input"
+            data-testid="spend-exempt-add-email"
+            aria-label="Cap-exempt email"
+            placeholder="uncapped@example.com"
+            value={exemptDraft}
+            disabled={disabled}
+            onChange={(e) => setExemptDraft(e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="spend-controls-view__btn"
+          data-testid="spend-exempt-add-submit"
+          disabled={disabled}
+          onClick={handleAddExempt}
+        >
+          Add
+        </button>
+      </div>
+
+      {capExempt.length === 0 ? (
+        loading ? null : (
+          <p
+            className="spend-controls-view__empty"
+            data-testid="spend-exempt-empty"
+          >
+            No accounts are exempt from the daily cap.
+          </p>
+        )
+      ) : (
+        <table
+          className="spend-controls-view__table"
+          data-testid="spend-exempt"
+        >
+          <thead>
+            <tr>
+              <th scope="col">Email</th>
+              <th scope="col">Added</th>
+              <th scope="col">Remove</th>
+            </tr>
+          </thead>
+          <tbody>
+            {capExempt.map((row) => (
+              <tr
+                key={row.email}
+                data-testid={`spend-exempt-row-${row.email}`}
+              >
+                <td>{row.email}</td>
+                <td data-testid={`spend-exempt-added-at-${row.email}`}>
+                  {formatTimestamp(row.addedAt)}
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="spend-controls-view__btn spend-controls-view__btn--danger"
+                    data-testid={`spend-exempt-remove-${row.email}`}
+                    disabled={disabled}
+                    onClick={() => onRemoveCapExempt(row.email)}
                   >
                     Remove
                   </button>

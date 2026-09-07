@@ -2,11 +2,12 @@
 
 /**
  * `/admin/settings` — the operator-controlled active-model switch plus the
- * spend-controls surface (daily caps + denylist).
+ * spend-controls surface (daily caps + denylist + cap-exempt).
  *
  * A THIN integrator (the "keep app/admin pages thin" rule): it owns the
  * `fetch('/api/admin/settings')` load, the OPTIMISTIC model switch, and the
- * spend write calls (`POST /api/admin/spend/caps`, POST/DELETE denylist),
+ * spend write calls (`POST /api/admin/spend/caps`, POST/DELETE denylist,
+ * POST/DELETE cap-exempt),
  * then delegates all render to the tested {@link SettingsView} and
  * {@link SpendControlsView}. It imports no db/repos — only the admin HTTP
  * surface (same-origin, session cookie auto-sent).
@@ -31,6 +32,7 @@ const LAUNCH_SPEND: AdminSpendState = {
   signedCap: 25,
   guestCap: 10,
   denylist: [],
+  capExempt: [],
 };
 
 export default function SettingsPage() {
@@ -176,6 +178,75 @@ export default function SettingsPage() {
     [applySpend],
   );
 
+  const onAddCapExempt = useCallback(
+    (email: string) => {
+      setSpendPending(true);
+      setSpendError(null);
+      void (async () => {
+        try {
+          const res = await fetch("/api/admin/spend/cap-exempt", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+          });
+          if (!res.ok) {
+            const body = (await res.json().catch(() => null)) as {
+              code?: string;
+              message?: string;
+            } | null;
+            throw new Error(body?.message ?? `HTTP ${res.status}`);
+          }
+          const body = (await res.json()) as { spend: AdminSpendState };
+          applySpend(body.spend);
+        } catch (err) {
+          setSpendError(
+            err instanceof Error
+              ? err.message
+              : "Failed to save spend controls.",
+          );
+        } finally {
+          setSpendPending(false);
+        }
+      })();
+    },
+    [applySpend],
+  );
+
+  const onRemoveCapExempt = useCallback(
+    (email: string) => {
+      setSpendPending(true);
+      setSpendError(null);
+      void (async () => {
+        try {
+          const res = await fetch("/api/admin/spend/cap-exempt", {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+          });
+          if (!res.ok) {
+            const body = (await res.json().catch(() => null)) as {
+              message?: string;
+            } | null;
+            throw new Error(body?.message ?? `HTTP ${res.status}`);
+          }
+          const body = (await res.json()) as { spend?: AdminSpendState };
+          if (body.spend) applySpend(body.spend);
+        } catch (err) {
+          setSpendError(
+            err instanceof Error
+              ? err.message
+              : "Failed to save spend controls.",
+          );
+        } finally {
+          setSpendPending(false);
+        }
+      })();
+    },
+    [applySpend],
+  );
+
   const onRemoveEmail = useCallback(
     (email: string) => {
       setSpendPending(true);
@@ -233,12 +304,15 @@ export default function SettingsPage() {
         signedCap={spend?.signedCap ?? LAUNCH_SPEND.signedCap}
         guestCap={spend?.guestCap ?? LAUNCH_SPEND.guestCap}
         denylist={spendReady ? spend.denylist : []}
+        capExempt={spendReady ? spend.capExempt : []}
         loading={loading || !spendReady}
         pending={spendPending}
         error={spendError ?? (spendReady ? null : error)}
         onSaveCaps={onSaveCaps}
         onAddEmail={onAddEmail}
         onRemoveEmail={onRemoveEmail}
+        onAddCapExempt={onAddCapExempt}
+        onRemoveCapExempt={onRemoveCapExempt}
       />
     </>
   );

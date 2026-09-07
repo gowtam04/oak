@@ -1,6 +1,6 @@
 /**
- * src/data/repos/spend-repo.ts — denylist CRUD, daily-cap get/set, and the
- * atomic UTC-day increment behind spend-control admission.
+ * src/data/repos/spend-repo.ts — denylist + cap-exempt CRUD, daily-cap get/set,
+ * and the atomic UTC-day increment behind spend-control admission.
  *
  * Handle style matches `settings-repo.ts`: `import "server-only"` and a
  * dynamic `await import("@/data/db")` per call so this module stays out of
@@ -16,7 +16,12 @@ import "server-only";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { account_denylist, app_setting, spend_daily_usage } from "@/data/schema";
+import {
+  account_cap_exempt,
+  account_denylist,
+  app_setting,
+  spend_daily_usage,
+} from "@/data/schema";
 
 /** `app_setting.key` for the signed-in daily turn cap. */
 export const DAILY_CAP_SIGNED_KEY = "daily_cap_signed";
@@ -102,6 +107,53 @@ export async function isDenylisted(email: string): Promise<boolean> {
 export async function getDenylist(): Promise<DenylistEntry[]> {
   const { db } = await import("@/data/db");
   const rows = await db.select().from(account_denylist);
+  return rows.map((r) => ({
+    email: r.email,
+    addedAt: r.added_at,
+    addedBy: r.added_by,
+  }));
+}
+
+export async function addCapExemptEmail(
+  email: string,
+  addedBy: string,
+): Promise<void> {
+  const { db } = await import("@/data/db");
+  const now = Date.now();
+  const normalized = normalizeEmail(email);
+  await db
+    .insert(account_cap_exempt)
+    .values({
+      email: normalized,
+      added_at: now,
+      added_by: addedBy,
+    })
+    .onConflictDoUpdate({
+      target: account_cap_exempt.email,
+      set: { added_at: now, added_by: addedBy },
+    });
+}
+
+export async function removeCapExemptEmail(email: string): Promise<void> {
+  const { db } = await import("@/data/db");
+  await db
+    .delete(account_cap_exempt)
+    .where(eq(account_cap_exempt.email, normalizeEmail(email)));
+}
+
+export async function isCapExempt(email: string): Promise<boolean> {
+  const { db } = await import("@/data/db");
+  const [row] = await db
+    .select({ email: account_cap_exempt.email })
+    .from(account_cap_exempt)
+    .where(eq(account_cap_exempt.email, normalizeEmail(email)))
+    .limit(1);
+  return row != null;
+}
+
+export async function getCapExempt(): Promise<DenylistEntry[]> {
+  const { db } = await import("@/data/db");
+  const rows = await db.select().from(account_cap_exempt);
   return rows.map((r) => ({
     email: r.email,
     addedAt: r.added_at,
@@ -200,4 +252,26 @@ export async function tryAdmit(
       ),
     );
   return { admitted: false, count: Number(current?.admitted_count ?? 0) };
+}
+
+/**
+ * Unbounded increment for cap-exempt signed-in admissions (SC-BR-16).
+ * Same INSERT … ON CONFLICT as `tryAdmit`, without the `WHERE count < cap`
+ * guard, so removing the exemption mid-day still sees today's actual usage.
+ */
+export async function recordAdmit(
+  subjectKey: string,
+  dayUtc: string,
+): Promise<{ count: number }> {
+  const { db } = await import("@/data/db");
+  const result = (await db.execute(sql`
+    INSERT INTO spend_daily_usage (subject_key, day_utc, admitted_count)
+    VALUES (${subjectKey}, ${dayUtc}, 1)
+    ON CONFLICT (subject_key, day_utc)
+    DO UPDATE SET admitted_count = spend_daily_usage.admitted_count + 1
+    RETURNING admitted_count
+  `)) as unknown as { rows: Array<{ admitted_count: unknown }> };
+
+  const admittedRow = result.rows[0];
+  return { count: Number(admittedRow?.admitted_count ?? 0) };
 }

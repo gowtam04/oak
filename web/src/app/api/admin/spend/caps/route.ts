@@ -5,7 +5,7 @@
  * Thin HTTP adapter: `requireAdminRequest` runs FIRST (401 guest / 403
  * non-admin), then body validation (integers ≥ 1), then
  * `spend-repo.setCaps(caps, adminEmail)`. 200 returns the spend projection
- * (`getCaps` + `getDenylist`).
+ * (`getCaps` + `getDenylist` + `getCapExempt`).
  *
  * Guard + repo are reached via DYNAMIC import so `next build`'s page-data
  * collection never eagerly evaluates the env/db-touching chain.
@@ -23,12 +23,19 @@ function isPositiveInt(n: unknown): n is number {
 }
 
 async function loadSpend(): Promise<AdminSpendState> {
-  const { getCaps, getDenylist } = await import("@/data/repos/spend-repo");
-  const [caps, denylist] = await Promise.all([getCaps(), getDenylist()]);
+  const { getCaps, getDenylist, getCapExempt } = await import(
+    "@/data/repos/spend-repo"
+  );
+  const [caps, denylist, capExempt] = await Promise.all([
+    getCaps(),
+    getDenylist(),
+    getCapExempt(),
+  ]);
   return {
     signedCap: caps.signedCap,
     guestCap: caps.guestCap,
     denylist,
+    capExempt,
   };
 }
 

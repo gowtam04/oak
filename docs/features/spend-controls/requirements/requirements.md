@@ -190,6 +190,33 @@ Non-admin users never see the denylist or the cap numbers in the admin panel.
   - **SC-AC-8.2** — Given my email is on `ADMIN_EMAILS`, I cannot appear as
     denylisted; attempts to add that email fail (SC-AC-1.3).
 
+### Operator — cap-exempt accounts
+
+- **SC-US-9** — As the operator, I want to exempt a signed-in account from
+  the daily turn cap by email from the admin panel, so that trusted
+  non-admin accounts can keep using chat without hitting the UTC-day
+  budget.
+  - **SC-AC-9.1** — Given I add a normalized email to the cap-exempt list,
+    when that account sends a 26th (or 100th) agent turn in a UTC day, then
+    it is admitted (chat, Teams Assistant, and voice share the exemption).
+  - **SC-AC-9.2** — Given an email is cap-exempt **and** denylisted, when
+    that account tries an agent turn, then it is refused with denylist copy
+    (denylist wins).
+  - **SC-AC-9.3** — Given I remove an email from the cap-exempt list, when
+    that account next tries an agent turn, then the daily cap applies
+    against today's actual admitted count (turns already taken while exempt
+    still count).
+  - **SC-AC-9.4** — Given I add an email, when I open the spend-controls
+    surface, then I see that email and when it was added. An empty list
+    shows an empty state, not a placeholder exempt user.
+  - **SC-AC-9.5** — Guests cannot be cap-exempted. Adding an email has no
+    effect on guest-IP counters.
+  - **SC-AC-9.6** — The cap-exempt list ships empty. Adding an
+    `ADMIN_EMAILS` address is allowed (redundant; they are already
+    uncapped) and does not 409.
+  - **SC-AC-9.7** — A non-admin cannot read or change the cap-exempt list
+    (same gating as the rest of `/admin`).
+
 ## Functional Requirements
 
 ### Surfaces that are gated
@@ -212,6 +239,8 @@ Before a model call, evaluate in this order:
 
 1. Denylist (signed-in, by email) → refuse with denylist copy.
 2. Daily turn cap (account or guest IP) → refuse with cap copy + reset time.
+   Signed-in emails on the cap-exempt list skip this gate but still increment
+   today's counter (SC-BR-16).
 3. Existing per-minute limiter → unchanged behavior.
 
 A refusal at (1) or (2) never reaches the model and does **not** increment the
@@ -241,6 +270,7 @@ daily counter.
 - Lives in the existing admin panel (web, allowlisted admins only). No admin
   UI on iOS/Android.
 - Denylist: add by email, remove, list (email + added-at).
+- Cap-exempt: add by email, remove, list (email + added-at). Empty at launch.
 - Caps: two integers (signed-in daily turns, guest daily turns) with the
   launch defaults above.
 - These writes are a deliberate exception to the panel’s original read-only
@@ -306,6 +336,12 @@ daily counter.
 - **SC-BR-15 — Cross-platform.** Any client that can start an agent turn
   (web, iOS, Android) must surface SC-US-5 / SC-US-6 / SC-US-7. The admin
   write UI is web-only.
+- **SC-BR-16 — Cap-exempt is email-keyed, signed-in only.** The exemption
+  identity is the normalized account email (same as the denylist). Guests
+  cannot be exempted. Denylist still wins if an email is on both lists.
+  Exempt admissions still increment today's counter so removing the
+  exemption mid-day applies the global cap against actual usage. Empty at
+  launch. Takes effect on the next admission.
 
 ## Non-Functional Requirements
 
@@ -345,6 +381,7 @@ daily counter.
 - A spend-controls section (Settings or Accounts — architect’s layout call)
   with:
   - denylist: email field + add, list with remove, empty state
+  - cap-exempt: email field + add, list with remove, empty state
   - two cap fields with current values and launch defaults shown as
     placeholders/help
 - Immediate success/error feedback on save. No “deploy to apply” language.

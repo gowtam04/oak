@@ -32,9 +32,14 @@ const spendRepo = vi.hoisted(() => ({
   addDenylistEmail: vi.fn(),
   removeDenylistEmail: vi.fn(),
   isDenylisted: vi.fn(),
+  getCapExempt: vi.fn(),
+  addCapExemptEmail: vi.fn(),
+  removeCapExemptEmail: vi.fn(),
+  isCapExempt: vi.fn(),
   getCaps: vi.fn(),
   setCaps: vi.fn(),
   tryAdmit: vi.fn(),
+  recordAdmit: vi.fn(),
 }));
 vi.mock("@/data/repos/spend-repo", () => spendRepo);
 
@@ -78,16 +83,23 @@ function admit(
 
 beforeEach(() => {
   spendRepo.isDenylisted.mockReset();
+  spendRepo.isCapExempt.mockReset();
   spendRepo.getCaps.mockReset();
   spendRepo.tryAdmit.mockReset();
+  spendRepo.recordAdmit.mockReset();
   spendRepo.getDenylist.mockReset();
   spendRepo.addDenylistEmail.mockReset();
   spendRepo.removeDenylistEmail.mockReset();
+  spendRepo.getCapExempt.mockReset();
+  spendRepo.addCapExemptEmail.mockReset();
+  spendRepo.removeCapExemptEmail.mockReset();
   spendRepo.setCaps.mockReset();
 
   spendRepo.isDenylisted.mockResolvedValue(false);
+  spendRepo.isCapExempt.mockResolvedValue(false);
   spendRepo.getCaps.mockResolvedValue({ signedCap: 25, guestCap: 10 });
   spendRepo.tryAdmit.mockResolvedValue({ admitted: true, count: 1 });
+  spendRepo.recordAdmit.mockResolvedValue({ count: 1 });
 });
 
 describe("utcDay / nextUtcMidnightMs (SC-BR-10)", () => {
@@ -135,7 +147,9 @@ describe("admitAgentTurn — admin skip (SC-BR-6, SC-AC-8.1)", () => {
     ).resolves.toEqual({ ok: true, skipped: "admin" });
 
     expect(spendRepo.isDenylisted).not.toHaveBeenCalled();
+    expect(spendRepo.isCapExempt).not.toHaveBeenCalled();
     expect(spendRepo.tryAdmit).not.toHaveBeenCalled();
+    expect(spendRepo.recordAdmit).not.toHaveBeenCalled();
     expect(spendRepo.getCaps).not.toHaveBeenCalled();
   });
 });
@@ -162,8 +176,10 @@ describe("admitAgentTurn — denylist (SC-BR-11)", () => {
       });
 
       expect(spendRepo.isDenylisted).toHaveBeenCalledWith("ash@example.com");
+      expect(spendRepo.isCapExempt).not.toHaveBeenCalled();
       expect(spendRepo.getCaps).not.toHaveBeenCalled();
       expect(spendRepo.tryAdmit).not.toHaveBeenCalled();
+      expect(spendRepo.recordAdmit).not.toHaveBeenCalled();
     },
   );
 });
@@ -179,7 +195,54 @@ describe("admitAgentTurn — guests skip denylist", () => {
     await expect(admit({ subject: GUEST })).resolves.toEqual({ ok: true });
 
     expect(spendRepo.isDenylisted).not.toHaveBeenCalled();
+    expect(spendRepo.isCapExempt).not.toHaveBeenCalled();
+    expect(spendRepo.recordAdmit).not.toHaveBeenCalled();
     expect(spendRepo.tryAdmit).toHaveBeenCalledWith("ip:1.1.1.1", DAY_UTC, 7);
+  });
+});
+
+describe("admitAgentTurn — cap-exempt (SC-US-9, SC-BR-16)", () => {
+  it("signed-in exempt account skips the cap, records an unbounded admit, and does not call tryAdmit/getCaps", async () => {
+    spendRepo.isCapExempt.mockResolvedValue(true);
+    spendRepo.recordAdmit.mockResolvedValue({ count: 26 });
+    spendRepo.getCaps.mockRejectedValue(new Error("should not be called"));
+    spendRepo.tryAdmit.mockRejectedValue(new Error("should not be called"));
+
+    await expect(admit()).resolves.toEqual({
+      ok: true,
+      skipped: "cap_exempt",
+    });
+
+    expect(spendRepo.isDenylisted).toHaveBeenCalledWith("ash@example.com");
+    expect(spendRepo.isCapExempt).toHaveBeenCalledWith("ash@example.com");
+    expect(spendRepo.recordAdmit).toHaveBeenCalledWith("acct:a1", DAY_UTC);
+    expect(spendRepo.tryAdmit).not.toHaveBeenCalled();
+    expect(spendRepo.getCaps).not.toHaveBeenCalled();
+  });
+
+  it("denylist still wins when the same email is also cap-exempt", async () => {
+    spendRepo.isDenylisted.mockResolvedValue(true);
+    spendRepo.isCapExempt.mockResolvedValue(true);
+
+    await expect(admit()).resolves.toEqual({
+      ok: false,
+      code: "account_denied",
+      message: "This account can't use chat.",
+    });
+
+    expect(spendRepo.isCapExempt).not.toHaveBeenCalled();
+    expect(spendRepo.recordAdmit).not.toHaveBeenCalled();
+    expect(spendRepo.tryAdmit).not.toHaveBeenCalled();
+  });
+
+  it("guests never consult isCapExempt even if the mock would throw", async () => {
+    spendRepo.isCapExempt.mockRejectedValue(
+      new Error("guests are not cap-exempt-checked"),
+    );
+    spendRepo.tryAdmit.mockResolvedValue({ admitted: true, count: 1 });
+
+    await expect(admit({ subject: GUEST })).resolves.toEqual({ ok: true });
+    expect(spendRepo.isCapExempt).not.toHaveBeenCalled();
   });
 });
 
@@ -255,6 +318,20 @@ describe("admitAgentTurn — fail-closed (SC-BR-8)", () => {
   it("repo throw from tryAdmit → spend_check_failed and never rethrows", async () => {
     spendRepo.tryAdmit.mockRejectedValue(new Error("db down"));
     await expect(admit()).resolves.toMatchObject(failed);
+  });
+
+  it("repo throw from isCapExempt → spend_check_failed and never rethrows", async () => {
+    spendRepo.isCapExempt.mockRejectedValue(new Error("db down"));
+    await expect(admit()).resolves.toMatchObject(failed);
+    expect(spendRepo.tryAdmit).not.toHaveBeenCalled();
+    expect(spendRepo.recordAdmit).not.toHaveBeenCalled();
+  });
+
+  it("repo throw from recordAdmit on an exempt account → spend_check_failed", async () => {
+    spendRepo.isCapExempt.mockResolvedValue(true);
+    spendRepo.recordAdmit.mockRejectedValue(new Error("db down"));
+    await expect(admit()).resolves.toMatchObject(failed);
+    expect(spendRepo.tryAdmit).not.toHaveBeenCalled();
   });
 });
 

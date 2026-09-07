@@ -1111,12 +1111,12 @@ export const meta_usage = pgTable(
 );
 
 // ===========================================================================
-// Spend controls — denylist + UTC-day counters (docs/features/spend-controls)
+// Spend controls — denylist + UTC-day counters + cap-exempt (docs/features/spend-controls)
 //
-// Operator-writable gates checked BEFORE any paid agent start. Neither table
-// is granted to `oak_readonly`; both names are in `sql-sandbox` DENIED_TABLES.
-// Empty denylist at launch (SC-BR-12) — no seed emails. Caps live as
-// `app_setting` keys (`daily_cap_signed` / `daily_cap_guest`), not here.
+// Operator-writable gates checked BEFORE any paid agent start. These tables
+// are not granted to `oak_readonly`; all names are in `sql-sandbox` DENIED_TABLES.
+// Empty denylist / cap-exempt at launch (SC-BR-12 / SC-BR-16) — no seed emails.
+// Caps live as `app_setting` keys (`daily_cap_signed` / `daily_cap_guest`), not here.
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
@@ -1127,6 +1127,23 @@ export const meta_usage = pgTable(
 // blocking a not-yet-signed-up email is allowed. `added_by` is audit only.
 // ---------------------------------------------------------------------------
 export const account_denylist = pgTable("account_denylist", {
+  /** Normalized (trim + lowercase) email. PK. */
+  email: text("email").primaryKey(),
+  /** Epoch ms the email was added. */
+  added_at: bigint("added_at", { mode: "number" }).notNull(),
+  /** Admin email that added it; null if unknown. Audit only. */
+  added_by: text("added_by"),
+});
+
+// ---------------------------------------------------------------------------
+// account_cap_exempt — signed-in identities that skip the daily turn cap
+// (SC-US-9, SC-BR-16)
+//
+// Same shape and identity as `account_denylist` (normalized email PK, no FK).
+// Denylist still wins if an email is on both lists. Empty at launch. Guests
+// are never exempt (the list is email-keyed). `added_by` is audit only.
+// ---------------------------------------------------------------------------
+export const account_cap_exempt = pgTable("account_cap_exempt", {
   /** Normalized (trim + lowercase) email. PK. */
   email: text("email").primaryKey(),
   /** Epoch ms the email was added. */

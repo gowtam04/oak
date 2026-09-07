@@ -1,15 +1,12 @@
 /**
- * Route-adapter tests for POST/DELETE /api/admin/spend/denylist
- * (spend-controls architecture § API Design; SC-US-1, SC-US-2, SC-AC-1.3,
- * SC-AC-2.1, SC-AC-2.2, SC-BR-6, SC-BR-12).
+ * Route-adapter tests for POST/DELETE /api/admin/spend/cap-exempt
+ * (spend-controls architecture; SC-US-9, SC-BR-16).
  *
  * Thin HTTP adapter: requireAdminRequest runs FIRST (401/403), then email
- * validation, then 409 admin_exempt if the target is on ADMIN_EMAILS, then
- * spend-repo add/remove. The repo is mocked; gating uses the real isAdmin
- * plus a stubbed getCurrentAccount — same identity seam as
+ * validation, then spend-repo add/remove. Admin emails are allowed (already
+ * uncapped — no 409). The repo is mocked; gating uses the real isAdmin plus
+ * a stubbed getCurrentAccount — same identity seam as
  * admin-routes.integration.test.ts.
- *
- * The route module is created in Phase 3; collection fails until then.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,15 +22,15 @@ const spend = vi.hoisted(() => ({
   getCaps: vi.fn(),
   getDenylist: vi.fn(),
   getCapExempt: vi.fn(),
-  addDenylistEmail: vi.fn(),
-  removeDenylistEmail: vi.fn(),
+  addCapExemptEmail: vi.fn(),
+  removeCapExemptEmail: vi.fn(),
 }));
 vi.mock("@/data/repos/spend-repo", () => ({
   getCaps: spend.getCaps,
   getDenylist: spend.getDenylist,
   getCapExempt: spend.getCapExempt,
-  addDenylistEmail: spend.addDenylistEmail,
-  removeDenylistEmail: spend.removeDenylistEmail,
+  addCapExemptEmail: spend.addCapExemptEmail,
+  removeCapExemptEmail: spend.removeCapExemptEmail,
 }));
 
 import { DELETE, POST } from "./route";
@@ -67,7 +64,7 @@ function asGuest(): void {
 }
 
 function postReq(body: unknown): Request {
-  return new Request("http://admin.test/api/admin/spend/denylist", {
+  return new Request("http://admin.test/api/admin/spend/cap-exempt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -75,7 +72,7 @@ function postReq(body: unknown): Request {
 }
 
 function deleteReq(body: unknown): Request {
-  return new Request("http://admin.test/api/admin/spend/denylist", {
+  return new Request("http://admin.test/api/admin/spend/cap-exempt", {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -83,7 +80,7 @@ function deleteReq(body: unknown): Request {
 }
 
 function deleteQueryReq(email: string): Request {
-  const url = new URL("http://admin.test/api/admin/spend/denylist");
+  const url = new URL("http://admin.test/api/admin/spend/cap-exempt");
   url.searchParams.set("email", email);
   return new Request(url.toString(), { method: "DELETE" });
 }
@@ -95,44 +92,44 @@ beforeEach(() => {
   spend.getCaps.mockReset();
   spend.getDenylist.mockReset();
   spend.getCapExempt.mockReset();
-  spend.addDenylistEmail.mockReset();
-  spend.removeDenylistEmail.mockReset();
+  spend.addCapExemptEmail.mockReset();
+  spend.removeCapExemptEmail.mockReset();
   spend.getCaps.mockResolvedValue({ signedCap: 25, guestCap: 10 });
   spend.getDenylist.mockResolvedValue([]);
   spend.getCapExempt.mockResolvedValue([]);
-  spend.addDenylistEmail.mockResolvedValue(undefined);
-  spend.removeDenylistEmail.mockResolvedValue(undefined);
+  spend.addCapExemptEmail.mockResolvedValue(undefined);
+  spend.removeCapExemptEmail.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("POST /api/admin/spend/denylist", () => {
+describe("POST /api/admin/spend/cap-exempt", () => {
   it("returns 401 {code:'unauthorized'} to a guest (SC-AC-2.2)", async () => {
     asGuest();
-    const res = await POST(postReq({ email: "blocked@example.com" }));
+    const res = await POST(postReq({ email: "friend@example.com" }));
     expect(res.status).toBe(401);
     expect((await res.json()).code).toBe("unauthorized");
-    expect(spend.addDenylistEmail).not.toHaveBeenCalled();
+    expect(spend.addCapExemptEmail).not.toHaveBeenCalled();
   });
 
   it("returns 403 {code:'forbidden'} to a signed-in non-admin (SC-AC-2.2)", async () => {
     asNonAdmin();
-    const res = await POST(postReq({ email: "blocked@example.com" }));
+    const res = await POST(postReq({ email: "friend@example.com" }));
     expect(res.status).toBe(403);
     expect((await res.json()).code).toBe("forbidden");
-    expect(spend.addDenylistEmail).not.toHaveBeenCalled();
+    expect(spend.addCapExemptEmail).not.toHaveBeenCalled();
   });
 
   it("gates before validation: a guest posting an empty email still gets 401", async () => {
     asGuest();
     const res = await POST(postReq({ email: "" }));
     expect(res.status).toBe(401);
-    expect(spend.addDenylistEmail).not.toHaveBeenCalled();
+    expect(spend.addCapExemptEmail).not.toHaveBeenCalled();
   });
 
-  it("400s empty or invalid email and does not write (SC-US-1)", async () => {
+  it("400s empty or invalid email and does not write (SC-US-9)", async () => {
     asAdmin();
     const bodies: unknown[] = [
       { email: "" },
@@ -145,152 +142,147 @@ describe("POST /api/admin/spend/denylist", () => {
       {},
     ];
     for (const body of bodies) {
-      spend.addDenylistEmail.mockClear();
+      spend.addCapExemptEmail.mockClear();
       const res = await POST(postReq(body));
       expect(res.status, JSON.stringify(body)).toBe(400);
       expect((await res.json()).code).toBe("invalid_request");
-      expect(spend.addDenylistEmail).not.toHaveBeenCalled();
+      expect(spend.addCapExemptEmail).not.toHaveBeenCalled();
     }
   });
 
-  it("409s admin_exempt when the email is on ADMIN_EMAILS (SC-AC-1.3, SC-BR-6)", async () => {
-    asAdmin();
-    const res = await POST(postReq({ email: ADMIN_EMAIL }));
-    expect(res.status).toBe(409);
-    expect((await res.json()).code).toBe("admin_exempt");
-    expect(spend.addDenylistEmail).not.toHaveBeenCalled();
-  });
-
-  it("409s admin_exempt case-insensitively for any allowlisted email", async () => {
-    asAdmin();
-    const res = await POST(postReq({ email: "Owner@Oak.TEST" }));
-    expect(res.status).toBe(409);
-    expect((await res.json()).code).toBe("admin_exempt");
-    expect(spend.addDenylistEmail).not.toHaveBeenCalled();
-
-    const other = await POST(postReq({ email: OTHER_ADMIN }));
-    expect(other.status).toBe(409);
-    expect((await other.json()).code).toBe("admin_exempt");
-    expect(spend.addDenylistEmail).not.toHaveBeenCalled();
-  });
-
-  it("200 { ok: true, spend } on add, echoing the stored caps (SC-US-1, SC-AC-1.1)", async () => {
+  it("200s when adding an ADMIN_EMAILS address (already uncapped; no 409)", async () => {
     asAdmin();
     const entry = {
-      email: "blocked@example.com",
+      email: ADMIN_EMAIL,
+      addedAt: 1_700_000_000_000,
+      addedBy: ADMIN_EMAIL,
+    };
+    spend.getCapExempt.mockResolvedValue([entry]);
+
+    const res = await POST(postReq({ email: ADMIN_EMAIL }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).ok).toBe(true);
+    expect(spend.addCapExemptEmail).toHaveBeenCalledWith(
+      ADMIN_EMAIL,
+      ADMIN_EMAIL,
+    );
+  });
+
+  it("200 { ok: true, spend } on add, echoing the stored caps (SC-US-9)", async () => {
+    asAdmin();
+    const entry = {
+      email: "friend@example.com",
       addedAt: 1_700_000_000_000,
       addedBy: ADMIN_EMAIL,
     };
     spend.getCaps.mockResolvedValue({ signedCap: 40, guestCap: 5 });
-    spend.getDenylist.mockResolvedValue([entry]);
+    spend.getCapExempt.mockResolvedValue([entry]);
 
-    const res = await POST(postReq({ email: "blocked@example.com" }));
+    const res = await POST(postReq({ email: "friend@example.com" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: true,
       spend: {
         signedCap: 40,
         guestCap: 5,
-        denylist: [entry],
-        capExempt: [],
+        denylist: [],
+        capExempt: [entry],
       },
     });
-    expect(spend.addDenylistEmail).toHaveBeenCalledTimes(1);
-    expect(spend.addDenylistEmail).toHaveBeenCalledWith(
-      "blocked@example.com",
+    expect(spend.addCapExemptEmail).toHaveBeenCalledTimes(1);
+    expect(spend.addCapExemptEmail).toHaveBeenCalledWith(
+      "friend@example.com",
       ADMIN_EMAIL,
     );
   });
 
-  it("normalizes padded mixed-case email before add (SC-BR-2)", async () => {
+  it("normalizes padded mixed-case email before add (SC-BR-16)", async () => {
     asAdmin();
     const entry = {
-      email: "blocked@example.com",
+      email: "friend@example.com",
       addedAt: 1_700_000_000_000,
       addedBy: ADMIN_EMAIL,
     };
-    spend.getCaps.mockResolvedValue({ signedCap: 40, guestCap: 5 });
-    spend.getDenylist.mockResolvedValue([entry]);
+    spend.getCapExempt.mockResolvedValue([entry]);
 
-    const res = await POST(postReq({ email: "  Blocked@Example.COM  " }));
+    const res = await POST(postReq({ email: "  Friend@Example.COM  " }));
     expect(res.status).toBe(200);
-    expect(spend.addDenylistEmail).toHaveBeenCalledWith(
-      "blocked@example.com",
+    expect(spend.addCapExemptEmail).toHaveBeenCalledWith(
+      "friend@example.com",
       ADMIN_EMAIL,
     );
   });
 
-  it("200 is idempotent when the email is already denylisted", async () => {
+  it("200 is idempotent when the email is already cap-exempt", async () => {
     asAdmin();
     const entry = {
-      email: "blocked@example.com",
+      email: "friend@example.com",
       addedAt: 1_700_000_000_000,
       addedBy: ADMIN_EMAIL,
     };
-    spend.getCaps.mockResolvedValue({ signedCap: 40, guestCap: 5 });
-    spend.getDenylist.mockResolvedValue([entry]);
+    spend.getCapExempt.mockResolvedValue([entry]);
 
-    const first = await POST(postReq({ email: "blocked@example.com" }));
-    const second = await POST(postReq({ email: "blocked@example.com" }));
+    const first = await POST(postReq({ email: "friend@example.com" }));
+    const second = await POST(postReq({ email: "friend@example.com" }));
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
     const secondBody = await second.json();
     expect(secondBody).toEqual({
       ok: true,
       spend: {
-        signedCap: 40,
-        guestCap: 5,
-        denylist: [entry],
-        capExempt: [],
+        signedCap: 25,
+        guestCap: 10,
+        denylist: [],
+        capExempt: [entry],
       },
     });
-    expect(secondBody.spend.denylist).toHaveLength(1);
-    expect(spend.addDenylistEmail).toHaveBeenCalledTimes(2);
+    expect(secondBody.spend.capExempt).toHaveLength(1);
+    expect(spend.addCapExemptEmail).toHaveBeenCalledTimes(2);
   });
 });
 
-describe("DELETE /api/admin/spend/denylist", () => {
+describe("DELETE /api/admin/spend/cap-exempt", () => {
   it("returns 401 {code:'unauthorized'} to a guest (SC-AC-2.2)", async () => {
     asGuest();
-    const res = await DELETE(deleteReq({ email: "blocked@example.com" }));
+    const res = await DELETE(deleteReq({ email: "friend@example.com" }));
     expect(res.status).toBe(401);
     expect((await res.json()).code).toBe("unauthorized");
-    expect(spend.removeDenylistEmail).not.toHaveBeenCalled();
+    expect(spend.removeCapExemptEmail).not.toHaveBeenCalled();
   });
 
   it("returns 403 {code:'forbidden'} to a signed-in non-admin (SC-AC-2.2)", async () => {
     asNonAdmin();
-    const res = await DELETE(deleteReq({ email: "blocked@example.com" }));
+    const res = await DELETE(deleteReq({ email: "friend@example.com" }));
     expect(res.status).toBe(403);
     expect((await res.json()).code).toBe("forbidden");
-    expect(spend.removeDenylistEmail).not.toHaveBeenCalled();
+    expect(spend.removeCapExemptEmail).not.toHaveBeenCalled();
   });
 
-  it("200 even if the email is absent (SC-AC-2.1, idempotent remove)", async () => {
+  it("200 even if the email is absent (idempotent remove)", async () => {
     asAdmin();
     const res = await DELETE(deleteReq({ email: "absent@example.com" }));
     expect(res.status).toBe(200);
-    expect(spend.removeDenylistEmail).toHaveBeenCalledTimes(1);
-    expect(spend.removeDenylistEmail).toHaveBeenCalledWith(
+    expect(spend.removeCapExemptEmail).toHaveBeenCalledTimes(1);
+    expect(spend.removeCapExemptEmail).toHaveBeenCalledWith(
       "absent@example.com",
     );
   });
 
   it("200 removes a present email from the body", async () => {
     asAdmin();
-    const res = await DELETE(deleteReq({ email: "blocked@example.com" }));
+    const res = await DELETE(deleteReq({ email: "friend@example.com" }));
     expect(res.status).toBe(200);
-    expect(spend.removeDenylistEmail).toHaveBeenCalledWith(
-      "blocked@example.com",
+    expect(spend.removeCapExemptEmail).toHaveBeenCalledWith(
+      "friend@example.com",
     );
   });
 
   it("200 accepts email as a query param", async () => {
     asAdmin();
-    const res = await DELETE(deleteQueryReq("blocked@example.com"));
+    const res = await DELETE(deleteQueryReq("friend@example.com"));
     expect(res.status).toBe(200);
-    expect(spend.removeDenylistEmail).toHaveBeenCalledWith(
-      "blocked@example.com",
+    expect(spend.removeCapExemptEmail).toHaveBeenCalledWith(
+      "friend@example.com",
     );
   });
 });

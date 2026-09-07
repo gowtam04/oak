@@ -999,6 +999,13 @@
   font-size: var(--text-sm);
 }
 
+.spend-controls-view__heading {
+  margin: var(--space-6) 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
 .spend-controls-view__caps,
 .spend-controls-view__add {
   display: flex;

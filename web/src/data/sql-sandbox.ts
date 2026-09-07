@@ -72,6 +72,7 @@ const DENIED_TABLES = [
   "turn_record",
   "auth_event",
   "account_denylist",
+  "account_cap_exempt",
   "spend_daily_usage",
 ];
 

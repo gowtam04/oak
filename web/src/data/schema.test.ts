@@ -152,7 +152,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 30 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse + 1 app settings + 3 chat-qol + 1 artifact pin + 2 spend)", async () => {
+  it("creates all 31 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse + 1 app settings + 3 chat-qol + 1 artifact pin + 3 spend)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
@@ -203,12 +203,14 @@ describe("Drizzle migration — table creation", () => {
         // Spend controls (denylist + UTC-day counters) — added by the 0021 migration.
         "account_denylist",
         "spend_daily_usage",
+        // Cap-exempt emails — added by the 0022 migration (SC-US-9 / SC-BR-16).
+        "account_cap_exempt",
       ]),
     );
-    // Exactly 30 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
+    // Exactly 31 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
     // + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse
-    // + 1 app settings + 3 chat-qol + 1 artifact pin + 2 spend).
-    expect(tables).toHaveLength(30);
+    // + 1 app settings + 3 chat-qol + 1 artifact pin + 3 spend).
+    expect(tables).toHaveLength(31);
   });
 
   it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {
@@ -487,6 +489,14 @@ describe("Drizzle migration — table creation", () => {
     );
     expect(await columnNames(db, "account_denylist")).toHaveLength(3);
     expect(await pkColumns(db, "account_denylist")).toEqual(["email"]);
+  });
+
+  it("migration creates account_cap_exempt with email PK + added_at + added_by", async () => {
+    expect(await columnNames(db, "account_cap_exempt")).toEqual(
+      expect.arrayContaining(["email", "added_at", "added_by"]),
+    );
+    expect(await columnNames(db, "account_cap_exempt")).toHaveLength(3);
+    expect(await pkColumns(db, "account_cap_exempt")).toEqual(["email"]);
   });
 
   it("migration creates spend_daily_usage with composite PK (subject_key, day_utc)", async () => {

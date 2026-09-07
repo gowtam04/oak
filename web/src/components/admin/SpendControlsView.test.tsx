@@ -24,14 +24,25 @@ const DENYLIST = [
   },
 ] as const;
 
+const EXEMPT = [
+  {
+    email: "friend@example.com",
+    addedAt: ADDED_AT,
+    addedBy: "owner@oak.test",
+  },
+] as const;
+
 function renderView(overrides: Partial<SpendControlsViewProps> = {}) {
   const props: SpendControlsViewProps = {
     signedCap: 25,
     guestCap: 10,
     denylist: [],
+    capExempt: [],
     onSaveCaps: vi.fn(),
     onAddEmail: vi.fn(),
     onRemoveEmail: vi.fn(),
+    onAddCapExempt: vi.fn(),
+    onRemoveCapExempt: vi.fn(),
     ...overrides,
   };
   render(<SpendControlsView {...props} />);
@@ -226,6 +237,91 @@ describe("SpendControlsView", () => {
     ).toBe(true);
     expect(
       (screen.getByTestId("spend-add-submit") as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByTestId("spend-exempt-add-submit") as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  it("shows an empty cap-exempt state, not a placeholder exempt user (SC-US-9)", () => {
+    renderView({ capExempt: [] });
+    expect(screen.getByTestId("spend-exempt-empty")).toBeInTheDocument();
+    expect(screen.queryByTestId("spend-exempt")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("friend@example.com"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("lists each cap-exempt email and when it was added (SC-US-9)", () => {
+    renderView({ capExempt: [...EXEMPT] });
+    expect(screen.queryByTestId("spend-exempt-empty")).not.toBeInTheDocument();
+    expect(screen.getByTestId("spend-exempt")).toBeInTheDocument();
+
+    const friend = screen.getByTestId("spend-exempt-row-friend@example.com");
+    expect(friend).toHaveTextContent("friend@example.com");
+    const added = screen.getByTestId(
+      "spend-exempt-added-at-friend@example.com",
+    );
+    expect(added.textContent?.trim()).not.toBe("");
+  });
+
+  it("calls onAddCapExempt with the entered email (SC-US-9)", () => {
+    const props = renderView();
+    fireEvent.change(screen.getByTestId("spend-exempt-add-email"), {
+      target: { value: "friend@example.com" },
+    });
+    fireEvent.click(screen.getByTestId("spend-exempt-add-submit"));
+    expect(props.onAddCapExempt).toHaveBeenCalledTimes(1);
+    expect(props.onAddCapExempt).toHaveBeenCalledWith("friend@example.com");
+  });
+
+  it("does not call onAddCapExempt when the email field is empty", () => {
+    const props = renderView();
+    fireEvent.click(screen.getByTestId("spend-exempt-add-submit"));
+    expect(props.onAddCapExempt).not.toHaveBeenCalled();
+  });
+
+  it("calls onRemoveCapExempt for the row's email (SC-US-9)", () => {
+    const props = renderView({ capExempt: [...EXEMPT] });
+    fireEvent.click(
+      screen.getByTestId("spend-exempt-remove-friend@example.com"),
+    );
+    expect(props.onRemoveCapExempt).toHaveBeenCalledTimes(1);
+    expect(props.onRemoveCapExempt).toHaveBeenCalledWith("friend@example.com");
+  });
+
+  it("hides the empty cap-exempt state while loading", () => {
+    renderView({
+      error: "Failed to load settings.",
+      loading: true,
+      capExempt: [],
+    });
+    expect(
+      screen.queryByTestId("spend-exempt-empty"),
+    ).not.toBeInTheDocument();
+    expect(
+      (screen.getByTestId("spend-exempt-add-submit") as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByTestId("spend-exempt-add-email") as HTMLInputElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  it("disables cap-exempt add and remove while pending", () => {
+    renderView({ capExempt: [...EXEMPT], pending: true });
+    expect(
+      (screen.getByTestId("spend-exempt-add-submit") as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (
+        screen.getByTestId(
+          "spend-exempt-remove-friend@example.com",
+        ) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 });
