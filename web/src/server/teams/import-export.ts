@@ -197,7 +197,7 @@ function mapSet(
         slot,
         kind: "pokemon",
         raw: set.species,
-        message: `Could not resolve Pokémon "${set.species}" — kept as stored text.`,
+        message: `Pokémon "${set.species}" is not in the Champions roster — kept as stored text.`,
       });
     }
   }
@@ -212,7 +212,7 @@ function mapSet(
         slot,
         kind: "ability",
         raw: set.ability,
-        message: `Could not resolve ability "${set.ability}" — kept as stored text.`,
+        message: `Ability "${set.ability}" is not in the Champions roster — kept as stored text.`,
       });
     }
   }
@@ -227,7 +227,7 @@ function mapSet(
         slot,
         kind: "item",
         raw: set.item,
-        message: `Could not resolve item "${set.item}" — kept as stored text.`,
+        message: `Item "${set.item}" is not in the Champions roster — kept as stored text.`,
       });
     }
   }
@@ -243,7 +243,7 @@ function mapSet(
         slot,
         kind: "move",
         raw: rawMove,
-        message: `Could not resolve move "${rawMove}" — kept as stored text.`,
+        message: `Move "${rawMove}" is not in the Champions roster — kept as stored text.`,
       });
       const kept = storedText(rawMove);
       if (kept) moves.push(kept);

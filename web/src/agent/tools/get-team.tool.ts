@@ -26,8 +26,8 @@ import {
 } from "@/server/teams/active-team";
 
 const description =
-  "Load one of the user's saved teams by id — its members (species, ability, " +
-  "item, moves, nature, EVs/IVs, Tera type, level), their display names, and any " +
+  "Load one of the user's living Champions teams by id — its members (species, " +
+  "ability, item, moves, nature, Stat Points), their display names, and any " +
   "validity/legality warnings. Pass a `team_id` you got from `list_teams` (you " +
   "cannot guess one). Returns { found: false } if the id isn't one of this " +
   "user's living Champions teams (archived / other-game teams are not loaded). " +

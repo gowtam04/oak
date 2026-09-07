@@ -301,6 +301,18 @@ describe("GET /api/teams (list)", () => {
     expect(body.teams[0]?.format).toBe(CH);
   });
 
+  it("treats ?format=champions&archived=1 as living (format=champions wins)", async () => {
+    await seedLiving({ name: "Living A" });
+    await seedArchived({ format: GEN7, name: "Gen7 archive" });
+    signedIn(ACCT_A);
+    const body = (await (
+      await list.GET(
+        new Request("http://t/api/teams?format=champions&archived=1"),
+      )
+    ).json()) as { teams: { name: string; format: string }[] };
+    expect(body.teams.map((t) => t.name)).toEqual(["Living A"]);
+  });
+
   it("400s an old other-game ?format= picker (api-design: unknown format= → invalid_request)", async () => {
     signedIn(ACCT_A);
     const res = await list.GET(new Request("http://t/api/teams?format=gen-7"));

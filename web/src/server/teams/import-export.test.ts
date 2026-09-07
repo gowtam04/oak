@@ -123,7 +123,9 @@ Ability: Rough Skin
     expect(members[0].ability).toBe("rough-skin");
     expect(members[0].moves).toEqual(["earthquake"]);
 
-    expect(notes.some((n) => n.kind === "pokemon" && n.raw === "Notamon")).toBe(true);
+    const note = notes.find((n) => n.kind === "pokemon" && n.raw === "Notamon");
+    expect(note).toBeDefined();
+    expect(note?.message).toMatch(/not in the Champions roster/);
   });
 
   it("keeps an off-roster move as stored text with a note (CF-TEAM-AC-3.3)", async () => {

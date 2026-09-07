@@ -64,9 +64,13 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const { listTeams } = await import("@/data/repos/team-repo");
-  const teams = await listTeams(account.id, {
-    archived: isArchivedQuery(url.searchParams.get("archived")),
-  });
+  // `?format=champions` wins over `?archived=1` so an old client that sends
+  // both still gets the living list (not a mixed/ambiguous archive).
+  const archived =
+    format === CHAMPIONS_FORMAT
+      ? false
+      : isArchivedQuery(url.searchParams.get("archived"));
+  const teams = await listTeams(account.id, { archived });
   return json(200, { teams });
 }
 

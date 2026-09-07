@@ -248,8 +248,9 @@ export async function createTeam(args: {
 /**
  * Replace a team's name and/or members (TEAM-US-2; the "apply proposed team onto
  * an existing team" path too). Account-scoped — returns `null` if the team is
- * missing / not owned (no-op). Always bumps `updated_at`. `format` is fixed for
- * the team's life (BR-T3) and is never changed here.
+ * missing / not owned / **archived** (no-op; never rewrites archive JSON).
+ * Always bumps `updated_at` on a living write. `format` is fixed for the
+ * team's life (BR-T3) and is never changed here.
  */
 export async function updateTeam(args: {
   accountId: string;
@@ -276,7 +277,13 @@ export async function updateTeam(args: {
   const rows = await db
     .update(team)
     .set(set)
-    .where(and(eq(team.account_id, args.accountId), eq(team.id, args.id)))
+    .where(
+      and(
+        eq(team.account_id, args.accountId),
+        eq(team.id, args.id),
+        eq(team.format, CHAMPIONS_FORMAT),
+      ),
+    )
     .returning({
       id: team.id,
       accountId: team.account_id,
@@ -298,8 +305,9 @@ export async function updateTeam(args: {
 }
 
 /**
- * Clone a team's members into a new, independent team named `"<name> copy"`
- * (AC-4.2). Account-scoped — returns `null` if the source is missing / not owned.
+ * Clone a living team's members into a new, independent team named
+ * `"<name> copy"` (AC-4.2). Account-scoped — returns `null` if the source is
+ * missing / not owned / **archived** (CF-TEAM-AC-5.3: no rebuild-as-Champions).
  * The copy gets its own id and is fully independent thereafter.
  */
 export async function duplicateTeam(
@@ -308,7 +316,7 @@ export async function duplicateTeam(
   now: number,
 ): Promise<Team | null> {
   const source = await getTeam(accountId, id);
-  if (!source) return null;
+  if (!source || isArchivedTeam(source.format)) return null;
   return createTeam({
     accountId,
     format: CHAMPIONS_FORMAT,

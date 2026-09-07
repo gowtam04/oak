@@ -179,6 +179,9 @@ describe("POST /api/teams/import", () => {
       "Hyper Nonsense",
     );
     expect(out.validation.map((w) => w.code)).toContain("species_illegal");
+    expect(
+      out.validation.find((w) => w.code === "species_illegal")?.message,
+    ).toMatch(/not in the Champions roster/);
   });
 
   it("EV > 255 from @pkmn is a SAFE 200 (clamped, not a 500); cap is a warning", async () => {

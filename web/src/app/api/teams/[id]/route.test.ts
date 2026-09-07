@@ -158,6 +158,32 @@ describe("GET /api/teams/[id]", () => {
     if (body.archived !== undefined) expect(body.archived).toBe(true);
   });
 
+  it("GET archived validates against Champions roster, not stored format (CF-TEAM-AC-5.4)", async () => {
+    const archived = await seedArchived({
+      format: GEN7,
+      name: "Old rain",
+      members: [
+        mkMember({
+          species: "missingno",
+          evs: { hp: 252, atk: 252, def: 4, spa: 0, spd: 0, spe: 0 },
+        }),
+      ],
+    });
+    signedIn(ACCT_A);
+    const res = await byId.GET(new Request("http://t"), idCtx(archived.id));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      validation: { code: string; message: string }[];
+    };
+    const codes = body.validation.map((w) => w.code);
+    expect(codes).toContain("species_illegal");
+    expect(
+      body.validation.find((w) => w.code === "species_illegal")?.message,
+    ).toMatch(/not in the Champions roster/);
+    expect(codes).not.toContain("ev_total_exceeded");
+    expect(codes).not.toContain("ev_stat_exceeded");
+  });
+
   it("other account → 404 for living and archived (CF-AUTH-AC-2.1)", async () => {
     const living = await seedLiving("A living");
     const archived = await seedArchived({ format: SV, name: "A archive" });

@@ -17,7 +17,7 @@
  */
 
 import { json, jsonError, readJsonObject } from "@/app/api/auth/_lib/http";
-import { CHAMPIONS_FORMAT, type Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT } from "@/data/formats";
 import { teamMembersSchema, type TeamMember } from "@/data/teams/team-schema";
 
 export const runtime = "nodejs";
@@ -52,9 +52,15 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
   if (team === null) return NOT_FOUND();
 
   const { db } = await import("@/data/db");
-  const { validateTeam } = await import("@/server/teams/validate-team");
-  const validation = await validateTeam(team.members, team.format as Format, db);
+  const { validateTeam, validateArchivedTeam } = await import(
+    "@/server/teams/validate-team"
+  );
   const archived = isArchivedTeam(team.format);
+  // Living: full Champions checks. Archive: Champions roster-presence only
+  // (CF-TEAM-AC-5.4) — no gen-N index lookups, no 508/252 EV noise.
+  const validation = archived
+    ? await validateArchivedTeam(team.members, db)
+    : await validateTeam(team.members, CHAMPIONS_FORMAT, db);
 
   return json(200, { team, validation, ...(archived ? { archived: true } : {}) });
 }

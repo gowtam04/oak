@@ -399,6 +399,28 @@ describe("updateTeam", () => {
     // A's team untouched.
     expect((await repo.getTeam(ACCT_A, created.id))?.name).toBe("A's");
   });
+
+  it("refuses to update an archived team (no JSON rewrite)", async () => {
+    const members = [fullMember("garchomp")];
+    const archived = await insertArchived({
+      accountId: ACCT_A,
+      format: GEN7,
+      name: "Frozen",
+      members,
+    });
+    expect(
+      await repo.updateTeam({
+        accountId: ACCT_A,
+        id: archived.id,
+        name: "Nope",
+        members: [fullMember("dragonite")],
+        now: 2000,
+      }),
+    ).toBeNull();
+    const still = await repo.getTeam(ACCT_A, archived.id);
+    expect(still).toMatchObject({ name: "Frozen", format: GEN7 });
+    expect(still?.members[0]?.species).toBe("garchomp");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -439,6 +461,19 @@ describe("duplicateTeam", () => {
     });
     expect(await repo.duplicateTeam(ACCT_B, original.id, 2000)).toBeNull();
     expect(await repo.duplicateTeam(ACCT_A, "no-such-id", 2000)).toBeNull();
+  });
+
+  it("refuses to duplicate an archived team (no rebuild-as-Champions)", async () => {
+    const archived = await insertArchived({
+      accountId: ACCT_A,
+      format: GEN7,
+      name: "Old rain",
+    });
+    expect(await repo.duplicateTeam(ACCT_A, archived.id, 2000)).toBeNull();
+    expect((await repo.listTeams(ACCT_A)).map((t) => t.name)).not.toContain(
+      "Old rain copy",
+    );
+    expect((await repo.getTeam(ACCT_A, archived.id))?.format).toBe(GEN7);
   });
 });
 
