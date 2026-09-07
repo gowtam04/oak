@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi, type Mock } from "vitest";
 import {
   render,
   screen,
@@ -680,7 +680,7 @@ describe("TeamMemberPanel — Apply this Champions set (CF-TEAM-US-6, CF-UI-US-5
 
   function renderLiving(
     m: TeamMember,
-    onChange: ReturnType<typeof vi.fn> = vi.fn(),
+    onChange: Mock<(next: TeamMember) => void> = vi.fn(),
   ) {
     render(
       <TeamMemberPanel

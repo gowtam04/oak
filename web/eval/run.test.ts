@@ -23,12 +23,17 @@ import {
   parseArgs,
   selectCases,
 } from "./run";
-import {
-  EMPTY_USAGE,
-  type AssertResult,
-  type JudgeResult,
-  type RubricDimension,
-} from "./judge";
+// Type-only: a value import of ./judge pulls runtime → @/data/db at module
+// load, before main()'s installAsSingleton, so resolve_entity would hit the
+// placeholder DATABASE_URL instead of the fixture schema.
+import type { AssertResult, JudgeResult, RubricDimension } from "./judge";
+
+const EMPTY_USAGE = {
+  inputTokens: 0,
+  outputTokens: 0,
+  thinkingTokens: 0,
+  cachedInputTokens: 0,
+};
 
 describe("parseArgs", () => {
   it("defaults to the full judged suite", () => {

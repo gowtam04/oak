@@ -69,7 +69,7 @@ const post = (body: unknown) =>
 
 interface ImportBody {
   team: { id: string; name: string; format: string; members: TeamMember[] };
-  validation: { code: string }[];
+  validation: { code: string; message: string }[];
   notes?: { kind: string; raw: string }[];
 }
 

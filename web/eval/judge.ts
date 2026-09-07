@@ -51,7 +51,8 @@ export interface GoldenCase {
    */
   input: string | string[];
   /**
-   * AgentContext.mode for this case; defaults to the harness default (standard).
+   * AgentContext.mode for this case. Product default is Champions, but
+   * `createAgentContext` still aliases an omitted `mode` to `"standard"` (Gen 9).
    * Champions cases must set it — the input text does NOT drive scope in the eval
    * harness (scope resolution runs in the chat route, not runOak).
    */

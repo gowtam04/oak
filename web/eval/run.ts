@@ -258,7 +258,11 @@ async function buildContext(opts: EvalOptions): Promise<BuiltContext> {
     (globalThis as { __oakDb?: { pool: Pool; db: typeof db } }).__oakDb =
       { pool, db };
     (await import("@/data/repos/resolve-index")).resetResolveIndex();
-    const ctx = await createAgentContext({ model: opts.model });
+    const ctx = await createAgentContext({
+      model: opts.model,
+      mode: "champions",
+      db,
+    });
     return {
       ctx,
       label: `live index (${uri})`,
@@ -268,20 +272,18 @@ async function buildContext(opts: EvalOptions): Promise<BuiltContext> {
     };
   }
 
-  // Fixture: an isolated, migrated + seeded Postgres schema. run_sql
-  // (G26/G32/G35/G44/G47) reads its OWN sandbox pool (src/data/sql-sandbox.ts),
-  // not ctx.db/the singleton above — install the same fixture pool there too.
+  // Fixture: an isolated, migrated + seeded Postgres schema.
   const fix = await createPgSchema({ seed: "eval" });
   await installAsSingleton(fix);
-  const { installSandboxPool } = await import("@/data/sql-sandbox");
-  installSandboxPool(fix.bundle.pool);
-  const ctx = await createAgentContext({ model: opts.model });
+  const ctx = await createAgentContext({
+    model: opts.model,
+    mode: "champions",
+    db: fix.db,
+  });
   return {
     ctx,
     label: "fixture (pg schema)",
     close: async () => {
-      const { resetSandboxPool } = await import("@/data/sql-sandbox");
-      resetSandboxPool();
       await fix.cleanup();
     },
   };

@@ -7,9 +7,10 @@
  * Mega Evolution as the only gimmick, and off-roster / other-game decline.
  * Wiki / SQL / Smogon OU / National Dex / G55-fallback cases are gone.
  *
- * Every case sets `mode: "champions"`. The eval harness does not run chat-route
- * scope resolution; without this, `createAgentContext` still defaults to
- * `"standard"` and would miss the Champions index.
+ * Every case sets `mode: "champions"`. Product default is Champions, but
+ * `createAgentContext` still aliases an omitted `mode` to `"standard"` (Gen 9).
+ * The eval harness does not run chat-route scope resolution; without this
+ * field, the helper would miss the Champions index.
  *
  * Determinism policy:
  *  - `deterministic: true` → Vitest CI subset (eval/deterministic.ts).

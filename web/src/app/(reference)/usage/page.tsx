@@ -15,13 +15,16 @@ import UsageLeaderboardTable from "./usage-leaderboard-table";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const UNAVAILABLE: Omit<UsageLeaderboardResponse, "ladder"> & {
-  available: false;
-} = {
-  available: false,
-  error: "upstream_unavailable",
-  rows: [],
-};
+type UsageUnavailable = Extract<UsageLeaderboardResponse, { available: false }>;
+
+function unavailable(ladder: "doubles" | "singles"): UsageUnavailable {
+  return {
+    available: false,
+    ladder,
+    error: "upstream_unavailable",
+    rows: [],
+  };
+}
 
 async function loadView(ladder: "doubles" | "singles"): Promise<UsageLeaderboardResponse> {
   try {
@@ -31,7 +34,7 @@ async function loadView(ladder: "doubles" | "singles"): Promise<UsageLeaderboard
     );
     return await loadUsageLeaderboard(ladder, db);
   } catch {
-    return { ...UNAVAILABLE, ladder };
+    return unavailable(ladder);
   }
 }
 

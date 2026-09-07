@@ -73,9 +73,10 @@ by this listing).
 
 ## What's New (this release)
 
-**Champions-first listing (not yet submitted)** — copy for the cut that makes
-Oak a Pokémon Champions coach. Pair with the next binary that ships P7
-(regulation chip, Usage tab, archive, Stat Point editor).
+**Champions-first listing (next train — not the in-review binary).** Copy for
+the cut that makes Oak a Pokémon Champions coach. Not yet submitted; pair with
+the next binary that ships P7 (regulation chip, Usage tab, archive, Stat Point
+editor). 1.1.1 below is the currently in-review train and is **not** this listing.
 
 ```
 What's new
@@ -86,7 +87,13 @@ What's new
 • Other games are declined; off-roster names are called out honestly
 ```
 
-**1.1.1 (build 50)** — submitted 2026-09-07 (`WAITING_FOR_REVIEW`, `releaseType: AFTER_APPROVAL`). ASC version was the 1.1 record (created 2026-08-16, approved then held as `PENDING_DEVELOPER_RELEASE` on build 45); that hold was developer-rejected and retargeted as 1.1.1 so users never got the stale 1.1 binary. What's New covers everything since 1.0.2 (the last version that shipped). 1.0.3 and 1.1 were TestFlight / unreleased.
+**1.1.1 (build 50) — in-review train (not Champions listing)** — submitted
+2026-09-07 (`WAITING_FOR_REVIEW`, `releaseType: AFTER_APPROVAL`). ASC version
+was the 1.1 record (created 2026-08-16, approved then held as
+`PENDING_DEVELOPER_RELEASE` on build 45); that hold was developer-rejected and
+retargeted as 1.1.1 so users never got the stale 1.1 binary. What's New covers
+everything since 1.0.2 (the last version that shipped). 1.0.3 and 1.1 were
+TestFlight / unreleased.
 
 ```
 What's new in 1.1.1
