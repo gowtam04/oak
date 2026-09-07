@@ -73,6 +73,11 @@ struct RootView: View {
           .symbolEffect(.bounce, value: selection == .account)
       }
     }
+    // Canvas fills any tab-bar overlay region so iOS 26's floating capsule
+    // never reveals window-black. `oakTabBarUnminimized` stops scroll-minimize
+    // from collapsing the capsule and leaving a blank band.
+    .background(Theme.canvas.ignoresSafeArea())
+    .oakTabBarUnminimized()
     .tint(Theme.accent)
     .environment(\.showsAddToTeam, isSignedIn)
     .onChange(of: selection) { _, _ in Haptics.tap() }

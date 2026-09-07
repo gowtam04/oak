@@ -5,12 +5,23 @@ import UIKit
 /// and paper tab dock. Kept out of `Theme.swift` (pure tokens) because these
 /// touch UIKit appearance proxies and compose views.
 enum OakChrome {
+  /// iOS 18 can force a full-width opaque paper dock. iOS 26's tab bar is a
+  /// floating capsule; `UITabBar.isTranslucent = false` still reserves the old
+  /// dock height and leaves it unpainted (black void above the capsule).
+  static var forcesOpaqueTabDock: Bool {
+    if #available(iOS 26.0, *) { return false }
+    return true
+  }
+
   /// Installs Oak's global `UIBarAppearance` so every `NavigationStack` nav bar
-  /// is **opaque enamel** (`uiPokeRed`) and the root `TabView` tab bar is an
-  /// **opaque paper dock** (`uiSurface`) — never system material / Liquid Glass.
+  /// is **opaque enamel** (`uiPokeRed`) and the root `TabView` tab bar is paper
+  /// (`uiSurface`) — never system material / Liquid Glass.
   ///
   /// Called once at app launch. Appearance proxies are process-global and the
   /// colors are dynamic `UIColor`s, so light/dark tracking is automatic.
+  ///
+  /// Tab-bar *colors* apply on every OS. Tab-bar *translucency* is gated by
+  /// ``forcesOpaqueTabDock`` — see that flag's doc for the iOS 26 inset bug.
   @MainActor
   static func applyBarAppearance() {
     let titleFont = UIFont(name: "Fredoka-SemiBold", size: 17)
@@ -49,7 +60,9 @@ enum OakChrome {
     let tabBar = UITabBar.appearance()
     tabBar.standardAppearance = tab
     tabBar.scrollEdgeAppearance = tab
-    tabBar.isTranslucent = false
+    // Explicit on both sides: opaque appearance can leave the flag false
+    // even when we skip the iOS 18 assignment.
+    tabBar.isTranslucent = !forcesOpaqueTabDock
   }
 
   /// Opaque 12% mix of `#231F1C` (neutral-900) into poke-red-active.
@@ -89,6 +102,23 @@ extension View {
   /// `oakEnamelNav`). Kept as a no-op so leftover call sites compile. Do not
   /// reintroduce a 2pt thread on cream.
   func oakRedThread() -> some View { self }
+
+  /// iOS 26 can shrink the floating tab capsule on scroll, which reopens a
+  /// blank band under content. Pin the capsule so every tab keeps a stable
+  /// bottom edge. No-op below iOS 26 (no minimize behavior).
+  func oakTabBarUnminimized() -> some View {
+    modifier(OakTabBarUnminimized())
+  }
+}
+
+private struct OakTabBarUnminimized: ViewModifier {
+  func body(content: Content) -> some View {
+    if #available(iOS 26.0, *) {
+      content.tabBarMinimizeBehavior(.never)
+    } else {
+      content
+    }
+  }
 }
 
 extension ToolbarContent {
