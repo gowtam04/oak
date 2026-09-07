@@ -131,7 +131,7 @@ struct DexView: View {
               HStack(spacing: Theme.Spacing.sm) {
                 if match.kind == .pokemon {
                   SpriteImage(
-                    urlString: match.spriteUrl,
+                    urlString: match.resolvedSpriteURL,
                     name: match.displayName,
                     size: 36,
                     animated: false,
