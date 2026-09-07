@@ -6,6 +6,7 @@ import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.OakTopBar
 import ai.gowtam.oak.ui.SpriteImage
+import ai.gowtam.oak.ui.resolvedSpriteUrl
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.SearchMatch
@@ -221,7 +222,7 @@ private fun MatchRow(match: SearchMatch, onClick: () -> Unit) {
     ) {
         if (match.kind == EntityKind.POKEMON) {
             SpriteImage(
-                url = match.spriteUrl,
+                url = match.resolvedSpriteUrl(),
                 name = match.displayName,
                 size = 36.dp,
                 animated = false,
