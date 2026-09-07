@@ -50,8 +50,7 @@ import { createShare } from "@/lib/api/share-client";
 import { parseSlashCommand } from "@/lib/chat/slash-commands";
 import type { FollowUpChip } from "@/lib/chat/follow-up-chips";
 import { parseMentions } from "@/lib/chat/mentions";
-import { isFormat, type Format } from "@/data/formats";
-import { scopeLabel } from "@/lib/scope/scope-label";
+import { CHAMPIONS_REGULATION, isFormat, type Format } from "@/data/formats";
 import type {
   ChatStatus,
   ChatTurn,
@@ -64,6 +63,9 @@ import type {
 const CALC_SCENARIO_KEY = "oak-calc-scenario";
 const CALC_EXPLAIN_KEY = "oak-calc-explain";
 const GUEST_DENSITY_KEY = "oak-answer-density";
+
+/** Empty-desk regulation stamp — always the current Champions regulation. */
+const CHAMPIONS_REGULATION_LABEL = `Champions · ${CHAMPIONS_REGULATION.replace(/^Regulation\b/, "Reg").trim()}`;
 
 function readGuestDensity(): "full" | "compact" {
   try {
@@ -962,9 +964,7 @@ export default function Home() {
 
   const handleFollowUpChip = useCallback(
     (chip: FollowUpChip) => {
-      if (chip.kind === "scope") {
-        return;
-      }
+      if (chip.kind === "scope") return;
       if (chip.kind === "dex") {
         navigateTo(`/pokedex/${slugify(chip.target)}`);
         return;
@@ -994,10 +994,6 @@ export default function Home() {
         .querySelector<HTMLInputElement>('[aria-label="Search conversations"]')
         ?.focus();
     });
-  }, []);
-
-  const openScopePicker = useCallback(() => {
-    document.querySelector<HTMLButtonElement>('[data-testid="scope-chip"]')?.click();
   }, []);
 
   const openPalette = useCallback(() => {
@@ -1052,11 +1048,6 @@ export default function Home() {
         focusHistorySearch();
         return;
       }
-      if (meta && key === "s" && e.shiftKey) {
-        e.preventDefault();
-        openScopePicker();
-        return;
-      }
       if (meta && key === "p" && e.shiftKey) {
         e.preventDefault();
         pinCurrentConversation();
@@ -1075,7 +1066,6 @@ export default function Home() {
     handleNewChat,
     handleStop,
     openPalette,
-    openScopePicker,
     pinCurrentConversation,
     status,
   ]);
@@ -1500,7 +1490,7 @@ export default function Home() {
                       lastTeam: lastTeam
                         ? { id: lastTeam.id, name: lastTeam.name }
                         : null,
-                      scopeLabel: scopeLabel(displayFormat),
+                      scopeLabel: CHAMPIONS_REGULATION_LABEL,
                       onContinue: lastConversation
                         ? () => handleOpenConversation(lastConversation.id)
                         : undefined,

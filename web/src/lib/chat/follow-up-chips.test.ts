@@ -12,20 +12,19 @@
  *
  *   deriveFollowUpChips({
  *     answer: OakAnswer,
- *     impliedFormat?: Format,       // only when a *different* format is implied
+ *     impliedFormat?: Format,       // ignored — no game-switch chip
  *     mentionedTeam?: { id, name }, // signed-in bound / @mentioned team
  *   }): Array<{
- *     kind: "scope" | "dex" | "team",
+ *     kind: "dex" | "team",
  *     label: string,
- *     target: string,               // format id | subject name | team id
+ *     target: string,               // subject name | team id
  *   }>
  *
  * Labels:
- *   scope → `Switch to ${impliedFormat}.`
  *   dex   → `Open ${subject.name} in Dex`
  *   team  → `Open ${teamName}`
  *
- * Caps: ≤1 scope, ≤3 Dex, ≤1 team. No empty-row filler chips.
+ * Caps: ≤3 Dex, ≤1 team. No empty-row filler chips. No "Switch to {format}".
  * Never calc / compare / add-to-team / "Open this calc" / "tell me more".
  * No new OakAnswer field — chips are a client projection (CHIP-BR-3).
  */
@@ -86,21 +85,16 @@ function subject(name: string, dex: number, types: TypeName[]): Subject {
 const FORBIDDEN_CHIP = /calc|compare|add .+ to a team|open this calc|tell me more/i;
 
 describe("deriveFollowUpChips", () => {
-  it("emits one scope chip when a different format is implied (CHIP-AC-1.1 / CHIP-BR-2)", () => {
+  it("never emits a Switch-to-format chip, even when impliedFormat is passed (CF-UI-BR-2)", () => {
     const chips = deriveFollowUpChips({
       answer: BASE,
       impliedFormat: "scarlet-violet",
     });
-    const scope = chips.filter((c) => c.kind === "scope");
-    expect(scope).toHaveLength(1);
-    expect(scope[0]).toEqual({
-      kind: "scope",
-      label: "Switch to scarlet-violet.",
-      target: "scarlet-violet",
-    });
+    expect(chips.filter((c) => c.kind === "scope")).toHaveLength(0);
+    expect(chips.map((c) => c.label).join("\n")).not.toMatch(/Switch to /i);
   });
 
-  it("emits no scope chip when impliedFormat is omitted (CHIP-AC-1.1)", () => {
+  it("emits no scope chip when impliedFormat is omitted", () => {
     const chips = deriveFollowUpChips({ answer: BASE });
     expect(chips.filter((c) => c.kind === "scope")).toHaveLength(0);
   });
@@ -245,16 +239,15 @@ describe("deriveFollowUpChips", () => {
       mentionedTeam: { id: "team-rain-1", name: "Rain Offense" },
     });
 
-    expect(chips.every((c) => ["scope", "dex", "team"].includes(c.kind))).toBe(
-      true,
-    );
+    expect(chips.every((c) => ["dex", "team"].includes(c.kind))).toBe(true);
     for (const chip of chips) {
       expect(chip.label).not.toMatch(FORBIDDEN_CHIP);
       expect(chip.label.toLowerCase()).not.toContain("/calc");
       expect(chip.label.toLowerCase()).not.toContain("add garchomp to a team");
       expect(chip.label.toLowerCase()).not.toContain("open this calc");
+      expect(chip.label).not.toMatch(/Switch to /i);
     }
-    expect(chips.some((c) => c.kind === "scope")).toBe(true);
+    expect(chips.some((c) => c.kind === "scope")).toBe(false);
     expect(chips.filter((c) => c.kind === "dex").length).toBeLessThanOrEqual(3);
     expect(chips.filter((c) => c.kind === "team")).toHaveLength(1);
   });
@@ -278,7 +271,7 @@ describe("deriveFollowUpChips", () => {
     expect("follow_up_chips" in answer).toBe(false);
   });
 
-  it("respects combined caps: 1 scope + 3 Dex + 1 team (CHIP-BR-2)", () => {
+  it("respects combined caps: 3 Dex + 1 team, no scope (CHIP-BR-2, CF-UI-BR-2)", () => {
     const chips = deriveFollowUpChips({
       answer: {
         ...BASE,
@@ -297,9 +290,9 @@ describe("deriveFollowUpChips", () => {
       impliedFormat: "scarlet-violet",
       mentionedTeam: { id: "team-rain-1", name: "Rain Offense" },
     });
-    expect(chips.filter((c) => c.kind === "scope")).toHaveLength(1);
+    expect(chips.filter((c) => c.kind === "scope")).toHaveLength(0);
     expect(chips.filter((c) => c.kind === "dex")).toHaveLength(3);
     expect(chips.filter((c) => c.kind === "team")).toHaveLength(1);
-    expect(chips).toHaveLength(5);
+    expect(chips).toHaveLength(4);
   });
 });

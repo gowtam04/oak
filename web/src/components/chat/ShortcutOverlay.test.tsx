@@ -19,7 +19,6 @@ const ACTIONS = [
   /focus composer/i,
   /stop/i,
   /history search/i,
-  /scope picker/i,
   /pin(\/unpin)? conversation/i,
 ];
 
@@ -29,7 +28,6 @@ const CHORDS = [
   /⌘⇧J|Ctrl\+Shift\+J/i,
   /⌘\.|Ctrl\+\./i,
   /⌘⇧F|Ctrl\+Shift\+F/i,
-  /⌘⇧S|Ctrl\+Shift\+S/i,
   /⌘⇧P|Ctrl\+Shift\+P/i,
 ];
 
@@ -46,6 +44,8 @@ describe("ShortcutOverlay (NAV-US-2, ADR-15)", () => {
     for (const action of ACTIONS) {
       expect(overlay).toHaveTextContent(action);
     }
+    expect(overlay).not.toHaveTextContent(/scope picker/i);
+    expect(overlay.textContent).not.toMatch(/⌘⇧S|Ctrl\+Shift\+S/i);
   });
 
   it("documents macOS and other-desktop chords from ADR-15", () => {

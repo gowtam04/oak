@@ -29,7 +29,7 @@ describe("FollowUpChipRow (CHIP-US-1)", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("renders derived scope / Dex / team labels and reports the chip on click", () => {
+  it("renders derived Dex / team labels and reports the chip on click", () => {
     const chips = deriveFollowUpChips({
       answer: CANONICAL_ANSWER,
       impliedFormat: "scarlet-violet",
@@ -41,8 +41,8 @@ describe("FollowUpChipRow (CHIP-US-1)", () => {
     const row = screen.getByTestId("follow-up-chip-row");
     expect(row).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Switch to scarlet-violet." }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /Switch to /i }),
+    ).toBeNull();
     expect(
       screen.getByRole("button", { name: "Open Garchomp in Dex" }),
     ).toBeInTheDocument();

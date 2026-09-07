@@ -4,8 +4,8 @@
  * Stubbed `fetch` + SSE. Never imports db/repos/runtime. Vitest jsdom.
  *
  * Test focus (implementation-plan Phase 8):
- *   undo calls stop; retry keeps old card until answer; chip pick without
- *   send calls PUT /api/scope; empty desk recents; palette lists; guest
+ *   undo calls stop; retry keeps old card until answer; regulation chip is
+ *   display-only (no PUT /api/scope); empty desk recents; palette lists; guest
  *   hides share/pin/fork. Also slash intercept + ADR-15 shortcuts.
  *
  * Refs: REC-US-1/2/3, COPY-US-1, SHARE-US-1, NAV-US-1/2, EMPTY-US-1,
@@ -27,7 +27,7 @@ import Home from "@/app/page";
 import { formatSseEvent } from "@/lib/sse/sse-types";
 import { CANONICAL_ANSWER, MINIMAL_ANSWER } from "@/components/test-fixtures";
 import type { ChatTurn, OakAnswer } from "@/components/types";
-import type { Format } from "@/data/formats";
+import { CHAMPIONS_REGULATION } from "@/data/formats";
 
 const EMAIL = "ash@pallet.town";
 
@@ -315,10 +315,9 @@ async function send(text: string, assistantCount: number) {
   }
 }
 
-function pickScope(format: Format) {
-  fireEvent.click(screen.getByTestId("scope-chip"));
-  fireEvent.click(screen.getByTestId(`scope-chip-option-${format}`));
-}
+const REGULATION_RE = new RegExp(
+  `${CHAMPIONS_REGULATION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}|${CHAMPIONS_REGULATION.replace(/^Regulation\b/, "Reg").trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+);
 
 describe("Home — undo send (REC-US-3, ADR-3)", () => {
   it("offers Undo on the just-sent bubble and Stop-cancels the turn (REC-AC-3.1, REC-AC-3.2)", async () => {
@@ -434,30 +433,34 @@ describe("Home — retry / edit keep the old card (REC-US-1/2)", () => {
   });
 });
 
-describe("Home — scope chip PUT (SCOPE-US-1, ADR-8)", () => {
-  it("persists a guest chip pick with no message via PUT /api/scope (SCOPE-AC-1.1, SCOPE-AC-1.3)", async () => {
+describe("Home — regulation chip (CF-UI-US-2)", () => {
+  it("shows the current Champions regulation; click opens no menu and does not PUT /api/scope", async () => {
     render(<Home />);
     await screen.findByTestId("composer");
-    pickScope("gen-7");
-
-    await waitFor(() => expect(scopePuts).toHaveLength(1));
-    expect(scopePuts[0]!.format).toBe("gen-7");
-    expect(scopePuts[0]!.querySessionId || scopePuts[0]!.session_id).toBeTruthy();
-    expect(scopePuts[0]!.conversation_id ?? null).toBeNull();
+    const chip = screen.getByTestId("scope-chip");
+    expect(chip).toHaveTextContent(REGULATION_RE);
+    fireEvent.click(chip);
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.queryByTestId("scope-chip-menu")).toBeNull();
+    expect(screen.queryByTestId("scope-chip-option-gen-7")).toBeNull();
+    expect(scopePuts).toHaveLength(0);
     expect(chatBodies).toHaveLength(0);
-    expect(screen.getByTestId("scope-chip")).toHaveTextContent("Gen 7 · USUM");
   });
 
-  it("updates last-used scope for a signed-in empty chat (SCOPE-AC-1.2)", async () => {
-    meState = { signedIn: true, email: EMAIL, lastUsedScopes: [] };
+  it("stays on Champions regulation for a signed-in empty chat with no PUT", async () => {
+    meState = {
+      signedIn: true,
+      email: EMAIL,
+      lastUsedScope: "gen-7",
+      lastUsedScopes: ["gen-7"],
+    };
     render(<Home />);
     await screen.findByTestId("history-sidebar");
-    pickScope("champions");
-
-    await waitFor(() => expect(scopePuts).toHaveLength(1));
-    expect(scopePuts[0]!.format).toBe("champions");
+    fireEvent.click(screen.getByTestId("scope-chip"));
+    expect(screen.getByTestId("scope-chip")).toHaveTextContent(REGULATION_RE);
+    expect(screen.getByTestId("scope-chip")).not.toHaveTextContent(/Gen 7/i);
+    expect(scopePuts).toHaveLength(0);
     expect(chatBodies).toHaveLength(0);
-    expect(screen.getByTestId("scope-chip")).toHaveTextContent("Champions");
   });
 });
 
@@ -480,7 +483,11 @@ describe("Home — empty desk (EMPTY-US-1)", () => {
     expect(screen.getByTestId("empty-desk-last-team")).toHaveTextContent(
       "Rain Offense",
     );
-    expect(screen.getByTestId("empty-desk-scope")).toBeInTheDocument();
+    const deskScope = screen.getByTestId("empty-desk-scope");
+    expect(deskScope).toHaveTextContent(REGULATION_RE);
+    expect(deskScope).not.toHaveTextContent(/National Dex/i);
+    expect(deskScope).not.toHaveTextContent(/Scarlet/i);
+    expect(deskScope).not.toHaveTextContent(/\bGen [1-8]\b/);
     expect(screen.getAllByTestId("chat-empty-example")).toHaveLength(4);
   });
 
@@ -539,6 +546,8 @@ describe("Home — palette and shortcuts (NAV-US-1/2, ADR-15)", () => {
     expect(overlay).toHaveTextContent(/focus composer/i);
     expect(overlay).toHaveTextContent(/stop/i);
     expect(overlay.textContent).toMatch(/⌘\s*K|Ctrl\+K/i);
+    expect(overlay).not.toHaveTextContent(/scope picker/i);
+    expect(overlay.textContent).not.toMatch(/⌘⇧S|Ctrl\+Shift\+S/i);
   });
 
   it("does not steal a typed ? from the focused composer (ADR-15, NAV-BR-2)", async () => {
@@ -616,8 +625,12 @@ describe("Home — guest hides share / pin / fork / @ (AUTH)", () => {
       screen.getByRole("button", { name: /copy as human text/i }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^share$/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^pin( turn)?$/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^fork$/i })).toBeNull();
+    expect(
+      screen.queryAllByTestId("turn-actions").flatMap((el) =>
+        within(el).queryAllByRole("button", { name: /^pin$/i }),
+      ),
+    ).toHaveLength(0);
     expect(screen.queryByTestId("pin-strip")).toBeNull();
   });
 
@@ -659,8 +672,12 @@ describe("Home — guest hides share / pin / fork / @ (AUTH)", () => {
     await waitFor(() => expect(screen.getByTestId("assistant-turn")).toBeInTheDocument());
 
     expect(screen.getByRole("button", { name: /^share$/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^pin( turn)?$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^fork$/i })).toBeInTheDocument();
+    expect(
+      screen.getAllByTestId("turn-actions").some((el) =>
+        within(el).queryByRole("button", { name: /^pin$/i }),
+      ),
+    ).toBe(true);
   });
 });
 
