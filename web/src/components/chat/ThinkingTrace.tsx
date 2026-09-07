@@ -3,13 +3,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { ToolActivityEvent } from "@/lib/sse/sse-types";
 import { thinkingHeader, traceRows } from "@/lib/chat/thinking-trace";
-import { orbStateForActivity } from "@/lib/orbs/orb-state";
-import type { OrbState } from "@/lib/orbs/types";
-import ThinkingOrbMark from "./ThinkingOrbMark";
 
 /**
- * Expandable thinking trace — dotted orb + shimmering "Thinking", then a
- * vertical rail of tool steps (spinner on the live row, check on done).
+ * Expandable thinking trace — 22px CSS Poké Ball + shimmering "Thinking",
+ * then a vertical rail of tool steps (spinner on the live row, check on done).
  * Collapses to "Thought for N seconds" once tokens start. Driven only by
  * real `tool_activity` events; never invents steps.
  */
@@ -40,17 +37,9 @@ export default function ThinkingTrace({
   const bodyId = useId();
   const hasRows = rows.length > 0;
   const statusTestId = hasRows ? "field-note" : "progress-thinking";
-  const latestTool = rows.at(-1)?.tool ?? null;
-  const desiredOrb = orbStateForActivity({
-    reconnecting,
-    latestTool,
-    writing: settled,
-  });
-  const orbState = useHeldOrbState(desiredOrb);
-  const orbLive = header.live || orbState === "composing";
   const label = (
     <>
-      <ThinkingOrbMark state={orbState} live={orbLive} />
+      <span className="ball" aria-hidden="true" />
       <span
         className={
           "thinking-trace__label" +
@@ -166,23 +155,6 @@ function useThinkingElapsed(running: boolean, settled: boolean): number {
   }, [running, settled]);
 
   return elapsed;
-}
-
-/** Hold a category ~400ms so rapid tool_activity does not twitch the mark. */
-function useHeldOrbState(desired: OrbState): OrbState {
-  const [shown, setShown] = useState(desired);
-  const first = useRef(true);
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      setShown(desired);
-      return;
-    }
-    if (desired === shown) return;
-    const id = window.setTimeout(() => setShown(desired), 400);
-    return () => window.clearTimeout(id);
-  }, [desired, shown]);
-  return shown;
 }
 
 function CheckIcon() {

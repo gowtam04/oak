@@ -11,10 +11,6 @@
  * min-width keeps it usable at the low end. The mobile overlay below replaces
  * all three with a fixed full-screen layout. */
 .artifact-viewer {
-  /* Type-light plate (soul.md Instrument redesign) — mirrors .answer-card in
-     globals.css §7: solid surface + a leading-edge light + one corner glow,
-     both on pseudo-elements so the base panel never has to fade. Mix
-     strengths inherit from :root (plate tuner). */
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
   position: relative;
@@ -31,33 +27,26 @@
   border-left: 1px solid var(--border);
   border-radius: 0;
   background: var(--surface);
-  box-shadow: none;
-  min-width: 0;
+  box-shadow: var(--shadow-raised);
 }
 .artifact-viewer::before,
 .artifact-viewer::after {
   content: none;
 }
-/* Ink plate (mechanics / ability / item / loading) — sunken well, no type light. */
+/* Modifier classes stay for data-plate tests; chrome is the same paper sheet. */
 .artifact-viewer.answer-card--ink {
-  --plate-a: var(--neutral-500);
-  --plate-b: var(--neutral-600);
-  background: var(--surface-sunken);
-  box-shadow: var(--shadow-well);
-  border-color: var(--border-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+  border-color: var(--border);
 }
 .artifact-viewer.answer-card--ink::before,
 .artifact-viewer.answer-card--ink::after {
   content: none;
 }
-/* Multi-subject comparison / multi-member team — a faint dual-segment edge,
-   no corner glow (don't fight several types' light at once). */
 .artifact-viewer.answer-card--multi {
   border-color: var(--border);
 }
-.artifact-viewer.answer-card--multi::before {
-  opacity: var(--plate-edge);
-}
+.artifact-viewer.answer-card--multi::before,
 .artifact-viewer.answer-card--multi::after {
   content: none;
 }
@@ -69,11 +58,11 @@
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid color-mix(in srgb, var(--plate-a) 14%, var(--border));
-  background: color-mix(in srgb, var(--plate-a) 4%, var(--surface-raised));
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 .artifact-viewer.answer-card--ink .artifact-viewer__header {
-  background: var(--surface-raised);
+  background: var(--surface);
   border-bottom-color: var(--border);
 }
 

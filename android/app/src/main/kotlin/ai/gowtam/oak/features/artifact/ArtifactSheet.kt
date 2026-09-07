@@ -137,6 +137,7 @@ fun ArtifactSheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
         scrimColor = LocalOakColors.current.scrim,
+        tonalElevation = 0.dp,
         shape = RoundedCornerShape(topStart = OakRadius.xl, topEnd = OakRadius.xl),
         dragHandle = { BottomSheetDefaults.DragHandle() },
         properties = ModalBottomSheetDefaults.properties(shouldDismissOnBackPress = false),

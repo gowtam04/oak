@@ -128,6 +128,17 @@ struct ThemeFoundationTests {
     #expect(Bool(true))
   }
 
+  @Test
+  func typeBadgeChromeMixesConstruct() {
+    _ = Theme.TypeBadgeChrome.fill("fire")
+    _ = Theme.TypeBadgeChrome.ink("water")
+    _ = Theme.TypeBadgeChrome.border("dragon")
+    _ = TypeBadge(type: "grass")
+    _ = Theme.userBubble
+    _ = Theme.userBubbleBorder
+    #expect(Bool(true))
+  }
+
   // MARK: Warm neutral ramp (canvas + surfaceSunken)
 
   /// `canvas` and `background` are the same value (legacy alias).

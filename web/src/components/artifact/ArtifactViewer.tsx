@@ -60,9 +60,8 @@ function dexHref(
 }
 
 /**
- * Specimen-plate wash for the artifact shell (soul.md Phase 2 — continuation
- * of the answer plate, not a second product). Typed when types are known;
- * ink for mechanics / loading / ability / item.
+ * Plate kind for the artifact shell (data-plate / modifier class). Visual
+ * chrome is a white paper sheet — no type-glow chassis (enamel-paper.md KD-16).
  */
 function plateForView(view: ArtifactView): PlateVars {
   if (view.type === "structured") {

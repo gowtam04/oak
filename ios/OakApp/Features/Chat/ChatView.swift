@@ -791,12 +791,14 @@ struct ChatView: View {
   }
 }
 
-// MARK: - User note (sunken + hairline; no red bubble, no corner pip)
+// MARK: - User note (red-soft bubble)
 
-/// A user's note, trailing-aligned. Sunken fill + hairline — **not** an
-/// accent-filled iMessage/ChatGPT bubble and **not** a red-pipped instrument card.
+/// A user's note, trailing-aligned. Enamel restores the red-soft bubble:
+/// `Theme.userBubble` fill, 30% poke-red hairline, `radius-lg` with `radius-sm`
+/// on the bottom-right — not Signal's sunken gray note.
 private struct UserMessageView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.colorScheme) private var colorScheme
   let text: String
   let imageCount: Int
 
@@ -810,10 +812,20 @@ private struct UserMessageView: View {
             .foregroundStyle(Theme.textStrong)
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.vertical, Theme.Spacing.md)
-            .background(Theme.surfaceSunken, in: noteShape)
+            .background(Theme.userBubble, in: noteShape)
             .overlay {
-              noteShape.strokeBorder(Theme.separator, lineWidth: 1)
+              noteShape.strokeBorder(Theme.userBubbleBorder, lineWidth: 1)
             }
+            .shadow(
+              color: colorScheme == .dark ? .clear : Theme.Shadow.card.ambient.color,
+              radius: Theme.Shadow.card.ambient.radius,
+              y: Theme.Shadow.card.ambient.y
+            )
+            .shadow(
+              color: colorScheme == .dark ? .clear : Theme.Shadow.card.key.color,
+              radius: Theme.Shadow.card.key.radius,
+              y: Theme.Shadow.card.key.y
+            )
         }
         if imageCount > 0 {
           Label("\(imageCount) image(s) attached", systemImage: "photo")
@@ -825,8 +837,16 @@ private struct UserMessageView: View {
     .transition(entrance)
   }
 
-  private var noteShape: RoundedRectangle {
-    RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+  private var noteShape: UnevenRoundedRectangle {
+    UnevenRoundedRectangle(
+      cornerRadii: RectangleCornerRadii(
+        topLeading: Theme.Radius.lg,
+        bottomLeading: Theme.Radius.lg,
+        bottomTrailing: Theme.Radius.sm,
+        topTrailing: Theme.Radius.lg
+      ),
+      style: .continuous
+    )
   }
 
   /// Pops in from the sending corner (scale + rise + fade); Reduce Motion keeps only

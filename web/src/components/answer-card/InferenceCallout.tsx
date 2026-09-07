@@ -21,8 +21,8 @@ function confidenceLabel(confidence: Inference["confidence"]): string {
  * InferenceCallout — visually distinct callouts for `inferences[]`, clearly
  * separating deductions from stated data (BR-3).
  *
- * An `.ilabel` "Oak's deductions" title heads the box; each item shows its
- * claim, a confidence PILL (a colored badge — never the literal `[high]`
+ * Chrome is an azure-soft plate with a dashed azure border. Each item shows
+ * its claim, a confidence PILL (a colored badge — never the literal `[high]`
  * bracket text a plain string interpolation used to produce), and an optional
  * note on what the inference hinges on. Returns null when `inferences` is
  * empty.

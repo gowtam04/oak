@@ -24,6 +24,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -49,6 +50,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
@@ -65,9 +68,9 @@ import kotlinx.coroutines.launch
 
 /**
  * The top-level renderer for a single finalized [OakAnswer] — the native mirror of the
- * iOS `AnswerCardView` and web `AnswerCard`. Signal plate (`docs/design/signal.md`
- * §6.3): surface + 12.dp + 1.dp outline. No type-lit glow, no scope tag (the LED
- * lives in the header).
+ * iOS `AnswerCardView` and web `AnswerCard`. Enamel paper plate: `--surface`, 24.dp
+ * pad, radius-lg, 1.dp `--border`, umber raised shadow. No type-lit glow, no scope
+ * tag (scope lives in the header chip).
  *
  * It fans each field of the payload out to its mapped leaf subview, **rendering a
  * subview only when its field is present** (the render-if-present rule), in one fixed
@@ -101,7 +104,9 @@ fun AnswerCard(
 ) {
     val oak = LocalOakColors.current
     val reduceMotion = rememberReduceMotion()
+    val dark = isSystemInDarkTheme()
     val plateShape = RoundedCornerShape(OakRadius.lg)
+    val umber = Color(0xFF4A352A)
     var receiptsExpanded by remember { mutableStateOf(false) }
     var highlight by remember { mutableStateOf<CitationAnchor?>(null) }
     val sections = answerSections(answer, density)
@@ -123,6 +128,18 @@ fun AnswerCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag(TAG_ANSWER_CARD)
+            .then(
+                if (dark) {
+                    Modifier
+                } else {
+                    Modifier.shadow(
+                        elevation = 4.dp,
+                        shape = plateShape,
+                        ambientColor = umber.copy(alpha = 0.07f),
+                        spotColor = umber.copy(alpha = 0.10f),
+                    )
+                },
+            )
             .clip(plateShape)
             .background(MaterialTheme.colorScheme.surface, plateShape)
             .border(1.dp, oak.border, plateShape),
@@ -131,12 +148,12 @@ fun AnswerCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    start = OakSpacing.lg,
-                    end = OakSpacing.lg,
-                    top = OakSpacing.lg,
-                    bottom = if (hasReceipts) OakSpacing.md else OakSpacing.lg,
+                    start = OakSpacing.xl,
+                    end = OakSpacing.xl,
+                    top = OakSpacing.xl,
+                    bottom = if (hasReceipts) OakSpacing.md else OakSpacing.xl,
                 ),
-            verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(OakSpacing.xl),
         ) {
             if (subjectTypes.isNotEmpty()) {
                 FlowRow(
@@ -413,7 +430,7 @@ internal fun nonBlank(values: List<String>?): List<String> =
 
 internal const val TAG_ANSWER_CARD = "answer-card"
 
-/** The answer prose — first paragraph is the 22sp Figtree 600 lead. */
+/** The answer prose — first paragraph is the 22sp Fredoka 600 lead. */
 @Composable
 private fun AnswerBody(markdown: String, modifier: Modifier = Modifier) {
     ai.gowtam.oak.ui.MarkdownBlockView(

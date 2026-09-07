@@ -51,8 +51,7 @@ enum Theme {
   static let dangerSoft = adaptive(light: 0xFCE8EA, dark: 0x3A1518)
 
   /// User chat bubble — `accentSoft` mixed 55% over `surface` (not `surfaceSunken`).
-  /// Signal forbade the red bubble; Enamel restores it. The `UserMessageView`
-  /// restyle is PR3 — token only here.
+  /// Signal forbade the red bubble; Enamel restores it.
   static let userBubble = Color(
     uiColor: UIColor { traits in
       let isDark = traits.userInterfaceStyle == .dark
@@ -60,6 +59,18 @@ enum Theme {
         rgb: isDark ? 0x3A1E1E : 0xFCEBEB,
         over: isDark ? 0x231F1C : 0xFFFFFF,
         amount: 0.55
+      )
+    }
+  )
+
+  /// User-bubble hairline — poke-red mixed 30% into `--border`.
+  static let userBubbleBorder = Color(
+    uiColor: UIColor { traits in
+      let isDark = traits.userInterfaceStyle == .dark
+      return UIColor.mix(
+        rgb: isDark ? 0xC44545 : 0xEE5A5A,
+        over: isDark ? 0x3A332E : 0xE9E0D8,
+        amount: 0.30
       )
     }
   )
@@ -248,12 +259,53 @@ enum Theme {
     typeColors[name.lowercased()] ?? typeColors["normal"]!
   }
 
+  /// Packed 0xRRGGBB for a type slug — used by ``TypeBadgeChrome`` mixes.
+  fileprivate static func packedTypeRGB(_ name: String) -> UInt32 {
+    typeRGB[name.lowercased()] ?? typeRGB["normal"]!
+  }
+
   /// The legible ink color for text/labels set directly on a full-chroma
-  /// `type(_:)` fill (e.g. `TypeBadge`'s solid 8pt chip). White for the darker
-  /// type solids, near-black for the lighter ones — a fixed per-type contrast
-  /// table rather than a computed luminance check, so it's theme-stable.
+  /// `type(_:)` fill. White for the darker type solids, near-black for the
+  /// lighter ones — a fixed per-type contrast table. Type badges use
+  /// ``TypeBadgeChrome`` instead of this solid ink.
   static func typeInk(_ name: String) -> Color {
     typeInkColors[name.lowercased()] ?? typeInkColors["normal"]!
+  }
+
+  /// Tinted type-badge mix (Enamel & Paper). Light: type 16% into surface /
+  /// 72% into textStrong; dark: 26% into surface / 45% into white. Border is
+  /// type 30% into clear. `TypeBadge` consumes these three — do not hand-roll
+  /// a second mix, and do not keep the Signal solid chip.
+  enum TypeBadgeChrome {
+    static func fill(_ type: String) -> Color {
+      Color(
+        uiColor: UIColor { traits in
+          let isDark = traits.userInterfaceStyle == .dark
+          return UIColor.mix(
+            rgb: Theme.packedTypeRGB(type),
+            over: isDark ? 0x231F1C : 0xFFFFFF,
+            amount: isDark ? 0.26 : 0.16
+          )
+        }
+      )
+    }
+
+    static func ink(_ type: String) -> Color {
+      Color(
+        uiColor: UIColor { traits in
+          let isDark = traits.userInterfaceStyle == .dark
+          return UIColor.mix(
+            rgb: Theme.packedTypeRGB(type),
+            over: isDark ? 0xFFFFFF : 0x2A2521,
+            amount: isDark ? 0.45 : 0.72
+          )
+        }
+      )
+    }
+
+    static func border(_ type: String) -> Color {
+      Theme.type(type).opacity(0.30)
+    }
   }
 
   private static let typeInkWhite = solid(0xFFFFFF)
@@ -280,26 +332,30 @@ enum Theme {
     "fairy": typeInkDark,
   ]
 
-  private static let typeColors: [String: Color] = [
-    "normal": solid(0xA8A77A),
-    "fire": solid(0xEE8130),
-    "water": solid(0x6390F0),
-    "electric": solid(0xF7D02C),
-    "grass": solid(0x7AC74C),
-    "ice": solid(0x96D9D6),
-    "fighting": solid(0xC22E28),
-    "poison": solid(0xA33EA1),
-    "ground": solid(0xE2BF65),
-    "flying": solid(0xA98FF3),
-    "psychic": solid(0xF95587),
-    "bug": solid(0xA6B91A),
-    "rock": solid(0xB6A136),
-    "ghost": solid(0x735797),
-    "dragon": solid(0x6F35FC),
-    "dark": solid(0x705746),
-    "steel": solid(0xB7B7CE),
-    "fairy": solid(0xD685AD),
+  private static let typeRGB: [String: UInt32] = [
+    "normal": 0xA8A77A,
+    "fire": 0xEE8130,
+    "water": 0x6390F0,
+    "electric": 0xF7D02C,
+    "grass": 0x7AC74C,
+    "ice": 0x96D9D6,
+    "fighting": 0xC22E28,
+    "poison": 0xA33EA1,
+    "ground": 0xE2BF65,
+    "flying": 0xA98FF3,
+    "psychic": 0xF95587,
+    "bug": 0xA6B91A,
+    "rock": 0xB6A136,
+    "ghost": 0x735797,
+    "dragon": 0x6F35FC,
+    "dark": 0x705746,
+    "steel": 0xB7B7CE,
+    "fairy": 0xD685AD,
   ]
+
+  private static let typeColors: [String: Color] = Dictionary(
+    uniqueKeysWithValues: typeRGB.map { ($0.key, solid($0.value)) }
+  )
 
   // MARK: Pokémon type display order (mirrors web TYPE_DISPLAY_ORDER — schemas.ts)
 

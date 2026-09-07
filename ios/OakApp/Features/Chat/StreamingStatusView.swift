@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Expandable thinking trace: dotted orb + shimmering "Thinking", then one row
-/// per live tool call (spinner on the in-flight row, check on done). Collapses
-/// to "Thought for N seconds" once tokens start. Action labels come from
-/// ``ToolTrail`` — raw tool ids never render.
+/// Expandable thinking trace: 22pt Poké Ball + shimmering "Thinking", then one
+/// row per live tool call (spinner on the in-flight row, check on done).
+/// Collapses to "Thought for N seconds" once tokens start. Action labels come
+/// from ``ToolTrail`` — raw tool ids never render. The thinking mark is the
+/// drawn ball, not ``ThinkingOrbView``.
 struct StreamingStatusView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let phase: ChatViewModel.StreamingPhase
@@ -22,8 +23,6 @@ struct StreamingStatusView: View {
   @State private var userOpen: Bool?
   @State private var frozenElapsed: Int?
   @State private var spinAngle: Double = 0
-  @State private var shownOrb: OrbState = .breathing
-  @State private var holdWork: DispatchWorkItem?
 
   var body: some View {
     if phase != .idle {
@@ -39,13 +38,9 @@ struct StreamingStatusView: View {
       .animation(reduceMotion ? nil : Theme.Motion.smooth, value: headerText)
       .onAppear {
         captureFreeze()
-        shownOrb = desiredOrb
       }
       .onChange(of: settled) { _, _ in captureFreeze() }
       .onChange(of: sceneKey) { _, _ in userOpen = nil }
-      .onChange(of: desiredOrb) { _, next in
-        holdOrbChange(next)
-      }
       .accessibilityElement(children: .contain)
     }
   }
@@ -69,22 +64,6 @@ struct StreamingStatusView: View {
   }
 
   private var live: Bool { ThinkingTraceCopy.header(reconnecting: reconnecting, settled: settled).live }
-
-  private var desiredOrb: OrbState {
-    ThinkingTraceCopy.orbState(
-      reconnecting: reconnecting,
-      latestTool: rows.last?.tool,
-      writing: settled
-    )
-  }
-
-  private func holdOrbChange(_ next: OrbState) {
-    if next == shownOrb { return }
-    holdWork?.cancel()
-    let work = DispatchWorkItem { shownOrb = next }
-    holdWork = work
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
-  }
 
   private var headerText: String {
     ThinkingTraceCopy.header(
@@ -118,10 +97,7 @@ struct StreamingStatusView: View {
   @ViewBuilder
   private var header: some View {
     let label = HStack(spacing: Theme.Spacing.sm) {
-      ThinkingOrbView(
-        state: shownOrb,
-        live: live || shownOrb == .composing
-      )
+      ThinkingBallMark()
       headerLabel
       if !rows.isEmpty {
         Image(systemName: "chevron.down")
@@ -239,6 +215,53 @@ struct StreamingStatusView: View {
         }
       }
       .accessibilityHidden(true)
+  }
+}
+
+// MARK: - 22pt thinking ball
+
+/// Drawn CSS Poké Ball (Enamel & Paper `.ball`): red top / white bottom /
+/// black equator / inner white ring. 22pt. Spins 1.1s linear; Reduce Motion
+/// is a static ball. Not ``ThinkingOrbView``. ``OakSpinner`` and
+/// ``VoiceOrbView`` stay on their own surfaces.
+private struct ThinkingBallMark: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var spinning = false
+
+  private static let equator = Color(red: 26 / 255, green: 26 / 255, blue: 26 / 255)
+
+  var body: some View {
+    ZStack {
+      Circle()
+        .fill(
+          LinearGradient(
+            stops: [
+              .init(color: Theme.accent, location: 0),
+              .init(color: Theme.accent, location: 0.46),
+              .init(color: Self.equator, location: 0.46),
+              .init(color: Self.equator, location: 0.54),
+              .init(color: .white, location: 0.54),
+              .init(color: .white, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+          )
+        )
+      Circle()
+        .strokeBorder(Self.equator, lineWidth: 2)
+      Circle()
+        .strokeBorder(Color.white, lineWidth: 2)
+        .padding(2)
+    }
+    .frame(width: 22, height: 22)
+    .rotationEffect(.degrees(!reduceMotion && spinning ? 360 : 0))
+    .onAppear {
+      guard !reduceMotion else { return }
+      withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
+        spinning = true
+      }
+    }
+    .accessibilityHidden(true)
   }
 }
 

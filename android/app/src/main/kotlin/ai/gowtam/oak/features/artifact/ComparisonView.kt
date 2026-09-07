@@ -4,7 +4,6 @@ import ai.gowtam.oak.features.chat.answercard.SubjectCard
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
-import ai.gowtam.oak.ui.OakType
 import ai.gowtam.oak.wire.Subject
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,12 +15,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
@@ -32,8 +31,8 @@ import androidx.compose.ui.unit.dp
  * itself renders — so the sprites, names, mute dex captions, and any fallback pill
  * stay identical to the answer.
  *
- * Phase 2: the comparison sits in a multi-subject specimen plate shell (neutral-ish
- * multi wash from [OakType.plateWashForTypes]), continuing the answer-plate language.
+ * Enamel paper plate (Key Decision 16): white `--surface` + hairline + umber
+ * shadow. No type-glow chassis.
  *
  * Each card is tappable to drill into that Pokémon's full profile (AV-US-5), pushing
  * a new artifact onto the viewer's back stack via [onOpen].
@@ -48,45 +47,30 @@ fun ComparisonView(
 ) {
     val oak = LocalOakColors.current
     val dark = isSystemInDarkTheme()
-    val wash = remember(
-        subjects,
-        dark,
-        oak.surfaceRaised,
-        oak.surfaceSunken,
-        oak.border,
-        oak.borderStrong,
-    ) {
-        OakType.plateWashForTypes(
-            subjectTypes = subjects.map { it.types },
-            surface = oak.surfaceRaised,
-            surfaceSunken = oak.surfaceSunken,
-            border = oak.border,
-            borderStrong = oak.borderStrong,
-            dark = dark,
-        )
-    }
-    val plateShape = RoundedCornerShape(OakRadius.xl)
-    val plateBrush = remember(wash, oak.surfaceRaised, oak.surfaceSunken) {
-        when {
-            wash.fillSecondary != null ->
-                Brush.linearGradient(listOf(wash.fill, wash.fillSecondary, oak.surfaceRaised))
-            wash.isMechanics ->
-                Brush.verticalGradient(listOf(oak.surfaceSunken, oak.surfaceRaised))
-            else ->
-                Brush.linearGradient(listOf(wash.fill, oak.surfaceRaised))
-        }
-    }
+    val plateShape = RoundedCornerShape(OakRadius.lg)
+    val umber = Color(0xFF4A352A)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(OakSpacing.lg)
-            .then(if (dark) Modifier else Modifier.shadow(6.dp, plateShape))
+            .then(
+                if (dark) {
+                    Modifier
+                } else {
+                    Modifier.shadow(
+                        elevation = 4.dp,
+                        shape = plateShape,
+                        ambientColor = umber.copy(alpha = 0.07f),
+                        spotColor = umber.copy(alpha = 0.10f),
+                    )
+                },
+            )
             .clip(plateShape)
-            .background(plateBrush, plateShape)
-            .border(1.dp, wash.border, plateShape)
-            .padding(OakSpacing.lg),
+            .background(MaterialTheme.colorScheme.surface, plateShape)
+            .border(1.dp, oak.border, plateShape)
+            .padding(OakSpacing.xl),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
         for (subject in subjects) {

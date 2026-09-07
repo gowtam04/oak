@@ -43,8 +43,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
- * Why + Sources disclosure (Signal). Unifies reasoning + citations into one
- * expandable drawer. Tab label: `Why · Sources (N)` or `Why`. Closed by default.
+ * Why + Sources disclosure. Unifies reasoning + citations into one expandable
+ * drawer on the paper plate. Tab label: `Why · Sources (N)` or `Why`. Closed by
+ * default.
  *
  * Keeps stable instrumentation tags [AnswerSection.REASONING] /
  * [AnswerSection.CITATIONS] on always-mounted section shells so

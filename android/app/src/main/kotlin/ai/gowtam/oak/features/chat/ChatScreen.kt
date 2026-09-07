@@ -85,6 +85,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -737,16 +739,39 @@ private fun UserMessageRow(
     onEdit: () -> Unit = {},
 ) {
     val oak = LocalOakColors.current
-    // Signal user note: sunken fill + hairline, ink text. No red bubble, no corner pip.
-    val noteShape = RoundedCornerShape(OakRadius.lg)
+    val dark = isSystemInDarkTheme()
+    val surface = MaterialTheme.colorScheme.surface
+    // Enamel user bubble: poke-red-soft mixed 55% with surface, 30% red border,
+    // sm radius on the bottom-right. Not surfaceSunken (Key Decision 9).
+    val bubbleFill = lerp(surface, oak.accentSoft, 0.55f)
+    val bubbleBorder = lerp(oak.border, oak.accent, 0.30f)
+    val noteShape = RoundedCornerShape(
+        topStart = OakRadius.lg,
+        topEnd = OakRadius.lg,
+        bottomStart = OakRadius.lg,
+        bottomEnd = OakRadius.sm,
+    )
+    val umber = Color(0xFF4A352A)
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(max = 320.dp)) {
             if (turn.text.isNotEmpty()) {
                 Box(
                     modifier = Modifier
+                        .then(
+                            if (dark) {
+                                Modifier
+                            } else {
+                                Modifier.shadow(
+                                    elevation = 4.dp,
+                                    shape = noteShape,
+                                    ambientColor = umber.copy(alpha = 0.07f),
+                                    spotColor = umber.copy(alpha = 0.10f),
+                                )
+                            },
+                        )
                         .clip(noteShape)
-                        .background(oak.surfaceSunken)
-                        .border(1.dp, oak.border, noteShape)
+                        .background(bubbleFill)
+                        .border(1.dp, bubbleBorder, noteShape)
                         .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
                 ) {
                     Text(

@@ -6,7 +6,6 @@ import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.orbs.OrbState
-import ai.gowtam.oak.ui.orbs.ThinkingOrb
 import ai.gowtam.oak.ui.rememberReduceMotion
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -45,7 +44,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -56,10 +54,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -144,15 +146,17 @@ private fun StreamingAnswerPlate(streamingText: String) {
             .clip(plateShape)
             .background(MaterialTheme.colorScheme.surface, plateShape)
             .border(1.dp, oak.border, plateShape)
-            .padding(OakSpacing.lg),
+            .padding(OakSpacing.xl),
     ) {
         MarkdownBlockView(markdown = streamingText, modifier = Modifier.fillMaxWidth())
     }
 }
 
 /**
- * Expandable thinking trace: dotted orb + shimmering "Thinking", then one row
- * per live tool call. Collapses to "Thought for N seconds" once tokens start.
+ * Expandable thinking trace: 22.dp Poké Ball + shimmering "Thinking", then one
+ * row per live tool call. Collapses to "Thought for N seconds" once tokens start.
+ * Chat thinking uses the ball (`docs/design/enamel-paper.md` Key Decision 17),
+ * not [ai.gowtam.oak.ui.orbs.ThinkingOrb].
  */
 @Composable
 fun StreamingStatus(
@@ -168,22 +172,6 @@ fun StreamingStatus(
     val reduceMotion = rememberReduceMotion()
     val rows = if (reconnecting) emptyList() else traceRows(activities, settled)
     val header = thinkingHeader(reconnecting, settled, elapsedSeconds)
-    val desiredOrb = orbStateForActivity(
-        reconnecting,
-        rows.lastOrNull()?.tool,
-        writing = settled,
-    )
-    var shownOrb by remember { mutableStateOf<OrbState?>(null) }
-    val orbState = shownOrb ?: desiredOrb
-    LaunchedEffect(desiredOrb) {
-        if (shownOrb == null) {
-            shownOrb = desiredOrb
-            return@LaunchedEffect
-        }
-        if (desiredOrb == shownOrb) return@LaunchedEffect
-        delay(400)
-        shownOrb = desiredOrb
-    }
     var userOpen by remember { mutableStateOf<Boolean?>(null) }
     val autoOpen = rows.isNotEmpty() && !settled && !reconnecting
     val open = userOpen ?: autoOpen
@@ -225,9 +213,9 @@ fun StreamingStatus(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
         ) {
-            ThinkingOrb(
-                state = orbState,
-                live = header.live || orbState == OrbState.Composing,
+            ThinkingBall(
+                spinning = header.live,
+                reduceMotion = reduceMotion,
             )
             ShimmerLabel(
                 text = header.text,
@@ -276,6 +264,59 @@ fun StreamingStatus(
                 }
             }
         }
+    }
+}
+
+/** 22.dp CSS Poké Ball — red top / black equator / white bottom / inner white ring. */
+@Composable
+private fun ThinkingBall(spinning: Boolean, reduceMotion: Boolean) {
+    val oak = LocalOakColors.current
+    val transition = rememberInfiniteTransition(label = "pokeBallSpin")
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1_100, easing = LinearEasing),
+        ),
+        label = "pokeBallAngle",
+    )
+    val enamel = oak.accent
+    Canvas(
+        modifier = Modifier
+            .size(22.dp)
+            .rotate(if (spinning && !reduceMotion) angle else 0f),
+    ) {
+        val stroke = 2.dp.toPx()
+        val radius = size.minDimension / 2f
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val disk = Path().apply {
+            addOval(Rect(center = center, radius = radius - stroke / 2f))
+        }
+        clipPath(disk) {
+            drawRect(color = enamel, size = Size(size.width, size.height * 0.46f))
+            drawRect(
+                color = Color(0xFF1A1A1A),
+                topLeft = Offset(0f, size.height * 0.46f),
+                size = Size(size.width, size.height * 0.08f),
+            )
+            drawRect(
+                color = Color.White,
+                topLeft = Offset(0f, size.height * 0.54f),
+                size = Size(size.width, size.height * 0.46f),
+            )
+        }
+        drawCircle(
+            color = Color(0xFF1A1A1A),
+            radius = radius - stroke / 2f,
+            center = center,
+            style = Stroke(width = stroke),
+        )
+        drawCircle(
+            color = Color.White,
+            radius = (radius - stroke - 2.dp.toPx()).coerceAtLeast(1f),
+            center = center,
+            style = Stroke(width = 2.dp.toPx()),
+        )
     }
 }
 

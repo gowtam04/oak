@@ -2,6 +2,8 @@ package ai.gowtam.oak.ui
 
 import ai.gowtam.oak.R
 import androidx.compose.material3.Typography
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -121,3 +123,20 @@ val OakTypography: Typography = Typography().let { base ->
         ),
     )
 }
+
+/**
+ * Enamel type-badge mix (`docs/design/enamel-paper.md` Key Decision 9).
+ * Approximates CSS `color-mix(in srgb, type N%, surface|ink)`:
+ * - fill: type 16% into [surface] (dark: 26%)
+ * - ink: type 72% into [textStrong] (dark: type 45% into white)
+ * - border: type 30% into transparent
+ *
+ * [TypeBadge] is the only consumer — do not hand-roll a second mix.
+ */
+fun OakType.badgeFill(type: String, surface: Color, dark: Boolean): Color =
+    lerp(surface, color(type), if (dark) 0.26f else 0.16f)
+
+fun OakType.badgeInk(type: String, textStrong: Color, dark: Boolean): Color =
+    if (dark) lerp(Color.White, color(type), 0.45f) else lerp(textStrong, color(type), 0.72f)
+
+fun OakType.badgeBorder(type: String): Color = color(type).copy(alpha = 0.30f)

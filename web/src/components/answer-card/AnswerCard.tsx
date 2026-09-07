@@ -50,10 +50,10 @@ function formatFromAnswer(
  * (ux-design.md UI → Agent Input Map). A candidate row click instead opens that
  * Pokémon's artifact in the viewer (CandidateTable owns that, no follow-up).
  *
- * Specimen-desk plate (soul.md):
+ * Enamel paper plate (enamel-paper.md):
+ *  - White `--surface` card, 24px pad, radius-lg, umber raised shadow.
  *  - `Masthead` (status + scope tag) leads the card.
- *  - Type wash from `subjects[0].types` via `--plate-a` / `--plate-b` (ink plate
- *    when no subjects; multi accent when several subjects).
+ *  - `data-plate` is kept for tests; type-light radials stay off.
  *  - `AnswerBody` + `subjects[]` share an "evidence rail" row so sprite cards
  *    sit beside the prose instead of stranding it (media object, stacks on
  *    narrow viewports).

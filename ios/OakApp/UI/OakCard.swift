@@ -2,15 +2,13 @@ import SwiftUI
 
 /// Oak's raised-surface treatment and the interactions that go with it.
 ///
-/// The app's surfaces were flat fills with 1pt separator strokes; `oakCard`
-/// replaces that with a scheme-aware elevation recipe (constraint 6):
+/// Enamel & Paper plates: opaque `--surface`, 1pt `--border` hairline, and a
+/// warm **umber** `Theme.Shadow.card` in light mode (constraint 6):
 ///
-/// - **Light mode**: a raised fill (optionally a faint type/accent gradient
-///   wash), a two-layer `Theme.Shadow.card`, and **no stroke** — depth comes
-///   from the shadow.
-/// - **Dark mode**: the same fill/wash, a **subtle `Theme.separator` stroke**,
-///   and no shadow — shadows nearly vanish on dark backgrounds, so a hairline
-///   carries the separation instead.
+/// - **Light mode**: white `--surface` fill (optionally a faint type/accent
+///   gradient wash), 1pt hairline, two-layer umber shadow.
+/// - **Dark mode**: the same fill/wash + hairline, **no shadow** — shadows
+///   nearly vanish on dark backgrounds, so the hairline carries separation.
 ///
 /// The recipe is encapsulated here so callers never hand-roll the light/dark
 /// split — they just say `.oakCard()`. Shadow and stroke are decorative; the
@@ -58,7 +56,7 @@ struct OakCardModifier: ViewModifier {
       content
       .background {
         ZStack {
-          shape.fill(Theme.surfaceRaised)
+          shape.fill(Theme.surface)
           if let tint {
             shape.fill(
               LinearGradient(
@@ -74,10 +72,7 @@ struct OakCardModifier: ViewModifier {
         }
       }
       .overlay {
-        // Dark mode leans on a hairline for separation; light mode omits it.
-        if isDark {
-          shape.strokeBorder(Theme.separator, lineWidth: 1)
-        }
+        shape.strokeBorder(Theme.separator, lineWidth: 1)
       }
       .clipShape(shape)
       // Light mode carries the elevation; dark mode nulls both passes to `.clear`

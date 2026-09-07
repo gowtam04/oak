@@ -9,7 +9,7 @@ import UIKit
 /// every field the web renders is represented; nothing is dropped for brevity):
 ///
 ///   1. status badge        ← non-`answered` outcomes only (M-AC-1.3)
-///   2. type chips           ← unique `subjects[].types` (solid TypeBadge)
+///   2. type chips           ← unique `subjects[].types` (tinted TypeBadge)
 ///   3. answer markdown      ← `answer_markdown` (always; first paragraph as answerLead)
 ///   4. inferences           ← `inferences[]` as an Inferred line
 ///   5. clarify question     ← `question.options[]` — the "stop and ask" CTA
@@ -23,8 +23,9 @@ import UIKit
 ///
 /// Scope is header-only (the chip) — it is not repeated on the answer plate.
 /// Type chips lead the plate; the inferred line sits under the lead; the
-/// uncertainty strip stays (warning, not red). The plate is surface + 12pt
-/// radius + 1pt hairline — no type glow, no 3pt type edge, no latch pip.
+/// uncertainty strip stays (warning, not red). The plate is white `--surface`
+/// + 16pt radius + 1pt hairline + umber raised shadow — no type glow, no
+/// 3pt type edge, no latch pip.
 ///
 /// Interactivity: a clarify-option or suggestion tap sends its text **verbatim**
 /// as the next user turn via ``onFollowUp`` (the same UI→agent-input mechanism the
@@ -104,7 +105,7 @@ struct AnswerCardView: View {
             )
         }
       }
-      .padding(Theme.Spacing.lg)
+      .padding(Theme.Spacing.xl)
       .frame(maxWidth: .infinity, alignment: .leading)
 
       // Full-width Why / Sources footer — only when reasoning/citations present
@@ -149,15 +150,7 @@ struct AnswerCardView: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(
-      Theme.surface,
-      in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-    )
-    .overlay {
-      RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-        .strokeBorder(Theme.separator, lineWidth: 1)
-    }
-    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
+    .oakCard()
     .contextMenu {
       Button {
         copyHuman()
@@ -449,7 +442,7 @@ struct AnswerCardView: View {
 
   // MARK: Type chips (unique subjects[].types, plate top)
 
-  /// Solid type chips for every unique type on `subjects[]`, subject-then-type
+  /// Tinted type pills for every unique type on `subjects[]`, subject-then-type
   /// order. Types are the other color in the room — they sit above the lead.
   @ViewBuilder
   private var typeChips: some View {

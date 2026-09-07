@@ -592,7 +592,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  height: 36px;
+  height: 40px;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: var(--poke-red);
@@ -623,11 +623,15 @@
   background: var(--surface);
   color: var(--text-strong);
 }
-/* Active = white row + 2px red inset. Not a red fill rail. */
+/* Active = poke-red-soft fill + poke-red ink (historical selected). */
 .app-nav__link--active {
-  background: var(--surface);
-  box-shadow: inset 2px 0 0 var(--poke-red);
-  color: var(--text-strong);
+  background: var(--poke-red-soft);
+  box-shadow: none;
+  color: var(--poke-red);
+}
+.app-nav__link--active:hover {
+  background: var(--poke-red-soft);
+  color: var(--poke-red);
 }
 .app-nav__slot {
   flex: 1;
@@ -802,18 +806,19 @@
   align-items: flex-end;
   gap: var(--space-2);
 }
-/* User note: sunken fill + hairline. No red bubble, no corner pip. */
+/* User note: poke-red-soft mix, 30% red border, sm radius on the bottom-right. */
 .chat-turn--user .chat-turn__content {
   position: relative;
   max-width: 70%;
   padding: var(--space-3) var(--space-5) var(--space-3) var(--space-4);
-  background: var(--surface-sunken);
+  background: color-mix(in srgb, var(--poke-red-soft) 55%, var(--surface));
   color: var(--text-strong);
   font-size: 0.9375rem;
   font-weight: 500;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--poke-red) 30%, var(--border));
   border-radius: var(--radius-lg);
-  box-shadow: none;
+  border-bottom-right-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
 }
 .chat-turn--user .chat-turn__content::before {
   content: none;
@@ -840,65 +845,52 @@
 }
 
 /* --------------------------------------------------------------------------
-   6. Type badge — the signature recipe + 18 modifiers
+   6. Type badge — tinted pills (16/72/30 mix; dark 26/45)
    -------------------------------------------------------------------------- */
 .type-badge {
   --type: var(--type-normal);
-  --type-ink: #16181a;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-family: var(--body);
-  font-weight: 600;
-  font-size: 11px;
-  line-height: 1;
-  letter-spacing: 0;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font: 600 11px/1 var(--body);
+  letter-spacing: 0.03em;
   text-transform: capitalize;
   white-space: nowrap;
-  background: var(--type);
-  color: var(--type-ink);
-  border: none;
+  background: color-mix(in srgb, var(--type) 16%, var(--surface));
+  color: color-mix(in srgb, var(--type) 72%, var(--text-strong));
+  border: 1px solid color-mix(in srgb, var(--type) 30%, transparent);
+}
+[data-theme="dark"] .type-badge {
+  background: color-mix(in srgb, var(--type) 26%, var(--surface));
+  color: color-mix(in srgb, var(--type) 45%, #ffffff);
 }
 
-/* Full-chroma solids are theme-stable — no dark-mode pastel override. Ink is
-   picked per-type for contrast (WCAG-legible white or near-black on the raw
-   type color), not derived from the theme. */
-.type-badge--normal { --type: var(--type-normal); --type-ink: #16181a; }
-.type-badge--fire { --type: var(--type-fire); --type-ink: #16181a; }
-.type-badge--water { --type: var(--type-water); --type-ink: #16181a; }
-.type-badge--electric { --type: var(--type-electric); --type-ink: #16181a; }
-.type-badge--grass { --type: var(--type-grass); --type-ink: #16181a; }
-.type-badge--ice { --type: var(--type-ice); --type-ink: #16181a; }
-.type-badge--fighting { --type: var(--type-fighting); --type-ink: #ffffff; }
-.type-badge--poison { --type: var(--type-poison); --type-ink: #ffffff; }
-.type-badge--ground { --type: var(--type-ground); --type-ink: #16181a; }
-.type-badge--flying { --type: var(--type-flying); --type-ink: #16181a; }
-.type-badge--psychic { --type: var(--type-psychic); --type-ink: #16181a; }
-.type-badge--bug { --type: var(--type-bug); --type-ink: #16181a; }
-.type-badge--rock { --type: var(--type-rock); --type-ink: #16181a; }
-.type-badge--ghost { --type: var(--type-ghost); --type-ink: #ffffff; }
-.type-badge--dragon { --type: var(--type-dragon); --type-ink: #ffffff; }
-.type-badge--dark { --type: var(--type-dark); --type-ink: #ffffff; }
-.type-badge--steel { --type: var(--type-steel); --type-ink: #16181a; }
-.type-badge--fairy { --type: var(--type-fairy); --type-ink: #16181a; }
+.type-badge--normal { --type: var(--type-normal); }
+.type-badge--fire { --type: var(--type-fire); }
+.type-badge--water { --type: var(--type-water); }
+.type-badge--electric { --type: var(--type-electric); }
+.type-badge--grass { --type: var(--type-grass); }
+.type-badge--ice { --type: var(--type-ice); }
+.type-badge--fighting { --type: var(--type-fighting); }
+.type-badge--poison { --type: var(--type-poison); }
+.type-badge--ground { --type: var(--type-ground); }
+.type-badge--flying { --type: var(--type-flying); }
+.type-badge--ghost { --type: var(--type-ghost); }
+.type-badge--psychic { --type: var(--type-psychic); }
+.type-badge--bug { --type: var(--type-bug); }
+.type-badge--rock { --type: var(--type-rock); }
+.type-badge--dragon { --type: var(--type-dragon); }
+.type-badge--dark { --type: var(--type-dark); }
+.type-badge--steel { --type: var(--type-steel); }
+.type-badge--fairy { --type: var(--type-fairy); }
 
 /* --------------------------------------------------------------------------
-   7. Answer card + its sections — TYPE-LIGHT plate (soul.md Instrument redesign)
+   7. Answer card + its sections — white paper plate (enamel-paper.md)
    -------------------------------------------------------------------------- */
-/* Type-light dial values live on :root so the dev plate tuner can dial them.
-   These are the SAME 5 custom properties the old pastel-wash recipe used
-   (PlateTuner.tsx keys are unchanged) but their meaning is remapped for the
-   "type is a light, not a wash" recipe:
-     --plate-radial-a  the plate's own corner glow (answer-card / artifact-viewer)
-     --plate-radial-b  the sprite WELL's glow — the light SOURCE, stronger
-     --plate-wash-a    the streaming skeleton's softer corner glow
-     --plate-wash-b    roster slots' ambient glow
-     --plate-edge      border color-mix strength (the hairline tint under the
-                        bold edge light); also reused as the multi-plate's
-                        faint edge-segment opacity (see .answer-card--multi)
-   Dark theme raises every glow so the light still reads on graphite. */
+/* Leftover plate-tuner vars (PlateTuner.tsx). Not used as type-light on the
+   answer card; kept so leftover CSS compiles. */
 :root {
   --plate-radial-a: 12%;
   --plate-radial-b: 28%;
@@ -914,18 +906,14 @@
   --plate-edge: 38%;
 }
 .answer-card {
-  --plate-a: var(--neutral-500);
-  --plate-b: var(--neutral-600);
-  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: 16px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
+  gap: var(--space-6);
+  padding: var(--space-6);
   background: var(--surface);
-  box-shadow: none;
-  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
   animation: answer-enter var(--motion-enter) both;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -943,39 +931,24 @@
     transform: translateY(0);
   }
 }
-/* Leading-edge light — a 3px inset strip in the primary type color; a linear
-   split at 60/40 folds in the secondary type without a second pseudo-element
-   (single subject collapses to one solid color since --plate-a === --plate-b). */
-.answer-card::before {
-  content: none;
-}
-/* Glow — ONE radial anchored where the sprite well sits (top-right on desktop),
-   layered above the solid surface via its own pseudo-element so the base panel
-   never has to fade (only the light does, for the "reading latches" moment). */
+/* Type-light radials stay off — do not revive. */
+.answer-card::before,
 .answer-card::after {
   content: none;
 }
-/* Mechanics / no subjects — sunken ink plate. Neutral, no type light. */
 .answer-card--ink {
-  --plate-a: var(--neutral-500);
-  --plate-b: var(--neutral-600);
   background: var(--surface);
-  box-shadow: none;
+  box-shadow: var(--shadow-raised);
   border-color: var(--border);
 }
 .answer-card--ink::before,
 .answer-card--ink::after {
   content: none;
 }
-/* Multi-subject: neutral-ish shell + a faint dual-segment edge (don't fight
-   several glows at once) — no card-corner glow. */
 .answer-card--multi {
   border-color: var(--border);
 }
-.answer-card--multi::before {
-  /* Faint — reuses the edge dial's own percentage as the segment's opacity. */
-  --latch-opacity: var(--plate-edge);
-}
+.answer-card--multi::before,
 .answer-card--multi::after {
   content: none;
 }
@@ -1053,8 +1026,8 @@
    width (UI §3) — the card itself stays wide; only the text is held narrow. */
 .answer-body__content {
   max-width: var(--measure-prose);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 1rem;
+  line-height: 1.6;
   color: var(--text);
   /* A long URL / hyphen-free identifier must break rather than widen the card
      past a 390px viewport. Only acts on otherwise-unbreakable tokens. */
@@ -1065,14 +1038,14 @@
   font-weight: 700;
 }
 
-/* Answer lead — Figtree 600 / 22. Rest of markdown stays 15/400. */
+/* Lead stays Nunito (Fredoka is chrome titles only — enamel-paper.md). */
 .answer-body__content.markdown-body > p:first-child {
-  font-family: var(--display);
+  font-family: var(--body);
   font-weight: 600;
-  font-size: 22px;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.6;
+  letter-spacing: 0;
+  color: var(--text-strong);
 }
 
 /* Evidence rail — AnswerBody + subjects[] share a row so sprite cards sit
@@ -1163,10 +1136,10 @@
 .markdown-body h5,
 .markdown-body h6 {
   margin: var(--space-5) 0 var(--space-2);
-  font-family: var(--display);
+  font-family: var(--body);
   font-weight: 600;
   line-height: 1.25;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--text-strong);
 }
 .markdown-body h1 {
@@ -1408,7 +1381,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   8. Sprite card — type-glow specimen well (soul.md)
+   8. Sprite card — paper well (no type-glow chassis)
    -------------------------------------------------------------------------- */
 .sprite-card {
   --plate-a: var(--type-normal);
@@ -1428,24 +1401,15 @@
 .sprite-card:hover {
   transform: scale(1.03);
 }
-/* Type-glow radial well — the light SOURCE (soul.md Instrument redesign):
-   an inset well (machined into the chassis) with a saturated glow stronger
-   than the card's own corner light (--plate-radial-b, tuned higher). */
 .sprite-card__well {
   width: 120px;
   height: 120px;
-  border-radius: 22px;
+  border-radius: var(--radius-lg);
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(
-      circle at 50% 45%,
-      color-mix(in srgb, var(--plate-a) var(--plate-radial-b), transparent),
-      transparent 65%
-    ),
-    var(--surface-sunken);
-  border: 1px solid color-mix(in srgb, var(--plate-a) 32%, var(--border-strong));
-  box-shadow: var(--shadow-well);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  box-shadow: none;
 }
 .sprite-card__sprite-link {
   display: block;
@@ -2069,12 +2033,11 @@
    11. Disclosures — Receipts footer · Sources (artifacts) · Assumptions
    -------------------------------------------------------------------------- */
 
-/* Specimen-plate RECEIPTS footer (soul.md) — full-width expandable tab
-   unifying reasoning + citations. */
+/* Receipts footer — Why / Sources disclosure on the paper plate. */
 .receipts {
   margin: var(--space-2) calc(-1 * var(--space-6)) 0;
-  border-top: 1px solid color-mix(in srgb, var(--plate-a) 18%, var(--border));
-  background: color-mix(in srgb, var(--surface-sunken) 65%, transparent);
+  border-top: 1px solid var(--border);
+  background: var(--surface-sunken);
 }
 .receipts__tab {
   width: 100%;
@@ -2135,7 +2098,11 @@
   display: none;
 }
 .receipts__label {
-  color: var(--text-muted);
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 1.125rem;
+  line-height: 1.35;
+  color: var(--text-strong);
 }
 .receipts__chevron {
   flex: none;
@@ -2320,16 +2287,16 @@
 }
 
 /* --------------------------------------------------------------------------
-   13. Inference callout — "my deduction, not stated data"
+   13. Inference callout — "my deduction, not stated data" (dashed azure)
    -------------------------------------------------------------------------- */
 .inference-callout {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
+  padding: var(--space-4);
+  background: var(--azure-soft);
+  border: 1px dashed var(--azure);
+  border-radius: var(--radius-md);
 }
 .inference-callout__title {
   display: none;
@@ -2343,14 +2310,14 @@
 .inference-callout__word {
   font-style: normal;
   font-weight: 600;
-  color: var(--poke-red);
+  color: color-mix(in srgb, var(--azure) 55%, var(--text-strong));
 }
 .inference-callout__item {
   position: relative;
   padding-left: 0;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--text);
 }
 .inference-callout__item::before {
   content: none;
@@ -2610,15 +2577,42 @@ button.thinking-trace__header:hover {
 .thinking-trace__orb {
   flex: none;
   display: block;
-  width: 20px;
-  height: 20px;
-}
-.thinking-trace__orb[data-size="64"] {
-  width: 64px;
-  height: 64px;
 }
 .thinking-trace__orb[data-live="false"] {
   opacity: 0.55;
+}
+/* 22px CSS Poké Ball — chat thinking mark (enamel-paper.md KD-17). */
+.ball {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(
+    180deg,
+    var(--poke-red) 0 46%,
+    #1a1a1a 46% 54%,
+    #fff 54% 100%
+  );
+  border: 2px solid #1a1a1a;
+  box-shadow: 0 0 0 2px #fff inset;
+  animation: spin 1.1s linear infinite;
+}
+.ball[data-size="64"] {
+  width: 64px;
+  height: 64px;
+}
+.ball[data-paused="true"] {
+  animation: none;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ball {
+    animation: none;
+  }
 }
 .thinking-trace__label {
   font-family: var(--body);
@@ -3096,7 +3090,8 @@ button.thinking-trace__header:hover {
     background-clip: unset;
   }
   .thinking-trace__row,
-  .thinking-trace__spin {
+  .thinking-trace__spin,
+  .ball {
     animation: none !important;
   }
   .thinking-trace__body,
@@ -3669,7 +3664,7 @@ button.scope-chip:focus-visible {
   font-weight: 600;
   font-size: 22px;
   line-height: 1.3;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--text-strong);
 }
 .auth-dialog__close {
@@ -3722,16 +3717,13 @@ button.scope-chip:focus-visible {
   line-height: 1.5;
   color: var(--text-strong);
 }
-/* Sunken-borderless (UI §3 "inputs invert"): sunken fill, no border at rest —
-   a border + focus ring appear only on focus, same recipe as the teams-page
-   inputs. */
 .auth-dialog__input {
   width: 100%;
   box-sizing: border-box;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
   color: var(--text);
   font-family: var(--body);
   font-weight: 400;
@@ -3742,13 +3734,13 @@ button.scope-chip:focus-visible {
     background var(--motion-fast);
 }
 .auth-dialog__input:hover {
-  background: color-mix(in srgb, var(--surface-sunken) 72%, var(--border));
+  border-color: var(--border-strong);
 }
 .auth-dialog__input:focus-visible {
   outline: none;
   background: var(--surface);
-  border-color: var(--azure);
-  box-shadow: var(--focus-ring);
+  border-color: var(--poke-red);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--poke-red) 18%, transparent);
 }
 
 /* ----- OTP segmented input (code step) -----------------------------------
@@ -3792,23 +3784,25 @@ button.scope-chip:focus-visible {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-family: var(--mono);
+  letter-spacing: 0.12em;
   font-size: 1.25rem;
   color: var(--text-strong);
   transition: border-color var(--motion-fast), box-shadow var(--motion-fast),
     background var(--motion-fast);
 }
 .auth-dialog__otp-cell--filled {
-  background: color-mix(in srgb, var(--surface-sunken) 55%, var(--surface));
-  border-color: var(--border);
+  background: var(--surface);
+  border-color: var(--border-strong);
 }
 .auth-dialog__otp-cell--active {
-  border-color: var(--azure);
-  box-shadow: var(--focus-ring);
+  border-color: var(--poke-red);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--poke-red) 18%, transparent);
 }
 .auth-dialog__submit {
-  height: 38px;
+  height: 40px;
   padding: 0 var(--space-4);
   border-radius: var(--radius-md);
   border: none;
@@ -3938,7 +3932,12 @@ button.scope-chip:focus-visible {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background: var(--bg);
+  background: radial-gradient(
+      120% 60% at 50% -10%,
+      color-mix(in srgb, var(--poke-red) 4%, var(--bg)),
+      var(--bg) 55%
+    )
+    no-repeat;
 }
 .teams-page__band {
   position: sticky;
@@ -3953,8 +3952,15 @@ button.scope-chip:focus-visible {
   padding-bottom: var(--space-4);
   padding-left: max(var(--space-10), env(safe-area-inset-left));
   padding-right: max(var(--space-10), env(safe-area-inset-right));
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  background: linear-gradient(
+    180deg,
+    var(--poke-red) 0%,
+    color-mix(in srgb, var(--poke-red-active) 60%, var(--poke-red)) 100%
+  );
+  border-bottom: 2px solid
+    color-mix(in srgb, var(--neutral-900) 12%, var(--poke-red-active));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--poke-red) 22%, transparent);
+  color: var(--neutral-0);
 }
 .teams-page__brand {
   display: inline-flex;
@@ -3965,12 +3971,33 @@ button.scope-chip:focus-visible {
 .teams-page__wordmark {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-3);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  color: var(--neutral-0);
   text-decoration: none;
-  color: inherit;
+}
+.teams-page__wordmark::before {
+  content: "";
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--brand-mark) center / cover no-repeat;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--neutral-0) 62%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.24);
+}
+.teams-page__band .oak-wordmark {
+  color: var(--neutral-0);
+  font-size: inherit;
 }
 .teams-page__wordmark:hover,
 .teams-page__wordmark:focus-visible {
-  opacity: 0.75;
+  opacity: 0.85;
   text-decoration: none;
 }
 .teams-page__band-controls {
@@ -3983,13 +4010,14 @@ button.scope-chip:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--text-muted);
+  color: var(--neutral-0);
   font-family: var(--body);
   font-weight: 600;
   font-size: var(--text-sm);
 }
 .teams-page__format-text {
-  color: var(--text-muted);
+  color: var(--neutral-0);
+  opacity: 0.85;
 }
 .teams-page__select-wrap {
   position: relative;
@@ -4002,27 +4030,28 @@ button.scope-chip:focus-visible {
   height: var(--space-10);
   padding-inline: var(--space-3) var(--space-8);
   border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--neutral-0);
   font-family: var(--body);
   font-weight: 600;
   font-size: var(--text-input);
   line-height: 1.2;
   cursor: pointer;
-  transition: background var(--motion-fast), border-color var(--motion-fast);
+  transition: background var(--motion-fast);
 }
 .teams-page__format-select:hover {
-  background: var(--surface-sunken);
+  background: rgba(255, 255, 255, 0.28);
 }
 .teams-page__format-select option {
   color: var(--text);
+  background: var(--surface);
 }
 .teams-page__select-wrap .pill-caret {
   position: absolute;
   right: var(--space-3);
   pointer-events: none;
-  color: var(--text-muted);
+  color: var(--neutral-0);
 }
 /* ----- Teams rail shell ---------------------------------------------------
    Wraps AppNav (as `.teams-page__rail`) and the existing body content in a
@@ -4696,9 +4725,7 @@ button.scope-chip:focus-visible {
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--surface) 86%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--surface);
   box-shadow: var(--shadow-floating);
 }
 .team-editor__savebar-meta {
@@ -4765,8 +4792,6 @@ button.scope-chip:focus-visible {
   gap: var(--space-3);
 }
 .roster-slot {
-  /* Filled slot = type edge + a small glow (soul.md "six sockets in a
-     device" — the party tray). --plate-a/--plate-b set per-slot in TSX. */
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
   display: flex;
@@ -4779,9 +4804,7 @@ button.scope-chip:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow:
-    0 0 10px color-mix(in srgb, var(--plate-a) var(--plate-wash-b), transparent),
-    var(--shadow-raised);
+  box-shadow: var(--shadow-raised);
   cursor: pointer;
   transition:
     border-color var(--motion-fast),
@@ -4789,54 +4812,32 @@ button.scope-chip:focus-visible {
     background var(--motion-fast),
     transform var(--motion-spring);
 }
-/* Leading-edge light, same recipe as the answer plate — small, top-inset. */
 .roster-slot::before {
-  content: "";
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 0;
-  width: 3px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, var(--plate-a) 0 60%, var(--plate-b) 60% 100%);
+  content: none;
 }
 .roster-slot:hover {
   transform: translateY(-2px);
-  box-shadow:
-    0 0 14px color-mix(in srgb, var(--plate-a) var(--plate-wash-b), transparent),
-    var(--shadow-floating);
+  box-shadow: var(--shadow-floating);
 }
-/* Selection = red record-light ring (not a left list rail). */
 .roster-slot[data-selected="true"] {
-  border-color: var(--poke-red);
-  box-shadow: 0 0 0 1px var(--poke-red), var(--shadow-floating);
-  background: radial-gradient(
-    120% 80% at 50% 20%,
-    var(--poke-red-soft),
-    var(--surface) 80%
-  );
+  border: 2px solid var(--poke-red);
+  box-shadow: var(--shadow-raised);
+  background: var(--surface);
   transform: translateY(-2px);
 }
-/* Empty / unknown-type filled slots: a solid hairline socket machined into
-   the chassis (inset well) — no type edge, no dashed placeholder. */
 .roster-slot[data-empty="true"] {
   border-style: solid;
   border-color: var(--border);
   background: var(--surface-sunken);
-  box-shadow: var(--shadow-well);
+  box-shadow: none;
 }
 .roster-slot[data-empty="true"]::before {
   content: none;
 }
 .roster-slot[data-empty="true"][data-selected="true"] {
-  border-style: solid;
-  border-color: var(--poke-red);
-  box-shadow: 0 0 0 1px var(--poke-red);
-  background: radial-gradient(
-    120% 80% at 50% 20%,
-    var(--poke-red-soft),
-    var(--surface) 80%
-  );
+  border: 2px solid var(--poke-red);
+  box-shadow: var(--shadow-raised);
+  background: var(--surface);
 }
 .roster-slot__index {
   position: absolute;
@@ -5423,8 +5424,6 @@ button.scope-chip:focus-visible {
   justify-content: center;
   padding: var(--space-4);
   background: var(--scrim);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   z-index: var(--z-overlay);
   animation: scrim-in var(--motion-fast) both;
 }
@@ -5825,8 +5824,6 @@ button.scope-chip:focus-visible {
     inset: 0;
     z-index: var(--z-scrim);
     background: var(--scrim);
-    backdrop-filter: blur(1px);
-    -webkit-backdrop-filter: blur(1px);
     animation: scrim-in var(--motion-fast) both;
   }
   /* /teams collapses to a single column (list rail stacks above the editor). */
@@ -5869,6 +5866,9 @@ button.scope-chip:focus-visible {
   }
   .answer-card {
     padding: var(--space-4);
+  }
+  .receipts {
+    margin-inline: calc(-1 * var(--space-4));
   }
   /* The account email (clamped to 200px, hover-only on desktop) would crowd /
      overflow the phone header — drop it; "Sign out" + the avatar carry the
@@ -6350,9 +6350,7 @@ button.scope-chip:focus-visible {
   align-items: center;
   justify-content: center;
   padding: var(--space-6);
-  background: color-mix(in srgb, var(--bg) 74%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--scrim);
 }
 .voice-overlay__panel {
   position: relative;

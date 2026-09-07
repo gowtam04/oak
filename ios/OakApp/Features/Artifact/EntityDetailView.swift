@@ -38,21 +38,6 @@ struct EntityDetailView: View {
     return source
   }
 
-  /// Specimen-plate atmosphere from this entity's types (soul.md Phase 2.1).
-  /// Pokémon / move / type → typed wash; ability / item / unsupported → ink plate.
-  private var plateAtmosphere: Theme.PlateAtmosphere {
-    switch artifact.data {
-    case .pokemon(let data):
-      return Theme.PlateAtmosphere.resolve(subjectTypes: [data.types])
-    case .move(let data):
-      return Theme.PlateAtmosphere.resolve(subjectTypes: [[data.type]])
-    case .type(let data):
-      return Theme.PlateAtmosphere.resolve(subjectTypes: [data.types])
-    case .ability, .item, .unsupported:
-      return .mechanics
-    }
-  }
-
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
@@ -64,8 +49,7 @@ struct EntityDetailView: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(Theme.Spacing.lg)
-      // Artifact chrome is a specimen-plate continuation of the answer card.
-      .oakSpecimenPlate(plateAtmosphere, showsLeadingEdge: false)
+      .oakCard()
       .padding(.horizontal, Theme.Spacing.sm)
       .padding(.vertical, Theme.Spacing.sm)
     }
@@ -139,24 +123,20 @@ struct EntityDetailView: View {
     movepoolSection(data.movepool)
   }
 
-  /// The full-width Pokémon hero band: type-glow artwork well (SubjectsView quality)
-  /// over a neutral band lit by a single primary-type radial glow (Phase 2 plate-
-  /// glow language, `Theme.typeGlowBand`), plus display name, mono dex, and
-  /// tappable type chips. Glow is enhancement only — chips carry typing as color
-  /// **and** label (M-AC-UI9.3). Soul.md Phase 2.1 artifact continuation.
+  /// Pokémon hero: artwork in a paper well, display name, mono dex, and
+  /// tappable type chips. Chips carry typing as color **and** label (M-AC-UI9.3).
   private func pokemonHeader(_ data: PokemonArtifactData) -> some View {
-    let primary = data.types.first ?? "normal"
-    let secondary = data.types.count > 1 ? data.types[1] : nil
-    return VStack(spacing: 12) {
+    VStack(spacing: 12) {
       SpriteImage(urlString: data.artworkUrl, name: data.displayName, size: 112)
         .padding(Theme.Spacing.md)
-        .oakTypeGlowWell(
-          primary: primary,
-          secondary: secondary,
-          cornerRadius: Theme.Radius.xl,
-          glowEndRadius: 96
+        .background(
+          Theme.surfaceSunken,
+          in: RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
         )
-        .shadow(color: Color.black.opacity(0.14), radius: 10, x: 0, y: 4)
+        .overlay {
+          RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
+            .strokeBorder(Theme.separator, lineWidth: 1)
+        }
       VStack(spacing: 6) {
         Text(data.displayName)
           .font(Theme.display(.title))
@@ -178,37 +158,31 @@ struct EntityDetailView: View {
     .padding(.vertical, 20)
     .padding(.horizontal, 16)
     .background(
-      Theme.typeGlowBand(primary),
+      Theme.surface,
       in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
     )
+    .overlay {
+      RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+        .strokeBorder(Theme.separator, lineWidth: 1)
+    }
   }
 
-  /// A tinted header band for the non-Pokémon kinds — a left-aligned title (and, for a move, its
-  /// type/damage-class chips) over a neutral band with a single radial type glow (Phase 2 plate-
-  /// glow language). Callers pass the background: a move/type uses `Theme.typeGlowBand`, and
-  /// abilities/items use the neutral accent wash (they have no single type to key off). Radius
-  /// matches the Pokémon hero (`Radius.lg`).
-  private func headerBand<Background: ShapeStyle, Content: View>(
-    background: Background, @ViewBuilder content: () -> Content
-  ) -> some View {
+  /// Paper header band for non-Pokémon kinds — title (and, for a move, its
+  /// type/damage-class chips) on `--surface` + hairline. Radius matches the
+  /// Pokémon hero (`Radius.lg`).
+  private func headerBand<Content: View>(@ViewBuilder content: () -> Content) -> some View {
     VStack(alignment: .leading, spacing: 8) {
       content()
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(16)
     .background(
-      background, in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+      Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
     )
-  }
-
-  /// The neutral accent wash used for ability/item bands — the low-opacity accent diagonal that
-  /// stands in where there's no type color to tint the band with.
-  private var accentBandGradient: LinearGradient {
-    LinearGradient(
-      colors: [Theme.accent.opacity(0.14), Theme.accent.opacity(0.05)],
-      startPoint: .topLeading,
-      endPoint: .bottomTrailing
-    )
+    .overlay {
+      RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+        .strokeBorder(Theme.separator, lineWidth: 1)
+    }
   }
 
   private func abilitiesSection(_ abilities: Abilities) -> some View {
@@ -351,7 +325,7 @@ struct EntityDetailView: View {
   @ViewBuilder
   private func moveBody(_ data: MoveArtifactData) -> some View {
     VStack(alignment: .leading, spacing: 14) {
-      headerBand(background: Theme.typeGlowBand(data.type)) {
+      headerBand {
         Text(data.displayName)
           .font(Theme.display(.title2))
           .foregroundStyle(Theme.textPrimary)
@@ -380,7 +354,7 @@ struct EntityDetailView: View {
   @ViewBuilder
   private func abilityBody(_ data: AbilityArtifactData) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      headerBand(background: accentBandGradient) {
+      headerBand {
         Text(data.displayName)
           .font(Theme.display(.title2))
           .foregroundStyle(Theme.textPrimary)
@@ -416,7 +390,7 @@ struct EntityDetailView: View {
   @ViewBuilder
   private func itemBody(_ data: ItemArtifactData) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      headerBand(background: accentBandGradient) {
+      headerBand {
         Text(data.displayName)
           .font(Theme.display(.title2))
           .foregroundStyle(Theme.textPrimary)
@@ -439,9 +413,7 @@ struct EntityDetailView: View {
   @ViewBuilder
   private func typeBody(_ data: TypeArtifactData) -> some View {
     VStack(alignment: .leading, spacing: 14) {
-      headerBand(
-        background: Theme.typeGlowBand(data.types.first ?? "normal")
-      ) {
+      headerBand {
         flow {
           ForEach(data.types, id: \.self) { type in
             TypeBadge(type: type)

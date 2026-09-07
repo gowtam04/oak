@@ -83,7 +83,7 @@ struct DexEntityDetailContainer: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(Theme.Spacing.lg)
-    .oakSpecimenPlate(.mechanics)
+    .oakCard()
     .padding(Theme.Spacing.sm)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Loading")
