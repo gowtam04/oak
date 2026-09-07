@@ -2,41 +2,52 @@
 
 Category: **Reference**. Age rating: **4+**. Price: **Free, no in-app purchases.**
 
+Champions-first (CF-INT-BR-10, CF-AS-6): listing copy describes Oak as a
+**Pokémon Champions coach**, not a whole-franchise or every-generation Dex. No
+National Dex default, no Smogon OU, no generation toggle.
+
 ## App Name (30 chars max)
 
 ```
 Oak – AI Coach
 ```
-**13 / 30 chars.** Renamed from `Oak – AI Battle Coach` on the 1.1 listing (2026-08-16). Drops "Battle" so in-game / whole-games questions still fit the store name, and keeps the wedge: Oak *coaches* — it reasons and explains — rather than just looking up. The home-screen name stays `Oak` (`CFBundleDisplayName`); only the App Store display name changed. `battle` moved into the Keywords field so "battle calculator" still combines with the subtitle.
+**13 / 30 chars.** Home-screen name stays `Oak` (`CFBundleDisplayName`); only
+the App Store display name uses this string. Oak *coaches* — it reasons and
+explains — rather than just looking up. `battle` lives in Keywords so "battle
+calculator" still combines with the subtitle.
 
 ## Subtitle (30 chars max)
 
 ```
 Team Builder & Calculator
 ```
-**25 / 30 chars.** Reworked now that "AI" and "Battle" live in the App Name — the subtitle no longer repeats them and instead carries the next tier of high-intent terms. It locks the exact phrase "team builder" (a Tier-1 search term) into a heavily-weighted field, and "Calculator" combines cross-field with the App Name's "Battle" → "battle calculator" (Tier 1) and with the keyword "damage" → "damage calculator" (Tier 2). Zero trademarked words. (5 chars of headroom remain if you later want to append a term.)
+**25 / 30 chars.** Locks "team builder" into a heavily-weighted field.
+"Calculator" combines cross-field with Keywords `battle` → "battle calculator"
+and `damage` → "damage calculator". Zero trademarked words.
 
 ## Promotional Text (170 chars max, updatable without resubmission)
 
 ```
-New: a one-tap format toggle scopes your whole team chat and battle calculator to the current competitive regulation ruleset — no separate app, no manual rule lookups.
+Oak now coaches Pokémon Champions only — Stat Points, Mega Evolution, and live Doubles/Singles usage for the current regulation. Other games are declined.
 ```
-**167 / 170 chars.**
+**154 / 170 chars.**
 
 ## Description (4000 chars max)
 
 ```
-Oak is your AI battle coach — a chat companion for building and reasoning about competitive creature-battle teams. Ask any question about your roster and get a reasoned, cited answer, not a stat dump.
+Oak is your AI coach for Pokémon Champions — a chat companion for building and reasoning about competitive teams in the current regulation. Ask a question about your roster and get a reasoned, cited answer, not a stat dump.
 
 Most reference apps hand you raw numbers and leave the thinking to you. Oak reasons on top of the data: every answer comes with its reasoning, the sources it's grounded in, and explicit "this part is inferred" flags whenever the data doesn't fully cover your question — so you always know what's fact and what's a best guess.
 
+Oak covers Pokémon Champions only. Other games and a National Dex are out of scope.
+
 WHAT YOU CAN DO
 
-• Build full competitive teams — set species, ability, held item, all four moves, nature, EVs, IVs, and Tera type for every slot on your roster.
-• Import and export teams using the popular Showdown text format — bring a team in from a calculator or a friend, or take yours out to use elsewhere.
+• Build Champions teams — species, ability, held item, moves, nature, and Stat Points (66 total, max 32 per stat) for every slot. Everything is Level 50; Mega Evolution is the gimmick, with no Tera.
+• Import and export teams using the popular Showdown text format — Stat Points ride in the EV fields.
+• Check live Champions ladder usage (Doubles by default, Singles as a second view) — leaderboard plus per-species sets, dated as a snapshot.
 • Ask anything in plain English and get the direct answer plus the reasoning behind it, with cited sources and clear flags when something is uncertain or inferred.
-• Switch your entire chat and team builder to the official competitive regulation format with one toggle — no separate app, no manual rule lookups.
-• Attach a photo or screenshot — a team sheet, a card, an in-game moment — and ask Oak about it directly.
+• Attach a photo or screenshot — a Champions stats screen or team sheet — and ask Oak about it directly.
 • Drill into any move, ability, type matchup, or damage calculation in a dedicated detail view without losing your place in the conversation.
 • Start chatting instantly as a guest, no account required. Sign in with a one-time email code (no password) when you want your chats and teams saved and synced across devices.
 
@@ -48,16 +59,32 @@ Oak is an independent, unofficial fan project. It is not affiliated with, endors
 
 Questions or feedback? Reach us at www.gowtam.ai/#contact.
 ```
-**2,085 / 4000 chars** (well within budget).
 
 ## Keywords (100 chars max, hidden, comma-separated, no spaces)
 
 ```
-type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,battle,showdown,import,reasoning,chat
+type,chart,weakness,coverage,moveset,damage,mega,speed,battle,showdown,import,reasoning,chat,usage
 ```
-**98 / 100 chars.** After the 1.1 rename, `battle` left the App Name so it is back in Keywords (to keep "battle calculator" with the subtitle). `chat` uses the leftover budget. Dropped `regulation` to fit. Full rationale in `aso-keywords.md`.
+**98 / 100 chars.** Dropped `ev` / `iv` / `tera` (mainline knobs Oak no longer
+surfaces). Added `mega` (Champions gimmick) and `usage` (live ladder). `battle`
+stays so "battle calculator" still combines with the subtitle. Full historical
+rationale in `aso-keywords.md` (that file's older Tera/EV notes are superseded
+by this listing).
 
 ## What's New (this release)
+
+**Champions-first listing (not yet submitted)** — copy for the cut that makes
+Oak a Pokémon Champions coach. Pair with the next binary that ships P7
+(regulation chip, Usage tab, archive, Stat Point editor).
+
+```
+What's new
+
+• Oak now coaches Pokémon Champions only — current regulation, no generation picker
+• Team builder uses Stat Points and Mega Evolution (no Tera)
+• Live Champions usage: Doubles default, Singles as a second view
+• Other games are declined; off-roster names are called out honestly
+```
 
 **1.1.1 (build 50)** — submitted 2026-09-07 (`WAITING_FOR_REVIEW`, `releaseType: AFTER_APPROVAL`). ASC version was the 1.1 record (created 2026-08-16, approved then held as `PENDING_DEVELOPER_RELEASE` on build 45); that hold was developer-rejected and retargeted as 1.1.1 so users never got the stale 1.1 binary. What's New covers everything since 1.0.2 (the last version that shipped). 1.0.3 and 1.1 were TestFlight / unreleased.
 
