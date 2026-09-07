@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import {
   FORMATS,
   DEFAULT_FORMATS,
+  SCOPE_PICKER_ORDER,
   STANDARD_FORMAT,
   CHAMPIONS_FORMAT,
   NATDEX_FORMAT,
@@ -56,6 +57,12 @@ describe("FORMATS", () => {
     expect(STANDARD_FORMAT).toBe("scarlet-violet");
     expect(CHAMPIONS_FORMAT).toBe("champions");
     expect(NATDEX_FORMAT).toBe("national-dex");
+  });
+
+  it("SCOPE_PICKER_ORDER is Champions-only — not an eleven-scope picker (ADR-3)", () => {
+    expect([...SCOPE_PICKER_ORDER]).toEqual(["champions"]);
+    expect(SCOPE_PICKER_ORDER).not.toContain("national-dex");
+    expect(SCOPE_PICKER_ORDER).not.toContain("gen-7");
   });
 });
 

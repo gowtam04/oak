@@ -1,26 +1,21 @@
 /**
  * src/ingest/run.ts — the `npm run ingest` CLI + `runIngest()` orchestrator.
  *
- * Builds the per-format index (DS-2 pokemon, DS-3 learnset, searchable_names,
+ * Builds the Champions index (DS-2 pokemon, DS-3 learnset, searchable_names,
  * DS-4 reference_cache) from the @pkmn ecosystem (local packages — no network):
  *
- *     for each format:  loadFormat → build-pokedex → build-learnsets
- *                       → build-names → build-reference
+ *     loadFormat(champions) → build-pokedex → build-learnsets
+ *                           → build-names → build-reference
  *
- * then writes one ingest_meta row per format.
+ * then writes one ingest_meta row. Champions-first (ADR-4): default formats
+ * are Champions only. Other-game warehouse pipelines (wiki / natdex /
+ * encounters / PMD / Smogon meta) are gone.
  *
- * Build-then-write discipline: ALL formats are built into in-memory arrays
- * first; only then does `writeIndex` apply them in ONE atomic transaction —
- * every table swap (pokemon/learnset/searchable_names/reference_cache) AND the
- * ingest_meta write commit or roll back together, so a crash or a concurrent
- * read never sees a cross-table-inconsistent index. Deletes are SCOPED to the
- * formats built this run (`WHERE format IN (...)`), not "delete everything" —
- * so `npm run ingest -- --formats=X` surgically swaps only X's rows and leaves
- * every other format's rows (and ingest_meta row) untouched. A rebuild is
- * idempotent. Accepted edge: if a format were ever removed from `FORMATS`, its
- * rows would become orphaned (never deleted, never re-read) — a non-issue
- * today with six fixed formats. @pkmn is local, so the old "reuse-last-good on
- * PokeAPI outage" path is gone — there is no upstream.
+ * Build-then-write discipline: formats are built into in-memory arrays first;
+ * only then does `writeIndex` apply them in ONE atomic transaction — every
+ * table swap (pokemon/learnset/searchable_names/reference_cache) AND the
+ * ingest_meta write commit or roll back together. Deletes are SCOPED to the
+ * formats built this run (`WHERE format IN (...)`). A rebuild is idempotent.
  *
  * Connection ownership: the ingest CLI runs under tsx as its OWN process and
  * does NOT import the `@/data/db` singleton (that module is `server-only`).
@@ -35,30 +30,21 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { inArray, sql } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import {
-  classic_encounters,
   ingest_meta,
   learnset,
-  natdex_machines,
-  natdex_moves,
-  natdex_species,
-  pmd_recruits,
   pokemon,
   reference_cache,
   searchable_names,
-  wiki_chunk,
-  wiki_page,
 } from "@/data/schema";
 import * as schema from "@/data/schema";
 import {
   type Format,
   DEFAULT_FORMATS,
-  STANDARD_FORMAT,
   CHAMPIONS_FORMAT,
-  isFormat,
 } from "@/data/formats";
 import { loadFormat, slugFor } from "@/data/pkmn/gen-provider";
 import { logger } from "@/server/logger";
@@ -68,24 +54,6 @@ import { buildPokedex, type PokemonRow } from "./build-pokedex";
 import { buildLearnsetRows, type LearnsetRow } from "./build-learnsets";
 import { buildNames, type NameRow } from "./build-names";
 import { buildReferenceRows, type ReferenceRow } from "./build-reference";
-import { buildEncounterRows } from "./build-encounters";
-import {
-  buildNatdexSpeciesRows,
-  buildNatdexMoveRows,
-  type NatdexSpeciesRow,
-  type NatdexMoveRow,
-} from "./build-natdex";
-import { buildMachineRows, type NatdexMachineRow } from "./build-machines";
-import {
-  buildClassicEncounterRows,
-  type ClassicEncounterRow,
-} from "./build-classic-encounters";
-import { buildPmdRows, type PmdRecruitRow } from "./build-pmd";
-import {
-  buildWikiRows,
-  type WikiChunkRow,
-  type WikiPageRow,
-} from "./build-wiki";
 
 // ---------------------------------------------------------------------------
 // Connection (own handle — db.ts is server-only and unusable under tsx)
@@ -127,67 +95,25 @@ export interface IngestReport {
   learnsets: number;
   names: number;
   references: number;
-  /** Row counts for the global natdex warehouse tables (built once per run). */
-  global: GlobalReport;
   startedAt: number;
   finishedAt: number;
 }
 
 export interface RunIngestOptions {
-  /** Formats to build. Default: every format in DEFAULT_FORMATS (all eleven). */
+  /** Formats to build. Default: {@link DEFAULT_FORMATS} (Champions only). */
   formats?: Format[];
   /** Optional human-readable progress callback. */
   onProgress?: (msg: string) => void;
-  /**
-   * Force replacing wiki_page/wiki_chunk even when the built wiki rows are
-   * empty. Default false — see the empty-wiki guard in `writeIndex`. Set this
-   * only for an intentional corpus removal.
-   */
-  allowEmptyWiki?: boolean;
-}
-
-/** The built rows for the GLOBAL natdex warehouse tables (built once per run). */
-export interface GlobalRows {
-  natdexSpecies: NatdexSpeciesRow[];
-  natdexMoves: NatdexMoveRow[];
-  machines: NatdexMachineRow[];
-  classicEncounters: ClassicEncounterRow[];
-  pmd: PmdRecruitRow[];
-  /** Fandom wiki corpus (empty unless `.wiki-cache/` was fetched). */
-  wikiPages: WikiPageRow[];
-  wikiChunks: WikiChunkRow[];
 }
 
 /**
- * The built rows for every table `writeIndex` swaps in, one atomic call. The
- * `global` rows (natdex warehouse) are OPTIONAL: they are format-independent and
- * built ONCE per run, so a caller (e.g. the run.test.ts write-phase regression)
- * that only exercises the per-format tables omits them and leaves the global
- * tables untouched.
+ * The built rows for every table `writeIndex` swaps in, one atomic call.
  */
 export interface IndexRows {
   pokemon: PokemonRow[];
   learnsets: LearnsetRow[];
   names: NameRow[];
   references: ReferenceRow[];
-  global?: GlobalRows;
-}
-
-/** Row counts for the global natdex warehouse tables (evidence / bookkeeping). */
-export interface GlobalReport {
-  natdexSpecies: number;
-  natdexMoves: number;
-  machines: number;
-  classicEncounters: number;
-  pmd: number;
-  /** Actual wiki_page/wiki_chunk row counts left in the DB after this run —
-   * the built-row counts when replaced, or the preserved counts when the
-   * empty-wiki guard fired (see `wikiPreserved`). */
-  wikiPages: number;
-  wikiChunks: number;
-  /** True when the empty-wiki guard preserved an existing populated corpus
-   * instead of wiping it with an empty build (see `writeIndex`). */
-  wikiPreserved: boolean;
 }
 
 const SCHEMA_VERSION = "2";
@@ -215,25 +141,6 @@ async function replaceTable<TTable extends PgTable & { format: AnyPgColumn }>(
   }
 }
 
-/**
- * Replace ALL rows in a GLOBAL (non-format-partitioned) table — delete
- * everything, then chunked insert. Runs inside writeIndex's transaction, so it
- * commits/rolls back atomically with the per-format swaps. Unlike replaceTable
- * the delete is unscoped: these tables have no `format` column (natdex
- * warehouse), so each ingest run rebuilds them wholesale.
- */
-async function replaceGlobalTable<TTable extends PgTable>(
-  tx: IngestTx,
-  table: TTable,
-  rows: TTable["$inferInsert"][],
-): Promise<void> {
-  await tx.delete(table);
-  for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
-    const chunk = rows.slice(i, i + INSERT_CHUNK);
-    if (chunk.length > 0) await tx.insert(table).values(chunk);
-  }
-}
-
 /** Replace `formats`' ingest_meta rows with one fresh row per report. */
 async function writeIngestMeta(
   tx: IngestTx,
@@ -254,47 +161,12 @@ async function writeIngestMeta(
   }
 }
 
-export interface WriteIndexOptions {
-  /**
-   * Force replacing wiki_page/wiki_chunk even when the incoming wiki rows are
-   * empty. Default false — see the empty-wiki guard below.
-   */
-  allowEmptyWiki?: boolean;
-}
-
-/** What actually happened to the wiki tables this call — only set when
- * `rows.global` was supplied. */
-export interface WikiWriteOutcome {
-  /** True when an empty incoming build hit a populated DB and was skipped
-   * (both wiki_page and wiki_chunk left untouched, as a consistent pair). */
-  preserved: boolean;
-  /** Row counts actually left in wiki_page/wiki_chunk after this call. */
-  wikiPages: number;
-  wikiChunks: number;
-}
-
-export interface WriteIndexResult {
-  wiki: WikiWriteOutcome | null;
-}
-
 /**
  * Apply a built index to Postgres in ONE atomic transaction: all four table
  * swaps plus the ingest_meta write commit or roll back together, and every
  * delete is scoped to `formats` — the formats actually built this run. A crash
  * or thrown error mid-write leaves the database exactly as it was before the
- * call (DATA-02); a partial-format call (`formats` shorter than all eleven)
- * leaves every other format's rows untouched (DATA-01).
- *
- * Empty-wiki guard: the Fandom wiki corpus (`wiki_page`/`wiki_chunk`) is only
- * ever built from the gitignored, manually-fetched `.wiki-cache/` (see
- * `build-wiki.ts` / `npm run fetch:wiki`) — an ingest run without that cache
- * builds ZERO wiki rows. Since these are GLOBAL tables (`replaceGlobalTable`
- * does an unscoped delete), writing that empty build over a populated DB would
- * silently wipe the corpus. So when the incoming wiki rows are empty AND the
- * DB currently holds a populated `wiki_page` table, this call SKIPS replacing
- * both wiki tables (they must stay consistent as a pair) and logs a warning
- * instead. Pass `{ allowEmptyWiki: true }` (the CLI's `--allow-empty-wiki`) to
- * force the old unconditional wipe for an intentional corpus removal.
+ * call (DATA-02).
  */
 export async function writeIndex(
   db: IngestDb,
@@ -303,10 +175,7 @@ export async function writeIndex(
   formats: Format[],
   finishedAt: number,
   report: (msg: string) => void = () => {},
-  opts: WriteIndexOptions = {},
-): Promise<WriteIndexResult> {
-  let wiki: WikiWriteOutcome | null = null;
-
+): Promise<void> {
   await db.transaction(async (tx) => {
     report("writing pokemon…");
     await replaceTable(tx, pokemon, rows.pokemon, formats);
@@ -317,75 +186,30 @@ export async function writeIndex(
     report("writing reference_cache…");
     await replaceTable(tx, reference_cache, rows.references, formats);
     await writeIngestMeta(tx, reports, formats, finishedAt);
-
-    // Global natdex warehouse tables — built once per run, replaced wholesale.
-    if (rows.global) {
-      report("writing natdex_species…");
-      await replaceGlobalTable(tx, natdex_species, rows.global.natdexSpecies);
-      report("writing natdex_moves…");
-      await replaceGlobalTable(tx, natdex_moves, rows.global.natdexMoves);
-      report("writing natdex_machines…");
-      await replaceGlobalTable(tx, natdex_machines, rows.global.machines);
-      report("writing classic_encounters…");
-      await replaceGlobalTable(
-        tx,
-        classic_encounters,
-        rows.global.classicEncounters,
-      );
-      report("writing pmd_recruits…");
-      await replaceGlobalTable(tx, pmd_recruits, rows.global.pmd);
-
-      // Fandom wiki corpus — pages before chunks (logical FK, no constraint).
-      const incomingEmpty = rows.global.wikiPages.length === 0;
-      let skipWiki = false;
-      if (incomingEmpty && !opts.allowEmptyWiki) {
-        const [pageCount, chunkCount] = await Promise.all([
-          tx
-            .select({ n: sql<number>`count(*)`.mapWith(Number) })
-            .from(wiki_page),
-          tx
-            .select({ n: sql<number>`count(*)`.mapWith(Number) })
-            .from(wiki_chunk),
-        ]);
-        const existingPages = pageCount[0]?.n ?? 0;
-        const existingChunks = chunkCount[0]?.n ?? 0;
-        if (existingPages > 0) {
-          skipWiki = true;
-          const msg =
-            `wiki cache empty — preserving ${existingPages} existing ` +
-            `wiki_page rows (run 'npm run fetch:wiki' first, or pass ` +
-            `--allow-empty-wiki to force the wipe)`;
-          logger.warn({ event: "ingest_wiki_guard", existingPages, existingChunks }, msg);
-          report(msg);
-          wiki = { preserved: true, wikiPages: existingPages, wikiChunks: existingChunks };
-        }
-      }
-      if (!skipWiki) {
-        report("writing wiki_page…");
-        await replaceGlobalTable(tx, wiki_page, rows.global.wikiPages);
-        report("writing wiki_chunk…");
-        await replaceGlobalTable(tx, wiki_chunk, rows.global.wikiChunks);
-        wiki = {
-          preserved: false,
-          wikiPages: rows.global.wikiPages.length,
-          wikiChunks: rows.global.wikiChunks.length,
-        };
-      }
-    }
   });
-
-  return { wiki };
 }
 
 // ---------------------------------------------------------------------------
 // Orchestrator
 // ---------------------------------------------------------------------------
 
+/** Refuse any format other than Champions so gen-7 (etc.) is never written. */
+function championsOnlyFormats(requested: Format[] | undefined, via: string): Format[] {
+  const formats = requested ?? [...DEFAULT_FORMATS];
+  const refused = formats.filter((f) => f !== CHAMPIONS_FORMAT);
+  if (refused.length > 0) {
+    throw new Error(
+      `Champions-only ingest (${via}): refused format(s) ${refused.join(", ")}`,
+    );
+  }
+  return formats.length > 0 ? formats : [...DEFAULT_FORMATS];
+}
+
 export async function runIngest(
   opts: RunIngestOptions = {},
 ): Promise<IngestReport> {
   const startedAt = Date.now();
-  const formats = opts.formats ?? [...DEFAULT_FORMATS];
+  const formats = championsOnlyFormats(opts.formats, "runIngest");
   const report = (msg: string): void => opts.onProgress?.(msg);
 
   const pokemonRows: PokemonRow[] = [];
@@ -394,21 +218,18 @@ export async function runIngest(
   const referenceRows: ReferenceRow[] = [];
   const formatReports: FormatReport[] = [];
 
-  // ----- Build every format into memory ------------------------------------
   for (const format of formats) {
     report(`[${format}] loading @pkmn data…`);
     const source = await loadFormat(format);
     // A mainline format keeps only its own generation's learnset sources; the
-    // filter is the format's Dex gen (9 for scarlet-violet, else 5–8). Champions
-    // uses the mod's already-scoped learnset as-is → no gen filter.
+    // filter is the format's Dex gen. Champions uses the mod's already-scoped
+    // learnset as-is → no gen filter.
     const isChampions = format === CHAMPIONS_FORMAT;
     const genFilter = isChampions ? undefined : source.genNumber;
 
-    // DS-2 Pokédex
     const formatPokemon = buildPokedex(source);
     report(`[${format}] pokedex: ${formatPokemon.length} forms`);
 
-    // Map slug → @pkmn species for learnset lookups.
     const speciesBySlug = new Map(
       source.roster.map((s) => [slugFor(s.id, s.name), s]),
     );
@@ -417,7 +238,6 @@ export async function runIngest(
       return m && m.exists ? slugFor(m.id, m.name) : null;
     };
 
-    // DS-3 learnsets (per kept form; fall back to base species for formes).
     let formatLearnsets = 0;
     for (const row of formatPokemon) {
       const s = speciesBySlug.get(row.id);
@@ -433,17 +253,8 @@ export async function runIngest(
     }
     report(`[${format}] learnsets: ${formatLearnsets} rows`);
 
-    // searchable_names + reference
     const formatNames = buildNames(source, formatPokemon);
     const formatRefs = buildReferenceRows(source, startedAt);
-    // Catch-location / obtain-method data (PokeAPI snapshot) — scarlet-violet
-    // ONLY (GS-D4). Appended into the reference rows so they ride the existing
-    // reference_cache write. Champions and the mainline gen scopes (gen-5…gen-8)
-    // ship no encounter rows: get_encounters reads STANDARD_FORMAT in every
-    // mainline mode, and is mode-gated off in Champions.
-    if (format === STANDARD_FORMAT) {
-      formatRefs.push(...buildEncounterRows(source, startedAt));
-    }
     report(`[${format}] names: ${formatNames.length}, references: ${formatRefs.length}`);
 
     pokemonRows.push(...formatPokemon);
@@ -458,67 +269,22 @@ export async function runIngest(
     });
   }
 
-  // ----- Build the GLOBAL natdex warehouse tables ONCE (not per format) -----
-  // These read the committed PokeAPI/PMD snapshots (src/ingest/data/*) via fs and
-  // are format-independent, so they are built a single time per run and replaced
-  // wholesale inside the same atomic transaction as the per-format tables.
-  const wiki = buildWikiRows();
-  const global: GlobalRows = {
-    natdexSpecies: buildNatdexSpeciesRows(),
-    natdexMoves: buildNatdexMoveRows(),
-    machines: buildMachineRows(),
-    classicEncounters: buildClassicEncounterRows(),
-    pmd: buildPmdRows(),
-    wikiPages: wiki.pages,
-    wikiChunks: wiki.chunks,
-  };
-  const globalReport: GlobalReport = {
-    natdexSpecies: global.natdexSpecies.length,
-    natdexMoves: global.natdexMoves.length,
-    machines: global.machines.length,
-    classicEncounters: global.classicEncounters.length,
-    pmd: global.pmd.length,
-    // Provisional — the built counts. Corrected below with what writeIndex
-    // actually left in the DB (the empty-wiki guard may preserve rather than
-    // replace).
-    wikiPages: global.wikiPages.length,
-    wikiChunks: global.wikiChunks.length,
-    wikiPreserved: false,
-  };
-  report(
-    `[global] natdex_species: ${globalReport.natdexSpecies}, ` +
-      `natdex_moves: ${globalReport.natdexMoves}, ` +
-      `machines: ${globalReport.machines}, ` +
-      `classic_encounters: ${globalReport.classicEncounters}, ` +
-      `pmd_recruits: ${globalReport.pmd}, ` +
-      `wiki_page: ${globalReport.wikiPages}, ` +
-      `wiki_chunk: ${globalReport.wikiChunks}`,
-  );
-
-  // ----- Write phase (one atomic transaction — see writeIndex) -------------
   const { db, pool } = await openIngestDb();
   const finishedAt = Date.now();
   try {
-    const { wiki } = await writeIndex(
+    await writeIndex(
       db,
       {
         pokemon: pokemonRows,
         learnsets: learnsetRows,
         names: nameRows,
         references: referenceRows,
-        global,
       },
       formatReports,
       formats,
       finishedAt,
       report,
-      { allowEmptyWiki: opts.allowEmptyWiki ?? false },
     );
-    if (wiki) {
-      globalReport.wikiPages = wiki.wikiPages;
-      globalReport.wikiChunks = wiki.wikiChunks;
-      globalReport.wikiPreserved = wiki.preserved;
-    }
   } finally {
     await pool.end();
   }
@@ -529,7 +295,6 @@ export async function runIngest(
     learnsets: learnsetRows.length,
     names: nameRows.length,
     references: referenceRows.length,
-    global: globalReport,
     startedAt,
     finishedAt,
   };
@@ -541,18 +306,21 @@ export async function runIngest(
 
 function parseCliOptions(argv: string[]): RunIngestOptions {
   const fmtArg = argv.find((a) => a.startsWith("--formats="));
-  const formats = fmtArg
-    ? fmtArg
-        .slice("--formats=".length)
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s): s is Format => isFormat(s))
-    : undefined;
-  const allowEmptyWiki = argv.includes("--allow-empty-wiki");
-  return {
-    ...(formats && formats.length > 0 ? { formats } : {}),
-    ...(allowEmptyWiki ? { allowEmptyWiki } : {}),
-  };
+  if (!fmtArg) return {};
+  const tokens = fmtArg
+    .slice("--formats=".length)
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (tokens.length === 0) return {};
+  // isFormat still decodes archived stored rows; ingest itself is Champions-only.
+  const refused = tokens.filter((t) => t !== CHAMPIONS_FORMAT);
+  if (refused.length > 0) {
+    throw new Error(
+      `Champions-only ingest: refused --formats value(s) ${refused.join(", ")} (only champions is allowed)`,
+    );
+  }
+  return { formats: tokens.map(() => CHAMPIONS_FORMAT) };
 }
 
 async function main(): Promise<void> {
