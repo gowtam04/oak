@@ -8,13 +8,14 @@
  * agent's `proposed_team`).
  *
  * Two contract rules drive the design:
- *   - **Resolve-or-clarify (BR-T7):** every species/move/ability/item/nature/tera
- *     name that does NOT resolve to a known slug becomes an {@link ImportNote}
- *     and the corresponding member field is left empty (`null`, or dropped from
- *     `moves`) — the import is never aborted wholesale (BR-T11, AC-10.2).
- *   - **Warn-but-allow (BR-T6/T11):** out-of-range EVs/IVs and illegal-but-named
- *     entries are preserved as-is; legality is a separate warn-only concern
- *     (`validate-team.ts`), never enforced here.
+ *   - **Resolve-or-clarify (BR-T7 / CF-TEAM-AC-3.3):** every species/move/
+ *     ability/item name that does NOT resolve to a known Champions slug is
+ *     **kept as stored text** (slugified) plus an {@link ImportNote} — the
+ *     import is never aborted wholesale (BR-T11, AC-10.2). Unknown natures
+ *     still left empty. Tera is dropped (ADR-7).
+ *   - **Warn-but-allow (BR-T6/T11 / CF-TEAM-AC-3.2):** EV numbers are stored as
+ *     Stat Points verbatim; 66/32 over-cap is `validate-team.ts`, never clamped
+ *     here. Living import forces `tera_type: null` and `level: 50`.
  *
  * Boundary notes:
  *   - This module imports `@pkmn` types ONLY via `team-paste` (the `ShowdownSet`
@@ -29,7 +30,7 @@
 import { eq } from "drizzle-orm";
 
 import type { OakDb } from "@/data/db";
-import type { Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, type Format } from "@/data/formats";
 import { searchable_names } from "@/data/schema";
 import type { StatSpread, TeamMember } from "@/data/teams/team-schema";
 import {
@@ -67,8 +68,8 @@ const NATURE_SLUGS: ReadonlySet<string> = new Set([
   "calm", "gentle", "sassy", "careful", "quirky",
 ]);
 
-/** Showdown defaults applied when a paste omits a field. */
-const DEFAULT_LEVEL = 100; // Showdown omits `Level:` when 100.
+/** Living Champions defaults applied when a paste omits a field (ADR-7). */
+const DEFAULT_LEVEL = 50;
 const DEFAULT_EV = 0;
 const DEFAULT_IV = 31;
 
@@ -157,6 +158,15 @@ function resolveSlug(
   return resolver.forward[kind].get(key) ?? null;
 }
 
+/**
+ * Keep an off-roster paste name as stored text (slug form) so the slot is not
+ * wiped (CF-TEAM-AC-3.3). Empty after slugify → null.
+ */
+function storedText(raw: string): string | null {
+  const key = slugify(raw);
+  return key.length > 0 ? key : null;
+}
+
 /** Coerce a (possibly partial) `@pkmn` stats table to a full StatSpread. */
 function toStatSpread(
   table: Partial<Record<string, number>> | undefined,
@@ -177,16 +187,17 @@ function mapSet(
   resolver: Resolver,
   notes: ImportNote[],
 ): TeamMember {
-  // species — required field; unresolved → null + note (rest still imports).
+  // species — required field; unresolved → stored text + note (rest still imports).
   let species: string | null = null;
   if (set.species && set.species.trim()) {
     species = resolveSlug(resolver, "pokemon", set.species);
     if (species === null) {
+      species = storedText(set.species);
       notes.push({
         slot,
         kind: "pokemon",
         raw: set.species,
-        message: `Could not resolve Pokémon "${set.species}" — left empty.`,
+        message: `Could not resolve Pokémon "${set.species}" — kept as stored text.`,
       });
     }
   }
@@ -196,11 +207,12 @@ function mapSet(
   if (set.ability && set.ability.trim()) {
     ability = resolveSlug(resolver, "ability", set.ability);
     if (ability === null) {
+      ability = storedText(set.ability);
       notes.push({
         slot,
         kind: "ability",
         raw: set.ability,
-        message: `Could not resolve ability "${set.ability}" — left empty.`,
+        message: `Could not resolve ability "${set.ability}" — kept as stored text.`,
       });
     }
   }
@@ -210,16 +222,17 @@ function mapSet(
   if (set.item && set.item.trim()) {
     item = resolveSlug(resolver, "item", set.item);
     if (item === null) {
+      item = storedText(set.item);
       notes.push({
         slot,
         kind: "item",
         raw: set.item,
-        message: `Could not resolve item "${set.item}" — left empty.`,
+        message: `Could not resolve item "${set.item}" — kept as stored text.`,
       });
     }
   }
 
-  // moves — drop the unresolved ones, keep the rest (max 4).
+  // moves — keep unresolved names as stored text (max 4).
   const moves: string[] = [];
   for (const rawMove of set.moves ?? []) {
     if (!rawMove || !rawMove.trim()) continue;
@@ -230,8 +243,10 @@ function mapSet(
         slot,
         kind: "move",
         raw: rawMove,
-        message: `Could not resolve move "${rawMove}" — dropped.`,
+        message: `Could not resolve move "${rawMove}" — kept as stored text.`,
       });
+      const kept = storedText(rawMove);
+      if (kept) moves.push(kept);
       continue;
     }
     moves.push(moveSlug);
@@ -253,32 +268,28 @@ function mapSet(
     }
   }
 
-  // tera type — resolves against the `type` kind in the index.
-  let teraType: string | null = null;
+  // tera — living Champions import always drops Tera (CF-TEAM-AC-3.1, ADR-7).
   if (set.teraType && set.teraType.trim()) {
-    teraType = resolveSlug(resolver, "type", set.teraType);
-    if (teraType === null) {
-      notes.push({
-        slot,
-        kind: "tera",
-        raw: set.teraType,
-        message: `Could not resolve Tera type "${set.teraType}" — left empty.`,
-      });
-    }
+    notes.push({
+      slot,
+      kind: "tera",
+      raw: set.teraType,
+      message: `Tera Type "${set.teraType}" is not used in Champions — dropped.`,
+    });
   }
 
-  // level — preserved verbatim (warn-but-allow); an out-of-range value gets a
-  // note here and is clamped into the schema range at the route (like EV/IV).
-  const level =
+  // level — living import is always 50 (ADR-7). Out-of-range paste values still
+  // import the member; the clamp is noted here.
+  const pastedLevel =
     typeof set.level === "number" && Number.isFinite(set.level)
       ? set.level
-      : DEFAULT_LEVEL;
-  if (level < 1 || level > 100) {
+      : null;
+  if (pastedLevel !== null && (pastedLevel < 1 || pastedLevel > 100)) {
     notes.push({
       slot,
       kind: "level",
       raw: String(set.level),
-      message: `Level ${set.level} is out of range (1–100) — clamped.`,
+      message: `Level ${set.level} is out of range (1–100) — living import is level ${DEFAULT_LEVEL}.`,
     });
   }
 
@@ -290,8 +301,8 @@ function mapSet(
     nature,
     evs: toStatSpread(set.evs, DEFAULT_EV),
     ivs: toStatSpread(set.ivs, DEFAULT_IV),
-    tera_type: teraType,
-    level,
+    tera_type: null,
+    level: DEFAULT_LEVEL,
   };
 
   // Cosmetics — round-tripped, not competitively significant (BR-T1).
@@ -306,20 +317,21 @@ function mapSet(
 
 /**
  * Parse a Showdown paste and map it to `TeamMember[]`, never aborting on a bad
- * entry (BR-T11). Unresolved names become {@link ImportNote}s with the matching
- * member field left empty; everything resolvable still imports (AC-10.2).
- * Out-of-range / illegal-but-named values are preserved verbatim (AC-10.3) —
- * legality is `validate-team`'s warn-only concern.
+ * entry (BR-T11). Unresolved names become {@link ImportNote}s and are kept as
+ * stored text (CF-TEAM-AC-3.3); everything resolvable still imports (AC-10.2).
+ * EV numbers are stored as Stat Points verbatim (AC-10.3) — 66/32 legality is
+ * `validate-team`'s warn-only concern. `format` is ignored; resolution always
+ * uses the Champions index (CF-DATA-BR-9).
  */
 export async function importPaste(
   paste: string,
-  format: Format,
+  _format: Format,
   db: OakDb,
 ): Promise<{ members: TeamMember[]; notes: ImportNote[] }> {
   const sets = parseShowdown(paste);
   if (sets.length === 0) return { members: [], notes: [] };
 
-  const resolver = await buildResolver(format, db);
+  const resolver = await buildResolver(CHAMPIONS_FORMAT, db);
   const notes: ImportNote[] = [];
   const members = sets.map((set, slot) => mapSet(set, slot, resolver, notes));
 
@@ -344,7 +356,7 @@ function memberToSet(member: TeamMember, resolver: Resolver): ShowdownSet {
     level: member.level,
   };
 
-  if (member.tera_type) set.teraType = display("type", member.tera_type);
+  // Living export omits Tera even if a stored member still has tera_type (ADR-7).
   if (member.shiny) set.shiny = true;
 
   return set;
@@ -352,17 +364,18 @@ function memberToSet(member: TeamMember, resolver: Resolver): ShowdownSet {
 
 /**
  * Serialize `TeamMember[]` to a Showdown paste, round-tripping every represented
- * field including cosmetics (AC-11.1/11.2). Slugs are mapped back to display
- * names via the index (falling back to a humanized slug for anything not in the
- * index, so export never throws on an off-index entry).
+ * field including cosmetics (AC-11.1/11.2) except Tera (omitted; CF-TEAM-AC-3.4).
+ * Slugs are mapped back to display names via the Champions index (falling back
+ * to a humanized slug for anything not in the index, so export never throws on
+ * an off-index entry). `format` is ignored.
  */
 export async function exportPaste(
   members: TeamMember[],
-  format: Format,
+  _format: Format,
   db: OakDb,
 ): Promise<string> {
   if (!members || members.length === 0) return "";
-  const resolver = await buildResolver(format, db);
+  const resolver = await buildResolver(CHAMPIONS_FORMAT, db);
   const sets = members.map((m) => memberToSet(m, resolver));
   return serializeShowdown(sets);
 }

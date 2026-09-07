@@ -26,11 +26,16 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 
 import { db } from "@/data/db";
+import { CHAMPIONS_FORMAT } from "@/data/formats";
 import { team } from "@/data/schema";
-import { teamMembersSchema, type TeamMember } from "@/data/teams/team-schema";
+import {
+  teamMembersSchema,
+  type StatSpread,
+  type TeamMember,
+} from "@/data/teams/team-schema";
 
 // ---------------------------------------------------------------------------
 // Row shapes (camelCase — § Interface Definitions)
@@ -40,7 +45,7 @@ import { teamMembersSchema, type TeamMember } from "@/data/teams/team-schema";
 export interface Team {
   id: string;
   accountId: string;
-  format: string; // "scarlet-violet" | "champions"
+  format: string; // living iff `"champions"`; any other stored Format ⇒ archived (ADR-3)
   name: string;
   members: TeamMember[];
   /** Optional free-text win condition / game plan. */
@@ -74,6 +79,34 @@ export interface TeamSummary {
 // Helpers
 // ---------------------------------------------------------------------------
 
+const LIVING_LEVEL = 50;
+const LIVING_IVS: StatSpread = {
+  hp: 31,
+  atk: 31,
+  def: 31,
+  spa: 31,
+  spd: 31,
+  spe: 31,
+};
+
+/** True when a stored team is archived (`format !== "champions"`, ADR-3). */
+export function isArchivedTeam(format: string): boolean {
+  return format !== CHAMPIONS_FORMAT;
+}
+
+/**
+ * Living-write defaults (ADR-7): drop Tera, force level 50, IVs 31. EV numbers
+ * are Stat Points and are left as the caller supplied them (warn-but-allow).
+ */
+function applyLivingMemberDefaults(members: TeamMember[]): TeamMember[] {
+  return members.map((m) => ({
+    ...m,
+    tera_type: null,
+    level: LIVING_LEVEL,
+    ivs: { ...LIVING_IVS },
+  }));
+}
+
 /** Parse + validate a stored `members` JSON payload (carry-over invariant). */
 function parseMembers(raw: string): TeamMember[] {
   return teamMembersSchema.parse(JSON.parse(raw));
@@ -93,17 +126,22 @@ function isIncomplete(members: TeamMember[]): boolean {
 
 /**
  * List an account's teams, most-recently-edited first (ORDER BY updated_at DESC,
- * AC-1.1). `format` filters by exact format (optional). Scoped to `accountId`
- * (BR-T2). Reads the `members` JSON to compute the completeness summary; no
- * index reads.
+ * AC-1.1). Living vs archived is derived from `format` (ADR-3):
+ *   - `archived: true`  → `format !== "champions"`
+ *   - `archived: false` / omitted → `format === "champions"` (living)
+ * Scoped to `accountId` (BR-T2 / CF-DATA-BR-11). Reads the `members` JSON to
+ * compute the completeness summary; no index reads.
  */
 export async function listTeams(
   accountId: string,
-  opts?: { format?: string },
+  opts?: { archived?: boolean },
 ): Promise<TeamSummary[]> {
   const conditions = [eq(team.account_id, accountId)];
-  const format = opts?.format?.trim();
-  if (format) conditions.push(eq(team.format, format));
+  if (opts?.archived) {
+    conditions.push(ne(team.format, CHAMPIONS_FORMAT));
+  } else {
+    conditions.push(eq(team.format, CHAMPIONS_FORMAT));
+  }
 
   const rows = await db
     .select({
@@ -167,12 +205,15 @@ export async function getTeam(
 // ---------------------------------------------------------------------------
 
 /**
- * Create a team (TEAM-US-1). The caller supplies `accountId`, `format`, a name
+ * Create a living Champions team (TEAM-US-1, CF-DATA-BR-9). `format` is ignored
+ * and always stored as `"champions"`. The caller supplies `accountId`, a name
  * (defaulted to "Untitled team" upstream, AC-1.2), the members array (empty /
- * partial allowed, BR-T4), and `now`. Mints a fresh UUID. Returns the new Team.
+ * partial allowed, BR-T4), and `now`. Living writes persist `tera_type: null`,
+ * `level: 50`, IVs 31 (ADR-7). Mints a fresh UUID. Returns the new Team.
  */
 export async function createTeam(args: {
   accountId: string;
+  /** Ignored — living teams are always champions (CF-DATA-BR-9, CF-TEAM-AC-1.1). */
   format: string;
   name: string;
   members: TeamMember[];
@@ -181,12 +222,13 @@ export async function createTeam(args: {
 }): Promise<Team> {
   const id = randomUUID();
   const winCondition = args.winCondition?.trim() || null;
+  const members = applyLivingMemberDefaults(args.members);
   await db.insert(team).values({
     id,
     account_id: args.accountId,
-    format: args.format,
+    format: CHAMPIONS_FORMAT,
     name: args.name,
-    members: JSON.stringify(args.members),
+    members: JSON.stringify(members),
     win_condition: winCondition,
     created_at: args.now,
     updated_at: args.now,
@@ -194,9 +236,9 @@ export async function createTeam(args: {
   return {
     id,
     accountId: args.accountId,
-    format: args.format,
+    format: CHAMPIONS_FORMAT,
     name: args.name,
-    members: args.members,
+    members,
     winCondition,
     createdAt: args.now,
     updatedAt: args.now,
@@ -224,7 +266,9 @@ export async function updateTeam(args: {
     win_condition?: string | null;
   } = { updated_at: args.now };
   if (args.name !== undefined) set.name = args.name;
-  if (args.members !== undefined) set.members = JSON.stringify(args.members);
+  if (args.members !== undefined) {
+    set.members = JSON.stringify(applyLivingMemberDefaults(args.members));
+  }
   if (args.winCondition !== undefined) {
     set.win_condition = args.winCondition?.trim() || null;
   }
@@ -267,7 +311,7 @@ export async function duplicateTeam(
   if (!source) return null;
   return createTeam({
     accountId,
-    format: source.format,
+    format: CHAMPIONS_FORMAT,
     name: `${source.name} copy`,
     members: source.members,
     winCondition: source.winCondition,

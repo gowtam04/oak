@@ -49,9 +49,10 @@ export {
 import type { TeamWarning } from "@/data/teams/team-schema";
 
 /**
- * Legal EV / stat-point ceilings per format. Scarlet/Violet uses classic EVs
- * (508 total, 252 per stat); Champions uses the much tighter Stat-Point budget
- * (66 total, 32 per stat) — mirrors `evBudgetFor` in the team-builder UI.
+ * Legal EV / stat-point ceilings per format. Living teams are always Champions
+ * (P4 / CF-DATA-BR-9) and use the Stat-Point budget (66 total, 32 per stat).
+ * Archived rows may still pass a historical format; those keep classic EVs
+ * (508 total, 252 per stat) so GET-archive warnings describe the stored game.
  */
 function evCaps(format: Format): { total: number; perStat: number } {
   return format === "champions"

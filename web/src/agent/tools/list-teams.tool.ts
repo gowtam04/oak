@@ -1,12 +1,12 @@
 /**
- * T16 — `list_teams` (the user's saved teams for the turn's format).
+ * T16 — `list_teams` (the user's living Champions teams).
  *
  * Returns a cheap pick-list — each saved team's id, name, completeness, and the
  * display names of its Pokémon — so the model can match the user's words ("my
  * rain team", "the one with Garchomp") against names AND contents, then load the
- * chosen team with `get_team`. Scoped to the turn's format (server-controlled,
- * like `mode`, so a Champions team is never offered while standard is active and
- * vice-versa) and to the signed-in account; a guest gets `{ signed_in: false }`.
+ * chosen team with `get_team`. Living only (`format === "champions"`), even if
+ * leftover `ctx.mode` is another game — archived / other-format teams are never
+ * offered (CF-TEAM-AC-1.7, CF-TEAM-AC-5.3). A guest gets `{ signed_in: false }`.
  *
  * Never throws in-domain: a read fault degrades to an empty team list rather than
  * propagating.
@@ -20,19 +20,20 @@ import {
   type ListTeamsOutput,
   type TeamListEntry,
 } from "@/agent/schemas";
-import { formatForMode } from "@/data/formats";
+import { CHAMPIONS_FORMAT } from "@/data/formats";
 import { listTeams } from "@/data/repos/team-repo";
 import { displayNamesFor } from "@/server/teams/active-team";
 
 const description =
-  "List the user's saved teams for the current format — each team's id, name, " +
+  "List the user's living Champions teams — each team's id, name, " +
   "how many Pokémon it has, whether it's incomplete, and the names of its " +
   "Pokémon. Takes no arguments. Returns { signed_in: false } for a guest, else " +
   "{ signed_in: true, teams: [...] } (an empty list means they have no saved " +
-  "teams). Call this when the user refers to a saved team (\"my team\", \"my " +
-  "rain team\", \"this set\"): match their words against the team names AND " +
-  "Pokémon, then call get_team with the matching team_id. If nothing matches, " +
-  "say so and offer to build one; if two or more plausibly match, ask which.";
+  "living teams). Archived teams from other games are not listed. Call this " +
+  "when the user refers to a saved team (\"my team\", \"my rain team\", " +
+  "\"this set\"): match their words against the team names AND Pokémon, then " +
+  "call get_team with the matching team_id. If nothing matches, say so and " +
+  "offer to build one; if two or more plausibly match, ask which.";
 
 export const listTeamsTool: ToolDef = {
   name: "list_teams",
@@ -42,13 +43,13 @@ export const listTeamsTool: ToolDef = {
     // Guests have no saved teams (the route never binds accountId).
     if (!ctx.accountId) return { signed_in: false };
     try {
-      const format = formatForMode(ctx.mode);
-      const summaries = await listTeams(ctx.accountId, { format });
+      const summaries = await listTeams(ctx.accountId);
       // One batched display-name read across every team's species (never throws;
-      // falls back to the raw slug for an unknown species).
+      // falls back to the raw slug for an unknown species). Always Champions —
+      // leftover ctx.mode must not surface archived other-game teams.
       const names = await displayNamesFor(
         summaries.flatMap((t) => t.species),
-        format,
+        CHAMPIONS_FORMAT,
         ctx.db as unknown as OakDb,
       );
       const teams: TeamListEntry[] = summaries.map((t) => ({
