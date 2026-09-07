@@ -5,8 +5,8 @@ import type { ChatThreadProps } from "@/components/types";
 import AnswerCard from "@/components/answer-card/AnswerCard";
 import Markdown from "@/components/Markdown";
 import {
-  STARTER_ENTRIES,
-  pickRandomStarters,
+  firstFiledStarters,
+  pickFiledStarters,
   type StarterPrompt,
 } from "@/lib/example-prompts";
 import { deriveFollowUpChips, type FollowUpChip } from "@/lib/chat/follow-up-chips";
@@ -125,18 +125,17 @@ export default function ChatThread({
 }: ChatThreadProps & ChatThreadQolProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
 
-  // Empty-state filed starters: show a fresh random 6 each time the empty state
-  // appears (page load, or returning to it after a "new chat" resets `turns`),
-  // so a user discovers Oak's full range over repeated visits. The initial value
-  // is the deterministic first-6 so the server render and first client render
-  // match (this is a Client Component — `Math.random()` at render time would
-  // hydration-mismatch); the post-mount effect then swaps in the random set.
-  // Each starter carries a category prefix (Battle / Dex / Rules / Meta).
+  // Empty-state filed starters: one random prompt per category (Battle → Dex
+  // → Rules → Meta) each time the empty state appears, so a user discovers
+  // Oak's range over repeated visits. The initial value is the deterministic
+  // first-of-each-category slice so the server render and first client render
+  // match (`Math.random()` at render time would hydration-mismatch); the
+  // post-mount effect then swaps in the random set.
   const [examples, setExamples] = useState<StarterPrompt[]>(() =>
-    STARTER_ENTRIES.slice(0, 4),
+    firstFiledStarters(),
   );
   useEffect(() => {
-    if (showEmptyState) setExamples(pickRandomStarters(4));
+    if (showEmptyState) setExamples(pickFiledStarters());
   }, [showEmptyState]);
 
   // Auto-scroll to the newest content (new turn / streamed token) — important on
