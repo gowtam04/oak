@@ -40,7 +40,7 @@ class DexViewModelTest {
         assertEquals(1, dex.searchCalls.size)
         assertEquals(EntityKind.POKEMON, dex.searchCalls[0].first)
         assertEquals("", dex.searchCalls[0].second)
-        assertEquals(Format.ScarletViolet, dex.searchCalls[0].third)
+        assertEquals(Format.Champions, dex.searchCalls[0].third)
     }
 
     @Test
@@ -71,8 +71,8 @@ class DexViewModelTest {
         model.selectFormat(Format.Gen7)
         advanceUntilIdle()
 
-        assertEquals(Format.Gen7, model.list.value.format)
-        assertEquals(Format.Gen7, dex.searchCalls.last().third)
+        assertEquals(Format.Champions, model.list.value.format)
+        assertEquals(Format.Champions, dex.searchCalls.last().third)
     }
 
     // -------------------------------------------------------------------
@@ -97,12 +97,12 @@ class DexViewModelTest {
         model.applyHop(EntityKind.MOVE, "earthquake", Format.Gen5)
         advanceUntilIdle()
 
-        assertEquals(Format.Gen5, model.list.value.format)
+        assertEquals(Format.Champions, model.list.value.format)
         assertEquals(1, artifact.entityCalls.size)
         assertEquals(EntityKind.MOVE, artifact.entityCalls.single().first)
         assertEquals("earthquake", artifact.entityCalls.single().second)
-        assertEquals(Format.Gen5, artifact.entityCalls.single().third)
-        assertEquals(Format.Gen5, dex.searchCalls.last().third)
+        assertEquals(Format.Champions, artifact.entityCalls.single().third)
+        assertEquals(Format.Champions, dex.searchCalls.last().third)
     }
 
     @Test
@@ -115,8 +115,9 @@ class DexViewModelTest {
         model.applyHop(EntityKind.POKEMON, "garchomp", Format.Gen4)
         advanceUntilIdle()
 
-        assertEquals(Format.Gen4, model.list.value.format)
-        assertEquals(Format.Gen4, artifact.entityCalls.single().third)
+        assertEquals(Format.Champions, model.list.value.format)
+        assertEquals(Format.Champions, artifact.entityCalls.single().third)
         assertFalse(artifact.entityCalls.any { it.third == Format.NationalDex })
+        assertFalse(artifact.entityCalls.any { it.third == Format.Gen4 })
     }
 }

@@ -67,19 +67,16 @@ class TeamsListViewModelTest {
     }
 
     @Test
-    fun setFormatFilterReFetchesWithTheNewFilterAndIsANoOpWhenUnchanged() = runTest(mainDispatcherRule.dispatcher) {
+    fun thereIsNoOtherGameFormatFilter() = runTest(mainDispatcherRule.dispatcher) {
         val service = FakeTeamService()
         val model = TeamsListViewModel(service)
 
-        model.setFormatFilter(Format.Gen5)
+        model.reload()
         advanceUntilIdle()
-        assertEquals(Format.Gen5, model.uiState.value.formatFilter)
-        assertEquals(listOf<Format?>(Format.Gen5), service.listCalls)
 
-        model.setFormatFilter(Format.Gen5)
-        advanceUntilIdle()
-        // Unchanged filter ⇒ no second reload.
-        assertEquals(1, service.listCalls.size)
+        val names = model.uiState.value::class.java.declaredFields.map { it.name }
+        assertFalse("formatFilter" in names)
+        assertTrue(service.listCalls.none { it == Format.Gen5 })
     }
 
     // -------------------------------------------------------------------
@@ -95,7 +92,7 @@ class TeamsListViewModelTest {
         advanceUntilIdle()
 
         var createdCallback: Team? = null
-        model.createTeam(Format.Champions) { createdCallback = it }
+        model.createTeam { createdCallback = it }
         advanceUntilIdle()
 
         assertEquals("new-1", createdCallback?.id)
@@ -127,7 +124,7 @@ class TeamsListViewModelTest {
 
         var resultTeam: Team? = null
         var resultNotes: List<ImportNote> = emptyList()
-        model.importPaste("some paste", Format.ScarletViolet) { team, n -> resultTeam = team; resultNotes = n }
+        model.importPaste("some paste") { team, n -> resultTeam = team; resultNotes = n }
         advanceUntilIdle()
 
         assertEquals("import-1", resultTeam?.id)
@@ -141,7 +138,7 @@ class TeamsListViewModelTest {
         val model = TeamsListViewModel(service)
 
         var resultTeam: Team? = fakeTeam()
-        model.importPaste("paste", Format.Champions) { team, _ -> resultTeam = team }
+        model.importPaste("paste") { team, _ -> resultTeam = team }
         advanceUntilIdle()
 
         assertNull(resultTeam)
@@ -218,11 +215,11 @@ class TeamsListViewModelTest {
         val service = FakeTeamService()
         val model = TeamsListViewModel(service)
 
-        val editor = model.makeEditor(Format.Gen7)
+        val editor = model.makeEditor()
         advanceUntilIdle()
 
         assertNull(editor.uiState.value.teamId)
-        assertEquals(Format.Gen7, editor.format)
+        assertEquals(Format.Champions, editor.format)
         assertTrue(service.getCalls.isEmpty())
         assertTrue(service.createCalls.isEmpty())
     }

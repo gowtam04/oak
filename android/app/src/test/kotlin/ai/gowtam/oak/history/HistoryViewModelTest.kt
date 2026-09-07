@@ -76,7 +76,7 @@ class HistoryViewModelTest {
 
         val (query, format) = service.listCalls.last()
         assertEquals("garchomp", query)
-        assertEquals(Format.Gen7, format)
+        assertTrue(format == null || format == Format.Champions)
     }
 
     @Test

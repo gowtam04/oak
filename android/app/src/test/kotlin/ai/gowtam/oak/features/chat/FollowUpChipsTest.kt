@@ -98,21 +98,14 @@ class FollowUpChipsTest {
         Regex("calc|compare|add .+ to a team|open this calc|tell me more", RegexOption.IGNORE_CASE)
 
     @Test
-    fun `emits one scope chip when a different format is implied (CHIP-AC-1_1 _ CHIP-BR-2)`() {
+    fun `emits no scope chip even when a different format is implied (CF-UI-AC-1_1)`() {
         val chips = deriveFollowUpChips(
             answer = base,
             impliedFormat = Format.ScarletViolet,
         )
         val scope = chips.filter { it.kind == FollowUpChip.Kind.Scope }
-        assertEquals(1, scope.size)
-        assertEquals(
-            FollowUpChip(
-                kind = FollowUpChip.Kind.Scope,
-                label = "Switch to scarlet-violet.",
-                target = "scarlet-violet",
-            ),
-            scope.single(),
-        )
+        assertEquals(0, scope.size)
+        assertTrue(chips.none { it.label.contains("Switch to", ignoreCase = true) })
     }
 
     @Test

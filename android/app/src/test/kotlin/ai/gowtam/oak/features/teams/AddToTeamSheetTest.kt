@@ -258,7 +258,7 @@ class AddToTeamSheetTest {
 
     @Test
     fun createNewWritesSlot1OnATeamInTheConversationFormat() = runTest(mainDispatcherRule.dispatcher) {
-        val created = fakeTeam("new-1").copy(format = Format.Gen5, members = listOf(incomingNamed()))
+        val created = fakeTeam("new-1").copy(format = Format.Champions, members = listOf(incomingNamed()))
         val teams = FakeTeamService(
             listResult = emptyList(),
             teamResult = created to emptyList(),
@@ -275,7 +275,7 @@ class AddToTeamSheetTest {
         assertEquals("new-1", done.teamId)
         assertEquals(0, done.slotIndex)
         val createdCall = teams.createCalls.single()
-        assertEquals(Format.Gen5, createdCall.first)
+        assertEquals(Format.Champions, createdCall.first)
         assertEquals(incoming, createdCall.third!!.first())
     }
 
@@ -284,23 +284,20 @@ class AddToTeamSheetTest {
     // -------------------------------------------------------------------
 
     @Test
-    fun aFormatMismatchStillWrites() = runTest(mainDispatcherRule.dispatcher) {
-        val gen5 = teamWith("g5", emptyList(), format = Format.Gen5)
+    fun archivedOtherFormatTeamsDoNotAppearInThePicker() = runTest(mainDispatcherRule.dispatcher) {
         val teams = FakeTeamService(
-            listResult = listOf(summary("g5", "BW", 0, format = Format.Gen5)),
-            teamResult = gen5 to emptyList(),
+            listResult = listOf(
+                summary("live", "Reg rain", 1, format = Format.Champions),
+                summary("g5", "BW", 0, format = Format.Gen5),
+            ),
         )
-        val miraidon = blankTeamMember().copy(species = "miraidon")
-        val vm = AddToTeamViewModel(teams, miraidon, Format.ScarletViolet)
+        val vm = AddToTeamViewModel(teams, incomingNamed(), Format.Champions)
         vm.load()
         advanceUntilIdle()
 
-        vm.pickTeam("g5")
-        advanceUntilIdle()
-
-        val done = vm.phase.value as AddToTeamViewModel.Phase.Done
-        assertEquals("g5", done.teamId)
-        assertEquals("miraidon", teams.updateCalls.single().third!!.first().species)
+        val picker = vm.phase.value as AddToTeamViewModel.Phase.Picker
+        assertTrue(picker.teams.all { it.format == Format.Champions })
+        assertTrue(picker.teams.none { it.id == "g5" })
     }
 
     // -------------------------------------------------------------------

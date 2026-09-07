@@ -226,15 +226,10 @@ class CalcWireTest {
     // -------------------------------------------------------------------
 
     @Test
-    fun defaultLevelIs50ForChampionsAnd100Otherwise() {
+    fun defaultLevelIs50ForEveryFormat() {
         assertEquals(50, defaultCalcLevel(Format.Champions))
-        val hundreds = listOf(
-            Format.NationalDex, Format.ScarletViolet,
-            Format.Gen1, Format.Gen2, Format.Gen3, Format.Gen4,
-            Format.Gen5, Format.Gen6, Format.Gen7, Format.Gen8,
-        )
-        for (format in hundreds) {
-            assertEquals("defaultCalcLevel($format)", 100, defaultCalcLevel(format))
+        for (format in Format.knownCases) {
+            assertEquals("defaultCalcLevel($format)", 50, defaultCalcLevel(format))
         }
     }
 

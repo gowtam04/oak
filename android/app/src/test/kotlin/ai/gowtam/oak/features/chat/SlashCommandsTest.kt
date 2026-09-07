@@ -25,24 +25,20 @@ import org.junit.Test
  *
  * Fails to compile until `SlashCommand` grows `Calc(rest)`.
  *
- * Android has **no** usage surface in this pack — [parseSlashCommand] must
- * default `hasUsagePage` to false, so `/usage` is an ordinary message
- * (SLASH-AC-1.4 / SLASH-AC-1.5). Cases that pass `hasUsagePage = true` lockstep
- * the parser with web; they are not the Android product default.
+ * Android Usage is a Dex section (ADR-6) — [parseSlashCommand] defaults
+ * `hasUsagePage` to true, so `/usage` navigates. Cases that pass
+ * `hasUsagePage = false` keep the parser's gated path.
  *
- * Known leading tokens: `/new`, `/team`, `/dex`, `/calc`, and `/usage` only
- * when `hasUsagePage == true`. First whitespace-delimited token wins; args stay
- * on the navigate result (client routes `/team {name}` / `/dex {name}`).
- * Unknown slashes — including `/compare` and `/usage` when the client has no
- * usage page — are ordinary messages.
+ * Known leading tokens: `/new`, `/team`, `/dex`, `/calc`, and `/usage`.
+ * First whitespace-delimited token wins; args stay on the navigate result.
  *
  * Requirement refs: SLASH-US-1, SLASH-AC-1.1..1.6, SLASH-BR-1, SLASH-BR-2,
  * CALC-US-3, CALC-AC-3.1..3.4, CALC-BR-4. ADR-4, ADR-10.
  */
 class SlashCommandsTest {
 
-    /** Android product default — no usage page until a usage surface ships. */
-    private val native = false
+    /** Android product default — Usage is a Dex section (ADR-6). */
+    private val native = true
 
     /** Lockstep-only: web has `/meta`. Not the Android default. */
     private val web = true
@@ -101,14 +97,15 @@ class SlashCommandsTest {
 
     @Test
     fun `treats slash-usage as a normal message when hasUsagePage is false (SLASH-AC-1_4 _ SLASH-AC-1_5)`() {
-        assertEquals(SlashCommand.Message, parseSlashCommand("/usage", native))
-        assertEquals(SlashCommand.Message, parseSlashCommand("/usage ou", native))
+        assertEquals(SlashCommand.Message, parseSlashCommand("/usage", hasUsagePage = false))
+        assertEquals(SlashCommand.Message, parseSlashCommand("/usage ou", hasUsagePage = false))
     }
 
     @Test
-    fun `Android default treats slash-usage as a message (hasUsagePage=false)`() {
-        assertEquals(SlashCommand.Message, parseSlashCommand("/usage"))
-        assertEquals(SlashCommand.Message, parseSlashCommand("/usage ou"))
+    fun `Android default navigates slash-usage because Usage is a Dex section (ADR-6)`() {
+        assertEquals(SlashCommand.Navigate(SlashCommand.Target.Usage), parseSlashCommand("/usage"))
+        assertEquals(SlashCommand.Navigate(SlashCommand.Target.Usage), parseSlashCommand("/usage ou"))
+        assertEquals(SlashCommand.Navigate(SlashCommand.Target.Usage), parseSlashCommand("/usage", native))
     }
 
     @Test
