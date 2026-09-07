@@ -1,17 +1,12 @@
 /**
- * Attach a meta threat board (+ optional sample calcs) to a TeamAnalysisOk.
- * Fail-soft: missing meta / DB errors leave threats empty.
+ * Attach a live Champions Doubles threat board (+ optional sample calcs)
+ * to a TeamAnalysisOk. Fail-soft: usage down / throws → empty threats + note.
+ * Never Smogon / meta-repo (CF-TEAM-US-4, CF-INT-BR-4–7, ADR-5).
  */
 
 import type { OakDb } from "@/data/db";
-import type { Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, type Format } from "@/data/formats";
 import type { TeamMember } from "@/data/teams/team-schema";
-import { DEFAULT_META_FORMAT } from "@/data/meta-formats";
-import {
-  listMetaMonths,
-  metaLeaderboard,
-  metaSpeciesDetail,
-} from "@/data/repos/meta-repo";
 import { spriteRefsByNames } from "@/data/repos/pokedex-repo";
 import { moveSummaries } from "@/data/repos/reference-cache";
 import { defMultiplier, combineDefensive } from "@/agent/formulas/type-chart";
@@ -23,21 +18,17 @@ import { computeMemberStats } from "@/lib/teams/member-stats";
 import { scoreThreats } from "@/lib/teams/threat-score";
 import { sampleThreatCalc } from "@/lib/teams/threat-calcs";
 import type { TeamAnalysisOk, ThreatRowWire } from "@/lib/teams/team-analysis";
+import {
+  getUsage,
+  listLeaderboard,
+  USAGE_ATTRIBUTION,
+} from "@/server/champions-usage/usage-client";
+import { toEntitySlug } from "@/server/champions-usage/ladder";
 
 const THREAT_LIMIT = 15;
 const CALC_THREAT_LIMIT = 8;
+const UNAVAILABLE_NOTE = "Live Champions usage is unavailable.";
 
-/** Formats that use gen9ou ladder snapshots for the threat board. */
-function metaFormatForTeam(format: Format): typeof DEFAULT_META_FORMAT | null {
-  if (format === "scarlet-violet" || format === "national-dex") {
-    return DEFAULT_META_FORMAT;
-  }
-  return null;
-}
-
-/**
- * Parse a Smogon EV spread string like "0/252/4/0/0/252" → Spe EV (last).
- */
 function speEvFromSpread(evs: string | undefined): number {
   if (!evs) return 0;
   const parts = evs.split("/").map((p) => Number(p.trim()));
@@ -45,10 +36,13 @@ function speEvFromSpread(evs: string | undefined): number {
   return parts[5] ?? 0;
 }
 
-function natureBoostsSpe(nature: string | undefined): boolean {
-  if (!nature) return false;
-  const n = nature.toLowerCase();
-  return ["jolly", "timid", "hasty", "naive"].includes(n);
+function failSoft(analysis: TeamAnalysisOk): TeamAnalysisOk {
+  return {
+    ...analysis,
+    threats: [],
+    meta_attribution: null,
+    notes: [...analysis.notes, UNAVAILABLE_NOTE],
+  };
 }
 
 export async function attachThreatBoard(
@@ -58,47 +52,34 @@ export async function attachThreatBoard(
   db: OakDb,
   typeProfiles: Map<string, TypeProfileLite>,
 ): Promise<TeamAnalysisOk> {
-  const metaFormat = metaFormatForTeam(format);
-  if (!metaFormat) {
-    const note =
-      format === "champions"
-        ? "Meta threat board uses Smogon OU for SV/NatDex; for Champions, ask the assistant with live usage."
-        : "No stored ladder snapshot for this format — threat board empty.";
-    return {
-      ...analysis,
-      threats: [],
-      meta_attribution: null,
-      notes: [...analysis.notes, note],
-    };
-  }
-
-  const months = await listMetaMonths(db, metaFormat);
-  if (months.length === 0) {
+  if (format !== CHAMPIONS_FORMAT) {
     return {
       ...analysis,
       threats: [],
       meta_attribution: null,
       notes: [
         ...analysis.notes,
-        "No Smogon usage months synced yet (run npm run sync:meta).",
+        "Threat board uses live Champions Doubles usage.",
       ],
     };
   }
 
-  const month = months[0]!; // latest first per repo convention
-  const board = await metaLeaderboard(db, metaFormat, month);
-  const top = board.slice(0, THREAT_LIMIT);
+  let board: Awaited<ReturnType<typeof listLeaderboard>>;
+  try {
+    board = await listLeaderboard("doubles");
+  } catch {
+    return failSoft(analysis);
+  }
+  if (!board.available) return failSoft(analysis);
+
+  const top = board.rows.slice(0, THREAT_LIMIT);
   if (top.length === 0) {
     return { ...analysis, threats: [], meta_attribution: null };
   }
 
-  const threatSlugs = top.map((r) => r.species);
-  // Threats live on SV index for gen9ou.
-  const threatFormat: Format =
-    format === "national-dex" ? "scarlet-violet" : format;
-  const threatRefs = await spriteRefsByNames(threatSlugs, threatFormat, db);
+  const names = top.map((r) => r.name);
+  const threatRefs = await spriteRefsByNames(names, CHAMPIONS_FORMAT, db);
 
-  // Build defense-side members from analysis + draft abilities.
   const foundMembers = analysis.members.filter(
     (m): m is Extract<typeof m, { found: true }> => m.found,
   );
@@ -113,54 +94,50 @@ export async function attachThreatBoard(
     };
   });
 
-  const candidates = top.map((row) => {
-    const ref = threatRefs.get(row.species);
-    return {
-      species: row.species,
-      display_name: row.display_name,
-      types: ref?.types ?? [],
-      usage_pct: row.usage_pct,
-      rank: row.rank,
-      speed: null as number | null,
-    };
+  const candidates = top.flatMap((row) => {
+    const ref = threatRefs.get(row.name);
+    if (!ref) return [];
+    return [
+      {
+        species: toEntitySlug(row.name),
+        display_name: ref.display_name,
+        types: ref.types,
+        usage_pct: row.usage_pct,
+        rank: row.rank,
+        speed: null as number | null,
+        lookupName: row.name,
+      },
+    ];
   });
 
-  // Enrich speeds from top spreads where possible.
   for (const c of candidates) {
     try {
-      const detail = await metaSpeciesDetail(
-        db,
-        metaFormat,
-        month,
-        c.species,
-      );
-      if (!detail || !c.types.length) continue;
-      const topSpread = detail.spreads[0];
-      const ref = threatRefs.get(c.species);
-      if (ref && topSpread) {
-        const speEv = speEvFromSpread(topSpread.evs);
-        const nature = topSpread.nature?.toLowerCase() ?? null;
-        const stats = computeMemberStats(
-          {
-            evs: {
-              hp: 0,
-              atk: 0,
-              def: 0,
-              spa: 0,
-              spd: 0,
-              spe: speEv,
-            },
-            nature: natureBoostsSpe(nature ?? undefined)
-              ? nature
-              : nature,
-            level: 50,
+      const usage = await getUsage(c.lookupName, "doubles");
+      if (!usage?.found || !c.types.length) continue;
+      const topSpread = usage.data.spreads[0];
+      const ref = threatRefs.get(c.lookupName);
+      if (!ref || !topSpread) continue;
+      const speEv = speEvFromSpread(topSpread.name);
+      const nature = usage.data.natures[0]?.name
+        ? toEntitySlug(usage.data.natures[0].name)
+        : null;
+      const stats = computeMemberStats(
+        {
+          evs: {
+            hp: 0,
+            atk: 0,
+            def: 0,
+            spa: 0,
+            spd: 0,
+            spe: speEv,
           },
-          ref.base_stats,
-          "scarlet-violet",
-        );
-        const spe = stats.find((s) => s.key === "spe")?.value ?? null;
-        c.speed = spe;
-      }
+          nature,
+          level: 50,
+        },
+        ref.base_stats,
+        CHAMPIONS_FORMAT,
+      );
+      c.speed = stats.find((s) => s.key === "spe")?.value ?? null;
     } catch {
       // skip speed enrich
     }
@@ -174,23 +151,19 @@ export async function attachThreatBoard(
     limit: THREAT_LIMIT,
   });
 
-  // Sample calcs for worst threats.
   threats = await enrichCalcs(
     threats,
     members,
     analysis,
     threatRefs,
     typeProfiles,
-    metaFormat,
-    month,
     db,
-    threatFormat,
   );
 
   return {
     ...analysis,
     threats,
-    meta_attribution: `Smogon ${metaFormat} ${month}`,
+    meta_attribution: USAGE_ATTRIBUTION,
   };
 }
 
@@ -198,12 +171,14 @@ async function enrichCalcs(
   threats: ThreatRowWire[],
   members: TeamMember[],
   analysis: TeamAnalysisOk,
-  threatRefs: Map<string, Awaited<ReturnType<typeof spriteRefsByNames>> extends Map<string, infer V> ? V : never>,
+  threatRefs: Map<
+    string,
+    Awaited<ReturnType<typeof spriteRefsByNames>> extends Map<string, infer V>
+      ? V
+      : never
+  >,
   typeProfiles: Map<string, TypeProfileLite>,
-  metaFormat: typeof DEFAULT_META_FORMAT,
-  month: string,
   db: OakDb,
-  threatFormat: Format,
 ): Promise<ThreatRowWire[]> {
   const targets = threats
     .filter((t) => t.status === "unanswered" || t.status === "soft")
@@ -221,34 +196,30 @@ async function enrichCalcs(
       continue;
     }
     try {
-      const detail = await metaSpeciesDetail(
-        db,
-        metaFormat,
-        month,
-        threat.species,
-      );
-      const topMove = detail?.moves?.[0];
-      const threatRef = threatRefs.get(threat.species);
-      if (!topMove || !threatRef) {
+      const usage = await getUsage(threat.display_name, "doubles");
+      const topMoveName = usage?.found ? usage.data.moves[0]?.name : undefined;
+      const threatRef =
+        threatRefs.get(threat.display_name) ?? threatRefs.get(threat.species);
+      if (!topMoveName || !threatRef) {
         out.push(threat);
         continue;
       }
-      const moveMap = await moveSummaries([topMove.slug], threatFormat, db);
-      const move = moveMap.get(topMove.slug);
+      const topMoveSlug = toEntitySlug(topMoveName);
+      const moveMap = await moveSummaries([topMoveSlug], CHAMPIONS_FORMAT, db);
+      const move = moveMap.get(topMoveSlug);
       if (!move || !move.power || move.power <= 0) {
         out.push(threat);
         continue;
       }
 
       const isPhysical = move.damageClass === "physical";
-      // Threat attack: assume 252 in attacking stat, neutral nature, lv50.
       const threatAtkStats = computeMemberStats(
         {
           evs: {
             hp: 0,
-            atk: isPhysical ? 252 : 0,
+            atk: isPhysical ? 32 : 0,
             def: 0,
-            spa: isPhysical ? 0 : 252,
+            spa: isPhysical ? 0 : 32,
             spd: 0,
             spe: 0,
           },
@@ -256,7 +227,7 @@ async function enrichCalcs(
           level: 50,
         },
         threatRef.base_stats,
-        "scarlet-violet",
+        CHAMPIONS_FORMAT,
       );
       const attackStat =
         threatAtkStats.find((s) => s.key === (isPhysical ? "atk" : "spa"))
@@ -269,7 +240,6 @@ async function enrichCalcs(
         const hp = m.stats.hp;
         if (defStat == null || hp == null) continue;
 
-        // Type effectiveness of move type vs member types.
         const defs: DefensiveProfile[] = [];
         for (const t of m.types) {
           const p = typeProfiles.get(t);
@@ -286,7 +256,7 @@ async function enrichCalcs(
         const line = sampleThreatCalc({
           attackerSlug: threat.species,
           defenderSlug: m.slug,
-          moveSlug: topMove.slug,
+          moveSlug: topMoveSlug,
           power: move.power,
           attackStat,
           defenseStat: defStat,

@@ -45,6 +45,34 @@ const GARCHOMP_BATTLE = {
   ],
 };
 
+/** Live championsbattledata battle rows (held_item / stat_alignment / stat_points). */
+const GARCHOMP_BATTLE_LIVE = {
+  pokemon: "Garchomp",
+  format: "Doubles",
+  season: "Season M-3",
+  rows: [
+    { position: 1, category: "move", rank: 1, name: "Earthquake", percentage: "90.3%" },
+    { position: 2, category: "move", rank: 2, name: "Protect", percentage: "84.1%" },
+    { position: 1, category: "held_item", rank: 1, name: "Life Orb", percentage: "41.5%" },
+    { position: 1, category: "ability", rank: 1, name: "Rough Skin", percentage: "100%" },
+    { position: 1, category: "stat_alignment", rank: 1, name: "Jolly", percentage: "73.4%" },
+    {
+      position: 1,
+      category: "stat_points",
+      rank: 1,
+      name: "",
+      percentage: "31.0%",
+      hp_points: 32,
+      attack_points: 0,
+      defense_points: 0,
+      sp_atk_points: 0,
+      sp_def_points: 2,
+      speed_points: 32,
+    },
+    { position: 1, category: "teammate", rank: 1, name: "Rillaboom", percentage: "28.6%" },
+  ],
+};
+
 const OGERPON_META = {
   pokemon: "Ogerpon",
   rows: [
@@ -121,6 +149,58 @@ describe("getUsage — happy path", () => {
     await getUsage("garchomp", "doubles", { now: 2000 });
     // Still just the first call's index + battle.
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("maps live categories held_item/stat_alignment/stat_points and synthesizes SP spreads", async () => {
+    installFetch((url) => {
+      if (url === `${BASE}/api`) return ok(INDEX);
+      if (url.startsWith(`${BASE}/api/battle/Doubles/Garchomp`)) {
+        return ok(GARCHOMP_BATTLE_LIVE);
+      }
+      return notFound();
+    });
+    const res = await getUsage("garchomp", "doubles", { now: 1 });
+    expect(res.found).toBe(true);
+    if (!res.found) return;
+    expect(res.data.items[0]).toEqual({ name: "Life Orb", pct: 41.5, rank: 1 });
+    expect(res.data.natures[0]).toEqual({ name: "Jolly", pct: 73.4, rank: 1 });
+    expect(res.data.spreads[0]).toEqual({
+      name: "32/0/0/0/2/32",
+      pct: 31,
+      rank: 1,
+    });
+    expect(res.data.moves[0].name).toBe("Earthquake");
+  });
+
+  it("still synthesizes spreads from special_attack_points / special_defense_points fallbacks", async () => {
+    installFetch((url) => {
+      if (url === `${BASE}/api`) return ok(INDEX);
+      if (url.startsWith(`${BASE}/api/battle/Doubles/Garchomp`)) {
+        return ok({
+          ...GARCHOMP_BATTLE_LIVE,
+          rows: [
+            {
+              position: 1,
+              category: "stat_points",
+              rank: 1,
+              name: "",
+              percentage: "31.0%",
+              hp_points: 32,
+              attack_points: 0,
+              defense_points: 0,
+              special_attack_points: 0,
+              special_defense_points: 2,
+              speed_points: 32,
+            },
+          ],
+        });
+      }
+      return notFound();
+    });
+    const res = await getUsage("garchomp", "doubles", { now: 1 });
+    expect(res.found).toBe(true);
+    if (!res.found) return;
+    expect(res.data.spreads[0]?.name).toBe("32/0/0/0/2/32");
   });
 });
 
@@ -302,6 +382,8 @@ describe("listLeaderboard — bulk ranks, no N+1 (ADR-5, CF-USAGE-US-1, CF-INT-B
       "Rillaboom",
     ]);
     expect(res.rows.map((r) => r.rank)).toEqual([1, 2, 3]);
+    // Rank-only bulk: do not invent usage_pct: 0.
+    expect(res.rows.every((r) => r.usage_pct === undefined)).toBe(true);
     // One (or a handful of) index requests — never one battle GET per species.
     expect(battleUrls()).toEqual([]);
     expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(3);

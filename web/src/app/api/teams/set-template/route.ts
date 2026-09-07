@@ -1,12 +1,12 @@
 /**
- * POST /api/teams/set-template — resolve a usage-based common set for a species.
- * Public read (no account secrets); rate-limited like analyze.
+ * POST /api/teams/set-template — live Champions usage set for one species.
+ * Public read (no account secrets); applying onto a team is a later PATCH.
+ * Request `{ species }` only; leftover `format` is ignored (always Champions).
  */
 
 import { z } from "zod";
 
 import { json, jsonError, retryAfterHeader } from "@/app/api/auth/_lib/http";
-import { FORMATS, type Format } from "@/data/formats";
 import { checkRateLimit, PUBLIC_READ_CONFIG } from "@/server/rate-limit";
 import { clientIp } from "@/server/client-ip";
 
@@ -14,7 +14,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({
-  format: z.enum(FORMATS as unknown as [Format, ...Format[]]),
   species: z.string().min(1).max(80),
 });
 
@@ -43,18 +42,17 @@ export async function POST(req: Request): Promise<Response> {
     }
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) {
-      return jsonError(400, "invalid_request", "format and species required.");
+      return jsonError(400, "invalid_request", "species required.");
     }
 
     const { db } = await import("@/data/db");
     const { resolveSetTemplate } = await import("@/server/teams/set-template");
-    const result = await resolveSetTemplate(
-      parsed.data.species,
-      parsed.data.format,
-      db,
-    );
+    const result = await resolveSetTemplate(parsed.data.species, db);
     return json(200, result);
   } catch {
-    return jsonError(500, "internal_error", "Could not load set template.");
+    return json(200, {
+      found: false,
+      notes: ["Live Champions usage is unavailable."],
+    });
   }
 }

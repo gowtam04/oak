@@ -27,6 +27,7 @@ export interface AppNavItem {
 export const PRIMARY_NAV_ITEMS: readonly AppNavItem[] = [
   { label: "Teams", href: "/teams" },
   { label: "Calculator", href: "/calc" },
+  { label: "Usage", href: "/usage" },
 ];
 
 /** The programmatic reference pages, rendered as a quiet footer group. */
