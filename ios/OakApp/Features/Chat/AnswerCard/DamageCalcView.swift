@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Renders an answer's `damage_calc` as a two-column Signal fact table
-/// (IBM Plex Mono 12/13, hairline between rows). Rows come only from the
+/// Renders an answer's `damage_calc` as a two-column Enamel fact table
+/// (JetBrains Mono 12/13, hairline between rows). Rows come only from the
 /// structured `result` / `assumptions` maps — never invented from markdown.
 ///
 /// Damage output is always non-authoritative (`is_estimate` is true by schema),

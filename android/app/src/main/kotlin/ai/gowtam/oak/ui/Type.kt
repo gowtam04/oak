@@ -19,9 +19,6 @@ import androidx.compose.ui.unit.sp
  * Nunito Sans. JetBrains Mono appears only in fact tables, damage breakdowns, OTP
  * digits, and source keys — applied per call-site via [JetBrainsMonoFamily].
  *
- * [FigtreeFamily] / [InterFamily] / [SpaceGroteskFamily] alias [NunitoSansFamily]
- * so leftover call sites compile through PR1; unused faces are deleted in PR6.
- *
  * Every role still sizes in `sp`, so the whole ramp scales with the user's system
  * font-size setting.
  */
@@ -45,21 +42,6 @@ val JetBrainsMonoFamily = FontFamily(
     Font(R.font.jetbrains_mono_medium, FontWeight.Medium),
     Font(R.font.jetbrains_mono_semibold, FontWeight.SemiBold),
 )
-
-/** Kept defined through PR1 — files still exist; unused faces go in PR6. */
-val PlexMonoFamily = FontFamily(
-    Font(R.font.ibm_plex_mono_regular, FontWeight.Normal),
-    Font(R.font.ibm_plex_mono_medium, FontWeight.Medium),
-)
-
-/** PR1 alias — leftover display call-sites compile against Nunito Sans. */
-val FigtreeFamily = NunitoSansFamily
-
-/** PR1 alias — leftover display call-sites compile against Nunito Sans. */
-val SpaceGroteskFamily = NunitoSansFamily
-
-/** PR1 alias — leftover body call-sites compile against Nunito Sans. */
-val InterFamily = NunitoSansFamily
 
 /**
  * Oak's type ramp, keyed to the web `--text-*` scale (11 / 12 / 13 / 14 / 18 / 22 / 28)

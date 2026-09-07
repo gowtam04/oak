@@ -1,12 +1,16 @@
 # Oak soul — visual source of truth
 
-> Operational contract for **every** UI surface (web, iOS, Android).
-> Agents and humans must obey this when touching chrome.
+> **SUPERSEDED.** Do not implement from this file. The visual language to
+> implement is [`enamel-paper.md`](enamel-paper.md) (Enamel & Paper). This
+> document is history. Do not re-apply Instrument / chassis / specimen-desk
+> / Signal from here.
+
+> Historical operational contract (superseded). Do not implement from this
+> file or from [`signal.md`](./signal.md). Implement from [`enamel-paper.md`](enamel-paper.md).
 >
-> **Full guide (implement from this):** [`signal.md`](./signal.md)
-> Lab mock: `docs/design/theme-lab/` · world **Signal**.
+> Lab mock of the Signal era: `docs/design/theme-lab/` · world **Signal**.
 >
-> This file REPLACES Instrument / chassis (`fable-ui-strategy.md`) and the
+> This file once replaced Instrument / chassis (`fable-ui-strategy.md`) and the
 > former field-notes / specimen-desk doctrine. Do not reintroduce cream paper,
 > grain, dashed chrome, a red Pokédex clamshell, or indigo as the brand.
 
