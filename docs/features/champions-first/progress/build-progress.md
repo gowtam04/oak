@@ -1,6 +1,6 @@
 # Build Progress
 
-Status: `in-progress`
+Status: `COMPLETE` (pending merge to `develop`)
 
 ## References
 
@@ -9,96 +9,63 @@ Status: `in-progress`
 - Build Manifest: present (`docs/features/champions-first/architecture/implementation-plan.md`)
 - Mode: `PM`
 - Budget Tier: `startup`
-- Rigor: `standard` (PM + 9 phases: test-author → red → implement → impl review → regression; skip test-review unless tests look weak)
+- Rigor: `standard`
 
 ## Environment
 
-- Install / test / typecheck / build commands (from architecture/manifest):
-  - `cd web && npx vitest run <file>`
-  - `cd web && npm run typecheck`
-  - `cd web && npm run lint`
-  - `cd web && npm test` (Docker)
-  - `cd web && npm run build`
-  - iOS: `cd ios && xcodegen generate && xcodebuild test -scheme OakApp -only-testing:OakAppTests -destination 'platform=iOS Simulator,name=iPhone 17'`
-  - Android: `JAVA_HOME=/opt/homebrew/opt/openjdk@17` + `./gradlew --no-daemon :app:compileDebugKotlin` / `:app:testDebugUnitTest`
-- Notes:
-  - Integration worktree: `/Users/gowtam/Documents/Projects/oak-champions-first` on `agent/champions-first` (from `develop` @ 2659b62)
-  - Do **not** merge to `develop` until P7+P8 land on this branch (CF-OPS-BR-4)
-  - Manifest extras assigned by parent: sql-sandbox.test.ts + encounter-repo (+ tests) → P2; deleted-tool oracles + gen-scope/reference-tools + thinking-trace → P3
-  - P6c sequenced after P5 (UsageBlock → GET /api/usage)
+- Web: Node 26 for vitest (Node 20 hits Testcontainers/undici crash)
+- iOS: xcodebuild OakAppTests
+- Android: `JAVA_HOME=/opt/homebrew/opt/openjdk@17` Gradle unit tests
+- Integration worktree: `/Users/gowtam/Documents/Projects/oak-champions-first` on `agent/champions-first`
 
 ## Resume Snapshot
 
-- Last completed phase id / name: none
-- Last green verification (commands + outcome summary): none
-- Open review findings (MUST-FIX + SHOULD-FIX — both must clear before phase verified): none
-- Worktrees / branches in play (if any):
-  - `/Users/gowtam/Documents/Projects/oak-champions-first` (`agent/champions-first`) — integration
-  - Shared checkout `/Users/gowtam/Documents/Projects/Oak` remains `develop` (do not edit)
+- Last completed phase: P9 + typecheck glue (`e89072b`)
+- Last green verification:
+  - Web typecheck: clean after `e89072b`
+  - Web lint: 0 errors
+  - Eval cases/deterministic/run tests: 184 passed
+  - iOS OakAppTests: 761 passed (P7)
+  - Android JVM: compile + unit tests BUILD SUCCESSFUL (P8, 664+ tests)
+- Open review findings: none
+- Branch: `agent/champions-first` contains P1–P9
 
 ## Current Phase
 
-- Phase name / number / manifest id: Wave 1 tests (p1 ∥ p2 ∥ p3)
-- Requirement refs: see phase log
-- Status: `in-progress`
-- Active workers (role → owned files / isolation):
-  - pending spawn: three `[test-author]` workers, shared worktree, disjoint owns
+- Status: `verified` — merge to `develop` is the remaining ops step
 
 ## Phase Log
 
-### Phase P1: Turn scope always Champions
-
-Requirement refs: CF-CHAT-AC-1.1 (server), CF-CHAT-AC-3.2–3.4, CF-DATA-BR-1, CF-DATA-BR-7, CF-DATA-BR-21, CF-AUTH-AC-1.1
-
-| Step | Status | Notes |
-|------|--------|-------|
-| Tests | in-progress | |
-| Red check | | |
-| Test review | skipped | PM standard rigor |
-| Implementation | | |
-| Impl review | | |
-| Regression | | |
-
-### Phase P2: Reference cutover
-
-Requirement refs: CF-DATA-BR-3, CF-OPS-US-1, CF-OPS-AC-1.1, CF-OPS-AC-1.2, CF-OPS-AC-1.5, CF-DEX-AC-1.3, CF-INT-BR-3
-
-| Step | Status | Notes |
-|------|--------|-------|
-| Tests | in-progress | |
-| Red check | | |
-| Test review | skipped | |
-| Implementation | | |
-| Impl review | | |
-| Regression | | |
-
-### Phase P3: Tools and prompt
-
-Requirement refs: CF-CHAT-US-2, CF-CHAT-AC-2.1–2.5, CF-VOICE-US-1, CF-BOX-AC-1.1, CF-DATA-BR-4, CF-DATA-BR-5, CF-INT-BR-1, ADR-2, ADR-8
-
-| Step | Status | Notes |
-|------|--------|-------|
-| Tests | in-progress | |
-| Red check | | |
-| Test review | skipped | |
-| Implementation | | |
-| Impl review | | |
-| Regression | | |
+P1 TurnScope — verified. Always `ctx.mode = "champions"`.
+P2 ReferenceCutover — verified. Migration 0023 + Champions ingest.
+P3 Tools/prompt — verified. 17-tool barrel, decline phrase.
+P4 Teams API — verified. Living vs archived.
+P5 Usage — verified. Live API, apply-set, `/meta` → `/usage`.
+P6a Chrome — verified. Regulation chip, starters, landing.
+P6b Teams UI — verified. Archive + Stat Points + apply confirm.
+P6c Dex/calc — verified. Champions-only, 404, L50 SP.
+P7 iOS — verified. Fifth Usage tab.
+P8 Android — verified. Usage as Dex section; no Voice mic.
+P9 Docs/eval — verified. AGENTS/README/eval Champions-only.
 
 ## Integration
 
-- Checkpoints (from architecture when present): agent-stack, api-stack, web-ui, native-clients, launch-bar
-- Seams covered:
-- Results:
+- agent-stack: 673 tests passed after oracle glue
+- api-stack: 191 tests passed
+- native: iOS 761 + Android JVM green
+- Typecheck: clean after glue
 
 ## Final Verification
 
-- Full suite:
-- Typecheck / build:
-- Requirement refs covered / gaps:
-- Review findings remaining (should be none):
-- Unresolved risks:
+- Typecheck: pass (`e89072b`)
+- Lint: 0 errors
+- Eval harness: pass
+- Full `npm test` (entire node+jsdom suite) not re-run as a single command in the last pass; targeted suites per phase passed
+- Browser E2E: not run (no local Next against prod DB in this session)
+- Prod migrate+ingest: documented, not executed
 
 ## Parent-Local Fixes
 
-(none yet)
+- Worktree/branch orchestration, test commits, merges
+- Oracle off-roster names vs Champions fixture (`945e84e`)
+- Typecheck/eval harness glue (`e89072b`)
