@@ -12,6 +12,12 @@ import Testing
 /// value round-trips through its case, and ANY unrecognized string still decodes
 /// (never throws) by falling back to `.unknown`, re-encoding as its original raw
 /// string.
+///
+/// Champions-first (ADR-3 / CF-TEAM-US-5): the enum STAYS for JSON decode of
+/// archived teams. Living is `format == .champions`; archived is `format !=
+/// .champions`. Expected helpers on `Format` / `Team` / `TeamSummary`:
+///   `isLiving` / `isArchived`
+///   `pickerCases` == `[.champions]` (knownCases stays the historical union)
 struct FormatDecodingTests {
 
   // MARK: Known cases — decode + round-trip
@@ -85,6 +91,77 @@ struct FormatDecodingTests {
     let format = Format.unknown("gen-99-mystery")
     #expect(format.shortLabel == "gen-99-mystery")
     #expect(format.displayLabel == "gen-99-mystery")
+  }
+
+  // MARK: Champions-first living / archive (ADR-3, CF-TEAM-US-5)
+
+  /// Pre-cutover team JSON (`format: "gen-7"`) must still decode. Collapsing
+  /// `Format` to `"champions"` only would fail the whole list for returning
+  /// users (ADR-3). Living is `format == champions`; archived is any other
+  /// stored format — no `archived_at` column.
+  @Test
+  func oldGen7TeamJSONStillDecodes() throws {
+    let json = """
+      {"id":"team_alola","name":"Alola rain","format":"gen-7","members":[\
+      {"species":"tapu-koko","ability":"electric-surge","item":null,"moves":["thunderbolt"],\
+      "nature":"timid","evs":{"hp":0,"atk":0,"def":0,"spa":252,"spd":4,"spe":252},\
+      "ivs":{"hp":31,"atk":31,"def":31,"spa":31,"spd":31,"spe":31},\
+      "tera_type":null,"level":50}],"createdAt":1,"updatedAt":2}
+      """
+    let team = try JSONDecoder().decode(Team.self, from: Data(json.utf8))
+    #expect(team.id == "team_alola")
+    #expect(team.name == "Alola rain")
+    #expect(team.format == .gen7)
+    #expect(team.format.rawValue == "gen-7")
+    #expect(team.members.first?.species == "tapu-koko")
+    #expect(team.members.first?.teraType == nil)
+  }
+
+  @Test
+  func livingIsChampionsAndArchivedIsAnyOtherFormat() throws {
+    let livingJSON = Data(#"{"id":"live","name":"Rain","format":"champions","members":[],"createdAt":1,"updatedAt":1}"#.utf8)
+    let living = try JSONDecoder().decode(Team.self, from: livingJSON)
+    #expect(living.format == .champions)
+    #expect(living.format.isLiving)
+    #expect(living.format.isArchived == false)
+    #expect(living.isLiving)
+    #expect(living.isArchived == false)
+
+    let archivedJSON = Data(#"{"id":"old","name":"Alola","format":"gen-7","members":[],"createdAt":1,"updatedAt":1}"#.utf8)
+    let archived = try JSONDecoder().decode(Team.self, from: archivedJSON)
+    #expect(archived.format != .champions)
+    #expect(archived.format.isLiving == false)
+    #expect(archived.format.isArchived)
+    #expect(archived.isLiving == false)
+    #expect(archived.isArchived)
+
+    for format in Format.knownCases where format != .champions {
+      #expect(format.isArchived, "\(format.rawValue) is archived (ADR-3)")
+      #expect(format.isLiving == false)
+    }
+    #expect(Format.unknown("gen-99-mystery").isArchived)
+    #expect(Format.scarletViolet.isArchived)
+    #expect(Format.nationalDex.isArchived)
+  }
+
+  /// Pickers must not list National Dex / Gens 1–8 (CF-UI-AC-1.1). `knownCases`
+  /// still names historical formats so archived rows decode.
+  @Test
+  func pickerCasesAreChampionsOnly() {
+    #expect(Format.pickerCases == [.champions])
+    #expect(Format.knownCases.contains(.gen7))
+    #expect(Format.knownCases.contains(.champions))
+  }
+
+  @Test
+  func teamSummaryPreservesArchivedOriginFormat() throws {
+    let json = Data(
+      #"{"id":"t","name":"Alola","format":"gen-7","memberCount":1,"incomplete":true,"species":["tapu-koko"],"updatedAt":1}"#
+        .utf8)
+    let summary = try JSONDecoder().decode(TeamSummary.self, from: json)
+    #expect(summary.format == .gen7)
+    #expect(summary.isArchived)
+    #expect(summary.isLiving == false)
   }
 
   // MARK: Parent-DTO tolerance — the actual live-bug fixture

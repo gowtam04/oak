@@ -11,8 +11,14 @@ import UIKit
 ///     `answer_start` resets the buffer but keeps tool history, the terminal answer
 ///     finalizes, an `error` event becomes a banner;
 ///   * the end-to-end `send` path over the real fixtures parsed by the production
-///     `SSEParser`, plus the request-shape checks (`scope_seed`) and the in-domain
-///     non-`answered` rendering.
+///     `SSEParser`, plus the request-shape checks (`scope_seed` is never an
+///     other-format seed — CF-CHAT-US-1) and the in-domain non-`answered` rendering.
+///
+/// Champions-first P7 expected API:
+///   `displayFormat` is always `.champions`
+///   `isRegulationChipPicker == false` (informational regulation chip)
+///   `regulationLabel` contains the current regulation (Reg M-B)
+///   `selectScope` is a no-op for other formats and does not persist them
 ///
 /// The view model is `@MainActor`, so the suite is too.
 @MainActor
@@ -316,31 +322,49 @@ struct ChatViewModelTests {
     }
   }
 
-  // MARK: Scope chip → scope_seed on the request (GS-C)
+  // MARK: Regulation chip — not a format picker (CF-CHAT-US-1, CF-UI-US-2)
 
   @Test
-  func displayFormatDefaultsToNationalDexWithNoSeedOrResolvedScope() {
+  func displayFormatDefaultsToChampionsWithNoPicker() {
     let vm = makeViewModel(fake: FakeChatService())
-    // seed ?? resolved ?? national-dex — a fresh thread has neither.
-    #expect(vm.displayFormat == .nationalDex)
+    #expect(vm.displayFormat == .champions)
     #expect(vm.scopeSeed == nil)
     #expect(vm.resolvedScope == nil)
+    #expect(vm.isRegulationChipPicker == false)
+    #expect(
+      vm.regulationLabel.contains("Reg M-B")
+        || vm.regulationLabel.contains("Regulation M-B")
+        || vm.displayFormat.displayLabel.contains("Reg M-B"))
   }
 
   @Test
-  func selectScopeSeedsDisplayFormatAndRidesTheNextRequest() async throws {
+  func leftoverLastUsedScopeDoesNotReopenAnotherGame() {
+    let appState = AppState()
+    appState.completeSignIn(email: "ash@pallet.town", lastUsedScope: .gen7)
+    let vm = makeViewModel(fake: FakeChatService(), appState: appState)
+    #expect(vm.displayFormat == .champions)
+    #expect(vm.scopeSeed == nil)
+  }
+
+  @Test
+  func selectScopeDoesNotSendOtherFormatScopeSeedAndIsNotAPicker() async throws {
     let fake = FakeChatService()
-    fake.scriptedEvents = []  // no `scope` event, so the seed is NOT cleared
+    fake.scriptedEvents = []
     let vm = makeViewModel(fake: fake)
 
     vm.selectScope(.gen7)
-    #expect(vm.displayFormat == .gen7)        // a pending pick outranks resolved/default
+    #expect(vm.displayFormat == .champions)
+    #expect(vm.scopeSeed == nil || vm.scopeSeed == .champions)
+    #expect(vm.isRegulationChipPicker == false)
 
     vm.composerText = "in this scope, what changed?"
     vm.send()
     await vm.streamTask?.value
 
-    #expect(fake.lastScopeSeed == .gen7)      // the pick rode the request as scope_seed
+    #expect(fake.lastScopeSeed != .gen7)
+    #expect(fake.lastScopeSeed == nil || fake.lastScopeSeed == .champions)
+    #expect(fake.lastPersistedScope != .gen7)
+    #expect(fake.persistScopeCount == 0)
   }
 
   @Test
@@ -353,57 +377,53 @@ struct ChatViewModelTests {
     vm.send()
     await vm.streamTask?.value
 
-    #expect(fake.lastScopeSeed == nil)        // absent scope_seed ⇒ server precedence resolves
+    #expect(fake.lastScopeSeed == nil || fake.lastScopeSeed == .champions)
+    #expect(fake.lastScopeSeed != .gen7)
+    #expect(fake.lastScopeSeed != .nationalDex)
   }
 
   @Test
-  func scopeEventAdoptsResolvedScopeAndClearsThePendingSeed() {
+  func otherFormatScopeEventDoesNotBecomeAPickerOrSeed() {
     let vm = makeViewModel(fake: FakeChatService())
     vm.selectScope(.gen7)
-    #expect(vm.displayFormat == .gen7)
 
-    // A resolved `scope` event lands (e.g. the server honored an in-message signal
-    // for a DIFFERENT scope): adopt it, retire the seed, and reflect it in display.
     vm.apply(.scope(format: .gen5, source: .message))
 
-    #expect(vm.resolvedScope == .gen5)
-    #expect(vm.resolvedScopeSource == .message)
-    #expect(vm.scopeSeed == nil)              // seed cleared once a turn resolved
-    #expect(vm.displayFormat == .gen5)        // now shows the resolved scope
+    #expect(vm.displayFormat == .champions)
+    #expect(vm.scopeSeed == nil || vm.scopeSeed == .champions)
+    #expect(vm.isRegulationChipPicker == false)
   }
 
   @Test
-  func seedRidesOnlyOneTurnThenClearsOnScopeEvent() async throws {
-    // A `scope` event in the stream clears the seed mid-turn, so it does NOT leak
-    // onto the following send (mirrors web's `scope` effect clearing `scopeSeed`).
+  func aChampionsScopeEventDoesNotLeakASeedOntoTheNextSend() async throws {
     let fake = FakeChatService()
     fake.scriptedEvents = [
-      .scope(format: .champions, source: .seed),
+      .scope(format: .champions, source: .default),
       .answer(try Fixtures.decode(OakAnswer.self, from: "oakanswer_answered_full.json")),
     ]
     let vm = makeViewModel(fake: fake)
 
-    vm.selectScope(.champions)
     vm.composerText = "first"
     vm.send()
     await vm.streamTask?.value
-    #expect(fake.lastScopeSeed == .champions) // rode the FIRST turn
+    #expect(fake.lastScopeSeed == nil || fake.lastScopeSeed == .champions)
 
     vm.composerText = "second"
     vm.send()
     await vm.streamTask?.value
-    #expect(fake.lastScopeSeed == nil)        // NOT re-sent on the next turn
+    #expect(fake.lastScopeSeed == nil || fake.lastScopeSeed == .champions)
+    #expect(fake.lastScopeSeed != .gen7)
   }
 
   @Test
-  func scopeEventMirrorsResolvedScopeToGuestThread() {
+  func scopeEventMirrorsChampionsOntoTheGuestThread() {
     let appState = AppState()               // defaults to .guest
     let vm = makeViewModel(fake: FakeChatService(), appState: appState)
 
     vm.apply(.scope(format: .gen8, source: .conversation))
 
-    // The resolved scope is mirrored so the guest→sign-in import uploads under it.
-    #expect(appState.guestThreadScope == .gen8)
+    #expect(appState.guestThreadScope == .champions)
+    #expect(vm.displayFormat == .champions)
   }
 
   @Test
@@ -412,7 +432,8 @@ struct ChatViewModelTests {
     vm.composerText = "q"
     vm.send()                                 // isStreaming → true
     vm.selectScope(.gen6)
-    #expect(vm.scopeSeed == nil)              // ignored while a turn streams
+    #expect(vm.scopeSeed == nil || vm.scopeSeed == .champions)
+    #expect(vm.displayFormat == .champions)
   }
 
   // MARK: Stop / quick-stop (mirrors web `handleStop`)
@@ -872,10 +893,10 @@ struct ChatViewModelTests {
     // The session id becomes the resumed conversation id.
     #expect(vm.sessionId == "conv-42")
 
-    // The stored scope seeds the display immediately (before the first turn re-emits).
-    #expect(vm.resolvedScope == .gen7)
-    #expect(vm.displayFormat == .gen7)
-    #expect(vm.scopeSeed == nil)
+    // Old threads may still store gen-7, but the chip is Champions-only
+    // (CF-CHAT-US-1 / CF-DATA-BR-21) and follow-ups must not send that seed.
+    #expect(vm.displayFormat == .champions)
+    #expect(vm.scopeSeed == nil || vm.scopeSeed == .champions)
 
     // Turns map one-to-one, preserving order and count: a `.user` turn → a user item
     // with no images, an `.assistant` turn → the rendered answer.
@@ -1119,7 +1140,7 @@ struct ChatViewModelTests {
     #expect(vm.isCalculatorPresented)
     #expect(vm.calculatorHop?.kind == .overlay)
     #expect(vm.calculatorHop?.rest == "")
-    #expect(vm.calculatorHop?.format == .gen7)
+    #expect(vm.calculatorHop?.format == .champions)
     #expect(vm.errorBanner == nil)
   }
 
@@ -1185,8 +1206,11 @@ struct ChatViewModelTests {
 
     #expect(fake.sendCount == 1)
     #expect(fake.lastMessage?.hasPrefix("Explain this damage estimate") == true)
+    #expect(fake.lastScopeSeed == nil || fake.lastScopeSeed == .champions)
+    #expect(fake.lastScopeSeed != .gen7)
     #expect(vm.isCalculatorPresented)
     #expect(vm.calculatorHop?.rest == "garchomp earthquake vs farigiraf")
+    #expect(vm.calculatorHop?.format == .champions)
   }
 
   // MARK: Guest hide Add / Pin (AUTH-BR-1)

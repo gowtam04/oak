@@ -50,7 +50,7 @@ struct TeamEditorPickerTests {
   @Test
   func refreshSpritesSkipsTheNetworkWhenNoSpeciesAreFilled() async {
     let dex = FakeDexLookupService()
-    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .scarletViolet)
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .champions)
 
     await vm.refreshSprites()
 
@@ -62,7 +62,7 @@ struct TeamEditorPickerTests {
   func refreshSpritesPopulatesRefsForEveryFilledSlot() async {
     let dex = FakeDexLookupService()
     dex.spriteResults["swampert-mega"] = ["swampert-mega": swampertMegaRef()]
-    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .scarletViolet)
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .champions)
     vm.members[0].species = "swampert-mega"
 
     await vm.refreshSprites()
@@ -73,7 +73,7 @@ struct TeamEditorPickerTests {
 
   @Test
   func spriteRefForUnresolvedOrEmptySpeciesIsNil() {
-    let vm = TeamEditorViewModel(teamService: FakeTeamService(), format: .scarletViolet)
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), format: .champions)
 
     #expect(vm.spriteRef(for: "") == nil)
     #expect(vm.spriteRef(for: "unresolved-species") == nil)
@@ -85,7 +85,7 @@ struct TeamEditorPickerTests {
   func refreshSpritesForcesAMegasRequiredItemOntoTheHeldItem() async {
     let dex = FakeDexLookupService()
     dex.spriteResults["swampert-mega"] = ["swampert-mega": swampertMegaRef(requiredItem: "swampertite")]
-    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .scarletViolet)
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .champions)
     vm.members[0].species = "swampert-mega"
     vm.members[0].item = "leftovers"  // wrong item pre-resolution
 
@@ -108,7 +108,7 @@ struct TeamEditorPickerTests {
         baseStats: BaseStats(hp: 108, atk: 130, def: 95, spa: 80, spd: 85, spe: 102)
       )
     ]
-    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .scarletViolet)
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .champions)
     vm.members[0].species = "garchomp"
     vm.members[0].item = "leftovers"
 
@@ -123,7 +123,7 @@ struct TeamEditorPickerTests {
   func abilityOptionsAreEmptyBeforeResolutionAndPopulatedAfter() async {
     let dex = FakeDexLookupService()
     dex.spriteResults["swampert-mega"] = ["swampert-mega": swampertMegaRef()]
-    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .scarletViolet)
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .champions)
     vm.members[0].species = "swampert-mega"
 
     #expect(vm.abilityOptions(for: "swampert-mega").isEmpty)
@@ -144,7 +144,7 @@ struct TeamEditorPickerTests {
       LearnsetMove(slug: "earthquake", displayName: "Earthquake", type: "ground", damageClass: .physical, power: 100),
       LearnsetMove(slug: "protect", displayName: "Protect", type: "normal", damageClass: .status, power: nil),
     ]
-    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .scarletViolet)
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .champions)
     vm.members[0].species = "swampert-mega"
 
     await vm.refreshMovepool(for: vm.members[0].id)
@@ -154,13 +154,13 @@ struct TeamEditorPickerTests {
     #expect(options.first?.hint == "Ground · Physical · 100 power")
     #expect(options.last?.hint == "Normal · Status")
     #expect(dex.learnsetCalls.first?.pokemon == "swampert-mega")
-    #expect(dex.learnsetCalls.first?.format == .scarletViolet)
+    #expect(dex.learnsetCalls.first?.format == .champions)
   }
 
   @Test
   func refreshMovepoolClearsTheCacheForAnEmptySpecies() async {
     let dex = FakeDexLookupService()
-    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .scarletViolet)
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .champions)
 
     await vm.refreshMovepool(for: vm.members[0].id)
 
@@ -174,7 +174,7 @@ struct TeamEditorPickerTests {
     dex.learnsetResults["garchomp"] = [
       LearnsetMove(slug: "earthquake", displayName: "Earthquake", type: "ground", damageClass: .physical, power: 100)
     ]
-    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .scarletViolet)
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), dexLookup: dex, format: .champions)
     vm.members[0].species = "garchomp"
     vm.addMember()  // second slot stays empty
 

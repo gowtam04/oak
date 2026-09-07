@@ -3,6 +3,8 @@ import Testing
 
 @testable import OakApp
 
+/// Champions-first (CF-DEX-US-1): Dex defaults to Champions and ignores leftover
+/// format writes — there is no National Dex / gen-N picker.
 @MainActor
 struct DexViewModelTests {
 
@@ -12,18 +14,19 @@ struct DexViewModelTests {
     fake.searchResults["pokemon:"] = [
       SearchMatch(slug: "abra", displayName: "Abra", kind: .pokemon),
     ]
-    let model = DexViewModel(dexLookup: fake, format: .scarletViolet)
+    let model = DexViewModel(dexLookup: fake)
     model.start()
     // Allow the Task in reload() to settle.
     await Task.yield()
     await waitUntil { !model.isLoading }
 
     #expect(model.section == .pokemon)
+    #expect(model.format == .champions)
     #expect(model.matches.map(\.slug) == ["abra"])
     #expect(fake.searchCalls.count == 1)
     #expect(fake.searchCalls[0].kind == .pokemon)
     #expect(fake.searchCalls[0].query == "")
-    #expect(fake.searchCalls[0].format == .scarletViolet)
+    #expect(fake.searchCalls[0].format == .champions)
   }
 
   @Test
@@ -35,7 +38,7 @@ struct DexViewModelTests {
     fake.searchResults["move:"] = [
       SearchMatch(slug: "earthquake", displayName: "Earthquake", kind: .move),
     ]
-    let model = DexViewModel(dexLookup: fake, format: .nationalDex)
+    let model = DexViewModel(dexLookup: fake)
     model.start()
     await waitUntil { !model.isLoading }
 
@@ -44,58 +47,68 @@ struct DexViewModelTests {
 
     #expect(model.matches.map(\.slug) == ["earthquake"])
     #expect(fake.searchCalls.last?.kind == .move)
+    #expect(fake.searchCalls.last?.format == .champions)
   }
 
+  /// CF-DEX-AC-1.5 / CF-UI-AC-1.1 — Dex is Champions-only; leftover format
+  /// writes must not reopen National Dex / gen-N.
   @Test
-  func selectFormatReloadsWithNewScope() async {
+  func selectFormatDoesNotChangeChampionsScope() async {
     let fake = FakeDexLookupService()
     fake.searchResults["pokemon:"] = [
       SearchMatch(slug: "pikachu", displayName: "Pikachu", kind: .pokemon),
     ]
-    let model = DexViewModel(dexLookup: fake, format: .nationalDex)
+    let model = DexViewModel(dexLookup: fake)
     model.start()
     await waitUntil { !model.isLoading }
 
     model.selectFormat(.gen7)
-    await waitUntil { model.format == .gen7 && !model.isLoading }
+    await waitUntil { !model.isLoading }
 
-    #expect(fake.searchCalls.last?.format == .gen7)
+    #expect(model.format == .champions)
+    #expect(fake.searchCalls.last?.format == .champions)
   }
 
-  // MARK: Artifact hop — format write before push (DEX-US-2 / DEX-BR-3)
+  @Test
+  func defaultInitIsChampionsWithNoFormatPicker() {
+    let model = DexViewModel(dexLookup: FakeDexLookupService())
+    #expect(model.format == .champions)
+  }
+
+  // MARK: Artifact hop — stays Champions (CF-DEX-US-1)
 
   @Test
-  func applyArtifactHopWritesFormatBeforeQueuingTheEntityRoute() async {
+  func applyArtifactHopStaysOnChampionsAndQueuesTheEntityRoute() async {
     let fake = FakeDexLookupService()
     fake.searchResults["move:"] = [
       SearchMatch(slug: "earthquake", displayName: "Earthquake", kind: .move),
     ]
-    let model = DexViewModel(dexLookup: fake, format: .nationalDex)
+    let model = DexViewModel(dexLookup: fake)
     model.start()
     await waitUntil { !model.isLoading }
 
     model.applyArtifactHop(
       DexArtifactHop(kind: .move, query: "earthquake", format: .gen5)
     )
-    await waitUntil { model.format == .gen5 && !model.isLoading }
+    await waitUntil { model.section == .move && !model.isLoading }
 
-    #expect(model.format == .gen5)
+    #expect(model.format == .champions)
     #expect(model.section == .move)
     #expect(model.pendingRoute == DexEntityRoute(kind: .move, query: "earthquake"))
-    #expect(fake.searchCalls.last?.format == .gen5)
+    #expect(fake.searchCalls.last?.format == .champions)
     #expect(fake.searchCalls.last?.kind == .move)
   }
 
   @Test
-  func applyArtifactHopDoesNotSilentlyFallBackToNationalDex() async {
+  func applyArtifactHopDoesNotAdoptAnotherGame() async {
     let fake = FakeDexLookupService()
-    let model = DexViewModel(dexLookup: fake, format: .nationalDex)
+    let model = DexViewModel(dexLookup: fake)
 
     model.applyArtifactHop(
       DexArtifactHop(kind: .pokemon, query: "Garchomp", format: .gen5)
     )
 
-    #expect(model.format == .gen5)
+    #expect(model.format == .champions)
     #expect(model.pendingRoute?.kind == .pokemon)
     #expect(model.pendingRoute?.query == "Garchomp")
   }
