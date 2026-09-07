@@ -3,9 +3,8 @@
  *
  * Item effect text (and, where available, wild-held data), via the read-through
  * reference cache (DS-4). Pass-through of miss / upstream shapes; never throws.
- * Champions mode only: either miss path (operator-excluded, or a plain
- * reference miss) is flagged with `exists_in_standard` when the item is real
- * in the mainline Gen 9 (scarlet-violet) index.
+ * Operator-excluded Champions items are treated as not-found. Off-roster names
+ * are a plain miss (ADR-8, CF-DATA-BR-5) — no `exists_in_standard`.
  */
 
 import type { ToolDef } from "@/agent/types";
@@ -15,7 +14,7 @@ import {
   type GetItemOutput,
 } from "@/agent/schemas";
 import { getReference } from "@/data/repos/reference-cache";
-import { formatForMode, CHAMPIONS_FORMAT, STANDARD_FORMAT } from "@/data/formats";
+import { formatForMode, CHAMPIONS_FORMAT } from "@/data/formats";
 
 const description =
   "Get an item's effect text and, where available, which Pokémon are found " +
@@ -33,44 +32,26 @@ export const getItemTool: ToolDef = {
     const format = formatForMode(ctx.mode);
     // Champions: an item the operator marked unavailable is treated as
     // not-found (defense in depth — resolve_entity already won't surface it, so
-    // the model shouldn't reach here with an excluded slug). `ctx.db` carries
-    // the bound handle, exactly as forwarded to getReference below.
+    // the model shouldn't reach here with an excluded slug). Load faults must
+    // not fail the tool (never throw in-domain).
     if (format === CHAMPIONS_FORMAT) {
-      const { loadChampionsItemExclusions } = await import(
-        "@/data/repos/champions-items-repo"
-      );
-      const excluded = await loadChampionsItemExclusions(ctx.db);
-      if (excluded.has(parsed.data.name)) {
-        // Operator-excluded items are real in standard almost by definition,
-        // but probe rather than assume so the flag stays honest.
-        const std = await getReference(
-          "item",
-          parsed.data.name,
-          STANDARD_FORMAT,
-          ctx.db,
+      try {
+        const { loadChampionsItemExclusions } = await import(
+          "@/data/repos/champions-items-repo"
         );
-        return {
-          found: false,
-          suggestions: [],
-          exists_in_standard: "found" in std && std.found === true,
-        };
+        const excluded = await loadChampionsItemExclusions(ctx.db);
+        if (excluded.has(parsed.data.name)) {
+          return { found: false, suggestions: [] };
+        }
+      } catch {
+        // Fall through to getReference.
       }
     }
-    const ref = (await getReference(
+    return (await getReference(
       "item",
       parsed.data.name,
       format,
       ctx.db,
     )) as GetItemOutput;
-    if (format === CHAMPIONS_FORMAT && "found" in ref && ref.found === false) {
-      const std = await getReference(
-        "item",
-        parsed.data.name,
-        STANDARD_FORMAT,
-        ctx.db,
-      );
-      return { ...ref, exists_in_standard: "found" in std && std.found === true };
-    }
-    return ref;
   },
 };
