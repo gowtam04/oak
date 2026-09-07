@@ -3,9 +3,8 @@
  *
  * Single-form profile read over the pokedex repo, which returns either the T3
  * profile shape or `{ found: false, suggestions }` on a miss (BR-9). Pass-through;
- * never throws in-domain. Champions mode only: a miss is additionally probed
- * against the mainline Gen 9 (scarlet-violet) index and flagged with
- * `exists_in_standard` when the species is real there.
+ * never throws in-domain. Off-roster names are a plain miss (ADR-8, CF-DATA-BR-5)
+ * — no `exists_in_standard` / other-game probe.
  */
 
 import type { ToolDef } from "@/agent/types";
@@ -15,7 +14,7 @@ import {
   type GetPokemonOutput,
 } from "@/agent/schemas";
 import { getPokemon } from "@/data/repos/pokedex-repo";
-import { formatForMode, CHAMPIONS_FORMAT, STANDARD_FORMAT } from "@/data/formats";
+import { formatForMode } from "@/data/formats";
 import type { OakDb } from "@/data/db";
 
 const description =
@@ -35,11 +34,6 @@ export const getPokemonTool: ToolDef = {
     }
     const format = formatForMode(ctx.mode);
     const db = ctx.db as unknown as OakDb;
-    const result = await getPokemon(parsed.data.name, format, db);
-    if (format === CHAMPIONS_FORMAT && result.found === false) {
-      const std = await getPokemon(parsed.data.name, STANDARD_FORMAT, db);
-      return { ...result, exists_in_standard: std.found === true };
-    }
-    return result;
+    return getPokemon(parsed.data.name, format, db);
   },
 };

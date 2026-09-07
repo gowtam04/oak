@@ -2,7 +2,7 @@
  * Cross-phase contract surface — Zod schemas (single source of truth, A5).
  *
  * This module is the ONLY definition of:
- *  - the input/output shapes for all 11 tools (T1..T11, tools.md), and
+ *  - the input/output shapes for the remaining 17 Champions tools, and
  *  - the `OakAnswer` object emitted by `submit_answer` (T11 / output-formats.md).
  *
  * TS types are inferred from these schemas; the Anthropic SDK tool `input_schema`
@@ -20,9 +20,6 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 // this shared schema surface. Single source of truth for the full `Format` set
 // (all six scopes) so the team enums below stay in lockstep with the ingest.
 import { FORMATS } from "@/data/formats";
-// Pure, client-safe (no @pkmn/DB/server imports) — the competitive-ladder axis
-// for T21 get_meta_usage's input enum (kept in lockstep with the meta warehouse).
-import { META_FORMAT_IDS, DEFAULT_META_FORMAT } from "@/data/meta-formats";
 import {
   teamMembersSchema,
   teamWarningSchema,
@@ -177,9 +174,6 @@ export const resolveEntityOutputSchema = z.object({
       score: z.number(),
     }),
   ),
-  /** Champions mode only: the entity missed here but exists in the mainline
-   *  Gen 9 (scarlet-violet) index — surface the cross-scope hint. Additive. */
-  exists_in_standard: z.boolean().optional(),
 });
 
 // ===========================================================================
@@ -265,9 +259,6 @@ export const pokemonProfileSchema = z.object({
 export const notFoundSchema = z.object({
   found: z.literal(false),
   suggestions: z.array(z.string()),
-  /** Champions mode only: the entity missed here but exists in the mainline
-   *  Gen 9 (scarlet-violet) index — surface the cross-scope hint. Additive. */
-  exists_in_standard: z.boolean().optional(),
 });
 
 /** PokeAPI-down miss shape for read-through-cache tools. */
@@ -403,9 +394,6 @@ export const evolutionChainDetailSchema = z.object({
       conditions: z.array(evolutionConditionSchema),
     }),
   ),
-  /** Champions scope only: the species missed the Champions roster, so this is
-   *  the mainline Gen 9 chain — additive, mirrors `exists_in_standard`. */
-  source_format: z.literal("scarlet-violet").optional(),
 });
 
 export const getEvolutionChainOutputSchema = z.union([
@@ -444,76 +432,14 @@ export const getItemOutputSchema = z.union([
 ]);
 
 // ===========================================================================
-// T14 — get_encounters (PokeAPI catch-location / obtain-method data)
-//
-// STANDARD MODE ONLY. The data covers Gen 1 → Sword/Shield + Let's Go (PokeAPI
-// has no encounter records for Scarlet/Violet, Legends: Arceus, or BDSP). Built
-// offline from a committed snapshot (src/ingest/build-encounters.ts) and stored
-// in reference_cache under resource_kind "encounters". See get-encounters.ts.
-// ===========================================================================
-
-export const getEncountersInputSchema = z.object({
-  name: z.string(),
-});
-
-/** One place a species can be obtained within a version-group. */
-export const encounterLocationSchema = z.object({
-  location_display: z.string(),
-  region: z.string().nullable(),
-  /** "walk" | "surf" | "old-rod" | "gift" | "gift-egg" | "npc-trade" | … */
-  method: z.string(),
-  min_level: z.number().int().nullable(),
-  max_level: z.number().int().nullable(),
-  /** Best (max) encounter rate % across the aggregated slots; null if unknown. */
-  chance: z.number().nullable(),
-  /** Meaningful conditions (swarm/season/radar/story); time-of-day is stripped. */
-  conditions: z.array(z.string()),
-});
-
-/** Encounters for one version-group (e.g. Gold/Silver), with its game versions. */
-export const encounterGroupSchema = z.object({
-  version_group: z.string(),
-  generation: z.number().int(),
-  versions: z.array(z.string()),
-  locations: z.array(encounterLocationSchema),
-  // Present ONLY on a gen-scoped turn (mode "gen-5".."gen-8"): true when this
-  // group's generation matches the active scope (B-12 annotate+foreground).
-  // Absent on standard/champions turns — byte-identical to pre-B-12 output.
-  in_active_scope: z.boolean().optional(),
-});
-
-export const encounterDetailSchema = z.object({
-  found: z.literal(true),
-  name: z.string(),
-  encounters: z.array(encounterGroupSchema),
-  // Non-null ONLY when `encounters` is empty: explains that PokeAPI records no
-  // catch data for this species (obtain via evolution/breeding/trade/event, or it
-  // exists only in a PokeAPI-uncovered game — Gen 9 / Legends: Arceus / BDSP).
-  coverage_note: z.string().nullish(),
-  // Set ONLY on a gen-scoped turn (mode "gen-5".."gen-8") when NO encounter
-  // group matches the active generation — every group is still returned, just
-  // none flagged in_active_scope (B-12). Null/absent on standard/champions
-  // turns and whenever at least one group matches.
-  scope_note: z.string().nullish(),
-});
-
-export const getEncountersOutputSchema = z.union([
-  encounterDetailSchema,
-  notFoundSchema,
-  z.object({ error: z.literal("index_unavailable") }),
-  z.object({ error: z.literal("not_available_in_champions") }),
-]);
-
-// ===========================================================================
 // T15 — get_usage_stats (championsbattledata.com live competitive usage)
 //
-// CHAMPIONS MODE ONLY (the mirror of get_encounters' standard-only gate). Fetches
-// live usage — most-used moves/items/abilities/natures/stat-spreads/teammates,
+// Live usage — most-used moves/items/abilities/natures/stat-spreads/teammates,
 // each with a usage % — from championsbattledata.com AT REQUEST TIME (the only
 // network-at-request-time tool; everything else reads the offline @pkmn index).
 // The data is community-maintained, time-varying, and fan-sourced, so answers
-// MUST cite the source + season + `fetched_at` and flag uncertainty. A standard-
-// mode turn short-circuits to `not_available_in_standard`. See
+// MUST cite the source + season + `fetched_at` and flag uncertainty. A
+// non-Champions turn short-circuits to `not_available_in_standard`. See
 // get-usage-stats.tool.ts + src/server/champions-usage/usage-client.ts.
 // ===========================================================================
 
@@ -947,212 +873,6 @@ export type GetLearnsetOutput =
   | { found: false; suggestions: string[] };
 
 // ===========================================================================
-// T18 — run_sql (guarded read-only SQL over Oak's offline warehouse; Oak v2 §5).
-// The model writes its own SQL for aggregations/set-operations the typed tools
-// can't express (natdex==BST, catch-rate vs pre-evo, unique type combos, dual→
-// mono evolutions). Safety is enforced at the DB layer (READ ONLY txn, single
-// statement, statement_timeout, oak_readonly role / deny-list, 200-row cap) —
-// see src/data/sql-sandbox.ts. On any failure the tool returns a structured
-// miss shape carrying the raw Postgres message as a `hint` (the loop's ≤10
-// iterations are the retry mechanism); it never throws in-domain.
-// ===========================================================================
-
-export const runSqlInputSchema = z.object({
-  /** A single read-only SELECT/CTE query against the warehouse. */
-  query: z.string().min(1).max(5000),
-  /** A short natural-language note on what the query is for (audit/log only). */
-  purpose: z
-    .string()
-    .min(1)
-    .max(200)
-    .describe(
-      "User-visible: a short, plain-English reason for the search, written for a non-technical player (it can appear as a progress label). NO table or column names, NO SQL, NO tool names — e.g. 'species whose Dex number equals their base-stat total', not a query description.",
-    ),
-});
-
-/** One returned cell — always coerced to a JSON primitive by the executor. */
-export const runSqlCellSchema = z.union([
-  z.string(),
-  z.number(),
-  z.boolean(),
-  z.null(),
-]);
-
-export const runSqlRowsSchema = z.object({
-  /** Column names, in select order. */
-  columns: z.array(z.string()),
-  /** Result rows (≤200), each a cell array aligned to `columns`. */
-  rows: z.array(z.array(runSqlCellSchema)),
-  /** Number of rows returned (= rows.length; ≤200). */
-  row_count: z.number().int(),
-  /** True when the 200-row cap clipped the result. */
-  truncated: z.boolean(),
-});
-
-export const runSqlErrorSchema = z.object({
-  /** "query_failed" (bad SQL / permission) | "query_timeout" (>3s). */
-  error: z.enum(["query_failed", "query_timeout"]),
-  /** Raw Postgres message (or timeout note) — the model uses it to fix the SQL. */
-  hint: z.string().optional(),
-});
-
-export const runSqlOutputSchema = z.union([
-  runSqlRowsSchema,
-  runSqlErrorSchema,
-]);
-
-// ===========================================================================
-// T19 — search_wiki (hybrid-lexical retrieval over the Fandom prose corpus;
-// Oak v2 §4.2/§5). Answers anime/movie/character/PMD/lore/glitch/trivia
-// questions Oak's structured @pkmn + natdex data can't. Backed by wiki-repo.ts
-// (the sole reader of wiki_page/wiki_chunk), Postgres built-in full-text search
-// (websearch_to_tsquery + ts_rank_cd, ts_headline snippets). NEVER an error:
-// an empty corpus OR no match both return `{ results: [] }` — this tool has no
-// upstream to fail. Results are community-sourced (CC BY-SA) prose excerpts, so
-// the model MUST cite them by URL and treat them as non-authoritative.
-// ===========================================================================
-
-export const searchWikiInputSchema = z.object({
-  /** Natural-language search query (1–300 chars). */
-  query: z.string().min(1).max(300),
-  /** Max results to return (1–8, default 5). */
-  limit: z.number().int().min(1).max(8).optional(),
-});
-
-export const wikiResultSchema = z.object({
-  /** Page title, e.g. "Ash Ketchum". */
-  title: z.string(),
-  /** Section heading the snippet came from. */
-  section: z.string(),
-  /** Highlighted prose excerpt (ts_headline), best-matching fragments. */
-  snippet: z.string(),
-  /** Canonical page URL — cite this. */
-  url: z.string(),
-  /** Epoch ms of the page's last wiki revision; null if unknown. */
-  revised_at: z.number().nullable(),
-});
-
-export const searchWikiOutputSchema = z.object({
-  results: z.array(wikiResultSchema),
-});
-
-// ===========================================================================
-// T21 — get_meta_usage (stored monthly Smogon ladder usage; backlog B-5).
-// A DB read over the offline meta_snapshot/meta_usage warehouse (synced from
-// Smogon's monthly chaos stats via sync:meta) — what a Pokémon runs on a
-// competitive ladder (moves/items/abilities/spreads/teammates/checks), with its
-// usage %, rank, and a short usage/rank trend. v1 covers ONE ladder,
-// "gen9ou" (Smogon OU Gen 9 singles); Pokémon Champions is deliberately NOT a
-// meta_format (its current usage is served live by T15 get_usage_stats). The
-// data is MONTHLY, not live, so answers must cite the ladder + month and flag
-// staleness. Available in ALL scopes — the ladder is an explicit input, so the
-// server-controlled data scope stays uninvolved. See get-meta-usage.tool.ts +
-// src/data/repos/meta-repo.ts + src/data/meta-formats.ts.
-// ===========================================================================
-
-export const getMetaUsageInputSchema = z.object({
-  name: z
-    .string()
-    .min(1)
-    .describe("A Pokémon name or slug, e.g. 'Kingambit' or 'great-tusk'."),
-  meta_format: z
-    .enum(META_FORMAT_IDS)
-    .default(DEFAULT_META_FORMAT)
-    .describe(
-      "The competitive ladder to read usage for. Currently only \"gen9ou\" " +
-        "(Smogon OU, Gen 9 singles) is available.",
-    ),
-  month: z
-    .string()
-    .regex(/^\d{4}-\d{2}$/)
-    .optional()
-    .describe(
-      "The stats month as \"YYYY-MM\". Omit for the latest synced month.",
-    ),
-});
-
-/** One move/item/ability/teammate usage line — `{name, slug, pct}`. */
-export const metaUsageEntrySchema = z.object({
-  name: z.string(),
-  slug: z.string(),
-  pct: z.number(),
-});
-
-/** One EV-spread usage line (`evs` is "HP/Atk/Def/SpA/SpD/Spe"). */
-export const metaSpreadEntrySchema = z.object({
-  nature: z.string(),
-  evs: z.string(),
-  pct: z.number(),
-});
-
-/** One checks-and-counters entry (score + combined KO-or-switch %, sample n). */
-export const metaCounterEntrySchema = z.object({
-  name: z.string(),
-  slug: z.string(),
-  score: z.number(),
-  ko_or_switch_pct: z.number(),
-  n: z.number(),
-});
-
-/** One point of a species' usage/rank trend across synced months. */
-export const metaTrendPointSchema = z.object({
-  month: z.string(),
-  usage_pct: z.number(),
-  rank: z.number().int(),
-});
-
-export const metaUsageDetailSchema = z.object({
-  found: z.literal(true),
-  /** The name/slug the caller asked for (echoed). */
-  name: z.string(),
-  /** The canonical species slug the usage row is keyed by, e.g. "great-tusk". */
-  species: z.string(),
-  /** The display name, e.g. "Great Tusk". */
-  display_name: z.string(),
-  /** The ladder id this usage is from, e.g. "gen9ou". */
-  meta_format: z.enum(META_FORMAT_IDS),
-  /** Full ladder label, e.g. "Smogon OU (Gen 9 singles)". */
-  meta_format_label: z.string(),
-  /** Exact Smogon format id behind the stats URL, e.g. "gen9ou". */
-  smogon_format_id: z.string(),
-  /** The stats month this row covers ("YYYY-MM"). */
-  month: z.string(),
-  /** The usage cutoff (minimum battles a player needed to count). */
-  cutoff: z.number().int(),
-  /** The species' usage rank on the ladder that month (1 = most used). */
-  rank: z.number().int(),
-  /** The species' usage percentage that month, e.g. 46.1. */
-  usage_pct: z.number(),
-  moves: z.array(metaUsageEntrySchema),
-  items: z.array(metaUsageEntrySchema),
-  abilities: z.array(metaUsageEntrySchema),
-  spreads: z.array(metaSpreadEntrySchema),
-  teammates: z.array(metaUsageEntrySchema),
-  counters: z.array(metaCounterEntrySchema),
-  /** Usage/rank trend, ascending by month (oldest first), most-recent ≤6 months. */
-  trend: z.array(metaTrendPointSchema),
-  /** Total battles behind the snapshot; null when the source omitted it. */
-  total_battles: z.number().nullable(),
-  /** The Smogon chaos-stats URL this snapshot was synced from. */
-  source_url: z.string(),
-  /** Static attribution string — always cite Smogon. */
-  attribution: z.string(),
-});
-
-/** No usage data for the requested (or any) month on this ladder. */
-export const metaNoDataSchema = z.object({
-  error: z.literal("no_data"),
-  /** Every synced month for this ladder, most recent first (may be empty). */
-  months_available: z.array(z.string()),
-});
-
-export const getMetaUsageOutputSchema = z.union([
-  metaUsageDetailSchema,
-  notFoundSchema,
-  metaNoDataSchema,
-]);
-
-// ===========================================================================
 // T22 — lookup_box (bulk species + compact learnset; team-from-box Phase 1)
 //
 // One call looks up up to 40 names: get_pokemon profile + ≤16 compact legal
@@ -1194,8 +914,6 @@ export const lookupBoxMissSchema = z.object({
   query: z.string(),
   found: z.literal(false),
   suggestions: z.array(z.string()),
-  /** Champions mode only: the species missed here but exists in mainline Gen 9. */
-  exists_in_standard: z.boolean().optional(),
 });
 
 export const lookupBoxOutputSchema = z.object({
@@ -1236,11 +954,6 @@ export type GetEvolutionChainOutput = z.infer<
 export type GetItemInput = z.infer<typeof getItemInputSchema>;
 export type ItemDetail = z.infer<typeof itemDetailSchema>;
 export type GetItemOutput = z.infer<typeof getItemOutputSchema>;
-export type GetEncountersInput = z.infer<typeof getEncountersInputSchema>;
-export type EncounterLocation = z.infer<typeof encounterLocationSchema>;
-export type EncounterGroup = z.infer<typeof encounterGroupSchema>;
-export type EncounterDetail = z.infer<typeof encounterDetailSchema>;
-export type GetEncountersOutput = z.infer<typeof getEncountersOutputSchema>;
 export type UsageFormat = z.infer<typeof usageFormatSchema>;
 export type GetUsageStatsInput = z.infer<typeof getUsageStatsInputSchema>;
 export type UsageEntry = z.infer<typeof usageEntrySchema>;
@@ -1265,24 +978,6 @@ export type SavedTeam = z.infer<typeof savedTeamSchema>;
 export type TypeName = z.infer<typeof typeNameSchema>;
 export type StatKey = z.infer<typeof statKeySchema>;
 export type EntityKind = z.infer<typeof entityKindSchema>;
-export type RunSqlInput = z.infer<typeof runSqlInputSchema>;
-export type RunSqlCell = z.infer<typeof runSqlCellSchema>;
-export type RunSqlRows = z.infer<typeof runSqlRowsSchema>;
-export type RunSqlError = z.infer<typeof runSqlErrorSchema>;
-export type RunSqlOutput = z.infer<typeof runSqlOutputSchema>;
-
-export type SearchWikiInput = z.infer<typeof searchWikiInputSchema>;
-export type WikiResult = z.infer<typeof wikiResultSchema>;
-export type SearchWikiOutput = z.infer<typeof searchWikiOutputSchema>;
-
-export type GetMetaUsageInput = z.infer<typeof getMetaUsageInputSchema>;
-export type MetaUsageEntry = z.infer<typeof metaUsageEntrySchema>;
-export type MetaSpreadEntry = z.infer<typeof metaSpreadEntrySchema>;
-export type MetaCounterEntry = z.infer<typeof metaCounterEntrySchema>;
-export type MetaTrendPoint = z.infer<typeof metaTrendPointSchema>;
-export type MetaUsageDetail = z.infer<typeof metaUsageDetailSchema>;
-export type MetaNoData = z.infer<typeof metaNoDataSchema>;
-export type GetMetaUsageOutput = z.infer<typeof getMetaUsageOutputSchema>;
 
 export type LookupBoxInput = z.infer<typeof lookupBoxInputSchema>;
 export type CompactMove = z.infer<typeof compactMoveSchema>;
@@ -1346,21 +1041,13 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   get_team: toJsonSchema(getTeamInputSchema),
   // T13 — save a proposed team to the user's Teams on approval.
   save_team: toJsonSchema(saveTeamInputSchema),
-  // T14 — catch-location / obtain-method data (standard mode only).
-  get_encounters: toJsonSchema(getEncountersInputSchema),
-  // T15 — live Champions competitive usage (championsbattledata.com; champions mode only).
+  // T15 — live Champions competitive usage (championsbattledata.com).
   get_usage_stats: toJsonSchema(getUsageStatsInputSchema),
   // T16 — the user's saved teams for the turn's format (the by-name pick-list).
   list_teams: toJsonSchema(listTeamsInputSchema),
   // T17 — every legal move a form can learn in the turn's format (team legality).
   get_learnset: toJsonSchema(getLearnsetInputSchema),
-  // T18 — guarded read-only SQL over Oak's offline warehouse (aggregations).
-  run_sql: toJsonSchema(runSqlInputSchema),
-  // T19 — full-text retrieval over the self-built Fandom prose corpus (lore/anime).
-  search_wiki: toJsonSchema(searchWikiInputSchema),
-  // T21 — stored monthly Smogon ladder usage (all scopes; ladder is explicit input).
-  get_meta_usage: toJsonSchema(getMetaUsageInputSchema),
-  // T22 — bulk species + compact learnset for box-build (appended after T21).
+  // T22 — bulk species + compact learnset for box-build (last).
   lookup_box: toJsonSchema(lookupBoxInputSchema),
 };
 
@@ -1368,7 +1055,7 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
 export const oakAnswerJsonSchema: JsonSchema =
   toolInputJsonSchemas.submit_answer;
 
-/** Canonical tool name list (T1..T22), in order. T1–T21 order is unchanged. */
+/** Canonical tool name list — the 17 remaining Champions tools (ADR-2). */
 export const TOOL_NAMES = [
   "resolve_entity",
   "query_pokedex",
@@ -1383,13 +1070,9 @@ export const TOOL_NAMES = [
   "submit_answer",
   "get_team",
   "save_team",
-  "get_encounters",
   "get_usage_stats",
   "list_teams",
   "get_learnset",
-  "run_sql",
-  "search_wiki",
-  "get_meta_usage",
   "lookup_box",
 ] as const;
 
