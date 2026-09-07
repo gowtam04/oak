@@ -18,6 +18,8 @@ export interface SearchMatch {
   slug: string;
   display_name: string;
   kind: EntityKind;
+  /** Present on pokemon matches that resolved to a `pokemon` row. */
+  sprite_url?: string;
 }
 
 /** Best-effort narrowing of one match from the JSON body; null if malformed. */
@@ -31,11 +33,15 @@ function toMatch(value: unknown): SearchMatch | null {
   ) {
     return null;
   }
-  return {
+  const match: SearchMatch = {
     slug: m.slug,
     display_name: m.display_name,
     kind: m.kind as EntityKind,
   };
+  if (typeof m.sprite_url === "string" && m.sprite_url.length > 0) {
+    match.sprite_url = m.sprite_url;
+  }
+  return match;
 }
 
 /**

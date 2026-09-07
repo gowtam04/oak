@@ -168,4 +168,31 @@ describe("EntityPicker", () => {
       "https://oak.gowtam.ai/api/media/sprite/charizard-megax",
     );
   });
+
+  it("prefers a server sprite_url on a suggestion thumbnail", async () => {
+    search.searchEntities.mockResolvedValue([
+      {
+        slug: "garchomp",
+        display_name: "Garchomp",
+        kind: "pokemon",
+        sprite_url: "https://img.example/sprite/445.png",
+      },
+    ]);
+    render(
+      <EntityPicker
+        kind="pokemon"
+        format="scarlet-violet"
+        value=""
+        onChange={vi.fn()}
+        testid="member-0-species"
+        withSprite
+      />,
+    );
+    fireEvent.focus(screen.getByTestId("member-0-species"));
+    await screen.findByText("Garchomp");
+    const thumb = document.querySelector(".entity-picker__thumb") as HTMLImageElement;
+    expect(thumb.getAttribute("src")).toBe(
+      "https://img.example/sprite/445.png",
+    );
+  });
 });

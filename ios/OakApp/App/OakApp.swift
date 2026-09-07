@@ -13,6 +13,13 @@ struct OakApp: App {
   private let services: ServiceContainer
 
   init() {
+    // Dex list + other sprite traffic; media responses are
+    // `Cache-Control: public, max-age=604800, immutable`.
+    URLCache.shared = URLCache(
+      memoryCapacity: 16 * 1024 * 1024,
+      diskCapacity: 80 * 1024 * 1024,
+      directory: nil
+    )
     // Paint the nav/tab bars onto Oak's canvas paper (not Apple's system
     // material) before the first frame renders.
     OakChrome.applyBarAppearance()

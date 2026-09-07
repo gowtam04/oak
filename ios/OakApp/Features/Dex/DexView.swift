@@ -125,7 +125,16 @@ struct DexView: View {
             Button {
               path.append(DexEntityRoute(kind: match.kind, query: match.slug))
             } label: {
-              HStack {
+              HStack(spacing: Theme.Spacing.sm) {
+                if match.kind == .pokemon {
+                  SpriteImage(
+                    urlString: match.spriteUrl,
+                    name: match.displayName,
+                    size: 36,
+                    animated: false,
+                    decorative: true
+                  )
+                }
                 Text(match.displayName)
                   .font(Theme.body(.body))
                   .foregroundStyle(Theme.textPrimary)

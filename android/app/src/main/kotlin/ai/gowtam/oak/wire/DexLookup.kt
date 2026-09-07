@@ -23,6 +23,8 @@ data class SearchMatch(
     val slug: String,
     @SerialName("display_name") val displayName: String,
     val kind: EntityKind,
+    /** Additive, pokemon-only, omitted when unknown. */
+    @SerialName("sprite_url") val spriteUrl: String? = null,
 )
 
 /**

@@ -79,11 +79,16 @@ describe("GET /api/search", () => {
     const res = await route.GET(req({ kind: "pokemon", q: "", format: SV }));
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      matches: { slug: string; display_name: string; kind: string }[];
+      matches: {
+        slug: string;
+        display_name: string;
+        kind: string;
+        sprite_url?: string;
+      }[];
     };
     // Blank browse returns the FULL kind (Dex tab / picker focus) — not a
     // partial window that forces typing to reach the rest of the index.
-    const { SEARCHABLE_NAMES_SEED } = await import(
+    const { SEARCHABLE_NAMES_SEED, POKEMON_SEED } = await import(
       "../../../../test/fixtures/tools-fixture"
     );
     const expectedPokemon = SEARCHABLE_NAMES_SEED.filter(
@@ -98,6 +103,15 @@ describe("GET /api/search", () => {
     for (const p of expectedPokemon) {
       expect(slugs.has(p.slug)).toBe(true);
     }
+    const spriteById = new Map(POKEMON_SEED.map((p) => [p.id, p.sprite_url]));
+    for (const m of body.matches) {
+      const url = spriteById.get(m.slug);
+      if (url) {
+        expect(m.sprite_url).toBe(url);
+      } else {
+        expect(m).not.toHaveProperty("sprite_url");
+      }
+    }
   });
 
   it("returns ranked, slug-bearing matches for a partial name", async () => {
@@ -111,6 +125,7 @@ describe("GET /api/search", () => {
       slug: "garchomp",
       display_name: "Garchomp",
       kind: "pokemon",
+      sprite_url: "https://img.example/sprite/445.png",
     });
   });
 
@@ -122,6 +137,7 @@ describe("GET /api/search", () => {
     };
     expect(body.matches.every((m) => m.kind === "move")).toBe(true);
     expect(body.matches.some((m) => m.slug === "earthquake")).toBe(true);
+    expect(body.matches.every((m) => !("sprite_url" in m))).toBe(true);
   });
 
   it("rate-limits a burst past PUBLIC_READ_CONFIG with 429 + Retry-After (EDGE-02)", async () => {
