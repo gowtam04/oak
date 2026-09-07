@@ -5,30 +5,36 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Exercises [ExamplePrompts]: the pool has no duplicate entries, and [ExamplePrompts.pick]
- * samples distinct members of the pool without replacement, clamping to the pool size when
- * asked for more than it holds. Also covers filed starters (Signal empty chat).
+ * Exercises [ExamplePrompts]: the generated pool has no duplicate prompts,
+ * covers all four categories, and [ExamplePrompts.pickFiled] samples one
+ * starter per category in Battle → Dex → Rules → Meta order.
  */
 class ExamplePromptsTest {
 
     @Test
-    fun `pool has no duplicate entries`() {
-        assertEquals(ExamplePrompts.pool.size, ExamplePrompts.pool.toSet().size)
+    fun `filedPool has no duplicate prompts`() {
+        val prompts = ExamplePrompts.filedPool.map { it.prompt }
+        assertEquals(prompts.size, prompts.toSet().size)
     }
 
     @Test
-    fun `pick returns the requested count of distinct entries all drawn from the pool`() {
-        val picked = ExamplePrompts.pick(4)
-        assertEquals(4, picked.size)
-        assertEquals(4, picked.toSet().size)
-        assertTrue(picked.all { it in ExamplePrompts.pool })
+    fun `filedPool is a large discovery set`() {
+        assertTrue(ExamplePrompts.filedPool.size >= 200)
+        for (category in ExamplePrompts.Category.entries) {
+            assertTrue(ExamplePrompts.filedPool.count { it.category == category } >= 50)
+        }
     }
 
     @Test
-    fun `pick clamps to the pool size when asked for more than it holds`() {
-        val picked = ExamplePrompts.pick(ExamplePrompts.pool.size + 100)
-        assertEquals(ExamplePrompts.pool.size, picked.size)
-        assertEquals(ExamplePrompts.pool.toSet(), picked.toSet())
+    fun `filedPool covers all four categories`() {
+        val categories = ExamplePrompts.filedPool.map { it.category }.toSet()
+        assertEquals(ExamplePrompts.Category.entries.toSet(), categories)
+    }
+
+    @Test
+    fun `filedPool entries have type dots`() {
+        assertTrue(ExamplePrompts.filedPool.all { it.typeDot.isNotBlank() })
+        assertTrue(ExamplePrompts.filedPool.all { it.prompt.isNotBlank() })
     }
 
     @Test
@@ -47,11 +53,5 @@ class ExamplePromptsTest {
         assertTrue(filed.all { it.prompt.isNotBlank() })
         assertTrue(filed.all { it.typeDot.isNotBlank() })
         assertTrue(filed.all { starter -> starter in ExamplePrompts.filedPool })
-    }
-
-    @Test
-    fun `filedPool covers all four categories`() {
-        val categories = ExamplePrompts.filedPool.map { it.category }.toSet()
-        assertEquals(ExamplePrompts.Category.entries.toSet(), categories)
     }
 }

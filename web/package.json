@@ -20,6 +20,7 @@
     "db:migrate": "tsx src/data/migrate.ts",
     "ingest": "tsx src/ingest/run.ts",
     "sync:meta": "tsx src/ingest/sync-meta.ts",
+    "sync:starters": "tsx scripts/sync-example-prompts.ts",
     "fetch:encounters": "tsx scripts/fetch-pokeapi-encounters.ts",
     "fetch:natdex": "tsx scripts/fetch-pokeapi-natdex.ts",
     "fetch:wiki": "tsx scripts/fetch-fandom-wiki.ts",

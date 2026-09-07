@@ -1,15 +1,12 @@
 package ai.gowtam.oak.features.chat
 
 /**
+ * GENERATED FILE — do not edit.
+ * Source: web/src/lib/example-prompts.ts
+ * Regenerate: cd web && npm run sync:starters
+ *
  * Starter prompts for the fresh-thread empty state ([EmptyState]).
- *
- * Signal empty chat (`docs/design/signal.md` §6.1) shows **filed starters** —
- * four full-width category rows (Battle / Dex / Rules / Meta). [pickFiled]
- * returns one prompt per category.
- *
- * The flat [pool] remains the full curated set (synced with
- * `web/src/lib/example-prompts.ts` / `ios/OakApp/Features/Chat/ExamplePrompts.swift`)
- * for sampling and tests.
+ * [pickFiled] returns one prompt per category (Battle → Dex → Rules → Meta).
  */
 object ExamplePrompts {
 
@@ -22,151 +19,277 @@ object ExamplePrompts {
     }
 
     /**
-     * One filed starter: mono category label, type-dot (Pokémon type slug for
-     * [ai.gowtam.oak.ui.OakType.color]), and the prompt text sent on tap.
+     * One filed starter: mono category label, type-dot (Pokémon type slug),
+     * and the prompt text sent on tap.
      */
     data class FiledStarter(
         val category: Category,
-        /** Type slug for the colored dot (e.g. `"dragon"`); unknown falls back to Normal. */
+        /** Type slug for the colored dot (e.g. `"dragon"`). */
         val typeDot: String,
         val prompt: String,
     )
 
-    /**
-     * Curated filed-starter pool, grouped by [Category]. [pickFiled] samples one
-     * from each category so the empty desk always shows Battle/Dex/Rules/Meta.
-     * Type-dot defaults match soul.md (Battle dragon/fighting, Dex ground/normal,
-     * Rules ghost/dark, Meta steel/water).
-     */
+    /** Canonical filed-starter pool, generated from web `STARTER_ENTRIES`. */
     val filedPool: List<FiledStarter> = listOf(
-        // Battle — competitive / nature / damage
         FiledStarter(Category.Battle, "dragon", "What's Garchomp's best nature for Speed?"),
         FiledStarter(Category.Battle, "fighting", "Can Garchomp OHKO Gholdengo with Earthquake?"),
-        FiledStarter(Category.Battle, "dragon", "Garchomp's Speed at level 50 with max Speed and Jolly"),
-        FiledStarter(Category.Battle, "fire", "Build me a rain team"),
-        FiledStarter(Category.Battle, "water", "Best Stat Point spread for Incineroar in Champions"),
-        // Dex — species / typing / immunity lists
+        FiledStarter(Category.Battle, "fire", "Garchomp's Speed at level 50 with max Speed and Jolly"),
+        FiledStarter(Category.Battle, "water", "Build me a rain team"),
+        FiledStarter(Category.Battle, "psychic", "Build me a Trick Room team"),
+        FiledStarter(Category.Battle, "fighting", "How does my team look?"),
+        FiledStarter(Category.Battle, "water", "Build me a Champions team around Mega Swampert"),
+        FiledStarter(Category.Battle, "dark", "Best Stat Point spread for Incineroar in Champions"),
+        FiledStarter(Category.Battle, "dragon", "Was Excadrill good in Gen 5?"),
+        FiledStarter(Category.Battle, "steel", "Best Steel types in Gen 7?"),
+        FiledStarter(Category.Battle, "fire", "Damage from a 120 BP STAB super-effective hit vs 95 Defense"),
+        FiledStarter(Category.Battle, "water", "How much HP does a fully invested Blissey have?"),
+        FiledStarter(Category.Battle, "dragon", "What's strong against Dragapult?"),
+        FiledStarter(Category.Battle, "fairy", "Best counters to Fairy types"),
+        FiledStarter(Category.Battle, "water", "What beats Water types?"),
+        FiledStarter(Category.Battle, "steel", "What is Gholdengo weak to?"),
+        FiledStarter(Category.Battle, "dragon", "Can Dragapult outspeed Flutter Mane with a Choice Scarf?"),
+        FiledStarter(Category.Battle, "dark", "What's the best nature for Kingambit?"),
+        FiledStarter(Category.Battle, "ground", "Does Choice Band Garchomp OHKO Toxapex with Earthquake?"),
+        FiledStarter(Category.Battle, "fire", "Build me a sun team"),
+        FiledStarter(Category.Battle, "ground", "Build me a sand team"),
+        FiledStarter(Category.Battle, "ice", "Build me a snow team"),
+        FiledStarter(Category.Battle, "normal", "How do I build a team from the Pokémon I own?"),
+        FiledStarter(Category.Battle, "fairy", "Best Stat Point spread for Flutter Mane in Champions"),
+        FiledStarter(Category.Battle, "dragon", "Best Stat Point spread for Dragonite in Champions"),
+        FiledStarter(Category.Battle, "dragon", "Was Garchomp good in Gen 4?"),
+        FiledStarter(Category.Battle, "ground", "Was Landorus-Therian good in Gen 5?"),
+        FiledStarter(Category.Battle, "ghost", "Was Mimikyu good in Gen 7?"),
+        FiledStarter(Category.Battle, "dragon", "Was Dragapult good in Gen 8?"),
+        FiledStarter(Category.Battle, "dragon", "How much Speed does Jolly Dragapult have at level 50?"),
+        FiledStarter(Category.Battle, "poison", "What's a bulky HP investment for Toxapex?"),
+        FiledStarter(Category.Battle, "fire", "Can Heatran live a Close Combat from Great Tusk?"),
+        FiledStarter(Category.Battle, "fighting", "What nature should I run on Iron Hands?"),
+        FiledStarter(Category.Battle, "dark", "Build me a hyper offense team"),
+        FiledStarter(Category.Battle, "steel", "Build me a bulky offense team"),
+        FiledStarter(Category.Battle, "water", "Build me a team around Pelipper"),
+        FiledStarter(Category.Battle, "fire", "Build me a team around Torkoal"),
+        FiledStarter(Category.Battle, "water", "How does my rain team look?"),
+        FiledStarter(Category.Battle, "dark", "What beats Kingambit?"),
+        FiledStarter(Category.Battle, "fairy", "What's strong against Flutter Mane?"),
+        FiledStarter(Category.Battle, "ground", "Best counters to Great Tusk"),
+        FiledStarter(Category.Battle, "water", "Can Rapid Strike Urshifu OHKO Incineroar?"),
+        FiledStarter(Category.Battle, "steel", "Does Gholdengo outspeed Amoonguss?"),
+        FiledStarter(Category.Battle, "rock", "How much damage does Salt Cure do to Steel types?"),
+        FiledStarter(Category.Battle, "dragon", "Can a +1 Dragonite Extreme Speed OHKO Flutter Mane?"),
+        FiledStarter(Category.Battle, "dark", "What's the Speed tier for Timid Chi-Yu?"),
+        FiledStarter(Category.Battle, "flying", "Best EV spread for Corviknight in OU"),
+        FiledStarter(Category.Battle, "fire", "Should I run Jolly or Adamant on Mega Charizard X?"),
+        FiledStarter(Category.Battle, "fighting", "Build me a Champions team around Mega Lucario"),
+        FiledStarter(Category.Battle, "grass", "Best Stat Point spread for Rillaboom in Champions"),
+        FiledStarter(Category.Battle, "steel", "Was Aegislash good in Gen 6?"),
+        FiledStarter(Category.Battle, "electric", "Can Pikachu OHKO a 4x weak target with Thunderbolt?"),
+        FiledStarter(Category.Battle, "poison", "What's the best nature for Galarian Slowking?"),
+        FiledStarter(Category.Battle, "grass", "How much HP does Ferrothorn have with max HP EVs?"),
+        FiledStarter(Category.Battle, "flying", "Does Tailwind let my team outspeed Dragapult?"),
+        FiledStarter(Category.Battle, "psychic", "Can Trick Room let Amoonguss move before Flutter Mane?"),
+        FiledStarter(Category.Battle, "ice", "What beats Ice types in Champions?"),
+        FiledStarter(Category.Battle, "dark", "Best counters to Dark types"),
+        FiledStarter(Category.Battle, "bug", "Was Volcarona good in Gen 5?"),
+        FiledStarter(Category.Battle, "bug", "Does Technician Scizor outdamage Choice Band?"),
+        FiledStarter(Category.Battle, "water", "How much Attack does Huge Power Azumarill have?"),
+        FiledStarter(Category.Battle, "fire", "Can Tera Fire Chi-Yu OHKO Assault Vest Toxapex?"),
+        FiledStarter(Category.Battle, "steel", "What's a good spread for Gholdengo in Gen 9 OU?"),
+        FiledStarter(Category.Battle, "psychic", "Build me a doubles team around Indeedee"),
+        FiledStarter(Category.Battle, "rock", "Was Tyranitar good in Gen 2?"),
+        FiledStarter(Category.Battle, "ghost", "Should I Mega evolve Gengar or keep it base?"),
         FiledStarter(Category.Dex, "ground", "Which Pokémon are immune to Ground?"),
-        FiledStarter(Category.Dex, "normal", "Show me Garchomp"),
+        FiledStarter(Category.Dex, "dragon", "Show me Garchomp"),
+        FiledStarter(Category.Dex, "dragon", "What are Dragapult's abilities?"),
+        FiledStarter(Category.Dex, "fighting", "Tell me about Iron Valiant"),
         FiledStarter(Category.Dex, "steel", "Gholdengo's stats and typing"),
-        FiledStarter(Category.Dex, "ground", "What is Gholdengo weak to?"),
-        FiledStarter(Category.Dex, "fairy", "Best counters to Fairy types"),
-        // Rules — mechanics / abilities / gen rules
+        FiledStarter(Category.Dex, "normal", "How does Eevee evolve?"),
+        FiledStarter(Category.Dex, "normal", "What forms does Tauros have?"),
+        FiledStarter(Category.Dex, "grass", "How do I evolve Applin?"),
+        FiledStarter(Category.Dex, "flying", "Is Ground super effective against Flying?"),
+        FiledStarter(Category.Dex, "ghost", "Pokémon that learn Trick Room and Will-O-Wisp"),
+        FiledStarter(Category.Dex, "ground", "What can learn Spikes?"),
+        FiledStarter(Category.Dex, "rock", "Who gets both Stealth Rock and Recover?"),
+        FiledStarter(Category.Dex, "dark", "Pokémon that learn Knock Off and Roost"),
+        FiledStarter(Category.Dex, "fire", "Fastest Fire types"),
+        FiledStarter(Category.Dex, "fire", "Fire types that learn Will-O-Wisp with Flash Fire"),
+        FiledStarter(Category.Dex, "dragon", "Dragon types with base Speed over 100"),
+        FiledStarter(Category.Dex, "water", "Bulkiest Water types"),
+        FiledStarter(Category.Dex, "steel", "Steel types that can set Stealth Rock"),
+        FiledStarter(Category.Dex, "electric", "Fastest Pokémon in the game"),
+        FiledStarter(Category.Dex, "normal", "Highest base stat total"),
+        FiledStarter(Category.Dex, "fighting", "Pokémon with base Attack over 130"),
+        FiledStarter(Category.Dex, "ghost", "How do I evolve Gimmighoul?"),
+        FiledStarter(Category.Dex, "steel", "Did Garchomp get Scale Shot in Gen 8?"),
+        FiledStarter(Category.Dex, "ghost", "What could Aegislash learn in Gen 6?"),
+        FiledStarter(Category.Dex, "electric", "What's the average base Speed of Electric types?"),
+        FiledStarter(Category.Dex, "normal", "Which type combination has the most Pokémon?"),
+        FiledStarter(Category.Dex, "flying", "Name all the Route 1 birds"),
+        FiledStarter(Category.Dex, "poison", "How many Pokémon are purple?"),
+        FiledStarter(Category.Dex, "normal", "Which Pokémon are exclusive to Violet?"),
+        FiledStarter(Category.Dex, "grass", "Show me Chikorita"),
+        FiledStarter(Category.Dex, "electric", "What are Rotom's forms and their types?"),
+        FiledStarter(Category.Dex, "bug", "How does Wurmple evolve?"),
+        FiledStarter(Category.Dex, "electric", "How do I evolve Pawmo?"),
+        FiledStarter(Category.Dex, "dark", "What's Kingambit's typing?"),
+        FiledStarter(Category.Dex, "ground", "Tell me about Great Tusk"),
+        FiledStarter(Category.Dex, "water", "Combined weight of Wailord and Skitty"),
+        FiledStarter(Category.Dex, "normal", "Which Pokémon has the same National Dex number as its BST?"),
+        FiledStarter(Category.Dex, "normal", "Which Pokémon go from dual type to monotype on evolution?"),
+        FiledStarter(Category.Dex, "normal", "Which Pokémon have a higher catch rate than their pre-evolution?"),
+        FiledStarter(Category.Dex, "normal", "Which Pokémon are based on cats?"),
+        FiledStarter(Category.Dex, "electric", "How many signature moves does Pikachu have?"),
+        FiledStarter(Category.Dex, "ice", "Is there a Fire/Ice type combination?"),
+        FiledStarter(Category.Dex, "normal", "How many Pokémon are in the National Dex?"),
+        FiledStarter(Category.Dex, "normal", "How many unique type combinations are missing?"),
+        FiledStarter(Category.Dex, "electric", "Fastest Electric types"),
+        FiledStarter(Category.Dex, "water", "Heaviest Pokémon"),
+        FiledStarter(Category.Dex, "steel", "Lightest Pokémon"),
+        FiledStarter(Category.Dex, "normal", "Highest base HP"),
+        FiledStarter(Category.Dex, "electric", "Who learns both U-turn and Volt Switch?"),
+        FiledStarter(Category.Dex, "flying", "What can learn Defog?"),
+        FiledStarter(Category.Dex, "steel", "Steel types that learn Recover"),
+        FiledStarter(Category.Dex, "ghost", "Ghost types with Levitate"),
+        FiledStarter(Category.Dex, "bug", "Bug types with base Attack over 120"),
+        FiledStarter(Category.Dex, "ice", "Ice types that can set Aurora Veil"),
+        FiledStarter(Category.Dex, "fairy", "Fairy types with Magic Bounce"),
+        FiledStarter(Category.Dex, "poison", "How do I evolve Hisuian Qwilfish?"),
+        FiledStarter(Category.Dex, "fighting", "What's the average base Attack of Fighting types?"),
+        FiledStarter(Category.Dex, "dragon", "Dragon types immune to Electric"),
+        FiledStarter(Category.Dex, "dark", "Who gets both Rapid Spin and Knock Off?"),
+        FiledStarter(Category.Dex, "water", "Tell me about Walking Wake"),
+        FiledStarter(Category.Dex, "grass", "What types does Ogerpon have?"),
+        FiledStarter(Category.Dex, "psychic", "How does Ralts evolve?"),
+        FiledStarter(Category.Dex, "rock", "Show me Tyranitar"),
+        FiledStarter(Category.Dex, "fighting", "Which Pokémon are exclusive to Scarlet?"),
         FiledStarter(Category.Rules, "ghost", "Does Prankster work on Dark types?"),
-        FiledStarter(Category.Rules, "dark", "Does Fake Out work on Farigiraf?"),
-        FiledStarter(Category.Rules, "ghost", "How does Fake Out's priority work?"),
-        FiledStarter(Category.Rules, "dark", "Does Earthquake hit everyone in doubles?"),
-        FiledStarter(Category.Rules, "ghost", "How does the Physical/Special split work?"),
-        // Meta — usage / role / format niche
+        FiledStarter(Category.Rules, "normal", "Does Fake Out work on Farigiraf?"),
+        FiledStarter(Category.Rules, "ground", "Does Earthquake hit everyone in doubles?"),
+        FiledStarter(Category.Rules, "normal", "How does Fake Out's priority work?"),
+        FiledStarter(Category.Rules, "normal", "What does Leftovers do?"),
+        FiledStarter(Category.Rules, "psychic", "What does Armor Tail do?"),
+        FiledStarter(Category.Rules, "grass", "What does Protosynthesis do?"),
+        FiledStarter(Category.Rules, "normal", "What item does Snorlax hold in the wild?"),
+        FiledStarter(Category.Rules, "electric", "Can Levitate dodge Earthquake?"),
+        FiledStarter(Category.Rules, "dragon", "Is Dragapult legal in Champions?"),
+        FiledStarter(Category.Rules, "normal", "How does the Physical/Special split work?"),
+        FiledStarter(Category.Rules, "normal", "How does the MissingNo glitch work?"),
+        FiledStarter(Category.Rules, "psychic", "What is the Mew glitch in Red and Blue?"),
+        FiledStarter(Category.Rules, "normal", "Do encounter rates change by time of day?"),
+        FiledStarter(Category.Rules, "flying", "Where do I get HM Fly in HeartGold?"),
+        FiledStarter(Category.Rules, "water", "What's the best strategy to catch Feebas in Gen 3?"),
+        FiledStarter(Category.Rules, "normal", "How do I get the Shiny Charm in Scarlet and Violet?"),
+        FiledStarter(Category.Rules, "normal", "How does recruiting work in Pokémon Mystery Dungeon?"),
+        FiledStarter(Category.Rules, "grass", "What starters can you play as in Mystery Dungeon: Explorers of Sky?"),
+        FiledStarter(Category.Rules, "dark", "How does Intimidate work in doubles?"),
+        FiledStarter(Category.Rules, "ground", "Does Mold Breaker ignore Levitate?"),
+        FiledStarter(Category.Rules, "steel", "What does Good as Gold do?"),
+        FiledStarter(Category.Rules, "dark", "How does Supreme Overlord work?"),
+        FiledStarter(Category.Rules, "electric", "What does Booster Energy do?"),
+        FiledStarter(Category.Rules, "normal", "How does Terastallization work?"),
+        FiledStarter(Category.Rules, "fire", "How do Z-Moves work in Gen 7?"),
+        FiledStarter(Category.Rules, "dragon", "How does Dynamax work in Sword and Shield?"),
+        FiledStarter(Category.Rules, "fighting", "How does Mega Evolution work in Gen 6?"),
+        FiledStarter(Category.Rules, "psychic", "Does Magic Bounce reflect Stealth Rock?"),
+        FiledStarter(Category.Rules, "bug", "Can Rage Powder redirect a spread move?"),
+        FiledStarter(Category.Rules, "psychic", "How does Psychic Terrain stop priority?"),
+        FiledStarter(Category.Rules, "normal", "What does Choice Scarf do?"),
+        FiledStarter(Category.Rules, "rock", "How does Salt Cure's residual damage work?"),
+        FiledStarter(Category.Rules, "poison", "Does Sheer Force remove Life Orb recoil?"),
+        FiledStarter(Category.Rules, "poison", "How does Neutralizing Gas work?"),
+        FiledStarter(Category.Rules, "water", "Can Unaware ignore Calm Mind boosts?"),
+        FiledStarter(Category.Rules, "rock", "What does Loaded Dice do?"),
+        FiledStarter(Category.Rules, "normal", "How does Parental Bond work?"),
+        FiledStarter(Category.Rules, "fire", "Does Flash Fire absorb Will-O-Wisp?"),
+        FiledStarter(Category.Rules, "fire", "Are Mega Evolutions legal in Champions?"),
+        FiledStarter(Category.Rules, "fairy", "Is Zacian legal in Champions?"),
+        FiledStarter(Category.Rules, "dragon", "Is Mega Rayquaza legal in Champions?"),
+        FiledStarter(Category.Rules, "normal", "How do IVs work in Gen 3?"),
+        FiledStarter(Category.Rules, "psychic", "Did Gen 1 have a Special Defense stat?"),
+        FiledStarter(Category.Rules, "fighting", "How do Stat Points work in Champions?"),
+        FiledStarter(Category.Rules, "flying", "How does the Old Man glitch work in Red?"),
+        FiledStarter(Category.Rules, "normal", "What's the cloning glitch in Gold and Silver?"),
+        FiledStarter(Category.Rules, "grass", "How does the Pomeg glitch work in Emerald?"),
+        FiledStarter(Category.Rules, "ghost", "What is tweaking in Diamond and Pearl?"),
+        FiledStarter(Category.Rules, "steel", "How does the Coin Case glitch work in Gen 2?"),
+        FiledStarter(Category.Rules, "grass", "What's the Berry glitch in Ruby and Sapphire?"),
+        FiledStarter(Category.Rules, "water", "Where do I get HM Surf in Pokémon Red?"),
+        FiledStarter(Category.Rules, "fighting", "Where do I get HM Strength in Emerald?"),
+        FiledStarter(Category.Rules, "water", "Where do I get Waterfall in Platinum?"),
+        FiledStarter(Category.Rules, "grass", "Where do I get HM Cut in Gold?"),
+        FiledStarter(Category.Rules, "electric", "How do I catch a roaming Raikou in Gen 2?"),
+        FiledStarter(Category.Rules, "normal", "How does the Safari Zone work in Fuchsia?"),
+        FiledStarter(Category.Rules, "fairy", "How do Friend Safaris work in X and Y?"),
+        FiledStarter(Category.Rules, "water", "How does SOS chaining work in Sun and Moon?"),
+        FiledStarter(Category.Rules, "ice", "How do I catch Articuno in Yellow?"),
+        FiledStarter(Category.Rules, "dark", "How do Hidden Grottos work in Black 2?"),
+        FiledStarter(Category.Rules, "dragon", "How do I recruit legendaries in Rescue Team?"),
+        FiledStarter(Category.Rules, "fairy", "What does a Friend Bow do in Mystery Dungeon?"),
+        FiledStarter(Category.Rules, "psychic", "How do IQ skills work in Explorers of Sky?"),
         FiledStarter(Category.Meta, "steel", "What is Gholdengo's role in Champions?"),
         FiledStarter(Category.Meta, "water", "Who has the highest usage in Champions right now?"),
-        FiledStarter(Category.Meta, "steel", "Is Dragapult legal in Champions?"),
-        FiledStarter(Category.Meta, "dragon", "Was Excadrill good in Gen 5?"),
-        FiledStarter(Category.Meta, "water", "Build me a Champions team around Mega Swampert"),
+        FiledStarter(Category.Meta, "fire", "How many gym leaders are Fire type?"),
+        FiledStarter(Category.Meta, "normal", "Who leads the guild in Pokémon Mystery Dungeon Explorers?"),
+        FiledStarter(Category.Meta, "normal", "What are the most populous cities in the mainline games?"),
+        FiledStarter(Category.Meta, "dark", "What's Incineroar's usage in Champions right now?"),
+        FiledStarter(Category.Meta, "fire", "Who is the most used Mega in Champions?"),
+        FiledStarter(Category.Meta, "fairy", "What moves is Flutter Mane running in Champions?"),
+        FiledStarter(Category.Meta, "grass", "What's Rillaboom's role in Champions?"),
+        FiledStarter(Category.Meta, "fighting", "How common is Urshifu in Champions?"),
+        FiledStarter(Category.Meta, "dark", "Who partners with Incineroar in Champions?"),
+        FiledStarter(Category.Meta, "ground", "What's Landorus's role in Champions?"),
+        FiledStarter(Category.Meta, "grass", "What's Amoonguss's usage in Champions?"),
+        FiledStarter(Category.Meta, "water", "Most used Water type in Champions"),
+        FiledStarter(Category.Meta, "dragon", "What's Dragonite's role in Champions?"),
+        FiledStarter(Category.Meta, "electric", "Who is the top restricted Pokémon in Champions?"),
+        FiledStarter(Category.Meta, "fairy", "What item does Flutter Mane usually hold in Champions?"),
+        FiledStarter(Category.Meta, "ground", "What's the highest usage in Smogon Gen 9 OU?"),
+        FiledStarter(Category.Meta, "dark", "What does Kingambit run in OU?"),
+        FiledStarter(Category.Meta, "ground", "What's Great Tusk's usage on the Smogon ladder?"),
+        FiledStarter(Category.Meta, "steel", "What items does Gholdengo run in Gen 9 OU?"),
+        FiledStarter(Category.Meta, "dark", "Who are Kingambit's checks in OU?"),
+        FiledStarter(Category.Meta, "fighting", "Common teammates for Great Tusk in OU"),
+        FiledStarter(Category.Meta, "dragon", "What's Dragapult's role in Smogon OU?"),
+        FiledStarter(Category.Meta, "water", "Is Palafin used in Gen 9 OU?"),
+        FiledStarter(Category.Meta, "rock", "Who's the top hazards setter in Gen 9 OU?"),
+        FiledStarter(Category.Meta, "ground", "What EV spread does Great Tusk run in OU?"),
+        FiledStarter(Category.Meta, "ice", "Is Baxcalibur used in Smogon OU?"),
+        FiledStarter(Category.Meta, "steel", "What's the usage trend for Gholdengo in OU?"),
+        FiledStarter(Category.Meta, "poison", "What's Galarian Slowking's role in OU?"),
+        FiledStarter(Category.Meta, "bug", "Is Volcarona used in Gen 9 OU?"),
+        FiledStarter(Category.Meta, "rock", "Who is the first gym leader in Kanto?"),
+        FiledStarter(Category.Meta, "normal", "What type is Whitney's gym in Johto?"),
+        FiledStarter(Category.Meta, "water", "Who is the Water gym leader in Hoenn?"),
+        FiledStarter(Category.Meta, "electric", "What's Volkner's type in Sinnoh?"),
+        FiledStarter(Category.Meta, "dragon", "Who is the Dragon gym leader in Unova?"),
+        FiledStarter(Category.Meta, "fighting", "What type is Korrina's gym in Kalos?"),
+        FiledStarter(Category.Meta, "grass", "Who is the first gym leader in Galar?"),
+        FiledStarter(Category.Meta, "ghost", "Who is Paldea's Ghost gym leader?"),
+        FiledStarter(Category.Meta, "water", "How many gym leaders are Water type?"),
+        FiledStarter(Category.Meta, "ice", "Who is the Ice Elite Four member in Kanto?"),
+        FiledStarter(Category.Meta, "dragon", "Who is the champion in Pokémon Platinum?"),
+        FiledStarter(Category.Meta, "bug", "Who is the champion in Pokémon Black and White?"),
+        FiledStarter(Category.Meta, "ghost", "Who is the Ghost Elite Four in Hoenn?"),
+        FiledStarter(Category.Meta, "electric", "Who is Lt. Surge?"),
+        FiledStarter(Category.Meta, "steel", "Who is the champion in Ruby?"),
+        FiledStarter(Category.Meta, "fairy", "Who is the Fairy gym leader in Galar?"),
+        FiledStarter(Category.Meta, "grass", "What's the starting town in Pokémon Gold?"),
+        FiledStarter(Category.Meta, "rock", "Where is the Pokémon League in Kanto?"),
+        FiledStarter(Category.Meta, "steel", "Where is the Battle Frontier in Emerald?"),
+        FiledStarter(Category.Meta, "electric", "What's the city with the Magnet Train?"),
+        FiledStarter(Category.Meta, "fire", "Where is the Pokémon Mansion in Gen 1?"),
+        FiledStarter(Category.Meta, "grass", "What's the starting town in Scarlet and Violet?"),
+        FiledStarter(Category.Meta, "water", "Where is Treasure Town in Explorers of Sky?"),
+        FiledStarter(Category.Meta, "normal", "Who runs the Kecleon shop in Mystery Dungeon?"),
+        FiledStarter(Category.Meta, "psychic", "What is Temporal Tower in Explorers of Sky?"),
+        FiledStarter(Category.Meta, "poison", "Who is on Team Skull in Explorers of Sky?"),
+        FiledStarter(Category.Meta, "fighting", "Where can I recruit Riolu in Explorers of Sky?"),
+        FiledStarter(Category.Meta, "flying", "Who is the Guild assistant in Explorers of Sky?"),
+        FiledStarter(Category.Meta, "ghost", "Who is Dusknoir in Explorers of Sky?"),
     )
 
     /**
-     * Flat pool spanning all of Oak's capabilities (filters, learnsets, mechanics,
-     * type matchups, stat/damage math, locations, glitches, Mystery Dungeon, …).
-     * Kept in sync with web `STARTER_PROMPTS` / iOS `ExamplePrompts.pool`.
-     */
-    val pool: List<String> = listOf(
-        // Lookups / profiles
-        "Show me Garchomp",
-        "What are Dragapult's abilities?",
-        "Tell me about Iron Valiant",
-        "Gholdengo's stats and typing",
-        // Evolution / forms
-        "How does Eevee evolve?",
-        "What forms does Tauros have?",
-        "How do I evolve Applin?",
-        // Type matchups
-        "What's strong against Dragapult?",
-        "What beats Water types?",
-        "Is Ground super effective against Flying?",
-        "What is Gholdengo weak to?",
-        "Best counters to Fairy types",
-        // Learnset filters
-        "Pokémon that learn Trick Room and Will-O-Wisp",
-        "What can learn Spikes?",
-        "Who gets both Stealth Rock and Recover?",
-        "Pokémon that learn Knock Off and Roost",
-        // Compound team-building filters
-        "Fastest Fire types",
-        "Fire types that learn Will-O-Wisp with Flash Fire",
-        "Dragon types with base Speed over 100",
-        "Bulkiest Water types",
-        "Steel types that can set Stealth Rock",
-        // Superlatives
-        "Fastest Pokémon in the game",
-        "Highest base stat total",
-        "Pokémon with base Attack over 130",
-        // Move mechanics
-        "Does Fake Out work on Farigiraf?",
-        "Does Earthquake hit everyone in doubles?",
-        "Does Prankster work on Dark types?",
-        "How does Fake Out's priority work?",
-        // Ability / item effects
-        "What does Leftovers do?",
-        "What does Armor Tail do?",
-        "What does Protosynthesis do?",
-        "What item does Snorlax hold in the wild?",
-        // Stat math
-        "Garchomp's Speed at level 50 with max Speed and Jolly",
-        "How much HP does a fully invested Blissey have?",
-        // Damage calc
-        "Can Garchomp OHKO Gholdengo with Earthquake?",
-        "Damage from a 120 BP STAB super-effective hit vs 95 Defense",
-        // Conditional inference
-        "Can Levitate dodge Earthquake?",
-        "Which Pokémon are immune to Ground?",
-        // Teams (build, or ask Oak about a saved team by name)
-        "Build me a rain team",
-        "Build me a Trick Room team",
-        "How does my team look?",
-        // Champions
-        "Build me a Champions team around Mega Swampert",
-        "Best Stat Point spread for Incineroar in Champions",
-        "Who has the highest usage in Champions right now?",
-        "Is Dragapult legal in Champions?",
-        // Whole-games (oak-v2): locations, progression, glitches, spin-offs
-        "Where do I get HM Fly in HeartGold?",
-        "What's the best strategy to catch Feebas in Gen 3?",
-        "How many gym leaders are Fire type?",
-        "Who leads the guild in Pokémon Mystery Dungeon Explorers?",
-        "Do encounter rates change by time of day?",
-        "How many Pokémon are purple?",
-        "What are the most populous cities in the mainline games?",
-        "Name all the Route 1 birds",
-        // Generation scopes (gen 5–8 are fully indexed formats)
-        "Was Excadrill good in Gen 5?",
-        "What could Aegislash learn in Gen 6?",
-        "Best Steel types in Gen 7?",
-        "Did Garchomp get Scale Shot in Gen 8?",
-        // In-game progression / version exclusives
-        "Which Pokémon are exclusive to Violet?",
-        "How do I get the Shiny Charm in Scarlet and Violet?",
-        "How do I evolve Gimmighoul?",
-        // Glitches
-        "How does the MissingNo glitch work?",
-        "What is the Mew glitch in Red and Blue?",
-        // Spin-offs
-        "What starters can you play as in Mystery Dungeon: Explorers of Sky?",
-        "How does recruiting work in Pokémon Mystery Dungeon?",
-        // Warehouse aggregations
-        "Which type combination has the most Pokémon?",
-        "What's the average base Speed of Electric types?",
-        // Mechanics history
-        "How does the Physical/Special split work?",
-    )
-
-    /** Sample [count] distinct prompts from [pool] at random (sampling without replacement). */
-    fun pick(count: Int = 4): List<String> = pool.shuffled().take(count)
-
-    /**
-     * One filed starter per category (Battle → Dex → Rules → Meta), each sampled
-     * at random from that category's entries in [filedPool]. Stable category order
-     * so the empty chat always shows the same Battle → Dex → Rules → Meta order.
+     * One filed starter per category (Battle → Dex → Rules → Meta), each
+     * sampled at random from that category's entries in [filedPool].
      */
     fun pickFiled(): List<FiledStarter> =
         Category.entries.map { category ->

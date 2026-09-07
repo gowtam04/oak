@@ -82,19 +82,29 @@ describe("ChatThread — empty-state blank specimen plate", () => {
     render(<ChatThread {...props({ turns: [], status: "idle" })} />);
     const chips = screen.getAllByTestId("chat-empty-example");
     expect(chips).toHaveLength(4);
-    const categories = new Set(["Battle", "Dex", "Rules", "Meta"]);
+    expect(chips.map((chip) => chip.getAttribute("data-category"))).toEqual([
+      "Battle",
+      "Dex",
+      "Rules",
+      "Meta",
+    ]);
     for (const chip of chips) {
       const prompt = chip.getAttribute("data-prompt");
       expect(prompt).toBeTruthy();
       expect(STARTER_PROMPTS).toContain(prompt);
-      expect(categories.has(chip.getAttribute("data-category") ?? "")).toBe(
-        true,
-      );
       expect(chip.querySelector(".starter__cat")).toBeTruthy();
       expect(chip.querySelector(".starter__text")?.textContent).toBe(prompt);
     }
     const shown = chips.map((c) => c.getAttribute("data-prompt"));
     expect(new Set(shown).size).toBe(4);
+  });
+
+  it("sends the starter prompt when a filed row is tapped", () => {
+    const onFollowUp = vi.fn();
+    render(<ChatThread {...props({ turns: [], status: "idle", onFollowUp })} />);
+    const chip = screen.getAllByTestId("chat-empty-example")[0]!;
+    fireEvent.click(chip);
+    expect(onFollowUp).toHaveBeenCalledWith(chip.getAttribute("data-prompt"));
   });
 
   it("shows no empty plate once the conversation has turns", () => {
