@@ -234,13 +234,11 @@ private fun ArtifactActionRow(
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
-                for (format in listOf(viewModel.activeFormat, Format.ScarletViolet, Format.NationalDex, Format.Gen5).distinct()) {
-                    androidx.compose.material3.FilterChip(
-                        selected = compareFormat == format,
-                        onClick = { compareFormat = format },
-                        label = { Text(format.shortLabel) },
-                    )
-                }
+                androidx.compose.material3.FilterChip(
+                    selected = compareFormat == Format.Champions,
+                    onClick = { compareFormat = Format.Champions },
+                    label = { Text(Format.Champions.shortLabel) },
+                )
             }
             Row {
                 androidx.compose.material3.TextButton(

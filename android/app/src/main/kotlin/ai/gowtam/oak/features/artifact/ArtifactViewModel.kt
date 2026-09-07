@@ -69,7 +69,7 @@ class ArtifactViewModel(
      * The active data scope for entity fetches (M-BR-ART-4). Updated by [updateFormat]
      * as the chat's resolved/seeded scope changes turn to turn.
      */
-    private var format: Format = initialFormat
+    private var format: Format = Format.Champions
 
     /**
      * The scope every artifact currently on the stack was fetched under (M-BR-ART-4). A
@@ -101,7 +101,7 @@ class ArtifactViewModel(
         val entryId = UUID.randomUUID().toString()
         _stack.update { it + Artifact(id = entryId, title = query, content = ArtifactContent.Loading) }
         viewModelScope.launch {
-            val result = service.entity(kind, query, format)
+            val result = service.entity(kind, query, Format.Champions)
             resolve(entryId) {
                 when (result) {
                     is EntityArtifact.Ok -> Artifact(
@@ -211,8 +211,8 @@ class ArtifactViewModel(
      * recomposition doesn't spuriously dismiss an open sheet).
      */
     fun updateFormat(newFormat: Format) {
-        if (newFormat == format) return
-        format = newFormat
+        if (format == Format.Champions) return
+        format = Format.Champions
         dismiss()
     }
 
@@ -253,7 +253,7 @@ class ArtifactViewModel(
         return DexHop(
             kind = entity.kind,
             query = entity.resolved.slug,
-            format = entity.format,
+            format = Format.Champions,
         )
     }
 
@@ -262,7 +262,7 @@ class ArtifactViewModel(
         viewModelScope.launch {
             val leftOk = (current?.content as? ArtifactContent.Entity)?.v ?: return@launch
             val leftPokemon = leftOk.data as? ai.gowtam.oak.wire.EntityData.Pokemon ?: return@launch
-            val result = service.entity(EntityKind.POKEMON, query, format)
+            val result = service.entity(EntityKind.POKEMON, query, Format.Champions)
             val ok = (result as? EntityArtifact.Ok)?.v ?: return@launch
             val pokemon = ok.data as? ai.gowtam.oak.wire.EntityData.Pokemon ?: return@launch
             val leftSubject = Subject(

@@ -2,12 +2,14 @@ package ai.gowtam.oak.services
 
 import ai.gowtam.oak.networking.Endpoint
 import ai.gowtam.oak.networking.OakApiClient
+import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.ImportNote
 import ai.gowtam.oak.wire.Team
 import ai.gowtam.oak.wire.TeamAnalysis
 import ai.gowtam.oak.wire.TeamMember
 import ai.gowtam.oak.wire.TeamSummary
+import ai.gowtam.oak.wire.SetTemplateResult
 import ai.gowtam.oak.wire.TeamWarning
 import kotlinx.serialization.Serializable
 
@@ -28,10 +30,11 @@ import kotlinx.serialization.Serializable
  */
 interface TeamService {
     /**
-     * Lists the account's teams, most-recently-edited first (`GET /api/teams?format=`).
-     * [format] filters by data scope (`null` = all).
+     * Lists the account's teams, most-recently-edited first.
+     * `GET /api/teams` — living Champions teams.
+     * `GET /api/teams?archived=1` — archived other-format teams.
      */
-    suspend fun list(format: Format?): List<TeamSummary>
+    suspend fun list(archived: Boolean = false): List<TeamSummary>
 
     /**
      * Loads one full team with its members + computed warnings (`GET /api/teams/{id}`).
@@ -82,6 +85,12 @@ interface TeamService {
      * failure (unbuilt index) rides back as `TeamAnalysis.Unavailable`, never thrown.
      */
     suspend fun analyze(format: Format, members: List<TeamMember>): TeamAnalysis
+
+    /**
+     * Live Champions usage set for one species (`POST /api/teams/set-template`).
+     * Public; in-domain miss is `{ found: false }` — never thrown.
+     */
+    suspend fun setTemplate(species: String): SetTemplateResult
 }
 
 /**
@@ -91,8 +100,8 @@ interface TeamService {
  */
 class LiveTeamService(private val apiClient: OakApiClient) : TeamService {
 
-    override suspend fun list(format: Format?): List<TeamSummary> {
-        val queryItems = format?.let { listOf("format" to it.rawValue) } ?: emptyList()
+    override suspend fun list(archived: Boolean): List<TeamSummary> {
+        val queryItems = if (archived) listOf("archived" to "1") else emptyList()
         val endpoint = Endpoint(
             method = Endpoint.Method.GET,
             path = "/api/teams",
@@ -179,6 +188,22 @@ class LiveTeamService(private val apiClient: OakApiClient) : TeamService {
         )
         return apiClient.send(endpoint, TeamAnalysis.serializer())
     }
+
+    override suspend fun setTemplate(species: String): SetTemplateResult {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.POST,
+            path = "/api/teams/set-template",
+            body = Endpoint.jsonBody(SetTemplateBody.serializer(), SetTemplateBody(species)),
+            requiresAuth = false,
+        )
+        return try {
+            apiClient.send(endpoint, SetTemplateResult.serializer())
+        } catch (_: OakError) {
+            SetTemplateResult(found = false, notes = listOf("Live Champions usage is unavailable."))
+        } catch (_: Exception) {
+            SetTemplateResult(found = false, notes = listOf("Live Champions usage is unavailable."))
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -223,3 +248,6 @@ private data class ImportBody(val format: Format, val paste: String)
 /** `POST /api/teams/analyze` body (`{ format, members }`, members = the full team wire shape). */
 @Serializable
 private data class AnalyzeBody(val format: Format, val members: List<TeamMember>)
+
+@Serializable
+private data class SetTemplateBody(val species: String)

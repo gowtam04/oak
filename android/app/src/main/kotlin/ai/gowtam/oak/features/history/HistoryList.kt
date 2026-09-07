@@ -127,10 +127,6 @@ fun HistoryScreen(
                 // New-chat moved to the floating disc for one-handed reach; the format
                 // filter stays a top-bar affordance and tints accent while a filter is on.
                 actions = {
-                    FilterAction(
-                        current = uiState.formatFilter,
-                        onSelect = { format -> scope.launch { viewModel.setFormatFilter(format) } },
-                    )
                     IconButton(onClick = viewModel::toggleSelecting) {
                         Icon(
                             if (uiState.selecting) Icons.Filled.Close else Icons.Filled.Check,
@@ -149,12 +145,6 @@ fun HistoryScreen(
                 onQueryChange = viewModel::onSearchQueryChange,
                 onSearch = { scope.launch { viewModel.search() } },
             )
-            uiState.formatFilter?.let { active ->
-                ActiveFilterPill(
-                    format = active,
-                    onClear = { scope.launch { viewModel.setFormatFilter(null) } },
-                )
-            }
             OrganizeStrip(
                 folders = uiState.folders,
                 folderFilter = uiState.folderFilter,
@@ -247,85 +237,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch
     )
 }
 
-/**
- * The top-bar filter affordance (iOS parity: iterates the full known-scope set, same as
- * the Teams list's filter — this used to be a hardcoded All / Gen 9 / Champions trio,
- * which was a real divergence from iOS's `HistoryListView` once more scopes existed). A
- * filter icon that tints **accent** while a filter is active, opening a menu of every
- * known [Format] with a check on the current one.
- */
-@Composable
-private fun FilterAction(current: Format?, onSelect: (Format?) -> Unit) {
-    val oak = LocalOakColors.current
-    var expanded by remember { mutableStateOf(false) }
-    val active = current != null
-    Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(
-                Icons.Filled.FilterList,
-                contentDescription = if (active) "Filter (active)" else "Filter",
-                tint = if (active) oak.accent else oak.textMuted,
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            FilterMenuItem("All", current == null) { onSelect(null); expanded = false }
-            Format.knownCases.forEach { format ->
-                FilterMenuItem(format.shortLabel, current == format) { onSelect(format); expanded = false }
-            }
-        }
-    }
-}
 
-@Composable
-private fun FilterMenuItem(label: String, selected: Boolean, onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = { Text(label) },
-        onClick = onClick,
-        leadingIcon = if (selected) {
-            { Icon(Icons.Filled.Check, contentDescription = null, tint = LocalOakColors.current.accent) }
-        } else {
-            null
-        },
-    )
-}
-
-/**
- * The active-filter cue by the search field: a sunken pill naming the current scope with
- * an ✕ that clears it. Shown only while a format filter is on (mirrors iOS's active-filter
- * token). The scope label is the existing [Format.shortLabel], never a new name.
- */
-@Composable
-private fun ActiveFilterPill(format: Format, onClear: () -> Unit) {
-    val oak = LocalOakColors.current
-    val shape = RoundedCornerShape(OakRadius.pill)
-    Row(
-        modifier = Modifier.padding(horizontal = OakSpacing.lg, vertical = OakSpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            modifier = Modifier
-                .clip(shape)
-                .background(oak.accentSoft)
-                .clickable(onClickLabel = "Clear filter", onClick = onClear)
-                .padding(start = OakSpacing.md, end = OakSpacing.sm, top = 6.dp, bottom = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = format.shortLabel,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = oak.accent,
-            )
-            Icon(
-                Icons.Filled.Close,
-                contentDescription = "Clear filter",
-                tint = oak.accent,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    }
-}
 
 /**
  * The new-chat floating disc (moved off the top bar for one-handed reach): a 56dp accent

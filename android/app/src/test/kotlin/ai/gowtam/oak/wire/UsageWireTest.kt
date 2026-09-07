@@ -84,4 +84,27 @@ class UsageWireTest {
         assertTrue(board.rows.all { it.usagePct == null })
         assertNull(board.rows[0].usagePct)
     }
+
+    @Test
+    fun decodesASpeciesDrillIn() {
+        val json = """
+            {
+              "available": true,
+              "found": true,
+              "slug": "garchomp",
+              "season": "Current",
+              "fetched_at": 1700000000000,
+              "attribution": "championsbattledata.com",
+              "saved_name": "Garchomp",
+              "format": "doubles",
+              "moves": [{"name": "Earthquake", "pct": 90.3, "rank": 1}]
+            }
+        """.trimIndent()
+        val detail = OakJson.decodeFromString<UsageSpecies>(json)
+        assertTrue(detail.available)
+        assertEquals(true, detail.found)
+        assertEquals("garchomp", detail.slug)
+        assertEquals("Earthquake", detail.moves[0].name)
+        assertEquals(90.3, detail.moves[0].pct!!, 0.001)
+    }
 }

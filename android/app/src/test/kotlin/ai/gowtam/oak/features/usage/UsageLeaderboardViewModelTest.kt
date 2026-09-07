@@ -5,6 +5,7 @@ import ai.gowtam.oak.support.MainDispatcherRule
 import ai.gowtam.oak.wire.UsageLadder
 import ai.gowtam.oak.wire.UsageLeaderboard
 import ai.gowtam.oak.wire.UsageLeaderboardRow
+import ai.gowtam.oak.wire.UsageSpecies
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -146,6 +147,46 @@ class UsageLeaderboardViewModelTest {
         assertTrue(vm.uiState.value.rows.isEmpty())
         assertNull(vm.uiState.value.rows.firstOrNull())
     }
+
+    @Test
+    fun openingARowLoadsTheSpeciesDrillInOnTheSameLadder() = runTest(mainDispatcherRule.dispatcher) {
+        val usage = FakeUsageService(leaderboardResult = available())
+        usage.speciesResult = UsageSpecies(
+            available = true,
+            found = true,
+            slug = "garchomp",
+            season = "Current",
+            fetchedAt = 1_700_000_000_000,
+            attribution = "championsbattledata.com",
+        )
+        val vm = UsageLeaderboardViewModel(usage)
+        vm.start()
+        advanceUntilIdle()
+
+        vm.openSpecies("garchomp")
+        advanceUntilIdle()
+
+        assertEquals(listOf("garchomp" to UsageLadder.Doubles), usage.speciesCalls)
+        assertEquals(true, vm.uiState.value.species?.found)
+        assertEquals("garchomp", vm.uiState.value.species?.slug)
+        assertEquals(true, vm.uiState.value.species?.available)
+    }
+
+    @Test
+    fun speciesUnavailableFailSoftsAndDoesNotInventASet() = runTest(mainDispatcherRule.dispatcher) {
+        val usage = FakeUsageService(leaderboardResult = available())
+        usage.speciesResult = UsageSpecies(available = false, error = "upstream_unavailable")
+        val vm = UsageLeaderboardViewModel(usage)
+        vm.start()
+        advanceUntilIdle()
+
+        vm.openSpecies("garchomp")
+        advanceUntilIdle()
+
+        assertEquals(false, vm.uiState.value.species?.available)
+        assertTrue(vm.uiState.value.species?.found != true)
+        assertEquals("upstream_unavailable", vm.uiState.value.species?.error)
+    }
 }
 
 /**
@@ -153,11 +194,18 @@ class UsageLeaderboardViewModelTest {
  */
 class FakeUsageService(
     var leaderboardResult: UsageLeaderboard,
+    var speciesResult: UsageSpecies = UsageSpecies(available = false, error = "upstream_unavailable"),
 ) : UsageService {
     val leaderboardCalls = mutableListOf<UsageLadder>()
+    val speciesCalls = mutableListOf<Pair<String, UsageLadder>>()
 
     override suspend fun leaderboard(ladder: UsageLadder): UsageLeaderboard {
         leaderboardCalls += ladder
         return leaderboardResult
+    }
+
+    override suspend fun species(slug: String, ladder: UsageLadder): UsageSpecies {
+        speciesCalls += slug to ladder
+        return speciesResult
     }
 }

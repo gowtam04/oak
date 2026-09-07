@@ -311,7 +311,8 @@ class ArtifactViewModelTest {
 
         vm.updateFormat(Format.ScarletViolet)
 
-        assertTrue(vm.stack.value.isEmpty())
+        assertTrue(vm.isPresented)
+        assertEquals(Format.Champions, vm.activeFormat)
     }
 
     @Test
@@ -402,7 +403,7 @@ class ArtifactViewModelTest {
 
         assertTrue(vm.canOpenInDex)
         val hop = vm.dexHop()
-        assertEquals(DexHop(kind = EntityKind.POKEMON, query = "garchomp", format = Format.Gen5), hop)
+        assertEquals(DexHop(kind = EntityKind.POKEMON, query = "garchomp", format = Format.Champions), hop)
     }
 
     @Test
@@ -414,7 +415,7 @@ class ArtifactViewModelTest {
 
         assertTrue(vm.canOpenInDex)
         assertEquals(EntityKind.MOVE, vm.dexHop()!!.kind)
-        assertEquals(Format.Gen5, vm.dexHop()!!.format)
+        assertEquals(Format.Champions, vm.dexHop()!!.format)
     }
 
     @Test
@@ -455,7 +456,7 @@ class ArtifactViewModelTest {
         advanceUntilIdle()
 
         assertTrue(vm.current!!.content is ArtifactContent.Comparison)
-        assertEquals(listOf(Triple(EntityKind.POKEMON, "dragapult", Format.ScarletViolet)), service.entityCalls)
+        assertEquals(listOf(Triple(EntityKind.POKEMON, "dragapult", Format.Champions)), service.entityCalls)
         assertTrue(vm.canGoBack)
         assertEquals(before!!.id, vm.stack.value.first().id)
     }

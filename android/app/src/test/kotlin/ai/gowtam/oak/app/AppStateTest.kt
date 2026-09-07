@@ -181,6 +181,6 @@ class AppStateTest {
         state.clearGuestThread()
 
         assertEquals(emptyList<GuestTurn>(), state.guestThread.value)
-        assertEquals(Format.NationalDex, state.guestThreadScope.value)
+        assertEquals(Format.Champions, state.guestThreadScope.value)
     }
 }

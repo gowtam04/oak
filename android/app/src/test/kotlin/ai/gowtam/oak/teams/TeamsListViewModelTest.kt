@@ -76,7 +76,7 @@ class TeamsListViewModelTest {
 
         val names = model.uiState.value::class.java.declaredFields.map { it.name }
         assertFalse("formatFilter" in names)
-        assertTrue(service.listCalls.none { it == Format.Gen5 })
+        assertTrue(service.listCalls.contains(false))
     }
 
     // -------------------------------------------------------------------
