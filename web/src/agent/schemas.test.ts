@@ -14,6 +14,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import type { SafeParseReturnType } from "zod";
 
 import {
   oakAnswerSchema,
@@ -163,9 +164,8 @@ describe("tool output schemas — no exists_in_standard (ADR-8, CF-DATA-BR-5)", 
       suggestions: ["garchomp"],
     });
     expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data).not.toHaveProperty("exists_in_standard");
-    }
+    if (!parsed.success) return;
+    expect(parsed.data).not.toHaveProperty("exists_in_standard");
   });
 
   it("getPokemonOutputSchema does not keep exists_in_standard on a miss", () => {
@@ -174,9 +174,9 @@ describe("tool output schemas — no exists_in_standard (ADR-8, CF-DATA-BR-5)", 
       suggestions: ["garchomp"],
       exists_in_standard: true,
     });
-    if (parsed.success) {
-      expect(parsed.data).not.toHaveProperty("exists_in_standard");
-    }
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).not.toHaveProperty("exists_in_standard");
   });
 
   it("getEvolutionChainOutputSchema parses a miss without source_format / exists_in_standard", () => {
@@ -185,10 +185,9 @@ describe("tool output schemas — no exists_in_standard (ADR-8, CF-DATA-BR-5)", 
       suggestions: [],
     });
     expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data).not.toHaveProperty("source_format");
-      expect(parsed.data).not.toHaveProperty("exists_in_standard");
-    }
+    if (!parsed.success) return;
+    expect(parsed.data).not.toHaveProperty("source_format");
+    expect(parsed.data).not.toHaveProperty("exists_in_standard");
   });
 
   it("getEvolutionChainOutputSchema does not keep source_format on a Champions miss", () => {
@@ -198,10 +197,10 @@ describe("tool output schemas — no exists_in_standard (ADR-8, CF-DATA-BR-5)", 
       source_format: "scarlet-violet",
       exists_in_standard: false,
     });
-    if (parsed.success) {
-      expect(parsed.data).not.toHaveProperty("source_format");
-      expect(parsed.data).not.toHaveProperty("exists_in_standard");
-    }
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).not.toHaveProperty("source_format");
+    expect(parsed.data).not.toHaveProperty("exists_in_standard");
   });
 });
 
@@ -447,7 +446,9 @@ const FARIGIRAF_PROFILE = {
   source_generation: null,
 };
 
-type ZodSafeParse = { safeParse: (v: unknown) => { success: boolean } };
+type ZodSafeParse = {
+  safeParse: (v: unknown) => SafeParseReturnType<unknown, unknown>;
+};
 
 async function loadLookupBoxSchemas(): Promise<{
   lookupBoxInputSchema: ZodSafeParse;
@@ -542,12 +543,10 @@ describe("lookup_box I/O (T22, BOX-AC-3.2, BOX-BR-5, BOX-BR-7)", () => {
       ],
     });
     expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      const miss = (
-        parsed.data as { results: Array<Record<string, unknown>> }
-      ).results[0];
-      expect(miss).not.toHaveProperty("exists_in_standard");
-    }
+    if (!parsed.success) return;
+    const miss = (parsed.data as { results: Array<Record<string, unknown>> })
+      .results[0];
+    expect(miss).not.toHaveProperty("exists_in_standard");
   });
 
   it("lookupBoxOutputSchema does not keep exists_in_standard on a miss (ADR-8, CF-DATA-BR-5)", async () => {
@@ -557,19 +556,18 @@ describe("lookup_box I/O (T22, BOX-AC-3.2, BOX-BR-5, BOX-BR-7)", () => {
       truncated_input: false,
       results: [
         {
-          query: "dracovish",
+          query: "excadrill",
           found: false,
           suggestions: ["garchomp"],
           exists_in_standard: true,
         },
       ],
     });
-    if (parsed.success) {
-      const miss = (
-        parsed.data as { results: Array<Record<string, unknown>> }
-      ).results[0];
-      expect(miss).not.toHaveProperty("exists_in_standard");
-    }
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const miss = (parsed.data as { results: Array<Record<string, unknown>> })
+      .results[0];
+    expect(miss).not.toHaveProperty("exists_in_standard");
   });
 
   it("lookupBoxOutputSchema accepts compact_moves with null detail fields", async () => {

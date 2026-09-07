@@ -5,7 +5,9 @@
  * or fall back to a Scarlet/Violet evolution chain (`source_format`).
  *
  * Gen-7 index partitions are gone (P2); these cases use the champions slice
- * of seed "tools" (Garchomp on-roster; Dracovish / nonsense off-roster).
+ * of seed "tools" (Garchomp on-roster; Excadrill / nonsense off-roster).
+ * Dracovish, Farigiraf, and the Eevee evolution-chain row ARE in the fixture
+ * (P2 remaining oracles) and must not be used as off-roster names.
  *
  * Wiring: migrate + seed an isolated Postgres schema and install it as the
  * @/data/db singleton BEFORE importing the tool layer (resolve-index Gotcha).
@@ -104,10 +106,10 @@ describe("champions get_pokemon — on-roster hit, off-roster miss (ADR-8)", () 
     expect(out).not.toHaveProperty("exists_in_standard");
   });
 
-  it("off-roster (Dracovish) is not found, with no exists_in_standard", async () => {
+  it("off-roster (Excadrill) is not found, with no exists_in_standard", async () => {
     ensureLoaded();
     const ctx = await ctxChampions();
-    const out = await dispatch("get_pokemon", { name: "dracovish" }, ctx);
+    const out = await dispatch("get_pokemon", { name: "excadrill" }, ctx);
     expect(getPokemonOutputSchema.safeParse(out).success).toBe(true);
     expect(out).toMatchObject({ found: false });
     expect(out).not.toHaveProperty("exists_in_standard");
@@ -140,7 +142,7 @@ describe("champions resolve_entity / get_move miss — no exists_in_standard", (
   it("resolve_entity on an off-roster name returns matches: [] without exists_in_standard", async () => {
     ensureLoaded();
     const ctx = await ctxChampions();
-    const out = await dispatch("resolve_entity", { query: "Farigiraf" }, ctx);
+    const out = await dispatch("resolve_entity", { query: "Excadrill" }, ctx);
     expect(resolveEntityOutputSchema.safeParse(out).success).toBe(true);
     expect(out).toMatchObject({ matches: [] });
     expect(out).not.toHaveProperty("exists_in_standard");
@@ -149,7 +151,7 @@ describe("champions resolve_entity / get_move miss — no exists_in_standard", (
   it("get_move on a Champions-absent slug is a plain miss", async () => {
     ensureLoaded();
     const ctx = await ctxChampions();
-    const out = await dispatch("get_move", { name: "flamethrower" }, ctx);
+    const out = await dispatch("get_move", { name: "not-a-real-move" }, ctx);
     expect(out).toMatchObject({ found: false });
     expect(out).not.toHaveProperty("exists_in_standard");
   });
@@ -159,7 +161,11 @@ describe("champions get_evolution_chain — no SV fallback (ADR-8)", () => {
   it("a roster-absent species is not found, with no source_format", async () => {
     ensureLoaded();
     const ctx = await ctxChampions();
-    const out = await dispatch("get_evolution_chain", { species: "eevee" }, ctx);
+    const out = await dispatch(
+      "get_evolution_chain",
+      { species: "excadrill" },
+      ctx,
+    );
     expect(getEvolutionChainOutputSchema.safeParse(out).success).toBe(true);
     expect(out).toMatchObject({ found: false });
     expect(out).not.toHaveProperty("source_format");

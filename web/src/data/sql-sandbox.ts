@@ -42,7 +42,26 @@ import "server-only";
 import { Pool, type PoolClient } from "pg";
 
 import { env } from "@/env";
-import type { RunSqlOutput } from "@/agent/schemas";
+
+/** One returned cell — always coerced to a JSON primitive by the executor. */
+type RunSqlCell = string | number | boolean | null;
+
+/**
+ * Local equivalent of the retired T18 `RunSqlOutput` contract (P3 deleted the
+ * Zod schema from `@/agent/schemas`). Success is a capped row-set; in-domain
+ * failures are `{ error, hint? }` — never thrown.
+ */
+type RunSqlOutput =
+  | {
+      columns: string[];
+      rows: RunSqlCell[][];
+      row_count: number;
+      truncated: boolean;
+    }
+  | {
+      error: "query_failed" | "query_timeout";
+      hint?: string;
+    };
 
 /** Hard row cap — the outer wrap's LIMIT and the truncation signal. */
 const ROW_LIMIT = 200;

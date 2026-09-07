@@ -308,14 +308,14 @@ describe("lookup_box bulk species + compact learnset (Champions)", () => {
 describe("lookup_box off-roster miss (CF-BOX-AC-1.1, CF-DATA-BR-4, ADR-8)", () => {
   it("lists an off-roster name as a structured miss with no other-game learnset", async () => {
     ensureLoaded();
-    const out = await lookupBox(["dracovish"]);
+    const out = await lookupBox(["excadrill"]);
 
     expect(out.format).toBe("champions");
     expect(out.results).toHaveLength(1);
     const miss = out.results[0];
     expect(miss?.found).toBe(false);
     if (miss?.found) return;
-    expect(miss.query).toBe("dracovish");
+    expect(miss.query).toBe("excadrill");
     expect(Array.isArray(miss.suggestions)).toBe(true);
     expect(miss).not.toHaveProperty("learnset");
     expect(miss).not.toHaveProperty("pokemon");
