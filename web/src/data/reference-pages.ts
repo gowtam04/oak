@@ -21,11 +21,13 @@
  * propagate → a 500 the crawler retries, never a soft-200 or a wrong 404.
  *
  * CACHING. Detail loaders are wrapped in React `cache()` so a page and its
- * `generateMetadata` share one query per request. Index loaders are ALSO wrapped
- * in `unstable_cache(..., { revalidate: 86400 })` so per-request renders don't
- * re-enumerate the whole dex. Tests call the UNCACHED inner `*Uncached(db)`
- * variants directly with an injected fixture handle — they never touch the
- * `@/data/db` singleton or the Next cache.
+ * `generateMetadata` share one query per request. Index loaders for Pokédex /
+ * moves / abilities are ALSO wrapped in `unstable_cache(..., { revalidate: 86400 })`
+ * so per-request renders don't re-enumerate. The items index SKIPS that cache
+ * because `champions_item_exclusion` can change without ingest (CF-DEX-AC-1.2).
+ * Tests call the UNCACHED inner `*Uncached(db)` variants directly with an
+ * injected fixture handle — they never touch the `@/data/db` singleton or the
+ * Next cache.
  *
  * `server-only`: it reads the repo/DB layer and must never reach a client
  * bundle. It is itself only ever dynamically imported by the reference pages.
@@ -439,7 +441,13 @@ export async function loadItemsIndexUncached(
   db: OakDb,
 ): Promise<NamesIndexData> {
   requireIndex(await isIndexAvailable(CHAMPIONS_FORMAT, db));
-  return { rows: await listNamesByKind("item", CHAMPIONS_FORMAT, db) };
+  const rows = await listNamesByKind("item", CHAMPIONS_FORMAT, db);
+  const { loadChampionsItemExclusions } = await import(
+    "@/data/repos/champions-items-repo"
+  );
+  const excluded = await loadChampionsItemExclusions({ db });
+  if (excluded.size === 0) return { rows };
+  return { rows: rows.filter((r) => !excluded.has(r.slug)) };
 }
 
 /**
@@ -522,12 +530,6 @@ const cachedAbilitiesIndex = unstable_cache(
   ["ref-abilities-index"],
   { revalidate: 86400 },
 );
-const cachedItemsIndex = unstable_cache(
-  async (): Promise<NamesIndexData> =>
-    loadItemsIndexUncached(await singletonDb()),
-  ["ref-items-index"],
-  { revalidate: 86400 },
-);
 
 export function loadPokedexIndex(): Promise<PokedexIndexData> {
   return cachedPokedexIndex();
@@ -538,6 +540,7 @@ export function loadMovesIndex(): Promise<MovesIndexData> {
 export function loadAbilitiesIndex(): Promise<NamesIndexData> {
   return cachedAbilitiesIndex();
 }
-export function loadItemsIndex(): Promise<NamesIndexData> {
-  return cachedItemsIndex();
+/** Live read — exclusions can change without ingest, so no 24h snapshot. */
+export async function loadItemsIndex(): Promise<NamesIndexData> {
+  return loadItemsIndexUncached(await singletonDb());
 }

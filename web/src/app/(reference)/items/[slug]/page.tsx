@@ -16,7 +16,7 @@ import AskOakCta from "@/components/reference/AskOakCta";
 import { buildItemDescription, buildItemTitle } from "@/data/reference-metadata";
 
 export const runtime = "nodejs";
-export const revalidate = 86400;
+export const dynamic = "force-dynamic";
 
 /** Title-case a slug ("mystic-water" → "Mystic Water"). */
 function titleCase(slug: string): string {

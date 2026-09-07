@@ -22,7 +22,11 @@ import "server-only";
 import { eq } from "drizzle-orm";
 
 import type { OakDb } from "@/data/db";
-import { CHAMPIONS_REGULATION, type Format } from "@/data/formats";
+import {
+  CHAMPIONS_FORMAT,
+  CHAMPIONS_REGULATION,
+  type Format,
+} from "@/data/formats";
 import { ingest_meta } from "@/data/schema";
 import type {
   AbilityDetail,
@@ -269,7 +273,10 @@ async function assemblePokemon(
   const movepool = groupMovepool(learned, summaries);
 
   const { found: _found, ...rest } = profile;
-  const isFallback = !profile.is_gen9_native;
+  // In-roster Champions species are not a "fallback" even when they originated
+  // in an earlier generation (CF-DEX-AC-1.5 — no "not native to Champions").
+  const isFallback =
+    format === CHAMPIONS_FORMAT ? false : !profile.is_gen9_native;
 
   return {
     status: "ok",
@@ -368,6 +375,25 @@ async function assembleItem(
   format: Format,
   db: OakDb,
 ): Promise<EntityArtifactResponse> {
+  if (format === CHAMPIONS_FORMAT) {
+    try {
+      const { loadChampionsItemExclusions } = await import(
+        "@/data/repos/champions-items-repo"
+      );
+      const excluded = await loadChampionsItemExclusions({ db });
+      if (excluded.has(slug)) {
+        return {
+          status: "not_found",
+          kind: "item",
+          format,
+          query: slug,
+          suggestions: [],
+        };
+      }
+    } catch {
+      // Missing exclusion table must not hide every item.
+    }
+  }
   const ref = await getReference("item", slug, format, { db });
   if (!isFoundRecord(ref)) {
     return {
