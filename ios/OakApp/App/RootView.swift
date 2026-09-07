@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// Top-level navigation shell: a four-tab `TabView` (Chat / Teams / Dex / Account).
+/// Top-level navigation shell: a four-tab `TabView` (Chat / Teams / Dex / Settings).
 /// Chat is the default surface on launch (M-AC-UI2.1); conversation history is folded
 /// into the Chat tab WhatsApp-style (the list appears once signed in), so there is no
 /// separate History tab. Teams hosts the team-builder library. Dex browses the public
-/// reference index (Pokémon / Moves / Abilities / Items). Account is a first-class tab
-/// (no intermediate More list).
+/// reference index (Pokémon / Moves / Abilities / Items). Settings is a first-class tab
+/// (account, appearance, about — no intermediate More list).
 ///
 /// This view is the single wiring point for launch behavior:
 ///   * on appear it restores the session (a stored Bearer token resolves to
@@ -38,7 +38,7 @@ struct RootView: View {
     case chat
     case teams
     case dex
-    case account
+    case settings
   }
 
   var body: some View {
@@ -63,14 +63,14 @@ struct RootView: View {
         Label("Dex", systemImage: "books.vertical")
           .symbolEffect(.bounce, value: selection == .dex)
       }
-      Tab(value: AppTab.account) {
+      Tab(value: AppTab.settings) {
         NavigationStack {
           AccountView(model: AccountViewModel(auth: services.auth, appState: appState))
         }
         .oakEnamelNav()
       } label: {
-        Label("Account", systemImage: "person.crop.circle")
-          .symbolEffect(.bounce, value: selection == .account)
+        Label("Settings", systemImage: "gearshape")
+          .symbolEffect(.bounce, value: selection == .settings)
       }
     }
     // Canvas fills any tab-bar overlay region so iOS 26's floating capsule

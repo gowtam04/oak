@@ -36,9 +36,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Functions
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -68,12 +68,12 @@ private enum class OakTab(val label: String) {
     Teams("Teams"),
     Dex("Dex"),
     Calculator("Calc"),
-    Account("Account"),
+    Settings("Settings"),
 }
 
 /**
- * The app's root composable — the 4-tab `NavigationBar` shell (Chat / Teams /
- * Dex / Account). Chat, Teams, Dex, and Account are all fully wired. The
+ * The app's root composable — the tab `NavigationBar` shell (Chat / Teams /
+ * Dex / Calc / Settings). Chat, Teams, Dex, Calc, and Settings are all fully wired. The
  * [ChatViewModel] and [ArtifactViewModel] are owned by the caller
  * (`MainActivity`) and passed in so their stream/back-stack state survives a tab
  * switch away from Chat and back.
@@ -204,7 +204,7 @@ fun OakApp(
                                     },
                                 )
                             }
-                            OakTab.Account -> {
+                            OakTab.Settings -> {
                                 val accountViewModel = remember(services, appState) {
                                     AccountViewModel(services.auth, appState, preferences = services.preferences)
                                 }
@@ -267,7 +267,7 @@ private fun OakTab.icon() = when (this) {
     OakTab.Teams -> Icons.Filled.Groups
     OakTab.Dex -> Icons.AutoMirrored.Filled.MenuBook
     OakTab.Calculator -> Icons.Filled.Functions
-    OakTab.Account -> Icons.Filled.AccountCircle
+    OakTab.Settings -> Icons.Filled.Settings
 }
 
 // ---------------------------------------------------------------------------

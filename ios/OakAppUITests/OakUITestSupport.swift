@@ -64,13 +64,13 @@ enum OakUITest {
   // MARK: Visible-label targets (mirror the app's labels)
 
   /// Tab-bar button labels (`RootView`). The app ships FOUR tabs — Chat, Teams, Dex,
-  /// and Account. History folded into the Chat tab (signed-in users see a conversation
-  /// list there); Account is a first-class tab (no intermediate More list).
+  /// and Settings. History folded into the Chat tab (signed-in users see a conversation
+  /// list there); Settings is a first-class tab (no intermediate More list).
   enum Tab {
     static let chat = "Chat"
     static let teams = "Teams"
     static let dex = "Dex"
-    static let account = "Account"
+    static let account = "Settings"
     static let all = [chat, teams, dex, account]
   }
 
@@ -103,9 +103,9 @@ enum OakUITest {
     static let openTeamInViewer = "Open team in viewer"
   }
 
-  /// Account / Settings surface (`AccountView`) — first-class tab root.
+  /// Settings surface (`AccountView`) — first-class tab root.
   enum Account {
-    static let navigationTitle = "Account"
+    static let navigationTitle = "Settings"
     static let signIn = "Sign in"
     static let signOut = "Sign out"
     static let deleteAccount = "Delete account"
