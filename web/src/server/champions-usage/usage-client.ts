@@ -12,8 +12,10 @@
  *     memory — the cache resets on deploy and a miss simply re-fetches, which is
  *     acceptable for live data and avoids a schema migration,
  *   - resolves an Oak species/display name to the API's form-specific
- *     `saved_name` (index match → `/api/metadata` form fallback → miss), and
- *   - normalizes the API's `rows[]` into typed, rank-sorted usage entries.
+ *     `saved_name` (index match → `/api/metadata` form fallback → miss),
+ *   - normalizes the API's `rows[]` into typed, rank-sorted usage entries, and
+ *   - `listLeaderboard(ladder)` maps a bulk index payload into ranked rows
+ *     (ADR-5 — never N+1 `/api/battle` per species; missing ranks → unavailable).
  *
  * Plain module (no `server-only` import) so node unit tests can load and mock it.
  * It THROWS only on a transport/parse fault; the tool maps that to the in-domain
@@ -22,6 +24,7 @@
 
 import { env } from "@/env";
 import type { UsageEntry, UsageFormat } from "@/agent/schemas";
+import { type UsageLadder } from "./ladder";
 
 // --- Tunables --------------------------------------------------------------
 
@@ -61,6 +64,23 @@ export interface UsageData {
 export type UsageLookup =
   | { found: true; data: UsageData }
   | { found: false; suggestions: string[] };
+
+/** One ranked species on a live Champions ladder (ADR-5 bulk index). */
+export interface LeaderboardRow {
+  rank: number;
+  name: string;
+  usage_pct?: number;
+  sprite?: string;
+}
+
+export type LeaderboardResult =
+  | {
+      available: true;
+      season: string;
+      fetched_at: number;
+      rows: LeaderboardRow[];
+    }
+  | { available: false };
 
 // --- Low-level fetch (timeout + single retry) ------------------------------
 
@@ -161,9 +181,18 @@ interface IndexData {
   defaultSeason: string;
   names: string[];
   fetchedAt: number;
+  /** Raw `/api` `pokemon` payload — objects may carry bulk ranks (ADR-5). */
+  pokemon: unknown;
 }
 
 let indexCache: IndexData | null = null;
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
 
 function extractNames(pokemon: unknown): string[] {
   if (!Array.isArray(pokemon)) return [];
@@ -180,20 +209,117 @@ function extractNames(pokemon: unknown): string[] {
   return out;
 }
 
+function parseIndexPayload(raw: unknown, now: number): IndexData {
+  const obj = asRecord(raw) ?? {};
+  const defaultSeason =
+    typeof obj.defaultSeason === "string" ? obj.defaultSeason : "";
+  return {
+    defaultSeason,
+    names: extractNames(obj.pokemon),
+    fetchedAt: now,
+    pokemon: obj.pokemon,
+  };
+}
+
 async function getIndex(now: number, signal?: AbortSignal): Promise<IndexData> {
   if (indexCache && now - indexCache.fetchedAt < INDEX_TTL_MS) return indexCache;
-  const raw = (await fetchJson(`${baseUrl()}/api`, signal)) as {
-    defaultSeason?: unknown;
-    pokemon?: unknown;
-  };
-  const defaultSeason =
-    typeof raw.defaultSeason === "string" ? raw.defaultSeason : "";
-  indexCache = {
-    defaultSeason,
-    names: extractNames(raw.pokemon),
-    fetchedAt: now,
-  };
+  const raw = await fetchJson(`${baseUrl()}/api`, signal);
+  indexCache = parseIndexPayload(raw, now);
   return indexCache;
+}
+
+/** Second bulk endpoint — only if `/api` has names but no ranks (no N+1). */
+async function getIndexAlternate(
+  now: number,
+  signal?: AbortSignal,
+): Promise<IndexData | null> {
+  try {
+    const raw = await fetchJson(`${baseUrl()}/api/index`, signal);
+    return parseIndexPayload(raw, now);
+  } catch {
+    return null;
+  }
+}
+
+function readFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value.trim())) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function readPosition(obj: Record<string, unknown> | null): number | null {
+  if (!obj) return null;
+  return readFiniteNumber(obj.position ?? obj.rank);
+}
+
+function pokemonDisplayName(p: unknown): string | null {
+  if (typeof p === "string") return p;
+  const rec = asRecord(p);
+  if (!rec) return null;
+  const n = rec.name ?? rec.saved_name ?? rec.base_name;
+  return typeof n === "string" ? n : null;
+}
+
+function ladderLabel(ladder: UsageLadder): string {
+  return ladder === "singles" ? "Singles" : "Doubles";
+}
+
+/**
+ * Pull ranked rows out of a bulk index payload. Returns null when no
+ * per-ladder position/rank is present — caller must NOT N+1 `/api/battle`.
+ */
+function extractLeaderboardRows(
+  pokemon: unknown,
+  ladder: UsageLadder,
+  season: string,
+): LeaderboardRow[] | null {
+  if (!Array.isArray(pokemon) || pokemon.length === 0) return null;
+  const formatLabel = ladderLabel(ladder);
+  const rows: LeaderboardRow[] = [];
+  for (const p of pokemon) {
+    const name = pokemonDisplayName(p);
+    if (!name) continue;
+    const rec = asRecord(p);
+    let pos = readPosition(rec);
+    let usage = rec ? parsePct(rec.usage_pct ?? rec.usage ?? rec.percentage) : null;
+    let sprite: string | undefined;
+    const summary = rec ? asRecord(rec.summary) : null;
+    if (summary) {
+      if (typeof summary.sprite === "string" && summary.sprite) {
+        sprite = summary.sprite;
+      }
+      const battle = asRecord(summary.battleSummary);
+      if (battle) {
+        const seasonBlock =
+          asRecord(battle[season]) ??
+          asRecord(Object.values(battle)[0]);
+        const ladderBlock = seasonBlock
+          ? (asRecord(seasonBlock[formatLabel]) ??
+            asRecord(seasonBlock[ladder]))
+          : null;
+        if (ladderBlock) {
+          pos = readPosition(ladderBlock) ?? pos;
+          usage =
+            parsePct(
+              ladderBlock.usage_pct ??
+                ladderBlock.usage ??
+                ladderBlock.percentage,
+            ) ?? usage;
+        }
+      }
+    }
+    if (pos == null) continue;
+    const row: LeaderboardRow = { rank: pos, name };
+    if (usage != null) row.usage_pct = usage;
+    if (sprite) row.sprite = sprite;
+    rows.push(row);
+  }
+  if (rows.length === 0) return null;
+  rows.sort((a, b) => a.rank - b.rank);
+  return rows;
 }
 
 // --- Name resolution (Oak name -> API saved_name) --------------------------
@@ -389,6 +515,47 @@ export async function getUsage(
 
   usageCache.set(key, { data, fetchedAt: now });
   return { found: true, data };
+}
+
+/**
+ * Bulk live ladder (ADR-5 / CF-USAGE-US-1). Reads ranks from the community
+ * index payload — never one `/api/battle` GET per species. If the index has
+ * names but no positions, returns `{ available: false }` rather than N+1.
+ * Transport faults also return unavailable (never throw).
+ */
+export async function listLeaderboard(
+  ladder: UsageFormat,
+  signal?: AbortSignal,
+): Promise<LeaderboardResult> {
+  const now = Date.now();
+  try {
+    const index = await getIndex(now, signal);
+    let rows = extractLeaderboardRows(
+      index.pokemon,
+      ladder,
+      index.defaultSeason,
+    );
+    if (!rows) {
+      const alt = await getIndexAlternate(now, signal);
+      if (alt) {
+        rows = extractLeaderboardRows(
+          alt.pokemon,
+          ladder,
+          alt.defaultSeason || index.defaultSeason,
+        );
+        if (rows) indexCache = alt;
+      }
+    }
+    if (!rows) return { available: false };
+    return {
+      available: true,
+      season: indexCache?.defaultSeason || index.defaultSeason || "current",
+      fetched_at: indexCache?.fetchedAt ?? index.fetchedAt,
+      rows,
+    };
+  } catch {
+    return { available: false };
+  }
 }
 
 /** Clear the module-level caches — for tests only. */

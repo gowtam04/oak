@@ -1,19 +1,8 @@
 /**
- * Competitive-ladder formats — the metagame axis (backlog B-5).
- *
- * This is a NEW axis, deliberately SEPARATE from the six-scope data
- * {@link Format}/`AgentMode` in `@/data/formats.ts`. That axis picks which
- * @pkmn-built index (Champions, Scarlet/Violet, gen-5…gen-8) a turn queries;
- * this one picks which Smogon competitive ladder's stored usage stats
- * (`meta_snapshot`/`meta_usage`, T21 `get_meta_usage`) a turn reads. Several
- * ladders can map onto the same data format — v1 has one ladder (`"gen9ou"`)
- * mapping to `dataFormat: "scarlet-violet"`, and a future VGC-style entry
- * would map to the same data format under a different ladder id — so the two
- * axes are kept independent rather than folded into one enum.
- *
- * Pokémon Champions is deliberately NOT a MetaFormat: Champions usage is
- * served live from T15 `get_usage_stats` (Showdown/official current-regulation
- * stats), never from these stored monthly Smogon snapshots.
+ * Retired public MetaFormat axis (Smogon gen9ou). Champions-first (ADR-5):
+ * public usage is live T15 `/usage`, not stored monthly Smogon snapshots.
+ * This module remains so leftover type imports still decode; it is not used
+ * by pages, sitemap, set-template, or the threat board.
  *
  * v1 supports EXACT Smogon format ids only (`smogonFormatId` is used verbatim
  * in the chaos-stats URL). Per-regulation prefix resolution (e.g. resolving a
