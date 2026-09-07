@@ -38,6 +38,7 @@ final class CalculatorViewModel {
 
   /// Champions-first: leftover format arguments coerce to Champions.
   var showsFormatPicker: Bool { false }
+  var showsTeraField: Bool { false }
   var showsLevelKnob: Bool { false }
   var showsIVKnobs: Bool { false }
   var investmentIsStatPoints: Bool { true }

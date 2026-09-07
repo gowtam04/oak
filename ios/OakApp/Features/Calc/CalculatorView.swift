@@ -15,13 +15,9 @@ struct CalculatorView: View {
           sideEditor(title: "Defender", side: defenderBinding)
           moveEditor
           fieldEditor
-          if model.showsFormatPicker {
-            formatPicker
-          } else {
-            LabeledContent("Format", value: "Pokémon Champions")
-              .padding(Theme.Spacing.md)
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .oakCard(radius: Theme.Radius.md)
+          if model.investmentIsStatPoints {
+            statPointsEditor(title: "Attacker", side: attackerBinding)
+            statPointsEditor(title: "Defender", side: defenderBinding)
           }
           resultBlock
           actions
@@ -68,8 +64,10 @@ struct CalculatorView: View {
       model.scenario.format.rawValue,
       a.species ?? "", a.item ?? "", a.ability ?? "", a.nature ?? "", a.tera ?? "",
       a.level.map(String.init) ?? "",
+      evKey(a.evs),
       d.species ?? "", d.item ?? "", d.ability ?? "", d.nature ?? "", d.tera ?? "",
       d.level.map(String.init) ?? "",
+      evKey(d.evs),
       model.scenario.move.slug ?? "", model.scenario.move.name ?? "",
       field?.weather?.rawValue ?? "",
       field?.reflect == true ? "R" : "",
@@ -94,9 +92,11 @@ struct CalculatorView: View {
       TextField("Nature", text: optionalString(side.nature))
         .textInputAutocapitalization(.never)
         .font(Theme.body(.body))
-      TextField("Tera", text: optionalString(side.tera))
-        .textInputAutocapitalization(.never)
-        .font(Theme.body(.body))
+      if model.showsTeraField {
+        TextField("Tera", text: optionalString(side.tera))
+          .textInputAutocapitalization(.never)
+          .font(Theme.body(.body))
+      }
       if model.showsLevelKnob {
         TextField(
           "Level",
@@ -185,16 +185,39 @@ struct CalculatorView: View {
     .oakCard(radius: Theme.Radius.md)
   }
 
-  private var formatPicker: some View {
-    Picker(
-      "Format",
-      selection: Binding(
-        get: { model.scenario.format },
-        set: { model.scenario.format = $0 }
-      )
-    ) {
-      ForEach(Format.knownCases, id: \.self) { format in
-        Text(format.displayLabel).tag(format)
+  private func statPointsEditor(title: String, side: Binding<CalcSide>) -> some View {
+    let keys = ["hp", "atk", "def", "spa", "spd", "spe"]
+    return VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+      Text("\(title) Stat Points")
+        .font(Theme.display(.subheadline))
+      ForEach(keys, id: \.self) { key in
+        HStack {
+          Text(key.uppercased())
+            .font(Theme.body(.caption))
+            .foregroundStyle(Theme.textSecondary)
+            .frame(width: 36, alignment: .leading)
+          TextField(
+            "0",
+            text: Binding(
+              get: {
+                guard let value = side.wrappedValue.evs?[key] else { return "" }
+                return String(value)
+              },
+              set: { raw in
+                var evs = side.wrappedValue.evs ?? [:]
+                if let value = Int(raw), value >= 0 {
+                  evs[key] = min(value, 32)
+                } else if raw.isEmpty {
+                  evs[key] = nil
+                }
+                side.wrappedValue.evs = evs.isEmpty ? nil : evs
+              }
+            )
+          )
+          .keyboardType(.numberPad)
+          .multilineTextAlignment(.trailing)
+          .font(Theme.mono(.body))
+        }
       }
     }
     .padding(Theme.Spacing.md)
@@ -261,6 +284,11 @@ struct CalculatorView: View {
         .buttonStyle(.oakSecondary)
       }
     }
+  }
+
+  private func evKey(_ evs: [String: Int]?) -> String {
+    guard let evs else { return "" }
+    return evs.keys.sorted().map { "\($0)=\(evs[$0] ?? 0)" }.joined(separator: ",")
   }
 
   private func optionalString(_ source: Binding<String?>) -> Binding<String> {

@@ -23,6 +23,8 @@ struct TeamsListView: View {
   /// `true` while the guest sign-in sheet is presented (mirrors `ChatTabView`'s
   /// guest-nudge pattern — web's `/teams` gate offers the same sign-in action).
   @State private var showSignIn = false
+  /// Archived delete confirmation target (CF-TEAM-US-5).
+  @State private var teamPendingDelete: TeamSummary?
 
   init(model: TeamsListViewModel) {
     _model = State(initialValue: model)
@@ -66,6 +68,23 @@ struct TeamsListView: View {
       }
       .sheet(isPresented: $showSignIn) {
         AuthView(model: AuthViewModel(auth: services.auth, appState: appState))
+      }
+      .alert(
+        "Delete archived team?",
+        isPresented: Binding(
+          get: { teamPendingDelete != nil },
+          set: { if !$0 { teamPendingDelete = nil } }
+        )
+      ) {
+        Button("Delete", role: .destructive) {
+          if let team = teamPendingDelete {
+            Task { await model.delete(team) }
+          }
+          teamPendingDelete = nil
+        }
+        Button("Cancel", role: .cancel) { teamPendingDelete = nil }
+      } message: {
+        Text("This permanently removes \(teamPendingDelete?.name ?? "this team").")
       }
     }
     .oakEnamelNav()
@@ -199,16 +218,16 @@ struct TeamsListView: View {
       TeamRow(team: team, model: model, archived: true)
     }
     .buttonStyle(.plain)
-    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
       Button(role: .destructive) {
-        Task { await model.delete(team) }
+        teamPendingDelete = team
       } label: {
         Label("Delete", systemImage: "trash")
       }
     }
     .contextMenu {
       Button(role: .destructive) {
-        Task { await model.delete(team) }
+        teamPendingDelete = team
       } label: {
         Label("Delete", systemImage: "trash")
       }
@@ -259,7 +278,11 @@ struct TeamsListView: View {
     }
     if model.canDelete(team) {
       Button(role: .destructive) {
-        Task { await model.delete(team) }
+        if team.isArchived {
+          teamPendingDelete = team
+        } else {
+          Task { await model.delete(team) }
+        }
       } label: {
         Label("Delete", systemImage: "trash")
       }

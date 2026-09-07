@@ -433,6 +433,8 @@ private struct MemberEditorSection: View {
           Stepper(value: $member.level, in: 1...100) {
             LabeledContent("Level", value: "\(member.level)")
           }
+        } else if isReadOnly {
+          LabeledContent("Level", value: "\(member.level)")
         } else {
           LabeledContent("Level", value: "50")
         }
@@ -523,6 +525,11 @@ private struct MemberEditorSection: View {
               ForEach(types, id: \.self) { TypeBadge(type: $0) }
             }
           }
+          if isOffRoster(field: "species") {
+            Text("not in the Champions roster")
+              .font(Theme.body(.caption))
+              .foregroundStyle(Theme.warning)
+          }
         }
         Spacer(minLength: 0)
       }
@@ -548,6 +555,7 @@ private struct MemberEditorSection: View {
       search: search,
       onChange: { member.species = $0 }
     )
+    offRosterNote(field: "species")
     EntityPickerRow(
       title: "Ability",
       value: member.ability,
@@ -557,6 +565,7 @@ private struct MemberEditorSection: View {
       search: search,
       onChange: { member.ability = $0 }
     )
+    offRosterNote(field: "ability")
     EntityPickerRow(
       title: requiredItem != nil ? "Item (Mega stone)" : "Item",
       value: member.item,
@@ -566,6 +575,7 @@ private struct MemberEditorSection: View {
       search: search,
       onChange: { member.item = $0 }
     )
+    offRosterNote(field: "item")
   }
 
   @ViewBuilder
@@ -621,6 +631,39 @@ private struct MemberEditorSection: View {
       Text("Genderless").tag(TeamMember.Gender?.some(.neutral))
     }
     Toggle("Shiny", isOn: $member.shiny)
+  }
+
+  @ViewBuilder
+  private func offRosterNote(field: String) -> some View {
+    if isOffRoster(field: field) {
+      Text("not in the Champions roster")
+        .font(Theme.body(.caption))
+        .foregroundStyle(Theme.warning)
+    }
+  }
+
+  private func isOffRoster(field: String) -> Bool {
+    guard isReadOnly else { return false }
+    if warnings.contains(where: { warning in
+      let matchesField =
+        warning.field == field
+        || (field == "species"
+          && (warning.field == nil || warning.code == .speciesIllegal))
+      return matchesField
+        && (warning.code == .speciesIllegal
+          || warning.message.localizedCaseInsensitiveContains("not in the Champions roster"))
+    }) {
+      return true
+    }
+    if field == "species", !member.species.isEmpty, spriteRef == nil { return true }
+    if field != "species", isOffRoster(field: "species") {
+      switch field {
+      case "ability": return !member.ability.isEmpty
+      case "item": return !member.item.isEmpty
+      default: return false
+      }
+    }
+    return false
   }
 
   /// EV / Stat Point budget footnote — informational, never blocking.

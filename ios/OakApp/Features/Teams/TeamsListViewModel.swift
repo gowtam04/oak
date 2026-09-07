@@ -97,22 +97,17 @@ final class TeamsListViewModel {
   /// blocks or errors the list (M-AC-1.4). Replaces the map wholesale each load so refs
   /// for teams no longer in the list are dropped.
   private func hydrateSprites() async {
-    var byFormat: [Format: Set<String>] = [:]
+    var names: Set<String> = []
     for team in teams + archivedTeams {
       for species in team.species where !species.isEmpty {
-        byFormat[team.format, default: []].insert(species)
+        names.insert(species)
       }
     }
-    guard !byFormat.isEmpty else {
+    guard !names.isEmpty else {
       spriteRefsBySpecies = [:]
       return
     }
-    var merged: [String: DexSpriteRef] = [:]
-    for (format, species) in byFormat {
-      let refs = await dexLookup.sprites(names: Array(species), format: format)
-      merged.merge(refs) { _, new in new }
-    }
-    spriteRefsBySpecies = merged
+    spriteRefsBySpecies = await dexLookup.sprites(names: Array(names), format: .champions)
   }
 
   /// The resolved sprite ref for a species slug, or `nil` when unresolved (the row then

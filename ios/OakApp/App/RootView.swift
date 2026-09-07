@@ -118,7 +118,6 @@ struct RootView: View {
         appState.pendingDestination = nil
       case .usage:
         selection = .usage
-        appState.pendingDestination = nil
       }
     }
     .sheet(item: Binding(

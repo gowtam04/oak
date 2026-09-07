@@ -204,8 +204,12 @@ final class TeamEditorViewModel {
 
   /// Live typeahead over `/api/search`, scoped to this editor's fixed format — backs the
   /// species/item ``EntityPickerSheet``s. An empty/failed lookup just shows no suggestions.
+  /// Champions index even for archived teams (CF-TEAM-AC-5.4) — stored gen-N
+  /// is not a Dex lookup scope.
+  private var lookupFormat: Format { .champions }
+
   func searchEntities(kind: EntityKind, query: String) async -> [PickerOption] {
-    await dexLookup.search(kind: kind, query: query, format: format)
+    await dexLookup.search(kind: kind, query: query, format: lookupFormat)
       .map { PickerOption(slug: $0.slug, displayName: $0.displayName) }
   }
 
@@ -218,7 +222,7 @@ final class TeamEditorViewModel {
       spriteRefsBySpecies = [:]
       return
     }
-    let refs = await dexLookup.sprites(names: Array(species), format: format)
+    let refs = await dexLookup.sprites(names: Array(species), format: lookupFormat)
     spriteRefsBySpecies = refs
     applyMegaAutoForce()
   }
@@ -231,7 +235,8 @@ final class TeamEditorViewModel {
       movepoolByMemberId[memberId] = []
       return
     }
-    movepoolByMemberId[memberId] = await dexLookup.learnset(pokemon: member.species, format: format)
+    movepoolByMemberId[memberId] = await dexLookup.learnset(
+      pokemon: member.species, format: lookupFormat)
   }
 
   /// Refetches every filled slot's movepool — used after a full team load (M-AC-T1.2),

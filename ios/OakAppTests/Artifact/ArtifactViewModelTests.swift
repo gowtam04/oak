@@ -18,7 +18,7 @@ struct ArtifactViewModelTests {
   private func makeVM(
     entityResult: EntityArtifact? = nil,
     savedTeamResult: (team: Team, validation: TeamValidationResult)? = nil,
-    format: Format = .scarletViolet,
+    format: Format = .champions,
     signedIn: Bool = true,
     pins: FakeArtifactPinService = FakeArtifactPinService()
   ) -> (ArtifactViewModel, FakeArtifactService) {
@@ -94,11 +94,11 @@ struct ArtifactViewModelTests {
     #expect(vm.canGoBack == false)
     #expect(entityOk(vm.current)?.resolved.displayName == "Garchomp")
     #expect(vm.current?.title == "Garchomp")
-    // The fetch went through the service with the active format (M-BR-ART-4).
+    // Champions-first: leftover format arguments still fetch Champions.
     #expect(service.entityCallCount == 1)
     #expect(service.lastEntityKind == .pokemon)
     #expect(service.lastEntityQuery == "Garchomp")
-    #expect(service.lastEntityFormat == .scarletViolet)
+    #expect(service.lastEntityFormat == .champions)
   }
 
   @Test
@@ -112,7 +112,7 @@ struct ArtifactViewModelTests {
 
     #expect(service.lastEntityQuery == "Mr. Mime")
     #expect(service.lastEntityKind == .pokemon)
-    #expect(service.lastEntityFormat == .scarletViolet)
+    #expect(service.lastEntityFormat == .champions)
   }
 
   @Test
@@ -353,7 +353,7 @@ struct ArtifactViewModelTests {
     #expect(vm.canOpenInDex)
     #expect(hop?.kind == .pokemon)
     #expect(hop?.query == "Garchomp")
-    #expect(hop?.format == .gen5)
+    #expect(hop?.format == .champions)
   }
 
   @Test
@@ -400,12 +400,13 @@ struct ArtifactViewModelTests {
     await vm.openEntity(kind: .pokemon, query: "Garchomp")
     let before = service.entityCallCount
 
-    await vm.compareWith(species: "Dragapult", format: .champions)
+    await vm.compareWith(species: "Dragapult", format: .gen7)
 
     #expect(vm.canGoBack)
     #expect(comparisonSubjects(vm.current)?.count == 2)
     #expect(comparisonSubjects(vm.current)?.map(\.name).contains("Dragapult") == true)
     #expect(service.entityCallCount > before)
+    #expect(service.lastEntityFormat == .champions)
   }
 
   @Test

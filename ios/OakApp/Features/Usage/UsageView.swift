@@ -3,7 +3,6 @@ import SwiftUI
 /// Public live Champions usage tab (ADR-6 fifth tab). Doubles default;
 /// Singles is the other view. Fail-soft when usage is down.
 struct UsageView: View {
-  @Environment(\.services) private var services
   @Environment(AppState.self) private var appState
   @State private var model: UsageViewModel
   @State private var path = NavigationPath()
@@ -29,6 +28,19 @@ struct UsageView: View {
     }
     .oakEnamelNav()
     .task { await model.start() }
+    .onAppear { consumePendingDestination() }
+    .onChange(of: appState.pendingDestination) { _, _ in
+      consumePendingDestination()
+    }
+  }
+
+  private func consumePendingDestination() {
+    guard case let .usage(slug) = appState.pendingDestination else { return }
+    if let slug {
+      let trimmed = slug.trimmingCharacters(in: .whitespacesAndNewlines)
+      if !trimmed.isEmpty { path.append(trimmed) }
+    }
+    appState.pendingDestination = nil
   }
 
   @ViewBuilder
@@ -151,8 +163,6 @@ private struct UsageRow: View {
 private struct UsageSpeciesView: View {
   let model: UsageViewModel
   let slug: String
-  @Environment(AppState.self) private var appState
-  @Environment(\.services) private var services
 
   var body: some View {
     Group {
@@ -204,12 +214,8 @@ private struct UsageSpeciesView: View {
         usageSection("Natures", entries: detail.natures)
         usageSection("Spreads", entries: detail.spreads)
         usageSection("Teammates", entries: detail.teammates)
-        if case .signedIn = appState.authState {
-          Section {
-            Button("Apply this Champions set") {
-              Task { await applySet(species: detail.slug ?? slug) }
-            }
-          }
+        Section {
+          ApplyChampionsSetButton(species: detail.slug ?? slug)
         }
       }
       .listStyle(.insetGrouped)
@@ -236,16 +242,6 @@ private struct UsageSpeciesView: View {
     }
   }
 
-  private func applySet(species: String) async {
-    do {
-      let result = try await services.teams.setTemplate(species: species)
-      if let member = result.member, result.found {
-        appState.pendingAddToTeam = member
-      }
-    } catch {
-      // Fail-soft — the list still shows; apply is best-effort.
-    }
-  }
 }
 
 func formatUsageFetchedAt(_ ms: Int64) -> String {
