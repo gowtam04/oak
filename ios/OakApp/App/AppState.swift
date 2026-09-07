@@ -47,6 +47,18 @@ final class AppState {
   /// Compact / full answer-card default (COMPACT-US-1). Full is the factory default.
   var answerDensity: AnswerDensity = .full
 
+  /// Device-local Light / Dark / System appearance. Default System follows the
+  /// iPhone setting. Writes through to ``appearanceStore`` on change.
+  var appearance: AppearancePreference {
+    didSet {
+      guard appearance != oldValue else { return }
+      appearanceStore.preference = appearance
+    }
+  }
+
+  @ObservationIgnored
+  private let appearanceStore: any AppearanceStoring
+
   /// Incoming species for the signed-in Add-to-team sheet (ADD-US-1). `nil` when idle.
   var pendingAddToTeam: TeamMember?
 
@@ -62,7 +74,10 @@ final class AppState {
   /// frame; cleared on any terminal event (answer/error/stopped) or a resume 404.
   private(set) var pendingTurns: [String: String] = [:]
 
-  init() {}
+  init(appearanceStore: any AppearanceStoring = InMemoryAppearanceStore()) {
+    self.appearanceStore = appearanceStore
+    self.appearance = appearanceStore.preference
+  }
 
   /// Records the turn generating for `conversationId` (the `turn` SSE frame).
   func setPendingTurn(conversationId: String, turnId: String) {

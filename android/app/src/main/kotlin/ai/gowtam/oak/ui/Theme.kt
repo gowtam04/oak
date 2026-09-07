@@ -61,7 +61,7 @@ fun OakTheme(
             val activity = view.context.findComponentActivity() ?: return@SideEffect
             // Status bar is always light-icons-on-enamel. Nav-bar contrast follows theme
             // (dark icons on light paper, light icons on dark paper). Not a one-shot
-            // onCreate paint — this re-applies when isSystemInDarkTheme() flips.
+            // onCreate paint — this re-applies when [darkTheme] flips.
             activity.enableEdgeToEdge(
                 statusBarStyle = SystemBarStyle.dark(enamel),
                 navigationBarStyle = if (darkTheme) {
@@ -129,6 +129,9 @@ data class OakColors(
     val textFaint: Color,
     /** Modal/overlay scrim — umber in light, black in dark. */
     val scrim: Color,
+    /** Whether this palette is the dark ramp. Use instead of [isSystemInDarkTheme]
+     * below [OakTheme] so an in-app Light/Dark override is respected. */
+    val isDark: Boolean,
 )
 
 /** Light-mode extended tokens (Enamel & Paper `--*` ramp). */
@@ -158,6 +161,7 @@ val OakLightColors = OakColors(
     textMuted = Color(0xFF6E625A),
     textFaint = Color(0xFF94867A),
     scrim = Color(0x734A352A),
+    isDark = false,
 )
 
 /** Dark-mode extended tokens (Enamel & Paper `--*` ramp). */
@@ -187,6 +191,7 @@ val OakDarkColors = OakColors(
     textMuted = Color(0xFFB7A99C),
     textFaint = Color(0xFF8A7D72),
     scrim = Color(0x99000000),
+    isDark = true,
 )
 
 /**

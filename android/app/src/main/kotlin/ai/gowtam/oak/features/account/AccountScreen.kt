@@ -5,6 +5,7 @@ import ai.gowtam.oak.features.auth.AuthDialog
 import ai.gowtam.oak.features.auth.AuthViewModel
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import android.content.Intent
@@ -23,13 +24,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.isSystemInDarkTheme
+import ai.gowtam.oak.app.AppearancePreference
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
@@ -41,6 +44,8 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -141,12 +146,31 @@ fun AccountScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(rememberScrollState())
                 .padding(OakSpacing.lg),
         ) {
             ProfileHeader(isSignedIn = authState is AuthState.SignedIn, email = viewModel.email, tierTitle = viewModel.tierTitle)
             Spacer(Modifier.height(OakSpacing.lg))
             val density by viewModel.answerDensity.collectAsState()
+            val appearance by viewModel.appState.appearance.collectAsState()
             SectionCard {
+                Column(modifier = Modifier.padding(OakSpacing.md), verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
+                    Text(
+                        text = "Appearance",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+                        for (pref in AppearancePreference.entries) {
+                            FilterChip(
+                                selected = appearance == pref,
+                                onClick = { viewModel.appState.setAppearance(pref) },
+                                label = { Text(pref.title) },
+                                colors = enamelFilterChipColors(colors),
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider(color = colors.border)
                 ActionRow(
                     icon = Icons.Filled.Info,
                     title = if (density is ai.gowtam.oak.wire.AnswerDensity.Compact) {
@@ -168,6 +192,12 @@ fun AccountScreen(
                     },
                 )
             }
+            Text(
+                text = "System follows your phone's Light/Dark setting. Compact hides Why / Sources on answer cards.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textMuted,
+                modifier = Modifier.padding(top = OakSpacing.sm, start = OakSpacing.xs, end = OakSpacing.xs),
+            )
             Spacer(Modifier.height(OakSpacing.lg))
 
             SectionCard {
@@ -322,7 +352,7 @@ private fun ProfileHeader(isSignedIn: Boolean, email: String?, tierTitle: String
 @Composable
 private fun SectionCard(danger: Boolean = false, content: @Composable () -> Unit) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
+    val dark = oak.isDark
     val shape = RoundedCornerShape(OakRadius.lg)
     val fill = if (danger) oak.dangerSoft else MaterialTheme.colorScheme.surface
     val stroke = if (danger) oak.danger.copy(alpha = 0.35f) else oak.border
@@ -413,6 +443,14 @@ private fun openUrl(context: android.content.Context, url: String) {
 }
 
 private fun versionString(): String = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
+
+@Composable
+private fun enamelFilterChipColors(oak: OakColors) = FilterChipDefaults.filterChipColors(
+    containerColor = MaterialTheme.colorScheme.surface,
+    labelColor = oak.textMuted,
+    selectedContainerColor = oak.accentSoft,
+    selectedLabelColor = oak.accent,
+)
 
 // Legal/support links + backend account-deletion endpoint reuse (D-AC-ACCT2.3 —
 // no new backend work; the iPhone app added the same DELETE route).

@@ -7,7 +7,7 @@ import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.wire.Subject
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,7 +46,7 @@ fun ComparisonView(
     onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)? = null,
 ) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
+    val dark = oak.isDark
     val plateShape = RoundedCornerShape(OakRadius.lg)
     val umber = Color(0xFF4A352A)
 
