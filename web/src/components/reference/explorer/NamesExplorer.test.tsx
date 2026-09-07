@@ -72,4 +72,23 @@ describe("NamesExplorer", () => {
     expect(screen.queryByRole("link", { name: "Torrent" })).toBeNull();
     expect(screen.getByRole("status")).toHaveTextContent("1 RESULTS");
   });
+
+  it("empty search says nothing on the Champions roster matched (CF-DEX-AC-1.3, CF-UI-AC-7.2)", () => {
+    render(
+      <NamesExplorer
+        rows={ROWS}
+        basePath="/abilities"
+        noun="ABILITIES"
+        searchPlaceholder="Search abilities"
+      />,
+    );
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "zzzznope" },
+    });
+    expect(screen.getByTestId("ref-empty")).toHaveTextContent(
+      /champions roster/i,
+    );
+    expect(screen.queryByText(/National Dex/i)).toBeNull();
+    expect(screen.queryByText(/Scarlet/i)).toBeNull();
+  });
 });
