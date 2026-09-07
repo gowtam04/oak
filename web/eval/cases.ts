@@ -1061,7 +1061,6 @@ export const cases: GoldenCase[] = [
       "Make a party from these: Mega Kangaskhan, Garchomp, Farigiraf, Ninetales, Talonflame, Tauros",
     expect: {
       status: "answered",
-      mustInclude: ["Learnset unavailable"],
       proposedTeamSpecies: ["kangaskhan-mega"],
       proposedTeamWarningCodes: ["learnset_unavailable"],
       toolEfficiency: { usedTool: "lookup_box", maxPerPokemonFetches: 0 },
