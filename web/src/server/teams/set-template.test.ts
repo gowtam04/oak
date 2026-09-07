@@ -122,6 +122,8 @@ describe("resolveSetTemplate — Champions live usage (CF-TEAM-AC-6.5–6.6, ADR
     expect(result.member.species).toBe("garchomp");
     expect(result.member.tera_type).toBeNull();
     expect(result.member.level).toBe(50);
+    // Live `stat_points` synthesize this slash string from
+    // hp_points / sp_atk_points / sp_def_points / speed_points.
     expect(result.member.evs).toEqual({
       hp: 32,
       atk: 0,
@@ -130,6 +132,7 @@ describe("resolveSetTemplate — Champions live usage (CF-TEAM-AC-6.5–6.6, ADR
       spd: 2,
       spe: 32,
     });
+    expect(result.member.evs.hp + result.member.evs.spe).toBeGreaterThan(0);
     expect(result.member.nature).toBe("jolly");
     expect(result.member.ability).toBe("rough-skin");
     expect(result.member.item).toBe("life-orb");

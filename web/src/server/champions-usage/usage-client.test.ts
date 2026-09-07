@@ -65,8 +65,8 @@ const GARCHOMP_BATTLE_LIVE = {
       hp_points: 32,
       attack_points: 0,
       defense_points: 0,
-      special_attack_points: 0,
-      special_defense_points: 2,
+      sp_atk_points: 0,
+      sp_def_points: 2,
       speed_points: 32,
     },
     { position: 1, category: "teammate", rank: 1, name: "Rillaboom", percentage: "28.6%" },
@@ -170,6 +170,37 @@ describe("getUsage — happy path", () => {
       rank: 1,
     });
     expect(res.data.moves[0].name).toBe("Earthquake");
+  });
+
+  it("still synthesizes spreads from special_attack_points / special_defense_points fallbacks", async () => {
+    installFetch((url) => {
+      if (url === `${BASE}/api`) return ok(INDEX);
+      if (url.startsWith(`${BASE}/api/battle/Doubles/Garchomp`)) {
+        return ok({
+          ...GARCHOMP_BATTLE_LIVE,
+          rows: [
+            {
+              position: 1,
+              category: "stat_points",
+              rank: 1,
+              name: "",
+              percentage: "31.0%",
+              hp_points: 32,
+              attack_points: 0,
+              defense_points: 0,
+              special_attack_points: 0,
+              special_defense_points: 2,
+              speed_points: 32,
+            },
+          ],
+        });
+      }
+      return notFound();
+    });
+    const res = await getUsage("garchomp", "doubles", { now: 1 });
+    expect(res.found).toBe(true);
+    if (!res.found) return;
+    expect(res.data.spreads[0]?.name).toBe("32/0/0/0/2/32");
   });
 });
 

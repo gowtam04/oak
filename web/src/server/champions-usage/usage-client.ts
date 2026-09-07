@@ -158,20 +158,27 @@ const CATEGORY_TO_KEY: Record<string, keyof CategoryBuckets> = {
   teammate: "teammates",
 };
 
-/** Live `stat_points` columns → HP/Atk/Def/SpA/SpD/Spe order. */
-const SPREAD_POINT_KEYS = [
+/**
+ * Live `stat_points` columns → HP/Atk/Def/SpA/SpD/Spe.
+ * Live CSV uses `sp_atk_points` / `sp_def_points`; longer names are fallbacks.
+ */
+const SPREAD_POINT_KEYS: readonly (readonly string[])[] = [
   ["hp_points", "hp"],
   ["attack_points", "atk"],
   ["defense_points", "def"],
-  ["special_attack_points", "spa"],
-  ["special_defense_points", "spd"],
+  ["sp_atk_points", "special_attack_points", "spa"],
+  ["sp_def_points", "special_defense_points", "spd"],
   ["speed_points", "spe"],
-] as const;
+];
 
 function spreadNameFromPoints(r: Record<string, unknown>): string | null {
   const parts: number[] = [];
-  for (const [primary, alt] of SPREAD_POINT_KEYS) {
-    const n = readFiniteNumber(r[primary] ?? r[alt]);
+  for (const keys of SPREAD_POINT_KEYS) {
+    let n: number | null = null;
+    for (const k of keys) {
+      n = readFiniteNumber(r[k]);
+      if (n != null) break;
+    }
     if (n == null) return null;
     parts.push(n);
   }
