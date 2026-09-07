@@ -28,6 +28,12 @@ struct AppearanceStoreTests {
   }
 
   @Test
+  func symbolsAreDistinct() {
+    let symbols = Set(AppearancePreference.allCases.map(\.symbol))
+    #expect(symbols.count == AppearancePreference.allCases.count)
+  }
+
+  @Test
   func userDefaultsRoundTrip() {
     let suiteName = "oak.appearance.tests.\(UUID().uuidString)"
     guard let defaults = UserDefaults(suiteName: suiteName) else {

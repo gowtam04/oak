@@ -1,12 +1,11 @@
 import SwiftUI
 
-/// The Account / Settings screen (M-UI-US-7): sign in/out, the current tier &
-/// what it unlocks, the **account-deletion** flow (M-ACCT-US-6 / M-NFR-6), and
-/// standard about/legal links. The former "Champions mode by default" preference
-/// was removed — scope is chosen per conversation via the header scope chip
-/// (`ChatView`), matching web (which also dropped its default toggle).
+/// The Settings screen (M-UI-US-7): appearance, answer-card density, sign in/out,
+/// the **account-deletion** flow (M-ACCT-US-6 / M-NFR-6), and about/legal links.
+/// Account actions live in an Account section inside Settings — the tab itself
+/// is Settings, not Account.
 ///
-/// Hosted as a first-class tab root (Chat / Teams / Dex / Account). The tab wraps
+/// Hosted as a first-class tab root (Chat / Teams / Dex / Settings). The tab wraps
 /// this view in a `NavigationStack`; this view supplies the `Form` and title.
 ///
 /// The view owns its ``AccountViewModel`` (`@State`) and drives it from `Task`s;
@@ -43,13 +42,14 @@ struct AccountView: View {
   var body: some View {
     Form {
       profileHeaderSection
-      accountSection
       appearanceSection
+      answerCardsSection
+      toolsSection
+      accountSection
       if let message = model.errorMessage {
         errorSection(message)
       }
       if model.isSignedIn {
-        sharedByMeSection
         dangerSection
       }
       aboutSection
@@ -57,7 +57,7 @@ struct AccountView: View {
     .scrollContentBackground(.hidden)
     .background(Theme.canvas)
     .listRowBackground(Theme.surface)
-    .navigationTitle("Account")
+    .navigationTitle("Settings")
     .navigationBarTitleDisplayMode(.inline)
     .sheet(isPresented: $showingSignIn) {
       AuthView(model: model.makeAuthViewModel())
@@ -167,8 +167,8 @@ struct AccountView: View {
 
   // MARK: Account actions
 
-  /// The sign-in / sign-out control. The tier row it used to sit beside now lives in
-  /// the profile header above; this section keeps the primary account action.
+  /// Sign-in / sign-out and public shares. Lives under an Account header so the
+  /// Settings tab can hold appearance and other prefs above it.
   @ViewBuilder
   private var accountSection: some View {
     Section {
@@ -180,6 +180,11 @@ struct AccountView: View {
         }
         .disabled(model.isBusy)
         .accessibilityHint("Returns the app to guest mode and removes your session from this device.")
+        NavigationLink {
+          SharedByMeView(shares: services.shares)
+        } label: {
+          actionLabel(title: "Shared by me", systemImage: "link")
+        }
       } else {
         Button {
           showingSignIn = true
@@ -188,33 +193,46 @@ struct AccountView: View {
         }
         .accessibilityHint("Sign in with your email to unlock saved history and the team builder.")
       }
+    } header: {
+      Text("Account").instrumentLabel().foregroundStyle(Theme.textSecondary)
     } footer: {
       Text(model.tierDescription)
     }
   }
 
+  /// Full-row Light / Dark / System choices so the control is a labelled
+  /// settings list, not an unlabeled segmented picker mixed into other rows.
   @ViewBuilder
   private var appearanceSection: some View {
     Section {
-      Button {
-        appState.pendingDestination = .calculator(nil)
-      } label: {
-        actionLabel(title: "Calculator", systemImage: "function")
-      }
-      .accessibilityHint("Opens the damage calculator")
-      Picker(
-        "Appearance",
-        selection: Binding(
-          get: { appState.appearance },
-          set: { appState.appearance = $0 }
-        )
-      ) {
-        ForEach(AppearancePreference.allCases, id: \.self) { pref in
-          Text(pref.title).tag(pref)
+      ForEach(AppearancePreference.allCases, id: \.self) { pref in
+        Button {
+          Haptics.tap()
+          appState.appearance = pref
+        } label: {
+          HStack {
+            actionLabel(title: pref.title, systemImage: pref.symbol)
+            Spacer()
+            if appState.appearance == pref {
+              Image(systemName: "checkmark")
+                .foregroundStyle(Theme.accent)
+                .accessibilityHidden(true)
+            }
+          }
         }
+        .accessibilityAddTraits(appState.appearance == pref ? .isSelected : [])
+        .accessibilityHint("Sets the app appearance to \(pref.title).")
       }
-      .pickerStyle(.segmented)
-      .accessibilityHint("Choose Light, Dark, or follow the iPhone setting.")
+    } header: {
+      Text("Appearance").instrumentLabel().foregroundStyle(Theme.textSecondary)
+    } footer: {
+      Text("System follows your iPhone's Light/Dark setting.")
+    }
+  }
+
+  @ViewBuilder
+  private var answerCardsSection: some View {
+    Section {
       Picker(
         "Answer cards",
         selection: Binding(
@@ -226,22 +244,19 @@ struct AccountView: View {
         Text("Compact").tag(AnswerDensity.compact)
       }
     } footer: {
-      Text(
-        "System follows your iPhone's Light/Dark setting. Compact hides Why / Sources on answer cards. Facts and caveats stay visible."
-      )
+      Text("Compact hides Why / Sources on answer cards. Facts and caveats stay visible.")
     }
   }
 
   @ViewBuilder
-  private var sharedByMeSection: some View {
+  private var toolsSection: some View {
     Section {
-      NavigationLink {
-        SharedByMeView(shares: services.shares)
+      Button {
+        appState.pendingDestination = .calculator(nil)
       } label: {
-        actionLabel(title: "Shared by me", systemImage: "link")
+        actionLabel(title: "Calculator", systemImage: "function")
       }
-    } footer: {
-      Text("Public answer links you've created. Revoke any time.")
+      .accessibilityHint("Opens the damage calculator")
     }
   }
 
