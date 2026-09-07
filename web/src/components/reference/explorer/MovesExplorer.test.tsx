@@ -40,4 +40,15 @@ describe("MovesExplorer", () => {
     expect(screen.queryByRole("link", { name: /Ember/ })).toBeNull();
     expect(screen.getByRole("status")).toHaveTextContent("1 RESULTS");
   });
+
+  it("empty search says nothing on the Champions roster matched (CF-DEX-AC-1.3, CF-UI-AC-7.2)", () => {
+    render(<MovesExplorer rows={ROWS} />);
+    fireEvent.change(screen.getByRole("searchbox"), {
+      target: { value: "zzzznope" },
+    });
+    expect(screen.getByTestId("ref-empty")).toHaveTextContent(
+      /champions roster/i,
+    );
+    expect(screen.queryByText(/National Dex/i)).toBeNull();
+  });
 });

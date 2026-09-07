@@ -23,7 +23,7 @@ describe("ReferenceHeader", () => {
     );
   });
 
-  it("links to all five reference sections", () => {
+  it("links to all five reference sections (Usage, not Meta)", () => {
     render(<ReferenceHeader />);
     expect(screen.getByRole("link", { name: "Pokédex" })).toHaveAttribute(
       "href",
@@ -41,10 +41,13 @@ describe("ReferenceHeader", () => {
       "href",
       "/items",
     );
-    expect(screen.getByRole("link", { name: "Meta" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Usage" })).toHaveAttribute(
       "href",
-      "/meta",
+      "/usage",
     );
+    expect(screen.queryByRole("link", { name: "Meta" })).toBeNull();
+    const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs).not.toContain("/meta");
   });
 
   it("links to chat", () => {

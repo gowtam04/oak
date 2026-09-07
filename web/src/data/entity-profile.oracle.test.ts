@@ -21,18 +21,39 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { entityArtifactResponseSchema } from "@/lib/entity-artifact";
+import { CHAMPIONS_FORMAT, CHAMPIONS_REGULATION } from "@/data/formats";
+import { reference_cache } from "@/data/schema";
 
-import { createPgSchema, type PgFixture } from "../../test/support/pg";
-import { seedEntityRefs } from "../../test/fixtures/entity-refs";
+import { createPgSchema, type PgDb, type PgFixture } from "../../test/support/pg";
+import { ENTITY_REFERENCE_SEED } from "../../test/fixtures/entity-refs";
 
-const SV = "scarlet-violet";
+const SKIP_REF_KEYS = new Set(["move/earthquake"]);
+
+async function seedChampionsEntityRefs(db: PgDb): Promise<void> {
+  const now = Date.now();
+  await db.insert(reference_cache).values(
+    ENTITY_REFERENCE_SEED.filter((r) => !SKIP_REF_KEYS.has(r.resource_key)).map(
+      (r) => ({
+        format: CHAMPIONS_FORMAT,
+        resource_key: r.resource_key,
+        resource_kind: r.resource_kind,
+        payload: JSON.stringify(r.payload),
+        endpoint_url: `https://pokeapi.co/api/v2/${r.resource_key}`,
+        fetched_at: now,
+      }),
+    ),
+  );
+}
 
 // Imported dynamically after server-only is mocked.
 let assembleEntityProfile: typeof import("./entity-profile").assembleEntityProfile;
 let fix: PgFixture;
 
 beforeAll(async () => {
-  fix = await createPgSchema({ seed: "tools", after: seedEntityRefs });
+  fix = await createPgSchema({
+    seed: "tools",
+    after: seedChampionsEntityRefs,
+  });
   ({ assembleEntityProfile } = await import("./entity-profile"));
 }, 60_000);
 
@@ -42,7 +63,12 @@ afterAll(async () => {
 
 describe("assembleEntityProfile — pokemon", () => {
   it("assembles Garchomp's full profile with combined matchups and grouped movepool", async () => {
-    const res = await assembleEntityProfile("pokemon", "garchomp", SV, fix.db);
+    const res = await assembleEntityProfile(
+      "pokemon",
+      "garchomp",
+      CHAMPIONS_FORMAT,
+      fix.db,
+    );
     expect(entityArtifactResponseSchema.parse(res)).toEqual(res);
     expect(res.status).toBe("ok");
     if (res.status !== "ok" || res.kind !== "pokemon") {
@@ -51,7 +77,8 @@ describe("assembleEntityProfile — pokemon", () => {
 
     expect(res.resolved).toEqual({ slug: "garchomp", display_name: "Garchomp" });
     expect(res.is_fallback).toBe(false);
-    expect(res.generation).toBe("Scarlet/Violet (Gen 9)");
+    expect(res.generation).toMatch(new RegExp(CHAMPIONS_REGULATION));
+    expect(res.format).toBe(CHAMPIONS_FORMAT);
     expect(res.data.types).toEqual(["dragon", "ground"]);
     expect(res.data.base_stats.attack).toBe(130);
     expect(res.data.base_stat_total).toBe(600);
@@ -86,7 +113,12 @@ describe("assembleEntityProfile — pokemon", () => {
   });
 
   it("flags a non-native species as a fallback (Dracovish)", async () => {
-    const res = await assembleEntityProfile("pokemon", "dracovish", SV, fix.db);
+    const res = await assembleEntityProfile(
+      "pokemon",
+      "dracovish",
+      CHAMPIONS_FORMAT,
+      fix.db,
+    );
     expect(res.status).toBe("ok");
     if (res.status !== "ok") throw new Error("expected ok");
     expect(res.is_fallback).toBe(true);
@@ -94,14 +126,24 @@ describe("assembleEntityProfile — pokemon", () => {
   });
 
   it("returns not_found for an unresolved Pokémon slug", async () => {
-    const res = await assembleEntityProfile("pokemon", "missingno", SV, fix.db);
+    const res = await assembleEntityProfile(
+      "pokemon",
+      "missingno",
+      CHAMPIONS_FORMAT,
+      fix.db,
+    );
     expect(res).toMatchObject({ status: "not_found", kind: "pokemon" });
   });
 });
 
 describe("assembleEntityProfile — move / ability / item / type", () => {
   it("assembles a move profile", async () => {
-    const res = await assembleEntityProfile("move", "earthquake", SV, fix.db);
+    const res = await assembleEntityProfile(
+      "move",
+      "earthquake",
+      CHAMPIONS_FORMAT,
+      fix.db,
+    );
     expect(entityArtifactResponseSchema.parse(res)).toEqual(res);
     if (res.status !== "ok" || res.kind !== "move") {
       throw new Error("expected ok move");
@@ -112,7 +154,12 @@ describe("assembleEntityProfile — move / ability / item / type", () => {
   });
 
   it("assembles an ability profile with its learned_by roster", async () => {
-    const res = await assembleEntityProfile("ability", "rough-skin", SV, fix.db);
+    const res = await assembleEntityProfile(
+      "ability",
+      "rough-skin",
+      CHAMPIONS_FORMAT,
+      fix.db,
+    );
     expect(entityArtifactResponseSchema.parse(res)).toEqual(res);
     if (res.status !== "ok" || res.kind !== "ability") {
       throw new Error("expected ok ability");
@@ -125,7 +172,12 @@ describe("assembleEntityProfile — move / ability / item / type", () => {
   });
 
   it("assembles an item profile", async () => {
-    const res = await assembleEntityProfile("item", "leftovers", SV, fix.db);
+    const res = await assembleEntityProfile(
+      "item",
+      "leftovers",
+      CHAMPIONS_FORMAT,
+      fix.db,
+    );
     if (res.status !== "ok" || res.kind !== "item") {
       throw new Error("expected ok item");
     }
@@ -134,7 +186,12 @@ describe("assembleEntityProfile — move / ability / item / type", () => {
   });
 
   it("assembles a type profile with offensive + defensive grids", async () => {
-    const res = await assembleEntityProfile("type", "ground", SV, fix.db);
+    const res = await assembleEntityProfile(
+      "type",
+      "ground",
+      CHAMPIONS_FORMAT,
+      fix.db,
+    );
     expect(entityArtifactResponseSchema.parse(res)).toEqual(res);
     if (res.status !== "ok" || res.kind !== "type") {
       throw new Error("expected ok type");
@@ -149,7 +206,12 @@ describe("assembleEntityProfile — move / ability / item / type", () => {
   });
 
   it("returns not_found for a move with no reference row", async () => {
-    const res = await assembleEntityProfile("move", "splash", SV, fix.db);
+    const res = await assembleEntityProfile(
+      "move",
+      "splash",
+      CHAMPIONS_FORMAT,
+      fix.db,
+    );
     expect(res).toMatchObject({ status: "not_found", kind: "move" });
   });
 });
@@ -161,13 +223,13 @@ describe("assembleEntityProfile — unavailable index", () => {
       const res = await assembleEntityProfile(
         "pokemon",
         "garchomp",
-        SV,
+        CHAMPIONS_FORMAT,
         empty.db,
       );
       expect(res).toEqual({
         status: "unavailable",
         kind: "pokemon",
-        format: SV,
+        format: CHAMPIONS_FORMAT,
       });
     } finally {
       await empty.cleanup();
