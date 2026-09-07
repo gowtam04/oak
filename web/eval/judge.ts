@@ -77,6 +77,22 @@ export interface GoldenCase {
       usedTool: string;
       maxPerPokemonFetches: number;
     };
+    /**
+     * None of these tool names may appear in the tool-call trace (e.g. G61
+     * forbids `run_sql` / `search_wiki` on a box-build). Checked against the
+     * `toolCalls` already passed to runStructural.
+     */
+    forbiddenTools?: string[];
+    /**
+     * Every slug here must appear as `proposed_team.members[].species`.
+     * Markdown mention is not enough (display name vs slug).
+     */
+    proposedTeamSpecies?: string[];
+    /**
+     * Every code here must appear on `proposed_team_warnings[].code`
+     * (e.g. `"learnset_unavailable"`).
+     */
+    proposedTeamWarningCodes?: string[];
     /** true → this case is in the Vitest CI subset (eval/deterministic.ts). */
     deterministic?: boolean;
     /**
@@ -179,6 +195,9 @@ export type RunOakFn = typeof defaultRunOak;
  *   5. Tool efficiency — usedTool present; get_pokemon calls bounded
  *   6. Citation presence for factual "answered" cases (BR-4)
  *   7. Generation correctness — fallback flag consistent with subjects (BR-1)
+ *   8. forbiddenTools — named tools must not appear in the tool-call trace
+ *   9. proposedTeamSpecies — slugs present on proposed_team.members[].species
+ *  10. proposedTeamWarningCodes — codes present on proposed_team_warnings[]
  */
 export function runStructural(
   answer: OakAnswer,
@@ -270,6 +289,40 @@ export function runStructural(
     failures.push(
       "generation_correctness: subjects[] contain is_fallback=true but generation_basis.fallback=false (BR-1)",
     );
+  }
+
+  // 8. forbiddenTools — none of these names may appear in the tool-call trace.
+  for (const tool of gc.expect.forbiddenTools ?? []) {
+    if (toolCalls.includes(tool)) {
+      failures.push(
+        `forbiddenTools: "${tool}" was called (must not appear)`,
+      );
+    }
+  }
+
+  // 9. proposedTeamSpecies — each required slug must be a member species.
+  //    Markdown-only mention is not enough (display name vs slug).
+  for (const slug of gc.expect.proposedTeamSpecies ?? []) {
+    const found = (answer.proposed_team?.members ?? []).some(
+      (m) => m.species === slug,
+    );
+    if (!found) {
+      failures.push(
+        `proposedTeamSpecies: proposed_team.members does not contain species "${slug}"`,
+      );
+    }
+  }
+
+  // 10. proposedTeamWarningCodes — each required code must appear.
+  for (const code of gc.expect.proposedTeamWarningCodes ?? []) {
+    const found = (answer.proposed_team_warnings ?? []).some(
+      (w) => w.code === code,
+    );
+    if (!found) {
+      failures.push(
+        `proposedTeamWarningCodes: proposed_team_warnings does not contain code "${code}"`,
+      );
+    }
   }
 
   return failures;
@@ -452,6 +505,21 @@ export function buildJudgeUserMessage(gc: GoldenCase, answer: OakAnswer): string
   if (gc.expect.mustInclude?.length) {
     expectLines.push(
       `Answer must include: ${gc.expect.mustInclude.join(", ")}`,
+    );
+  }
+  if (gc.expect.proposedTeamSpecies?.length) {
+    expectLines.push(
+      `Proposed team members must include species: ${gc.expect.proposedTeamSpecies.join(", ")}`,
+    );
+  }
+  if (gc.expect.proposedTeamWarningCodes?.length) {
+    expectLines.push(
+      `Proposed team warnings must include codes: ${gc.expect.proposedTeamWarningCodes.join(", ")}`,
+    );
+  }
+  if (gc.expect.forbiddenTools?.length) {
+    expectLines.push(
+      `Must not call tools: ${gc.expect.forbiddenTools.join(", ")}`,
     );
   }
 

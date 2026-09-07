@@ -54,11 +54,13 @@
  *
  * G61 (team-from-box, deterministic) is the launch-bar case from
  * docs/features/team-from-box: a pasted box that includes a missing-learnset
- * form (Mega Kangaskhan / kangaskhan-mega) must still place that form on
- * `proposed_team` with a visible warning, via one `lookup_box` call and no
- * `run_sql` / `search_wiki` grind (BOX-AC-1.2, BOX-AC-2.4, BOX-AC-3.1).
- * The eval fixture may lack the Mega form — the scripted plan keeps the
- * user-named species even on a miss (BOX-BR-2).
+ * form (Mega Kangaskhan / kangaskhan-mega) must still place that form as a
+ * `proposed_team` member (species slug `kangaskhan-mega`) with
+ * `learnset_unavailable` on `proposed_team_warnings`, via one `lookup_box`
+ * call and no `run_sql` / `search_wiki` grind (BOX-AC-1.2, BOX-AC-2.4,
+ * BOX-AC-3.1). Markdown-only mention is not enough. The eval fixture may
+ * lack the Mega form — the scripted plan keeps the user-named species even
+ * on a miss (BOX-BR-2).
  */
 
 // GoldenCase is defined once in ./judge (the single source of truth) and
@@ -1048,8 +1050,9 @@ export const cases: GoldenCase[] = [
   // =========================================================================
   // G61 — Team-from-box keep-and-warn (BOX-AC-1.2, BOX-AC-2.4, BOX-AC-3.1)
   // Pasted owned list including Mega Kangaskhan (empty/missing learnset).
-  // proposed_team (or answer_markdown) still names that form + a warning;
-  // tool path is one lookup_box, not a SQL/wiki grind.
+  // proposed_team.members includes species kangaskhan-mega AND
+  // proposed_team_warnings carries learnset_unavailable; markdown-only is
+  // not enough. Tool path is one lookup_box; run_sql/search_wiki forbidden.
   // DETERMINISTIC: plan in eval/deterministic.ts (lookup_box then compose).
   // =========================================================================
   {
@@ -1058,11 +1061,14 @@ export const cases: GoldenCase[] = [
       "Make a party from these: Mega Kangaskhan, Garchomp, Farigiraf, Ninetales, Talonflame, Tauros",
     expect: {
       status: "answered",
-      mustInclude: ["kangaskhan-mega", "Learnset unavailable"],
+      mustInclude: ["Learnset unavailable"],
+      proposedTeamSpecies: ["kangaskhan-mega"],
+      proposedTeamWarningCodes: ["learnset_unavailable"],
       toolEfficiency: { usedTool: "lookup_box", maxPerPokemonFetches: 0 },
+      forbiddenTools: ["run_sql", "search_wiki"],
       deterministic: true,
       rubricNote:
-        "Box-build: a pasted owned list that includes Mega Kangaskhan (kangaskhan-mega), a form whose learnset is empty or missing in this scope. A correct answer still places that named form on proposed_team (or names it in answer_markdown) with a learnset_unavailable / species-kept warning — not a silent omit or a substitute species. The tool path is one lookup_box over the listed names; run_sql and search_wiki must not appear. An answer that drops Mega Kangaskhan, swaps in another species, or grinds SQL/wiki FAILS.",
+        "Box-build: a pasted owned list that includes Mega Kangaskhan (kangaskhan-mega), a form whose learnset is empty or missing in this scope. A correct answer places that named form as a member of proposed_team (species slug kangaskhan-mega) with learnset_unavailable on proposed_team_warnings — not a silent omit, a substitute species, or a markdown-only mention. The tool path is one lookup_box over the listed names; run_sql and search_wiki must not appear. An answer that drops Mega Kangaskhan, swaps in another species, or grinds SQL/wiki FAILS.",
     },
     covers: ["BOX-AC-1.2", "BOX-AC-2.4", "BOX-AC-3.1"],
   },

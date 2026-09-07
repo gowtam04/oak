@@ -222,6 +222,23 @@ describe("eval/cases", () => {
         ).toBeGreaterThanOrEqual(0);
       }
 
+      // forbiddenTools / proposedTeamSpecies / proposedTeamWarningCodes
+      // (optional) must be non-empty arrays of non-empty strings
+      for (const key of [
+        "forbiddenTools",
+        "proposedTeamSpecies",
+        "proposedTeamWarningCodes",
+      ] as const) {
+        const arr = c.expect[key];
+        if (arr === undefined) continue;
+        expect(Array.isArray(arr)).toBe(true);
+        expect(arr.length).toBeGreaterThan(0);
+        for (const s of arr) {
+          expect(typeof s).toBe("string");
+          expect(s.length).toBeGreaterThan(0);
+        }
+      }
+
       // deterministic (optional) must be a boolean when present
       if (c.expect.deterministic !== undefined) {
         expect(typeof c.expect.deterministic).toBe("boolean");
@@ -652,11 +669,14 @@ describe("eval/cases", () => {
       expect(g61.expect.toolEfficiency?.maxPerPokemonFetches).toBe(0);
     });
 
-    it("requires the named Mega Kangaskhan form plus a learnset warning", () => {
+    it("structurally requires kangaskhan-mega on proposed_team with learnset_unavailable", () => {
       const g61 = getCase("G61");
-      expect(g61.expect.mustInclude).toEqual(
-        expect.arrayContaining(["kangaskhan-mega", "Learnset unavailable"]),
-      );
+      expect(g61.expect.proposedTeamSpecies).toEqual(["kangaskhan-mega"]);
+      expect(g61.expect.proposedTeamWarningCodes).toEqual([
+        "learnset_unavailable",
+      ]);
+      expect(g61.expect.forbiddenTools).toEqual(["run_sql", "search_wiki"]);
+      expect(g61.expect.mustInclude ?? []).not.toContain("kangaskhan-mega");
     });
 
     it("covers BOX-AC-1.2, BOX-AC-2.4, and BOX-AC-3.1", () => {

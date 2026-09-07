@@ -46,6 +46,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type OpenAI from "openai";
 
+import { normalizeBoxSpecies } from "@/agent/box-build";
 import { GrokProvider } from "@/agent/providers/grok-provider";
 import type { GrokResponsesClientLike } from "@/agent/providers/grok-provider";
 import {
@@ -510,14 +511,6 @@ function boxMember(species: string): TeamMember {
     tera_type: null,
     level: 50,
   };
-}
-
-function displayToSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/['’.]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -1017,17 +1010,25 @@ const PLANS: Record<string, DeterministicPlan> = {
       },
     ],
     compose: (o) => {
-      const KEEP = "kangaskhan-mega";
+      const KEEP = normalizeBoxSpecies("Mega Kangaskhan");
       const results = isLookupBoxOutput(o.lookup_box)
         ? o.lookup_box.results
         : [];
+      const slugOf = (r: (typeof results)[number]): string =>
+        r.found
+          ? normalizeBoxSpecies(r.pokemon.display_name)
+          : normalizeBoxSpecies(r.query);
+      // Named form stays even on a miss or empty/unavailable learnset
+      // (BOX-AC-1.2 / BOX-BR-2). Inspect each row; do not drop or substitute.
       const members: TeamMember[] = [boxMember(KEEP)];
       const seen = new Set<string>([KEEP]);
       for (const r of results) {
         if (members.length >= 6) break;
+        const slug = slugOf(r);
+        if (!slug) continue;
+        if (slug === KEEP) continue;
         if (!r.found) continue;
-        const slug = displayToSlug(r.pokemon.display_name);
-        if (!slug || seen.has(slug)) continue;
+        if (seen.has(slug)) continue;
         seen.add(slug);
         members.push(boxMember(slug));
       }
@@ -1043,6 +1044,13 @@ const PLANS: Record<string, DeterministicPlan> = {
           format: "scarlet-violet",
           members,
         },
+        proposed_team_warnings: [
+          {
+            code: "learnset_unavailable",
+            message: warning,
+            slot: 0,
+          },
+        ],
         citations: [],
         inferences: [],
         generation_basis: GEN9_BASIS,

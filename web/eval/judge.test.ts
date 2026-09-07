@@ -2,7 +2,9 @@
  * eval/judge.test.ts — focused unit tests for eval/judge.ts.
  *
  * Coverage:
- *   - runStructural: all seven assertion dimensions
+ *   - runStructural: status, minCandidates, mustCite, mustInclude,
+ *     toolEfficiency, citation_presence, generation_correctness,
+ *     forbiddenTools, proposedTeamSpecies, proposedTeamWarningCodes
  *   - runJudgedWith: orchestration, multi-turn, tool-call capture, score aggregation
  *
  * Design constraints (design.md § Testing Strategy — mocking policy):
@@ -64,6 +66,37 @@ const CANDIDATE_ANSWER: OakAnswer = {
       },
     ],
   },
+};
+
+const BOX_TEAM_ANSWER: OakAnswer = {
+  ...BASE_ANSWER,
+  answer_markdown:
+    "Keeping Mega Kangaskhan with a warning: Learnset unavailable.",
+  proposed_team: {
+    name: "Box party",
+    format: "scarlet-violet",
+    members: [
+      {
+        species: "kangaskhan-mega",
+        ability: null,
+        item: null,
+        moves: [],
+        nature: null,
+        evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
+        ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
+        tera_type: null,
+        level: 50,
+      },
+    ],
+  },
+  proposed_team_warnings: [
+    {
+      code: "learnset_unavailable",
+      message:
+        "Learnset unavailable for this form in this scope; species kept because you named it.",
+      slot: 0,
+    },
+  ],
 };
 
 const FALLBACK_ANSWER: OakAnswer = {
@@ -429,6 +462,92 @@ describe("runStructural", () => {
       const failures = runStructural(BASE_ANSWER, gc, []);
       expect(
         failures.filter((f) => f.startsWith("generation_correctness")),
+      ).toHaveLength(0);
+    });
+  });
+
+  describe("forbiddenTools assertion", () => {
+    it("fails when a forbidden tool appears in the trace", () => {
+      const gc = makeGoldenCase({
+        expect: { forbiddenTools: ["run_sql", "search_wiki"] },
+      });
+      const failures = runStructural(BASE_ANSWER, gc, [
+        "lookup_box",
+        "run_sql",
+      ]);
+      expect(failures).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('forbiddenTools: "run_sql" was called'),
+        ]),
+      );
+      expect(failures.filter((f) => f.includes("search_wiki"))).toHaveLength(
+        0,
+      );
+    });
+
+    it("passes when none of the forbidden tools were called", () => {
+      const gc = makeGoldenCase({
+        expect: { forbiddenTools: ["run_sql", "search_wiki"] },
+      });
+      const failures = runStructural(BASE_ANSWER, gc, ["lookup_box"]);
+      expect(
+        failures.filter((f) => f.startsWith("forbiddenTools")),
+      ).toHaveLength(0);
+    });
+  });
+
+  describe("proposedTeamSpecies assertion", () => {
+    it("fails when the species is only in answer_markdown, not proposed_team", () => {
+      const gc = makeGoldenCase({
+        expect: { proposedTeamSpecies: ["kangaskhan-mega"] },
+      });
+      const markdownOnly: OakAnswer = {
+        ...BASE_ANSWER,
+        answer_markdown: "Keeping kangaskhan-mega with a warning.",
+      };
+      const failures = runStructural(markdownOnly, gc, []);
+      expect(failures).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            'proposedTeamSpecies: proposed_team.members does not contain species "kangaskhan-mega"',
+          ),
+        ]),
+      );
+    });
+
+    it("passes when proposed_team.members includes the required species slug", () => {
+      const gc = makeGoldenCase({
+        expect: { proposedTeamSpecies: ["kangaskhan-mega"] },
+      });
+      const failures = runStructural(BOX_TEAM_ANSWER, gc, []);
+      expect(
+        failures.filter((f) => f.startsWith("proposedTeamSpecies")),
+      ).toHaveLength(0);
+    });
+  });
+
+  describe("proposedTeamWarningCodes assertion", () => {
+    it("fails when proposed_team_warnings lacks the required code", () => {
+      const gc = makeGoldenCase({
+        expect: { proposedTeamWarningCodes: ["learnset_unavailable"] },
+      });
+      const failures = runStructural(BASE_ANSWER, gc, []);
+      expect(failures).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(
+            'proposedTeamWarningCodes: proposed_team_warnings does not contain code "learnset_unavailable"',
+          ),
+        ]),
+      );
+    });
+
+    it("passes when proposed_team_warnings includes the required code", () => {
+      const gc = makeGoldenCase({
+        expect: { proposedTeamWarningCodes: ["learnset_unavailable"] },
+      });
+      const failures = runStructural(BOX_TEAM_ANSWER, gc, []);
+      expect(
+        failures.filter((f) => f.startsWith("proposedTeamWarningCodes")),
       ).toHaveLength(0);
     });
   });

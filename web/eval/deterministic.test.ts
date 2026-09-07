@@ -208,8 +208,16 @@ for (const provider of PROVIDERS) {
 
     it("G61 keeps kangaskhan-mega with a learnset-unavailable warning (BOX-AC-1.2)", () => {
       const a = byProvider[provider].byId.G61.answer;
-      expect(a.answer_markdown).toContain("kangaskhan-mega");
-      expect(a.answer_markdown).toContain("Learnset unavailable");
+      expect(
+        (a.proposed_team?.members ?? []).some(
+          (m) => m.species === "kangaskhan-mega",
+        ),
+      ).toBe(true);
+      expect(
+        (a.proposed_team_warnings ?? []).some(
+          (w) => w.code === "learnset_unavailable",
+        ),
+      ).toBe(true);
     });
   });
 }
