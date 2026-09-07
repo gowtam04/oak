@@ -4,9 +4,10 @@ import SwiftUI
 import UIKit
 
 /// The chat composer (chat-experience.md M-CHAT-US-1/5): a growing text field, a
-/// send button, and (P8) image attach — the photo library (`PhotosPicker`) or the
-/// camera (``CameraPicker``) behind one attach menu — with thumbnail/remove UI and
-/// permission handling. Scope is no longer set here: the header scope chip
+/// send button, a voice-mode mic (signed-in starts a session; guests get a
+/// sign-in nudge), and (P8) image attach — the photo library (`PhotosPicker`) or
+/// the camera (``CameraPicker``) behind one attach menu — with thumbnail/remove
+/// UI and permission handling. Scope is no longer set here: the header scope chip
 /// (`ChatView`) is the sole scope control (the Champions pill was removed).
 ///
 /// It reads and writes the feature's ``ChatViewModel`` directly (a sibling view in
@@ -100,9 +101,7 @@ struct ComposerView: View {
 
       HStack(alignment: .bottom, spacing: 8) {
         attachControls(model: model)
-        if Self.showsVoiceControl {
-          voiceControl(model: model)
-        }
+        voiceControl(model: model)
 
         TextField("Ask Oak", text: $model.composerText, axis: .vertical)
           .font(Theme.body(.body))
@@ -219,12 +218,6 @@ struct ComposerView: View {
     remainingSlots > 0 && !model.isStreaming
   }
 
-  /// Voice mode is temporarily hidden from the composer (kept implemented); flip to
-  /// re-show. Everything downstream (``voiceControl(model:)``, ``handleMicTap()``,
-  /// the mic/sign-in alerts, `onVoice`/`voiceReady`/`onSignInNudge`) stays wired and
-  /// compiled — this is the single gate.
-  private static let showsVoiceControl = false
-
   // MARK: Image attach control (one dialog → photo library / camera)
 
   /// A single attach affordance: a paperclip that opens a `confirmationDialog` with
@@ -265,6 +258,7 @@ struct ComposerView: View {
       Image(systemName: "mic.fill")
         .font(Theme.body(.title3))
         .symbolRenderingMode(.hierarchical)
+        .frame(width: 38, height: 38)
     }
     // At rest the mic is quiet `textSecondary` — red is reserved for *live* recording,
     // which happens in the voice overlay, not here (§4.02: red = live, not "audio
