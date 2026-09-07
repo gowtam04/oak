@@ -807,10 +807,12 @@ describe("/teams — archive view (CF-TEAM-AC-5.4, CF-UI-AC-4.3)", () => {
       fireEvent.click(within(archive).getByTestId(`team-open-${archived.id}`));
     });
     const editor = await screen.findByTestId("team-editor");
-    const nameEl = within(editor).getByTestId("team-name");
-    expect(
-      (nameEl as HTMLInputElement).value || nameEl.textContent,
-    ).toMatch(/Gen 7 rain/);
+    await waitFor(() => {
+      const nameEl = within(editor).getByTestId("team-name");
+      expect(
+        (nameEl as HTMLInputElement).value || nameEl.textContent,
+      ).toMatch(/Gen 7 rain/);
+    });
     expect(editor).toHaveTextContent(/excadrill/i);
     expect(editor).toHaveTextContent(/not in the Champions roster/);
     expect(screen.queryByTestId("team-save")).not.toBeInTheDocument();

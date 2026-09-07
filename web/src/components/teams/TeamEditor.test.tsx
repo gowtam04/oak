@@ -395,9 +395,38 @@ describe("TeamEditor — archived view (CF-TEAM-AC-5.2–5.4, CF-UI-AC-4.2–4.3
     setup({ team: archivedDetail() });
     expect(screen.getAllByText(/excadrill/i).length).toBeGreaterThan(0);
     const labels = screen.getAllByText(/not in the Champions roster/);
-    expect(labels.length).toBeGreaterThanOrEqual(1);
+    expect(labels.length).toBeGreaterThanOrEqual(4);
+    expect(
+      screen.getByTestId("member-0-species").closest(".team-member-panel__field"),
+    ).toHaveTextContent(/not in the Champions roster/);
+    expect(
+      screen.getByTestId("member-0-ability").closest(".team-member-panel__field"),
+    ).toHaveTextContent(/not in the Champions roster/);
+    expect(
+      screen.getByTestId("member-0-item").closest(".team-member-panel__field"),
+    ).toHaveTextContent(/not in the Champions roster/);
+    expect(screen.getByTestId("member-0-move-3").closest("td")).toHaveTextContent(
+      /not in the Champions roster/,
+    );
     expect(screen.queryByText(/try Scarlet/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/switch scope/i)).not.toBeInTheDocument();
+  });
+
+  it("renders stored spreads and Tera without living Stat Point chrome", () => {
+    setup({ team: archivedDetail() });
+    // fullMember: 252 Atk / 252 Spe — must not clip to the living 32 cap.
+    expect(screen.getByTestId("member-0-ev-atk")).toHaveValue(252);
+    expect(screen.getByTestId("member-0-ev-spe")).toHaveValue(252);
+    expect(screen.getByTestId("member-0-ev-atk")).not.toHaveAttribute(
+      "max",
+      "32",
+    );
+    expect(screen.queryByTestId("member-0-ev-total")).not.toBeInTheDocument();
+    expect(screen.queryByText(/stat points/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("slider")).not.toBeInTheDocument();
+    expect(screen.getByTestId("member-0-tera")).toHaveValue("Water");
+    expect(screen.queryByTestId("member-0-level")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("member-0-iv-hp")).not.toBeInTheDocument();
   });
 
   it("does not look up other-game Dex data for archived names (CF-TEAM-AC-5.4)", async () => {

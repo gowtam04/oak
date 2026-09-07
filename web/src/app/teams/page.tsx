@@ -23,6 +23,7 @@ import OakWordmark from "@/components/brand/OakWordmark";
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useTeams } from "@/lib/hooks/use-teams";
 import {
+  deleteTeam,
   listTeams,
   type TeamDetail,
   type TeamSummary,
@@ -216,11 +217,23 @@ export default function TeamsPage() {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      setArchivedTeams((prev) => prev.filter((t) => t.id !== id));
+      const archivedRow = archivedTeams.find((t) => t.id === id);
+      if (archivedRow) {
+        setArchivedTeams((prev) => prev.filter((t) => t.id !== id));
+        const ok = await deleteTeam(id);
+        if (!ok) {
+          setArchivedTeams((prev) =>
+            prev.some((t) => t.id === id) ? prev : [...prev, archivedRow],
+          );
+          return;
+        }
+        setSelected((prev) => (prev && prev.id === id ? null : prev));
+        return;
+      }
       await teams.remove(id);
       setSelected((prev) => (prev && prev.id === id ? null : prev));
     },
-    [teams],
+    [teams, archivedTeams],
   );
 
   // Import + export dialogs.

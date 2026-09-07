@@ -63,6 +63,7 @@ describe("ProposedTeamCard", () => {
     const members = screen.getByTestId("proposed-team-members");
     expect(members).toHaveTextContent("Great Tusk");
     expect(members).toHaveTextContent("Kingambit");
+    expect(members).not.toHaveTextContent(/Tera/i);
   });
 
   it("Save as new team calls createTeam with the proposed shape", async () => {

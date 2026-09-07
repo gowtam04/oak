@@ -67,7 +67,7 @@ function summary(
   return {
     id: "team-rain",
     name: "Rain Offense",
-    format: "scarlet-violet",
+    format: "champions",
     memberCount: 2,
     incomplete: true,
     updatedAt: Date.now(),
@@ -111,10 +111,11 @@ describe("AddToTeamPicker — list + create (ADD-US-2)", () => {
     expect(
       screen.getByRole("button", { name: /create new team/i }),
     ).toBeInTheDocument();
-    // Picker lists every team, not just the current format (api-design.md).
+    // Living Champions list only (no format filter, no archive).
     expect(listMock).toHaveBeenCalled();
     const arg = listMock.mock.calls[0]?.[0];
     expect(arg === undefined || arg.format === undefined).toBe(true);
+    expect(arg?.archived).not.toBe(true);
   });
 
   it("still opens with only Create new team when the account has zero teams (ADD-AC-2.3)", async () => {
@@ -155,7 +156,7 @@ describe("AddToTeamPicker — list + create (ADD-US-2)", () => {
     await waitFor(() =>
       expect(createMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          format: "gen-5",
+          format: "champions",
           members: expect.arrayContaining([
             expect.objectContaining({ species: "garchomp" }),
           ]),

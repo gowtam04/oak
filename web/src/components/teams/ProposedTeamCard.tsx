@@ -129,12 +129,6 @@ export default function ProposedTeamCard({
             {m.ability && (
               <span className="proposed-team__ability"> · {titleize(m.ability)}</span>
             )}
-            {m.tera_type && (
-              <span className="proposed-team__tera">
-                {" "}
-                · Tera {titleize(m.tera_type)}
-              </span>
-            )}
             {m.moves.length > 0 && (
               <span className="proposed-team__moves">
                 {" "}

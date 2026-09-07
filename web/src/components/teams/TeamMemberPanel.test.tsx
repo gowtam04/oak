@@ -251,6 +251,10 @@ describe("TeamMemberPanel", () => {
     expect(screen.getByTestId("member-0-ev-total")).toHaveTextContent("66 / 66");
     expect(screen.getByTestId("member-0-ev-spe")).toHaveAttribute("max", "32");
     expect(screen.getByTestId("member-0-ev-atk")).toHaveAttribute("max", "32");
+    expect(screen.getByTestId("member-0-ev-spe")).toHaveAttribute(
+      "aria-label",
+      "Spe Stat Points",
+    );
 
     fireEvent.change(screen.getByTestId("member-0-ev-atk"), {
       target: { value: "10" },
@@ -558,6 +562,52 @@ describe("TeamMemberPanel", () => {
       />,
     );
     expect(screen.getByText(/can't learn Surf/)).toBeInTheDocument();
+  });
+
+  it("readOnly archive shows stored spreads and Tera without Stat Point chrome", () => {
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member({
+          tera_type: "ground",
+          evs: { hp: 4, atk: 252, def: 0, spa: 0, spd: 0, spe: 252 },
+        })}
+        format="champions"
+        readOnly
+        warnings={[
+          {
+            code: "ability_not_for_species",
+            message: 'Ability "rough-skin" is not in the Champions roster.',
+            slot: 0,
+            field: "ability",
+          },
+          {
+            code: "move_not_in_learnset",
+            message: 'Move "earthquake" is not in the Champions roster.',
+            slot: 0,
+            field: "moves[0]",
+          },
+        ]}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(screen.getByTestId("member-0-ev-atk")).toHaveValue(252);
+    expect(screen.getByTestId("member-0-ev-spe")).toHaveValue(252);
+    expect(screen.getByTestId("member-0-ev-atk")).not.toHaveAttribute(
+      "max",
+      "32",
+    );
+    expect(screen.queryByTestId("member-0-ev-total")).not.toBeInTheDocument();
+    expect(screen.queryByText(/stat points/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("slider")).not.toBeInTheDocument();
+    expect(screen.getByTestId("member-0-tera")).toHaveValue("Ground");
+    expect(
+      screen.getByTestId("member-0-ability").closest(".team-member-panel__field"),
+    ).toHaveTextContent(/not in the Champions roster/);
+    expect(screen.getByTestId("member-0-move-0").closest("td")).toHaveTextContent(
+      /not in the Champions roster/,
+    );
   });
 });
 
