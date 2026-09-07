@@ -418,10 +418,8 @@ const ROSTER_SUBMIT_NUDGE =
 const BOX_BUILD_SUBMIT_NUDGE =
   "BOX BUILD — stop gathering. Call submit_answer NOW with a proposed_team " +
   "drawn from the named box. Do not drop named species — keep every Pokémon " +
-  "the user named for the party and warn if data is missing. Do not call " +
-  "run_sql or search_wiki. Members must come from the listed names.";
-
-const BOX_FORBIDDEN_TOOLS = new Set(["run_sql", "search_wiki"]);
+  "the user named for the party and warn if data is missing. Members must " +
+  "come from the listed names.";
 
 /** Hard codes that become warnings (not rejects) on named-for-party members. */
 const BOX_SOFT_ON_NAMED = new Set([
@@ -588,13 +586,11 @@ const PROGRESS_LABELS: Record<string, string> = {
   submit_answer: "✍️ Composing the answer…",
   get_team: "📋 Reading your team…",
   save_team: "💾 Saving your team…",
-  get_encounters: "🗺️ Checking where to find it…",
   get_usage_stats: "📈 Checking live usage…",
   list_teams: "📋 Finding your teams…",
   get_learnset: "📖 Checking the learnset…",
+  lookup_box: "📦 Looking up box…",
   submit_builder_answer: "✍️ Composing the answer…",
-  run_sql: "🗄️ Querying the dex database…",
-  search_wiki: "📖 Searching the wiki…",
 };
 
 /** The generic per-tool label, used as the fallback when args are unusable. */
@@ -719,10 +715,6 @@ export function describeToolCall(tool: string, input: unknown): string {
     }
     case "estimate_damage":
       return "💥 Running the damage calc…";
-    case "get_encounters": {
-      const name = titleizeSlug(obj.name);
-      return name ? `🗺️ Checking where to find ${name}…` : base;
-    }
     case "get_usage_stats": {
       const name = titleizeSlug(obj.name);
       const fmt =
@@ -738,22 +730,6 @@ export function describeToolCall(tool: string, input: unknown): string {
     case "get_learnset": {
       const name = titleizeSlug(obj.name);
       return name ? `📖 Checking ${name}’s learnset…` : base;
-    }
-    case "run_sql": {
-      const purpose =
-        typeof obj.purpose === "string" ? obj.purpose.trim() : "";
-      // Defensive scrub: if the model leaks internal names/SQL into `purpose`,
-      // fall back to the generic label rather than surfacing them to the user.
-      const leaks = /natdex_|meta_(usage|snapshot)|pmd_|\bsql\b|\bselect\b|\bjoin\b|_table\b/i;
-      return purpose && !leaks.test(purpose)
-        ? `🗄️ Querying the dex database — ${purpose.slice(0, 120)}…`
-        : base;
-    }
-    case "search_wiki": {
-      const query = typeof obj.query === "string" ? obj.query.trim() : "";
-      return query
-        ? `📖 Searching the wiki for "${query.slice(0, 60)}"…`
-        : base;
     }
     case "submit_answer":
       return "✍️ Composing the answer…";
@@ -1642,8 +1618,8 @@ export async function runWithProvider<TAnswer = OakAnswer>(
   // Provider-neutral tool defs for this run's tool list (loop-invariant).
   const providerToolDefs = toProviderToolDefs(hooks.tools);
 
-  // Box-build wins over roster and full team-build (BOX-BR-1): cap 6, no
-  // SQL/wiki dispatch, keep-named-species. Roster stays on the default cap.
+  // Box-build wins over roster and full team-build (BOX-BR-1): cap 6,
+  // keep-named-species. Roster stays on the default cap.
   // Full team-build gets 28 + an earlier submit nudge. Non-box "build me a
   // rain team" still uses MAX_ITERATIONS_TEAM_BUILD (BOX-AD-7).
   const historyTexts = history
@@ -1934,25 +1910,6 @@ export async function runWithProvider<TAnswer = OakAnswer>(
     let acceptAnnotate: ((enriched: TAnswer) => void) | null = null;
 
     for (const call of toolCalls) {
-      // Deny SQL/wiki on box-build before progress so the UI shows no SQL/wiki
-      // activity (BOX-AC-3.1). Dispatch is skipped below.
-      if (boxBuild && BOX_FORBIDDEN_TOOLS.has(call.name)) {
-        const started = Date.now();
-        state.toolTrace.push({
-          tool: call.name,
-          args: call.input,
-          latency_ms: Date.now() - started,
-          cache_hit: false,
-          error: "forbidden_on_box_build",
-        });
-        toolResults.push({
-          toolCallId: call.id,
-          content: JSON.stringify({ error: "forbidden_on_box_build" }),
-          isError: true,
-        });
-        continue;
-      }
-
       onProgress?.({
         tool: call.name,
         label: describeToolCall(call.name, call.input),

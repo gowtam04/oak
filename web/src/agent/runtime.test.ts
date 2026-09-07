@@ -1348,8 +1348,11 @@ describe("describeToolCall — context-rich progress labels", () => {
 
     // Generic fallbacks for the recently-added tools never leak the slug either.
     expect(describeToolCall("get_usage_stats", {})).not.toContain("get_usage_stats");
-    expect(describeToolCall("get_encounters", { name: "togepi" })).toContain(
-      "Togepi",
+    expect(describeToolCall("get_encounters", { name: "togepi" })).toBe(
+      "⚙️ Working…",
+    );
+    expect(describeToolCall("get_encounters", { name: "togepi" })).not.toContain(
+      "get_encounters",
     );
     expect(describeToolCall("save_team", {})).not.toContain("save_team");
   });
@@ -1375,54 +1378,25 @@ describe("describeToolCall — context-rich progress labels", () => {
     expect(describeToolCall("unknown_tool", null)).toEqual(expect.any(String));
   });
 
-  it("gives run_sql a purpose-enriched label when purpose is present", () => {
-    const withPurpose = describeToolCall("run_sql", {
+  it("labels removed tools with the generic Working fallback (never wiki/SQL copy)", () => {
+    const sql = describeToolCall("run_sql", {
       query: "SELECT ...",
       purpose: "find Pokémon with BST equal to their natdex number",
     });
-    expect(withPurpose).toContain("Querying the dex database");
-    expect(withPurpose).toContain("find Pokémon with BST");
-    expect(withPurpose).not.toContain("run_sql");
-  });
+    expect(sql).toBe("⚙️ Working…");
+    expect(sql).not.toContain("run_sql");
+    expect(sql).not.toMatch(/dex database|wiki/i);
 
-  it("gives run_sql a generic database label when purpose is absent", () => {
     const noPurpose = describeToolCall("run_sql", { query: "SELECT ..." });
-    expect(noPurpose).toMatch(/Querying the dex database/);
+    expect(noPurpose).toBe("⚙️ Working…");
     expect(noPurpose).not.toContain("run_sql");
 
-    const emptyPurpose = describeToolCall("run_sql", {
-      query: "SELECT ...",
-      purpose: "",
-    });
-    expect(emptyPurpose).toMatch(/Querying the dex database/);
-    expect(emptyPurpose).not.toContain("run_sql");
-  });
-
-  it("scrubs a run_sql purpose that leaks a table name / SQL to the generic label", () => {
-    // A model-supplied purpose that names an internal table falls back to the
-    // generic label instead of surfacing the table name to the user.
     const tableName = describeToolCall("run_sql", {
       query: "SELECT * FROM natdex_species",
       purpose: "aggregate over natdex_species",
     });
-    expect(tableName).toMatch(/Querying the dex database/);
+    expect(tableName).toBe("⚙️ Working…");
     expect(tableName).not.toContain("natdex_species");
-
-    // A purpose leaking SQL keywords is scrubbed too.
-    const sqlLeak = describeToolCall("run_sql", {
-      query: "SELECT ...",
-      purpose: "SELECT species JOIN moves",
-    });
-    expect(sqlLeak).toMatch(/Querying the dex database/);
-    expect(sqlLeak).not.toContain("JOIN");
-
-    // The stored-usage tables are scrubbed as well.
-    const metaLeak = describeToolCall("run_sql", {
-      query: "SELECT ...",
-      purpose: "read from meta_usage",
-    });
-    expect(metaLeak).toMatch(/Querying the dex database/);
-    expect(metaLeak).not.toContain("meta_usage");
   });
 
   it("gives an unknown tool a friendly generic label (never the raw name)", () => {
@@ -1431,18 +1405,16 @@ describe("describeToolCall — context-rich progress labels", () => {
     expect(label).not.toContain("some_new_tool");
   });
 
-  it("gives search_wiki a query-enriched label when query is present", () => {
+  it("gives search_wiki the generic Working label (no wiki copy)", () => {
     const withQuery = describeToolCall("search_wiki", {
       query: "Wigglytuff Guild Mystery Dungeon",
     });
-    expect(withQuery).toContain("Searching the wiki for");
-    expect(withQuery).toContain("Wigglytuff Guild");
+    expect(withQuery).toBe("⚙️ Working…");
     expect(withQuery).not.toContain("search_wiki");
-  });
+    expect(withQuery).not.toMatch(/wiki/i);
 
-  it("gives search_wiki a generic wiki label when query is absent", () => {
     const noQuery = describeToolCall("search_wiki", {});
-    expect(noQuery).toMatch(/Searching the wiki/);
+    expect(noQuery).toBe("⚙️ Working…");
     expect(noQuery).not.toContain("search_wiki");
   });
 });
@@ -1655,8 +1627,8 @@ describe("box-build loop (BOX-AC-3.3, BOX-BR-1)", () => {
   });
 });
 
-describe("box-build dispatch deny (BOX-AC-3.1, BOX-BR-5)", () => {
-  it("does not invoke mockDispatch for run_sql or search_wiki on a box-build", async () => {
+describe("box-build dispatch (BOX-AC-3.1, BOX-BR-5)", () => {
+  it("no longer special-denies removed tools on a box-build (ADR-2 unknown_tool path)", async () => {
     const { client, snapshots } = scriptedClient([
       message([
         toolUse("run_sql", { query: "SELECT 1", purpose: "lookup" }, "t1"),
@@ -1664,14 +1636,14 @@ describe("box-build dispatch deny (BOX-AC-3.1, BOX-BR-5)", () => {
       ]),
       message([toolUse("submit_answer", validAnswer, "t3")]),
     ]);
-    mockDispatch.mockResolvedValue({ ok: true });
+    mockDispatch.mockResolvedValue({ error: "unknown_tool" });
 
     const result = await runOakWith(client, BOX_SIX, [], ctx);
 
     expect(result).toEqual(validAnswer);
     const dispatched = mockDispatch.mock.calls.map((c) => c[0]);
-    expect(dispatched).not.toContain("run_sql");
-    expect(dispatched).not.toContain("search_wiki");
+    expect(dispatched).toContain("run_sql");
+    expect(dispatched).toContain("search_wiki");
 
     const toolResults = snapshots[1].messages.at(-1).content;
     expect(toolResults).toHaveLength(2);
@@ -1679,11 +1651,11 @@ describe("box-build dispatch deny (BOX-AC-3.1, BOX-BR-5)", () => {
       type: "tool_result",
       tool_use_id: "t1",
     });
-    expect(String(toolResults[0].content)).toMatch(/forbidden_on_box_build/);
-    expect(String(toolResults[1].content)).toMatch(/forbidden_on_box_build/);
+    expect(String(toolResults[0].content)).not.toMatch(/forbidden_on_box_build/);
+    expect(String(toolResults[1].content)).not.toMatch(/forbidden_on_box_build/);
   });
 
-  it("does not emit onProgress for denied run_sql / search_wiki on a box-build", async () => {
+  it("labels hallucinated removed tools with generic Working copy on a box-build", async () => {
     const onProgress = vi.fn();
     const { client } = scriptedClient([
       message([
@@ -1692,14 +1664,16 @@ describe("box-build dispatch deny (BOX-AC-3.1, BOX-BR-5)", () => {
       ]),
       message([toolUse("submit_answer", validAnswer, "t3")]),
     ]);
-    mockDispatch.mockResolvedValue({ ok: true });
+    mockDispatch.mockResolvedValue({ error: "unknown_tool" });
 
     await runOakWith(client, BOX_SIX, [], ctx, onProgress);
 
     const tools = onProgress.mock.calls.map((c) => c[0]?.tool);
-    expect(tools).not.toContain("run_sql");
-    expect(tools).not.toContain("search_wiki");
+    expect(tools).toContain("run_sql");
+    expect(tools).toContain("search_wiki");
     expect(tools).toContain("submit_answer");
+    const labels = onProgress.mock.calls.map((c) => c[0]?.label as string);
+    expect(labels.some((l) => /wiki|dex database/i.test(l))).toBe(false);
   });
 
   it("a well-behaved lookup_box + submit_answer turn never dispatches SQL/wiki (BOX-AC-3.1)", async () => {
@@ -2056,7 +2030,7 @@ describe("box-build is main-chat only (submit_answer)", () => {
     expect(stream.mock.calls.length).not.toBe(6);
   });
 
-  it("does not deny run_sql when submitToolName is submit_builder_answer", async () => {
+  it("dispatches a hallucinated run_sql when submitToolName is submit_builder_answer", async () => {
     const { client } = scriptedClient([
       message([
         toolUse("run_sql", { query: "SELECT 1", purpose: "lookup" }, "t1"),

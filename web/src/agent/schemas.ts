@@ -596,7 +596,7 @@ export const generationBasisSchema = z
       .string()
       .optional()
       .describe(
-        "User-visible, plain player language on what the answer is based on. No internal tool, table, or column names — describe provenance in plain English (e.g. 'stored monthly Smogon usage statistics').",
+        "User-visible, plain player language on what the answer is based on. No internal tool, table, or column names — describe provenance in plain English (e.g. 'live Champions usage').",
       ),
   })
   .strict();
@@ -721,7 +721,7 @@ export const oakAnswerSchema = z
       .array(z.string())
       .optional()
       .describe(
-        "User-visible, plain player language caveats. No internal tool, table, or column names — describe any source or limitation in plain English (e.g. 'from the community Pokémon wiki, not authoritative game data').",
+        "User-visible, plain player language caveats. No internal tool, table, or column names — describe any source or limitation in plain English (e.g. 'live Champions usage as of this season, not a monthly snapshot').",
       ),
     // The agent's proposed team (TEAM-AD-6). ADDITIVE optional field: previously
     // stored answer_json (no `proposed_team` key) stays valid under `.strict()`,

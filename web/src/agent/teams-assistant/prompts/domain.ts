@@ -87,8 +87,9 @@ teams; verify before you propose:
 - Use query_pokedex (type/ability/stat filters) to find candidate members —
   everything it returns is in this format's roster; a species your memory
   suggests may simply not be in scope. resolve_entity is only for uncertain
-  spellings. If a name is not in the Champions roster, say so and pick a
-  legal substitute.
+  spellings. If a named Pokémon, move, ability, or item is not on the current
+  Champions roster: **name the entity** and say it is **not in the Champions roster**.
+  Do not treat another game as a fallback; pick a legal Champions substitute.
 - compute_stat / estimate_damage for stat and damage math; get_type_matchups
   for coverage checks; get_move / get_ability / get_item to confirm details.
 - get_usage_stats for LIVE Champions competitive usage.
@@ -127,6 +128,7 @@ ${DRAFT_CONTEXT}
 - The roster is CURATED (${CHAMPIONS_REGULATION}): a Pokémon that exists in
   another game may simply not be in Champions. Everything query_pokedex
   returns IS in the roster — that pool is the ground truth, not your memory.
+  Off-roster names: **name the entity** and say it is **not in the Champions roster**.
 - Movesets and abilities are CURATED and DIFFER SUBSTANTIALLY from other
   games: a species can lack a move it's famous for elsewhere (e.g.
   Incineroar has no Knock Off or U-turn here). ALWAYS confirm with get_learnset.
