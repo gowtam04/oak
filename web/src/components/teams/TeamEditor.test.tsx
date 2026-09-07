@@ -13,12 +13,24 @@ vi.mock("@/lib/api/sprites-client", () => ({
   resolveSprites: vi.fn(async () => ({})),
 }));
 
+vi.mock("@/lib/api/learnset-client", () => ({
+  fetchLearnset: vi.fn(async () => []),
+}));
+
 import TeamEditor, { type TeamEditorHandle } from "./TeamEditor";
 import type { TeamDetail } from "@/lib/api/teams-client";
-import type { SpriteRef } from "@/lib/api/sprites-client";
+import { resolveSprites, type SpriteRef } from "@/lib/api/sprites-client";
+import { fetchLearnset } from "@/lib/api/learnset-client";
 import type { TeamMember } from "@/data/teams/team-schema";
 
-afterEach(() => cleanup());
+const resolveSpritesMock = vi.mocked(resolveSprites);
+const fetchLearnsetMock = vi.mocked(fetchLearnset);
+
+afterEach(() => {
+  cleanup();
+  resolveSpritesMock.mockClear();
+  fetchLearnsetMock.mockClear();
+});
 
 function fullMember(species: string): TeamMember {
   return {
@@ -39,7 +51,7 @@ function detail(overrides: Partial<TeamDetail> = {}): TeamDetail {
   return {
     id: "t1",
     name: "My Team",
-    format: "scarlet-violet",
+    format: "champions",
     members: [fullMember("gyarados"), fullMember("garchomp")],
     validation: [],
     ...overrides,
@@ -198,6 +210,14 @@ describe("TeamEditor", () => {
     expect(pill).toHaveTextContent(/Incomplete/i);
   });
 
+  it("living editor has no Tera, IV, or level knobs (CF-TEAM-AC-1.2, CF-UI-AC-1.3)", () => {
+    setup();
+    expect(screen.queryByTestId("member-0-tera")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("member-0-iv-hp")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("member-0-level")).not.toBeInTheDocument();
+    expect(screen.getByTestId("member-0-ev-total")).toHaveTextContent("/ 66");
+  });
+
   it("shows a LEGAL legality pill for a full, complete team", () => {
     // Six members, each with a species + 4 moves (fullMember) → complete.
     const six = Array.from({ length: 6 }, (_, i) => fullMember(`p${i}`));
@@ -295,5 +315,101 @@ describe("TeamEditor imperative handle (assistant panel seam)", () => {
       "gyarados",
       "garchomp",
     ]);
+  });
+});
+
+describe("TeamEditor — archived view (CF-TEAM-AC-5.2–5.4, CF-UI-AC-4.2–4.3)", () => {
+  function archivedDetail(): TeamDetail {
+    return detail({
+      id: "old-1",
+      name: "Old rain",
+      format: "gen-7",
+      members: [
+        {
+          ...fullMember("excadrill"),
+          ability: "sand-rush",
+          item: "air-balloon",
+          moves: ["earthquake", "iron-head", "rock-slide", "toxic"],
+        },
+      ],
+      validation: [
+        {
+          code: "species_illegal",
+          message: 'Species "excadrill" is not in the Champions roster.',
+          slot: 0,
+          field: "species",
+        },
+        {
+          code: "ability_not_for_species",
+          message: 'Ability "sand-rush" is not in the Champions roster.',
+          slot: 0,
+          field: "ability",
+        },
+        {
+          code: "item_illegal",
+          message: 'Item "air-balloon" is not in the Champions roster.',
+          slot: 0,
+          field: "item",
+        },
+        {
+          code: "move_not_in_learnset",
+          message: 'Move "toxic" is not in the Champions roster.',
+          slot: 0,
+          field: "moves[3]",
+        },
+      ],
+    });
+  }
+
+  function otherGameLookups(): string[] {
+    const formats: string[] = [];
+    for (const call of resolveSpritesMock.mock.calls) {
+      formats.push(String(call[0]));
+    }
+    for (const call of fetchLearnsetMock.mock.calls) {
+      formats.push(String(call[0]));
+    }
+    return formats.filter((f) =>
+      /^(gen-[1-8]|scarlet-violet|national-dex)$/.test(f),
+    );
+  }
+
+  it("is view-only: no save, add, apply-set, or slot edit (CF-TEAM-AC-5.2–5.3, CF-UI-AC-4.2)", () => {
+    setup({ team: archivedDetail() });
+    expect(screen.getByTestId("team-editor")).toBeInTheDocument();
+    expect(screen.getAllByText(/excadrill/i).length).toBeGreaterThan(0);
+    expect(screen.queryByTestId("team-save")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("team-add-member")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /apply this champions set/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /duplicate/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("member-0-remove")).not.toBeInTheDocument();
+    const name = screen.getByTestId("team-name");
+    expect(name).toBeDisabled();
+  });
+
+  it("labels off-roster stored names not in the Champions roster (CF-TEAM-AC-5.4, CF-UI-AC-4.3, CF-UI-BR-2)", () => {
+    setup({ team: archivedDetail() });
+    expect(screen.getAllByText(/excadrill/i).length).toBeGreaterThan(0);
+    const labels = screen.getAllByText(/not in the Champions roster/);
+    expect(labels.length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/try Scarlet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/switch scope/i)).not.toBeInTheDocument();
+  });
+
+  it("does not look up other-game Dex data for archived names (CF-TEAM-AC-5.4)", async () => {
+    setup({ team: archivedDetail() });
+    expect(screen.getAllByText(/excadrill/i).length).toBeGreaterThan(0);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    // Sprites/learnset may miss on Champions, but must not query gen-7 / SV / natdex.
+    expect(otherGameLookups()).toEqual([]);
   });
 });
