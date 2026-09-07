@@ -76,7 +76,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.heading
@@ -216,24 +215,13 @@ fun HistoryScreen(
 @Composable
 private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch: () -> Unit) {
     val oak = LocalOakColors.current
-    // Sunken borderless pill (§5.4): no outline at rest, an azure ring + soft azure glow
-    // only while focused. The glow's tinted shadow is API 28+; older devices simply skip it.
-    var focused by remember { mutableStateOf(false) }
     val pillShape = RoundedCornerShape(OakRadius.pill)
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm)
-            .onFocusChanged { focused = it.isFocused }
-            .then(
-                if (focused) {
-                    Modifier.shadow(elevation = 6.dp, shape = pillShape, ambientColor = oak.azure, spotColor = oak.azure)
-                } else {
-                    Modifier
-                },
-            ),
+            .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
         placeholder = { Text("Search conversations") },
         singleLine = true,
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = oak.textMuted) },
@@ -246,11 +234,11 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch
         },
         shape = pillShape,
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = oak.surfaceSunken,
-            unfocusedContainerColor = oak.surfaceSunken,
-            focusedBorderColor = oak.azure,
-            unfocusedBorderColor = Color.Transparent,
-            cursorColor = oak.azure,
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+            focusedBorderColor = oak.accent,
+            unfocusedBorderColor = oak.border,
+            cursorColor = oak.accent,
             focusedTextColor = oak.text,
             unfocusedTextColor = oak.text,
             focusedPlaceholderColor = oak.textFaint,
@@ -376,7 +364,7 @@ private fun NewChatFab(onClick: () -> Unit) {
         Icon(
             Icons.Filled.Edit,
             contentDescription = "New chat",
-            tint = Color.White,
+            tint = oak.onRed,
             modifier = Modifier.size(22.dp),
         )
     }
@@ -499,28 +487,15 @@ private fun ConversationRow(
         },
     ) {
         var showMenu by remember { mutableStateOf(false) }
-        // Specimen-desk selection (soul.md): NOT a red left rail. Active = lifted mini-
-        // plate (surface + hairline + raised shadow) + mono OPEN stamp. Pinned rows keep
-        // the pin icon only — no brand rail wash.
         val plateShape = RoundedCornerShape(OakRadius.md)
-        val dark = isSystemInDarkTheme()
+        val highlighted = active || selected
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = OakSpacing.md, vertical = 4.dp)
-                .then(
-                    if (active) {
-                        Modifier
-                            .then(if (dark) Modifier else Modifier.shadow(4.dp, plateShape))
-                            .clip(plateShape)
-                            .background(MaterialTheme.colorScheme.surface, plateShape)
-                            .border(1.dp, oak.borderStrong, plateShape)
-                    } else {
-                        Modifier
-                            .clip(plateShape)
-                            .background(Color.Transparent)
-                    },
-                )
+                .clip(plateShape)
+                .background(if (highlighted) oak.accentSoft else MaterialTheme.colorScheme.surface, plateShape)
+                .border(1.dp, if (highlighted) oak.accent.copy(alpha = 0.35f) else oak.border, plateShape)
                 .clickable { if (selecting) onToggleSelected(conversation.id) else onSelect(conversation) }
                 .padding(horizontal = OakSpacing.md, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -538,7 +513,7 @@ private fun ConversationRow(
                     Text(
                         text = conversation.title,
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = oak.textStrong,
+                        color = if (highlighted) oak.accent else oak.textStrong,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -697,7 +672,8 @@ private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
         color = if (selected) oak.accent else oak.textMuted,
         modifier = Modifier
             .clip(shape)
-            .background(if (selected) oak.accentSoft else oak.surfaceSunken)
+            .background(if (selected) oak.accentSoft else MaterialTheme.colorScheme.surface)
+            .border(1.dp, if (selected) oak.accent.copy(alpha = 0.35f) else oak.border, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = OakSpacing.sm, vertical = 4.dp),
     )

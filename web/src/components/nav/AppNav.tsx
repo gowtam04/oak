@@ -14,10 +14,12 @@
  *
  * Three stacked regions, each its own landmark:
  *   - `<nav aria-label="Primary">` — "New chat" first, then `PRIMARY_NAV_ITEMS`
- *     (currently just Teams). "New chat" renders as a `<button>` when the
- *     caller passes `onNewChat` (the chat page already has a fresh-thread
- *     handler); otherwise it renders as a `next/link` to `/` (the teams
- *     page, where "starting a new chat" just means navigating home).
+ *     (Teams, Calculator). "New chat" is a solid enamel poke-red / on-red
+ *     40px radius-md control (`.app-nav__newchat`). It renders as a
+ *     `<button>` when the caller passes `onNewChat` (the chat page already
+ *     has a fresh-thread handler); otherwise it renders as a `next/link` to
+ *     `/` (the teams page, where "starting a new chat" just means navigating
+ *     home). Active rows use poke-red-soft + poke-red ink.
  *   - `.app-nav__slot` — an optional middle region for page-specific content
  *     (the chat page's `ConversationList` or guest sign-in hint). Omitted
  *     entirely when no `children` are given (e.g. on `/teams`), so no empty

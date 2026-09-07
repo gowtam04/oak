@@ -23,12 +23,17 @@ struct ShareSnapshotView: View {
         if let snapshot {
           ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
-              Text(snapshot.conversationTitle)
-                .font(Theme.display(.title3))
-                .foregroundStyle(Theme.textStrong)
-              Text(snapshot.question)
-                .font(Theme.body(.body))
-                .foregroundStyle(Theme.textPrimary)
+              VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                Text(snapshot.conversationTitle)
+                  .font(Theme.display(.title3))
+                  .foregroundStyle(Theme.textStrong)
+                Text(snapshot.question)
+                  .font(Theme.body(.body))
+                  .foregroundStyle(Theme.textPrimary)
+              }
+              .padding(Theme.Spacing.lg)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .oakCard()
               AnswerCardView(answer: snapshot.answer)
               Button {
                 copyHuman(snapshot.answer)

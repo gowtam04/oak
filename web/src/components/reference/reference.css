@@ -172,33 +172,32 @@ a.ref-card:hover,
 }
 
 /* ---------------------------------------------------------------------------
-   ReferenceHeader / ReferenceNav — the sticky chrome, mirroring the chat
-   page's header (`.chat-page__header` / `.chat-page__title`): a surface
-   with a 2px `--poke-red` "thread" on top and a hairline bottom, the display
-   wordmark with its brand-mark chip, pill nav links (active = red on red-soft),
-   and an "Open chat" red pill mirroring `.app-nav__newchat`. Red's whole job
-   here: the thread, the active pill, the CTA, and link hover — nothing else.
+   ReferenceHeader / ReferenceNav — enamel lid (same recipe as chat header).
+   Opaque coral through the safe area; inset white-on-red pills; 32px mark.
    ------------------------------------------------------------------------- */
 
-/* Approximate rendered height of the sticky `.ref-header` (2px thread + ~16px
-   top pad + ~36px content row + 16px bottom pad ≈ 70px). Declared on :root so
-   it inherits down to the sibling index toolbar, which parks its sticky `top`
-   here. Held a touch UNDER the real height so any rounding error overlaps
-   *behind* the higher-z-index header (the safe direction — no page sliver). */
+/* Sticky explorer toolbar parks at this token. Lid height =
+   max(16px, safe-area) + 40px content row + 16px bottom + 2px edge. */
 :root {
-  --ref-header-h: 68px;
+  --ref-header-h: calc(
+    max(var(--space-4), env(safe-area-inset-top, 0px)) + var(--space-10) +
+      var(--space-4) + 2px
+  );
 }
 
 .ref-header {
   position: sticky;
   top: 0;
   z-index: var(--z-header);
-  /* Slightly translucent paper so the backdrop-blur reads when content scrolls
-     beneath; both tokens are theme-varying, so dark mode is free. */
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border);
+  background: linear-gradient(
+    180deg,
+    var(--poke-red) 0%,
+    color-mix(in srgb, var(--poke-red-active) 60%, var(--poke-red)) 100%
+  );
+  border-bottom: 2px solid
+    color-mix(in srgb, var(--neutral-900) 12%, var(--poke-red-active));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--poke-red) 22%, transparent);
+  color: var(--neutral-0);
 }
 
 .ref-header__inner {
@@ -207,8 +206,6 @@ a.ref-card:hover,
   display: flex;
   align-items: center;
   gap: var(--space-6);
-  /* Safe-area aware like `.chat-page__header`: env() collapses to the plain
-     gutters on desktop and only grows into the notch / landscape ears. */
   padding-top: max(var(--space-4), env(safe-area-inset-top));
   padding-bottom: var(--space-4);
   padding-left: max(var(--space-6), env(safe-area-inset-left));
@@ -218,13 +215,36 @@ a.ref-card:hover,
 .ref-header__wordmark {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-3);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  color: var(--neutral-0);
   text-decoration: none;
-  color: inherit;
+}
+
+.ref-header__wordmark::before {
+  content: "";
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--brand-mark) center / cover no-repeat;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--neutral-0) 62%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.ref-header .oak-wordmark {
+  color: var(--neutral-0);
+  font-size: inherit;
 }
 
 .ref-header__wordmark:hover,
 .ref-header__wordmark:focus-visible {
-  opacity: 0.75;
+  opacity: 0.85;
 }
 
 .ref-header__nav {
@@ -234,40 +254,42 @@ a.ref-card:hover,
   flex: 1;
 }
 
-/* Nav links as pills: quiet at rest, sunken on hover, red-on-red-soft when the
-   current page (`aria-current`, resolved by ReferenceNav via usePathname). */
 .ref-header__link {
-  padding: var(--space-1) var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 var(--space-3);
   border-radius: var(--radius-pill);
-  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--neutral-0);
   font-size: var(--text-sm);
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
-  transition: background var(--motion-fast), color var(--motion-fast);
+  transition: background var(--motion-fast);
 }
 
 .ref-header__link:hover {
-  background: var(--surface-sunken);
-  color: var(--text-strong);
+  background: rgba(255, 255, 255, 0.28);
+  color: var(--neutral-0);
 }
 
 .ref-header__link[aria-current="page"] {
-  color: var(--poke-red);
-  background: var(--poke-red-soft);
+  background: rgba(255, 255, 255, 0.28);
+  color: var(--neutral-0);
 }
 
-/* "Open chat" — the red pill CTA, mirroring `.app-nav__newchat`. */
 .ref-header__chat-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 36px;
+  height: 40px;
   padding: 0 var(--space-4);
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background: var(--poke-red);
-  color: var(--on-red);
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--neutral-0);
   font-size: var(--text-md);
   font-weight: 600;
   text-decoration: none;
@@ -276,7 +298,7 @@ a.ref-card:hover,
 }
 
 .ref-header__chat-link:hover {
-  background: var(--poke-red-hover);
+  background: rgba(255, 255, 255, 0.28);
 }
 
 /* Narrow screens: tighten the gutters and let the nav pills scroll rather than

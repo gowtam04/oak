@@ -30,7 +30,7 @@ struct VoiceLauncher: View {
         VoiceOverlayView(session: session, onEnd: finish)
       } else {
         // First frame only, before the `.task` below builds the session.
-        Theme.background.ignoresSafeArea()
+        Theme.canvas.ignoresSafeArea()
       }
     }
     .task {

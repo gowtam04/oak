@@ -38,7 +38,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -87,7 +86,7 @@ fun DexListScreen(
                 actions = {
                     Box {
                         TextButton(onClick = { scopeMenuOpen = true }) {
-                            Text(list.format.shortLabel, color = oak.accent, fontWeight = FontWeight.SemiBold)
+                            Text(list.format.shortLabel, color = oak.onRed, fontWeight = FontWeight.SemiBold)
                         }
                         DropdownMenu(
                             expanded = scopeMenuOpen,
@@ -142,12 +141,13 @@ fun DexListScreen(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(OakRadius.md),
+                shape = RoundedCornerShape(OakRadius.pill),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = oak.accent,
                     unfocusedBorderColor = oak.border,
-                    focusedContainerColor = oak.surfaceRaised,
-                    unfocusedContainerColor = oak.surfaceRaised,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    cursorColor = oak.accent,
                 ),
             )
 
@@ -166,10 +166,16 @@ fun DexListScreen(
                         )
                     }
                     else -> {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                                horizontal = OakSpacing.md,
+                                vertical = OakSpacing.sm,
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
                             items(list.matches, key = { "${it.kind.rawValue}:${it.slug}" }) { match ->
                                 MatchRow(match = match, onClick = { onOpen(match.kind, match.slug) })
-                                HorizontalDivider(color = oak.border)
                             }
                         }
                     }
@@ -212,9 +218,13 @@ private fun SectionChips(
 @Composable
 private fun MatchRow(match: SearchMatch, onClick: () -> Unit) {
     val oak = LocalOakColors.current
+    val shape = RoundedCornerShape(OakRadius.md)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface, shape)
+            .border(1.dp, oak.border, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.md),
         verticalAlignment = Alignment.CenterVertically,

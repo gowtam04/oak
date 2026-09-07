@@ -100,7 +100,9 @@ struct CalculatorView: View {
       .keyboardType(.numberPad)
       .font(Theme.body(.body))
     }
-    .oakCard()
+    .padding(Theme.Spacing.md)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .oakCard(radius: Theme.Radius.md)
   }
 
   private var moveEditor: some View {
@@ -117,7 +119,9 @@ struct CalculatorView: View {
       .textInputAutocapitalization(.never)
       .font(Theme.body(.body))
     }
-    .oakCard()
+    .padding(Theme.Spacing.md)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .oakCard(radius: Theme.Radius.md)
   }
 
   private var fieldEditor: some View {
@@ -164,7 +168,9 @@ struct CalculatorView: View {
         )
       )
     }
-    .oakCard()
+    .padding(Theme.Spacing.md)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .oakCard(radius: Theme.Radius.md)
   }
 
   private var formatPicker: some View {
@@ -179,7 +185,9 @@ struct CalculatorView: View {
         Text(format.displayLabel).tag(format)
       }
     }
-    .oakCard()
+    .padding(Theme.Spacing.md)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .oakCard(radius: Theme.Radius.md)
   }
 
   @ViewBuilder
@@ -219,7 +227,9 @@ struct CalculatorView: View {
           .foregroundStyle(Theme.textSecondary)
       }
     }
-    .oakCard()
+    .padding(Theme.Spacing.md)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .oakCard(radius: Theme.Radius.md, tint: Theme.sunflower)
     .accessibilityElement(children: .combine)
   }
 
@@ -246,18 +256,5 @@ struct CalculatorView: View {
       get: { source.wrappedValue ?? "" },
       set: { source.wrappedValue = $0.isEmpty ? nil : $0 }
     )
-  }
-}
-
-private extension View {
-  func oakCard() -> some View {
-    self
-      .padding(Theme.Spacing.md)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
-      .overlay {
-        RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-          .strokeBorder(Theme.separator, lineWidth: 1)
-      }
   }
 }

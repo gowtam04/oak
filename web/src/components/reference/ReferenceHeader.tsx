@@ -1,12 +1,9 @@
 /**
- * ReferenceHeader — the sticky paper chrome shared by every programmatic
- * reference page (/pokedex, /moves, /abilities, /items, /meta). Mirrors the
- * chat page's header design language (`.chat-page__header` / `.chat-page__title`):
- * a warm `--bg` surface with a 2px `--poke-red` "thread" on top and a hairline
- * bottom, the display-face wordmark with its brand-mark chip, and an "Open chat" red
- * pill mirroring `.app-nav__newchat`. Red only appears as the thread, the active
- * nav pill, the CTA, and link hover — never as wallpaper (the old red band is
- * retired; reference chrome follows `docs/design/soul.md` desk rules).
+ * ReferenceHeader — the sticky enamel lid shared by every programmatic
+ * reference page (/pokedex, /moves, /abilities, /items, /meta). Applies the
+ * chat lid recipe (`.chat-page__header`): opaque coral gradient through the
+ * safe area, Fredoka white wordmark + 32px mark, inset white-on-red pills,
+ * and an "Open chat" inset lid pill. Destinations unchanged.
  *
  * Server-safe: no hooks, no "use client". The active-section highlight needs
  * the current route, so the nav is delegated to {@link ReferenceNav}, a small

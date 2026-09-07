@@ -35,6 +35,7 @@ struct DexView: View {
           ToolbarItem(placement: .topBarTrailing) {
             scopeMenu(model: model)
           }
+          .oakLidItem()
         }
       }
       .navigationDestination(for: DexEntityRoute.self) { route in
@@ -178,7 +179,7 @@ struct DexView: View {
               .font(Theme.body(.subheadline, weight: .semibold))
               .padding(.horizontal, 12)
               .padding(.vertical, 8)
-              .background(selected ? Theme.accentSoft : Theme.surfaceRaised, in: Capsule())
+              .background(selected ? Theme.accentSoft : Theme.surface, in: Capsule())
               .foregroundStyle(selected ? Theme.accent : Theme.textSecondary)
               .overlay(
                 Capsule()
@@ -216,7 +217,7 @@ struct DexView: View {
     }
     .padding(.horizontal, Theme.Spacing.md)
     .padding(.vertical, Theme.Spacing.sm)
-    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
+    .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
     .overlay(
       RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
         .strokeBorder(Theme.border, lineWidth: 1)
@@ -244,10 +245,11 @@ struct DexView: View {
         Image(systemName: "chevron.down")
           .font(.caption2.weight(.semibold))
       }
-      .foregroundStyle(Theme.accent)
+      .foregroundStyle(Theme.onRed)
       .padding(.horizontal, 10)
       .padding(.vertical, 6)
-      .background(Theme.accentSoft, in: Capsule())
+      .background(Theme.onRed.opacity(0.16), in: Capsule())
+      .overlay(Capsule().strokeBorder(Theme.onRed.opacity(0.45), lineWidth: 1))
     }
     .accessibilityLabel("Scope")
     .accessibilityValue(model.format.displayLabel)

@@ -16,13 +16,12 @@ import SwiftUI
 /// carried by color alone (M-AC-UI9.3). Interactive controls carry VoiceOver
 /// labels/hints (M-AC-UI9.1).
 ///
-/// Chrome (UI-polish P6): a **profile header card** sits above the Form — a gradient
-/// wash with a 56pt avatar (email initial or `person.fill`), the tier title in the
-/// display face, and the email/sub-line beneath. The old `tierRow` folds into it.
-/// The header crossfades between the guest and signed-in faces (a crossfade is the
-/// Reduce-Motion-safe treatment; it's still gated so nothing animates when Reduce
-/// Motion is on). The color/gradient is decorative — the tier is always spelled out
-/// in text (M-AC-UI9.3).
+/// Chrome: a **paper profile card** sits above the Form — a 56pt enamel avatar
+/// (email initial or `person.fill`), the tier title in Fredoka, and the
+/// email/sub-line beneath. The old `tierRow` folds into it. The header
+/// crossfades between the guest and signed-in faces (gated under Reduce Motion).
+/// The avatar wash is decorative — the tier is always spelled out in text
+/// (M-AC-UI9.3).
 struct AccountView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(UpdateViewModel.self) private var updateModel
@@ -121,16 +120,7 @@ struct AccountView: View {
     }
     .padding(16)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background {
-      RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-        .fill(
-          LinearGradient(
-            colors: [Theme.accent.opacity(0.14), Theme.azure.opacity(0.10)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
-        )
-    }
+    .oakCard()
     // Guest ↔ signed-in crossfade. A crossfade is inherently Reduce-Motion-safe, but
     // gate it anyway so nothing animates when the user has asked for stillness.
     .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.isSignedIn)
@@ -194,7 +184,7 @@ struct AccountView: View {
         Button {
           showingSignIn = true
         } label: {
-          actionLabel(title: "Sign in", systemImage: "person.crop.circle.badge.plus")
+          actionLabel(title: "Sign in", systemImage: "person.crop.circle.badge.plus", tint: Theme.accent)
         }
         .accessibilityHint("Sign in with your email to unlock saved history and the team builder.")
       }

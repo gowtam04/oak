@@ -27,6 +27,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
@@ -137,6 +140,7 @@ fun AccountScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .background(MaterialTheme.colorScheme.background)
                 .padding(OakSpacing.lg),
         ) {
             ProfileHeader(isSignedIn = authState is AuthState.SignedIn, email = viewModel.email, tierTitle = viewModel.tierTitle)
@@ -318,12 +322,26 @@ private fun ProfileHeader(isSignedIn: Boolean, email: String?, tierTitle: String
 @Composable
 private fun SectionCard(danger: Boolean = false, content: @Composable () -> Unit) {
     val oak = LocalOakColors.current
+    val dark = isSystemInDarkTheme()
     val shape = RoundedCornerShape(OakRadius.lg)
-    val fill = if (danger) oak.dangerSoft else oak.surfaceRaised
+    val fill = if (danger) oak.dangerSoft else MaterialTheme.colorScheme.surface
     val stroke = if (danger) oak.danger.copy(alpha = 0.35f) else oak.border
+    val umber = Color(0xFF4A352A)
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (dark || danger) {
+                    Modifier
+                } else {
+                    Modifier.shadow(
+                        elevation = 4.dp,
+                        shape = shape,
+                        ambientColor = umber.copy(alpha = 0.07f),
+                        spotColor = umber.copy(alpha = 0.10f),
+                    )
+                },
+            )
             .background(fill, shape)
             .border(1.dp, stroke, shape),
     ) {

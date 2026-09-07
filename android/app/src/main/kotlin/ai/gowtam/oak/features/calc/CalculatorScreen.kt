@@ -1,15 +1,21 @@
 package ai.gowtam.oak.features.calc
 
 import ai.gowtam.oak.services.CalcService
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakColors
+import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.OakTopBar
 import ai.gowtam.oak.wire.CalcField
 import ai.gowtam.oak.wire.CalcResult
 import ai.gowtam.oak.wire.CalcScenario
 import ai.gowtam.oak.wire.Format
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,15 +53,19 @@ fun CalculatorScreen(
     val viewModel = remember(calc, format, initialScenario) {
         CalculatorViewModel(calc, initialFormat = format, initialScenario = initialScenario)
     }
+    val oak = LocalOakColors.current
     Scaffold(
         topBar = {
             OakTopBar(
                 title = { Text("Calculator") },
                 navigationIcon = {
-                    androidx.compose.material3.TextButton(onClick = onBack) { Text("Back") }
+                    androidx.compose.material3.TextButton(onClick = onBack) {
+                        Text("Back", color = oak.onRed)
+                    }
                 },
             )
         },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { inner ->
         CalculatorForm(
             viewModel = viewModel,
@@ -75,7 +87,13 @@ fun CalculatorOverlay(
     onExplain: (String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        scrimColor = LocalOakColors.current.scrim,
+        tonalElevation = 0.dp,
+    ) {
         CalculatorForm(
             viewModel = viewModel,
             onExplain = onExplain,
@@ -141,6 +159,7 @@ private fun CalculatorForm(
                     selected = scenario.format == format,
                     onClick = { viewModel.setFormat(format) },
                     label = { Text(format.shortLabel) },
+                    colors = enamelFilterChipColors(oak),
                 )
             }
         }
@@ -154,6 +173,7 @@ private fun CalculatorForm(
                         viewModel.setField(current.copy(weather = weather))
                     },
                     label = { Text(weather) },
+                    colors = enamelFilterChipColors(oak),
                 )
             }
         }
@@ -186,11 +206,21 @@ private fun CalculatorForm(
         when (val result = state.result) {
             is CalcResult.Ok -> {
                 val estimate = result.estimate
+                val plate = RoundedCornerShape(OakRadius.lg)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface, plate)
+                        .border(1.dp, oak.border, plate)
+                        .padding(OakSpacing.md),
+                    verticalArrangement = Arrangement.spacedBy(OakSpacing.xs),
+                ) {
                 Text(
                     text = "${estimate.minDamage}–${estimate.maxDamage} " +
                         "(${estimate.percentMin}–${estimate.percentMax}%) · ${estimate.ko.hits}HKO",
                     color = oak.textStrong,
                     fontWeight = FontWeight.SemiBold,
+                    fontFamily = JetBrainsMonoFamily,
                 )
                 if (result.applied.unsupported.isNotEmpty()) {
                     Text(
@@ -199,6 +229,7 @@ private fun CalculatorForm(
                     )
                 }
                 result.caveat?.let { Text(it, color = oak.textMuted) }
+                }
             }
             is CalcResult.Error -> {
                 Text(
@@ -223,3 +254,11 @@ private fun CalculatorForm(
         }
     }
 }
+
+@Composable
+private fun enamelFilterChipColors(oak: OakColors) = FilterChipDefaults.filterChipColors(
+    containerColor = MaterialTheme.colorScheme.surface,
+    labelColor = oak.textMuted,
+    selectedContainerColor = oak.accentSoft,
+    selectedLabelColor = oak.accent,
+)

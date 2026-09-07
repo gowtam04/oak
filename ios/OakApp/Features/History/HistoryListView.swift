@@ -13,11 +13,10 @@ import SwiftUI
 /// which pushes the thread route (load detail + resume into chat); ``onNewChat`` (the
 /// floating action disc) starts a fresh thread.
 ///
-/// Chrome (history polish, §5.4 + soul.md): a custom **sunken search pill** (not
-/// `.searchable`) pinned above the list, a **new-chat FAB** bottom-trailing, dense
-/// rows (title + engraved mono meta), an **OPEN stamp + lifted plate** marking the
-/// last-opened thread (never a red left rail), and a **filter cue** when a format
-/// filter is on.
+/// Chrome: a custom **paper search pill** (not `.searchable`) pinned above the
+/// list, a **red enamel new-chat FAB** bottom-trailing, dense paper rows (title
+/// + mono meta), an **Open stamp** marking the last-opened thread (never a red
+/// left rail), and a **filter cue** when a format filter is on.
 struct ConversationListView: View {
   @State private var model: HistoryListViewModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -45,7 +44,7 @@ struct ConversationListView: View {
   @State private var folderToRename: ConversationFolder?
   @State private var folderRenameText = ""
 
-  /// Drives the custom search pill's focus grammar (azure border + glow).
+  /// Drives the custom search pill's focus grammar (poke-red border + halo).
   @FocusState private var searchFocused: Bool
 
   init(
@@ -152,10 +151,10 @@ struct ConversationListView: View {
 
   // MARK: Search field (custom sunken pill — replaces `.searchable`, §5.4)
 
-  /// A borderless sunken search pill: `surfaceSunken` fill, no border at rest, an
-  /// **azure** focus border + soft glow (interaction), a leading magnifier, and a
-  /// trailing clear button. Wired to the same `searchQuery`/`search()` behavior as
-  /// the old `.searchable`, submitting on return.
+  /// A paper search pill: `--surface` fill + hairline at rest, **poke-red**
+  /// focus border + 18% red halo, a leading magnifier, and a trailing clear
+  /// button. Wired to the same `searchQuery`/`search()` behavior as the old
+  /// `.searchable`, submitting on return.
   private func searchField(_ query: Binding<String>) -> some View {
     HStack(spacing: Theme.Spacing.sm) {
       Image(systemName: "magnifyingglass")
@@ -164,7 +163,7 @@ struct ConversationListView: View {
       TextField("Search conversations", text: query)
         .font(Theme.body(.callout))
         .foregroundStyle(Theme.textPrimary)
-        .tint(Theme.azure)
+        .tint(Theme.accent)
         .submitLabel(.search)
         .focused($searchFocused)
         .autocorrectionDisabled()
@@ -183,11 +182,11 @@ struct ConversationListView: View {
     }
     .padding(.horizontal, Theme.Spacing.md)
     .padding(.vertical, 10)
-    .background(Theme.surfaceSunken, in: Capsule())
+    .background(Theme.surface, in: Capsule())
     .overlay {
-      Capsule().strokeBorder(searchFocused ? Theme.azure : .clear, lineWidth: 1.5)
+      Capsule().strokeBorder(searchFocused ? Theme.accent : Theme.border, lineWidth: searchFocused ? 1.5 : 1)
     }
-    .shadow(color: searchFocused ? Theme.azure.opacity(0.28) : .clear, radius: 6)
+    .shadow(color: searchFocused ? Theme.accent.opacity(0.18) : .clear, radius: 4)
     .padding(.horizontal, Theme.Spacing.lg)
     .padding(.top, Theme.Spacing.sm)
     .padding(.bottom, model.formatFilter == nil ? Theme.Spacing.sm : Theme.Spacing.xs)
@@ -239,8 +238,8 @@ struct ConversationListView: View {
 
   // MARK: New-chat FAB (§5.4)
 
-  /// A floating action disc, bottom-trailing above the tab bar — a one-handed reach
-  /// for "new chat" (replaces the top-right toolbar compose button on this screen).
+  /// Enamel 56pt new-chat disc, bottom-trailing above the tab bar — a
+  /// one-handed reach (replaces the top-right toolbar compose button).
   private var newChatFAB: some View {
     Button {
       Haptics.tap()
@@ -248,7 +247,7 @@ struct ConversationListView: View {
     } label: {
       Image(systemName: "square.and.pencil")
         .font(.system(size: 22, weight: .semibold))
-        .foregroundStyle(.white)
+        .foregroundStyle(Theme.onRed)
         .frame(width: 56, height: 56)
         .background(Theme.accent, in: Circle())
         .oakShadow(.raised)
@@ -313,7 +312,7 @@ struct ConversationListView: View {
   /// factored out so both the "Pinned" section and the main list share it.
   @ViewBuilder
   private func conversationRow(_ conversation: ConversationSummary) -> some View {
-    // Active = last-opened thread: lifted mini-plate + mono OPEN stamp (soul.md).
+    // Active = last-opened thread: poke-red-soft paper row + Open stamp.
     // Never a red left selection rail. Pinned is still the pin glyph only.
     let isActive = conversation.id == lastOpenedId
     Button {
@@ -345,18 +344,18 @@ struct ConversationListView: View {
       Group {
         if isActive {
           RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-            .fill(Theme.surface)
+            .fill(Theme.accentSoft)
             .overlay {
               RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                .strokeBorder(Theme.borderStrong, lineWidth: 1)
+                .strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1)
             }
-            .oakShadow(.card)
             .padding(.vertical, 2)
         } else {
-          Color.clear
+          Theme.surface
         }
       }
     )
+    .listRowSeparatorTint(Theme.separator)
     .listRowSeparator(isActive ? .hidden : .automatic)
     // Separator aligned to the text, not the row edge.
     .alignmentGuide(.listRowSeparatorLeading) { _ in Theme.Spacing.lg }
@@ -474,6 +473,9 @@ struct ConversationListView: View {
     }
     .padding()
     .background(Theme.surface)
+    .overlay(alignment: .top) {
+      Rectangle().fill(Theme.separator).frame(height: 1)
+    }
   }
 
   private func export(_ conversation: ConversationSummary, as format: ConversationExportFormat) async {
@@ -580,10 +582,9 @@ private struct FloatingActionButtonStyle: ButtonStyle {
   }
 }
 
-/// One conversation row: the title and an engraved mono meta line ("GEN 9 · 19H
-/// AGO"). When `isOpen`, a mono **OPEN** stamp trails (soul.md history selection —
-/// never a red rail). Color is never the sole signal — the format is shown as text
-/// (M-AC-UI9.3 / conventions.md).
+/// One conversation row: the title and a mono meta line ("GEN 9 · 19H AGO").
+/// When `isOpen`, an **Open** stamp trails (never a red rail). Color is never
+/// the sole signal — the format is shown as text (M-AC-UI9.3).
 private struct ConversationRow: View {
   let conversation: ConversationSummary
   /// True when this is the last-opened / active thread — shows the OPEN stamp.
@@ -617,11 +618,11 @@ private struct ConversationRow: View {
           .padding(.horizontal, 7)
           .padding(.vertical, 3)
           .background(
-            Theme.accent.opacity(0.08),
-            in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+            Theme.accentSoft,
+            in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
           )
           .overlay {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
+            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
               .strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1)
           }
           .accessibilityLabel("Open")
