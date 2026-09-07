@@ -10,7 +10,6 @@ import {
   type StarterPrompt,
 } from "@/lib/example-prompts";
 import { deriveFollowUpChips, type FollowUpChip } from "@/lib/chat/follow-up-chips";
-import { impliedFormatFromAnswer } from "@/lib/chat/implied-format";
 import type { Format } from "@/data/formats";
 import FollowUpChipRow from "./FollowUpChipRow";
 import PinStrip from "./PinStrip";
@@ -27,15 +26,13 @@ function isRetryableTransportCode(code: string): boolean {
 
 function chipsForAnswer(
   answer: import("@/components/types").OakAnswer,
-  currentFormat: Format | undefined,
   mentionedTeam: { id: string; name: string } | null,
   signedIn: boolean,
 ): FollowUpChip[] {
   const chips = deriveFollowUpChips({
     answer,
-    impliedFormat: impliedFormatFromAnswer(answer, currentFormat),
     mentionedTeam: signedIn ? (mentionedTeam ?? undefined) : undefined,
-  });
+  }).filter((c) => c.kind !== "scope");
   return signedIn ? chips : chips.filter((c) => c.kind !== "team");
 }
 
@@ -204,7 +201,8 @@ export default function ChatThread({
           <div className="blank-plate" data-testid="blank-plate">
             <h1 className="blank-plate__prompt">What do you want to know?</h1>
             <p className="blank-plate__sub">
-              Mechanics, locations, teams, damage. Oak will show its work.
+              Teams, calcs, and live usage for Pokémon Champions. Oak will show
+              its work.
             </p>
 
             {/* Composer promoted into the plate on desktop empty state; on
@@ -359,7 +357,6 @@ export default function ChatThread({
               <FollowUpChipRow
                 chips={chipsForAnswer(
                   turn.answer,
-                  currentFormat,
                   signedIn ? mentionedTeam : null,
                   signedIn,
                 )}

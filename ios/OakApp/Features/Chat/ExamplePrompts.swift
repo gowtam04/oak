@@ -54,14 +54,6 @@ enum ExamplePrompts {
       prompt: "Best Stat Point spread for Incineroar in Champions"
     ),
     FiledStarter(
-      category: .battle, typeDot: "dragon",
-      prompt: "Was Excadrill good in Gen 5?"
-    ),
-    FiledStarter(
-      category: .battle, typeDot: "steel",
-      prompt: "Best Steel types in Gen 7?"
-    ),
-    FiledStarter(
       category: .battle, typeDot: "fire",
       prompt: "Damage from a 120 BP STAB super-effective hit vs 95 Defense"
     ),
@@ -120,22 +112,6 @@ enum ExamplePrompts {
     FiledStarter(
       category: .battle, typeDot: "dragon",
       prompt: "Best Stat Point spread for Dragonite in Champions"
-    ),
-    FiledStarter(
-      category: .battle, typeDot: "dragon",
-      prompt: "Was Garchomp good in Gen 4?"
-    ),
-    FiledStarter(
-      category: .battle, typeDot: "ground",
-      prompt: "Was Landorus-Therian good in Gen 5?"
-    ),
-    FiledStarter(
-      category: .battle, typeDot: "ghost",
-      prompt: "Was Mimikyu good in Gen 7?"
-    ),
-    FiledStarter(
-      category: .battle, typeDot: "dragon",
-      prompt: "Was Dragapult good in Gen 8?"
     ),
     FiledStarter(
       category: .battle, typeDot: "dragon",
@@ -206,10 +182,6 @@ enum ExamplePrompts {
       prompt: "What's the Speed tier for Timid Chi-Yu?"
     ),
     FiledStarter(
-      category: .battle, typeDot: "flying",
-      prompt: "Best EV spread for Corviknight in OU"
-    ),
-    FiledStarter(
       category: .battle, typeDot: "fire",
       prompt: "Should I run Jolly or Adamant on Mega Charizard X?"
     ),
@@ -222,10 +194,6 @@ enum ExamplePrompts {
       prompt: "Best Stat Point spread for Rillaboom in Champions"
     ),
     FiledStarter(
-      category: .battle, typeDot: "steel",
-      prompt: "Was Aegislash good in Gen 6?"
-    ),
-    FiledStarter(
       category: .battle, typeDot: "electric",
       prompt: "Can Pikachu OHKO a 4x weak target with Thunderbolt?"
     ),
@@ -235,7 +203,7 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .battle, typeDot: "grass",
-      prompt: "How much HP does Ferrothorn have with max HP EVs?"
+      prompt: "How much HP does Ferrothorn have with max HP Stat Points?"
     ),
     FiledStarter(
       category: .battle, typeDot: "flying",
@@ -255,10 +223,6 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .battle, typeDot: "bug",
-      prompt: "Was Volcarona good in Gen 5?"
-    ),
-    FiledStarter(
-      category: .battle, typeDot: "bug",
       prompt: "Does Technician Scizor outdamage Choice Band?"
     ),
     FiledStarter(
@@ -266,20 +230,8 @@ enum ExamplePrompts {
       prompt: "How much Attack does Huge Power Azumarill have?"
     ),
     FiledStarter(
-      category: .battle, typeDot: "fire",
-      prompt: "Can Tera Fire Chi-Yu OHKO Assault Vest Toxapex?"
-    ),
-    FiledStarter(
-      category: .battle, typeDot: "steel",
-      prompt: "What's a good spread for Gholdengo in Gen 9 OU?"
-    ),
-    FiledStarter(
       category: .battle, typeDot: "psychic",
       prompt: "Build me a doubles team around Indeedee"
-    ),
-    FiledStarter(
-      category: .battle, typeDot: "rock",
-      prompt: "Was Tyranitar good in Gen 2?"
     ),
     FiledStarter(
       category: .battle, typeDot: "ghost",
@@ -374,14 +326,6 @@ enum ExamplePrompts {
       prompt: "How do I evolve Gimmighoul?"
     ),
     FiledStarter(
-      category: .dex, typeDot: "steel",
-      prompt: "Did Garchomp get Scale Shot in Gen 8?"
-    ),
-    FiledStarter(
-      category: .dex, typeDot: "ghost",
-      prompt: "What could Aegislash learn in Gen 6?"
-    ),
-    FiledStarter(
       category: .dex, typeDot: "electric",
       prompt: "What's the average base Speed of Electric types?"
     ),
@@ -390,20 +334,8 @@ enum ExamplePrompts {
       prompt: "Which type combination has the most Pokémon?"
     ),
     FiledStarter(
-      category: .dex, typeDot: "flying",
-      prompt: "Name all the Route 1 birds"
-    ),
-    FiledStarter(
       category: .dex, typeDot: "poison",
       prompt: "How many Pokémon are purple?"
-    ),
-    FiledStarter(
-      category: .dex, typeDot: "normal",
-      prompt: "Which Pokémon are exclusive to Violet?"
-    ),
-    FiledStarter(
-      category: .dex, typeDot: "grass",
-      prompt: "Show me Chikorita"
     ),
     FiledStarter(
       category: .dex, typeDot: "electric",
@@ -431,10 +363,6 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .dex, typeDot: "normal",
-      prompt: "Which Pokémon has the same National Dex number as its BST?"
-    ),
-    FiledStarter(
-      category: .dex, typeDot: "normal",
       prompt: "Which Pokémon go from dual type to monotype on evolution?"
     ),
     FiledStarter(
@@ -452,10 +380,6 @@ enum ExamplePrompts {
     FiledStarter(
       category: .dex, typeDot: "ice",
       prompt: "Is there a Fire/Ice type combination?"
-    ),
-    FiledStarter(
-      category: .dex, typeDot: "normal",
-      prompt: "How many Pokémon are in the National Dex?"
     ),
     FiledStarter(
       category: .dex, typeDot: "normal",
@@ -506,10 +430,6 @@ enum ExamplePrompts {
       prompt: "Fairy types with Magic Bounce"
     ),
     FiledStarter(
-      category: .dex, typeDot: "poison",
-      prompt: "How do I evolve Hisuian Qwilfish?"
-    ),
-    FiledStarter(
       category: .dex, typeDot: "fighting",
       prompt: "What's the average base Attack of Fighting types?"
     ),
@@ -538,8 +458,20 @@ enum ExamplePrompts {
       prompt: "Show me Tyranitar"
     ),
     FiledStarter(
+      category: .dex, typeDot: "grass",
+      prompt: "Show me Rillaboom"
+    ),
+    FiledStarter(
+      category: .dex, typeDot: "dark",
+      prompt: "Tell me about Incineroar"
+    ),
+    FiledStarter(
+      category: .dex, typeDot: "fairy",
+      prompt: "What are Flutter Mane's stats?"
+    ),
+    FiledStarter(
       category: .dex, typeDot: "fighting",
-      prompt: "Which Pokémon are exclusive to Scarlet?"
+      prompt: "What types does Urshifu have?"
     ),
     FiledStarter(
       category: .rules, typeDot: "ghost",
@@ -570,10 +502,6 @@ enum ExamplePrompts {
       prompt: "What does Protosynthesis do?"
     ),
     FiledStarter(
-      category: .rules, typeDot: "normal",
-      prompt: "What item does Snorlax hold in the wild?"
-    ),
-    FiledStarter(
       category: .rules, typeDot: "electric",
       prompt: "Can Levitate dodge Earthquake?"
     ),
@@ -584,38 +512,6 @@ enum ExamplePrompts {
     FiledStarter(
       category: .rules, typeDot: "normal",
       prompt: "How does the Physical/Special split work?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "normal",
-      prompt: "How does the MissingNo glitch work?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "psychic",
-      prompt: "What is the Mew glitch in Red and Blue?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "normal",
-      prompt: "Do encounter rates change by time of day?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "flying",
-      prompt: "Where do I get HM Fly in HeartGold?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "water",
-      prompt: "What's the best strategy to catch Feebas in Gen 3?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "normal",
-      prompt: "How do I get the Shiny Charm in Scarlet and Violet?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "normal",
-      prompt: "How does recruiting work in Pokémon Mystery Dungeon?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "grass",
-      prompt: "What starters can you play as in Mystery Dungeon: Explorers of Sky?"
     ),
     FiledStarter(
       category: .rules, typeDot: "dark",
@@ -636,22 +532,6 @@ enum ExamplePrompts {
     FiledStarter(
       category: .rules, typeDot: "electric",
       prompt: "What does Booster Energy do?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "normal",
-      prompt: "How does Terastallization work?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "fire",
-      prompt: "How do Z-Moves work in Gen 7?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "dragon",
-      prompt: "How does Dynamax work in Sword and Shield?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "fighting",
-      prompt: "How does Mega Evolution work in Gen 6?"
     ),
     FiledStarter(
       category: .rules, typeDot: "psychic",
@@ -710,92 +590,408 @@ enum ExamplePrompts {
       prompt: "Is Mega Rayquaza legal in Champions?"
     ),
     FiledStarter(
-      category: .rules, typeDot: "normal",
-      prompt: "How do IVs work in Gen 3?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "psychic",
-      prompt: "Did Gen 1 have a Special Defense stat?"
-    ),
-    FiledStarter(
       category: .rules, typeDot: "fighting",
       prompt: "How do Stat Points work in Champions?"
     ),
     FiledStarter(
-      category: .rules, typeDot: "flying",
-      prompt: "How does the Old Man glitch work in Red?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "normal",
-      prompt: "What's the cloning glitch in Gold and Silver?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "grass",
-      prompt: "How does the Pomeg glitch work in Emerald?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "ghost",
-      prompt: "What is tweaking in Diamond and Pearl?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "steel",
-      prompt: "How does the Coin Case glitch work in Gen 2?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "grass",
-      prompt: "What's the Berry glitch in Ruby and Sapphire?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "water",
-      prompt: "Where do I get HM Surf in Pokémon Red?"
+      category: .rules, typeDot: "fighting",
+      prompt: "What's the Stat Point budget in Champions?"
     ),
     FiledStarter(
       category: .rules, typeDot: "fighting",
-      prompt: "Where do I get HM Strength in Emerald?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "water",
-      prompt: "Where do I get Waterfall in Platinum?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "grass",
-      prompt: "Where do I get HM Cut in Gold?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "electric",
-      prompt: "How do I catch a roaming Raikou in Gen 2?"
+      prompt: "Can I put 32 Stat Points into one stat?"
     ),
     FiledStarter(
       category: .rules, typeDot: "normal",
-      prompt: "How does the Safari Zone work in Fuchsia?"
+      prompt: "Does Champions use Stat Points instead of EVs?"
     ),
     FiledStarter(
-      category: .rules, typeDot: "fairy",
-      prompt: "How do Friend Safaris work in X and Y?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "water",
-      prompt: "How does SOS chaining work in Sun and Moon?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "ice",
-      prompt: "How do I catch Articuno in Yellow?"
-    ),
-    FiledStarter(
-      category: .rules, typeDot: "dark",
-      prompt: "How do Hidden Grottos work in Black 2?"
+      category: .rules, typeDot: "normal",
+      prompt: "How does level 50 stat calculation work?"
     ),
     FiledStarter(
       category: .rules, typeDot: "dragon",
-      prompt: "How do I recruit legendaries in Rescue Team?"
+      prompt: "How do restricted Pokémon work in Champions?"
     ),
     FiledStarter(
-      category: .rules, typeDot: "fairy",
-      prompt: "What does a Friend Bow do in Mystery Dungeon?"
+      category: .rules, typeDot: "dragon",
+      prompt: "How many restricted Pokémon can I bring?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "What's the team size in Champions Doubles?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "Can I bring six and pick four in Champions?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "How does species clause work in Champions?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "steel",
+      prompt: "Can two Pokémon hold the same item in Champions?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fire",
+      prompt: "How does Mega Evolution work in Champions?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fire",
+      prompt: "Can a Mega share a team with its base form?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "Are Z-Moves legal in Champions?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "flying",
+      prompt: "How does Tailwind work in doubles?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "ground",
+      prompt: "Does Wide Guard block Earthquake?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "Can Follow Me redirect a spread move?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "Does Protect fail on consecutive uses?"
     ),
     FiledStarter(
       category: .rules, typeDot: "psychic",
-      prompt: "How do IQ skills work in Explorers of Sky?"
+      prompt: "Can Prankster Tailwind go through Psychic Terrain?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "How does Helping Hand work in doubles?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fighting",
+      prompt: "What does Coaching do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "psychic",
+      prompt: "How does Ally Switch work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "What does Assault Vest do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fighting",
+      prompt: "What does Choice Band do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "psychic",
+      prompt: "What does Choice Specs do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "dragon",
+      prompt: "What does Life Orb do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "What does Focus Sash do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "rock",
+      prompt: "Can Sturdy survive a multi-hit move?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "flying",
+      prompt: "How does Multiscale work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "Does Unaware ignore Intimidate?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fairy",
+      prompt: "How does Friend Guard work in doubles?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "grass",
+      prompt: "What does Safety Goggles do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "bug",
+      prompt: "Does Overcoat block Spore?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "water",
+      prompt: "How does Storm Drain redirect Water moves?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "electric",
+      prompt: "How does Lightning Rod redirect Electric moves?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fighting",
+      prompt: "Does Bulletproof block Aura Sphere?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "psychic",
+      prompt: "How does Magic Guard interact with Life Orb?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "ghost",
+      prompt: "What does Covert Cloak do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "How does Clear Amulet work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "Does Red Card trigger before Eject Button?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fighting",
+      prompt: "How does Fake Out interact with Inner Focus?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "steel",
+      prompt: "What does Rocky Helmet do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "water",
+      prompt: "How does Rough Skin work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "steel",
+      prompt: "Does Iron Barbs stack with Rocky Helmet?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fire",
+      prompt: "How does Flame Body's burn chance work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "electric",
+      prompt: "What does Static do on contact?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "poison",
+      prompt: "How does Poison Touch work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fighting",
+      prompt: "Does Guts ignore the burn Attack drop?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "water",
+      prompt: "How does Huge Power work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "What does Simple do to stat changes?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "water",
+      prompt: "How does Contrary work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fighting",
+      prompt: "Does Defiant trigger on Intimidate?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "psychic",
+      prompt: "How does Competitive work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "steel",
+      prompt: "What does Mirror Armor do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "How does Imposter work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "dark",
+      prompt: "Can Illusion copy a Mega?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "ghost",
+      prompt: "How does Disguise work on Mimikyu?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "flying",
+      prompt: "What does Air Balloon do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "steel",
+      prompt: "How does Heavy-Duty Boots ignore hazards?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "psychic",
+      prompt: "Does Magic Bounce reflect Taunt?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "dark",
+      prompt: "How does Taunt work in doubles?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "What does Encore do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "How does Disable work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "electric",
+      prompt: "Does Throat Spray trigger on a blocked sound move?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fighting",
+      prompt: "How does Punching Glove work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "rock",
+      prompt: "How does Skill Link work with Rock Blast?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "bug",
+      prompt: "Does Technician boost Ice Spinner?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "water",
+      prompt: "How does Adaptability STAB work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "bug",
+      prompt: "What does Tinted Lens do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "dragon",
+      prompt: "Does Sniper boost crits?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "How does Super Luck work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "What does Scope Lens do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fighting",
+      prompt: "How does Focus Energy work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "poison",
+      prompt: "What does Mortal Spin do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "water",
+      prompt: "How does Court Change work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "poison",
+      prompt: "How does Clear Smog work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "Does Roar phaze through Suction Cups?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "How does Shed Tail work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fairy",
+      prompt: "What does Revival Blessing do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "psychic",
+      prompt: "How does Healing Wish work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "psychic",
+      prompt: "How does Wish timing work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "water",
+      prompt: "What does Aqua Ring do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "grass",
+      prompt: "Does Leech Seed fail on Grass types?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "grass",
+      prompt: "How does Strength Sap work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "dark",
+      prompt: "What does Parting Shot do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "water",
+      prompt: "How does Flip Turn work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "bug",
+      prompt: "Does U-turn trigger Intimidate on the switch-in?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "electric",
+      prompt: "How does Volt Switch work in doubles?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "What does Eject Pack do?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fighting",
+      prompt: "How does Weakness Policy work?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "grass",
+      prompt: "Does White Herb clear Intimidate?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "normal",
+      prompt: "How do Stat Points interact with nature?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "ice",
+      prompt: "How does Aurora Veil work in doubles?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "ice",
+      prompt: "Does Snow Warning set snow in Champions?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "rock",
+      prompt: "How does Sand Stream work in doubles?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fire",
+      prompt: "How does Drought work in doubles?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "water",
+      prompt: "How does Drizzle work in doubles?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "grass",
+      prompt: "How does Grassy Terrain change Grassy Glide?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "electric",
+      prompt: "Does Electric Terrain stop sleep?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "fairy",
+      prompt: "How does Misty Terrain block status?"
+    ),
+    FiledStarter(
+      category: .rules, typeDot: "ghost",
+      prompt: "Are Z-Moves and Dynamax legal in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "steel",
@@ -804,18 +1000,6 @@ enum ExamplePrompts {
     FiledStarter(
       category: .meta, typeDot: "water",
       prompt: "Who has the highest usage in Champions right now?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "fire",
-      prompt: "How many gym leaders are Fire type?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "Who leads the guild in Pokémon Mystery Dungeon Explorers?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "What are the most populous cities in the mainline games?"
     ),
     FiledStarter(
       category: .meta, typeDot: "dark",
@@ -866,176 +1050,412 @@ enum ExamplePrompts {
       prompt: "What item does Flutter Mane usually hold in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "ground",
-      prompt: "What's the highest usage in Smogon Gen 9 OU?"
-    ),
-    FiledStarter(
       category: .meta, typeDot: "dark",
-      prompt: "What does Kingambit run in OU?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "ground",
-      prompt: "What's Great Tusk's usage on the Smogon ladder?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "steel",
-      prompt: "What items does Gholdengo run in Gen 9 OU?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "dark",
-      prompt: "Who are Kingambit's checks in OU?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "fighting",
-      prompt: "Common teammates for Great Tusk in OU"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "dragon",
-      prompt: "What's Dragapult's role in Smogon OU?"
+      prompt: "What's Incineroar's most common item in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "water",
-      prompt: "Is Palafin used in Gen 9 OU?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "rock",
-      prompt: "Who's the top hazards setter in Gen 9 OU?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "ground",
-      prompt: "What EV spread does Great Tusk run in OU?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "ice",
-      prompt: "Is Baxcalibur used in Smogon OU?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "steel",
-      prompt: "What's the usage trend for Gholdengo in OU?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "poison",
-      prompt: "What's Galarian Slowking's role in OU?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "bug",
-      prompt: "Is Volcarona used in Gen 9 OU?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "rock",
-      prompt: "Who is the first gym leader in Kanto?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "What type is Whitney's gym in Johto?"
+      prompt: "Who is the most used Pokémon in Champions Doubles?"
     ),
     FiledStarter(
       category: .meta, typeDot: "water",
-      prompt: "Who is the Water gym leader in Hoenn?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "electric",
-      prompt: "What's Volkner's type in Sinnoh?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "dragon",
-      prompt: "Who is the Dragon gym leader in Unova?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "fighting",
-      prompt: "What type is Korrina's gym in Kalos?"
+      prompt: "What's the top rain core in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "grass",
-      prompt: "Who is the first gym leader in Galar?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "ghost",
-      prompt: "Who is Paldea's Ghost gym leader?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "water",
-      prompt: "How many gym leaders are Water type?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "ice",
-      prompt: "Who is the Ice Elite Four member in Kanto?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "dragon",
-      prompt: "Who is the champion in Pokémon Platinum?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "bug",
-      prompt: "Who is the champion in Pokémon Black and White?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "ghost",
-      prompt: "Who is the Ghost Elite Four in Hoenn?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "electric",
-      prompt: "Who is Lt. Surge?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "steel",
-      prompt: "Who is the champion in Ruby?"
+      prompt: "Common partners for Rillaboom in Champions"
     ),
     FiledStarter(
       category: .meta, typeDot: "fairy",
-      prompt: "Who is the Fairy gym leader in Galar?"
+      prompt: "What's Flutter Mane's usual spread in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "grass",
-      prompt: "What's the starting town in Pokémon Gold?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "rock",
-      prompt: "Where is the Pokémon League in Kanto?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "steel",
-      prompt: "Where is the Battle Frontier in Emerald?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "electric",
-      prompt: "What's the city with the Magnet Train?"
+      category: .meta, typeDot: "dark",
+      prompt: "Who checks Incineroar in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fire",
-      prompt: "Where is the Pokémon Mansion in Gen 1?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "grass",
-      prompt: "What's the starting town in Scarlet and Violet?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "water",
-      prompt: "Where is Treasure Town in Explorers of Sky?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "Who runs the Kecleon shop in Mystery Dungeon?"
+      prompt: "What's the most used Mega stone in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "psychic",
-      prompt: "What is Temporal Tower in Explorers of Sky?"
+      prompt: "How common is Trick Room in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "poison",
-      prompt: "Who is on Team Skull in Explorers of Sky?"
+      category: .meta, typeDot: "normal",
+      prompt: "What's the best lead in Champions Doubles?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "Who is rising in Champions usage?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "grass",
+      prompt: "What's Amoonguss usually holding in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fighting",
-      prompt: "Where can I recruit Riolu in Explorers of Sky?"
+      prompt: "Common items on Urshifu in Champions"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ground",
+      prompt: "What's Landorus-Therian's usual set in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "water",
+      prompt: "Who pairs with Pelipper in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dragon",
+      prompt: "What's the most used restricted in Champions Doubles?"
     ),
     FiledStarter(
       category: .meta, typeDot: "flying",
-      prompt: "Who is the Guild assistant in Explorers of Sky?"
+      prompt: "How common is Tailwind in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dragon",
+      prompt: "What's Dragonite's usual item in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fairy",
+      prompt: "Who are the top supports in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "steel",
+      prompt: "What's Gholdengo's usual moveset in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "How often is Fake Out used in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fire",
+      prompt: "What's the top sun core in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fire",
+      prompt: "Common partners for Torkoal in Champions"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "Who is the best redirection user in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "grass",
+      prompt: "What's Rillaboom's usual item in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "How common is Follow Me in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "flying",
+      prompt: "What's the best speed control in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fairy",
+      prompt: "Who is the most used Fairy in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dark",
+      prompt: "What's Chi-Yu's role in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fighting",
+      prompt: "How common is Iron Hands in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ground",
+      prompt: "What's Great Tusk's usual set in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ground",
+      prompt: "Who is the best spread attacker in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "psychic",
+      prompt: "Common partners for Indeedee in Champions"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "psychic",
+      prompt: "What's the top Trick Room core in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dragon",
+      prompt: "Who is the most used Dragon in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fighting",
+      prompt: "What's Mega Lucario's usage in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fire",
+      prompt: "How often is Mega Charizard X used in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "water",
+      prompt: "What's Mega Swampert's role in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dark",
+      prompt: "Who is the best Intimidate user in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fighting",
+      prompt: "What's the most used Fighting type in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dark",
+      prompt: "How common is Kingambit in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fairy",
+      prompt: "Who checks Flutter Mane in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "steel",
+      prompt: "What's the best Steel type in Champions right now?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fire",
+      prompt: "How common is Heatran in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "flying",
+      prompt: "What's Tornadus's role in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "ghost",
-      prompt: "Who is Dusknoir in Explorers of Sky?"
+      prompt: "Who is the most used Ghost in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "rock",
+      prompt: "What's the top sand core in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "rock",
+      prompt: "How common is Tyranitar in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ice",
+      prompt: "What's the most used Ice type in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "flying",
+      prompt: "Who is the best Tailwind setter in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "grass",
+      prompt: "What's Ogerpon's usage in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "water",
+      prompt: "How common is Walking Wake in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "electric",
+      prompt: "What's the most used Electric type in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "psychic",
+      prompt: "Who is the best terrain setter in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "psychic",
+      prompt: "What's Indeedee's role in Champions Doubles?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "psychic",
+      prompt: "How common is Psychic Terrain in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "rock",
+      prompt: "What's the best hazard setter in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "rock",
+      prompt: "Who is the most used Rock type in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "rock",
+      prompt: "What's Salt Cure's usage in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "rock",
+      prompt: "How common is Garganacl in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "bug",
+      prompt: "What's the most used Bug type in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "water",
+      prompt: "Who is the best pivot in Champions Doubles?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dark",
+      prompt: "What's the top hyper offense core in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "How common is Choice Scarf in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "steel",
+      prompt: "What's the most used item in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fighting",
+      prompt: "Who holds the most Assault Vests in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ghost",
+      prompt: "What's Covert Cloak usage like in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "How common is Clear Amulet in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "water",
+      prompt: "What's the best rain sweeper in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "grass",
+      prompt: "How often is Grassy Terrain used in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "grass",
+      prompt: "What's the best Grassy Glide user in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fighting",
+      prompt: "Who checks Urshifu in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "water",
+      prompt: "What's Rapid Strike Urshifu's role in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dark",
+      prompt: "How common is Single Strike Urshifu in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dark",
+      prompt: "What's the most used Dark type in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "Who is the best Fake Out user in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "How common is Wide Guard in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "What's the most used Protect user in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fire",
+      prompt: "Who is rising among Megas in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ghost",
+      prompt: "What's Mega Gengar's usage in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "How common is Mega Kangaskhan in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ice",
+      prompt: "What's the best snow team look in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ice",
+      prompt: "Who is the most used Ice setter in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ice",
+      prompt: "What's Alolan Ninetales's role in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ice",
+      prompt: "How common is Aurora Veil in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "rock",
+      prompt: "What's the best sand setter in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ground",
+      prompt: "Who pairs with Excadrill in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ground",
+      prompt: "What's the most used Ground type in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fire",
+      prompt: "What's Entei's role in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fire",
+      prompt: "Who is the most used Fire type in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fire",
+      prompt: "What's the top sun sweeper in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fire",
+      prompt: "How common is Drought in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "What's the most used ability in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fairy",
+      prompt: "Who is the best support Pokémon in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "poison",
+      prompt: "What's Toxapex's usage in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "poison",
+      prompt: "How common is Amoonguss over Toedscruel?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "poison",
+      prompt: "Who is the most used Poison type in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "bug",
+      prompt: "What's Scizor's role in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "bug",
+      prompt: "How common is Volcarona in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "electric",
+      prompt: "What's Miraidon's usage in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "electric",
+      prompt: "How common is Raging Bolt in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ghost",
+      prompt: "What's Dragapult's usage in Champions Doubles?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "steel",
+      prompt: "How common is Kingambit vs Gholdengo right now?"
     ),
   ]
 
