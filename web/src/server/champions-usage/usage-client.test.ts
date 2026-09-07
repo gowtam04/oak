@@ -6,7 +6,9 @@
  *   - name -> saved_name resolution via the index, with a /api/metadata fallback,
  *   - a miss returns suggestions; a battle 404 is a miss with no retry,
  *   - a transient network error retries once then succeeds,
- *   - per-Pokémon usage is cached (a repeat call refetches nothing).
+ *   - per-Pokémon usage is cached (a repeat call refetches nothing),
+ *   - listLeaderboard (P5 / ADR-5): bulk index ranks, no N+1; names-only
+ *     index → available:false rather than per-species battle GETs.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -189,5 +191,207 @@ describe("getUsage — network resilience", () => {
       throw new TypeError("network down");
     });
     await expect(getUsage("garchomp", "doubles", { now: 1 })).rejects.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listLeaderboard — bulk ranks, no N+1 (ADR-5, CF-USAGE-US-1, CF-INT-BR-4)
+// ---------------------------------------------------------------------------
+
+type LeaderboardRow = {
+  rank: number;
+  name: string;
+  usage_pct?: number;
+};
+
+type LeaderboardResult =
+  | {
+      available: true;
+      season: string;
+      fetched_at: number;
+      rows: LeaderboardRow[];
+    }
+  | { available: false };
+
+type ListLeaderboard = (
+  ladder: "doubles" | "singles",
+  signal?: AbortSignal,
+) => Promise<LeaderboardResult>;
+
+async function loadListLeaderboard(): Promise<ListLeaderboard> {
+  const mod = (await import("./usage-client")) as {
+    listLeaderboard?: ListLeaderboard;
+  };
+  expect(mod.listLeaderboard).toEqual(expect.any(Function));
+  return mod.listLeaderboard as ListLeaderboard;
+}
+
+function battleUrls(): string[] {
+  return calledUrls().filter((u) => u.includes("/api/battle/"));
+}
+
+/** Community `/api` index with per-ladder `position` ranks in one payload. */
+function bulkIndex() {
+  return {
+    defaultSeason: "Current",
+    seasons: ["Current"],
+    pokemon: [
+      {
+        name: "Kingambit",
+        slug: "kingambit",
+        showdownId: "kingambit",
+        summary: {
+          sprite: "pokemon_champions_assets/pokemon/Kingambit.png",
+          battleSummary: {
+            Current: {
+              Doubles: { position: 1 },
+              Singles: { position: 5 },
+            },
+          },
+        },
+      },
+      {
+        name: "Garchomp",
+        slug: "garchomp",
+        showdownId: "garchomp",
+        summary: {
+          sprite: "pokemon_champions_assets/pokemon/Garchomp.png",
+          battleSummary: {
+            Current: {
+              Doubles: { position: 2 },
+              Singles: { position: 1 },
+            },
+          },
+        },
+      },
+      {
+        name: "Rillaboom",
+        slug: "rillaboom",
+        showdownId: "rillaboom",
+        summary: {
+          sprite: "pokemon_champions_assets/pokemon/Rillaboom.png",
+          battleSummary: {
+            Current: {
+              Doubles: { position: 3 },
+              Singles: { position: 8 },
+            },
+          },
+        },
+      },
+    ],
+  };
+}
+
+describe("listLeaderboard — bulk ranks, no N+1 (ADR-5, CF-USAGE-US-1, CF-INT-BR-4)", () => {
+  it("maps a bulk index payload into available:true ranked rows without per-species fetches", async () => {
+    installFetch((url) => {
+      if (url === `${BASE}/api` || url === `${BASE}/api/index`) return ok(bulkIndex());
+      return notFound();
+    });
+
+    const listLeaderboard = await loadListLeaderboard();
+    const res = await listLeaderboard("doubles");
+
+    expect(res.available).toBe(true);
+    if (!res.available) return;
+    expect(res.season).toBe("Current");
+    expect(typeof res.fetched_at).toBe("number");
+    expect(res.rows.map((r) => r.name)).toEqual([
+      "Kingambit",
+      "Garchomp",
+      "Rillaboom",
+    ]);
+    expect(res.rows.map((r) => r.rank)).toEqual([1, 2, 3]);
+    // One (or a handful of) index requests — never one battle GET per species.
+    expect(battleUrls()).toEqual([]);
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(3);
+  });
+
+  it("reads Singles ranks from the same bulk payload (no extra per-species GETs)", async () => {
+    installFetch((url) => {
+      if (url === `${BASE}/api` || url === `${BASE}/api/index`) return ok(bulkIndex());
+      return notFound();
+    });
+
+    const listLeaderboard = await loadListLeaderboard();
+    const res = await listLeaderboard("singles");
+
+    expect(res.available).toBe(true);
+    if (!res.available) return;
+    expect(res.rows[0]).toMatchObject({ rank: 1, name: "Garchomp" });
+    expect(res.rows.map((r) => r.name)).toEqual([
+      "Garchomp",
+      "Kingambit",
+      "Rillaboom",
+    ]);
+    expect(battleUrls()).toEqual([]);
+  });
+
+  it("returns available:false when the index has names but no ranks (must not N+1)", async () => {
+    // Existing INDEX fixture is a name list only — ranks would require
+    // /api/battle/:format/:name per species. ADR-5: unavailable instead.
+    installFetch((url) => {
+      if (url === `${BASE}/api`) return ok(INDEX);
+      if (url.includes("/api/battle/")) {
+        throw new Error("listLeaderboard must not N+1 per-species battle fetches (ADR-5)");
+      }
+      return notFound();
+    });
+
+    const listLeaderboard = await loadListLeaderboard();
+    const res = await listLeaderboard("doubles");
+
+    expect(res).toEqual({ available: false });
+    expect(battleUrls()).toEqual([]);
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(3);
+  });
+
+  it("returns available:false when pokemon objects lack ladder position/rank", async () => {
+    installFetch((url) => {
+      if (url === `${BASE}/api`) {
+        return ok({
+          defaultSeason: "Current",
+          pokemon: [
+            { name: "Garchomp", slug: "garchomp" },
+            { name: "Rillaboom", slug: "rillaboom" },
+          ],
+        });
+      }
+      if (url.includes("/api/battle/")) {
+        throw new Error("listLeaderboard must not N+1 per-species battle fetches (ADR-5)");
+      }
+      return notFound();
+    });
+
+    const listLeaderboard = await loadListLeaderboard();
+    const res = await listLeaderboard("doubles");
+    expect(res).toEqual({ available: false });
+    expect(battleUrls()).toEqual([]);
+  });
+
+  it("returns available:false on an upstream fault (does not throw)", async () => {
+    installFetch(() => {
+      throw new TypeError("network down");
+    });
+
+    const listLeaderboard = await loadListLeaderboard();
+    const res = await listLeaderboard("doubles");
+    expect(res).toEqual({ available: false });
+  });
+
+  it("does not require Redis — an in-process cache miss simply refetches the bulk index", async () => {
+    installFetch((url) => {
+      if (url === `${BASE}/api` || url === `${BASE}/api/index`) return ok(bulkIndex());
+      return notFound();
+    });
+
+    const listLeaderboard = await loadListLeaderboard();
+    const first = await listLeaderboard("doubles");
+    const second = await listLeaderboard("doubles");
+    expect(first.available).toBe(true);
+    expect(second.available).toBe(true);
+    // Cached index: still no per-species battle GETs, and no Redis.
+    expect(battleUrls()).toEqual([]);
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(3);
   });
 });
