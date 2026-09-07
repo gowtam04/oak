@@ -66,27 +66,11 @@ export const FORMATS = [
 export const DEFAULT_FORMATS = ["champions"] as const satisfies readonly Format[];
 
 /**
- * Display order for scope pickers (chat header chip, team menus, etc.).
- * National Dex first (the default scope), then Champions, then mainline
- * generations in release-date descending order. Does NOT reorder
- * {@link FORMATS} — that array feeds ingest/prompt/test lock-steps and must
- * stay stable.
- *
- * iOS/Android `Format.knownCases` should match this order.
+ * Display order for remaining product pickers. Champions-first (ADR-3):
+ * Champions is the only live format — National Dex is not the default.
+ * {@link FORMATS} is unchanged so archived stored rows still decode.
  */
-export const SCOPE_PICKER_ORDER: readonly Format[] = [
-  "national-dex",
-  "champions",
-  "scarlet-violet",
-  "gen-8",
-  "gen-7",
-  "gen-6",
-  "gen-5",
-  "gen-4",
-  "gen-3",
-  "gen-2",
-  "gen-1",
-] as const;
+export const SCOPE_PICKER_ORDER: readonly Format[] = ["champions"];
 
 /** The standard (non-Champions) format — today's Gen 9 scope. */
 export const STANDARD_FORMAT: Format = "scarlet-violet";
@@ -161,8 +145,9 @@ export function basisForFormat(format: Format): string {
 }
 
 /**
- * Type guard for a known format string (CLI args, archived stored rows).
- * Accepts the full historical {@link FORMATS} union (ADR-3), not only Champions.
+ * Type guard for a known stored-row format string (archived teams, old
+ * conversations). Accepts the full historical {@link FORMATS} union (ADR-3).
+ * Ingest/runtime do not use this to accept other games — those are Champions-only.
  */
 export function isFormat(value: string): value is Format {
   return (FORMATS as readonly string[]).includes(value);

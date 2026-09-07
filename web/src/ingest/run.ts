@@ -45,7 +45,6 @@ import {
   type Format,
   DEFAULT_FORMATS,
   CHAMPIONS_FORMAT,
-  isFormat,
 } from "@/data/formats";
 import { loadFormat, slugFor } from "@/data/pkmn/gen-provider";
 import { logger } from "@/server/logger";
@@ -194,11 +193,23 @@ export async function writeIndex(
 // Orchestrator
 // ---------------------------------------------------------------------------
 
+/** Refuse any format other than Champions so gen-7 (etc.) is never written. */
+function championsOnlyFormats(requested: Format[] | undefined, via: string): Format[] {
+  const formats = requested ?? [...DEFAULT_FORMATS];
+  const refused = formats.filter((f) => f !== CHAMPIONS_FORMAT);
+  if (refused.length > 0) {
+    throw new Error(
+      `Champions-only ingest (${via}): refused format(s) ${refused.join(", ")}`,
+    );
+  }
+  return formats.length > 0 ? formats : [...DEFAULT_FORMATS];
+}
+
 export async function runIngest(
   opts: RunIngestOptions = {},
 ): Promise<IngestReport> {
   const startedAt = Date.now();
-  const formats = opts.formats ?? [...DEFAULT_FORMATS];
+  const formats = championsOnlyFormats(opts.formats, "runIngest");
   const report = (msg: string): void => opts.onProgress?.(msg);
 
   const pokemonRows: PokemonRow[] = [];
@@ -295,16 +306,21 @@ export async function runIngest(
 
 function parseCliOptions(argv: string[]): RunIngestOptions {
   const fmtArg = argv.find((a) => a.startsWith("--formats="));
-  const formats = fmtArg
-    ? fmtArg
-        .slice("--formats=".length)
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s): s is Format => isFormat(s))
-    : undefined;
-  return {
-    ...(formats && formats.length > 0 ? { formats } : {}),
-  };
+  if (!fmtArg) return {};
+  const tokens = fmtArg
+    .slice("--formats=".length)
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (tokens.length === 0) return {};
+  // isFormat still decodes archived stored rows; ingest itself is Champions-only.
+  const refused = tokens.filter((t) => t !== CHAMPIONS_FORMAT);
+  if (refused.length > 0) {
+    throw new Error(
+      `Champions-only ingest: refused --formats value(s) ${refused.join(", ")} (only champions is allowed)`,
+    );
+  }
+  return { formats: tokens.map(() => CHAMPIONS_FORMAT) };
 }
 
 async function main(): Promise<void> {

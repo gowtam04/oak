@@ -719,7 +719,8 @@ type LoadedTools = {
  * contract). The AgentContext is built via the real factory in
  * src/agent/context.ts when present; if that module/export is not available yet,
  * a minimal ctx (singleton db handle + silent logger) is used so the DB-backed
- * tools that read the shared connection still run.
+ * tools that read the shared connection still run. Mode is always "champions"
+ * so oracles read the Champions fixture partition.
  *
  * NOTE for the Phase-4 / assembly author: this helper probes a few likely
  * factory names (createAgentContext / buildAgentContext / makeAgentContext /
@@ -751,7 +752,11 @@ async function buildOracleContext(): Promise<AgentContext> {
       .find((f): f is (...a: unknown[]) => unknown => typeof f === "function");
 
     if (factory) {
-      for (const args of [[{ requestId: "oracle" }], ["oracle"], []]) {
+      for (const args of [
+        [{ requestId: "oracle", mode: "champions" }],
+        ["oracle"],
+        [],
+      ]) {
         try {
           const candidate = await Promise.resolve(
             factory(...(args as unknown[])),
@@ -783,6 +788,6 @@ async function buildMinimalContext(): Promise<AgentContext> {
     db: { db: dbMod.db },
     logger,
     requestId: "oracle",
-    mode: "standard",
+    mode: "champions",
   } as unknown as AgentContext;
 }

@@ -77,4 +77,11 @@ describe("dropped readers are gone (CF-INT-BR-3)", () => {
     const path = fileURLToPath(new URL("./repos/meta-repo.ts", import.meta.url));
     expect(existsSync(path)).toBe(false);
   });
+
+  it("encounter-repo.ts is deleted", () => {
+    const path = fileURLToPath(
+      new URL("./repos/encounter-repo.ts", import.meta.url),
+    );
+    expect(existsSync(path)).toBe(false);
+  });
 });
