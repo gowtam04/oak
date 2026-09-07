@@ -46,7 +46,6 @@ import {
   type ExportFormat,
 } from "@/lib/api/history-client";
 import { listTeams, type TeamSummary } from "@/lib/api/teams-client";
-import { persistScope } from "@/lib/api/scope-client";
 import { createShare } from "@/lib/api/share-client";
 import { parseSlashCommand } from "@/lib/chat/slash-commands";
 import type { FollowUpChip } from "@/lib/chat/follow-up-chips";
@@ -320,35 +319,21 @@ export default function Home() {
     assistant_message_id?: string;
   } | null>(null);
 
-  // Server-resolved scope for the conversation (GS-C). The hook's `scope` is the
+  // Server-resolved format for the conversation. The hook's `scope` is the
   // per-turn `scope` SSE frame — `null` on a fresh send and until that frame
   // lands — so mirror it into page-level state that STICKS between turns (and is
   // seeded from a saved conversation's stored format in `handleOpenConversation`
-  // below). This drives the header scope chip + the artifact viewer's data scope,
-  // so a server override of the toggle (e.g. a "gen 7" message) is made visible.
+  // below). Empty UIs default Champions (CF-CHAT-US-1); the header chip is
+  // display-only and always paints the current regulation.
   const [resolvedScope, setResolvedScope] = useState<Format | null>(null);
-  // Signed-in account's last-used scope for NEW chats (from GET /api/auth/me +
-  // every subsequent `scope` event). Survives New Chat so the chip doesn't flash
-  // National Dex for a user mid–Gen 7 run. Guests leave this null.
+  // Signed-in account's last-used format for NEW chats (from GET /api/auth/me +
+  // every subsequent `scope` event). Survives New Chat. Guests leave this null
+  // so New Chat falls back to champions.
   const [lastUsedScope, setLastUsedScope] = useState<Format | null>(null);
-  const [lastUsedScopes, setLastUsedScopes] = useState<Format[]>([]);
-  // An explicit chip pick, sent as `scope_seed` on the NEXT turn only. Cleared
-  // on every scope event: once the server has acknowledged a turn (any turn),
-  // the seed's job is done — the conversation's scope is now sticky server-side,
-  // which outranks a stale seed on the FOLLOWING turn (scope_seed > sticky).
-  // Leaving a stale seed set would silently re-assert an old pick over the now-
-  // current sticky scope. (Known edge: an unsupported-gen turn emits no scope
-  // event at all, so a pending seed survives it and rides the next message —
-  // benign, since that's still the user's most recent explicit intent.)
-  const [scopeSeed, setScopeSeed] = useState<Format | null>(null);
   useEffect(() => {
     if (scope) {
       setResolvedScope(scope.format);
-      // Only signed-in accounts remember scope across New Chat (server stores
-      // account.last_used_scope). Guests keep lastUsedScope null so New Chat
-      // always falls back to national-dex.
       if (auth.signedIn) setLastUsedScope(scope.format);
-      setScopeSeed(null);
     }
   }, [scope, auth.signedIn]);
 
@@ -405,10 +390,9 @@ export default function Home() {
   } | null>(null);
 
   // One-time cleanup: the Champions toggle (and its localStorage-persisted
-  // choice) is gone — the header scope chip is now the sole scope control, and
-  // the server defaults a seedless fresh conversation to National Dex itself.
-  // Clear any stale value left by a previous build so it can't linger unread
-  // forever.
+  // choice) is gone — the header chip is a display-only regulation indicator,
+  // and every new turn is Champions. Clear any stale value left by a previous
+  // build so it can't linger unread forever.
   useEffect(() => {
     try {
       localStorage.removeItem("oak-champions-mode");
@@ -533,13 +517,10 @@ export default function Home() {
       setAuth(me);
       // Seed the new-chat default chip from the account preference (signed-in
       // only). Guests and never-chatted accounts leave lastUsedScope null →
-      // national-dex display fallback.
+      // champions display fallback.
       if (me.signedIn) {
         if (typeof me.lastUsedScope === "string" && isFormat(me.lastUsedScope)) {
           setLastUsedScope(me.lastUsedScope);
-        }
-        if (Array.isArray(me.lastUsedScopes)) {
-          setLastUsedScopes(me.lastUsedScopes.filter(isFormat));
         }
         setListsReady(false);
       } else {
@@ -566,21 +547,15 @@ export default function Home() {
         if (typeof me.lastUsedScope === "string" && isFormat(me.lastUsedScope)) {
           setLastUsedScope(me.lastUsedScope);
         }
-        if (Array.isArray(me.lastUsedScopes)) {
-          setLastUsedScopes(me.lastUsedScopes.filter(isFormat));
-        }
       }
       // BR-H10 / HIST-US-12: the on-screen guest thread's full-fidelity turns
       // live only on the client at this moment, so save them into the new
       // account (idempotent import), then surface it in the now-enabled history
       // list. An empty thread imports nothing (AC-12.2 — repo returns null).
       if (me.signedIn && turns.length > 0) {
-        // Import the guest thread under its RESOLVED scope (GS-C): a thread that
-        // switched to e.g. gen-7 via an in-message signal must import as gen-7,
-        // not as whatever the header chip currently shows. Fall back to the
-        // national-dex default when no turn has resolved a scope yet. A pending
-        // `scopeSeed` is deliberately excluded — no turn ran under it yet.
-        const importFormat: Format = resolvedScope ?? "national-dex";
+        // Import under the resolved format, falling back to Champions
+        // (CF-CHAT-US-1). No other-format seed is sent as a product control.
+        const importFormat: Format = resolvedScope ?? "champions";
         void importConversation(sessionId, turns, importFormat).then(() =>
           refreshConversations(),
         );
@@ -596,7 +571,6 @@ export default function Home() {
   const handleSignedOut = useCallback(() => {
     setAuth({ signedIn: false });
     setLastUsedScope(null);
-    setLastUsedScopes([]);
     setPinnedIds([]);
     setSelectedIds([]);
   }, []);
@@ -656,7 +630,6 @@ export default function Home() {
     setTurns([]);
     setImagePreviews({});
     setResolvedScope(null);
-    setScopeSeed(null);
     setPinnedIds([]);
     setArtifactPins([]);
     setPinCapError(false);
@@ -766,7 +739,6 @@ export default function Home() {
       const body = {
         session_id: sessionId,
         message,
-        ...(scopeSeed ? { scope_seed: scopeSeed } : {}),
         ...(images.length > 0
           ? { images: images.map((img) => ({ mimeType: img.mimeType, data: img.data })) }
           : {}),
@@ -782,7 +754,6 @@ export default function Home() {
       handleSlash,
       send,
       sessionId,
-      scopeSeed,
       status,
       stop,
       teams.teams,
@@ -822,7 +793,6 @@ export default function Home() {
         // Follow the conversation's stored scope so the chip + artifact scope
         // reflect it immediately, before the first resumed turn re-emits `scope`.
         setResolvedScope(detail.format as Format);
-        setScopeSeed(null);
         setPinnedIds(detail.pinnedMessageIds ?? []);
         const extra = detail as typeof detail & {
           pinnedArtifacts?: PinnedArtifactSummary[];
@@ -941,23 +911,6 @@ export default function Home() {
     setPrefill({ text: lastUser.content, images });
   }, [imagePreviews, turns]);
 
-  const handleScopeSelect = useCallback(
-    (format: Format) => {
-      setScopeSeed(format);
-      if (auth.signedIn) setLastUsedScope(format);
-      const conversationId =
-        auth.signedIn && turns.length > 0 ? sessionId : null;
-      void persistScope({
-        format,
-        conversationId,
-        sessionId,
-      }).then((result) => {
-        if (result?.lastUsedScopes) setLastUsedScopes(result.lastUsedScopes);
-      });
-    },
-    [auth.signedIn, sessionId, turns.length],
-  );
-
   const handleExport = useCallback(
     async (id: string, format: ExportFormat) => {
       const file = await exportConversation(id, format);
@@ -1009,8 +962,7 @@ export default function Home() {
 
   const handleFollowUpChip = useCallback(
     (chip: FollowUpChip) => {
-      if (chip.kind === "scope" && isFormat(chip.target)) {
-        handleScopeSelect(chip.target);
+      if (chip.kind === "scope") {
         return;
       }
       if (chip.kind === "dex") {
@@ -1019,7 +971,7 @@ export default function Home() {
       }
       navigateTo(`/teams?team=${encodeURIComponent(chip.target)}`);
     },
-    [handleScopeSelect, navigateTo],
+    [navigateTo],
   );
 
   const handleJumpToPin = useCallback((id: string) => {
@@ -1142,13 +1094,11 @@ export default function Home() {
   // (or a starter tap) is not lost when recents finish loading.
   const heroComposer = showEmptyState && !narrow;
 
-  // The scope in effect for the conversation: an explicit chip pick, else the
-  // server-resolved scope once a turn has run (GS-C), else the signed-in
-  // last-used preference (new-chat default), else national-dex. Drives BOTH
-  // the header scope chip and the artifact viewer (B-4) — the viewer snapshots
-  // this onto each artifact at open (BR-AV-7).
+  // The format in effect for the conversation. Empty UIs default to Champions
+  // (CF-CHAT-US-1). The header chip is display-only and always paints the
+  // current regulation; this value still seeds the artifact viewer / calc.
   const displayFormat: Format =
-    scopeSeed ?? resolvedScope ?? lastUsedScope ?? "national-dex";
+    resolvedScope ?? lastUsedScope ?? "champions";
 
   // Mic button tapped. Signed in → open the voice overlay at the current
   // display scope; guest → the sign-in dialog (the existing signed-in gate).
@@ -1319,16 +1269,10 @@ export default function Home() {
           </button>
         </div>
         <div className="chat-page__header-cluster" ref={headerClusterRef}>
-          {/* The scope control (GS-C). Rendered OUTSIDE the collapsible controls
-              so it stays visible on mobile — both the server's resolved scope
-              (e.g. a "gen 7" message overriding a chip pick) and the control to
-              change it must be surfaced, not hidden behind the gear. */}
-          <ScopeChip
-            format={displayFormat}
-            onSelect={handleScopeSelect}
-            disabled={status === "thinking"}
-            recentFormats={auth.signedIn ? lastUsedScopes : undefined}
-          />
+          {/* Display-only regulation chip (CF-UI-US-2). Rendered OUTSIDE the
+              collapsible controls so it stays visible on mobile. Not a game
+              picker — click does not switch formats. */}
+          <ScopeChip format={displayFormat} />
           {/* Collapsible group: inline on desktop, a popover under the gear on
               mobile (≤640px). Holds the secondary controls AND the auth control
               (AuthMenu) — the auth pill (guest "Sign in" or the wider signed-in

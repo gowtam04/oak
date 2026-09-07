@@ -204,7 +204,8 @@ export default function ChatThread({
           <div className="blank-plate" data-testid="blank-plate">
             <h1 className="blank-plate__prompt">What do you want to know?</h1>
             <p className="blank-plate__sub">
-              Mechanics, locations, teams, damage. Oak will show its work.
+              Teams, calcs, and live usage for Pokémon Champions. Oak will show
+              its work.
             </p>
 
             {/* Composer promoted into the plate on desktop empty state; on
