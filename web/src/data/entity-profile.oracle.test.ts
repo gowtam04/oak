@@ -5,7 +5,7 @@
  *     movepool, move, ability + learned_by, item, type)
  *   - the Pokémon combined defensive grid matches the shared type-chart formula
  *     (Garchomp = Ground/Dragon → 4× Ice, weak Dragon/Fairy, immune Electric)
- *   - the Gen-9 fallback flag (Dracovish, is_gen9_native = 0)
+ *   - in-roster Champions species are not flagged is_fallback (Dracovish)
  *   - not_found (unresolved slug) and unavailable (unbuilt index) envelopes
  *   - every ok result round-trips through the shared contract schema
  *
@@ -112,7 +112,7 @@ describe("assembleEntityProfile — pokemon", () => {
     expect(res.citations[0]?.source).toBe("pokemon/garchomp");
   });
 
-  it("flags a non-native species as a fallback (Dracovish)", async () => {
+  it("does not flag an in-roster Champions species as a fallback (Dracovish)", async () => {
     const res = await assembleEntityProfile(
       "pokemon",
       "dracovish",
@@ -121,8 +121,8 @@ describe("assembleEntityProfile — pokemon", () => {
     );
     expect(res.status).toBe("ok");
     if (res.status !== "ok") throw new Error("expected ok");
-    expect(res.is_fallback).toBe(true);
-    expect(res.fallback_note).toMatch(/gen-8/);
+    expect(res.is_fallback).toBe(false);
+    expect(res.fallback_note).toBeUndefined();
   });
 
   it("returns not_found for an unresolved Pokémon slug", async () => {

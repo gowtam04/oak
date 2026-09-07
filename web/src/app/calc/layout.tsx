@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Damage Calculator",
+  title: "Champions Damage Calculator",
   description:
-    "Estimate Pokémon damage ranges — attacker, defender, move, and field knobs — without sending a chat turn.",
+    "Estimate Pokémon Champions damage ranges — attacker, defender, move, and field knobs at Level 50 — without sending a chat turn.",
   alternates: {
     canonical: "/calc",
   },

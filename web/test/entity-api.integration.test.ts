@@ -1,12 +1,13 @@
 /**
- * Integration tests for `GET /api/entity` (B-4 Phase 3). Drives the real route
- * handler against a real migrated + seeded Postgres schema (Testcontainers).
+ * Integration tests for `GET /api/entity` (B-4 Phase 3, P6c Champions-only).
+ * Drives the real route handler against a real migrated + seeded Postgres
+ * schema (Testcontainers).
  *
- * Asserts: `ok` for each kind (resolution by display name AND slug), `not_found`
- * for an unresolvable query, `unavailable` when the requested format's index is
- * unbuilt (which also shows the `format` param switching the data scope), and a
- * 4xx for each malformed param. resolveEntity reads the `@/data/db` singleton, so
- * the fixture is installed via `installAsSingleton` before the first call.
+ * Asserts: `ok` for each kind on the Champions roster, `not_found` for an
+ * unresolvable or off-roster query (no National Dex fallback), and a 4xx for
+ * each malformed param. Other `format=` values are ignored for lookup.
+ * resolveEntity reads the `@/data/db` singleton, so the fixture is installed
+ * via `installAsSingleton` before the first call.
  */
 
 import {
@@ -27,8 +28,9 @@ import {
   type PgDb,
   type PgFixture,
 } from "./support/pg";
-import { seedEntityRefs } from "./fixtures/entity-refs";
-import { ingest_meta, pokemon, searchable_names } from "@/data/schema";
+import { CHAMPIONS_FORMAT } from "@/data/formats";
+import { ENTITY_REFERENCE_SEED } from "./fixtures/entity-refs";
+import { ingest_meta, pokemon, reference_cache, searchable_names } from "@/data/schema";
 import { _resetStoreForTests } from "@/server/rate-limit";
 
 import {
@@ -42,12 +44,27 @@ import { GET } from "@/app/api/entity/route";
 
 let fix: PgFixture;
 
+const SKIP_REF_KEYS = new Set(["move/earthquake"]);
+
+async function seedChampionsEntityRefs(db: PgDb): Promise<void> {
+  const now = Date.now();
+  await db.insert(reference_cache).values(
+    ENTITY_REFERENCE_SEED.filter((r) => !SKIP_REF_KEYS.has(r.resource_key)).map(
+      (r) => ({
+        format: CHAMPIONS_FORMAT,
+        resource_key: r.resource_key,
+        resource_kind: r.resource_kind,
+        payload: JSON.stringify(r.payload),
+        endpoint_url: `https://pokeapi.co/api/v2/${r.resource_key}`,
+        fetched_at: now,
+      }),
+    ),
+  );
+}
+
 /**
- * Extra rows for the National-Dex fallback gate (#2). Eternatus lives ONLY in a
- * fresh `national-dex` partition (the fallback target); the `gen-7` partition
- * (seeded by the tools fixture) gets a fuzzy neighbour, Tornadus, so an
- * "Eternatus" query there fuzzes onto the WRONG species unless the exact-match
- * gate refuses it.
+ * Off-roster rows that MUST NOT leak through a National Dex / gen-7 fallback.
+ * Eternatus lives ONLY in a `national-dex` partition; Tornadus is gen-7-only.
  */
 async function seedFallbackFixture(db: PgDb): Promise<void> {
   const now = Date.now();
@@ -106,7 +123,7 @@ beforeAll(async () => {
   fix = await createPgSchema({
     seed: "tools",
     after: async (db) => {
-      await seedEntityRefs(db);
+      await seedChampionsEntityRefs(db);
       await seedFallbackFixture(db);
     },
   });
@@ -197,28 +214,20 @@ describe("GET /api/entity — miss + unavailable", () => {
     expect(env).toMatchObject({ status: "not_found", kind: "pokemon" });
   });
 
-  it("falls back to National Dex for a species absent in the requested scope (not the fuzzy neighbour)", async () => {
-    // Eternatus has no gen-7 row; the fuzzy nearest name there is Tornadus. The
-    // exact-match gate must refuse Tornadus and instead show the EXACT National
-    // Dex Eternatus, marked source_format (the Eternatus∉gen-6 → Tornadus bug #2).
+  it("returns not_found for Eternatus even when a national-dex row exists (no fallback)", async () => {
     const env = await envelope(
       await call({ kind: "pokemon", q: "Eternatus", format: "gen-7" }),
     );
-    if (env.status !== "ok" || env.kind !== "pokemon") {
-      throw new Error("expected ok pokemon");
-    }
-    expect(env.resolved.slug).toBe("eternatus");
-    expect(env.resolved.slug).not.toBe("tornadus");
-    // Envelope format stays what the profile was assembled FROM (national-dex),
-    // with source_format marking the cross-scope fallback.
-    expect(env.format).toBe("national-dex");
-    expect(env.source_format).toBe("national-dex");
+    expect(env.status).toBe("not_found");
+    if (env.status !== "not_found") throw new Error("expected not_found");
+    expect(env.kind).toBe("pokemon");
+    expect(env.format).toBe("champions");
+    expect(JSON.stringify(env)).not.toMatch(/eternatus/i);
+    expect(env.suggestions).not.toContain("Tornadus");
+    expect(env.suggestions).not.toContain("Eternatus");
   });
 
-  it("returns not_found with POPULATED suggestions for a fuzzy-only miss (no exact anywhere)", async () => {
-    // "Tornado" fuzzes onto gen-7's Tornadus but matches nothing exactly (and
-    // National Dex has no Tornadus), so the route declines to render a fuzzy hit
-    // and returns not_found with the requested-scope fuzzy names as suggestions.
+  it("returns not_found for a fuzzy miss without inventing another game", async () => {
     const env = await envelope(
       await call({ kind: "pokemon", q: "Tornado", format: "gen-7" }),
     );
@@ -226,8 +235,8 @@ describe("GET /api/entity — miss + unavailable", () => {
       throw new Error("expected not_found");
     }
     expect(env.kind).toBe("pokemon");
-    expect(env.suggestions.length).toBeGreaterThan(0);
-    expect(env.suggestions).toContain("Tornadus");
+    expect(env.format).toBe("champions");
+    expect(env.suggestions).not.toContain("Tornadus");
   });
 
   it("returns an exact in-scope match with NO source_format key", async () => {
@@ -247,17 +256,15 @@ describe("GET /api/entity — miss + unavailable", () => {
     expect(env.source_format).toBeUndefined();
   });
 
-  it("returns unavailable when the requested format's index is unbuilt", async () => {
-    // The "tools" seed builds scarlet-violet, gen-7, and champions — gen-8 has
-    // no index.
+  it("ignores format=gen-8 and still looks up Champions", async () => {
     const env = await envelope(
       await call({ kind: "pokemon", q: "garchomp", format: "gen-8" }),
     );
-    expect(env).toEqual({
-      status: "unavailable",
-      kind: "pokemon",
-      format: "gen-8",
-    });
+    if (env.status !== "ok" || env.kind !== "pokemon") {
+      throw new Error("expected ok pokemon");
+    }
+    expect(env.format).toBe("champions");
+    expect(env.resolved.slug).toBe("garchomp");
   });
 });
 

@@ -92,13 +92,21 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
   }
   if (shardId === 4) {
     const { listNamesByKind } = await import("@/data/repos/reference-cache");
-    const rows = await listNamesByKind("item", CHAMPIONS_FORMAT, db);
-    return rows.map((r) => ({
-      url: `${SITE_ORIGIN}/items/${r.slug}`,
-      ...(lastModified ? { lastModified } : {}),
-      changeFrequency: "monthly" as const,
-      priority: 0.5,
-    }));
+    const { loadChampionsItemExclusions } = await import(
+      "@/data/repos/champions-items-repo"
+    );
+    const [rows, excluded] = await Promise.all([
+      listNamesByKind("item", CHAMPIONS_FORMAT, db),
+      loadChampionsItemExclusions({ db }),
+    ]);
+    return rows
+      .filter((r) => !excluded.has(r.slug))
+      .map((r) => ({
+        url: `${SITE_ORIGIN}/items/${r.slug}`,
+        ...(lastModified ? { lastModified } : {}),
+        changeFrequency: "monthly" as const,
+        priority: 0.5,
+      }));
   }
 
   throw new Error(`unknown sitemap shard: ${id}`);

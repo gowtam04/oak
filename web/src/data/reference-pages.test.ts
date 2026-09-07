@@ -45,7 +45,13 @@ import {
   clampDescription,
 } from "@/data/reference-metadata";
 import type { MovePageData, PokemonPageData } from "@/lib/reference-pages-types";
-import { ingest_meta, pokemon, reference_cache, searchable_names } from "@/data/schema";
+import {
+  champions_item_exclusion,
+  ingest_meta,
+  pokemon,
+  reference_cache,
+  searchable_names,
+} from "@/data/schema";
 import { SEARCHABLE_NAMES_SEED } from "../../test/fixtures/tools-fixture";
 import { createPgSchema, type PgDb, type PgFixture } from "../../test/support/pg";
 
@@ -170,6 +176,8 @@ describe("reference-pages module — Champions only (CF-DEX-AC-1.1, CF-DEX-AC-1.
     expect(SRC).not.toMatch(/STANDARD_FORMAT/);
     expect(SRC).toMatch(/champions-usage\/usage-client/);
     expect(SRC).toMatch(/CHAMPIONS_FORMAT|"champions"/);
+    expect(SRC).toMatch(/loadChampionsItemExclusions/);
+    expect(SRC).not.toMatch(/cachedItemsIndex/);
   });
 });
 
@@ -367,6 +375,40 @@ describe("reference-pages loaders (tools fixture + other-game decoys)", () => {
         "life-orb",
         "swampertite",
       ]);
+    });
+  });
+
+  describe("champions_item_exclusion (CF-DEX-AC-1.2)", () => {
+    it("drops an excluded slug from the index and 404s its detail", async () => {
+      const now = Date.now();
+      await db.insert(reference_cache).values({
+        format: CHAMPIONS_FORMAT,
+        resource_key: "item/leftovers",
+        resource_kind: "item",
+        payload: JSON.stringify({
+          found: true,
+          display_name: "Leftovers",
+          effect_short: "Restores HP each turn.",
+          effect_full: "The holder restores 1/16 max HP at the end of each turn.",
+        }),
+        endpoint_url: "https://pokeapi.co/api/v2/item/leftovers",
+        fetched_at: now,
+      });
+      expect(await loadItemPageUncached("leftovers", db)).not.toBeNull();
+
+      await db.insert(champions_item_exclusion).values({
+        slug: "leftovers",
+        excluded_at: now,
+        excluded_by: "test",
+      });
+
+      const index = await loadItemsIndexUncached(db);
+      expect(index.rows.map((r) => r.slug).sort()).toEqual([
+        "life-orb",
+        "swampertite",
+      ]);
+      expect(index.rows.some((r) => r.slug === "leftovers")).toBe(false);
+      expect(await loadItemPageUncached("leftovers", db)).toBeNull();
     });
   });
 

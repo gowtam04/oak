@@ -20,7 +20,6 @@ import {
   waitFor,
 } from "@testing-library/react";
 
-import { FORMATS } from "@/data/formats";
 import { explainCalcPrompt } from "@/lib/calc/explain-prompt";
 import type { CalcResult, CalcScenario } from "@/lib/calc/calc-schema";
 
@@ -38,31 +37,29 @@ afterEach(() => {
 });
 
 const EMPTY_SCENARIO: CalcScenario = {
-  format: "scarlet-violet",
+  format: "champions",
   attacker: {},
   defender: {},
   move: {},
 };
 
 const COMPLETE_SCENARIO: CalcScenario = {
-  format: "scarlet-violet",
+  format: "champions",
   attacker: {
     species: "garchomp",
     item: "life-orb",
     ability: "rough-skin",
     nature: "jolly",
-    evs: { atk: 252, spe: 252, hp: 4 },
-    level: 100,
-    tera: "ground",
+    evs: { atk: 32, spe: 32, hp: 2 },
+    level: 50,
   },
   defender: {
     species: "farigiraf",
     item: "leftovers",
     ability: "armor-tail",
     nature: "modest",
-    evs: { hp: 252, spd: 252 },
-    level: 100,
-    tera: "fairy",
+    evs: { hp: 32, spd: 32 },
+    level: 50,
   },
   move: { slug: "earthquake", name: "Earthquake" },
   field: { weather: "sun", reflect: true, light_screen: false },
@@ -70,7 +67,7 @@ const COMPLETE_SCENARIO: CalcScenario = {
 
 const SUCCESS: CalcResult = {
   ok: true,
-  format: "scarlet-violet",
+  format: "champions",
   estimate: {
     min_damage: 100,
     max_damage: 120,
@@ -101,32 +98,31 @@ type PanelProps = ComponentProps<typeof CalculatorPanel>;
 
 function renderPanel(over: Partial<PanelProps> = {}) {
   const props = {
-    format: "scarlet-violet",
+    format: "champions",
     scenario: EMPTY_SCENARIO,
     ...over,
   } as PanelProps;
   return render(<CalculatorPanel {...props} />);
 }
 
-describe("CalculatorPanel — first-class form (CALC-US-1, CALC-AC-1.1)", () => {
+describe("CalculatorPanel — first-class form (CALC-US-1, CALC-AC-1.1, CF-CALC-AC-1.1)", () => {
   beforeEach(() => {
     postCalc.mockResolvedValue(INCOMPLETE);
   });
 
-  it("renders two empty sides, a move control, field knobs, and the inherited format", () => {
-    renderPanel({ format: "national-dex" });
+  it("renders two empty sides, a move control, and field knobs — no format picker", () => {
+    renderPanel();
 
     expect(screen.getByTestId("calculator-panel")).toBeInTheDocument();
     expect(screen.getByTestId("calc-side-attacker")).toBeInTheDocument();
     expect(screen.getByTestId("calc-side-defender")).toBeInTheDocument();
     expect(screen.getByTestId("calc-move")).toBeInTheDocument();
     expect(screen.getByTestId("calc-field")).toBeInTheDocument();
-
-    const format = screen.getByTestId("calc-format");
-    expect(format).toHaveValue("national-dex");
-    for (const id of FORMATS) {
-      expect(format).toHaveTextContent(id);
-    }
+    expect(screen.queryByTestId("calc-format")).toBeNull();
+    expect(screen.getByTestId("calc-side-attacker")).toHaveTextContent(/Level 50/);
+    expect(screen.getByTestId("calc-side-attacker")).toHaveTextContent(
+      /Stat Points/,
+    );
   });
 
   it("exposes documented field knobs: weather + Reflect + Light Screen (CALC-AC-4.1, CALC-BR-3)", () => {
@@ -146,9 +142,7 @@ describe("CalculatorPanel — first-class form (CALC-US-1, CALC-AC-1.1)", () => 
   it("does not POST a chat turn when knobs change (CALC-BR-1)", () => {
     const onExplain = vi.fn();
     renderPanel({ onExplain } as Partial<PanelProps>);
-    fireEvent.change(screen.getByTestId("calc-format"), {
-      target: { value: "champions" },
-    });
+    fireEvent.click(screen.getByRole("radio", { name: /sun/i }));
     expect(onExplain).not.toHaveBeenCalled();
     expect(
       postCalc.mock.calls.every((call) => {
@@ -203,16 +197,12 @@ describe("CalculatorPanel — successful estimate (CALC-AC-4.4, CALC-AC-5.1, CAL
     expect(unsupported).toHaveTextContent(/not modeled/i);
   });
 
-  it("shows a persistent old-gen caveat when the result carries one (CALC-AC-6.3)", async () => {
+  it("shows a persistent caveat when the result carries one (CALC-AC-6.3)", async () => {
     postCalc.mockResolvedValue({
       ...SUCCESS,
-      format: "gen-1",
       caveat: "Modern estimate — not gen-accurate.",
     });
-    renderPanel({
-      format: "gen-1",
-      scenario: { ...COMPLETE_SCENARIO, format: "gen-1" },
-    });
+    renderPanel({ scenario: COMPLETE_SCENARIO });
     expect(await screen.findByTestId("calculator-caveat")).toHaveTextContent(
       /not gen-accurate/i,
     );
@@ -230,7 +220,7 @@ describe("CalculatorOverlay — hops and /calc dispatch (CALC-US-2, CALC-US-3)",
     render(
       <CalculatorOverlay
         open
-        format="scarlet-violet"
+        format="champions"
         slashRest=""
         onSend={onSend}
         onDismiss={onDismiss}
@@ -246,7 +236,7 @@ describe("CalculatorOverlay — hops and /calc dispatch (CALC-US-2, CALC-US-3)",
     render(
       <CalculatorOverlay
         open
-        format="scarlet-violet"
+        format="champions"
         slashRest="garchomp earthquake vs gholdengo"
         onSend={onSend}
       />,
@@ -260,7 +250,7 @@ describe("CalculatorOverlay — hops and /calc dispatch (CALC-US-2, CALC-US-3)",
     render(
       <CalculatorOverlay
         open
-        format="scarlet-violet"
+        format="champions"
         scenario={COMPLETE_SCENARIO}
         onExpand={onExpand}
       />,
@@ -268,7 +258,7 @@ describe("CalculatorOverlay — hops and /calc dispatch (CALC-US-2, CALC-US-3)",
     fireEvent.click(screen.getByRole("button", { name: /^expand$/i }));
     expect(onExpand).toHaveBeenCalledTimes(1);
     expect(onExpand).toHaveBeenCalledWith(
-      expect.objectContaining({ format: "scarlet-violet" }),
+      expect.objectContaining({ format: "champions" }),
     );
   });
 
@@ -278,7 +268,7 @@ describe("CalculatorOverlay — hops and /calc dispatch (CALC-US-2, CALC-US-3)",
     render(
       <CalculatorOverlay
         open
-        format="scarlet-violet"
+        format="champions"
         onSend={onSend}
         onDismiss={onDismiss}
       />,
@@ -298,7 +288,7 @@ describe("CalculatorOverlay — Explain this calc (CALC-US-8, CALC-AC-8.1–8.3)
     render(
       <CalculatorOverlay
         open
-        format="scarlet-violet"
+        format="champions"
         scenario={COMPLETE_SCENARIO}
         onExplain={onExplain}
         onDismiss={onDismiss}

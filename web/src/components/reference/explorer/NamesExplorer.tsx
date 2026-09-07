@@ -97,7 +97,9 @@ export default function NamesExplorer({
 
       {empty ? (
         <div className="ref-empty ref-card" data-testid="ref-empty">
-          <p className="ref-empty__text">Nothing matches your search.</p>
+          <p className="ref-empty__text">
+            Nothing on the Champions roster matched.
+          </p>
           <button type="button" className="ref-empty__clear" onClick={clearAll}>
             Clear search
           </button>

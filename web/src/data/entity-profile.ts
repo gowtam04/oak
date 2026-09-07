@@ -2,8 +2,10 @@
  * src/data/entity-profile.ts — the artifact viewer's full-profile assembler (B-4).
  *
  * `assembleEntityProfile(kind, slug, format, db)` is the single composition point
- * behind `GET /api/entity`. It reads the existing format-scoped index through the
- * repo layer (the sole DB readers, per CLAUDE.md) and assembles the full profile a
+ * behind `GET /api/entity`. Champions-first callers pass `CHAMPIONS_FORMAT`;
+ * there is no National Dex / other-game secondary lookup here (the route no
+ * longer falls back). It reads the format-scoped index through the repo layer
+ * (the sole DB readers, per CLAUDE.md) and assembles the full profile a
  * full-screen artifact needs — data that the `OakAnswer` payload does not
  * carry (BR-AV-3): a Pokémon's combined defensive grid (via the shared
  * `type-chart` formula) and grouped movepool, an ability's roster of holders.
@@ -20,7 +22,11 @@ import "server-only";
 import { eq } from "drizzle-orm";
 
 import type { OakDb } from "@/data/db";
-import { CHAMPIONS_REGULATION, type Format } from "@/data/formats";
+import {
+  CHAMPIONS_FORMAT,
+  CHAMPIONS_REGULATION,
+  type Format,
+} from "@/data/formats";
 import { ingest_meta } from "@/data/schema";
 import type {
   AbilityDetail,
@@ -267,7 +273,10 @@ async function assemblePokemon(
   const movepool = groupMovepool(learned, summaries);
 
   const { found: _found, ...rest } = profile;
-  const isFallback = !profile.is_gen9_native;
+  // In-roster Champions species are not a "fallback" even when they originated
+  // in an earlier generation (CF-DEX-AC-1.5 — no "not native to Champions").
+  const isFallback =
+    format === CHAMPIONS_FORMAT ? false : !profile.is_gen9_native;
 
   return {
     status: "ok",
@@ -366,6 +375,25 @@ async function assembleItem(
   format: Format,
   db: OakDb,
 ): Promise<EntityArtifactResponse> {
+  if (format === CHAMPIONS_FORMAT) {
+    try {
+      const { loadChampionsItemExclusions } = await import(
+        "@/data/repos/champions-items-repo"
+      );
+      const excluded = await loadChampionsItemExclusions({ db });
+      if (excluded.has(slug)) {
+        return {
+          status: "not_found",
+          kind: "item",
+          format,
+          query: slug,
+          suggestions: [],
+        };
+      }
+    } catch {
+      // Missing exclusion table must not hide every item.
+    }
+  }
   const ref = await getReference("item", slug, format, { db });
   if (!isFoundRecord(ref)) {
     return {

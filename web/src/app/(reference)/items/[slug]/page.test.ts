@@ -48,6 +48,18 @@ describe("/items/[slug] (CF-DEX-AC-1.4, CF-DEX-AC-1.5, CF-UI-AC-7.1)", () => {
     expect(SRC).not.toMatch(/Select another scope/);
   });
 
+  it("calls notFound for an excluded Champions item (CF-DEX-AC-1.2)", async () => {
+    loaders.loadItemPage.mockResolvedValue(null);
+    await expect(
+      ItemDetailPage({
+        params: Promise.resolve({ slug: "leftovers" }),
+        searchParams: Promise.resolve({}),
+      }),
+    ).rejects.toThrow(/NEXT_NOT_FOUND/);
+    expect(nav.notFound).toHaveBeenCalled();
+    expect(loaders.loadItemPage.mock.calls[0]?.[0]).toBe("leftovers");
+  });
+
   it("calls notFound for an off-roster item (no natdex fallback)", async () => {
     loaders.loadItemPage.mockResolvedValue(null);
     await expect(

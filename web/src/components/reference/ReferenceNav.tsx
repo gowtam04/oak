@@ -1,6 +1,6 @@
 /**
  * ReferenceNav — the reference header's section nav (Pokédex / Moves /
- * Abilities / Items / Meta). A small client island split out of the otherwise
+ * Abilities / Items / Usage). A small client island split out of the otherwise
  * server-rendered {@link ReferenceHeader} for the sole purpose of reading the
  * current route (`usePathname`) and marking the matching link with
  * `aria-current="page"` — the header itself stays server-safe.
@@ -15,13 +15,13 @@
 
 import { usePathname } from "next/navigation";
 
-/** The five reference sections, in nav order (Meta last, per the design). */
+/** The five reference sections, in nav order (Usage last). */
 export const NAV_ITEMS = [
   { key: "pokedex", href: "/pokedex", label: "Pokédex" },
   { key: "moves", href: "/moves", label: "Moves" },
   { key: "abilities", href: "/abilities", label: "Abilities" },
   { key: "items", href: "/items", label: "Items" },
-  { key: "meta", href: "/meta", label: "Meta" },
+  { key: "usage", href: "/usage", label: "Usage" },
 ] as const;
 
 /**
