@@ -51,10 +51,10 @@ afterAll(async () => {
 // ===========================================================================
 
 describe("ingest_meta — availability sentinel", () => {
-  it("has exactly one row, for the scarlet-violet format", async () => {
+  it("has exactly one row, for the champions format", async () => {
     const rows = await db.select().from(ingest_meta);
     expect(rows).toHaveLength(1);
-    expect(rows[0].format).toBe("scarlet-violet");
+    expect(rows[0].format).toBe("champions");
   });
 
   it("records schema_version 2", async () => {
@@ -62,16 +62,13 @@ describe("ingest_meta — availability sentinel", () => {
     expect(rows[0].schema_version).toBe("2");
   });
 
-  it("pokemon_count matches actual scarlet-violet-format rows", async () => {
-    // ingest_meta's one row is scoped to the scarlet-violet format, so the
-    // comparison must be too — the pokemon table also carries a separate
-    // national-dex partition (NATDEX_POKEMON_ROWS) with no matching
-    // ingest_meta row.
+  it("pokemon_count matches actual champions-format rows", async () => {
     const rows = await db.select().from(ingest_meta);
     const actual = (
-      await db.select().from(pokemon).where(eq(pokemon.format, "scarlet-violet"))
+      await db.select().from(pokemon).where(eq(pokemon.format, "champions"))
     ).length;
     expect(rows[0].pokemon_count).toBe(actual);
+    expect(actual).toBe(9);
   });
 });
 
@@ -289,47 +286,12 @@ describe("pokemon — Tauros forms (G18: ambiguous name disambiguation)", () => 
   });
 });
 
-describe("pokemon@national-dex partition (G57: form-aware type-combo existence)", () => {
-  const getNatdexRows = async () =>
-    db.select().from(pokemon).where(eq(pokemon.format, "national-dex"));
-
-  it("has exactly three national-dex rows", async () => {
-    const rows = await getNatdexRows();
-    expect(rows).toHaveLength(3);
-  });
-
-  it("includes Darmanitan-Galar-Zen as Ice/Fire (National Dex #555), a form absent from natdex_species", async () => {
-    const rows = await getNatdexRows();
-    const row = rows.find((r) => r.id === "darmanitan-galar-zen");
-    expect(row).toBeDefined();
-    expect(row?.national_dex_number).toBe(555);
-    expect(row?.type1).toBe("ice");
-    expect(row?.type2).toBe("fire");
-  });
-
-  it("includes a mono-type default form (Pikachu, Electric)", async () => {
-    const rows = await getNatdexRows();
-    const row = rows.find((r) => r.id === "pikachu");
-    expect(row).toBeDefined();
-    expect(row?.type1).toBe("electric");
-    expect(row?.type2).toBeNull();
-  });
-
-  it("includes a common dual-type default form (Charizard, Fire/Flying)", async () => {
-    const rows = await getNatdexRows();
-    const row = rows.find((r) => r.id === "charizard");
-    expect(row).toBeDefined();
-    expect(row?.type1).toBe("fire");
-    expect(row?.type2).toBe("flying");
-  });
-});
-
 // ===========================================================================
-// Learnset table — Gen-9 intersection (G1 key scenario)
+// Learnset table — Champions intersection (G1 key scenario)
 // ===========================================================================
 
 describe("learnset — Gen-9 multi-move intersection (G1)", () => {
-  it("Ninetales learns both will-o-wisp AND trick-room in scarlet-violet", async () => {
+  it("Ninetales learns both will-o-wisp AND trick-room in champions", async () => {
     const rows = await db
       .select()
       .from(learnset)
@@ -337,7 +299,7 @@ describe("learnset — Gen-9 multi-move intersection (G1)", () => {
         and(
           eq(learnset.pokemon_id, "ninetales"),
           inArray(learnset.move_slug, ["will-o-wisp", "trick-room"]),
-          eq(learnset.format, "scarlet-violet"),
+          eq(learnset.format, "champions"),
         ),
       );
     const slugs = rows.map((r) => r.move_slug).sort();
@@ -352,7 +314,7 @@ describe("learnset — Gen-9 multi-move intersection (G1)", () => {
       .where(
         and(
           inArray(learnset.move_slug, ["trick-room", "will-o-wisp"]),
-          eq(learnset.format, "scarlet-violet"),
+          eq(learnset.format, "champions"),
         ),
       )
       .groupBy(learnset.pokemon_id)
@@ -374,7 +336,7 @@ describe("learnset — Gen-9 multi-move intersection (G1)", () => {
           and(
             eq(learnset.pokemon_id, "talonflame"),
             eq(learnset.move_slug, "will-o-wisp"),
-            eq(learnset.format, "scarlet-violet"),
+            eq(learnset.format, "champions"),
           ),
         )
         .limit(1)
@@ -389,7 +351,7 @@ describe("learnset — Gen-9 multi-move intersection (G1)", () => {
           and(
             eq(learnset.pokemon_id, "talonflame"),
             eq(learnset.move_slug, "trick-room"),
-            eq(learnset.format, "scarlet-violet"),
+            eq(learnset.format, "champions"),
           ),
         )
         .limit(1)
@@ -588,7 +550,7 @@ describe("searchable_names — resolve_entity data (G3 precondition)", () => {
 // ===========================================================================
 
 describe("G5 precondition — Fire type with flash-fire that learns will-o-wisp", () => {
-  it("ninetales is the Fire/Flash-Fire candidate that also learns will-o-wisp in SV", async () => {
+  it("ninetales is the Fire/Flash-Fire candidate that also learns will-o-wisp in Champions", async () => {
     // Verify Fire type
     const mon = (
       await db.select().from(pokemon).where(eq(pokemon.id, "ninetales")).limit(1)
@@ -605,7 +567,7 @@ describe("G5 precondition — Fire type with flash-fire that learns will-o-wisp"
           and(
             eq(learnset.pokemon_id, "ninetales"),
             eq(learnset.move_slug, "will-o-wisp"),
-            eq(learnset.format, "scarlet-violet"),
+            eq(learnset.format, "champions"),
           ),
         )
         .limit(1)
@@ -634,7 +596,7 @@ describe("G8 precondition — Fire type with speed > 100 that learns will-o-wisp
           and(
             eq(learnset.pokemon_id, "talonflame"),
             eq(learnset.move_slug, "will-o-wisp"),
-            eq(learnset.format, "scarlet-violet"),
+            eq(learnset.format, "champions"),
           ),
         )
         .limit(1)
@@ -656,12 +618,16 @@ describe("G6 precondition — sort by speed desc", () => {
 });
 
 describe("fixture totals", () => {
-  it("has 12 Pokémon rows (9 scarlet-violet + 3 national-dex)", async () => {
-    expect(await db.select().from(pokemon)).toHaveLength(12);
+  it("has 9 Pokémon rows, all champions (no national-dex partition)", async () => {
+    const rows = await db.select().from(pokemon);
+    expect(rows).toHaveLength(9);
+    expect(rows.every((r) => r.format === "champions")).toBe(true);
   });
 
-  it("has 8 reference_cache entries", async () => {
-    expect(await db.select().from(reference_cache)).toHaveLength(8);
+  it("has 6 reference_cache entries (no encounter rows)", async () => {
+    const rows = await db.select().from(reference_cache);
+    expect(rows).toHaveLength(6);
+    expect(rows.every((r) => r.resource_kind !== "encounters")).toBe(true);
   });
 
   it("all base_stat_total values are the arithmetic sum of the six stat columns", async () => {

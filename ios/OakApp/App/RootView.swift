@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// Top-level navigation shell: a four-tab `TabView` (Chat / Teams / Dex / Settings).
-/// Chat is the default surface on launch (M-AC-UI2.1); conversation history is folded
-/// into the Chat tab WhatsApp-style (the list appears once signed in), so there is no
-/// separate History tab. Teams hosts the team-builder library. Dex browses the public
-/// reference index (Pokémon / Moves / Abilities / Items). Settings is a first-class tab
-/// (account, appearance, about — no intermediate More list).
+/// Top-level navigation shell: a five-tab `TabView` (Chat / Teams / Usage / Dex /
+/// Settings). Calc stays a cover, not a tab (ADR-6). Chat is the default surface
+/// on launch (M-AC-UI2.1); conversation history is folded into the Chat tab
+/// WhatsApp-style. Teams hosts the living Champions library plus archive. Usage
+/// is the public live ladder. Dex browses the Champions roster. Settings is a
+/// first-class tab (account, appearance, about).
 ///
 /// This view is the single wiring point for launch behavior:
 ///   * on appear it restores the session (a stored Bearer token resolves to
@@ -49,6 +49,20 @@ struct RootView: View {
         } label: {
           Label(OakAppTab.teams.title, systemImage: OakAppTab.teams.systemImage)
         }
+        Tab(value: OakAppTab.usage) {
+          UsageView(
+            model: UsageViewModel(
+              usage: services.usage,
+              isSignedIn: {
+                if case .signedIn = appState.authState { return true }
+                return false
+              }()
+            )
+          )
+          .oakHidesSystemTabBar()
+        } label: {
+          Label(OakAppTab.usage.title, systemImage: OakAppTab.usage.systemImage)
+        }
         Tab(value: OakAppTab.dex) {
           DexView()
             .oakHidesSystemTabBar()
@@ -63,6 +77,7 @@ struct RootView: View {
           .oakHidesSystemTabBar()
         } label: {
           Label(OakAppTab.settings.title, systemImage: OakAppTab.settings.systemImage)
+
         }
       }
       // Canvas fills any leftover system-bar overlay so a launch flash never
@@ -106,6 +121,8 @@ struct RootView: View {
       case let .share(id):
         presentedShareId = id
         appState.pendingDestination = nil
+      case .usage:
+        selection = .usage
       }
     }
     .sheet(item: Binding(
@@ -141,7 +158,7 @@ struct RootView: View {
     .fullScreenCover(item: $calculatorCover) { cover in
       CalculatorDestinationView(
         calc: services.calc,
-        format: cover.scenario?.format ?? appState.lastUsedScope ?? .nationalDex,
+        format: .champions,
         scenario: cover.scenario,
         onExplain: { prompt in
           appState.pendingChatSend = prompt
@@ -157,7 +174,7 @@ struct RootView: View {
           model: AddToTeamViewModel(
             teams: services.teams,
             isSignedIn: true,
-            conversationFormat: appState.lastUsedScope ?? .nationalDex,
+            conversationFormat: .champions,
             incoming: incoming
           ),
           onOpened: { id, _ in

@@ -30,7 +30,7 @@ android/
         │   ├── networking/     OkHttp client, SSE byte-stream parser, error mapping
         │   ├── wire/           kotlinx.serialization DTOs mirroring web/src/lib/sse + agent/schemas
         │   ├── services/       service interfaces + Live implementations over networking
-        │   ├── features/       chat (+ answercard), artifact, auth, account, history, teams
+        │   ├── features/       chat (+ answercard), artifact, auth, account, history, teams, dex (Usage is a Dex section, not a sixth tab)
         │   └── ui/             shared Compose theme/components (the Oak design system)
         ├── test/kotlin/…       JVM unit tests (JUnit4, no emulator)
         ├── test/resources/fixtures/   committed REST/SSE fixtures (see Testing below)
@@ -41,6 +41,10 @@ This is a structural, class-for-class port of `ios/OakApp/` (App → Networking 
 → Services → Features → UI), not a from-scratch design — see
 `../docs/features/android-app/architecture/overview.md` for the mapping and the "ground
 truth" note.
+
+**Champions-first (ADR-6):** Android keeps five bottom tabs (Chat / Teams / Dex / Calc /
+Settings). Live Champions usage is a first-class **Dex section** (Pokémon / Moves /
+Abilities / Items / Usage), not a sixth tab. There is no Voice mic session.
 
 ## Prerequisites
 

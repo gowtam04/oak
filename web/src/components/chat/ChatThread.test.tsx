@@ -63,19 +63,29 @@ describe("ChatThread — in-flight streaming bubble", () => {
 });
 
 describe("ChatThread — empty-state blank specimen plate", () => {
-  it("renders a Signal empty hero (not STANDBY, not a logo)", () => {
+  it("renders a Champions-oriented empty hero (CF-UI-AC-3.1, CF-UI-BR-1)", () => {
     render(<ChatThread {...props({ turns: [], status: "idle" })} />);
-    expect(screen.getByTestId("blank-plate")).toBeInTheDocument();
+    const plate = screen.getByTestId("blank-plate");
+    expect(plate).toBeInTheDocument();
     expect(screen.queryByText("STANDBY")).toBeNull();
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "What do you want to know?",
-    );
-    expect(
-      screen.getByText(
-        "Mechanics, locations, teams, damage. Oak will show its work.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Oak")).not.toBeInTheDocument();
+    const heading = within(plate).getByRole("heading", { level: 1 });
+    const sub = plate.querySelector(".blank-plate__sub");
+    expect(heading).toBeInTheDocument();
+    expect(sub).not.toBeNull();
+    const text = `${heading.textContent ?? ""} ${sub?.textContent ?? ""}`;
+    expect(text).toMatch(/champions/i);
+    expect(text).toMatch(/team|calc|usage|coach/i);
+    expect(text).not.toMatch(/locations/i);
+    expect(text).not.toMatch(/every generation/i);
+    expect(text).not.toMatch(/mystery dungeon/i);
+  });
+
+  it("has no tutorial overlay or first-run wizard (CF-UI-AC-3.3, CF-AS-12)", () => {
+    render(<ChatThread {...props({ turns: [], status: "idle" })} />);
+    expect(screen.queryByTestId("tutorial")).toBeNull();
+    expect(screen.queryByTestId("onboarding")).toBeNull();
+    expect(screen.queryByTestId("first-run-wizard")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("renders exactly 4 starter rows from the prompt pool with categories", () => {
@@ -292,9 +302,9 @@ describe("ChatThread — streaming field-notes trail", () => {
   });
 
   it("exposes instrumentToken with the full copy-table mapping", () => {
-    expect(instrumentToken("run_sql")).toBe("Querying game data");
-    expect(instrumentToken("search_wiki")).toBe("Searching wiki");
-    expect(instrumentToken("get_meta_usage")).toBe("Checking ladder usage");
+    expect(instrumentToken("run_sql")).toBe("Looking up");
+    expect(instrumentToken("search_wiki")).toBe("Looking up");
+    expect(instrumentToken("get_meta_usage")).toBe("Looking up");
     expect(instrumentToken("submit_builder_answer")).toBe("Teams");
     expect(instrumentToken("totally_unknown")).toBe("Looking up");
   });

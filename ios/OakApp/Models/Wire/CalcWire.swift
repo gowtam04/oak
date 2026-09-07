@@ -327,9 +327,11 @@ enum CalcResult: Codable, Sendable, Equatable {
 
 // MARK: - Portable helpers
 
-/// Format-aware default level (CALC-BR-7). Champions is 50; every other scope is 100.
+/// Champions-first calc is always L50 (CF-CALC-US-1). Leftover format strings
+/// do not reopen a gen-N / National Dex calculator.
 func defaultCalcLevel(_ format: Format) -> Int {
-  format == .champions ? 50 : 100
+  _ = format
+  return 50
 }
 
 /// Deterministic "Explain this calc" chat message (CALC-US-8). Not JSON.

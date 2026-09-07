@@ -79,13 +79,15 @@ final class ChatViewModel {
   /// `scopeSeed` (`web/src/app/page.tsx`).
   private(set) var scopeSeed: Format?
 
-  /// The scope the header chip displays and the artifact viewer scopes to: a
-  /// pending chip pick, else the server-resolved scope, else the signed-in
-  /// last-used preference, else the national-dex default — identical to web's
-  /// `displayFormat = scopeSeed ?? resolvedScope ?? lastUsedScope ?? "national-dex"`.
-  var displayFormat: Format {
-    scopeSeed ?? resolvedScope ?? appState.lastUsedScope ?? .nationalDex
-  }
+  /// Champions-first: the chip is always Champions. Leftover last-used / stored
+  /// gen-N values must not reopen another game (CF-CHAT-US-1 / CF-DATA-BR-21).
+  var displayFormat: Format { .champions }
+
+  /// Informational regulation chip — not a format picker (CF-UI-US-2).
+  var isRegulationChipPicker: Bool { false }
+
+  /// Current Champions regulation label (mirrors web `CHAMPIONS_REGULATION`).
+  var regulationLabel: String { Format.champions.displayLabel }
 
   /// Mention tokens inserted via `@` autocomplete (MEN-US-1).
   private(set) var mentionTokens: [FollowUpChips.MentionedTeam] = []
@@ -297,7 +299,7 @@ final class ChatViewModel {
     // Handled slashes are not a chat turn — skip them while editing the last
     // user message so "/new" in an edited typo still recovery-POSTs.
     if !isEditingLast {
-      switch SlashCommands.parse(text, hasUsagePage: false) {
+      switch SlashCommands.parse(text, hasUsagePage: true) {
       case .navigate(let target):
         handleSlash(target, argument: SlashCommands.argument(text))
         composerText = ""
@@ -337,7 +339,7 @@ final class ChatViewModel {
     let request = PendingRequest(
       message: text,
       images: images,
-      scopeSeed: scopeSeed,
+      scopeSeed: outboundScopeSeed,
       recovery: recovery,
       mentionedTeamIds: mentions.map(\.id)
     )
@@ -359,7 +361,7 @@ final class ChatViewModel {
     let request = PendingRequest(
       message: user.text,
       images: images,
-      scopeSeed: lastRequest?.scopeSeed ?? scopeSeed,
+      scopeSeed: outboundScopeSeed,
       recovery: .retry,
       mentionedTeamIds: lastRequest?.mentionedTeamIds
     )
@@ -400,7 +402,7 @@ final class ChatViewModel {
     }
     // Resumed thread with no retained request: re-send the last user turn's text.
     if case let .user(text, _)? = turns.last?.content, !text.isEmpty {
-      let request = PendingRequest(message: text, images: [], scopeSeed: scopeSeed)
+      let request = PendingRequest(message: text, images: [], scopeSeed: outboundScopeSeed)
       lastRequest = request
       beginStreaming(request)
     }
@@ -538,13 +540,14 @@ final class ChatViewModel {
   /// runs. Ignored mid-stream so a turn's scope is stable — the chip is disabled
   /// then in the UI. Mirrors web's `setScopeSeed` (`web/src/app/page.tsx`).
   func selectScope(_ format: Format) {
-    guard !isStreaming else { return }
-    scopeSeed = format
-    if case .signedIn = appState.authState {
-      appState.lastUsedScope = format
-    }
-    Task { await persistScopePick(format) }
+    // Regulation chip is informational. Leftover calls must not persist or
+    // seed another game (CF-CHAT-US-1 / CF-DATA-BR-21).
+    _ = format
   }
+
+  /// Never send a gen-N / National Dex `scope_seed`. Nil is preferred; Champions
+  /// is tolerated by the tests if a client still emits a seed.
+  private var outboundScopeSeed: Format? { nil }
 
   /// Persist a chip pick with no follow-up message (SCOPE-US-1).
   private func persistScopePick(_ format: Format) async {
@@ -623,7 +626,7 @@ final class ChatViewModel {
     appState.activeConversationId = nil
     if case .guest = appState.authState {
       appState.guestThread = []
-      appState.guestThreadScope = .nationalDex
+      appState.guestThreadScope = .champions
     }
   }
 
@@ -659,7 +662,8 @@ final class ChatViewModel {
         return ChatTurnItem(serverMessageId: id, content: .assistant(answer))
       }
     }
-    resolvedScope = format
+    _ = format
+    resolvedScope = .champions
     resolvedScopeSource = nil
     scopeSeed = nil
     streamingText = ""
@@ -745,18 +749,16 @@ final class ChatViewModel {
       toolActivities = []
       isStreaming = true
 
-    case let .scope(format, source):
-      // The server resolved this turn's scope. Adopt it and retire any pending
-      // chip pick — the conversation's scope is now sticky server-side and
-      // outranks a stale seed on the following turn (web clears `scopeSeed` here).
-      resolvedScope = format
+    case let .scope(_, source):
+      // Champions-first: ignore leftover other-format scope frames so the chip
+      // cannot become a picker or seed (CF-CHAT-US-1).
+      resolvedScope = .champions
       resolvedScopeSource = source
       scopeSeed = nil
-      // Signed-in only: remember for New Chat (server also persists on the account).
       if case .signedIn = appState.authState {
-        appState.lastUsedScope = format
+        appState.lastUsedScope = .champions
       }
-      mirrorGuestScope(format)
+      mirrorGuestScope(.champions)
 
     case let .toolActivity(tool, label):
       toolActivities.append(ToolActivity(tool: tool, label: label))
@@ -1178,8 +1180,14 @@ final class ChatViewModel {
     calculatorHop = CalculatorHop(
       kind: kind,
       rest: rest,
-      format: scenario?.format ?? displayFormat,
-      scenario: scenario
+      format: .champions,
+      scenario: scenario.map { hop in
+        var next = hop
+        next.format = .champions
+        next.attacker.level = 50
+        next.defender.level = 50
+        return next
+      }
     )
   }
 
@@ -1244,7 +1252,7 @@ final class ChatViewModel {
     case .dex:
       appState.pendingDestination = .dex(query: argument)
     case .usage:
-      break
+      appState.pendingDestination = .usage(slug: argument)
     }
   }
 
@@ -1381,11 +1389,8 @@ final class ChatViewModel {
   }
 
   private func impliedFormat(for answer: OakAnswer) -> Format? {
-    let raw = answer.generationBasis.generation
-    let mapped = Format(rawValue: raw)
-    if case .unknown = mapped { return nil }
-    if mapped == displayFormat { return nil }
-    return mapped
+    _ = answer
+    return nil
   }
 
   /// Bind `@Name` tokens: autocomplete taps *or* free-typed names that match a

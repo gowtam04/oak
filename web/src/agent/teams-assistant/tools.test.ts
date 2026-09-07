@@ -3,7 +3,8 @@
  * (tools.ts). SECURITY-RELEVANT per the module header: `builderDispatch` must
  * reject any tool name outside its own subset with the documented in-domain
  * error shape, even for names that ARE real tools in the main 17-tool barrel
- * (save_team/get_team/list_teams/get_encounters/submit_answer).
+ * (save_team/get_team/list_teams/submit_answer) and for removed other-game
+ * names (get_encounters/get_meta_usage).
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -23,6 +24,7 @@ const EXCLUDED_TOOL_NAMES = [
   "get_team",
   "list_teams",
   "get_encounters",
+  "get_meta_usage",
   "submit_answer",
 ];
 
@@ -33,11 +35,13 @@ describe("builderTools — the scoped read-only subset", () => {
     );
   });
 
-  it("includes get_meta_usage for Smogon ladder sets", () => {
-    expect(builderTools.some((t) => t.name === "get_meta_usage")).toBe(true);
+  it("omits get_meta_usage (removed T21) and get_encounters (removed T14)", () => {
+    const names = builderTools.map((t) => t.name);
+    expect(names).not.toContain("get_meta_usage");
+    expect(names).not.toContain("get_encounters");
   });
 
-  it("excludes save_team, get_team, list_teams, get_encounters, and submit_answer", () => {
+  it("excludes save_team, get_team, list_teams, removed other-game tools, and submit_answer", () => {
     const names = builderTools.map((t) => t.name);
     for (const excluded of EXCLUDED_TOOL_NAMES) {
       expect(names).not.toContain(excluded);
@@ -47,7 +51,7 @@ describe("builderTools — the scoped read-only subset", () => {
 
 describe("builderDispatch — rejects any name outside the builder subset", () => {
   it.each(EXCLUDED_TOOL_NAMES)(
-    'returns {error:"unknown_tool"} for "%s" (a real main-barrel tool, but not offered here)',
+    'returns {error:"unknown_tool"} for "%s"',
     async (name) => {
       const result = await builderDispatch(name, {}, {} as AgentContext);
       expect(result).toEqual({ error: "unknown_tool", detail: name });

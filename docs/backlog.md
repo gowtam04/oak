@@ -8,6 +8,13 @@ of those assumptions, so they're listed in dependency order: accounts unlock the
 
 > Append new items; don't renumber existing ones. IDs are stable.
 
+> **Champions-first (2026-09):** Oak is a Pokémon Champions coach. Whole-games
+> items below — National Dex default, eleven-scope, wiki / Mystery Dungeon /
+> catch locations, `run_sql` warehouse, Smogon `/meta` + `sync:meta`, Gens 1–4
+> as a product mode — are **superseded** by
+> `docs/features/champions-first/`. Do not treat them as current product.
+> Historical status lines are retained.
+
 ---
 
 ## B-1 — Account creation
@@ -238,6 +245,10 @@ artifacts depends on B-1 (per-account) and overlaps B-3 (what's stored per conve
 
 ## B-5 — Competitive battling page
 
+> **Status: SUPERSEDED (Champions-first)** — Smogon OU `/meta`, `get_meta_usage`,
+> and `sync:meta` are retired. Live Champions usage is T15 + public `/usage`
+> (ADR-5). Layer 4 (live battle co-pilot) remains a separate candidate as B-21.
+>
 > **Status: BUILT (layers 1–3)** — shipped as four independent layers, the first
 > three of which are done; the fourth is deferred to a new item, **B-21**.
 > **Layer 1 (data):** a NEW metagame axis, deliberately separate from the
@@ -571,6 +582,9 @@ with the Anthropic path.
 
 ## B-10 — Generations 1–4 support
 
+> **Status: SUPERSEDED (Champions-first)** — other generations are not a product
+> mode. Off-roster / other-game questions are declined.
+
 **Why:** The **generation-scope** feature (BUILT — see
 `docs/features/generation-scope/` and `docs/agent-design/generation-scope-addendum.md`)
 widened Oak's data scope from two formats to six: Gen 9 (`scarlet-violet`),
@@ -617,6 +631,9 @@ ingest builders.
 
 ## B-11 — LLM classifier fallback for ambiguous scope signals
 
+> **Status: SUPERSEDED (Champions-first)** — turns are always Champions;
+> `detect-scope` is not used to route.
+
 **Why:** Per-turn scope is resolved by a **deterministic lexicon** with **no LLM
 pre-pass** (`src/lib/scope/detect-scope.ts`, GS-D3) — a conscious "precision over
 recall" choice: it fires only on high-precision signals and otherwise falls back to
@@ -653,6 +670,9 @@ practice.
 ---
 
 ## B-12 — Per-generation encounter (catch-location) filtering
+
+> **Status: SUPERSEDED (Champions-first)** — `get_encounters` and encounter
+> tables are removed; catch-location questions are declined.
 
 > **Status: ADDRESSED** — shipped as **annotate + foreground, never drop**
 > (the "Open questions" filter-vs-annotate call resolved in favor of honesty
@@ -1021,6 +1041,9 @@ ownership.
 
 ## B-20 — Playthrough companion / catch tracker
 
+> **Status: SUPERSEDED (Champions-first)** — wiki / encounters / other-game
+> playthrough tracking are out of product scope. Do not invent a replacement.
+
 **Why:** oak-v2 built the whole-games data surface (all-gen scopes, `search_wiki`
 walkthrough/location content, `get_encounters`) but the product framing is still
 competitive-first. A lightweight per-account playthrough tracker — which game I'm
@@ -1181,6 +1204,11 @@ grok-heavy vs. claude fixture accounts plausibly flipped.
 ---
 
 ## B-23 — Prompt audit
+
+> **Status: SUPERSEDED in part (Champions-first)** — the live body is the
+> Champions-only `domain.ts` (17 tools, no warehouse DDL / wiki / eleven
+> scopes). A later audit of that smaller prefix is still a candidate; do not
+> re-expand whole-games routing.
 
 **Why:** Oak's defining trait is that it **reasons on top of data**, and the
 system prompt is the contract that makes that happen: tool routing, games-only

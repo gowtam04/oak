@@ -52,7 +52,7 @@ struct ShowdownRoundTripTests {
     let source = Team(
       id: "t1",
       name: "Round Trip",
-      format: .scarletViolet,
+      format: .champions,
       members: members,
       createdAt: 1,
       updatedAt: 1
@@ -64,13 +64,15 @@ struct ShowdownRoundTripTests {
     let paste = await editor.exportPaste()
     #expect(paste != nil)
 
-    // …then import through the list.
+    // …then import through the list (format argument is ignored — always Champions).
     let listVM = TeamsListViewModel(teamService: fake)
     let result = await listVM.importPaste(paste!, format: .scarletViolet)
 
     #expect(result != nil)
     #expect(result?.notes.isEmpty == true)  // a clean round-trip resolves everything
     #expect(result?.team.members == members)  // members reproduced exactly
+    #expect(result?.team.format == .champions)
+    #expect(fake.lastImportFormat == .champions)
     #expect(listVM.teams.contains { $0.id == result?.team.id })
   }
 

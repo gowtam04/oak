@@ -1,22 +1,15 @@
 /**
- * Regression test for the write phase of `runIngest` (DATA-01/DATA-02).
+ * Regression test for the write phase of `runIngest` after champions-first
+ * cutover (ADR-4, CF-DATA-BR-3, CF-INT-BR-3).
  *
- * `writeIndex` is exercised directly against a real, migrated-but-empty
- * Postgres schema (`createPgSchema({ seed: "none" })`) with tiny synthetic
- * rows — no @pkmn build involved. Two real formats ("gen-5" / "gen-6") stand
- * in for "the format being (re)built" and "an unrelated format that must
- * survive a partial ingest".
- *
- *   1. A partial call (`formats: ["gen-6"]`) must leave every "gen-5" row —
- *      across all four index tables plus its ingest_meta row — byte-identical
- *      (DATA-01: `replaceTable`'s delete is scoped to the formats being built,
- *      never "delete everything").
- *   2. A full call (`formats: ["gen-5", "gen-6"]`) must still replace both
- *      formats wholesale, matching pre-fix end-state behavior.
- *   3. A batch that fails mid-write (a duplicate composite-PK row) must reject
- *      AND leave every table's pre-call rows untouched — nothing partially
- *      committed (DATA-02: one atomic transaction).
+ * `writeIndex` is exercised against a real, migrated-but-empty Postgres schema
+ * (`createPgSchema({ seed: "none" })`) with tiny synthetic Champions rows —
+ * no @pkmn build involved. Default ingest is champions-only; wiki/natdex/meta/
+ * encounter/pmd write paths are gone.
  */
+
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -27,16 +20,13 @@ import {
   pokemon,
   reference_cache,
   searchable_names,
-  wiki_chunk,
-  wiki_page,
 } from "@/data/schema";
-import type { Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, DEFAULT_FORMATS, type Format } from "@/data/formats";
 
 import { createPgSchema, type PgFixture } from "../../test/support/pg";
 import {
   writeIndex,
   type FormatReport,
-  type GlobalRows,
   type IndexRows,
   type IngestDb,
 } from "./run";
@@ -44,7 +34,6 @@ import type { PokemonRow } from "./build-pokedex";
 import type { LearnsetRow } from "./build-learnsets";
 import type { NameRow } from "./build-names";
 import type { ReferenceRow } from "./build-reference";
-import type { WikiChunkRow, WikiPageRow } from "./build-wiki";
 
 let fix: PgFixture;
 let db: IngestDb;
@@ -146,19 +135,18 @@ function buildFormat(format: Format, version: string, n = 2) {
   return { pokemonRows, learnsetRows, nameRows, referenceRows, report };
 }
 
-/** Merge one or more built formats into a single writeIndex call's inputs. */
-function combine(...builts: ReturnType<typeof buildFormat>[]): {
+function toIndexRows(built: ReturnType<typeof buildFormat>): {
   rows: IndexRows;
   reports: FormatReport[];
 } {
   return {
     rows: {
-      pokemon: builts.flatMap((b) => b.pokemonRows),
-      learnsets: builts.flatMap((b) => b.learnsetRows),
-      names: builts.flatMap((b) => b.nameRows),
-      references: builts.flatMap((b) => b.referenceRows),
+      pokemon: built.pokemonRows,
+      learnsets: built.learnsetRows,
+      names: built.nameRows,
+      references: built.referenceRows,
     },
-    reports: builts.map((b) => b.report),
+    reports: [built.report],
   };
 }
 
@@ -173,78 +161,47 @@ async function tableCounts(format: Format) {
   return { p, l, n, r, m };
 }
 
-const GEN5: Format = "gen-5";
-const GEN6: Format = "gen-6";
-
-describe("writeIndex — partial swap preserves other formats (DATA-01)", () => {
-  it("a gen-6-only call leaves gen-5's rows and ingest_meta row untouched", async () => {
-    const gen5v1 = buildFormat(GEN5, "v1");
-    const gen6v1 = buildFormat(GEN6, "v1");
-    const seed = combine(gen5v1, gen6v1);
-    await writeIndex(db, seed.rows, seed.reports, [GEN5, GEN6], 1000);
-
-    const gen6v2 = buildFormat(GEN6, "v2", 3);
-    const partial = combine(gen6v2);
-    await writeIndex(db, partial.rows, partial.reports, [GEN6], 2000);
-
-    const gen5After = await tableCounts(GEN5);
-    expect(gen5After.p).toHaveLength(2);
-    expect(gen5After.p.map((r) => r.display_name).sort()).toEqual(
-      gen5v1.pokemonRows.map((r) => r.display_name).sort(),
-    );
-    expect(gen5After.l).toHaveLength(2);
-    expect(gen5After.l.map((r) => r.move_slug).sort()).toEqual(
-      gen5v1.learnsetRows.map((r) => r.move_slug).sort(),
-    );
-    expect(gen5After.n).toHaveLength(2);
-    expect(gen5After.r).toHaveLength(1);
-    expect(gen5After.r[0]!.payload).toBe(gen5v1.referenceRows[0]!.payload);
-    expect(gen5After.m).toHaveLength(1);
-    expect(gen5After.m[0]).toMatchObject({
-      format: GEN5,
-      last_success_at: 1000,
-      pokemon_count: 2,
-    });
-
-    const gen6After = await tableCounts(GEN6);
-    expect(gen6After.p).toHaveLength(3);
-    expect(gen6After.p.map((r) => r.display_name).sort()).toEqual(
-      gen6v2.pokemonRows.map((r) => r.display_name).sort(),
-    );
-    expect(gen6After.m).toHaveLength(1);
-    expect(gen6After.m[0]).toMatchObject({ last_success_at: 2000, pokemon_count: 3 });
+describe("DEFAULT ingest formats (CF-DATA-BR-3, ADR-4)", () => {
+  it("is exactly [\"champions\"] — gen-7 is not part of default ingest", () => {
+    expect([...DEFAULT_FORMATS]).toEqual(["champions"]);
+    expect(DEFAULT_FORMATS).not.toContain("gen-7");
   });
 });
 
-describe("writeIndex — a full-format call still replaces everything", () => {
-  it("wipes and rewrites both formats when both are named", async () => {
-    const seedA = combine(buildFormat(GEN5, "a1"), buildFormat(GEN6, "a1"));
-    await writeIndex(db, seedA.rows, seedA.reports, [GEN5, GEN6], 3000);
+describe("writeIndex — champions replace (DATA-01, champions-only)", () => {
+  it("a champions rewrite replaces the prior champions rows", async () => {
+    const v1 = toIndexRows(buildFormat(CHAMPIONS_FORMAT, "v1"));
+    await writeIndex(db, v1.rows, v1.reports, [CHAMPIONS_FORMAT], 1000);
 
-    const seedB = combine(buildFormat(GEN5, "a2", 3), buildFormat(GEN6, "a2", 3));
-    await writeIndex(db, seedB.rows, seedB.reports, [GEN5, GEN6], 4000);
+    const v2 = toIndexRows(buildFormat(CHAMPIONS_FORMAT, "v2", 3));
+    await writeIndex(db, v2.rows, v2.reports, [CHAMPIONS_FORMAT], 2000);
 
-    for (const format of [GEN5, GEN6]) {
-      const after = await tableCounts(format);
-      expect(after.p).toHaveLength(3);
-      expect(after.p.every((r) => r.display_name.startsWith("a2-"))).toBe(true);
-      expect(after.m[0]).toMatchObject({ last_success_at: 4000, pokemon_count: 3 });
-    }
+    const after = await tableCounts(CHAMPIONS_FORMAT);
+    expect(after.p).toHaveLength(3);
+    expect(after.p.map((r) => r.display_name).sort()).toEqual(
+      v2.rows.pokemon.map((r) => r.display_name).sort(),
+    );
+    expect(after.l).toHaveLength(3);
+    expect(after.n).toHaveLength(3);
+    expect(after.r).toHaveLength(1);
+    expect(after.r[0]!.payload).toBe(v2.rows.references[0]!.payload);
+    expect(after.m).toHaveLength(1);
+    expect(after.m[0]).toMatchObject({
+      format: CHAMPIONS_FORMAT,
+      last_success_at: 2000,
+      pokemon_count: 3,
+    });
   });
 });
 
 describe("writeIndex — atomic rollback on a mid-write failure (DATA-02)", () => {
-  it("rejects and leaves every pre-call row (all tables + ingest_meta) unchanged", async () => {
-    const seed = combine(buildFormat(GEN5, "r1"), buildFormat(GEN6, "r1"));
-    await writeIndex(db, seed.rows, seed.reports, [GEN5, GEN6], 5000);
+  it("rejects and leaves every pre-call champions row unchanged", async () => {
+    const seed = toIndexRows(buildFormat(CHAMPIONS_FORMAT, "r1"));
+    await writeIndex(db, seed.rows, seed.reports, [CHAMPIONS_FORMAT], 5000);
 
-    const before = { gen5: await tableCounts(GEN5), gen6: await tableCounts(GEN6) };
+    const before = await tableCounts(CHAMPIONS_FORMAT);
 
-    // A batch for gen-6 whose learnset rows contain a duplicate composite PK
-    // (pokemon_id, move_slug, format) — the second table writeIndex touches,
-    // so the pokemon table's delete+insert for gen-6 will already have run
-    // inside the same transaction before this insert fails.
-    const bad = buildFormat(GEN6, "bad", 2);
+    const bad = buildFormat(CHAMPIONS_FORMAT, "bad", 2);
     const dupedLearnsets: LearnsetRow[] = [
       ...bad.learnsetRows,
       { ...bad.learnsetRows[0]! },
@@ -260,159 +217,75 @@ describe("writeIndex — atomic rollback on a mid-write failure (DATA-02)", () =
     ];
 
     await expect(
-      writeIndex(db, badRows, badReports, [GEN6], 6000),
+      writeIndex(db, badRows, badReports, [CHAMPIONS_FORMAT], 6000),
     ).rejects.toThrow();
 
-    const after = { gen5: await tableCounts(GEN5), gen6: await tableCounts(GEN6) };
-    expect(after.gen5).toEqual(before.gen5);
-    expect(after.gen6.p.map((r) => r.display_name).sort()).toEqual(
-      before.gen6.p.map((r) => r.display_name).sort(),
+    const after = await tableCounts(CHAMPIONS_FORMAT);
+    expect(after.p.map((r) => r.display_name).sort()).toEqual(
+      before.p.map((r) => r.display_name).sort(),
     );
-    expect(after.gen6.l.map((r) => r.move_slug).sort()).toEqual(
-      before.gen6.l.map((r) => r.move_slug).sort(),
+    expect(after.l.map((r) => r.move_slug).sort()).toEqual(
+      before.l.map((r) => r.move_slug).sort(),
     );
-    expect(after.gen6.n).toHaveLength(before.gen6.n.length);
-    expect(after.gen6.r).toHaveLength(before.gen6.r.length);
-    expect(after.gen6.m).toEqual(before.gen6.m);
+    expect(after.n).toHaveLength(before.n.length);
+    expect(after.r).toHaveLength(before.r.length);
+    expect(after.m).toEqual(before.m);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Empty-wiki guard — writeIndex must never let an empty `.wiki-cache/` build
-// (rows.global.wikiPages/wikiChunks == []) silently wipe a populated wiki
-// corpus (both GLOBAL tables, unscoped delete). See run.ts writeIndex.
-// ---------------------------------------------------------------------------
-
-function makeGlobalRows(
-  wikiPages: WikiPageRow[],
-  wikiChunks: WikiChunkRow[],
-): GlobalRows {
-  return {
-    natdexSpecies: [],
-    natdexMoves: [],
-    machines: [],
-    classicEncounters: [],
-    pmd: [],
-    wikiPages,
-    wikiChunks,
-  };
-}
-
-function makeWikiPageRow(id: string): WikiPageRow {
-  return {
-    id,
-    title: `Title ${id}`,
-    url: `https://example.test/wiki/${id}`,
-    revised_at: null,
-    license: "CC BY-SA 4.0",
-  };
-}
-
-function makeWikiChunkRow(pageId: string, i = 0): WikiChunkRow {
-  return {
-    id: `${pageId}#${i}`,
-    page_id: pageId,
-    section: "Overview",
-    content: `content for ${pageId} chunk ${i}`,
-  };
-}
-
-async function wikiCounts() {
-  const [pages, chunks] = await Promise.all([
-    db.select().from(wiki_page),
-    db.select().from(wiki_chunk),
-  ]);
-  return { pages, chunks };
-}
-
-const EMPTY_INDEX_ROWS: Omit<IndexRows, "global"> = {
-  pokemon: [],
-  learnsets: [],
-  names: [],
-  references: [],
-};
-
-describe("writeIndex — empty-wiki guard", () => {
-  it("preserves an existing populated wiki corpus when incoming wiki rows are empty", async () => {
-    const seededPages = [makeWikiPageRow("bulbasaur"), makeWikiPageRow("charmander")];
-    const seededChunks = [
-      makeWikiChunkRow("bulbasaur"),
-      makeWikiChunkRow("charmander"),
+describe("runIngest does not write dropped other-game pipelines (CF-INT-BR-3, CF-OPS-AC-1.2)", () => {
+  it("run.ts does not import wiki/natdex/encounter/pmd/meta builders", () => {
+    const src = readFileSync(fileURLToPath(new URL("./run.ts", import.meta.url)), "utf8");
+    const bannedImports = [
+      "./build-wiki",
+      "./build-natdex",
+      "./build-encounters",
+      "./build-classic-encounters",
+      "./build-pmd",
+      "./build-meta",
+      "./sync-meta",
     ];
-    await writeIndex(
-      db,
-      { ...EMPTY_INDEX_ROWS, global: makeGlobalRows(seededPages, seededChunks) },
-      [],
-      [],
-      7000,
-    );
-    expect(await wikiCounts()).toMatchObject({
-      pages: expect.arrayContaining([expect.objectContaining({ id: "bulbasaur" })]),
-    });
-
-    const result = await writeIndex(
-      db,
-      { ...EMPTY_INDEX_ROWS, global: makeGlobalRows([], []) },
-      [],
-      [],
-      8000,
-    );
-
-    expect(result.wiki).toEqual({ preserved: true, wikiPages: 2, wikiChunks: 2 });
-    const after = await wikiCounts();
-    expect(after.pages.map((p) => p.id).sort()).toEqual(["bulbasaur", "charmander"]);
-    expect(after.chunks.map((c) => c.id).sort()).toEqual([
-      "bulbasaur#0",
-      "charmander#0",
-    ]);
+    for (const spec of bannedImports) {
+      expect(src, `run.ts must not import ${spec}`).not.toContain(`from "${spec}"`);
+      expect(src, `run.ts must not import ${spec}`).not.toContain(`from '${spec}'`);
+    }
+    for (const ident of [
+      "buildWikiRows",
+      "buildNatdexSpeciesRows",
+      "buildEncounterRows",
+      "buildClassicEncounterRows",
+      "buildPmdRows",
+      "buildMetaRows",
+      "wiki_page",
+      "wiki_chunk",
+      "natdex_species",
+      "natdex_machines",
+      "natdex_moves",
+      "classic_encounters",
+      "pmd_recruits",
+      "meta_snapshot",
+      "meta_usage",
+    ]) {
+      expect(src, `run.ts must not mention ${ident}`).not.toMatch(
+        new RegExp(`\\b${ident}\\b`),
+      );
+    }
   });
+});
 
-  it("allowEmptyWiki forces the wipe even over a populated corpus", async () => {
-    expect((await wikiCounts()).pages.length).toBeGreaterThan(0);
+describe("dropped ingest builders are gone (CF-INT-BR-3, CF-OPS-AC-1.2)", () => {
+  const dropped = [
+    "./build-wiki.ts",
+    "./build-natdex.ts",
+    "./build-encounters.ts",
+    "./build-classic-encounters.ts",
+    "./build-pmd.ts",
+    "./build-meta.ts",
+    "./sync-meta.ts",
+  ] as const;
 
-    const result = await writeIndex(
-      db,
-      { ...EMPTY_INDEX_ROWS, global: makeGlobalRows([], []) },
-      [],
-      [],
-      9000,
-      undefined,
-      { allowEmptyWiki: true },
-    );
-
-    expect(result.wiki).toEqual({ preserved: false, wikiPages: 0, wikiChunks: 0 });
-    const after = await wikiCounts();
-    expect(after.pages).toHaveLength(0);
-    expect(after.chunks).toHaveLength(0);
-  });
-
-  it("replaces normally when incoming wiki rows are non-empty", async () => {
-    // Starting from the empty state left by the previous test.
-    const firstPages = [makeWikiPageRow("squirtle")];
-    const firstChunks = [makeWikiChunkRow("squirtle")];
-    await writeIndex(
-      db,
-      { ...EMPTY_INDEX_ROWS, global: makeGlobalRows(firstPages, firstChunks) },
-      [],
-      [],
-      10_000,
-    );
-    expect((await wikiCounts()).pages.map((p) => p.id)).toEqual(["squirtle"]);
-
-    const secondPages = [makeWikiPageRow("pikachu"), makeWikiPageRow("eevee")];
-    const secondChunks = [makeWikiChunkRow("pikachu"), makeWikiChunkRow("eevee")];
-    const result = await writeIndex(
-      db,
-      { ...EMPTY_INDEX_ROWS, global: makeGlobalRows(secondPages, secondChunks) },
-      [],
-      [],
-      11_000,
-    );
-
-    expect(result.wiki).toEqual({ preserved: false, wikiPages: 2, wikiChunks: 2 });
-    const after = await wikiCounts();
-    // squirtle is gone — replaced wholesale, not merged.
-    expect(after.pages.map((p) => p.id).sort()).toEqual(["eevee", "pikachu"]);
-    expect(after.chunks.map((c) => c.id).sort()).toEqual(["eevee#0", "pikachu#0"]);
+  it.each(dropped)("%s is not on disk (module cannot be imported)", (rel) => {
+    const path = fileURLToPath(new URL(rel, import.meta.url));
+    expect(existsSync(path), `${rel} must be deleted`).toBe(false);
   });
 });

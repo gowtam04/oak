@@ -52,22 +52,28 @@ class TeamServiceTest {
     }
 
     @Test
-    fun listSendsFormatQuery() = runTest {
+    fun listLivingOmitsFormatPicker() = runTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"teams":[]}"""))
-        service.list(Format.Gen5)
+        service.list(archived = false)
 
         val recorded = server.takeRequest()
         assertEquals("GET", recorded.method)
-        assertTrue(recorded.path?.startsWith("/api/teams?") == true)
-        assertTrue(recorded.path?.contains("format=gen-5") == true)
+        assertTrue(recorded.path == "/api/teams" || recorded.path?.startsWith("/api/teams?") == true)
+        assertTrue(recorded.path?.contains("format=") != true)
         assertEquals("Bearer secret-token", recorded.getHeader("Authorization"))
     }
 
     @Test
-    fun listOmitsQueryWhenFormatIsNull() = runTest {
+    fun listArchivedSendsArchivedQuery() = runTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"teams":[]}"""))
-        service.list(null)
-        assertEquals("/api/teams", server.takeRequest().path)
+        service.list(archived = true)
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        val path = recorded.path ?: ""
+        assertTrue(path.contains("archived=1") || path.contains("archived=true"))
+        assertTrue(!path.contains("format="))
+        assertEquals("Bearer secret-token", recorded.getHeader("Authorization"))
     }
 
     @Test
@@ -152,6 +158,26 @@ class TeamServiceTest {
         val paste = service.exportPaste("t1")
         assertEquals("Garchomp @ Life Orb", paste)
         assertEquals("/api/teams/t1/export", server.takeRequest().path)
+    }
+
+    @Test
+    fun setTemplatePostsSpeciesOnlyAndIsPublic() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """{"found":true,"member":{"species":"garchomp","ability":"rough-skin","item":"life-orb","moves":["earthquake"],"nature":"jolly","evs":{"hp":0,"atk":32,"def":0,"spa":0,"spd":2,"spe":32},"ivs":{"hp":31,"atk":31,"def":31,"spa":31,"spd":31,"spe":31},"tera_type":null,"level":50},"attribution":"championsbattledata.com"}""",
+            ),
+        )
+        val result = service.setTemplate("garchomp")
+        assertTrue(result.found)
+        assertEquals("garchomp", result.member?.species)
+        assertEquals(50, result.member?.level)
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/api/teams/set-template", recorded.path)
+        val body = OakJson.parseToJsonElement(recorded.body.readUtf8()).jsonObject
+        assertEquals("garchomp", body["species"]?.jsonPrimitive?.content)
+        assertNull(recorded.getHeader("Authorization"))
     }
 
     @Test

@@ -67,7 +67,7 @@ function summary(
   return {
     id: "team-rain",
     name: "Rain Offense",
-    format: "scarlet-violet",
+    format: "champions",
     memberCount: 2,
     incomplete: true,
     updatedAt: Date.now(),
@@ -111,10 +111,11 @@ describe("AddToTeamPicker — list + create (ADD-US-2)", () => {
     expect(
       screen.getByRole("button", { name: /create new team/i }),
     ).toBeInTheDocument();
-    // Picker lists every team, not just the current format (api-design.md).
+    // Living Champions list only (no format filter, no archive).
     expect(listMock).toHaveBeenCalled();
     const arg = listMock.mock.calls[0]?.[0];
     expect(arg === undefined || arg.format === undefined).toBe(true);
+    expect(arg?.archived).not.toBe(true);
   });
 
   it("still opens with only Create new team when the account has zero teams (ADD-AC-2.3)", async () => {
@@ -155,7 +156,7 @@ describe("AddToTeamPicker — list + create (ADD-US-2)", () => {
     await waitFor(() =>
       expect(createMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          format: "gen-5",
+          format: "champions",
           members: expect.arrayContaining([
             expect.objectContaining({ species: "garchomp" }),
           ]),
@@ -368,58 +369,92 @@ describe("AddToTeamPicker — full team replace (ADD-US-3)", () => {
   });
 });
 
-describe("AddToTeamPicker — format mismatch is warn-but-allow (ADD-AC-4.1)", () => {
-  it("still writes Miraidon onto a Gen 5 team", async () => {
+describe("AddToTeamPicker — living Champions only (CF-TEAM-AC-5.3, CF-TEAM-AC-6.2)", () => {
+  it("does not list archived other-format teams (CF-TEAM-AC-5.3, CF-TEAM-AC-1.7)", async () => {
     listMock.mockResolvedValue([
       summary({
-        id: "gen5",
-        name: "Unova",
-        format: "gen-5",
-        memberCount: 0,
+        id: "live",
+        name: "Rain Offense",
+        format: "champions",
+        memberCount: 2,
+        incomplete: true,
+      }),
+      summary({
+        id: "old-gen7",
+        name: "Gen 7 rain",
+        format: "gen-7",
+        memberCount: 6,
+        incomplete: false,
+      }),
+    ]);
+    render(
+      <AddToTeamPicker
+        incoming={incoming()}
+        format="champions"
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText("Rain Offense")).toBeInTheDocument();
+    expect(screen.queryByText("Gen 7 rain")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("add-to-team-team-old-gen7")).toBeNull();
+    const arg = listMock.mock.calls[0]?.[0];
+    expect(arg?.archived).not.toBe(true);
+  });
+
+  it("fills the first empty slot of a living team without a replace confirm (CF-TEAM-AC-6.2)", async () => {
+    listMock.mockResolvedValue([
+      summary({
+        id: "team-rain",
+        name: "Rain Offense",
+        format: "champions",
+        memberCount: 2,
         incomplete: true,
       }),
     ]);
     getMock.mockResolvedValue({
-      id: "gen5",
-      name: "Unova",
-      format: "gen-5",
-      members: detailMembers(0),
+      id: "team-rain",
+      name: "Rain Offense",
+      format: "champions",
+      members: detailMembers(2),
       validation: [],
     });
     updateMock.mockResolvedValue({
-      id: "gen5",
-      name: "Unova",
-      format: "gen-5",
+      id: "team-rain",
+      name: "Rain Offense",
+      format: "champions",
       members: [],
-      validation: [
-        {
-          code: "species_illegal",
-          message: "Miraidon is not legal in this format.",
-          slot: 0,
-          field: "species",
-        },
-      ],
+      validation: [],
     });
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(
       <AddToTeamPicker
-        incoming={incoming({ species: "miraidon" })}
-        format="scarlet-violet"
+        incoming={incoming({
+          ability: "rough-skin",
+          item: "life-orb",
+          moves: ["earthquake"],
+          nature: "jolly",
+          evs: { hp: 4, atk: 30, def: 0, spa: 0, spd: 0, spe: 32 },
+          tera_type: null,
+          level: 50,
+        })}
+        format="champions"
         onClose={vi.fn()}
       />,
     );
-    fireEvent.click(await screen.findByTestId("add-to-team-team-gen5"));
-    await waitFor(() =>
-      expect(updateMock).toHaveBeenCalledWith(
-        "gen5",
-        expect.objectContaining({
-          members: expect.arrayContaining([
-            expect.objectContaining({ species: "miraidon" }),
-          ]),
-        }),
-      ),
+    fireEvent.click(await screen.findByTestId("add-to-team-team-team-rain"));
+
+    await waitFor(() => expect(updateMock).toHaveBeenCalled());
+    const written = updateMock.mock.calls[0]![1]!.members!;
+    expect(written[2]).toEqual(
+      expect.objectContaining({
+        species: "garchomp",
+        ability: "rough-skin",
+        item: "life-orb",
+        tera_type: null,
+        level: 50,
+      }),
     );
-    expect(pushMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/teams\?team=gen5&slot=0/),
-    );
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("apply-set-confirm")).not.toBeInTheDocument();
   });
 });

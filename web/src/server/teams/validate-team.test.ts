@@ -18,19 +18,22 @@
  * on a clean one; the service never throws and always returns an array (BR-T6).
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
 
 import type { OakDb } from "@/data/db";
 import type { StatSpread, TeamMember } from "@/data/teams/team-schema";
 
 import {
+  validateArchivedTeam,
   validateTeam,
   validateTeamDetailed,
   type WarningCode,
 } from "./validate-team";
 import { createPgSchema, type PgFixture } from "../../../test/support/pg";
 
-const SV = "scarlet-violet" as const;
+const CH = "champions" as const;
 
 const ZERO_EVS: StatSpread = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
 const PERFECT_IVS: StatSpread = {
@@ -91,47 +94,47 @@ afterAll(async () => {
 
 describe("validateTeam", () => {
   it("returns [] for an empty team", async () => {
-    expect(await validateTeam([], SV, db)).toEqual([]);
+    expect(await validateTeam([], CH, db)).toEqual([]);
   });
 
   it("returns [] for a fully-legal member (clean team)", async () => {
-    const warnings = await validateTeam([legalGarchomp()], SV, db);
+    const warnings = await validateTeam([legalGarchomp()], CH, db);
     expect(warnings).toEqual([]);
   });
 
   describe("EV/IV math (AC-5.1)", () => {
-    it("flags ev_total_exceeded when the EV total tops 508", async () => {
+    it("flags ev_total_exceeded when the Stat Point total tops 66", async () => {
       const warnings = await validateTeam(
         [
           legalGarchomp({
-            evs: { hp: 252, atk: 252, def: 252, spa: 0, spd: 0, spe: 0 },
+            evs: { hp: 32, atk: 32, def: 8, spa: 0, spd: 0, spe: 0 },
           }),
         ],
-        SV,
+        CH,
         db,
       );
       const w = warnings.find((x) => x.code === "ev_total_exceeded");
       expect(w).toBeDefined();
       expect(w?.slot).toBe(0);
       expect(w?.field).toBe("evs");
-      // 252*3 = 756 ≤ 252 each, so no per-stat warning here.
+      // 32+32+8 = 72; each ≤ 32, so no per-stat warning here.
       expect(codes(warnings)).not.toContain("ev_stat_exceeded");
     });
 
-    it("flags ev_stat_exceeded (per stat) when a single EV tops 252", async () => {
+    it("flags ev_stat_exceeded (per stat) when a single Stat Point tops 32", async () => {
       const warnings = await validateTeam(
         [
           legalGarchomp({
-            evs: { hp: 253, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
+            evs: { hp: 33, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
           }),
         ],
-        SV,
+        CH,
         db,
       );
       const w = warnings.find((x) => x.code === "ev_stat_exceeded");
       expect(w).toBeDefined();
       expect(w?.field).toBe("evs.hp");
-      // 253 total is under 508 → no total warning.
+      // 33 total is under 66 → no total warning.
       expect(codes(warnings)).not.toContain("ev_total_exceeded");
     });
 
@@ -142,7 +145,7 @@ describe("validateTeam", () => {
             ivs: { hp: 32, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
           }),
         ],
-        SV,
+        CH,
         db,
       );
       const w = warnings.find((x) => x.code === "iv_out_of_range");
@@ -150,15 +153,15 @@ describe("validateTeam", () => {
       expect(w?.field).toBe("ivs.hp");
     });
 
-    it("is silent on legal EV/IV spreads", async () => {
+    it("is silent on legal Stat Point / IV spreads", async () => {
       const warnings = await validateTeam(
         [
           legalGarchomp({
-            evs: { hp: 4, atk: 252, def: 0, spa: 0, spd: 0, spe: 252 },
+            evs: { hp: 2, atk: 32, def: 0, spa: 0, spd: 0, spe: 32 },
             ivs: { ...PERFECT_IVS },
           }),
         ],
-        SV,
+        CH,
         db,
       );
       expect(codes(warnings)).not.toContain("ev_total_exceeded");
@@ -171,13 +174,14 @@ describe("validateTeam", () => {
     it("flags species_illegal for a species not in the roster", async () => {
       const warnings = await validateTeam(
         [legalGarchomp({ species: "missingno" })],
-        SV,
+        CH,
         db,
       );
       const w = warnings.find((x) => x.code === "species_illegal");
       expect(w).toBeDefined();
       expect(w?.slot).toBe(0);
       expect(w?.field).toBe("species");
+      expect(w?.message).toMatch(/not in the Champions roster/);
       // An illegal species short-circuits ability/move legality (no noise).
       expect(codes(warnings)).not.toContain("ability_not_for_species");
       expect(codes(warnings)).not.toContain("move_not_in_learnset");
@@ -186,7 +190,7 @@ describe("validateTeam", () => {
     it("flags ability_not_for_species for an ability the species can't have", async () => {
       const warnings = await validateTeam(
         [legalGarchomp({ ability: "intimidate" })],
-        SV,
+        CH,
         db,
       );
       const w = warnings.find((x) => x.code === "ability_not_for_species");
@@ -197,7 +201,7 @@ describe("validateTeam", () => {
     it("accepts a hidden ability as legal", async () => {
       const warnings = await validateTeam(
         [legalGarchomp({ ability: "rough-skin" })],
-        SV,
+        CH,
         db,
       );
       expect(codes(warnings)).not.toContain("ability_not_for_species");
@@ -210,7 +214,7 @@ describe("validateTeam", () => {
             moves: ["earthquake", "psychic", "fire-fang", "trick-room"],
           }),
         ],
-        SV,
+        CH,
         db,
       );
       const offenders = warnings.filter(
@@ -226,18 +230,19 @@ describe("validateTeam", () => {
     it("flags item_illegal for an item not in the format master list", async () => {
       const warnings = await validateTeam(
         [legalGarchomp({ item: "choice-band" })],
-        SV,
+        CH,
         db,
       );
       const w = warnings.find((x) => x.code === "item_illegal");
       expect(w).toBeDefined();
       expect(w?.field).toBe("item");
+      expect(w?.message).toMatch(/not in the Champions roster/);
     });
 
     it("is silent on a legal item", async () => {
       const warnings = await validateTeam(
         [legalGarchomp({ item: "leftovers" })],
-        SV,
+        CH,
         db,
       );
       expect(codes(warnings)).not.toContain("item_illegal");
@@ -253,7 +258,7 @@ describe("validateTeam", () => {
             moves: ["earthquake", "waterfall", "ice-punch", "superpower"],
           }),
         ],
-        SV,
+        CH,
         db,
       );
       const w = warnings.find((x) => x.code === "item_illegal");
@@ -272,7 +277,7 @@ describe("validateTeam", () => {
             moves: ["earthquake", "waterfall", "ice-punch", "superpower"],
           }),
         ],
-        SV,
+        CH,
         db,
       );
       expect(codes(warnings)).not.toContain("item_illegal");
@@ -283,7 +288,7 @@ describe("validateTeam", () => {
     it("flags duplicate_species (species clause)", async () => {
       const warnings = await validateTeam(
         [legalGarchomp(), legalGarchomp({ item: null })],
-        SV,
+        CH,
         db,
       );
       const w = warnings.find((x) => x.code === "duplicate_species");
@@ -297,7 +302,7 @@ describe("validateTeam", () => {
           legalGarchomp(),
           legalGarchomp({ species: "ninetales", ability: "flash-fire", moves: ["will-o-wisp", "trick-room", "flamethrower", "will-o-wisp"] }),
         ],
-        SV,
+        CH,
         db,
       );
       // Both hold "leftovers" → item clause; different species → no species clause.
@@ -315,7 +320,7 @@ describe("validateTeam", () => {
           member({ species: "tauros" }),
           member({ species: "tauros-paldea-combat" }),
         ],
-        SV,
+        CH,
         db,
       );
       const dups = warnings.filter((x) => x.code === "duplicate_species");
@@ -332,7 +337,7 @@ describe("validateTeam", () => {
           member({ species: "ninetales", item: null }), // partial, different species
           member(), // empty slot
         ],
-        SV,
+        CH,
         db,
       );
       expect(codes(warnings)).not.toContain("duplicate_species");
@@ -342,7 +347,7 @@ describe("validateTeam", () => {
 
   describe("incomplete (BR-T4, informational)", () => {
     it("flags an empty species slot", async () => {
-      const warnings = await validateTeam([member()], SV, db);
+      const warnings = await validateTeam([member()], CH, db);
       const w = warnings.find((x) => x.code === "incomplete");
       expect(w).toBeDefined();
       expect(w?.slot).toBe(0);
@@ -351,14 +356,14 @@ describe("validateTeam", () => {
     it("flags a species with fewer than 4 moves", async () => {
       const warnings = await validateTeam(
         [legalGarchomp({ moves: ["earthquake", "dragon-claw"] })],
-        SV,
+        CH,
         db,
       );
       expect(codes(warnings)).toContain("incomplete");
     });
 
     it("is silent when species is set and there are 4 moves", async () => {
-      const warnings = await validateTeam([legalGarchomp()], SV, db);
+      const warnings = await validateTeam([legalGarchomp()], CH, db);
       expect(codes(warnings)).not.toContain("incomplete");
     });
   });
@@ -367,7 +372,7 @@ describe("validateTeam", () => {
     it("flags a complete member (4 moves) with no held item", async () => {
       const warnings = await validateTeam(
         [legalGarchomp({ item: null })],
-        SV,
+        CH,
         db,
       );
       const w = warnings.find((x) => x.code === "item_missing");
@@ -379,7 +384,7 @@ describe("validateTeam", () => {
     });
 
     it("is silent when the member holds an item", async () => {
-      const warnings = await validateTeam([legalGarchomp()], SV, db);
+      const warnings = await validateTeam([legalGarchomp()], CH, db);
       expect(codes(warnings)).not.toContain("item_missing");
     });
 
@@ -388,7 +393,7 @@ describe("validateTeam", () => {
       // the item requirement (an explicitly-requested rough core).
       const warnings = await validateTeam(
         [legalGarchomp({ item: null, moves: ["earthquake", "dragon-claw"] })],
-        SV,
+        CH,
         db,
       );
       expect(codes(warnings)).toContain("incomplete");
@@ -404,15 +409,15 @@ describe("validateTeam", () => {
           moves: ["earthquake", "psychic", "fire-fang", "trick-room"], // 2 illegal moves
         }),
       ];
-      const flat = await validateTeam(team, SV, db);
-      const detailed = await validateTeamDetailed(team, SV, db);
+      const flat = await validateTeam(team, CH, db);
+      const detailed = await validateTeamDetailed(team, CH, db);
       expect(detailed.warnings).toEqual(flat);
     });
 
     it("populates legalMoves + legalAbilities + legalItems for a found species", async () => {
       const { legalMoves, legalAbilities, legalItems } = await validateTeamDetailed(
         [legalGarchomp()],
-        SV,
+        CH,
         db,
       );
       // Slug-sorted move slugs from the learnset Set.
@@ -434,7 +439,7 @@ describe("validateTeam", () => {
     it("has no entry for an illegal species", async () => {
       const { legalMoves, legalAbilities } = await validateTeamDetailed(
         [legalGarchomp({ species: "missingno" })],
-        SV,
+        CH,
         db,
       );
       expect(legalMoves.has("missingno")).toBe(false);
@@ -454,7 +459,7 @@ describe("validateTeam", () => {
           ivs: { hp: 99, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
         }),
       ],
-      SV,
+      CH,
       db,
     );
     expect(Array.isArray(warnings)).toBe(true);
@@ -462,56 +467,36 @@ describe("validateTeam", () => {
   });
 });
 
-describe("validateTeam — gen-3 Future-item exclusion (#5, ingest Future-entity filter)", () => {
-  // A SEPARATE schema/fixture from the describe above: the shared "tools" seed
-  // has no gen-3 row-set, so this adds a minimal one directly via `after` —
-  // just the gen-3 item master list (searchable_names, kind "item"), curated to
-  // mirror what the real ingest now produces post-fix: ordinary gen-3-legal
-  // items present, "absolite" (a Future item under Dex.forGen(3) — a Gen 6 Mega
-  // Stone) absent. No gen-3 species/learnset rows are needed since item
-  // legality is checked independently of species (validate-team.ts:294).
-  const GEN3 = "gen-3" as const;
-
-  let gen3Fix: PgFixture;
-  let gen3Db: OakDb;
-
-  beforeAll(async () => {
-    gen3Fix = await createPgSchema({
-      seed: "tools",
-      after: async (db) => {
-        const { searchable_names } = await import("@/data/schema");
-        await db.insert(searchable_names).values([
-          { format: GEN3, kind: "item", slug: "leftovers", display_name: "Leftovers" },
-          { format: GEN3, kind: "item", slug: "choice-band", display_name: "Choice Band" },
-          // Deliberately NOT seeded: "absolite" — excluded from gen-3 as a
-          // Future item, per the gen-provider.ts fix.
-        ]);
-      },
-    });
-    gen3Db = gen3Fix.db;
-  });
-
-  afterAll(async () => {
-    await gen3Fix.cleanup();
-  });
-
-  it("flags item_illegal for Absolite held in a gen-3 team (Future item, not in the gen-3 master list)", async () => {
-    const warnings = await validateTeam(
-      [member({ item: "absolite" })],
-      GEN3,
-      gen3Db,
+describe("validateArchivedTeam (CF-TEAM-AC-5.4)", () => {
+  it("flags off-roster names against Champions and skips Stat Point noise", async () => {
+    const warnings = await validateArchivedTeam(
+      [
+        legalGarchomp({
+          species: "missingno",
+          evs: { hp: 252, atk: 252, def: 4, spa: 0, spd: 0, spe: 0 },
+        }),
+      ],
+      db,
     );
-    const w = warnings.find((x) => x.code === "item_illegal");
+    const w = warnings.find((x) => x.code === "species_illegal");
     expect(w).toBeDefined();
-    expect(w?.field).toBe("item");
+    expect(w?.message).toMatch(/not in the Champions roster/);
+    expect(codes(warnings)).not.toContain("ev_total_exceeded");
+    expect(codes(warnings)).not.toContain("ev_stat_exceeded");
+    expect(codes(warnings)).not.toContain("incomplete");
   });
 
-  it("is silent on an ordinary gen-3-legal item", async () => {
-    const warnings = await validateTeam(
-      [member({ item: "leftovers" })],
-      GEN3,
-      gen3Db,
+  it("is silent on a Champions-roster member even with leftover 252 EVs", async () => {
+    const warnings = await validateArchivedTeam(
+      [
+        legalGarchomp({
+          evs: { hp: 252, atk: 252, def: 4, spa: 0, spd: 0, spe: 0 },
+        }),
+      ],
+      db,
     );
-    expect(codes(warnings)).not.toContain("item_illegal");
+    expect(codes(warnings)).not.toContain("ev_total_exceeded");
+    expect(codes(warnings)).not.toContain("ev_stat_exceeded");
+    expect(codes(warnings)).not.toContain("species_illegal");
   });
 });

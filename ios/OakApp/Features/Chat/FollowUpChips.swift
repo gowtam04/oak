@@ -37,15 +37,8 @@ enum FollowUpChips {
   ) -> [FollowUpChip] {
     var chips: [FollowUpChip] = []
 
-    if let impliedFormat {
-      chips.append(
-        FollowUpChip(
-          kind: .scope,
-          label: "Switch to \(impliedFormat.rawValue).",
-          target: impliedFormat.rawValue
-        )
-      )
-    }
+    _ = impliedFormat
+    // Champions-first: never offer a "Switch to <format>" chip (CF-UI-AC-1.1).
 
     if let subjects = answer.subjects, !subjects.isEmpty {
       for subject in subjects.prefix(dexCap) {

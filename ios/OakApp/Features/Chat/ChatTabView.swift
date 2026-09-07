@@ -51,7 +51,7 @@ struct ChatTabView: View {
         path = [.existing(ConversationSummary(
           id: id,
           title: "Conversation",
-          format: appState.lastUsedScope ?? .nationalDex,
+          format: .champions,
           pinned: false,
           updatedAt: 0
         ))]

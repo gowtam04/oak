@@ -130,7 +130,11 @@ data class Team(
     val members: List<TeamMember>,
     val createdAt: Long,
     val updatedAt: Long,
-)
+) {
+    /** Archived iff the stored format is not Champions (ADR-3, no extra column). */
+    val isArchived: Boolean get() = format.isArchived
+    val isLiving: Boolean get() = format.isLiving
+}
 
 /**
  * `GET /api/teams` list-row projection (NOT the full [Team]) — mirrors
@@ -146,7 +150,11 @@ data class TeamSummary(
     val incomplete: Boolean,
     val species: List<String>,
     val updatedAt: Long,
-)
+) {
+    /** Archived iff the stored format is not Champions (ADR-3). */
+    val isArchived: Boolean get() = format.isArchived
+    val isLiving: Boolean get() = format.isLiving
+}
 
 /**
  * One entry in the `notes` array of `POST /api/teams/import` (Showdown import)

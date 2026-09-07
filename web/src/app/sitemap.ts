@@ -1,16 +1,15 @@
 import type { MetadataRoute } from "next";
 import { SITE_ORIGIN } from "@/lib/site";
-import { DEFAULT_META_FORMAT } from "@/data/meta-formats";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Shards: 0 = static pages; 1 = pokemon, 2 = moves, 3 = abilities, 4 = items
 // (filled by the reference-pages workstream via dynamic-imported repos — those
-// imports MUST stay inside the function bodies; see CLAUDE.md env-throw gotcha);
-// 5 = meta species drill-ins (B-5 — see its own degradation contract below).
+// imports MUST stay inside the function bodies; see CLAUDE.md env-throw gotcha).
+// Smogon OU shard 5 is retired (ADR-5) — Usage is a static /usage URL on shard 0.
 export async function generateSitemaps() {
-  return [{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }];
+  return [{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }];
 }
 
 export default async function sitemap({ id }: { id: number }): Promise<MetadataRoute.Sitemap> {
@@ -30,43 +29,41 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
       { url: `${SITE_ORIGIN}/moves`, changeFrequency: "monthly", priority: 0.7 },
       { url: `${SITE_ORIGIN}/abilities`, changeFrequency: "monthly", priority: 0.7 },
       { url: `${SITE_ORIGIN}/items`, changeFrequency: "monthly", priority: 0.7 },
-      { url: `${SITE_ORIGIN}/meta`, changeFrequency: "monthly", priority: 0.6 },
-      {
-        url: `${SITE_ORIGIN}/meta/${DEFAULT_META_FORMAT}`,
-        changeFrequency: "weekly",
-        priority: 0.6,
-      },
+      { url: `${SITE_ORIGIN}/usage`, changeFrequency: "hourly", priority: 0.7 },
       { url: `${SITE_ORIGIN}/teams`, changeFrequency: "monthly", priority: 0.6 },
       { url: `${SITE_ORIGIN}/privacy`, changeFrequency: "yearly", priority: 0.2 },
     ];
   }
 
-  // Shards 1–4 read the Postgres index. Both imports are dynamic and stay
-  // INSIDE the function body — never top-level — so `next build`'s static
-  // evaluation never touches @/data/db (server-only + a live DATABASE_URL) or
-  // @/env (throws on a missing XAI_API_KEY); see CLAUDE.md's env-throw gotcha.
-  // We call the *Uncached loaders (the same ones the /pokedex, /moves,
-  // /abilities, /items index pages assemble their rows from) rather than
-  // reimplementing repo calls, so a shard's URL set can never drift from what
-  // its index page actually renders. A missing/unbuilt index is a genuine 500
-  // for these shards, NOT an empty array: the loaders throw `index_unavailable`
-  // in that case and we deliberately let it propagate here so a crawler
-  // retries instead of caching an empty sitemap as "the site has zero
-  // entities."
+  // Shards 1–4 read the Champions Postgres index. Imports stay INSIDE the
+  // function body so `next build` never evaluates @/data/db / @/env. A
+  // missing/unbuilt Champions index is a genuine 500 (crawler retries), not
+  // an empty sitemap.
   const { db } = await import("@/data/db");
-  const {
-    loadPokedexIndexUncached,
-    loadMovesIndexUncached,
-    loadAbilitiesIndexUncached,
-    loadItemsIndexUncached,
-    referenceLastModifiedUncached,
-  } = await import("@/data/reference-pages");
-
-  const lastModified = (await referenceLastModifiedUncached(db)) ?? undefined;
+  const { CHAMPIONS_FORMAT } = await import("@/data/formats");
+  const { isIndexAvailable } = await import("@/data/entity-profile");
+  if (!(await isIndexAvailable(CHAMPIONS_FORMAT, db))) {
+    throw new Error("index_unavailable");
+  }
+  const { ingest_meta } = await import("@/data/schema");
+  const { eq } = await import("drizzle-orm");
+  let lastModified: Date | undefined;
+  try {
+    const rows = await db
+      .select({ ts: ingest_meta.last_success_at })
+      .from(ingest_meta)
+      .where(eq(ingest_meta.format, CHAMPIONS_FORMAT))
+      .limit(1);
+    const ts = rows[0]?.ts;
+    lastModified = ts != null ? new Date(ts) : undefined;
+  } catch {
+    lastModified = undefined;
+  }
 
   if (shardId === 1) {
-    const { rows, extras } = await loadPokedexIndexUncached(db);
-    return [...rows, ...extras].map((r) => ({
+    const { listAllPokemon } = await import("@/data/repos/pokedex-repo");
+    const rows = await listAllPokemon(CHAMPIONS_FORMAT, db);
+    return rows.map((r) => ({
       url: `${SITE_ORIGIN}/pokedex/${r.slug}`,
       ...(lastModified ? { lastModified } : {}),
       changeFrequency: "weekly" as const,
@@ -74,7 +71,8 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
     }));
   }
   if (shardId === 2) {
-    const { rows } = await loadMovesIndexUncached(db);
+    const { listNamesByKind } = await import("@/data/repos/reference-cache");
+    const rows = await listNamesByKind("move", CHAMPIONS_FORMAT, db);
     return rows.map((r) => ({
       url: `${SITE_ORIGIN}/moves/${r.slug}`,
       ...(lastModified ? { lastModified } : {}),
@@ -83,7 +81,8 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
     }));
   }
   if (shardId === 3) {
-    const { rows } = await loadAbilitiesIndexUncached(db);
+    const { listNamesByKind } = await import("@/data/repos/reference-cache");
+    const rows = await listNamesByKind("ability", CHAMPIONS_FORMAT, db);
     return rows.map((r) => ({
       url: `${SITE_ORIGIN}/abilities/${r.slug}`,
       ...(lastModified ? { lastModified } : {}),
@@ -92,41 +91,22 @@ export default async function sitemap({ id }: { id: number }): Promise<MetadataR
     }));
   }
   if (shardId === 4) {
-    const { rows } = await loadItemsIndexUncached(db);
-    return rows.map((r) => ({
-      url: `${SITE_ORIGIN}/items/${r.slug}`,
-      ...(lastModified ? { lastModified } : {}),
-      changeFrequency: "monthly" as const,
-      priority: 0.5,
-    }));
-  }
-
-  if (shardId === 5) {
-    // Meta drill-ins deliberately DO NOT share shards 1-4's index_unavailable
-    // propagation above: `meta_snapshot`/`meta_usage` are filled by a separate,
-    // manual `sync:meta` step (never by `ingest`), so a never-synced ladder is
-    // an EXPECTED, temporary state, not a broken index (see
-    // src/data/meta-pages.ts's module doc). `loadMetaLeaderboardUncached`
-    // reflects that with `available: false` instead of throwing, so this
-    // shard contributes zero URLs for an unsynced ladder rather than 500ing.
-    const { META_FORMATS } = await import("@/data/meta-formats");
-    const { loadMetaLeaderboardUncached } = await import("@/data/meta-pages");
-
-    const entries: MetadataRoute.Sitemap = [];
-    for (const format of META_FORMATS) {
-      const view = await loadMetaLeaderboardUncached(format.id, undefined, db);
-      if (!view.available) continue;
-      const snapshotModified = new Date(view.snapshot.fetchedAt);
-      for (const row of view.rows) {
-        entries.push({
-          url: `${SITE_ORIGIN}/meta/${format.id}/${row.species}`,
-          lastModified: snapshotModified,
-          changeFrequency: "monthly" as const,
-          priority: 0.5,
-        });
-      }
-    }
-    return entries;
+    const { listNamesByKind } = await import("@/data/repos/reference-cache");
+    const { loadChampionsItemExclusions } = await import(
+      "@/data/repos/champions-items-repo"
+    );
+    const [rows, excluded] = await Promise.all([
+      listNamesByKind("item", CHAMPIONS_FORMAT, db),
+      loadChampionsItemExclusions({ db }),
+    ]);
+    return rows
+      .filter((r) => !excluded.has(r.slug))
+      .map((r) => ({
+        url: `${SITE_ORIGIN}/items/${r.slug}`,
+        ...(lastModified ? { lastModified } : {}),
+        changeFrequency: "monthly" as const,
+        priority: 0.5,
+      }));
   }
 
   throw new Error(`unknown sitemap shard: ${id}`);

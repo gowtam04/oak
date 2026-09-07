@@ -55,4 +55,27 @@ describe("UsageBlock", () => {
     );
     expect(screen.queryByText("Top moves")).not.toBeInTheDocument();
   });
+
+  it("points at live Champions usage, not Smogon /meta (CF-DEX-AC-1.6)", () => {
+    const liveHref = { slug: "garchomp" };
+    render(
+      <UsageBlock
+        {...liveHref}
+        usage={{
+          season: "Reg M-B, Season 3",
+          usagePercent: 12.4,
+          topMoves: [{ name: "Earthquake", pct: 60 }],
+          topItems: [],
+          topTeammates: [],
+          attribution: "Usage data via Pokémon Champions ranked ladder.",
+        }}
+      />,
+    );
+    const html = document.body.innerHTML;
+    expect(html).not.toMatch(/smogon/i);
+    expect(html).not.toMatch(/\/meta/);
+    expect(html).not.toMatch(/gen9ou/);
+    const link = screen.getByRole("link");
+    expect(link.getAttribute("href")).toMatch(/^\/(usage|api\/usage)\/garchomp/);
+  });
 });

@@ -20,6 +20,7 @@ import {
   placeSpeciesOnTeam,
 } from "@/data/teams/place-on-team";
 import type { TeamMember } from "@/data/teams/team-schema";
+import { CHAMPIONS_FORMAT } from "@/data/formats";
 import { formatLabel, titleizeSlug } from "@/components/teams/display-names";
 
 import "./add-to-team.css";
@@ -42,7 +43,6 @@ function padMembers(members: TeamMember[]): TeamMember[] {
 
 export default function AddToTeamPicker({
   incoming,
-  format,
   onClose,
 }: AddToTeamPickerProps) {
   const router = useRouter();
@@ -58,7 +58,9 @@ export default function AddToTeamPicker({
   useEffect(() => {
     let active = true;
     void listTeams().then((list) => {
-      if (active) setTeams(list);
+      if (active) {
+        setTeams(list.filter((t) => t.format === CHAMPIONS_FORMAT));
+      }
     });
     return () => {
       active = false;
@@ -114,7 +116,7 @@ export default function AddToTeamPicker({
     const members = padMembers([]);
     members[0] = incoming;
     const saved = await createTeam({
-      format,
+      format: CHAMPIONS_FORMAT,
       members,
       name: titleizeSlug(incoming.species, "New team"),
     });

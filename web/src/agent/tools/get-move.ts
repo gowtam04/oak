@@ -3,9 +3,9 @@
  *
  * Reads the move's mechanical details from the read-through reference cache
  * (DS-4). Optionally augments a successful hit with the Gen-9 learner count from
- * the learnset repo (DS-3). Misses / upstream failures pass straight through:
- *   - { found: false, suggestions: [...] }  (Champions mode: probed against the
- *     mainline Gen 9 index and flagged with `exists_in_standard`)
+ * the learnset repo (DS-3; field name `gen9_learner_count` is historical).
+ * Misses / upstream failures pass straight through:
+ *   - { found: false, suggestions: [...] }  (plain miss — no exists_in_standard)
  *   - { error: "upstream_unavailable" }
  */
 
@@ -18,7 +18,7 @@ import {
 } from "@/agent/schemas";
 import { getReference } from "@/data/repos/reference-cache";
 import { gen9LearnerCount } from "@/data/repos/learnset-repo";
-import { formatForMode, CHAMPIONS_FORMAT, STANDARD_FORMAT } from "@/data/formats";
+import { formatForMode } from "@/data/formats";
 import type { OakDb } from "@/data/db";
 
 const description =
@@ -26,7 +26,7 @@ const description =
   "damage class (physical/special/status), target, and effect text. Use " +
   "whenever reasoning depends on how a move behaves (e.g. checking that Fake " +
   "Out is a priority move). Optionally returns the count of Pokémon that learn " +
-  "it in Gen 9.";
+  "it in the current Champions roster.";
 
 /** True when a reference result is a successful detail record (found: true). */
 function isFound(ref: unknown): ref is { found: true } {
@@ -51,10 +51,6 @@ export const getMoveTool: ToolDef = {
 
     const ref = (await getReference("move", name, format, ctx.db)) as GetMoveOutput;
     if (!isFound(ref)) {
-      if (format === CHAMPIONS_FORMAT && "found" in ref && ref.found === false) {
-        const std = await getReference("move", name, STANDARD_FORMAT, ctx.db);
-        return { ...ref, exists_in_standard: "found" in std && std.found === true };
-      }
       return ref;
     }
 

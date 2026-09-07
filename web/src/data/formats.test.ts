@@ -1,12 +1,13 @@
 /**
- * Unit tests for the pure format↔mode mappings (generation-scope GS-D1/GS-D2,
- * widened by the National Dex scope feature to 11 formats).
+ * Unit tests for the pure format↔mode mappings.
+ *
+ * Champions-first (ADR-3 / ADR-4): `FORMATS` remains the historical stored-row
+ * union so archived teams and old conversations still decode (`isFormat("gen-7")`
+ * etc.). Ingest / product default is Champions only — `DEFAULT_FORMATS` is
+ * exactly `["champions"]`, not the full `FORMATS` tuple.
  *
  * `formats.ts` is a client-safe portable module (only type-only imports), so
- * this needs no DB, no @pkmn, and no `server-only` mock. It pins:
- *   - the stable 11-entry FORMATS tuple,
- *   - the formatForMode/modeForFormat round-trip for every format + mode,
- *   - the genNumberForFormat / basisForFormat tables.
+ * this needs no DB, no @pkmn, and no `server-only` mock.
  */
 
 import { describe, expect, it } from "vitest";
@@ -14,10 +15,10 @@ import { describe, expect, it } from "vitest";
 import {
   FORMATS,
   DEFAULT_FORMATS,
+  SCOPE_PICKER_ORDER,
   STANDARD_FORMAT,
   CHAMPIONS_FORMAT,
   NATDEX_FORMAT,
-  SCOPE_PICKER_ORDER,
   formatForMode,
   modeForFormat,
   genNumberForFormat,
@@ -28,7 +29,7 @@ import {
 import type { AgentMode } from "@/agent/types";
 
 describe("FORMATS", () => {
-  it("is the stable 11-entry tuple in the documented order (GS-D1, National Dex scope)", () => {
+  it("keeps the historical stored-row union so archived formats still decode (ADR-3)", () => {
     expect([...FORMATS]).toEqual([
       "scarlet-violet",
       "champions",
@@ -44,14 +45,24 @@ describe("FORMATS", () => {
     ]);
   });
 
-  it("DEFAULT_FORMATS is FORMATS (ingest builds everything by default)", () => {
-    expect(DEFAULT_FORMATS).toBe(FORMATS);
+  it("DEFAULT_FORMATS is exactly [\"champions\"] — not FORMATS (ADR-4, CF-DATA-BR-3)", () => {
+    expect([...DEFAULT_FORMATS]).toEqual(["champions"]);
+    expect(DEFAULT_FORMATS).not.toEqual(FORMATS);
+    expect(DEFAULT_FORMATS).not.toContain("gen-7");
+    expect(DEFAULT_FORMATS).not.toContain("national-dex");
+    expect(DEFAULT_FORMATS).not.toContain("scarlet-violet");
   });
 
   it("keeps the standard/champions/national-dex constants pointed at their formats", () => {
     expect(STANDARD_FORMAT).toBe("scarlet-violet");
     expect(CHAMPIONS_FORMAT).toBe("champions");
     expect(NATDEX_FORMAT).toBe("national-dex");
+  });
+
+  it("SCOPE_PICKER_ORDER is Champions-only — not an eleven-scope picker (ADR-3)", () => {
+    expect([...SCOPE_PICKER_ORDER]).toEqual(["champions"]);
+    expect(SCOPE_PICKER_ORDER).not.toContain("national-dex");
+    expect(SCOPE_PICKER_ORDER).not.toContain("gen-7");
   });
 });
 
@@ -156,33 +167,6 @@ describe("basisForFormat", () => {
   });
 });
 
-describe("SCOPE_PICKER_ORDER", () => {
-  it("contains exactly the same members as FORMATS (no additions or omissions)", () => {
-    expect([...SCOPE_PICKER_ORDER].sort()).toEqual([...FORMATS].sort());
-  });
-
-  it("starts with national-dex (the default scope)", () => {
-    expect(SCOPE_PICKER_ORDER[0]).toBe("national-dex");
-  });
-
-  it("lists champions next, then mainline gens in release-date descending order", () => {
-    // Expected: national-dex, champions, scarlet-violet, gen-8..gen-1
-    expect([...SCOPE_PICKER_ORDER]).toEqual([
-      "national-dex",
-      "champions",
-      "scarlet-violet",
-      "gen-8",
-      "gen-7",
-      "gen-6",
-      "gen-5",
-      "gen-4",
-      "gen-3",
-      "gen-2",
-      "gen-1",
-    ]);
-  });
-});
-
 describe("isFormat", () => {
   it("accepts every FORMATS entry and rejects near-misses", () => {
     for (const f of FORMATS) expect(isFormat(f)).toBe(true);
@@ -191,7 +175,10 @@ describe("isFormat", () => {
     }
   });
 
-  it("now accepts gen-4 (widened by the National Dex scope feature)", () => {
-    expect(isFormat("gen-4")).toBe(true);
+  it("accepts archived stored-row values like gen-7 (ADR-3)", () => {
+    expect(isFormat("gen-7")).toBe(true);
+    expect(isFormat("national-dex")).toBe(true);
+    expect(isFormat("scarlet-violet")).toBe(true);
+    expect(isFormat("champions")).toBe(true);
   });
 });

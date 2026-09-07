@@ -1,6 +1,9 @@
 package ai.gowtam.oak.features.dex
 
 import ai.gowtam.oak.features.artifact.EntityDetail
+import ai.gowtam.oak.features.usage.UsageLeaderboardScreen
+import ai.gowtam.oak.features.usage.UsageLeaderboardViewModel
+import ai.gowtam.oak.services.UsageService
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
@@ -72,12 +75,15 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun DexListScreen(
     viewModel: DexViewModel,
+    usage: UsageService,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
+    onApplySpecies: ((String) -> Unit)? = null,
 ) {
     val list by viewModel.list.collectAsState()
     val oak = LocalOakColors.current
-    var scopeMenuOpen by remember { mutableStateOf(false) }
+    val usageViewModel = remember(usage) { UsageLeaderboardViewModel(usage) }
+    val showingUsage = list.section == DexSection.Usage
 
     Scaffold(
         modifier = modifier,
@@ -85,30 +91,10 @@ fun DexListScreen(
             OakTopBar(
                 title = { Text("Dex", modifier = Modifier.semantics { heading() }) },
                 actions = {
-                    Box {
-                        TextButton(onClick = { scopeMenuOpen = true }) {
-                            Text(list.format.shortLabel, color = oak.onRed, fontWeight = FontWeight.SemiBold)
-                        }
-                        DropdownMenu(
-                            expanded = scopeMenuOpen,
-                            onDismissRequest = { scopeMenuOpen = false },
-                        ) {
-                            Format.knownCases.forEach { format ->
-                                DropdownMenuItem(
-                                    text = { Text(format.displayLabel) },
-                                    onClick = {
-                                        scopeMenuOpen = false
-                                        viewModel.selectFormat(format)
-                                    },
-                                    leadingIcon = if (format == list.format) {
-                                        { Icon(Icons.Filled.Check, contentDescription = null, tint = oak.accent) }
-                                    } else {
-                                        null
-                                    },
-                                )
-                            }
-                        }
-                    }
+                    ai.gowtam.oak.ui.RegulationChip(
+                        onLid = true,
+                        modifier = Modifier.padding(end = OakSpacing.md),
+                    )
                 },
             )
         },
@@ -124,6 +110,15 @@ fun DexListScreen(
                 onSelect = viewModel::selectSection,
                 modifier = Modifier.padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
             )
+
+            if (showingUsage) {
+                UsageLeaderboardScreen(
+                    viewModel = usageViewModel,
+                    onApplySpecies = onApplySpecies,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+                return@Column
+            }
 
             OutlinedTextField(
                 value = list.query,
@@ -262,9 +257,9 @@ private fun EmptyMatches(hasQuery: Boolean, modifier: Modifier = Modifier) {
         Spacer(Modifier.size(OakSpacing.xs))
         Text(
             if (hasQuery) {
-                "Try a different name or scope."
+                "Nothing on the Champions roster matched."
             } else {
-                "No entries in this scope."
+                "No entries in the Champions roster."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = oak.textMuted,
@@ -286,6 +281,7 @@ fun DexDetailScreen(
     onBack: () -> Unit,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
+    onApplySpecies: ((String) -> Unit)? = null,
 ) {
     val detail by viewModel.detail.collectAsState()
     val list by viewModel.list.collectAsState()
@@ -327,12 +323,25 @@ fun DexDetailScreen(
                     )
                 }
                 is DexViewModel.DetailState.Ready -> {
-                    EntityDetail(
-                        artifact = d.artifact,
-                        requestFormat = list.format,
-                        onOpen = onOpen,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        if (kind == EntityKind.POKEMON && onApplySpecies != null) {
+                            ai.gowtam.oak.ui.OakButton(
+                                onClick = { onApplySpecies(query) },
+                                style = ai.gowtam.oak.ui.OakButtonStyle.Primary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
+                            ) {
+                                Text("Apply this Champions set")
+                            }
+                        }
+                        EntityDetail(
+                            artifact = d.artifact,
+                            requestFormat = Format.Champions,
+                            onOpen = onOpen,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
                 is DexViewModel.DetailState.Unavailable -> {
                     Column(
@@ -351,7 +360,7 @@ fun DexDetailScreen(
                         )
                         Spacer(Modifier.size(OakSpacing.sm))
                         Text(
-                            "Oak doesn't have a ${d.kind.rawValue} profile for “${d.query}” in this format.",
+                            "Oak doesn't have a ${d.kind.rawValue} profile for “${d.query}” in the Champions roster.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = oak.textMuted,
                             textAlign = TextAlign.Center,

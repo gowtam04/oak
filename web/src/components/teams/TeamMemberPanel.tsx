@@ -1,9 +1,11 @@
 /**
  * TeamMemberPanel — the focused editor for ONE team slot (set).
  *
- * Renders every competitive field of a {@link TeamMember} (species / ability /
- * item / 4 moves / nature / tera type / level / EV + IV spreads, plus the
- * cosmetic nickname) and emits an updated member on each edit. Slugs are stored,
+ * Renders every competitive field of a {@link TeamMember}. The living Champions
+ * editor (CF-TEAM-AC-1.2–1.3) is species / ability / item / 4 moves / nature /
+ * Stat Points — no Tera, no IV knobs, no level knob (level is 50). Other formats
+ * keep the historical EV / Tera / level fields for tests and archive display
+ * when those knobs are not hidden. Slugs are stored,
  * `null` = empty (BR-T4); a partial member is valid. The free-text slug inputs
  * are now {@link EntityPicker} autocompletes — but each still keeps its
  * `data-testid` and commits the typed/selected value verbatim via `onChange`, so
@@ -76,6 +78,13 @@ const STAT_ROWS: StatRow[] = [
   { spread: "spe", base: "speed", label: "Spe", isHp: false },
 ];
 
+const OFF_ROSTER_CODES = new Set([
+  "species_illegal",
+  "ability_not_for_species",
+  "item_illegal",
+  "move_not_in_learnset",
+]);
+
 function natureEffectFor(
   nature: string | null,
   stat: SpreadKey,
@@ -142,6 +151,8 @@ export interface TeamMemberPanelProps {
   spriteRef?: SpriteRef;
   /** Data scope for the autocomplete pickers. */
   format?: Format;
+  /** Archived / view-only: no edits, no apply-set, no remove (CF-TEAM-AC-5.3). */
+  readOnly?: boolean;
   onChange: (next: TeamMember) => void;
   onRemove: () => void;
   onMoveUp?: () => void;
@@ -157,6 +168,7 @@ export default function TeamMemberPanel({
   baseStats,
   spriteRef,
   format = "scarlet-violet",
+  readOnly = false,
   onChange,
   onRemove,
   onMoveUp,
@@ -165,17 +177,58 @@ export default function TeamMemberPanel({
   canMoveDown = false,
 }: TeamMemberPanelProps) {
   const id = (suffix: string) => `member-${slot}-${suffix}`;
+  const locked = readOnly;
+  // Living Champions editor: Stat Points 66/32, no Tera/IV/level.
+  // Archived readOnly keeps stored spreads (and stored Tera) without that chrome.
+  const livingChampions = !locked && format === "champions";
+  const offRosterLabel = "not in the Champions roster";
+  const warningMarksField = (field: string) =>
+    warnings.some((w) => {
+      if (w.field !== field && !(field === "species" && w.field == null && w.code === "species_illegal")) {
+        return false;
+      }
+      return (
+        OFF_ROSTER_CODES.has(w.code) ||
+        /not in the Champions roster/i.test(w.message)
+      );
+    });
+  // Production validateArchivedTeam skips ability/move/item when the species
+  // itself misses the roster — those stored names still cannot be Champions-legal.
+  const speciesOffRoster =
+    locked &&
+    (warningMarksField("species") ||
+      warnings.some((w) => w.code === "species_illegal"));
+  const fieldOffRoster = (field: string) => {
+    if (!locked) {
+      return warnings.some(
+        (w) =>
+          w.field === field &&
+          /not in the Champions roster/i.test(w.message),
+      );
+    }
+    if (warningMarksField(field)) return true;
+    if (!speciesOffRoster) return false;
+    if (field === "ability") return Boolean(member.ability);
+    if (field === "item") return Boolean(member.item);
+    const moveMatch = /^moves\[(\d+)\]$/.exec(field);
+    if (moveMatch) {
+      const i = Number(moveMatch[1]);
+      return Boolean(member.moves[i]);
+    }
+    return false;
+  };
 
-  // EV / stat-point budget for this format (Champions caps far tighter, no Tera).
-  const budget = evBudgetFor(format);
+  const budget = evBudgetFor(livingChampions ? "champions" : format === "champions" ? "scarlet-violet" : format);
+  const investmentWord = livingChampions ? "Stat Points" : "EV";
 
   // Legal movepool for the focused species — the Move pickers offer ONLY these
   // (a species' learnset), not the whole move index. Refetched per species.
   // Carries the F1 metadata (type/damage_class/power) alongside slug/name.
+  // Archived view-only skips the fetch (no other-game Dex; stored names render).
   const [movepool, setMovepool] = useState<LearnsetOption[]>([]);
   useEffect(() => {
     const species = member.species;
-    if (!species) {
+    if (!species || locked) {
       setMovepool([]);
       return;
     }
@@ -186,11 +239,15 @@ export default function TeamMemberPanel({
     return () => {
       active = false;
     };
-  }, [member.species, format]);
+  }, [member.species, format, locked]);
 
-  const set = (patch: Partial<TeamMember>) => onChange({ ...member, ...patch });
+  const set = (patch: Partial<TeamMember>) => {
+    if (locked) return;
+    onChange({ ...member, ...patch });
+  };
 
   const setSpread = (kind: "evs" | "ivs", key: SpreadKey, raw: string) => {
+    if (locked) return;
     // EVs clamp to the format ceiling (32 in Champions, 255 warn-but-allow in SV);
     // IVs to the legal 0..31 superset (the input itself caps at 31).
     const max = kind === "evs" ? budget.clampMax : 255;
@@ -209,14 +266,24 @@ export default function TeamMemberPanel({
   // Moves are edited as four boxes; emit the non-empty slugs in order.
   const moveInputs = [0, 1, 2, 3].map((i) => member.moves[i] ?? "");
   const setMove = (index: number, value: string) => {
+    if (locked) return;
     const next = [...moveInputs];
     next[index] = value;
     onChange({ ...member, moves: next.map((m) => m.trim()).filter(Boolean) });
   };
 
+  /** A slot is "filled" when any set field is present (not just species). */
+  const slotFilled =
+    Boolean(member.ability) ||
+    Boolean(member.item) ||
+    Boolean(member.nature) ||
+    member.moves.length > 0 ||
+    STAT_ROWS.some((r) => member.evs[r.spread] > 0);
+
   // Live stats + a shared max so the bars are relative to this set's spread.
+  // Archived view does not compute Champions live stats from stored other-game EVs.
   const lives = STAT_ROWS.map((row) =>
-    baseStats ? liveStat(row, member, baseStats, format) : null,
+    !locked && baseStats ? liveStat(row, member, baseStats, format) : null,
   );
   const maxLive = Math.max(1, ...lives.map((v) => v ?? 0));
 
@@ -252,11 +319,14 @@ export default function TeamMemberPanel({
 
   const [templateLoading, setTemplateLoading] = useState(false);
   const [templateNote, setTemplateNote] = useState<string | null>(null);
-  const applyCommonSet = () => {
-    if (!member.species || templateLoading) return;
+  const applyChampionsSet = () => {
+    if (!member.species || templateLoading || locked) return;
+    // Filled slot: yes/no replace, not a field diff (CF-AS-3). Empty fills
+    // with no confirm (CF-TEAM-AC-6.2). Confirm is synchronous so the click
+    // handler's tests see it before the fetch.
     if (
-      member.moves.length > 0 &&
-      !window.confirm("Replace this slot's set with the common usage set?")
+      slotFilled &&
+      !window.confirm("Replace this slot with the Champions usage set?")
     ) {
       return;
     }
@@ -266,7 +336,7 @@ export default function TeamMemberPanel({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ format, species: member.species }),
+      body: JSON.stringify({ species: member.species }),
     })
       .then(async (res) => {
         const body = (await res.json()) as {
@@ -277,7 +347,7 @@ export default function TeamMemberPanel({
         };
         if (!body.found || !body.member) {
           setTemplateNote(
-            body.notes?.[0] ?? "No common set available for this species.",
+            body.notes?.[0] ?? "Usage is unavailable for this species.",
           );
           return;
         }
@@ -285,14 +355,16 @@ export default function TeamMemberPanel({
           ...member,
           ...body.member,
           species: member.species,
+          tera_type: null,
+          level: 50,
           // Keep cosmetic fields the user may have set.
           nickname: member.nickname,
           gender: member.gender,
           shiny: member.shiny,
         });
-        setTemplateNote(body.attribution ?? "Applied common set.");
+        setTemplateNote(body.attribution ?? "Applied Champions set.");
       })
-      .catch(() => setTemplateNote("Couldn't load common set."))
+      .catch(() => setTemplateNote("Couldn't load Champions set."))
       .finally(() => setTemplateLoading(false));
   };
 
@@ -308,47 +380,51 @@ export default function TeamMemberPanel({
           )}
         </div>
         <div className="team-member-panel__actions">
-          {member.species && (
+          {member.species && !locked && (
             <button
               type="button"
               className="tm-btn tm-btn--ghost tm-btn--sm"
-              data-testid={id("common-set")}
-              onClick={applyCommonSet}
+              data-testid={id("apply-set")}
+              onClick={applyChampionsSet}
               disabled={templateLoading}
-              title="Fill moves/item/nature/EVs from ladder usage"
+              title="Fill moves/item/nature/Stat Points from live Champions usage"
             >
-              {templateLoading ? "Loading…" : "Apply common set"}
+              {templateLoading ? "Loading…" : "Apply this Champions set"}
             </button>
           )}
-          <button
-            type="button"
-            className="tm-icon-btn"
-            data-testid={id("up")}
-            aria-label={`Move slot ${slot + 1} up`}
-            onClick={onMoveUp}
-            disabled={!canMoveUp}
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            className="tm-icon-btn"
-            data-testid={id("down")}
-            aria-label={`Move slot ${slot + 1} down`}
-            onClick={onMoveDown}
-            disabled={!canMoveDown}
-          >
-            ↓
-          </button>
-          <button
-            type="button"
-            className="tm-icon-btn tm-icon-btn--danger"
-            data-testid={id("remove")}
-            aria-label={`Remove slot ${slot + 1}`}
-            onClick={onRemove}
-          >
-            Remove
-          </button>
+          {!locked && (
+            <>
+              <button
+                type="button"
+                className="tm-icon-btn"
+                data-testid={id("up")}
+                aria-label={`Move slot ${slot + 1} up`}
+                onClick={onMoveUp}
+                disabled={!canMoveUp}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="tm-icon-btn"
+                data-testid={id("down")}
+                aria-label={`Move slot ${slot + 1} down`}
+                onClick={onMoveDown}
+                disabled={!canMoveDown}
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                className="tm-icon-btn tm-icon-btn--danger"
+                data-testid={id("remove")}
+                aria-label={`Remove slot ${slot + 1}`}
+                onClick={onRemove}
+              >
+                Remove
+              </button>
+            </>
+          )}
         </div>
       </div>
       {templateNote && (
@@ -410,7 +486,13 @@ export default function TeamMemberPanel({
             ariaLabel="Species"
             placeholder="Search Pokémon…"
             withSprite
+            disabled={locked}
           />
+          {fieldOffRoster("species") && (
+            <span className="team-member-panel__off-roster">
+              {offRosterLabel}
+            </span>
+          )}
         </PickerField>
 
         <div className="team-member-panel__row2">
@@ -426,8 +508,13 @@ export default function TeamMemberPanel({
               placeholder={
                 member.species ? "Search abilities…" : "Select a species first"
               }
-              disabled={!member.species}
+              disabled={locked || !member.species}
             />
+            {fieldOffRoster("ability") && (
+              <span className="team-member-panel__off-roster">
+                {offRosterLabel}
+              </span>
+            )}
           </PickerField>
           <PickerField
             label={itemLocked ? "Item (Mega stone)" : "Item"}
@@ -442,8 +529,13 @@ export default function TeamMemberPanel({
               inputId={id("item")}
               ariaLabel="Item"
               placeholder="Search items…"
-              disabled={itemLocked}
+              disabled={locked || itemLocked}
             />
+            {fieldOffRoster("item") && (
+              <span className="team-member-panel__off-roster">
+                {offRosterLabel}
+              </span>
+            )}
           </PickerField>
         </div>
       </div>
@@ -475,8 +567,13 @@ export default function TeamMemberPanel({
                       placeholder={
                         member.species ? `Move ${i + 1}` : "Select a species first"
                       }
-                      disabled={!member.species}
+                      disabled={locked || !member.species}
                     />
+                    {fieldOffRoster(`moves[${i}]`) && (
+                      <span className="team-member-panel__off-roster">
+                        {offRosterLabel}
+                      </span>
+                    )}
                   </td>
                   <td data-testid={id(`move-${i}-type`)}>
                     {meta?.type ? (
@@ -522,10 +619,11 @@ export default function TeamMemberPanel({
             inputId={id("nature")}
             ariaLabel="Nature"
             placeholder="Nature"
+            disabled={locked}
           />
         </PickerField>
-        {/* Champions has no Terastallization — hide the Tera picker there. */}
-        {format !== "champions" && (
+        {/* Living Champions has no Tera. Archived view shows stored Tera if present. */}
+        {!livingChampions && (!locked || member.tera_type) && (
           <PickerField label="Tera type" htmlFor={id("tera")}>
             <EntityPicker
               options={TYPE_OPTIONS}
@@ -536,46 +634,45 @@ export default function TeamMemberPanel({
               inputId={id("tera")}
               ariaLabel="Tera type"
               placeholder="Tera type"
+              disabled={locked}
             />
           </PickerField>
         )}
-        {/* Champions battles are fixed at Level 50 — lock the field there. */}
-        <label className="team-member-panel__field" htmlFor={id("level")}>
-          Level
-          <input
-            id={id("level")}
-            data-testid={id("level")}
-            className="team-member-panel__level-input"
-            type="number"
-            min={1}
-            max={100}
-            value={format === "champions" ? 50 : member.level}
-            disabled={format === "champions"}
-            title={
-              format === "champions"
-                ? "Champions battles are fixed at Level 50"
-                : undefined
-            }
-            onChange={(e) => set({ level: clampInt(e.target.value, 1, 100) })}
-          />
-        </label>
+        {/* Living Champions is fixed at Level 50 — not a user knob. Archive omits it too. */}
+        {!livingChampions && !locked && (
+          <label className="team-member-panel__field" htmlFor={id("level")}>
+            Level
+            <input
+              id={id("level")}
+              data-testid={id("level")}
+              className="team-member-panel__level-input"
+              type="number"
+              min={1}
+              max={100}
+              value={member.level}
+              onChange={(e) => set({ level: clampInt(e.target.value, 1, 100) })}
+            />
+          </label>
+        )}
         </div>
       </div>
 
       <div className="team-member-panel__stats" data-testid={id("stats")}>
         <div className="team-member-panel__stats-head">
           <span className="team-member-panel__stats-title ilabel">
-            {budget.label}
+            {locked ? "Stored spread" : budget.label}
           </span>
-          <span
-            className={
-              "team-member-panel__ev-total" +
-              (evOver ? " team-member-panel__ev-total--over" : "")
-            }
-            data-testid={id("ev-total")}
-          >
-            {evTotal} / {budget.total}
-          </span>
+          {!locked && (
+            <span
+              className={
+                "team-member-panel__ev-total" +
+                (evOver ? " team-member-panel__ev-total--over" : "")
+              }
+              data-testid={id("ev-total")}
+            >
+              {evTotal} / {budget.total}
+            </span>
+          )}
         </div>
 
         {STAT_ROWS.map((row, i) => {
@@ -585,27 +682,34 @@ export default function TeamMemberPanel({
           return (
             <div className="tm-stat" key={row.spread} data-effect={effect}>
               <span className="tm-stat__label">{row.label}</span>
-              <input
-                className="tm-stat__slider"
-                type="range"
-                min={0}
-                max={budget.perStat}
-                step={budget.step}
-                value={Math.min(ev, budget.perStat)}
-                aria-label={`${row.label} EV slider`}
-                onChange={(e) => setSpread("evs", row.spread, e.target.value)}
-              />
+              {!locked && (
+                <input
+                  className="tm-stat__slider"
+                  type="range"
+                  min={0}
+                  max={budget.perStat}
+                  step={budget.step}
+                  value={Math.min(ev, budget.perStat)}
+                  aria-label={`${row.label} ${investmentWord} slider`}
+                  onChange={(e) => setSpread("evs", row.spread, e.target.value)}
+                />
+              )}
               <input
                 className="tm-stat__ev"
                 data-testid={id(`ev-${row.spread}`)}
-                aria-label={`${row.label} EV`}
+                aria-label={
+                  locked
+                    ? `${row.label} stored`
+                    : `${row.label} ${investmentWord}`
+                }
                 type="number"
                 min={0}
-                max={budget.clampMax}
+                max={locked ? undefined : budget.clampMax}
                 value={ev}
+                disabled={locked}
                 onChange={(e) => setSpread("evs", row.spread, e.target.value)}
               />
-              {baseStats && (
+              {!locked && baseStats && (
                 <span className="tm-stat__bar">
                   <span
                     className="tm-stat__bar-fill"
@@ -629,16 +733,16 @@ export default function TeamMemberPanel({
 
       <details className="team-member-panel__advanced">
         <summary className="team-member-panel__advanced-summary">
-          {format === "champions"
+          {livingChampions || locked
             ? "Advanced — nickname"
             : "Advanced — IVs & nickname"}
         </summary>
-        {/* Champions fixes every IV at 31, so the IV editor is hidden there. */}
-        {format === "champions" ? (
+        {/* Living Champions fixes every IV at 31. Archive does not show IV knobs. */}
+        {livingChampions ? (
           <p className="team-member-panel__iv-note">
             IVs are fixed at 31 in Champions.
           </p>
-        ) : (
+        ) : locked ? null : (
           <div className="team-member-panel__iv-grid">
             {STAT_ROWS.map((row) => (
               <label
@@ -653,6 +757,7 @@ export default function TeamMemberPanel({
                   min={0}
                   max={31}
                   value={member.ivs[row.spread]}
+                  disabled={locked}
                   onChange={(e) => setSpread("ivs", row.spread, e.target.value)}
                 />
               </label>
@@ -666,6 +771,7 @@ export default function TeamMemberPanel({
             data-testid={id("nickname")}
             value={member.nickname ?? ""}
             placeholder="(optional)"
+            disabled={locked}
             onChange={(e) => set({ nickname: e.target.value || null })}
           />
         </label>

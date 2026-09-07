@@ -1,9 +1,11 @@
 /**
  * Derive follow-up chips from a finalized OakAnswer + turn context (CHIP-US-1 /
- * ADR-9). Chips only hop to surfaces that already exist: scope, Dex, Teams.
+ * ADR-9). Chips only hop to surfaces that already exist: Dex, Teams.
  *
- * Pure: no DOM, no fetch, no mutation of the answer. Caps: ≤1 scope, ≤3 Dex,
- * ≤1 team. Never invents calc / compare / add-to-team / "tell me more".
+ * Champions-first: never emit a "Switch to {format}" chip (CF-UI-BR-2).
+ *
+ * Pure: no DOM, no fetch, no mutation of the answer. Caps: ≤3 Dex, ≤1 team.
+ * Never invents calc / compare / add-to-team / "tell me more".
  */
 
 import type { OakAnswer } from "@/agent/schemas";
@@ -20,7 +22,10 @@ export interface FollowUpChip {
 
 export interface DeriveFollowUpChipsInput {
   answer: OakAnswer;
-  /** Only when a *different* format is implied by the turn. */
+  /**
+   * Ignored. Kept so callers that still pass a hop-to format type-check;
+   * Champions-first does not emit a game-switch chip.
+   */
   impliedFormat?: Format;
   /** Signed-in bound / @mentioned team. Wins over `answer.saved_team`. */
   mentionedTeam?: { id: string; name: string };
@@ -34,18 +39,9 @@ const DEX_CAP = 3;
  */
 export function deriveFollowUpChips({
   answer,
-  impliedFormat,
   mentionedTeam,
 }: DeriveFollowUpChipsInput): FollowUpChip[] {
   const chips: FollowUpChip[] = [];
-
-  if (impliedFormat) {
-    chips.push({
-      kind: "scope",
-      label: `Switch to ${impliedFormat}.`,
-      target: impliedFormat,
-    });
-  }
 
   const subjects = answer.subjects;
   if (subjects && subjects.length > 0) {

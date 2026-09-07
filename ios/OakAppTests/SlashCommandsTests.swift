@@ -21,15 +21,13 @@ import Testing
 /// Fails to compile until `SlashCommand` grows `.calc(rest:)`
 /// (`ios/OakApp/Features/Chat/SlashCommands.swift`).
 ///
-/// iOS has no usage surface — callers pass `hasUsagePage: false`.
-/// `/usage` is therefore a normal message (SLASH-AC-1.4 / SLASH-AC-1.5).
-/// No palette / shortcuts (NAV-US-1/2 are web-only).
+/// iOS Usage is a fifth tab (ADR-6) — callers pass `hasUsagePage: true`.
+/// `/usage` navigates. No palette / shortcuts (NAV-US-1/2 are web-only).
 ///
 /// Known leading tokens: `/new`, `/team`, `/dex`, `/calc`, and `/usage` only
 /// when `hasUsagePage == true`. First whitespace-delimited token wins; args
 /// stay on the navigate result (client routes `/team {name}` / `/dex {name}`).
-/// Unknown slashes — including `/compare` and `/usage` when the client has no
-/// usage page — are ordinary messages.
+/// Unknown slashes — including `/compare` — are ordinary messages.
 ///
 /// Requirement refs: SLASH-US-1, SLASH-AC-1.1..1.6, SLASH-BR-1, SLASH-BR-2,
 /// CALC-US-3, CALC-AC-3.1..3.4, CALC-BR-4. ADR-4, ADR-10.
@@ -37,8 +35,8 @@ struct SlashCommandsTests {
 
   /// Web lockstep option — usage page exists.
   private let webHasUsagePage = true
-  /// iOS / Android — no usage page.
-  private let nativeHasUsagePage = false
+  /// iOS Usage is a fifth tab (ADR-6).
+  private let nativeHasUsagePage = true
 
   private func parse(_ text: String, hasUsagePage: Bool) -> SlashCommand {
     SlashCommands.parse(text, hasUsagePage: hasUsagePage)
@@ -101,12 +99,18 @@ struct SlashCommandsTests {
     #expect(
       parse("/usage ou", hasUsagePage: webHasUsagePage) == .navigate(target: .usage)
     )
+    #expect(
+      parse("/usage", hasUsagePage: nativeHasUsagePage) == .navigate(target: .usage)
+    )
+    #expect(
+      parse("/usage garchomp", hasUsagePage: nativeHasUsagePage) == .navigate(target: .usage)
+    )
   }
 
   @Test
   func treatsUsageAsANormalMessageWhenHasUsagePageIsFalse() {
-    #expect(parse("/usage", hasUsagePage: nativeHasUsagePage) == .message)
-    #expect(parse("/usage ou", hasUsagePage: nativeHasUsagePage) == .message)
+    #expect(parse("/usage", hasUsagePage: false) == .message)
+    #expect(parse("/usage ou", hasUsagePage: false) == .message)
   }
 
   // MARK: CALC-US-3 / CALC-AC-3.1–3.4 / CALC-BR-4 — /calc is handled
@@ -173,7 +177,6 @@ struct SlashCommandsTests {
     #expect(parse("/calcish", hasUsagePage: webHasUsagePage) == .message)
 
     #expect(parse("/compare", hasUsagePage: nativeHasUsagePage) == .message)
-    #expect(parse("/usage", hasUsagePage: nativeHasUsagePage) == .message)
     #expect(parse("/newish", hasUsagePage: nativeHasUsagePage) == .message)
     #expect(parse("/calcish", hasUsagePage: nativeHasUsagePage) == .message)
   }

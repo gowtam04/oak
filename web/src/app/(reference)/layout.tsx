@@ -1,6 +1,6 @@
 /**
  * (reference) route-group layout — the shared chrome for every programmatic
- * reference page (/pokedex, /moves, /abilities, /items, /meta). Imports the
+ * reference page (/pokedex, /moves, /abilities, /items, /usage; /meta redirects). Imports the
  * group's four stylesheets once (chrome/scaffolding + explorer + detail + meta)
  * and wraps each page in the paper header + fan-project footer. Server
  * component (no hooks). It sets NO metadata: the route group

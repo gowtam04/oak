@@ -75,10 +75,12 @@ function ctxFor(mode: AgentMode): Promise<AgentContext> {
   });
 }
 
-describe("get_learnset holds its fixed T17 slot (append-only order)", () => {
-  it("exposes `get_learnset` at index 16 — T18+ tools (e.g. run_sql) append AFTER it", () => {
+describe("get_learnset holds its Champions barrel slot", () => {
+  it("exposes `get_learnset` at index 15, with lookup_box last", () => {
     ensureLoaded();
-    expect(tools[16]?.name).toBe("get_learnset");
+    expect(tools[15]?.name).toBe("get_learnset");
+    expect(tools[16]?.name).toBe("lookup_box");
+    expect(tools.at(-1)?.name).toBe("lookup_box");
   });
 });
 

@@ -52,11 +52,13 @@ export default function ProposedTeamCard({
   const [addMember, setAddMember] = useState<TeamMember | null>(null);
   const { openTeam } = useArtifactViewer();
 
-  // Offer apply-existing only for same-format teams the account already owns.
+  // Offer apply-existing only for same-format living teams (never archived).
   useEffect(() => {
     let active = true;
     void listTeams({ format }).then((list) => {
-      if (active) setExisting(list);
+      if (active) {
+        setExisting(list.filter((t) => t.format === format));
+      }
     });
     return () => {
       active = false;
@@ -126,12 +128,6 @@ export default function ProposedTeamCard({
             )}
             {m.ability && (
               <span className="proposed-team__ability"> · {titleize(m.ability)}</span>
-            )}
-            {m.tera_type && (
-              <span className="proposed-team__tera">
-                {" "}
-                · Tera {titleize(m.tera_type)}
-              </span>
             )}
             {m.moves.length > 0 && (
               <span className="proposed-team__moves">

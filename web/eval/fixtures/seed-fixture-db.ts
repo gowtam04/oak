@@ -31,19 +31,9 @@
  *   - All abilities carried by the fixture Pokémon
  *   - All 18 type slugs
  *
- * natdex_species / natdex_moves rows (GLOBAL, no `format` column — Oak v2
- * §4.1) back the five run_sql deterministic plans (eval/deterministic.ts
- * PLANS, Oak v2 §7): G26/G32/G44/G47 use illustrative/contrived rows (see
- * their per-row comments below); G32 (purple count) and G35 (Fire Fang is
- * Gen 4) use real, verified PokeAPI facts so those assertions hold against
- * the real warehouse too, not just this fixture.
- *
- * pokemon@national-dex rows (NATDEX_POKEMON_ROWS) back PLANS.G56/G57 (the
- * national-dex-scope feature's regression cases): a FORM-AWARE partition of
- * the `pokemon` table (unlike natdex_species, which is default-forms-only),
- * carrying a form-only type combo (Darmanitan-Galar-Zen, Ice/Fire, stored in
- * the non-canonical type1/type2 slot order — G57's LEAST/GREATEST
- * normalization pin) plus a mono-type and a dual-type default-form row.
+ * Champions-first (ADR-4): the index partition is format="champions" only.
+ * National Dex / wiki / natdex warehouse / OU seeds used only by dropped
+ * tools are not seeded.
  *
  * Exports:
  *   - seedFixtureDb(db)   — seed an already-migrated Drizzle handle (async)
@@ -64,8 +54,6 @@ import * as schema from "@/data/schema";
 import {
   ingest_meta,
   learnset,
-  natdex_moves,
-  natdex_species,
   pokemon,
   reference_cache,
   searchable_names,
@@ -83,8 +71,8 @@ export type FixtureDb = NodePgDatabase<typeof schema>;
 // Fixture data
 // ===========================================================================
 
-/** Every fixture row is the standard (Scarlet-Violet) data scope. */
-const SV = "scarlet-violet";
+/** Every fixture row is the Champions data scope (ADR-4). */
+const CHAMPIONS = "champions";
 
 // ---------------------------------------------------------------------------
 // 1. Pokémon rows — pokemon table (DS-2)
@@ -368,116 +356,7 @@ const POKEMON_ROWS: Omit<PokemonRow, "format">[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// 1b. Pokémon rows — pokemon table, format="national-dex" partition (G57).
-// Unlike natdex_species (species-level, DEFAULT FORMS ONLY), this partition
-// is the FORM-AWARE whole-dex source — it carries per-form rows, so a
-// form-only type combination is visible here even when it's absent from
-// natdex_species. Backs PLANS.G57 in eval/deterministic.ts.
-// ---------------------------------------------------------------------------
-
-const NATDEX_POKEMON_ROWS: PokemonRow[] = [
-  // Darmanitan (Galarian Zen Mode) — National Dex #555. Real PokeAPI form:
-  // type1="ice", type2="fire" — stored in the OPPOSITE slot order from how
-  // the combo reads conventionally ("Fire/Ice"), which is exactly why a
-  // type-combination-existence query must normalize with
-  // LEAST(type1,type2)/GREATEST(type1,type2) rather than assume a canonical
-  // slot order (warehouse-ddl.ts's IMPORTANT note). This form does NOT
-  // appear in natdex_species — "darmanitan" there would only be the
-  // default (Standard Mode) form — so it's a form-only combo that only
-  // pokemon@national-dex can see.
-  {
-    format: "national-dex",
-    id: "darmanitan-galar-zen",
-    species_name: "darmanitan",
-    form_name: "galar-zen",
-    display_name: "Darmanitan (Galarian Zen Mode)",
-    national_dex_number: 555,
-    type1: "ice",
-    type2: "fire",
-    ability_slot1: "zen-mode",
-    ability_slot2: null,
-    ability_hidden: null,
-    stat_hp: 105,
-    stat_attack: 160,
-    stat_defense: 55,
-    stat_special_attack: 30,
-    stat_special_defense: 95,
-    stat_speed: 30,
-    base_stat_total: 475, // 105+160+55+30+95+30
-    sprite_url:
-      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10026.png",
-    artwork_url:
-      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10026.png",
-    required_item: null,
-    generation: "national-dex",
-    is_gen9_native: 1,
-    source_generation: null,
-  },
-
-  // Pikachu — default form, mono-type (Electric). A non-degenerate mono-type
-  // row so type-combo counts over this partition aren't trivially all-one-row.
-  {
-    format: "national-dex",
-    id: "pikachu",
-    species_name: "pikachu",
-    form_name: null,
-    display_name: "Pikachu",
-    national_dex_number: 25,
-    type1: "electric",
-    type2: null,
-    ability_slot1: "static",
-    ability_slot2: null,
-    ability_hidden: "lightning-rod",
-    stat_hp: 35,
-    stat_attack: 55,
-    stat_defense: 40,
-    stat_special_attack: 50,
-    stat_special_defense: 50,
-    stat_speed: 90,
-    base_stat_total: 320, // 35+55+40+50+50+90
-    sprite_url:
-      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png",
-    artwork_url:
-      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png",
-    required_item: null,
-    generation: "national-dex",
-    is_gen9_native: 1,
-    source_generation: null,
-  },
-
-  // Charizard — default form, a common dual-type (Fire/Flying) row.
-  {
-    format: "national-dex",
-    id: "charizard",
-    species_name: "charizard",
-    form_name: null,
-    display_name: "Charizard",
-    national_dex_number: 6,
-    type1: "fire",
-    type2: "flying",
-    ability_slot1: "blaze",
-    ability_slot2: null,
-    ability_hidden: "solar-power",
-    stat_hp: 78,
-    stat_attack: 84,
-    stat_defense: 78,
-    stat_special_attack: 109,
-    stat_special_defense: 85,
-    stat_speed: 100,
-    base_stat_total: 534, // 78+84+78+109+85+100
-    sprite_url:
-      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/6.png",
-    artwork_url:
-      "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png",
-    required_item: null,
-    generation: "national-dex",
-    is_gen9_native: 1,
-    source_generation: null,
-  },
-];
-
-// ---------------------------------------------------------------------------
-// 2. Learnset rows — learnset table (DS-3, Gen-9, format=scarlet-violet)
+// 2. Learnset rows — learnset table (DS-3, format=champions)
 // ---------------------------------------------------------------------------
 // Dracovish has no entries — it's not Gen-9 native (no SV learnset).
 // All other Gen-9 native Pokémon carry their key moves.
@@ -489,19 +368,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "garchomp",
     move_slug: "earthquake",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
   {
     pokemon_id: "garchomp",
     move_slug: "dragon-claw",
-    format: SV,
+    format: CHAMPIONS,
     method: "level-up",
   },
   {
     pokemon_id: "garchomp",
     move_slug: "fire-fang",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
 
@@ -509,13 +388,13 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "farigiraf",
     move_slug: "trick-room",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
   {
     pokemon_id: "farigiraf",
     move_slug: "hyper-voice",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
 
@@ -525,19 +404,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "ninetales",
     move_slug: "will-o-wisp",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
   {
     pokemon_id: "ninetales",
     move_slug: "trick-room",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
   {
     pokemon_id: "ninetales",
     move_slug: "flamethrower",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
 
@@ -545,19 +424,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "talonflame",
     move_slug: "will-o-wisp",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
   {
     pokemon_id: "talonflame",
     move_slug: "brave-bird",
-    format: SV,
+    format: CHAMPIONS,
     method: "level-up",
   },
   {
     pokemon_id: "talonflame",
     move_slug: "flare-blitz",
-    format: SV,
+    format: CHAMPIONS,
     method: "level-up",
   },
 
@@ -565,19 +444,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "tauros",
     move_slug: "tackle",
-    format: SV,
+    format: CHAMPIONS,
     method: "level-up",
   },
   {
     pokemon_id: "tauros",
     move_slug: "horn-attack",
-    format: SV,
+    format: CHAMPIONS,
     method: "level-up",
   },
   {
     pokemon_id: "tauros",
     move_slug: "work-up",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
 
@@ -585,19 +464,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "tauros-paldea-combat",
     move_slug: "close-combat",
-    format: SV,
+    format: CHAMPIONS,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-combat",
     move_slug: "bulk-up",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
   {
     pokemon_id: "tauros-paldea-combat",
     move_slug: "protect",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
 
@@ -605,19 +484,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "tauros-paldea-blaze",
     move_slug: "flare-blitz",
-    format: SV,
+    format: CHAMPIONS,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-blaze",
     move_slug: "close-combat",
-    format: SV,
+    format: CHAMPIONS,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-blaze",
     move_slug: "protect",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
 
@@ -625,19 +504,19 @@ const LEARNSET_ROWS: LearnsetRow[] = [
   {
     pokemon_id: "tauros-paldea-aqua",
     move_slug: "liquidation",
-    format: SV,
+    format: CHAMPIONS,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-aqua",
     move_slug: "close-combat",
-    format: SV,
+    format: CHAMPIONS,
     method: "level-up",
   },
   {
     pokemon_id: "tauros-paldea-aqua",
     move_slug: "protect",
-    format: SV,
+    format: CHAMPIONS,
     method: "machine",
   },
 ];
@@ -786,52 +665,6 @@ const REFERENCE_CACHE_ROWS: Omit<RefCacheRow, "format">[] = [
     endpoint_url: "https://pokeapi.co/api/v2/move/trick-room",
     fetched_at: FAR_FUTURE_MS,
   },
-
-  // encounters/garchomp — T14 get_encounters: a grouped HIT (catch-location data).
-  {
-    resource_key: "encounters/garchomp",
-    resource_kind: "encounters",
-    payload: JSON.stringify({
-      found: true,
-      name: "Garchomp",
-      encounters: [
-        {
-          version_group: "sword-shield",
-          generation: 8,
-          versions: ["shield", "sword"],
-          locations: [
-            {
-              location_display: "Lake of Outrage",
-              region: "Galar",
-              method: "walk",
-              min_level: 55,
-              max_level: 60,
-              chance: 5,
-              conditions: [],
-            },
-          ],
-        },
-      ],
-      coverage_note: null,
-    }),
-    endpoint_url: "https://pokeapi.co",
-    fetched_at: FAR_FUTURE_MS,
-  },
-
-  // encounters/dracovish — T14: known-but-empty (no recorded catch data).
-  {
-    resource_key: "encounters/dracovish",
-    resource_kind: "encounters",
-    payload: JSON.stringify({
-      found: true,
-      name: "Dracovish",
-      encounters: [],
-      coverage_note:
-        "PokeAPI records no catch/encounter data for this Pokémon. Obtain it by evolution, breeding, in-game trade, or events.",
-    }),
-    endpoint_url: "https://pokeapi.co",
-    fetched_at: FAR_FUTURE_MS,
-  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -940,159 +773,11 @@ const SEARCHABLE_NAME_ROWS: Omit<SearchableRow, "format">[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// 5. Natdex warehouse rows — natdex_species / natdex_moves (Oak v2 §4.1,
-//    GLOBAL tables, no `format` column). Backs the five G26/G32/G35/G44/G47
-//    deterministic run_sql plans (eval/deterministic.ts PLANS).
-// ---------------------------------------------------------------------------
-
-type NatdexSpeciesRow = typeof natdex_species.$inferInsert;
-type NatdexMoveRow = typeof natdex_moves.$inferInsert;
-
-const NATDEX_SPECIES_ROWS: NatdexSpeciesRow[] = [
-  // G26 (BQ-1, natdex==BST): an illustrative fixture row, not a real Pokédex
-  // match — the deterministic assertion checks that the aggregation runs
-  // correctly, not a specific species name (see cases.ts G26 note).
-  {
-    species: "fixturemon-bst-match",
-    national_dex_number: 400,
-    generation: 9,
-    color: null,
-    shape: null,
-    capture_rate: 45,
-    base_stat_total: 400,
-    evolves_from: null,
-    type1: "normal",
-    type2: null,
-  },
-
-  // G32 (BQ-7, purple count): REAL PokeAPI color="purple" species, so this
-  // holds against both the fixture and the real warehouse (only the exact
-  // count differs — see cases.ts G32 note, which deliberately omits it).
-  {
-    species: "gengar",
-    national_dex_number: 94,
-    generation: 1,
-    color: "purple",
-    shape: "humanoid",
-    capture_rate: 45,
-    base_stat_total: 500,
-    evolves_from: "haunter",
-    type1: "ghost",
-    type2: "poison",
-  },
-  {
-    species: "koffing",
-    national_dex_number: 109,
-    generation: 1,
-    color: "purple",
-    shape: "orb",
-    capture_rate: 190,
-    base_stat_total: 340,
-    evolves_from: null,
-    type1: "poison",
-    type2: null,
-  },
-  {
-    species: "weezing",
-    national_dex_number: 110,
-    generation: 1,
-    color: "purple",
-    shape: "orb",
-    capture_rate: 60,
-    base_stat_total: 490,
-    evolves_from: "koffing",
-    type1: "poison",
-    type2: null,
-  },
-  {
-    species: "grimer",
-    national_dex_number: 88,
-    generation: 1,
-    color: "purple",
-    shape: "blob",
-    capture_rate: 190,
-    base_stat_total: 325,
-    evolves_from: null,
-    type1: "poison",
-    type2: null,
-  },
-
-  // G44 (BQ-19, catch rate > pre-evolution): a contrived self-join pair
-  // (mirrors the same pattern used in run-sql.oracle.test.ts) — the real
-  // exception set differs live vs. fixture, so no species name is asserted.
-  {
-    species: "lowcatch",
-    national_dex_number: 900,
-    generation: 9,
-    color: "gray",
-    shape: "upright",
-    capture_rate: 30,
-    base_stat_total: 400,
-    evolves_from: null,
-    type1: "rock",
-    type2: null,
-  },
-  {
-    species: "highcatch",
-    national_dex_number: 901,
-    generation: 9,
-    color: "gray",
-    shape: "upright",
-    capture_rate: 60,
-    base_stat_total: 500,
-    evolves_from: "lowcatch",
-    type1: "rock",
-    type2: null,
-  },
-
-  // G47 (BQ-22, dual-type -> monotype on evolution): a contrived pair
-  // demonstrating the join; real examples are rare/contested, so no species
-  // name is asserted (see cases.ts G47 note).
-  {
-    species: "duoform",
-    national_dex_number: 902,
-    generation: 9,
-    color: "blue",
-    shape: "upright",
-    capture_rate: 45,
-    base_stat_total: 400,
-    evolves_from: null,
-    type1: "fire",
-    type2: "flying",
-  },
-  {
-    species: "monoform",
-    national_dex_number: 903,
-    generation: 9,
-    color: "red",
-    shape: "upright",
-    capture_rate: 45,
-    base_stat_total: 500,
-    evolves_from: "duoform",
-    type1: "fire",
-    type2: null,
-  },
-];
-
-const NATDEX_MOVES_ROWS: NatdexMoveRow[] = [
-  // G35 (BQ-10, Fire-Fang-is-Gen-4 false-premise verification): Fire Fang was
-  // introduced in Generation 4 (Diamond/Pearl/Platinum) — a real, verified
-  // fact, so this row (and the "Generation 4" assertion in cases.ts G35)
-  // holds against both the fixture and the real warehouse.
-  {
-    move_slug: "fire-fang",
-    generation: 4,
-    type: "fire",
-    damage_class: "physical",
-  },
-];
-
-// ---------------------------------------------------------------------------
 // 6. Ingest meta — ingest_meta table (index availability sentinel)
 // ---------------------------------------------------------------------------
 
 const INGEST_META_ROW: typeof ingest_meta.$inferInsert = {
-  format: SV,
+  format: CHAMPIONS,
   last_success_at: Date.now(),
   pokemon_count: POKEMON_ROWS.length,
   learnset_count: LEARNSET_ROWS.length,
@@ -1112,21 +797,18 @@ const INGEST_META_ROW: typeof ingest_meta.$inferInsert = {
  * this is async and wraps the inserts in one transaction.
  */
 export async function seedFixtureDb(db: FixtureDb): Promise<void> {
-  // Every fixture row is the standard scope; stamp `format` on insert.
+  // Champions partition only; stamp `format` on insert.
   await db.transaction(async (tx) => {
     await tx
       .insert(pokemon)
-      .values(POKEMON_ROWS.map((r) => ({ ...r, format: SV })));
-    await tx.insert(pokemon).values(NATDEX_POKEMON_ROWS);
+      .values(POKEMON_ROWS.map((r) => ({ ...r, format: CHAMPIONS })));
     await tx.insert(learnset).values(LEARNSET_ROWS);
     await tx
       .insert(reference_cache)
-      .values(REFERENCE_CACHE_ROWS.map((r) => ({ ...r, format: SV })));
+      .values(REFERENCE_CACHE_ROWS.map((r) => ({ ...r, format: CHAMPIONS })));
     await tx
       .insert(searchable_names)
-      .values(SEARCHABLE_NAME_ROWS.map((r) => ({ ...r, format: SV })));
-    await tx.insert(natdex_species).values(NATDEX_SPECIES_ROWS);
-    await tx.insert(natdex_moves).values(NATDEX_MOVES_ROWS);
+      .values(SEARCHABLE_NAME_ROWS.map((r) => ({ ...r, format: CHAMPIONS })));
     await tx.insert(ingest_meta).values(INGEST_META_ROW);
   });
 }

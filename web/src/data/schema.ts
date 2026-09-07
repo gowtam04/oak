@@ -2,9 +2,9 @@
  * Drizzle ORM table definitions for Oak's Postgres store.
  *
  * The five Pokédex-index tables (design.md § Data Model) each carry a `format`
- * discriminator ("scarlet-violet" | "champions") so one physical schema holds
- * both the standard Gen-9 index and the Champions index; repos filter by the
- * active format (derived from the turn's mode). See src/data/formats.ts.
+ * discriminator. Champions-first (ADR-4): after migration 0023 every index row
+ * is `format = 'champions'`. The column still accepts historical Format values
+ * so archived teams / old conversations decode (ADR-3). See src/data/formats.ts.
  *
  *   pokemon          — DS-2 Pokédex index, one row per (format, battle form)
  *   learnset         — DS-3 learnset index, PK (pokemon_id, move_slug, format)
@@ -34,8 +34,6 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
-  customType,
-  doublePrecision,
   index,
   integer,
   pgTable,
@@ -44,26 +42,13 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-/**
- * Postgres `tsvector` — the full-text search type. Drizzle pg-core has no
- * built-in column type for it, so it's declared here as a `customType`. Only the
- * wiki full-text search (T19 `search_wiki`, Oak v2 §4.2/§5) uses it; the column
- * is a STORED GENERATED column (see `wiki_chunk.tsv`), so nothing ever writes it
- * directly — Postgres derives it from `section || ' ' || content` on insert.
- */
-const tsvector = customType<{ data: string; driverData: string }>({
-  dataType() {
-    return "tsvector";
-  },
-});
-
 // ---------------------------------------------------------------------------
 // pokemon — DS-2 Pokédex index (one row per (format, battle-relevant form), D8)
 // ---------------------------------------------------------------------------
 export const pokemon = pgTable(
   "pokemon",
   {
-    /** Data scope: "scarlet-violet" | "champions". Part of the composite PK. */
+    /** Data scope. After cutover only "champions" rows exist; PK with `id`. */
     format: text("format").notNull(),
     /** PokeAPI-style pokemon slug, e.g. "tauros-paldea-aqua". */
     id: text("id").notNull(),
@@ -136,7 +121,7 @@ export const learnset = pgTable(
     pokemon_id: text("pokemon_id").notNull(),
     /** Canonical move slug, e.g. "will-o-wisp". */
     move_slug: text("move_slug").notNull(),
-    /** Data scope: "scarlet-violet" | "champions". Part of the composite PK. */
+    /** Data scope. After cutover only "champions" rows exist; part of the PK. */
     format: text("format").notNull(),
     /** "level-up" | "machine" | "tutor". Egg moves excluded (out of scope). */
     method: text("method"),
@@ -158,7 +143,7 @@ export const learnset = pgTable(
 export const reference_cache = pgTable(
   "reference_cache",
   {
-    /** Data scope: "scarlet-violet" | "champions". Part of the composite PK. */
+    /** Data scope. After cutover only "champions" rows exist; part of the PK. */
     format: text("format").notNull(),
     /** e.g. "move/fake-out", "ability/armor-tail", "type/ground". */
     resource_key: text("resource_key").notNull(),
@@ -180,7 +165,7 @@ export const reference_cache = pgTable(
 export const searchable_names = pgTable(
   "searchable_names",
   {
-    /** Data scope: "scarlet-violet" | "champions". Part of the composite PK. */
+    /** Data scope. After cutover only "champions" rows exist; part of the PK. */
     format: text("format").notNull(),
     /** "pokemon" | "move" | "ability" | "type" | "item". */
     kind: text("kind").notNull(),
@@ -198,7 +183,7 @@ export const searchable_names = pgTable(
 // ingest_meta — pipeline bookkeeping (one row per format)
 // ---------------------------------------------------------------------------
 export const ingest_meta = pgTable("ingest_meta", {
-  /** Data scope this row describes ("scarlet-violet" | "champions"). PK. */
+  /** Data scope this row describes. After cutover only "champions". PK. */
   format: text("format").primaryKey(),
   /** Epoch ms of the last successful ingest run for this format. */
   last_success_at: bigint("last_success_at", { mode: "number" }).notNull(),
@@ -771,344 +756,6 @@ export const app_setting = pgTable("app_setting", {
   /** Epoch ms of the last write. */
   updated_at: bigint("updated_at", { mode: "number" }).notNull(),
 });
-
-// ===========================================================================
-// Natdex warehouse — global Pokédex-wide tables (Oak v2, design §4.1)
-//
-// Five GLOBAL tables built OFFLINE from the PokeAPI CSV dump + the Pokémon
-// Mystery Dungeon dataset (scripts/fetch-pokeapi-natdex.ts → committed JSON
-// snapshots → the build-natdex/machines/classic-encounters/pmd builders). They
-// give the agent (via the later `run_sql` tool) whole-franchise facts the
-// per-format @pkmn index can't express: colors, shapes, catch rates, national
-// dex numbers, evolution parents, TM/HM machines, Gens 1–4 moves, classic wild
-// encounters, and PMD recruit data.
-//
-// Unlike the pokemon/learnset/reference_cache index tables these carry NO
-// `format` column — they are not format-partitioned (keyed by species /
-// version-group / move slug). Following the schema's conventions: snake_case
-// columns, no physical FK constraints (species / move slugs are logical joins
-// resolved in SQL), no native booleans, epoch-ms would be `bigint` (none here).
-// Built ONCE per ingest run (not per format) via a replace-all delete+insert
-// inside the same atomic ingest transaction.
-// ===========================================================================
-
-// ---------------------------------------------------------------------------
-// natdex_species — one row per national-dex species
-// ---------------------------------------------------------------------------
-export const natdex_species = pgTable(
-  "natdex_species",
-  {
-    /** PokeAPI species slug, e.g. "pikachu". PK. */
-    species: text("species").primaryKey(),
-    /** National Pokédex number (= PokeAPI species id). */
-    national_dex_number: integer("national_dex_number").notNull(),
-    /** Generation introduced (1–9). */
-    generation: integer("generation").notNull(),
-    /** Pokédex color slug, e.g. "yellow"; null if unset. */
-    color: text("color"),
-    /** Body-shape slug, e.g. "quadruped"; null if unset. */
-    shape: text("shape"),
-    /** Catch rate (0–255); null if unknown. */
-    capture_rate: integer("capture_rate"),
-    /** Sum of the six base stats of the species' default form. */
-    base_stat_total: integer("base_stat_total").notNull(),
-    /** Pre-evolution species slug (logical FK → natdex_species.species); null if none. */
-    evolves_from: text("evolves_from"),
-    /** Primary type slug of the default form. */
-    type1: text("type1").notNull(),
-    /** Secondary type slug; null for mono-type species. */
-    type2: text("type2"),
-  },
-  (t) => [
-    index("natdex_species_national_dex_number_idx").on(t.national_dex_number),
-    index("natdex_species_generation_idx").on(t.generation),
-    index("natdex_species_color_idx").on(t.color),
-    index("natdex_species_shape_idx").on(t.shape),
-    index("natdex_species_type1_idx").on(t.type1),
-    index("natdex_species_type2_idx").on(t.type2),
-    index("natdex_species_evolves_from_idx").on(t.evolves_from),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// natdex_machines — TM/HM/TR machines per version group
-// ---------------------------------------------------------------------------
-export const natdex_machines = pgTable(
-  "natdex_machines",
-  {
-    /** Version-group slug, e.g. "heartgold-soulsilver". Part of the PK. */
-    version_group: text("version_group").notNull(),
-    /** Machine label, e.g. "HM02" / "TM24" / "TR50". Part of the PK. */
-    machine: text("machine").notNull(),
-    /** Canonical move slug the machine teaches, e.g. "fly". */
-    move_slug: text("move_slug").notNull(),
-    /** Canonical item slug of the machine itself, e.g. "hm02". */
-    item_slug: text("item_slug").notNull(),
-  },
-  (t) => [
-    // A machine label is unique within a version group.
-    primaryKey({ columns: [t.version_group, t.machine] }),
-    // "which machine teaches move X (and where)?"
-    index("natdex_machines_move_slug_idx").on(t.move_slug),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// natdex_moves — every move's generation / type / damage class
-// ---------------------------------------------------------------------------
-export const natdex_moves = pgTable(
-  "natdex_moves",
-  {
-    /** Canonical move slug, e.g. "fire-fang". PK. */
-    move_slug: text("move_slug").primaryKey(),
-    /** Generation introduced (1–9). */
-    generation: integer("generation").notNull(),
-    /** Type slug, e.g. "fire"; null if unset. */
-    type: text("type"),
-    /** "physical" | "special" | "status"; null if unset. */
-    damage_class: text("damage_class"),
-  },
-  (t) => [
-    index("natdex_moves_generation_idx").on(t.generation),
-    index("natdex_moves_type_idx").on(t.type),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// classic_encounters — wild-encounter tables, Gens 1–7 ONLY (best-effort)
-//
-// PokeAPI has NO Gen 8–9 encounter data and known Gen 1–7 holes, so every answer
-// sourced from this table must be flaggable as partial. `id` is a synthetic
-// sequential key assigned by the builder (there is no natural PK after the
-// per-version/slot rows are deduped).
-// ---------------------------------------------------------------------------
-export const classic_encounters = pgTable(
-  "classic_encounters",
-  {
-    /** Synthetic sequential id (builder-assigned). PK. */
-    id: integer("id").primaryKey(),
-    /** Game version slug, e.g. "gold". */
-    version: text("version").notNull(),
-    /** Location slug, e.g. "johto-route-29". */
-    location: text("location").notNull(),
-    /** Sub-area slug within the location; null when PokeAPI records none. */
-    area: text("area"),
-    /** Encounter method slug, e.g. "walk" / "surf" / "old-rod". */
-    method: text("method").notNull(),
-    /** Species slug encountered, e.g. "pidgey". */
-    species: text("species").notNull(),
-    /** Encounter-slot rarity weight; null if unknown. */
-    rarity: integer("rarity"),
-    /** Minimum wild level; null if unknown. */
-    min_level: integer("min_level"),
-    /** Maximum wild level; null if unknown. */
-    max_level: integer("max_level"),
-  },
-  (t) => [
-    index("classic_encounters_species_idx").on(t.species),
-    index("classic_encounters_version_idx").on(t.version),
-    index("classic_encounters_location_idx").on(t.location),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// pmd_recruits — Pokémon Mystery Dungeon recruit locations + rates
-// ---------------------------------------------------------------------------
-export const pmd_recruits = pgTable(
-  "pmd_recruits",
-  {
-    /** Game slug: "red-blue-rescue-team" | "explorers-of-sky". Part of the PK. */
-    game: text("game").notNull(),
-    /** Species slug, e.g. "bulbasaur". Part of the PK. */
-    species: text("species").notNull(),
-    /** Recruit location description (free text, as scraped). */
-    location: text("location").notNull(),
-    /** Recruit rate as a display string, e.g. "12.5%"; null if unknown. */
-    recruit_rate: text("recruit_rate"),
-    /** Friend-area name (Rescue Team mechanic); null if unset. */
-    friend_area: text("friend_area"),
-  },
-  (t) => [
-    // One row per species per game.
-    primaryKey({ columns: [t.game, t.species] }),
-    index("pmd_recruits_species_idx").on(t.species),
-  ],
-);
-
-// ===========================================================================
-// Fandom wiki corpus — global prose retrieval tables (Oak v2, design §4.2/§5)
-//
-// Two GLOBAL tables backing T19 `search_wiki`: a self-built, hybrid-lexical
-// retrieval corpus crawled from pokemon.fandom.com (CC BY-SA 4.0 —
-// commercial-safe, unlike the CC BY-NC-SA Bulbapedia which is NEVER ingested).
-// They answer anime/movie/character/PMD/lore/trivia questions Oak's structured
-// @pkmn + natdex data can't. Like the natdex warehouse these carry NO `format`
-// column — the wiki is franchise-wide. Built ONCE per ingest run from the
-// gitignored `web/.wiki-cache/` (fetched by `npm run fetch:wiki`), replaced
-// wholesale inside the same atomic transaction as every other table.
-//
-// v1 retrieval is Postgres BUILT-IN full-text search only (tsvector + GIN) — NO
-// pgvector (unavailable on prod Fly Postgres; hybrid/embeddings is a documented
-// later follow-up). The `tsv` column on `wiki_chunk` is a STORED GENERATED
-// column so the index is always in lock-step with the content and no writer has
-// to maintain it. Attribution (license + canonical url + revision timestamp) is
-// stored per page so every wiki-sourced answer can cite it as required.
-// ===========================================================================
-
-// ---------------------------------------------------------------------------
-// wiki_page — one row per crawled Fandom page (attribution + provenance)
-// ---------------------------------------------------------------------------
-export const wiki_page = pgTable(
-  "wiki_page",
-  {
-    /** Stable page id — the slugified canonical title, e.g. "ash-ketchum". PK. */
-    id: text("id").primaryKey(),
-    /** Display title as shown on the wiki, e.g. "Ash Ketchum". */
-    title: text("title").notNull(),
-    /** Canonical page URL (surfaced in citations). */
-    url: text("url").notNull(),
-    /** Epoch ms of the page's last wiki revision; null if the crawl lacked it. */
-    revised_at: bigint("revised_at", { mode: "number" }),
-    /** License string, e.g. "CC BY-SA 4.0" (attribution requirement). */
-    license: text("license").notNull(),
-  },
-  (t) => [index("wiki_page_title_idx").on(t.title)],
-);
-
-// ---------------------------------------------------------------------------
-// wiki_chunk — one row per (page, section) prose chunk, full-text indexed
-// ---------------------------------------------------------------------------
-export const wiki_chunk = pgTable(
-  "wiki_chunk",
-  {
-    /** Stable chunk id — `${page_id}#${section_index}`. PK. */
-    id: text("id").primaryKey(),
-    /** Owning page (logical FK → wiki_page.id; no physical constraint). */
-    page_id: text("page_id").notNull(),
-    /** Section heading this chunk came from, e.g. "Biography". */
-    section: text("section").notNull(),
-    /** The stripped plain-prose text of the section. */
-    content: text("content").notNull(),
-    /**
-     * Full-text search vector — a STORED GENERATED column derived from
-     * section + content. Never written directly; Postgres computes it on
-     * insert/update. Referenced by column NAME (not the Drizzle column, to avoid
-     * a self-reference in this table definition) — matches the hand-verified
-     * migration SQL exactly.
-     */
-    tsv: tsvector("tsv").generatedAlwaysAs(
-      sql`to_tsvector('english', coalesce(section, '') || ' ' || coalesce(content, ''))`,
-    ),
-  },
-  (t) => [
-    index("wiki_chunk_page_id_idx").on(t.page_id),
-    // GIN index over the generated tsvector — the retrieval hot path.
-    index("wiki_chunk_tsv_idx").using("gin", t.tsv),
-  ],
-);
-
-// ===========================================================================
-// Smogon metagame warehouse — competitive ladder usage stats (backlog B-5)
-//
-// Two GLOBAL tables populated by `npm run sync:meta` (src/ingest/sync-meta.ts)
-// — the ONE network-fetching DB writer in the codebase; ingest itself stays
-// fully offline (see "Data layer — built from @pkmn" in CLAUDE.md). Each month
-// of a competitive ladder (see `@/data/meta-formats`, the MetaFormat axis —
-// deliberately separate from the six-scope data Format/AgentMode) is fetched
-// from Smogon's published chaos stats, transformed, and replaced wholesale for
-// its (meta_format, month) pair — never partial-written. Retention is ALL
-// synced months (no pruning). Exposed read-only through the T18 `run_sql`
-// sandbox (see `oak_readonly` grants + `WAREHOUSE_ALLOWLIST`) and via the
-// typed T21 `get_meta_usage` tool. Champions is intentionally absent here —
-// its usage stats are served live by T15 `get_usage_stats`, never stored.
-//
-// Following the schema's conventions: snake_case columns, NO jsonb (JSON
-// payloads are `text` columns holding a JSON string, documented per-column
-// below), no physical FK constraints (meta_format/species are logical joins
-// resolved in SQL), epoch-ms timestamps as `bigint` with `mode: "number"`.
-// `usage_pct` is this schema's first `doublePrecision` column — usage stats
-// are inherently fractional (0–100), unlike every other numeric column here.
-// ===========================================================================
-
-// ---------------------------------------------------------------------------
-// meta_snapshot — one row per (meta_format, month) sync, snapshot bookkeeping
-// ---------------------------------------------------------------------------
-export const meta_snapshot = pgTable(
-  "meta_snapshot",
-  {
-    /** Ladder id, e.g. "gen9ou" (see MetaFormat). Part of the PK. */
-    meta_format: text("meta_format").notNull(),
-    /** Month this snapshot covers, "YYYY-MM". Part of the PK. */
-    month: text("month").notNull(),
-    /** Exact Smogon format id used for the fetch, e.g. "gen9ou". */
-    smogon_format_id: text("smogon_format_id").notNull(),
-    /** Minimum-battles usage cutoff this snapshot was fetched at. */
-    cutoff: integer("cutoff").notNull(),
-    /** Total ladder battles Smogon recorded for the month; null if unpublished. */
-    total_battles: integer("total_battles"),
-    /** Count of distinct species present in this snapshot's meta_usage rows. */
-    species_count: integer("species_count").notNull(),
-    /** Epoch ms this snapshot was fetched by sync-meta. */
-    fetched_at: bigint("fetched_at", { mode: "number" }).notNull(),
-    /** Source chaos-stats URL fetched (citation/audit). */
-    source_url: text("source_url").notNull(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.meta_format, t.month] }),
-    // Month-scoped scans across ladders (e.g. "what's synced for 2026-06?").
-    index("meta_snapshot_month_idx").on(t.month),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// meta_usage — one row per (meta_format, month, species) usage-stats entry
-// ---------------------------------------------------------------------------
-export const meta_usage = pgTable(
-  "meta_usage",
-  {
-    /** Ladder id, e.g. "gen9ou". Part of the PK. */
-    meta_format: text("meta_format").notNull(),
-    /** Month this row covers, "YYYY-MM". Part of the PK. */
-    month: text("month").notNull(),
-    /** Oak canonical species slug (resolved via searchable_names). Part of the PK. */
-    species: text("species").notNull(),
-    /** Raw Smogon display name as published, e.g. "Urshifu-Rapid-Strike". */
-    display_name: text("display_name").notNull(),
-    /** Usage rank within the month (1 = most used). */
-    rank: integer("rank").notNull(),
-    /** Usage percentage, 0–100. This schema's first doublePrecision column. */
-    usage_pct: doublePrecision("usage_pct").notNull(),
-    /** Raw weighted usage count backing usage_pct; null if not published. */
-    raw_count: integer("raw_count"),
-    /** JSON string: top 15 `{name, slug, pct}` moves by usage. */
-    moves: text("moves").notNull(),
-    /** JSON string: top 15 `{name, slug, pct}` held items by usage. */
-    items: text("items").notNull(),
-    /** JSON string: top 15 `{name, slug, pct}` abilities by usage. */
-    abilities: text("abilities").notNull(),
-    /**
-     * JSON string: top 10 `{nature, evs, pct}` spreads by usage. `evs` is a
-     * "252/0/0/252/4/0" string in HP/Atk/Def/SpA/SpD/Spe order.
-     */
-    spreads: text("spreads").notNull(),
-    /** JSON string: top 12 `{name, slug, pct}` teammates by usage. */
-    teammates: text("teammates").notNull(),
-    /**
-     * JSON string: top 10 `{name, slug, score, ko_or_switch_pct, n}`
-     * checks-and-counters entries, sorted by `score` desc. `score` is Smogon's
-     * C&C ranking score `(p − 4·d) × 100`; `ko_or_switch_pct` is `p × 100` (the
-     * KO-or-forced-switch rate); `n` is the weighted encounter count.
-     */
-    counters: text("counters").notNull(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.meta_format, t.month, t.species] }),
-    // Leaderboard reads: top-N by rank within a (ladder, month).
-    index("meta_usage_rank_idx").on(t.meta_format, t.month, t.rank),
-    // Per-species lookups/trend queries across months.
-    index("meta_usage_species_idx").on(t.species),
-  ],
-);
 
 // ===========================================================================
 // Spend controls — denylist + UTC-day counters + cap-exempt (docs/features/spend-controls)

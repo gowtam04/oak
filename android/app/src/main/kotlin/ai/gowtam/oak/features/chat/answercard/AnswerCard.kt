@@ -297,7 +297,7 @@ data class AnswerCardActions(
     val onOpenDamageCalc: (DamageCalc) -> Unit = {},
     /** Opens the standalone calculator prefilled from a damage block (CALC-AC-2.1). */
     val onOpenCalculator: (ai.gowtam.oak.wire.CalcScenario) -> Unit = {},
-    val calculatorFormat: ai.gowtam.oak.wire.Format = ai.gowtam.oak.wire.Format.NationalDex,
+    val calculatorFormat: ai.gowtam.oak.wire.Format = ai.gowtam.oak.wire.Format.Champions,
     /** Signed-in Add-to-team (ADD-US-1). Null = guest hide. */
     val onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)? = null,
     val onCitationHighlight: (CitationAnchor) -> Unit = {},

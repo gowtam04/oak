@@ -7,14 +7,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, type Format } from "@/data/formats";
 import type { CalcScenario } from "@/lib/calc/calc-schema";
 
 import CalculatorPanel from "./CalculatorPanel";
 
 export interface CalculatorOverlayProps {
   open: boolean;
-  format: Format;
+  /** Ignored — calc is always Champions. Kept so chat callers compile. */
+  format?: Format;
   slashRest?: string;
   scenario?: CalcScenario;
   onSend?: (message: string) => void;
@@ -23,7 +24,8 @@ export interface CalculatorOverlayProps {
   onExpand?: (scenario: CalcScenario) => void;
 }
 
-function parseSlashRest(rest: string, format: Format): CalcScenario {
+function parseSlashRest(rest: string): CalcScenario {
+  const format = CHAMPIONS_FORMAT;
   const empty: CalcScenario = { format, attacker: {}, defender: {}, move: {} };
   const trimmed = rest.trim();
   if (!trimmed) return empty;
@@ -61,24 +63,25 @@ function parseSlashRest(rest: string, format: Format): CalcScenario {
 
 export default function CalculatorOverlay({
   open,
-  format,
   slashRest = "",
   scenario,
-  onSend: _onSend,
   onExplain,
   onDismiss,
   onExpand,
 }: CalculatorOverlayProps) {
-  const fromSlash = useMemo(
-    () => parseSlashRest(slashRest, format),
-    [slashRest, format],
-  );
-  const initial = scenario ?? fromSlash;
+  const fromSlash = useMemo(() => parseSlashRest(slashRest), [slashRest]);
+  const initial = scenario
+    ? { ...scenario, format: CHAMPIONS_FORMAT }
+    : fromSlash;
   const [live, setLive] = useState<CalcScenario>(initial);
 
   useEffect(() => {
-    setLive(scenario ?? parseSlashRest(slashRest, format));
-  }, [scenario, slashRest, format]);
+    setLive(
+      scenario
+        ? { ...scenario, format: CHAMPIONS_FORMAT }
+        : parseSlashRest(slashRest),
+    );
+  }, [scenario, slashRest]);
 
   useEffect(() => {
     if (!open) return;
@@ -128,7 +131,7 @@ export default function CalculatorOverlay({
           </div>
         </header>
         <CalculatorPanel
-          format={format}
+          format={CHAMPIONS_FORMAT}
           scenario={live}
           onScenarioChange={setLive}
           onExplain={handleExplain}

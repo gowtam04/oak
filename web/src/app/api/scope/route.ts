@@ -1,25 +1,24 @@
 /**
- * `PUT /api/scope` — persist a header scope-chip pick with no follow-up
- * message (chat-qol api-design.md, ADR-8; SCOPE-US-1, SCOPE-BR-1).
+ * `PUT /api/scope` — old clients still call this after a chip pick
+ * (champions-first TurnScope, CF-DATA-BR-21). The requested format is
+ * ignored; the response always acks Champions and does not persist
+ * National Dex / gen-N as a future default.
  *
  *   Request  `{ format: Format, conversation_id?: string | null }`
  *            Guest also needs `session_id` as `?session_id=` or body
  *            `session_id` (same ownership pattern as `POST .../stop`).
- *   200      `{ format, lastUsedScopes?: Format[] }`
- *            (`lastUsedScopes` omitted for guests)
+ *   200      `{ format: "champions", lastUsedScope: "champions",
+ *               lastUsedScopes: ["champions"] }`
+ *            (guests omit lastUsedScope / lastUsedScopes)
  *   400      unknown / missing format; guest missing `session_id`
  *   404      signed-in + `conversation_id` not owned (no existence leak)
- *
- * Signed-in + conversation_id → conversation format + last_used_scope + MRU.
- * Signed-in + no conversation  → last_used_scope + MRU only (empty new chat).
- * Guest                      → `setSessionScope` (session/thread). No MRU.
  *
  * No turn, no model. db/env-touching modules are dynamically imported so
  * `next build` never evaluates `@/env`.
  */
 
 import { json, jsonError, readJsonObject } from "@/app/api/auth/_lib/http";
-import { isFormat, type Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, isFormat } from "@/data/formats";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,7 +53,7 @@ export async function PUT(req: Request): Promise<Response> {
   if (typeof body.format !== "string" || !isFormat(body.format)) {
     return INVALID_FORMAT();
   }
-  const format: Format = body.format;
+  // Requested format is ignored (old clients may still send gen-7).
 
   const conversationId = body.conversation_id;
   if (
@@ -77,9 +76,10 @@ export async function PUT(req: Request): Promise<Response> {
     if (sessionId === null) {
       return jsonError(400, "invalid_request", "session_id is required.");
     }
-    const { setSessionScope } = await import("@/server/session-store");
-    await setSessionScope(sessionId, format);
-    return json(200, { format });
+    // Do not persist the requested format onto the guest session
+    // (CF-DATA-BR-21). Session id is still required so old guests 400 the
+    // same as today when it is missing.
+    return json(200, { format: CHAMPIONS_FORMAT });
   }
 
   const convId =
@@ -89,15 +89,16 @@ export async function PUT(req: Request): Promise<Response> {
 
   if (convId !== null) {
     const convRepo = await import("@/data/repos/conversation-repo");
-    const conv = await convRepo.getConversation(account.id, convId);
-    if (conv === null) return NOT_FOUND();
-    await convRepo.updateConversationFormat(account.id, convId, format);
+    // Ownership check only — do not rewrite historical format to the
+    // requested chip pick (CF-DATA-BR-21).
+    if ((await convRepo.getConversation(account.id, convId)) === null) {
+      return NOT_FOUND();
+    }
   }
 
-  const accounts = await import("@/data/repos/accounts-repo");
-  const mru = await import("@/data/repos/scope-mru-repo");
-  await accounts.updateLastUsedScope(account.id, format);
-  await mru.touch(account.id, format, Date.now());
-  const lastUsedScopes = (await mru.list(account.id)).filter(isFormat);
-  return json(200, { format, lastUsedScopes });
+  return json(200, {
+    format: CHAMPIONS_FORMAT,
+    lastUsedScope: CHAMPIONS_FORMAT,
+    lastUsedScopes: [CHAMPIONS_FORMAT],
+  });
 }

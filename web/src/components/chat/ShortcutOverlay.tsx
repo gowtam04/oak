@@ -17,7 +17,6 @@ const ROWS: { action: string; mac: string; other: string }[] = [
   { action: "Focus composer", mac: "⌘⇧J", other: "Ctrl+Shift+J" },
   { action: "Stop", mac: "⌘.", other: "Ctrl+." },
   { action: "History search", mac: "⌘⇧F", other: "Ctrl+Shift+F" },
-  { action: "Scope picker", mac: "⌘⇧S", other: "Ctrl+Shift+S" },
   { action: "Pin/unpin conversation", mac: "⌘⇧P", other: "Ctrl+Shift+P" },
 ];
 

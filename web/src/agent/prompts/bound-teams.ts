@@ -1,7 +1,7 @@
 /**
  * Ephemeral (not prefix-cached) system segment listing the teams the user
  * @mentioned on this turn. The model must call existing `get_team` — there is
- * no 21st tool. Omitted entirely when `boundTeams` is empty.
+ * no extra tool. Omitted entirely when `boundTeams` is empty.
  */
 
 import type { BoundTeam } from "@/agent/types";

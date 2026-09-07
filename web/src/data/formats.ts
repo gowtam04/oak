@@ -1,12 +1,14 @@
 /**
- * Data-scope formats — the discriminator that scopes the index to a game.
+ * Data-scope formats — the discriminator stored on index rows, teams, and
+ * conversations.
  *
- * After the @pkmn migration the SQLite index stores one row-set PER FORMAT
- * (a `format` column on pokemon/learnset/reference_cache/searchable_names and a
- * per-format ingest_meta row). Repos filter by the active format, which is
+ * Champions-first (ADR-3 / ADR-4): ingest and runtime are Champions-only
+ * (`DEFAULT_FORMATS` is `["champions"]`). The historical {@link FORMATS} union
+ * remains so archived teams and old conversations still decode
+ * (`isFormat("gen-7")` etc.). Repos filter by the active format, which is
  * derived from the turn's {@link AgentMode} (server-controlled — see
  * `@/agent/types`). This module holds ONLY pure constants/mappings (no @pkmn or
- * SQLite imports) so it is safe to import from repos, tools, ingest, and tests.
+ * DB imports) so it is safe to import from repos, tools, ingest, and tests.
  */
 
 import type { AgentMode } from "@/agent/types";
@@ -39,7 +41,10 @@ export type GenFormat = "gen-5" | "gen-6" | "gen-7" | "gen-8" | "gen-4" | "gen-3
  */
 export type Format = "scarlet-violet" | "champions" | "national-dex" | GenFormat;
 
-/** All formats the ingest builds, in stable order. Append-only. */
+/**
+ * Historical stored-row union (archived teams, old conversations, turn_record).
+ * Append-only. Not the ingest/runtime set — see {@link DEFAULT_FORMATS}.
+ */
 export const FORMATS = [
   "scarlet-violet",
   "champions",
@@ -54,31 +59,18 @@ export const FORMATS = [
   "gen-1",
 ] as const;
 
-/** Default set of formats `runIngest` builds when none are specified. */
-export const DEFAULT_FORMATS: readonly Format[] = FORMATS;
+/**
+ * Formats `runIngest` builds when none are specified. Champions-first (ADR-4):
+ * ingest and runtime are Champions-only — not the full {@link FORMATS} tuple.
+ */
+export const DEFAULT_FORMATS = ["champions"] as const satisfies readonly Format[];
 
 /**
- * Display order for scope pickers (chat header chip, team menus, etc.).
- * National Dex first (the default scope), then Champions, then mainline
- * generations in release-date descending order. Does NOT reorder
- * {@link FORMATS} — that array feeds ingest/prompt/test lock-steps and must
- * stay stable.
- *
- * iOS/Android `Format.knownCases` should match this order.
+ * Display order for remaining product pickers. Champions-first (ADR-3):
+ * Champions is the only live format — National Dex is not the default.
+ * {@link FORMATS} is unchanged so archived stored rows still decode.
  */
-export const SCOPE_PICKER_ORDER: readonly Format[] = [
-  "national-dex",
-  "champions",
-  "scarlet-violet",
-  "gen-8",
-  "gen-7",
-  "gen-6",
-  "gen-5",
-  "gen-4",
-  "gen-3",
-  "gen-2",
-  "gen-1",
-] as const;
+export const SCOPE_PICKER_ORDER: readonly Format[] = ["champions"];
 
 /** The standard (non-Champions) format — today's Gen 9 scope. */
 export const STANDARD_FORMAT: Format = "scarlet-violet";
@@ -152,7 +144,11 @@ export function basisForFormat(format: Format): string {
   return format; // "national-dex" (falls through intentionally) or "gen-1"…"gen-8"
 }
 
-/** Type guard for a known format string (e.g. when reading CLI args). */
+/**
+ * Type guard for a known stored-row format string (archived teams, old
+ * conversations). Accepts the full historical {@link FORMATS} union (ADR-3).
+ * Ingest/runtime do not use this to accept other games — those are Champions-only.
+ */
 export function isFormat(value: string): value is Format {
   return (FORMATS as readonly string[]).includes(value);
 }

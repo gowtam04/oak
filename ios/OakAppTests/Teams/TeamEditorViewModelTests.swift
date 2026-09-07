@@ -7,6 +7,13 @@ import Testing
 /// the full-set editor's load, the create-vs-update save path, the **warn-but-allow**
 /// guarantee (warnings render but never block save, M-AC-T3.1), member add/remove, the
 /// editable↔wire conversion, and export. `@MainActor`.
+///
+/// Champions-first P7 expected API (parity with Android P8 names):
+///   `showsTeraField` / `showsIVKnobs` / `showsLevelKnob` — false on living
+///   `showsStatPoints` — true; `statPointBudget` 66 / `statPointStatCap` 32
+///   `isReadOnly` / `canSave` / `showsApplyUsageSet` — archived is view-only
+///   `applyUsageSet(toSlot:incoming:)` — empty fills; filled sets `pendingApplyConfirm`
+///   `confirmApplySet()` / `cancelApplySet()` (CF-TEAM-AC-6.3, CF-UI-US-5)
 @MainActor
 struct TeamEditorViewModelTests {
 
@@ -37,7 +44,7 @@ struct TeamEditorViewModelTests {
   private func team(
     id: String,
     name: String = "Team",
-    format: Format = .scarletViolet,
+    format: Format = .champions,
     members: [TeamMember] = []
   ) -> Team {
     Team(id: id, name: name, format: format, members: members, createdAt: 1, updatedAt: 1)
@@ -52,7 +59,7 @@ struct TeamEditorViewModelTests {
     #expect(vm.teamId == nil)
     #expect(vm.members.count == 1)
     #expect(vm.members[0].species.isEmpty)
-    #expect(vm.format == .scarletViolet)
+    #expect(vm.format == .champions)
   }
 
   // MARK: Save (create / update)
@@ -336,5 +343,165 @@ struct TeamEditorViewModelTests {
 
     #expect(fake.analyzeCalls == 2)
     #expect(vm.analysis == second)
+  }
+
+  // MARK: Champions-first editor (CF-TEAM-AC-1.2, CF-UI-US-4/5, ADR-7)
+
+  private func usageSetMember() -> TeamMember {
+    TeamMember(
+      species: "garchomp",
+      ability: "rough-skin",
+      item: "life-orb",
+      moves: ["earthquake", "dragon-claw", "fire-fang", "protect"],
+      nature: "jolly",
+      evs: StatSpread(hp: 4, atk: 30, def: 0, spa: 0, spd: 0, spe: 32),
+      ivs: StatSpread(hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31),
+      teraType: nil,
+      level: 50,
+      nickname: nil,
+      gender: nil,
+      shiny: nil
+    )
+  }
+
+  @Test
+  func livingEditorHidesTeraIVsAndLevelAndShowsStatPoints() {
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), format: .champions)
+
+    #expect(vm.format == .champions)
+    #expect(vm.isReadOnly == false)
+    #expect(vm.showsTeraField == false)
+    #expect(vm.showsIVKnobs == false)
+    #expect(vm.showsLevelKnob == false)
+    #expect(vm.showsStatPoints)
+    #expect(vm.showsApplyUsageSet)
+    #expect(vm.statPointBudget == 66)
+    #expect(vm.statPointStatCap == 32)
+    vm.members[0].evs = EditableStatSpread(hp: 4, atk: 30, def: 0, spa: 0, spd: 0, spe: 32)
+    #expect(vm.members[0].evs.total == 66)
+  }
+
+  @Test
+  func leftoverFormatArgumentStillOpensAChampionsEditor() {
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), format: .gen7)
+    #expect(vm.format == .champions)
+    #expect(vm.showsTeraField == false)
+  }
+
+  @Test
+  func saveStripsTeraForcesLevel50AndKeepsStatPointsInEVs() async {
+    let fake = FakeTeamService()
+    let vm = TeamEditorViewModel(teamService: fake, format: .champions, name: "Rain")
+    vm.members[0].species = "garchomp"
+    vm.members[0].teraType = "steel"
+    vm.members[0].level = 100
+    vm.members[0].ivs = EditableStatSpread(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0)
+    vm.members[0].evs = EditableStatSpread(hp: 4, atk: 30, def: 0, spa: 0, spd: 0, spe: 32)
+
+    let saved = await vm.save()
+
+    #expect(saved != nil)
+    #expect(fake.lastCreateFormat == .champions)
+    #expect(fake.lastCreateMembers?.first?.teraType == nil)
+    #expect(fake.lastCreateMembers?.first?.level == 50)
+    #expect(fake.lastCreateMembers?.first?.evs.spe == 32)
+    #expect(fake.lastCreateMembers?.first?.ivs.hp == 31)
+  }
+
+  @Test
+  func archivedEditorIsReadOnlyAndDoesNotOfferApplySet() {
+    let archived = team(id: "g7", name: "Alola rain", format: .gen7, members: [
+      member(species: "tapu-koko", moves: ["thunderbolt"]),
+    ])
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(seed: [archived]), team: archived)
+
+    #expect(vm.isReadOnly)
+    #expect(vm.format == .gen7)
+    #expect(vm.showsApplyUsageSet == false)
+    #expect(vm.canSave == false)
+  }
+
+  @Test
+  func applyUsageSetFillsAnEmptySlotWithoutConfirm() async {
+    let fake = FakeTeamService()
+    fake.nextSetTemplateFound = true
+    fake.nextSetTemplateMember = usageSetMember()
+    let vm = TeamEditorViewModel(teamService: fake, format: .champions)
+    #expect(vm.members[0].species.isEmpty)
+
+    await vm.applyUsageSet(toSlot: 0, incoming: usageSetMember())
+
+    #expect(vm.pendingApplyConfirm == false)
+    #expect(vm.members[0].species == "garchomp")
+    #expect(vm.members[0].ability == "rough-skin")
+    #expect(vm.members[0].item == "life-orb")
+    #expect(vm.members[0].nature == "jolly")
+    #expect(vm.members[0].teraType.isEmpty)
+    #expect(vm.members[0].level == 50)
+    #expect(vm.members[0].evs.spe == 32)
+  }
+
+  @Test
+  func applyUsageSetOnAFilledSlotAsksToConfirmAndCancelLeavesTheSlot() async {
+    let fake = FakeTeamService()
+    fake.nextSetTemplateFound = true
+    fake.nextSetTemplateMember = usageSetMember()
+    let existing = team(id: "t1", format: .champions, members: [
+      member(species: "landorus", moves: ["earthquake"]),
+    ])
+    let vm = TeamEditorViewModel(teamService: fake, team: existing)
+    #expect(vm.members[0].species == "landorus")
+
+    await vm.applyUsageSet(toSlot: 0, incoming: usageSetMember())
+
+    #expect(vm.pendingApplyConfirm)
+    #expect(vm.members[0].species == "landorus")
+
+    vm.cancelApplySet()
+
+    #expect(vm.pendingApplyConfirm == false)
+    #expect(vm.members[0].species == "landorus")
+    #expect(fake.updateCount == 0)
+  }
+
+  @Test
+  func confirmingReplaceWritesTheUsageSetWithoutTera() async {
+    let fake = FakeTeamService()
+    fake.nextSetTemplateFound = true
+    fake.nextSetTemplateMember = usageSetMember()
+    let existing = team(id: "t1", format: .champions, members: [
+      member(species: "landorus", moves: ["earthquake"]),
+    ])
+    let vm = TeamEditorViewModel(teamService: fake, team: existing)
+
+    await vm.applyUsageSet(toSlot: 0, incoming: usageSetMember())
+    #expect(vm.pendingApplyConfirm)
+    await vm.confirmApplySet()
+
+    #expect(vm.pendingApplyConfirm == false)
+    #expect(vm.members[0].species == "garchomp")
+    #expect(vm.members[0].ability == "rough-skin")
+    #expect(vm.members[0].item == "life-orb")
+    #expect(vm.members[0].teraType.isEmpty)
+    #expect(vm.members[0].level == 50)
+    #expect(vm.members[0].evs.atk == 30)
+  }
+
+  @Test
+  func applyUsageSetDoesNotEmptyTheSlotWhenUsageIsDown() async {
+    let fake = FakeTeamService()
+    fake.nextSetTemplateFound = false
+    fake.nextSetTemplateMember = nil
+    fake.nextSetTemplateNotes = ["Live Champions usage is unavailable."]
+    let existing = team(id: "t1", format: .champions, members: [
+      member(species: "garchomp", moves: ["earthquake"]),
+    ])
+    let vm = TeamEditorViewModel(teamService: fake, team: existing)
+
+    await vm.applyUsageSet(toSlot: 0, incoming: nil)
+
+    #expect(vm.members[0].species == "garchomp")
+    #expect(vm.pendingApplyConfirm == false)
+    #expect(vm.applySetUnavailableMessage != nil)
   }
 }

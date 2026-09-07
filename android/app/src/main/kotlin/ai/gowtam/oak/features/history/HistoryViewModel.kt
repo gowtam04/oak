@@ -124,8 +124,9 @@ class HistoryViewModel(
         if (_uiState.value.searchQuery.isNotBlank()) reload()
     }
 
-    /** Switches the format filter and re-fetches. A no-op when unchanged. */
+    /** History has no generation filter (CF-UI-AC-1.2). Other-game values are ignored. */
     suspend fun setFormatFilter(format: Format?) {
+        if (format != null && format != Format.Champions) return
         if (format == _uiState.value.formatFilter) return
         _uiState.update { it.copy(formatFilter = format) }
         reload()

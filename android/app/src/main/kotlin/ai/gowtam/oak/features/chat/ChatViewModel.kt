@@ -189,13 +189,14 @@ class ChatViewModel(
     // ---- Derived state ----
 
     /**
-     * The scope the header chip displays and the artifact viewer scopes to: a pending
-     * chip pick, else the server-resolved scope, else the signed-in last-used preference,
-     * else the national-dex default — identical to web's
-     * `displayFormat = scopeSeed ?? resolvedScope ?? lastUsedScope ?? "national-dex"`.
+     * The regulation chip is display-only Champions (CF-CHAT-AC-1.2, ADR-3).
+     * Other stored formats never relabel the chip.
      */
-    private fun displayFormat(): Format =
-        scopeSeed ?: resolvedScope ?: appState.lastUsedScope.value ?: Format.NationalDex
+    private fun displayFormat(): Format = Format.Champions
+
+    /** Other-game seeds are never sent (CF-CHAT-AC-1.1). Champions may be omitted. */
+    private fun livingScopeSeed(seed: Format?): Format? =
+        if (seed == Format.Champions) Format.Champions else null
 
     /**
      * Whether the composer can send: not already streaming, and either some text or at
@@ -306,7 +307,7 @@ class ChatViewModel(
                 return
             }
             is SlashCommand.Calc -> {
-                val format = displayFormat()
+                val format = Format.Champions
                 calcOverlay = CalcOverlayState(
                     scenario = parseCalcSlashRest(slash.rest, format) ?: CalcScenario(
                         format = format,
@@ -364,7 +365,7 @@ class ChatViewModel(
         val request = PendingRequest(
             message = text,
             images = images,
-            scopeSeed = scopeSeed,
+            scopeSeed = livingScopeSeed(scopeSeed),
             recovery = recovery,
             mentionedTeamIds = mentions.ids.takeIf { it.isNotEmpty() },
         )
@@ -412,7 +413,7 @@ class ChatViewModel(
         val request = PendingRequest(
             message = lastUser.text,
             images = retained,
-            scopeSeed = lastRequest?.scopeSeed ?: scopeSeed,
+            scopeSeed = livingScopeSeed(lastRequest?.scopeSeed ?: scopeSeed),
             recovery = ChatRecovery.Retry,
             mentionedTeamIds = lastRequest?.mentionedTeamIds,
         )
@@ -541,14 +542,10 @@ class ChatViewModel(
      * turn's scope stays stable (the chip is disabled then in the UI).
      */
     fun selectScope(format: Format) {
+        // Regulation chip is not a generation picker (CF-UI-AC-2.2).
+        if (format != Format.Champions) return
         if (isStreaming) return
-        scopeSeed = format
-        if (appState.authState.value is AuthState.SignedIn) {
-            appState.setLastUsedScope(format)
-            val mru = listOf(format) + appState.lastUsedScopes.value.filter { it != format }
-            appState.setLastUsedScopes(mru)
-        }
-        persistScopePick(format)
+        scopeSeed = null
         publish()
     }
 
@@ -602,7 +599,7 @@ class ChatViewModel(
 
     fun activateChip(chip: FollowUpChip) {
         when (chip.kind) {
-            FollowUpChip.Kind.Scope -> Format.fromRaw(chip.target).takeUnless { it is Format.Unknown }?.let { selectScope(it) }
+            FollowUpChip.Kind.Scope -> Unit
             FollowUpChip.Kind.Dex -> appState.requestDex(chip.target)
             FollowUpChip.Kind.Team -> appState.requestTeams(id = chip.target)
         }
@@ -676,15 +673,15 @@ class ChatViewModel(
             val lastConvo = runCatching { history?.list(query = null, format = null).orEmpty() }
                 .getOrDefault(emptyList())
                 .firstOrNull()
-            val lastTeam = runCatching { teams?.list(format = null).orEmpty() }
+            val lastTeam = runCatching { teams?.list(archived = false).orEmpty() }
                 .getOrDefault(emptyList())
                 .firstOrNull()
             emptyDeskRecents = EmptyDeskRecents(
                 lastConversation = lastConvo?.let { EmptyDeskRecents.Conversation(it.id, it.title) },
                 lastTeam = lastTeam?.let { EmptyDeskRecents.Team(it.id, it.name) },
-                scope = displayFormat(),
+                scope = Format.Champions,
             )
-            savedTeams = runCatching { teams?.list(format = null).orEmpty() }.getOrDefault(savedTeams)
+            savedTeams = runCatching { teams?.list(archived = false).orEmpty() }.getOrDefault(savedTeams)
             publish()
         }
     }
@@ -899,19 +896,15 @@ class ChatViewModel(
             }
 
             is SseEvent.Scope -> {
-                // Adopt this turn's scope and retire any pending chip pick — the
-                // conversation's scope is now sticky server-side and outranks a stale
-                // seed on the following turn.
-                resolvedScope = event.format
+                resolvedScope = Format.Champions
                 resolvedScopeSource = event.source
                 scopeSeed = null
-                // Signed-in only: remember for New Chat (server also persists on the account).
                 if (appState.authState.value is AuthState.SignedIn) {
-                    appState.setLastUsedScope(event.format)
-                    val mru = listOf(event.format) + appState.lastUsedScopes.value.filter { it != event.format }
+                    appState.setLastUsedScope(Format.Champions)
+                    val mru = listOf(Format.Champions) + appState.lastUsedScopes.value.filter { it != Format.Champions }
                     appState.setLastUsedScopes(mru)
                 }
-                mirrorGuestScope(event.format)
+                mirrorGuestScope(Format.Champions)
             }
 
             is SseEvent.ToolActivity ->
@@ -1368,7 +1361,7 @@ class ChatViewModel(
                 appState.requestTeams(id = match?.id, name = args.ifBlank { null })
             }
             SlashCommand.Target.Dex -> appState.requestDex(args.ifBlank { null })
-            SlashCommand.Target.Usage -> Unit // Android has no usage page
+            SlashCommand.Target.Usage -> appState.requestUsage()
         }
     }
 
@@ -1430,7 +1423,7 @@ class ChatViewModel(
         }
         if (savedTeams.isEmpty()) {
             viewModelScope.launch {
-                savedTeams = runCatching { teams?.list(format = null).orEmpty() }.getOrDefault(emptyList())
+                savedTeams = runCatching { teams?.list(archived = false).orEmpty() }.getOrDefault(emptyList())
                 mentionSuggestions = filterTeams(mentionQuery.orEmpty())
                 publish()
             }
@@ -1526,7 +1519,7 @@ data class ChatUiState(
     val toolActivities: List<ToolActivity> = emptyList(),
     val isStreaming: Boolean = false,
     val errorBanner: ErrorBanner? = null,
-    val displayFormat: Format = Format.NationalDex,
+    val displayFormat: Format = Format.Champions,
     val resolvedScope: Format? = null,
     val scopeSeed: Format? = null,
     val pendingImages: List<Bitmap> = emptyList(),

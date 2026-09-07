@@ -66,7 +66,7 @@ class AddToTeamViewModel(
         viewModelScope.launch {
             _phase.value = Phase.Loading
             try {
-                val list = teams.list(null)
+                val list = teams.list(archived = false)
                 pickerTeams = list
                 _phase.value = Phase.Picker(list)
             } catch (e: Exception) {
@@ -97,7 +97,7 @@ class AddToTeamViewModel(
     fun createNew(name: String?) {
         viewModelScope.launch {
             try {
-                val (team, _) = teams.create(conversationFormat, name, listOf(incoming))
+                val (team, _) = teams.create(Format.Champions, name, listOf(incoming))
                 _phase.value = Phase.Done(team.id, 0)
             } catch (e: Exception) {
                 _phase.value = Phase.Failed("We couldn't create that team.")

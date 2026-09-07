@@ -64,7 +64,7 @@ class AppState(
      */
     private val pendingTurns = java.util.concurrent.ConcurrentHashMap<String, String>()
 
-    private val _guestThreadScope = MutableStateFlow<Format>(Format.NationalDex)
+    private val _guestThreadScope = MutableStateFlow<Format>(Format.Champions)
 
     /**
      * The guest thread's resolved data scope, mirrored from the chat reducer's
@@ -155,6 +155,8 @@ class AppState(
         data class Teams(val id: String? = null, val name: String? = null) : SurfaceRequest
         data class ShareSnapshot(val id: String) : SurfaceRequest
         data class Calculator(val scenario: ai.gowtam.oak.wire.CalcScenario?) : SurfaceRequest
+        /** Open the Dex tab on the Usage section (ADR-6). */
+        data object Usage : SurfaceRequest
     }
 
     private val _surfaceRequest = MutableStateFlow<SurfaceRequest>(SurfaceRequest.None)
@@ -178,6 +180,10 @@ class AppState(
 
     fun requestCalculator(scenario: ai.gowtam.oak.wire.CalcScenario?) {
         _surfaceRequest.value = SurfaceRequest.Calculator(scenario)
+    }
+
+    fun requestUsage() {
+        _surfaceRequest.value = SurfaceRequest.Usage
     }
 
     fun consumeSurfaceRequest() {
@@ -215,7 +221,7 @@ class AppState(
     /** Clears the in-memory guest thread back to its defaults (e.g. on quick-stop). */
     fun clearGuestThread() {
         _guestThread.value = emptyList()
-        _guestThreadScope.value = Format.NationalDex
+        _guestThreadScope.value = Format.Champions
     }
 
     // -------------------------------------------------------------------

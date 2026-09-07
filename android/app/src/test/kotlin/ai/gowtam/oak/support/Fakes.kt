@@ -36,6 +36,7 @@ import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.ImportNote
 import ai.gowtam.oak.wire.LearnsetMove
 import ai.gowtam.oak.wire.SearchMatch
+import ai.gowtam.oak.wire.SetTemplateResult
 import ai.gowtam.oak.wire.Team
 import ai.gowtam.oak.wire.TeamAnalysis
 import ai.gowtam.oak.wire.TeamMember
@@ -332,7 +333,7 @@ class FakeTeamService(
     /** Optional per-call script (result / thrown error / a gate to suspend on) — overrides the defaults while non-empty. */
     var analyzeScript: ArrayDeque<AnalyzeStep>? = null,
 ) : TeamService {
-    val listCalls = mutableListOf<Format?>()
+    val listCalls = mutableListOf<Boolean>()
     val getCalls = mutableListOf<String>()
     val createCalls = mutableListOf<Triple<Format, String?, List<TeamMember>?>>()
     val updateCalls = mutableListOf<Triple<String, String?, List<TeamMember>?>>()
@@ -341,6 +342,9 @@ class FakeTeamService(
     val importPasteCalls = mutableListOf<Pair<Format, String>>()
     val exportPasteCalls = mutableListOf<String>()
     val analyzeCalls = mutableListOf<Pair<Format, List<TeamMember>>>()
+    val setTemplateCalls = mutableListOf<String>()
+    var setTemplateResult: SetTemplateResult = SetTemplateResult(found = false)
+    var setTemplateError: OakError? = null
 
     /** One scripted `analyze` outcome: optionally suspend on [gate], then throw [error] or return [result]. */
     data class AnalyzeStep(
@@ -349,10 +353,10 @@ class FakeTeamService(
         val gate: CompletableDeferred<Unit>? = null,
     )
 
-    override suspend fun list(format: Format?): List<TeamSummary> {
-        listCalls += format
+    override suspend fun list(archived: Boolean): List<TeamSummary> {
+        listCalls += archived
         error?.let { throw it }
-        return listResult
+        return listResult.filter { it.format.isArchived == archived }
     }
 
     override suspend fun get(id: String): Pair<Team, List<TeamWarning>> {
@@ -406,6 +410,12 @@ class FakeTeamService(
         }
         analyzeError?.let { throw it }
         return analyzeResult
+    }
+
+    override suspend fun setTemplate(species: String): SetTemplateResult {
+        setTemplateCalls += species
+        setTemplateError?.let { throw it }
+        return setTemplateResult
     }
 }
 

@@ -23,15 +23,16 @@ describe("instrumentToken", () => {
     expect(instrumentToken("compute_stat")).toBe("Computing stats");
     expect(instrumentToken("estimate_damage")).toBe("Calculating damage");
     expect(instrumentToken("get_usage_stats")).toBe("Checking live usage");
-    expect(instrumentToken("get_meta_usage")).toBe("Checking ladder usage");
-    expect(instrumentToken("get_encounters")).toBe("Finding locations");
     expect(instrumentToken("get_learnset")).toBe("Checking learnset");
     expect(instrumentToken("lookup_box")).toBe("Looking up box");
     expect(instrumentToken("get_team")).toBe("Reading team");
     expect(instrumentToken("list_teams")).toBe("Listing teams");
     expect(instrumentToken("save_team")).toBe("Saving team");
-    expect(instrumentToken("run_sql")).toBe("Querying game data");
-    expect(instrumentToken("search_wiki")).toBe("Searching wiki");
+    // Removed T14/T18/T19/T21 — generic fallback, no special copy (ADR-2).
+    expect(instrumentToken("get_meta_usage")).toBe("Looking up");
+    expect(instrumentToken("get_encounters")).toBe("Looking up");
+    expect(instrumentToken("run_sql")).toBe("Looking up");
+    expect(instrumentToken("search_wiki")).toBe("Looking up");
     expect(instrumentToken("submit_answer")).toBe("Answer");
     expect(instrumentToken("submit_builder_answer")).toBe("Teams");
     expect(instrumentToken("totally_unknown")).toBe("Looking up");

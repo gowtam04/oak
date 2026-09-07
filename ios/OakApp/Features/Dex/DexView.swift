@@ -31,18 +31,16 @@ struct DexView: View {
             .accessibilityAddTraits(.isHeader)
         }
         .oakLidItem()
-        if let model {
-          ToolbarItem(placement: .topBarTrailing) {
-            scopeMenu(model: model)
-          }
-          .oakLidItem()
+        ToolbarItem(placement: .topBarTrailing) {
+          RegulationChip()
         }
+        .oakLidItem()
       }
       .navigationDestination(for: DexEntityRoute.self) { route in
         DexEntityDetailContainer(
           kind: route.kind,
           query: route.query,
-          format: model?.format ?? .nationalDex,
+          format: .champions,
           artifactService: services.artifact,
           onOpen: { kind, query in
             path.append(DexEntityRoute(kind: kind, query: query))
@@ -90,8 +88,7 @@ struct DexView: View {
 
   private func ensureModel() {
     guard model == nil else { return }
-    let initial = appState.lastUsedScope ?? .nationalDex
-    let vm = DexViewModel(dexLookup: services.dexLookup, format: initial)
+    let vm = DexViewModel(dexLookup: services.dexLookup, format: .champions)
     model = vm
     vm.start()
   }
@@ -117,8 +114,8 @@ struct DexView: View {
           } description: {
             Text(
               model.query.isEmpty
-                ? "No entries in this scope."
-                : "Try a different name or scope."
+                ? "Nothing on the Champions roster matched."
+                : "Nothing on the Champions roster matched."
             )
           }
           .listRowBackground(Color.clear)
@@ -224,36 +221,6 @@ struct DexView: View {
     )
   }
 
-  private func scopeMenu(model: DexViewModel) -> some View {
-    Menu {
-      ForEach(Format.knownCases, id: \.self) { format in
-        Button {
-          path = NavigationPath()
-          model.selectFormat(format)
-        } label: {
-          if format == model.format {
-            Label(format.displayLabel, systemImage: "checkmark")
-          } else {
-            Text(format.displayLabel)
-          }
-        }
-      }
-    } label: {
-      HStack(spacing: 4) {
-        Text(model.format.shortLabel)
-          .font(Theme.body(.caption, weight: .semibold))
-        Image(systemName: "chevron.down")
-          .font(.caption2.weight(.semibold))
-      }
-      .foregroundStyle(Theme.onRed)
-      .padding(.horizontal, 10)
-      .padding(.vertical, 6)
-      .background(Theme.onRed.opacity(0.16), in: Capsule())
-      .overlay(Capsule().strokeBorder(Theme.onRed.opacity(0.45), lineWidth: 1))
-    }
-    .accessibilityLabel("Scope")
-    .accessibilityValue(model.format.displayLabel)
-  }
 }
 
 #if DEBUG

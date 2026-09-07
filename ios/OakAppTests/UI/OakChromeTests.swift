@@ -4,15 +4,16 @@ import UIKit
 
 @testable import OakApp
 
-/// Pins enamel chrome contracts: opaque nav appearance, the four-tab dock
-/// vocabulary, and that the system tab-bar translucency gate is gone (the
-/// visible dock is ``OakTabDock``, not `UITabBar`).
+/// Pins enamel chrome contracts: opaque nav appearance, the five-tab dock
+/// vocabulary (ADR-6), and that the system tab-bar translucency gate is gone
+/// (the visible dock is ``OakTabDock``, not `UITabBar`).
 @MainActor
 struct OakChromeTests {
   @Test
-  func oakAppTabHasFourCases() {
-    #expect(OakAppTab.allCases == [.chat, .teams, .dex, .settings])
+  func oakAppTabHasFiveCases() {
+    #expect(OakAppTab.allCases == [.chat, .teams, .usage, .dex, .settings])
     #expect(OakAppTab.chat.title == "Chat")
+    #expect(OakAppTab.usage.title == "Usage")
     #expect(OakAppTab.teams.systemImage == "square.grid.3x2.fill")
   }
 

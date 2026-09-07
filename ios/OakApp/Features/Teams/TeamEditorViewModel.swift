@@ -25,8 +25,33 @@ final class TeamEditorViewModel {
   /// The saved team's id once persisted; `nil` for a brand-new, unsaved team.
   private(set) var teamId: String?
 
-  /// The team's fixed data-scope format (M-BR-T2). Set at creation; never edited.
+  /// The team's fixed data-scope format (M-BR-T2). New editors always Champions;
+  /// archived teams keep their stored origin format.
   let format: Format
+
+  /// Archived teams are view + delete only (CF-TEAM-US-5).
+  var isReadOnly: Bool { format.isArchived }
+
+  /// Save is offered only on living Champions teams.
+  var canSave: Bool { !isReadOnly }
+
+  /// Living Champions editor hides Tera / IVs / level (CF-TEAM-AC-1.2, ADR-7).
+  var showsTeraField: Bool { false }
+  var showsIVKnobs: Bool { false }
+  var showsLevelKnob: Bool { false }
+  var showsStatPoints: Bool { !isReadOnly }
+  var showsApplyUsageSet: Bool { !isReadOnly && format.isLiving }
+
+  let statPointBudget = 66
+  let statPointStatCap = 32
+
+  /// True while a filled-slot apply-set is waiting for confirm (CF-TEAM-AC-6.3).
+  private(set) var pendingApplyConfirm = false
+  /// Honest copy when live usage is down (CF-TEAM-AC-6.5).
+  private(set) var applySetUnavailableMessage: String?
+
+  private var pendingApplySlot: Int?
+  private var pendingApplyMember: TeamMember?
 
   // MARK: Editable state (two-way bound)
 
@@ -113,9 +138,10 @@ final class TeamEditorViewModel {
   ) {
     self.teamService = teamService
     self.dexLookup = dexLookup
-    self.format = format
+    self.format = .champions
     self.name = name
     self.members = [EditableMember()]
+    _ = format
   }
 
   /// Opens the editor on an existing team by its list summary; ``load()`` fetches the
@@ -178,8 +204,12 @@ final class TeamEditorViewModel {
 
   /// Live typeahead over `/api/search`, scoped to this editor's fixed format — backs the
   /// species/item ``EntityPickerSheet``s. An empty/failed lookup just shows no suggestions.
+  /// Champions index even for archived teams (CF-TEAM-AC-5.4) — stored gen-N
+  /// is not a Dex lookup scope.
+  private var lookupFormat: Format { .champions }
+
   func searchEntities(kind: EntityKind, query: String) async -> [PickerOption] {
-    await dexLookup.search(kind: kind, query: query, format: format)
+    await dexLookup.search(kind: kind, query: query, format: lookupFormat)
       .map { PickerOption(slug: $0.slug, displayName: $0.displayName) }
   }
 
@@ -192,7 +222,7 @@ final class TeamEditorViewModel {
       spriteRefsBySpecies = [:]
       return
     }
-    let refs = await dexLookup.sprites(names: Array(species), format: format)
+    let refs = await dexLookup.sprites(names: Array(species), format: lookupFormat)
     spriteRefsBySpecies = refs
     applyMegaAutoForce()
   }
@@ -205,7 +235,8 @@ final class TeamEditorViewModel {
       movepoolByMemberId[memberId] = []
       return
     }
-    movepoolByMemberId[memberId] = await dexLookup.learnset(pokemon: member.species, format: format)
+    movepoolByMemberId[memberId] = await dexLookup.learnset(
+      pokemon: member.species, format: lookupFormat)
   }
 
   /// Refetches every filled slot's movepool — used after a full team load (M-AC-T1.2),
@@ -311,7 +342,8 @@ final class TeamEditorViewModel {
     errorMessage = nil
     defer { isSaving = false }
 
-    let memberPayload = members.map { $0.asTeamMember() }
+    guard canSave else { return nil }
+    let memberPayload = members.map { Self.livingLegalize($0.asTeamMember()) }
     let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
     let namePayload = trimmedName.isEmpty ? nil : trimmedName
 
@@ -320,7 +352,7 @@ final class TeamEditorViewModel {
       if let teamId {
         result = try await teamService.update(id: teamId, name: namePayload, members: memberPayload)
       } else {
-        result = try await teamService.create(format: format, name: namePayload, members: memberPayload)
+        result = try await teamService.create(format: .champions, name: namePayload, members: memberPayload)
       }
       apply(saved: result.team, validation: result.validation)
       await refreshSprites()
@@ -427,6 +459,93 @@ final class TeamEditorViewModel {
   /// Clears the current error banner.
   func dismissError() {
     errorMessage = nil
+  }
+
+  // MARK: Apply usage set (CF-TEAM-US-6 / CF-TEAM-AC-6.3)
+
+  /// Fills an empty slot immediately; a filled slot asks to confirm replace.
+  /// `incoming == nil` means usage is down — the slot is left unchanged.
+  func applyUsageSet(toSlot index: Int, incoming: TeamMember?) async {
+    guard !isReadOnly, members.indices.contains(index) else { return }
+    guard let incoming else {
+      applySetUnavailableMessage = "Live Champions usage is unavailable right now."
+      pendingApplyConfirm = false
+      pendingApplySlot = nil
+      pendingApplyMember = nil
+      return
+    }
+    applySetUnavailableMessage = nil
+    if members[index].species.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      writeUsageSet(toSlot: index, incoming: incoming)
+      pendingApplyConfirm = false
+      pendingApplySlot = nil
+      pendingApplyMember = nil
+      return
+    }
+    pendingApplySlot = index
+    pendingApplyMember = incoming
+    pendingApplyConfirm = true
+  }
+
+  func confirmApplySet() async {
+    applyPendingSetImmediately()
+  }
+
+  /// Sync write used by the confirm dialog so dismiss cannot race the Task.
+  func applyPendingSetImmediately() {
+    guard pendingApplyConfirm, let slot = pendingApplySlot, let incoming = pendingApplyMember else {
+      return
+    }
+    writeUsageSet(toSlot: slot, incoming: incoming)
+    pendingApplyConfirm = false
+    pendingApplySlot = nil
+    pendingApplyMember = nil
+  }
+
+  func cancelApplySet() {
+    pendingApplyConfirm = false
+    pendingApplySlot = nil
+    pendingApplyMember = nil
+  }
+
+  /// Fetches the live Champions set for this slot's species, then applies it.
+  func fetchAndApplyUsageSet(toSlot index: Int) async {
+    guard !isReadOnly, members.indices.contains(index) else { return }
+    let species = members[index].species.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !species.isEmpty else { return }
+    do {
+      let result = try await teamService.setTemplate(species: species)
+      await applyUsageSet(toSlot: index, incoming: result.found ? result.member : nil)
+    } catch {
+      await applyUsageSet(toSlot: index, incoming: nil)
+    }
+  }
+
+  private func writeUsageSet(toSlot index: Int, incoming: TeamMember) {
+    guard members.indices.contains(index) else { return }
+    members[index] = EditableMember(from: Self.livingLegalize(incoming))
+  }
+
+  private static let perfectIVs = StatSpread(
+    hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31
+  )
+
+  /// Persist tera null, level 50, IVs 31; Stat Points stay in `evs` (ADR-7).
+  private static func livingLegalize(_ member: TeamMember) -> TeamMember {
+    TeamMember(
+      species: member.species,
+      ability: member.ability,
+      item: member.item,
+      moves: member.moves,
+      nature: member.nature,
+      evs: member.evs,
+      ivs: perfectIVs,
+      teraType: nil,
+      level: 50,
+      nickname: member.nickname,
+      gender: member.gender,
+      shiny: member.shiny
+    )
   }
 
   // MARK: Teams-assistant draft bridge (Apply / Undo — in-memory draft only)

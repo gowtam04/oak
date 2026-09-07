@@ -102,7 +102,7 @@ class ChatViewModelAnswerCardsTest {
         val overlay = vm.uiState.value.calcOverlay
         assertNotNull(overlay)
         assertEquals("", overlay!!.rest)
-        assertEquals(Format.Gen7, overlay.scenario.format)
+        assertEquals(Format.Champions, overlay.scenario.format)
         assertNull(overlay.scenario.attacker.species)
         assertFalse(vm.uiState.value.isStreaming)
     }

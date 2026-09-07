@@ -23,12 +23,17 @@ import {
   parseArgs,
   selectCases,
 } from "./run";
-import {
-  EMPTY_USAGE,
-  type AssertResult,
-  type JudgeResult,
-  type RubricDimension,
-} from "./judge";
+// Type-only: a value import of ./judge pulls runtime → @/data/db at module
+// load, before main()'s installAsSingleton, so resolve_entity would hit the
+// placeholder DATABASE_URL instead of the fixture schema.
+import type { AssertResult, JudgeResult, RubricDimension } from "./judge";
+
+const EMPTY_USAGE = {
+  inputTokens: 0,
+  outputTokens: 0,
+  thinkingTokens: 0,
+  cachedInputTokens: 0,
+};
 
 describe("parseArgs", () => {
   it("defaults to the full judged suite", () => {
@@ -81,16 +86,15 @@ describe("parseArgs", () => {
 });
 
 describe("selectCases", () => {
-  it("defaults to all 61 cases for the judged suite", () => {
+  it("defaults to all 27 Champions goldens for the judged suite", () => {
     const { cases } = selectCases(parseArgs([]));
-    expect(cases).toHaveLength(61);
+    expect(cases).toHaveLength(27);
   });
 
-  it("uses the G1/G5/G6/G7/G17/G25 set for --rebuild", () => {
+  it("uses the G1/G5/G6/G7/G25 set for --rebuild", () => {
     const { cases } = selectCases(parseArgs(["--rebuild"]));
     expect(cases.map((c) => c.id).sort()).toEqual([
       "G1",
-      "G17",
       "G25",
       "G5",
       "G6",
@@ -99,12 +103,12 @@ describe("selectCases", () => {
   });
 
   it("narrows --deterministic to planned cases and reports the rest", () => {
-    // --rebuild ∩ deterministic-plans = G1/G5/G6; G7/G17/G25 need the live judge.
+    // --rebuild ∩ deterministic-plans = G1/G5/G6; G7/G25 need the live judge.
     const { cases, excludedFromDeterministic } = selectCases(
       parseArgs(["--deterministic", "--rebuild"]),
     );
     expect(cases.map((c) => c.id).sort()).toEqual(["G1", "G5", "G6"]);
-    expect(excludedFromDeterministic.sort()).toEqual(["G17", "G25", "G7"]);
+    expect(excludedFromDeterministic.sort()).toEqual(["G25", "G7"]);
   });
 
   it("honors a --case filter", () => {

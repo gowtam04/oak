@@ -1,13 +1,15 @@
 /**
  * Shared calculator form (overlay + /calc). Posts to POST /api/calc;
- * never starts a chat turn (CALC-BR-1).
+ * never starts a chat turn (CALC-BR-1). Champions-only: Level 50, Stat
+ * Points, hidden 31 individual values, roster species (CF-CALC-US-1,
+ * CF-UI-US-8).
  */
 
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 
-import { FORMATS, isFormat, type Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, type Format } from "@/data/formats";
 import { postCalc } from "@/lib/api/calc-client";
 import { explainCalcPrompt } from "@/lib/calc/explain-prompt";
 import type {
@@ -17,46 +19,82 @@ import type {
   CalcSide,
 } from "@/lib/calc/calc-schema";
 import EntityPicker from "@/components/teams/EntityPicker";
-import { NATURE_OPTIONS, TYPE_OPTIONS } from "@/components/teams/dex-constants";
+import { NATURE_OPTIONS } from "@/components/teams/dex-constants";
 
 import "./calculator.css";
 
 const WEATHERS = ["none", "sun", "rain", "sand", "snow"] as const;
 
-const EV_KEYS = ["hp", "atk", "def", "spa", "spd", "spe"] as const;
+const SP_KEYS = ["hp", "atk", "def", "spa", "spd", "spe"] as const;
+
+const CHAMPIONS_LEVEL = 50;
+const SP_PER_STAT = 32;
+const SP_BUDGET = 66;
+
+const FIXED_IVS = {
+  hp: 31,
+  atk: 31,
+  def: 31,
+  spa: 31,
+  spd: 31,
+  spe: 31,
+} as const;
 
 export interface CalculatorPanelProps {
-  format: Format;
+  /** Ignored — calc is always Champions. Kept so overlay/chat callers compile. */
+  format?: Format;
   scenario?: CalcScenario;
   onScenarioChange?: (scenario: CalcScenario) => void;
   onExplain?: (message: string) => void;
 }
 
-function emptyScenario(format: Format): CalcScenario {
-  return { format, attacker: {}, defender: {}, move: {} };
+function emptyScenario(): CalcScenario {
+  return {
+    format: CHAMPIONS_FORMAT,
+    attacker: { level: CHAMPIONS_LEVEL, ivs: { ...FIXED_IVS }, tera: null },
+    defender: { level: CHAMPIONS_LEVEL, ivs: { ...FIXED_IVS }, tera: null },
+    move: {},
+  };
 }
 
-function mergeScenario(
-  format: Format,
-  scenario: CalcScenario | undefined,
-): CalcScenario {
-  if (!scenario) return emptyScenario(format);
-  // The `format` prop is the inherited conversation scope (CALC-AC-1.1).
-  return { ...scenario, format };
+function bindSide(side: CalcSide | undefined): CalcSide {
+  return {
+    ...side,
+    level: CHAMPIONS_LEVEL,
+    ivs: { ...FIXED_IVS },
+    tera: null,
+  };
+}
+
+function championsScenario(scenario: CalcScenario | undefined): CalcScenario {
+  if (!scenario) return emptyScenario();
+  return {
+    ...scenario,
+    format: CHAMPIONS_FORMAT,
+    attacker: bindSide(scenario.attacker),
+    defender: bindSide(scenario.defender),
+  };
 }
 
 function sideSpecies(side: CalcSide): string {
   return side.species ?? "";
 }
 
+function spTotal(side: CalcSide): number {
+  const evs = side.evs ?? {};
+  return SP_KEYS.reduce(
+    (sum, key) => sum + (typeof evs[key] === "number" ? evs[key]! : 0),
+    0,
+  );
+}
+
 export default function CalculatorPanel({
-  format,
   scenario,
   onScenarioChange,
   onExplain,
 }: CalculatorPanelProps) {
   const [draft, setDraft] = useState<CalcScenario>(() =>
-    mergeScenario(format, scenario),
+    championsScenario(scenario),
   );
   const [result, setResult] = useState<CalcResult | null>(null);
 
@@ -74,8 +112,9 @@ export default function CalculatorPanel({
   }, [draft]);
 
   function patch(next: CalcScenario) {
-    setDraft(next);
-    onScenarioChange?.(next);
+    const bound = championsScenario(next);
+    setDraft(bound);
+    onScenarioChange?.(bound);
   }
 
   function patchSide(which: "attacker" | "defender", patchSide: Partial<CalcSide>) {
@@ -101,39 +140,16 @@ export default function CalculatorPanel({
 
   return (
     <div className="calculator-panel" data-testid="calculator-panel">
-      <div className="calculator-panel__meta">
-        <label className="calculator-label">
-          Format
-          <select
-            className="calculator-select"
-            data-testid="calc-format"
-            value={draft.format}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (isFormat(value)) patch({ ...draft, format: value });
-            }}
-          >
-            {FORMATS.map((id) => (
-              <option key={id} value={id}>
-                {id}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
       <div className="calculator-panel__row">
         <CalcSideFields
           testid="calc-side-attacker"
           title="Attacker"
-          format={draft.format}
           side={draft.attacker}
           onChange={(next) => patchSide("attacker", next)}
         />
         <CalcSideFields
           testid="calc-side-defender"
           title="Defender"
-          format={draft.format}
           side={draft.defender}
           onChange={(next) => patchSide("defender", next)}
         />
@@ -145,7 +161,7 @@ export default function CalculatorPanel({
           Move
           <EntityPicker
             kind="move"
-            format={draft.format}
+            format={CHAMPIONS_FORMAT}
             value={draft.move.slug ?? ""}
             onChange={(slug) =>
               patch({
@@ -279,80 +295,52 @@ export default function CalculatorPanel({
 function CalcSideFields({
   testid,
   title,
-  format,
   side,
   onChange,
 }: {
   testid: string;
   title: string;
-  format: Format;
   side: CalcSide;
   onChange: (patch: Partial<CalcSide>) => void;
 }) {
-  const evs = side.evs ?? {};
-  const ivs = side.ivs ?? {};
   const species = sideSpecies(side);
+  const total = spTotal(side);
+  const overBudget = total > SP_BUDGET;
 
-  const evInputs = useMemo(
-    () =>
-      EV_KEYS.map((key) => (
-        <label key={key} className="calculator-label">
-          {key.toUpperCase()}
-          <input
-            type="number"
-            min={0}
-            max={255}
-            value={typeof evs[key] === "number" ? evs[key] : ""}
-            onChange={(e) => {
-              const n = e.target.value === "" ? undefined : Number(e.target.value);
-              onChange({
-                evs: {
-                  ...evs,
-                  ...(n === undefined || Number.isNaN(n) ? {} : { [key]: n }),
-                },
-              });
-            }}
-          />
-        </label>
-      )),
-    [evs, onChange],
-  );
-
-  const ivInputs = useMemo(
-    () =>
-      EV_KEYS.map((key) => (
-        <label key={key} className="calculator-label">
-          {key.toUpperCase()}
-          <input
-            type="number"
-            min={0}
-            max={31}
-            value={typeof ivs[key] === "number" ? ivs[key] : ""}
-            onChange={(e) => {
-              const n = e.target.value === "" ? undefined : Number(e.target.value);
-              onChange({
-                ivs: {
-                  ...ivs,
-                  ...(n === undefined || Number.isNaN(n) ? {} : { [key]: n }),
-                },
-              });
-            }}
-            aria-label={`${title} ${key} IVs`}
-          />
-        </label>
-      )),
-    [ivs, onChange, title],
-  );
+  const spInputs = useMemo(() => {
+    const evs = side.evs ?? {};
+    return SP_KEYS.map((key) => (
+      <label key={key} className="calculator-label">
+        {key.toUpperCase()}
+        <input
+          type="number"
+          min={0}
+          max={SP_PER_STAT}
+          value={typeof evs[key] === "number" ? evs[key] : ""}
+          onChange={(e) => {
+            const n = e.target.value === "" ? undefined : Number(e.target.value);
+            onChange({
+              evs: {
+                ...evs,
+                ...(n === undefined || Number.isNaN(n) ? {} : { [key]: n }),
+              },
+            });
+          }}
+        />
+      </label>
+    ));
+  }, [side.evs, onChange]);
 
   return (
     <section className="calc-side" data-testid={testid}>
       <h3 className="calc-side__title">{title}</h3>
       <span className="calc-side__species">{species || "Empty"}</span>
+      <p className="calc-side__species">Level {CHAMPIONS_LEVEL}</p>
       <label className="calculator-label">
         Species
         <EntityPicker
           kind="pokemon"
-          format={format}
+          format={CHAMPIONS_FORMAT}
           value={species}
           onChange={(value) => onChange({ species: value || undefined })}
           placeholder="Species"
@@ -364,7 +352,7 @@ function CalcSideFields({
         Ability
         <EntityPicker
           kind="ability"
-          format={format}
+          format={CHAMPIONS_FORMAT}
           value={side.ability ?? ""}
           onChange={(value) => onChange({ ability: value || null })}
           placeholder="Ability"
@@ -375,7 +363,7 @@ function CalcSideFields({
         Item
         <EntityPicker
           kind="item"
-          format={format}
+          format={CHAMPIONS_FORMAT}
           value={side.item ?? ""}
           onChange={(value) => onChange({ item: value || null })}
           placeholder="Item"
@@ -385,7 +373,7 @@ function CalcSideFields({
       <label className="calculator-label">
         Nature
         <EntityPicker
-          format={format}
+          format={CHAMPIONS_FORMAT}
           value={side.nature ?? ""}
           onChange={(value) => onChange({ nature: value || null })}
           options={NATURE_OPTIONS}
@@ -393,39 +381,12 @@ function CalcSideFields({
           ariaLabel={`${title} nature`}
         />
       </label>
-      <label className="calculator-label">
-        Tera
-        <EntityPicker
-          format={format}
-          value={side.tera ?? ""}
-          onChange={(value) => onChange({ tera: value || null })}
-          options={TYPE_OPTIONS}
-          placeholder="Tera type"
-          ariaLabel={`${title} tera`}
-        />
-      </label>
-      <label className="calculator-label">
-        Level
-        <input
-          type="number"
-          min={1}
-          max={100}
-          value={side.level ?? ""}
-          onChange={(e) => {
-            const n = Number(e.target.value);
-            onChange({
-              level:
-                e.target.value === "" || Number.isNaN(n)
-                  ? undefined
-                  : Math.min(100, Math.max(1, n)),
-            });
-          }}
-        />
-      </label>
-      <span className="ilabel">EVs</span>
-      <div className="calculator-evs">{evInputs}</div>
-      <span className="ilabel">IVs</span>
-      <div className="calculator-evs">{ivInputs}</div>
+      <span className="ilabel">Stat Points</span>
+      <div className="calculator-evs">{spInputs}</div>
+      <p className="calc-side__species">
+        {total} / {SP_BUDGET}
+        {overBudget ? " — over 66" : ""}
+      </p>
     </section>
   );
 }

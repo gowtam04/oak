@@ -85,6 +85,73 @@ private struct AddToTeamButtonInner: View {
   }
 }
 
+/// Apply a live Champions usage set (CF-TEAM-US-6). Guests get a sign-in sheet
+/// instead of a silent hide (CF-AS-11).
+struct ApplyChampionsSetButton: View {
+  let species: String
+  var compact: Bool = false
+
+  @Environment(\.services) private var services
+  @Environment(AppState.self) private var appState
+  @State private var showSignIn = false
+  @State private var note: String?
+  @State private var busy = false
+
+  private var isSignedIn: Bool {
+    if case .signedIn = appState.authState { return true }
+    return false
+  }
+
+  var body: some View {
+    VStack(alignment: compact ? .trailing : .center, spacing: 6) {
+      Button {
+        Task { await apply() }
+      } label: {
+        if busy {
+          ProgressView()
+        } else {
+          Text("Apply this Champions set")
+        }
+      }
+      .buttonStyle(.oakSecondary)
+      .disabled(busy || species.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+      .accessibilityLabel("Apply this Champions set")
+      if let note {
+        Text(note)
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.textSecondary)
+          .multilineTextAlignment(compact ? .trailing : .center)
+      }
+    }
+    .sheet(isPresented: $showSignIn) {
+      AuthView(model: AuthViewModel(auth: services.auth, appState: appState))
+    }
+    .onChange(of: appState.authState) { _, newValue in
+      if case .signedIn = newValue { showSignIn = false }
+    }
+  }
+
+  private func apply() async {
+    guard isSignedIn else {
+      showSignIn = true
+      return
+    }
+    busy = true
+    note = nil
+    defer { busy = false }
+    do {
+      let result = try await services.teams.setTemplate(species: species)
+      if let member = result.member, result.found {
+        appState.pendingAddToTeam = member
+      } else {
+        note = result.notes.first ?? "Usage is unavailable or no set is listed for this species."
+      }
+    } catch {
+      note = "Live Champions usage is unavailable."
+    }
+  }
+}
+
 /// Picker + first-empty / replace / create-new (ADD-US-1–4). Guests never see
 /// the sheet (AUTH-BR-1).
 @MainActor
@@ -117,12 +184,13 @@ final class AddToTeamViewModel {
     self.conversationFormat = conversationFormat
     self.incoming = incoming
     self.isPresented = isSignedIn
+    _ = self.conversationFormat
   }
 
   func load() async {
     guard isSignedIn else { return }
     do {
-      teams = try await teamService.list(format: nil)
+      teams = try await teamService.list(archived: false)
     } catch {
       errorMessage = "Couldn't load teams."
       teams = []
@@ -180,7 +248,7 @@ final class AddToTeamViewModel {
     case .ok(let members, let slot):
       do {
         let created = try await teamService.create(
-          format: conversationFormat,
+          format: .champions,
           name: name,
           members: members
         )

@@ -19,8 +19,17 @@
  *
  * Chat-qol Phase 2 (recovery + mentions) is additional describes at the bottom:
  * `recovery` replace-vs-append, 409 `nothing_to_replace`, mention 400s before
- * `startTurn`, `ctx.boundTeams`, guest session-store replace, SCOPE-BR-2 MRU.
+ * `startTurn`, `ctx.boundTeams`, guest session-store replace.
+ *
+ * Champions-first P1 (TurnScope): every new turn binds `ctx.mode = "champions"`;
+ * `scope_seed` / `champions_mode` / in-message gen signals / sticky conversation
+ * format / `account.last_used_scope` do not pick another game. SSE `scope` is
+ * always `{ format: "champions", source: "default" }`. `detect-scope` is not
+ * used to route turns (the module is unhooked; in-message "Gen 5" must not
+ * switch mode). Mentions bind living Champions teams only.
  */
+
+import { randomUUID } from "node:crypto";
 
 import { sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -66,6 +75,7 @@ const spend = vi.hoisted(() => ({
 vi.mock("@/server/spend-control", () => spend);
 
 import { createPgSchema, installAsSingleton, type PgFixture } from "../../../../test/support/pg";
+import { team } from "@/data/schema";
 import {
   _resetStoreForTests,
   checkRateLimit,
@@ -235,6 +245,39 @@ async function readBody(res: Response): Promise<string> {
   return text;
 }
 
+/** The SSE `scope` frame payload, if the turn emitted one. */
+function parseScope(
+  text: string,
+): { format: string; source: string } | undefined {
+  for (const frame of text.split("\n\n")) {
+    if (!/^event:\s*scope$/m.test(frame)) continue;
+    const line = frame.split("\n").find((l) => l.startsWith("data:"));
+    if (!line) continue;
+    return JSON.parse(line.slice("data:".length).trim()) as {
+      format: string;
+      source: string;
+    };
+  }
+  return undefined;
+}
+
+function boundMode(): unknown {
+  return (captured.options as Record<string, unknown> | null)?.mode;
+}
+
+async function pollUntil<T>(
+  read: () => Promise<T>,
+  pred: (value: T) => boolean,
+  ticks = 50,
+): Promise<T> {
+  let value = await read();
+  for (let i = 0; i < ticks && !pred(value); i++) {
+    await new Promise((r) => setTimeout(r, 10));
+    value = await read();
+  }
+  return value;
+}
+
 describe("POST /api/chat — no active-team seam", () => {
   it("ignores a legacy active_team_id field and never binds an active team", async () => {
     signedIn(ACCT_A);
@@ -262,31 +305,42 @@ describe("POST /api/chat — no active-team seam", () => {
     expect((captured.options as Record<string, unknown>).accountId).toBe(ACCT_A);
   });
 
-  it("a seedless fresh conversation defaults to national-dex (scope flip)", async () => {
+  it("a seedless fresh conversation always binds Champions (CF-DATA-BR-1, CF-DATA-BR-7)", async () => {
     signedIn(ACCT_A);
-    await drain(await post({ session_id: "c2-default", message: "hi" }));
-    expect((captured.options as Record<string, unknown>).mode).toBe(
-      "national-dex",
+    const text = await readBody(
+      await post({ session_id: "c2-default", message: "hi" }),
     );
+    expect(boundMode()).toBe("champions");
+    expect(parseScope(text)).toEqual({
+      format: "champions",
+      source: "default",
+    });
   });
 
-  it("a seedless fresh conversation uses the account last_used_scope preference", async () => {
+  it("account last_used_scope must not restore another game (CF-DATA-BR-21)", async () => {
     signedIn(ACCT_A, { lastUsedScope: "gen-7" });
     const text = await readBody(
       await post({ session_id: "c2-pref", message: "hi" }),
     );
-    expect((captured.options as Record<string, unknown>).mode).toBe("gen-7");
-    // Preference source is reported on the scope frame.
-    expect(text).toContain('"source":"preference"');
-    expect(text).toContain('"format":"gen-7"');
+    expect(boundMode()).toBe("champions");
+    expect(parseScope(text)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+    expect(text).not.toContain('"source":"preference"');
+    expect(text).not.toContain('"format":"gen-7"');
   });
 
-  it("an explicit scope_seed chip pick binds that scope's mode (gen-2)", async () => {
+  it("an explicit scope_seed chip pick is ignored — still Champions (CF-CHAT-AC-1.1)", async () => {
     signedIn(ACCT_A);
-    await drain(
+    const text = await readBody(
       await post({ session_id: "c2-seed", message: "hi", scope_seed: "gen-2" }),
     );
-    expect((captured.options as Record<string, unknown>).mode).toBe("gen-2");
+    expect(boundMode()).toBe("champions");
+    expect(parseScope(text)).toEqual({
+      format: "champions",
+      source: "default",
+    });
   });
 
   // BACKGROUND TURNS (design §5.2): a client disconnect NO LONGER cancels or
@@ -324,8 +378,8 @@ describe("POST /api/chat — turn recording", () => {
     expect(input).toMatchObject({
       sessionId: "rec1",
       accountId: ACCT_A,
-      // Seedless fresh conversation → the National Dex default (the scope flip).
-      mode: "national-dex",
+      // Seedless fresh conversation → always Champions (CF-DATA-BR-1, CF-DATA-BR-7).
+      mode: "champions",
       status: "answered",
       // From the captured TurnTrace.
       providerModel: FAKE_TRACE.model,
@@ -425,11 +479,27 @@ const MISSING_TEAM_ID = "00000000-0000-4000-8000-000000000001";
 async function seedOwnedTeam(
   accountId: string,
   name: string,
-  format: "scarlet-violet" | "champions" = "scarlet-violet",
+  format: "scarlet-violet" | "champions" | "gen-7" = "champions",
 ): Promise<{ id: string; name: string; format: string }> {
+  // Living writes always store champions (P4). Archived rows must be inserted
+  // directly so format !== "champions" (ADR-3).
+  if (format !== "champions") {
+    const id = randomUUID();
+    const now = Date.now();
+    await fix.db.insert(team).values({
+      id,
+      account_id: accountId,
+      format,
+      name,
+      members: JSON.stringify([]),
+      created_at: now,
+      updated_at: now,
+    });
+    return { id, format, name };
+  }
   return teamRepo.createTeam({
     accountId,
-    format,
+    format: "champions",
     name,
     members: [],
     now: Date.now(),
@@ -440,11 +510,12 @@ async function seedSignedInPair(
   conversationId: string,
   userMessage: string,
   answerMarkdown: string,
+  format: "national-dex" | "gen-7" | "champions" | "scarlet-violet" = "national-dex",
 ): Promise<void> {
   await convRepo.appendTurnPair({
     accountId: ACCT_A,
     conversationId,
-    format: "national-dex",
+    format,
     userTurnId: convRepo.newTurnId(),
     userMessage,
     assistantTurnId: convRepo.newTurnId(),
@@ -588,14 +659,14 @@ describe("POST /api/chat — mentions (MEN-US-1, MEN-BR-1..4, AUTH-BR-4)", () =>
     expect(findRunningBySession("mixed-mention")).toBeUndefined();
   });
 
-  it("owned mentions bind onto ctx.boundTeams — no 21st tool (MEN-US-1, MEN-BR-1, MEN-BR-3)", async () => {
+  it("owned living Champions mentions bind onto ctx.boundTeams (MEN-US-1, MEN-BR-1, MEN-BR-3, CF-CHAT-AC-3.4)", async () => {
     signedIn(ACCT_A);
-    const rain = await seedOwnedTeam(ACCT_A, "Rain", "scarlet-violet");
     const cup = await seedOwnedTeam(ACCT_A, "Worlds cup", "champions");
+    const rain = await seedOwnedTeam(ACCT_A, "Rain 2", "champions");
 
     const res = await post({
       session_id: "bind-mention",
-      message: "compare @Rain and @Worlds cup",
+      message: "compare @Rain 2 and @Worlds cup",
       mentioned_team_ids: [rain.id, cup.id],
     });
     expect(res.status).toBe(200);
@@ -604,17 +675,63 @@ describe("POST /api/chat — mentions (MEN-US-1, MEN-BR-1..4, AUTH-BR-4)", () =>
     expect(captured.options).not.toBeNull();
     expect(captured.options).toHaveProperty("boundTeams");
     expect(captured.options!.boundTeams).toEqual([
-      { id: rain.id, name: "Rain", format: "scarlet-violet" },
+      { id: rain.id, name: "Rain 2", format: "champions" },
       { id: cup.id, name: "Worlds cup", format: "champions" },
     ]);
     // Mentions ride ctx.boundTeams + existing get_team — they are not a new tool.
     expect(captured.options).not.toHaveProperty("activeTeam");
   });
 
+  it.each(["gen-7", "scarlet-violet"] as const)(
+    "an archived / other-format %s team cannot bind (CF-CHAT-AC-3.4)",
+    async (format) => {
+      signedIn(ACCT_A);
+      const archived = await seedOwnedTeam(ACCT_A, "Old rain", format);
+
+      const res = await post({
+        session_id: `arch-mention-${format}`,
+        message: "use @Old rain",
+        mentioned_team_ids: [archived.id],
+      });
+
+      expect(res.status).toBe(400);
+      expect(await jsonBody(res)).toEqual(
+        expect.objectContaining({
+          error: "unbound_mention",
+          id: archived.id,
+        }),
+      );
+      expect(mockRunOak).not.toHaveBeenCalled();
+      expect(findRunningBySession(`arch-mention-${format}`)).toBeUndefined();
+    },
+  );
+
+  it("a mixed living + archived mention list 400s the archived id and never startTurn (CF-CHAT-AC-3.4)", async () => {
+    signedIn(ACCT_A);
+    const living = await seedOwnedTeam(ACCT_A, "Worlds cup", "champions");
+    const archived = await seedOwnedTeam(ACCT_A, "Old rain", "gen-7");
+
+    const res = await post({
+      session_id: "mixed-arch-mention",
+      message: "compare @Worlds cup and @Old rain",
+      mentioned_team_ids: [living.id, archived.id],
+    });
+
+    expect(res.status).toBe(400);
+    expect(await jsonBody(res)).toEqual(
+      expect.objectContaining({
+        error: "unbound_mention",
+        id: archived.id,
+      }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
+    expect(findRunningBySession("mixed-arch-mention")).toBeUndefined();
+  });
+
   it("does not add a mentions tool (ADR-5)", async () => {
     const { tools } = await import("@/agent/tools");
-    // T22 lookup_box is the real 21st tool; mentions still are not a tool.
-    expect(tools).toHaveLength(21);
+    // Mentions ride ctx.boundTeams — not a tool. P3 owns the 17-tool barrel;
+    // this file must not require deleted other-game tools or a 21-tool count.
     expect(tools.map((t) => t.name)).not.toContain("get_bound_teams");
   });
 
@@ -674,6 +791,170 @@ describe("POST /api/chat — mentions (MEN-US-1, MEN-BR-1..4, AUTH-BR-4)", () =>
     expect(await getSessionScope("guest-dead-mention-scope")).toBe(
       "national-dex",
     );
+  });
+});
+
+// ===========================================================================
+// Champions-first P1 — TurnScope (CF-CHAT-AC-1.1, CF-CHAT-AC-3.2/3.3/3.4,
+// CF-DATA-BR-1/7/21, CF-AUTH-AC-1.1, ADR-3)
+//
+// detect-scope is not consulted for turn routing (web/src/lib/scope/detect-scope.ts
+// is unhooked). In-message gen signals, chip seeds, sticky conversation format,
+// and account.last_used_scope must not pick another game.
+// ===========================================================================
+
+describe("POST /api/chat — Champions-first TurnScope (P1)", () => {
+  it.each(["gen-7", "national-dex", "scarlet-violet"] as const)(
+    "ignores scope_seed %s and binds ctx.mode = champions (CF-CHAT-AC-1.1, CF-DATA-BR-1)",
+    async (seed) => {
+      signedIn(ACCT_A);
+      const text = await readBody(
+        await post({
+          session_id: `cf-seed-${seed}`,
+          message: "hi",
+          scope_seed: seed,
+        }),
+      );
+      expect(boundMode()).toBe("champions");
+      expect(parseScope(text)).toEqual({
+        format: "champions",
+        source: "default",
+      });
+    },
+  );
+
+  it.each([true, false] as const)(
+    "ignores champions_mode %s and still binds Champions (CF-CHAT-AC-1.1)",
+    async (flag) => {
+      signedIn(ACCT_A);
+      const text = await readBody(
+        await post({
+          session_id: `cf-legacy-${flag}`,
+          message: "hi",
+          champions_mode: flag,
+        }),
+      );
+      expect(boundMode()).toBe("champions");
+      expect(parseScope(text)).toEqual({
+        format: "champions",
+        source: "default",
+      });
+    },
+  );
+
+  it("in-message Gen 5 does not switch mode — detect-scope is not used to route (CF-CHAT-AC-1.1, ADR-3)", async () => {
+    signedIn(ACCT_A);
+    const text = await readBody(
+      await post({
+        session_id: "cf-gen5-signal",
+        message: "analyze my Gen 5 rain team",
+      }),
+    );
+    expect(boundMode()).toBe("champions");
+    expect(parseScope(text)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+    expect(text).not.toContain('"format":"gen-5"');
+    expect(text).not.toContain('"source":"message"');
+  });
+
+  it("a new message on an old other-game thread is Champions (CF-CHAT-AC-3.2, CF-DATA-BR-7)", async () => {
+    signedIn(ACCT_A);
+    await seedSignedInPair("old-gen7-thread", "prior q", "prior a", "gen-7");
+
+    const text = await readBody(
+      await post({
+        session_id: "old-gen7-thread",
+        message: "what about defensively?",
+      }),
+    );
+    expect(boundMode()).toBe("champions");
+    expect(parseScope(text)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+    // Sticky other-game conversation format is not used to pick data.
+    expect(text).not.toContain('"source":"conversation"');
+    expect(text).not.toContain('"format":"gen-7"');
+
+    const conv = await pollUntil(
+      () => convRepo.getConversation(ACCT_A, "old-gen7-thread"),
+      (c) => c?.format === "champions",
+    );
+    expect(conv?.format).toBe("champions");
+  });
+
+  it("after that new message, a follow-up is still Champions (CF-CHAT-AC-3.3)", async () => {
+    signedIn(ACCT_A);
+    await seedSignedInPair("old-natdex-thread", "prior q", "prior a", "national-dex");
+
+    const first = await post({
+      session_id: "old-natdex-thread",
+      message: "new question",
+    });
+    expect(first.status).toBe(200);
+    const text1 = await readBody(first);
+    expect(boundMode()).toBe("champions");
+    expect(parseScope(text1)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+    expect(
+      (await pollUntil(
+        () => convRepo.getConversation(ACCT_A, "old-natdex-thread"),
+        (c) => c?.format === "champions",
+      ))?.format,
+    ).toBe("champions");
+
+    const text2 = await readBody(
+      await post({
+        session_id: "old-natdex-thread",
+        message: "and offensively?",
+      }),
+    );
+    expect(boundMode()).toBe("champions");
+    expect(parseScope(text2)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+  });
+
+  it("guest sticky session scope gen-7 is not used to pick data (CF-CHAT-AC-3.3, CF-AUTH-AC-1.1)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+    await setSessionScope("guest-sticky-gen7", "gen-7");
+
+    const text = await readBody(
+      await post({
+        session_id: "guest-sticky-gen7",
+        message: "what about defensively?",
+      }),
+    );
+    expect(boundMode()).toBe("champions");
+    expect(parseScope(text)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+    expect(mockRunOak).toHaveBeenCalled();
+    expect(
+      await pollUntil(
+        () => getSessionScope("guest-sticky-gen7"),
+        (scope) => scope === "champions",
+      ),
+    ).toBe("champions");
+  });
+
+  it("guest chat still works and is Champions (CF-AUTH-AC-1.1, CF-DATA-BR-1)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+    const res = await post({ session_id: "guest-cf-chat", message: "hi" });
+    expect(res.status).toBe(200);
+    const text = await readBody(res);
+    expect(boundMode()).toBe("champions");
+    expect(parseScope(text)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+    expect(mockRunOak).toHaveBeenCalled();
   });
 });
 
@@ -899,9 +1180,12 @@ describe("POST /api/chat — recovery persist (REC-US-1..3, REC-BR-1..8)", () =>
 // Chat-qol Phase 2 — MRU touch on a signed-in completed turn (SCOPE-BR-2)
 // ===========================================================================
 
-describe("POST /api/chat — scope MRU on completed signed-in turn (SCOPE-BR-2)", () => {
-  it("fire-and-forget touches the resolved format after a successful signed-in turn", async () => {
+describe("POST /api/chat — scope MRU on completed signed-in turn (CF-DATA-BR-21)", () => {
+  it("must not persist gen-7 / National Dex as a future default after a completed turn", async () => {
+    const accounts = await import("@/data/repos/accounts-repo");
+    await accounts.createAccount(`${ACCT_A}@x.test`, ACCT_A, 0);
     signedIn(ACCT_A);
+
     const res = await post({
       session_id: "mru-touch",
       message: "hi",
@@ -910,15 +1194,28 @@ describe("POST /api/chat — scope MRU on completed signed-in turn (SCOPE-BR-2)"
     expect(res.status).toBe(200);
     await drain(res);
 
+    // Fire-and-forget MRU touch: wait long enough to observe a gen-7 write.
     let listed = await mruRepo.list(ACCT_A);
-    for (let i = 0; i < 50 && listed[0] !== "gen-7"; i++) {
+    for (let i = 0; i < 50; i++) {
       await new Promise((r) => setTimeout(r, 10));
       listed = await mruRepo.list(ACCT_A);
+      if (listed.includes("gen-7") || listed.includes("national-dex")) break;
     }
-    expect(listed[0]).toBe("gen-7");
+    expect(listed).not.toContain("gen-7");
+    expect(listed).not.toContain("national-dex");
+    expect(listed).not.toContain("scarlet-violet");
+    expect(listed.every((s) => s === "champions")).toBe(true);
+
+    const found = await accounts.findAccountByEmail(`${ACCT_A}@x.test`);
+    expect(found?.lastUsedScope).not.toBe("gen-7");
+    expect(found?.lastUsedScope).not.toBe("national-dex");
+    expect(found?.lastUsedScope).not.toBe("scarlet-violet");
+    if (found?.lastUsedScope) {
+      expect(found.lastUsedScope).toBe("champions");
+    }
   });
 
-  it("a guest completed turn does not write an account MRU row (SCOPE-BR-2)", async () => {
+  it("a guest completed turn does not write an account MRU row (CF-AUTH-AC-1.1)", async () => {
     cu.getCurrentAccount.mockResolvedValue(null);
     await drain(
       await post({

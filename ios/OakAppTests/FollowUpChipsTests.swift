@@ -18,7 +18,7 @@ import Testing
 ///   `mentionedTeam` = `{ id, name }` (`FollowUpChips.MentionedTeam`)
 ///
 /// Labels:
-///   scope → `Switch to ${impliedFormat.rawValue}.`
+///   scope → never emitted (Champions-first; leftover impliedFormat ignored)
 ///   dex   → `Open ${subject.name} in Dex`
 ///   team  → `Open ${teamName}`
 ///
@@ -116,21 +116,13 @@ struct FollowUpChipsTests {
   // MARK: CHIP-AC-1.1 — scope
 
   @Test
-  func emitsOneScopeChipWhenADifferentFormatIsImplied() {
+  func doesNotEmitAScopeChipEvenWhenADifferentFormatIsImplied() {
     let chips = FollowUpChips.derive(
       answer: base,
       impliedFormat: .scarletViolet
     )
-    let scope = chips.filter { $0.kind == .scope }
-    #expect(scope.count == 1)
-    #expect(
-      scope.first
-        == FollowUpChip(
-          kind: .scope,
-          label: "Switch to scarlet-violet.",
-          target: "scarlet-violet"
-        )
-    )
+    #expect(chips.filter { $0.kind == .scope }.isEmpty)
+    #expect(chips.contains { $0.label.localizedCaseInsensitiveContains("Switch to") } == false)
   }
 
   @Test
@@ -321,7 +313,7 @@ struct FollowUpChipsTests {
       #expect(!chip.label.lowercased().contains("add garchomp to a team"))
       #expect(!chip.label.lowercased().contains("open this calc"))
     }
-    #expect(chips.contains { $0.kind == .scope })
+    #expect(chips.filter { $0.kind == .scope }.isEmpty)
     #expect(chips.filter { $0.kind == .dex }.count <= 3)
     #expect(chips.filter { $0.kind == .team }.count == 1)
   }
@@ -367,9 +359,9 @@ struct FollowUpChipsTests {
       impliedFormat: .scarletViolet,
       mentionedTeam: FollowUpChips.MentionedTeam(id: "team-rain-1", name: "Rain Offense")
     )
-    #expect(chips.filter { $0.kind == .scope }.count == 1)
+    #expect(chips.filter { $0.kind == .scope }.isEmpty)
     #expect(chips.filter { $0.kind == .dex }.count == 3)
     #expect(chips.filter { $0.kind == .team }.count == 1)
-    #expect(chips.count == 5)
+    #expect(chips.count == 4)
   }
 }

@@ -16,13 +16,13 @@
  *
  * Checks (BR-T5), in stable per-slot then team-level order:
  *   - incomplete            — species unset OR < 4 moves (informational, BR-T4).
- *   - ev_total_exceeded     — sum(EVs) > 508.
- *   - ev_stat_exceeded      — any single EV > 252 (one warning per stat).
+ *   - ev_total_exceeded     — sum(Stat Points) > 66 (living Champions).
+ *   - ev_stat_exceeded      — any single Stat Point > 32 (one warning per stat).
  *   - iv_out_of_range       — any IV outside 0..31 (one warning per stat).
- *   - species_illegal       — species not in the format roster.
+ *   - species_illegal       — species not in the Champions roster.
  *   - ability_not_for_species — ability not one of the species' legal abilities.
- *   - move_not_in_learnset  — a move not learnable by the species in the format.
- *   - item_illegal          — held item not legal in the format.
+ *   - move_not_in_learnset  — a move not learnable by the species in Champions.
+ *   - item_illegal          — held item not legal in Champions.
  *   - item_missing          — a complete member (4 moves) with no held item.
  *   - duplicate_species     — species clause, by National Dex number (team-level).
  *   - duplicate_item        — item clause (team-level).
@@ -31,7 +31,7 @@
 import { and, eq } from "drizzle-orm";
 
 import type { OakDb } from "@/data/db";
-import type { Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, type Format } from "@/data/formats";
 import type { StatSpread, TeamMember } from "@/data/teams/team-schema";
 import { searchable_names } from "@/data/schema";
 import { getPokemon } from "@/data/repos/pokedex-repo";
@@ -46,18 +46,27 @@ export {
   HARD_VIOLATION_CODES,
   isHardViolation,
 } from "@/data/teams/team-schema";
-import type { TeamWarning } from "@/data/teams/team-schema";
+import type { TeamWarning, WarningCode } from "@/data/teams/team-schema";
 
 /**
- * Legal EV / stat-point ceilings per format. Scarlet/Violet uses classic EVs
- * (508 total, 252 per stat); Champions uses the much tighter Stat-Point budget
- * (66 total, 32 per stat) — mirrors `evBudgetFor` in the team-builder UI.
+ * Legal EV / stat-point ceilings per format. Living validation is always
+ * Champions (66 total / 32 per stat). A historical format still uses classic
+ * EVs if a caller passes one; archive GET uses {@link validateArchivedTeam}
+ * instead (roster-presence only — no budget noise).
  */
 function evCaps(format: Format): { total: number; perStat: number } {
-  return format === "champions"
+  return format === CHAMPIONS_FORMAT
     ? { total: 66, perStat: 32 }
     : { total: 508, perStat: 252 };
 }
+
+/** Archive-view codes: roster presence only (CF-TEAM-AC-5.4). No EV/IV budget. */
+const ARCHIVE_ROSTER_CODES: ReadonlySet<WarningCode> = new Set([
+  "species_illegal",
+  "ability_not_for_species",
+  "move_not_in_learnset",
+  "item_illegal",
+]);
 /** Legal IV range. */
 const IV_MIN = 0;
 const IV_MAX = 31;
@@ -110,6 +119,19 @@ export async function validateTeam(
   db: OakDb,
 ): Promise<TeamWarning[]> {
   return (await validateTeamDetailed(members, format, db)).warnings;
+}
+
+/**
+ * Archive GET (CF-TEAM-AC-5.4 / CF-DATA-BR-4): stored names vs the Champions
+ * roster only. Never looks up another format's index. Drops Stat Point / EV
+ * budget noise so a leftover 252 spread is not flagged as if it were living.
+ */
+export async function validateArchivedTeam(
+  members: TeamMember[],
+  db: OakDb,
+): Promise<TeamWarning[]> {
+  const warnings = await validateTeam(members, CHAMPIONS_FORMAT, db);
+  return warnings.filter((w) => ARCHIVE_ROSTER_CODES.has(w.code));
 }
 
 /**
@@ -267,7 +289,7 @@ export async function validateTeamDetailed(
           code: "species_illegal",
           slot,
           field: "species",
-          message: `Species "${member.species}" is not legal in this format.`,
+          message: `Species "${member.species}" is not in the Champions roster.`,
         });
       } else {
         // Ability must be one of the species' legal ability slots.
@@ -341,7 +363,7 @@ export async function validateTeamDetailed(
         code: "item_illegal",
         slot,
         field: "item",
-        message: `Item "${member.item}" is not legal in this format.`,
+        message: `Item "${member.item}" is not in the Champions roster.`,
       });
     }
 

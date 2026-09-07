@@ -34,8 +34,8 @@ final class HistoryListViewModel {
   /// The search text (M-AC-H2.2). Applied server-side via `?q=` on ``reload()``.
   var searchQuery: String = ""
 
-  /// The active format filter (M-AC-H2.3); `nil` = all formats. Applied server-side
-  /// via `?format=`.
+  /// Leftover generation filter. Champions-first: always `nil` — History does
+  /// not filter by game (CF-UI-AC-1.2 / CF-HIST-AC-1.1).
   private(set) var formatFilter: Format?
 
   /// Folder list (signed-in organize).
@@ -76,7 +76,7 @@ final class HistoryListViewModel {
     do {
       conversations = try await history.list(
         query: trimmedQuery,
-        format: formatFilter,
+        format: nil,
         folderId: folderFilter,
         archived: showingArchive ? true : false,
         includeArchived: includeArchivedInSearch && trimmedQuery != nil
@@ -95,11 +95,10 @@ final class HistoryListViewModel {
     await reload()
   }
 
-  /// Switches the format filter and re-fetches (M-AC-H2.3). A no-op when unchanged.
+  /// Leftover trampoline — there is no generation picker. A gen-N value must
+  /// not refetch another game (CF-UI-AC-1.2).
   func setFormatFilter(_ format: Format?) async {
-    guard format != formatFilter else { return }
-    formatFilter = format
-    await reload()
+    _ = format
   }
 
   /// The trimmed search text, or `nil` when blank (so an empty field sends no `?q=`).

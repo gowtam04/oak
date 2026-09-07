@@ -88,7 +88,7 @@ class CalculatorViewModelTest {
     // -------------------------------------------------------------------
 
     @Test
-    fun standaloneOpensWithEmptySidesAndTheInheritedFormat() = runTest(mainDispatcherRule.dispatcher) {
+    fun standaloneOpensWithEmptySidesAndChampions() = runTest(mainDispatcherRule.dispatcher) {
         val vm = newModel(
             calc = FakeCalcService(result = CalcResult.Error(error = "incomplete")),
             format = Format.Gen5,
@@ -96,7 +96,7 @@ class CalculatorViewModelTest {
         advanceUntilIdle()
 
         val state = vm.uiState.value
-        assertEquals(Format.Gen5, state.scenario.format)
+        assertEquals(Format.Champions, state.scenario.format)
         assertNull(state.scenario.attacker.species)
         assertNull(state.scenario.defender.species)
         assertNull(state.scenario.move.slug)
@@ -193,12 +193,12 @@ class CalculatorViewModelTest {
     }
 
     // -------------------------------------------------------------------
-    // CALC-US-6 / CALC-BR-5 — format is visible and user-owned
+    // CF-CALC-AC-1.1 — format is Champions; not a gen picker
     // -------------------------------------------------------------------
 
     @Test
-    fun changingFormatRecalculatesAgainstTheNewScope() = runTest(mainDispatcherRule.dispatcher) {
-        val calc = FakeCalcService(result = success(format = Format.Gen5))
+    fun changingFormatDoesNotLeaveChampions() = runTest(mainDispatcherRule.dispatcher) {
+        val calc = FakeCalcService(result = success(format = Format.Champions))
         val vm = newModel(calc, format = Format.ScarletViolet)
         vm.setAttackerSpecies("garchomp")
         vm.setDefenderSpecies("ferrothorn")
@@ -208,12 +208,12 @@ class CalculatorViewModelTest {
         vm.setFormat(Format.Gen5)
         advanceUntilIdle()
 
-        assertEquals(Format.Gen5, vm.uiState.value.scenario.format)
-        assertEquals(Format.Gen5, calc.estimateCalls.last().format)
+        assertEquals(Format.Champions, vm.uiState.value.scenario.format)
+        assertEquals(Format.Champions, calc.estimateCalls.last().format)
     }
 
     @Test
-    fun aHeaderChipChangeDoesNotRewriteAnAlreadyOpenScenario() = runTest(mainDispatcherRule.dispatcher) {
+    fun aPrefillFromAnotherFormatIsNormalizedToChampions() = runTest(mainDispatcherRule.dispatcher) {
         val prefilled = CalcScenario(
             format = Format.Gen7,
             attacker = CalcSide(species = "garchomp"),
@@ -223,10 +223,8 @@ class CalculatorViewModelTest {
         val vm = newModel(scenario = prefilled)
         advanceUntilIdle()
 
-        // The overlay keeps its own format (CALC-BR-5). A later header-chip
-        // change is the chat VM's job and must not be applied here.
-        assertEquals(Format.Gen7, vm.uiState.value.scenario.format)
-        assertNotEquals(Format.NationalDex, vm.uiState.value.scenario.format)
+        assertEquals(Format.Champions, vm.uiState.value.scenario.format)
+        assertNotEquals(Format.Gen7, vm.uiState.value.scenario.format)
     }
 
     // -------------------------------------------------------------------

@@ -37,6 +37,7 @@ final class FakeTeamService: TeamService, @unchecked Sendable {
   var importError: OakError?
   var exportError: OakError?
   var analyzeError: OakError?
+  var setTemplateError: OakError?
 
   // MARK: Analyze (public draft-coverage endpoint)
 
@@ -86,6 +87,18 @@ final class FakeTeamService: TeamService, @unchecked Sendable {
   private(set) var lastAnalyzeFormat: Format?
   private(set) var lastAnalyzeMembers: [TeamMember]?
 
+  /// Champions-first living vs archive (GET `/api/teams` vs `?archived=1`).
+  private(set) var lastListArchived: Bool?
+
+  /// `POST /api/teams/set-template` recording (CF-TEAM-US-6). Extra method —
+  /// the P7 `TeamService` protocol grows `setTemplate(species:)`.
+  private(set) var setTemplateCount = 0
+  private(set) var lastSetTemplateSpecies: String?
+  var nextSetTemplateFound = true
+  var nextSetTemplateMember: TeamMember?
+  var nextSetTemplateNotes: [String] = []
+  var nextSetTemplateAttribution: String? = "Live Champions usage"
+
   init(seed: [Team] = []) {
     self.store = seed
   }
@@ -113,6 +126,33 @@ final class FakeTeamService: TeamService, @unchecked Sendable {
       store
       .filter { format == nil || $0.format == format }
       .map(TeamSummary.init(team:))
+  }
+
+  /// Living Champions teams (`GET /api/teams`). P7 `TeamService.list(archived:)`
+  /// should call through here with `archived: false`.
+  func list(archived: Bool) async throws -> [TeamSummary] {
+    listCount += 1
+    lastListArchived = archived
+    lastListFormat = nil
+    if let listError { throw listError }
+    return
+      store
+      .filter { archived ? $0.format != .champions : $0.format == .champions }
+      .map(TeamSummary.init(team:))
+  }
+
+  func setTemplate(species: String) async throws -> (
+    found: Bool, member: TeamMember?, notes: [String], attribution: String?
+  ) {
+    setTemplateCount += 1
+    lastSetTemplateSpecies = species
+    if let setTemplateError { throw setTemplateError }
+    return (
+      nextSetTemplateFound,
+      nextSetTemplateMember,
+      nextSetTemplateNotes,
+      nextSetTemplateAttribution
+    )
   }
 
   func get(id: String) async throws -> (team: Team, validation: TeamValidationResult) {

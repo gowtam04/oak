@@ -54,8 +54,7 @@ class ChatViewModelResumeTest {
         assertEquals("What's Garchomp's best moveset?", (state.turns[0] as ChatTurnItem.User).text)
         assertTrue(state.turns[1] is ChatTurnItem.Assistant)
         assertEquals("Garchomp runs Choice Scarf.", (state.turns[1] as ChatTurnItem.Assistant).answer.answerMarkdown)
-        assertEquals(Format.Gen7, state.resolvedScope)
-        assertEquals(Format.Gen7, state.displayFormat)
+        assertEquals(Format.Champions, state.displayFormat)
         assertNull(state.scopeSeed)
         assertEquals("conv-1", appState.activeConversationId.value)
     }

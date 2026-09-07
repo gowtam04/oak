@@ -256,12 +256,12 @@ describe("POST /api/teams/assistant — SSE happy path", () => {
     expect(payload.answer.team_patch).toEqual(BUILDER_ANSWER.team_patch);
   });
 
-  it("derives the turn's mode from draft.format — no scope resolution", async () => {
+  it("always uses champions mode, ignoring draft.format", async () => {
     signedIn(ACCT_A);
     await readBody(
       await post(body({ session_id: "sse-2", draft: draft({ format: "gen-7" }) })),
     );
-    expect((captured.options as Record<string, unknown>).mode).toBe("gen-7");
+    expect((captured.options as Record<string, unknown>).mode).toBe("champions");
   });
 
   it("runs with the builder hooks built from the request draft's members", async () => {

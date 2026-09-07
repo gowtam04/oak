@@ -147,10 +147,7 @@ struct ChatView: View {
         }
         .oakLidItem()
       }
-      // The scope control (GS-C): the header's visible counterpart to the `scope`
-      // SSE event and the ONLY interactive scope control (the Champions pill +
-      // Account toggle are gone). Centered so it reads as the thread's scope, not
-      // an action; disabled mid-stream so a turn's scope stays stable.
+      // Informational regulation chip (CF-UI-US-2) — not a format picker.
       ToolbarItem(placement: .principal) {
         scopeChip
       }
@@ -292,54 +289,12 @@ struct ChatView: View {
 
   // MARK: Scope chip (generation-scope GS-C)
 
-  /// The header scope control: a compact pill showing the displayed scope's short
-  /// label, opening a menu of all known formats as an inline radio list
-  /// (checkmark on the current pick). Picking one seeds the next turn's scope
-  /// (`selectScope`). Disabled while a turn streams so the scope can't change
-  /// mid-turn — mirrors `ScopeChip.tsx` (label = the scope, menu =
-  /// `Format.knownCases`, disabled while streaming).
+  /// Display-only regulation chip (CF-CHAT-US-1 / CF-UI-US-2). Not a menu of
+  /// games — tap does not switch scope.
   @ViewBuilder
   private var scopeChip: some View {
-    Menu {
-      Picker(
-        "Answer scope",
-        selection: Binding(
-          get: { model.displayFormat },
-          set: { model.selectScope($0) }
-        )
-      ) {
-        let mru = appState.lastUsedScopes
-        if !mru.isEmpty, case .signedIn = appState.authState {
-          Section("Recent") {
-            ForEach(mru, id: \.self) { format in
-              Text(format.displayLabel).tag(format)
-            }
-          }
-        }
-        Section {
-          ForEach(Format.knownCases.filter { !mru.contains($0) || mru.isEmpty || appState.authState == .guest }, id: \.self) { format in
-            Text(format.displayLabel).tag(format)
-          }
-        }
-      }
-    } label: {
-      HStack(spacing: 6) {
-        Text(model.displayFormat.shortLabel)
-          .font(Theme.body(.caption, weight: .medium))
-        Image(systemName: "chevron.down")
-          .font(.system(size: 9, weight: .bold))
-      }
-      .foregroundStyle(Theme.onRed)
-      .padding(.horizontal, 10)
-      .padding(.vertical, 5)
-      .background(Theme.onRed.opacity(0.16), in: Capsule())
-      .overlay(Capsule().strokeBorder(Theme.onRed.opacity(0.45), lineWidth: 1))
-      .contentShape(Capsule())
-    }
-    .disabled(model.isStreaming)
-    .accessibilityLabel("Answer scope")
-    .accessibilityValue(model.displayFormat.displayLabel)
-    .accessibilityHint("Choose which game or generation answers are based on")
+    RegulationChip()
+      .accessibilityValue(model.regulationLabel)
   }
 
   // MARK: Voice mode (T5)
@@ -652,7 +607,7 @@ struct ChatView: View {
         .accessibilityAddTraits(.isHeader)
         .accessibilityIdentifier("empty-desk-prompt")
 
-      Text("Mechanics, locations, teams, damage. Oak will show its work.")
+      Text("Teams, calcs, and live usage for Pokémon Champions. Oak will show its work.")
         .font(Theme.body(.subheadline))
         .foregroundStyle(Theme.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
@@ -696,7 +651,7 @@ struct ChatView: View {
         }
         .buttonStyle(.plain)
       }
-      Text("Scope: \(model.displayFormat.shortLabel)")
+      Text(model.regulationLabel)
         .font(Theme.body(.caption))
         .foregroundStyle(Theme.textMuted)
     }

@@ -1,11 +1,13 @@
 import SwiftUI
 import UIKit
 
-/// The four root destinations. Named `OakAppTab` to avoid colliding with
-/// SwiftUI's `Tab`. `Hashable` so it can back `TabView(selection:)`.
-enum OakAppTab: Hashable, CaseIterable, Sendable {
+/// The five root destinations (ADR-6). Named `OakAppTab` to avoid colliding with
+/// SwiftUI's `Tab`. Display order: Chat / Teams / Usage / Dex / Settings.
+/// Calc stays a cover, not a tab. `Hashable` so it can back `TabView(selection:)`.
+enum OakAppTab: String, Hashable, CaseIterable, Sendable {
   case chat
   case teams
+  case usage
   case dex
   case settings
 
@@ -13,6 +15,7 @@ enum OakAppTab: Hashable, CaseIterable, Sendable {
     switch self {
     case .chat: "Chat"
     case .teams: "Teams"
+    case .usage: "Usage"
     case .dex: "Dex"
     case .settings: "Settings"
     }
@@ -22,6 +25,7 @@ enum OakAppTab: Hashable, CaseIterable, Sendable {
     switch self {
     case .chat: "bubble.left.and.text.bubble.right"
     case .teams: "square.grid.3x2.fill"
+    case .usage: "chart.bar"
     case .dex: "books.vertical"
     case .settings: "gearshape"
     }

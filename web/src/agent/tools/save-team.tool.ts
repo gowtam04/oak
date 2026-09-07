@@ -26,7 +26,7 @@ import {
   type SaveTeamOutput,
 } from "@/agent/schemas";
 import type { OakDb } from "@/data/db";
-import { formatForMode } from "@/data/formats";
+import { CHAMPIONS_FORMAT } from "@/data/formats";
 import { createTeam } from "@/data/repos/team-repo";
 import { validateTeam, isHardViolation } from "@/server/teams/validate-team";
 
@@ -64,19 +64,18 @@ export const saveTeamTool: ToolDef = {
 
     const name = (input.name ?? team.name ?? "").trim() || "Untitled team";
 
-    // Don't persist a format-illegal team. Roster-validate against the turn's
-    // format (server-controlled, like the runtime proposal gate) and refuse any
-    // HARD illegality (see HARD_VIOLATION_CODES) — an out-of-format species, an
-    // illegal move/ability/item, or the species/item clauses — the same
-    // violations the model is told to rebuild away from in the submit_answer
-    // loop. Softer warnings (EV/IV caps, `incomplete` skeletons, and a missing
+    // Don't persist a format-illegal team. Roster-validate against Champions
+    // (living saves are always champions — leftover ctx.mode is ignored) and
+    // refuse any HARD illegality (see HARD_VIOLATION_CODES) — an out-of-roster
+    // species, an illegal move/ability/item, or the species/item clauses. Softer
+    // warnings (EV/IV / Stat Point caps, `incomplete` skeletons, and a missing
     // held item — legal, just weak) are advisory and still saved, matching the
     // warn-but-allow Teams API (e.g. a team imported from a screenshot with an
     // obscured item stays saveable).
     try {
       const warnings = await validateTeam(
         team.members,
-        formatForMode(ctx.mode),
+        CHAMPIONS_FORMAT,
         ctx.db as unknown as OakDb,
       );
       const illegal = warnings.filter(isHardViolation);
@@ -91,7 +90,7 @@ export const saveTeamTool: ToolDef = {
     try {
       const saved = await createTeam({
         accountId: ctx.accountId,
-        format: team.format,
+        format: CHAMPIONS_FORMAT,
         name,
         members: team.members,
         now: Date.now(),
@@ -99,14 +98,18 @@ export const saveTeamTool: ToolDef = {
 
       // Surface the saved team to the route (mutable result slot), which stamps
       // answer.saved_team authoritatively (no UUID round-trip through the model).
-      // `team.format` is the typed enum (the stored Team.format widens to string).
-      ctx.savedTeam = { id: saved.id, name: saved.name, format: team.format };
+      // Living saves are always champions (CF-DATA-BR-9).
+      ctx.savedTeam = {
+        id: saved.id,
+        name: saved.name,
+        format: CHAMPIONS_FORMAT,
+      };
 
       return {
         saved: true,
         team_id: saved.id,
         name: saved.name,
-        format: team.format,
+        format: CHAMPIONS_FORMAT,
       };
     } catch {
       return { saved: false, reason: "index_unavailable" };

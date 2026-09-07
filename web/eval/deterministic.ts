@@ -62,7 +62,6 @@ import type {
   OakAnswer,
   QueryPokedexResult,
   ResolveEntityOutput,
-  RunSqlRows,
   TypeMatchupsDetail,
   TypeName,
 } from "@/agent/schemas";
@@ -196,7 +195,7 @@ function makeScriptedClient(plan: DeterministicPlan): AnthropicClientLike {
             reasoning_markdown: "",
             citations: [],
             inferences: [],
-            generation_basis: { generation: "gen-9", fallback: false },
+            generation_basis: { generation: "champions", fallback: false },
           };
         }
         return streamOf(
@@ -417,7 +416,7 @@ function makeScriptedGrokClient(plan: DeterministicPlan): GrokResponsesClientLik
             reasoning_markdown: "",
             citations: [],
             inferences: [],
-            generation_basis: { generation: "gen-9", fallback: false },
+            generation_basis: { generation: "champions", fallback: false },
           };
         }
         const args = JSON.stringify(answer);
@@ -438,14 +437,8 @@ function makeScriptedGrokClient(plan: DeterministicPlan): GrokResponsesClientLik
 // Compose helpers
 // ---------------------------------------------------------------------------
 
-const GEN9_BASIS: OakAnswer["generation_basis"] = {
-  generation: "gen-9",
-  fallback: false,
-};
-
-/** Whole-dex answers (G56/G57) stamp the national-dex basis tag, not gen-9's. */
-const NATDEX_BASIS: OakAnswer["generation_basis"] = {
-  generation: "national-dex",
+const CHAMPIONS_BASIS: OakAnswer["generation_basis"] = {
+  generation: "champions",
   fallback: false,
 };
 
@@ -478,13 +471,6 @@ function candidatesFrom(q: QueryPokedexResult): Candidates {
 /** Total match count for a query result, or 0 for a non-result shape. */
 function totalOf(o: unknown): number {
   return isQueryResult(o) ? o.total_count : 0;
-}
-
-/** Is this a successful run_sql result (vs. a query_failed/query_timeout shape)? */
-function isRunSqlRows(o: unknown): o is RunSqlRows {
-  return (
-    typeof o === "object" && o !== null && Array.isArray((o as { rows?: unknown }).rows)
-  );
 }
 
 /** Is this a successful lookup_box result? */
@@ -531,22 +517,22 @@ const PLANS: Record<string, DeterministicPlan> = {
       const total = totalOf(q);
       return {
         status: "answered",
-        answer_markdown: `**${total}** Pokémon can learn both Trick Room and Will-O-Wisp in Gen 9.`,
+        answer_markdown: `**${total}** Pokémon can learn both Trick Room and Will-O-Wisp in Champions.`,
         reasoning_markdown:
-          "Intersected the Gen-9 learnsets for both moves in a single query — only Pokémon that learn BOTH appear.",
+          "Intersected the Champions learnsets for both moves in a single query — only Pokémon that learn BOTH appear.",
         candidates: isQueryResult(q) ? candidatesFrom(q) : undefined,
         citations: [
           {
-            source: "learnset/trick-room (gen-9)",
-            detail: "Gen-9 learnset, intersected",
+            source: "learnset/trick-room",
+            detail: "Champions learnset, intersected",
           },
           {
-            source: "learnset/will-o-wisp (gen-9)",
-            detail: "Gen-9 learnset, intersected",
+            source: "learnset/will-o-wisp",
+            detail: "Champions learnset, intersected",
           },
         ],
         inferences: [],
-        generation_basis: GEN9_BASIS,
+        generation_basis: CHAMPIONS_BASIS,
       };
     },
   },
@@ -571,7 +557,7 @@ const PLANS: Record<string, DeterministicPlan> = {
         suggestions: matches.map((m) => m.display_name),
         citations: [],
         inferences: [],
-        generation_basis: GEN9_BASIS,
+        generation_basis: CHAMPIONS_BASIS,
       };
     },
   },
@@ -593,18 +579,18 @@ const PLANS: Record<string, DeterministicPlan> = {
       const total = totalOf(q);
       return {
         status: "answered",
-        answer_markdown: `**${total}** Fire-type Pokémon with Flash Fire can learn Will-O-Wisp in Gen 9.`,
+        answer_markdown: `**${total}** Fire-type Pokémon with Flash Fire can learn Will-O-Wisp in Champions.`,
         reasoning_markdown:
-          "Single query intersecting type, ability, and Gen-9 learnset — no per-Pokémon fetching.",
+          "Single query intersecting type, ability, and Champions learnset — no per-Pokémon fetching.",
         candidates: isQueryResult(q) ? candidatesFrom(q) : undefined,
         citations: [
           {
-            source: "learnset/will-o-wisp (gen-9)",
-            detail: "Gen-9 learnset filter",
+            source: "learnset/will-o-wisp",
+            detail: "Champions learnset filter",
           },
         ],
         inferences: [],
-        generation_basis: GEN9_BASIS,
+        generation_basis: CHAMPIONS_BASIS,
       };
     },
   },
@@ -632,7 +618,7 @@ const PLANS: Record<string, DeterministicPlan> = {
           { source: "Pokédex index", detail: "sorted by base speed (desc)" },
         ],
         inferences: [],
-        generation_basis: GEN9_BASIS,
+        generation_basis: CHAMPIONS_BASIS,
       };
     },
   },
@@ -654,18 +640,18 @@ const PLANS: Record<string, DeterministicPlan> = {
       const total = totalOf(q);
       return {
         status: "answered",
-        answer_markdown: `**${total}** Fire-type Pokémon with base Speed over 100 can learn Will-O-Wisp in Gen 9.`,
+        answer_markdown: `**${total}** Fire-type Pokémon with base Speed over 100 can learn Will-O-Wisp in Champions.`,
         reasoning_markdown:
-          "One combined query over type + a Speed threshold + the Gen-9 learnset.",
+          "One combined query over type + a Speed threshold + the Champions learnset.",
         candidates: isQueryResult(q) ? candidatesFrom(q) : undefined,
         citations: [
           {
-            source: "learnset/will-o-wisp (gen-9)",
-            detail: "Gen-9 learnset filter",
+            source: "learnset/will-o-wisp",
+            detail: "Champions learnset filter",
           },
         ],
         inferences: [],
-        generation_basis: GEN9_BASIS,
+        generation_basis: CHAMPIONS_BASIS,
       };
     },
   },
@@ -692,21 +678,19 @@ const PLANS: Record<string, DeterministicPlan> = {
           },
         ],
         inferences: [],
-        generation_basis: GEN9_BASIS,
+        generation_basis: CHAMPIONS_BASIS,
       };
     },
   },
 
-  // G15 — exact stat value comes from the real compute_stat formula tool.
+  // G15 — exact Champions Speed from compute_stat (32 Stat Points, Jolly).
   G15: {
     reads: [
       {
         name: "compute_stat",
         input: {
           base_stat: 102,
-          level: 50,
-          ev: 252,
-          iv: 31,
+          ev: 32,
           nature_effect: "boosted",
         },
       },
@@ -718,271 +702,49 @@ const PLANS: Record<string, DeterministicPlan> = {
       const value = c?.value;
       return {
         status: "answered",
-        answer_markdown: `Garchomp's Speed is **${value}** at Level 50 with 252 Speed EVs, a 31 Speed IV, and a Jolly (+Speed) nature.`,
+        answer_markdown: `Garchomp's Speed is **${value}** at Level 50 with 32 Speed Stat Points and a Jolly (+Speed) nature.`,
         reasoning_markdown:
-          "Garchomp's base Speed is 102. The exact in-game formula (per-step flooring) is applied by compute_stat, not by hand.",
+          "Garchomp's base Speed is 102. Champions uses Stat Points (IVs fixed at 31, everything Level 50); compute_stat applies the exact formula.",
         damage_calc: {
-          // `value ?? 0`: the free-form damage_calc maps are now typed as JSON
-          // scalars (no undefined) so the submit_answer schema stays xAI-strict-
-          // safe; the real compute_stat tool always returns a number here.
-          assumptions: { level: 50, ev: 252, iv: 31, nature: "Jolly (+Spe)" },
+          assumptions: {
+            level: 50,
+            stat_points: 32,
+            iv: 31,
+            nature: "Jolly (+Spe)",
+          },
           result: { stat: "speed", value: value ?? 0 },
           is_estimate: true,
           breakdown: c?.breakdown ?? "",
         },
         citations: [{ source: "pokemon/garchomp", detail: "base Speed 102" }],
         inferences: [],
-        generation_basis: GEN9_BASIS,
+        generation_basis: CHAMPIONS_BASIS,
       };
     },
   },
 
-  // -------------------------------------------------------------------------
-  // Oak v2 §7 — run_sql aggregation plans (G26/G32/G35/G44/G47). Each issues
-  // ONE run_sql read against the fixture's natdex_species/natdex_moves rows
-  // (eval/fixtures/seed-fixture-db.ts) and composes from the REAL rows the
-  // sandboxed query returns — same "compose from live tool output" contract
-  // as every other plan in this file. See cases.ts for which assertions are
-  // real facts (hold live too) vs. illustrative-fixture-only.
-  // -------------------------------------------------------------------------
-
-  // G26 — natdex number == base-stat total (illustrative fixture row).
-  G26: {
+  // G17 — off-roster / other-game decline (Excadrill is not on the Champions roster).
+  G17: {
     reads: [
       {
-        name: "run_sql",
-        input: {
-          query:
-            "SELECT species, national_dex_number, base_stat_total FROM natdex_species WHERE national_dex_number = base_stat_total ORDER BY species",
-          purpose: "find species whose National Dex number equals its base stat total",
-        },
+        name: "resolve_entity",
+        input: { query: "Excadrill", kind: "pokemon" },
       },
     ],
     compose: (o) => {
-      const r = o.run_sql;
-      const rows = isRunSqlRows(r) ? r.rows : [];
-      const names = rows.map((row) => String(row[0]));
+      const r = o.resolve_entity as ResolveEntityOutput | undefined;
+      const matches = r?.matches ?? [];
       return {
         status: "answered",
         answer_markdown:
-          names.length > 0
-            ? `**${names.join(", ")}** — National Dex number equals base stat total, per a warehouse aggregation over the whole Pokédex.`
-            : "No species in the warehouse has a National Dex number equal to its base stat total.",
+          matches.length === 0
+            ? `**Excadrill** is **not in the Champions roster**, and Oak covers Pokémon Champions only — I don't have Gen 5 facts for it. Ask me about a Champions-legal species instead.`
+            : `**Excadrill** is **not in the Champions roster**. Oak covers Pokémon Champions only and cannot answer Gen 5 questions.`,
         reasoning_markdown:
-          "Ran one natdex_species aggregation (WHERE national_dex_number = base_stat_total) instead of checking species one at a time.",
-        citations: [
-          { source: "natdex_species", detail: "national_dex_number = base_stat_total" },
-        ],
+          "resolve_entity against the Champions index did not find Excadrill (or only a near-miss). Decline other-game / off-roster questions by name; do not invent Gen-5 facts.",
+        citations: [],
         inferences: [],
-        generation_basis: GEN9_BASIS,
-      };
-    },
-  },
-
-  // G32 — count + list of color='purple' species (real PokeAPI fact).
-  G32: {
-    reads: [
-      {
-        name: "run_sql",
-        input: {
-          query:
-            "SELECT species, national_dex_number FROM natdex_species WHERE color = 'purple' ORDER BY national_dex_number",
-          purpose: "count and list purple-colored species",
-        },
-      },
-    ],
-    compose: (o) => {
-      const r = o.run_sql;
-      const rows = isRunSqlRows(r) ? r.rows : [];
-      const names = rows.map((row) => String(row[0]));
-      return {
-        status: "answered",
-        answer_markdown: `**${rows.length}** Pokémon are classified color="purple" in the warehouse: ${names.join(", ") || "(none)"}.`,
-        reasoning_markdown:
-          "Ran one natdex_species aggregation (WHERE color = 'purple') over the whole Pokédex.",
-        citations: [{ source: "natdex_species", detail: "color = 'purple'" }],
-        inferences: [],
-        generation_basis: GEN9_BASIS,
-      };
-    },
-  },
-
-  // G35 — Fire Fang's generation, verifying it postdates Gen 3 (real fact).
-  G35: {
-    reads: [
-      {
-        name: "run_sql",
-        input: {
-          query: "SELECT move_slug, generation FROM natdex_moves WHERE move_slug = 'fire-fang'",
-          purpose: "verify which generation Fire Fang was introduced in",
-        },
-      },
-    ],
-    compose: (o) => {
-      const r = o.run_sql;
-      const rows = isRunSqlRows(r) ? r.rows : [];
-      const gen = rows[0]?.[1];
-      return {
-        status: "answered",
-        answer_markdown:
-          gen === 4
-            ? "There's no Fire Fang bug from Generation 3 — Fire Fang wasn't introduced until **Generation 4** (Diamond/Pearl/Platinum), so it didn't exist in Gen 3 at all."
-            : `Fire Fang's recorded introduction generation is ${String(gen)}, not Generation 3 — no Gen-3 bug is possible for a move that didn't exist yet.`,
-        reasoning_markdown:
-          "natdex_moves is the only move-generation source covering Gens 1-4; it shows Fire Fang was introduced in Gen 4, which rejects the premise directly rather than inventing a Gen-3 bug.",
-        citations: [{ source: "natdex_moves", detail: "move_slug = 'fire-fang'" }],
-        inferences: [],
-        generation_basis: GEN9_BASIS,
-      };
-    },
-  },
-
-  // G44 — catch rate higher than pre-evolution (contrived fixture pair).
-  G44: {
-    reads: [
-      {
-        name: "run_sql",
-        input: {
-          query:
-            "SELECT s.species, s.capture_rate, p.species AS pre_evo, p.capture_rate AS pre_capture_rate " +
-            "FROM natdex_species s JOIN natdex_species p ON s.evolves_from = p.species " +
-            "WHERE s.capture_rate > p.capture_rate ORDER BY s.species",
-          purpose: "find species with a higher catch rate than their pre-evolution",
-        },
-      },
-    ],
-    compose: (o) => {
-      const r = o.run_sql;
-      const rows = isRunSqlRows(r) ? r.rows : [];
-      const names = rows.map((row) => String(row[0]));
-      return {
-        status: "answered",
-        answer_markdown:
-          names.length > 0
-            ? `Yes — **${names.join(", ")}** has a higher catch rate than its pre-evolution, per a self-join over the whole Pokédex.`
-            : "No species in the warehouse has a higher catch rate than its pre-evolution.",
-        reasoning_markdown:
-          "Self-joined natdex_species on evolves_from and filtered capture_rate > the pre-evolution's capture_rate.",
-        citations: [{ source: "natdex_species", detail: "capture_rate self-join on evolves_from" }],
-        inferences: [],
-        generation_basis: GEN9_BASIS,
-      };
-    },
-  },
-
-  // G47 — dual-type -> monotype on evolution (contrived fixture pair).
-  G47: {
-    reads: [
-      {
-        name: "run_sql",
-        input: {
-          query:
-            "SELECT s.species, p.species AS pre_evo FROM natdex_species s " +
-            "JOIN natdex_species p ON s.evolves_from = p.species " +
-            "WHERE p.type2 IS NOT NULL AND s.type2 IS NULL ORDER BY s.species",
-          purpose: "find dual-type species that become monotype on evolution",
-        },
-      },
-    ],
-    compose: (o) => {
-      const r = o.run_sql;
-      const rows = isRunSqlRows(r) ? r.rows : [];
-      const names = rows.map((row) => String(row[0]));
-      return {
-        status: "answered",
-        answer_markdown:
-          names.length > 0
-            ? `**${names.join(", ")}** evolve from a dual-type pre-evolution into a monotype form, per a self-join over the whole Pokédex.`
-            : "No species in the warehouse evolves from dual-type into monotype.",
-        reasoning_markdown:
-          "Self-joined natdex_species on evolves_from, filtering pre-evolution type2 IS NOT NULL and evolution type2 IS NULL.",
-        citations: [{ source: "natdex_species", detail: "type2 self-join on evolves_from" }],
-        inferences: [],
-        generation_basis: GEN9_BASIS,
-      };
-    },
-  },
-
-  // -------------------------------------------------------------------------
-  // National-dex-scope feature regression cases (G56/G57) — pin the two root
-  // causes of the production incident (whole-dex questions routed against a
-  // narrower scope's roster, and (type1, type2) treated as an ordered pair
-  // instead of normalized with LEAST/GREATEST — see warehouse-ddl.ts).
-  // -------------------------------------------------------------------------
-
-  // G56 — whole-dex total species count, asked from champions scope. Must
-  // route to a natdex_species aggregation (the whole National Pokédex), not
-  // the (much smaller) Champions roster.
-  G56: {
-    reads: [
-      {
-        name: "run_sql",
-        input: {
-          query: "SELECT COUNT(*) AS total FROM natdex_species",
-          purpose: "count every species in the whole National Pokédex",
-        },
-      },
-    ],
-    compose: (o) => {
-      const r = o.run_sql;
-      const rows = isRunSqlRows(r) ? r.rows : [];
-      const total = rows[0]?.[0];
-      return {
-        status: "answered",
-        answer_markdown:
-          total !== undefined
-            ? `The National Pokédex currently indexes **${total}** species, per a single whole-dex aggregation.`
-            : "Could not determine the whole-dex species count.",
-        reasoning_markdown:
-          "Ran one COUNT(*) aggregation over natdex_species (the whole National Pokédex) rather than counting from the narrower Champions roster.",
-        citations: [
-          { source: "natdex_species", detail: "COUNT(*) over the whole National Pokédex" },
-        ],
-        inferences: [],
-        generation_basis: NATDEX_BASIS,
-      };
-    },
-  },
-
-  // G57 — Fire/Ice type-combination existence, national-dex scope. The
-  // fixture's Darmanitan-Galar-Zen row stores type1="ice"/type2="fire" (the
-  // opposite of how the combo reads conventionally), so a query that assumes
-  // a canonical slot order would miss it — LEAST/GREATEST normalization is
-  // required. Also form-aware: this form is absent from natdex_species, so
-  // the query must target pokemon@national-dex, not the species table.
-  G57: {
-    reads: [
-      {
-        name: "run_sql",
-        input: {
-          query:
-            "SELECT display_name FROM pokemon WHERE format = 'national-dex' " +
-            "AND LEAST(type1, type2) = 'fire' AND GREATEST(type1, type2) = 'ice'",
-          purpose:
-            "check whether any Pokémon form has the Fire and Ice types together, regardless of listed slot order",
-        },
-      },
-    ],
-    compose: (o) => {
-      const r = o.run_sql;
-      const rows = isRunSqlRows(r) ? r.rows : [];
-      const names = rows.map((row) => String(row[0]));
-      return {
-        status: "answered",
-        answer_markdown:
-          names.length > 0
-            ? `Yes — **${names.join(", ")}** has the Fire/Ice type combination, per a form-aware, slot-order-normalized search over the whole national-dex partition.`
-            : "No Pokémon form in the warehouse has the Fire/Ice type combination.",
-        reasoning_markdown:
-          "Queried pokemon WHERE format = 'national-dex' (form-aware, not just default-form species) and normalized (type1, type2) with LEAST/GREATEST so the combo matches regardless of which slot holds Fire vs. Ice.",
-        citations: [
-          {
-            source: "pokemon (national-dex)",
-            detail: "LEAST/GREATEST(type1,type2) = (fire,ice)",
-          },
-        ],
-        inferences: [],
-        generation_basis: NATDEX_BASIS,
+        generation_basis: CHAMPIONS_BASIS,
       };
     },
   },
@@ -990,7 +752,7 @@ const PLANS: Record<string, DeterministicPlan> = {
   // -------------------------------------------------------------------------
   // Team-from-box (G61) — one lookup_box over a pasted owned list that
   // includes Mega Kangaskhan. Keep the named form even if the fixture (or
-  // live index) has no learnset / no row; never call run_sql / search_wiki.
+  // live index) has no learnset / no row; never call removed wiki/SQL tools.
   // -------------------------------------------------------------------------
 
   G61: {
@@ -1041,7 +803,7 @@ const PLANS: Record<string, DeterministicPlan> = {
           "One lookup_box call over the pasted names. Mega Kangaskhan is named-for-party, so a missing or empty learnset is a warning, not a drop or substitute.",
         proposed_team: {
           name: "Box party",
-          format: "scarlet-violet",
+          format: "champions",
           members,
         },
         proposed_team_warnings: [
@@ -1053,7 +815,7 @@ const PLANS: Record<string, DeterministicPlan> = {
         ],
         citations: [],
         inferences: [],
-        generation_basis: GEN9_BASIS,
+        generation_basis: CHAMPIONS_BASIS,
       };
     },
   },
@@ -1063,10 +825,9 @@ const PLANS: Record<string, DeterministicPlan> = {
 export const PLANNED_CASE_IDS: readonly string[] = Object.keys(PLANS);
 
 /**
- * Read-only accessor for a plan's read-phase SQL query text(s), keyed by case
- * ID. Exported so tests can pin the literal SQL shape a plan issues — e.g.
- * G57's LEAST/GREATEST slot-order normalization — without exposing the whole
- * (non-serializable, function-valued) `PLANS` map.
+ * Read-only accessor for a plan's read-phase `query` strings, keyed by case
+ * ID. Champions-first plans do not issue SQL; kept so tests can inspect any
+ * remaining query-shaped reads without exposing the function-valued `PLANS` map.
  */
 export function planQueries(caseId: string): string[] {
   const plan = PLANS[caseId];
@@ -1157,7 +918,7 @@ export async function runDeterministic(
           reasoning_markdown: "",
           citations: [],
           inferences: [],
-          generation_basis: GEN9_BASIS,
+          generation_basis: CHAMPIONS_BASIS,
         },
       });
       continue;

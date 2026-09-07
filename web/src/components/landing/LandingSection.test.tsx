@@ -6,6 +6,16 @@ import LandingSection from "./LandingSection";
 import { LANDING_DISCLAIMER, LANDING_FAQ } from "@/components/landing/landing-content";
 
 describe("LandingSection", () => {
+  it("renders Champions-only copy with no eleven-scope / National Dex / Smogon OU claims (CF-UI-BR-3)", () => {
+    render(<LandingSection />);
+    expect(screen.getByTestId("landing")).toHaveTextContent(/Pokémon Champions/i);
+    expect(screen.queryByText(/National Dex/i)).toBeNull();
+    expect(screen.queryByText(/smogon/i)).toBeNull();
+    expect(screen.queryByText(/eleven scopes?/i)).toBeNull();
+    expect(screen.queryByText(/six data scopes?/i)).toBeNull();
+    expect(screen.queryByText(/every generation/i)).toBeNull();
+  });
+
   it("renders every FAQ question", () => {
     render(<LandingSection />);
     for (const { q } of LANDING_FAQ) {

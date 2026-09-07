@@ -85,7 +85,7 @@ export async function analyzeTeamForFormat(
       }),
     }));
 
-    // Pure analysis first; meta threat board is fail-soft and never blocks ok.
+    // Pure analysis first; live Champions threat board is fail-soft.
     const base = analyzeTeam(sources, typeProfiles, format);
     try {
       const { attachThreatBoard } = await import("./threat-board");

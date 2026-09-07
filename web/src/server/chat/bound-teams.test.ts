@@ -13,6 +13,8 @@
  *     { ok:true, teams: BoundTeam[] } | { ok:false, error:"unbound_mention", id }
  */
 
+import { randomUUID } from "node:crypto";
+
 import { sql } from "drizzle-orm";
 import {
   afterAll,
@@ -33,6 +35,7 @@ import {
 } from "../../../test/support/pg";
 
 import type { Format } from "@/data/formats";
+import { team } from "@/data/schema";
 
 type BoundTeam = { id: string; name: string; format: Format };
 type ResolveBoundTeams = (
@@ -87,9 +90,25 @@ async function seedTeam(
   name: string,
   format: "scarlet-violet" | "champions",
 ) {
+  // Living writes always store champions (P4). A non-champions format is
+  // archived by definition (ADR-3) and must be inserted directly.
+  if (format !== "champions") {
+    const id = randomUUID();
+    const now = Date.now();
+    await fix.db.insert(team).values({
+      id,
+      account_id: accountId,
+      format,
+      name,
+      members: JSON.stringify([]),
+      created_at: now,
+      updated_at: now,
+    });
+    return { id, format, name };
+  }
   return teamRepo.createTeam({
     accountId,
-    format,
+    format: "champions",
     name,
     members: [],
     now: Date.now(),

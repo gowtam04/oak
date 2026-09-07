@@ -140,24 +140,22 @@ class ChatViewModelReducerTest {
     }
 
     @Test
-    fun scopeAdoptionSetsResolvedScopeAndClearsAPendingSeed() {
+    fun scopeAdoptionDoesNotRelabelTheChipOffChampions() {
         val vm = newModel()
         vm.selectScope(Format.Gen7)
-        assertEquals(Format.Gen7, vm.uiState.value.displayFormat)
+        assertEquals(Format.Champions, vm.uiState.value.displayFormat)
 
         vm.apply(SseEvent.Scope(Format.ScarletViolet, ScopeSource.Message))
 
         val state = vm.uiState.value
-        assertEquals(Format.ScarletViolet, state.resolvedScope)
         assertNull(state.scopeSeed)
-        // scope_seed is retired — the resolved scope now drives the displayed chip.
-        assertEquals(Format.ScarletViolet, state.displayFormat)
+        assertEquals(Format.Champions, state.displayFormat)
     }
 
     @Test
-    fun displayFormatFallsBackToNationalDexWithNoSeedOrResolvedScope() {
+    fun displayFormatDefaultsToChampionsWithNoSeedOrResolvedScope() {
         val vm = newModel()
-        assertEquals(Format.NationalDex, vm.uiState.value.displayFormat)
+        assertEquals(Format.Champions, vm.uiState.value.displayFormat)
     }
 
     // -------------------------------------------------------------------
@@ -193,10 +191,9 @@ class ChatViewModelReducerTest {
     }
 
     @Test
-    fun scopeSeedRidesTheNextChatRequest() = runTest(mainDispatcherRule.dispatcher) {
+    fun selectScopeDoesNotSendOtherFormatSeeds() = runTest(mainDispatcherRule.dispatcher) {
         val finalAnswer = answer()
         val chat = FakeChatService(
-            // No Scope event scripted — the seed must ride through untouched.
             scriptedEvents = listOf(
                 SseEvent.AnswerStart,
                 SseEvent.AnswerDelta(finalAnswer.answerMarkdown),
@@ -210,15 +207,17 @@ class ChatViewModelReducerTest {
         vm.send()
         mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(Format.Gen7, chat.sendWithImagesCalls.last().scopeSeed)
+        val seed = chat.sendWithImagesCalls.last().scopeSeed
+        assertTrue(seed == null || seed == Format.Champions)
+        assertEquals(Format.Champions, vm.uiState.value.displayFormat)
     }
 
     @Test
-    fun scopeSeedIsClearedAfterScopeEventSoTheNextTurnSendsNull() = runTest(mainDispatcherRule.dispatcher) {
+    fun aFollowUpTurnAlsoOmitsOtherFormatSeeds() = runTest(mainDispatcherRule.dispatcher) {
         val finalAnswer = answer()
         val chat = FakeChatService(
             scriptedEvents = listOf(
-                SseEvent.Scope(Format.Gen7, ScopeSource.Message),
+                SseEvent.Scope(Format.Champions, ScopeSource.Default),
                 SseEvent.AnswerStart,
                 SseEvent.AnswerDelta(finalAnswer.answerMarkdown),
                 SseEvent.Answer(finalAnswer),
@@ -231,16 +230,17 @@ class ChatViewModelReducerTest {
         vm.send()
         mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
 
-        // Sanity: the first turn did carry the seed, and the scope event adopted it.
-        assertEquals(Format.Gen7, chat.sendWithImagesCalls.first().scopeSeed)
-        assertEquals(Format.Gen7, vm.uiState.value.resolvedScope)
+        val first = chat.sendWithImagesCalls.first().scopeSeed
+        assertTrue(first == null || first == Format.Champions)
+        assertEquals(Format.Champions, vm.uiState.value.displayFormat)
         assertNull(vm.uiState.value.scopeSeed)
 
         vm.setComposerText("second turn")
         vm.send()
         mainDispatcherRule.dispatcher.scheduler.advanceUntilIdle()
 
-        assertNull(chat.sendWithImagesCalls.last().scopeSeed)
+        val second = chat.sendWithImagesCalls.last().scopeSeed
+        assertTrue(second == null || second == Format.Champions)
     }
 
     @Test
@@ -265,7 +265,7 @@ class ChatViewModelReducerTest {
         assertEquals(2, appState.guestThread.value.size)
         assertTrue(appState.guestThread.value[0].content is GuestTurn.Content.User)
         assertTrue(appState.guestThread.value[1].content is GuestTurn.Content.Assistant)
-        assertEquals(Format.Gen5, appState.guestThreadScope.value)
+        assertEquals(Format.Champions, vm.uiState.value.displayFormat)
     }
 
     // -------------------------------------------------------------------

@@ -2,10 +2,11 @@
  * T22 — `lookup_box` (team-from-box Phase 1).
  *
  * One call looks up up to 40 names: each hit is a get_pokemon profile plus a
- * compact legal-move subset (≤16); each miss is suggestions (and, in Champions,
- * `exists_in_standard`). Server-side loop — not N model iterations (BOX-AC-3.2).
- * Compact moves, not a full movepool (BOX-AC-3.4); `get_learnset` stays the
- * complete-list API (BOX-BR-7). Never throws in-domain.
+ * compact legal-move subset (≤16); each miss is suggestions (CF-BOX-AC-1.1).
+ * Server-side loop — not N model iterations (BOX-AC-3.2). Compact moves, not a
+ * full movepool (BOX-AC-3.4); `get_learnset` stays the complete-list API
+ * (BOX-BR-7). Never throws in-domain. Off-roster names are a structured miss
+ * with no other-game learnset and no `exists_in_standard` (ADR-8).
  *
  * Advertised Zod max is 40. `run` slices extras and sets `truncated_input`
  * rather than safeParse-ing a 41-length array (that would fail the schema).
@@ -22,11 +23,7 @@ import {
 import { getPokemon, normalizeName } from "@/data/repos/pokedex-repo";
 import { movesForPokemon } from "@/data/repos/learnset-repo";
 import { moveSummaries } from "@/data/repos/reference-cache";
-import {
-  formatForMode,
-  CHAMPIONS_FORMAT,
-  STANDARD_FORMAT,
-} from "@/data/formats";
+import { formatForMode } from "@/data/formats";
 import type { OakDb } from "@/data/db";
 import { compactMoves } from "./compact-learnset";
 
@@ -72,21 +69,11 @@ export const lookupBoxTool: ToolDef = {
     for (const query of names) {
       const profile = await getPokemon(query, format, db);
       if (!profile.found) {
-        if (format === CHAMPIONS_FORMAT) {
-          const std = await getPokemon(query, STANDARD_FORMAT, db);
-          results.push({
-            query,
-            found: false,
-            suggestions: profile.suggestions,
-            exists_in_standard: std.found === true,
-          });
-        } else {
-          results.push({
-            query,
-            found: false,
-            suggestions: profile.suggestions,
-          });
-        }
+        results.push({
+          query,
+          found: false,
+          suggestions: profile.suggestions,
+        });
         continue;
       }
 

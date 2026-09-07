@@ -15,26 +15,29 @@ import Testing
 ///     dismiss or reset (CALC-AC-8.2)
 ///   `recompute() async` — POST /api/calc via `CalcService`; no model
 ///
-/// Compile-fail until the P7 implementer adds the VM.
+/// Champions-first (CF-CALC-US-1): leftover format arguments coerce to
+/// `.champions`; `showsFormatPicker` / `showsLevelKnob` / `showsIVKnobs` are
+/// false; `investmentIsStatPoints` is true; rolls are L50.
 ///
 /// Requirement refs: CALC-US-1, CALC-US-2, CALC-AC-2.3, CALC-AC-2.4, CALC-AC-5.3,
-/// CALC-AC-5.4, CALC-AC-8.1, CALC-AC-8.2, CALC-BR-1, CALC-BR-8.
+/// CALC-AC-5.4, CALC-AC-8.1, CALC-AC-8.2, CALC-BR-1, CALC-BR-8,
+/// CF-CALC-US-1, CF-CALC-AC-1.1, CF-CALC-AC-1.2.
 @MainActor
 struct CalculatorViewModelTests {
 
   private func makeVM(
-    format: Format = .scarletViolet,
+    format: Format = .champions,
     presentation: CalculatorViewModel.Presentation = .overlay,
     fake: FakeCalcService = FakeCalcService()
   ) -> (CalculatorViewModel, FakeCalcService) {
     (CalculatorViewModel(calc: fake, format: format, presentation: presentation), fake)
   }
 
-  private func completeScenario(format: Format = .scarletViolet) -> CalcScenario {
+  private func completeScenario(format: Format = .champions) -> CalcScenario {
     CalcScenario(
       format: format,
-      attacker: CalcSide(species: "garchomp"),
-      defender: CalcSide(species: "farigiraf"),
+      attacker: CalcSide(species: "garchomp", level: 50),
+      defender: CalcSide(species: "farigiraf", level: 50),
       move: CalcMove(slug: "earthquake")
     )
   }
@@ -69,13 +72,41 @@ struct CalculatorViewModelTests {
     let (vm, _) = makeVM(format: .gen7, presentation: .fullScreen)
 
     #expect(vm.presentation == .fullScreen)
-    #expect(vm.scenario.format == .gen7)
+    #expect(vm.scenario.format == .champions)
+    #expect(vm.showsFormatPicker == false)
+    #expect(vm.showsTeraField == false)
+    #expect(vm.showsLevelKnob == false)
+    #expect(vm.showsIVKnobs == false)
+    #expect(vm.investmentIsStatPoints)
     #expect(vm.scenario.attacker.species == nil)
     #expect(vm.scenario.defender.species == nil)
     #expect(vm.scenario.move.slug == nil)
     #expect(vm.isIncomplete)
     #expect(vm.displaysDamageRange == false)
     #expect(vm.result == nil || vm.result?.isIncomplete == true)
+  }
+
+  /// CF-CALC-US-1 / CF-CALC-AC-1.1–1.2 — no gen picker; Level 50 Stat Points.
+  @Test
+  func championsCalcHasNoFormatPickerAndUsesLevel50StatPoints() async {
+    let fake = FakeCalcService(nextResult: successResult())
+    let (vm, _) = makeVM(format: .nationalDex, presentation: .fullScreen, fake: fake)
+
+    #expect(vm.scenario.format == .champions)
+    #expect(vm.showsFormatPicker == false)
+    #expect(vm.showsTeraField == false)
+    #expect(defaultCalcLevel(vm.scenario.format) == 50)
+
+    vm.applyPrefill(completeScenario(format: .gen7))
+    await vm.recompute()
+
+    #expect(fake.lastScenario?.format == .champions)
+    #expect(fake.lastScenario?.attacker.level == 50)
+    #expect(fake.lastScenario?.defender.level == 50)
+    #expect(vm.scenario.format == .champions)
+    #expect(vm.investmentIsStatPoints)
+    #expect(vm.showsIVKnobs == false)
+    #expect(vm.showsLevelKnob == false)
   }
 
   // MARK: CALC-US-2 — overlay hops
@@ -90,6 +121,7 @@ struct CalculatorViewModelTests {
     #expect(vm.presentation == .overlay)
     #expect(vm.isPresented)
     #expect(vm.scenario.format == .champions)
+    #expect(vm.showsFormatPicker == false)
     #expect(vm.scenario.attacker.species == "garchomp")
     #expect(vm.scenario.defender.species == "farigiraf")
     #expect(vm.scenario.move.slug == "earthquake")

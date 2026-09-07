@@ -63,6 +63,7 @@ describe("ProposedTeamCard", () => {
     const members = screen.getByTestId("proposed-team-members");
     expect(members).toHaveTextContent("Great Tusk");
     expect(members).toHaveTextContent("Kingambit");
+    expect(members).not.toHaveTextContent(/Tera/i);
   });
 
   it("Save as new team calls createTeam with the proposed shape", async () => {
@@ -232,5 +233,60 @@ describe("ProposedTeamCard — Copy Showdown paste (PASTE-US-1)", () => {
     expect(
       screen.getByRole("button", { name: /copy showdown paste/i }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("ProposedTeamCard — living Champions apply (CF-TEAM-AC-5.3, CF-AS-11)", () => {
+  it("does not offer archived teams as apply-existing targets (CF-TEAM-AC-5.3)", async () => {
+    listMock.mockResolvedValue([
+      {
+        id: "live",
+        name: "Rain",
+        format: "champions",
+        memberCount: 1,
+        incomplete: true,
+        updatedAt: Date.now(),
+      },
+      {
+        id: "old",
+        name: "Gen 7 rain",
+        format: "gen-7",
+        memberCount: 6,
+        incomplete: false,
+        updatedAt: Date.now(),
+      },
+    ]);
+    render(
+      <ProposedTeamCard
+        proposedTeam={proposed({ format: "champions" })}
+        signedIn
+      />,
+    );
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+    const arg = listMock.mock.calls[0]?.[0];
+    expect(arg?.archived).not.toBe(true);
+    const target = screen.queryByTestId("proposed-team-target");
+    if (target) {
+      expect(target).not.toHaveTextContent(/Gen 7 rain/);
+      const options = Array.from(target.querySelectorAll("option")).map(
+        (o) => o.textContent ?? "",
+      );
+      expect(options.some((t) => /Gen 7/i.test(t))).toBe(false);
+    }
+  });
+
+  it("guest save asks to sign in and does not create a team (CF-AUTH-AC-1.2, CF-AS-11)", async () => {
+    createMock.mockResolvedValue(null);
+    render(
+      <ProposedTeamCard
+        proposedTeam={proposed({ format: "champions" })}
+        signedIn={false}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("proposed-team-save-new"));
+    expect(await screen.findByTestId("proposed-team-status")).toHaveTextContent(
+      /sign in/i,
+    );
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });

@@ -14,11 +14,14 @@
  */
 
 import { describe, expect, it } from "vitest";
+import type { SafeParseReturnType } from "zod";
 
 import {
   oakAnswerSchema,
   getTeamInputSchema,
   listTeamsInputSchema,
+  getPokemonOutputSchema,
+  getEvolutionChainOutputSchema,
   TOOL_NAMES,
   toolInputJsonSchemas,
   TYPE_DISPLAY_ORDER,
@@ -154,6 +157,53 @@ describe("oakAnswerSchema — proposed_team_warnings (server-stamped, BR-T5)", (
   });
 });
 
+describe("tool output schemas — no exists_in_standard (ADR-8, CF-DATA-BR-5)", () => {
+  it("getPokemonOutputSchema parses a miss without exists_in_standard", () => {
+    const parsed = getPokemonOutputSchema.safeParse({
+      found: false,
+      suggestions: ["garchomp"],
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).not.toHaveProperty("exists_in_standard");
+  });
+
+  it("getPokemonOutputSchema does not keep exists_in_standard on a miss", () => {
+    const parsed = getPokemonOutputSchema.safeParse({
+      found: false,
+      suggestions: ["garchomp"],
+      exists_in_standard: true,
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).not.toHaveProperty("exists_in_standard");
+  });
+
+  it("getEvolutionChainOutputSchema parses a miss without source_format / exists_in_standard", () => {
+    const parsed = getEvolutionChainOutputSchema.safeParse({
+      found: false,
+      suggestions: [],
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).not.toHaveProperty("source_format");
+    expect(parsed.data).not.toHaveProperty("exists_in_standard");
+  });
+
+  it("getEvolutionChainOutputSchema does not keep source_format on a Champions miss", () => {
+    const parsed = getEvolutionChainOutputSchema.safeParse({
+      found: false,
+      suggestions: [],
+      source_format: "scarlet-violet",
+      exists_in_standard: false,
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data).not.toHaveProperty("source_format");
+    expect(parsed.data).not.toHaveProperty("exists_in_standard");
+  });
+});
+
 describe("team-lookup I/O (get_team T12, list_teams T16)", () => {
   it("registers get_team and list_teams in TOOL_NAMES and toolInputJsonSchemas", () => {
     expect(TOOL_NAMES).toContain("get_team");
@@ -162,6 +212,39 @@ describe("team-lookup I/O (get_team T12, list_teams T16)", () => {
     expect(toolInputJsonSchemas.list_teams).toBeDefined();
     // The retired server-bound tool is gone from the contract.
     expect(TOOL_NAMES).not.toContain("get_active_team");
+  });
+
+  it("TOOL_NAMES is the 17 remaining Champions tools in architecture order (ADR-2)", () => {
+    expect(TOOL_NAMES).toEqual([
+      "resolve_entity",
+      "query_pokedex",
+      "get_pokemon",
+      "get_move",
+      "get_ability",
+      "get_type_matchups",
+      "get_evolution_chain",
+      "get_item",
+      "compute_stat",
+      "estimate_damage",
+      "submit_answer",
+      "get_team",
+      "save_team",
+      "get_usage_stats",
+      "list_teams",
+      "get_learnset",
+      "lookup_box",
+    ]);
+    for (const removed of [
+      "get_encounters",
+      "run_sql",
+      "search_wiki",
+      "get_meta_usage",
+    ]) {
+      expect(TOOL_NAMES).not.toContain(removed);
+      expect(
+        (toolInputJsonSchemas as Record<string, unknown>)[removed],
+      ).toBeUndefined();
+    }
   });
 
   it("get_team requires a non-empty team_id and rejects strays", () => {
@@ -331,9 +414,9 @@ describe("oakAnswerSchema — origin (VOICE-AC-1.2)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// lookup_box (T22, team-from-box Phase 1)
+// lookup_box (T22, team-from-box)
 // BOX-AC-3.2 bulk names, BOX-AC-3.4 compact moves, BOX-BR-5 short-path lookup,
-// BOX-BR-7 get_learnset stays the full-movepool API (T1–T21 order unchanged).
+// BOX-BR-7 get_learnset stays the full-movepool API (last two barrel names).
 // ---------------------------------------------------------------------------
 
 /** Canonical get_pokemon hit (tools.md T3) — lookup_box embeds this as `pokemon`. */
@@ -363,7 +446,9 @@ const FARIGIRAF_PROFILE = {
   source_generation: null,
 };
 
-type ZodSafeParse = { safeParse: (v: unknown) => { success: boolean } };
+type ZodSafeParse = {
+  safeParse: (v: unknown) => SafeParseReturnType<unknown, unknown>;
+};
 
 async function loadLookupBoxSchemas(): Promise<{
   lookupBoxInputSchema: ZodSafeParse;
@@ -385,9 +470,9 @@ async function loadLookupBoxSchemas(): Promise<{
 }
 
 describe("lookup_box I/O (T22, BOX-AC-3.2, BOX-BR-5, BOX-BR-7)", () => {
-  it("appends lookup_box as the last TOOL_NAMES entry; T1–T21 order is unchanged", () => {
-    expect(TOOL_NAMES[16]).toBe("get_learnset");
-    expect(TOOL_NAMES.at(-2)).toBe("get_meta_usage");
+  it("appends lookup_box as the last TOOL_NAMES entry of the 17-tool barrel", () => {
+    expect(TOOL_NAMES[15]).toBe("get_learnset");
+    expect(TOOL_NAMES[16]).toBe("lookup_box");
     expect(TOOL_NAMES.at(-1)).toBe("lookup_box");
     expect(
       (toolInputJsonSchemas as Record<string, unknown>).lookup_box,
@@ -444,36 +529,45 @@ describe("lookup_box I/O (T22, BOX-AC-3.2, BOX-BR-5, BOX-BR-7)", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("lookupBoxOutputSchema accepts a miss with suggestions and optional exists_in_standard", async () => {
+  it("lookupBoxOutputSchema accepts a miss with suggestions and does not require exists_in_standard", async () => {
     const { lookupBoxOutputSchema } = await loadLookupBoxSchemas();
-    expect(
-      lookupBoxOutputSchema.safeParse({
-        format: "scarlet-violet",
-        truncated_input: false,
-        results: [
-          {
-            query: "garchom",
-            found: false,
-            suggestions: ["garchomp"],
-          },
-        ],
-      }).success,
-    ).toBe(true);
+    const parsed = lookupBoxOutputSchema.safeParse({
+      format: "champions",
+      truncated_input: false,
+      results: [
+        {
+          query: "garchom",
+          found: false,
+          suggestions: ["garchomp"],
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const miss = (parsed.data as { results: Array<Record<string, unknown>> })
+      .results[0];
+    expect(miss).not.toHaveProperty("exists_in_standard");
+  });
 
-    expect(
-      lookupBoxOutputSchema.safeParse({
-        format: "champions",
-        truncated_input: false,
-        results: [
-          {
-            query: "dracovish",
-            found: false,
-            suggestions: ["garchomp"],
-            exists_in_standard: true,
-          },
-        ],
-      }).success,
-    ).toBe(true);
+  it("lookupBoxOutputSchema does not keep exists_in_standard on a miss (ADR-8, CF-DATA-BR-5)", async () => {
+    const { lookupBoxOutputSchema } = await loadLookupBoxSchemas();
+    const parsed = lookupBoxOutputSchema.safeParse({
+      format: "champions",
+      truncated_input: false,
+      results: [
+        {
+          query: "excadrill",
+          found: false,
+          suggestions: ["garchomp"],
+          exists_in_standard: true,
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const miss = (parsed.data as { results: Array<Record<string, unknown>> })
+      .results[0];
+    expect(miss).not.toHaveProperty("exists_in_standard");
   });
 
   it("lookupBoxOutputSchema accepts compact_moves with null detail fields", async () => {

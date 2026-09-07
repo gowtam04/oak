@@ -10,7 +10,7 @@
  *     full OakAnswer,
  *   - a follow-up feeds the DB-derived history to the model and continues the
  *     SAME conversation (seq advances),
- *   - a resumed conversation's mode follows its stored format (BR-H6),
+ *   - every new turn is Champions (stored format / seed / preference ignored),
  *   - an aborted turn persists nothing,
  *   - the guest path persists nothing to the DB.
  *
@@ -165,6 +165,19 @@ async function post(
   return res;
 }
 
+async function pollUntil<T>(
+  read: () => Promise<T>,
+  pred: (value: T) => boolean,
+  ticks = 50,
+): Promise<T> {
+  let value = await read();
+  for (let i = 0; i < ticks && !pred(value); i++) {
+    await new Promise((r) => setTimeout(r, 10));
+    value = await read();
+  }
+  return value;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -179,8 +192,8 @@ describe("signed-in persistence", () => {
     expect(conv).toMatchObject({
       id: sid,
       title: "What beats Garchomp?",
-      // A plain post with no seed now defaults to National Dex (the new default).
-      format: "national-dex",
+      // A plain post with no seed is always Champions (CF-DATA-BR-1, CF-DATA-BR-7).
+      format: "champions",
       pinned: false,
     });
     const stored = await repo.getMessages(ACCT.id, sid);
@@ -213,29 +226,32 @@ describe("signed-in persistence", () => {
     expect(stored.map((t) => t.seq)).toEqual([0, 1, 2, 3]);
   });
 
-  it("overrides mode from the stored format when resuming (BR-H6)", async () => {
+  it("a resumed other-game conversation is Champions and is stamped champions (CF-CHAT-AC-3.2, CF-CHAT-AC-3.3)", async () => {
     const sid = randomUUID();
-    // Seed a champions conversation directly.
     await repo.appendTurnPair({
       accountId: ACCT.id,
       conversationId: sid,
-      format: "champions",
+      format: "gen-7",
       userTurnId: repo.newTurnId(),
-      userMessage: "champ q",
+      userMessage: "gen7 q",
       assistantTurnId: repo.newTurnId(),
-      answer: makeAnswer("champ a"),
+      answer: makeAnswer("gen7 a"),
       now: 1000,
     });
 
-    // Continue WITHOUT champions_mode in the body — mode must follow the stored
-    // format, not the body.
+    // Stored gen-7 + champions_mode: false must not pick another game.
     await post({ session_id: sid, message: "follow up", champions_mode: false });
     expect(capturedModes[0]).toBe("champions");
+
+    const conv = await pollUntil(
+      () => repo.getConversation(ACCT.id, sid),
+      (c) => c?.format === "champions",
+    );
+    expect(conv?.format).toBe("champions");
   });
 
-  it("switches a resumed conversation's scope on an explicit in-message signal, and persists it (GS-D3 / §3.6d)", async () => {
+  it("ignores an in-message Scarlet/Violet signal — still Champions (CF-CHAT-AC-1.1, ADR-3)", async () => {
     const sid = randomUUID();
-    // Seed a champions conversation directly.
     await repo.appendTurnPair({
       accountId: ACCT.id,
       conversationId: sid,
@@ -247,9 +263,6 @@ describe("signed-in persistence", () => {
       now: 1000,
     });
 
-    // Resume it with an EXPLICIT Scarlet/Violet signal (no champions_mode). The
-    // detector switches the turn's scope, and — unlike the sticky BR-H6 case —
-    // the conversation's stored format is UPDATED to follow the new scope.
     const res = await POST(
       new Request("http://localhost/api/chat", {
         method: "POST",
@@ -262,7 +275,6 @@ describe("signed-in persistence", () => {
     );
     const text = await res.text();
 
-    // The `scope` event reports the switch to scarlet-violet, message-sourced.
     const scopeFrame = text
       .split("\n\n")
       .find((f) => f.startsWith("event: scope"));
@@ -271,24 +283,19 @@ describe("signed-in persistence", () => {
       format: string;
       source: string;
     };
-    expect(scopeData).toEqual({ format: "scarlet-violet", source: "message" });
+    expect(scopeData).toEqual({ format: "champions", source: "default" });
+    expect(capturedModes[0]).toBe("champions");
 
-    // The tools ran under standard (Gen 9), not the stored champions scope.
-    expect(capturedModes[0]).toBe("standard");
-
-    // The stored conversation.format was UPDATED (fire-and-forget), so a later
-    // resume sticks to scarlet-violet. Poll until the async write lands.
-    let conv = await repo.getConversation(ACCT.id, sid);
-    for (let i = 0; i < 50 && conv?.format !== "scarlet-violet"; i++) {
-      await new Promise((r) => setTimeout(r, 10));
-      conv = await repo.getConversation(ACCT.id, sid);
-    }
-    expect(conv?.format).toBe("scarlet-violet");
+    const conv = await pollUntil(
+      () => repo.getConversation(ACCT.id, sid),
+      (c) => c?.format === "scarlet-violet" || c?.format === "champions",
+    );
+    expect(conv?.format).toBe("champions");
+    expect(conv?.format).not.toBe("scarlet-violet");
   });
 
-  it("switches a resumed conversation's scope on an explicit scope_seed chip pick, and persists it", async () => {
+  it("ignores scope_seed — still Champions, does not persist another game (CF-CHAT-AC-1.1)", async () => {
     const sid = randomUUID();
-    // Seed a champions conversation directly.
     await repo.appendTurnPair({
       accountId: ACCT.id,
       conversationId: sid,
@@ -300,10 +307,6 @@ describe("signed-in persistence", () => {
       now: 1000,
     });
 
-    // Resume it with an explicit scope_seed chip pick (no in-message signal).
-    // The seed ranks above the sticky champions scope, and — like the
-    // in-message-signal switch above — the conversation's stored format is
-    // UPDATED to follow the new scope.
     const res = await POST(
       new Request("http://localhost/api/chat", {
         method: "POST",
@@ -317,7 +320,6 @@ describe("signed-in persistence", () => {
     );
     const text = await res.text();
 
-    // The `scope` event reports the switch to scarlet-violet, seed-sourced.
     const scopeFrame = text
       .split("\n\n")
       .find((f) => f.startsWith("event: scope"));
@@ -326,19 +328,15 @@ describe("signed-in persistence", () => {
       format: string;
       source: string;
     };
-    expect(scopeData).toEqual({ format: "scarlet-violet", source: "seed" });
+    expect(scopeData).toEqual({ format: "champions", source: "default" });
+    expect(capturedModes[0]).toBe("champions");
 
-    // The tools ran under standard (Gen 9), not the stored champions scope.
-    expect(capturedModes[0]).toBe("standard");
-
-    // The stored conversation.format was UPDATED (fire-and-forget), so a later
-    // resume sticks to scarlet-violet. Poll until the async write lands.
-    let conv = await repo.getConversation(ACCT.id, sid);
-    for (let i = 0; i < 50 && conv?.format !== "scarlet-violet"; i++) {
-      await new Promise((r) => setTimeout(r, 10));
-      conv = await repo.getConversation(ACCT.id, sid);
-    }
-    expect(conv?.format).toBe("scarlet-violet");
+    const conv = await pollUntil(
+      () => repo.getConversation(ACCT.id, sid),
+      (c) => c?.format === "scarlet-violet" || c?.format === "champions",
+    );
+    expect(conv?.format).toBe("champions");
+    expect(conv?.format).not.toBe("scarlet-violet");
   });
 
   it("still delivers the answer event to the client (persist is off the critical path)", async () => {
@@ -366,7 +364,7 @@ describe("signed-in persistence", () => {
     expect(await repo.getConversation(ACCT.id, sid)).not.toBeNull();
   });
 
-  it("persists last_used_scope on the account after a resolved turn", async () => {
+  it("must not persist gen-7 last_used_scope after a completed turn (CF-DATA-BR-21)", async () => {
     const sid = randomUUID();
     const res = await POST(
       new Request("http://localhost/api/chat", {
@@ -381,19 +379,25 @@ describe("signed-in persistence", () => {
     );
     await res.text();
 
-    // Poll for the fire-and-forget account update.
     const accounts = await import("@/data/repos/accounts-repo");
     let found = await accounts.findAccountByEmail(ACCT.email);
-    for (let i = 0; i < 50 && found?.lastUsedScope !== "gen-7"; i++) {
+    for (let i = 0; i < 50; i++) {
       await new Promise((r) => setTimeout(r, 10));
       found = await accounts.findAccountByEmail(ACCT.email);
+      if (found?.lastUsedScope === "gen-7") break;
     }
-    expect(found?.lastUsedScope).toBe("gen-7");
+    expect(found?.lastUsedScope).not.toBe("gen-7");
+    expect(found?.lastUsedScope).not.toBe("national-dex");
+    expect(found?.lastUsedScope).not.toBe("scarlet-violet");
+    if (found?.lastUsedScope) {
+      expect(found.lastUsedScope).toBe("champions");
+    }
+
+    const conv = await repo.getConversation(ACCT.id, sid);
+    expect(conv?.format).toBe("champions");
   });
 
-  it("a new conversation uses the account last_used_scope when no seed/sticky", async () => {
-    // Prefill the preference and expose it on the mocked account (the chat
-    // route reads lastUsedScope from getCurrentAccount, not a re-query).
+  it("a stored last_used_scope gen-7 must not restore another game (CF-DATA-BR-21)", async () => {
     const accounts = await import("@/data/repos/accounts-repo");
     await accounts.updateLastUsedScope(ACCT.id, "gen-7");
     meMock.mockResolvedValue({ ...ACCT, lastUsedScope: "gen-7" });
@@ -416,11 +420,12 @@ describe("signed-in persistence", () => {
       format: string;
       source: string;
     };
-    expect(scopeData).toEqual({ format: "gen-7", source: "preference" });
-    expect(capturedModes[0]).toBe("gen-7");
+    expect(scopeData).toEqual({ format: "champions", source: "default" });
+    expect(capturedModes[0]).toBe("champions");
 
     const conv = await repo.getConversation(ACCT.id, sid);
-    expect(conv?.format).toBe("gen-7");
+    expect(conv?.format).toBe("champions");
+    expect(conv?.format).not.toBe("gen-7");
   });
 });
 
@@ -455,19 +460,6 @@ async function seedPair(
     answer: makeAnswer(answerMarkdown),
     now,
   });
-}
-
-async function pollUntil<T>(
-  read: () => Promise<T>,
-  pred: (value: T) => boolean,
-  ticks = 50,
-): Promise<T> {
-  let value = await read();
-  for (let i = 0; i < ticks && !pred(value); i++) {
-    await new Promise((r) => setTimeout(r, 10));
-    value = await read();
-  }
-  return value;
 }
 
 describe("signed-in recovery persist (REC-BR-2, ADR-2, ADR-4)", () => {
@@ -650,8 +642,8 @@ describe("guest recovery persist (REC-BR-8, ADR-2)", () => {
   });
 });
 
-describe("signed-in completed turn MRU (SCOPE-BR-2)", () => {
-  it("touches the resolved format so scope-mru-repo.list sees it", async () => {
+describe("signed-in completed turn MRU (CF-DATA-BR-21)", () => {
+  it("must not record gen-7 / National Dex as a future default", async () => {
     const sid = randomUUID();
     await post({
       session_id: sid,
@@ -659,10 +651,21 @@ describe("signed-in completed turn MRU (SCOPE-BR-2)", () => {
       scope_seed: "gen-7",
     });
 
-    const listed = await pollUntil(
-      () => mruRepo.list(ACCT.id),
-      (formats) => formats[0] === "gen-7",
-    );
-    expect(listed[0]).toBe("gen-7");
+    let listed = await mruRepo.list(ACCT.id);
+    for (let i = 0; i < 50; i++) {
+      await new Promise((r) => setTimeout(r, 10));
+      listed = await mruRepo.list(ACCT.id);
+      if (
+        listed.includes("gen-7") ||
+        listed.includes("national-dex") ||
+        listed[0] === "champions"
+      ) {
+        break;
+      }
+    }
+    expect(listed).not.toContain("gen-7");
+    expect(listed).not.toContain("national-dex");
+    expect(listed).not.toContain("scarlet-violet");
+    expect(listed.every((s) => s === "champions")).toBe(true);
   });
 });

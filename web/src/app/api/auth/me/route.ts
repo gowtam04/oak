@@ -7,17 +7,13 @@
  * expired/unknown/orphaned token — is the first-class `{ signedIn: false }` case
  * (never an error, BR-A11), so this always returns 200.
  *
- *   - account resolved → 200 { signedIn: true, email, lastUsedScope?, lastUsedScopes, answerDensity? }
+ *   - account resolved → 200 { signedIn: true, email, lastUsedScope, lastUsedScopes, answerDensity? }
  *   - null (guest)     → 200 { signedIn: false }
  *
- * `lastUsedScope` is the signed-in account's remembered game scope for new
- * chats (a Format literal). Omitted when never set so old clients that only
- * read `signedIn`/`email` stay happy; new clients use it to seed the empty
- * new-chat chip before the first turn.
- *
- * `lastUsedScopes` (plural, SCOPE-US-2 / ADR-8) is the signed-in MRU list
- * newest-first (may be `[]`). Guests omit it. Singular `lastUsedScope` stays.
- * A list() fault fail-softs to `[]` so MRU never 500s the auth bootstrap.
+ * Champions-first (CF-DATA-BR-21): `lastUsedScope` is always `"champions"` for
+ * a signed-in account — a stored gen-7 / National Dex preference must not
+ * reopen another game. `lastUsedScopes` is empty or `["champions"]`. Guests
+ * omit both.
  *
  * `answerDensity` is additive (COMPACT-US-2 / ADR-9): `"full" | "compact"`.
  * Omitted when the column is NULL so existing clients stay exact
@@ -25,16 +21,16 @@
  */
 
 import { json } from "../_lib/http";
-import { isFormat, type Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, type Format } from "@/data/formats";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Newest-first known formats, or `[]` if the MRU read fails. */
+/** Champions-only MRU, or `[]` if the MRU read fails / holds other games. */
 async function lastUsedScopesFor(accountId: string): Promise<Format[]> {
   try {
     const { list } = await import("@/data/repos/scope-mru-repo");
-    return (await list(accountId)).filter(isFormat);
+    return (await list(accountId)).filter((f) => f === CHAMPIONS_FORMAT);
   } catch {
     return [];
   }
@@ -57,7 +53,7 @@ export async function GET(): Promise<Response> {
   return json(200, {
     signedIn: true,
     email: account.email,
-    ...(account.lastUsedScope ? { lastUsedScope: account.lastUsedScope } : {}),
+    lastUsedScope: CHAMPIONS_FORMAT,
     lastUsedScopes,
     ...(answerDensity ? { answerDensity } : {}),
   });
