@@ -45,6 +45,8 @@ export interface PickerOption {
   display_name: string;
   /** Optional secondary line (e.g. a nature's +/- stat summary). */
   hint?: string;
+  /** Server sprite for species rows; the picker falls back to a slug guess. */
+  sprite_url?: string;
 }
 
 /** Short stat label for nature hints (HP never appears in a nature). */

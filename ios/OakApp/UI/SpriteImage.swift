@@ -5,38 +5,51 @@ import SwiftUI
 ///
 /// Sprite art arrives from the backend as absolute URLs on the answer payload
 /// (`Subject.spriteUrl`, `CandidateRow.spriteUrl`, `PokemonArtifactData.spriteUrl`)
-/// — Oak serves alternate forms their own Showdown-CDN sprites, so these are small
-/// pixel-art images. Base forms are static PNGs; alternate formes (Megas, Primals,
-/// regionals) are **animated GIFs**. `AsyncImage` renders only a GIF's first frame,
-/// so this hand-rolls the load: fetch the bytes, decode with ``SpriteDecoder``, and
-/// render an animated `UIImage` via ``AnimatedSpriteView`` for a multi-frame GIF or a
-/// plain SwiftUI `Image` for anything static. It keeps `AsyncImage`'s graceful states
-/// — a placeholder while a URL is absent or the fetch fails (M-AC-1.4) and a spinner
-/// while loading — and reuses the same rendering (`.interpolation(.none)` /
-/// nearest-neighbor) so static sprites look byte-for-byte as before.
+/// and from Dex lookup as `/api/media/sprite/{id}`. Ingest serves Showdown **ani**
+/// GIFs for every form (base and alternate) through that media route, so this
+/// hand-rolls the load: fetch the bytes, decode with ``SpriteDecoder``, and render
+/// an animated `UIImage` via ``AnimatedSpriteView`` for a multi-frame GIF or a
+/// plain SwiftUI `Image` for anything static. `AsyncImage` would show only a GIF's
+/// first frame.
 ///
-/// Reduce Motion: when `accessibilityReduceMotion` is on, an animated sprite renders
-/// as its static first frame instead of playing.
+/// List thumbs pass `animated: false` so a GIF never plays — after decode the
+/// view always mounts a still `Image` (``.still`` or `animation.firstFrame`) and
+/// never ``AnimatedSpriteView``. Answer cards, entity detail, and teams keep the
+/// default (`animated: true`) and play GIFs unless Reduce Motion is on.
 ///
-/// Caching: relies on `URLSession.shared`'s default `URLCache` — sprite payloads
-/// are tiny and the system disk/memory cache is sufficient; no bespoke cache layer.
+/// Reduce Motion: when `accessibilityReduceMotion` is on **and** `animated` is
+/// true, an animated sprite renders as its static first frame instead of playing.
+/// When `animated` is already false the still path is used regardless.
 ///
-/// Accessibility: the view is a single element labeled with the entity name, so
-/// VoiceOver announces the subject ("Garchomp") even when only the placeholder is
-/// showing — the picture is never the sole carrier of meaning (M-AC-UI9.3). The
-/// frame scales with Dynamic Type via `@ScaledMetric` so it grows alongside
-/// surrounding text instead of clipping (M-UI-US-9).
+/// Caching: relies on `URLSession.shared` and the shared `URLCache` configured
+/// at launch in ``OakApp`` (16 MB memory / 80 MB disk). Sprite responses carry
+/// `Cache-Control: public, max-age=604800, immutable`; no bespoke cache layer.
+///
+/// Accessibility: by default the view is a single element labeled with the
+/// entity name, so VoiceOver announces the subject ("Garchomp") even when only
+/// the placeholder is showing — the picture is never the sole carrier of meaning
+/// (M-AC-UI9.3). List thumbs pass `decorative: true` so the sprite is hidden
+/// from VoiceOver (the parent row already names the Pokémon). The frame scales
+/// with Dynamic Type via `@ScaledMetric` so it grows alongside surrounding text
+/// instead of clipping (M-UI-US-9).
 struct SpriteImage: View {
   /// The sprite art URL; `nil` (e.g. an absent `sprite_url`) renders the placeholder.
   let url: URL?
   /// The entity name, used verbatim as the VoiceOver accessibility label.
   let name: String
+  /// When `false`, always render a still first frame — never play a GIF, never
+  /// show a loading spinner. Defaults to `true` (answer cards / detail / teams).
+  let animated: Bool
+  /// When `true`, hide from VoiceOver. Defaults to `false` (the view is labeled
+  /// with `name`). List thumbs set this so the parent row is the named element.
+  let decorative: Bool
 
   /// The square render edge in points, scaled with the user's Dynamic Type setting.
   @ScaledMetric private var edge: CGFloat
 
   /// True when the user has asked the system to reduce/disable motion — an animated
-  /// sprite then shows its static first frame. Read here (not in `init`, where the
+  /// sprite then shows its static first frame. Consulted only when `animated` is
+  /// true; a still thumb ignores it. Read here (not in `init`, where the
   /// environment is unavailable) so a change re-evaluates `body` and swaps the render.
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -52,11 +65,22 @@ struct SpriteImage: View {
 
   /// - Parameters:
   ///   - url: The sprite URL, or `nil` to show the placeholder.
-  ///   - name: The entity name for the accessibility label.
+  ///   - name: The entity name for the accessibility label (ignored when `decorative`).
   ///   - size: The base square edge in points (scaled with Dynamic Type).
-  init(url: URL?, name: String, size: CGFloat = 56) {
+  ///   - animated: When `false`, always render a still first frame and never mount
+  ///     ``AnimatedSpriteView``. Defaults to `true`.
+  ///   - decorative: When `true`, hide from VoiceOver. Defaults to `false`.
+  init(
+    url: URL?,
+    name: String,
+    size: CGFloat = 56,
+    animated: Bool = true,
+    decorative: Bool = false
+  ) {
     self.url = url
     self.name = name
+    self.animated = animated
+    self.decorative = decorative
     self._edge = ScaledMetric(wrappedValue: size)
   }
 
@@ -69,9 +93,7 @@ struct SpriteImage: View {
       }
     }
     .frame(width: edge, height: edge)
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(Text(name))
-    .accessibilityAddTraits(.isImage)
+    .modifier(SpriteImageAccessibility(name: name, decorative: decorative))
     // `.task(id: url)` cancels the in-flight load and restarts when the sprite URL
     // changes (a recycled row), so a stale response can never clobber the current URL.
     .task(id: url) { await load(url) }
@@ -81,17 +103,33 @@ struct SpriteImage: View {
   @ViewBuilder private var content: some View {
     switch phase {
     case .loading:
-      ProgressView()
+      if animated {
+        ProgressView()
+      } else {
+        // Dense lists must not flash spinners — empty well, same fill as placeholder.
+        emptyWell
+      }
     case .failed:
       placeholder
-    case .loaded(.still(let image)):
-      staticImage(image)
-    case .loaded(.animated(let animation)):
-      if reduceMotion {
-        staticImage(animation.firstFrame)  // honor Reduce Motion: freeze on frame 0
-      } else {
+    case .loaded(let decoded):
+      if animated, !reduceMotion, case .animated(let animation) = decoded {
         AnimatedSpriteView(image: animation.image)
+      } else {
+        // Still thumbs, Reduce Motion, and single-frame sources all draw a still
+        // `Image`. `stillImage(from:)` never returns the multi-frame GIF UIImage.
+        staticImage(Self.stillImage(from: decoded))
       }
+    }
+  }
+
+  /// The still `UIImage` to draw for `decoded`. List thumbs (`animated: false`)
+  /// always use this so a GIF never mounts ``AnimatedSpriteView``.
+  static func stillImage(from decoded: SpriteDecoder.Decoded) -> UIImage {
+    switch decoded {
+    case .still(let image):
+      return image
+    case .animated(let animation):
+      return animation.firstFrame
     }
   }
 
@@ -124,15 +162,24 @@ struct SpriteImage: View {
     }
   }
 
-  /// The no-image surface — a rounded tile carrying an SF Symbol so the empty state
-  /// reads as "image unavailable" rather than a blank gap.
-  private var placeholder: some View {
+  /// Rounded tile fill shared by the placeholder and the still-thumb loading well.
+  private var emptyWell: some View {
     RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
       .fill(Theme.surface)
+  }
+
+  /// The no-image surface — a rounded tile. When `animated` is true (answer
+  /// cards / detail), it carries an SF Symbol so the empty state reads as
+  /// "image unavailable". List thumbs (`animated: false`) omit the glyph so a
+  /// dense list stays quiet — empty rounded rect only.
+  private var placeholder: some View {
+    emptyWell
       .overlay {
-        Image(systemName: "photo")
-          .font(.system(size: edge * 0.4))
-          .foregroundStyle(Theme.textMuted)
+        if animated {
+          Image(systemName: "photo")
+            .font(.system(size: edge * 0.4))
+            .foregroundStyle(Theme.textMuted)
+        }
       }
   }
 }
@@ -141,12 +188,42 @@ extension SpriteImage {
   /// Convenience for the common case where the sprite URL arrives as a wire
   /// `String` (optional, since `CandidateRow.spriteUrl` may be absent). An empty,
   /// whitespace-only, or malformed string maps to the placeholder.
-  init(urlString: String?, name: String, size: CGFloat = 56) {
+  init(
+    urlString: String?,
+    name: String,
+    size: CGFloat = 56,
+    animated: Bool = true,
+    decorative: Bool = false
+  ) {
     let url =
       urlString
       .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
       .flatMap { $0.isEmpty ? nil : URL(string: $0) }
-    self.init(url: url, name: name, size: size)
+    self.init(
+      url: url,
+      name: name,
+      size: size,
+      animated: animated,
+      decorative: decorative
+    )
+  }
+}
+
+/// VoiceOver: named image by default; list thumbs (`decorative: true`) are not
+/// an accessibility element — the parent row already names the Pokémon.
+private struct SpriteImageAccessibility: ViewModifier {
+  let name: String
+  let decorative: Bool
+
+  func body(content: Content) -> some View {
+    if decorative {
+      content.accessibilityHidden(true)
+    } else {
+      content
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(name))
+        .accessibilityAddTraits(.isImage)
+    }
   }
 }
 
@@ -159,5 +236,16 @@ extension SpriteImage {
     SpriteImage(url: nil, name: "Unknown")
     SpriteImage(urlString: "  ", name: "Empty string", size: 40)
   }
+  .padding()
+}
+
+#Preview("still + decorative") {
+  SpriteImage(
+    url: nil,
+    name: "Should not be announced",
+    size: 40,
+    animated: false,
+    decorative: true
+  )
   .padding()
 }

@@ -22,6 +22,7 @@ import {
   pokemonFormats,
   pokemonRequiringItem,
   queryPokedex as queryPokedexRaw,
+  spriteUrlsByIds,
   type PokedexFilters,
 } from "./pokedex-repo";
 
@@ -491,6 +492,79 @@ describe("getPokemon — T3", () => {
     const r = await getPokemon("zzzznope", db);
     expect(r).toEqual({ found: false, suggestions: [] });
   });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("spriteUrlsByIds", () => {
+  it("returns urls keyed by id", async () => {
+    const map = await spriteUrlsByIds(["garchomp", "dragapult"], SV, db);
+    expect(map.get("garchomp")).toBe("https://img/garchomp.png");
+    expect(map.get("dragapult")).toBe("https://img/dragapult.png");
+    expect(map.size).toBe(2);
+  });
+
+  it("omits unknown ids", async () => {
+    const map = await spriteUrlsByIds(["garchomp", "missingno"], SV, db);
+    expect(map.get("garchomp")).toBe("https://img/garchomp.png");
+    expect(map.has("missingno")).toBe(false);
+  });
+
+  it("returns an empty map for empty ids without throwing", async () => {
+    await expect(spriteUrlsByIds([], SV, db)).resolves.toEqual(new Map());
+    await expect(spriteUrlsByIds(["", "  "], SV, db)).resolves.toEqual(
+      new Map(),
+    );
+  });
+
+  it("is format-scoped: a row in another format does not leak", async () => {
+    const fix = await createPgSchema({ seed: "none" });
+    try {
+      await insertMon(fix.db, {
+        id: "garchomp",
+        species_name: "garchomp",
+        display_name: "Garchomp",
+        national_dex_number: 445,
+        type1: "dragon",
+        type2: "ground",
+        ability_slot1: "sand-veil",
+        stat_hp: 108,
+        stat_attack: 130,
+        stat_defense: 95,
+        stat_special_attack: 80,
+        stat_special_defense: 85,
+        stat_speed: 102,
+        sprite_url: "https://img/sv-garchomp.png",
+      });
+      await insertMon(fix.db, {
+        format: "champions",
+        id: "garchomp",
+        species_name: "garchomp",
+        display_name: "Garchomp",
+        national_dex_number: 445,
+        type1: "dragon",
+        type2: "ground",
+        ability_slot1: "sand-veil",
+        stat_hp: 108,
+        stat_attack: 130,
+        stat_defense: 95,
+        stat_special_attack: 80,
+        stat_special_defense: 85,
+        stat_speed: 102,
+        sprite_url: "https://img/champions-garchomp.png",
+      });
+
+      const sv = await spriteUrlsByIds(["garchomp"], SV, fix.db);
+      expect(sv.get("garchomp")).toBe("https://img/sv-garchomp.png");
+      expect(sv.size).toBe(1);
+
+      const champ = await spriteUrlsByIds(["garchomp"], "champions", fix.db);
+      expect(champ.get("garchomp")).toBe("https://img/champions-garchomp.png");
+      expect(champ.size).toBe(1);
+    } finally {
+      await fix.cleanup();
+    }
+  }, 60_000);
 });
 
 // ---------------------------------------------------------------------------

@@ -54,14 +54,24 @@ export interface EntityPickerProps {
 const DEBOUNCE_MS = 150;
 
 /** A sprite thumbnail that quietly removes itself if the CDN 404s. */
-function SpriteThumb({ slug }: { slug: string }) {
+function SpriteThumb({
+  slug,
+  spriteUrl,
+}: {
+  slug: string;
+  spriteUrl?: string;
+}) {
   const [ok, setOk] = useState(true);
   if (!ok) return <span className="entity-picker__thumb entity-picker__thumb--empty" aria-hidden />;
+  const src =
+    spriteUrl && spriteUrl.length > 0
+      ? spriteUrl
+      : guessOakMediaSpriteUrl(slug);
   return (
     // eslint-disable-next-line @next/next/no-img-element -- external CDN sprite, not a static asset
     <img
       className="entity-picker__thumb"
-      src={guessOakMediaSpriteUrl(slug)}
+      src={src}
       alt=""
       aria-hidden
       loading="lazy"
@@ -159,7 +169,11 @@ export default function EntityPicker({
       void searchEntities(kind, query, format).then((matches) => {
         if (id !== reqId.current) return;
         setResults(
-          matches.map((m) => ({ slug: m.slug, display_name: m.display_name })),
+          matches.map((m) => ({
+            slug: m.slug,
+            display_name: m.display_name,
+            sprite_url: m.sprite_url,
+          })),
         );
       });
     }, DEBOUNCE_MS);
@@ -286,7 +300,9 @@ export default function EntityPicker({
               }}
               onMouseEnter={() => setActive(i)}
             >
-              {withSprite && <SpriteThumb slug={option.slug} />}
+              {withSprite && (
+                <SpriteThumb slug={option.slug} spriteUrl={option.sprite_url} />
+              )}
               <span className="entity-picker__option-name">
                 {option.display_name}
               </span>

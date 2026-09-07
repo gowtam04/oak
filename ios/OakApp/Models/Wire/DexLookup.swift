@@ -16,15 +16,28 @@ import Foundation
 
 /// One typeahead candidate from `GET /api/search` — mirrors `SearchMatch` in
 /// `web/src/lib/api/search-client.ts`.
+///
+/// `sprite_url` is additive and Pokémon-only: present on Pokémon matches when
+/// the index has a sprite, omitted (decode → `nil`) when unknown or for
+/// moves/abilities/items. Older responses without the key still decode.
 struct SearchMatch: Decodable, Sendable, Equatable, Identifiable {
   let slug: String
   let displayName: String
   let kind: EntityKind
+  let spriteUrl: String?
 
   enum CodingKeys: String, CodingKey {
     case slug
     case displayName = "display_name"
     case kind
+    case spriteUrl = "sprite_url"
+  }
+
+  init(slug: String, displayName: String, kind: EntityKind, spriteUrl: String? = nil) {
+    self.slug = slug
+    self.displayName = displayName
+    self.kind = kind
+    self.spriteUrl = spriteUrl
   }
 
   var id: String { slug }

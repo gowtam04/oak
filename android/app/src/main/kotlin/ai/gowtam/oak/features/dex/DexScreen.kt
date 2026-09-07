@@ -5,6 +5,7 @@ import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.OakTopBar
+import ai.gowtam.oak.ui.SpriteImage
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.SearchMatch
@@ -218,6 +219,16 @@ private fun MatchRow(match: SearchMatch, onClick: () -> Unit) {
             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (match.kind == EntityKind.POKEMON) {
+            SpriteImage(
+                url = match.spriteUrl,
+                name = match.displayName,
+                size = 36.dp,
+                animated = false,
+                decorative = true,
+            )
+            Spacer(Modifier.size(OakSpacing.sm))
+        }
         Text(
             text = match.displayName,
             style = MaterialTheme.typography.bodyLarge,

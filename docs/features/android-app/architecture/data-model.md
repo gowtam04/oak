@@ -372,7 +372,7 @@ in-domain values the viewer renders, never thrown (`ArtifactService` returns `nu
 ### Dex-lookup DTOs — `GET /api/search` / `/api/learnset` / `/api/sprites`
 
 ```kotlin
-@Serializable data class SearchMatch(val slug: String, @SerialName("display_name") val displayName: String, val kind: EntityKind)
+@Serializable data class SearchMatch(val slug: String, @SerialName("display_name") val displayName: String, val kind: EntityKind, @SerialName("sprite_url") val spriteUrl: String? = null)
 @Serializable data class LearnsetMove(
   val slug: String, @SerialName("display_name") val displayName: String,
   val type: String? = null, @SerialName("damage_class") val damageClass: DamageClass? = null, val power: Int? = null,
