@@ -69,7 +69,8 @@ export interface RosterStripProps {
   selectedSlot: number;
   spriteBySpecies: Record<string, SpriteRef | undefined>;
   onSelect: (index: number) => void;
-  onAdd: () => void;
+  /** Omit to hide the trailing add tile (archived view-only). */
+  onAdd?: () => void;
 }
 
 export default function RosterStrip({
@@ -134,7 +135,7 @@ export default function RosterStrip({
         );
       })}
 
-      {members.length < 6 && (
+      {members.length < 6 && onAdd && (
         <button
           type="button"
           className="roster-slot roster-slot--add"

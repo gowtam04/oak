@@ -38,7 +38,7 @@ import {
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { TeamDetail } from "@/lib/api/teams-client";
 import { resolveSprites, type SpriteRef } from "@/lib/api/sprites-client";
-import { type Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, type Format } from "@/data/formats";
 import TeamMemberPanel from "./TeamMemberPanel";
 import RosterStrip from "./RosterStrip";
 import TeamWarnings from "./TeamWarnings";
@@ -124,6 +124,8 @@ export default function TeamEditor({
   winCondition,
   onWinConditionChange,
 }: TeamEditorProps) {
+  const archived = team.format !== CHAMPIONS_FORMAT;
+  const editorFormat: Format = CHAMPIONS_FORMAT;
   const [name, setName] = useState(team.name);
   const [members, setMembers] = useState<TeamMember[]>(team.members);
   const [selectedSlot, setSelectedSlot] = useState(0);
@@ -192,7 +194,7 @@ export default function TeamEditor({
     ];
     if (wanted.length === 0) return;
     let active = true;
-    void resolveSprites(team.format, wanted).then((refs) => {
+    void resolveSprites(editorFormat, wanted).then((refs) => {
       if (!active) return;
       setResolved((prev) => {
         const next = { ...prev };
@@ -203,11 +205,13 @@ export default function TeamEditor({
     return () => {
       active = false;
     };
-  }, [members, team.format, resolved, spriteBySpecies]);
+  }, [members, editorFormat, resolved, spriteBySpecies]);
 
   // A Mega must hold its stone: once a member's species resolves to a form with a
   // `required_item`, force its item to that stone (idempotent — stops once set).
+  // Archived teams are view-only — never mutate stored items.
   useEffect(() => {
+    if (archived) return;
     let changed = false;
     const next = members.map((m) => {
       if (!m.species) return m;
@@ -220,7 +224,7 @@ export default function TeamEditor({
       return m;
     });
     if (changed) setMembers(next);
-  }, [resolved, spriteBySpecies, members]);
+  }, [archived, resolved, spriteBySpecies, members]);
 
   const updateMember = (index: number, next: TeamMember) =>
     setMembers((prev) => prev.map((m, i) => (i === index ? next : m)));
@@ -279,6 +283,7 @@ export default function TeamEditor({
           aria-label="Team name"
           value={name}
           placeholder="Untitled team"
+          disabled={archived}
           onChange={(e) => setName(e.target.value)}
         />
         <div className="team-editor__header-actions">
@@ -311,6 +316,7 @@ export default function TeamEditor({
             maxLength={280}
             value={winCondition ?? ""}
             placeholder="e.g. late-game SD Garchomp after hazards"
+            disabled={archived}
             onChange={(e) => onWinConditionChange(e.target.value)}
           />
         </label>
@@ -327,7 +333,7 @@ export default function TeamEditor({
         selectedSlot={slot}
         spriteBySpecies={sprites}
         onSelect={(i) => setSelectedSlot(i)}
-        onAdd={addMember}
+        onAdd={archived ? undefined : addMember}
       />
 
       {focused ? (
@@ -335,7 +341,8 @@ export default function TeamEditor({
           key={slot}
           slot={slot}
           member={focused}
-          format={team.format as Format}
+          format={editorFormat}
+          readOnly={archived}
           warnings={team.validation.filter((w) => w.slot === slot)}
           baseStats={
             focused.species ? sprites[focused.species]?.base_stats : undefined
@@ -354,11 +361,13 @@ export default function TeamEditor({
         </p>
       )}
 
-      <TeamAnalysisPanel
-        members={members}
-        format={team.format as Format}
-        onAnalysisChange={onAnalysisChange}
-      />
+      {!archived && (
+        <TeamAnalysisPanel
+          members={members}
+          format={editorFormat}
+          onAnalysisChange={onAnalysisChange}
+        />
+      )}
 
       <div className="team-editor__savebar" data-testid="team-editor-savebar">
         <span
@@ -382,15 +391,17 @@ export default function TeamEditor({
           <span aria-hidden>{complete ? "✓" : "⚠"}</span>
           {complete ? "Legal" : "Incomplete"}
         </span>
-        <button
-          type="button"
-          className="tm-btn tm-btn--primary team-editor__save"
-          data-testid="team-save"
-          onClick={() => onSave({ name, members })}
-          disabled={saving}
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
+        {!archived && (
+          <button
+            type="button"
+            className="tm-btn tm-btn--primary team-editor__save"
+            data-testid="team-save"
+            onClick={() => onSave({ name, members })}
+            disabled={saving}
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        )}
       </div>
     </div>
   );

@@ -187,7 +187,9 @@ export default function AddToTeamPicker({
         ) : (
           <>
             <ul className="add-to-team__list">
-              {(teams ?? []).map((team) => {
+              {(teams ?? [])
+                .filter((t) => t.format === format || t.format === "champions")
+                .map((team) => {
                 const full = team.memberCount >= 6 || team.incomplete === false;
                 return (
                   <li key={team.id}>
