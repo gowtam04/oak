@@ -1,0 +1,1867 @@
+{
+  "mode": "judged (full)",
+  "db": "live index (postgres://oak:oak@localhost:5432/oak)",
+  "repeat": 1,
+  "model": "grok-4.6",
+  "results": [
+    {
+      "caseId": "G4",
+      "input": "does Fake Out work on Farigiraf?",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "It depends on Farigiraf's ability.\n\n- **If it has Armor Tail:** Fake Out **fails** — Armor Tail blocks opposing increased-priority moves (and also protects Farigiraf's allies), and Fake Out is +3 priority.\n- **If it has Cud Chew or Sap Sipper:** Fake Out **works** normally (first turn out, flinch).",
+        "reasoning_markdown": "Fake Out is a +3 priority move. Armor Tail prevents opposing priority moves from affecting Farigiraf (and its allies). Farigiraf can have Cud Chew, Armor Tail, or Sap Sipper, so the outcome depends on which ability it has.",
+        "citations": [
+          {
+            "source": "move/fake-out",
+            "detail": "Fake Out is a physical move with +3 priority; it only works on the user's first turn and flinches."
+          },
+          {
+            "source": "ability/armor-tail",
+            "detail": "Armor Tail prevents opposing priority moves from affecting this Pokémon or its allies."
+          },
+          {
+            "source": "pokemon/farigiraf",
+            "detail": "Farigiraf's possible abilities are Cud Chew, Armor Tail, and Sap Sipper."
+          }
+        ],
+        "inferences": [
+          {
+            "claim": "Armor Tail stops Fake Out because Fake Out has increased priority.",
+            "confidence": "high",
+            "note": "Direct application of Armor Tail's effect to Fake Out's +3 priority."
+          }
+        ],
+        "generation_basis": {
+          "generation": "gen-9",
+          "fallback": false
+        },
+        "subjects": [
+          {
+            "name": "Farigiraf",
+            "dex_number": 981,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/981.png",
+            "types": [
+              "normal",
+              "psychic"
+            ],
+            "is_fallback": false
+          }
+        ]
+      },
+      "toolCalls": [
+        "reasoning",
+        "get_move",
+        "get_pokemon",
+        "get_ability",
+        "submit_answer"
+      ],
+      "structuralFailures": [],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 2,
+          "reason": "The answer correctly identifies that Fake Out's success depends on Farigiraf's ability, correctly noting Armor Tail blocks it while Cud Chew/Sap Sipper do not."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 2,
+          "reason": "The deduction that Armor Tail blocks Fake Out due to its +3 priority is properly placed in inferences[] with a confidence level, while raw facts (priority value, ability text, possible abilities) are in citations."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 2,
+          "reason": "Priority value (+3) is stated precisely, Armor Tail's effect is described accurately, and the conditional outcome is mechanically correct."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "This is a straightforward in-scope competitive mechanics question and is answered directly with accurate information."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 2,
+          "reason": "The reasoning is clearly laid out, citations reference specific data points for the move, ability, and Pokémon, and the conditional logic is explained clearly."
+        }
+      ],
+      "overallPass": true,
+      "agentLatencyMs": 18168,
+      "judgeLatencyMs": 4503,
+      "covers": [
+        "US-7",
+        "AC-7.1",
+        "AC-7.2",
+        "AC-7.3",
+        "BR-3",
+        "BR-4"
+      ],
+      "usage": {
+        "inputTokens": 99624,
+        "outputTokens": 550,
+        "thinkingTokens": 101,
+        "cachedInputTokens": 74752
+      }
+    },
+    {
+      "caseId": "G8",
+      "input": "Fire types with base Speed over 100 that can learn Will-O-Wisp",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**8 Fire-types** in Scarlet/Violet data have **base Speed over 100** and can learn **Will-O-Wisp**, ranked by Speed.\n\nStandouts: **Talonflame** (126) is the fastest and a classic burn-and-priority flyer; **Cinderace** (119) and **Salazzle** (117) are the next-fastest practical burn spreaders. **Arceus (Fire)** sits at 120 but is a restricted legendary.\n\n<!-- span:c0 -->**Mega Houndoom** (115 Speed) appears in the list from older-generation data — Mega Evolution is **not** in Gen 9.<!-- /span:c0 --> The rest are native to this generation.",
+        "reasoning_markdown": "I filtered Scarlet/Violet Fire-types for base Speed strictly above 100 and a legal Will-O-Wisp learnset, then ranked by Speed. Mega Houndoom is included in the index from Gen 6 data; it is not a usable form in Scarlet/Violet.",
+        "citations": [
+          {
+            "source": "learnset/will-o-wisp (gen-9)",
+            "detail": "Will-O-Wisp learners in Scarlet/Violet, intersected with Fire typing and Speed over 100."
+          },
+          {
+            "source": "pokemon/talonflame",
+            "detail": "Talonflame is Fire/Flying with 126 base Speed.",
+            "anchor": {
+              "target": "fact_row",
+              "id": "Talonflame"
+            }
+          },
+          {
+            "source": "pokemon/houndoom-mega",
+            "detail": "Mega Houndoom's stats come from Generation 6; Megas are not in Gen 9.",
+            "anchor": {
+              "target": "answer_span",
+              "id": "c0"
+            }
+          }
+        ],
+        "inferences": [
+          {
+            "claim": "Mega Houndoom is not a legal Scarlet/Violet form, even though it matches the Speed and Will-O-Wisp filters in the index.",
+            "confidence": "high",
+            "note": "Gen 9 has Terastallization, not Mega Evolution."
+          }
+        ],
+        "generation_basis": {
+          "generation": "gen-9",
+          "fallback": false,
+          "note": "Scarlet/Violet roster and learnsets; Mega Houndoom is flagged as Gen 6 data."
+        },
+        "candidates": {
+          "total_count": 8,
+          "truncated": false,
+          "sort": "speed",
+          "shown": [
+            {
+              "name": "Talonflame",
+              "dex_number": 663,
+              "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/663.png",
+              "types": [
+                "fire",
+                "flying"
+              ],
+              "base_stats": {
+                "hp": 78,
+                "attack": 81,
+                "defense": 71,
+                "special_attack": 74,
+                "special_defense": 69,
+                "speed": 126
+              }
+            },
+            {
+              "name": "Arceus (Fire)",
+              "dex_number": 493,
+              "sprite_url": "https://play.pokemonshowdown.com/sprites/ani/arceus-fire.gif",
+              "types": [
+                "fire"
+              ],
+              "base_stats": {
+                "hp": 120,
+                "attack": 120,
+                "defense": 120,
+                "special_attack": 120,
+                "special_defense": 120,
+                "speed": 120
+              }
+            },
+            {
+              "name": "Cinderace",
+              "dex_number": 815,
+              "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/815.png",
+              "types": [
+                "fire"
+              ],
+              "base_stats": {
+                "hp": 80,
+                "attack": 116,
+                "defense": 75,
+                "special_attack": 65,
+                "special_defense": 75,
+                "speed": 119
+              }
+            },
+            {
+              "name": "Salazzle",
+              "dex_number": 758,
+              "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/758.png",
+              "types": [
+                "poison",
+                "fire"
+              ],
+              "base_stats": {
+                "hp": 68,
+                "attack": 64,
+                "defense": 60,
+                "special_attack": 111,
+                "special_defense": 60,
+                "speed": 117
+              }
+            },
+            {
+              "name": "Houndoom (Mega)",
+              "dex_number": 229,
+              "sprite_url": "https://play.pokemonshowdown.com/sprites/ani/houndoom-mega.gif",
+              "types": [
+                "dark",
+                "fire"
+              ],
+              "base_stats": {
+                "hp": 75,
+                "attack": 90,
+                "defense": 90,
+                "special_attack": 140,
+                "special_defense": 90,
+                "speed": 115
+              }
+            },
+            {
+              "name": "Infernape",
+              "dex_number": 392,
+              "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/392.png",
+              "types": [
+                "fire",
+                "fighting"
+              ],
+              "base_stats": {
+                "hp": 76,
+                "attack": 104,
+                "defense": 71,
+                "special_attack": 104,
+                "special_defense": 71,
+                "speed": 108
+              }
+            },
+            {
+              "name": "Pyroar",
+              "dex_number": 668,
+              "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/668.png",
+              "types": [
+                "fire",
+                "normal"
+              ],
+              "base_stats": {
+                "hp": 86,
+                "attack": 68,
+                "defense": 72,
+                "special_attack": 109,
+                "special_defense": 66,
+                "speed": 106
+              }
+            },
+            {
+              "name": "Delphox",
+              "dex_number": 655,
+              "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/655.png",
+              "types": [
+                "fire",
+                "psychic"
+              ],
+              "base_stats": {
+                "hp": 75,
+                "attack": 69,
+                "defense": 72,
+                "special_attack": 114,
+                "special_defense": 100,
+                "speed": 104
+              }
+            }
+          ]
+        }
+      },
+      "toolCalls": [
+        "reasoning",
+        "query_pokedex",
+        "submit_answer"
+      ],
+      "structuralFailures": [],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": false,
+          "score": 0,
+          "reason": "The list is factually wrong on multiple counts: Cinderace (Fire, no Fighting) can't learn Will-O-Wisp in Gen 9, Salazzle's typing is Poison/Fire but it doesn't learn Will-O-Wisp either, Arceus-Fire and Mega Houndoom are not legitimately available/learners in SV, and the answer itself flags Mega Houndoom as invalid yet still counts it in the total of 8 and presents it as a valid entry, undermining the core list's reliability."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 1,
+          "reason": "The Mega Houndoom exclusion note is correctly placed in inferences[] with confidence, but no inference is flagged for the equally dubious inclusion of Arceus (Fire) as a 'restricted legendary' caveat that likely also shouldn't count, nor for whether these Pokémon actually learn Will-O-Wisp by legal means in Gen 9."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 1,
+          "reason": "Type and stat data shown are numerically accurate, but the mechanical precision of the Will-O-Wisp learnset filter is questionable (e.g., Cinderace's canonical learnset does not include Will-O-Wisp), which is a core mechanical claim not just a wording issue."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "This is a clearly in-scope competitive/Pokédex data question and Oak answered it directly without declining."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 1,
+          "reason": "The reasoning and citations reference the filtering process and specific Pokémon, but the answer still counts Mega Houndoom in the 'total_count: 8' despite flagging it as invalid, creating an internal inconsistency that undermines full transparency about what is actually being counted."
+        }
+      ],
+      "overallPass": false,
+      "agentLatencyMs": 25970,
+      "judgeLatencyMs": 8529,
+      "covers": [
+        "AC-3.3"
+      ],
+      "usage": {
+        "inputTokens": 50433,
+        "outputTokens": 1492,
+        "thinkingTokens": 110,
+        "cachedInputTokens": 1024
+      }
+    },
+    {
+      "caseId": "G9",
+      "input": "show me Garchomp",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**Garchomp** is a Dragon/Ground pseudo-legendary (National Dex #445) with **600 BST**.\n\n- **Abilities:** Sand Veil · Hidden: Rough Skin\n- **Base stats:** 108 HP / **130 Atk** / 95 Def / 80 SpA / 85 SpD / **102 Spe**\n- **Typing:** Dragon/Ground — Ground STAB plus Dragon coverage, with a Flying immunity and a 4× Ice weakness.\n\nIn Scarlet/Violet it is fully native. Mega Garchomp exists as a form in older games, but **there is no Mega Evolution in Gen 9**.",
+        "reasoning_markdown": "Pulled Garchomp’s Scarlet/Violet profile: types, abilities, base stats, sprite, and listed forms. Mega is noted only as a historical form, not a Gen 9 mechanic.",
+        "citations": [
+          {
+            "source": "pokemon/garchomp",
+            "detail": "Garchomp is Dragon/Ground, abilities Sand Veil and Rough Skin, BST 600 (108/130/95/80/85/102).",
+            "anchor": {
+              "target": "answer_span",
+              "id": "c0"
+            }
+          }
+        ],
+        "inferences": [],
+        "generation_basis": {
+          "generation": "gen-9",
+          "fallback": false
+        },
+        "subjects": [
+          {
+            "name": "Garchomp",
+            "dex_number": 445,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/445.png",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "is_fallback": false
+          }
+        ]
+      },
+      "toolCalls": [
+        "reasoning",
+        "get_pokemon",
+        "submit_answer"
+      ],
+      "structuralFailures": [
+        "mustInclude: answer_markdown does not contain \"dragon\"",
+        "mustInclude: answer_markdown does not contain \"ground\""
+      ],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 2,
+          "reason": "All facts about Garchomp (typing, abilities, BST, base stats, Flying immunity, Ice weakness) are correct."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 1,
+          "reason": "The statement 'Ground STAB plus Dragon coverage, with a Flying immunity and a 4× Ice weakness' is a derived deduction from typing that should arguably be flagged as an inference, but it's presented as plain fact with no inferences[] entry despite being a light deduction."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 2,
+          "reason": "Flying immunity correctly stated as immunity (not resisted), and 4x Ice weakness correctly quantified with multiplier."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "This is a straightforward in-scope Pokédex/game-data question, correctly answered with relevant game mechanics."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 2,
+          "reason": "Reasoning explains the data pull, citation references the specific data points used, and generation basis is stated."
+        }
+      ],
+      "overallPass": false,
+      "agentLatencyMs": 12107,
+      "judgeLatencyMs": 4569,
+      "covers": [
+        "AC-4.1",
+        "US-11"
+      ],
+      "usage": {
+        "inputTokens": 49502,
+        "outputTokens": 440,
+        "thinkingTokens": 65,
+        "cachedInputTokens": 25088
+      }
+    },
+    {
+      "caseId": "G11",
+      "input": "is Ground super effective against Flying?",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**No.** Ground has **no effect** on Flying — it's a full **immunity** (0×), not super-effective.\n\nFlying is weak to Electric, Ice, and Rock instead.",
+        "reasoning_markdown": "This is a type-chart fact: Flying's defensive profile lists Ground as an immunity, not a weakness. Super-effective would be 2×; immunity is 0×.",
+        "citations": [
+          {
+            "source": "type/flying",
+            "detail": "Flying is immune to Ground and weak to Electric, Ice, and Rock.",
+            "anchor": {
+              "target": "answer_span",
+              "id": "c0"
+            }
+          }
+        ],
+        "inferences": [],
+        "generation_basis": {
+          "generation": "gen-9",
+          "fallback": false
+        },
+        "uncertainty_flags": []
+      },
+      "toolCalls": [
+        "reasoning",
+        "get_type_matchups",
+        "submit_answer"
+      ],
+      "structuralFailures": [
+        "mustCite: no citation with source prefix \"type/ground\"",
+        "mustInclude: answer_markdown does not contain \"immune\""
+      ],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 2,
+          "reason": "Correctly states Ground is not super effective against Flying but a full immunity, matching actual game mechanics."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 2,
+          "reason": "This is a pure type-chart fact with no deduction required; inferences[] is correctly empty."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 2,
+          "reason": "Correctly labels the interaction as immune/0× rather than 'not very effective', satisfying the critical precision test."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "This is a core competitive type-effectiveness question, squarely in scope, and is answered directly."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 2,
+          "reason": "Reasoning is stated clearly and a citation to the type/flying data source backs the claim."
+        }
+      ],
+      "overallPass": false,
+      "agentLatencyMs": 10156,
+      "judgeLatencyMs": 3925,
+      "covers": [
+        "US-6",
+        "BR-5"
+      ],
+      "usage": {
+        "inputTokens": 49520,
+        "outputTokens": 354,
+        "thinkingTokens": 154,
+        "cachedInputTokens": 24576
+      }
+    },
+    {
+      "caseId": "G13",
+      "input": "what does Leftovers do",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**Leftovers** heals the holder for **1/16 of its max HP at the end of every turn**.\n\nThat’s a small, reliable trickle of recovery — great on bulky Pokémon that stay in and take hits. It doesn’t stack with other end-of-turn healing from the same source, and it still works while you’re poisoned, burned, or otherwise taking residual damage (it just happens after those effects in the usual end-of-turn order).",
+        "reasoning_markdown": "This is a held-item question, so I used Oak’s item data for Leftovers. The effect is straightforward: restore 1/16 max HP each turn. No extra inference needed for the core effect.",
+        "citations": [
+          {
+            "source": "item/leftovers",
+            "detail": "Leftovers restores 1/16 of the holder’s max HP at the end of every turn.",
+            "anchor": {
+              "target": "answer_span",
+              "id": "c0"
+            }
+          }
+        ],
+        "inferences": [],
+        "generation_basis": {
+          "generation": "gen-9",
+          "fallback": false
+        }
+      },
+      "toolCalls": [
+        "reasoning",
+        "get_item",
+        "submit_answer"
+      ],
+      "structuralFailures": [],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 2,
+          "reason": "Correctly states Leftovers heals 1/16 max HP at end of turn, matching expected content."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 2,
+          "reason": "No deductions were needed and none were mislabeled; inferences[] correctly left empty for a pure fact lookup."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 2,
+          "reason": "The 1/16 max HP figure and end-of-turn timing are accurate and precisely stated."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "Item mechanics is squarely in-scope for GAMES and was answered directly."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 2,
+          "reason": "Reasoning is stated and a specific citation (item/leftovers) backs the claim."
+        }
+      ],
+      "overallPass": true,
+      "agentLatencyMs": 11554,
+      "judgeLatencyMs": 4125,
+      "covers": [
+        "AC-8.1"
+      ],
+      "usage": {
+        "inputTokens": 49384,
+        "outputTokens": 298,
+        "thinkingTokens": 33,
+        "cachedInputTokens": 25088
+      }
+    },
+    {
+      "caseId": "G15",
+      "input": "Garchomp's Speed at level 50, max Speed EVs, Jolly",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**169 Speed** at Level 50, with 252 Speed EVs, a 31 Speed IV, and a Jolly nature (+Speed).",
+        "reasoning_markdown": "Garchomp’s base Speed is 102. Applying the standard stat formula with max Speed EVs, a perfect IV, and Jolly’s +10% Speed gives 169. Want a different level or spread?",
+        "citations": [
+          {
+            "source": "pokemon/garchomp",
+            "detail": "Garchomp's base Speed is 102."
+          }
+        ],
+        "inferences": [],
+        "generation_basis": {
+          "generation": "gen-9",
+          "fallback": false
+        },
+        "subjects": [
+          {
+            "name": "Garchomp",
+            "dex_number": 445,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/445.png",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "is_fallback": false
+          }
+        ],
+        "damage_calc": {
+          "assumptions": {
+            "level": 50,
+            "ev": 252,
+            "iv": 31,
+            "nature": "Jolly (+Spe)"
+          },
+          "result": {
+            "stat": "speed",
+            "value": 169
+          },
+          "is_estimate": true,
+          "breakdown": "floor((2*102 + 31 + floor(252/4)) * 50 / 100) = 149; (149 + 5) * 1.1 = 169.4 -> floor 169"
+        }
+      },
+      "toolCalls": [
+        "reasoning",
+        "get_pokemon",
+        "compute_stat",
+        "submit_answer"
+      ],
+      "structuralFailures": [],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 2,
+          "reason": "The computed value 169 matches the expected answer and the formula/breakdown is mathematically correct for base 102 Speed."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 2,
+          "reason": "The calculation is a straightforward deterministic formula application (not a subjective deduction) and is properly presented in damage_calc with assumptions stated, not falsely placed in inferences; inferences[] is empty which is appropriate here."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 2,
+          "reason": "The stat formula, EV/IV/nature application, and rounding steps are all precise and correctly shown in the breakdown."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "This is a standard in-scope competitive stat calculation question, correctly answered rather than declined."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 2,
+          "reason": "All assumptions (level 50, 252 EV, 31 IV, Jolly nature) are explicitly stated, the result is marked as an estimate, and a specific breakdown plus citation for base stat is provided."
+        }
+      ],
+      "overallPass": true,
+      "agentLatencyMs": 11863,
+      "judgeLatencyMs": 4917,
+      "covers": [
+        "AC-9.2",
+        "BR-6"
+      ],
+      "usage": {
+        "inputTokens": 74595,
+        "outputTokens": 450,
+        "thinkingTokens": 70,
+        "cachedInputTokens": 73984
+      }
+    },
+    {
+      "caseId": "G25",
+      "input": "Does Earthquake do 100% damage to all Pokémon in doubles?",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**No.** In doubles, Earthquake hits **every adjacent Pokémon** — BOTH foes **and your own ally** — and because it strikes 2+ Pokémon, each takes **75%** damage (the 0.75× spread reduction), not 100%.\n\n- **Flying-types and Levitate** take **0×** — full immunity, not just reduced.\n- It deals **full power** only when a single valid target remains.\n- A Pokémon mid-**Dig** (or Dive) is still hit — for **double** damage.",
+        "reasoning_markdown": "Earthquake’s move data shows it hits every adjacent Pokémon — allies included — at 0.75× damage when it strikes multiple targets. The spread reduction only applies while two or more Pokémon are actually hit. Ground immunity for Flying-types/Levitate and the double-damage-vs-Dig interaction are universal battle rules not stated in the move data itself.",
+        "citations": [
+          {
+            "source": "move/earthquake",
+            "detail": "Earthquake (100 base power) hits every other Pokémon on the field, including your own ally, and its damage drops to 75% in Doubles when it strikes two or more targets."
+          }
+        ],
+        "inferences": [
+          {
+            "claim": "Each target takes 75% (0.75×) because Earthquake hits 2+ Pokémon in doubles.",
+            "confidence": "high",
+            "note": "Earthquake's spread penalty is 75%; against a single remaining target it deals full power instead."
+          }
+        ],
+        "generation_basis": {
+          "generation": "gen-9",
+          "fallback": false
+        }
+      },
+      "toolCalls": [
+        "reasoning",
+        "get_move",
+        "submit_answer"
+      ],
+      "structuralFailures": [
+        "mustInclude: answer_markdown does not contain \"immune\""
+      ],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 2,
+          "reason": "Correctly explains Earthquake hits all adjacent Pokémon including ally at 75% spread damage, notes Flying/Levitate immunity and Dig double-damage interaction, matching expected keywords 75/ally/immune."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 1,
+          "reason": "The 75% spread-damage claim is correctly flagged as inference, but it's actually a well-established game mechanic (fact) rather than a deduction, so it's arguably mislabeled; also the flying/levitate immunity and Dig interaction are stated as fact without being flagged, which is fine since they are facts, but the reasoning_markdown calls them 'universal battle rules' suggesting some inference was made without being placed in inferences[]."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 2,
+          "reason": "Correctly states Flying/Levitate get 0× (immune), correctly identifies 75% spread damage, and correctly notes the Dig double-damage interaction — all precise and accurate."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "This is a core competitive mechanics question about move interactions in doubles, squarely in Oak's scope, and it was answered directly."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 2,
+          "reason": "Citations reference the specific move data point, and reasoning_markdown clearly explains the source of each claim (move data vs. universal battle rules)."
+        }
+      ],
+      "overallPass": false,
+      "agentLatencyMs": 10391,
+      "judgeLatencyMs": 6373,
+      "covers": [
+        "mechanics_precision",
+        "inference_flagging",
+        "BR-3"
+      ],
+      "usage": {
+        "inputTokens": 49430,
+        "outputTokens": 413,
+        "thinkingTokens": 36,
+        "cachedInputTokens": 25088
+      }
+    },
+    {
+      "caseId": "G26",
+      "input": "Which pokemon has the same natdex number as its base stat total?",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**Archeops** — National Dex **#567** with a base-stat total of exactly **567**. It’s the only species whose dex number matches its BST (75 / 140 / 65 / 112 / 65 / 110).",
+        "reasoning_markdown": "This is a whole-Pokédex check: I compared every species’ National Dex number to its base-stat total in Oak’s complete Pokédex records. Exactly one match came back — Archeops.",
+        "citations": [
+          {
+            "source": "run_sql/natdex_species",
+            "detail": "Archeops is the only species whose Dex number (567) equals its base-stat total (567)."
+          },
+          {
+            "source": "pokemon/archeops",
+            "detail": "Archeops is Rock/Flying with base stats 75/140/65/112/65/110 (BST 567) and National Dex #567."
+          }
+        ],
+        "inferences": [],
+        "generation_basis": {
+          "generation": "national-dex",
+          "fallback": false,
+          "note": "A whole-Pokédex fact from Oak's complete Pokédex records, not tied to Scarlet/Violet's roster."
+        },
+        "subjects": [
+          {
+            "name": "Archeops",
+            "dex_number": 567,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/567.png",
+            "types": [
+              "rock",
+              "flying"
+            ],
+            "is_fallback": false,
+            "source_generation": "gen-5"
+          }
+        ]
+      },
+      "toolCalls": [
+        "reasoning",
+        "run_sql",
+        "get_pokemon",
+        "submit_answer"
+      ],
+      "structuralFailures": [
+        "toolEfficiency: get_pokemon called 1 times for 1 result(s) (max 0 per result = 0 allowed)"
+      ],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 2,
+          "reason": "Archeops (BST 567, Dex #567) is indeed correct and matches known Pokémon data; the answer is factually accurate."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 2,
+          "reason": "No deductions were needed beyond a direct SQL lookup, and inferences[] is correctly left empty since the result is a tool-derived fact."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 2,
+          "reason": "Base stats and BST are stated precisely and match Archeops' known stats (75/140/65/112/65/110 = 567)."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "This is a clear in-scope Pokédex/BST trivia question, correctly answered rather than declined."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 1,
+          "reason": "Citations reference the SQL aggregation and species data, but the reasoning doesn't explicitly confirm a single aggregate query (WHERE national_dex_number = base_stat_total) was run as opposed to a loop, leaving the aggregation method somewhat implicit."
+        }
+      ],
+      "overallPass": false,
+      "agentLatencyMs": 14142,
+      "judgeLatencyMs": 4878,
+      "covers": [
+        "BQ-1",
+        "SQL"
+      ],
+      "usage": {
+        "inputTokens": 74452,
+        "outputTokens": 518,
+        "thinkingTokens": 102,
+        "cachedInputTokens": 49792
+      }
+    },
+    {
+      "caseId": "G30",
+      "input": "Where do I get HM Fly in HeartGold?",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**HM Fly is HM02** in HeartGold/SoulSilver.\n\nI can confirm that from Oak’s move/HM records for HeartGold–SoulSilver, but I **don’t have a walkthrough source** for the exact NPC/town right now (the community wiki search came up empty).\n\nIn HeartGold, Fly is the second HM. If you want, I can still help with who can learn Fly, or other HG HMs (Cut, Surf, Strength, etc.).",
+        "reasoning_markdown": "This is an in-game item location question. Oak’s complete machine records for HeartGold–SoulSilver list Fly as HM02. The community wiki search for the Cianwood/Chuck’s-wife walkthrough returned no pages, so I’m not inventing a pickup location.",
+        "citations": [
+          {
+            "source": "run_sql/natdex_machines",
+            "detail": "In HeartGold and SoulSilver, HM02 teaches Fly."
+          }
+        ],
+        "inferences": [],
+        "generation_basis": {
+          "generation": "gen-4",
+          "fallback": false,
+          "note": "HeartGold HM assignment from Oak’s complete machine records. Pickup location is not in the available walkthrough corpus."
+        },
+        "uncertainty_flags": [
+          "Exact NPC and city for receiving HM Fly are not in the available community wiki results, so they are not stated here."
+        ]
+      },
+      "toolCalls": [
+        "reasoning",
+        "search_wiki",
+        "run_sql",
+        "search_wiki",
+        "submit_answer"
+      ],
+      "structuralFailures": [
+        "mustCite: no citation with source prefix \"https://pokemon.fandom.com\""
+      ],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 1,
+          "reason": "The HM02 identification is correct, but the answer fails to provide the actual location (Route 36) that the expected behavior requires, leaving the core question unanswered."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 2,
+          "reason": "No deductions were made beyond the SQL fact, and that fact is correctly placed in citations rather than inferences; inferences[] is appropriately empty."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 2,
+          "reason": "The stated fact (HM02 = Fly in HGSS) is precise and accurate with no mechanical errors."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "This is a clearly in-scope in-game location question and Oak attempted to answer it rather than declining, correctly staying in scope even though the answer was incomplete."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 2,
+          "reason": "The answer clearly explains what was found (SQL data) versus what was missing (wiki location data) and cites the specific source used, being honest about the gap rather than fabricating a location."
+        }
+      ],
+      "overallPass": false,
+      "agentLatencyMs": 19734,
+      "judgeLatencyMs": 4910,
+      "covers": [
+        "BQ-5",
+        "SQL",
+        "WIKI"
+      ],
+      "usage": {
+        "inputTokens": 99399,
+        "outputTokens": 669,
+        "thinkingTokens": 253,
+        "cachedInputTokens": 98816
+      }
+    },
+    {
+      "caseId": "G35",
+      "input": "What was the Fire Fang bug in Gen 3?",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "There wasn't one — **Fire Fang didn't exist in Gen 3.** It was introduced in **Generation 4** (Diamond/Pearl), so there's no Gen 3 Fire Fang bug to explain. If you're thinking of a different move or a specific glitch, tell me which and I'll dig in.",
+        "reasoning_markdown": "The question assumes Fire Fang existed in Gen 3. Oak's complete move records show it debuted in Generation 4, so I corrected that rather than inventing a bug.",
+        "citations": [
+          {
+            "source": "run_sql/natdex_moves",
+            "detail": "Fire Fang was introduced in Generation 4."
+          }
+        ],
+        "inferences": [],
+        "generation_basis": {
+          "generation": "national-dex",
+          "fallback": false,
+          "note": "A move-introduction fact from Oak's complete move records."
+        }
+      },
+      "toolCalls": [
+        "reasoning",
+        "run_sql",
+        "submit_answer"
+      ],
+      "structuralFailures": [],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 2,
+          "reason": "The answer correctly rejects the false premise, stating Fire Fang was introduced in Gen 4 and thus no Gen 3 bug exists, matching the expected behavior exactly."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 2,
+          "reason": "The claim is a factual lookup from natdex_moves, not a deduction, so leaving inferences[] empty is correct."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 2,
+          "reason": "The generation attribution (Gen 4, Diamond/Pearl) is accurate and no mechanical claims are misstated."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "This is a mainline game data/mechanics question about move history, squarely in scope, and it is answered correctly rather than declined."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 2,
+          "reason": "The reasoning is clearly stated, the false premise is identified, and a specific citation (natdex_moves) supports the claim."
+        }
+      ],
+      "overallPass": true,
+      "agentLatencyMs": 11320,
+      "judgeLatencyMs": 4025,
+      "covers": [
+        "BQ-10",
+        "POLICY"
+      ],
+      "usage": {
+        "inputTokens": 49413,
+        "outputTokens": 300,
+        "thinkingTokens": 62,
+        "cachedInputTokens": 24576
+      }
+    },
+    {
+      "caseId": "G38",
+      "input": "How many Pokémon has Ash caught in the anime?",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "I focus on the **Pokémon games**, not the anime — so I don’t track how many Pokémon Ash has caught on the show.\n\nIf you want the games-side version of that question, I can help with in-game catch locations, team building, learnsets, or Mystery Dungeon recruits. What would you like to look up?",
+        "reasoning_markdown": "This is an anime/franchise-media question (Ash’s catch count), which is outside the games scope. Declining in persona and offering games-side help instead of answering from memory or searching media sources.",
+        "citations": [],
+        "inferences": [],
+        "generation_basis": {
+          "generation": "gen-9",
+          "fallback": false,
+          "note": "Out of scope: anime, not a games fact."
+        }
+      },
+      "toolCalls": [
+        "reasoning",
+        "submit_answer"
+      ],
+      "structuralFailures": [],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 2,
+          "reason": "Correctly declines the anime question and clearly explains the games-only boundary without fabricating a count."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 2,
+          "reason": "No deductions were made and inferences[] is correctly empty."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 2,
+          "reason": "No mechanics claims are made, so there is nothing to penalize."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "Correctly identifies the anime question as out-of-scope and declines gracefully while offering games-side alternatives."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 2,
+          "reason": "Clearly states the reason for declining and the empty citations/inferences are appropriate for this case."
+        }
+      ],
+      "overallPass": true,
+      "agentLatencyMs": 5767,
+      "judgeLatencyMs": 3298,
+      "covers": [
+        "BQ-13",
+        "POLICY"
+      ],
+      "usage": {
+        "inputTokens": 24643,
+        "outputTokens": 229,
+        "thinkingTokens": 46,
+        "cachedInputTokens": 24576
+      }
+    },
+    {
+      "caseId": "G54",
+      "input": "What's the best strategy to catch Feebas in Gen 3?",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**In Ruby, Sapphire, and Emerald, fish on Route 119.** Feebas only appears via a special **Feebas-tile fishing** encounter there — not on every water square.\n\n- **Games:** Ruby, Sapphire, Emerald\n- **Location:** Hoenn Route 119\n- **Method:** fishing on Feebas tiles\n- **Levels:** 20–25\n- **On a good tile:** about **50%** of fishing encounters are Feebas\n\n**Practical approach:** systematically fish every water tile on the Route 119 river until one consistently yields Feebas, then stay on that tile. Old Rod can work; a better rod just makes fishing faster.\n\nI couldn’t pull the community-wiki write-up of the exact tile-randomization rules this time, so treat “which tiles and how they shuffle” as incomplete here. Encounter records for Gens 1–7 are also best-effort.",
+        "reasoning_markdown": "This is an in-game catch question for Generation 3. Oak’s encounter records list Feebas in Ruby, Sapphire, and Emerald on Hoenn Route 119 with the method “Feebas-tile fishing,” levels 20–25, and a 50 encounter weight on those tiles. A community-wiki search for the famous random-tile details returned nothing, so I’m not filling in tile counts or shuffle rules from memory.",
+        "citations": [
+          {
+            "source": "run_sql/classic_encounters",
+            "detail": "Ruby, Sapphire, and Emerald list Feebas on Hoenn Route 119 via Feebas-tile fishing, levels 20–25, encounter weight 50."
+          }
+        ],
+        "inferences": [
+          {
+            "claim": "You have to hunt specific water tiles rather than fishing anywhere on the river.",
+            "confidence": "high",
+            "note": "The encounter method is recorded as Feebas-tile fishing, not a normal walk/surf/rod slot for the whole route."
+          }
+        ],
+        "generation_basis": {
+          "generation": "gen-3",
+          "fallback": false,
+          "note": "In-game encounter records for Ruby, Sapphire, and Emerald. Tile-shuffle details were not in the available sources this time."
+        },
+        "uncertainty_flags": [
+          "Encounter records for Gens 1–7 are best-effort and may be incomplete.",
+          "Exact how-many-tiles / how-they-change details were not in the available sources."
+        ]
+      },
+      "toolCalls": [
+        "reasoning",
+        "search_wiki",
+        "search_wiki",
+        "run_sql",
+        "submit_answer"
+      ],
+      "structuralFailures": [
+        "mustCite: no citation with source prefix \"https://pokemon.fandom.com\""
+      ],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 1,
+          "reason": "The answer correctly identifies Route 119 fishing and the tile-based mechanic exists, but it fails to deliver the core expected content—the changing-tile-per-save-file mechanic—instead admitting it couldn't retrieve that info, leaving the strategy incomplete."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 2,
+          "reason": "The deduction about needing to hunt specific tiles rather than fish anywhere is properly placed in inferences[] with a confidence level, and SQL-sourced facts are kept in citations."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 1,
+          "reason": "The stated facts (levels, 50% encounter rate) are precise, but the core mechanic—that only certain tiles per save file contain Feebas and this is fixed at save creation—is missing, which is a significant mechanical gap for a 'catch strategy' answer."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "Gen 3 in-game catch strategy is correctly treated as in-scope and answered rather than declined."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 2,
+          "reason": "The answer clearly states its source (SQL encounter table), explicitly flags what it could not find (wiki tile-shuffle details), and marks uncertainty appropriately."
+        }
+      ],
+      "overallPass": false,
+      "agentLatencyMs": 23744,
+      "judgeLatencyMs": 5744,
+      "covers": [
+        "BQ-29",
+        "WIKI",
+        "SQL"
+      ],
+      "usage": {
+        "inputTokens": 100033,
+        "outputTokens": 999,
+        "thinkingTokens": 360,
+        "cachedInputTokens": 73984
+      }
+    },
+    {
+      "caseId": "G55",
+      "input": "How does Eevee evolve?",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**Eevee has eight evolutions**, each with its own method (Scarlet/Violet-style data). Eevee itself isn’t on the Champions competitive roster, but the evolution line is still the same.\n\n| Evolution | How |\n|---|---|\n| **Vaporeon** | Water Stone |\n| **Jolteon** | Thunder Stone |\n| **Flareon** | Fire Stone |\n| **Leafeon** | Leaf Stone |\n| **Glaceon** | Ice Stone |\n| **Espeon** | Level up **during the day** |\n| **Umbreon** | Level up **at night** |\n| **Sylveon** | Level up **knowing a Fairy-type move**, with **two levels of Affection** |\n\nOlder games used mossy/icy rocks for Leafeon/Glaceon instead of stones; current mainline uses the stones listed above. Espeon and Umbreon have historically also needed **high friendship** along with time of day — the evolution data here only lists the time-of-day trigger.",
+        "reasoning_markdown": "This is an evolution-line question, not a Champions legality question. I used Oak’s evolution-chain data, which for Eevee comes from Scarlet/Violet (Eevee isn’t in the Champions roster). Stone evolutions and the listed Espeon/Umbreon/Sylveon triggers are taken from that chain. Friendship for Espeon/Umbreon is a well-known extra requirement in the games but wasn’t in that chain text, so I flagged it separately.",
+        "citations": [
+          {
+            "source": "evolution/eevee",
+            "detail": "Eevee evolves into Vaporeon, Jolteon, Flareon, Leafeon, and Glaceon with Water, Thunder, Fire, Leaf, and Ice Stones; into Espeon by leveling up during the day; into Umbreon by leveling up at night; and into Sylveon by leveling up with a Fairy-type move and two levels of Affection (Scarlet/Violet evolution data)."
+          }
+        ],
+        "inferences": [
+          {
+            "claim": "Espeon and Umbreon also typically require high friendship, not only time of day.",
+            "confidence": "high",
+            "note": "The evolution chain only listed day vs night; friendship is the usual extra condition in the mainline games."
+          }
+        ],
+        "generation_basis": {
+          "generation": "gen-9",
+          "fallback": true,
+          "note": "Evolution methods from Scarlet/Violet data. Eevee is not on the Champions roster."
+        },
+        "subjects": [
+          {
+            "name": "Eevee",
+            "dex_number": 71,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/71.png",
+            "types": [
+              "normal"
+            ],
+            "is_fallback": true,
+            "source_generation": "scarlet-violet"
+          }
+        ],
+        "uncertainty_flags": [
+          "Sylveon’s listed condition uses Affection; later games often use friendship plus a Fairy-type move instead."
+        ]
+      },
+      "toolCalls": [
+        "reasoning",
+        "get_evolution_chain",
+        "get_pokemon",
+        "search_wiki",
+        "submit_answer"
+      ],
+      "structuralFailures": [],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": true,
+          "score": 2,
+          "reason": "The answer correctly lists all eight Eevee evolutions with accurate methods, includes Vaporeon and Sylveon as required, and correctly notes Eevee isn't in the Champions roster while still answering the mainline question."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 2,
+          "reason": "The friendship-requirement deduction for Espeon/Umbreon is correctly placed in inferences[] with a confidence level, while the tool-sourced evolution methods stay in the main answer/citations."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 2,
+          "reason": "Evolution methods (stones, day/night leveling, Affection+Fairy-move for Sylveon) are stated precisely and match known game mechanics, with historical notes on mossy/icy rocks appropriately caveated."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 2,
+          "reason": "The agent correctly recognized this as an in-scope mainline evolution question despite the Champions-scope framing, answered it fully, and properly stamped a non-Champions generation_basis with fallback flagged."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 2,
+          "reason": "Reasoning markdown explains the source (Scarlet/Violet evolution chain, Champions roster note) and the friendship deduction is separately flagged; citation references the specific evolution data used."
+        }
+      ],
+      "overallPass": true,
+      "agentLatencyMs": 29579,
+      "judgeLatencyMs": 5416,
+      "covers": [
+        "AC-5.1",
+        "TYPED"
+      ],
+      "usage": {
+        "inputTokens": 105439,
+        "outputTokens": 1197,
+        "thinkingTokens": 521,
+        "cachedInputTokens": 79104
+      }
+    },
+    {
+      "caseId": "G58",
+      "input": "How many unique type combinations still don't have any Pokémon?",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**9 unique type combinations still have no Pokémon**, counting every battle-relevant form (regionals, Megas where they exist in the records, Paradox, etc.).\n\nThere are **18 types**. Treating order as irrelevant, that is **18 monotypes + 153 dual types = 171** possible combinations. Every **monotype** exists. The **9 unused dual types** are:\n\n- **Bug / Dragon**\n- **Bug / Normal**\n- **Fairy / Fire**\n- **Fairy / Ground**\n- **Ghost / Rock**\n- **Ice / Normal**\n- **Ice / Poison**\n- **Normal / Rock**\n- **Normal / Steel**\n\nIf you only counted **default species** (no Rotom appliances, regionals, etc.), more combos would look “empty” — for example **Electric / Fire** is filled by Rotom-Heat, not by a default-form species. The list above is the form-aware one.",
+        "reasoning_markdown": "This is a whole-Pokédex question, so it is not answered from the Champions competitive roster. I counted every unique typing among all recorded forms (including regionals and other battle formes), treating Fire/Water the same as Water/Fire and keeping single-type Pokémon as their own case. That yields 162 used combinations out of 171 possible, leaving nine unused dual types. All 18 monotypes are used.",
+        "citations": [
+          {
+            "source": "run_sql/pokemon@scarlet-violet",
+            "detail": "Form-aware Pokédex records (including alternate forms) show 162 distinct type combinations; 9 dual-type pairings have no Pokémon."
+          }
+        ],
+        "inferences": [
+          {
+            "claim": "There are 171 unordered type combinations (18 monotypes plus 153 dual types), so 171 minus 162 used combinations leaves 9 unused dual types.",
+            "confidence": "high",
+            "note": "Type slot order in the data is not semantic, so pairs were treated as unordered."
+          }
+        ],
+        "generation_basis": {
+          "generation": "national-dex",
+          "fallback": true,
+          "note": "Whole-Pokédex, form-aware count from Oak's complete records (Scarlet/Violet-era forms included). Not the Champions competitive roster."
+        },
+        "uncertainty_flags": [
+          "If a future game adds a new form or species, this list of unused combinations can shrink."
+        ]
+      },
+      "toolCalls": [
+        "reasoning",
+        "run_sql",
+        "run_sql",
+        "run_sql",
+        "run_sql",
+        "submit_answer"
+      ],
+      "structuralFailures": [],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": false,
+          "score": 0,
+          "reason": "The expected correct figure is ~17 unique missing type combinations from the complete natdex_species + form-only records, but the agent reported 9, indicating an incomplete or incorrect data source/query."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 1,
+          "reason": "The combinatorial math (171 total, 162 used, 9 unused) is correctly placed in inferences, but the underlying claim that 'every monotype exists' and the specific list of 9 unused combos are stated as fact in the answer without being flagged as derived/uncertain given the query only used one table (pokemon@scarlet-violet) rather than the full warehouse."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 1,
+          "reason": "No immunity/priority/ability precision issues arise here since it's a type-combo counting question; the mechanics of type combinations (18 types, 153 dual pairs) are correctly computed, but the underlying data completeness is flawed."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 1,
+          "reason": "The agent correctly identified this as a whole-Pokédex question rather than a Champions-roster one, but failed to actually query the complete warehouse (natdex_species + pokemon@national-dex) as required, instead using only pokemon@scarlet-violet, which is a boundary/execution error rather than a scope misclassification."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 1,
+          "reason": "The agent explains its reasoning and lists the unused combos with a citation, but the citation only references 'pokemon@scarlet-violet' rather than the full natdex_species+national-dex warehouse the task requires, so the data source is misrepresented as complete when it is not."
+        }
+      ],
+      "overallPass": false,
+      "agentLatencyMs": 55072,
+      "judgeLatencyMs": 7694,
+      "covers": [
+        "SQL",
+        "whole-dex-routing",
+        "type-combo-normalization"
+      ],
+      "usage": {
+        "inputTokens": 135586,
+        "outputTokens": 2712,
+        "thinkingTokens": 1820,
+        "cachedInputTokens": 106752
+      }
+    },
+    {
+      "caseId": "G60",
+      "input": "top 3 highest BST",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**In Red/Blue/Yellow, BST is five stats** (HP, Attack, Defense, **Special**, Speed) — Special Attack and Special Defense are not split yet.\n\n**Top 3:**\n\n1. **Mewtwo — 590** (106 / 110 / 90 / Special 154 / 130)\n2. **Mew — 500** and **Dragonite — 500** (tie)\n\nAfter that, **Moltres** sits at **495** in Gen 1 (all three legendary birds used Special 125 before the Gen 2 split).\n\nIf you instead meant *modern* six-stat BST for the original 151, Mewtwo is still first, with Mew and Dragonite tied at 600 — but that is **not** how totals worked in RBY.",
+        "reasoning_markdown": "The Red/Blue/Yellow competitive tools were not available, so this ranking is the Generation 1 five-stat total: HP + Attack + Defense + Special + Speed. Special is a single stat; listing six numbers would double-count it. Mewtwo’s Special 154 is the clear outlier; Mew’s 100s and Dragonite’s spread both sum to 500. The legendary birds’ Special was 125 in Gen 1 (Articuno’s Special Attack was lowered when the stats split in Gen 2), which is why Moltres is next at 495 rather than matching later-game charts.",
+        "citations": [
+          {
+            "source": "pokemon/mewtwo",
+            "detail": "Mewtwo: 106 HP, 110 Attack, 90 Defense, 154 Special, 130 Speed in Generation 1 (five-stat total 590)."
+          },
+          {
+            "source": "pokemon/mew",
+            "detail": "Mew: 100 in each of HP, Attack, Defense, Special, and Speed (five-stat total 500)."
+          },
+          {
+            "source": "pokemon/dragonite",
+            "detail": "Dragonite: 91 HP, 134 Attack, 95 Defense, 100 Special, 80 Speed (five-stat total 500)."
+          }
+        ],
+        "inferences": [
+          {
+            "claim": "Mew and Dragonite share second place; there is no unique #2 and #3 by BST in RBY.",
+            "confidence": "high",
+            "note": "Both five-stat totals are 500."
+          },
+          {
+            "claim": "Moltres is fourth at 495 if you break the 2nd-place tie.",
+            "confidence": "high",
+            "note": "Gen 1 legendary birds all had Special 125; Moltres’s other stats sum highest among them."
+          }
+        ],
+        "generation_basis": {
+          "generation": "gen-1",
+          "fallback": true,
+          "note": "Ranked with Generation 1’s five-stat BST (combined Special). The Red/Blue/Yellow Pokédex index was not loaded, so later-game six-stat totals were not used as-is."
+        },
+        "subjects": [
+          {
+            "name": "Mewtwo",
+            "dex_number": 150,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/150.png",
+            "types": [
+              "psychic"
+            ],
+            "is_fallback": false
+          },
+          {
+            "name": "Mew",
+            "dex_number": 151,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/151.png",
+            "types": [
+              "psychic"
+            ],
+            "is_fallback": false
+          },
+          {
+            "name": "Dragonite",
+            "dex_number": 149,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/149.png",
+            "types": [
+              "dragon",
+              "flying"
+            ],
+            "is_fallback": false
+          }
+        ],
+        "candidates": {
+          "total_count": 3,
+          "truncated": false,
+          "sort": "base_stat_total",
+          "shown": [
+            {
+              "name": "Mewtwo",
+              "dex_number": 150,
+              "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/150.png",
+              "types": [
+                "psychic"
+              ],
+              "base_stats": {
+                "hp": 106,
+                "attack": 110,
+                "defense": 90,
+                "special_attack": 154,
+                "special_defense": 154,
+                "speed": 130
+              },
+              "key_stats": {
+                "gen1_bst": 590
+              }
+            },
+            {
+              "name": "Mew",
+              "dex_number": 151,
+              "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/151.png",
+              "types": [
+                "psychic"
+              ],
+              "base_stats": {
+                "hp": 100,
+                "attack": 100,
+                "defense": 100,
+                "special_attack": 100,
+                "special_defense": 100,
+                "speed": 100
+              },
+              "key_stats": {
+                "gen1_bst": 500
+              }
+            },
+            {
+              "name": "Dragonite",
+              "dex_number": 149,
+              "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/149.png",
+              "types": [
+                "dragon",
+                "flying"
+              ],
+              "base_stats": {
+                "hp": 91,
+                "attack": 134,
+                "defense": 95,
+                "special_attack": 100,
+                "special_defense": 100,
+                "speed": 80
+              },
+              "key_stats": {
+                "gen1_bst": 500
+              }
+            }
+          ]
+        },
+        "uncertainty_flags": [
+          "Generation 1 index was unavailable; five-stat RBY totals are used instead of later six-stat BST."
+        ]
+      },
+      "toolCalls": [
+        "reasoning",
+        "query_pokedex",
+        "run_sql",
+        "run_sql",
+        "run_sql",
+        "run_sql",
+        "run_sql",
+        "run_sql",
+        "run_sql",
+        "run_sql",
+        "search_wiki",
+        "submit_answer"
+      ],
+      "structuralFailures": [],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": false,
+          "score": 0,
+          "reason": "Modern six-stat BST is the standard metric even for Gen 1 mons and matches the expected answer (Mewtwo 680, Dragonite/Mew 600); the agent's invented 'five-stat total' (Mewtwo 590, Mew/Dragonite 500) is a fabricated, non-standard metric that gets the actual top 3 wrong (missing Zapdos/Moltres/Articuno at 580, wrong totals throughout)."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": false,
+          "score": 0,
+          "reason": "The claim that RBY used a 'five-stat BST' with Special as a single combined stat contributing 154 to Mewtwo is a fabricated mechanical premise stated as fact in reasoning_markdown/citations rather than flagged as a low-confidence inference, and it's not even accurate (Special isn't halved/summed the way BST is normally computed)."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": false,
+          "score": 0,
+          "reason": "The 'five-stat BST' framework is a mechanical fabrication — real BST is always the sum of six stats (with Special Attack = Special Defense in Gen 1 hardware terms, both counted), so Mewtwo's true BST is 680 not 590, and the ranking/values given mislead the player about actual Gen 1 stat totals."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 1,
+          "reason": "The agent correctly stayed within Gen 1 scope and did not leak in modern/national-dex Pokémon, satisfying the core scope-leak test this case targets, though the substance of the answer is wrong."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 1,
+          "reason": "The agent did explain its reasoning and flag uncertainty (uncertainty_flags, generation_basis.note about tool unavailability), but it presented a fabricated stat-total methodology as established fact rather than clearly marking it as a guess needing verification."
+        }
+      ],
+      "overallPass": false,
+      "agentLatencyMs": 77617,
+      "judgeLatencyMs": 11845,
+      "covers": [
+        "SQL",
+        "scope-defaulting",
+        "whole-dex-routing"
+      ],
+      "usage": {
+        "inputTokens": 289957,
+        "outputTokens": 3602,
+        "thinkingTokens": 1589,
+        "cachedInputTokens": 260352
+      }
+    },
+    {
+      "caseId": "G61",
+      "input": "Make a party from these: Mega Kangaskhan, Garchomp, Farigiraf, Ninetales, Talonflame, Tauros",
+      "answer": {
+        "status": "answered",
+        "answer_markdown": "**Party from your six — Scarlet/Violet (no Megas).** Mega Kangaskhan isn’t here, and **Kangaskhan has no legal moves in this format**, so that slot stays on the team as an incomplete placeholder instead of being swapped out.\n\n**Win condition:** Drought Ninetales powers Fire STAB and Solar Beam; Garchomp and Tauros break physically; Talonflame revenge-kills; Farigiraf (Armor Tail) shuts down Fake Out / priority.\n\n**Cores:** Ninetales + Talonflame (sun Fire) · Garchomp + Tauros (Ground/Fighting/Dragon) · Farigiraf as bulky special pivot.\n\n**Speed:** Talonflame (base 126) and Choice Scarf Tauros; Jolly Garchomp as the mid-speed breaker.\n\n**Holes:** Ice, Rock (Talonflame), Fighting. No Water resist besides Garchomp. Kangaskhan cannot be battle-ready until it has a legal movepool in this game.\n\nApply it from the team card; it isn’t auto-saved.",
+        "reasoning_markdown": "You named six, so none were dropped. Mega Kangaskhan is not a Scarlet/Violet form. Regular Kangaskhan is in the dex but has an empty legal movepool here, so that slot is incomplete rather than replaced. The other five use only compact legal moves from the box lookup, unique items, and no duplicate species.",
+        "citations": [
+          {
+            "source": "lookup_box",
+            "detail": "Garchomp, Farigiraf, Ninetales, Talonflame, and Tauros matched with compact legal moves; Mega Kangaskhan did not match a form."
+          },
+          {
+            "source": "learnset/kangaskhan (gen-9)",
+            "detail": "Kangaskhan has no legal moves listed in Scarlet/Violet."
+          }
+        ],
+        "inferences": [
+          {
+            "claim": "The Kangaskhan slot cannot be a complete battle set in Scarlet/Violet.",
+            "confidence": "high",
+            "note": "No Mega formes, and the species learnset in this game is empty."
+          }
+        ],
+        "generation_basis": {
+          "generation": "gen-9",
+          "fallback": false
+        },
+        "subjects": [
+          {
+            "name": "Garchomp",
+            "dex_number": 445,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/445.png",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "is_fallback": false
+          },
+          {
+            "name": "Farigiraf",
+            "dex_number": 981,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/981.png",
+            "types": [
+              "normal",
+              "psychic"
+            ],
+            "is_fallback": false
+          },
+          {
+            "name": "Ninetales",
+            "dex_number": 38,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/38.png",
+            "types": [
+              "fire"
+            ],
+            "is_fallback": false
+          },
+          {
+            "name": "Talonflame",
+            "dex_number": 663,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/663.png",
+            "types": [
+              "fire",
+              "flying"
+            ],
+            "is_fallback": false
+          },
+          {
+            "name": "Tauros",
+            "dex_number": 128,
+            "sprite_url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/128.png",
+            "types": [
+              "normal"
+            ],
+            "is_fallback": false
+          }
+        ],
+        "proposed_team": {
+          "name": "Box Six",
+          "format": "scarlet-violet",
+          "members": [
+            {
+              "species": "kangaskhan",
+              "ability": "scrappy",
+              "item": "assault-vest",
+              "moves": [],
+              "nature": "adamant",
+              "evs": {
+                "hp": 4,
+                "atk": 252,
+                "def": 0,
+                "spa": 0,
+                "spd": 0,
+                "spe": 252
+              },
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "tera_type": "normal",
+              "level": 50
+            },
+            {
+              "species": "garchomp",
+              "ability": "rough-skin",
+              "item": "life-orb",
+              "moves": [
+                "outrage",
+                "earthquake",
+                "stone-edge",
+                "stealth-rock"
+              ],
+              "nature": "jolly",
+              "evs": {
+                "hp": 4,
+                "atk": 252,
+                "def": 0,
+                "spa": 0,
+                "spd": 0,
+                "spe": 252
+              },
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "tera_type": "ground",
+              "level": 50
+            },
+            {
+              "species": "farigiraf",
+              "ability": "armor-tail",
+              "item": "leftovers",
+              "moves": [
+                "psychic",
+                "hyper-voice",
+                "thunderbolt",
+                "protect"
+              ],
+              "nature": "modest",
+              "evs": {
+                "hp": 252,
+                "atk": 0,
+                "def": 4,
+                "spa": 252,
+                "spd": 0,
+                "spe": 0
+              },
+              "ivs": {
+                "hp": 31,
+                "atk": 0,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "tera_type": "fairy",
+              "level": 50
+            },
+            {
+              "species": "ninetales",
+              "ability": "drought",
+              "item": "heat-rock",
+              "moves": [
+                "flamethrower",
+                "solar-beam",
+                "energy-ball",
+                "protect"
+              ],
+              "nature": "timid",
+              "evs": {
+                "hp": 4,
+                "atk": 0,
+                "def": 0,
+                "spa": 252,
+                "spd": 0,
+                "spe": 252
+              },
+              "ivs": {
+                "hp": 31,
+                "atk": 0,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "tera_type": "grass",
+              "level": 50
+            },
+            {
+              "species": "talonflame",
+              "ability": "gale-wings",
+              "item": "heavy-duty-boots",
+              "moves": [
+                "brave-bird",
+                "flare-blitz",
+                "protect",
+                "agility"
+              ],
+              "nature": "jolly",
+              "evs": {
+                "hp": 4,
+                "atk": 252,
+                "def": 0,
+                "spa": 0,
+                "spd": 0,
+                "spe": 252
+              },
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "tera_type": "flying",
+              "level": 50
+            },
+            {
+              "species": "tauros",
+              "ability": "intimidate",
+              "item": "choice-scarf",
+              "moves": [
+                "close-combat",
+                "double-edge",
+                "raging-bull",
+                "outrage"
+              ],
+              "nature": "jolly",
+              "evs": {
+                "hp": 4,
+                "atk": 252,
+                "def": 0,
+                "spa": 0,
+                "spd": 0,
+                "spe": 252
+              },
+              "ivs": {
+                "hp": 31,
+                "atk": 31,
+                "def": 31,
+                "spa": 31,
+                "spd": 31,
+                "spe": 31
+              },
+              "tera_type": "fighting",
+              "level": 50
+            }
+          ]
+        },
+        "proposed_team_warnings": [
+          {
+            "code": "incomplete",
+            "slot": 0,
+            "message": "Slot has only 0 of 4 moves."
+          }
+        ]
+      },
+      "toolCalls": [
+        "reasoning",
+        "lookup_box",
+        "submit_answer",
+        "get_learnset",
+        "submit_answer"
+      ],
+      "structuralFailures": [
+        "proposedTeamSpecies: proposed_team.members does not contain species \"kangaskhan-mega\"",
+        "proposedTeamWarningCodes: proposed_team_warnings does not contain code \"learnset_unavailable\""
+      ],
+      "scores": [
+        {
+          "dimension": "answer_correctness",
+          "pass": false,
+          "score": 0,
+          "reason": "The species slug in proposed_team is 'kangaskhan', not the required 'kangaskhan-mega', so the named form was silently substituted rather than kept as specified, contrary to the required behavior."
+        },
+        {
+          "dimension": "inference_flagging",
+          "pass": true,
+          "score": 1,
+          "reason": "The Kangaskhan-incomplete deduction is flagged in inferences with confidence, but the underlying claim itself is based on a wrong species substitution."
+        },
+        {
+          "dimension": "mechanics_precision",
+          "pass": true,
+          "score": 1,
+          "reason": "Ability/type/move mechanics for the other five members are accurate, but the core mechanical distinction between Mega Kangaskhan and base Kangaskhan (a critical form-identity fact) was mishandled."
+        },
+        {
+          "dimension": "scope_adherence",
+          "pass": true,
+          "score": 1,
+          "reason": "The question is in-scope and was answered, but the required tool path was violated in spirit (species substitution) even though no run_sql/search_wiki were called."
+        },
+        {
+          "dimension": "transparency",
+          "pass": true,
+          "score": 1,
+          "reason": "Reasoning is explained and citations given, but it never explicitly states it substituted plain Kangaskhan for Mega Kangaskhan as species slug versus just noting Mega isn't legal in this format."
+        }
+      ],
+      "overallPass": false,
+      "agentLatencyMs": 73771,
+      "judgeLatencyMs": 6380,
+      "covers": [
+        "BOX-AC-1.2",
+        "BOX-AC-2.4",
+        "BOX-AC-3.1"
+      ],
+      "usage": {
+        "inputTokens": 114203,
+        "outputTokens": 4489,
+        "thinkingTokens": 949,
+        "cachedInputTokens": 29056
+      }
+    }
+  ]
+}

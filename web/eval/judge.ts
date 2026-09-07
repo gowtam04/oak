@@ -32,6 +32,7 @@ import { env } from "@/env";
 import { runOak as defaultRunOak } from "@/agent/runtime";
 import type { AgentContext, AgentMode, ChatMessage } from "@/agent/types";
 import type { OakAnswer } from "@/agent/schemas";
+import type { TurnTrace } from "@/server/logger";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -162,6 +163,40 @@ export interface JudgeResult {
   agentLatencyMs: number;
   judgeLatencyMs: number;
   covers: string[];
+  /**
+   * Summed provider usage across every runOak call in this case (multi-turn
+   * cases add). Zeros when the agent mock/runtime never fired onTurnComplete.
+   * `inputTokens` is the provider total (cached + uncached); subtract
+   * `cachedInputTokens` before applying the uncached input rate.
+   */
+  usage: TurnUsage;
+}
+
+/** Provider token totals for one judged case (summed across runOak calls). */
+export interface TurnUsage {
+  inputTokens: number;
+  outputTokens: number;
+  thinkingTokens: number;
+  cachedInputTokens: number;
+}
+
+export const EMPTY_USAGE: TurnUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  thinkingTokens: 0,
+  cachedInputTokens: 0,
+};
+
+export function sumUsage(traces: readonly TurnTrace[]): TurnUsage {
+  return traces.reduce<TurnUsage>(
+    (acc, t) => ({
+      inputTokens: acc.inputTokens + t.input_tokens,
+      outputTokens: acc.outputTokens + t.output_tokens,
+      thinkingTokens: acc.thinkingTokens + t.thinking_tokens,
+      cachedInputTokens: acc.cachedInputTokens + t.cached_input_tokens,
+    }),
+    { ...EMPTY_USAGE },
+  );
 }
 
 // ─── Injectable seam types ────────────────────────────────────────────────────
@@ -625,12 +660,20 @@ async function runOneCase(
   runOak: RunOakFn,
 ): Promise<JudgeResult> {
   const toolCalls: string[] = [];
+  const traces: TurnTrace[] = [];
   const inputs = Array.isArray(gc.input) ? gc.input : [gc.input];
 
   // Per-case scope override: `ctx` is built once (buildContext) and reused, so a
   // case that needs a non-default scope (e.g. a champions case) sets gc.mode —
   // the input text does NOT drive scope in the harness.
-  const caseCtx: AgentContext = { ...ctx, mode: gc.mode ?? ctx.mode };
+  const caseCtx: AgentContext = {
+    ...ctx,
+    mode: gc.mode ?? ctx.mode,
+    onTurnComplete: (trace) => {
+      traces.push(trace);
+      ctx.onTurnComplete?.(trace);
+    },
+  };
 
   // ── 1. Run the agent (supports multi-turn via sequential calls) ──────────
   const agentStart = Date.now();
@@ -674,6 +717,7 @@ async function runOneCase(
     agentLatencyMs,
     judgeLatencyMs,
     covers: gc.covers,
+    usage: sumUsage(traces),
   };
 }
 
