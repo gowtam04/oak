@@ -66,6 +66,7 @@ struct TeamsListView: View {
         AuthView(model: AuthViewModel(auth: services.auth, appState: appState))
       }
     }
+    .oakEnamelNav()
     .task(id: isSignedIn) {
       if isSignedIn { await model.reload() }
     }

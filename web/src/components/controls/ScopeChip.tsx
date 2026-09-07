@@ -13,14 +13,15 @@
  * then a one-tap correction, not a silently wrong answer.
  *
  * Two render modes, selected by whether `onSelect` is passed:
- *   - ABSENT: today's plain, read-only pill (unchanged markup/attrs/styling —
- *     pinned by the existing display-only tests).
+ *   - ABSENT: today's plain, read-only pill (markup/attrs pinned by the
+ *     display-only tests). Lid CSS paints it as an inset enamel pill.
  *   - PRESENT: a menu button that opens a popover listing every format
  *     (`SCOPE_PICKER_ORDER`) as `menuitemradio` options — each a two-line row (name +
- *     one-line description, fable-ui §4 screen 02); picking one reports the new
+ *     one-line description); picking one reports the new
  *     format via `onSelect` and closes the menu. Closes on Escape (refocusing
  *     the trigger) and on an outside pointerdown, mirroring the header's
- *     overflow-menu popover pattern (`src/app/page.tsx`).
+ *     overflow-menu popover pattern (`src/app/page.tsx`). The menu is a paper
+ *     plate; the selected row is poke-red ink on poke-red-soft.
  *
  * `testId` lets a second instance (the empty-state hero chip) render distinct
  * `data-testid`s so a page-level `getByTestId("scope-chip")` still resolves to
@@ -95,7 +96,6 @@ export default function ScopeChip({
         data-format={format}
         title={`Answers are scoped to ${label}`}
       >
-        <span className="scope-chip__led" aria-hidden="true" />
         {label}
       </span>
     );
@@ -211,7 +211,6 @@ function InteractiveScopeChip({
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
       >
-        <span className="scope-chip__led" aria-hidden="true" />
         {label}
         <span className="scope-chip__caret" aria-hidden="true">
           ▾

@@ -39,8 +39,6 @@ struct ComposerView: View {
   /// ``sendPulse`` changes and released by ``Theme/Motion/snappy``.
   @State private var isPulsing = false
 
-  /// Drives the light-mode-only upward lift shadow (dark mode leans on the divider).
-  @Environment(\.colorScheme) private var colorScheme
   /// Gates the focus/toggle/thumbnail motion (constraint 2).
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -113,42 +111,34 @@ struct ComposerView: View {
           .focused($isInputFocused)
           .padding(.horizontal, Theme.Spacing.md)
           .padding(.vertical, Theme.Spacing.sm)
-          .background(Theme.surfaceSunken, in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
-          // Rest: hairline. Focus: 2pt red stroke offset 2pt on canvas — no
-          // chassis glow / record-ready halo.
+          .background(Theme.surface, in: Capsule())
           .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-              .strokeBorder(Theme.separator, lineWidth: 1)
+            Capsule()
+              .strokeBorder(
+                isInputFocused ? Theme.accent : Theme.borderStrong,
+                lineWidth: 1
+              )
           }
           .overlay {
             if isInputFocused {
-              RoundedRectangle(cornerRadius: Theme.Radius.lg + 4, style: .continuous)
-                .strokeBorder(Theme.accent, lineWidth: 2)
-                .padding(-4)
+              Capsule()
+                .stroke(Theme.accent.opacity(0.18), lineWidth: 4)
+                .padding(-2)
             }
           }
-          .animation(Theme.Motion.snappy, value: isInputFocused)
+          .oakShadow(.raised)
+          .offset(y: isInputFocused && !reduceMotion ? -1 : 0)
+          .animation(reduceMotion ? nil : Theme.Motion.snappy, value: isInputFocused)
 
         sendButton
       }
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
-    // A quiet chassis bar lifted off the thread (Instrument redesign): a flat
-    // `canvas` fill (no frosted-glass material — the bar reads as part of the
-    // device, not a floating pane) plus a themed hairline top edge and (light
-    // mode only) a faint upward shadow; dark mode leans on the hairline alone.
+    // Padding on paper; the pill carries elevation. Opaque canvas — no
+    // frost, no `.bar`, no material, no upward shadow-as-frost.
     .background {
-      Rectangle()
-        .fill(Theme.canvas.opacity(0.92))
-        .overlay(alignment: .top) {
-          Rectangle().fill(Theme.separator).frame(height: 1)
-        }
-        .shadow(
-          color: colorScheme == .dark ? .clear : .black.opacity(0.05),
-          radius: 8, y: -3
-        )
-        .ignoresSafeArea(edges: .bottom)
+      Theme.canvas.ignoresSafeArea(edges: .bottom)
     }
     // The attach dialog and active typing are mutually exclusive (feedback
     // APFrit48yRdOdP2IKOX6tBM): gaining text focus, or the text itself changing,

@@ -27,9 +27,10 @@ struct DexView: View {
         ToolbarItem(placement: .principal) {
           Text("Dex")
             .font(Theme.display(.headline))
-            .foregroundStyle(Theme.textStrong)
+            .foregroundStyle(Theme.onRed)
             .accessibilityAddTraits(.isHeader)
         }
+        .oakLidItem()
         if let model {
           ToolbarItem(placement: .topBarTrailing) {
             scopeMenu(model: model)
@@ -48,6 +49,7 @@ struct DexView: View {
         )
       }
     }
+    .oakEnamelNav()
     .task {
       ensureModel()
       consumePendingDestination()

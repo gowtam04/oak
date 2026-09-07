@@ -51,6 +51,7 @@ struct UpdateAvailableSheet: View {
         }
       }
     }
+    .oakEnamelNav()
     .presentationDetents([.medium])
     .presentationDragIndicator(.visible)
   }

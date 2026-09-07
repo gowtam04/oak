@@ -1,51 +1,30 @@
 import SwiftUI
 
-/// Oak's empty-state mark — the daylight `O.` lockup (ink oval + red period).
-/// Geometry matches the app icon (`web/public/oak-app-icon.svg`): no concentric
-/// rings, no Pokéball seam, no tile.
+/// Oak's in-app brand tile — coral rounded square + white O ring, matching
+/// `docs/design/prototypes/red-top-bar-assets/oak-mark.svg` (32×32, rx 7,
+/// circle r 7.7, stroke 4.6 white).
 ///
-/// **Accessibility:** the slow 6s breathing scale (1.0 ↔ 1.04) loops forever,
-/// so it's disabled under `@Environment(\.accessibilityReduceMotion)`.
-/// The mark is decorative — the surrounding view carries the meaning — so it's
-/// hidden from VoiceOver (M-AC-UI9.3).
+/// This is the **lid / wordmark tile**, not the home-screen glyph (that is a
+/// full-bleed 1024 square). Do not mount this on the chat empty landing.
+///
+/// **Accessibility:** the mark is decorative — the surrounding view carries
+/// the meaning — so it's hidden from VoiceOver (M-AC-UI9.3).
 struct OakBrandMark: View {
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-  /// The overall box in points (default 96).
-  var size: CGFloat = 96
-
-  @State private var breathe = false
+  /// The overall box in points (default 32 — the lid tile).
+  var size: CGFloat = 32
 
   var body: some View {
-    Canvas { context, canvasSize in
-      let s = min(canvasSize.width, canvasSize.height)
-      func rect(cx: CGFloat, cy: CGFloat, rx: CGFloat, ry: CGFloat) -> CGRect {
-        CGRect(
-          x: (cx - rx) * s,
-          y: (cy - ry) * s,
-          width: rx * 2 * s,
-          height: ry * 2 * s
-        )
-      }
-      // Normalized from the 1024 icon: O center (440, 512), outer 195×240,
-      // stroke 92, period (753, 674) r 70.
-      var donut = Path()
-      donut.addEllipse(in: rect(cx: 440 / 1024, cy: 512 / 1024, rx: 195 / 1024, ry: 240 / 1024))
-      donut.addEllipse(in: rect(cx: 440 / 1024, cy: 512 / 1024, rx: 103 / 1024, ry: 148 / 1024))
-      context.fill(donut, with: .color(Theme.textStrong), style: FillStyle(eoFill: true))
-      context.fill(
-        Path(ellipseIn: rect(cx: 753 / 1024, cy: 674 / 1024, rx: 70 / 1024, ry: 70 / 1024)),
-        with: .color(Theme.accent)
-      )
+    let corner = size * 7 / 32
+    let ringDiameter = size * 7.7 / 16
+    let stroke = size * 4.6 / 32
+    ZStack {
+      RoundedRectangle(cornerRadius: corner, style: .continuous)
+        .fill(Theme.accent)
+      Circle()
+        .strokeBorder(Theme.onRed, lineWidth: stroke)
+        .frame(width: ringDiameter, height: ringDiameter)
     }
     .frame(width: size, height: size)
-    .scaleEffect(breathe ? 1.04 : 1.0)
-    .onAppear {
-      guard !reduceMotion else { return }
-      withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
-        breathe = true
-      }
-    }
     .accessibilityHidden(true)
   }
 }

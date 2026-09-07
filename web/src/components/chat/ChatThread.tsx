@@ -131,7 +131,7 @@ export default function ChatThread({
   // is the deterministic first-6 so the server render and first client render
   // match (this is a Client Component — `Math.random()` at render time would
   // hydration-mismatch); the post-mount effect then swaps in the random set.
-  // Each starter carries category + optional type-dot (specimen desk, soul.md).
+  // Each starter carries a category prefix (Battle / Dex / Rules / Meta).
   const [examples, setExamples] = useState<StarterPrompt[]>(() =>
     STARTER_ENTRIES.slice(0, 4),
   );

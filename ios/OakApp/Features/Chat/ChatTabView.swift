@@ -71,20 +71,21 @@ struct ChatTabView: View {
         // (one-handed reach); this is its action.
         onNewChat: { path.append(.new) }
       )
-      // Inline title with a custom Figtree principal view. Root cause of the
+      // Inline title with a custom Fredoka principal view. Root cause of the
       // old phantom band: the screen used the default (large) title display mode,
       // and a custom largeTitleTextAttributes UIFont doesn't render on iOS 26's
       // large-title band — it reserved the tall band but drew nothing. Inline
-      // mode removes the band; the principal view guarantees the Figtree face.
+      // mode removes the band; the principal view is white on enamel.
       .navigationTitle("Chats")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .principal) {
           Text("Chats")
             .font(Theme.display(.headline))
-            .foregroundStyle(Theme.textStrong)
+            .foregroundStyle(Theme.onRed)
             .accessibilityAddTraits(.isHeader)
         }
+        .oakLidItem()
       }
       .navigationDestination(for: ChatRoute.self) { route in
         // New Chat from a pushed saved thread seeds a fresh `.new` route (mirrors the
@@ -92,6 +93,7 @@ struct ChatTabView: View {
         ChatThreadScreen(source: route, onNewChat: { path = [.new] })
       }
     }
+    .oakEnamelNav()
   }
 
   // MARK: Guest — single in-memory thread
@@ -111,6 +113,7 @@ struct ChatTabView: View {
         signInAction: { showSignIn = true }
       )
     }
+    .oakEnamelNav()
     .sheet(isPresented: $showSignIn) {
       AuthView(model: AuthViewModel(auth: services.auth, appState: appState))
     }

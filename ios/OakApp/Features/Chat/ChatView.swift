@@ -137,13 +137,15 @@ struct ChatView: View {
     .navigationTitle("Oak")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
-      // Signal wordmark (`Oak.` + red period) leading, so the Chat root reads as
-      // Oak the instant it opens. Only on the root (guest single thread); a
-      // pushed signed-in thread keeps the system back button leading.
+      // Enamel lockup (coral tile + white Fredoka "Oak") leading, so the Chat
+      // root reads as Oak the instant it opens. Only on the root (guest single
+      // thread); a pushed signed-in thread keeps the system back button leading.
       if showsNewConversationButton {
         ToolbarItem(placement: .topBarLeading) {
           OakWordmarkLockup()
+            .fixedSize()
         }
+        .oakLidItem()
       }
       // The scope control (GS-C): the header's visible counterpart to the `scope`
       // SSE event and the ONLY interactive scope control (the Champions pill +
@@ -152,6 +154,7 @@ struct ChatView: View {
       ToolbarItem(placement: .principal) {
         scopeChip
       }
+      .oakLidItem()
       ToolbarItem(placement: .topBarTrailing) {
         HStack(spacing: 12) {
           if model.isSignedIn, !model.turns.isEmpty {
@@ -179,6 +182,7 @@ struct ChatView: View {
           }
         }
       }
+      .oakLidItem()
     }
     // Navigating away UNSUBSCRIBES — it never cancels generation (background-turns
     // design §6.2). `detach` closes the socket, keeps the pending-turn pointer, and
@@ -319,22 +323,16 @@ struct ChatView: View {
       }
     } label: {
       HStack(spacing: 6) {
-        // Always-on 6pt scope LED — Signal's header mark, not a "changed from
-        // default" indicator.
-        Circle()
-          .fill(Theme.accent)
-          .frame(width: 6, height: 6)
-          .accessibilityHidden(true)
         Text(model.displayFormat.shortLabel)
           .font(Theme.body(.caption, weight: .medium))
         Image(systemName: "chevron.down")
           .font(.system(size: 9, weight: .bold))
       }
-      .foregroundStyle(Theme.textSecondary)
+      .foregroundStyle(Theme.onRed)
       .padding(.horizontal, 10)
       .padding(.vertical, 5)
-      .background(Theme.surface, in: Capsule())
-      .overlay(Capsule().strokeBorder(Theme.separator, lineWidth: 1))
+      .background(Theme.onRed.opacity(0.16), in: Capsule())
+      .overlay(Capsule().strokeBorder(Theme.onRed.opacity(0.45), lineWidth: 1))
       .contentShape(Capsule())
     }
     .disabled(model.isStreaming)
@@ -624,10 +622,10 @@ struct ChatView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  /// Signal empty chat: large title, mute sub, four full-width starter rows.
-  /// Scope LED lives in the header only — not repeated on this plate.
+  /// Empty chat: Fredoka title on paper, mute sub, four full-width starter
+  /// rows. Current landing IA — not the July centered Oak lockup.
   private var emptyState: some View {
-    blankSpecimenPlate
+    emptyLanding
       .frame(maxWidth: Self.plateMaxWidth)
       .frame(maxWidth: .infinity)
       .onAppear {
@@ -643,9 +641,8 @@ struct ChatView: View {
   /// Max width the empty-chat column snaps to.
   private static let plateMaxWidth: CGFloat = 520
 
-  /// Title + sub + starter rows. No Standby label, no LED well, no type-dot
-  /// hero composition.
-  private var blankSpecimenPlate: some View {
+  /// Title + sub + starter rows. No Standby label, no LED well, no brand tile.
+  private var emptyLanding: some View {
     VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
       Text("What do you want to know?")
         .font(Theme.display(.title))
@@ -737,8 +734,9 @@ struct ChatView: View {
       )
       .overlay {
         RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-          .strokeBorder(Theme.separator, lineWidth: 1)
+          .strokeBorder(Theme.borderStrong, lineWidth: 1)
       }
+      .oakShadow(.card)
     }
     .buttonStyle(OakPressableButtonStyle())
     .opacity(shown ? 1 : 0)
@@ -921,6 +919,7 @@ struct PreviewChatService: ChatService {
   return NavigationStack {
     ChatView(model: ChatViewModel(chat: PreviewChatService(), appState: state))
   }
+  .oakEnamelNav()
   .environment(state)
 }
 
@@ -932,6 +931,7 @@ struct PreviewChatService: ChatService {
       signInAction: {}
     )
   }
+  .oakEnamelNav()
   .environment(state)
 }
 #endif

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 /**
  * ThemeToggle — flips the manual light/dark choice and persists it.
+ * Lid chrome (inset enamel pill) lives on `.theme-toggle` in globals.css.
  *
  * Writes `data-theme` on <html> and mirrors it to `localStorage` under
  * `oak-theme` (the same key the no-flash inline script in `layout.tsx`

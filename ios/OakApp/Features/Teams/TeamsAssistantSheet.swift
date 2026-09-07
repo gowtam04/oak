@@ -36,6 +36,7 @@ struct TeamsAssistantSheet: View {
       }
       .onDisappear { model.cancel() }
     }
+    .oakEnamelNav()
   }
 
   // MARK: Thread

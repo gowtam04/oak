@@ -12,8 +12,8 @@ import ShortcutOverlay from "@/components/chat/ShortcutOverlay";
  * "AuthMenu.tsx"; UI/UX Vision "Sign-in affordance" / "Signed-in state"; Phase 6
  * / p6).
  *
- * Two states, both rendered in the Pokédex-red header band (translucent-white
- * look, matching `ScopeChip`):
+ * Two states, both rendered in the Pokédex-red header band as inset enamel
+ * pills (white-on-red, matching `ScopeChip`):
  *
  *   - Guest → a single non-blocking "Sign in" control (AC-1.2) that asks the
  *     parent to open `AuthDialog` via `onSignInClick`. It never gates the chat.

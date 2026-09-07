@@ -149,6 +149,7 @@ struct EntityPickerSheet: View {
       .task { await runSearch(query) }
       .onChange(of: query) { _, newValue in scheduleSearch(newValue) }
     }
+    .oakEnamelNav()
   }
 
   private func scheduleSearch(_ q: String) {

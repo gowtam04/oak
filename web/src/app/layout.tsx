@@ -38,19 +38,20 @@ export const metadata: Metadata = {
 // non-zero (the header/composer pad themselves with it). `viewportFit: "cover"`
 // is the prerequisite for any safe-area handling. We deliberately do NOT cap
 // zoom (no maximumScale/userScalable) — that would break WCAG 1.4.4. themeColor
-// tints the browser chrome to match the app background. This is a media pair
-// keyed to `prefers-color-scheme` rather than the in-app `data-theme` toggle —
-// Oak's dark mode is opt-in via the toggle, not OS-driven, so this tracks the
-// OS preference rather than the actual active theme. That's an accepted
-// mismatch: the browser chrome may not match the toggled-in-app theme, but it
-// always matches *a* plausible theme rather than staying hardcoded light.
+// tints the browser chrome to the enamel lid, not the paper canvas. This is a
+// media pair keyed to `prefers-color-scheme` rather than the in-app `data-theme`
+// toggle — Oak's dark mode is opt-in via the toggle, not OS-driven, so this
+// tracks the OS preference rather than the actual active theme. That's an
+// accepted mismatch: the browser chrome may not match the toggled-in-app
+// theme, but it always matches *a* plausible lid rather than staying
+// hardcoded light.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#121417" },
-    { media: "(prefers-color-scheme: light)", color: "#F6F7F9" },
+    { media: "(prefers-color-scheme: dark)", color: "#c44545" },
+    { media: "(prefers-color-scheme: light)", color: "#ee5a5a" },
   ],
 };
 

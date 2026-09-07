@@ -92,6 +92,7 @@ struct ArtifactSheetView: View {
         }
       }
     }
+    .oakEnamelNav()
     .sheet(isPresented: $showingCompare) {
       NavigationStack {
         Form {
@@ -127,6 +128,7 @@ struct ArtifactSheetView: View {
           }
         }
       }
+      .oakEnamelNav()
       .presentationDetents([.medium])
     }
     .presentationDetents([.medium, .large])

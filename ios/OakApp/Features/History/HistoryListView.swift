@@ -700,5 +700,6 @@ private struct PreviewHistoryService: HistoryService {
     .navigationTitle("Chats")
     .navigationBarTitleDisplayMode(.inline)
   }
+  .oakEnamelNav()
 }
 #endif

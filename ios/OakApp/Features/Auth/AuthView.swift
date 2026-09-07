@@ -76,6 +76,7 @@ struct AuthView: View {
         if !reduceMotion { shakeTrigger += 1 }
       }
     }
+    .oakEnamelNav()
   }
 
   // MARK: Header

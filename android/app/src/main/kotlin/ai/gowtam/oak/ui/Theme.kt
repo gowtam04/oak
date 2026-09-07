@@ -1,6 +1,11 @@
 package ai.gowtam.oak.ui
 
+import android.content.Context
+import android.content.ContextWrapper
 import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
@@ -14,11 +19,14 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 
 /**
@@ -45,6 +53,25 @@ fun OakTheme(
 ) {
     val colorScheme = if (darkTheme) OakDarkColorScheme else OakLightColorScheme
     val oakColors = if (darkTheme) OakDarkColors else OakLightColors
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        val enamel = oakColors.accent.toArgb()
+        val paper = colorScheme.surface.toArgb()
+        SideEffect {
+            val activity = view.context.findComponentActivity() ?: return@SideEffect
+            // Status bar is always light-icons-on-enamel. Nav-bar contrast follows theme
+            // (dark icons on light paper, light icons on dark paper). Not a one-shot
+            // onCreate paint — this re-applies when isSystemInDarkTheme() flips.
+            activity.enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.dark(enamel),
+                navigationBarStyle = if (darkTheme) {
+                    SystemBarStyle.dark(paper)
+                } else {
+                    SystemBarStyle.light(paper, paper)
+                },
+            )
+        }
+    }
     CompositionLocalProvider(LocalOakColors provides oakColors) {
         MaterialTheme(
             colorScheme = colorScheme,
@@ -53,6 +80,15 @@ fun OakTheme(
             content = content,
         )
     }
+}
+
+private tailrec fun Context.findComponentActivity(): ComponentActivity? = when (this) {
+    is ComponentActivity -> this
+    is ContextWrapper -> {
+        val base = baseContext
+        if (base === this) null else base.findComponentActivity()
+    }
+    else -> null
 }
 
 // ---------------------------------------------------------------------------

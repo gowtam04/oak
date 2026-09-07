@@ -120,6 +120,7 @@ struct ThemeFoundationTests {
     _ = Color.clear.oakCard()
     _ = Color.clear.oakCard(radius: Theme.Radius.md, tint: Theme.type("water"))
     _ = Color.clear.oakShadow(.card)
+    _ = Color.clear.oakEnamelNav()
     _ = Color.clear.oakInsetWell()
     _ = Color.clear.shimmer()
     _ = Color.clear.shimmer(active: false)

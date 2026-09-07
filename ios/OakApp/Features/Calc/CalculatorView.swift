@@ -42,6 +42,7 @@ struct CalculatorView: View {
         await model.recompute()
       }
     }
+    .oakEnamelNav()
   }
 
   private var attackerBinding: Binding<CalcSide> {

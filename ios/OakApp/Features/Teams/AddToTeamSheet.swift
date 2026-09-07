@@ -287,6 +287,7 @@ struct AddToTeamSheet: View {
         Text("This team is full. Choose a member to replace.")
       }
     }
+    .oakEnamelNav()
   }
 
   private var replacePresented: Binding<Bool> {

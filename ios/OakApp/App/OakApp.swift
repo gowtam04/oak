@@ -20,8 +20,8 @@ struct OakApp: App {
       diskCapacity: 80 * 1024 * 1024,
       directory: nil
     )
-    // Paint the nav/tab bars onto Oak's canvas paper (not Apple's system
-    // material) before the first frame renders.
+    // Paint the enamel nav lid + paper tab dock (not Apple's system
+    // material / Liquid Glass) before the first frame renders.
     OakChrome.applyBarAppearance()
     let services = ServiceContainer.live()
     self.services = services

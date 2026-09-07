@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 1024 1024">
-  <!-- Daylight O. — ink oval + red period on cool canvas. Same geometry as oak-app-icon.svg. -->
-  <rect width="1024" height="1024" rx="220" fill="#F6F7F9"/>
-  <path fill="#1B2430" fill-rule="evenodd" d="M 245.000,512.000 A 195.000,240.000 0 1 1 635.000,512.000 A 195.000,240.000 0 1 1 245.000,512.000 Z M 337.000,512.000 A 103.000,148.000 0 1 0 543.000,512.000 A 103.000,148.000 0 1 0 337.000,512.000 Z"/>
-  <circle cx="753" cy="674" r="70" fill="#E3350D"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- In-app tile: coral rounded square, white O ring. Not the home-screen glyph. -->
+  <rect width="32" height="32" rx="7" fill="#ee5a5a"/>
+  <circle cx="16" cy="16" r="7.7" fill="none" stroke="#ffffff" stroke-width="4.6"/>
 </svg>

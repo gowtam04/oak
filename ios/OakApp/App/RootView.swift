@@ -67,6 +67,7 @@ struct RootView: View {
         NavigationStack {
           AccountView(model: AccountViewModel(auth: services.auth, appState: appState))
         }
+        .oakEnamelNav()
       } label: {
         Label("Account", systemImage: "person.crop.circle")
           .symbolEffect(.bounce, value: selection == .account)

@@ -105,6 +105,7 @@ struct ShowdownImportView: View {
         }
       }
     }
+    .oakEnamelNav()
   }
 
   /// Runs the import. On success: if there were no notes, dismiss immediately; otherwise

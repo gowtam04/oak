@@ -23,7 +23,10 @@ import { parseMentions } from "@/lib/chat/mentions";
 const MAX_INPUT_PX = 160;
 
 /**
- * Composer — the chat input box. Submits via `onSend(message, images)` and clears
+ * Composer — the chat input box. Chrome (opaque pill, fade-to-paper dock, no
+ * blur) lives in globals.css; this file owns behavior only.
+ *
+ * Submits via `onSend(message, images)` and clears
  * the field. A message is sendable when it has non-empty text OR at least one
  * attached image (an image-only "what is this?" upload). Images are picked (the
  * attach button) or pasted, downscaled + re-encoded client-side, shown as

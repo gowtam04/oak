@@ -381,6 +381,7 @@ private struct PreviewAccountAuthService: AuthService {
   return NavigationStack {
     AccountView(model: AccountViewModel(auth: PreviewAccountAuthService(), appState: state))
   }
+  .oakEnamelNav()
   .environment(state)
   .environment(updates)
 }
@@ -395,6 +396,7 @@ private struct PreviewAccountAuthService: AuthService {
   return NavigationStack {
     AccountView(model: AccountViewModel(auth: PreviewAccountAuthService(), appState: state))
   }
+  .oakEnamelNav()
   .environment(state)
   .environment(updates)
 }

@@ -60,6 +60,7 @@ struct ShareSnapshotView: View {
         }
       }
     }
+    .oakEnamelNav()
     .task { await load() }
     .sheet(isPresented: $showingSignIn) {
       AuthView(model: AuthViewModel(auth: services.auth, appState: appState))

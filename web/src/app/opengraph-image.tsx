@@ -9,8 +9,8 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const alt = "Oak — AI Pokémon assistant";
 
-// Hex values mirror Signal tokens (--bg, --ink, --red) — satori cannot read
-// CSS vars, so these are hand-copied; keep in sync if the palette changes.
+// Hex values mirror enamel-paper tokens (--bg cream, --poke-red coral,
+// --text-strong). Satori cannot read CSS vars, so these are hand-copied.
 export default function OpengraphImage() {
   return new ImageResponse(
     (
@@ -22,12 +22,42 @@ export default function OpengraphImage() {
           width: "100%",
           height: "100%",
           padding: 80,
-          background: "#F6F7F9",
+          background: "#FBF7F4",
         }}
       >
-        <div style={{ display: "flex", fontSize: 96, fontWeight: 600, color: "#1B2430" }}>
-          Oak
-          <span style={{ color: "#E3350D" }}>.</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 96,
+              height: 96,
+              borderRadius: 24,
+              background: "#EE5A5A",
+            }}
+          >
+            <div
+              style={{
+                width: 46,
+                height: 46,
+                borderRadius: 999,
+                border: "14px solid #ffffff",
+              }}
+            />
+          </div>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 96,
+              fontWeight: 600,
+              fontFamily: "Fredoka, sans-serif",
+              color: "#2A2521",
+              letterSpacing: "0.01em",
+            }}
+          >
+            Oak
+          </div>
         </div>
         <div
           style={{
@@ -36,7 +66,7 @@ export default function OpengraphImage() {
             maxWidth: 900,
             fontSize: 40,
             lineHeight: 1.35,
-            color: "#2A3340",
+            color: "#3D362F",
           }}
         >
           {SITE_DESCRIPTION}

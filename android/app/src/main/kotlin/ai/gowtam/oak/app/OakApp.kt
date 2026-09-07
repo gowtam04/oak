@@ -131,7 +131,11 @@ fun OakApp(
                 // Hairline that separates the nav band from the canvas above it —
                 // the branded stand-in for Material's tonal-elevation shadow.
                 HorizontalDivider(color = oak.border, thickness = 1.dp)
-                NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
+                // Opaque paper dock (`--surface`). No tonal elevation — frost is banned.
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 0.dp,
+                ) {
                     OakTab.entries.forEach { tab ->
                         NavigationBarItem(
                             selected = selectedTab == tab,

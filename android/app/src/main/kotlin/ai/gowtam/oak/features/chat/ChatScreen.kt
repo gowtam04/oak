@@ -31,6 +31,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -82,7 +84,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -540,33 +542,39 @@ private fun HydrateBannerRow(
 private fun ScopeChip(format: Format, enabled: Boolean, onClick: () -> Unit) {
     val oak = LocalOakColors.current
     val chipShape = RoundedCornerShape(OakRadius.pill)
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val fillAlpha = if (pressed && enabled) 0.28f else 0.16f
     Row(
         modifier = Modifier
             .padding(end = OakSpacing.sm)
             .clip(chipShape)
-            .background(oak.surfaceSunken, chipShape)
-            .border(1.dp, oak.border, chipShape)
-            .then(if (enabled) Modifier.clickableChip(onClick) else Modifier)
+            .background(oak.onRed.copy(alpha = fillAlpha), chipShape)
+            .border(1.dp, oak.onRed.copy(alpha = 0.45f), chipShape)
+            .then(
+                if (enabled) {
+                    Modifier.clickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Signal scope LED — always on, not only when scope ≠ national-dex.
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(oak.accent),
-        )
         Text(
             text = format.shortLabel,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-            color = oak.textMuted,
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = oak.onRed.copy(alpha = if (enabled) 1f else 0.7f),
         )
         Icon(
             Icons.Filled.KeyboardArrowDown,
             contentDescription = null,
-            tint = if (enabled) oak.textMuted else oak.textFaint,
+            tint = oak.onRed.copy(alpha = if (enabled) 1f else 0.7f),
             modifier = Modifier.height(16.dp),
         )
     }
@@ -848,14 +856,14 @@ private fun ErrorBannerRow(banner: ErrorBanner, onRetry: () -> Unit) {
 }
 
 // ---------------------------------------------------------------------------
-// Empty state — Signal hero + filed starter rows
+// Empty state — current landing on paper under the enamel lid
 // ---------------------------------------------------------------------------
 
 /**
- * Empty-thread hero (`docs/design/signal.md` §6.1): large title, one mute
- * sentence, four full-width starter rows. Scope LED lives in the header only —
- * no STANDBY plate, no LED well, no centered logo.
- * Starters are sampled once per composition via [ExamplePrompts.pickFiled].
+ * Empty-thread landing (`docs/design/enamel-paper.md` Empty chat): Fredoka title
+ * on paper, recents, categorized filed starters. No STANDBY plate, no LED well,
+ * no centered Oak lockup. Starters are sampled once per composition via
+ * [ExamplePrompts.pickFiled].
  */
 @Composable
 private fun EmptyState(
@@ -902,9 +910,8 @@ private fun EmptyState(
 }
 
 /**
- * The Instrument "record light" LED: a solid `oak.accent` dot with a soft halo behind
- * it (a larger, low-alpha same-color disc — cheap, no `RenderEffect` blur needed).
- * Shared by the empty-state scope stamp and the scope picker's selected row.
+ * Selected-row marker for the scope picker. Not mounted on the empty plate
+ * (STANDBY / LED well is dropped). Cheap disc + halo — no `RenderEffect`.
  */
 @Composable
 private fun LedDot(modifier: Modifier = Modifier, dotSize: Dp = 6.dp, haloSize: Dp = 10.dp) {
@@ -926,19 +933,20 @@ private fun LedDot(modifier: Modifier = Modifier, dotSize: Dp = 6.dp, haloSize: 
 }
 
 /**
- * One filed-starter row: mute category prefix + prompt. Surface, 10.dp radius,
- * hairline. Text only — no type-dot, no equal hero chip.
+ * One empty-desk recent row: mute category prefix + title. White plate, strong
+ * hairline, raised umber shadow. Text only — no LED chip.
  */
 @Composable
 private fun FiledActionRow(label: String, title: String, onClick: () -> Unit) {
     val oak = LocalOakColors.current
     val shape = RoundedCornerShape(OakRadius.md)
+    val dark = isSystemInDarkTheme()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
+            .then(if (dark) Modifier else Modifier.shadow(4.dp, shape))
             .background(MaterialTheme.colorScheme.surface, shape)
-            .border(1.dp, oak.border, shape)
+            .border(1.dp, oak.borderStrong, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = OakSpacing.md, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
@@ -965,19 +973,22 @@ private fun FiledStarterRow(starter: ExamplePrompts.FiledStarter, onClick: () ->
     val reduceMotion = rememberReduceMotion()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.98f else 1f,
-        animationSpec = if (reduceMotion) snap() else OakMotion.snappy,
-        label = "filedStarterScale",
+    val lift by animateFloatAsState(
+        targetValue = if (pressed && !reduceMotion) -2f else 0f,
+        animationSpec = if (reduceMotion) snap() else OakMotion.spring,
+        label = "filedStarterLift",
     )
     val shape = RoundedCornerShape(OakRadius.md)
+    val dark = isSystemInDarkTheme()
+    val fill = if (pressed) oak.accentSoft else MaterialTheme.colorScheme.surface
+    val stroke = if (pressed) oak.accent else oak.borderStrong
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface, shape)
-            .border(1.dp, oak.border, shape)
+            .offset(y = lift.dp)
+            .then(if (dark) Modifier else Modifier.shadow(4.dp, shape))
+            .background(fill, shape)
+            .border(1.dp, stroke, shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = OakSpacing.md, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),

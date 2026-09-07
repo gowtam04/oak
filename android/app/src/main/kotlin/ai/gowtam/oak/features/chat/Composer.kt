@@ -22,16 +22,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -45,8 +48,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
@@ -58,9 +59,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -162,7 +169,7 @@ fun Composer(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(oak.surfaceRaised)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
@@ -220,47 +227,35 @@ fun Composer(
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.Bottom) {
-            // Surface field. Focus/streaming = 2.dp red outline, no chassis glow.
-            var isFocused by remember { mutableStateOf(false) }
-            val fieldShape = RoundedCornerShape(OakRadius.lg)
-            val outlineActive = isStreaming || isFocused
-            OutlinedTextField(
-                value = composerText,
-                onValueChange = {
-                    // Typing implies the user wants the keyboard, not the attach menu.
-                    if (menuExpanded) menuExpanded = false
-                    onTextChange(it)
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .onFocusChanged {
-                        isFocused = it.isFocused
-                        if (it.isFocused && menuExpanded) menuExpanded = false
-                    }
-                    .border(
-                        width = if (outlineActive) 2.dp else 1.dp,
-                        color = if (outlineActive) oak.accent else oak.border,
-                        shape = fieldShape,
-                    ),
-                placeholder = { Text("Ask Oak") },
-                maxLines = 5,
-                shape = fieldShape,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    cursorColor = oak.accent,
-                    focusedTextColor = oak.text,
-                    unfocusedTextColor = oak.text,
-                    focusedPlaceholderColor = oak.textFaint,
-                    unfocusedPlaceholderColor = oak.textFaint,
-                ),
-            )
-
-            // Attach (and voice, when present) stay mute icons immediately left of Send.
+        var isFocused by remember { mutableStateOf(false) }
+        val dark = isSystemInDarkTheme()
+        val pillShape = RoundedCornerShape(OakRadius.pill)
+        val outlineActive = isStreaming || isFocused
+        val pillBorder = if (outlineActive) oak.accent else oak.borderStrong
+        val halo = oak.accent.copy(alpha = 0.18f)
+        val paper = MaterialTheme.colorScheme.surface
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .drawBehind {
+                    if (!isFocused) return@drawBehind
+                    val stroke = 4.dp.toPx()
+                    val radius = size.minDimension / 2f + stroke / 2f
+                    drawRoundRect(
+                        color = halo,
+                        topLeft = Offset(-stroke / 2f, -stroke / 2f),
+                        size = Size(size.width + stroke, size.height + stroke),
+                        cornerRadius = CornerRadius(radius),
+                        style = Stroke(width = stroke),
+                    )
+                }
+                .then(if (dark) Modifier else Modifier.shadow(6.dp, pillShape))
+                .background(paper, pillShape)
+                .border(1.dp, pillBorder, pillShape)
+                .padding(start = OakSpacing.xs, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs),
+            verticalAlignment = Alignment.Bottom,
+        ) {
             Box {
                 IconButton(
                     onClick = {
@@ -301,6 +296,38 @@ fun Composer(
                 }
             }
 
+            BasicTextField(
+                value = composerText,
+                onValueChange = {
+                    if (menuExpanded) menuExpanded = false
+                    onTextChange(it)
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 40.dp)
+                    .padding(vertical = OakSpacing.sm, horizontal = OakSpacing.xs)
+                    .onFocusChanged {
+                        isFocused = it.isFocused
+                        if (it.isFocused && menuExpanded) menuExpanded = false
+                    },
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = oak.text),
+                cursorBrush = SolidColor(oak.accent),
+                maxLines = 5,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                decorationBox = { inner ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (composerText.isEmpty()) {
+                            Text(
+                                text = "Ask Oak",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = oak.textFaint,
+                            )
+                        }
+                        inner()
+                    }
+                },
+            )
+
             SendButton(
                 isStreaming = isStreaming,
                 canSend = canSend,
@@ -312,10 +339,10 @@ fun Composer(
 }
 
 /**
- * Signal Send — a 44dp-tall rounded rect (8dp radius), accent fill, `--on-red`
- * glyph. Not a circular FAB. Press scales to 0.98. Disabled sits on sunken with
- * a faint glyph. Streaming swaps the arrow for Stop; the shape stays a rounded
- * rect. Touch target stays ≥48dp via [minimumInteractiveComponentSize].
+ * Enamel Send — a 44.dp circle. Ready = poke-red fill + `--on-red` glyph, spring
+ * pop to 1.06 on press. Disabled = sunken fill, faint glyph, scale 0.85. Streaming
+ * swaps the arrow for a red Stop square on the same 44.dp sunken circle. Touch
+ * target stays ≥48.dp via [minimumInteractiveComponentSize].
  */
 @Composable
 private fun SendButton(
@@ -330,22 +357,39 @@ private fun SendButton(
     val pressed by interactionSource.collectIsPressedAsState()
 
     val enabled = isStreaming || canSend
-    val targetScale = if (pressed && enabled) 0.98f else 1f
+    val targetScale = when {
+        isStreaming -> if (pressed) 0.98f else 1f
+        canSend -> if (pressed) 1.06f else 1f
+        else -> 0.85f
+    }
     val scale by animateFloatAsState(
         targetValue = targetScale,
-        animationSpec = if (reduceMotion) snap() else OakMotion.snappy,
+        animationSpec = if (reduceMotion) {
+            snap()
+        } else if (canSend && !isStreaming) {
+            OakMotion.spring
+        } else {
+            OakMotion.snappy
+        },
         label = "sendButtonScale",
     )
-    val shape = RoundedCornerShape(OakRadius.sm)
-    val fill = if (enabled) oak.accent else oak.surfaceSunken
-    val glyphTint = if (enabled) oak.onRed else oak.textFaint
+    val fill = when {
+        isStreaming -> oak.surfaceSunken
+        canSend -> oak.accent
+        else -> oak.surfaceSunken
+    }
+    val glyphTint = when {
+        isStreaming -> oak.accent
+        canSend -> oak.onRed
+        else -> oak.textFaint
+    }
 
     Box(
         modifier = Modifier
             .minimumInteractiveComponentSize()
             .size(44.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(shape)
+            .clip(CircleShape)
             .background(fill)
             .clickable(
                 interactionSource = interactionSource,
