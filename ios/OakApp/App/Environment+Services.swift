@@ -67,6 +67,10 @@ struct ServiceContainer: Sendable {
   /// Conversation artifact pins (signed-in).
   let artifactPins: any ArtifactPinService
 
+  /// Public live Champions usage (GET `/api/usage`). Backed by
+  /// ``LiveUsageService`` in production.
+  let usage: any UsageService
+
   /// The production wiring (real `Live…` services).
   ///
   /// All services share **one** ``TokenStore`` (the Keychain) and **one**
@@ -89,7 +93,8 @@ struct ServiceContainer: Sendable {
       voice: LiveVoiceService(apiClient: api),
       updates: LiveUpdateService(),
       calc: LiveCalcService(apiClient: api),
-      artifactPins: LiveArtifactPinService(apiClient: api)
+      artifactPins: LiveArtifactPinService(apiClient: api),
+      usage: LiveUsageService(apiClient: api)
     )
   }
 
@@ -112,7 +117,8 @@ struct ServiceContainer: Sendable {
       voice: PreviewStubVoiceService(),
       updates: PreviewStubUpdateService(),
       calc: PreviewStubCalcService(),
-      artifactPins: PreviewStubArtifactPinService()
+      artifactPins: PreviewStubArtifactPinService(),
+      usage: PreviewStubUsageService()
     )
     #else
     live()
@@ -232,6 +238,14 @@ struct PreviewStubTeamService: TeamService {
   private var notFound: OakError { .http(status: 404, code: "not_found", message: "Preview stub.") }
 
   func list(format: Format?) async throws -> [TeamSummary] { [] }
+
+  func list(archived: Bool) async throws -> [TeamSummary] { [] }
+
+  func setTemplate(species: String) async throws -> (
+    found: Bool, member: TeamMember?, notes: [String], attribution: String?
+  ) {
+    (false, nil, ["Preview stub."], nil)
+  }
 
   func get(id: String) async throws -> (team: Team, validation: TeamValidationResult) {
     throw notFound
@@ -361,6 +375,16 @@ struct PreviewStubVoiceService: VoiceService {
 
 struct PreviewStubCalcService: CalcService {
   func estimate(_ scenario: CalcScenario) async -> CalcResult? { nil }
+}
+
+struct PreviewStubUsageService: UsageService {
+  func leaderboard(ladder: UsageLadder) async throws -> UsageLeaderboard {
+    .unavailable(ladder: ladder)
+  }
+
+  func species(slug: String, ladder: UsageLadder) async throws -> UsageSpeciesResponse {
+    .unavailable
+  }
 }
 
 struct PreviewStubArtifactPinService: ArtifactPinService {

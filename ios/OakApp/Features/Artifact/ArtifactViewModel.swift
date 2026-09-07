@@ -57,10 +57,11 @@ final class ArtifactViewModel {
     conversationId: String? = nil
   ) {
     self.service = service
-    self.format = format
+    self.format = .champions
     self.isSignedIn = isSignedIn
     self.pins = pins
     self.conversationId = conversationId
+    _ = format
   }
 
   // MARK: Derived presentation state
@@ -197,13 +198,14 @@ final class ArtifactViewModel {
   func openInDex() -> DexArtifactHop? {
     guard canOpenInDex, case .entity(let ok)? = current?.content else { return nil }
     let query = lastEntityQuery ?? ok.resolved.displayName
-    return DexArtifactHop(kind: ok.kind, query: query, format: format)
+    return DexArtifactHop(kind: ok.kind, query: query, format: .champions)
   }
 
   func compareWith(species: String, format: Format?) async {
     guard case .entity(let first)? = current?.content, case .pokemon(let leftData) = first.data else { return }
     compareErrorMessage = nil
-    let scope = format ?? self.format
+    _ = format
+    let scope = Format.champions
     let result = await service.entity(kind: .pokemon, q: species, format: scope)
     guard case .ok(let second)? = result, case .pokemon(let rightData) = second.data else {
       compareErrorMessage = "Couldn't find \(species) to compare."

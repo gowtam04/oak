@@ -23,6 +23,8 @@ struct TeamsListView: View {
   /// `true` while the guest sign-in sheet is presented (mirrors `ChatTabView`'s
   /// guest-nudge pattern — web's `/teams` gate offers the same sign-in action).
   @State private var showSignIn = false
+  /// Archived delete confirmation target (CF-TEAM-US-5).
+  @State private var teamPendingDelete: TeamSummary?
 
   init(model: TeamsListViewModel) {
     _model = State(initialValue: model)
@@ -48,8 +50,8 @@ struct TeamsListView: View {
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         if isSignedIn {
-          ToolbarItem(placement: .topBarLeading) {
-            formatFilterMenu
+          ToolbarItem(placement: .principal) {
+            RegulationChip()
           }
           .oakLidItem()
           ToolbarItem(placement: .topBarTrailing) {
@@ -67,10 +69,30 @@ struct TeamsListView: View {
       .sheet(isPresented: $showSignIn) {
         AuthView(model: AuthViewModel(auth: services.auth, appState: appState))
       }
+      .alert(
+        "Delete archived team?",
+        isPresented: Binding(
+          get: { teamPendingDelete != nil },
+          set: { if !$0 { teamPendingDelete = nil } }
+        )
+      ) {
+        Button("Delete", role: .destructive) {
+          if let team = teamPendingDelete {
+            Task { await model.delete(team) }
+          }
+          teamPendingDelete = nil
+        }
+        Button("Cancel", role: .cancel) { teamPendingDelete = nil }
+      } message: {
+        Text("This permanently removes \(teamPendingDelete?.name ?? "this team").")
+      }
     }
     .oakEnamelNav()
     .task(id: isSignedIn) {
-      if isSignedIn { await model.reload() }
+      if isSignedIn {
+        await model.reload()
+        await model.reloadArchived()
+      }
     }
     // A completed sign-in flips `isSignedIn`, which switches the body out of
     // `guestState` on its own — this just drops the now-redundant sheet.
@@ -94,7 +116,7 @@ struct TeamsListView: View {
         TeamSummary(
           id: id,
           name: "Team",
-          format: .nationalDex,
+          format: .champions,
           memberCount: 0,
           incomplete: false,
           species: [],
@@ -118,7 +140,7 @@ struct TeamsListView: View {
 
   @ViewBuilder
   private var listContent: some View {
-    if model.teams.isEmpty {
+    if model.teams.isEmpty && model.archivedTeams.isEmpty {
       if model.isLoading {
         skeletonList
       } else {
@@ -126,32 +148,36 @@ struct TeamsListView: View {
       }
     } else {
       List {
-        ForEach(model.teams) { team in
-          Button {
-            editorTarget = .existing(team)
-          } label: {
-            TeamRow(team: team, model: model)
-          }
-          .buttonStyle(.plain)
-          .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-              Task { await model.delete(team) }
-            } label: {
-              Label("Delete", systemImage: "trash")
+        if !model.teams.isEmpty {
+          Section {
+            ForEach(model.teams) { team in
+              livingRow(team)
             }
           }
-          .contextMenu {
-            rowMenu(for: team)
+        } else if !model.isLoading {
+          Section {
+            Text("No Champions teams yet")
+              .font(Theme.body(.subheadline))
+              .foregroundStyle(Theme.textSecondary)
+              .listRowBackground(Theme.surface)
           }
-          .listRowBackground(Theme.surface)
-          .listRowSeparatorTint(Theme.separator)
+        }
+        if !model.archivedTeams.isEmpty {
+          Section("Archived") {
+            ForEach(model.archivedTeams) { team in
+              archivedRow(team)
+            }
+          }
         }
       }
       .listStyle(.plain)
       .scrollContentBackground(.hidden)
       .background(Theme.canvas)
       .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.teams)
-      .refreshable { await model.reload() }
+      .refreshable {
+        await model.reload()
+        await model.reloadArchived()
+      }
       .overlay(alignment: .bottom) {
         if let message = model.errorMessage {
           ErrorBanner(message: message, onDismiss: { model.dismissError() })
@@ -160,6 +186,54 @@ struct TeamsListView: View {
         }
       }
     }
+  }
+
+  private func livingRow(_ team: TeamSummary) -> some View {
+    Button {
+      editorTarget = .existing(team)
+    } label: {
+      TeamRow(team: team, model: model)
+    }
+    .buttonStyle(.plain)
+    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+      if model.canDelete(team) {
+        Button(role: .destructive) {
+          Task { await model.delete(team) }
+        } label: {
+          Label("Delete", systemImage: "trash")
+        }
+      }
+    }
+    .contextMenu {
+      rowMenu(for: team)
+    }
+    .listRowBackground(Theme.surface)
+    .listRowSeparatorTint(Theme.separator)
+  }
+
+  private func archivedRow(_ team: TeamSummary) -> some View {
+    Button {
+      editorTarget = .existing(team)
+    } label: {
+      TeamRow(team: team, model: model, archived: true)
+    }
+    .buttonStyle(.plain)
+    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+      Button(role: .destructive) {
+        teamPendingDelete = team
+      } label: {
+        Label("Delete", systemImage: "trash")
+      }
+    }
+    .contextMenu {
+      Button(role: .destructive) {
+        teamPendingDelete = team
+      } label: {
+        Label("Delete", systemImage: "trash")
+      }
+    }
+    .listRowBackground(Theme.surface)
+    .listRowSeparatorTint(Theme.separator)
   }
 
   /// Six skeleton rows shown while the first page is loading, replacing the
@@ -178,66 +252,52 @@ struct TeamsListView: View {
 
   @ViewBuilder
   private func rowMenu(for team: TeamSummary) -> some View {
-    Button {
-      editorTarget = .existing(team)
-    } label: {
-      Label("Edit", systemImage: "pencil")
-    }
-    Button {
-      Task {
-        if let created = await model.duplicate(team) {
-          editorTarget = .created(created)
-        }
+    if model.canEdit(team) {
+      Button {
+        editorTarget = .existing(team)
+      } label: {
+        Label("Edit", systemImage: "pencil")
       }
-    } label: {
-      Label("Duplicate", systemImage: "plus.square.on.square")
+    } else {
+      Button {
+        editorTarget = .existing(team)
+      } label: {
+        Label("View", systemImage: "eye")
+      }
     }
-    Button(role: .destructive) {
-      Task { await model.delete(team) }
-    } label: {
-      Label("Delete", systemImage: "trash")
+    if model.canDuplicate(team) {
+      Button {
+        Task {
+          if let created = await model.duplicate(team) {
+            editorTarget = .created(created)
+          }
+        }
+      } label: {
+        Label("Duplicate", systemImage: "plus.square.on.square")
+      }
+    }
+    if model.canDelete(team) {
+      Button(role: .destructive) {
+        if team.isArchived {
+          teamPendingDelete = team
+        } else {
+          Task { await model.delete(team) }
+        }
+      } label: {
+        Label("Delete", systemImage: "trash")
+      }
     }
   }
 
   // MARK: Toolbar menus
 
-  /// All known formats (mirrors the web `/teams` page's format selector, which
-  /// spans `FORMATS` in full) — unlike the history list's 3-way filter, teams
-  /// exist in any of the known scopes so the library filter must too.
-  private var formatFilterMenu: some View {
-    Menu {
-      filterButton(title: "All formats", format: nil)
-      ForEach(Format.knownCases, id: \.self) { format in
-        filterButton(title: format.shortLabel, format: format)
-      }
-    } label: {
-      Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
-    }
-  }
-
-  @ViewBuilder
-  private func filterButton(title: String, format: Format?) -> some View {
-    Button {
-      Task { await model.setFormatFilter(format) }
-    } label: {
-      if model.formatFilter == format {
-        Label(title, systemImage: "checkmark")
-      } else {
-        Text(title)
-      }
-    }
-  }
-
   private var addMenu: some View {
     Menu {
-      ForEach(Format.knownCases, id: \.self) { format in
-        Button {
-          editorTarget = .new(format)
-        } label: {
-          Label("New \(format.shortLabel) team", systemImage: "plus")
-        }
+      Button {
+        editorTarget = .new(.champions)
+      } label: {
+        Label("New Champions team", systemImage: "plus")
       }
-      Divider()
       Button {
         isImporting = true
       } label: {
@@ -288,9 +348,9 @@ struct TeamsListView: View {
   private var emptyState: some View {
     VStack(spacing: 12) {
       OakBrandMark(size: 64)
-      Text(model.formatFilter == nil ? "No teams yet" : "No teams in this format")
+      Text("No teams yet")
         .font(Theme.display(.title3))
-      Text("Create a team with the + button, or import one from Showdown.")
+      Text("Create a Champions team with the + button, or import one from Showdown.")
         .font(Theme.body(.subheadline))
         .foregroundStyle(Theme.textSecondary)
         .multilineTextAlignment(.center)
@@ -333,6 +393,7 @@ private struct TeamRow: View {
   /// The list view model, read for the batch-resolved sprite refs (keyed by species
   /// slug) so filled slots can show Pokémon artwork.
   let model: TeamsListViewModel
+  var archived: Bool = false
 
   var body: some View {
     HStack(spacing: 12) {
@@ -394,7 +455,7 @@ private struct TeamRow: View {
   }
 
   private var formatLabel: String {
-    team.format.shortLabel
+    archived ? "Archived · \(team.format.shortLabel)" : "Champions"
   }
 
   /// Either the filled-slot species (titleized) or a "n/6 Pokémon" count when empty.

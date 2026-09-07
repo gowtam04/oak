@@ -36,6 +36,13 @@ final class CalculatorViewModel {
 
   private let calc: any CalcService
 
+  /// Champions-first: leftover format arguments coerce to Champions.
+  var showsFormatPicker: Bool { false }
+  var showsTeraField: Bool { false }
+  var showsLevelKnob: Bool { false }
+  var showsIVKnobs: Bool { false }
+  var investmentIsStatPoints: Bool { true }
+
   init(
     calc: any CalcService,
     format: Format,
@@ -44,9 +51,9 @@ final class CalculatorViewModel {
     self.calc = calc
     self.presentation = presentation
     self.scenario = CalcScenario(
-      format: format,
-      attacker: CalcSide(),
-      defender: CalcSide(),
+      format: .champions,
+      attacker: CalcSide(level: defaultCalcLevel(format)),
+      defender: CalcSide(level: defaultCalcLevel(format)),
       move: CalcMove()
     )
     self.isPresented = presentation == .fullScreen
@@ -73,7 +80,7 @@ final class CalculatorViewModel {
   }
 
   func applyPrefill(_ hop: CalcScenario) {
-    scenario = hop
+    scenario = championsScenario(hop)
     result = nil
     errorMessage = nil
     isPresented = true
@@ -83,8 +90,8 @@ final class CalculatorViewModel {
     slashRest = rest
     errorMessage = nil
     isPresented = true
-    if let parsed = parseCalcSlashRest(rest, format: scenario.format) {
-      scenario = parsed
+    if let parsed = parseCalcSlashRest(rest, format: .champions) {
+      scenario = championsScenario(parsed)
     }
   }
 
@@ -104,6 +111,7 @@ final class CalculatorViewModel {
   }
 
   func recompute() async {
+    scenario = championsScenario(scenario)
     let next = await calc.estimate(scenario)
     result = next
     if next == nil {
@@ -112,12 +120,22 @@ final class CalculatorViewModel {
       errorMessage = nil
     }
   }
+
+  private func championsScenario(_ hop: CalcScenario) -> CalcScenario {
+    var next = hop
+    next.format = .champions
+    next.attacker.level = 50
+    next.defender.level = 50
+    return next
+  }
 }
 
 /// Best-effort `A [move] vs B` parse for `/calc` rest. Unresolved tokens still
 /// open the overlay (CALC-AC-3.3) — this never errors.
 /// Prefill from an answer `damage_calc` assumptions map (CALC-AC-2.1).
 func scenarioFromDamageCalc(_ calc: DamageCalc, format: Format) -> CalcScenario {
+  _ = format
+  let format = Format.champions
   let a = calc.assumptions
   func species(_ key: String) -> String? {
     switch a[key] {
@@ -128,19 +146,11 @@ func scenarioFromDamageCalc(_ calc: DamageCalc, format: Format) -> CalcScenario 
       return nil
     }
   }
-  func level() -> Int? {
-    switch a["level"] {
-    case .int(let value): return value
-    case .double(let value): return Int(value)
-    default: return nil
-    }
-  }
   let move = species("move")
-  let lvl = level()
   return CalcScenario(
     format: format,
-    attacker: CalcSide(species: species("attacker"), nature: species("nature"), level: lvl),
-    defender: CalcSide(species: species("defender"), level: lvl),
+    attacker: CalcSide(species: species("attacker"), nature: species("nature"), level: 50),
+    defender: CalcSide(species: species("defender"), level: 50),
     move: CalcMove(slug: move, name: move)
   )
 }

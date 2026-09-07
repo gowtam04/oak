@@ -4,9 +4,9 @@ import Testing
 @testable import OakApp
 
 /// `HistoryListViewModel` against `FakeHistoryService` (history-and-teams.md
-/// M-HIST-US-2): loading, server-side search (`?q=`) and format filter (`?format=`),
-/// and the optimistic pin / rename / delete mutations. The view model is
-/// `@MainActor`, so the suite is too.
+/// M-HIST-US-2): loading, server-side search (`?q=`), and the optimistic pin /
+/// rename / delete mutations. Champions-first: leftover `setFormatFilter` must
+/// not refetch another game (CF-UI-AC-1.2). `@MainActor`.
 @MainActor
 struct HistoryListViewModelTests {
 
@@ -76,18 +76,34 @@ struct HistoryListViewModelTests {
     #expect(fake.lastListQuery == nil)
   }
 
-  // MARK: Format filter
+  // MARK: Format filter — Champions-first (CF-UI-AC-1.2 / CF-HIST-AC-1.1)
 
   @Test
-  func setFormatFilterReloadsWithFormat() async {
+  func leftoverFormatFilterDoesNotRefetchAnotherGame() async {
     let fake = FakeHistoryService()
     let vm = HistoryListViewModel(history: fake)
-
-    await vm.setFormatFilter(.champions)
-
-    #expect(vm.formatFilter == .champions)
-    #expect(fake.lastListFormat == .champions)
+    await vm.reload()
+    #expect(fake.lastListFormat == nil)
     #expect(fake.listCount == 1)
+
+    await vm.setFormatFilter(.gen7)
+    #expect(vm.formatFilter != .gen7)
+    #expect(fake.lastListFormat != .gen7)
+    #expect(fake.lastListFormat == nil)
+    #expect(fake.listCount == 1)
+
+    await vm.setFormatFilter(.scarletViolet)
+    #expect(vm.formatFilter != .scarletViolet)
+    #expect(fake.lastListFormat != .scarletViolet)
+    #expect(fake.listCount == 1)
+  }
+
+  @Test
+  func reloadNeverSendsAGenerationFormatFilter() async {
+    let fake = FakeHistoryService()
+    let vm = HistoryListViewModel(history: fake)
+    await vm.reload()
+    #expect(fake.lastListFormat == nil)
   }
 
   @Test
@@ -95,7 +111,6 @@ struct HistoryListViewModelTests {
     let fake = FakeHistoryService()
     let vm = HistoryListViewModel(history: fake)
 
-    // Default filter is already nil ("all"), so selecting "all" again must not refetch.
     await vm.setFormatFilter(nil)
 
     #expect(fake.listCount == 0)

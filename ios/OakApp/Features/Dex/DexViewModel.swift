@@ -34,9 +34,10 @@ final class DexViewModel {
   /// after section/format changes (scheduled immediately via ``reload()``).
   private static let debounceNanoseconds: UInt64 = 280_000_000
 
-  init(dexLookup: any DexLookupService, format: Format = .nationalDex) {
+  init(dexLookup: any DexLookupService, format: Format = .champions) {
     self.dexLookup = dexLookup
-    self.format = format
+    self.format = .champions
+    _ = format
   }
 
   /// Initial load (blank browse for the default section). Call once from the view's
@@ -52,14 +53,13 @@ final class DexViewModel {
   }
 
   func selectFormat(_ next: Format) {
-    guard next != format else { return }
-    format = next
-    reload()
+    // Champions-only Dex: leftover writes must not reopen National Dex / gen-N.
+    _ = next
   }
 
-  /// Writes format first, then queues the entity route (DEX-BR-3).
+  /// Queues the entity route. Format stays Champions (CF-DEX-US-1).
   func applyArtifactHop(_ hop: DexArtifactHop) {
-    format = hop.format
+    format = .champions
     if let section = DexSection(entityKind: hop.kind) {
       self.section = section
     }

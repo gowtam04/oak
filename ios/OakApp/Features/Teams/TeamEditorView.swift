@@ -47,6 +47,17 @@ struct TeamEditorView: View {
   /// When `true`, the editor fetches the full team on appear (existing-team path).
   private let loadsOnAppear: Bool
 
+  private var applyConfirmPresented: Binding<Bool> {
+    Binding(
+      get: { model.pendingApplyConfirm },
+      set: { newValue in
+        if !newValue, model.pendingApplyConfirm {
+          model.cancelApplySet()
+        }
+      }
+    )
+  }
+
   init(model: TeamEditorViewModel, loadsOnAppear: Bool = false) {
     _model = State(initialValue: model)
     self.loadsOnAppear = loadsOnAppear
@@ -87,7 +98,13 @@ struct TeamEditorView: View {
           Section("Team") {
             TextField("Team name", text: $model.name)
               .textInputAutocapitalization(.words)
+              .disabled(model.isReadOnly)
             LabeledContent("Format", value: model.format.displayLabel)
+            if model.isReadOnly {
+              Text("Archived — view and delete only. Stored names that are not in the Champions roster stay labeled in place.")
+                .font(Theme.body(.footnote))
+                .foregroundStyle(Theme.textSecondary)
+            }
           }
 
           ForEach($model.members) { $member in
@@ -100,19 +117,30 @@ struct TeamEditorView: View {
                 abilityOptions: model.abilityOptions(for: member.species),
                 movepoolOptions: model.movepoolOptions(for: member.id),
                 search: model.searchEntities,
+                isReadOnly: model.isReadOnly,
+                showsTeraField: model.showsTeraField,
+                showsIVKnobs: model.showsIVKnobs,
+                showsLevelKnob: model.showsLevelKnob,
+                showsStatPoints: model.showsStatPoints,
+                showsApplyUsageSet: model.showsApplyUsageSet,
+                statPointBudget: model.statPointBudget,
+                statPointStatCap: model.statPointStatCap,
                 onSpeciesChange: {
                   Task {
                     await model.refreshSprites()
                     await model.refreshMovepool(for: member.id)
                   }
                 },
-                onRemove: { model.removeMember(at: index) }
+                onRemove: { model.removeMember(at: index) },
+                onApplyUsageSet: {
+                  Task { await model.fetchAndApplyUsageSet(toSlot: index) }
+                }
               )
               .id(member.id)
             }
           }
 
-          if model.canAddMember {
+          if model.canAddMember && !model.isReadOnly {
             Section {
               Button {
                 model.addMember()
@@ -147,40 +175,42 @@ struct TeamEditorView: View {
       .background(Theme.canvas)
       .listRowBackground(Theme.surface)
       .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.warnings)
-      .navigationTitle(model.savedTeam == nil ? "New team" : "Edit team")
+      .navigationTitle(
+        model.isReadOnly ? "Archived team" : (model.savedTeam == nil ? "New team" : "Edit team")
+      )
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button {
-            openAssistant()
-          } label: {
-            Label("Team assistant", systemImage: "sparkles")
-          }
-          .foregroundStyle(Theme.onRed)
-        }
-        .oakLidItem()
-        // Layout workaround: keep trailing items from merging into one
-        // capsule. Not glass identity — enamel lid chrome stays opaque paint.
-        if #available(iOS 26.0, *) {
-          ToolbarSpacer(.fixed, placement: .topBarTrailing)
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-          if model.isSaving {
-            ProgressView()
-              .tint(Theme.onRed)
-          } else {
-            Button("Save") {
-              Task { await saveAndConfirm() }
+        if !model.isReadOnly {
+          ToolbarItem(placement: .topBarTrailing) {
+            Button {
+              openAssistant()
+            } label: {
+              Label("Team assistant", systemImage: "sparkles")
             }
-            .font(Theme.body(.subheadline, weight: .semibold))
             .foregroundStyle(Theme.onRed)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Theme.onRed.opacity(0.16), in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.onRed.opacity(0.45), lineWidth: 1))
           }
+          .oakLidItem()
+          if #available(iOS 26.0, *) {
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+          }
+          ToolbarItem(placement: .topBarTrailing) {
+            if model.isSaving {
+              ProgressView()
+                .tint(Theme.onRed)
+            } else if model.canSave {
+              Button("Save") {
+                Task { await saveAndConfirm() }
+              }
+              .font(Theme.body(.subheadline, weight: .semibold))
+              .foregroundStyle(Theme.onRed)
+              .padding(.horizontal, 12)
+              .padding(.vertical, 6)
+              .background(Theme.onRed.opacity(0.16), in: Capsule())
+              .overlay(Capsule().strokeBorder(Theme.onRed.opacity(0.45), lineWidth: 1))
+            }
+          }
+          .oakLidItem()
         }
-        .oakLidItem()
         if model.teamId != nil {
           ToolbarItem(placement: .topBarLeading) {
             Button {
@@ -200,7 +230,25 @@ struct TeamEditorView: View {
           ErrorBanner(message: message, onDismiss: { model.dismissError() })
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.bottom, Theme.Spacing.sm)
+        } else if let message = model.applySetUnavailableMessage {
+          ErrorBanner(message: message, onDismiss: { })
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.bottom, Theme.Spacing.sm)
         }
+      }
+      .confirmationDialog(
+        "Replace this Pokémon with the live Champions set?",
+        isPresented: applyConfirmPresented,
+        titleVisibility: .visible
+      ) {
+        Button("Replace") {
+          model.applyPendingSetImmediately()
+        }
+        Button("Cancel", role: .cancel) {
+          model.cancelApplySet()
+        }
+      } message: {
+        Text("This replaces the whole slot. It is not a per-field merge.")
       }
       .overlay(alignment: .top) {
         if showSaveConfirmation {
@@ -342,10 +390,19 @@ private struct MemberEditorSection: View {
   /// Backs the species/item pickers' network search (routed through the owning
   /// ``TeamEditorViewModel``, never touching ``DexLookupService`` directly).
   let search: (EntityKind, String) async -> [PickerOption]
+  let isReadOnly: Bool
+  let showsTeraField: Bool
+  let showsIVKnobs: Bool
+  let showsLevelKnob: Bool
+  let showsStatPoints: Bool
+  let showsApplyUsageSet: Bool
+  let statPointBudget: Int
+  let statPointStatCap: Int
   /// Fired whenever `member.species` changes, so the owner can re-resolve sprites/
   /// movepool for the new (or cleared) species.
   let onSpeciesChange: () -> Void
   let onRemove: () -> Void
+  let onApplyUsageSet: () -> Void
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -363,25 +420,40 @@ private struct MemberEditorSection: View {
       VStack(alignment: .leading, spacing: 16) {
         identityHeader
         identityFields
+        if showsApplyUsageSet, !member.species.isEmpty {
+          Button("Apply this Champions set", action: onApplyUsageSet)
+            .font(Theme.body(.subheadline, weight: .medium))
+        }
         moveFields
         naturePicker
-        teraPicker
-        Stepper(value: $member.level, in: 1...100) {
+        if showsTeraField {
+          teraPicker
+        }
+        if showsLevelKnob {
+          Stepper(value: $member.level, in: 1...100) {
+            LabeledContent("Level", value: "\(member.level)")
+          }
+        } else if isReadOnly {
           LabeledContent("Level", value: "\(member.level)")
+        } else {
+          LabeledContent("Level", value: "50")
         }
         StatStepperGrid(
-          title: "EVs",
+          title: showsStatPoints ? "Stat Points" : "EVs",
           spread: $member.evs,
-          range: 0...252,
-          step: 4,
+          range: showsStatPoints ? 0...statPointStatCap : 0...252,
+          step: showsStatPoints ? 1 : 4,
           footnote: evFootnote
         )
-        StatStepperGrid(
-          title: "IVs",
-          spread: $member.ivs,
-          range: 0...31,
-          step: 1
-        )
+        .disabled(isReadOnly)
+        if showsIVKnobs {
+          StatStepperGrid(
+            title: "IVs",
+            spread: $member.ivs,
+            range: 0...31,
+            step: 1
+          )
+        }
         cosmeticFields
 
         if !warnings.isEmpty {
@@ -413,14 +485,17 @@ private struct MemberEditorSection: View {
       HStack {
         Text(headerTitle)
         Spacer()
-        Button(role: .destructive, action: onRemove) {
-          Label("Remove", systemImage: "trash")
-            .labelStyle(.iconOnly)
+        if !isReadOnly {
+          Button(role: .destructive, action: onRemove) {
+            Label("Remove", systemImage: "trash")
+              .labelStyle(.iconOnly)
+          }
+          .accessibilityLabel("Remove Pokémon \(index + 1)")
         }
-        .accessibilityLabel("Remove Pokémon \(index + 1)")
       }
     }
     .onChange(of: member.species) { _, _ in onSpeciesChange() }
+    .disabled(isReadOnly)
   }
 
   /// One-shot entrance for a newly-surfaced per-slot legality warning.
@@ -450,6 +525,11 @@ private struct MemberEditorSection: View {
               ForEach(types, id: \.self) { TypeBadge(type: $0) }
             }
           }
+          if isOffRoster(field: "species") {
+            Text("not in the Champions roster")
+              .font(Theme.body(.caption))
+              .foregroundStyle(Theme.warning)
+          }
         }
         Spacer(minLength: 0)
       }
@@ -475,6 +555,7 @@ private struct MemberEditorSection: View {
       search: search,
       onChange: { member.species = $0 }
     )
+    offRosterNote(field: "species")
     EntityPickerRow(
       title: "Ability",
       value: member.ability,
@@ -484,6 +565,7 @@ private struct MemberEditorSection: View {
       search: search,
       onChange: { member.ability = $0 }
     )
+    offRosterNote(field: "ability")
     EntityPickerRow(
       title: requiredItem != nil ? "Item (Mega stone)" : "Item",
       value: member.item,
@@ -493,6 +575,7 @@ private struct MemberEditorSection: View {
       search: search,
       onChange: { member.item = $0 }
     )
+    offRosterNote(field: "item")
   }
 
   @ViewBuilder
@@ -550,14 +633,47 @@ private struct MemberEditorSection: View {
     Toggle("Shiny", isOn: $member.shiny)
   }
 
-  /// EV-budget footnote — informational, never blocking. Over 508 is the same advisory
-  /// the server flags (M-AC-T3.1).
+  @ViewBuilder
+  private func offRosterNote(field: String) -> some View {
+    if isOffRoster(field: field) {
+      Text("not in the Champions roster")
+        .font(Theme.body(.caption))
+        .foregroundStyle(Theme.warning)
+    }
+  }
+
+  private func isOffRoster(field: String) -> Bool {
+    guard isReadOnly else { return false }
+    if warnings.contains(where: { warning in
+      let matchesField =
+        warning.field == field
+        || (field == "species"
+          && (warning.field == nil || warning.code == .speciesIllegal))
+      return matchesField
+        && (warning.code == .speciesIllegal
+          || warning.message.localizedCaseInsensitiveContains("not in the Champions roster"))
+    }) {
+      return true
+    }
+    if field == "species", !member.species.isEmpty, spriteRef == nil { return true }
+    if field != "species", isOffRoster(field: "species") {
+      switch field {
+      case "ability": return !member.ability.isEmpty
+      case "item": return !member.item.isEmpty
+      default: return false
+      }
+    }
+    return false
+  }
+
+  /// EV / Stat Point budget footnote — informational, never blocking.
   private var evFootnote: String {
     let total = member.evs.total
-    if total > 508 {
-      return "Total \(total) / 508 — over the legal budget (saved anyway)."
+    let budget = showsStatPoints ? statPointBudget : 508
+    if total > budget {
+      return "Total \(total) / \(budget) — over the legal budget (saved anyway)."
     }
-    return "Total \(total) / 508"
+    return "Total \(total) / \(budget)"
   }
 
   /// A slug/search text field with no autocapitalization/autocorrection (slugs are

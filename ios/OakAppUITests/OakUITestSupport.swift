@@ -63,15 +63,15 @@ enum OakUITest {
 
   // MARK: Visible-label targets (mirror the app's labels)
 
-  /// Tab-bar button labels (`RootView`). The app ships FOUR tabs — Chat, Teams, Dex,
-  /// and Settings. History folded into the Chat tab (signed-in users see a conversation
-  /// list there); Settings is a first-class tab (no intermediate More list).
+  /// Tab-bar button labels (`RootView`). Five tabs: Chat / Teams / Usage / Dex /
+  /// Settings. Calc stays a cover (ADR-6). History is folded into Chat.
   enum Tab {
     static let chat = "Chat"
     static let teams = "Teams"
+    static let usage = "Usage"
     static let dex = "Dex"
     static let account = "Settings"
-    static let all = [chat, teams, dex, account]
+    static let all = [chat, teams, usage, dex, account]
   }
 
   /// Chat surface (`ChatView` / `ComposerView`).

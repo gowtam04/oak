@@ -26,11 +26,11 @@ final class AppState {
   /// here with a lightweight turn model; P6 populates it as the chat streams.
   var guestThread: [GuestTurn] = []
 
-  /// The guest thread's resolved data scope (GS-C), mirrored from the chat
-  /// reducer's `scope` events so the guest→sign-in import can persist the thread
-  /// under the scope it actually ran in. Defaults to national-dex (the server
-  /// default) until a turn resolves otherwise; reset with the guest thread.
-  var guestThreadScope: Format = .nationalDex
+  /// The guest thread's resolved data scope, mirrored from the chat reducer's
+  /// `scope` events so the guest→sign-in import can persist the thread under
+  /// the scope it actually ran in. Champions-first: defaults to Champions
+  /// (CF-DATA-BR-1); leftover other-format values are not used to pick a game.
+  var guestThreadScope: Format = .champions
 
   /// Signed-in account's last-used game scope for NEW chats (from `GET /api/auth/me`
   /// + every subsequent `scope` event while signed in). Survives New Chat so the
@@ -265,6 +265,8 @@ enum AppDestination: Equatable, Sendable {
   case calculator(CalcScenario?)
   case conversation(id: String)
   case share(id: String)
+  /// Usage tab (ADR-6). Optional species slug for a drill-in.
+  case usage(slug: String?)
 }
 
 /// One turn of the in-memory guest thread (session-only, never persisted).

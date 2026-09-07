@@ -106,7 +106,7 @@ struct TeamsListViewModelTests {
     await vm.reload()
 
     #expect(Set(vm.teams.map(\.id)) == ["ch"])
-    #expect(vm.teams.allSatisfy(\.isLiving))
+    #expect(vm.teams.allSatisfy { $0.isLiving })
     #expect(fake.lastListArchived == false || fake.lastListFormat == .champions)
   }
 
@@ -294,7 +294,7 @@ struct TeamsListViewModelTests {
 
     #expect(vm.teams.map(\.id) == ["ch"])
     #expect(vm.teams.allSatisfy { $0.format == .champions })
-    #expect(vm.teams.allSatisfy(\.isLiving))
+    #expect(vm.teams.allSatisfy { $0.isLiving })
     #expect(fake.lastListArchived == false)
   }
 
@@ -310,7 +310,7 @@ struct TeamsListViewModelTests {
     await vm.reloadArchived()
 
     #expect(Set(vm.archivedTeams.map(\.id)) == ["sv", "g7"])
-    #expect(vm.archivedTeams.allSatisfy(\.isArchived))
+    #expect(vm.archivedTeams.allSatisfy { $0.isArchived })
     #expect(vm.archivedTeams.allSatisfy { $0.format != .champions })
     #expect(fake.lastListArchived == true)
     #expect(vm.teams.map(\.id) == ["ch"])

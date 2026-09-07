@@ -74,6 +74,7 @@ struct CalculatorViewModelTests {
     #expect(vm.presentation == .fullScreen)
     #expect(vm.scenario.format == .champions)
     #expect(vm.showsFormatPicker == false)
+    #expect(vm.showsTeraField == false)
     #expect(vm.showsLevelKnob == false)
     #expect(vm.showsIVKnobs == false)
     #expect(vm.investmentIsStatPoints)
@@ -93,6 +94,7 @@ struct CalculatorViewModelTests {
 
     #expect(vm.scenario.format == .champions)
     #expect(vm.showsFormatPicker == false)
+    #expect(vm.showsTeraField == false)
     #expect(defaultCalcLevel(vm.scenario.format) == 50)
 
     vm.applyPrefill(completeScenario(format: .gen7))

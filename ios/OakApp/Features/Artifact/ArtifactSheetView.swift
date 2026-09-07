@@ -19,7 +19,6 @@ struct ArtifactSheetView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(AppState.self) private var appState
   @State private var compareSpecies = ""
-  @State private var compareFormat: Format = .nationalDex
   @State private var showingCompare = false
   /// Mirrors the back-stack depth of the *previous* render so the drill transition can tell a
   /// push (depth grew → new content slides in from the trailing edge) from a back (depth shrank →
@@ -72,7 +71,6 @@ struct ArtifactSheetView: View {
             }
             if case .entity(let ok)? = model.current?.content, ok.kind == .pokemon {
               Button {
-                compareFormat = model.requestFormat
                 showingCompare = true
               } label: {
                 Label("Compare with…", systemImage: "rectangle.split.2x1")
@@ -98,11 +96,6 @@ struct ArtifactSheetView: View {
         Form {
           TextField("Species", text: $compareSpecies)
             .textInputAutocapitalization(.never)
-          Picker("Scope", selection: $compareFormat) {
-            ForEach(Format.knownCases, id: \.self) { format in
-              Text(format.displayLabel).tag(format)
-            }
-          }
           if let message = model.compareErrorMessage {
             Text(message).foregroundStyle(Theme.warning)
           }
@@ -117,7 +110,7 @@ struct ArtifactSheetView: View {
             Button("Compare") {
               let species = compareSpecies
               Task {
-                await model.compareWith(species: species, format: compareFormat)
+                await model.compareWith(species: species, format: .champions)
                 if model.compareErrorMessage == nil {
                   compareSpecies = ""
                   showingCompare = false

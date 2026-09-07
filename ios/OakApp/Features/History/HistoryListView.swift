@@ -62,9 +62,6 @@ struct ConversationListView: View {
     VStack(spacing: 0) {
       searchField($model.searchQuery)
       includeArchivedToggle
-      if let filter = model.formatFilter {
-        activeFilterPill(filter)
-      }
       listContent
     }
     .background(Theme.canvas)
@@ -79,7 +76,6 @@ struct ConversationListView: View {
             model.isSelecting.toggle()
             if !model.isSelecting { /* selection cleared on Done via bulk */ }
           }
-          formatFilterMenu
         }
       }
     }
@@ -189,7 +185,7 @@ struct ConversationListView: View {
     .shadow(color: searchFocused ? Theme.accent.opacity(0.18) : .clear, radius: 4)
     .padding(.horizontal, Theme.Spacing.lg)
     .padding(.top, Theme.Spacing.sm)
-    .padding(.bottom, model.formatFilter == nil ? Theme.Spacing.sm : Theme.Spacing.xs)
+    .padding(.bottom, Theme.Spacing.sm)
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: searchFocused)
   }
 
@@ -205,35 +201,6 @@ struct ConversationListView: View {
           Task { await model.search() }
         }
     }
-  }
-
-  // MARK: Active filter cue (dismissible scope pill, §5.4)
-
-  /// A dismissible pill naming the active format filter; tapping the ✕ clears it.
-  /// The toolbar filter icon is also tinted/filled while a filter is on.
-  private func activeFilterPill(_ format: Format) -> some View {
-    HStack(spacing: Theme.Spacing.xs) {
-      Text(format.shortLabel)
-        .instrumentLabel(.caption2)
-        .foregroundStyle(Theme.accent)
-      Button {
-        Task { await model.setFormatFilter(nil) }
-      } label: {
-        Image(systemName: "xmark")
-          .font(.system(size: 9, weight: .bold))
-          .foregroundStyle(Theme.accent)
-      }
-      .accessibilityLabel("Clear \(format.shortLabel) filter")
-    }
-    .padding(.horizontal, Theme.Spacing.sm)
-    .padding(.vertical, 5)
-    .background(Theme.accentSoft, in: Capsule())
-    .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1))
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, Theme.Spacing.lg)
-    .padding(.bottom, Theme.Spacing.sm)
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel("Filtered to \(format.shortLabel)")
   }
 
   // MARK: New-chat FAB (§5.4)
@@ -497,39 +464,6 @@ struct ConversationListView: View {
     .background(Theme.canvas)
   }
 
-  /// Format filter spanning every known scope (`Format.knownCases`) — mirrors the
-  /// Teams list's filter and `FORMATS` in full so every conversation scope is
-  /// reachable from the history list. The icon fills + tints accent while a filter
-  /// is active (paired with the dismissible pill — never color alone).
-  private var formatFilterMenu: some View {
-    Menu {
-      filterButton(title: "All", format: nil)
-      ForEach(Format.knownCases, id: \.self) { format in
-        filterButton(title: format.shortLabel, format: format)
-      }
-    } label: {
-      Label(
-        "Filter",
-        systemImage: model.formatFilter == nil
-          ? "line.3.horizontal.decrease.circle"
-          : "line.3.horizontal.decrease.circle.fill"
-      )
-    }
-  }
-
-  @ViewBuilder
-  private func filterButton(title: String, format: Format?) -> some View {
-    Button {
-      Task { await model.setFormatFilter(format) }
-    } label: {
-      if model.formatFilter == format {
-        Label(title, systemImage: "checkmark")
-      } else {
-        Text(title)
-      }
-    }
-  }
-
   // MARK: Empty / error states
 
   private var emptyState: some View {
@@ -553,7 +487,6 @@ struct ConversationListView: View {
 
   private var searchActive: Bool {
     !model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-      || model.formatFilter != nil
   }
 
   // MARK: Rename alert binding

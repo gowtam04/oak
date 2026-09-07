@@ -19,8 +19,11 @@ final class TeamsListViewModel {
 
   // MARK: List state
 
-  /// The visible team summaries, most-recently-edited first (the server's order).
+  /// The visible living Champions team summaries, most-recently-edited first.
   private(set) var teams: [TeamSummary] = []
+
+  /// Archived other-format teams (`GET /api/teams?archived=1`). View + delete only.
+  private(set) var archivedTeams: [TeamSummary] = []
 
   /// `true` while a list fetch is in flight (drives the refresh spinner).
   private(set) var isLoading: Bool = false
@@ -53,15 +56,14 @@ final class TeamsListViewModel {
 
   // MARK: Loading
 
-  /// (Re)loads the team list with the current filter — the initial load,
-  /// pull-to-refresh, and the re-fetch after a filter change all route through here.
-  /// Never throws: a failure surfaces as ``errorMessage`` and leaves the prior list.
+  /// (Re)loads the living Champions list. Never throws: a failure surfaces as
+  /// ``errorMessage`` and leaves the prior list.
   func reload() async {
     isLoading = true
     errorMessage = nil
     defer { isLoading = false }
     do {
-      teams = try await teamService.list(format: formatFilter)
+      teams = try await teamService.list(archived: false)
     } catch let error as OakError {
       errorMessage = Self.message(for: error)
     } catch {
@@ -69,6 +71,23 @@ final class TeamsListViewModel {
     }
     await hydrateSprites()
   }
+
+  /// Loads archived other-format teams (`GET /api/teams?archived=1`).
+  func reloadArchived() async {
+    do {
+      archivedTeams = try await teamService.list(archived: true)
+    } catch let error as OakError {
+      errorMessage = Self.message(for: error)
+    } catch {
+      errorMessage = Self.genericMessage
+    }
+    await hydrateSprites()
+  }
+
+  func canEdit(_ summary: TeamSummary) -> Bool { summary.isLiving }
+  func canDuplicate(_ summary: TeamSummary) -> Bool { summary.isLiving }
+  func canApplySet(_ summary: TeamSummary) -> Bool { summary.isLiving }
+  func canDelete(_ summary: TeamSummary) -> Bool { true }
 
   /// Batch-resolves sprite refs for every distinct species across the loaded teams so
   /// the rows can render Pokémon artwork instead of dots. Batches one call per distinct
@@ -78,22 +97,17 @@ final class TeamsListViewModel {
   /// blocks or errors the list (M-AC-1.4). Replaces the map wholesale each load so refs
   /// for teams no longer in the list are dropped.
   private func hydrateSprites() async {
-    var byFormat: [Format: Set<String>] = [:]
-    for team in teams {
+    var names: Set<String> = []
+    for team in teams + archivedTeams {
       for species in team.species where !species.isEmpty {
-        byFormat[team.format, default: []].insert(species)
+        names.insert(species)
       }
     }
-    guard !byFormat.isEmpty else {
+    guard !names.isEmpty else {
       spriteRefsBySpecies = [:]
       return
     }
-    var merged: [String: DexSpriteRef] = [:]
-    for (format, species) in byFormat {
-      let refs = await dexLookup.sprites(names: Array(species), format: format)
-      merged.merge(refs) { _, new in new }
-    }
-    spriteRefsBySpecies = merged
+    spriteRefsBySpecies = await dexLookup.sprites(names: Array(names), format: .champions)
   }
 
   /// The resolved sprite ref for a species slug, or `nil` when unresolved (the row then
@@ -102,10 +116,11 @@ final class TeamsListViewModel {
     species.isEmpty ? nil : spriteRefsBySpecies[species]
   }
 
-  /// Switches the format filter and re-fetches (M-TEAM-US-6). A no-op when unchanged.
+  /// Leftover trampoline — there is no format picker. Other-game values cannot
+  /// reopen a gen-N living list (CF-TEAM-AC-1.7).
   func setFormatFilter(_ format: Format?) async {
-    guard format != formatFilter else { return }
-    formatFilter = format
+    _ = format
+    formatFilter = nil
     await reload()
   }
 
@@ -116,8 +131,9 @@ final class TeamsListViewModel {
   /// editor), or `nil` on failure. `name == nil` ⇒ the server's default name.
   @discardableResult
   func createTeam(format: Format, name: String? = nil) async -> Team? {
+    _ = format
     do {
-      let (team, _) = try await teamService.create(format: format, name: name, members: nil)
+      let (team, _) = try await teamService.create(format: .champions, name: name, members: nil)
       insertOrReplace(TeamSummary(team: team))
       return team
     } catch let error as OakError {
@@ -132,6 +148,7 @@ final class TeamsListViewModel {
   /// Duplicates a team (M-TEAM-US-6) and inserts the copy's summary at the top.
   @discardableResult
   func duplicate(_ summary: TeamSummary) async -> Team? {
+    guard canDuplicate(summary) else { return nil }
     do {
       let (team, _) = try await teamService.duplicate(id: summary.id)
       insertOrReplace(TeamSummary(team: team))
@@ -150,16 +167,20 @@ final class TeamsListViewModel {
   /// restores the row and surfaces an error.
   func delete(_ summary: TeamSummary) async {
     let snapshot = teams
+    let archivedSnapshot = archivedTeams
     teams.removeAll { $0.id == summary.id }
+    archivedTeams.removeAll { $0.id == summary.id }
     do {
       try await teamService.delete(id: summary.id)
     } catch OakError.http(let status, _, _) where status == 404 {
       // Already deleted on the server — keep it removed (idempotent).
     } catch let error as OakError {
       teams = snapshot
+      archivedTeams = archivedSnapshot
       errorMessage = Self.message(for: error)
     } catch {
       teams = snapshot
+      archivedTeams = archivedSnapshot
       errorMessage = Self.genericMessage
     }
   }
@@ -175,7 +196,7 @@ final class TeamsListViewModel {
   func applyProposed(_ proposed: ProposedTeam) async -> Team? {
     do {
       let (team, _) = try await teamService.create(
-        format: proposed.format,
+        format: .champions,
         name: proposed.name,
         members: proposed.members
       )
@@ -196,7 +217,8 @@ final class TeamsListViewModel {
   @discardableResult
   func importPaste(_ paste: String, format: Format) async -> (team: Team, notes: [ImportNote])? {
     do {
-      let (team, _, notes) = try await teamService.importPaste(format: format, paste: paste)
+      _ = format
+      let (team, _, notes) = try await teamService.importPaste(format: .champions, paste: paste)
       insertOrReplace(TeamSummary(team: team))
       return (team, notes)
     } catch let error as OakError {
@@ -218,7 +240,8 @@ final class TeamsListViewModel {
   /// An editor for a brand-new, unsaved team in `format` (the "+" flow). The editor's
   /// own Save persists it; the list reloads on return.
   func makeEditor(forNewTeam format: Format) -> TeamEditorViewModel {
-    TeamEditorViewModel(teamService: teamService, dexLookup: dexLookup, format: format)
+    _ = format
+    return TeamEditorViewModel(teamService: teamService, dexLookup: dexLookup, format: .champions)
   }
 
   /// An editor for an existing team (by summary); the editor's ``TeamEditorViewModel/load()``
