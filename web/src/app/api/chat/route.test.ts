@@ -262,6 +262,19 @@ function boundMode(): unknown {
   return (captured.options as Record<string, unknown> | null)?.mode;
 }
 
+async function pollUntil<T>(
+  read: () => Promise<T>,
+  pred: (value: T) => boolean,
+  ticks = 50,
+): Promise<T> {
+  let value = await read();
+  for (let i = 0; i < ticks && !pred(value); i++) {
+    await new Promise((r) => setTimeout(r, 10));
+    value = await read();
+  }
+  return value;
+}
+
 describe("POST /api/chat — no active-team seam", () => {
   it("ignores a legacy active_team_id field and never binds an active team", async () => {
     signedIn(ACCT_A);
@@ -845,6 +858,12 @@ describe("POST /api/chat — Champions-first TurnScope (P1)", () => {
     // Sticky other-game conversation format is not used to pick data.
     expect(text).not.toContain('"source":"conversation"');
     expect(text).not.toContain('"format":"gen-7"');
+
+    const conv = await pollUntil(
+      () => convRepo.getConversation(ACCT_A, "old-gen7-thread"),
+      (c) => c?.format === "champions",
+    );
+    expect(conv?.format).toBe("champions");
   });
 
   it("after that new message, a follow-up is still Champions (CF-CHAT-AC-3.3)", async () => {
@@ -862,6 +881,12 @@ describe("POST /api/chat — Champions-first TurnScope (P1)", () => {
       format: "champions",
       source: "default",
     });
+    expect(
+      (await pollUntil(
+        () => convRepo.getConversation(ACCT_A, "old-natdex-thread"),
+        (c) => c?.format === "champions",
+      ))?.format,
+    ).toBe("champions");
 
     const text2 = await readBody(
       await post({
@@ -892,6 +917,12 @@ describe("POST /api/chat — Champions-first TurnScope (P1)", () => {
       source: "default",
     });
     expect(mockRunOak).toHaveBeenCalled();
+    expect(
+      await pollUntil(
+        () => getSessionScope("guest-sticky-gen7"),
+        (scope) => scope === "champions",
+      ),
+    ).toBe("champions");
   });
 
   it("guest chat still works and is Champions (CF-AUTH-AC-1.1, CF-DATA-BR-1)", async () => {

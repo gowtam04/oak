@@ -21,12 +21,31 @@ import { oakAnswerSchema, type OakAnswer } from "@/agent/schemas";
 // a guest (null) directly — this test asserts SSE framing as a guest, and keeps
 // the real db/auth chain (server-only, cookies()) out of the node test entirely.
 vi.mock("server-only", () => ({}));
+
+const cu = vi.hoisted(() => ({
+  getCurrentAccount: vi.fn(async (): Promise<unknown> => null),
+}));
 vi.mock("@/server/auth/current-user", () => ({
-  getCurrentAccount: vi.fn(async () => null),
+  getCurrentAccount: () => cu.getCurrentAccount(),
 }));
 vi.mock("@/server/spend-control", () => ({
   admitAgentTurn: vi.fn(async () => ({ ok: true })),
   assertNotDenylisted: vi.fn(async () => ({ ok: true })),
+}));
+
+const bound = vi.hoisted(() => ({
+  resolveBoundTeams: vi.fn(),
+}));
+vi.mock("@/server/chat/bound-teams", () => ({
+  resolveBoundTeams: (accountId: string, ids: string[]) =>
+    bound.resolveBoundTeams(accountId, ids),
+}));
+vi.mock("@/data/repos/conversation-repo", () => ({
+  getConversation: vi.fn(async () => null),
+  getMessages: vi.fn(async () => []),
+  appendTurnPair: vi.fn(async () => {}),
+  updateConversationFormat: vi.fn(async () => {}),
+  newTurnId: () => "test-turn-id",
 }));
 
 // --- Mock the runtime + context so the route never opens SQLite / hits the model.
@@ -159,6 +178,9 @@ function rawOf(events: SseEvent[]): string {
 
 beforeEach(async () => {
   mockRunOak.mockReset();
+  cu.getCurrentAccount.mockReset();
+  cu.getCurrentAccount.mockResolvedValue(null);
+  bound.resolveBoundTeams.mockReset();
   await _resetStoreForTests();
   await resetTurnStore();
   process.env.ANTHROPIC_API_KEY = SECRET;
@@ -609,6 +631,34 @@ describe("POST /api/chat — Champions-first TurnScope", () => {
       source: "default",
     });
     expect(boundMode()).toBe("champions");
+  });
+
+  it("an archived / other-format mention is 400 unbound_mention (CF-CHAT-AC-3.4)", async () => {
+    const archivedId = "00000000-0000-4000-8000-000000000099";
+    cu.getCurrentAccount.mockResolvedValue({
+      id: "acct-a",
+      email: "a@x.test",
+      createdAt: 0,
+      lastUsedScope: null,
+    });
+    bound.resolveBoundTeams.mockResolvedValue({
+      ok: true,
+      teams: [{ id: archivedId, name: "Old rain", format: "gen-7" }],
+    });
+
+    const res = await post({
+      session_id: "s-arch-mention",
+      message: "use @Old rain",
+      mentioned_team_ids: [archivedId],
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual(
+      expect.objectContaining({
+        error: "unbound_mention",
+        id: archivedId,
+      }),
+    );
+    expect(mockRunOak).not.toHaveBeenCalled();
   });
 
   it("a named Gen 3 catch question still runs as Champions (CF-CHAT-AC-1.1, CF-DATA-BR-7)", async () => {
