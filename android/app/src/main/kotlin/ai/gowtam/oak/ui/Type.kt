@@ -9,99 +9,114 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 /**
- * Oak's brand typefaces (Signal: Figtree + IBM Plex Mono; `docs/design/signal.md`
- * §3.2). The static TTFs live under `res/font/` (OFL, license files bundled in
- * `assets/fonts-licenses/`).
+ * Oak's brand typefaces (Enamel & Paper: Fredoka + Nunito Sans + JetBrains Mono;
+ * `docs/design/enamel-paper.md` Typefaces / Native packaging). The static TTFs live
+ * under `res/font/` (OFL, license files bundled in `assets/fonts-licenses/`).
  *
- * One sans, one mono. Figtree carries display, lead, prose, rows, buttons, and
- * chrome labels. IBM Plex Mono appears only in fact tables, damage breakdowns,
- * and source keys — applied per call-site via [PlexMonoFamily] (exported as
- * [JetBrainsMonoFamily] this phase so existing sites compile).
+ * Display (wordmark, empty-landing title, section chrome) is Fredoka. Body / UI is
+ * Nunito Sans. JetBrains Mono appears only in fact tables, damage breakdowns, OTP
+ * digits, and source keys — applied per call-site via [JetBrainsMonoFamily].
+ *
+ * [FigtreeFamily] / [InterFamily] / [SpaceGroteskFamily] alias [NunitoSansFamily]
+ * so leftover call sites compile through PR1; unused faces are deleted in PR6.
  *
  * Every role still sizes in `sp`, so the whole ramp scales with the user's system
  * font-size setting.
  */
 
-/** Signal sans — wordmark, titles, lead, body, chips, chrome labels. */
-val FigtreeFamily = FontFamily(
-    Font(R.font.figtree_regular, FontWeight.Normal),
-    Font(R.font.figtree_medium, FontWeight.Medium),
-    Font(R.font.figtree_semibold, FontWeight.SemiBold),
+/** Display — wordmark, empty-landing title, disclosure / auth titles. */
+val FredokaFamily = FontFamily(
+    Font(R.font.fredoka_medium, FontWeight.Medium),
+    Font(R.font.fredoka_semibold, FontWeight.SemiBold),
 )
 
-/** Signal mono — fact tables, damage, source keys. */
+/** Body / UI — prose, composer, chips, buttons, chrome labels. */
+val NunitoSansFamily = FontFamily(
+    Font(R.font.nunito_sans_regular, FontWeight.Normal),
+    Font(R.font.nunito_sans_medium, FontWeight.Medium),
+    Font(R.font.nunito_sans_semibold, FontWeight.SemiBold),
+    Font(R.font.nunito_sans_bold, FontWeight.Bold),
+)
+
+/** Mono — fact tables, damage, OTP, dex numbers. */
+val JetBrainsMonoFamily = FontFamily(
+    Font(R.font.jetbrains_mono_medium, FontWeight.Medium),
+    Font(R.font.jetbrains_mono_semibold, FontWeight.SemiBold),
+)
+
+/** Kept defined through PR1 — files still exist; unused faces go in PR6. */
 val PlexMonoFamily = FontFamily(
     Font(R.font.ibm_plex_mono_regular, FontWeight.Normal),
     Font(R.font.ibm_plex_mono_medium, FontWeight.Medium),
 )
 
-/** Alias — Figtree this phase so existing display call-sites compile. */
-val SpaceGroteskFamily = FigtreeFamily
+/** PR1 alias — leftover display call-sites compile against Nunito Sans. */
+val FigtreeFamily = NunitoSansFamily
 
-/** Alias — Figtree this phase so existing body call-sites compile. */
-val InterFamily = FigtreeFamily
+/** PR1 alias — leftover display call-sites compile against Nunito Sans. */
+val SpaceGroteskFamily = NunitoSansFamily
 
-/** Alias — Plex this phase so existing table/damage call-sites compile. */
-val JetBrainsMonoFamily = PlexMonoFamily
+/** PR1 alias — leftover body call-sites compile against Nunito Sans. */
+val InterFamily = NunitoSansFamily
 
 /**
  * Oak's type ramp, keyed to the web `--text-*` scale (11 / 12 / 13 / 14 / 18 / 22 / 28)
- * and Signal §3.2. Roles fall into two voices:
+ * and Enamel & Paper typefaces:
  *
- * - **Figtree (sans):** `displaySmall` (wordmark/hero), `headlineSmall` /
- *   `titleLarge` (screen + section titles), `headlineMedium` (answer lead),
- *   and the rest of the body/label roles (prose, rows, controls). Display
- *   roles ≥18sp keep a tightened `-0.02em` tracking.
- * - **labelSmall** is Figtree Medium — Signal reserves mono for fact tables
+ * - **Fredoka (display):** `displaySmall` (wordmark/hero), `headlineSmall` /
+ *   `titleLarge` (screen + section titles), `headlineMedium` (answer lead).
+ *   Display roles ≥18sp keep a slight `0.01em` tracking.
+ * - **Nunito Sans (body):** the rest of the body/label roles (prose, rows, controls).
+ * - **labelSmall** is Nunito Sans Medium — Enamel reserves mono for fact tables
  *   only; numerals still opt in per call-site via [JetBrainsMonoFamily].
  */
-private val displayTracking = (-0.02).em
+private val displayTracking = 0.01.em
 
 val OakTypography: Typography = Typography().let { base ->
     base.copy(
-        // Figtree — display voice
+        // Fredoka — display voice
         displaySmall = base.displaySmall.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 28.sp,
+            fontFamily = FredokaFamily, fontWeight = FontWeight.SemiBold, fontSize = 28.sp,
             letterSpacing = displayTracking,
         ),
         headlineSmall = base.headlineSmall.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+            fontFamily = FredokaFamily, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
             letterSpacing = displayTracking,
         ),
         titleLarge = base.titleLarge.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+            fontFamily = FredokaFamily, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
             letterSpacing = displayTracking,
         ),
-        // Figtree — the answer lead
+        // Fredoka — the answer lead
         headlineMedium = base.headlineMedium.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 22.sp,
+            fontFamily = FredokaFamily, fontWeight = FontWeight.SemiBold, fontSize = 22.sp,
             letterSpacing = displayTracking,
         ),
-        // Figtree — body voice
+        // Nunito Sans — body voice
         titleMedium = base.titleMedium.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+            fontFamily = NunitoSansFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
         ),
         titleSmall = base.titleSmall.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+            fontFamily = NunitoSansFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
         ),
         bodyLarge = base.bodyLarge.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp,
+            fontFamily = NunitoSansFamily, fontWeight = FontWeight.Normal, fontSize = 16.sp,
         ),
         bodyMedium = base.bodyMedium.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.Normal, fontSize = 14.sp,
+            fontFamily = NunitoSansFamily, fontWeight = FontWeight.Normal, fontSize = 14.sp,
         ),
         bodySmall = base.bodySmall.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.Normal, fontSize = 13.sp,
+            fontFamily = NunitoSansFamily, fontWeight = FontWeight.Normal, fontSize = 13.sp,
         ),
         labelLarge = base.labelLarge.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+            fontFamily = NunitoSansFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
         ),
         labelMedium = base.labelMedium.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+            fontFamily = NunitoSansFamily, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
         ),
-        // Figtree Medium — chrome/meta labels; mono is call-site only
+        // Nunito Sans Medium — chrome/meta labels; mono is call-site only
         labelSmall = base.labelSmall.copy(
-            fontFamily = FigtreeFamily, fontWeight = FontWeight.Medium,
+            fontFamily = NunitoSansFamily, fontWeight = FontWeight.Medium,
             fontSize = 11.sp, letterSpacing = 0.88.sp,
         ),
     )

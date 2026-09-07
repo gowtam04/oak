@@ -1,9 +1,9 @@
 /* ==========================================================================
    Oak — Design System
    Single source of truth. Tokens (light + dark) → base → app shell → components.
-   Implements docs/design/signal.md. Component styles target the existing BEM
+   Implements docs/design/enamel-paper.md. Component styles target the existing BEM
    class names; nothing here references a raw hex outside the token block below.
-   Cool daylight neutrals, Pokéball red as a signal, Figtree + IBM Plex Mono.
+   Warm taupe paper, enamel coral #ee5a5a, Fredoka + Nunito Sans + JetBrains Mono.
    ========================================================================== */
 
 /* Cascade layers: only the bare element-tag resets live in @layer base, so any
@@ -16,54 +16,55 @@
    -------------------------------------------------------------------------- */
 :root {
   /* Brand */
-  --poke-red: #e3350d;
-  --poke-red-hover: #c92e0b;
-  --poke-red-active: #b02a0a;
-  --poke-red-soft: #fde8e3;
-  /* Text ink for a solid --poke-red fill. White clears AA in light mode
-     (4.4:1); dark mode's lifted #FF4A22 record red is too bright for white
-     text (3.4:1, fails AA) so dark swaps to a near-black ink (#1B1410). */
+  --poke-red: #ee5a5a;
+  --poke-red-hover: #e04545;
+  --poke-red-active: #c93b3b;
+  --poke-red-soft: #fcebeb;
+  /* Ink on a solid enamel fill. White in both themes — do not use Signal's
+     near-black #1b1410. Light lid #ee5a5a is ~3.36:1 (large-text AA). */
   --on-red: #ffffff;
-  --azure: #2b7dd1;
-  --azure-soft: #e5f0fa;
+  --sunflower: #f5a524;
+  --sunflower-soft: #fdf1dc;
+  --azure: #3aa0e3;
+  --azure-soft: #e6f2fb;
 
-  /* Neutral ramp (cool, theme-stable — Signal §3.1) */
+  /* Neutral ramp (warm taupe, theme-stable — enamel-paper.md) */
   --neutral-0: #ffffff;
-  --neutral-50: #f6f7f9;
-  --neutral-100: #eef0f3;
-  --neutral-200: #e3e8ef;
-  --neutral-300: #d0d6de;
-  --neutral-400: #b4bcc6;
-  --neutral-500: #8a94a0;
-  --neutral-600: #5b6b7c;
-  --neutral-700: #3d4a58;
-  --neutral-800: #2a3340;
-  --neutral-900: #1b2430;
-  --neutral-950: #121417;
+  --neutral-50: #fbf7f4;
+  --neutral-100: #f3ece6;
+  --neutral-200: #e9e0d8;
+  --neutral-300: #d8ccc1;
+  --neutral-400: #b8a99c;
+  --neutral-500: #94867a;
+  --neutral-600: #6e625a;
+  --neutral-700: #4e453f;
+  --neutral-800: #332d29;
+  --neutral-900: #231f1c;
+  --neutral-950: #161311;
 
-  /* Semantic */
-  --success: #1f9d61;
-  --success-soft: #e4f4ec;
-  --warning: #e08700;
-  --warning-soft: #fbf0dc;
-  --danger: #d6303f;
-  --danger-soft: #fae7e9;
-  --info: #2b7dd1;
-  --info-soft: #e5f0fa;
+  /* Semantic — danger stays distinct from poke-red */
+  --success: #2fb573;
+  --success-soft: #e3f6ec;
+  --warning: #f08c00;
+  --warning-soft: #fdefd9;
+  --danger: #e0394a;
+  --danger-soft: #fce8ea;
+  --info: var(--azure);
+  --info-soft: var(--azure-soft);
 
-  /* Surfaces / text (Signal §3.1 light) */
-  --bg: #f6f7f9;
+  /* Surfaces / text (enamel-paper.md light) */
+  --bg: #fbf7f4;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --surface-sunken: #eef0f3;
-  --border: #e3e8ef;
-  --border-strong: #d0d6de;
-  --text-strong: #1b2430;
-  --text: #2a3340;
-  --text-muted: #5b6b7c;
-  --text-faint: #8a94a0;
+  --surface-sunken: #f7f1eb;
+  --border: #e9e0d8;
+  --border-strong: #d8ccc1;
+  --text-strong: #2a2521;
+  --text: #3d362f;
+  --text-muted: #6e625a;
+  --text-faint: #94867a;
 
-  /* Signal aliases — same values, guide names. Prefer these in new CSS. */
+  /* Signal aliases — leftover CSS compiles. New CSS uses the historical names. */
   --red: var(--poke-red);
   --red-hover: var(--poke-red-hover);
   --red-active: var(--poke-red-active);
@@ -94,11 +95,11 @@
   --type-steel: #b7b7ce;
   --type-fairy: #d685ad;
 
-  /* Radius (Signal §3.4) */
-  --radius-sm: 8px;
+  /* Radius (historical 6/10/16/24 — Signal 8/10/12/16 is out) */
+  --radius-sm: 6px;
   --radius-md: 10px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
   --radius-pill: 999px;
 
   /* Spacing (4px base) */
@@ -113,25 +114,26 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* Motion (Signal §3.6) */
-  --ease: cubic-bezier(0.2, 0, 0, 1);
-  --motion-fast: 180ms var(--ease);
-  --motion-base: 180ms var(--ease);
-  --motion-enter: 280ms var(--ease);
-  --motion-spring: 180ms var(--ease);
+  /* Motion (enamel-paper.md). --ease / --motion-enter kept for leftover CSS. */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-fast: 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-base: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-enter: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-spring: 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  /* Shadows — hairline is the default on plates. Floating uses the Signal tint. */
-  --shadow-raised: 0 1px 2px rgba(27, 36, 48, 0.05),
-    0 8px 22px -14px rgba(27, 36, 48, 0.14);
-  --shadow-floating: 0 12px 32px -16px rgba(27, 36, 48, 0.18);
-  --shadow-overlay: 0 20px 48px -16px rgba(27, 36, 48, 0.28);
-  --shadow-well: inset 0 2px 8px rgba(27, 36, 48, 0.12);
+  /* Shadows — warm umber. --shadow-well is not a brand device (none, not inset). */
+  --shadow-raised: 0 1px 2px rgba(74, 53, 42, 0.05),
+    0 4px 12px rgba(74, 53, 42, 0.07);
+  --shadow-floating: 0 6px 16px rgba(74, 53, 42, 0.1),
+    0 2px 6px rgba(74, 53, 42, 0.08);
+  --shadow-overlay: 0 16px 40px rgba(74, 53, 42, 0.18);
+  --shadow-well: none;
 
-  /* Focus ring: 2px red with a canvas-colored offset. Azure is fallback only. */
+  /* Focus ring: 2px poke-red with a canvas-colored offset. Composer halo is PR2. */
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--poke-red);
 
-  /* Type families (next/font sets --font-body / --font-mono on <html>) */
-  --display: var(--font-body), system-ui, -apple-system, sans-serif;
+  /* Type families (next/font sets --font-display / --font-body / --font-mono) */
+  --display: var(--font-display), system-ui, -apple-system, sans-serif;
   --body: var(--font-body), system-ui, -apple-system, sans-serif;
   --mono: var(--font-mono), ui-monospace, "SF Mono", monospace;
 
@@ -166,8 +168,8 @@
   --composer-max: 680px; /* composer field column */
   --artifact-panel-w: 320px; /* Signal §5.5 right sheet */
 
-  /* Neutral ink overlay scrim (behind modals / drawers). */
-  --scrim: rgba(13, 16, 18, 0.45);
+  /* Umber overlay scrim (behind modals / drawers). */
+  --scrim: rgba(74, 53, 42, 0.45);
 
   /* CSS-only icon set — masked SVGs, tinted via currentColor */
   --brand-mark: url("/oak-app-icon.png");
@@ -188,43 +190,45 @@
    opt-in only, applied when the user toggles it (`data-theme="dark"`).
    -------------------------------------------------------------------------- */
 [data-theme="dark"] {
-  --poke-red: #ff4a22;
-  --poke-red-hover: #ff5f3c;
-  --poke-red-active: #e8431e;
-  --poke-red-soft: #33170f;
-  /* AA pass (phase 3): white text on the lifted dark record red is 3.4:1 —
-     fails. This near-black ink reads at 5.7:1. */
-  --on-red: #1b1410;
-  --azure: #55a0e8;
-  --azure-soft: #142433;
+  --poke-red: #c44545;
+  --poke-red-hover: #d45656;
+  --poke-red-active: #b33a3a;
+  --poke-red-soft: #3a1e1e;
+  /* White ink on #c44545 is ~4.9:1 (AA). Not historical #ff6b6b; not Signal
+     near-black #1b1410. */
+  --on-red: #ffffff;
+  --sunflower: #f8b73e;
+  --sunflower-soft: #3a2e14;
+  --azure: #5bb4ef;
+  --azure-soft: #16263a;
 
-  --success: #34c27f;
-  --success-soft: #123821;
-  --warning: #f0a030;
-  --warning-soft: #3a2a0d;
-  --danger: #f04a58;
-  --danger-soft: #3a1216;
-  --info: #55a0e8;
-  --info-soft: #142a3e;
+  --success: #46c98a;
+  --success-soft: #10301f;
+  --warning: #fba53b;
+  --warning-soft: #3a2a0f;
+  --danger: #ff5c6b;
+  --danger-soft: #3a1518;
+  --info: var(--azure);
+  --info-soft: var(--azure-soft);
 
-  --bg: #121417;
-  --surface: #1a1d22;
-  --surface-raised: #22262c;
-  --surface-sunken: #0e1013;
-  --border: #2a3038;
-  --border-strong: #3a434c;
-  --text-strong: #f2f4f6;
-  --text: #d5dae0;
-  --text-muted: #8b949e;
-  --text-faint: #6a737d;
+  --bg: #161311;
+  --surface: #231f1c;
+  --surface-raised: #332d29;
+  --surface-sunken: #1c1916;
+  --border: #3a332e;
+  --border-strong: #4e453f;
+  --text-strong: #f5efe9;
+  --text: #e4dad0;
+  --text-muted: #b7a99c;
+  --text-faint: #8a7d72;
 
-  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.28);
-  --shadow-floating: 0 12px 32px -16px rgba(0, 0, 0, 0.4);
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 6px 16px rgba(0, 0, 0, 0.34), 0 2px 6px rgba(0, 0, 0, 0.28);
   --shadow-overlay: 0 16px 40px rgba(0, 0, 0, 0.45);
-  --shadow-well: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-well: none;
 
   /* Deeper scrim in dark mode so overlays still read against the near-black canvas. */
-  --scrim: rgba(0, 0, 0, 0.6);
+  --scrim: rgba(0, 0, 0, 0.60);
 }
 
 /* --------------------------------------------------------------------------

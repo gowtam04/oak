@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Figtree, IBM_Plex_Mono } from "next/font/google";
+import { Fredoka, Nunito_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import "../components/artifact/artifact-viewer.css";
 
@@ -54,18 +54,24 @@ export const viewport: Viewport = {
   ],
 };
 
-// One sans (Figtree) + one mono (IBM Plex Mono). Figtree is exposed as
-// --font-body; globals.css aliases --font-display to the same face so we do
-// not download the family twice. next/font self-hosts — no Google Fonts <link>.
-const figtree = Figtree({
+// Display (Fredoka) + body (Nunito Sans) + mono (JetBrains Mono). next/font
+// self-hosts — no Google Fonts <link>. CSS aliases --display/--body/--mono
+// onto these three variables (see globals.css).
+const fredoka = Fredoka({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  weight: ["500", "600"],
+  variable: "--font-display",
+  display: "swap",
+});
+const nunitoSans = Nunito_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-body",
   display: "swap",
 });
-const ibmPlexMono = IBM_Plex_Mono({
+const jetBrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["500", "600"],
   variable: "--font-mono",
   display: "swap",
 });
@@ -81,7 +87,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${figtree.variable} ${ibmPlexMono.variable}`}
+      className={`${fredoka.variable} ${nunitoSans.variable} ${jetBrainsMono.variable}`}
       suppressHydrationWarning
     >
       <head>

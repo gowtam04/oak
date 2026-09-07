@@ -140,6 +140,11 @@ struct ThemeFoundationTests {
     _ = Theme.surface
     _ = Theme.surfaceRaised
     _ = Theme.surfaceSunken
+    _ = Theme.sunflower
+    _ = Theme.uiSurface
+    _ = Theme.uiOnRed
+    _ = Theme.uiPokeRed
+    _ = Theme.Motion.spring
     #expect(Bool(true))
   }
 
