@@ -1,15 +1,15 @@
 /**
- * Route-adapter tests for PUT /api/scope (chat-qol api-design.md, ADR-8).
+ * Route-adapter tests for PUT /api/scope (Champions-first P1 TurnScope).
  *
- * Chip-pick persist with no follow-up message (SCOPE-US-1, SCOPE-BR-1).
- * Signed-in picks also write account.last_used_scope + MRU touch (SCOPE-US-2,
- * SCOPE-BR-2). Guests write session scope only. No turn, no model.
+ * Old clients still call this after a chip pick. The request format is ignored;
+ * the response always acks Champions and must not persist National Dex / gen-N
+ * as a future default (CF-DATA-BR-21).
  *
  * Real migrated Postgres (Testcontainers) so conversation / account / MRU
  * repos run against the `@/data/db` singleton; only `getCurrentAccount` is
  * mocked. Guest session scope is the in-process session-store.
  *
- * Requirement refs: SCOPE-US-1, SCOPE-US-2, SCOPE-BR-1..3, SCOPE-AC-1.1..2.3
+ * Requirement refs: CF-DATA-BR-21, CF-CHAT-AC-1.1, CF-AUTH-AC-1.1
  */
 
 import { sql } from "drizzle-orm";
@@ -133,24 +133,55 @@ function errorToken(body: { error?: unknown; code?: unknown }): string {
   return typeof token === "string" ? token : "";
 }
 
-// --- 400 unknown format ----------------------------------------------------
+/** Signed-in PUT ack: always Champions; lastUsedScopes empty or ["champions"]. */
+function expectChampionsAck(body: Record<string, unknown>): void {
+  expect(body.format).toBe(CHAMPIONS);
+  expect(body.lastUsedScope).toBe(CHAMPIONS);
+  expect(Array.isArray(body.lastUsedScopes)).toBe(true);
+  const scopes = body.lastUsedScopes as string[];
+  expect(scopes.every((s) => s === CHAMPIONS)).toBe(true);
+  expect(scopes.length).toBeLessThanOrEqual(1);
+}
 
-describe("PUT /api/scope — unknown format (400)", () => {
-  it("rejects an unknown format and writes nothing", async () => {
-    await seedAccount(ACCT_A);
-    await seedConv(ACCT_A, CONV_A, NATDEX);
-    signedIn(ACCT_A);
-
-    const res = await put({ format: "gen9ou", conversation_id: CONV_A });
-
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error?: string; code?: string };
-    expect(errorToken(body)).toMatch(/format/i);
-
-    expect(await lastUsedScopeOf(ACCT_A)).toBeNull();
-    expect(await mru.list(ACCT_A)).toEqual([]);
-    expect((await convRepo.getConversation(ACCT_A, CONV_A))?.format).toBe(NATDEX);
+function expectNoOtherGamePersisted(accountId: string): Promise<void> {
+  return Promise.all([
+    lastUsedScopeOf(accountId),
+    mru.list(accountId),
+  ]).then(([last, listed]) => {
+    expect(last).not.toBe(GEN7);
+    expect(last).not.toBe(NATDEX);
+    expect(last).not.toBe("scarlet-violet");
+    if (last) expect(last).toBe(CHAMPIONS);
+    expect(listed).not.toContain(GEN7);
+    expect(listed).not.toContain(NATDEX);
+    expect(listed).not.toContain("scarlet-violet");
+    expect(listed.every((s) => s === CHAMPIONS)).toBe(true);
   });
+}
+
+// --- Format is ignored; other games still 200 (CF-DATA-BR-21) --------------
+
+describe("PUT /api/scope — ignored format, always Champions ack (CF-DATA-BR-21)", () => {
+  it.each(["gen-7", "national-dex", "scarlet-violet", "champions"] as const)(
+    "PUT format %s is 200 Champions and does not persist another game",
+    async (format) => {
+      signedIn(ACCT_A);
+      await seedAccount(ACCT_A);
+      await seedConv(ACCT_A, CONV_A, NATDEX);
+
+      const res = await put({ format, conversation_id: CONV_A });
+
+      expect(res.status).toBe(200);
+      expectChampionsAck((await res.json()) as Record<string, unknown>);
+
+      const conv = await convRepo.getConversation(ACCT_A, CONV_A);
+      // Historical National Dex may remain, or the row may be updated to
+      // Champions — never rewritten to a chip-picked other game.
+      expect(["national-dex", "champions"]).toContain(conv?.format);
+
+      await expectNoOtherGamePersisted(ACCT_A);
+    },
+  );
 
   it("rejects a missing format", async () => {
     signedIn(ACCT_A);
@@ -160,31 +191,14 @@ describe("PUT /api/scope — unknown format (400)", () => {
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error?: string; code?: string };
     expect(errorToken(body)).toMatch(/format/i);
+    await expectNoOtherGamePersisted(ACCT_A);
   });
 });
 
 // --- Signed-in -------------------------------------------------------------
 
-describe("PUT /api/scope — signed-in (SCOPE-US-1, SCOPE-BR-1)", () => {
-  it("owned conversation_id updates format + last_used_scope + MRU", async () => {
-    signedIn(ACCT_A);
-    await seedAccount(ACCT_A);
-    await seedConv(ACCT_A, CONV_A, NATDEX);
-
-    const res = await put({ format: GEN7, conversation_id: CONV_A });
-
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
-      format: GEN7,
-      lastUsedScopes: [GEN7],
-    });
-
-    expect((await convRepo.getConversation(ACCT_A, CONV_A))?.format).toBe(GEN7);
-    expect(await lastUsedScopeOf(ACCT_A)).toBe(GEN7);
-    expect(await mru.list(ACCT_A)).toEqual([GEN7]);
-  });
-
-  it("no conversation_id updates last_used_scope + MRU only (ADR-8)", async () => {
+describe("PUT /api/scope — signed-in (CF-DATA-BR-21, CF-CHAT-AC-1.1)", () => {
+  it("no conversation_id still acks Champions and does not persist gen-7 (ADR-3)", async () => {
     signedIn(ACCT_A);
     await seedAccount(ACCT_A);
     await seedConv(ACCT_A, CONV_A, NATDEX);
@@ -192,15 +206,10 @@ describe("PUT /api/scope — signed-in (SCOPE-US-1, SCOPE-BR-1)", () => {
     const res = await put({ format: GEN7 });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
-      format: GEN7,
-      lastUsedScopes: [GEN7],
-    });
+    expectChampionsAck((await res.json()) as Record<string, unknown>);
 
-    expect(await lastUsedScopeOf(ACCT_A)).toBe(GEN7);
-    expect(await mru.list(ACCT_A)).toEqual([GEN7]);
-    // Existing thread is untouched — this is an empty-new-chat pick.
     expect((await convRepo.getConversation(ACCT_A, CONV_A))?.format).toBe(NATDEX);
+    await expectNoOtherGamePersisted(ACCT_A);
   });
 
   it("conversation_id: null is the no-conversation path", async () => {
@@ -211,15 +220,11 @@ describe("PUT /api/scope — signed-in (SCOPE-US-1, SCOPE-BR-1)", () => {
     const res = await put({ format: CHAMPIONS, conversation_id: null });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
-      format: CHAMPIONS,
-      lastUsedScopes: [CHAMPIONS],
-    });
+    expectChampionsAck((await res.json()) as Record<string, unknown>);
     expect((await convRepo.getConversation(ACCT_A, CONV_A))?.format).toBe(NATDEX);
-    expect(await lastUsedScopeOf(ACCT_A)).toBe(CHAMPIONS);
   });
 
-  it("unowned conversation_id → 404 with no writes", async () => {
+  it("unowned conversation_id → 404 with no other-game writes", async () => {
     await seedAccount(ACCT_A);
     await seedAccount(ACCT_B);
     await seedConv(ACCT_A, CONV_A, NATDEX);
@@ -230,9 +235,9 @@ describe("PUT /api/scope — signed-in (SCOPE-US-1, SCOPE-BR-1)", () => {
     expect(res.status).toBe(404);
     expect((await convRepo.getConversation(ACCT_A, CONV_A))?.format).toBe(NATDEX);
     expect(await lastUsedScopeOf(ACCT_A)).toBeNull();
-    expect(await lastUsedScopeOf(ACCT_B)).toBeNull();
+    expect(await lastUsedScopeOf(ACCT_B)).not.toBe(GEN7);
     expect(await mru.list(ACCT_A)).toEqual([]);
-    expect(await mru.list(ACCT_B)).toEqual([]);
+    expect(await mru.list(ACCT_B)).not.toContain(GEN7);
   });
 
   it("missing conversation_id is the same 404 as unowned (no existence leak)", async () => {
@@ -241,44 +246,30 @@ describe("PUT /api/scope — signed-in (SCOPE-US-1, SCOPE-BR-1)", () => {
 
     const res = await put({ format: GEN7, conversation_id: "does-not-exist" });
     expect(res.status).toBe(404);
-    expect(await lastUsedScopeOf(ACCT_A)).toBeNull();
-    expect(await mru.list(ACCT_A)).toEqual([]);
+    expect(await lastUsedScopeOf(ACCT_A)).not.toBe(GEN7);
+    expect(await mru.list(ACCT_A)).not.toContain(GEN7);
   });
 
-  it("returns lastUsedScopes newest-first after chip picks (SCOPE-US-2, SCOPE-AC-2.1)", async () => {
+  it("repeated chip picks never accumulate other-game MRU rows (CF-DATA-BR-21)", async () => {
     signedIn(ACCT_A);
     await seedAccount(ACCT_A);
-    await mru.touch(ACCT_A, NATDEX, 1_000);
 
     const first = await put({ format: GEN7 });
     expect(first.status).toBe(200);
-    expect(await first.json()).toEqual({
-      format: GEN7,
-      lastUsedScopes: [GEN7, NATDEX],
-    });
+    expectChampionsAck((await first.json()) as Record<string, unknown>);
 
-    const second = await put({ format: CHAMPIONS });
+    const second = await put({ format: NATDEX });
     expect(second.status).toBe(200);
-    expect(await second.json()).toEqual({
-      format: CHAMPIONS,
-      lastUsedScopes: [CHAMPIONS, GEN7, NATDEX],
-    });
+    expectChampionsAck((await second.json()) as Record<string, unknown>);
 
-    // Re-picking an already-used scope moves it to the front (upsert).
-    const again = await put({ format: NATDEX });
-    expect(again.status).toBe(200);
-    expect(await again.json()).toEqual({
-      format: NATDEX,
-      lastUsedScopes: [NATDEX, CHAMPIONS, GEN7],
-    });
-    expect(await mru.list(ACCT_A)).toEqual([NATDEX, CHAMPIONS, GEN7]);
+    await expectNoOtherGamePersisted(ACCT_A);
   });
 });
 
 // --- Guest -----------------------------------------------------------------
 
-describe("PUT /api/scope — guest (SCOPE-AC-1.3, SCOPE-BR-2)", () => {
-  it("persists session scope from ?session_id= and omits lastUsedScopes", async () => {
+describe("PUT /api/scope — guest (CF-AUTH-AC-1.1, CF-DATA-BR-21)", () => {
+  it("acks Champions and does not persist gen-7 on the session", async () => {
     guest();
 
     const res = await put(
@@ -287,19 +278,31 @@ describe("PUT /api/scope — guest (SCOPE-AC-1.3, SCOPE-BR-2)", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ format: GEN7 });
-    expect(await getSessionScope(GUEST_SID)).toBe(GEN7);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.format).toBe(CHAMPIONS);
+    if (body.lastUsedScope !== undefined) {
+      expect(body.lastUsedScope).toBe(CHAMPIONS);
+    }
+    if (body.lastUsedScopes !== undefined) {
+      const scopes = body.lastUsedScopes as string[];
+      expect(scopes.every((s) => s === CHAMPIONS)).toBe(true);
+      expect(scopes.length).toBeLessThanOrEqual(1);
+    }
+    expect(await getSessionScope(GUEST_SID)).not.toBe(GEN7);
+    expect([undefined, CHAMPIONS]).toContain(await getSessionScope(GUEST_SID));
     expect(await mru.list(ACCT_A)).toEqual([]);
   });
 
-  it("persists session scope from a body session_id", async () => {
+  it("body session_id path also acks Champions", async () => {
     guest();
 
-    const res = await put({ format: CHAMPIONS, session_id: GUEST_SID });
+    const res = await put({ format: NATDEX, session_id: GUEST_SID });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ format: CHAMPIONS });
-    expect(await getSessionScope(GUEST_SID)).toBe(CHAMPIONS);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.format).toBe(CHAMPIONS);
+    expect(await getSessionScope(GUEST_SID)).not.toBe(NATDEX);
+    expect([undefined, CHAMPIONS]).toContain(await getSessionScope(GUEST_SID));
   });
 
   it("requires session_id (query or body) — 400 when missing", async () => {
@@ -320,8 +323,9 @@ describe("PUT /api/scope — guest (SCOPE-AC-1.3, SCOPE-BR-2)", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ format: GEN7 });
-    expect(await getSessionScope(GUEST_SID)).toBe(GEN7);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.format).toBe(CHAMPIONS);
+    expect(await getSessionScope(GUEST_SID)).not.toBe(GEN7);
     expect(await lastUsedScopeOf(ACCT_A)).toBeNull();
     expect(await mru.list(ACCT_A)).toEqual([]);
   });

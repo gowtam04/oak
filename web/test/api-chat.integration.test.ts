@@ -51,6 +51,7 @@ import { _resetStoreForTests } from "@/server/rate-limit";
 import { _resetStoreForTests as resetTurnStore } from "@/server/turn-store";
 import {
   clearSession,
+  setSessionScope,
   _resetStoreForTests as resetSessionStore,
 } from "@/server/session-store";
 
@@ -431,14 +432,18 @@ describe("POST /api/chat — session history", () => {
   });
 });
 
-// --- Scope resolution (generation-scope GS-B / §3.4) ------------------------
+// --- Champions-first TurnScope (P1) ----------------------------------------
+// detect-scope is not consulted for turn routing (web/src/lib/scope/detect-scope.ts
+// is unhooked). Chip seeds, legacy champions_mode, in-message gen signals, and
+// sticky session format must not pick another game.
 
-describe("POST /api/chat — scope resolution", () => {
+describe("POST /api/chat — Champions-first TurnScope", () => {
   // The guest scope store is GLOBAL and outlives clearSession() (which only
   // wipes message history), so fully reset the session store around each case.
-  beforeEach(() => {
-    resetSessionStore();
+  beforeEach(async () => {
+    await resetSessionStore();
     vi.mocked(createAgentContext).mockClear();
+    mockRunOak.mockResolvedValue(G1_ANSWER);
   });
   afterEach(() => resetSessionStore());
 
@@ -450,61 +455,123 @@ describe("POST /api/chat — scope resolution", () => {
     return e?.data as { format: string; source: string } | undefined;
   }
 
-  it("an explicit in-message gen signal overrides the Champions toggle seed, then sticks", async () => {
-    mockRunOak.mockResolvedValue(G1_ANSWER);
-    const sid = "s-scope";
+  function boundMode(): string | undefined {
+    const last = vi.mocked(createAgentContext).mock.calls.at(-1)?.[0] as
+      | { mode?: string }
+      | undefined;
+    return last?.mode;
+  }
 
-    // (a) A gen-7 signal on a FRESH session, with the Champions toggle ON: the
-    //     explicit signal wins over the seed → the turn runs in gen-7, and the
-    //     `scope` event reports it as message-sourced.
+  it("guest chat works and is always Champions (CF-AUTH-AC-1.1, CF-DATA-BR-1, CF-DATA-BR-7)", async () => {
+    const res = await post({
+      session_id: "s-scope-guest",
+      message: "what about defensively?",
+    });
+    expect(res.status).toBe(200);
+    const events = await readSse(res);
+    expect(scopeOf(events)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+    expect(boundMode()).toBe("champions");
+    expect(mockRunOak).toHaveBeenCalledTimes(1);
+    expect(events.filter((e) => e.event === "error")).toHaveLength(0);
+    expect(events.filter((e) => e.event === "answer")).toHaveLength(1);
+  });
+
+  it.each(["gen-7", "national-dex", "scarlet-violet"] as const)(
+    "ignores scope_seed %s — SSE scope is always champions/default (CF-CHAT-AC-1.1)",
+    async (seed) => {
+      const res = await post({
+        session_id: `s-scope-seed-${seed}`,
+        message: "what about defensively?",
+        scope_seed: seed,
+      });
+      const events = await readSse(res);
+      expect(scopeOf(events)).toEqual({
+        format: "champions",
+        source: "default",
+      });
+      expect(boundMode()).toBe("champions");
+    },
+  );
+
+  it.each([true, false] as const)(
+    "ignores champions_mode %s (CF-CHAT-AC-1.1)",
+    async (flag) => {
+      const res = await post({
+        session_id: `s-scope-legacy-${flag}`,
+        message: "what about defensively?",
+        champions_mode: flag,
+      });
+      const events = await readSse(res);
+      expect(scopeOf(events)).toEqual({
+        format: "champions",
+        source: "default",
+      });
+      expect(boundMode()).toBe("champions");
+    },
+  );
+
+  it("in-message Gen 5 / gen 7 does not switch mode — detect-scope is unused (CF-CHAT-AC-1.1, ADR-3)", async () => {
+    const sid = "s-scope-signal";
+
     const res1 = await post({
       session_id: sid,
       message: "analyze my gen 7 team",
       champions_mode: true,
     });
     const events1 = await readSse(res1);
-    expect(scopeOf(events1)).toEqual({ format: "gen-7", source: "message" });
-    // The mode threaded onto the AgentContext (what the tools scope by) is gen-7.
-    const call1 = vi.mocked(createAgentContext).mock.calls[0]![0] as {
-      mode: string;
-    };
-    expect(call1.mode).toBe("gen-7");
+    expect(scopeOf(events1)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+    expect(boundMode()).toBe("champions");
 
-    // (b) A follow-up with NO signal stays gen-7 via the session's sticky scope
-    //     (source becomes "conversation"). The toggle is not re-applied.
     const res2 = await post({
       session_id: sid,
-      message: "what about defensively?",
+      message: "what about defensively in Gen 5?",
     });
     const events2 = await readSse(res2);
-    expect(scopeOf(events2)).toEqual({ format: "gen-7", source: "conversation" });
-    const call2 = vi.mocked(createAgentContext).mock.calls[1]![0] as {
-      mode: string;
-    };
-    expect(call2.mode).toBe("gen-7");
+    expect(scopeOf(events2)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+    expect(boundMode()).toBe("champions");
   });
 
-  it("a fresh session with no seed fields defaults to National Dex", async () => {
-    mockRunOak.mockResolvedValue(G1_ANSWER);
+  it("an in-message gen signal does not beat scope_seed — both are ignored (CF-CHAT-AC-1.1)", async () => {
+    const res = await post({
+      session_id: "s-scope-signal-ignored",
+      message: "analyze my gen 7 team",
+      scope_seed: "national-dex",
+    });
+    const events = await readSse(res);
+    expect(scopeOf(events)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+    expect(boundMode()).toBe("champions");
+  });
+
+  it("sticky session gen-7 is not used to pick data (CF-CHAT-AC-3.2, CF-CHAT-AC-3.3)", async () => {
+    await setSessionScope("s-scope-sticky", "gen-7");
 
     const res = await post({
-      session_id: "s-scope-default",
+      session_id: "s-scope-sticky",
       message: "what about defensively?",
     });
     const events = await readSse(res);
     expect(scopeOf(events)).toEqual({
-      format: "national-dex",
+      format: "champions",
       source: "default",
     });
-    const call = vi.mocked(createAgentContext).mock.calls[0]![0] as {
-      mode: string;
-    };
-    expect(call.mode).toBe("national-dex");
+    expect(boundMode()).toBe("champions");
+    expect(mockRunOak).toHaveBeenCalledTimes(1);
   });
 
-  it("an explicit scope_seed chip pick seeds a fresh session, then sticks", async () => {
-    mockRunOak.mockResolvedValue(G1_ANSWER);
-    const sid = "s-scope-seed";
+  it("a follow-up after an ignored seed stays Champions, not sticky gen-6 (CF-CHAT-AC-3.3)", async () => {
+    const sid = "s-scope-followup";
 
     const res1 = await post({
       session_id: sid,
@@ -512,88 +579,25 @@ describe("POST /api/chat — scope resolution", () => {
       scope_seed: "gen-6",
     });
     const events1 = await readSse(res1);
-    expect(scopeOf(events1)).toEqual({ format: "gen-6", source: "seed" });
+    expect(scopeOf(events1)).toEqual({
+      format: "champions",
+      source: "default",
+    });
+    expect(boundMode()).toBe("champions");
 
-    // A follow-up with no scope_seed stays gen-6 via the sticky scope.
     const res2 = await post({
       session_id: sid,
       message: "and offensively?",
     });
     const events2 = await readSse(res2);
     expect(scopeOf(events2)).toEqual({
-      format: "gen-6",
-      source: "conversation",
-    });
-  });
-
-  it("an explicit scope_seed overrides an existing sticky scope, which then re-sticks", async () => {
-    mockRunOak.mockResolvedValue(G1_ANSWER);
-    const sid = "s-scope-seed-override";
-
-    // Turn 1: plain — seeds (and sticks) National Dex by default.
-    const res1 = await post({ session_id: sid, message: "hello" });
-    const events1 = await readSse(res1);
-    expect(scopeOf(events1)).toEqual({
-      format: "national-dex",
+      format: "champions",
       source: "default",
     });
-
-    // Turn 2: an explicit chip pick overrides the sticky National Dex scope.
-    const res2 = await post({
-      session_id: sid,
-      message: "what about defensively?",
-      scope_seed: "scarlet-violet",
-    });
-    const events2 = await readSse(res2);
-    expect(scopeOf(events2)).toEqual({
-      format: "scarlet-violet",
-      source: "seed",
-    });
-
-    // Turn 3: plain — the new sticky scope (scarlet-violet) holds.
-    const res3 = await post({ session_id: sid, message: "and offensively?" });
-    const events3 = await readSse(res3);
-    expect(scopeOf(events3)).toEqual({
-      format: "scarlet-violet",
-      source: "conversation",
-    });
+    expect(boundMode()).toBe("champions");
   });
 
-  it("an in-message signal beats an explicit scope_seed on the same turn", async () => {
-    mockRunOak.mockResolvedValue(G1_ANSWER);
-
-    const res = await post({
-      session_id: "s-scope-signal-beats-seed",
-      message: "analyze my gen 7 team",
-      scope_seed: "champions",
-    });
-    const events = await readSse(res);
-    expect(scopeOf(events)).toEqual({ format: "gen-7", source: "message" });
-  });
-
-  it("the legacy champions_mode:false seeds National Dex on a fresh session (reported as 'seed')", async () => {
-    mockRunOak.mockResolvedValue(G1_ANSWER);
-
-    // A legacy client that toggled Champions OFF now lands in the National Dex
-    // default (the scope flip), not scarlet-violet.
-    const res = await post({
-      session_id: "s-scope-legacy-false",
-      message: "what about defensively?",
-      champions_mode: false,
-    });
-    const events = await readSse(res);
-    expect(scopeOf(events)).toEqual({
-      format: "national-dex",
-      source: "seed",
-    });
-  });
-
-  it("a malformed scope_seed is silently dropped, falling through to the national-dex default", async () => {
-    mockRunOak.mockResolvedValue(G1_ANSWER);
-
-    // "kalos-dex" is not a known Format (isFormat === false), so parseBody drops
-    // it and the turn falls through to the default. (Gen 1–4 seeds are now valid,
-    // so the invalid seed must be a genuinely unknown string.)
+  it("a malformed scope_seed is ignored — still Champions default (CF-DATA-BR-7)", async () => {
     const res = await post({
       session_id: "s-scope-seed-malformed",
       message: "what about defensively?",
@@ -601,32 +605,25 @@ describe("POST /api/chat — scope resolution", () => {
     });
     const events = await readSse(res);
     expect(scopeOf(events)).toEqual({
-      format: "national-dex",
+      format: "champions",
       source: "default",
     });
+    expect(boundMode()).toBe("champions");
   });
 
-  it("(c) a named Gen 1–4 signal now resolves to that gen's own first-class scope", async () => {
-    // National Dex feature: Gens 1–4 are fully-ingested, first-class scopes, so
-    // "gen 3" resolves directly to the gen-3 data scope (no longer a widened
-    // STANDARD fallback). The in-message signal is message-sourced.
-    mockRunOak.mockResolvedValue(G1_ANSWER);
-
+  it("a named Gen 3 catch question still runs as Champions (CF-CHAT-AC-1.1, CF-DATA-BR-7)", async () => {
     const res = await post({
       session_id: "s-scope-gen3",
       message: "best strategy to catch feebas in gen 3",
     });
     const events = await readSse(res);
 
-    // The agent DID run and the scope was reported as a message-sourced gen-3.
     expect(mockRunOak).toHaveBeenCalledTimes(1);
     expect(scopeOf(events)).toEqual({
-      format: "gen-3",
-      source: "message",
+      format: "champions",
+      source: "default",
     });
-    // The context threaded to the agent carries the gen-3 mode.
-    const ctxArg = vi.mocked(createAgentContext).mock.calls.at(-1)?.[0];
-    expect(ctxArg?.mode).toBe("gen-3");
+    expect(boundMode()).toBe("champions");
     expect(events.filter((e) => e.event === "error")).toHaveLength(0);
 
     const answers = events.filter((e) => e.event === "answer");

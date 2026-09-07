@@ -2,8 +2,9 @@
  * Tests for src/data/schema.ts — Phase 2 schema / migration unit tests (Postgres).
  *
  * Success criteria (design.md Phase 2, adapted to Postgres):
- *   1. The migration creates all 5 tables + all expected indexes + the composite
- *      primary keys on a fresh schema (introspected via the Postgres catalogs).
+ *   1. The migration creates the remaining app tables + expected indexes + the
+ *      composite primary keys on a fresh schema (introspected via the Postgres
+ *      catalogs). Champions-first 0023 DROPs wiki/natdex/encounters/pmd/meta.
  *   2. EXPLAIN confirms stat/type/move-slug queries CAN use their indexes — with
  *      enable_seqscan off (so the planner doesn't seq-scan the tiny fixture),
  *      each query plan names its index rather than a Seq Scan.
@@ -126,12 +127,12 @@ beforeAll(async () => {
          base_stat_total, sprite_url, artwork_url,
          generation, is_gen9_native, source_generation)
       VALUES
-        ('scarlet-violet', 'garchomp', 'garchomp', NULL, 'Garchomp', 445,
+        ('champions', 'garchomp', 'garchomp', NULL, 'Garchomp', 445,
          'dragon', 'ground', 'sand-veil', NULL, 'rough-skin',
          108, 130, 95, 80, 85, 102,
          600, 'https://sprites.example/445.png', 'https://art.example/445.png',
          'gen-9', 1, NULL),
-        ('scarlet-violet', 'tauros', 'tauros', NULL, 'Tauros', 128,
+        ('champions', 'tauros', 'tauros', NULL, 'Tauros', 128,
          'normal', NULL, 'intimidate', 'anger-point', 'sheer-force',
          75, 100, 95, 40, 70, 110,
          490, 'https://sprites.example/128.png', 'https://art.example/128.png',
@@ -139,7 +140,7 @@ beforeAll(async () => {
   );
   await db.execute(
     sql.raw(`INSERT INTO learnset (pokemon_id, move_slug, format, method)
-             VALUES ('garchomp', 'dragon-claw', 'scarlet-violet', 'machine')`),
+             VALUES ('garchomp', 'dragon-claw', 'champions', 'machine')`),
   );
 }, 60_000);
 
@@ -152,11 +153,11 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 31 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse + 1 app settings + 3 chat-qol + 1 artifact pin + 3 spend)", async () => {
+  it("creates the 22 remaining app tables after champions-first cutover (CF-DATA-BR-3, CF-OPS-AC-1.2, CF-OPS-AC-1.5, ADR-4)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
-        // Pokédex index tables (format-scoped)
+        // Pokédex index tables (format-scoped; champions rows only after 0023)
         "ingest_meta",
         "learnset",
         "pokemon",
@@ -177,19 +178,6 @@ describe("Drizzle migration — table creation", () => {
         "auth_event",
         // Champions item availability (operator-curated) — added by the 0007 migration.
         "champions_item_exclusion",
-        // Global natdex warehouse (Oak v2, NOT format-scoped) — added by the 0008 migration.
-        "natdex_species",
-        "natdex_machines",
-        "natdex_moves",
-        "classic_encounters",
-        "pmd_recruits",
-        // Fandom wiki corpus (Oak v2, NOT format-scoped) — added by the 0010 migration.
-        "wiki_page",
-        "wiki_chunk",
-        // Smogon metagame warehouse (backlog B-5, NOT format-scoped) — added by
-        // the 0011 migration.
-        "meta_snapshot",
-        "meta_usage",
         // Generic operator-controlled key/value settings (multi-model switch,
         // NOT format-scoped) — added by the 0013 migration.
         "app_setting",
@@ -207,10 +195,43 @@ describe("Drizzle migration — table creation", () => {
         "account_cap_exempt",
       ]),
     );
-    // Exactly 31 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
-    // + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse
-    // + 1 app settings + 3 chat-qol + 1 artifact pin + 3 spend).
-    expect(tables).toHaveLength(31);
+    // 22 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
+    // + 1 champions-items + 1 app settings + 3 chat-qol + 1 artifact pin + 3 spend).
+    // Other-game warehouse tables are DROPPED by 0023 (CF-OPS-AC-1.2).
+    expect(tables).toHaveLength(22);
+  });
+
+  it("drops other-game reference tables (CF-DATA-BR-3, CF-OPS-AC-1.2, CF-INT-BR-3, ADR-4)", async () => {
+    const tables = await tableNames(db);
+    const dropped = [
+      "wiki_page",
+      "wiki_chunk",
+      "natdex_species",
+      "natdex_machines",
+      "natdex_moves",
+      "classic_encounters",
+      "pmd_recruits",
+      "meta_snapshot",
+      "meta_usage",
+    ];
+    for (const name of dropped) {
+      expect(tables, `cutover must DROP ${name}`).not.toContain(name);
+    }
+  });
+
+  it("does not wipe conversations, teams, accounts, turn_record, or shares (CF-OPS-AC-1.5)", async () => {
+    const tables = await tableNames(db);
+    for (const name of [
+      "account",
+      "conversation",
+      "conversation_message",
+      "team",
+      "turn_record",
+      "shared_answer",
+      "champions_item_exclusion",
+    ]) {
+      expect(tables, `cutover must KEEP ${name}`).toContain(name);
+    }
   });
 
   it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {
@@ -579,7 +600,7 @@ describe("EXPLAIN — indexes are used (enable_seqscan off)", () => {
       `SELECT pokemon_id
          FROM learnset
         WHERE move_slug IN ('dragon-claw', 'earthquake')
-          AND format IN ('scarlet-violet')
+          AND format IN ('champions')
         GROUP BY pokemon_id
        HAVING COUNT(DISTINCT move_slug) = 2`,
     );
@@ -643,6 +664,22 @@ describe("Schema constraints", () => {
         .insert(learnset)
         .values({ pokemon_id: "bulbasaur", move_slug: "tackle", format: "champions", method: "level-up" }),
     ).resolves.toBeDefined();
+  });
+
+  it("still accepts historical format='gen-7' on the column, but gen-7 is not a default ingest format (ADR-3, CF-DEX-AC-1.3)", async () => {
+    // 0023 DELETEs non-champions index rows; it does not add a CHECK that
+    // forbids the stored-row union (archived teams / old conversations).
+    await expect(
+      cdb.insert(learnset).values({
+        pokemon_id: "tyranitar",
+        move_slug: "crunch",
+        format: "gen-7",
+        method: "level-up",
+      }),
+    ).resolves.toBeDefined();
+    const { DEFAULT_FORMATS } = await import("@/data/formats");
+    expect([...DEFAULT_FORMATS]).toEqual(["champions"]);
+    expect(DEFAULT_FORMATS).not.toContain("gen-7");
   });
 
   it("searchable_names composite PK rejects duplicate (format, kind, slug)", async () => {

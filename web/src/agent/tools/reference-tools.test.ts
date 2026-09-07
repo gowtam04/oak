@@ -133,7 +133,7 @@ describe("get_ability / get_evolution_chain / get_item kind routing (T5/T7/T8)",
   });
 });
 
-describe("get_evolution_chain champions fallback (T7)", () => {
+describe("get_evolution_chain Champions-index only (T7, ADR-8, CF-DATA-BR-5)", () => {
   const championsCtx = {
     db: {},
     logger: console,
@@ -148,49 +148,31 @@ describe("get_evolution_chain champions fallback (T7)", () => {
     ],
   };
 
-  it("champions active miss + standard hit → returns the standard chain marked source_format (two reads)", async () => {
+  it("champions miss → not found, single champions read, no SV fallback", async () => {
     getReference.mockImplementation((_kind: string, _slug: string, format: string) =>
       Promise.resolve(
-        format === "champions" ? { found: false, suggestions: [] } : eeveeChain,
+        format === "champions"
+          ? { found: false, suggestions: [] }
+          : eeveeChain,
       ),
     );
     const out = await getEvolutionChainTool.run(
       { species: "eevee" },
       championsCtx,
     );
-    expect(getReference).toHaveBeenCalledTimes(2);
-    expect(getReference).toHaveBeenNthCalledWith(
-      1,
+    expect(getReference).toHaveBeenCalledTimes(1);
+    expect(getReference).toHaveBeenCalledWith(
       "evolution",
       "eevee",
       "champions",
       championsCtx.db,
     );
-    expect(getReference).toHaveBeenNthCalledWith(
-      2,
-      "evolution",
-      "eevee",
-      "scarlet-violet",
-      championsCtx.db,
-    );
-    expect(out).toEqual({ ...eeveeChain, source_format: "scarlet-violet" });
+    expect(out).toEqual({ found: false, suggestions: [] });
+    expect(out).not.toHaveProperty("source_format");
+    expect(out).not.toHaveProperty("exists_in_standard");
   });
 
-  it("champions active miss + standard miss → returns the miss with exists_in_standard:false", async () => {
-    getReference.mockResolvedValue({ found: false, suggestions: [] });
-    const out = await getEvolutionChainTool.run(
-      { species: "notamon" },
-      championsCtx,
-    );
-    expect(getReference).toHaveBeenCalledTimes(2);
-    expect(out).toEqual({
-      found: false,
-      suggestions: [],
-      exists_in_standard: false,
-    });
-  });
-
-  it("champions active hit → single read, no source_format", async () => {
+  it("champions hit → single read, no source_format", async () => {
     getReference.mockResolvedValue(eeveeChain);
     const out = await getEvolutionChainTool.run(
       { species: "eevee" },
@@ -199,15 +181,51 @@ describe("get_evolution_chain champions fallback (T7)", () => {
     expect(getReference).toHaveBeenCalledTimes(1);
     expect(out).toEqual(eeveeChain);
     expect(out).not.toHaveProperty("source_format");
+    expect(out).not.toHaveProperty("exists_in_standard");
+  });
+});
+
+describe("champions reference miss — no exists_in_standard (ADR-8, CF-DATA-BR-5)", () => {
+  const championsCtx = {
+    db: {},
+    logger: console,
+    requestId: "test",
+    mode: "champions",
+  } as unknown as AgentContext;
+
+  it("get_move champions miss is a plain miss (one champions read)", async () => {
+    getReference.mockResolvedValue({ found: false, suggestions: ["fake-out"] });
+    const out = await getMoveTool.run({ name: "fak-out" }, championsCtx);
+    expect(getReference).toHaveBeenCalledTimes(1);
+    expect(getReference).toHaveBeenCalledWith(
+      "move",
+      "fak-out",
+      "champions",
+      championsCtx.db,
+    );
+    expect(out).toEqual({ found: false, suggestions: ["fake-out"] });
+    expect(out).not.toHaveProperty("exists_in_standard");
   });
 
-  it("standard-mode miss → single read, neither source_format nor exists_in_standard", async () => {
-    getReference.mockResolvedValue({ found: false, suggestions: ["eevee"] });
-    const out = await getEvolutionChainTool.run({ species: "eeve" }, ctx);
+  it("get_ability champions miss is a plain miss", async () => {
+    getReference.mockResolvedValue({
+      found: false,
+      suggestions: ["armor-tail"],
+    });
+    const out = await getAbilityTool.run({ name: "armor-tal" }, championsCtx);
     expect(getReference).toHaveBeenCalledTimes(1);
-    expect(getReference).toHaveBeenCalledWith("evolution", "eeve", FMT, ctx.db);
-    expect(out).toEqual({ found: false, suggestions: ["eevee"] });
-    expect(out).not.toHaveProperty("source_format");
+    expect(out).toEqual({ found: false, suggestions: ["armor-tail"] });
+    expect(out).not.toHaveProperty("exists_in_standard");
+  });
+
+  it("get_item champions miss is a plain miss", async () => {
+    getReference.mockResolvedValue({
+      found: false,
+      suggestions: ["leftovers"],
+    });
+    const out = await getItemTool.run({ name: "leftover" }, championsCtx);
+    expect(getReference).toHaveBeenCalledTimes(1);
+    expect(out).toEqual({ found: false, suggestions: ["leftovers"] });
     expect(out).not.toHaveProperty("exists_in_standard");
   });
 });
