@@ -124,7 +124,7 @@ class TeamEditorViewModelTest {
 
         assertEquals(1, results.size)
         assertEquals("garchomp", results.first().slug)
-        assertEquals(Triple(EntityKind.POKEMON, "garch", Format.Gen5), dex.searchCalls.single())
+        assertEquals(Triple(EntityKind.POKEMON, "garch", Format.Champions), dex.searchCalls.single())
     }
 
     @Test

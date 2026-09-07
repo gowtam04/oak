@@ -5,6 +5,7 @@ import ai.gowtam.oak.networking.OakApiClient
 import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.wire.UsageLadder
 import ai.gowtam.oak.wire.UsageLeaderboard
+import ai.gowtam.oak.wire.UsageSpecies
 import android.util.Log
 
 /**
@@ -18,6 +19,9 @@ interface UsageService {
      * unavailability rides back as [UsageLeaderboard.available] `false`.
      */
     suspend fun leaderboard(ladder: UsageLadder = UsageLadder.Doubles): UsageLeaderboard
+
+    /** Species drill-in (`GET /api/usage/:slug`). Never throws. */
+    suspend fun species(slug: String, ladder: UsageLadder = UsageLadder.Doubles): UsageSpecies
 }
 
 class LiveUsageService(private val apiClient: OakApiClient) : UsageService {
@@ -51,6 +55,29 @@ class LiveUsageService(private val apiClient: OakApiClient) : UsageService {
                 error = "upstream_unavailable",
                 rows = emptyList(),
             )
+        }
+    }
+
+    override suspend fun species(slug: String, ladder: UsageLadder): UsageSpecies {
+        val queryItems = if (ladder == UsageLadder.Doubles) {
+            emptyList()
+        } else {
+            listOf("ladder" to "singles")
+        }
+        val endpoint = Endpoint(
+            method = Endpoint.Method.GET,
+            path = "/api/usage/${slug.trim()}",
+            queryItems = queryItems,
+            requiresAuth = false,
+        )
+        return try {
+            apiClient.send(endpoint, UsageSpecies.serializer())
+        } catch (e: OakError) {
+            Log.e(TAG, "usage species unavailable: ${e::class.simpleName}")
+            UsageSpecies(available = false, error = "upstream_unavailable")
+        } catch (e: Exception) {
+            Log.e(TAG, "usage species unavailable: ${e::class.simpleName}")
+            UsageSpecies(available = false, error = "upstream_unavailable")
         }
     }
 

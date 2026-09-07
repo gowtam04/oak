@@ -49,6 +49,7 @@ fun CalculatorScreen(
     initialScenario: CalcScenario? = null,
     onBack: () -> Unit,
     onExplain: (String) -> Unit = {},
+    dexLookup: ai.gowtam.oak.services.DexLookupService? = null,
 ) {
     val viewModel = remember(calc, format, initialScenario) {
         CalculatorViewModel(calc, initialFormat = format, initialScenario = initialScenario)
@@ -70,6 +71,7 @@ fun CalculatorScreen(
         CalculatorForm(
             viewModel = viewModel,
             onExplain = onExplain,
+            dexLookup = dexLookup,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner)
@@ -85,6 +87,7 @@ fun CalculatorOverlay(
     onDismiss: () -> Unit,
     onExpand: () -> Unit,
     onExplain: (String) -> Unit,
+    dexLookup: ai.gowtam.oak.services.DexLookupService? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -98,6 +101,7 @@ fun CalculatorOverlay(
             viewModel = viewModel,
             onExplain = onExplain,
             onExpand = onExpand,
+            dexLookup = dexLookup,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(OakSpacing.lg),
@@ -111,6 +115,7 @@ private fun CalculatorForm(
     modifier: Modifier = Modifier,
     onExplain: (String) -> Unit = {},
     onExpand: (() -> Unit)? = null,
+    dexLookup: ai.gowtam.oak.services.DexLookupService? = null,
 ) {
     val oak = LocalOakColors.current
     val state by viewModel.uiState.collectAsState()
@@ -124,27 +129,66 @@ private fun CalculatorForm(
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
             color = oak.textStrong,
         )
-        OutlinedTextField(
-            value = scenario.attacker.species.orEmpty(),
-            onValueChange = viewModel::setAttackerSpecies,
-            label = { Text("Attacker") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
+        Text(
+            "Investment is Stat Points at level 50.",
+            style = MaterialTheme.typography.labelSmall,
+            color = oak.textMuted,
         )
-        OutlinedTextField(
-            value = scenario.defender.species.orEmpty(),
-            onValueChange = viewModel::setDefenderSpecies,
-            label = { Text("Defender") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
-        OutlinedTextField(
-            value = scenario.move.slug.orEmpty(),
-            onValueChange = viewModel::setMoveSlug,
-            label = { Text("Move") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-        )
+        val search: suspend (ai.gowtam.oak.wire.EntityKind, String) -> List<ai.gowtam.oak.features.teams.PickerOption> = { kind, q ->
+            val dex = dexLookup
+            if (dex == null) emptyList()
+            else dex.search(kind, q, Format.Champions).map {
+                ai.gowtam.oak.features.teams.PickerOption(it.slug, it.displayName)
+            }
+        }
+        if (dexLookup != null) {
+            ai.gowtam.oak.features.teams.EntityPickerField(
+                title = "Attacker",
+                value = scenario.attacker.species.orEmpty(),
+                source = ai.gowtam.oak.features.teams.PickerSource.Search(ai.gowtam.oak.wire.EntityKind.POKEMON),
+                search = search,
+                onValueChange = viewModel::setAttackerSpecies,
+                placeholder = "Search Champions roster…",
+            )
+            ai.gowtam.oak.features.teams.EntityPickerField(
+                title = "Defender",
+                value = scenario.defender.species.orEmpty(),
+                source = ai.gowtam.oak.features.teams.PickerSource.Search(ai.gowtam.oak.wire.EntityKind.POKEMON),
+                search = search,
+                onValueChange = viewModel::setDefenderSpecies,
+                placeholder = "Search Champions roster…",
+            )
+            ai.gowtam.oak.features.teams.EntityPickerField(
+                title = "Move",
+                value = scenario.move.slug.orEmpty(),
+                source = ai.gowtam.oak.features.teams.PickerSource.Search(ai.gowtam.oak.wire.EntityKind.MOVE),
+                search = search,
+                onValueChange = viewModel::setMoveSlug,
+                placeholder = "Search moves…",
+            )
+        } else {
+            OutlinedTextField(
+                value = scenario.attacker.species.orEmpty(),
+                onValueChange = viewModel::setAttackerSpecies,
+                label = { Text("Attacker") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = scenario.defender.species.orEmpty(),
+                onValueChange = viewModel::setDefenderSpecies,
+                label = { Text("Defender") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = scenario.move.slug.orEmpty(),
+                onValueChange = viewModel::setMoveSlug,
+                label = { Text("Move") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+        }
         OutlinedTextField(
             value = scenario.attacker.item.orEmpty(),
             onValueChange = viewModel::setAttackerItem,

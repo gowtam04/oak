@@ -276,7 +276,7 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    RegulationChip(format = uiState.displayFormat)
+                    ai.gowtam.oak.ui.RegulationChip(format = uiState.displayFormat, onLid = true)
                     IconButton(onClick = onOpenCalculator) {
                         Icon(Icons.Filled.Functions, contentDescription = "Calculator")
                     }
@@ -481,6 +481,7 @@ fun ChatScreen(
             onDismiss = viewModel::dismissCalculator,
             onExpand = viewModel::expandCalculator,
             onExplain = { prompt -> viewModel.sendFollowUp(prompt) },
+            dexLookup = services.dexLookup,
         )
     }
 }
@@ -513,117 +514,7 @@ private fun HydrateBannerRow(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Scope chip + picker
-// ---------------------------------------------------------------------------
 
-@Composable
-private fun RegulationChip(format: Format) {
-    val oak = LocalOakColors.current
-    val chipShape = RoundedCornerShape(OakRadius.pill)
-    Row(
-        modifier = Modifier
-            .padding(end = OakSpacing.sm)
-            .clip(chipShape)
-            .background(oak.onRed.copy(alpha = 0.16f), chipShape)
-            .border(1.dp, oak.onRed.copy(alpha = 0.45f), chipShape)
-            .padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = format.displayLabel,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = oak.onRed,
-        )
-    }
-}
-
-private fun Modifier.clickableChip(onClick: () -> Unit): Modifier =
-    this.clickable(onClick = onClick)
-
-@Composable
-private fun ScopePickerSheet(
-    current: Format,
-    mru: List<Format> = emptyList(),
-    onSelect: (Format) -> Unit,
-) {
-    val oak = LocalOakColors.current
-    val remaining = Format.knownCases.filterNot { it in mru }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Answer scope",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = oak.textStrong,
-            modifier = Modifier
-                .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm)
-                .semantics { heading() },
-        )
-        Text(
-            text = "Choose which game or generation answers are based on.",
-            style = MaterialTheme.typography.bodySmall,
-            color = oak.textMuted,
-            modifier = Modifier.padding(horizontal = OakSpacing.lg),
-        )
-        Spacer(Modifier.height(OakSpacing.sm))
-        // The known-scopes list now runs to 11 rows (national-dex + gen-1..8 + champions),
-        // which overflows a fixed-height ModalBottomSheet on most phones — scroll the rows
-        // so every option stays reachable instead of clipping off the bottom.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = OakSpacing.xxl),
-        ) {
-            if (mru.isNotEmpty()) {
-                Text(
-                    text = "Recent",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = oak.textMuted,
-                    modifier = Modifier.padding(horizontal = OakSpacing.lg, vertical = OakSpacing.xs),
-                )
-                for (format in mru) {
-                    ScopePickerRow(format = format, selected = format == current, onSelect = onSelect)
-                }
-                Text(
-                    text = "All scopes",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = oak.textMuted,
-                    modifier = Modifier.padding(horizontal = OakSpacing.lg, vertical = OakSpacing.xs),
-                )
-            }
-            for (format in remaining) {
-                ScopePickerRow(format = format, selected = format == current, onSelect = onSelect)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScopePickerRow(format: Format, selected: Boolean, onSelect: (Format) -> Unit) {
-    val oak = LocalOakColors.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickableChip { onSelect(format) }
-            .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.md),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = format.displayLabel,
-            style = MaterialTheme.typography.bodyLarge,
-            color = oak.textStrong,
-        )
-        if (selected) {
-            LedDot(
-                dotSize = 8.dp,
-                haloSize = 14.dp,
-                modifier = Modifier.semantics { contentDescription = "Selected" },
-            )
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Thread rows
@@ -888,29 +779,6 @@ private fun EmptyState(
                 FiledStarterRow(starter = starter, onClick = { onExampleTap(starter.prompt) })
             }
         }
-    }
-}
-
-/**
- * Selected-row marker for the scope picker. Not mounted on the empty plate
- * (STANDBY / LED well is dropped). Cheap disc + halo — no `RenderEffect`.
- */
-@Composable
-private fun LedDot(modifier: Modifier = Modifier, dotSize: Dp = 6.dp, haloSize: Dp = 10.dp) {
-    val oak = LocalOakColors.current
-    Box(modifier = modifier.size(haloSize), contentAlignment = Alignment.Center) {
-        Box(
-            modifier = Modifier
-                .size(haloSize)
-                .clip(CircleShape)
-                .background(oak.accent.copy(alpha = 0.35f)),
-        )
-        Box(
-            modifier = Modifier
-                .size(dotSize)
-                .clip(CircleShape)
-                .background(oak.accent),
-        )
     }
 }
 

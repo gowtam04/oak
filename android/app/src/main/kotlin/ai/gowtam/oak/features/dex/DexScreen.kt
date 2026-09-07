@@ -78,6 +78,7 @@ fun DexListScreen(
     usage: UsageService,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
+    onApplySpecies: ((String) -> Unit)? = null,
 ) {
     val list by viewModel.list.collectAsState()
     val oak = LocalOakColors.current
@@ -90,10 +91,8 @@ fun DexListScreen(
             OakTopBar(
                 title = { Text("Dex", modifier = Modifier.semantics { heading() }) },
                 actions = {
-                    Text(
-                        text = Format.Champions.displayLabel,
-                        color = oak.onRed,
-                        fontWeight = FontWeight.SemiBold,
+                    ai.gowtam.oak.ui.RegulationChip(
+                        onLid = true,
                         modifier = Modifier.padding(end = OakSpacing.md),
                     )
                 },
@@ -115,6 +114,7 @@ fun DexListScreen(
             if (showingUsage) {
                 UsageLeaderboardScreen(
                     viewModel = usageViewModel,
+                    onApplySpecies = onApplySpecies,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
                 return@Column
@@ -281,6 +281,7 @@ fun DexDetailScreen(
     onBack: () -> Unit,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
+    onApplySpecies: ((String) -> Unit)? = null,
 ) {
     val detail by viewModel.detail.collectAsState()
     val list by viewModel.list.collectAsState()
@@ -322,12 +323,25 @@ fun DexDetailScreen(
                     )
                 }
                 is DexViewModel.DetailState.Ready -> {
-                    EntityDetail(
-                        artifact = d.artifact,
-                        requestFormat = list.format,
-                        onOpen = onOpen,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        if (kind == EntityKind.POKEMON && onApplySpecies != null) {
+                            ai.gowtam.oak.ui.OakButton(
+                                onClick = { onApplySpecies(query) },
+                                style = ai.gowtam.oak.ui.OakButtonStyle.Primary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
+                            ) {
+                                Text("Apply this Champions set")
+                            }
+                        }
+                        EntityDetail(
+                            artifact = d.artifact,
+                            requestFormat = Format.Champions,
+                            onOpen = onOpen,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
                 is DexViewModel.DetailState.Unavailable -> {
                     Column(
@@ -346,7 +360,7 @@ fun DexDetailScreen(
                         )
                         Spacer(Modifier.size(OakSpacing.sm))
                         Text(
-                            "Oak doesn't have a ${d.kind.rawValue} profile for “${d.query}” in this format.",
+                            "Oak doesn't have a ${d.kind.rawValue} profile for “${d.query}” in the Champions roster.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = oak.textMuted,
                             textAlign = TextAlign.Center,

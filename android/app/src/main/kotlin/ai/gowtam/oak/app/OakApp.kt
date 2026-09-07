@@ -199,6 +199,7 @@ fun OakApp(
                                     calc = services.calc,
                                     format = calculatorScenario?.format ?: chatFormat,
                                     initialScenario = calculatorScenario,
+                                    dexLookup = services.dexLookup,
                                     onBack = { selectedTab = OakTab.Chat },
                                     onExplain = { prompt ->
                                         chatViewModel.sendFollowUp(prompt)
@@ -378,7 +379,7 @@ private fun SignedInChatHome(
                         ConversationSummary(
                             id = id,
                             title = "Conversation",
-                            format = Format.NationalDex,
+                            format = Format.Champions,
                             pinned = false,
                             updatedAt = 0L,
                         ),
@@ -390,7 +391,7 @@ private fun SignedInChatHome(
                         ConversationSummary(
                             id = id,
                             title = "Fork",
-                            format = Format.NationalDex,
+                            format = Format.Champions,
                             pinned = false,
                             updatedAt = 0L,
                         ),
@@ -413,7 +414,7 @@ private fun SignedInChatHome(
                         ConversationSummary(
                             id = id,
                             title = "Fork",
-                            format = Format.NationalDex,
+                            format = Format.Champions,
                             pinned = false,
                             updatedAt = 0L,
                         ),

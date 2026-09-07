@@ -264,7 +264,7 @@ class TeamEditorViewModel private constructor(
     /** Live typeahead over `/api/search`, scoped to this editor's fixed [format] — backs
      * the species/item pickers. An empty/failed lookup just shows no suggestions. */
     suspend fun searchEntities(kind: EntityKind, query: String): List<PickerOption> =
-        dexLookup.search(kind, query, format).map { PickerOption(it.slug, it.displayName) }
+        dexLookup.search(kind, query, Format.Champions).map { PickerOption(it.slug, it.displayName) }
 
     /** Re-resolves sprite/type/ability/base-stat refs for every filled species slot in
      * one batch call, then applies the Mega required-item auto-force. */
@@ -306,9 +306,9 @@ class TeamEditorViewModel private constructor(
             _uiState.update { it.copy(spriteRefsBySpecies = emptyMap()) }
             return
         }
-        val refs = dexLookup.sprites(species.toList(), format)
+        val refs = dexLookup.sprites(species.toList(), Format.Champions)
         _uiState.update { it.copy(spriteRefsBySpecies = refs) }
-        applyMegaAutoForce()
+        if (!isReadOnly) applyMegaAutoForce()
     }
 
     /** A Mega (or any form with a `required_item`) must hold its stone: force every
@@ -331,7 +331,7 @@ class TeamEditorViewModel private constructor(
             _uiState.update { it.copy(movepoolByMemberId = it.movepoolByMemberId - memberId) }
             return
         }
-        val moves = dexLookup.learnset(member.species, format)
+        val moves = dexLookup.learnset(member.species, Format.Champions)
         _uiState.update { it.copy(movepoolByMemberId = it.movepoolByMemberId + (memberId to moves)) }
     }
 
@@ -445,7 +445,7 @@ class TeamEditorViewModel private constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isAnalyzing = true) }
             try {
-                val result = teamService.analyze(format, members)
+                val result = teamService.analyze(Format.Champions, members)
                 if (generation != analysisGeneration) return@launch
                 _uiState.update { it.copy(analysis = result, isAnalyzing = false, analysisError = null) }
             } catch (e: OakError) {
@@ -553,6 +553,38 @@ class TeamEditorViewModel private constructor(
      * untouched — the patched rows land in the editor's unsaved state and the user still
      * hits Save. The slot edits reuse the exact pure [applyTeamPatch] the server
      * legality-gate ran, so applied ≡ validated. */
+    /**
+     * Fetches the live Champions usage set for this slot's species
+     * (`POST /api/teams/set-template`) and applies it (confirm if filled).
+     */
+    fun applyChampionsSet(slotIndex: Int) {
+        if (!canApplySet) return
+        val species = uiState.value.members.getOrNull(slotIndex)?.species?.trim()?.takeIf { it.isNotBlank() }
+            ?: return
+        viewModelScope.launch {
+            val result = try {
+                teamService.setTemplate(species)
+            } catch (e: OakError) {
+                _uiState.update { it.copy(errorMessage = message(e)) }
+                return@launch
+            } catch (_: Exception) {
+                _uiState.update { it.copy(errorMessage = "Live Champions usage is unavailable.") }
+                return@launch
+            }
+            val incoming = result.member
+            if (!result.found || incoming == null) {
+                _uiState.update {
+                    it.copy(
+                        errorMessage = result.notes.firstOrNull()
+                            ?: "Usage is unavailable or no set is listed for this species.",
+                    )
+                }
+                return@launch
+            }
+            applyUsageSet(slotIndex, incoming)
+        }
+    }
+
     /**
      * Applies a live usage set to [slotIndex]. An empty slot fills immediately;
      * a filled slot asks for yes/no confirm (CF-TEAM-AC-6.3). Tera is stripped

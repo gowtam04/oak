@@ -192,6 +192,7 @@ private fun TeamsListScreen(
     val state by viewModel.uiState.collectAsState()
     var isImporting by remember { mutableStateOf(false) }
     var showAddMenu by remember { mutableStateOf(false) }
+    var pendingArchivedDelete by remember { mutableStateOf<TeamSummary?>(null) }
 
     LaunchedEffect(Unit) { viewModel.reload() }
 
@@ -201,6 +202,7 @@ private fun TeamsListScreen(
             OakTopBar(
                 title = { OakWordmark() },
                 actions = {
+                    ai.gowtam.oak.ui.RegulationChip(onLid = true)
                     Box {
                         IconButton(onClick = { showAddMenu = true }) { Icon(Icons.Filled.Add, contentDescription = "Add team") }
                         DropdownMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
@@ -255,7 +257,7 @@ private fun TeamsListScreen(
                                 archived = true,
                                 onClick = { onOpenExisting(team) },
                                 onDuplicate = {},
-                                onDelete = { viewModel.delete(team) },
+                                onDelete = { pendingArchivedDelete = team },
                             )
                         }
                     }
@@ -269,6 +271,25 @@ private fun TeamsListScreen(
                 )
             }
         }
+    }
+
+    pendingArchivedDelete?.let { team ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingArchivedDelete = null },
+            title = { Text("Delete archived team?") },
+            text = { Text("“${team.name}” will be removed. This cannot be undone.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        viewModel.delete(team)
+                        pendingArchivedDelete = null
+                    },
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { pendingArchivedDelete = null }) { Text("Cancel") }
+            },
+        )
     }
 
     if (isImporting) {

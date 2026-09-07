@@ -1,11 +1,17 @@
 package ai.gowtam.oak.features.usage
 
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.wire.UsageEntry
 import ai.gowtam.oak.wire.UsageLadder
 import ai.gowtam.oak.wire.UsageLeaderboardRow
+import ai.gowtam.oak.wire.UsageSpecies
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,12 +21,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -35,27 +44,61 @@ import java.util.Date
 
 /**
  * Live Champions usage leaderboard (ADR-6 Dex section). Doubles default,
- * Singles second view. Fail-soft when unavailable — never a Smogon OU board.
+ * Singles second view. Click a row for species drill-in + Apply.
  */
 @Composable
 fun UsageLeaderboardScreen(
     viewModel: UsageLeaderboardViewModel,
     modifier: Modifier = Modifier,
+    onApplySpecies: ((String) -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
-    val oak = LocalOakColors.current
     LaunchedEffect(viewModel) { viewModel.start() }
 
+    val species = state.species
+    if (species != null || state.speciesLoading) {
+        BackHandler { viewModel.clearSpecies() }
+        UsageSpeciesDetail(
+            detail = species,
+            loading = state.speciesLoading,
+            onBack = viewModel::clearSpecies,
+            onApply = onApplySpecies,
+            modifier = modifier,
+        )
+        return
+    }
+
+    UsageLeaderboardList(
+        state = state,
+        onLadder = viewModel::setLadder,
+        onOpen = viewModel::openSpecies,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun UsageLeaderboardList(
+    state: UsageLeaderboardViewModel.UiState,
+    onLadder: (UsageLadder) -> Unit,
+    onOpen: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val oak = LocalOakColors.current
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = OakSpacing.md),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
+        Text(
+            "Live Champions usage",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = oak.textStrong,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
             FilterChip(
                 selected = state.ladder == UsageLadder.Doubles,
-                onClick = { viewModel.setLadder(UsageLadder.Doubles) },
+                onClick = { onLadder(UsageLadder.Doubles) },
                 label = { Text("Doubles") },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = oak.accentSoft,
@@ -64,7 +107,7 @@ fun UsageLeaderboardScreen(
             )
             FilterChip(
                 selected = state.ladder == UsageLadder.Singles,
-                onClick = { viewModel.setLadder(UsageLadder.Singles) },
+                onClick = { onLadder(UsageLadder.Singles) },
                 label = { Text("Singles") },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = oak.accentSoft,
@@ -119,7 +162,7 @@ fun UsageLeaderboardScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         items(state.rows, key = { it.slug }) { row ->
-                            UsageRow(row)
+                            UsageRow(row, onClick = { onOpen(row.slug) })
                         }
                     }
                 }
@@ -129,7 +172,84 @@ fun UsageLeaderboardScreen(
 }
 
 @Composable
-private fun UsageRow(row: UsageLeaderboardRow) {
+private fun UsageSpeciesDetail(
+    detail: UsageSpecies?,
+    loading: Boolean,
+    onBack: () -> Unit,
+    onApply: ((String) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val oak = LocalOakColors.current
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = OakSpacing.md)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+    ) {
+        TextButton(onClick = onBack) { Text("Back to usage") }
+        Text(
+            "Live Champions usage",
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = oak.accent,
+        )
+        when {
+            loading && detail == null -> CircularProgressIndicator(color = oak.accent)
+            detail == null -> Text("Couldn't load this species.", color = oak.textMuted)
+            !detail.available -> {
+                Text("Usage unavailable", style = MaterialTheme.typography.titleMedium, color = oak.textStrong)
+                Text(
+                    detail.error ?: "The live Champions ladder is down. Try again later.",
+                    color = oak.textMuted,
+                )
+            }
+            detail.found != true -> {
+                Text(
+                    detail.slug ?: "This Pokémon",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = oak.textStrong,
+                )
+                Text("No live Champions set is listed for this species.", color = oak.textMuted)
+                if (detail.suggestions.isNotEmpty()) {
+                    Text("Did you mean: ${detail.suggestions.joinToString()}", color = oak.textMuted)
+                }
+            }
+            else -> {
+                val title = detail.savedName ?: detail.slug ?: "Species"
+                Text(title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold))
+                val asOf = listOfNotNull(detail.season, detail.format).joinToString(" · ")
+                if (asOf.isNotEmpty()) Text(asOf, style = MaterialTheme.typography.labelSmall, color = oak.textMuted)
+                detail.attribution?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = oak.textMuted) }
+                val slug = detail.slug
+                if (onApply != null && !slug.isNullOrBlank()) {
+                    OakButton(onClick = { onApply(slug) }, style = OakButtonStyle.Primary, modifier = Modifier.fillMaxWidth()) {
+                        Text("Apply this Champions set")
+                    }
+                }
+                UsageSection("Moves", detail.moves)
+                UsageSection("Items", detail.items)
+                UsageSection("Abilities", detail.abilities)
+                UsageSection("Natures", detail.natures)
+                UsageSection("Spreads", detail.spreads)
+                UsageSection("Teammates", detail.teammates)
+            }
+        }
+    }
+}
+
+@Composable
+private fun UsageSection(title: String, entries: List<UsageEntry>) {
+    if (entries.isEmpty()) return
+    val oak = LocalOakColors.current
+    Text(title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = oak.textStrong)
+    for (entry in entries.take(8)) {
+        val pct = entry.pct?.let { "${"%.1f".format(it)}%" } ?: "—"
+        Text("${entry.name} · $pct", style = MaterialTheme.typography.bodyMedium, color = oak.text)
+    }
+}
+
+@Composable
+private fun UsageRow(row: UsageLeaderboardRow, onClick: () -> Unit) {
     val oak = LocalOakColors.current
     val shape = RoundedCornerShape(12.dp)
     Row(
@@ -137,6 +257,7 @@ private fun UsageRow(row: UsageLeaderboardRow) {
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface, shape)
             .border(1.dp, oak.border, shape)
+            .clickable(onClick = onClick)
             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.md),
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.md),
         verticalAlignment = Alignment.CenterVertically,

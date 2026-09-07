@@ -6,6 +6,7 @@ import ai.gowtam.oak.support.MainDispatcherRule
 import ai.gowtam.oak.support.fakeTeam
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.StatSpread
+import ai.gowtam.oak.wire.SetTemplateResult
 import ai.gowtam.oak.wire.TeamMember
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -83,6 +84,27 @@ class TeamEditorChampionsFirstTest {
         val member = model.uiState.value.members[0]
         assertEquals(66, member.statPointTotal)
         assertEquals(member.evTotal, member.statPointTotal)
+    }
+
+    @Test
+    fun applyChampionsSetFetchesTheTemplateAndFillsAnEmptySlot() = runTest(mainDispatcherRule.dispatcher) {
+        val incoming = usageMember()
+        val service = FakeTeamService()
+        service.setTemplateResult = SetTemplateResult(found = true, member = incoming)
+        val model = TeamEditorViewModel(service, format = Format.Champions)
+        model.updateMember(0) { it.copy(species = "garchomp") }
+        advanceUntilIdle()
+
+        model.applyChampionsSet(0)
+        advanceUntilIdle()
+
+        assertEquals(listOf("garchomp"), service.setTemplateCalls)
+        assertNotNull(model.uiState.value.pendingApplyConfirm)
+        model.confirmApplySet()
+        advanceUntilIdle()
+        assertNull(model.uiState.value.pendingApplyConfirm)
+        assertEquals("life-orb", model.uiState.value.members[0].item)
+        assertTrue(model.uiState.value.members[0].teraType.isBlank())
     }
 
     @Test

@@ -104,4 +104,22 @@ class UsageServiceTest {
         ).jsonObject
         assertEquals("upstream_unavailable", body["error"]?.jsonPrimitive?.content)
     }
+
+    @Test
+    fun speciesDrillInIsPublicAndNeverThrows() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """{"available":true,"found":true,"slug":"garchomp","season":"Current","fetched_at":1,"moves":[]}""",
+            ),
+        )
+        val detail = service.species("garchomp")
+        assertTrue(detail.available)
+        assertEquals(true, detail.found)
+        assertEquals("garchomp", detail.slug)
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertTrue(recorded.path!!.startsWith("/api/usage/garchomp"))
+        assertNull(recorded.getHeader("Authorization"))
+    }
 }

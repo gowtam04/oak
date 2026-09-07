@@ -12,9 +12,6 @@ import ai.gowtam.oak.wire.TeamSummary
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -84,17 +81,10 @@ class TeamsListViewModel(
     /** Batch-fetches sprite refs for all species in [teams], grouped by format.
      * Returns an empty map on any failure (degrade silently). */
     private suspend fun fetchSpriteRefs(teams: List<TeamSummary>): Map<String, DexSpriteRef> {
-        val byFormat = teams.groupBy { it.format }
+        val slugs = teams.flatMap { it.species }.distinct()
+        if (slugs.isEmpty()) return emptyMap()
         return try {
-            coroutineScope {
-                byFormat.map { (format, formatTeams) ->
-                    async {
-                        val slugs = formatTeams.flatMap { it.species }.distinct()
-                        if (slugs.isEmpty()) emptyMap()
-                        else dexLookup.sprites(slugs, format)
-                    }
-                }.awaitAll().fold(emptyMap<String, DexSpriteRef>()) { acc, map -> acc + map }
-            }
+            dexLookup.sprites(slugs, Format.Champions)
         } catch (e: Exception) {
             emptyMap()
         }

@@ -161,6 +161,26 @@ class TeamServiceTest {
     }
 
     @Test
+    fun setTemplatePostsSpeciesOnlyAndIsPublic() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """{"found":true,"member":{"species":"garchomp","ability":"rough-skin","item":"life-orb","moves":["earthquake"],"nature":"jolly","evs":{"hp":0,"atk":32,"def":0,"spa":0,"spd":2,"spe":32},"ivs":{"hp":31,"atk":31,"def":31,"spa":31,"spd":31,"spe":31},"tera_type":null,"level":50},"attribution":"championsbattledata.com"}""",
+            ),
+        )
+        val result = service.setTemplate("garchomp")
+        assertTrue(result.found)
+        assertEquals("garchomp", result.member?.species)
+        assertEquals(50, result.member?.level)
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/api/teams/set-template", recorded.path)
+        val body = OakJson.parseToJsonElement(recorded.body.readUtf8()).jsonObject
+        assertEquals("garchomp", body["species"]?.jsonPrimitive?.content)
+        assertNull(recorded.getHeader("Authorization"))
+    }
+
+    @Test
     fun analyzePostsPublicWithFormatAndFullMemberWireShape() = runTest {
         server.enqueue(
             MockResponse().setResponseCode(200).setBody("""{"status":"unavailable","format":"champions"}"""),

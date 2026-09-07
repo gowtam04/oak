@@ -3,6 +3,7 @@ package ai.gowtam.oak.features.usage
 import ai.gowtam.oak.services.UsageService
 import ai.gowtam.oak.wire.UsageLadder
 import ai.gowtam.oak.wire.UsageLeaderboardRow
+import ai.gowtam.oak.wire.UsageSpecies
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,6 +32,8 @@ class UsageLeaderboardViewModel(
         val attribution: String? = null,
         val errorMessage: String? = null,
         val isLoading: Boolean = false,
+        val species: UsageSpecies? = null,
+        val speciesLoading: Boolean = false,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -45,8 +48,23 @@ class UsageLeaderboardViewModel(
             load(ladder)
             return
         }
-        _uiState.update { it.copy(ladder = ladder) }
+        _uiState.update { it.copy(ladder = ladder, species = null) }
         load(ladder)
+    }
+
+    fun openSpecies(slug: String) {
+        val trimmed = slug.trim()
+        if (trimmed.isEmpty()) return
+        val ladder = _uiState.value.ladder
+        viewModelScope.launch {
+            _uiState.update { it.copy(speciesLoading = true) }
+            val detail = usage.species(trimmed, ladder)
+            _uiState.update { it.copy(species = detail, speciesLoading = false) }
+        }
+    }
+
+    fun clearSpecies() {
+        _uiState.update { it.copy(species = null, speciesLoading = false) }
     }
 
     private fun load(ladder: UsageLadder) {

@@ -99,12 +99,12 @@ class CalculatorViewModel(
                 attacker = scenario.attacker.copy(
                     tera = null,
                     ivs = null,
-                    level = scenario.attacker.level?.let { level },
+                    level = level,
                 ),
                 defender = scenario.defender.copy(
                     tera = null,
                     ivs = null,
-                    level = scenario.defender.level?.let { level },
+                    level = level,
                 ),
             )
         }

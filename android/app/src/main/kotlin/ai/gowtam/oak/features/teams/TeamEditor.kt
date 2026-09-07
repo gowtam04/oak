@@ -180,15 +180,14 @@ fun TeamEditor(
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !viewModel.isReadOnly,
                         )
-                        Text(
-                            text = if (viewModel.isReadOnly) {
-                                "Archived · ${viewModel.format.displayLabel}"
-                            } else {
-                                "Format: ${viewModel.format.displayLabel}"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = LocalOakColors.current.textMuted,
-                        )
+                        ai.gowtam.oak.ui.RegulationChip()
+                        if (viewModel.isReadOnly) {
+                            Text(
+                                text = "Archived · ${viewModel.format.displayLabel}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = LocalOakColors.current.textMuted,
+                            )
+                        }
                     }
                 }
 
@@ -218,6 +217,8 @@ fun TeamEditor(
                         showsIvKnobs = viewModel.showsIvKnobs,
                         showsLevelKnob = viewModel.showsLevelKnob,
                         showsStatPoints = viewModel.showsStatPoints,
+                        canApplySet = viewModel.canApplySet && member.species.isNotBlank(),
+                        onApplySet = { viewModel.applyChampionsSet(index) },
                         onChange = { transform -> viewModel.updateMember(index, transform) },
                         onRemove = { viewModel.removeMember(index) },
                     )
@@ -375,6 +376,8 @@ private fun MemberEditorCard(
     showsIvKnobs: Boolean,
     showsLevelKnob: Boolean,
     showsStatPoints: Boolean,
+    canApplySet: Boolean = false,
+    onApplySet: () -> Unit = {},
     onChange: ((EditableMember) -> EditableMember) -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -423,8 +426,11 @@ private fun MemberEditorCard(
             displayNameOverride = if (spriteRef != null) { { headerTitle } } else null,
             enabled = !readOnly,
         )
-        if (readOnly && member.species.isNotBlank() && spriteRef == null) {
+        if (member.species.isNotBlank() && spriteRef == null) {
             Text(TeamEditorViewModel.OFF_ROSTER_LABEL, style = MaterialTheme.typography.labelSmall, color = oak.warning)
+        }
+        if (canApplySet) {
+            TextButton(onClick = onApplySet) { Text("Apply this Champions set") }
         }
         EntityPickerField(
             title = "Ability",
@@ -435,6 +441,9 @@ private fun MemberEditorCard(
             placeholder = if (member.species.isBlank()) "Select a species first" else "Search abilities…",
             enabled = !readOnly && member.species.isNotBlank(),
         )
+        if (member.ability.isNotBlank() && member.species.isNotBlank() && abilityOptions.none { it.slug == member.ability }) {
+            Text(TeamEditorViewModel.OFF_ROSTER_LABEL, style = MaterialTheme.typography.labelSmall, color = oak.warning)
+        }
         EntityPickerField(
             title = if (requiredItem != null) "Item (Mega stone)" else "Item",
             value = member.item,
@@ -444,6 +453,9 @@ private fun MemberEditorCard(
             placeholder = "Search items…",
             enabled = !readOnly && requiredItem == null,
         )
+        if (member.item.isNotBlank() && member.species.isNotBlank() && spriteRef == null) {
+            Text(TeamEditorViewModel.OFF_ROSTER_LABEL, style = MaterialTheme.typography.labelSmall, color = oak.warning)
+        }
 
         for (moveIndex in 0 until 4) {
             val currentMove = member.moves.getOrElse(moveIndex) { "" }
@@ -461,6 +473,9 @@ private fun MemberEditorCard(
                 )
                 movepoolOptions.find { it.slug == currentMove }?.hint?.let { hint ->
                     Text(hint, style = MaterialTheme.typography.labelSmall, color = oak.textMuted)
+                }
+                if (currentMove.isNotBlank() && member.species.isNotBlank() && movepoolOptions.none { it.slug == currentMove }) {
+                    Text(TeamEditorViewModel.OFF_ROSTER_LABEL, style = MaterialTheme.typography.labelSmall, color = oak.warning)
                 }
             }
         }

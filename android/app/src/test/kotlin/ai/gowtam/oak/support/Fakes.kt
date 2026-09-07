@@ -36,6 +36,7 @@ import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.ImportNote
 import ai.gowtam.oak.wire.LearnsetMove
 import ai.gowtam.oak.wire.SearchMatch
+import ai.gowtam.oak.wire.SetTemplateResult
 import ai.gowtam.oak.wire.Team
 import ai.gowtam.oak.wire.TeamAnalysis
 import ai.gowtam.oak.wire.TeamMember
@@ -341,6 +342,9 @@ class FakeTeamService(
     val importPasteCalls = mutableListOf<Pair<Format, String>>()
     val exportPasteCalls = mutableListOf<String>()
     val analyzeCalls = mutableListOf<Pair<Format, List<TeamMember>>>()
+    val setTemplateCalls = mutableListOf<String>()
+    var setTemplateResult: SetTemplateResult = SetTemplateResult(found = false)
+    var setTemplateError: OakError? = null
 
     /** One scripted `analyze` outcome: optionally suspend on [gate], then throw [error] or return [result]. */
     data class AnalyzeStep(
@@ -406,6 +410,12 @@ class FakeTeamService(
         }
         analyzeError?.let { throw it }
         return analyzeResult
+    }
+
+    override suspend fun setTemplate(species: String): SetTemplateResult {
+        setTemplateCalls += species
+        setTemplateError?.let { throw it }
+        return setTemplateResult
     }
 }
 
