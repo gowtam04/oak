@@ -31,7 +31,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -739,7 +739,7 @@ private fun UserMessageRow(
     onEdit: () -> Unit = {},
 ) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
+    val dark = oak.isDark
     val surface = MaterialTheme.colorScheme.surface
     // Enamel user bubble: poke-red-soft mixed 55% with surface, 30% red border,
     // sm radius on the bottom-right. Not surfaceSunken (Key Decision 9).
@@ -965,7 +965,7 @@ private fun LedDot(modifier: Modifier = Modifier, dotSize: Dp = 6.dp, haloSize: 
 private fun FiledActionRow(label: String, title: String, onClick: () -> Unit) {
     val oak = LocalOakColors.current
     val shape = RoundedCornerShape(OakRadius.md)
-    val dark = isSystemInDarkTheme()
+    val dark = oak.isDark
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1004,7 +1004,7 @@ private fun FiledStarterRow(starter: ExamplePrompts.FiledStarter, onClick: () ->
         label = "filedStarterLift",
     )
     val shape = RoundedCornerShape(OakRadius.md)
-    val dark = isSystemInDarkTheme()
+    val dark = oak.isDark
     val fill = if (pressed) oak.accentSoft else MaterialTheme.colorScheme.surface
     val stroke = if (pressed) oak.accent else oak.borderStrong
     Row(

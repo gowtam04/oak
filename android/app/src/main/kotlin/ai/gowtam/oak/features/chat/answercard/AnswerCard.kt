@@ -24,7 +24,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -104,7 +104,7 @@ fun AnswerCard(
 ) {
     val oak = LocalOakColors.current
     val reduceMotion = rememberReduceMotion()
-    val dark = isSystemInDarkTheme()
+    val dark = oak.isDark
     val plateShape = RoundedCornerShape(OakRadius.lg)
     val umber = Color(0xFF4A352A)
     var receiptsExpanded by remember { mutableStateOf(false) }

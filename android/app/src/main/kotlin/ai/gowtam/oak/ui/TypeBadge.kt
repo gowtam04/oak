@@ -2,7 +2,7 @@ package ai.gowtam.oak.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
+
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -31,7 +31,7 @@ fun TypeBadge(
     modifier: Modifier = Modifier,
 ) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
+    val dark = oak.isDark
     val surface = MaterialTheme.colorScheme.surface
     val fill = OakType.badgeFill(type, surface, dark)
     val ink = OakType.badgeInk(type, oak.textStrong, dark)

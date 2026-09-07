@@ -36,6 +36,12 @@ class OakTypeBadgeTest {
     }
 
     @Test
+    fun `light palette is not dark and dark palette is`() {
+        assertEquals(false, OakLightColors.isDark)
+        assertEquals(true, OakDarkColors.isDark)
+    }
+
+    @Test
     fun `border is type at 30 percent alpha`() {
         val electric = OakType.color("electric")
         assertEquals(electric.copy(alpha = 0.30f), OakType.badgeBorder("electric"))

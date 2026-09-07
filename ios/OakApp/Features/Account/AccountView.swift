@@ -203,6 +203,19 @@ struct AccountView: View {
       }
       .accessibilityHint("Opens the damage calculator")
       Picker(
+        "Appearance",
+        selection: Binding(
+          get: { appState.appearance },
+          set: { appState.appearance = $0 }
+        )
+      ) {
+        ForEach(AppearancePreference.allCases, id: \.self) { pref in
+          Text(pref.title).tag(pref)
+        }
+      }
+      .pickerStyle(.segmented)
+      .accessibilityHint("Choose Light, Dark, or follow the iPhone setting.")
+      Picker(
         "Answer cards",
         selection: Binding(
           get: { model.answerDensity },
@@ -213,7 +226,9 @@ struct AccountView: View {
         Text("Compact").tag(AnswerDensity.compact)
       }
     } footer: {
-      Text("Compact hides Why / Sources on answer cards. Facts and caveats stay visible.")
+      Text(
+        "System follows your iPhone's Light/Dark setting. Compact hides Why / Sources on answer cards. Facts and caveats stay visible."
+      )
     }
   }
 

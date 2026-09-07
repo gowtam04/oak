@@ -29,7 +29,9 @@ private const val TAG = "Oak.AppState"
  * `collectAsState()` the flows they need.
  */
 @Stable
-class AppState {
+class AppState(
+    private val appearanceStore: AppearanceStore = InMemoryAppearanceStore(),
+) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Guest)
 
     /** Whether the user is a guest or signed in. */
@@ -129,6 +131,14 @@ class AppState {
 
     fun setAnswerDensity(density: AnswerDensity) {
         _answerDensity.value = density
+    }
+
+    private val _appearance = MutableStateFlow(appearanceStore.load())
+    val appearance: StateFlow<AppearancePreference> = _appearance.asStateFlow()
+
+    fun setAppearance(preference: AppearancePreference) {
+        _appearance.value = preference
+        appearanceStore.save(preference)
     }
 
     /**

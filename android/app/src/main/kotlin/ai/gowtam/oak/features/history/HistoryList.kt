@@ -18,7 +18,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -336,7 +336,7 @@ private fun ActiveFilterPill(format: Format, onClear: () -> Unit) {
 @Composable
 private fun NewChatFab(onClick: () -> Unit) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
+    val dark = oak.isDark
     val reduceMotion = rememberReduceMotion()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()

@@ -9,6 +9,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
@@ -82,7 +83,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            OakTheme {
+            val appearance by appState.appearance.collectAsState()
+            val systemDark = isSystemInDarkTheme()
+            OakTheme(darkTheme = appearance.resolveDark(systemDark)) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     OakApp(services = services, appState = appState, chatViewModel = chatViewModel, artifactViewModel = artifactViewModel)
                 }
