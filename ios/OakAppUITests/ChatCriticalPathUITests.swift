@@ -23,7 +23,7 @@ final class ChatCriticalPathUITests: XCTestCase {
     try requireLiveBackend()
 
     let app = XCUIApplication().launchOak()
-    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
 
     XCTAssertTrue(goToTab(OakUITest.Tab.chat, in: app), "Chat tab unreachable.")
     try requireComposer(in: app)

@@ -63,12 +63,14 @@ struct ShareSnapshotView: View {
         ToolbarItem(placement: .cancellationAction) {
           Button("Close") { dismiss() }
         }
+        .oakLidItem()
       }
     }
     .oakEnamelNav()
     .task { await load() }
     .sheet(isPresented: $showingSignIn) {
       AuthView(model: AuthViewModel(auth: services.auth, appState: appState))
+        .oakPaperSheet()
     }
     .onChange(of: appState.authState) { _, newValue in
       if case .signedIn = newValue, pendingImportAfterSignIn {

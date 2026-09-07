@@ -33,6 +33,7 @@ struct TeamsAssistantSheet: View {
         ToolbarItem(placement: .topBarTrailing) {
           Button("Done") { dismiss() }
         }
+        .oakLidItem()
       }
       .onDisappear { model.cancel() }
     }

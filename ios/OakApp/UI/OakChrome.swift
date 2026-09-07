@@ -1,27 +1,46 @@
 import SwiftUI
 import UIKit
 
+/// The four root destinations. Named `OakAppTab` to avoid colliding with
+/// SwiftUI's `Tab`. `Hashable` so it can back `TabView(selection:)`.
+enum OakAppTab: Hashable, CaseIterable, Sendable {
+  case chat
+  case teams
+  case dex
+  case settings
+
+  var title: String {
+    switch self {
+    case .chat: "Chat"
+    case .teams: "Teams"
+    case .dex: "Dex"
+    case .settings: "Settings"
+    }
+  }
+
+  var systemImage: String {
+    switch self {
+    case .chat: "bubble.left.and.text.bubble.right"
+    case .teams: "square.grid.3x2.fill"
+    case .dex: "books.vertical"
+    case .settings: "gearshape"
+    }
+  }
+}
+
 /// Oak's chrome layer — the enamel lid (opaque coral nav through the status bar)
 /// and paper tab dock. Kept out of `Theme.swift` (pure tokens) because these
 /// touch UIKit appearance proxies and compose views.
 enum OakChrome {
-  /// iOS 18 can force a full-width opaque paper dock. iOS 26's tab bar is a
-  /// floating capsule; `UITabBar.isTranslucent = false` still reserves the old
-  /// dock height and leaves it unpainted (black void above the capsule).
-  static var forcesOpaqueTabDock: Bool {
-    if #available(iOS 26.0, *) { return false }
-    return true
-  }
-
   /// Installs Oak's global `UIBarAppearance` so every `NavigationStack` nav bar
-  /// is **opaque enamel** (`uiPokeRed`) and the root `TabView` tab bar is paper
-  /// (`uiSurface`) — never system material / Liquid Glass.
+  /// is **opaque enamel** (`uiPokeRed`) — never system material / Liquid Glass.
+  ///
+  /// The root tab bar is **not** the system `UITabBar`: `RootView` hides it and
+  /// draws ``OakTabDock``. Tab-bar appearance is still painted opaque as a
+  /// safety net if the system bar flashes during launch.
   ///
   /// Called once at app launch. Appearance proxies are process-global and the
   /// colors are dynamic `UIColor`s, so light/dark tracking is automatic.
-  ///
-  /// Tab-bar *colors* apply on every OS. Tab-bar *translucency* is gated by
-  /// ``forcesOpaqueTabDock`` — see that flag's doc for the iOS 26 inset bug.
   @MainActor
   static func applyBarAppearance() {
     let titleFont = UIFont(name: "Fredoka-SemiBold", size: 17)
@@ -60,9 +79,6 @@ enum OakChrome {
     let tabBar = UITabBar.appearance()
     tabBar.standardAppearance = tab
     tabBar.scrollEdgeAppearance = tab
-    // Explicit on both sides: opaque appearance can leave the flag false
-    // even when we skip the iOS 18 assignment.
-    tabBar.isTranslucent = !forcesOpaqueTabDock
   }
 
   /// Opaque 12% mix of `#231F1C` (neutral-900) into poke-red-active.
@@ -96,6 +112,7 @@ extension View {
       .toolbarColorScheme(.dark, for: .navigationBar)
       .toolbarBackground(Theme.accent, for: .navigationBar)
       .toolbarBackground(.visible, for: .navigationBar)
+      .oakDisableScrollEdgeGlass()
   }
 
   /// Retired: the lid *is* the red slab (painted by `applyBarAppearance` /
@@ -103,20 +120,31 @@ extension View {
   /// reintroduce a 2pt thread on cream.
   func oakRedThread() -> some View { self }
 
-  /// iOS 26 can shrink the floating tab capsule on scroll, which reopens a
-  /// blank band under content. Pin the capsule so every tab keeps a stable
-  /// bottom edge. No-op below iOS 26 (no minimize behavior).
-  func oakTabBarUnminimized() -> some View {
-    modifier(OakTabBarUnminimized())
+  /// Paper canvas fill for sheets — kills iOS 26's frosted presentation chrome.
+  /// Callers still set their own detents.
+  func oakPaperSheet() -> some View {
+    self
+      .presentationBackground(Theme.canvas)
+      .presentationCornerRadius(24)
+      .presentationDragIndicator(.visible)
   }
-}
 
-private struct OakTabBarUnminimized: ViewModifier {
-  func body(content: Content) -> some View {
+  /// Hides the system `TabView` bar (including iOS 26's Liquid Glass capsule)
+  /// so ``OakTabDock`` is the only tab chrome.
+  func oakHidesSystemTabBar() -> some View {
+    self
+      .toolbar(.hidden, for: .tabBar)
+      .toolbarBackground(.hidden, for: .tabBar)
+  }
+
+  /// iOS 26 auto-blurs scroll content under system bars. Enamel lids and the
+  /// paper dock are opaque, so the fade is just leftover glass — disable it.
+  @ViewBuilder
+  func oakDisableScrollEdgeGlass() -> some View {
     if #available(iOS 26.0, *) {
-      content.tabBarMinimizeBehavior(.never)
+      self.scrollEdgeEffectHidden()
     } else {
-      content
+      self
     }
   }
 }
@@ -131,6 +159,80 @@ extension ToolbarContent {
     } else {
       self
     }
+  }
+}
+
+/// Opaque paper tab capsule that replaces iOS 26's Liquid Glass `TabView` bar.
+/// Sliding `accentSoft` pill + snappy color — no material morph, no refraction.
+struct OakTabDock: View {
+  @Binding var selection: OakAppTab
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.colorScheme) private var colorScheme
+  @Namespace private var indicator
+
+  var body: some View {
+    HStack(spacing: 0) {
+      ForEach(OakAppTab.allCases, id: \.self) { tab in
+        dockItem(tab)
+      }
+    }
+    .padding(4)
+    .background(Theme.surface, in: Capsule())
+    .overlay {
+      Capsule().strokeBorder(Theme.border, lineWidth: 1)
+    }
+    .shadow(
+      color: colorScheme == .dark ? .clear : Theme.Shadow.raised.ambient.color,
+      radius: Theme.Shadow.raised.ambient.radius,
+      y: Theme.Shadow.raised.ambient.y
+    )
+    .shadow(
+      color: colorScheme == .dark ? .clear : Theme.Shadow.raised.key.color,
+      radius: Theme.Shadow.raised.key.radius,
+      y: Theme.Shadow.raised.key.y
+    )
+    .padding(.horizontal, Theme.Spacing.lg)
+    .padding(.top, Theme.Spacing.sm)
+    .padding(.bottom, Theme.Spacing.sm)
+    .frame(maxWidth: .infinity)
+    .background(Theme.canvas.ignoresSafeArea(edges: .bottom))
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("oak-tab-dock")
+  }
+
+  private func dockItem(_ tab: OakAppTab) -> some View {
+    let isSelected = selection == tab
+    return Button {
+      guard selection != tab else { return }
+      if reduceMotion {
+        selection = tab
+      } else {
+        withAnimation(Theme.Motion.snappy) { selection = tab }
+      }
+    } label: {
+      VStack(spacing: 2) {
+        Image(systemName: tab.systemImage)
+          .font(.system(size: 20, weight: .semibold))
+          .symbolEffect(.bounce, value: isSelected)
+        Text(tab.title)
+          .font(Theme.body(.caption2, weight: .semibold))
+          .lineLimit(1)
+      }
+      .foregroundStyle(isSelected ? Theme.accent : Theme.textSecondary)
+      .frame(maxWidth: .infinity)
+      .padding(.vertical, 8)
+      .background {
+        if isSelected {
+          Capsule()
+            .fill(Theme.accentSoft)
+            .matchedGeometryEffect(id: "oak-tab-indicator", in: indicator)
+        }
+      }
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(tab.title)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 }
 
@@ -186,6 +288,16 @@ struct OakWordmarkLockup: View {
     OakWordmarkLockup(elevated: false)
   }
   .padding()
+  .frame(maxWidth: .infinity, maxHeight: .infinity)
+  .background(Theme.canvas)
+}
+
+#Preview("Tab dock") {
+  @Previewable @State var selection: OakAppTab = .chat
+  VStack {
+    Spacer()
+    OakTabDock(selection: $selection)
+  }
   .frame(maxWidth: .infinity, maxHeight: .infinity)
   .background(Theme.canvas)
 }

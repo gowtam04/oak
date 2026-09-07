@@ -82,6 +82,7 @@ struct ShowdownImportView: View {
         ToolbarItem(placement: .topBarLeading) {
           Button("Cancel") { dismiss() }
         }
+        .oakLidItem()
         ToolbarItem(placement: .topBarTrailing) {
           if isImporting {
             ProgressView()
@@ -96,6 +97,7 @@ struct ShowdownImportView: View {
               .fontWeight(.semibold)
           }
         }
+        .oakLidItem()
       }
       .overlay(alignment: .bottom) {
         if let message = model.errorMessage {

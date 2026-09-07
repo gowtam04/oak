@@ -193,6 +193,7 @@ struct TeamEditorView: View {
               Label("Export", systemImage: "square.and.arrow.up")
             }
           }
+          .oakLidItem()
         }
       }
       .overlay(alignment: .bottom) {
@@ -211,12 +212,14 @@ struct TeamEditorView: View {
       }
       .sheet(item: $exportedPaste) { payload in
         ExportSheet(text: payload.text)
+          .oakPaperSheet()
       }
       // `.sheet(item:)` on the presentation-only binding — a nil-model blank sheet is
       // then structurally impossible (the sheet only presents once the model exists) —
       // while the lifetime holder (`assistant`) is untouched by dismiss.
       .sheet(item: $presentedAssistant) { assistant in
         TeamsAssistantSheet(model: assistant)
+          .oakPaperSheet()
       }
       .task {
         // `load()` (existing-team path) fetches sprites/movepools itself once the members
@@ -307,14 +310,21 @@ private struct ExportSheet: View {
         ToolbarItem(placement: .topBarLeading) {
           Button("Copy") { UIPasteboard.general.string = text }
         }
+        .oakLidItem()
         ToolbarItem(placement: .topBarTrailing) {
           ShareLink(item: text) {
             Label("Share", systemImage: "square.and.arrow.up")
           }
         }
-        ToolbarItem(placement: .bottomBar) {
-          Button("Done") { dismiss() }
-        }
+        .oakLidItem()
+      }
+      .safeAreaInset(edge: .bottom) {
+        Button("Done") { dismiss() }
+          .buttonStyle(.oakPrimary)
+          .padding(.horizontal, Theme.Spacing.lg)
+          .padding(.vertical, Theme.Spacing.sm)
+          .frame(maxWidth: .infinity)
+          .background(Theme.canvas)
       }
     }
     .oakEnamelNav()

@@ -76,6 +76,7 @@ struct EntityPickerRow: View {
           isPresented = false
         }
       )
+      .oakPaperSheet()
     }
   }
 }
@@ -92,6 +93,8 @@ struct EntityPickerSheet: View {
   let onSelect: (String) -> Void
 
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @FocusState private var searchFocused: Bool
   @State private var query = ""
   @State private var results: [PickerOption] = []
   @State private var searchTask: Task<Void, Never>?
@@ -101,55 +104,101 @@ struct EntityPickerSheet: View {
 
   var body: some View {
     NavigationStack {
-      List {
-        if !currentValue.isEmpty {
-          Button(role: .destructive) {
-            onSelect("")
-          } label: {
-            Label("Clear selection", systemImage: "xmark.circle")
-          }
-        }
-        if results.isEmpty {
-          ContentUnavailableView("No matches", systemImage: "magnifyingglass")
-            .listRowSeparator(.hidden)
-        } else {
-          ForEach(results) { option in
-            Button {
-              onSelect(option.slug)
+      VStack(spacing: 0) {
+        searchField
+        List {
+          if !currentValue.isEmpty {
+            Button(role: .destructive) {
+              onSelect("")
             } label: {
-              HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                  Text(option.displayName)
-                    .foregroundStyle(Theme.textPrimary)
-                  if let hint = option.hint {
-                    Text(hint)
-                      .font(.caption)
-                      .foregroundStyle(Theme.textSecondary)
+              Label("Clear selection", systemImage: "xmark.circle")
+            }
+            .listRowBackground(Theme.surface)
+          }
+          if results.isEmpty {
+            ContentUnavailableView("No matches", systemImage: "magnifyingglass")
+              .listRowSeparator(.hidden)
+              .listRowBackground(Color.clear)
+          } else {
+            ForEach(results) { option in
+              Button {
+                onSelect(option.slug)
+              } label: {
+                HStack {
+                  VStack(alignment: .leading, spacing: 2) {
+                    Text(option.displayName)
+                      .foregroundStyle(Theme.textPrimary)
+                    if let hint = option.hint {
+                      Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                    }
+                  }
+                  Spacer(minLength: 8)
+                  if option.slug == currentValue {
+                    Image(systemName: "checkmark")
+                      .foregroundStyle(Theme.accent)
                   }
                 }
-                Spacer(minLength: 8)
-                if option.slug == currentValue {
-                  Image(systemName: "checkmark")
-                    .foregroundStyle(Theme.accent)
-                }
               }
+              .listRowBackground(Theme.surface)
             }
           }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
       }
-      .softHeaderScrollEdge()
-      .searchable(text: $query, prompt: "Search")
+      .background(Theme.canvas)
       .navigationTitle(title)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           Button("Cancel") { dismiss() }
         }
+        .oakLidItem()
       }
       .task { await runSearch(query) }
       .onChange(of: query) { _, newValue in scheduleSearch(newValue) }
     }
     .oakEnamelNav()
+  }
+
+  /// Paper search pill — same grammar as History/Dex. Replaces iOS 26's glass
+  /// `.searchable` so the enamel title stays opaque paint.
+  private var searchField: some View {
+    HStack(spacing: Theme.Spacing.sm) {
+      Image(systemName: "magnifyingglass")
+        .foregroundStyle(Theme.textMuted)
+        .accessibilityHidden(true)
+      TextField("Search", text: $query)
+        .font(Theme.body(.callout))
+        .foregroundStyle(Theme.textPrimary)
+        .tint(Theme.accent)
+        .submitLabel(.search)
+        .focused($searchFocused)
+        .autocorrectionDisabled()
+        .textInputAutocapitalization(.never)
+      if !query.isEmpty {
+        Button {
+          query = ""
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .foregroundStyle(Theme.textMuted)
+        }
+        .accessibilityLabel("Clear search")
+      }
+    }
+    .padding(.horizontal, Theme.Spacing.md)
+    .padding(.vertical, 10)
+    .background(Theme.surface, in: Capsule())
+    .overlay {
+      Capsule().strokeBorder(searchFocused ? Theme.accent : Theme.border, lineWidth: searchFocused ? 1.5 : 1)
+    }
+    .shadow(color: searchFocused ? Theme.accent.opacity(0.18) : .clear, radius: 4)
+    .padding(.horizontal, Theme.Spacing.lg)
+    .padding(.top, Theme.Spacing.sm)
+    .padding(.bottom, Theme.Spacing.sm)
+    .animation(reduceMotion ? nil : Theme.Motion.snappy, value: searchFocused)
   }
 
   private func scheduleSearch(_ q: String) {
@@ -178,27 +227,6 @@ struct EntityPickerSheet: View {
       let matches = await search(kind, trimmed)
       guard !Task.isCancelled else { return }
       results = matches
-    }
-  }
-}
-
-extension View {
-  /// Lets scrolled list rows fade under the picker's inline header instead of
-  /// hard-clipping against it — the "cutoff on species" a TestFlight tester reported.
-  /// Oak paints its nav bars opaque (``OakChrome``), which fully occludes content
-  /// scrolling under the header; hiding this sheet's bar background is what lets iOS
-  /// 26's soft top scroll-edge effect render the graceful Liquid-Glass fade. Both
-  /// modifiers are gated together: **below iOS 26 the soft fade is unavailable, so we
-  /// must keep the opaque bar** — hiding the background there would leave the title
-  /// and rows colliding under a transparent header, worse than the original clip.
-  @ViewBuilder
-  func softHeaderScrollEdge() -> some View {
-    if #available(iOS 26.0, *) {
-      self
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .scrollEdgeEffectStyle(.soft, for: .top)
-    } else {
-      self
     }
   }
 }

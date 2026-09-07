@@ -32,10 +32,12 @@ struct CalculatorView: View {
               onDismiss?()
             }
           }
+          .oakLidItem()
         } else {
           ToolbarItem(placement: .cancellationAction) {
             Button("Done") { onDismiss?() }
           }
+          .oakLidItem()
         }
       }
       .task(id: estimateKey) {

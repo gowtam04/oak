@@ -267,6 +267,7 @@ struct AddToTeamSheet: View {
         ToolbarItem(placement: .cancellationAction) {
           Button("Cancel") { model.dismiss() }
         }
+        .oakLidItem()
       }
       .task { await model.load() }
       .alert("Replace a member?", isPresented: replacePresented) {

@@ -116,6 +116,7 @@ struct ChatTabView: View {
     .oakEnamelNav()
     .sheet(isPresented: $showSignIn) {
       AuthView(model: AuthViewModel(auth: services.auth, appState: appState))
+        .oakPaperSheet()
     }
   }
 }

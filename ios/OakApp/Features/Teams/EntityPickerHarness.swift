@@ -5,9 +5,9 @@ import SwiftUI
 ///
 /// The team builder's entity picker sheet is only reachable behind a signed-in
 /// account, which makes the sheet's system-chrome layout (inline nav bar + the
-/// iOS 26 bottom search field) awkward to inspect or screenshot in isolation. This
+/// paper search pill) awkward to inspect or screenshot in isolation. This
 /// harness presents the exact same ``EntityPickerSheet`` — same `NavigationStack`,
-/// `List`, `.searchable`, and toolbar — over a static, offline `.options` source so
+/// `List`, paper search field, and toolbar — over a static, offline `.options` source so
 /// the chrome/inset behavior can be verified without a network round-trip or auth.
 ///
 /// It is compiled only in DEBUG and only reached when the app is launched with the
@@ -42,6 +42,7 @@ struct EntityPickerHarness: View {
           search: { _, _ in [] },
           onSelect: { _ in }
         )
+        .oakPaperSheet()
       }
   }
 }

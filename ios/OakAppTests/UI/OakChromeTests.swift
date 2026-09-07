@@ -4,26 +4,33 @@ import UIKit
 
 @testable import OakApp
 
-/// Pins the iOS 26 tab-dock translucency gate. Appearance proxies are
-/// process-global, so these tests call `applyBarAppearance()` and read
-/// `UITabBar.appearance()` — they do not render pixels.
+/// Pins enamel chrome contracts: opaque nav appearance, the four-tab dock
+/// vocabulary, and that the system tab-bar translucency gate is gone (the
+/// visible dock is ``OakTabDock``, not `UITabBar`).
 @MainActor
 struct OakChromeTests {
   @Test
-  func opaqueTabDockIsNotForcedOnIOS26() {
-    if #available(iOS 26.0, *) {
-      #expect(!OakChrome.forcesOpaqueTabDock)
-    } else {
-      #expect(OakChrome.forcesOpaqueTabDock)
-    }
+  func oakAppTabHasFourCases() {
+    #expect(OakAppTab.allCases == [.chat, .teams, .dex, .settings])
+    #expect(OakAppTab.chat.title == "Chat")
+    #expect(OakAppTab.teams.systemImage == "square.grid.3x2.fill")
   }
 
   @Test
-  func applyBarAppearanceMatchesDockGate() {
+  func applyBarAppearancePaintsOpaqueEnamelNav() {
     OakChrome.applyBarAppearance()
-    // UIAppearance getters do not round-trip; a fresh bar picks up the proxy.
-    let tabBar = UITabBar()
-    #expect(tabBar.isTranslucent == !OakChrome.forcesOpaqueTabDock)
-    #expect(UITabBar.appearance().standardAppearance.backgroundColor != nil)
+    let nav = UINavigationBar.appearance()
+    #expect(nav.standardAppearance.backgroundColor != nil)
+    #expect(nav.isTranslucent == false)
+  }
+
+  @Test
+  func tabDockAndPaperSheetModifiersCompile() {
+    _ = OakTabDock(selection: .constant(.chat))
+    _ = Color.clear.oakEnamelNav()
+    _ = Color.clear.oakPaperSheet()
+    _ = Color.clear.oakHidesSystemTabBar()
+    _ = Color.clear.oakDisableScrollEdgeGlass()
+    #expect(Bool(true))
   }
 }

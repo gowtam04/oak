@@ -57,6 +57,7 @@ struct ArtifactSheetView: View {
             }
             .accessibilityLabel("Back to previous artifact")
           }
+          .oakLidItem()
         }
         ToolbarItem(placement: .topBarTrailing) {
           HStack(spacing: 12) {
@@ -90,6 +91,7 @@ struct ArtifactSheetView: View {
             }
           }
         }
+        .oakLidItem()
       }
     }
     .oakEnamelNav()
@@ -113,6 +115,7 @@ struct ArtifactSheetView: View {
           ToolbarItem(placement: .cancellationAction) {
             Button("Cancel") { showingCompare = false }
           }
+          .oakLidItem()
           ToolbarItem(placement: .confirmationAction) {
             Button("Compare") {
               let species = compareSpecies
@@ -126,16 +129,15 @@ struct ArtifactSheetView: View {
             }
             .disabled(compareSpecies.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
           }
+          .oakLidItem()
         }
       }
       .oakEnamelNav()
       .presentationDetents([.medium])
+      .oakPaperSheet()
     }
     .presentationDetents([.medium, .large])
-    .presentationDragIndicator(.visible)
-    // Paper canvas under white plates.
-    .presentationBackground(Theme.canvas)
-    .presentationCornerRadius(24)
+    .oakPaperSheet()
   }
 
   /// Push (deeper) slides content in from the trailing edge and out to the leading edge; back

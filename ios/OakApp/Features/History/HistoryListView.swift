@@ -73,6 +73,7 @@ struct ConversationListView: View {
       ToolbarItem(placement: .topBarLeading) {
         organizeMenu
       }
+      .oakLidItem()
       ToolbarItem(placement: .topBarTrailing) {
         HStack {
           Button(model.isSelecting ? "Done" : "Select") {
@@ -82,6 +83,7 @@ struct ConversationListView: View {
           formatFilterMenu
         }
       }
+      .oakLidItem()
     }
     .safeAreaInset(edge: .bottom) {
       if model.isSelecting, !model.selectedIds.isEmpty {

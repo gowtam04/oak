@@ -29,7 +29,7 @@ final class CrossFeatureUITests: XCTestCase {
     let credentials = try requireTestOTP()
 
     let app = XCUIApplication().launchOak()
-    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
 
     // Ask one question as a guest to establish an in-memory thread.
     XCTAssertTrue(goToTab(OakUITest.Tab.chat, in: app), "Chat tab unreachable.")
@@ -94,7 +94,7 @@ final class CrossFeatureUITests: XCTestCase {
     try requireLiveBackend()
 
     let app = XCUIApplication().launchOak()
-    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
 
     XCTAssertTrue(goToTab(OakUITest.Tab.chat, in: app), "Chat tab unreachable.")
     try requireComposer(in: app)

@@ -61,6 +61,7 @@ struct AccountView: View {
     .navigationBarTitleDisplayMode(.inline)
     .sheet(isPresented: $showingSignIn) {
       AuthView(model: model.makeAuthViewModel())
+        .oakPaperSheet()
     }
     // Dismiss the sign-in sheet automatically once verification flips the app to
     // signed-in (the AuthView itself is presenter-agnostic).

@@ -16,11 +16,11 @@ import SwiftUI
 /// Both side-effects are non-fatal — they swallow their own errors — so a transient
 /// backend problem never blocks the UI or costs the user their on-screen thread.
 ///
-/// Chrome (UI-polish P6): the tab bar tracks a `selection` so a switch fires a
-/// light `Haptics.tap()` and the selected tab's icon plays a one-shot
-/// `.symbolEffect(.bounce)`. The bounce is a decorative enhancement layered over
-/// the label text (which always carries the meaning), so no Reduce Motion gate is
-/// needed — SwiftUI's symbol effects already no-op under that setting.
+/// Chrome: ``OakTabDock`` (opaque paper capsule, sliding `accentSoft` pill)
+/// replaces the system `TabView` bar so iOS 26 never draws Liquid Glass. A switch
+/// fires `Haptics.tap()` and the selected icon plays a one-shot
+/// `.symbolEffect(.bounce)`. The bounce is decorative (the label carries the
+/// meaning); SwiftUI's symbol effects already no-op under Reduce Motion.
 struct RootView: View {
   @Environment(\.services) private var services
   @Environment(\.scenePhase) private var scenePhase
@@ -28,56 +28,51 @@ struct RootView: View {
   @Environment(UpdateViewModel.self) private var updateModel
 
   /// The selected tab, tracked so tab changes can fire haptics + a symbol bounce.
-  @State private var selection: AppTab = .chat
+  @State private var selection: OakAppTab = .chat
   @State private var presentedShareId: String?
   @State private var calculatorCover: CalculatorCover?
 
-  /// The four root destinations. Named `AppTab` to avoid colliding with SwiftUI's
-  /// `Tab`; `Hashable` so it can back the `TabView(selection:)`.
-  private enum AppTab: Hashable {
-    case chat
-    case teams
-    case dex
-    case settings
-  }
-
   var body: some View {
-    TabView(selection: $selection) {
-      Tab(value: AppTab.chat) {
-        ChatTabView()
-      } label: {
-        Label("Chat", systemImage: "bubble.left.and.text.bubble.right")
-          .symbolEffect(.bounce, value: selection == .chat)
-      }
-      Tab(value: AppTab.teams) {
-        TeamsListView(
-          model: TeamsListViewModel(teamService: services.teams, dexLookup: services.dexLookup)
-        )
-      } label: {
-        Label("Teams", systemImage: "square.grid.3x2.fill")
-          .symbolEffect(.bounce, value: selection == .teams)
-      }
-      Tab(value: AppTab.dex) {
-        DexView()
-      } label: {
-        Label("Dex", systemImage: "books.vertical")
-          .symbolEffect(.bounce, value: selection == .dex)
-      }
-      Tab(value: AppTab.settings) {
-        NavigationStack {
-          AccountView(model: AccountViewModel(auth: services.auth, appState: appState))
+    VStack(spacing: 0) {
+      TabView(selection: $selection) {
+        Tab(value: OakAppTab.chat) {
+          ChatTabView()
+            .oakHidesSystemTabBar()
+        } label: {
+          Label(OakAppTab.chat.title, systemImage: OakAppTab.chat.systemImage)
         }
-        .oakEnamelNav()
-      } label: {
-        Label("Settings", systemImage: "gearshape")
-          .symbolEffect(.bounce, value: selection == .settings)
+        Tab(value: OakAppTab.teams) {
+          TeamsListView(
+            model: TeamsListViewModel(teamService: services.teams, dexLookup: services.dexLookup)
+          )
+          .oakHidesSystemTabBar()
+        } label: {
+          Label(OakAppTab.teams.title, systemImage: OakAppTab.teams.systemImage)
+        }
+        Tab(value: OakAppTab.dex) {
+          DexView()
+            .oakHidesSystemTabBar()
+        } label: {
+          Label(OakAppTab.dex.title, systemImage: OakAppTab.dex.systemImage)
+        }
+        Tab(value: OakAppTab.settings) {
+          NavigationStack {
+            AccountView(model: AccountViewModel(auth: services.auth, appState: appState))
+          }
+          .oakEnamelNav()
+          .oakHidesSystemTabBar()
+        } label: {
+          Label(OakAppTab.settings.title, systemImage: OakAppTab.settings.systemImage)
+        }
       }
+      // Canvas fills any leftover system-bar overlay so a launch flash never
+      // reveals window-black. The visible dock is ``OakTabDock`` (opaque paper),
+      // stacked below the tabs so Chat's composer and lists are never covered.
+      .background(Theme.canvas.ignoresSafeArea())
+      .oakDisableScrollEdgeGlass()
+      OakTabDock(selection: $selection)
     }
-    // Canvas fills any tab-bar overlay region so iOS 26's floating capsule
-    // never reveals window-black. `oakTabBarUnminimized` stops scroll-minimize
-    // from collapsing the capsule and leaving a blank band.
     .background(Theme.canvas.ignoresSafeArea())
-    .oakTabBarUnminimized()
     .tint(Theme.accent)
     .environment(\.showsAddToTeam, isSignedIn)
     .onChange(of: selection) { _, _ in Haptics.tap() }
@@ -118,6 +113,7 @@ struct RootView: View {
       set: { presentedShareId = $0?.id }
     )) { item in
       ShareSnapshotView(shareId: item.id)
+        .oakPaperSheet()
     }
     .onOpenURL { url in
       if let id = Self.shareId(from: url) {
@@ -140,6 +136,7 @@ struct RootView: View {
         onUpdate: { updateModel.openStore() },
         onNotNow: { updateModel.dismissSoftUpdate() }
       )
+      .oakPaperSheet()
     }
     .fullScreenCover(item: $calculatorCover) { cover in
       CalculatorDestinationView(
@@ -168,6 +165,7 @@ struct RootView: View {
             appState.pendingDestination = .team(id: id)
           }
         )
+        .oakPaperSheet()
       }
     }
   }

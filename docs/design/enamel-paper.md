@@ -733,6 +733,8 @@ Principal/custom titles on the lid use `Theme.onRed`, not `Theme.textStrong`.
 
 If iOS 26 still frosts `TabView` after opaque `UITabBarAppearance`, replace with a custom opaque `--surface` capsule (mock `.tabs` at 92% white is **too translucent** — use **100% `--surface`**, 1px `--border`, `--shadow-floating`, radius 28). Red active label. No `.ultraThinMaterial`.
 
+**Landed:** appearance proxies were not enough — iOS 26 `TabView` still drew a Liquid Glass capsule and morphed it on tab switch. The system tab bar is now hidden; ``OakTabDock`` (`ios/OakApp/UI/OakChrome.swift`) is the only tab chrome: 100% `--surface` capsule, sliding `accentSoft` pill (`Theme.Motion.snappy`), red selected label. `oakEnamelNav()` also hides the automatic scroll-edge blur (`scrollEdgeEffectHidden`). Sheets use `oakPaperSheet()`. Do **not** set `UIDesignRequiresCompatibility` — that reverts the whole UI to iOS 18 and does not add Enamel motion.
+
 ### Android shell
 
 `OakTopBar` (`android/.../ui/Chrome.kt`):

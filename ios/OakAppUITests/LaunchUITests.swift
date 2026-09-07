@@ -20,7 +20,7 @@ final class LaunchUITests: XCTestCase {
       "App did not reach the foreground after launch."
     )
     XCTAssertTrue(
-      app.tabBars.firstMatch.waitForExistence(timeout: 15),
+      app.oakTabBar.firstMatch.waitForExistence(timeout: 15),
       "Expected the root tab shell to render on launch."
     )
   }
@@ -30,11 +30,11 @@ final class LaunchUITests: XCTestCase {
   @MainActor
   func testAllParityTabsPresent() {
     let app = XCUIApplication().launchOak()
-    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
 
     for label in OakUITest.Tab.all {
       XCTAssertTrue(
-        app.tabBars.buttons[label].waitForExistence(timeout: 5),
+        app.oakTabBar.buttons[label].waitForExistence(timeout: 5),
         "Expected the \(label) tab to be reachable from the tab shell."
       )
     }

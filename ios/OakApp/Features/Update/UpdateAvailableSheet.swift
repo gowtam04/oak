@@ -49,6 +49,7 @@ struct UpdateAvailableSheet: View {
           Button("Close", action: onNotNow)
             .font(Theme.body(.body))
         }
+        .oakLidItem()
       }
     }
     .oakEnamelNav()

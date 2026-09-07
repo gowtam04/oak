@@ -63,9 +63,11 @@ struct TeamsListView: View {
       }
       .sheet(isPresented: $isImporting, onDismiss: { Task { await model.reload() } }) {
         ShowdownImportView(model: model)
+          .oakPaperSheet()
       }
       .sheet(isPresented: $showSignIn) {
         AuthView(model: AuthViewModel(auth: services.auth, appState: appState))
+          .oakPaperSheet()
       }
     }
     .oakEnamelNav()

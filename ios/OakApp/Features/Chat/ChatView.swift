@@ -249,6 +249,7 @@ struct ChatView: View {
           },
           onDismiss: { model.dismissCalculator() }
         )
+        .oakPaperSheet()
       }
     }
     .onChange(of: model.calculatorHop) { _, hop in
