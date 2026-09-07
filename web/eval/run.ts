@@ -313,6 +313,9 @@ export function formatJudgeReport(results: JudgeResult[]): string {
     lines.push(
       `        status=${r.answer.status}  tools=[${r.toolCalls.join(", ")}]`,
     );
+    lines.push(
+      `        tokens: in=${r.usage.inputTokens} cached=${r.usage.cachedInputTokens} out=${r.usage.outputTokens} think=${r.usage.thinkingTokens}`,
+    );
     lines.push(`        rubric: ${scores}`);
     if (r.structuralFailures.length > 0) {
       for (const f of r.structuralFailures) {
@@ -517,7 +520,13 @@ export async function main(argv: string[]): Promise<number> {
     if (opts.json) {
       log(
         JSON.stringify(
-          { mode, db: built.label, repeat: opts.repeat, results },
+          {
+            mode,
+            db: built.label,
+            repeat: opts.repeat,
+            model: opts.model ?? DEFAULT_MODEL_KEY,
+            results,
+          },
           null,
           2,
         ),

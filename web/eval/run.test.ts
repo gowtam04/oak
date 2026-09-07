@@ -23,7 +23,12 @@ import {
   parseArgs,
   selectCases,
 } from "./run";
-import type { AssertResult, JudgeResult, RubricDimension } from "./judge";
+import {
+  EMPTY_USAGE,
+  type AssertResult,
+  type JudgeResult,
+  type RubricDimension,
+} from "./judge";
 
 describe("parseArgs", () => {
   it("defaults to the full judged suite", () => {
@@ -149,6 +154,7 @@ describe("report formatting", () => {
         agentLatencyMs: 10,
         judgeLatencyMs: 5,
         covers: ["AC-1.2"],
+        usage: EMPTY_USAGE,
       },
     ];
     const out = formatJudgeReport(results);
@@ -181,6 +187,7 @@ describe("report formatting", () => {
       agentLatencyMs: 100,
       judgeLatencyMs: 5,
       covers: [],
+      usage: EMPTY_USAGE,
     });
 
     // G8: 1 pass + 1 fail → flaky; G1: 2 passes → stable-pass.

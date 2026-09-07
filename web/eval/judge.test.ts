@@ -178,6 +178,12 @@ function mockJudgeClient(judgment: MockJudgment): JudgeClientLike {
 function mockRunOak(
   answer: OakAnswer,
   toolsToEmit: string[] = [],
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    thinkingTokens: number;
+    cachedInputTokens: number;
+  },
 ): RunOakFn {
   const fn = vi
     .fn()
@@ -185,11 +191,26 @@ function mockRunOak(
       async (
         _message: string,
         _history: unknown,
-        _ctx: unknown,
+        ctx: AgentContext,
         onProgress?: (e: { tool: string; label: string }) => void,
       ) => {
         for (const tool of toolsToEmit) {
           onProgress?.({ tool, label: `Running ${tool}` });
+        }
+        if (usage) {
+          ctx.onTurnComplete?.({
+            request_id: ctx.requestId,
+            session_id: "",
+            model: "grok-4.6",
+            input_tokens: usage.inputTokens,
+            output_tokens: usage.outputTokens,
+            thinking_tokens: usage.thinkingTokens,
+            cached_input_tokens: usage.cachedInputTokens,
+            tool_trace: [],
+            turn_latency_ms: 1,
+            status: answer.status,
+            citation_count: answer.citations.length,
+          });
         }
         return answer;
       },
@@ -571,7 +592,10 @@ describe("runJudgedWith", () => {
     expect(runOak).toHaveBeenCalledWith(
       "is Garchomp fast?",
       [],
-      SILENT_CTX,
+      expect.objectContaining({
+        requestId: SILENT_CTX.requestId,
+        onTurnComplete: expect.any(Function),
+      }),
       expect.any(Function),
     );
   });
@@ -601,6 +625,44 @@ describe("runJudgedWith", () => {
     // Second call should have non-empty history (the first turn's exchange).
     const history = secondCallArgs[1] as unknown[];
     expect(history).toHaveLength(2); // one user turn + one assistant turn
+  });
+
+  it("sums onTurnComplete traces into JudgeResult.usage", async () => {
+    runOak = mockRunOak(BASE_ANSWER, ["get_pokemon"], {
+      inputTokens: 1200,
+      outputTokens: 80,
+      thinkingTokens: 40,
+      cachedInputTokens: 900,
+    });
+    const gc = makeGoldenCase();
+    const [result] = await runJudgedWith(
+      [gc],
+      SILENT_CTX,
+      judgeClient,
+      runOak,
+    );
+    expect(result.usage).toEqual({
+      inputTokens: 1200,
+      outputTokens: 80,
+      thinkingTokens: 40,
+      cachedInputTokens: 900,
+    });
+  });
+
+  it("defaults usage to zeros when the agent never reports a trace", async () => {
+    const gc = makeGoldenCase();
+    const [result] = await runJudgedWith(
+      [gc],
+      SILENT_CTX,
+      judgeClient,
+      runOak,
+    );
+    expect(result.usage).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      thinkingTokens: 0,
+      cachedInputTokens: 0,
+    });
   });
 
   it("captures tool calls from onProgress into JudgeResult.toolCalls", async () => {
