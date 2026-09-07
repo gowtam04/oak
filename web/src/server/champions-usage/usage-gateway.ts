@@ -24,7 +24,8 @@ export type UsageLeaderboardRow = {
   rank: number;
   name: string;
   slug: string;
-  usage_pct: number;
+  /** Present only when the live index actually published a percentage. */
+  usage_pct?: number;
   sprite?: string;
 };
 
@@ -88,8 +89,8 @@ async function joinRoster(
       rank: row.rank,
       name: row.name,
       slug: hit.slug,
-      usage_pct: typeof row.usage_pct === "number" ? row.usage_pct : 0,
     };
+    if (typeof row.usage_pct === "number") joined.usage_pct = row.usage_pct;
     if (sprite) joined.sprite = sprite;
     out.push(joined);
   }
@@ -100,34 +101,27 @@ export async function loadUsageLeaderboard(
   ladder: UsageLadder,
   db: OakDb,
 ): Promise<UsageLeaderboardResponse> {
-  let board: Awaited<ReturnType<typeof listLeaderboard>>;
-  try {
-    board = await listLeaderboard(ladder);
-  } catch {
-    return {
-      available: false,
-      ladder,
-      error: "upstream_unavailable",
-      rows: [],
-    };
-  }
-  if (!board.available) {
-    return {
-      available: false,
-      ladder,
-      error: "upstream_unavailable",
-      rows: [],
-    };
-  }
-  const rows = await joinRoster(board.rows, db);
-  return {
-    available: true,
+  const unavailable: UsageLeaderboardResponse = {
+    available: false,
     ladder,
-    season: board.season,
-    fetched_at: board.fetched_at,
-    attribution: USAGE_ATTRIBUTION,
-    rows,
+    error: "upstream_unavailable",
+    rows: [],
   };
+  try {
+    const board = await listLeaderboard(ladder);
+    if (!board.available) return unavailable;
+    const rows = await joinRoster(board.rows, db);
+    return {
+      available: true,
+      ladder,
+      season: board.season,
+      fetched_at: board.fetched_at,
+      attribution: USAGE_ATTRIBUTION,
+      rows,
+    };
+  } catch {
+    return unavailable;
+  }
 }
 
 export async function loadUsageSpecies(
@@ -135,16 +129,16 @@ export async function loadUsageSpecies(
   ladder: UsageLadder,
   db: OakDb,
 ): Promise<UsageSpeciesResponse> {
-  const mon = await getPokemon(slug, CHAMPIONS_FORMAT, db);
-  if (!mon.found) {
-    return {
-      available: true,
-      found: false,
-      suggestions: mon.suggestions ?? [],
-    };
-  }
-
   try {
+    const mon = await getPokemon(slug, CHAMPIONS_FORMAT, db);
+    if (!mon.found) {
+      return {
+        available: true,
+        found: false,
+        suggestions: mon.suggestions ?? [],
+      };
+    }
+
     const result = await getUsage(mon.display_name, ladder);
     if (!result.found) {
       return {

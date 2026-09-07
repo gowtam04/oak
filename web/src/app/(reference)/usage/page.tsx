@@ -5,14 +5,35 @@
 
 import type { Metadata } from "next";
 
-import MetaFormatTabs from "@/components/meta/MetaFormatTabs";
-import MetaLeaderboardTable from "@/components/meta/MetaLeaderboardTable";
 import { CHAMPIONS_REGULATION } from "@/data/formats";
 import { parseUsageLadder } from "@/server/champions-usage/ladder";
+import type { UsageLeaderboardResponse } from "@/server/champions-usage/usage-gateway";
 import { formatFetchedAt, ladderTabs, usageHref } from "./ladder-href";
+import UsageLadderTabs from "./usage-ladder-tabs";
+import UsageLeaderboardTable from "./usage-leaderboard-table";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const UNAVAILABLE: Omit<UsageLeaderboardResponse, "ladder"> & {
+  available: false;
+} = {
+  available: false,
+  error: "upstream_unavailable",
+  rows: [],
+};
+
+async function loadView(ladder: "doubles" | "singles"): Promise<UsageLeaderboardResponse> {
+  try {
+    const { db } = await import("@/data/db");
+    const { loadUsageLeaderboard } = await import(
+      "@/server/champions-usage/usage-gateway"
+    );
+    return await loadUsageLeaderboard(ladder, db);
+  } catch {
+    return { ...UNAVAILABLE, ladder };
+  }
+}
 
 export async function generateMetadata({
   searchParams,
@@ -35,13 +56,7 @@ export default async function UsageIndexPage({
 }) {
   const parsed = parseUsageLadder((await searchParams).ladder);
   const ladder = parsed ?? "doubles";
-
-  const { db } = await import("@/data/db");
-  const { loadUsageLeaderboard } = await import(
-    "@/server/champions-usage/usage-gateway"
-  );
-  const view = await loadUsageLeaderboard(ladder, db);
-
+  const view = await loadView(ladder);
   const label = ladder === "singles" ? "Singles" : "Doubles";
 
   return (
@@ -52,7 +67,7 @@ export default async function UsageIndexPage({
         official ladder; Singles is a second view. Figures are a snapshot, not
         a guarantee of the next hour.
       </p>
-      <MetaFormatTabs tabs={ladderTabs(ladder)} />
+      <UsageLadderTabs tabs={ladderTabs(ladder)} />
 
       {!view.available ? (
         <p className="ref-intro" data-testid="usage-unavailable">
@@ -70,13 +85,12 @@ export default async function UsageIndexPage({
           {view.rows.length === 0 ? (
             <p className="ref-intro">No Champions usage rows for this ladder.</p>
           ) : (
-            <MetaLeaderboardTable
+            <UsageLeaderboardTable
               rows={view.rows.map((r) => ({
                 rank: r.rank,
                 name: r.name,
                 href: usageHref(r.slug, ladder),
                 usagePct: r.usage_pct,
-                deltaPct: null,
                 species: r.slug,
                 spriteUrl: r.sprite ?? null,
               }))}

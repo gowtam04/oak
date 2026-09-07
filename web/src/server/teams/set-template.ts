@@ -27,6 +27,7 @@ export interface SetTemplateResult {
   notes?: string[];
 }
 
+/** Slash-separated Stat Points from live `stat_points` (e.g. "32/0/0/0/2/32"). */
 function parseEvs(evs: string | undefined): TeamMember["evs"] {
   const zero = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 };
   if (!evs) return zero;

@@ -149,11 +149,43 @@ function parsePct(p: unknown): number | null {
 const CATEGORY_TO_KEY: Record<string, keyof CategoryBuckets> = {
   move: "moves",
   item: "items",
+  held_item: "items",
   ability: "abilities",
   nature: "natures",
+  stat_alignment: "natures",
   spread: "spreads",
+  stat_points: "spreads",
   teammate: "teammates",
 };
+
+/** Live `stat_points` columns → HP/Atk/Def/SpA/SpD/Spe order. */
+const SPREAD_POINT_KEYS = [
+  ["hp_points", "hp"],
+  ["attack_points", "atk"],
+  ["defense_points", "def"],
+  ["special_attack_points", "spa"],
+  ["special_defense_points", "spd"],
+  ["speed_points", "spe"],
+] as const;
+
+function spreadNameFromPoints(r: Record<string, unknown>): string | null {
+  const parts: number[] = [];
+  for (const [primary, alt] of SPREAD_POINT_KEYS) {
+    const n = readFiniteNumber(r[primary] ?? r[alt]);
+    if (n == null) return null;
+    parts.push(n);
+  }
+  return parts.join("/");
+}
+
+function rowDisplayName(
+  r: Record<string, unknown>,
+  key: keyof CategoryBuckets,
+): string | null {
+  if (typeof r.name === "string" && r.name.trim() !== "") return r.name.trim();
+  if (key === "spreads") return spreadNameFromPoints(r);
+  return null;
+}
 
 interface CategoryBuckets {
   moves: UsageEntry[];
@@ -434,12 +466,17 @@ function groupRows(
     for (const row of obj.rows) {
       if (!row || typeof row !== "object") continue;
       const r = row as Record<string, unknown>;
-      const key = typeof r.category === "string" ? CATEGORY_TO_KEY[r.category] : undefined;
+      const key =
+        typeof r.category === "string" ? CATEGORY_TO_KEY[r.category] : undefined;
       if (!key) continue;
-      const name = typeof r.name === "string" ? r.name : null;
+      const name = rowDisplayName(r, key);
       if (!name) continue;
       const rank = typeof r.rank === "number" ? r.rank : Number.MAX_SAFE_INTEGER;
-      buckets[key].push({ name, pct: parsePct(r.percentage), rank });
+      buckets[key].push({
+        name,
+        pct: parsePct(r.percentage ?? r.percentage_value),
+        rank,
+      });
     }
   }
   for (const key of Object.keys(buckets) as (keyof CategoryBuckets)[]) {

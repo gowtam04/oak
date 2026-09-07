@@ -6,15 +6,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import AskOakCta from "@/components/reference/AskOakCta";
-import MetaFormatTabs from "@/components/meta/MetaFormatTabs";
 import MetaUsageLists from "@/components/meta/MetaUsageLists";
 import type { MetaUsageSection } from "@/components/meta/MetaUsageLists";
 import CopyShowdownSet from "@/components/meta/CopyShowdownSet";
 import { CHAMPIONS_REGULATION } from "@/data/formats";
 import { parseUsageLadder, toEntitySlug } from "@/server/champions-usage/ladder";
+import type { UsageSpeciesResponse } from "@/server/champions-usage/usage-gateway";
 import type { UsageEntry } from "@/agent/schemas";
 import ApplyUsageSet from "../apply-usage-set";
 import { formatFetchedAt, ladderTabs, usageHref } from "../ladder-href";
+import UsageLadderTabs from "../usage-ladder-tabs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -123,12 +124,19 @@ function showdownExport(
   return lines.join("\n");
 }
 
-async function loadView(slug: string, ladder: "doubles" | "singles") {
-  const { db } = await import("@/data/db");
-  const { loadUsageSpecies } = await import(
-    "@/server/champions-usage/usage-gateway"
-  );
-  return loadUsageSpecies(slug, ladder, db);
+async function loadView(
+  slug: string,
+  ladder: "doubles" | "singles",
+): Promise<UsageSpeciesResponse> {
+  try {
+    const { db } = await import("@/data/db");
+    const { loadUsageSpecies } = await import(
+      "@/server/champions-usage/usage-gateway"
+    );
+    return await loadUsageSpecies(slug, ladder, db);
+  } catch {
+    return { available: false, error: "upstream_unavailable" };
+  }
 }
 
 export async function generateMetadata({
@@ -172,7 +180,7 @@ export default async function UsageSpeciesPage({
         <span>{slug}</span>
       </nav>
 
-      <MetaFormatTabs tabs={ladderTabs(ladder, slug)} />
+      <UsageLadderTabs tabs={ladderTabs(ladder, slug)} />
 
       {!view.available ? (
         <p className="ref-intro" data-testid="usage-unavailable">

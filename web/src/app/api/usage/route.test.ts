@@ -168,6 +168,31 @@ describe("GET /api/usage (CF-USAGE-US-1, CF-AS-1, CF-INT-BR-4–6, ADR-5)", () =
     ).toMatchObject({ rank: 1, name: "Garchomp", slug: "garchomp" });
   });
 
+  it("does not invent usage_pct: 0 when the live ladder is rank-only", async () => {
+    usage.listLeaderboard.mockResolvedValue({
+      available: true,
+      season: "Current",
+      fetched_at: 1,
+      rows: [
+        { rank: 1, name: "Garchomp" },
+        { rank: 3, name: "Farigiraf" },
+      ],
+    });
+
+    const res = await route.GET(req());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      available: boolean;
+      rows: { slug: string; usage_pct?: number }[];
+    };
+    expect(body.available).toBe(true);
+    expect(body.rows.map((r) => r.slug).sort()).toEqual([
+      "farigiraf",
+      "garchomp",
+    ]);
+    expect(body.rows.every((r) => r.usage_pct === undefined)).toBe(true);
+  });
+
   it("returns 200 { available:false, error: upstream_unavailable } when usage is down (CF-USAGE-AC-1.6, CF-INT-BR-6)", async () => {
     usage.listLeaderboard.mockResolvedValue({ available: false });
 
