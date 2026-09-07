@@ -609,6 +609,47 @@ describe("TeamMemberPanel", () => {
       /not in the Champions roster/,
     );
   });
+
+  it("labels ability/move/item in place when only species_illegal is present", () => {
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member({
+          species: "excadrill",
+          ability: "sand-rush",
+          item: "air-balloon",
+          moves: ["earthquake", "iron-head", "rock-slide", "toxic"],
+        })}
+        format="champions"
+        readOnly
+        warnings={[
+          {
+            code: "species_illegal",
+            message: 'Species "excadrill" is not in the Champions roster.',
+            slot: 0,
+            field: "species",
+          },
+        ]}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(
+      screen.getByTestId("member-0-species").closest(".team-member-panel__field"),
+    ).toHaveTextContent(/not in the Champions roster/);
+    expect(
+      screen.getByTestId("member-0-ability").closest(".team-member-panel__field"),
+    ).toHaveTextContent(/not in the Champions roster/);
+    expect(
+      screen.getByTestId("member-0-item").closest(".team-member-panel__field"),
+    ).toHaveTextContent(/not in the Champions roster/);
+    expect(screen.getByTestId("member-0-move-0").closest("td")).toHaveTextContent(
+      /not in the Champions roster/,
+    );
+    expect(screen.getByTestId("member-0-move-3").closest("td")).toHaveTextContent(
+      /not in the Champions roster/,
+    );
+  });
 });
 
 describe("TeamMemberPanel — Apply this Champions set (CF-TEAM-US-6, CF-UI-US-5)", () => {

@@ -78,6 +78,13 @@ const STAT_ROWS: StatRow[] = [
   { spread: "spe", base: "speed", label: "Spe", isHp: false },
 ];
 
+const OFF_ROSTER_CODES = new Set([
+  "species_illegal",
+  "ability_not_for_species",
+  "item_illegal",
+  "move_not_in_learnset",
+]);
+
 function natureEffectFor(
   nature: string | null,
   stat: SpreadKey,
@@ -175,12 +182,41 @@ export default function TeamMemberPanel({
   // Archived readOnly keeps stored spreads (and stored Tera) without that chrome.
   const livingChampions = !locked && format === "champions";
   const offRosterLabel = "not in the Champions roster";
-  const fieldOffRoster = (field: string) =>
-    warnings.some(
-      (w) =>
-        w.field === field &&
-        /not in the Champions roster/i.test(w.message),
-    );
+  const warningMarksField = (field: string) =>
+    warnings.some((w) => {
+      if (w.field !== field && !(field === "species" && w.field == null && w.code === "species_illegal")) {
+        return false;
+      }
+      return (
+        OFF_ROSTER_CODES.has(w.code) ||
+        /not in the Champions roster/i.test(w.message)
+      );
+    });
+  // Production validateArchivedTeam skips ability/move/item when the species
+  // itself misses the roster — those stored names still cannot be Champions-legal.
+  const speciesOffRoster =
+    locked &&
+    (warningMarksField("species") ||
+      warnings.some((w) => w.code === "species_illegal"));
+  const fieldOffRoster = (field: string) => {
+    if (!locked) {
+      return warnings.some(
+        (w) =>
+          w.field === field &&
+          /not in the Champions roster/i.test(w.message),
+      );
+    }
+    if (warningMarksField(field)) return true;
+    if (!speciesOffRoster) return false;
+    if (field === "ability") return Boolean(member.ability);
+    if (field === "item") return Boolean(member.item);
+    const moveMatch = /^moves\[(\d+)\]$/.exec(field);
+    if (moveMatch) {
+      const i = Number(moveMatch[1]);
+      return Boolean(member.moves[i]);
+    }
+    return false;
+  };
 
   const budget = evBudgetFor(livingChampions ? "champions" : format === "champions" ? "scarlet-violet" : format);
   const investmentWord = livingChampions ? "Stat Points" : "EV";
