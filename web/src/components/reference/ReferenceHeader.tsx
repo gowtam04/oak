@@ -1,6 +1,6 @@
 /**
  * ReferenceHeader — the sticky enamel lid shared by every programmatic
- * reference page (/pokedex, /moves, /abilities, /items, /meta). Applies the
+ * reference page (/pokedex, /moves, /abilities, /items, /usage). Applies the
  * chat lid recipe (`.chat-page__header`): opaque coral gradient through the
  * safe area, Fredoka white wordmark + 32px mark, inset white-on-red pills,
  * and an "Open chat" inset lid pill. Destinations unchanged.

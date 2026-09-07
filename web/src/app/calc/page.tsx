@@ -1,6 +1,7 @@
 /**
  * /calc — first-class Calculator screen (CALC-US-1).
  * Expand from the overlay lands here with `oak-calc-scenario` in sessionStorage.
+ * Champions-only: no format picker; Level 50 Stat Points (CF-CALC-US-1).
  */
 
 "use client";
@@ -12,8 +13,7 @@ import { useRouter } from "next/navigation";
 import AppNav from "@/components/nav/AppNav";
 import OakWordmark from "@/components/brand/OakWordmark";
 import CalculatorPanel from "@/components/calc/CalculatorPanel";
-import { fetchMe } from "@/lib/api/auth-client";
-import { isFormat, type Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT } from "@/data/formats";
 import { calcScenarioSchema, type CalcScenario } from "@/lib/calc/calc-schema";
 
 const SCENARIO_KEY = "oak-calc-scenario";
@@ -33,21 +33,11 @@ function readStoredScenario(): CalcScenario | null {
 
 export default function CalcPage() {
   const router = useRouter();
-  const [format, setFormat] = useState<Format>("national-dex");
   const [scenario, setScenario] = useState<CalcScenario | undefined>(undefined);
 
   useEffect(() => {
     const stored = readStoredScenario();
-    if (stored) {
-      setScenario(stored);
-      setFormat(stored.format);
-      return;
-    }
-    void fetchMe().then((me) => {
-      if (typeof me.lastUsedScope === "string" && isFormat(me.lastUsedScope)) {
-        setFormat(me.lastUsedScope);
-      }
-    });
+    if (stored) setScenario(stored);
   }, []);
 
   return (
@@ -64,9 +54,9 @@ export default function CalcPage() {
       <div className="calc-page__shell">
         <AppNav pathname="/calc" />
         <div className="calc-page__main">
-          <h1 className="calc-page__heading">Calculator</h1>
+          <h1 className="calc-page__heading">Champions Calculator</h1>
           <CalculatorPanel
-            format={format}
+            format={CHAMPIONS_FORMAT}
             scenario={scenario}
             onExplain={(message) => {
               try {

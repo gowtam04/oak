@@ -1,14 +1,12 @@
 /**
  * /moves/[slug] — a single move reference page: a fact table (type, damage
- * class, power, accuracy, PP, priority, target), effect prose, availability
- * chips, the full "Pokémon that can learn it" reverse roster (the crawl spine),
- * and an "Ask Oak" CTA.
+ * class, power, accuracy, PP, priority, target), effect prose, the full
+ * "Pokémon that can learn it" reverse roster (the crawl spine), and an
+ * "Ask Oak" CTA.
+ *
+ * Champions-only (CF-DEX-US-1): unknown slugs 404; no generation picker.
  *
  * Detail route config + dynamic-import + notFound rules: see /pokedex/[slug].
- *
- * `?format=<Format>` selects which scope's profile is shown (shareable). An
- * invalid or unavailable format soft-falls back to the default SV-first chain.
- * Canonical SEO URL stays `/moves/{slug}` without the query.
  */
 
 import type { Metadata } from "next";
@@ -20,12 +18,9 @@ import type {
   RefRosterEntry,
   RefRosterGroup,
 } from "@/components/reference/RefRosterList";
-import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
 import TypeBadge from "@/components/TypeBadge";
 import type { TypeName } from "@/agent/schemas";
-import { isFormat, type Format } from "@/data/formats";
-import { scopeLabel } from "@/lib/scope/scope-label";
 import { buildMoveDescription, buildMoveTitle } from "@/data/reference-metadata";
 import type { LearnerRow } from "@/lib/reference-pages-types";
 
@@ -57,15 +52,12 @@ function methodLabel(method: string | null): string {
 }
 
 /** Group the reverse-learner roster by method into index groups. */
-function learnerGroups(
-  learners: LearnerRow[],
-  sourceFormat: Format,
-): RefRosterGroup[] {
+function learnerGroups(learners: LearnerRow[]): RefRosterGroup[] {
   const byMethod = new Map<string, RefRosterEntry[]>();
   for (const l of learners) {
     const heading = methodLabel(l.method);
     const entry: RefRosterEntry = {
-      href: `/pokedex/${l.slug}?format=${sourceFormat}`,
+      href: `/pokedex/${l.slug}`,
       primary: l.displayName,
     };
     const list = byMethod.get(heading);
@@ -79,24 +71,15 @@ function learnerGroups(
     .map((heading) => ({ heading, entries: byMethod.get(heading)! }));
 }
 
-/** Parse `?format=` into a known Format, or undefined when missing/invalid. */
-function parseFormatParam(raw: string | string[] | undefined): Format | undefined {
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value || !isFormat(value)) return undefined;
-  return value;
-}
-
 export async function generateMetadata({
   params,
-  searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ format?: string | string[] }>;
+  searchParams?: Promise<{ format?: string | string[] }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const preferred = parseFormatParam((await searchParams).format);
   const { loadMovePage } = await import("@/data/reference-pages");
-  const data = await loadMovePage(slug, preferred);
+  const data = await loadMovePage(slug);
   if (!data) return {};
   return {
     title: buildMoveTitle(data),
@@ -107,19 +90,14 @@ export async function generateMetadata({
 
 export default async function MoveDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ format?: string | string[] }>;
+  searchParams?: Promise<{ format?: string | string[] }>;
 }) {
   const { slug } = await params;
-  const preferred = parseFormatParam((await searchParams).format);
   const { loadMovePage } = await import("@/data/reference-pages");
-  const data = await loadMovePage(slug, preferred);
+  const data = await loadMovePage(slug);
   if (!data) notFound();
-
-  const formatSelected =
-    preferred != null && data.sourceFormat === preferred;
 
   const facts: { label: string; value: string }[] = [
     { label: "Type", value: titleCase(data.type) },
@@ -154,13 +132,6 @@ export default async function MoveDetailPage({
         </div>
       </div>
 
-      {formatSelected && (
-        <p className="ref-intro ref-detail-intro">
-          Showing {scopeLabel(data.sourceFormat)} data. Select another scope
-          below to compare generations.
-        </p>
-      )}
-
       <section className="ref-card ref-detail-section">
         <h2 className="ref-detail-section__title">Details</h2>
         <table className="ref-fact-table">
@@ -183,25 +154,14 @@ export default async function MoveDetailPage({
       )}
 
       <section className="ref-card ref-detail-section">
-        <h2 className="ref-detail-section__title">Availability</h2>
-        <FormatChips
-          formats={data.availability}
-          activeFormat={data.sourceFormat}
-          hrefFor={(f) => `/moves/${slug}?format=${f}`}
-        />
-      </section>
-
-      <section className="ref-card ref-detail-section">
         <h2 className="ref-detail-section__title">
           Pokémon that can learn {data.displayName} ({data.learnerCount})
         </h2>
         {data.learnerCount > 0 ? (
-          <RefRosterList
-            groups={learnerGroups(data.learners, data.sourceFormat)}
-          />
+          <RefRosterList groups={learnerGroups(data.learners)} />
         ) : (
           <p className="ref-intro">
-            No Pokémon in this scope can learn {data.displayName}.
+            No Pokémon on the Champions roster can learn {data.displayName}.
           </p>
         )}
       </section>

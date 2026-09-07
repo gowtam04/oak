@@ -2,8 +2,10 @@
  * src/data/entity-profile.ts — the artifact viewer's full-profile assembler (B-4).
  *
  * `assembleEntityProfile(kind, slug, format, db)` is the single composition point
- * behind `GET /api/entity`. It reads the existing format-scoped index through the
- * repo layer (the sole DB readers, per CLAUDE.md) and assembles the full profile a
+ * behind `GET /api/entity`. Champions-first callers pass `CHAMPIONS_FORMAT`;
+ * there is no National Dex / other-game secondary lookup here (the route no
+ * longer falls back). It reads the format-scoped index through the repo layer
+ * (the sole DB readers, per CLAUDE.md) and assembles the full profile a
  * full-screen artifact needs — data that the `OakAnswer` payload does not
  * carry (BR-AV-3): a Pokémon's combined defensive grid (via the shared
  * `type-chart` formula) and grouped movepool, an ability's roster of holders.

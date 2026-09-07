@@ -1,34 +1,22 @@
 /**
- * /items/[slug] — a single item reference page: effect prose, availability
- * chips, wild holders, the forms that require it (Mega stones → their Mega
- * form, linked), and an "Ask Oak" CTA.
+ * /items/[slug] — a single item reference page: effect prose, wild holders,
+ * the forms that require it (Mega stones → their Mega form, linked), and an
+ * "Ask Oak" CTA.
+ *
+ * Champions-only (CF-DEX-US-1): unknown slugs 404; no generation picker.
  *
  * Detail route config + dynamic-import + notFound rules: see /pokedex/[slug].
- *
- * `?format=<Format>` selects which scope's profile is shown (shareable). An
- * invalid or unavailable format soft-falls back to the default SV-first chain.
- * Canonical SEO URL stays `/items/{slug}` without the query.
  */
 
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
-import { isFormat, type Format } from "@/data/formats";
-import { scopeLabel } from "@/lib/scope/scope-label";
 import { buildItemDescription, buildItemTitle } from "@/data/reference-metadata";
 
 export const runtime = "nodejs";
 export const revalidate = 86400;
-
-/** Parse `?format=` into a known Format, or undefined when missing/invalid. */
-function parseFormatParam(raw: string | string[] | undefined): Format | undefined {
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value || !isFormat(value)) return undefined;
-  return value;
-}
 
 /** Title-case a slug ("mystic-water" → "Mystic Water"). */
 function titleCase(slug: string): string {
@@ -40,15 +28,13 @@ function titleCase(slug: string): string {
 
 export async function generateMetadata({
   params,
-  searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ format?: string | string[] }>;
+  searchParams?: Promise<{ format?: string | string[] }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const preferred = parseFormatParam((await searchParams).format);
   const { loadItemPage } = await import("@/data/reference-pages");
-  const data = await loadItemPage(slug, preferred);
+  const data = await loadItemPage(slug);
   if (!data) return {};
   return {
     title: buildItemTitle(data),
@@ -59,19 +45,15 @@ export async function generateMetadata({
 
 export default async function ItemDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ format?: string | string[] }>;
+  searchParams?: Promise<{ format?: string | string[] }>;
 }) {
   const { slug } = await params;
-  const preferred = parseFormatParam((await searchParams).format);
   const { loadItemPage } = await import("@/data/reference-pages");
-  const data = await loadItemPage(slug, preferred);
+  const data = await loadItemPage(slug);
   if (!data) notFound();
 
-  const formatSelected =
-    preferred != null && data.sourceFormat === preferred;
   const effect = data.effectFull || data.effectShort;
 
   return (
@@ -90,13 +72,6 @@ export default async function ItemDetailPage({
         </div>
       </div>
 
-      {formatSelected && (
-        <p className="ref-intro ref-detail-intro">
-          Showing {scopeLabel(data.sourceFormat)} data. Select another scope
-          below to compare generations.
-        </p>
-      )}
-
       {effect && (
         <section className="ref-card ref-detail-section">
           <h2 className="ref-detail-section__title">Effect</h2>
@@ -104,24 +79,13 @@ export default async function ItemDetailPage({
         </section>
       )}
 
-      <section className="ref-card ref-detail-section">
-        <h2 className="ref-detail-section__title">Availability</h2>
-        <FormatChips
-          formats={data.availability}
-          activeFormat={data.sourceFormat}
-          hrefFor={(f) => `/items/${slug}?format=${f}`}
-        />
-      </section>
-
       {data.requiredBy.length > 0 && (
         <section className="ref-card ref-detail-section">
           <h2 className="ref-detail-section__title">Required by</h2>
           <ul className="ref-formats">
             {data.requiredBy.map((r) => (
               <li key={r.slug} className="ref-formats__chip">
-                <a href={`/pokedex/${r.slug}?format=${data.sourceFormat}`}>
-                  {r.displayName}
-                </a>
+                <a href={`/pokedex/${r.slug}`}>{r.displayName}</a>
               </li>
             ))}
           </ul>
