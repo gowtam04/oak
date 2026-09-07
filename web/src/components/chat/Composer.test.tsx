@@ -332,3 +332,45 @@ describe("Composer — dead @mention (MEN-AC-1.3)", () => {
     expect(screen.queryByTestId("mention-dead")).toBeNull();
   });
 });
+
+describe("Composer — voice mic", () => {
+  it("omits the mic when onVoice is not provided", () => {
+    render(<Composer {...props()} />);
+    expect(screen.queryByTestId("composer-voice")).not.toBeInTheDocument();
+  });
+
+  it("renders the mic when onVoice is provided", () => {
+    render(<Composer {...props()} onVoice={() => {}} />);
+    expect(screen.getByTestId("composer-voice")).toBeInTheDocument();
+  });
+
+  it("labels the mic as sign-in when voice is not ready", () => {
+    render(<Composer {...props()} onVoice={() => {}} voiceReady={false} />);
+    expect(screen.getByTestId("composer-voice")).toHaveAttribute(
+      "aria-label",
+      "Sign in to use voice mode",
+    );
+  });
+
+  it("labels the mic as start when voice is ready", () => {
+    render(<Composer {...props()} onVoice={() => {}} voiceReady />);
+    expect(screen.getByTestId("composer-voice")).toHaveAttribute(
+      "aria-label",
+      "Start voice mode",
+    );
+  });
+
+  it("calls onVoice when the mic is clicked", () => {
+    const onVoice = vi.fn();
+    render(<Composer {...props()} onVoice={onVoice} voiceReady />);
+    fireEvent.click(screen.getByTestId("composer-voice"));
+    expect(onVoice).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the mic while a text turn is streaming", () => {
+    render(
+      <Composer {...props({ streaming: true })} onVoice={() => {}} voiceReady />,
+    );
+    expect(screen.getByTestId("composer-voice")).toBeDisabled();
+  });
+});
