@@ -611,9 +611,10 @@ describe("POST /api/chat — mentions (MEN-US-1, MEN-BR-1..4, AUTH-BR-4)", () =>
     expect(captured.options).not.toHaveProperty("activeTeam");
   });
 
-  it("does not add a 21st tool for mentions (ADR-5)", async () => {
+  it("does not add a mentions tool (ADR-5)", async () => {
     const { tools } = await import("@/agent/tools");
-    expect(tools).toHaveLength(20);
+    // T22 lookup_box is the real 21st tool; mentions still are not a tool.
+    expect(tools).toHaveLength(21);
     expect(tools.map((t) => t.name)).not.toContain("get_bound_teams");
   });
 

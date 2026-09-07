@@ -22,6 +22,9 @@ describe("orbStateForActivity", () => {
       orbStateForActivity({ reconnecting: false, latestTool: "search_wiki" }),
     ).toBe("searching");
     expect(
+      orbStateForActivity({ reconnecting: false, latestTool: "lookup_box" }),
+    ).toBe("searching");
+    expect(
       orbStateForActivity({ reconnecting: false, latestTool: "resolve_entity" }),
     ).toBe("searching");
   });

@@ -1153,6 +1153,58 @@ export const getMetaUsageOutputSchema = z.union([
 ]);
 
 // ===========================================================================
+// T22 — lookup_box (bulk species + compact learnset; team-from-box Phase 1)
+//
+// One call looks up up to 40 names: get_pokemon profile + ≤16 compact legal
+// moves, or a miss with suggestions. Advertised Zod max is 40 (model JSON
+// Schema); the tool run() slices extras and sets truncated_input. An empty
+// learnset is a hit with available:false — not a miss (BOX-AC-3.2/3.4).
+// get_learnset stays the full-movepool API (BOX-BR-7 / BOX-AD-1).
+// ===========================================================================
+
+export const lookupBoxInputSchema = z
+  .object({
+    names: z.array(z.string().min(1)).min(1).max(40),
+  })
+  .strict();
+
+export const compactMoveSchema = z.object({
+  slug: z.string(),
+  method: z.string().nullable(),
+  type: z.string().nullable(),
+  category: z.enum(["physical", "special", "status"]).nullable(),
+  power: z.number().nullable(),
+});
+
+export const lookupBoxLearnsetSchema = z.object({
+  available: z.boolean(),
+  count: z.number().int(),
+  truncated: z.boolean(),
+  compact_moves: z.array(compactMoveSchema).max(16),
+});
+
+export const lookupBoxHitSchema = z.object({
+  query: z.string(),
+  found: z.literal(true),
+  pokemon: pokemonProfileSchema,
+  learnset: lookupBoxLearnsetSchema,
+});
+
+export const lookupBoxMissSchema = z.object({
+  query: z.string(),
+  found: z.literal(false),
+  suggestions: z.array(z.string()),
+  /** Champions mode only: the species missed here but exists in mainline Gen 9. */
+  exists_in_standard: z.boolean().optional(),
+});
+
+export const lookupBoxOutputSchema = z.object({
+  format: z.string(),
+  truncated_input: z.boolean(),
+  results: z.array(z.union([lookupBoxHitSchema, lookupBoxMissSchema])),
+});
+
+// ===========================================================================
 // Inferred TypeScript types
 // ===========================================================================
 
@@ -1232,6 +1284,13 @@ export type MetaUsageDetail = z.infer<typeof metaUsageDetailSchema>;
 export type MetaNoData = z.infer<typeof metaNoDataSchema>;
 export type GetMetaUsageOutput = z.infer<typeof getMetaUsageOutputSchema>;
 
+export type LookupBoxInput = z.infer<typeof lookupBoxInputSchema>;
+export type CompactMove = z.infer<typeof compactMoveSchema>;
+export type LookupBoxLearnset = z.infer<typeof lookupBoxLearnsetSchema>;
+export type LookupBoxHit = z.infer<typeof lookupBoxHitSchema>;
+export type LookupBoxMiss = z.infer<typeof lookupBoxMissSchema>;
+export type LookupBoxOutput = z.infer<typeof lookupBoxOutputSchema>;
+
 /** The single structured output the agent emits per turn (T11). */
 export type OakAnswer = z.infer<typeof oakAnswerSchema>;
 
@@ -1301,13 +1360,15 @@ export const toolInputJsonSchemas: Record<string, JsonSchema> = {
   search_wiki: toJsonSchema(searchWikiInputSchema),
   // T21 — stored monthly Smogon ladder usage (all scopes; ladder is explicit input).
   get_meta_usage: toJsonSchema(getMetaUsageInputSchema),
+  // T22 — bulk species + compact learnset for box-build (appended after T21).
+  lookup_box: toJsonSchema(lookupBoxInputSchema),
 };
 
 /** The generated `submit_answer` (OakAnswer) JSON Schema. */
 export const oakAnswerJsonSchema: JsonSchema =
   toolInputJsonSchemas.submit_answer;
 
-/** Canonical tool name list (T1..T17), in order. */
+/** Canonical tool name list (T1..T22), in order. T1–T21 order is unchanged. */
 export const TOOL_NAMES = [
   "resolve_entity",
   "query_pokedex",
@@ -1329,6 +1390,7 @@ export const TOOL_NAMES = [
   "run_sql",
   "search_wiki",
   "get_meta_usage",
+  "lookup_box",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

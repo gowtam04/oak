@@ -256,6 +256,7 @@ struct TeamWarning: Codable, Sendable, Equatable {
     case abilityNotForSpecies = "ability_not_for_species"
     case itemIllegal = "item_illegal"
     case moveNotInLearnset = "move_not_in_learnset"
+    case learnsetUnavailable = "learnset_unavailable"
     case duplicateSpecies = "duplicate_species"
     case duplicateItem = "duplicate_item"
   }

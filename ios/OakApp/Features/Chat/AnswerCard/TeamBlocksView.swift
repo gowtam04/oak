@@ -396,7 +396,7 @@ private extension TeamWarning {
   var severityLabel: String {
     switch code {
     case .incomplete: return "Note"
-    case .evTotalExceeded, .evStatExceeded, .ivOutOfRange: return "Caution"
+    case .evTotalExceeded, .evStatExceeded, .ivOutOfRange, .learnsetUnavailable: return "Caution"
     case .speciesIllegal, .abilityNotForSpecies, .itemIllegal, .moveNotInLearnset,
       .duplicateSpecies, .duplicateItem:
       return "Legality"

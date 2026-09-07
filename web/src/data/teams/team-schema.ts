@@ -97,6 +97,7 @@ export const warningCodeSchema = z.enum([
   "item_illegal", // item not legal in the format
   "item_missing", // battle-ready member (4 moves) with no held item
   "move_not_in_learnset", // move not in the species' learnset for the format
+  "learnset_unavailable", // empty/missing learnset; warn-but-allow on box-build
   "duplicate_species", // species clause
   "duplicate_item", // item clause
 ]);

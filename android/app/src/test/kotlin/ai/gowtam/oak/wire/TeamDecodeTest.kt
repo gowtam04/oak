@@ -20,8 +20,8 @@ private data class TeamsListEnvelope(val teams: List<Team>)
 
 /**
  * [TeamMember] round-trip (asymmetric null/omit encoding), [TeamWarning.Code]
- * tolerant decode (all 11 codes incl. `item_missing`, plus an unrecognized
- * 12th), and the `team`/`teams` envelope fixtures.
+ * tolerant decode (all 12 codes incl. `item_missing` and `learnset_unavailable`,
+ * plus an unrecognized 13th), and the `team`/`teams` envelope fixtures.
  */
 class TeamDecodeTest {
 
@@ -125,7 +125,7 @@ class TeamDecodeTest {
         assertEquals(blankTeamMember(), a)
     }
 
-    // -- TeamWarning.Code: all 11 known codes + tolerant Unknown --
+    // -- TeamWarning.Code: all 12 known codes + tolerant Unknown --
 
     @Test
     fun itemMissingDecodesEvenThoughIOSPortIsMissingIt() {
@@ -146,10 +146,11 @@ class TeamDecodeTest {
             "item_illegal" to TeamWarning.Code.ItemIllegal,
             "item_missing" to TeamWarning.Code.ItemMissing,
             "move_not_in_learnset" to TeamWarning.Code.MoveNotInLearnset,
+            "learnset_unavailable" to TeamWarning.Code.LearnsetUnavailable,
             "duplicate_species" to TeamWarning.Code.DuplicateSpecies,
             "duplicate_item" to TeamWarning.Code.DuplicateItem,
         )
-        assertEquals(11, known.size)
+        assertEquals(12, known.size)
         for ((raw, expected) in known) {
             assertEquals(expected, TeamWarning.Code.fromRaw(raw))
             assertEquals(raw, expected.rawValue)
@@ -167,6 +168,26 @@ class TeamDecodeTest {
     fun hardViolationCodesExcludeItemMissing() {
         assertFalse(TeamWarning.Code.ItemMissing in HARD_VIOLATION_CODES)
         assertTrue(TeamWarning.Code.SpeciesIllegal in HARD_VIOLATION_CODES)
+        assertEquals(6, HARD_VIOLATION_CODES.size)
+    }
+
+    @Test
+    fun learnsetUnavailableDecodesAsNamedCodeNotUnknown() {
+        val json =
+            """{"code":"learnset_unavailable","message":"Learnset unavailable for this form in this scope; species kept because you named it."}"""
+        val warning = OakJson.decodeFromString(TeamWarning.serializer(), json)
+        assertEquals(TeamWarning.Code.LearnsetUnavailable, warning.code)
+        assertEquals("learnset_unavailable", TeamWarning.Code.LearnsetUnavailable.rawValue)
+        assertEquals(
+            TeamWarning.Code.LearnsetUnavailable,
+            TeamWarning.Code.fromRaw("learnset_unavailable"),
+        )
+        assertFalse(warning.code is TeamWarning.Code.Unknown)
+    }
+
+    @Test
+    fun hardViolationCodesExcludeLearnsetUnavailableAndStaySizeSix() {
+        assertFalse(TeamWarning.Code.LearnsetUnavailable in HARD_VIOLATION_CODES)
         assertEquals(6, HARD_VIOLATION_CODES.size)
     }
 }

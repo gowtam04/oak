@@ -25,6 +25,7 @@ const SEARCHING_TOOLS = new Set([
   "get_evolution_chain",
   "get_encounters",
   "get_learnset",
+  "lookup_box",
   "get_team",
   "list_teams",
   "save_team",

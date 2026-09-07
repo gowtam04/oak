@@ -126,13 +126,14 @@ flowchart TB
         GPT["GPT-5.5"]
     end
 
-    subgraph tools["20 tools — src/agent/tools/ (never throw in-domain)"]
+    subgraph tools["21 tools — src/agent/tools/ (never throw in-domain)"]
         TYPED["Typed lookups (T1–T8)<br/>resolve_entity · query_pokedex · get_pokemon · get_move<br/>get_ability · get_type_matchups · get_evolution_chain · get_item"]
         MATH["Battle math (T9–T10)<br/>compute_stat · estimate_damage — pure formulas"]
         FEAT["Feature tools (T12–T17)<br/>get_team · save_team · get_encounters<br/>get_usage_stats · list_teams · get_learnset"]
         SQL["run_sql (T18)<br/>guarded read-only SQL over the offline warehouse"]
         WIKI["search_wiki (T19)<br/>Postgres full-text search over the Fandom game corpus"]
         META["get_meta_usage (T21)<br/>stored Smogon monthly ladder usage stats"]
+        BOX["lookup_box (T22)<br/>bulk species + compact learnset for a pasted owned list"]
         SUBMIT["submit_answer (T11)<br/>terminates the turn"]
     end
 
@@ -151,6 +152,7 @@ flowchart TB
     SQL --> REPOS
     WIKI --> REPOS
     META --> REPOS
+    BOX --> REPOS
     REPOS --> PG
     SUBMIT --> ANSWER --> ROUTE
     ROUTE -->|"SSE: turn · scope · tool_activity* · answer_start · answer_delta* · answer | stopped"| clients
@@ -190,7 +192,7 @@ frontend, API, agent loop, and the ingest CLI.
   the [`@pkmn`](https://github.com/pkmn) ecosystem (`@pkmn/dex`, `@pkmn/data`,
   `@pkmn/mods`), plus a global **national-dex warehouse** and a **wiki prose
   corpus** built from committed/crawled snapshots — see [Data](#data).
-- **Agent** — a provider-agnostic tool-loop over **20 tools** that return
+- **Agent** — a provider-agnostic tool-loop over **21 tools** that return
   structured facts; the model reasons on top and emits a Zod-validated
   `OakAnswer`.
 - **Models** — **xAI Grok 4.6** (native Responses API) is the primary/default,

@@ -42,6 +42,26 @@ function bodyText(
     .join("\n");
 }
 
+/** Collapse backticks/wrapping so Box-build pins match durable fragments. */
+function promptPlain(text: string): string {
+  return text.replace(/`/g, "").replace(/\s+/g, " ");
+}
+
+/**
+ * Slice the Box-build section from its heading through the next same-or-higher
+ * heading, so the Full-build sequence stays a sibling (BOX-BR-6).
+ */
+function boxBuildSection(text: string): string {
+  const heading = /(?:^|\n)(#{1,3}\s+[^\n]*box-build[^\n]*)/i.exec(text);
+  expect(heading).not.toBeNull();
+  const line = heading![1];
+  const level = /^#+/.exec(line)![0].length;
+  const start = heading!.index + (heading![0].startsWith("\n") ? 1 : 0);
+  const after = start + line.length;
+  const next = new RegExp(`\\n#{1,${level}}\\s`).exec(text.slice(after));
+  return text.slice(start, next ? after + next.index : text.length);
+}
+
 const SAMPLE_BOUND_TEAMS: BoundTeam[] = [
   { id: "11111111-1111-4111-8111-111111111111", name: "Rain", format: "scarlet-violet" },
 ];
@@ -336,6 +356,8 @@ describe("Roster vs full-build policy — catalog shortlist, not exhaustive", ()
         expect(text).toContain("Do NOT call get_learnset per");
         expect(text).toContain("on a roster turn");
         expect(text).toContain("partial high-signal list");
+        // Pasted owned list / box-build is not this Full-build sequence.
+        expect(text).toContain("Box-build section above");
       });
     }
   }
@@ -370,6 +392,87 @@ describe("get_meta_usage routing (B-5) — present + DDL in the cached prefix", 
           .map((s) => s.text)
           .join("\n");
         expect(prefix).toContain("CREATE TABLE meta_usage");
+      });
+    }
+  }
+});
+
+describe("Box-build section — lookup_box short path in the cached body", () => {
+  // Phase 3 pins (BOX-US-2/3/4, BOX-AC-2.2/2.4, BOX-BR-5/6/7): a Box-build
+  // section above the full-build sequence teaches lookup_box, do-not-drop,
+  // and no run_sql/search_wiki/per-species get_learnset on that path. The
+  // rest of the body still documents the full agent (BOX-BR-6/7).
+  for (const provider of PROVIDERS) {
+    for (const mode of ["standard", "champions"] as const) {
+      it(`contains lookup_box (${provider}, ${mode})`, () => {
+        expect(bodyText(provider, mode)).toContain("lookup_box");
+      });
+
+      it(`teaches do-not-drop named species (${provider}, ${mode})`, () => {
+        const plain = promptPlain(boxBuildSection(bodyText(provider, mode)));
+        expect(plain).toMatch(/do not drop|don't drop/i);
+        expect(plain).toMatch(/named/i);
+      });
+
+      it(`forbids run_sql and search_wiki inside Box-build, not the rest of the body (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        const section = promptPlain(boxBuildSection(text));
+        expect(section).toMatch(/do not call run_sql|don't call run_sql/i);
+        expect(section).toMatch(
+          /do not call search_wiki|don't call search_wiki|run_sql.{0,80}search_wiki/i,
+        );
+        expect(section).toContain("lookup_box");
+        // BOX-BR-6: non-box turns still get the warehouse/wiki tools + full build.
+        expect(text).toContain("**run_sql**");
+        expect(text).toContain("**search_wiki**");
+        expect(text).toContain("### Full build");
+      });
+
+      it(`places the Box-build section above the full-build sequence (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        const boxHeadingAt = text.search(/#{1,3}\s+[^\n]*box-build/i);
+        const fullAt = text.indexOf("### Full build");
+        expect(boxHeadingAt).toBeGreaterThanOrEqual(0);
+        expect(fullAt).toBeGreaterThan(boxHeadingAt);
+        expect(text.indexOf("lookup_box")).toBeGreaterThanOrEqual(0);
+        expect(text.indexOf("lookup_box")).toBeLessThan(fullAt);
+      });
+
+      it(`does not call get_learnset per species on the box-build path (${provider}, ${mode})`, () => {
+        const text = bodyText(provider, mode);
+        const section = promptPlain(boxBuildSection(text));
+        expect(section).toContain("lookup_box");
+        expect(section).toMatch(
+          /do not call get_learnset|don't call get_learnset|get_learnset per|per-species get_learnset/i,
+        );
+        // BOX-BR-7: full-movepool questions still route to get_learnset.
+        expect(text).toContain("get_learnset");
+        expect(text).toContain("what moves can/does X learn");
+      });
+
+      it(`allows cuts from a box larger than six (BOX-AC-2.2) (${provider}, ${mode})`, () => {
+        const section = promptPlain(boxBuildSection(bodyText(provider, mode)));
+        expect(section).toContain("more than six names");
+        expect(section).toMatch(/cuts/i);
+      });
+
+      it(`submits proposed_team for the user to apply (BOX-AC-2.4) (${provider}, ${mode})`, () => {
+        const section = promptPlain(boxBuildSection(bodyText(provider, mode)));
+        expect(section).toContain("proposed_team");
+        expect(section).toContain("user applies");
+      });
+
+      it(`pins Box-build heading and lookup_box in the cached prefix (${provider}, ${mode})`, () => {
+        // Same idea as the get_meta_usage DDL pin: the section lives in the
+        // cached prefix (system body), not the few-shot segment.
+        const prefix = prefixThroughBreakpoint(
+          buildSystemSegments({ provider, mode }),
+        )
+          .slice(0, -1)
+          .map((s) => s.text)
+          .join("\n");
+        expect(prefix).toContain("## Box-build");
+        expect(prefix).toContain("lookup_box");
       });
     }
   }

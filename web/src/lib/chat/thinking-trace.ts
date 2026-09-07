@@ -46,6 +46,7 @@ const INSTRUMENT_TOKENS: Record<string, string> = {
   get_meta_usage: "Checking ladder usage",
   get_encounters: "Finding locations",
   get_learnset: "Checking learnset",
+  lookup_box: "Looking up box",
   get_team: "Reading team",
   list_teams: "Listing teams",
   save_team: "Saving team",

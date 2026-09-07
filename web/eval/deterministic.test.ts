@@ -18,7 +18,7 @@
  *
  * Asserts:
  *   1. Every deterministic case
- *      (G1/G3/G5/G6/G8/G11/G15/G26/G32/G35/G44/G47/G56/G57) passes its
+ *      (G1/G3/G5/G6/G8/G11/G15/G26/G32/G35/G44/G47/G56/G57/G61) passes its
  *      structural checks against the real tools + fixture data, under EACH
  *      provider.
  *   2. The subset is exactly the one design.md + Oak v2 §7 specifies (a guard
@@ -60,6 +60,7 @@ const EXPECTED_IDS = [
   "G47",
   "G56",
   "G57",
+  "G61",
 ];
 
 /** Both scripted transports are gated — Anthropic content-blocks AND native Grok. */
@@ -202,6 +203,20 @@ for (const provider of PROVIDERS) {
       expect(a.answer_markdown).toContain("Darmanitan");
       expect(
         a.citations.some((c) => c.source.startsWith("pokemon")),
+      ).toBe(true);
+    });
+
+    it("G61 keeps kangaskhan-mega with a learnset-unavailable warning (BOX-AC-1.2)", () => {
+      const a = byProvider[provider].byId.G61.answer;
+      expect(
+        (a.proposed_team?.members ?? []).some(
+          (m) => m.species === "kangaskhan-mega",
+        ),
+      ).toBe(true);
+      expect(
+        (a.proposed_team_warnings ?? []).some(
+          (w) => w.code === "learnset_unavailable",
+        ),
       ).toBe(true);
     });
   });
