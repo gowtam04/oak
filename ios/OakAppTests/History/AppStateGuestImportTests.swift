@@ -70,17 +70,17 @@ struct AppStateGuestImportTests {
   }
 
   @Test
-  func importDefaultsToNationalDexScopeWhenNoTurnResolvedOne() async {
-    // A guest who never had a turn resolve a scope imports under the national-dex
-    // default (web: `resolvedScope ?? "national-dex"`).
-    let state = AppState()  // guestThreadScope defaults to .nationalDex
+  func importDefaultsToChampionsScopeWhenNoTurnResolvedOne() async {
+    // A guest who never had a turn resolve a scope imports under Champions
+    // (CF-DATA-BR-1).
+    let state = AppState()  // guestThreadScope defaults to .champions
     state.guestThread = [GuestTurn(content: .user(text: "hi"))]
     let fake = FakeHistoryService()
     fake.importResult = .success("conv_x")
 
     _ = await state.importGuestThread(using: fake)
 
-    #expect(fake.lastImportFormat == .nationalDex)
+    #expect(fake.lastImportFormat == .champions)
   }
 
   @Test

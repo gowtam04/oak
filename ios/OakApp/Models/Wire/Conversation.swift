@@ -215,6 +215,11 @@ struct Team: Decodable, Sendable, Identifiable {
   let createdAt: Int64
   let updatedAt: Int64
 
+  /// Living iff `format == champions` (ADR-3).
+  var isLiving: Bool { format.isLiving }
+  /// Archived iff `format != champions`.
+  var isArchived: Bool { format.isArchived }
+
   enum CodingKeys: String, CodingKey {
     case id
     case name

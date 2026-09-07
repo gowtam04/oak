@@ -43,33 +43,3 @@ final class FakeUsageService: UsageService, @unchecked Sendable {
     return nextSpecies
   }
 }
-
-extension UsageLeaderboard {
-  /// Fail-soft envelope the live ladder returns on 200 when the community API
-  /// is down (CF-USAGE-AC-1.6) — never a Smogon OU board.
-  static func unavailable(ladder: UsageLadder) -> UsageLeaderboard {
-    UsageLeaderboard(
-      available: false,
-      ladder: ladder,
-      season: nil,
-      fetchedAt: nil,
-      attribution: nil,
-      error: "upstream_unavailable",
-      rows: []
-    )
-  }
-}
-
-extension UsageSpeciesResponse {
-  static var unavailable: UsageSpeciesResponse {
-    UsageSpeciesResponse(
-      available: false,
-      found: nil,
-      slug: nil,
-      season: nil,
-      fetchedAt: nil,
-      attribution: nil,
-      error: "upstream_unavailable"
-    )
-  }
-}

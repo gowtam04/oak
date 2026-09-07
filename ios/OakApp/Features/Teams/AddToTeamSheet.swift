@@ -117,12 +117,13 @@ final class AddToTeamViewModel {
     self.conversationFormat = conversationFormat
     self.incoming = incoming
     self.isPresented = isSignedIn
+    _ = self.conversationFormat
   }
 
   func load() async {
     guard isSignedIn else { return }
     do {
-      teams = try await teamService.list(format: nil)
+      teams = try await teamService.list(archived: false)
     } catch {
       errorMessage = "Couldn't load teams."
       teams = []
@@ -180,7 +181,7 @@ final class AddToTeamViewModel {
     case .ok(let members, let slot):
       do {
         let created = try await teamService.create(
-          format: conversationFormat,
+          format: .champions,
           name: name,
           members: members
         )

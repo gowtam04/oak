@@ -15,7 +15,14 @@ struct CalculatorView: View {
           sideEditor(title: "Defender", side: defenderBinding)
           moveEditor
           fieldEditor
-          formatPicker
+          if model.showsFormatPicker {
+            formatPicker
+          } else {
+            LabeledContent("Format", value: "Pokémon Champions")
+              .padding(Theme.Spacing.md)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .oakCard(radius: Theme.Radius.md)
+          }
           resultBlock
           actions
         }
@@ -90,15 +97,20 @@ struct CalculatorView: View {
       TextField("Tera", text: optionalString(side.tera))
         .textInputAutocapitalization(.never)
         .font(Theme.body(.body))
-      TextField(
-        "Level",
-        text: Binding(
-          get: { side.wrappedValue.level.map(String.init) ?? "" },
-          set: { side.wrappedValue.level = Int($0) }
+      if model.showsLevelKnob {
+        TextField(
+          "Level",
+          text: Binding(
+            get: { side.wrappedValue.level.map(String.init) ?? "" },
+            set: { side.wrappedValue.level = Int($0) }
+          )
         )
-      )
-      .keyboardType(.numberPad)
-      .font(Theme.body(.body))
+        .keyboardType(.numberPad)
+        .font(Theme.body(.body))
+      } else {
+        LabeledContent("Level", value: "50")
+          .font(Theme.body(.body))
+      }
     }
     .padding(Theme.Spacing.md)
     .frame(maxWidth: .infinity, alignment: .leading)

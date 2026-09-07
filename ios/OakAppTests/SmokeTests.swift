@@ -17,7 +17,7 @@ struct SmokeTests {
     #expect(state.authState == .guest)
     #expect(state.activeConversationId == nil)
     #expect(state.guestThread.isEmpty)
-    #expect(state.guestThreadScope == .nationalDex)
+    #expect(state.guestThreadScope == .champions)
   }
 
   @Test

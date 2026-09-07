@@ -5,8 +5,8 @@ import Foundation
 /// Classifies only — it does not POST `/api/chat`. Known tokens: `/new`, `/team`,
 /// `/dex`, `/calc`, and `/usage` only when `hasUsagePage` is true. `/calc` is a
 /// handled slash (ADR-4) — `rest` is the substring after the token, trimmed.
-/// `/compare` stays an ordinary message (CMP-BR-3). iOS has no usage page, so
-/// callers pass `hasUsagePage: false` and `/usage` is a normal message.
+/// `/compare` stays an ordinary message (CMP-BR-3). iOS Usage is a fifth tab
+/// (ADR-6), so chat passes `hasUsagePage: true` and `/usage` navigates.
 enum SlashCommands {
   /// Leading-token parse. First whitespace-delimited token after leading
   /// whitespace wins. Exact token match only (`/newish` / `/calcish` are messages).

@@ -45,17 +45,23 @@ enum Format: Sendable, Hashable {
   /// A format string not in the known eleven — preserves the original wire value.
   case unknown(String)
 
-  /// The known, orderable formats in scope-picker DISPLAY order — the default
-  /// (National Dex) first, then Champions/Scarlet-Violet, then by release date
-  /// descending (Gen 8 → Gen 1). This no longer mirrors the `FORMATS` array in
-  /// `formats.ts` (which stays in its own order to feed ingest/prompt
-  /// lock-steps); web exposes the same display order via a separate
-  /// `SCOPE_PICKER_ORDER` constant. Backs the eleven-way format pickers/filters;
-  /// `.unknown` is deliberately excluded (it has no fixed identity to list).
+  /// The known, orderable formats in historical DISPLAY order. `knownCases`
+  /// stays the eleven-value union so archived teams / old conversations still
+  /// decode (ADR-3). Living pickers use ``pickerCases`` (Champions only).
   static let knownCases: [Format] = [
     .nationalDex, .champions, .scarletViolet, .gen8, .gen7, .gen6, .gen5, .gen4, .gen3, .gen2,
     .gen1,
   ]
+
+  /// Champions-first pickers (CF-UI-AC-1.1). National Dex / Gens 1–8 remain on
+  /// ``knownCases`` for JSON decode of archived rows.
+  static let pickerCases: [Format] = [.champions]
+
+  /// Living reference / teams are Champions; any other stored format is archive.
+  var isLiving: Bool { self == .champions }
+
+  /// Inverse of ``isLiving`` — derived, no `archived_at` column (ADR-3).
+  var isArchived: Bool { self != .champions }
 
   /// The wire string for a known case, or the original raw string for `.unknown`.
   var rawValue: String {
