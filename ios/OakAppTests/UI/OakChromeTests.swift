@@ -41,4 +41,29 @@ struct OakChromeTests {
     #expect(OakTabDockMetrics.bottomLift(inset: 0) == 0)
     #expect(OakTabDockMetrics.bottomLift(inset: 10) == 0)
   }
+
+  @Test
+  func keyboardOverlapIgnoresHomeIndicator() {
+    #expect(OakTabDockMetrics.keyboardOverlap(bottomInset: 34, homeIndicator: 34) == 0)
+    #expect(OakTabDockMetrics.keyboardOverlap(bottomInset: 336, homeIndicator: 34) == 302)
+    #expect(OakTabDockMetrics.keyboardOverlap(bottomInset: 300, homeIndicator: 0) == 300)
+    #expect(OakTabDockMetrics.keyboardOverlap(bottomInset: 10, homeIndicator: 34) == 0)
+  }
+
+  @Test
+  func screenCoverIsZeroWhenKeyboardIsOffscreen() {
+    let window = CGRect(x: 0, y: 0, width: 390, height: 844)
+    let hidden = CGRect(x: 0, y: 844, width: 390, height: 336)
+    let shown = CGRect(x: 0, y: 508, width: 390, height: 336)
+    #expect(OakTabDockMetrics.screenCover(keyboardFrameInWindow: hidden, windowBounds: window) == 0)
+    #expect(OakTabDockMetrics.screenCover(keyboardFrameInWindow: shown, windowBounds: window) == 336)
+  }
+
+  @Test
+  func dockReservationCollapsesOnceKeyboardCoversDock() {
+    #expect(OakTabDockMetrics.dockReservation(dockHeight: 83, keyboardOverlap: 0) == 83)
+    #expect(OakTabDockMetrics.dockReservation(dockHeight: 83, keyboardOverlap: 40) == 43)
+    #expect(OakTabDockMetrics.dockReservation(dockHeight: 83, keyboardOverlap: 302) == 0)
+    #expect(OakTabDockMetrics.dockReservation(dockHeight: 83, keyboardOverlap: 400) == 0)
+  }
 }

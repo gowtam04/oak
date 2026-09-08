@@ -30,10 +30,20 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import ai.gowtam.oak.ui.imeAwareBottomPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -62,6 +72,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -143,7 +154,12 @@ fun OakApp(
     }
 
     val oak = LocalOakColors.current
+    val layoutDirection = LocalLayoutDirection.current
+    val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
     Scaffold(
+        // Keep the paper dock at the physical bottom; IME is applied to tab
+        // content as a replacement for the nav reservation, not stacked on it.
+        contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
         bottomBar = {
             Column {
                 // Hairline that separates the nav band from the canvas above it —
@@ -153,6 +169,7 @@ fun OakApp(
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface,
                     tonalElevation = 0.dp,
+                    windowInsets = WindowInsets.navigationBars,
                 ) {
                     OakTab.entries.forEach { tab ->
                         NavigationBarItem(
@@ -184,7 +201,22 @@ fun OakApp(
             LocalServices provides services,
             LocalRegulation provides regulation,
         ) {
-            Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            val bottom = imeAwareBottomPadding(
+                nav = innerPadding.calculateBottomPadding(),
+                ime = imeBottom,
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        PaddingValues(
+                            start = innerPadding.calculateStartPadding(layoutDirection),
+                            top = innerPadding.calculateTopPadding(),
+                            end = innerPadding.calculateEndPadding(layoutDirection),
+                            bottom = bottom,
+                        ),
+                    ),
+            ) {
                 ConnectionBanner(status = connectionStatus)
                 // Tab content crossfades on switch (reduce-motion: an instant swap —
                 // AnimatedContent's default transitionSpec already collapses to

@@ -38,11 +38,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -87,6 +91,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -246,6 +254,7 @@ fun ChatScreen(
         }
     }
 
+    val focusManager = LocalFocusManager.current
     val showEmptyState = uiState.turns.isEmpty() && !uiState.isStreaming
     val showInProgress = uiState.isStreaming || uiState.streamingText.isNotEmpty()
     val itemCount = uiState.turns.size + (if (showEmptyState) 1 else 0) + (if (showInProgress) 1 else 0)
@@ -265,6 +274,10 @@ fun ChatScreen(
 
     Scaffold(
         modifier = modifier,
+        // Parent `OakApp` already IME-pads tab content; don't stack a second IME inset
+        // on top of the nav-bar reservation (that would sit the composer above the bar
+        // which itself would sit above the keyboard).
+        contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
         topBar = {
             OakTopBar(
                 title = { OakWordmark() },
@@ -321,7 +334,18 @@ fun ChatScreen(
             Box(modifier = Modifier.weight(1f)) {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (event.type == PointerEventType.Press) {
+                                        focusManager.clearFocus()
+                                    }
+                                }
+                            }
+                        },
                     contentPadding = PaddingValues(OakSpacing.lg),
                     verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
                 ) {

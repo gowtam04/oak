@@ -182,6 +182,91 @@ enum OakTabDockMetrics {
   static func bottomLift(inset: CGFloat) -> CGFloat {
     max(inset - homeIndicatorClearance, 0)
   }
+
+  /// How much of the screen's bottom edge is covered by `keyboardFrameInWindow`.
+  /// Hidden / off-screen keyboards return 0.
+  static func screenCover(keyboardFrameInWindow: CGRect, windowBounds: CGRect) -> CGFloat {
+    max(0, windowBounds.maxY - keyboardFrameInWindow.minY)
+  }
+
+  /// Extra bottom inset that is the keyboard, not the home indicator.
+  /// Use with SwiftUI's keyboard-aware `safeAreaInsets.bottom` **or** with
+  /// ``screenCover(keyboardFrameInWindow:windowBounds:)``.
+  static func keyboardOverlap(bottomInset: CGFloat, homeIndicator: CGFloat) -> CGFloat {
+    max(0, bottomInset - homeIndicator)
+  }
+
+  /// How much of the dock's layout height to keep reserved in `RootView`'s
+  /// VStack so the composer sits on the keyboard instead of on the dock.
+  static func dockReservation(dockHeight: CGFloat, keyboardOverlap: CGFloat) -> CGFloat {
+    max(0, dockHeight - keyboardOverlap)
+  }
+
+  /// Home-indicator (or home-button 0) inset from the key window. UIKit's
+  /// window insets do **not** include the keyboard — that's the point.
+  @MainActor
+  static var keyWindowBottomInset: CGFloat {
+    let windows = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap(\.windows)
+    let window = windows.first(where: \.isKeyWindow) ?? windows.first
+    return window?.safeAreaInsets.bottom ?? 0
+  }
+
+  /// Keyboard overlap to apply as a downward offset on ``OakTabDock`` so the
+  /// shelf stays at the physical bottom (covered) instead of riding the keyboard.
+  @MainActor
+  static func overlap(fromKeyboardNotification notification: Notification) -> CGFloat {
+    guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+      return 0
+    }
+    let windows = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap(\.windows)
+    let window = windows.first(where: \.isKeyWindow) ?? windows.first
+    let bounds = window?.bounds ?? .zero
+    let converted = window.map { $0.convert(frame, from: nil) } ?? frame
+    let cover = screenCover(keyboardFrameInWindow: converted, windowBounds: bounds)
+    return keyboardOverlap(bottomInset: cover, homeIndicator: keyWindowBottomInset)
+  }
+}
+
+/// Tracks how far the software keyboard covers the bottom of the window so
+/// ``RootView`` can pin ``OakTabDock`` and collapse the dock spacer. Listens to
+/// both will- and did-change: will-change carries the show/hide animation,
+/// did-change tracks interactive dismiss as the finger drags.
+private struct KeyboardOverlapReader: ViewModifier {
+  @Binding var overlap: CGFloat
+
+  func body(content: Content) -> some View {
+    content
+      .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+        apply(notification, animated: true)
+      }
+      .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidChangeFrameNotification)) { notification in
+        apply(notification, animated: false)
+      }
+  }
+
+  private func apply(_ notification: Notification, animated: Bool) {
+    let next = OakTabDockMetrics.overlap(fromKeyboardNotification: notification)
+    let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?
+      .doubleValue ?? 0
+    if animated, duration > 0 {
+      withAnimation(.easeOut(duration: duration)) {
+        overlap = next
+      }
+    } else {
+      overlap = next
+    }
+  }
+}
+
+extension View {
+  /// Publishes the keyboard's overlap above the home indicator (0 when hidden).
+  func oakKeyboardOverlap(_ overlap: Binding<CGFloat>) -> some View {
+    modifier(KeyboardOverlapReader(overlap: overlap))
+  }
 }
 
 struct OakTabDock: View {
@@ -215,15 +300,7 @@ struct OakTabDock: View {
   /// `safeAreaInsets` environment key, and a `GeometryReader` inside the
   /// already-inset `VStack` reports 0.
   private var bottomLift: CGFloat {
-    OakTabDockMetrics.bottomLift(inset: Self.keyWindowBottomInset)
-  }
-
-  private static var keyWindowBottomInset: CGFloat {
-    let windows = UIApplication.shared.connectedScenes
-      .compactMap { $0 as? UIWindowScene }
-      .flatMap(\.windows)
-    let window = windows.first(where: \.isKeyWindow) ?? windows.first
-    return window?.safeAreaInsets.bottom ?? 0
+    OakTabDockMetrics.bottomLift(inset: OakTabDockMetrics.keyWindowBottomInset)
   }
 
   private func dockItem(_ tab: OakAppTab) -> some View {

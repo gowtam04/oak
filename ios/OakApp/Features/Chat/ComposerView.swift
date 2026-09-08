@@ -34,7 +34,8 @@ struct ComposerView: View {
   /// Motion (the caller only toggles it when motion is allowed).
   var sendPulse: Bool = false
 
-  @FocusState private var isInputFocused: Bool
+  /// Owned by ``ChatView`` so the thread can resign focus on an outside tap.
+  @FocusState.Binding var isInputFocused: Bool
 
   /// Drives the one-shot send-button scale pulse, flipped on for a beat when
   /// ``sendPulse`` changes and released by ``Theme/Motion/snappy``.
@@ -460,9 +461,20 @@ private struct OakSendButtonStyle: ButtonStyle {
 
 #if DEBUG
 #Preview("Composer") {
-  VStack {
-    Spacer()
-    ComposerView(model: ChatViewModel(chat: PreviewChatService(), appState: AppState()))
+  ComposerPreviewHost()
+}
+
+private struct ComposerPreviewHost: View {
+  @FocusState private var isInputFocused: Bool
+
+  var body: some View {
+    VStack {
+      Spacer()
+      ComposerView(
+        model: ChatViewModel(chat: PreviewChatService(), appState: AppState()),
+        isInputFocused: $isInputFocused
+      )
+    }
   }
 }
 #endif

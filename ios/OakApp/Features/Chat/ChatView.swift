@@ -52,6 +52,9 @@ struct ChatView: View {
   /// the eye lands where the action is (§4.01). Skipped under Reduce Motion.
   @State private var sendPulse = false
 
+  /// Composer focus — lifted so tapping the thread can dismiss the keyboard.
+  @FocusState private var composerFocused: Bool
+
   /// The empty desk's four filed starters (Battle / Dex / Rules / Meta), resampled
   /// from ``ExamplePrompts/filedPool`` each time the empty state (re)appears —
   /// never mid-appearance, so rows don't shuffle under the user's finger.
@@ -124,7 +127,8 @@ struct ChatView: View {
         onVoice: { isVoicePresented = true },
         voiceReady: voiceReady,
         onSignInNudge: signInAction,
-        sendPulse: sendPulse
+        sendPulse: sendPulse,
+        isInputFocused: $composerFocused
       )
     }
     // The error banner slides up from the composer seam as it appears/clears.
@@ -372,6 +376,7 @@ struct ChatView: View {
             }
             .padding(Theme.Spacing.lg)
             .frame(minHeight: geo.size.height, alignment: .top)
+            .oakDismissesComposerKeyboard { composerFocused = false }
           } else {
             VStack(spacing: 0) {
               PinStripView(
@@ -410,6 +415,7 @@ struct ChatView: View {
             }
             .padding(Theme.Spacing.lg)
             .frame(minHeight: geo.size.height, alignment: .bottom)
+            .oakDismissesComposerKeyboard { composerFocused = false }
           }
         }
         .background(Theme.canvas)
@@ -823,6 +829,16 @@ private struct UserMessageView: View {
 // MARK: - Optional artifact-viewer host
 
 private extension View {
+  /// Tapping empty canvas (and simultaneous with chip/button taps) resigns the
+  /// composer. Applied to the scroll *content*, not the ScrollView, so dragging
+  /// a long thread still works. `.scrollDismissesKeyboard(.interactively)` covers
+  /// drag-to-dismiss once the thread is actually scrollable.
+  func oakDismissesComposerKeyboard(_ dismiss: @escaping () -> Void) -> some View {
+    self
+      .contentShape(Rectangle())
+      .simultaneousGesture(TapGesture().onEnded(dismiss))
+  }
+
   /// Hosts the artifact bottom sheet once the thread's ``ArtifactViewModel`` has been
   /// built (it's created lazily in `.task`, so it's `nil` for the first frame).
   ///

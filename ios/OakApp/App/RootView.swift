@@ -32,6 +32,13 @@ struct RootView: View {
   @State private var selection: OakAppTab = .chat
   @State private var presentedShareId: String?
   @State private var calculatorCover: CalculatorCover?
+  /// Keyboard coverage above the home indicator. Used to pin the overlay dock
+  /// at the physical bottom (offset down, covered) and collapse the hidden
+  /// spacer so the composer sits on the keyboard instead of on the dock.
+  @State private var keyboardOverlap: CGFloat = 0
+  /// Intrinsic layout height of ``OakTabDock``, measured from the overlay (the
+  /// spacer is height-clamped and cannot be the source of truth).
+  @State private var dockHeight: CGFloat = 0
 
   var body: some View {
     VStack(spacing: 0) {
@@ -74,14 +81,30 @@ struct RootView: View {
       // Hidden sibling keeps the dock's layout height in the VStack so Chat's
       // composer is never covered. NavigationStack's UIKit view is full-window
       // and would steal dock taps if the interactive shelf lived only here.
+      // When the keyboard covers the dock, reservation collapses to 0 so the
+      // composer lands on the keyboard rather than a dock-sized gap above it.
       OakTabDock(selection: $selection)
         .hidden()
         .accessibilityHidden(true)
         .allowsHitTesting(false)
+        .frame(height: dockHeight == 0 ? nil : dockReservation, alignment: .top)
+        .clipped()
     }
     .overlay(alignment: .bottom) {
+      // Offset — not `.ignoresSafeArea(.keyboard)` — because ignoring the
+      // keyboard expands the dock downward from the keyboard-safe bottom and
+      // leaves the labels riding the keyboard.
       OakTabDock(selection: $selection)
+        .background {
+          GeometryReader { geo in
+            Color.clear
+              .onAppear { dockHeight = geo.size.height }
+              .onChange(of: geo.size.height) { _, height in dockHeight = height }
+          }
+        }
+        .offset(y: keyboardOverlap)
     }
+    .oakKeyboardOverlap($keyboardOverlap)
     .background(Theme.canvas.ignoresSafeArea())
     .tint(Theme.accent)
     .environment(\.showsAddToTeam, isSignedIn)
@@ -184,6 +207,10 @@ struct RootView: View {
         .oakPaperSheet()
       }
     }
+  }
+
+  private var dockReservation: CGFloat {
+    OakTabDockMetrics.dockReservation(dockHeight: dockHeight, keyboardOverlap: keyboardOverlap)
   }
 
   @ViewBuilder
