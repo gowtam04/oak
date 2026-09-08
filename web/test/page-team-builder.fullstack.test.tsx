@@ -1,11 +1,10 @@
 /**
  * TEAM-BUILDER-UI-E2E (frontend) — `/teams` + proposed_team apply.
  *
- * Champions-first P6b (CF-TEAM-AC-1.2–1.7, CF-TEAM-AC-5.4–5.5, CF-TEAM-AC-6.1–6.4,
- * CF-UI-US-4, CF-UI-US-5, CF-AS-3, CF-AS-11, CF-AUTH-AC-1.2):
+ * Champions-first P6b (CF-TEAM-AC-1.2–1.7, CF-TEAM-AC-5.4–5.5,
+ * CF-UI-US-4, CF-AS-11, CF-AUTH-AC-1.2):
  *   - living Champions list + Archived section (view+delete only),
  *   - living editor: no Tera / IV / level knobs; Stat Points 66 / 32,
- *   - Apply this Champions set (empty fill; filled yes/no replace),
  *   - archive view labels off-roster names; no other-game Dex lookup.
  *
  * Renders the REAL pages (`<TeamsPage/>` and `<Home/>`) with a single stubbed
@@ -66,34 +65,6 @@ function garchompMember(): TeamMember {
     moves: ["earthquake", "dragon-claw", "fire-fang", "stealth-rock"],
     nature: "adamant",
     evs: { ...spread(), atk: 30, spe: 32, hp: 4 },
-    ivs: spread(31),
-    tera_type: null,
-    level: 50,
-  };
-}
-
-function emptyGarchomp(): TeamMember {
-  return {
-    species: "garchomp",
-    ability: null,
-    item: null,
-    moves: [],
-    nature: null,
-    evs: spread(0),
-    ivs: spread(31),
-    tera_type: null,
-    level: 50,
-  };
-}
-
-function usageGarchomp(): TeamMember {
-  return {
-    species: "garchomp",
-    ability: "rough-skin",
-    item: "life-orb",
-    moves: ["earthquake", "dragon-claw", "fire-fang", "protect"],
-    nature: "jolly",
-    evs: { ...spread(), hp: 4, atk: 30, spe: 32 },
     ivs: spread(31),
     tera_type: null,
     level: 50,
@@ -255,17 +226,6 @@ beforeEach(() => {
       if (path === "/api/search") return jsonResponse(200, { matches: [] });
       if (path === "/api/teams/analyze") {
         return jsonResponse(200, { status: "unavailable" });
-      }
-
-      // --- usage set-template (Apply this Champions set) ---
-      if (path === "/api/teams/set-template" && method === "POST") {
-        const b = JSON.parse(init!.body ?? "{}") as { species?: string };
-        if (!b.species) return jsonResponse(400, { error: "invalid_request" });
-        return jsonResponse(200, {
-          found: true,
-          member: { ...usageGarchomp(), species: b.species },
-          attribution: "Live Champions usage",
-        });
       }
 
       // --- chat ---
@@ -555,20 +515,8 @@ function seedArchived(name: string, format: string, members: TeamMember[]): Stor
   return t;
 }
 
-function queryReplaceConfirm() {
-  return (
-    screen.queryByTestId("apply-set-confirm") ??
-    screen.queryByRole("alertdialog") ??
-    screen.queryByRole("dialog", { name: /replace/i })
-  );
-}
-
 function applySetButton() {
-  return (
-    screen.queryByRole("button", { name: /apply this champions set/i }) ??
-    screen.queryByTestId("member-0-apply-set") ??
-    screen.queryByTestId("member-0-common-set")
-  );
+  return screen.queryByRole("button", { name: /apply this champions set/i });
 }
 
 describe("/teams — guest (CF-AUTH-AC-1.2, CF-AS-11)", () => {
@@ -715,84 +663,7 @@ describe("/teams — living editor knobs (CF-TEAM-AC-1.2–1.3, CF-UI-AC-1.3)", 
     expect(screen.getByText(/stat points/i)).toBeInTheDocument();
     expect(screen.getByTestId("member-0-ev-total")).toHaveTextContent("/ 66");
     expect(screen.getByTestId("member-0-ev-spe")).toHaveAttribute("max", "32");
-  });
-});
-
-describe("/teams — Apply this Champions set (CF-TEAM-US-6, CF-UI-US-5)", () => {
-  it("fills an empty slot from the usage set (CF-TEAM-AC-6.1–6.2)", async () => {
-    seedLiving("Ladder Core", [emptyGarchomp()]);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<TeamsPage />);
-    await screen.findByTestId("team-editor");
-    const btn = applySetButton();
-    expect(btn).toBeInTheDocument();
-    expect(btn).toHaveTextContent(/apply this champions set/i);
-    await act(async () => {
-      fireEvent.click(btn!);
-    });
-    await waitFor(() =>
-      expect(screen.getByTestId("member-0-ability")).toHaveValue("Rough Skin"),
-    );
-    expect(screen.getByTestId("member-0-item")).toHaveValue("Life Orb");
-    expect(screen.getByTestId("member-0-nature")).toHaveValue("Jolly");
-    expect(screen.getByTestId("member-0-move-0")).toHaveValue("Earthquake");
-    expect(screen.queryByTestId("member-0-tera")).not.toBeInTheDocument();
-    expect(confirmSpy).not.toHaveBeenCalled();
-    expect(queryReplaceConfirm()).not.toBeInTheDocument();
-  });
-
-  it("asks yes/no replace on a filled slot; cancel leaves the slot (CF-TEAM-AC-6.3, CF-UI-AC-5.1–5.2, CF-AS-3)", async () => {
-    seedLiving("Ladder Core", [garchompMember()]);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<TeamsPage />);
-    await screen.findByTestId("team-editor");
-    expect(screen.getByTestId("member-0-item")).toHaveValue("Leftovers");
-    await act(async () => {
-      fireEvent.click(applySetButton()!);
-    });
-    const ui = queryReplaceConfirm();
-    if (ui) {
-      expect(ui).toHaveTextContent(/replace/i);
-      expect(ui.textContent ?? "").not.toMatch(/→|ability:|item:|nature:/i);
-      fireEvent.click(
-        within(ui).getByRole("button", { name: /cancel|no|keep/i }),
-      );
-    } else {
-      expect(confirmSpy).toHaveBeenCalled();
-      const msg = String(confirmSpy.mock.calls[0]?.[0] ?? "");
-      expect(msg).toMatch(/replace/i);
-      expect(msg).not.toMatch(/ability:|item:|nature:|→/i);
-    }
-    expect(screen.getByTestId("member-0-item")).toHaveValue("Leftovers");
-    expect(screen.getByTestId("member-0-ability")).toHaveValue("Rough Skin");
-  });
-
-  it("replaces the filled slot on confirm without Tera (CF-TEAM-AC-6.3, CF-UI-AC-5.3)", async () => {
-    seedLiving("Ladder Core", [garchompMember()]);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<TeamsPage />);
-    await screen.findByTestId("team-editor");
-    await act(async () => {
-      fireEvent.click(applySetButton()!);
-    });
-    const ui = queryReplaceConfirm();
-    if (ui) {
-      const go =
-        within(ui).queryByRole("button", {
-          name: /^(replace|confirm|yes|overwrite)$/i,
-        }) ??
-        within(ui).getByRole("button", { name: /replace|overwrite|yes/i });
-      await act(async () => {
-        fireEvent.click(go);
-      });
-    } else {
-      expect(confirmSpy).toHaveBeenCalled();
-    }
-    await waitFor(() =>
-      expect(screen.getByTestId("member-0-item")).toHaveValue("Life Orb"),
-    );
-    expect(screen.getByTestId("member-0-nature")).toHaveValue("Jolly");
-    expect(screen.queryByTestId("member-0-tera")).not.toBeInTheDocument();
+    expect(applySetButton()).not.toBeInTheDocument();
   });
 });
 

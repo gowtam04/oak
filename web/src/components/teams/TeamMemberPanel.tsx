@@ -151,7 +151,7 @@ export interface TeamMemberPanelProps {
   spriteRef?: SpriteRef;
   /** Data scope for the autocomplete pickers. */
   format?: Format;
-  /** Archived / view-only: no edits, no apply-set, no remove (CF-TEAM-AC-5.3). */
+  /** Archived / view-only: no edits, no remove (CF-TEAM-AC-5.3). */
   readOnly?: boolean;
   onChange: (next: TeamMember) => void;
   onRemove: () => void;
@@ -272,14 +272,6 @@ export default function TeamMemberPanel({
     onChange({ ...member, moves: next.map((m) => m.trim()).filter(Boolean) });
   };
 
-  /** A slot is "filled" when any set field is present (not just species). */
-  const slotFilled =
-    Boolean(member.ability) ||
-    Boolean(member.item) ||
-    Boolean(member.nature) ||
-    member.moves.length > 0 ||
-    STAT_ROWS.some((r) => member.evs[r.spread] > 0);
-
   // Live stats + a shared max so the bars are relative to this set's spread.
   // Archived view does not compute Champions live stats from stored other-game EVs.
   const lives = STAT_ROWS.map((row) =>
@@ -317,57 +309,6 @@ export default function TeamMemberPanel({
     (slug) => ({ slug, display_name: titleizeSlug(slug) }),
   );
 
-  const [templateLoading, setTemplateLoading] = useState(false);
-  const [templateNote, setTemplateNote] = useState<string | null>(null);
-  const applyChampionsSet = () => {
-    if (!member.species || templateLoading || locked) return;
-    // Filled slot: yes/no replace, not a field diff (CF-AS-3). Empty fills
-    // with no confirm (CF-TEAM-AC-6.2). Confirm is synchronous so the click
-    // handler's tests see it before the fetch.
-    if (
-      slotFilled &&
-      !window.confirm("Replace this slot with the Champions usage set?")
-    ) {
-      return;
-    }
-    setTemplateLoading(true);
-    setTemplateNote(null);
-    void fetch("/api/teams/set-template", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ species: member.species }),
-    })
-      .then(async (res) => {
-        const body = (await res.json()) as {
-          found?: boolean;
-          member?: TeamMember;
-          attribution?: string;
-          notes?: string[];
-        };
-        if (!body.found || !body.member) {
-          setTemplateNote(
-            body.notes?.[0] ?? "Usage is unavailable for this species.",
-          );
-          return;
-        }
-        onChange({
-          ...member,
-          ...body.member,
-          species: member.species,
-          tera_type: null,
-          level: 50,
-          // Keep cosmetic fields the user may have set.
-          nickname: member.nickname,
-          gender: member.gender,
-          shiny: member.shiny,
-        });
-        setTemplateNote(body.attribution ?? "Applied Champions set.");
-      })
-      .catch(() => setTemplateNote("Couldn't load Champions set."))
-      .finally(() => setTemplateLoading(false));
-  };
-
   return (
     <div className="team-member-panel" data-testid={id("panel")}>
       <div className="team-member-panel__header">
@@ -380,18 +321,6 @@ export default function TeamMemberPanel({
           )}
         </div>
         <div className="team-member-panel__actions">
-          {member.species && !locked && (
-            <button
-              type="button"
-              className="tm-btn tm-btn--ghost tm-btn--sm"
-              data-testid={id("apply-set")}
-              onClick={applyChampionsSet}
-              disabled={templateLoading}
-              title="Fill moves/item/nature/Stat Points from live Champions usage"
-            >
-              {templateLoading ? "Loading…" : "Apply this Champions set"}
-            </button>
-          )}
           {!locked && (
             <>
               <button
@@ -427,11 +356,6 @@ export default function TeamMemberPanel({
           )}
         </div>
       </div>
-      {templateNote && (
-        <p className="team-member-panel__template-note" data-testid={id("template-note")}>
-          {templateNote}
-        </p>
-      )}
 
       {member.species && (
         <div className="team-member-panel__identity">

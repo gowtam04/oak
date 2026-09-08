@@ -92,7 +92,6 @@ class TeamsListViewModel(
 
     fun canEdit(summary: TeamSummary): Boolean = !summary.format.isArchived
     fun canDuplicate(summary: TeamSummary): Boolean = !summary.format.isArchived
-    fun canApplySet(summary: TeamSummary): Boolean = !summary.format.isArchived
     fun canUseInChat(summary: TeamSummary): Boolean = !summary.format.isArchived
     fun canDelete(summary: TeamSummary): Boolean = true
 

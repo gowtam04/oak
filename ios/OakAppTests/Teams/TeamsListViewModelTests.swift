@@ -11,7 +11,7 @@ import Testing
 /// Expected P7 API additions:
 ///   `archivedTeams: [TeamSummary]`
 ///   `reloadArchived()` — GET `/api/teams?archived=1`
-///   `canEdit` / `canDuplicate` / `canApplySet` false for archived; `canDelete` true
+///   `canEdit` / `canDuplicate` false for archived; `canDelete` true
 ///   create/import always persist `champions` (format argument ignored)
 @MainActor
 struct TeamsListViewModelTests {
@@ -328,7 +328,6 @@ struct TeamsListViewModelTests {
 
     #expect(vm.canEdit(archived) == false)
     #expect(vm.canDuplicate(archived) == false)
-    #expect(vm.canApplySet(archived) == false)
     #expect(vm.canDelete(archived))
 
     let copy = await vm.duplicate(archived)

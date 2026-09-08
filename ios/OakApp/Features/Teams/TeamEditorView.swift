@@ -47,17 +47,6 @@ struct TeamEditorView: View {
   /// When `true`, the editor fetches the full team on appear (existing-team path).
   private let loadsOnAppear: Bool
 
-  private var applyConfirmPresented: Binding<Bool> {
-    Binding(
-      get: { model.pendingApplyConfirm },
-      set: { newValue in
-        if !newValue, model.pendingApplyConfirm {
-          model.cancelApplySet()
-        }
-      }
-    )
-  }
-
   init(model: TeamEditorViewModel, loadsOnAppear: Bool = false) {
     _model = State(initialValue: model)
     self.loadsOnAppear = loadsOnAppear
@@ -122,7 +111,6 @@ struct TeamEditorView: View {
                 showsIVKnobs: model.showsIVKnobs,
                 showsLevelKnob: model.showsLevelKnob,
                 showsStatPoints: model.showsStatPoints,
-                showsApplyUsageSet: model.showsApplyUsageSet,
                 statPointBudget: model.statPointBudget,
                 statPointStatCap: model.statPointStatCap,
                 onSpeciesChange: {
@@ -131,10 +119,7 @@ struct TeamEditorView: View {
                     await model.refreshMovepool(for: member.id)
                   }
                 },
-                onRemove: { model.removeMember(at: index) },
-                onApplyUsageSet: {
-                  Task { await model.fetchAndApplyUsageSet(toSlot: index) }
-                }
+                onRemove: { model.removeMember(at: index) }
               )
               .id(member.id)
             }
@@ -231,25 +216,7 @@ struct TeamEditorView: View {
           ErrorBanner(message: message, onDismiss: { model.dismissError() })
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.bottom, Theme.Spacing.sm)
-        } else if let message = model.applySetUnavailableMessage {
-          ErrorBanner(message: message, onDismiss: { })
-            .padding(.horizontal, Theme.Spacing.lg)
-            .padding(.bottom, Theme.Spacing.sm)
         }
-      }
-      .confirmationDialog(
-        "Replace this Pokémon with the live Champions set?",
-        isPresented: applyConfirmPresented,
-        titleVisibility: .visible
-      ) {
-        Button("Replace") {
-          model.applyPendingSetImmediately()
-        }
-        Button("Cancel", role: .cancel) {
-          model.cancelApplySet()
-        }
-      } message: {
-        Text("This replaces the whole slot. It is not a per-field merge.")
       }
       .overlay(alignment: .top) {
         if showSaveConfirmation {
@@ -405,14 +372,12 @@ private struct MemberEditorSection: View {
   let showsIVKnobs: Bool
   let showsLevelKnob: Bool
   let showsStatPoints: Bool
-  let showsApplyUsageSet: Bool
   let statPointBudget: Int
   let statPointStatCap: Int
   /// Fired whenever `member.species` changes, so the owner can re-resolve sprites/
   /// movepool for the new (or cleared) species.
   let onSpeciesChange: () -> Void
   let onRemove: () -> Void
-  let onApplyUsageSet: () -> Void
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -430,10 +395,6 @@ private struct MemberEditorSection: View {
       VStack(alignment: .leading, spacing: 16) {
         identityHeader
         identityFields
-        if showsApplyUsageSet, !member.species.isEmpty {
-          Button("Apply this Champions set", action: onApplyUsageSet)
-            .font(Theme.body(.subheadline, weight: .medium))
-        }
         moveFields
         naturePicker
         if showsTeraField {

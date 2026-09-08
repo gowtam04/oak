@@ -121,11 +121,10 @@ struct EntityDetailView: View {
         typeChips(data.types)
         AddToTeamButton(
           incoming: incomingTeamMember(
-            species: data.displayName,
+            species: artifact.resolved.slug,
             ability: data.abilities.slot1
           )
         )
-        ApplyChampionsSetButton(species: data.displayName)
       }
     }
     .frame(maxWidth: .infinity)

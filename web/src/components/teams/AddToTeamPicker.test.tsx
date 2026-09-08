@@ -455,6 +455,5 @@ describe("AddToTeamPicker — living Champions only (CF-TEAM-AC-5.3, CF-TEAM-AC-
       }),
     );
     expect(confirmSpy).not.toHaveBeenCalled();
-    expect(screen.queryByTestId("apply-set-confirm")).not.toBeInTheDocument();
   });
 });

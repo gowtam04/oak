@@ -86,7 +86,6 @@ final class TeamsListViewModel {
 
   func canEdit(_ summary: TeamSummary) -> Bool { summary.isLiving }
   func canDuplicate(_ summary: TeamSummary) -> Bool { summary.isLiving }
-  func canApplySet(_ summary: TeamSummary) -> Bool { summary.isLiving }
   func canDelete(_ summary: TeamSummary) -> Bool { true }
 
   /// Batch-resolves sprite refs for every distinct species across the loaded teams so

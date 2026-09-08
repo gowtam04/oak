@@ -374,7 +374,7 @@ describe("TeamEditor — archived view (CF-TEAM-AC-5.2–5.4, CF-UI-AC-4.2–4.3
     );
   }
 
-  it("is view-only: no save, add, apply-set, or slot edit (CF-TEAM-AC-5.2–5.3, CF-UI-AC-4.2)", () => {
+  it("is view-only: no save, add, or slot edit (CF-TEAM-AC-5.2–5.3, CF-UI-AC-4.2)", () => {
     setup({ team: archivedDetail() });
     expect(screen.getByTestId("team-editor")).toBeInTheDocument();
     expect(screen.getAllByText(/excadrill/i).length).toBeGreaterThan(0);

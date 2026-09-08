@@ -217,8 +217,6 @@ fun TeamEditor(
                         showsIvKnobs = viewModel.showsIvKnobs,
                         showsLevelKnob = viewModel.showsLevelKnob,
                         showsStatPoints = viewModel.showsStatPoints,
-                        canApplySet = viewModel.canApplySet && member.species.isNotBlank(),
-                        onApplySet = { viewModel.applyChampionsSet(index) },
                         onChange = { transform -> viewModel.updateMember(index, transform) },
                         onRemove = { viewModel.removeMember(index) },
                     )
@@ -258,20 +256,6 @@ fun TeamEditor(
                 )
             }
         }
-    }
-
-    state.pendingApplyConfirm?.let {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = viewModel::cancelApplySet,
-            title = { Text("Replace this Pokémon?") },
-            text = { Text("Apply the usage set to this slot?") },
-            confirmButton = {
-                TextButton(onClick = viewModel::confirmApplySet) { Text("Replace") }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::cancelApplySet) { Text("Cancel") }
-            },
-        )
     }
 
     if (showAssistant) {
@@ -376,8 +360,6 @@ private fun MemberEditorCard(
     showsIvKnobs: Boolean,
     showsLevelKnob: Boolean,
     showsStatPoints: Boolean,
-    canApplySet: Boolean = false,
-    onApplySet: () -> Unit = {},
     onChange: ((EditableMember) -> EditableMember) -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -428,9 +410,6 @@ private fun MemberEditorCard(
         )
         if (member.species.isNotBlank() && spriteRef == null) {
             Text(TeamEditorViewModel.OFF_ROSTER_LABEL, style = MaterialTheme.typography.labelSmall, color = oak.warning)
-        }
-        if (canApplySet) {
-            TextButton(onClick = onApplySet) { Text("Apply this Champions set") }
         }
         EntityPickerField(
             title = "Ability",

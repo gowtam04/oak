@@ -190,23 +190,6 @@ struct RootView: View {
         onDismiss: { calculatorCover = nil }
       )
     }
-    .sheet(isPresented: addToTeamPresented) {
-      if let incoming = appState.pendingAddToTeam {
-        AddToTeamSheet(
-          model: AddToTeamViewModel(
-            teams: services.teams,
-            isSignedIn: true,
-            conversationFormat: .champions,
-            incoming: incoming
-          ),
-          onOpened: { id, _ in
-            appState.pendingAddToTeam = nil
-            appState.pendingDestination = .team(id: id)
-          }
-        )
-        .oakPaperSheet()
-      }
-    }
   }
 
   private var dockReservation: CGFloat {
@@ -225,13 +208,6 @@ struct RootView: View {
   private var isSignedIn: Bool {
     if case .signedIn = appState.authState { return true }
     return false
-  }
-
-  private var addToTeamPresented: Binding<Bool> {
-    Binding(
-      get: { isSignedIn && appState.pendingAddToTeam != nil },
-      set: { if !$0 { appState.pendingAddToTeam = nil } }
-    )
   }
 }
 
