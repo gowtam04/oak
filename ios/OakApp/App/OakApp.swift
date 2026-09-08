@@ -8,7 +8,10 @@ import SwiftUI
 /// only to the Oak backend over HTTP/SSE (plus App Store Lookup for soft-update).
 @main
 struct OakApp: App {
-  @State private var appState = AppState(appearanceStore: UserDefaultsAppearanceStore())
+  @State private var appState = AppState(
+    appearanceStore: UserDefaultsAppearanceStore(),
+    regulationStore: UserDefaultsRegulationStore()
+  )
   @State private var updateModel: UpdateViewModel
   private let services: ServiceContainer
 

@@ -1,4 +1,10 @@
 /**
+ * `GET /api/scope` — public current-regulation facts for native chips
+ * (CF-UI-AC-2.3). No auth, no DB. Body is {@link currentRegulationMeta}.
+ *
+ *   200  `{ format, regulation, chipLabel, hint }`
+ *        `Cache-Control: public, max-age=60`
+ *
  * `PUT /api/scope` — old clients still call this after a chip pick
  * (champions-first TurnScope, CF-DATA-BR-21). The requested format is
  * ignored; the response always acks Champions and does not persist
@@ -13,12 +19,23 @@
  *   400      unknown / missing format; guest missing `session_id`
  *   404      signed-in + `conversation_id` not owned (no existence leak)
  *
- * No turn, no model. db/env-touching modules are dynamically imported so
- * `next build` never evaluates `@/env`.
+ * PUT dynamically imports db/env-touching modules so `next build` never
+ * evaluates `@/env`. GET only reads the pure `formats.ts` helpers.
  */
 
 import { json, jsonError, readJsonObject } from "@/app/api/auth/_lib/http";
-import { CHAMPIONS_FORMAT, isFormat } from "@/data/formats";
+import {
+  CHAMPIONS_FORMAT,
+  currentRegulationMeta,
+  isFormat,
+} from "@/data/formats";
+
+const REGULATION_CACHE = { "Cache-Control": "public, max-age=60" };
+
+/** Public current-regulation facts. Native chips fetch this; web imports the helpers. */
+export async function GET(): Promise<Response> {
+  return json(200, currentRegulationMeta(), REGULATION_CACHE);
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

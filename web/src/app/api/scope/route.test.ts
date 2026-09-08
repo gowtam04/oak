@@ -16,6 +16,7 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { OakAnswer } from "@/agent/schemas";
+import { currentRegulationMeta } from "@/data/formats";
 
 vi.mock("server-only", () => ({}));
 
@@ -158,6 +159,24 @@ function expectNoOtherGamePersisted(accountId: string): Promise<void> {
     expect(listed.every((s) => s === CHAMPIONS)).toBe(true);
   });
 }
+
+// --- GET current regulation (public, no auth) ------------------------------
+
+describe("GET /api/scope — current regulation (CF-UI-AC-2.3)", () => {
+  it("returns the current regulation meta with a short cache", async () => {
+    const res = await route.GET();
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=60");
+    expect(await res.json()).toEqual(currentRegulationMeta());
+  });
+
+  it("does not require a session or account", async () => {
+    guest();
+    const res = await route.GET();
+    expect(res.status).toBe(200);
+    expect((await res.json() as { format: string }).format).toBe("champions");
+  });
+});
 
 // --- Format is ignored; other games still 200 (CF-DATA-BR-21) --------------
 

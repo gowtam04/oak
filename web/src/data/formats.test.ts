@@ -19,6 +19,10 @@ import {
   STANDARD_FORMAT,
   CHAMPIONS_FORMAT,
   NATDEX_FORMAT,
+  CHAMPIONS_REGULATION,
+  regulationChipLabel,
+  regulationHint,
+  currentRegulationMeta,
   formatForMode,
   modeForFormat,
   genNumberForFormat,
@@ -164,6 +168,33 @@ describe("basisForFormat", () => {
   ];
   it.each(CASES)("%s → basis %s", (format, expected) => {
     expect(basisForFormat(format)).toBe(expected);
+  });
+});
+
+describe("regulation display helpers", () => {
+  it("shortens Regulation … to Champions · Reg …", () => {
+    expect(regulationChipLabel("Regulation M-B")).toBe("Champions · Reg M-B");
+    expect(regulationChipLabel("Regulation M-C")).toBe("Champions · Reg M-C");
+    expect(regulationChipLabel()).toBe(
+      `Champions · ${CHAMPIONS_REGULATION.replace(/^Regulation\b/i, "Reg").trim()}`,
+    );
+  });
+
+  it("builds the accessibility hint from the full regulation name", () => {
+    expect(regulationHint("Regulation M-C")).toBe(
+      "Current Champions regulation: Regulation M-C",
+    );
+    expect(regulationHint()).toBe(
+      `Current Champions regulation: ${CHAMPIONS_REGULATION}`,
+    );
+  });
+
+  it("currentRegulationMeta matches GET /api/scope's body", () => {
+    const meta = currentRegulationMeta();
+    expect(meta.format).toBe("champions");
+    expect(meta.regulation).toBe(CHAMPIONS_REGULATION);
+    expect(meta.chipLabel).toBe(regulationChipLabel());
+    expect(meta.hint).toBe(regulationHint());
   });
 });
 

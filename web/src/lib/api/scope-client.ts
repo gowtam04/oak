@@ -1,16 +1,22 @@
 /**
- * scope-client — typed `fetch` helper over `PUT /api/scope` (chat-qol
- * api-design.md, ADR-8; SCOPE-US-1).
+ * scope-client — typed `fetch` helpers over `/api/scope`.
  *
- * Persist a header scope-chip pick with no follow-up message. Mirrors
- * history-client.ts: it NEVER throws — a transport/HTTP failure folds to
+ * `GET` — current Champions regulation facts (public). NEVER throws; a
+ * transport/HTTP/decode miss folds to `null`.
+ *
+ * `PUT` — persist a header scope-chip pick (legacy; chat-qol api-design.md,
+ * ADR-8; SCOPE-US-1). NEVER throws — a transport/HTTP failure folds to
  * `null` so the chip UI can keep its local pick. The httpOnly session
  * cookie is sent automatically (`credentials: "same-origin"`).
  *
  * Guests must pass `sessionId` (query + body, same as stop-for-guest).
  */
 
-import { isFormat, type Format } from "@/data/formats";
+import {
+  isFormat,
+  type Format,
+  type RegulationMeta,
+} from "@/data/formats";
 
 export interface PersistScopeInput {
   format: Format;
@@ -38,6 +44,36 @@ async function readJsonBody(res: Response): Promise<Record<string, unknown>> {
     /* non-JSON or empty body */
   }
   return {};
+}
+
+/**
+ * `GET /api/scope` — current regulation facts, or `null` on any failure.
+ */
+export async function fetchCurrentRegulation(): Promise<RegulationMeta | null> {
+  try {
+    const res = await fetch("/api/scope", {
+      method: "GET",
+      credentials: "same-origin",
+    });
+    if (!res.ok) return null;
+    const body = await readJsonBody(res);
+    if (body.format !== "champions") return null;
+    if (typeof body.regulation !== "string" || body.regulation.length === 0) {
+      return null;
+    }
+    if (typeof body.chipLabel !== "string" || body.chipLabel.length === 0) {
+      return null;
+    }
+    if (typeof body.hint !== "string" || body.hint.length === 0) return null;
+    return {
+      format: "champions",
+      regulation: body.regulation,
+      chipLabel: body.chipLabel,
+      hint: body.hint,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**

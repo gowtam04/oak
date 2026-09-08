@@ -1,9 +1,11 @@
 package ai.gowtam.oak.features.chat.answercard
 
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.LocalRegulation
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.wire.GenerationBasis
+import ai.gowtam.oak.wire.RegulationMeta
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -38,7 +40,10 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun ScopeTag(generationBasis: GenerationBasis, modifier: Modifier = Modifier) {
     val oak = LocalOakColors.current
-    val display = scopeTagLabel(generationBasis.generation.trim())
+    val display = scopeTagLabel(
+        generationBasis.generation.trim(),
+        LocalRegulation.current.chipLabel,
+    )
     Row(
         modifier = modifier
             .wrapContentWidth(Alignment.Start)
@@ -63,20 +68,20 @@ fun ScopeTag(generationBasis: GenerationBasis, modifier: Modifier = Modifier) {
     }
 }
 
-/** Champions regulation, duplicated from web's `CHAMPIONS_REGULATION` (`formats.ts`). */
-private const val CHAMPIONS_REGULATION = "Regulation M-B"
-
 /**
  * Maps a raw `generation_basis.generation` code to its display tag — mirrors web's
  * `formatScopeTag`:
  *  - `"national-dex"` → `"National Dex"`,
- *  - `"champions"` → `"Champions · Reg M-B"` (`Regulation ` shortened to `Reg `),
+ *  - `"champions"` → the live chip label from `GET /api/scope`,
  *  - `"gen-N"` → `"Gen N"`,
  *  - anything else → returned unchanged (an already-display-form string passes through).
  */
-fun scopeTagLabel(generation: String): String = when {
+fun scopeTagLabel(
+    generation: String,
+    championsChipLabel: String = RegulationMeta.fallback.chipLabel,
+): String = when {
     generation == "national-dex" -> "National Dex"
-    generation == "champions" -> "Champions · " + CHAMPIONS_REGULATION.replaceFirst(Regex("^Regulation\\s+", RegexOption.IGNORE_CASE), "Reg ")
+    generation == "champions" -> championsChipLabel
     generation.startsWith("gen-") -> "Gen " + generation.removePrefix("gen-")
     else -> generation
 }

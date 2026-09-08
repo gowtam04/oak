@@ -59,6 +59,15 @@ final class AppState {
   @ObservationIgnored
   private let appearanceStore: any AppearanceStoring
 
+  @ObservationIgnored
+  private let regulationStore: any RegulationStoring
+
+  /// Header-chip / answer-tag label. Last-known from disk, else `"Champions"`.
+  private(set) var regulationChipLabel: String
+
+  /// Accessibility hint for the regulation chip.
+  private(set) var regulationHint: String
+
   /// Incoming species for the signed-in Add-to-team sheet (ADD-US-1). `nil` when idle.
   var pendingAddToTeam: TeamMember?
 
@@ -74,9 +83,26 @@ final class AppState {
   /// frame; cleared on any terminal event (answer/error/stopped) or a resume 404.
   private(set) var pendingTurns: [String: String] = [:]
 
-  init(appearanceStore: any AppearanceStoring = InMemoryAppearanceStore()) {
+  init(
+    appearanceStore: any AppearanceStoring = InMemoryAppearanceStore(),
+    regulationStore: any RegulationStoring = InMemoryRegulationStore()
+  ) {
     self.appearanceStore = appearanceStore
+    self.regulationStore = regulationStore
     self.appearance = appearanceStore.preference
+    let cached = regulationStore.snapshot
+    self.regulationChipLabel = cached?.chipLabel ?? RegulationMeta.fallback.chipLabel
+    self.regulationHint = cached?.hint ?? RegulationMeta.fallback.hint
+  }
+
+  /// Refreshes the regulation chip from `GET /api/scope`. A miss keeps last-known
+  /// (or the generic `"Champions"` fallback) — never a stale letter from a
+  /// compile-time constant.
+  func refreshRegulation(using service: any RegulationService) async {
+    guard let meta = await service.current(), meta.isUsable else { return }
+    regulationChipLabel = meta.chipLabel
+    regulationHint = meta.hint
+    regulationStore.snapshot = meta
   }
 
   /// Records the turn generating for `conversationId` (the `turn` SSE frame).

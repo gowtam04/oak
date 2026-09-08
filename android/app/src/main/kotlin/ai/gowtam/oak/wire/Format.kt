@@ -86,15 +86,15 @@ sealed interface Format {
         }
 
     /**
-     * A fuller display label with the game-pair/regulation suffix — mirrors
-     * `scopeLabel` (`web/src/lib/scope/scope-label.ts`) exactly. The Champions
-     * regulation string is duplicated from web's `CHAMPIONS_REGULATION` — update
-     * this when that rotates. [Unknown] echoes its raw value.
+     * A fuller display label with the game-pair suffix — mirrors `scopeLabel`
+     * for archived formats. Champions is `"Champions"` here; the live
+     * regulation letter lives on the chip (`GET /api/scope`). [Unknown] echoes
+     * its raw value.
      */
     val displayLabel: String
         get() = when (this) {
             NationalDex -> "National Dex · All Gens"
-            Champions -> "Champions · Reg M-B"
+            Champions -> "Champions"
             ScarletViolet -> "Gen 9 · Scarlet/Violet"
             Gen8 -> "Gen 8 · Sword/Shield"
             Gen7 -> "Gen 7 · USUM"

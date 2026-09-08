@@ -17,7 +17,7 @@ import UIKit
 /// Champions-first P7 expected API:
 ///   `displayFormat` is always `.champions`
 ///   `isRegulationChipPicker == false` (informational regulation chip)
-///   `regulationLabel` contains the current regulation (Reg M-B)
+///   `regulationLabel` comes from AppState (`GET /api/scope`)
 ///   `selectScope` is a no-op for other formats and does not persist them
 ///
 /// The view model is `@MainActor`, so the suite is too.
@@ -331,10 +331,7 @@ struct ChatViewModelTests {
     #expect(vm.scopeSeed == nil)
     #expect(vm.resolvedScope == nil)
     #expect(vm.isRegulationChipPicker == false)
-    #expect(
-      vm.regulationLabel.contains("Reg M-B")
-        || vm.regulationLabel.contains("Regulation M-B")
-        || vm.displayFormat.displayLabel.contains("Reg M-B"))
+    #expect(vm.regulationLabel.contains("Champions"))
   }
 
   @Test

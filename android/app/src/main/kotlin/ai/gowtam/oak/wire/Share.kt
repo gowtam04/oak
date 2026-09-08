@@ -42,3 +42,24 @@ data class PersistScopeResult(
     val format: Format,
     val lastUsedScopes: List<Format>? = null,
 )
+
+/** `GET /api/scope` 200 body — current Champions regulation facts for the chip. */
+@Serializable
+data class RegulationMeta(
+    val format: Format,
+    val regulation: String,
+    val chipLabel: String,
+    val hint: String,
+) {
+    val isUsable: Boolean get() = chipLabel.isNotBlank()
+
+    companion object {
+        /** Shown when nothing has been fetched yet and nothing is cached. */
+        val fallback = RegulationMeta(
+            format = Format.Champions,
+            regulation = "",
+            chipLabel = "Champions",
+            hint = "Current Champions regulation",
+        )
+    }
+}

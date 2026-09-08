@@ -8,8 +8,8 @@ import SwiftUI
 /// pre-Gen-9 fallback code like `"gen-1"`. This turns it into the label web
 /// shows:
 ///
-///   - `"champions"` → `"Champions · Reg M-B"` (the current regulation, `Regulation `
-///     shortened to `Reg ` exactly as web's `/^Regulation\s+/i` → `"Reg "`),
+///   - `"champions"` → the live chip label from `GET /api/scope`
+///     (e.g. `"Champions · Reg M-C"`), or `"Champions"` before the first fetch,
 ///   - `"national-dex"` → `"National Dex"` (the whole-Pokédex reference scope;
 ///     `basisForFormat` returns the raw format string for it, not a `gen-N` tag),
 ///   - `"gen-N"` → `"Gen N"`,
@@ -19,15 +19,12 @@ import SwiftUI
 /// Structured like ``UncertaintyFlagLabels``: a small pure helper beside the view,
 /// pinned by `ScopeTagTests`.
 enum ScopeTag {
-  /// Current Champions regulation, duplicated from web's `CHAMPIONS_REGULATION`
-  /// (`src/data/formats.ts`, `"Regulation M-B"`). Update this alongside
-  /// `Format.displayLabel` when it rotates.
-  static let championsRegulation = "Regulation M-B"
-
   /// Map a raw `generation` code to its display tag (see the type doc).
-  static func label(for generation: String) -> String {
+  /// `championsChipLabel` is the live `GET /api/scope` chip label (or the
+  /// `"Champions"` fallback); historical answers paint the current regulation.
+  static func label(for generation: String, championsChipLabel: String = RegulationMeta.fallback.chipLabel) -> String {
     if generation == "champions" {
-      return "Champions · \(shortRegulation)"
+      return championsChipLabel
     }
     if generation == "national-dex" {
       return "National Dex"
@@ -36,17 +33,6 @@ enum ScopeTag {
       return "Gen \(generation.dropFirst("gen-".count))"
     }
     return generation
-  }
-
-  /// `"Regulation M-B"` → `"Reg M-B"` — the leading `Regulation` word (any casing /
-  /// following whitespace) becomes `Reg `, mirroring web's regex replace.
-  private static var shortRegulation: String {
-    if let range = championsRegulation.range(
-      of: "^Regulation\\s+", options: [.regularExpression, .caseInsensitive]
-    ) {
-      return "Reg " + championsRegulation[range.upperBound...]
-    }
-    return championsRegulation
   }
 }
 
@@ -61,11 +47,13 @@ enum ScopeTag {
 ///
 /// Renders **nothing** when the generation string is blank (mirrors the render-if-
 /// present rule; web's `formatScopeTag("")` is likewise empty). The tag text is the
-/// wire `generation` code run through ``ScopeTag/label(for:)`` — e.g. `"gen-9"` →
-/// "Gen 9", `"champions"` → "Champions · Reg M-B" — so it reads the same as web's
-/// masthead tag; the fallback note and any friendly-labeled uncertainty flags are
-/// surfaced by ``CaveatStripView``, not here.
+/// wire `generation` code run through ``ScopeTag/label(for:championsChipLabel:)``
+/// — e.g. `"gen-9"` → "Gen 9", `"champions"` → the live chip label — so it
+/// reads the same as web's masthead tag; the fallback note and any
+/// friendly-labeled uncertainty flags are surfaced by ``CaveatStripView``, not
+/// here.
 struct ScopeTagView: View {
+  @Environment(AppState.self) private var appState
   let generationBasis: GenerationBasis
 
   var body: some View {
@@ -74,7 +62,10 @@ struct ScopeTagView: View {
     if generation.isEmpty {
       EmptyView()
     } else {
-      let display = ScopeTag.label(for: generation)
+      let display = ScopeTag.label(
+        for: generation,
+        championsChipLabel: appState.regulationChipLabel
+      )
       Text(display)
         .instrumentLabel()
         .foregroundStyle(Theme.textSecondary)
@@ -104,5 +95,6 @@ struct ScopeTagView: View {
     )
   }
   .padding()
+  .environment(AppState())
 }
 #endif

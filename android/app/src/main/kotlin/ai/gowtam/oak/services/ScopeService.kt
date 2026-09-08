@@ -2,8 +2,11 @@ package ai.gowtam.oak.services
 
 import ai.gowtam.oak.networking.Endpoint
 import ai.gowtam.oak.networking.OakApiClient
+import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.PersistScopeResult
+import ai.gowtam.oak.wire.RegulationMeta
+import android.util.Log
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -17,6 +20,12 @@ interface ScopeService {
      * callers may pass [conversationId] to update that thread's sticky scope.
      */
     suspend fun persist(format: Format, conversationId: String?, sessionId: String): PersistScopeResult
+
+    /**
+     * `GET /api/scope` — current regulation facts. Never throws; a transport /
+     * HTTP / decode miss folds to `null` so the chip can keep last-known.
+     */
+    suspend fun current(): RegulationMeta?
 }
 
 class LiveScopeService(private val apiClient: OakApiClient) : ScopeService {
@@ -37,7 +46,27 @@ class LiveScopeService(private val apiClient: OakApiClient) : ScopeService {
         )
         return apiClient.send(endpoint, PersistScopeResult.serializer())
     }
+
+    override suspend fun current(): RegulationMeta? {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.GET,
+            path = "/api/scope",
+            requiresAuth = false,
+        )
+        return try {
+            val meta = apiClient.send(endpoint, RegulationMeta.serializer())
+            meta.takeIf { it.isUsable }
+        } catch (e: OakError) {
+            Log.e(TAG, "regulation fetch failed: ${e::class.simpleName}")
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "regulation fetch failed: ${e::class.simpleName}")
+            null
+        }
+    }
 }
+
+private const val TAG = "Oak.Scope"
 
 @Serializable
 private data class ScopeBody(

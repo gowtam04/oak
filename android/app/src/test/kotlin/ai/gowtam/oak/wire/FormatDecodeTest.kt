@@ -76,7 +76,7 @@ class FormatDecodeTest {
     @Test
     fun formatDisplayLabelsMatchScopeLabelTs() {
         assertEquals("National Dex · All Gens", Format.NationalDex.displayLabel)
-        assertEquals("Champions · Reg M-B", Format.Champions.displayLabel)
+        assertEquals("Champions", Format.Champions.displayLabel)
         assertEquals("Gen 9 · Scarlet/Violet", Format.ScarletViolet.displayLabel)
         assertEquals("Gen 8 · Sword/Shield", Format.Gen8.displayLabel)
         assertEquals("Gen 7 · USUM", Format.Gen7.displayLabel)
