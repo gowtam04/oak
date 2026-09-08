@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Top-level navigation shell: a five-tab `TabView` (Chat / Teams / Usage / Dex /
-/// Settings). Calc stays a cover, not a tab (ADR-6). Chat is the default surface
+/// Top-level navigation shell: five always-mounted panes (Chat / Teams / Usage /
+/// Dex / Settings) with ``OakTabDock`` as the only tab control — no system
+/// `TabView`. Calc stays a cover, not a tab (ADR-6). Chat is the default surface
 /// on launch (M-AC-UI2.1); conversation history is folded into the Chat tab
 /// WhatsApp-style. Teams hosts the living Champions library plus archive. Usage
 /// is the public live ladder. Dex browses the Champions roster. Settings is a
@@ -16,9 +17,9 @@ import SwiftUI
 /// Both side-effects are non-fatal — they swallow their own errors — so a transient
 /// backend problem never blocks the UI or costs the user their on-screen thread.
 ///
-/// Chrome: ``OakTabDock`` (full-bleed paper shelf, coral selected labels)
-/// replaces the system `TabView` bar so iOS 26 never draws Liquid Glass. A switch
-/// fires `Haptics.tap()` and the selected icon plays a one-shot
+/// Chrome: ``OakTabDock`` (full-bleed paper shelf, coral selected labels) is
+/// the only tab control, so iOS 26 never draws Liquid Glass or steals dock taps.
+/// A switch fires `Haptics.tap()` and the selected icon plays a one-shot
 /// `.symbolEffect(.bounce)`. The bounce is decorative (the label carries the
 /// meaning); SwiftUI's symbol effects already no-op under Reduce Motion.
 struct RootView: View {
@@ -34,22 +35,16 @@ struct RootView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      TabView(selection: $selection) {
-        Tab(value: OakAppTab.chat) {
+      ZStack {
+        tabPane(.chat) {
           ChatTabView()
-            .oakHidesSystemTabBar()
-        } label: {
-          Label(OakAppTab.chat.title, systemImage: OakAppTab.chat.systemImage)
         }
-        Tab(value: OakAppTab.teams) {
+        tabPane(.teams) {
           TeamsListView(
             model: TeamsListViewModel(teamService: services.teams, dexLookup: services.dexLookup)
           )
-          .oakHidesSystemTabBar()
-        } label: {
-          Label(OakAppTab.teams.title, systemImage: OakAppTab.teams.systemImage)
         }
-        Tab(value: OakAppTab.usage) {
+        tabPane(.usage) {
           UsageView(
             model: UsageViewModel(
               usage: services.usage,
@@ -59,32 +54,32 @@ struct RootView: View {
               }()
             )
           )
-          .oakHidesSystemTabBar()
-        } label: {
-          Label(OakAppTab.usage.title, systemImage: OakAppTab.usage.systemImage)
         }
-        Tab(value: OakAppTab.dex) {
+        tabPane(.dex) {
           DexView()
-            .oakHidesSystemTabBar()
-        } label: {
-          Label(OakAppTab.dex.title, systemImage: OakAppTab.dex.systemImage)
         }
-        Tab(value: OakAppTab.settings) {
+        tabPane(.settings) {
           NavigationStack {
             AccountView(model: AccountViewModel(auth: services.auth, appState: appState))
           }
           .oakEnamelNav()
-          .oakHidesSystemTabBar()
-        } label: {
-          Label(OakAppTab.settings.title, systemImage: OakAppTab.settings.systemImage)
-
         }
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
       // Canvas fills any leftover system-bar overlay so a launch flash never
       // reveals window-black. The visible dock is ``OakTabDock`` (paper shelf),
       // stacked below the tabs so Chat's composer and lists are never covered.
       .background(Theme.canvas.ignoresSafeArea())
       .oakDisableScrollEdgeGlass()
+      // Hidden sibling keeps the dock's layout height in the VStack so Chat's
+      // composer is never covered. NavigationStack's UIKit view is full-window
+      // and would steal dock taps if the interactive shelf lived only here.
+      OakTabDock(selection: $selection)
+        .hidden()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+    .overlay(alignment: .bottom) {
       OakTabDock(selection: $selection)
     }
     .background(Theme.canvas.ignoresSafeArea())
@@ -189,6 +184,15 @@ struct RootView: View {
         .oakPaperSheet()
       }
     }
+  }
+
+  @ViewBuilder
+  private func tabPane<Content: View>(_ tab: OakAppTab, @ViewBuilder content: () -> Content) -> some View {
+    content()
+      .opacity(selection == tab ? 1 : 0)
+      .allowsHitTesting(selection == tab)
+      .accessibilityHidden(selection != tab)
+      .zIndex(selection == tab ? 1 : 0)
   }
 
   private var isSignedIn: Bool {

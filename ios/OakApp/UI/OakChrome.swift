@@ -3,7 +3,7 @@ import UIKit
 
 /// The five root destinations (ADR-6). Named `OakAppTab` to avoid colliding with
 /// SwiftUI's `Tab`. Display order: Chat / Teams / Usage / Dex / Settings.
-/// Calc stays a cover, not a tab. `Hashable` so it can back `TabView(selection:)`.
+/// Calc stays a cover, not a tab. `Hashable` so it can key dock bounce state.
 enum OakAppTab: String, Hashable, CaseIterable, Sendable {
   case chat
   case teams
@@ -39,9 +39,9 @@ enum OakChrome {
   /// Installs Oak's global `UIBarAppearance` so every `NavigationStack` nav bar
   /// is **opaque enamel** (`uiPokeRed`) — never system material / Liquid Glass.
   ///
-  /// The root tab bar is **not** the system `UITabBar`: `RootView` hides it and
-  /// draws ``OakTabDock``. Tab-bar appearance is still painted opaque as a
-  /// safety net if the system bar flashes during launch.
+  /// The root tab bar is **not** the system `UITabBar`: `RootView` hosts panes
+  /// in a `ZStack` and draws ``OakTabDock``. Tab-bar appearance is still painted
+  /// opaque as a safety net if a system bar flashes during launch.
   ///
   /// Called once at app launch. Appearance proxies are process-global and the
   /// colors are dynamic `UIColor`s, so light/dark tracking is automatic.
@@ -174,9 +174,20 @@ extension ToolbarContent {
 /// home-indicator band empty under the labels. ``bottomLift`` drops the items
 /// into that inset so they sit just above the pill; the surface paint already
 /// fills to the screen edge.
+enum OakTabDockMetrics {
+  /// Clearance above the home-indicator pill.
+  /// `lg` (16) sat too close; zero lift sat a full inset band too high.
+  static let homeIndicatorClearance: CGFloat = 22
+
+  static func bottomLift(inset: CGFloat) -> CGFloat {
+    max(inset - homeIndicatorClearance, 0)
+  }
+}
+
 struct OakTabDock: View {
   @Binding var selection: OakAppTab
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var bounceGeneration: [OakAppTab: Int] = [:]
 
   var body: some View {
     HStack(spacing: 0) {
@@ -198,13 +209,13 @@ struct OakTabDock: View {
     .accessibilityIdentifier("oak-tab-dock")
   }
 
-  /// Pull items down by the bottom inset minus a `lg` clearance so labels
-  /// stay above the home-indicator pill. Home-button devices (inset 0) stay put.
-  /// Read from the key window because SwiftUI has no `safeAreaInsets`
-  /// environment key, and a `GeometryReader` inside the already-inset
-  /// `VStack` reports 0.
+  /// Pull items down by the bottom inset minus ``OakTabDockMetrics`` clearance
+  /// so labels stay above the home-indicator pill. Home-button devices
+  /// (inset 0) stay put. Read from the key window because SwiftUI has no
+  /// `safeAreaInsets` environment key, and a `GeometryReader` inside the
+  /// already-inset `VStack` reports 0.
   private var bottomLift: CGFloat {
-    max(Self.keyWindowBottomInset - Theme.Spacing.lg, 0)
+    OakTabDockMetrics.bottomLift(inset: Self.keyWindowBottomInset)
   }
 
   private static var keyWindowBottomInset: CGFloat {
@@ -219,29 +230,31 @@ struct OakTabDock: View {
     let isSelected = selection == tab
     return Button {
       guard selection != tab else { return }
-      if reduceMotion {
-        selection = tab
-      } else {
-        withAnimation(Theme.Motion.snappy) { selection = tab }
-      }
+      // Assign selection outside withAnimation — wrapping it swallows the
+      // one-shot symbol bounce on the newly selected icon.
+      selection = tab
+      if !reduceMotion { bounceGeneration[tab, default: 0] += 1 }
     } label: {
       VStack(spacing: 2) {
         Image(systemName: tab.systemImage)
           .font(.system(size: 20, weight: .semibold))
-          .symbolEffect(.bounce, value: isSelected)
+          .symbolEffect(.bounce, options: .nonRepeating, value: bounceGeneration[tab, default: 0])
         Text(tab.title)
           .font(Theme.body(.caption2, weight: .semibold))
           .lineLimit(1)
       }
       .foregroundStyle(isSelected ? Theme.accent : Theme.textSecondary)
+      .animation(reduceMotion ? nil : Theme.Motion.snappy, value: isSelected)
       .frame(maxWidth: .infinity)
       .padding(.top, Theme.Spacing.sm)
       .padding(.bottom, Theme.Spacing.xs)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .contentShape(Rectangle())
     .accessibilityLabel(tab.title)
     .accessibilityAddTraits(isSelected ? .isSelected : [])
+    .accessibilityRemoveTraits(isSelected ? [] : .isSelected)
   }
 }
 

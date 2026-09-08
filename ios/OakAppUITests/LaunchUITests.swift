@@ -39,4 +39,32 @@ final class LaunchUITests: XCTestCase {
       )
     }
   }
+
+  /// ``OakTabDock`` (not a leftover system `TabView`) owns selection: tapping a
+  /// dock button marks only that button selected.
+  @MainActor
+  func testTabDockSelectsOnlyTheActiveTab() {
+    let app = XCUIApplication().launchOak()
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
+
+    for label in OakUITest.Tab.all {
+      XCTAssertTrue(goToTab(label, in: app), "Expected the \(label) tab to be reachable.")
+      let selected = app.oakTabBar.buttons[label]
+      let becameSelected = NSPredicate(format: "isSelected == true")
+      let wait = XCTNSPredicateExpectation(predicate: becameSelected, object: selected)
+      XCTAssertEqual(
+        XCTWaiter.wait(for: [wait], timeout: 5),
+        .completed,
+        "Expected \(label) to become the selected dock button."
+      )
+      for other in OakUITest.Tab.all {
+        let button = app.oakTabBar.buttons[other]
+        XCTAssertEqual(
+          button.isSelected,
+          other == label,
+          "After tapping \(label), \(other) isSelected=\(button.isSelected)."
+        )
+      }
+    }
+  }
 }
