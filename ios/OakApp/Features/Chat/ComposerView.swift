@@ -239,7 +239,8 @@ struct ComposerView: View {
       Image(systemName: "paperclip")
         .font(Theme.body(.title3))
         .symbolRenderingMode(.hierarchical)
-        .frame(width: 38, height: 38)
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
     }
     .tint(Theme.textSecondary)
     .disabled(!canAttachMore)
@@ -260,7 +261,8 @@ struct ComposerView: View {
       Image(systemName: "mic.fill")
         .font(Theme.body(.title3))
         .symbolRenderingMode(.hierarchical)
-        .frame(width: 38, height: 38)
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
     }
     // At rest the mic is quiet `textSecondary` — red is reserved for *live* recording,
     // which happens in the voice overlay, not here (§4.02: red = live, not "audio
@@ -275,24 +277,30 @@ struct ComposerView: View {
   /// (`AVAudioApplication`, iOS 17+): granted fires ``onVoice`` immediately,
   /// undetermined requests permission and fires ``onVoice`` only if granted, and
   /// denied shows the "enable in Settings" alert.
+  ///
+  /// Keyboard focus is always dropped first. Presenting the voice
+  /// `.fullScreenCover` over a live first responder is a SwiftUI failure mode
+  /// (the cover flashes and tears down), which looks like "voice does nothing."
   private func handleMicTap() {
-    guard voiceReady else {
+    isInputFocused = false
+    switch VoiceMicGate.action(
+      voiceReady: voiceReady,
+      permission: AVAudioApplication.shared.recordPermission
+    ) {
+    case .start:
+      // Yield so SwiftUI commits the focus change (keyboard down) before
+      // the voice `.fullScreenCover` presents.
+      Task { @MainActor in onVoice?() }
+    case .signIn:
       showVoiceSignInAlert = true
-      return
-    }
-    switch AVAudioApplication.shared.recordPermission {
-    case .granted:
-      onVoice?()
-    case .undetermined:
+    case .openSettings:
+      showMicDeniedAlert = true
+    case .requestPermission:
       AVAudioApplication.requestRecordPermission { granted in
         Task { @MainActor in
           if granted { onVoice?() }
         }
       }
-    case .denied:
-      showMicDeniedAlert = true
-    @unknown default:
-      showMicDeniedAlert = true
     }
   }
 

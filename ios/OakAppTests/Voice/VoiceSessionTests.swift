@@ -344,6 +344,14 @@ struct VoiceSessionTests {
   // MARK: Teardown
 
   @Test
+  func endFromIdleMarksEndedSoASpuriousDisappearCannotLeaveConnecting() {
+    let h = makeHarness()
+    h.session.end()
+    #expect(h.session.phase == .ended)
+    #expect(h.connection.sent.isEmpty)
+  }
+
+  @Test
   func endStopsCaptureClosesTheSocketAndMarksEnded() async {
     let h = makeHarness()
     await connect(h)

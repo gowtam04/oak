@@ -64,6 +64,20 @@ function jsonError(
   );
 }
 
+/** Structured token-route log. Never include the minted token / xAI value. */
+function logVoiceToken(
+  event:
+    | "voice_token_accepted"
+    | "voice_token_unauthorized"
+    | "voice_token_invalid_request"
+    | "voice_token_rate_limited"
+    | "voice_token_mint_failed",
+  fields: Record<string, unknown>,
+  level: "info" | "error" = "info",
+): void {
+  logger[level]({ event, ...fields }, `oak_${event}`);
+}
+
 const SPEND_CHECK_FAILED_MESSAGE =
   "Could not verify usage limits. Please try again.";
 
@@ -97,6 +111,9 @@ export async function POST(req: Request): Promise<Response> {
   // 0) Body under a hard streaming byte cap.
   const bodyResult = await readJsonBodyWithLimit(req, MAX_REQUEST_BYTES);
   if (!bodyResult.ok) {
+    logVoiceToken("voice_token_invalid_request", {
+      reason: bodyResult.reason,
+    });
     if (bodyResult.reason === "too_large") {
       return jsonError(413, "request_too_large", "Request body is too large.");
     }
@@ -104,6 +121,7 @@ export async function POST(req: Request): Promise<Response> {
   }
   const parsed = requestBodySchema.safeParse(bodyResult.value);
   if (!parsed.success) {
+    logVoiceToken("voice_token_invalid_request", { reason: "schema" });
     return jsonError(
       400,
       "invalid_request",
@@ -116,6 +134,7 @@ export async function POST(req: Request): Promise<Response> {
   const { getCurrentAccount } = await import("@/server/auth/current-user");
   const account = await getCurrentAccount();
   if (!account) {
+    logVoiceToken("voice_token_unauthorized", { session_id });
     return jsonError(
       401,
       "sign_in_required",
@@ -158,6 +177,10 @@ export async function POST(req: Request): Promise<Response> {
   );
   if (!gate.allowed) {
     // input_too_long is impossible here (empty message); only rate_limited fires.
+    logVoiceToken("voice_token_rate_limited", {
+      account_id: account.id,
+      session_id,
+    });
     return new Response(
       JSON.stringify({
         error: "rate_limited",
@@ -208,14 +231,14 @@ export async function POST(req: Request): Promise<Response> {
   try {
     minted = await mintEphemeralToken();
   } catch (err) {
-    logger.error(
+    logVoiceToken(
+      "voice_token_mint_failed",
       {
-        event: "voice_token_mint_failed",
         account_id: account.id,
         session_id,
         err: err instanceof Error ? err.message : String(err),
       },
-      "oak_voice_token_mint_failed",
+      "error",
     );
     return jsonError(
       502,
@@ -230,6 +253,12 @@ export async function POST(req: Request): Promise<Response> {
     expires_at: minted.expires_at,
     session,
   };
+
+  logVoiceToken("voice_token_accepted", {
+    account_id: account.id,
+    session_id,
+    format,
+  });
 
   return new Response(JSON.stringify(responseBody), {
     status: 200,
