@@ -1,8 +1,8 @@
 /**
  * T8 — `get_item` (tools.md T8).
  *
- * Item effect text (and, where available, wild-held data), via the read-through
- * reference cache (DS-4). Pass-through of miss / upstream shapes; never throws.
+ * Item effect text via the read-through reference cache (DS-4). Pass-through
+ * of miss / upstream shapes; never throws.
  * Operator-excluded Champions items are treated as not-found. Off-roster names
  * are a plain miss (ADR-8, CF-DATA-BR-5) — no `exists_in_standard`.
  */
@@ -17,8 +17,7 @@ import { getReference } from "@/data/repos/reference-cache";
 import { formatForMode, CHAMPIONS_FORMAT } from "@/data/formats";
 
 const description =
-  "Get an item's effect text and, where available, which Pokémon are found " +
-  "holding it in the wild. Use for item questions.";
+  "Get an item's effect text. Use for item questions.";
 
 export const getItemTool: ToolDef = {
   name: "get_item",
