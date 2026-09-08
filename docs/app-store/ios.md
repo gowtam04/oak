@@ -73,18 +73,16 @@ by this listing).
 
 ## What's New (this release)
 
-**1.2 (build 51) — Champions-first.** In review as of 2026-09-08
-(`WAITING_FOR_REVIEW`, `releaseType: AFTER_APPROVAL`, submission
-`1684bee2-bc06-4f83-aaf9-c8617fe95efb`). Same ASC version record as 1.1.1
-(created 2026-08-16): the 1.1.1 review was cancelled and retargeted to
-1.2 + build 51 so the Champions listing ships instead of the
-pre-Champions 1.1.1 binary. An earlier 1.2 submit the same day was
-developer-rejected (`DEVELOPER_REJECTED`, item `REMOVED`) and resubmitted
-with this copy unchanged. Live 1.0.2 promotional text is already the
-Champions line (no resubmission). App name on this version is
-`Oak – AI Coach` (live 1.0.2 still shows `Oak – AI Battle Coach` until 1.2
-is approved). TestFlight what-to-test and beta description were updated
-to the same Champions-only framing.
+**1.2 (build 51) — Champions-first.** Listing copy, keywords, screenshots,
+and What's New are on this version in App Store Connect. Not submitted
+for review. Same ASC version record as 1.1.1 (created 2026-08-16): the
+1.1.1 review was cancelled and retargeted to 1.2 + build 51 so the
+Champions listing can ship instead of the pre-Champions 1.1.1 binary.
+Live 1.0.2 promotional text is already the Champions line (that field
+updates without a new version). App name on this version is
+`Oak – AI Coach` (live 1.0.2 still shows `Oak – AI Battle Coach` until
+1.2 is submitted and approved). TestFlight what-to-test and beta
+description use the same Champions-only framing.
 
 ```
 What's new
