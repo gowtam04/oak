@@ -34,4 +34,11 @@ struct OakChromeTests {
     _ = Color.clear.oakDisableScrollEdgeGlass()
     #expect(Bool(true))
   }
+
+  @Test
+  func tabDockBottomLiftClearsHomeIndicator() {
+    #expect(OakTabDockMetrics.bottomLift(inset: 34) == 12)
+    #expect(OakTabDockMetrics.bottomLift(inset: 0) == 0)
+    #expect(OakTabDockMetrics.bottomLift(inset: 10) == 0)
+  }
 }

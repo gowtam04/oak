@@ -138,6 +138,7 @@ struct ComposerView: View {
     // frost, no `.bar`, no material, no upward shadow-as-frost.
     .background {
       Theme.canvas.ignoresSafeArea(edges: .bottom)
+        .allowsHitTesting(false)
     }
     // The attach dialog and active typing are mutually exclusive (feedback
     // APFrit48yRdOdP2IKOX6tBM): gaining text focus, or the text itself changing,
