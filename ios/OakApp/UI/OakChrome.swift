@@ -169,6 +169,11 @@ extension ToolbarContent {
 /// Opaque paper tab shelf that replaces iOS 26's Liquid Glass `TabView` bar.
 /// Full-bleed `--surface` through the home indicator, 1px `--border` hairline
 /// on top, coral selected labels — no capsule, no selected pill, no shadow.
+///
+/// `RootView`'s `VStack` lays out in the safe rect, which would leave a full
+/// home-indicator band empty under the labels. ``bottomLift`` drops the items
+/// into that inset so they sit just above the pill; the surface paint already
+/// fills to the screen edge.
 struct OakTabDock: View {
   @Binding var selection: OakAppTab
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -188,8 +193,26 @@ struct OakTabDock: View {
         .allowsHitTesting(false)
     }
     .background(Theme.surface.ignoresSafeArea(edges: .bottom))
+    .padding(.bottom, -bottomLift)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("oak-tab-dock")
+  }
+
+  /// Pull items down by the bottom inset minus a `lg` clearance so labels
+  /// stay above the home-indicator pill. Home-button devices (inset 0) stay put.
+  /// Read from the key window because SwiftUI has no `safeAreaInsets`
+  /// environment key, and a `GeometryReader` inside the already-inset
+  /// `VStack` reports 0.
+  private var bottomLift: CGFloat {
+    max(Self.keyWindowBottomInset - Theme.Spacing.lg, 0)
+  }
+
+  private static var keyWindowBottomInset: CGFloat {
+    let windows = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap(\.windows)
+    let window = windows.first(where: \.isKeyWindow) ?? windows.first
+    return window?.safeAreaInsets.bottom ?? 0
   }
 
   private func dockItem(_ tab: OakAppTab) -> some View {
@@ -212,7 +235,8 @@ struct OakTabDock: View {
       }
       .foregroundStyle(isSelected ? Theme.accent : Theme.textSecondary)
       .frame(maxWidth: .infinity)
-      .padding(.vertical, Theme.Spacing.sm)
+      .padding(.top, Theme.Spacing.sm)
+      .padding(.bottom, Theme.Spacing.xs)
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
