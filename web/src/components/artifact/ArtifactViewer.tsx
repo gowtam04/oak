@@ -153,7 +153,12 @@ function EntityRenderer({
 }): React.JSX.Element {
   switch (response.kind) {
     case "pokemon":
-      return <PokemonArtifact data={response.data} />;
+      return (
+        <PokemonArtifact
+          data={response.data}
+          slug={response.resolved.slug}
+        />
+      );
     case "move":
       return <MoveArtifact data={response.data} />;
     case "ability":

@@ -269,31 +269,6 @@ private struct UsageSpeciesView: View {
 
 }
 
-private struct UsageShareRow: View {
-  let name: String
-  let pct: Double?
-  var showsChevron: Bool
-
-  var body: some View {
-    HStack {
-      Text(name)
-        .foregroundStyle(Theme.textPrimary)
-      Spacer()
-      if let pct {
-        Text(String(format: "%.1f%%", pct))
-          .font(Theme.mono(.footnote))
-          .foregroundStyle(Theme.textSecondary)
-      }
-      if showsChevron {
-        Image(systemName: "chevron.right")
-          .font(.caption.weight(.semibold))
-          .foregroundStyle(Theme.textMuted)
-      }
-    }
-    .contentShape(Rectangle())
-  }
-}
-
 /// Compact LIVE · season + local fetched time. Lives inside the `List` so it
 /// scrolls away (not a `Section` header — those pin on iOS).
 private struct UsageSnapshotHeader: View {

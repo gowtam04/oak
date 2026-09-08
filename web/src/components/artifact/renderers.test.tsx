@@ -81,6 +81,25 @@ describe("PokemonArtifact", () => {
     expect(() => fireEvent.click(moveBtn)).not.toThrow();
   });
 
+  it("shows Summary / Usage tabs when a slug is provided and stays on Summary", () => {
+    render(<PokemonArtifact data={POKEMON_WITH_QUAD} slug="garchomp" />);
+    expect(screen.getByTestId("pokemon-artifact-tab-summary")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByTestId("pokemon-stats")).toBeInTheDocument();
+    expect(screen.queryByTestId("pokemon-usage")).not.toBeInTheDocument();
+  });
+
+  it("opens the Usage tab without losing the summary on toggle back", async () => {
+    render(<PokemonArtifact data={POKEMON_WITH_QUAD} slug="garchomp" />);
+    fireEvent.click(screen.getByTestId("pokemon-artifact-tab-usage"));
+    expect(await screen.findByTestId("pokemon-usage")).toBeInTheDocument();
+    expect(screen.queryByTestId("pokemon-stats")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("pokemon-artifact-tab-summary"));
+    expect(screen.getByTestId("pokemon-stats")).toBeInTheDocument();
+  });
+
   it("orders movepool types and matchup rows by Champions display order", () => {
     render(<PokemonArtifact data={POKEMON_WITH_QUAD} />);
 
