@@ -232,6 +232,143 @@ describe("getUsage — resolution + misses", () => {
     expect(res.suggestions).toContain("Garchomp");
   });
 
+  it("maps Oak regional slugs and parenthetical names to adjective saved_names", async () => {
+    const regionalIndex = {
+      defaultSeason: "Current",
+      pokemon: [
+        "Alolan Ninetales",
+        "Ninetales",
+        "Paldean Tauros Aqua Breed",
+        "Garchomp",
+      ],
+    };
+    installFetch((url) => {
+      if (url === `${BASE}/api`) return ok(regionalIndex);
+      if (url.startsWith(`${BASE}/api/battle/Doubles/Alolan%20Ninetales`)) {
+        return ok({
+          rows: [
+            {
+              category: "ability",
+              rank: 1,
+              name: "Snow Warning",
+              percentage: "98.6%",
+            },
+          ],
+        });
+      }
+      if (url.startsWith(`${BASE}/api/battle/Doubles/Ninetales`)) {
+        return ok({
+          rows: [
+            {
+              category: "ability",
+              rank: 1,
+              name: "Drought",
+              percentage: "97.5%",
+            },
+          ],
+        });
+      }
+      if (
+        url.startsWith(
+          `${BASE}/api/battle/Doubles/Paldean%20Tauros%20Aqua%20Breed`,
+        )
+      ) {
+        return ok({
+          rows: [
+            { category: "move", rank: 1, name: "Wave Crash", percentage: "80%" },
+          ],
+        });
+      }
+      return notFound();
+    });
+
+    for (const q of ["ninetales-alola", "Ninetales (Alola)", "Alolan Ninetales"]) {
+      __resetUsageCachesForTests();
+      const res = await getUsage(q, "doubles", { now: 1 });
+      expect(res.found, q).toBe(true);
+      if (!res.found) return;
+      expect(res.data.saved_name, q).toBe("Alolan Ninetales");
+      expect(res.data.abilities[0]?.name, q).toBe("Snow Warning");
+      expect(
+        calledUrls().some((u) =>
+          u.includes("/api/battle/Doubles/Alolan%20Ninetales"),
+        ),
+        q,
+      ).toBe(true);
+    }
+
+    __resetUsageCachesForTests();
+    const kanto = await getUsage("ninetales", "doubles", { now: 1 });
+    expect(kanto.found).toBe(true);
+    if (!kanto.found) return;
+    expect(kanto.data.saved_name).toBe("Ninetales");
+    expect(kanto.data.abilities[0]?.name).toBe("Drought");
+
+    __resetUsageCachesForTests();
+    const tauros = await getUsage("tauros-paldea-aqua", "doubles", { now: 1 });
+    expect(tauros.found).toBe(true);
+    if (!tauros.found) return;
+    expect(tauros.data.saved_name).toBe("Paldean Tauros Aqua Breed");
+  });
+
+  it("picks the matching form from metadata instead of the empty-form base", async () => {
+    const ninetalesMeta = {
+      pokemon: "Alolan Ninetales",
+      rows: [
+        {
+          base_name: "Ninetales",
+          saved_name: "Alolan Ninetales",
+          form: "Alolan",
+        },
+        { base_name: "Ninetales", saved_name: "Ninetales", form: "" },
+      ],
+    };
+    installFetch((url) => {
+      if (url === `${BASE}/api`) return ok(INDEX);
+      if (url.startsWith(`${BASE}/api/metadata/ninetales-alola`)) {
+        return ok(ninetalesMeta);
+      }
+      if (url.startsWith(`${BASE}/api/battle/Doubles/Alolan%20Ninetales`)) {
+        return ok({
+          rows: [
+            {
+              category: "ability",
+              rank: 1,
+              name: "Snow Warning",
+              percentage: "98.6%",
+            },
+          ],
+        });
+      }
+      if (url.startsWith(`${BASE}/api/battle/Doubles/Ninetales`)) {
+        return ok({
+          rows: [
+            {
+              category: "ability",
+              rank: 1,
+              name: "Drought",
+              percentage: "97.5%",
+            },
+          ],
+        });
+      }
+      return notFound();
+    });
+    const res = await getUsage("ninetales-alola", "doubles", { now: 1 });
+    expect(res.found).toBe(true);
+    if (!res.found) return;
+    expect(res.data.saved_name).toBe("Alolan Ninetales");
+    expect(res.data.abilities[0]?.name).toBe("Snow Warning");
+    expect(
+      calledUrls().some((u) => u.includes("/api/metadata/ninetales-alola")),
+    ).toBe(true);
+    expect(
+      calledUrls().some((u) =>
+        u.includes("/api/battle/Doubles/Alolan%20Ninetales"),
+      ),
+    ).toBe(true);
+  });
+
   it("treats a battle 404 as a miss and does not retry it", async () => {
     let battleCalls = 0;
     installFetch((url) => {

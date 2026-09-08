@@ -367,12 +367,62 @@ type Resolved =
   | { ok: true; savedName: string }
   | { ok: false; suggestions: string[] };
 
+/**
+ * Oak slugs / parenthetical formes use the region stem (`alola`, `galar`);
+ * championsbattledata saved_names use the adjective (`Alolan`, `Galarian`).
+ * Fold both directions onto the adjective so token-set match is order- and
+ * phrasing-independent: "ninetales-alola", "Ninetales (Alola)", "Alolan
+ * Ninetales" → {ninetales, alolan}.
+ */
+const REGION_ALIASES: Readonly<Record<string, string>> = {
+  alola: "alolan",
+  galar: "galarian",
+  hisui: "hisuian",
+  paldea: "paldean",
+};
+
+function tokensOf(s: string): string[] {
+  return normalize(s)
+    .split(" ")
+    .filter(Boolean)
+    .map((t) => REGION_ALIASES[t] ?? t);
+}
+
+function tokenSet(s: string): Set<string> {
+  return new Set(tokensOf(s));
+}
+
+function isSubset(wanted: Set<string>, have: Set<string>): boolean {
+  for (const t of wanted) if (!have.has(t)) return false;
+  return true;
+}
+
+/**
+ * Among `names`, pick the one whose tokens contain every wanted token, preferring
+ * fewer extra tokens (so "ninetales" → "Ninetales", not "Alolan Ninetales").
+ */
+function pickBestName(names: string[], wanted: Set<string>): string | null {
+  if (wanted.size === 0) return null;
+  let best: string | null = null;
+  let bestExtra = Number.POSITIVE_INFINITY;
+  for (const name of names) {
+    const have = tokenSet(name);
+    if (!isSubset(wanted, have)) continue;
+    const extra = have.size - wanted.size;
+    if (extra < bestExtra) {
+      bestExtra = extra;
+      best = name;
+    }
+  }
+  return best;
+}
+
 function suggestFrom(index: IndexData, name: string): string[] {
-  const wanted = new Set(normalize(name).split(" ").filter(Boolean));
+  const wanted = tokenSet(name);
   if (wanted.size === 0) return [];
   return index.names
     .map((n) => {
-      const tokens = new Set(normalize(n).split(" "));
+      const tokens = tokenSet(n);
       let score = 0;
       for (const t of wanted) if (tokens.has(t)) score += 1;
       return { n, score };
@@ -383,6 +433,18 @@ function suggestFrom(index: IndexData, name: string): string[] {
     .map((x) => x.n);
 }
 
+function savedNameOf(r: unknown): string | null {
+  if (!r || typeof r !== "object") return null;
+  const sn = (r as Record<string, unknown>).saved_name;
+  return typeof sn === "string" && sn.trim() !== "" ? sn : null;
+}
+
+function rowForm(r: unknown): string {
+  if (!r || typeof r !== "object") return "";
+  const form = (r as Record<string, unknown>).form;
+  return typeof form === "string" ? form.trim() : "";
+}
+
 function pickSavedNameFromMetadata(
   meta: unknown,
   requested: string,
@@ -390,26 +452,42 @@ function pickSavedNameFromMetadata(
   const rows = (meta as { rows?: unknown }).rows;
   if (!Array.isArray(rows) || rows.length === 0) return null;
   const target = normalize(requested);
-  const savedOf = (r: unknown): string | null =>
-    r && typeof r === "object" && typeof (r as Record<string, unknown>).saved_name === "string"
-      ? ((r as Record<string, unknown>).saved_name as string)
-      : null;
-  // 1. exact saved_name match
+  const wanted = tokenSet(requested);
+
+  // 1. exact saved_name match (normalized string)
   for (const r of rows) {
-    const sn = savedOf(r);
+    const sn = savedNameOf(r);
     if (sn && normalize(sn) === target) return sn;
   }
-  // 2. base form (empty `form`) when the request is just the base species
+
+  // 2. token-set / specific subset against saved_name, then saved_name+form
+  //    (covers Oak slugs and "Ninetales (Alola)" vs "Alolan Ninetales").
+  const savedNames = rows.map(savedNameOf).filter((n): n is string => n != null);
+  const bySaved = pickBestName(savedNames, wanted);
+  if (bySaved) return bySaved;
+
+  const labels: string[] = [];
+  const labelToSaved = new Map<string, string>();
   for (const r of rows) {
-    const sn = savedOf(r);
-    const form = (r as Record<string, unknown>)?.form;
-    if (sn && (!form || (typeof form === "string" && form.trim() === ""))) {
-      return sn;
-    }
+    const sn = savedNameOf(r);
+    if (!sn) continue;
+    const form = rowForm(r);
+    const label = form ? `${sn} ${form}` : sn;
+    labels.push(label);
+    if (!labelToSaved.has(label)) labelToSaved.set(label, sn);
   }
-  // 3. fall back to the first row that has a saved_name
+  const byLabel = pickBestName(labels, wanted);
+  if (byLabel) return labelToSaved.get(byLabel) ?? null;
+
+  // 3. Base-species only: empty `form`, then first saved_name. Never do this
+  //    when the request carried a form token — wrong form is worse than a miss.
+  if (wanted.size !== 1) return null;
   for (const r of rows) {
-    const sn = savedOf(r);
+    const sn = savedNameOf(r);
+    if (sn && rowForm(r) === "") return sn;
+  }
+  for (const r of rows) {
+    const sn = savedNameOf(r);
     if (sn) return sn;
   }
   return null;
@@ -421,21 +499,18 @@ async function resolveSavedName(
   signal?: AbortSignal,
 ): Promise<Resolved> {
   const target = normalize(name);
-  const wanted = target.split(" ").filter(Boolean);
+  const wanted = tokenSet(name);
 
   // 1. exact normalized match against the index names
   const exact = index.names.find((n) => normalize(n) === target);
   if (exact) return { ok: true, savedName: exact };
 
-  // 1b. token-subset match (handles forms whose saved_name is in the index,
-  //     e.g. "paldean tauros aqua breed" ⊆ "Paldean Tauros Aqua Breed").
-  if (wanted.length > 0) {
-    const subset = index.names.find((n) => {
-      const tokens = new Set(normalize(n).split(" "));
-      return wanted.every((t) => tokens.has(t));
-    });
-    if (subset) return { ok: true, savedName: subset };
-  }
+  // 1b. alias-folded token match (exact set first via extra=0, then subset).
+  //     "ninetales-alola" / "Ninetales (Alola)" → "Alolan Ninetales";
+  //     "tauros-paldea-aqua" → "Paldean Tauros Aqua Breed";
+  //     "ninetales" still prefers "Ninetales" over "Alolan Ninetales".
+  const best = pickBestName(index.names, wanted);
+  if (best) return { ok: true, savedName: best };
 
   // 2. metadata fallback — the endpoint is keyed by base name and lists this
   //    species' forms with their saved_names; pick the matching one.

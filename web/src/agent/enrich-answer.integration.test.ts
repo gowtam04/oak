@@ -8,7 +8,8 @@
  * sprite_url / dex_number / subjects, so nothing rendered. The runtime now
  * enriches every validated answer from the index, so a "Grok" payload that omits
  * those fields comes out with them populated — proving sprites are now
- * model-independent.
+ * model-independent. A supplied sprite_url/dex_number is replaced by the index
+ * when a SpriteRef exists (hallucinated PokeAPI form ids must not win).
  *
  * Two cases:
  *   1. candidate list — rows with NO sprite_url/dex_number get them backfilled
@@ -50,7 +51,7 @@ let contextMod: ContextMod;
 beforeAll(async () => {
   process.env.ANTHROPIC_API_KEY ??= "test-dummy-key";
   // seed "tools" → Garchomp (#445), Farigiraf (#981), Tauros forms, etc., in
-  // the scarlet-violet format, with sprite_url + searchable_names populated.
+  // the champions format, with sprite_url + searchable_names populated.
   fix = await createPgSchema({ seed: "tools" });
   await installAsSingleton(fix);
 
@@ -192,7 +193,7 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
       },
     };
 
-    const ctx = await buildCtx("standard");
+    const ctx = await buildCtx("champions");
     const result = await runtime.runWithProvider(
       grokProvider([toolCallChunks("submit_answer", answer, "c1")]),
       "which dragons?",
@@ -221,7 +222,7 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
       generation_basis: { generation: "gen-9", fallback: false },
     };
 
-    const ctx = await buildCtx("standard");
+    const ctx = await buildCtx("champions");
     const result = await runtime.runWithProvider(
       grokProvider([
         toolCallChunks("get_pokemon", { name: "farigiraf" }, "c1"),
@@ -264,7 +265,7 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
       },
     };
 
-    const ctx = await buildCtx("standard");
+    const ctx = await buildCtx("champions");
     const result = await runtime.runWithProvider(
       grokProvider([
         toolCallChunks("query_pokedex", { types: ["fighting"], limit: 1 }, "c1"),
@@ -309,7 +310,7 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
       },
     };
 
-    const ctx = await buildCtx("standard");
+    const ctx = await buildCtx("champions");
     const result = await runtime.runWithProvider(
       grokProvider([
         toolCallChunks("query_pokedex", { types: ["fighting"], limit: 1 }, "c1"),
@@ -342,7 +343,7 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
       },
     };
 
-    const ctx = await buildCtx("standard");
+    const ctx = await buildCtx("champions");
     const result = await runtime.runWithProvider(
       grokProvider([
         toolCallChunks("query_pokedex", { types: ["dragon"], limit: 1 }, "c1"),
@@ -375,7 +376,7 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
       },
     };
 
-    const ctx = await buildCtx("standard");
+    const ctx = await buildCtx("champions");
     const result = await runtime.runWithProvider(
       grokProvider([toolCallChunks("submit_answer", answer, "c1")]),
       "which pokemon are fighting type?",
@@ -386,9 +387,10 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
     expect(result.candidates!.hidden_rows).toBeUndefined();
   });
 
-  it("leaves a Claude-style answer (already has sprites) unchanged", async () => {
-    // Enrichment only ADDS missing fields — an answer that already carries
-    // sprite_url/dex_number is returned as-is (no regression to the Claude path).
+  it("replaces a model-supplied sprite_url/dex with the index when a ref exists", async () => {
+    // Identity fields are index-owned: a hallucinated PokeAPI form id (the
+    // Alolan Vulpix 10103 / Alolan Ninetales mix-up) must not win over the
+    // roster sprite. Types the model already filled stay.
     const answer: OakAnswer = {
       status: "answered",
       answer_markdown: "**Garchomp**.",
@@ -399,15 +401,16 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
       subjects: [
         {
           name: "Garchomp",
-          dex_number: 445,
-          sprite_url: "https://cdn.example/custom-garchomp.png",
+          dex_number: 37,
+          sprite_url:
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10103.png",
           types: ["dragon", "ground"],
           is_fallback: false,
         },
       ],
     };
 
-    const ctx = await buildCtx("standard");
+    const ctx = await buildCtx("champions");
     const result = await runtime.runWithProvider(
       grokProvider([toolCallChunks("submit_answer", answer, "c1")]),
       "tell me about garchomp",
@@ -415,9 +418,10 @@ describe("enrich-answer-e2e — server backfills sprites/dex (model-independent)
       ctx,
     );
 
-    // The model-supplied sprite_url is preserved, not overwritten by the index.
     expect(result.subjects![0].sprite_url).toBe(
-      "https://cdn.example/custom-garchomp.png",
+      "https://img.example/sprite/445.png",
     );
+    expect(result.subjects![0].dex_number).toBe(445);
+    expect(result.subjects![0].types).toEqual(["dragon", "ground"]);
   });
 });
