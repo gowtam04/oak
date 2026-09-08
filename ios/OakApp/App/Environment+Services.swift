@@ -247,12 +247,6 @@ struct PreviewStubTeamService: TeamService {
 
   func list(archived: Bool) async throws -> [TeamSummary] { [] }
 
-  func setTemplate(species: String) async throws -> (
-    found: Bool, member: TeamMember?, notes: [String], attribution: String?
-  ) {
-    (false, nil, ["Preview stub."], nil)
-  }
-
   func get(id: String) async throws -> (team: Team, validation: TeamValidationResult) {
     throw notFound
   }

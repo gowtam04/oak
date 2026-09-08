@@ -61,93 +61,45 @@ private struct AddToTeamButtonInner: View {
   let incoming: TeamMember
   var compact: Bool = false
   @Environment(AppState.self) private var appState
-
-  var body: some View {
-    if compact {
-      Button {
-        appState.pendingAddToTeam = incoming
-      } label: {
-        Label("Add to team", systemImage: "plus")
-          .font(Theme.body(.caption, weight: .medium))
-      }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Add to team")
-    } else {
-      Button {
-        appState.pendingAddToTeam = incoming
-      } label: {
-        Label("Add to team", systemImage: "plus.square.on.square")
-          .font(Theme.display(.footnote))
-      }
-      .buttonStyle(.oakSecondary)
-      .accessibilityLabel("Add to team")
-    }
-  }
-}
-
-/// Apply a live Champions usage set (CF-TEAM-US-6). Guests get a sign-in sheet
-/// instead of a silent hide (CF-AS-11).
-struct ApplyChampionsSetButton: View {
-  let species: String
-  var compact: Bool = false
-
   @Environment(\.services) private var services
-  @Environment(AppState.self) private var appState
-  @State private var showSignIn = false
-  @State private var note: String?
-  @State private var busy = false
-
-  private var isSignedIn: Bool {
-    if case .signedIn = appState.authState { return true }
-    return false
-  }
+  @State private var presented = false
 
   var body: some View {
-    VStack(alignment: compact ? .trailing : .center, spacing: 6) {
-      Button {
-        Task { await apply() }
-      } label: {
-        if busy {
-          ProgressView()
-        } else {
-          Text("Apply this Champions set")
+    Group {
+      if compact {
+        Button {
+          presented = true
+        } label: {
+          Label("Add to team", systemImage: "plus")
+            .font(Theme.body(.caption, weight: .medium))
         }
-      }
-      .buttonStyle(.oakSecondary)
-      .disabled(busy || species.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-      .accessibilityLabel("Apply this Champions set")
-      if let note {
-        Text(note)
-          .font(Theme.body(.caption))
-          .foregroundStyle(Theme.textSecondary)
-          .multilineTextAlignment(compact ? .trailing : .center)
-      }
-    }
-    .sheet(isPresented: $showSignIn) {
-      AuthView(model: AuthViewModel(auth: services.auth, appState: appState))
-    }
-    .onChange(of: appState.authState) { _, newValue in
-      if case .signedIn = newValue { showSignIn = false }
-    }
-  }
-
-  private func apply() async {
-    guard isSignedIn else {
-      showSignIn = true
-      return
-    }
-    busy = true
-    note = nil
-    defer { busy = false }
-    do {
-      let result = try await services.teams.setTemplate(species: species)
-      if let member = result.member, result.found {
-        appState.pendingAddToTeam = member
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add to team")
       } else {
-        note = result.notes.first ?? "Usage is unavailable or no set is listed for this species."
+        Button {
+          presented = true
+        } label: {
+          Label("Add to team", systemImage: "plus.square.on.square")
+            .font(Theme.display(.footnote))
+        }
+        .buttonStyle(.oakSecondary)
+        .accessibilityLabel("Add to team")
       }
-    } catch {
-      note = "Live Champions usage is unavailable."
+    }
+    .sheet(isPresented: $presented) {
+      AddToTeamSheet(
+        model: AddToTeamViewModel(
+          teams: services.teams,
+          isSignedIn: true,
+          conversationFormat: .champions,
+          incoming: incoming
+        ),
+        onOpened: { id, _ in
+          presented = false
+          appState.pendingDestination = .team(id: id)
+        }
+      )
+      .oakPaperSheet()
     }
   }
 }
@@ -287,6 +239,7 @@ struct AddToTeamSheet: View {
   @Bindable var model: AddToTeamViewModel
   var onOpened: ((String, Int) -> Void)?
 
+  @Environment(\.dismiss) private var dismiss
   @State private var newName = ""
 
   var body: some View {
@@ -333,7 +286,10 @@ struct AddToTeamSheet: View {
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") { model.dismiss() }
+          Button("Cancel") {
+            model.dismiss()
+            dismiss()
+          }
         }
         .oakLidItem()
       }

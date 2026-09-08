@@ -136,15 +136,6 @@ data class TeamEditorUiState(
     val isAnalyzing: Boolean = false,
     /** A failed analysis's message; the last good [analysis] is retained alongside it. */
     val analysisError: String? = null,
-    /** Pending replace-confirm when applying a usage set onto a filled slot. */
-    val pendingApplyConfirm: PendingApplyConfirm? = null,
-)
-
-/** Yes/no confirm before a filled slot is replaced by a usage set (CF-TEAM-AC-6.3). */
-@Immutable
-data class PendingApplyConfirm(
-    val slotIndex: Int,
-    val incoming: TeamMember,
 )
 
 /**
@@ -181,7 +172,6 @@ class TeamEditorViewModel private constructor(
     val showsLevelKnob: Boolean get() = false
     val showsStatPoints: Boolean get() = true
     val canDuplicate: Boolean get() = !isReadOnly
-    val canApplySet: Boolean get() = !isReadOnly
 
     /** The pending debounce timer for [scheduleAnalysis]; cancelled/relaunched on each edit. */
     private var analysisDebounceJob: Job? = null
@@ -553,78 +543,6 @@ class TeamEditorViewModel private constructor(
      * untouched — the patched rows land in the editor's unsaved state and the user still
      * hits Save. The slot edits reuse the exact pure [applyTeamPatch] the server
      * legality-gate ran, so applied ≡ validated. */
-    /**
-     * Fetches the live Champions usage set for this slot's species
-     * (`POST /api/teams/set-template`) and applies it (confirm if filled).
-     */
-    fun applyChampionsSet(slotIndex: Int) {
-        if (!canApplySet) return
-        val species = uiState.value.members.getOrNull(slotIndex)?.species?.trim()?.takeIf { it.isNotBlank() }
-            ?: return
-        viewModelScope.launch {
-            val result = try {
-                teamService.setTemplate(species)
-            } catch (e: OakError) {
-                _uiState.update { it.copy(errorMessage = message(e)) }
-                return@launch
-            } catch (_: Exception) {
-                _uiState.update { it.copy(errorMessage = "Live Champions usage is unavailable.") }
-                return@launch
-            }
-            val incoming = result.member
-            if (!result.found || incoming == null) {
-                _uiState.update {
-                    it.copy(
-                        errorMessage = result.notes.firstOrNull()
-                            ?: "Usage is unavailable or no set is listed for this species.",
-                    )
-                }
-                return@launch
-            }
-            applyUsageSet(slotIndex, incoming)
-        }
-    }
-
-    /**
-     * Applies a live usage set to [slotIndex]. An empty slot fills immediately;
-     * a filled slot asks for yes/no confirm (CF-TEAM-AC-6.3). Tera is stripped
-     * and level forced to 50 (ADR-7).
-     */
-    fun applyUsageSet(slotIndex: Int, incoming: TeamMember) {
-        if (!canApplySet) return
-        val current = uiState.value.members.getOrNull(slotIndex) ?: return
-        if (current.species.isNotBlank()) {
-            _uiState.update { it.copy(pendingApplyConfirm = PendingApplyConfirm(slotIndex, incoming)) }
-            return
-        }
-        writeUsageSet(slotIndex, incoming)
-    }
-
-    fun confirmApplySet() {
-        val pending = uiState.value.pendingApplyConfirm ?: return
-        _uiState.update { it.copy(pendingApplyConfirm = null) }
-        writeUsageSet(pending.slotIndex, pending.incoming)
-    }
-
-    fun cancelApplySet() {
-        _uiState.update { it.copy(pendingApplyConfirm = null) }
-    }
-
-    private fun writeUsageSet(slotIndex: Int, incoming: TeamMember) {
-        val current = uiState.value.members.getOrNull(slotIndex) ?: return
-        val applied = EditableMember.from(incoming).copy(
-            id = current.id,
-            teraType = "",
-            level = LEVEL,
-        )
-        _uiState.update { state ->
-            state.copy(members = state.members.toMutableList().also { it[slotIndex] = applied })
-        }
-        refreshSprites()
-        refreshMovepool(applied.id)
-        scheduleAnalysis()
-    }
-
     fun applyAssistantPatch(patch: TeamPatch) {
         if (isReadOnly) return
         val patched = applyTeamPatch(draftWireMembers(), patch)

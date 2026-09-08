@@ -1,5 +1,5 @@
 /**
- * /usage/[slug] — live Champions usage drill-in + Apply (CF-USAGE-AC-1.4).
+ * /usage/[slug] — live Champions usage drill-in (CF-USAGE-AC-1.4).
  */
 
 import type { Metadata } from "next";
@@ -13,7 +13,6 @@ import { CHAMPIONS_REGULATION } from "@/data/formats";
 import { parseUsageLadder, toEntitySlug } from "@/server/champions-usage/ladder";
 import type { UsageSpeciesResponse } from "@/server/champions-usage/usage-gateway";
 import type { UsageEntry } from "@/agent/schemas";
-import ApplyUsageSet from "../apply-usage-set";
 import { ladderTabs, usageHref } from "../ladder-href";
 import UsageFetchedAt from "../usage-fetched-at";
 import UsageLadderTabs from "../usage-ladder-tabs";
@@ -226,7 +225,6 @@ export default async function UsageSpeciesPage({
             <CopyShowdownSet
               exportText={showdownExport(view.saved_name, view)}
             />
-            <ApplyUsageSet species={view.slug} />
           </section>
 
           <AskOakCta

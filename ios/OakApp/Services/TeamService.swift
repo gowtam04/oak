@@ -30,12 +30,6 @@ protocol TeamService: Sendable {
   /// other-format teams (`archived: true`, `GET /api/teams?archived=1`).
   func list(archived: Bool) async throws -> [TeamSummary]
 
-  /// Live Champions usage set for one species (`POST /api/teams/set-template`).
-  /// Public read; `found: false` when usage is down or no set is listed.
-  func setTemplate(species: String) async throws -> (
-    found: Bool, member: TeamMember?, notes: [String], attribution: String?
-  )
-
   /// Loads one full team with its members + computed warnings
   /// (`GET /api/teams/{id}`, M-AC-T1.2/AC-T5.4). Throws `.http(404)` for a missing /
   /// not-owned team (isolation, M-BR-T1).
@@ -197,19 +191,6 @@ struct LiveTeamService: TeamService {
     return try await apiClient.send(endpoint, as: TeamsListEnvelope.self).teams
   }
 
-  func setTemplate(species: String) async throws -> (
-    found: Bool, member: TeamMember?, notes: [String], attribution: String?
-  ) {
-    let endpoint = Endpoint(
-      method: .post,
-      path: "/api/teams/set-template",
-      body: SetTemplateBody(species: species),
-      requiresAuth: false
-    )
-    let envelope = try await apiClient.send(endpoint, as: SetTemplateEnvelope.self)
-    return (envelope.found, envelope.member, envelope.notes ?? [], envelope.attribution)
-  }
-
   func get(id: String) async throws -> (team: Team, validation: TeamValidationResult) {
     let endpoint = Endpoint(
       method: .get,
@@ -363,17 +344,4 @@ private struct ImportBody: Encodable, Sendable {
 private struct AnalyzeBody: Encodable, Sendable {
   let format: Format
   let members: [TeamMember]
-}
-
-/// `POST /api/teams/set-template` body (`{ species }`). Leftover `format` is not sent.
-private struct SetTemplateBody: Encodable, Sendable {
-  let species: String
-}
-
-/// `POST /api/teams/set-template` → `{ found, member?, notes?, attribution? }`.
-private struct SetTemplateEnvelope: Decodable, Sendable {
-  let found: Bool
-  let member: TeamMember?
-  let notes: [String]?
-  let attribution: String?
 }

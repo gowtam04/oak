@@ -61,13 +61,3 @@ data class UsageSpecies(
     val teammates: List<UsageEntry> = emptyList(),
     @SerialName("source_url") val sourceUrl: String? = null,
 )
-
-/** `POST /api/teams/set-template` — live Champions usage set for one species. */
-@Serializable
-data class SetTemplateResult(
-    val found: Boolean,
-    val member: TeamMember? = null,
-    val attribution: String? = null,
-    val month: String? = null,
-    val notes: List<String> = emptyList(),
-)

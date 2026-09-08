@@ -68,9 +68,6 @@ final class AppState {
   /// Accessibility hint for the regulation chip.
   private(set) var regulationHint: String
 
-  /// Incoming species for the signed-in Add-to-team sheet (ADD-US-1). `nil` when idle.
-  var pendingAddToTeam: TeamMember?
-
   /// Explain-from-calculator should land as a normal chat send.
   var pendingChatSend: String?
 

@@ -78,7 +78,6 @@ fun DexListScreen(
     usage: UsageService,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
-    onApplySpecies: ((String) -> Unit)? = null,
 ) {
     val list by viewModel.list.collectAsState()
     val oak = LocalOakColors.current
@@ -114,7 +113,6 @@ fun DexListScreen(
             if (showingUsage) {
                 UsageLeaderboardScreen(
                     viewModel = usageViewModel,
-                    onApplySpecies = onApplySpecies,
                     onOpenDex = onOpen,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
@@ -282,7 +280,7 @@ fun DexDetailScreen(
     onBack: () -> Unit,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
-    onApplySpecies: ((String) -> Unit)? = null,
+    onAddToTeam: (() -> Unit)? = null,
 ) {
     val detail by viewModel.detail.collectAsState()
     val list by viewModel.list.collectAsState()
@@ -325,15 +323,15 @@ fun DexDetailScreen(
                 }
                 is DexViewModel.DetailState.Ready -> {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        if (kind == EntityKind.POKEMON && onApplySpecies != null) {
+                        if (kind == EntityKind.POKEMON && onAddToTeam != null) {
                             ai.gowtam.oak.ui.OakButton(
-                                onClick = { onApplySpecies(query) },
-                                style = ai.gowtam.oak.ui.OakButtonStyle.Primary,
+                                onClick = onAddToTeam,
+                                style = ai.gowtam.oak.ui.OakButtonStyle.Secondary,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
                             ) {
-                                Text("Apply this Champions set")
+                                Text("Add to team")
                             }
                         }
                         EntityDetail(

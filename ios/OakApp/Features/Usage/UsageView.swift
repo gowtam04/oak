@@ -240,9 +240,6 @@ private struct UsageSpeciesView: View {
         usageSection("Natures", kind: .natures, entries: detail.natures)
         usageSection("Spreads", kind: .spreads, entries: detail.spreads)
         usageSection("Teammates", kind: .teammates, entries: detail.teammates)
-        Section {
-          ApplyChampionsSetButton(species: detail.slug ?? slug)
-        }
       }
       .listStyle(.insetGrouped)
       .scrollContentBackground(.hidden)

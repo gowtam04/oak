@@ -1,8 +1,6 @@
 package ai.gowtam.oak.features.usage
 
 import ai.gowtam.oak.ui.LocalOakColors
-import ai.gowtam.oak.ui.OakButton
-import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.UsageEntry
@@ -48,13 +46,12 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Live Champions usage leaderboard (ADR-6 Dex section). Doubles default,
- * Singles second view. Click a row for species drill-in + Apply.
+ * Singles second view. Click a row for species drill-in.
  */
 @Composable
 fun UsageLeaderboardScreen(
     viewModel: UsageLeaderboardViewModel,
     modifier: Modifier = Modifier,
-    onApplySpecies: ((String) -> Unit)? = null,
     onOpenDex: ((EntityKind, String) -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -67,7 +64,6 @@ fun UsageLeaderboardScreen(
             detail = species,
             loading = state.speciesLoading,
             onBack = viewModel::clearSpecies,
-            onApply = onApplySpecies,
             onOpenDex = onOpenDex,
             modifier = modifier,
         )
@@ -183,7 +179,6 @@ private fun UsageSpeciesDetail(
     detail: UsageSpecies?,
     loading: Boolean,
     onBack: () -> Unit,
-    onApply: ((String) -> Unit)?,
     onOpenDex: ((EntityKind, String) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -234,12 +229,6 @@ private fun UsageSpeciesDetail(
                         TextButton(onClick = { onOpenDex(target.kind, target.query) }) {
                             Text("View in Dex")
                         }
-                    }
-                }
-                val slug = detail.slug
-                if (onApply != null && !slug.isNullOrBlank()) {
-                    OakButton(onClick = { onApply(slug) }, style = OakButtonStyle.Primary, modifier = Modifier.fillMaxWidth()) {
-                        Text("Apply this Champions set")
                     }
                 }
                 UsageSection("Moves", detail.moves, UsageListKind.MOVES, onOpenDex)

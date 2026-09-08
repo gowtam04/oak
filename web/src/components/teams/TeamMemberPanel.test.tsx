@@ -1,11 +1,9 @@
-import { afterEach, beforeEach, describe, it, expect, vi, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import {
   render,
   screen,
   cleanup,
   fireEvent,
-  waitFor,
-  within,
 } from "@testing-library/react";
 
 // The Move pickers load a species' legal movepool via this client.
@@ -72,51 +70,6 @@ function livingMember(overrides: Partial<TeamMember> = {}): TeamMember {
   });
 }
 
-function applySetButton(slot = 0) {
-  return (
-    screen.queryByRole("button", { name: /apply this champions set/i }) ??
-    screen.queryByTestId(`member-${slot}-apply-set`) ??
-    screen.queryByTestId(`member-${slot}-common-set`)
-  );
-}
-
-function queryReplaceConfirm() {
-  return (
-    screen.queryByTestId("apply-set-confirm") ??
-    screen.queryByRole("alertdialog") ??
-    screen.queryByRole("dialog", { name: /replace/i })
-  );
-}
-
-function expectYesNoReplaceConfirm(el: HTMLElement) {
-  expect(el).toHaveTextContent(/replace/i);
-  const text = el.textContent ?? "";
-  // CF-AS-3 / CF-UI-AC-5.1: yes/no, not a per-field diff.
-  expect(text).not.toMatch(/→|ability:|item:|nature:|stat points:/i);
-  expect(
-    within(el).queryByRole("button", { name: /cancel|no|keep/i }),
-  ).toBeInTheDocument();
-  expect(
-    within(el).queryByRole("button", {
-      name: /^(replace|confirm|yes|overwrite)$/i,
-    }) ??
-      within(el).queryByRole("button", { name: /replace|overwrite/i }),
-  ).toBeInTheDocument();
-}
-
-const USAGE_SET: TeamMember = {
-  species: "garchomp",
-  ability: "rough-skin",
-  item: "life-orb",
-  moves: ["earthquake", "dragon-claw", "fire-fang", "protect"],
-  nature: "jolly",
-  evs: { hp: 4, atk: 30, def: 0, spa: 0, spd: 0, spe: 32 },
-  ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
-  tera_type: null,
-  level: 50,
-  nickname: null,
-};
-
 describe("TeamMemberPanel", () => {
   it("renders every living-editor set field as a controlled input (CF-TEAM-AC-1.2)", () => {
     render(
@@ -139,6 +92,10 @@ describe("TeamMemberPanel", () => {
     expect(screen.queryByTestId("member-0-tera")).not.toBeInTheDocument();
     expect(screen.queryByTestId("member-0-level")).not.toBeInTheDocument();
     expect(screen.queryByTestId("member-0-iv-hp")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /apply this champions set/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("member-0-apply-set")).not.toBeInTheDocument();
   });
 
   it("commits a selected option and clears a field to null", () => {
@@ -648,157 +605,6 @@ describe("TeamMemberPanel", () => {
     );
     expect(screen.getByTestId("member-0-move-3").closest("td")).toHaveTextContent(
       /not in the Champions roster/,
-    );
-  });
-});
-
-describe("TeamMemberPanel — Apply this Champions set (CF-TEAM-US-6, CF-UI-US-5)", () => {
-  beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => {
-        if (String(url).includes("/api/teams/set-template")) {
-          return {
-            ok: true,
-            status: 200,
-            json: async () => ({
-              found: true,
-              member: USAGE_SET,
-              attribution: "Live Champions usage",
-            }),
-          };
-        }
-        throw new Error(`unexpected fetch: ${url}`);
-      }),
-    );
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
-
-  function renderLiving(
-    m: TeamMember,
-    onChange: Mock<(next: TeamMember) => void> = vi.fn(),
-  ) {
-    render(
-      <TeamMemberPanel
-        slot={0}
-        member={m}
-        format="champions"
-        warnings={[]}
-        onChange={onChange}
-        onRemove={noop}
-      />,
-    );
-    return onChange;
-  }
-
-  it("offers Apply this Champions set on a living slot (CF-TEAM-AC-6.1)", () => {
-    renderLiving(livingMember({ moves: [], ability: null, item: null }));
-    const btn = applySetButton();
-    expect(btn).toBeInTheDocument();
-    expect(btn).toHaveTextContent(/apply this champions set/i);
-  });
-
-  it("fills an empty slot from the usage set with no confirm (CF-TEAM-AC-6.2)", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const onChange = renderLiving(
-      livingMember({
-        ability: null,
-        item: null,
-        moves: [],
-        nature: null,
-        evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
-      }),
-    );
-
-    fireEvent.click(applySetButton()!);
-
-    await waitFor(() =>
-      expect(onChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          species: "garchomp",
-          ability: "rough-skin",
-          item: "life-orb",
-          nature: "jolly",
-          moves: USAGE_SET.moves,
-          evs: USAGE_SET.evs,
-          tera_type: null,
-          level: 50,
-        }),
-      ),
-    );
-    expect(confirmSpy).not.toHaveBeenCalled();
-    expect(queryReplaceConfirm()).not.toBeInTheDocument();
-    const applied = onChange.mock.calls.at(-1)![0] as TeamMember;
-    expect(applied.tera_type).toBeNull();
-    expect(applied.level).toBe(50);
-  });
-
-  it("asks yes/no replace on a filled slot — not a field diff (CF-TEAM-AC-6.3, CF-UI-AC-5.1, CF-AS-3)", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const onChange = renderLiving(livingMember());
-
-    fireEvent.click(applySetButton()!);
-
-    const ui = queryReplaceConfirm();
-    if (ui) {
-      expectYesNoReplaceConfirm(ui);
-    } else {
-      expect(confirmSpy).toHaveBeenCalled();
-      const msg = String(confirmSpy.mock.calls[0]?.[0] ?? "");
-      expect(msg).toMatch(/replace/i);
-      expect(msg).not.toMatch(/ability:|item:|nature:|→/i);
-    }
-    // Cancel / dismiss: slot unchanged (CF-UI-AC-5.2).
-    if (ui) {
-      fireEvent.click(
-        within(ui).getByRole("button", { name: /cancel|no|keep/i }),
-      );
-    }
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  it("replaces the filled slot on confirm (CF-TEAM-AC-6.3, CF-UI-AC-5.3)", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const onChange = renderLiving(
-      livingMember({
-        ability: "sand-veil",
-        item: "leftovers",
-        moves: ["swords-dance"],
-        nature: "adamant",
-        evs: { hp: 32, atk: 32, def: 2, spa: 0, spd: 0, spe: 0 },
-      }),
-    );
-
-    fireEvent.click(applySetButton()!);
-
-    const ui = queryReplaceConfirm();
-    if (ui) {
-      const go =
-        within(ui).queryByRole("button", {
-          name: /^(replace|confirm|yes|overwrite)$/i,
-        }) ??
-        within(ui).getByRole("button", { name: /replace|overwrite|yes/i });
-      fireEvent.click(go);
-    } else {
-      expect(confirmSpy).toHaveBeenCalled();
-    }
-
-    await waitFor(() =>
-      expect(onChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          ability: "rough-skin",
-          item: "life-orb",
-          moves: USAGE_SET.moves,
-          nature: "jolly",
-          evs: USAGE_SET.evs,
-          tera_type: null,
-          level: 50,
-        }),
-      ),
     );
   });
 });

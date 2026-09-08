@@ -26,7 +26,7 @@ import org.junit.Test
  *   TeamsListViewModel.createTeam(name?)          (no format argument)
  *   TeamsListViewModel.importPaste(paste)         (no format argument)
  *   TeamsListViewModel.makeEditor()               (new team is Champions)
- *   canEdit / canDuplicate / canApplySet / canUseInChat → false for archived
+ *   canEdit / canDuplicate / canUseInChat → false for archived
  *
  *   TeamService.list(archived: Boolean = false)
  *     GET /api/teams            living
@@ -104,7 +104,6 @@ class TeamsArchiveTest {
         assertTrue(model.canDelete(archived))
         assertFalse(model.canEdit(archived))
         assertFalse(model.canDuplicate(archived))
-        assertFalse(model.canApplySet(archived))
         assertFalse(model.canUseInChat(archived))
 
         assertTrue(model.canEdit(living))

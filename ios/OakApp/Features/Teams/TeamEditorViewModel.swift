@@ -40,18 +40,9 @@ final class TeamEditorViewModel {
   var showsIVKnobs: Bool { false }
   var showsLevelKnob: Bool { false }
   var showsStatPoints: Bool { !isReadOnly }
-  var showsApplyUsageSet: Bool { !isReadOnly && format.isLiving }
 
   let statPointBudget = 66
   let statPointStatCap = 32
-
-  /// True while a filled-slot apply-set is waiting for confirm (CF-TEAM-AC-6.3).
-  private(set) var pendingApplyConfirm = false
-  /// Honest copy when live usage is down (CF-TEAM-AC-6.5).
-  private(set) var applySetUnavailableMessage: String?
-
-  private var pendingApplySlot: Int?
-  private var pendingApplyMember: TeamMember?
 
   // MARK: Editable state (two-way bound)
 
@@ -459,71 +450,6 @@ final class TeamEditorViewModel {
   /// Clears the current error banner.
   func dismissError() {
     errorMessage = nil
-  }
-
-  // MARK: Apply usage set (CF-TEAM-US-6 / CF-TEAM-AC-6.3)
-
-  /// Fills an empty slot immediately; a filled slot asks to confirm replace.
-  /// `incoming == nil` means usage is down — the slot is left unchanged.
-  func applyUsageSet(toSlot index: Int, incoming: TeamMember?) async {
-    guard !isReadOnly, members.indices.contains(index) else { return }
-    guard let incoming else {
-      applySetUnavailableMessage = "Live Champions usage is unavailable right now."
-      pendingApplyConfirm = false
-      pendingApplySlot = nil
-      pendingApplyMember = nil
-      return
-    }
-    applySetUnavailableMessage = nil
-    if members[index].species.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      writeUsageSet(toSlot: index, incoming: incoming)
-      pendingApplyConfirm = false
-      pendingApplySlot = nil
-      pendingApplyMember = nil
-      return
-    }
-    pendingApplySlot = index
-    pendingApplyMember = incoming
-    pendingApplyConfirm = true
-  }
-
-  func confirmApplySet() async {
-    applyPendingSetImmediately()
-  }
-
-  /// Sync write used by the confirm dialog so dismiss cannot race the Task.
-  func applyPendingSetImmediately() {
-    guard pendingApplyConfirm, let slot = pendingApplySlot, let incoming = pendingApplyMember else {
-      return
-    }
-    writeUsageSet(toSlot: slot, incoming: incoming)
-    pendingApplyConfirm = false
-    pendingApplySlot = nil
-    pendingApplyMember = nil
-  }
-
-  func cancelApplySet() {
-    pendingApplyConfirm = false
-    pendingApplySlot = nil
-    pendingApplyMember = nil
-  }
-
-  /// Fetches the live Champions set for this slot's species, then applies it.
-  func fetchAndApplyUsageSet(toSlot index: Int) async {
-    guard !isReadOnly, members.indices.contains(index) else { return }
-    let species = members[index].species.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !species.isEmpty else { return }
-    do {
-      let result = try await teamService.setTemplate(species: species)
-      await applyUsageSet(toSlot: index, incoming: result.found ? result.member : nil)
-    } catch {
-      await applyUsageSet(toSlot: index, incoming: nil)
-    }
-  }
-
-  private func writeUsageSet(toSlot index: Int, incoming: TeamMember) {
-    guard members.indices.contains(index) else { return }
-    members[index] = EditableMember(from: Self.livingLegalize(incoming))
   }
 
   private static let perfectIVs = StatSpread(
