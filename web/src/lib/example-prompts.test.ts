@@ -21,6 +21,16 @@ const OTHER_GAME: Array<[string, RegExp]> = [
   ["Smogon OU", /\bsmogon\b|\bgen\s*9\s*ou\b|\bgen9ou\b/i],
 ];
 
+const TRIVIA: Array<[string, RegExp]> = [
+  ["weight", /\bweight\b/i],
+  ["heaviest", /\bheaviest\b/i],
+  ["lightest", /\blightest\b/i],
+  ["color trivia", /\bpurple\b/i],
+  ["catch rate", /\bcatch\s*rate\b/i],
+  ["based-on trivia", /\bbased on\b/i],
+  ["signature moves", /\bsignature moves?\b/i],
+];
+
 describe("STARTER_PROMPTS — Champions-only (CF-CHAT-AC-1.3)", () => {
   it("exports a non-empty pool that matches STARTER_ENTRIES texts", () => {
     expect(STARTER_PROMPTS.length).toBeGreaterThan(0);
@@ -37,6 +47,14 @@ describe("STARTER_PROMPTS — Champions-only (CF-CHAT-AC-1.3)", () => {
       }
       // Case-sensitive OU ladder tag (avoid matching "you").
       expect(text, `Smogon OU: ${text}`).not.toMatch(/(?<![A-Za-z])OU(?![A-Za-z])/);
+    }
+  });
+
+  it("does not ask Pokédex trivia Oak has no tool for", () => {
+    for (const entry of STARTER_ENTRIES) {
+      for (const [name, re] of TRIVIA) {
+        expect(entry.text, `${name}: ${entry.text}`).not.toMatch(re);
+      }
     }
   });
 });

@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+
+import { loadFormat, type PkmnSpecies } from "@/data/pkmn/gen-provider";
 
 import {
   STARTER_CATEGORIES,
@@ -90,6 +92,26 @@ describe("STARTER_PROMPTS", () => {
   });
 });
 
+const TRIVIA: Array<[string, RegExp]> = [
+  ["weight", /\bweight\b/i],
+  ["heaviest", /\bheaviest\b/i],
+  ["lightest", /\blightest\b/i],
+  ["color trivia", /\bpurple\b/i],
+  ["catch rate", /\bcatch\s*rate\b/i],
+  ["based-on trivia", /\bbased on\b/i],
+  ["signature moves", /\bsignature moves?\b/i],
+];
+
+describe("STARTER_ENTRIES — no unanswerable trivia", () => {
+  it("does not ask Pokédex trivia Oak has no tool for", () => {
+    for (const entry of STARTER_ENTRIES) {
+      for (const [name, re] of TRIVIA) {
+        expect(entry.text, `${name}: ${entry.text}`).not.toMatch(re);
+      }
+    }
+  });
+});
+
 describe("firstFiledStarters", () => {
   it("returns the first entry of each category in Battle Dex Rules Meta order", () => {
     const first = firstFiledStarters();
@@ -120,5 +142,104 @@ describe("generated iOS/Android mirrors", () => {
     expect(readFileSync(KOTLIN_PATH, "utf8")).toBe(
       renderKotlin(STARTER_ENTRIES),
     );
+  });
+});
+
+/** Explicit legality / restricted-rules chips may name off-roster entities. */
+const LEGALITY_EXEMPT = /\blegal in Champions\b|\brestricted Pokémon\b/i;
+
+function humanAliases(s: PkmnSpecies): string[] {
+  const names = new Set<string>();
+  if (s.name) names.add(s.name);
+  if (s.baseSpecies) names.add(s.baseSpecies);
+  const forme = s.forme ?? "";
+  const base = s.baseSpecies || s.name;
+  if (forme) {
+    names.add(`${base} (${forme})`);
+    names.add(`${base}-${forme}`);
+    if (forme === "Mega") {
+      names.add(`Mega ${base}`);
+    } else if (forme.startsWith("Mega-")) {
+      names.add(`Mega ${base} ${forme.slice("Mega-".length)}`);
+      names.add(`Mega ${base}-${forme.slice("Mega-".length)}`);
+    } else if (forme === "Galar") {
+      names.add(`Galarian ${base}`);
+    } else if (forme === "Alola") {
+      names.add(`Alolan ${base}`);
+    } else if (forme === "Hisui") {
+      names.add(`Hisuian ${base}`);
+    } else if (forme.startsWith("Paldea")) {
+      names.add(`Paldean ${base}`);
+    } else if (forme === "Rapid-Strike") {
+      names.add(`Rapid Strike ${base}`);
+    } else if (forme === "Single-Strike") {
+      names.add(`Single Strike ${base}`);
+    }
+  }
+  return [...names].filter((n) => n.length > 1);
+}
+
+function escapeRe(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function namePattern(alias: string): RegExp {
+  return new RegExp(`(?<![A-Za-z])${escapeRe(alias)}(?:'s)?(?![A-Za-z])`, "i");
+}
+
+describe("STARTER_ENTRIES — current Champions roster", () => {
+  let legalAliases: string[] = [];
+  let illegalAliases: string[] = [];
+
+  beforeAll(async () => {
+    const champions = await loadFormat("champions");
+    const legalIds = new Set(champions.roster.map((s) => s.id));
+    const legal = new Set<string>();
+    const illegal = new Set<string>();
+    for (const s of champions.dex.species.all()) {
+      if (!s.exists || typeof s.num !== "number" || s.num <= 0) continue;
+      const aliases = humanAliases(s);
+      if (legalIds.has(s.id)) {
+        for (const alias of aliases) legal.add(alias);
+        continue;
+      }
+      // Past/Gmax formes share baseSpecies with legal mons — don't mark
+      // "Charizard" illegal because Charizard-Gmax is.
+      for (const alias of aliases) {
+        if (s.baseSpecies && alias === s.baseSpecies && alias !== s.name) {
+          continue;
+        }
+        illegal.add(alias);
+      }
+    }
+    const byLength = (a: string, b: string) => b.length - a.length;
+    legalAliases = [...legal].sort(byLength);
+    illegalAliases = [...illegal].sort(byLength);
+  });
+
+  it("names only on-roster species, except explicit legality questions", () => {
+    expect(legalAliases.length).toBeGreaterThan(200);
+    expect(illegalAliases.length).toBeGreaterThan(0);
+
+    for (const entry of STARTER_ENTRIES) {
+      const text = entry.text;
+      if (LEGALITY_EXEMPT.test(text)) continue;
+      const hit = illegalAliases.find((alias) => namePattern(alias).test(text));
+      expect(hit, `off-roster "${hit}" in: ${text}`).toBeUndefined();
+    }
+  });
+
+  it("Meta chips name a legal species so T15 can ground them", () => {
+    const meta = STARTER_ENTRIES.filter((e) => e.category === "Meta");
+    expect(meta.length).toBeGreaterThanOrEqual(50);
+    for (const entry of meta) {
+      const hit = legalAliases.find((alias) =>
+        namePattern(alias).test(entry.text),
+      );
+      expect(
+        hit,
+        `Meta chip names no roster species: ${entry.text}`,
+      ).toBeDefined();
+    }
   });
 });
