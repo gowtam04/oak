@@ -134,6 +134,45 @@ struct ToolTrailTests {
   func parsesMultiWordCapitalisedSubject() {
     #expect(ToolTrail.subject(from: "Looking up Fake Out") == "Fake Out")
     #expect(ToolTrail.subject(from: "Looking up Armor Tail") == "Armor Tail")
+    #expect(
+      ToolTrail.subject(from: "Looking up the move Will-O-Wisp") == "Will-O-Wisp"
+    )
+  }
+
+  @Test
+  func stripsVerbAndTrailingPossessiveFromLearnsetLabels() {
+    #expect(ToolTrail.subject(from: "Checking Torkoal's learnset…") == "Torkoal")
+    #expect(ToolTrail.subject(from: "Checking Torkoal’s learnset…") == "Torkoal")
+    #expect(
+      ToolTrail.subject(from: "Checking Charizard-Mega-Y’s learnset…")
+        == "Charizard-Mega-Y"
+    )
+  }
+
+  @Test
+  func takesTheClauseAfterAColon() {
+    #expect(ToolTrail.subject(from: "Searching the Pokédex: Fire…") == "Fire")
+    #expect(
+      ToolTrail.subject(from: "Searching the Pokédex: Fire · Speed > 100…")
+        == "Fire · Speed > 100"
+    )
+  }
+
+  @Test
+  func prefersTheSpeciesOverALaterFormatWord() {
+    #expect(
+      ToolTrail.subject(from: "Checking Torkoal’s live Doubles usage…")
+        == "Torkoal"
+    )
+  }
+
+  @Test
+  func readsAbilityEvolutionAndMatchupLabels() {
+    #expect(ToolTrail.subject(from: "Reading the Drought ability…") == "Drought")
+    #expect(ToolTrail.subject(from: "Tracing Garchomp’s evolution…") == "Garchomp")
+    #expect(
+      ToolTrail.subject(from: "Checking Fire/Flying matchups…") == "Fire/Flying"
+    )
   }
 
   @Test

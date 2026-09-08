@@ -216,6 +216,24 @@ describe("ChatThread — user-turn image thumbnails", () => {
     );
     expect(screen.queryByTestId("user-turn-images")).toBeNull();
   });
+
+  it("tucks Edit under the note, not as a sibling of the thread column", () => {
+    render(
+      <ChatThread
+        {...props({
+          turns: [{ id: "u4", role: "user", content: "Build me a team around Torkoal" }],
+          onEditLast: () => {},
+        })}
+      />,
+    );
+    const turn = screen.getByTestId("user-turn");
+    const note = turn.querySelector(".chat-turn__note");
+    expect(note).not.toBeNull();
+    expect(note!.querySelector(".chat-turn__content")).toHaveTextContent(
+      "Build me a team around Torkoal",
+    );
+    expect(within(note as HTMLElement).getByTestId("turn-actions")).toBeInTheDocument();
+  });
 });
 
 describe("ChatThread — answer-card follow-ups gated while streaming (U2)", () => {
@@ -284,6 +302,32 @@ describe("ChatThread — streaming field-notes trail", () => {
     expect(trace.textContent).not.toContain("resolve_entity");
     expect(trace.textContent).not.toContain("get_pokemon");
     expect(screen.queryByTestId("progress-thinking")).toBeNull();
+  });
+
+  it("shows species names, not leftover Checking/Pokédex sentence fragments", () => {
+    render(
+      <ChatThread
+        {...props({
+          status: "streaming",
+          activity: [
+            { tool: "get_pokemon", label: "📇 Looking up Torkoal…" },
+            { tool: "get_learnset", label: "📖 Checking Torkoal’s learnset…" },
+            { tool: "query_pokedex", label: "📊 Searching the Pokédex: Fire…" },
+            {
+              tool: "get_learnset",
+              label: "📖 Checking Charizard-Mega-Y’s learnset…",
+            },
+          ],
+        })}
+      />,
+    );
+    const trace = screen.getByTestId("thinking-trace");
+    expect(trace).toHaveTextContent("Torkoal");
+    expect(trace).toHaveTextContent("Fire");
+    expect(trace).toHaveTextContent("Charizard-Mega-Y");
+    expect(trace.textContent).not.toContain("Checking Torkoal");
+    expect(trace.textContent).not.toContain("Pokédex: Fire");
+    expect(trace.textContent).not.toContain("Checking Charizard");
   });
 
   it("falls back to a generic 'Looking up' token for an unrecognized tool", () => {

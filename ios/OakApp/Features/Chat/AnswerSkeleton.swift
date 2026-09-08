@@ -45,6 +45,7 @@ struct IncomingAnswerPlate: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.bottom, Theme.Spacing.md)
     .animation(reduceMotion ? nil : Theme.Motion.enter, value: awaitingTokens)
   }
 

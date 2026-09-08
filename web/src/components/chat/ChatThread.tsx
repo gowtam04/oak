@@ -293,25 +293,27 @@ export default function ChatThread({
                 ))}
               </div>
             ) : null}
-            {turn.content ? (
-              <div className="chat-turn__content">{turn.content}</div>
-            ) : null}
-            {undoTurnId === turn.id && onUndo && (
-              <button
-                type="button"
-                className="chat-turn__undo"
-                onClick={onUndo}
-              >
-                Undo
-              </button>
-            )}
-            <TurnActions
-              role="user"
-              isLast={turn.id === lastUserId}
-              signedIn={signedIn}
-              streaming={status === "streaming"}
-              onEdit={onEditLast}
-            />
+            <div className="chat-turn__note">
+              {turn.content ? (
+                <div className="chat-turn__content">{turn.content}</div>
+              ) : null}
+              {undoTurnId === turn.id && onUndo && (
+                <button
+                  type="button"
+                  className="chat-turn__undo"
+                  onClick={onUndo}
+                >
+                  Undo
+                </button>
+              )}
+              <TurnActions
+                role="user"
+                isLast={turn.id === lastUserId}
+                signedIn={signedIn}
+                streaming={status === "streaming"}
+                onEdit={onEditLast}
+              />
+            </div>
           </div>
         ) : (
           <div

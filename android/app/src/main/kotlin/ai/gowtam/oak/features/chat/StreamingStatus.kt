@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -69,6 +68,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -350,16 +350,16 @@ private fun TraceRowView(row: TraceRow, reduceMotion: Boolean) {
             color = oak.textStrong,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
         )
         if (row.secondary != null) {
-            Spacer(Modifier.weight(1f))
             Text(
                 text = row.secondary,
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
                 color = oak.textFaint,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.End,
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -546,28 +546,46 @@ internal fun stripLeadingEmoji(label: String): String {
     return stripped.trim()
 }
 
+/**
+ * Subject entity from a cleaned server label. Lock-step with web
+ * `subjectFromLabel` and iOS `ToolTrail.subject`.
+ *
+ * Order: quoted phrase, else the clause after the first colon (Pokédex
+ * filters), else the first capitalised run after the sentence-initial
+ * verb. Trailing `'s` / `’s` is stripped so "Checking Torkoal’s learnset"
+ * yields "Torkoal", not "Checking Torkoal's".
+ */
 internal fun subjectFromLabel(cleaned: String): String? {
     firstQuoted(cleaned)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
-    val words = cleaned.trimEnd('…', '.', ' ').split(Regex("\\s+")).filter { it.isNotEmpty() }
-    var lastRun = emptyList<String>()
-    var lastRunStart = -1
-    var currentRun = mutableListOf<String>()
-    var currentStart = -1
-    words.forEachIndexed { index, word ->
+    val stripped = cleaned.trimEnd('…', '.').trim()
+    if (stripped.isEmpty()) return null
+    val colon = stripped.indexOf(':')
+    if (colon >= 0) {
+        val after = stripped.substring(colon + 1).trimEnd('…', '.').trim()
+        return after.takeIf { it.isNotEmpty() }
+    }
+    val words = stripped.split(Regex("\\s+")).filter { it.isNotEmpty() }
+    val search = if (words.isNotEmpty() && words[0].firstOrNull()?.isUpperCase() == true) {
+        words.drop(1)
+    } else {
+        words
+    }
+    val run = mutableListOf<String>()
+    for (word in search) {
         val first = word.firstOrNull()
         if (first != null && first.isUpperCase()) {
-            if (currentRun.isEmpty()) currentStart = index
-            currentRun.add(word)
-            lastRun = currentRun.toList()
-            lastRunStart = currentStart
-        } else {
-            currentRun = mutableListOf()
+            run.add(word)
+        } else if (run.isNotEmpty()) {
+            break
         }
     }
-    if (lastRun.isEmpty()) return null
-    if (lastRun.size == 1 && lastRunStart == 0) return null
-    return lastRun.joinToString(" ")
+    if (run.isEmpty()) return null
+    return stripTrailingPossessive(run.joinToString(" "))
 }
+
+/** `Torkoal's` / `Torkoal’s` (U+2019, as emitted by `describeToolCall`). */
+private fun stripTrailingPossessive(text: String): String =
+    if (text.endsWith("'s") || text.endsWith("’s")) text.dropLast(2) else text
 
 private fun firstQuoted(text: String): String? {
     val pairs = mapOf('“' to '”', '"' to '"', '‟' to '”', '‘' to '’')
