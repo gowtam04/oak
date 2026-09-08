@@ -16,7 +16,7 @@ import SwiftUI
 /// Both side-effects are non-fatal — they swallow their own errors — so a transient
 /// backend problem never blocks the UI or costs the user their on-screen thread.
 ///
-/// Chrome: ``OakTabDock`` (opaque paper capsule, sliding `accentSoft` pill)
+/// Chrome: ``OakTabDock`` (full-bleed paper shelf, coral selected labels)
 /// replaces the system `TabView` bar so iOS 26 never draws Liquid Glass. A switch
 /// fires `Haptics.tap()` and the selected icon plays a one-shot
 /// `.symbolEffect(.bounce)`. The bounce is decorative (the label carries the
@@ -81,7 +81,7 @@ struct RootView: View {
         }
       }
       // Canvas fills any leftover system-bar overlay so a launch flash never
-      // reveals window-black. The visible dock is ``OakTabDock`` (opaque paper),
+      // reveals window-black. The visible dock is ``OakTabDock`` (paper shelf),
       // stacked below the tabs so Chat's composer and lists are never covered.
       .background(Theme.canvas.ignoresSafeArea())
       .oakDisableScrollEdgeGlass()

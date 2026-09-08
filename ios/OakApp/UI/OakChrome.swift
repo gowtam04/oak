@@ -166,13 +166,12 @@ extension ToolbarContent {
   }
 }
 
-/// Opaque paper tab capsule that replaces iOS 26's Liquid Glass `TabView` bar.
-/// Sliding `accentSoft` pill + snappy color — no material morph, no refraction.
+/// Opaque paper tab shelf that replaces iOS 26's Liquid Glass `TabView` bar.
+/// Full-bleed `--surface` through the home indicator, 1px `--border` hairline
+/// on top, coral selected labels — no capsule, no selected pill, no shadow.
 struct OakTabDock: View {
   @Binding var selection: OakAppTab
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @Environment(\.colorScheme) private var colorScheme
-  @Namespace private var indicator
 
   var body: some View {
     HStack(spacing: 0) {
@@ -180,26 +179,15 @@ struct OakTabDock: View {
         dockItem(tab)
       }
     }
-    .padding(4)
-    .background(Theme.surface, in: Capsule())
-    .overlay {
-      Capsule().strokeBorder(Theme.border, lineWidth: 1)
-    }
-    .shadow(
-      color: colorScheme == .dark ? .clear : Theme.Shadow.raised.ambient.color,
-      radius: Theme.Shadow.raised.ambient.radius,
-      y: Theme.Shadow.raised.ambient.y
-    )
-    .shadow(
-      color: colorScheme == .dark ? .clear : Theme.Shadow.raised.key.color,
-      radius: Theme.Shadow.raised.key.radius,
-      y: Theme.Shadow.raised.key.y
-    )
-    .padding(.horizontal, Theme.Spacing.lg)
-    .padding(.top, Theme.Spacing.sm)
-    .padding(.bottom, Theme.Spacing.sm)
+    .padding(.top, Theme.Spacing.xs)
     .frame(maxWidth: .infinity)
-    .background(Theme.canvas.ignoresSafeArea(edges: .bottom))
+    .overlay(alignment: .top) {
+      Rectangle()
+        .fill(Theme.separator)
+        .frame(height: 1)
+        .allowsHitTesting(false)
+    }
+    .background(Theme.surface.ignoresSafeArea(edges: .bottom))
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("oak-tab-dock")
   }
@@ -224,15 +212,8 @@ struct OakTabDock: View {
       }
       .foregroundStyle(isSelected ? Theme.accent : Theme.textSecondary)
       .frame(maxWidth: .infinity)
-      .padding(.vertical, 8)
-      .background {
-        if isSelected {
-          Capsule()
-            .fill(Theme.accentSoft)
-            .matchedGeometryEffect(id: "oak-tab-indicator", in: indicator)
-        }
-      }
-      .contentShape(Capsule())
+      .padding(.vertical, Theme.Spacing.sm)
+      .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .accessibilityLabel(tab.title)
