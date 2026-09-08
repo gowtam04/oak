@@ -1,5 +1,5 @@
 /**
- * Structure pins for the voice-mode Pokédex instructions (`./voice`).
+ * Structure pins for the voice-mode Champions-coach instructions (`./voice`).
  *
  * Champions-first: spoken chat is a Champions coach with the same decline
  * rule as text (CF-VOICE-US-1 / CF-VOICE-AC-1.2–1.3). No wiki/SQL tools.
@@ -13,12 +13,13 @@ import { buildVoiceInstructions } from "@/agent/prompts/voice";
 import { CHAMPIONS_REGULATION } from "@/data/formats";
 
 describe("buildVoiceInstructions", () => {
-  it("always carries the Pokédex persona and the spoken-answer contract", () => {
+  it("always carries the Champions-coach persona and the spoken-answer contract", () => {
     const instructions = buildVoiceInstructions({ format: "champions" });
 
     expect(instructions).toContain("Oak");
-    expect(instructions).toMatch(/Pokédex/i);
+    expect(instructions).toMatch(/Champions coach/i);
     expect(instructions.toLowerCase()).toContain("voice mode");
+    expect(instructions).not.toMatch(/Pokédex/i);
   });
 
   it("forbids markdown, lists, URLs, and emoji in spoken answers", () => {

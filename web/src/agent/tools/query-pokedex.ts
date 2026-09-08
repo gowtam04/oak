@@ -44,7 +44,7 @@ const description =
   "with optional sorting and a result limit. Use this for any filter, " +
   "threshold, superlative ('fastest'), or compound query — never fetch Pokémon " +
   "one by one for these. Pass multiple moves to get the set of Pokémon that can " +
-  "learn ALL of them in Gen 9 (intersection). Returns the total match count " +
+  "learn ALL of them in the current Champions roster (intersection). Returns the total match count " +
   "plus the top-N rows with stats, types, abilities, and sprite.";
 
 export const queryPokedexTool: ToolDef = {

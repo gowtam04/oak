@@ -556,7 +556,7 @@ export const citationSchema = z
     detail: z
       .string()
       .describe(
-        "User-visible, plain player language describing the fact relied on. No internal tool, table, or column names and no SQL — say where it came from in plain English (e.g. 'Oak's complete Pokédex records').",
+        "User-visible, plain player language describing the fact relied on. No internal tool, table, or column names — say where it came from in plain English (e.g. \"Oak's Champions records\").",
       ),
     endpoint_url: z.string().optional(),
     // Optional highlight target. Invalid / extra-keyed anchors are stripped by
@@ -707,7 +707,7 @@ export const oakAnswerSchema = z
     reasoning_markdown: z
       .string()
       .describe(
-        "User-visible, plain player language explaining how you reached the answer. No internal tool, table, or column names, no SQL — describe where facts came from in plain English.",
+        "User-visible, plain player language explaining how you reached the answer. No internal tool, table, or column names — describe where facts came from in plain English.",
       ),
     citations: z.array(citationSchema),
     inferences: z.array(inferenceSchema),

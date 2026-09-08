@@ -29,10 +29,11 @@ import {
 } from "@/agent/formulas/compute-stat";
 
 const description =
-  "Compute a Pokémon's final stat at a given level using the exact in-game " +
-  "formula (handles the per-step flooring). Provide the base stat (from " +
-  "get_pokemon/query_pokedex), IV, EV, level, and nature effect on this stat. " +
-  "Returns the exact value and a step-by-step breakdown. Use this for any " +
+  "Compute a Pokémon's final stat using the exact in-game formula (handles the " +
+  "per-step flooring). Provide the base stat (from get_pokemon/query_pokedex) " +
+  "and the nature effect on this stat. In Champions, pass Stat Points in the " +
+  "`ev` field; `iv` and `level` are ignored (IVs are 31, everything is Level " +
+  "50). Returns the exact value and a step-by-step breakdown. Use this for any " +
   "stat-math question — do not compute stats yourself.";
 
 export const computeStatTool: ToolDef = {

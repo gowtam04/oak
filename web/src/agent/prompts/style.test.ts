@@ -341,6 +341,7 @@ describe("Anti-leak — no internal machinery in user-visible fields", () => {
       expect(fewShot).not.toContain("offline warehouse");
       expect(fewShot).not.toContain("ran one read-only SQL");
       expect(fewShot).not.toContain("meta_usage warehouse");
+      expect(fewShot).not.toContain("is_gen9_native");
     });
   }
 });

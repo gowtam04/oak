@@ -20,8 +20,8 @@ import type { OakDb } from "@/data/db";
 const description =
   "Get the full profile of one specific Pokémon form: its types, all abilities " +
   "(including the hidden ability), base stats, sprite/artwork, national dex " +
-  "number, available forms, and which generation the data is from. Use for " +
-  "single-Pokémon lookups and to ground reasoning.";
+  "number, and available forms. Use for single-Pokémon lookups and to ground " +
+  "reasoning.";
 
 export const getPokemonTool: ToolDef = {
   name: "get_pokemon",
