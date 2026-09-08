@@ -4,6 +4,7 @@ import SwiftUI
 /// Singles is the other view. Fail-soft when usage is down.
 struct UsageView: View {
   @Environment(AppState.self) private var appState
+  @Environment(\.services) private var services
   @State private var model: UsageViewModel
   @State private var path = NavigationPath()
 
@@ -23,7 +24,20 @@ struct UsageView: View {
           .oakLidItem()
         }
         .navigationDestination(for: String.self) { slug in
-          UsageSpeciesView(model: model, slug: slug)
+          UsageSpeciesView(model: model, slug: slug) { route in
+            path.append(route)
+          }
+        }
+        .navigationDestination(for: DexEntityRoute.self) { route in
+          DexEntityDetailContainer(
+            kind: route.kind,
+            query: route.query,
+            format: .champions,
+            artifactService: services.artifact,
+            onOpen: { kind, query in
+              path.append(DexEntityRoute(kind: kind, query: query))
+            }
+          )
         }
     }
     .oakEnamelNav()
@@ -153,6 +167,7 @@ private struct UsageRow: View {
 private struct UsageSpeciesView: View {
   let model: UsageViewModel
   let slug: String
+  var onOpenDex: (DexEntityRoute) -> Void
 
   var body: some View {
     Group {
@@ -201,13 +216,30 @@ private struct UsageSpeciesView: View {
                 .foregroundStyle(Theme.textMuted)
             }
           }
+          if let route = UsageDexLink.speciesRoute(nameOrSlug: detail.savedName ?? slug) {
+            Button {
+              onOpenDex(route)
+            } label: {
+              HStack {
+                Text("View in Dex")
+                  .foregroundStyle(Theme.accent)
+                Spacer()
+                Image(systemName: "chevron.right")
+                  .font(.caption.weight(.semibold))
+                  .foregroundStyle(Theme.textMuted)
+              }
+              .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens \(route.query) in Dex")
+          }
         }
-        usageSection("Moves", entries: detail.moves)
-        usageSection("Items", entries: detail.items)
-        usageSection("Abilities", entries: detail.abilities)
-        usageSection("Natures", entries: detail.natures)
-        usageSection("Spreads", entries: detail.spreads)
-        usageSection("Teammates", entries: detail.teammates)
+        usageSection("Moves", kind: .moves, entries: detail.moves)
+        usageSection("Items", kind: .items, entries: detail.items)
+        usageSection("Abilities", kind: .abilities, entries: detail.abilities)
+        usageSection("Natures", kind: .natures, entries: detail.natures)
+        usageSection("Spreads", kind: .spreads, entries: detail.spreads)
+        usageSection("Teammates", kind: .teammates, entries: detail.teammates)
         Section {
           ApplyChampionsSetButton(species: detail.slug ?? slug)
         }
@@ -218,24 +250,51 @@ private struct UsageSpeciesView: View {
   }
 
   @ViewBuilder
-  private func usageSection(_ title: String, entries: [UsageEntry]?) -> some View {
+  private func usageSection(_ title: String, kind: UsageListKind, entries: [UsageEntry]?) -> some View {
     if let entries, !entries.isEmpty {
       Section(title) {
         ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
-          HStack {
-            Text(entry.name)
-            Spacer()
-            if let pct = entry.pct {
-              Text(String(format: "%.1f%%", pct))
-                .font(Theme.mono(.footnote))
-                .foregroundStyle(Theme.textSecondary)
+          if let route = UsageDexLink.route(kind: kind, name: entry.name) {
+            Button {
+              onOpenDex(route)
+            } label: {
+              UsageShareRow(name: entry.name, pct: entry.pct, showsChevron: true)
             }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens \(entry.name) in Dex")
+          } else {
+            UsageShareRow(name: entry.name, pct: entry.pct, showsChevron: false)
           }
         }
       }
     }
   }
 
+}
+
+private struct UsageShareRow: View {
+  let name: String
+  let pct: Double?
+  var showsChevron: Bool
+
+  var body: some View {
+    HStack {
+      Text(name)
+        .foregroundStyle(Theme.textPrimary)
+      Spacer()
+      if let pct {
+        Text(String(format: "%.1f%%", pct))
+          .font(Theme.mono(.footnote))
+          .foregroundStyle(Theme.textSecondary)
+      }
+      if showsChevron {
+        Image(systemName: "chevron.right")
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(Theme.textMuted)
+      }
+    }
+    .contentShape(Rectangle())
+  }
 }
 
 /// Compact LIVE · season + local fetched time. Lives inside the `List` so it
