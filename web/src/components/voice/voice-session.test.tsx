@@ -183,6 +183,8 @@ describe("VoiceSession — connection + configuration", () => {
     });
     expect(h.audio.captureStarted).toBe(true);
 
+    const types = h.socket.sentEvents().map((e) => e.type);
+    expect(types).toEqual(["session.update"]);
     const first = h.socket.sentEvents()[0]!;
     expect(first.type).toBe("session.update");
     const session = first.session as {
@@ -204,6 +206,9 @@ describe("VoiceSession — connection + configuration", () => {
       .filter((e) => e.type === "input_audio_buffer.append");
     expect(appends).toHaveLength(1);
     expect(appends[0]!.audio).toBe("BASE64CHUNK");
+    expect(
+      h.socket.sentEvents().map((e) => e.type).filter((t) => t !== "session.update"),
+    ).toEqual(["input_audio_buffer.append"]);
   });
 
   it("fails cleanly when token minting throws", async () => {
@@ -244,6 +249,9 @@ describe("VoiceSession — turn phases + barge-in", () => {
     h.socket.emit({ type: "ping", ping_timestamp: 777 });
     const pong = h.socket.sentEvents().find((e) => e.type === "pong");
     expect(pong).toEqual({ type: "pong", ping_timestamp: 777 });
+    expect(
+      h.socket.sentEvents().map((e) => e.type).filter((t) => t !== "session.update"),
+    ).toEqual(["pong"]);
   });
 });
 
@@ -396,6 +404,31 @@ describe("VoiceSession — teardown", () => {
     await connect(h);
     h.socket.emit({ type: "error", code: "server_fault", message: "boom" });
     expect(h.phase()).toBe("error");
+  });
+
+  it("surfaces nested invalid_event params as the rejected type", async () => {
+    const h = harness();
+    await connect(h);
+    const params =
+      "1 validation error for RealtimeClientEvent\ntype\n  Input should be '<enum>' [type=enum, input_value='not.a.real.event', input_type=str]";
+    const errors: string[] = [];
+    h.session.onState((s) => {
+      if (s.error) errors.push(s.error);
+    });
+    h.socket.emit({
+      type: "error",
+      event_id: "evt_1",
+      error: {
+        type: "invalid_request_error",
+        code: "invalid_event",
+        message: "Invalid event received",
+        params,
+      },
+    });
+    expect(h.phase()).toBe("error");
+    expect(errors.at(-1)).toBe(
+      "Invalid event received (rejected type: not.a.real.event)",
+    );
   });
 
   it("auto-ends at the max-session cap", async () => {

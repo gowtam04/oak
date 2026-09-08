@@ -81,7 +81,9 @@ struct VoiceSessionTests {
     #expect(h.connection.connectURL?.absoluteString.contains("grok-voice-latest") == true)
     #expect(h.connection.subprotocol == "xai-client-secret.tok-123")
 
-    // The first frame is session.update built from the bootstrap + our rate.
+    // The first (and only, until ping/audio) frame is session.update.
+    let types = h.connection.sentObjects().compactMap { $0["type"] as? String }
+    #expect(types == ["session.update"])
     let first = h.connection.sentObjects().first
     #expect(first?["type"] as? String == "session.update")
     let session = first?["session"] as? [String: Any]
@@ -110,6 +112,8 @@ struct VoiceSessionTests {
     let appends = h.connection.sentObjects().filter { $0["type"] as? String == "input_audio_buffer.append" }
     #expect(appends.count == 1)
     #expect(appends.first?["audio"] as? String == "BASE64CHUNK")
+    let types = h.connection.sentObjects().compactMap { $0["type"] as? String }
+    #expect(types.filter { $0 != "session.update" } == ["input_audio_buffer.append"])
   }
 
   @Test
@@ -226,6 +230,8 @@ struct VoiceSessionTests {
 
     let pong = h.connection.sentObjects().first { $0["type"] as? String == "pong" }
     #expect(pong?["ping_timestamp"] as? Double == 777)
+    let types = h.connection.sentObjects().compactMap { $0["type"] as? String }
+    #expect(types.filter { $0 != "session.update" } == ["pong"])
   }
 
   // MARK: Tool calls
@@ -404,6 +410,30 @@ struct VoiceSessionTests {
 
     #expect(h.session.phase == .error)
     #expect(h.session.errorMessage == "nested boom")
+  }
+
+  @Test
+  func aNestedInvalidEventSurfacesTheRejectedTypeFromParams() async {
+    let h = makeHarness()
+    await connect(h)
+
+    let params =
+      "1 validation error for RealtimeClientEvent\ntype\n  Input should be '<enum>' [type=enum, input_value='not.a.real.event', input_type=str]"
+    h.connection.emit([
+      "type": "error",
+      "event_id": "evt_1",
+      "error": [
+        "type": "invalid_request_error",
+        "code": "invalid_event",
+        "message": "Invalid event received",
+        "params": params,
+      ],
+    ])
+    await settle()
+
+    #expect(h.session.phase == .error)
+    #expect(h.session.errorMessage == "Invalid event received (rejected type: not.a.real.event)")
+    #expect(h.session.errorMessage?.contains("not.a.real.event") == true)
   }
 
   @Test

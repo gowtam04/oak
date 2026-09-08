@@ -31,6 +31,7 @@ import {
   parseServerEvent,
   realtimeUrl,
   voiceToolLabel,
+  formatVoiceServerError,
   VOICE_TRANSCRIBE_MODEL,
   type ClientEvent,
   type ServerEvent,
@@ -427,7 +428,12 @@ export class VoiceSession {
     this.setPhase("listening");
   }
 
-  private handleServerError(event: { code?: string; message?: string }): void {
+  private handleServerError(event: {
+    code?: string;
+    message?: string;
+    params?: string;
+    event_id?: string;
+  }): void {
     if (event.code === "timeout" || event.code === "max_duration") {
       // A benign end-of-session signal — tear down cleanly, not as an error.
       this.finished = true;
@@ -435,7 +441,15 @@ export class VoiceSession {
       this.setPhase("ended");
       return;
     }
-    this.fail(event.message ?? "The voice service reported an error.");
+    // Never log token / PCM / session.update body. params carries pydantic
+    // input_value for invalid_event — that's the overlay diagnosis.
+    // eslint-disable-next-line no-console
+    console.warn("voice server error", {
+      code: event.code,
+      event_id: event.event_id,
+      params: event.params,
+    });
+    this.fail(formatVoiceServerError(event.message, event.params));
   }
 
   // ── Timers + teardown ──────────────────────────────────────────────────

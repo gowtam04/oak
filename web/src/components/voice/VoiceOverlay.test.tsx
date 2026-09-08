@@ -170,6 +170,28 @@ describe("VoiceOverlay", () => {
     expect(screen.getByTestId("voice-error")).toHaveTextContent("boom");
   });
 
+  it("shows the rejected type from nested invalid_event params", async () => {
+    const env = setup();
+    await renderOpen(env);
+    const params =
+      "1 validation error for RealtimeClientEvent\ntype\n  Input should be '<enum>' [type=enum, input_value='not.a.real.event', input_type=str]";
+    await act(async () => {
+      env.socket.emit({
+        type: "error",
+        error: {
+          type: "invalid_request_error",
+          code: "invalid_event",
+          message: "Invalid event received",
+          params,
+        },
+      });
+      await tick();
+    });
+    expect(screen.getByTestId("voice-error")).toHaveTextContent(
+      "Invalid event received (rejected type: not.a.real.event)",
+    );
+  });
+
   it("End button ends the session and calls onClose", async () => {
     const env = setup();
     await renderOpen(env);
