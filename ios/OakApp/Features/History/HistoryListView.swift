@@ -2,7 +2,9 @@ import SwiftUI
 
 /// The saved-conversation list (history-and-teams.md M-HIST-US-2; M-UI-US-4): a
 /// searchable, format-filterable list of conversations with native list patterns —
-/// swipe actions, context menus, and pull-to-refresh (M-AC-H2.5).
+/// context menus, pull-to-refresh (M-AC-H2.5), and a right-to-left swipe that
+/// opens a new chat (same as the FAB). Per-row swipe actions are omitted so that
+/// screen-level swipe is not stolen by delete/pin/archive.
 ///
 /// **Content-only / signed-in only.** It does not own a `NavigationStack` — the Chat
 /// tab's signed-in home embeds it inside its own stack (titled "Chats") and supplies
@@ -11,7 +13,7 @@ import SwiftUI
 /// ``HistoryListViewModel`` (`@State`) and drives it; all logic lives in the view
 /// model. Tapping a row hands the conversation back to the Chat tab via ``onSelect``,
 /// which pushes the thread route (load detail + resume into chat); ``onNewChat`` (the
-/// floating action disc) starts a fresh thread.
+/// floating action disc, and the screen-level RTL swipe) starts a fresh thread.
 ///
 /// Chrome: a custom **paper search pill** (not `.searchable`) pinned above the
 /// list, a **red enamel new-chat FAB** bottom-trailing, dense paper rows (title
@@ -47,6 +49,9 @@ struct ConversationListView: View {
   /// Drives the custom search pill's focus grammar (poke-red border + halo).
   @FocusState private var searchFocused: Bool
 
+  /// Dedupes a row-level + list-level simultaneous swipe both firing at once.
+  @State private var lastNewChatSwipeAt: Date?
+
   init(
     model: HistoryListViewModel,
     onSelect: @escaping (ConversationSummary) -> Void,
@@ -64,6 +69,7 @@ struct ConversationListView: View {
       includeArchivedToggle
       listContent
     }
+    .simultaneousGesture(newChatSwipe)
     .background(Theme.canvas)
     .overlay(alignment: .bottomTrailing) { newChatFAB }
     .toolbar {
@@ -227,6 +233,26 @@ struct ConversationListView: View {
     .accessibilityLabel("New chat")
   }
 
+  // MARK: Screen swipe → new chat
+
+  /// Right-to-left swipe on the list (including on a row) opens a new chat.
+  /// Vertical-dominant drags are ignored so scrolling and pull-to-refresh win.
+  /// Disabled in Select mode. Debounced so a parent + row simultaneous
+  /// recognizer cannot push `.new` twice.
+  private var newChatSwipe: some Gesture {
+    DragGesture(minimumDistance: 40)
+      .onEnded { value in
+        guard !model.isSelecting else { return }
+        let dx = value.translation.width
+        let dy = value.translation.height
+        guard dx < -72, abs(dx) > abs(dy) * 1.2 else { return }
+        if let last = lastNewChatSwipeAt, Date().timeIntervalSince(last) < 0.4 { return }
+        lastNewChatSwipeAt = Date()
+        Haptics.tap()
+        onNewChat()
+      }
+  }
+
   // MARK: List
 
   @ViewBuilder
@@ -277,8 +303,8 @@ struct ConversationListView: View {
     model.conversations.filter { !$0.pinned }
   }
 
-  /// One row's full interaction surface (tap, swipe actions, context menu),
-  /// factored out so both the "Pinned" section and the main list share it.
+  /// One row's full interaction surface (tap, context menu). A right-to-left
+  /// swipe on the row opens a new chat rather than revealing row actions.
   @ViewBuilder
   private func conversationRow(_ conversation: ConversationSummary) -> some View {
     // Active = last-opened thread: poke-red-soft paper row + Open stamp.
@@ -328,29 +354,7 @@ struct ConversationListView: View {
     .listRowSeparator(isActive ? .hidden : .automatic)
     // Separator aligned to the text, not the row edge.
     .alignmentGuide(.listRowSeparatorLeading) { _ in Theme.Spacing.lg }
-    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-      Button(role: .destructive) {
-        Task { await model.delete(conversation) }
-      } label: {
-        Label("Delete", systemImage: "trash")
-      }
-      Button {
-        Task { await model.archive(conversation) }
-      } label: {
-        Label(conversation.archived ? "Unarchive" : "Archive", systemImage: "archivebox")
-      }
-    }
-    .swipeActions(edge: .leading) {
-      Button {
-        Task { await model.togglePin(conversation) }
-      } label: {
-        Label(
-          conversation.pinned ? "Unpin" : "Pin",
-          systemImage: conversation.pinned ? "pin.slash" : "pin"
-        )
-      }
-      .tint(Theme.accent)
-    }
+    .simultaneousGesture(newChatSwipe)
     .contextMenu {
       Button {
         renameText = conversation.title
@@ -464,6 +468,7 @@ struct ConversationListView: View {
     .listStyle(.plain)
     .scrollContentBackground(.hidden)
     .background(Theme.canvas)
+    .simultaneousGesture(newChatSwipe)
   }
 
   // MARK: Empty / error states
@@ -485,6 +490,7 @@ struct ConversationListView: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Theme.canvas)
+    .simultaneousGesture(newChatSwipe)
   }
 
   private var searchActive: Bool {

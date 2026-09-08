@@ -16,6 +16,8 @@ import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 
@@ -57,13 +59,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import ai.gowtam.oak.ui.OakTopBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -76,8 +75,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -85,6 +85,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 
 /**
@@ -94,6 +95,8 @@ import kotlinx.coroutines.launch
  * **content-only, signed-in only** — the caller (the Chat tab) mounts this only once
  * signed in and supplies the "New Chat" action; a guest instead sees the single
  * in-memory thread with a sign-in nudge (mirrors `ChatTabView`'s guest/signed-in split).
+ * A right-to-left swipe on this screen opens a new chat (same as the FAB). Per-row
+ * swipe-to-delete is omitted so that screen-level swipe is not stolen.
  *
  * Selecting a row hands the conversation back via [onSelect], which the caller uses
  * to load the full detail and resume it into [ai.gowtam.oak.features.chat.ChatViewModel].
@@ -185,6 +188,7 @@ fun HistoryScreen(
                     onToggleSelected = viewModel::toggleSelected,
                     onRefresh = { scope.launch { viewModel.reload() } },
                     onDismissError = viewModel::dismissError,
+                    onNewChat = onNewChat,
                 )
             }
         }
@@ -300,8 +304,15 @@ private fun HistoryListContent(
     onToggleSelected: (String) -> Unit,
     onRefresh: () -> Unit,
     onDismissError: () -> Unit,
+    onNewChat: () -> Unit,
 ) {
-    PullToRefreshBox(isRefreshing = uiState.isLoading, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
+    PullToRefreshBox(
+        isRefreshing = uiState.isLoading,
+        onRefresh = onRefresh,
+        modifier = Modifier
+            .fillMaxSize()
+            .swipeToNewChat(enabled = !selecting, onNewChat = onNewChat),
+    ) {
         if (uiState.conversations.isEmpty()) {
             if (uiState.isLoading) {
                 LoadingState()
@@ -348,11 +359,11 @@ private fun SectionHeader(title: String) {
 }
 
 /**
- * One conversation row's full interaction surface: tap to open, a trailing swipe to
- * delete (Material 3 [SwipeToDismissBox]), a leading pin toggle, and an overflow menu
- * (rename / pin / delete) — the same actions iOS exposes via swipe + context menu.
+ * One conversation row's full interaction surface: tap to open, a pin toggle,
+ * and an overflow menu (rename / pin / archive / delete) — the same actions iOS
+ * exposes via context menu. Row swipe is intentionally not used; a screen-level
+ * right-to-left swipe opens a new chat instead.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ConversationRow(
     conversation: ConversationSummary,
@@ -370,138 +381,109 @@ private fun ConversationRow(
     onToggleSelected: (String) -> Unit,
 ) {
     val oak = LocalOakColors.current
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onDelete(conversation)
-                true
-            } else {
-                false
-            }
-        },
-    )
-
-    SwipeToDismissBox(
-        state = dismissState,
-        enableDismissFromStartToEnd = false,
-        enableDismissFromEndToStart = true,
-        backgroundContent = {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(oak.danger.copy(alpha = 0.85f))
-                    .padding(horizontal = OakSpacing.lg),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.Delete, contentDescription = null, tint = Color.White)
-            }
-        },
+    var showMenu by remember { mutableStateOf(false) }
+    val plateShape = RoundedCornerShape(OakRadius.md)
+    val highlighted = active || selected
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = OakSpacing.md, vertical = 4.dp)
+            .clip(plateShape)
+            .background(if (highlighted) oak.accentSoft else MaterialTheme.colorScheme.surface, plateShape)
+            .border(1.dp, if (highlighted) oak.accent.copy(alpha = 0.35f) else oak.border, plateShape)
+            .clickable { if (selecting) onToggleSelected(conversation.id) else onSelect(conversation) }
+            .padding(horizontal = OakSpacing.md, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        var showMenu by remember { mutableStateOf(false) }
-        val plateShape = RoundedCornerShape(OakRadius.md)
-        val highlighted = active || selected
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = OakSpacing.md, vertical = 4.dp)
-                .clip(plateShape)
-                .background(if (highlighted) oak.accentSoft else MaterialTheme.colorScheme.surface, plateShape)
-                .border(1.dp, if (highlighted) oak.accent.copy(alpha = 0.35f) else oak.border, plateShape)
-                .clickable { if (selecting) onToggleSelected(conversation.id) else onSelect(conversation) }
-                .padding(horizontal = OakSpacing.md, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (conversation.pinned) {
-                        Icon(
-                            Icons.Filled.PushPin,
-                            contentDescription = "Pinned",
-                            tint = oak.accent,
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
-                    Text(
-                        text = conversation.title,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = if (highlighted) oak.accent else oak.textStrong,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (conversation.pinned) {
+                    Icon(
+                        Icons.Filled.PushPin,
+                        contentDescription = "Pinned",
+                        tint = oak.accent,
+                        modifier = Modifier.size(14.dp),
                     )
                 }
-                // Meta line in the instrument voice: "GEN 9 · 19H AGO" (existing scope
-                // label uppercased + compact relative time).
                 Text(
-                    text = "${conversation.format.shortLabel.uppercase()} · ${compactRelativeTime(conversation.updatedAt)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = oak.textMuted,
+                    text = conversation.title,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (highlighted) oak.accent else oak.textStrong,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (active) {
-                Text(
-                    text = "OPEN",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = oak.accent,
-                    modifier = Modifier
-                        .padding(end = OakSpacing.xs)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(oak.accent.copy(alpha = 0.08f))
-                        .border(1.dp, oak.accent.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 7.dp, vertical = 3.dp),
-                )
+            // Meta line in the instrument voice: "GEN 9 · 19H AGO" (existing scope
+            // label uppercased + compact relative time).
+            Text(
+                text = "${conversation.format.shortLabel.uppercase()} · ${compactRelativeTime(conversation.updatedAt)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = oak.textMuted,
+                maxLines = 1,
+            )
+        }
+        if (active) {
+            Text(
+                text = "OPEN",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = oak.accent,
+                modifier = Modifier
+                    .padding(end = OakSpacing.xs)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(oak.accent.copy(alpha = 0.08f))
+                    .border(1.dp, oak.accent.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 7.dp, vertical = 3.dp),
+            )
+        }
+        IconButton(onClick = { onTogglePin(conversation) }) {
+            Icon(
+                if (conversation.pinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                contentDescription = if (conversation.pinned) "Unpin" else "Pin",
+                tint = oak.textMuted,
+            )
+        }
+        Box {
+            IconButton(onClick = { showMenu = true }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = oak.textMuted)
             }
-            IconButton(onClick = { onTogglePin(conversation) }) {
-                Icon(
-                    if (conversation.pinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                    contentDescription = if (conversation.pinned) "Unpin" else "Pin",
-                    tint = oak.textMuted,
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text("Rename") },
+                    leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                    onClick = { showMenu = false; onRequestRename(conversation) },
                 )
-            }
-            Box {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = oak.textMuted)
-                }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text(if (conversation.pinned) "Unpin" else "Pin") },
+                    leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
+                    onClick = { showMenu = false; onTogglePin(conversation) },
+                )
+                DropdownMenuItem(
+                    text = { Text(if (conversation.archived) "Unarchive" else "Archive") },
+                    onClick = { showMenu = false; onArchive(conversation) },
+                )
+                DropdownMenuItem(
+                    text = { Text("Move to Unfiled") },
+                    onClick = { showMenu = false; onMoveToFolder(conversation, null) },
+                )
+                folders.forEach { folder ->
                     DropdownMenuItem(
-                        text = { Text("Rename") },
-                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-                        onClick = { showMenu = false; onRequestRename(conversation) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (conversation.pinned) "Unpin" else "Pin") },
-                        leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
-                        onClick = { showMenu = false; onTogglePin(conversation) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (conversation.archived) "Unarchive" else "Archive") },
-                        onClick = { showMenu = false; onArchive(conversation) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Move to Unfiled") },
-                        onClick = { showMenu = false; onMoveToFolder(conversation, null) },
-                    )
-                    folders.forEach { folder ->
-                        DropdownMenuItem(
-                            text = { Text("Move to ${folder.name}") },
-                            onClick = { showMenu = false; onMoveToFolder(conversation, folder.id) },
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text("Export Markdown") },
-                        onClick = { showMenu = false; onExport(conversation, "md") },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Export PDF") },
-                        onClick = { showMenu = false; onExport(conversation, "pdf") },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete") },
-                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = oak.danger) },
-                        onClick = { showMenu = false; onDelete(conversation) },
+                        text = { Text("Move to ${folder.name}") },
+                        onClick = { showMenu = false; onMoveToFolder(conversation, folder.id) },
                     )
                 }
+                DropdownMenuItem(
+                    text = { Text("Export Markdown") },
+                    onClick = { showMenu = false; onExport(conversation, "md") },
+                )
+                DropdownMenuItem(
+                    text = { Text("Export PDF") },
+                    onClick = { showMenu = false; onExport(conversation, "pdf") },
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete") },
+                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = oak.danger) },
+                    onClick = { showMenu = false; onDelete(conversation) },
+                )
             }
         }
     }
@@ -665,6 +647,42 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
         Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = oak.danger, modifier = Modifier.size(18.dp))
         Text(message, style = MaterialTheme.typography.bodySmall, color = oak.textStrong, modifier = Modifier.weight(1f))
         TextButton(onClick = onDismiss) { Text("Dismiss") }
+    }
+}
+
+/**
+ * Observes a right-to-left swipe on the chats list and opens a new chat.
+ * Does not consume pointer events, so vertical scroll and pull-to-refresh still
+ * win. Gestures that begin in the system-back edge insets are ignored. No-ops
+ * while [enabled] is false (Select mode).
+ */
+private fun Modifier.swipeToNewChat(enabled: Boolean, onNewChat: () -> Unit): Modifier {
+    if (!enabled) return this
+    return pointerInput(onNewChat) {
+        val minDistance = 72.dp.toPx()
+        val edgeIgnore = 24.dp.toPx()
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val startX = down.position.x
+            var totalX = 0f
+            var totalY = 0f
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull() ?: break
+                totalX += change.position.x - change.previousPosition.x
+                totalY += change.position.y - change.previousPosition.y
+                if (event.changes.all { !it.pressed }) {
+                    val startedAtEdge = startX < edgeIgnore || startX > size.width - edgeIgnore
+                    if (!startedAtEdge &&
+                        totalX < -minDistance &&
+                        abs(totalX) > abs(totalY) * 1.2f
+                    ) {
+                        onNewChat()
+                    }
+                    break
+                }
+            }
+        }
     }
 }
 
