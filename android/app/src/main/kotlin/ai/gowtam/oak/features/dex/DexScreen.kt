@@ -115,6 +115,7 @@ fun DexListScreen(
                 UsageLeaderboardScreen(
                     viewModel = usageViewModel,
                     onApplySpecies = onApplySpecies,
+                    onOpenDex = onOpen,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 )
                 return@Column

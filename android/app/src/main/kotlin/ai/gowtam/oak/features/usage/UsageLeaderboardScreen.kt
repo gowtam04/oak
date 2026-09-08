@@ -4,6 +4,7 @@ import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.UsageEntry
 import ai.gowtam.oak.wire.UsageLadder
 import ai.gowtam.oak.wire.UsageLeaderboardRow
@@ -24,9 +25,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,6 +55,7 @@ fun UsageLeaderboardScreen(
     viewModel: UsageLeaderboardViewModel,
     modifier: Modifier = Modifier,
     onApplySpecies: ((String) -> Unit)? = null,
+    onOpenDex: ((EntityKind, String) -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
     LaunchedEffect(viewModel) { viewModel.start() }
@@ -63,6 +68,7 @@ fun UsageLeaderboardScreen(
             loading = state.speciesLoading,
             onBack = viewModel::clearSpecies,
             onApply = onApplySpecies,
+            onOpenDex = onOpenDex,
             modifier = modifier,
         )
         return
@@ -177,6 +183,7 @@ private fun UsageSpeciesDetail(
     loading: Boolean,
     onBack: () -> Unit,
     onApply: ((String) -> Unit)?,
+    onOpenDex: ((EntityKind, String) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val oak = LocalOakColors.current
@@ -220,31 +227,73 @@ private fun UsageSpeciesDetail(
                 val asOf = listOfNotNull(detail.season, detail.format).joinToString(" · ")
                 if (asOf.isNotEmpty()) Text(asOf, style = MaterialTheme.typography.labelSmall, color = oak.textMuted)
                 detail.attribution?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = oak.textMuted) }
+                if (onOpenDex != null) {
+                    UsageDexLink.speciesRoute(detail.savedName ?: detail.slug.orEmpty())?.let { target ->
+                        TextButton(onClick = { onOpenDex(target.kind, target.query) }) {
+                            Text("View in Dex")
+                        }
+                    }
+                }
                 val slug = detail.slug
                 if (onApply != null && !slug.isNullOrBlank()) {
                     OakButton(onClick = { onApply(slug) }, style = OakButtonStyle.Primary, modifier = Modifier.fillMaxWidth()) {
                         Text("Apply this Champions set")
                     }
                 }
-                UsageSection("Moves", detail.moves)
-                UsageSection("Items", detail.items)
-                UsageSection("Abilities", detail.abilities)
-                UsageSection("Natures", detail.natures)
-                UsageSection("Spreads", detail.spreads)
-                UsageSection("Teammates", detail.teammates)
+                UsageSection("Moves", detail.moves, UsageListKind.MOVES, onOpenDex)
+                UsageSection("Items", detail.items, UsageListKind.ITEMS, onOpenDex)
+                UsageSection("Abilities", detail.abilities, UsageListKind.ABILITIES, onOpenDex)
+                UsageSection("Natures", detail.natures, UsageListKind.NATURES, onOpenDex)
+                UsageSection("Spreads", detail.spreads, UsageListKind.SPREADS, onOpenDex)
+                UsageSection("Teammates", detail.teammates, UsageListKind.TEAMMATES, onOpenDex)
             }
         }
     }
 }
 
 @Composable
-private fun UsageSection(title: String, entries: List<UsageEntry>) {
+private fun UsageSection(
+    title: String,
+    entries: List<UsageEntry>,
+    kind: UsageListKind,
+    onOpenDex: ((EntityKind, String) -> Unit)?,
+) {
     if (entries.isEmpty()) return
     val oak = LocalOakColors.current
     Text(title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold), color = oak.textStrong)
     for (entry in entries.take(8)) {
         val pct = entry.pct?.let { "${"%.1f".format(it)}%" } ?: "—"
-        Text("${entry.name} · $pct", style = MaterialTheme.typography.bodyMedium, color = oak.text)
+        val target = UsageDexLink.route(kind, entry.name)
+        val open = if (target != null && onOpenDex != null) {
+            { onOpenDex(target.kind, target.query) }
+        } else {
+            null
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (open != null) {
+                        Modifier.clickable(onClick = open, onClickLabel = "Open in Dex")
+                    } else {
+                        Modifier
+                    },
+                )
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+        ) {
+            Text(
+                entry.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = oak.text,
+                modifier = Modifier.weight(1f),
+            )
+            Text(pct, style = MaterialTheme.typography.bodyMedium, color = oak.textMuted)
+            if (open != null) {
+                Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = oak.textMuted)
+            }
+        }
     }
 }
 
