@@ -9,12 +9,13 @@ National Dex default, no Smogon OU, no generation toggle.
 ## App Name (30 chars max)
 
 ```
-Oak – AI Coach
+Oak – Champions Coach
 ```
-**14 / 30 chars.** Home-screen name stays `Oak` (`CFBundleDisplayName`); only
-the App Store display name uses this string. Oak *coaches* — it reasons and
-explains — rather than just looking up. `battle` lives in Keywords so "battle
-calculator" still combines with the subtitle.
+**21 / 30 chars.** Home-screen name stays `Oak` (`CFBundleDisplayName`); only
+the App Store display name uses this string. Indexes `oak`, `champions`,
+`coach` so the subtitle supplies "champions team builder" and "champions
+calculator". `ai` moved to Keywords (it used to live in this field). Zero
+trademarked words — "Champions" names the format without "Pokémon".
 
 ## Subtitle (30 chars max)
 
@@ -63,13 +64,14 @@ Questions or feedback? Reach us at www.gowtam.ai/#contact.
 ## Keywords (100 chars max, hidden, comma-separated, no spaces)
 
 ```
-type,chart,weakness,coverage,moveset,damage,mega,speed,battle,showdown,import,reasoning,chat,usage
+type,chart,weakness,coverage,moveset,damage,mega,speed,battle,showdown,import,ai,chat,usage
 ```
-**98 / 100 chars.** Dropped `ev` / `iv` / `tera` (mainline knobs Oak no longer
-surfaces). Added `mega` (Champions gimmick) and `usage` (live ladder). `battle`
-stays so "battle calculator" still combines with the subtitle. Full historical
-rationale in `aso-keywords.md` (that file's older Tera/EV notes are superseded
-by this listing).
+**91 / 100 chars.** `champions` and `coach` now live in the App Name, so they
+are omitted here. `ai` moved in from the old name (`Oak – AI Coach`) and sits
+next to `chat` for "ai chat" / "ai coach" (cross-field with the name). Dropped
+`reasoning` to make room (still in the Description). `battle` stays so "battle
+calculator" still combines with the subtitle. Full rationale in
+`aso-keywords.md`.
 
 ## What's New (this release)
 
@@ -81,7 +83,7 @@ cancelled and retargeted to 1.2 + build 51 so the Champions listing can
 ship instead of the pre-Champions 1.1.1 binary.
 Live 1.0.2 promotional text is already the Champions line (that field
 updates without a new version). App name on this version is
-`Oak – AI Coach` (live 1.0.2 still shows `Oak – AI Battle Coach` until
+`Oak – Champions Coach` (live 1.0.2 still shows `Oak – AI Battle Coach` until
 1.2 is submitted and approved). TestFlight what-to-test and beta
 description use the same Champions-only framing.
 
