@@ -73,10 +73,9 @@ by this listing).
 
 ## What's New (this release)
 
-**Champions-first listing (next train — not the in-review binary).** Copy for
-the cut that makes Oak a Pokémon Champions coach. Not yet submitted; pair with
-the next binary that ships P7 (regulation chip, Usage tab, archive, Stat Point
-editor). 1.1.1 below is the currently in-review train and is **not** this listing.
+**1.2 (build 51) — Champions-first.** Pair this listing with the 1.2 TestFlight
+binary (regulation chip, Usage tab, archive, Stat Point editor). 1.1.1 below is
+the previous in-review train and is **not** this listing.
 
 ```
 What's new
