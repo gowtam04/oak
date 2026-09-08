@@ -45,6 +45,7 @@ import {
 import type { VoiceTokenResponseBody } from "@/lib/voice/voice-types";
 import { tools } from "@/agent/tools";
 import { VOICE_EXCLUDED_TOOLS } from "@/agent/tools/voice-gating";
+import { logger } from "@/server/logger";
 
 /** Main tool-barrel count minus the voice exclusion set — not a literal. */
 const EXPECTED_VOICE_TOOL_COUNT = tools.filter(
@@ -347,3 +348,71 @@ describe("POST /api/voice/token — spend controls (SC-US-5/6, SC-AC-5.3, SC-AC-
     expect(fetchMock()).not.toHaveBeenCalled();
   });
 });
+
+// ===========================================================================
+// Outcome logs — Fly can see a token attempt without the minted secret.
+// ===========================================================================
+
+function logEvents(spy: { mock: { calls: unknown[][] } }): string[] {
+  return spy.mock.calls
+    .map((call) => {
+      const arg = call[0];
+      if (typeof arg !== "object" || arg === null) return null;
+      const event = (arg as { event?: unknown }).event;
+      return typeof event === "string" ? event : null;
+    })
+    .filter((event): event is string => event !== null);
+}
+
+describe("POST /api/voice/token — outcome logs", () => {
+  let info: ReturnType<typeof vi.spyOn>;
+  let error: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    info = vi.spyOn(logger, "info").mockImplementation(() => undefined as never);
+    error = vi.spyOn(logger, "error").mockImplementation(() => undefined as never);
+  });
+
+  afterEach(() => {
+    info.mockRestore();
+    error.mockRestore();
+  });
+
+  it("logs voice_token_accepted without the minted token", async () => {
+    signedIn(ACCT);
+    const res = await post(body());
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as VoiceTokenResponseBody;
+    expect(json.token).toBe("tok-abc");
+    expect(logEvents(info)).toContain("voice_token_accepted");
+    expect(JSON.stringify(info.mock.calls)).not.toContain("tok-abc");
+  });
+
+  it("logs voice_token_unauthorized for a guest", async () => {
+    guest();
+    const res = await post(body());
+    expect(res.status).toBe(401);
+    expect(logEvents(info)).toContain("voice_token_unauthorized");
+    expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("logs voice_token_invalid_request for a bad format", async () => {
+    signedIn(ACCT);
+    const res = await post(body({ format: "gen-99" }));
+    expect(res.status).toBe(400);
+    expect(logEvents(info)).toContain("voice_token_invalid_request");
+  });
+
+  it("logs voice_token_mint_failed on an upstream 500", async () => {
+    signedIn(ACCT);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("upstream boom", { status: 500 })),
+    );
+    const res = await post(body());
+    expect(res.status).toBe(502);
+    expect(logEvents(error)).toContain("voice_token_mint_failed");
+    expect(JSON.stringify(error.mock.calls)).not.toContain("tok-abc");
+  });
+});
+
