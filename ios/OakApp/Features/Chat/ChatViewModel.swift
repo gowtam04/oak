@@ -86,8 +86,8 @@ final class ChatViewModel {
   /// Informational regulation chip — not a format picker (CF-UI-US-2).
   var isRegulationChipPicker: Bool { false }
 
-  /// Current Champions regulation label (mirrors web `CHAMPIONS_REGULATION`).
-  var regulationLabel: String { Format.champions.displayLabel }
+  /// Current Champions regulation label from ``AppState`` (`GET /api/scope`).
+  var regulationLabel: String { appState.regulationChipLabel }
 
   /// Mention tokens inserted via `@` autocomplete (MEN-US-1).
   private(set) var mentionTokens: [FollowUpChips.MentionedTeam] = []

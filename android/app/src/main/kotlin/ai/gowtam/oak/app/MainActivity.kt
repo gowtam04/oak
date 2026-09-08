@@ -72,7 +72,10 @@ class MainActivity : ComponentActivity() {
         handleShareIntent(intent, appState)
 
         setContent {
-            LaunchedEffect(services) { appState.restoreSession(services.auth) }
+            LaunchedEffect(services) {
+                appState.restoreSession(services.auth)
+                appState.refreshRegulation(services.scope)
+            }
 
             val keepScreenOn by chatViewModel.keepScreenOn.collectAsState()
             LaunchedEffect(keepScreenOn) {

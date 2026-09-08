@@ -276,7 +276,7 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    ai.gowtam.oak.ui.RegulationChip(format = uiState.displayFormat, onLid = true)
+                    ai.gowtam.oak.ui.RegulationChip(onLid = true)
                     IconButton(onClick = onOpenCalculator) {
                         Icon(Icons.Filled.Functions, contentDescription = "Calculator")
                     }

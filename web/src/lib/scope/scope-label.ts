@@ -8,10 +8,7 @@
  * portable-modules list alongside `detect-scope.ts`.
  */
 
-import { CHAMPIONS_REGULATION, type Format } from "@/data/formats";
-
-/** The Champions regulation ("Regulation M-B") shortened for the chip ("Reg M-B"). */
-const CHAMPIONS_REG_SHORT = CHAMPIONS_REGULATION.replace(/^Regulation\b/, "Reg");
+import { regulationChipLabel, type Format } from "@/data/formats";
 
 /** A short display label for a resolved scope, e.g. for the header scope chip. */
 export function scopeLabel(format: Format): string {
@@ -19,7 +16,7 @@ export function scopeLabel(format: Format): string {
     case "national-dex":
       return "National Dex · All Gens";
     case "champions":
-      return `Champions · ${CHAMPIONS_REG_SHORT}`;
+      return regulationChipLabel();
     case "scarlet-violet":
       return "Gen 9 · Scarlet/Violet";
     case "gen-8":

@@ -27,6 +27,7 @@ import ai.gowtam.oak.wire.CreatedShare
 import ai.gowtam.oak.wire.Folder
 import ai.gowtam.oak.wire.ForkResult
 import ai.gowtam.oak.wire.PersistScopeResult
+import ai.gowtam.oak.wire.RegulationMeta
 import ai.gowtam.oak.wire.PublicShare
 import ai.gowtam.oak.wire.ShareListItem
 import ai.gowtam.oak.wire.DexSpriteRef
@@ -508,6 +509,7 @@ class FakeTeamsAssistantService(
 
 class FakeScopeService(
     var result: PersistScopeResult = PersistScopeResult(format = Format.NationalDex),
+    var currentResult: RegulationMeta? = null,
     var error: OakError? = null,
 ) : ScopeService {
     val persistCalls = mutableListOf<Triple<Format, String?, String>>()
@@ -517,6 +519,8 @@ class FakeScopeService(
         error?.let { throw it }
         return result.copy(format = format)
     }
+
+    override suspend fun current(): RegulationMeta? = currentResult
 }
 
 class FakeShareService(

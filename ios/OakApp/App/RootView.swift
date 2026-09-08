@@ -93,12 +93,16 @@ struct RootView: View {
     .onChange(of: selection) { _, _ in Haptics.tap() }
     .task {
       await appState.restoreSession(using: services.auth)
+      await appState.refreshRegulation(using: services.regulation)
       await updateModel.checkIfNeeded()
     }
     .onChange(of: scenePhase) { _, phase in
       // Foreground re-check is throttled inside the view model (24h).
       if phase == .active {
-        Task { await updateModel.checkIfNeeded() }
+        Task {
+          await appState.refreshRegulation(using: services.regulation)
+          await updateModel.checkIfNeeded()
+        }
       }
     }
     .onChange(of: appState.authState) { _, newValue in

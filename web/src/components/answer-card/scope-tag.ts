@@ -1,5 +1,5 @@
 import type { GenerationBasis } from "@/components/types";
-import { CHAMPIONS_REGULATION } from "@/data/formats";
+import { regulationChipLabel } from "@/data/formats";
 
 /**
  * Format the masthead's scope tag from `generation_basis.generation` — the
@@ -15,8 +15,7 @@ import { CHAMPIONS_REGULATION } from "@/data/formats";
 export function formatScopeTag(generationBasis: GenerationBasis): string {
   const { generation } = generationBasis;
   if (generation === "champions") {
-    const regulation = CHAMPIONS_REGULATION.replace(/^Regulation\s+/i, "Reg ");
-    return `Champions · ${regulation}`;
+    return regulationChipLabel();
   }
   if (generation === "national-dex") {
     return "National Dex";

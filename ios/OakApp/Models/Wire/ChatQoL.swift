@@ -15,6 +15,27 @@ struct ScopePersistResponse: Decodable, Sendable {
   var lastUsedScopes: [Format]? = nil
 }
 
+/// `GET /api/scope` success body — current Champions regulation facts for the
+/// display-only chip (CF-UI-AC-2.3). Extra keys are ignored (plain JSONDecoder).
+struct RegulationMeta: Codable, Sendable, Equatable {
+  let format: Format
+  let regulation: String
+  let chipLabel: String
+  let hint: String
+
+  /// Shown when nothing has been fetched yet and nothing is cached.
+  static let fallback = RegulationMeta(
+    format: .champions,
+    regulation: "",
+    chipLabel: "Champions",
+    hint: "Current Champions regulation"
+  )
+
+  var isUsable: Bool {
+    !chipLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
+}
+
 /// `POST /api/conversations/:id/fork` success body.
 struct ForkResponse: Decodable, Sendable {
   let id: String

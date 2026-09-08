@@ -24,12 +24,12 @@ struct ScopeTagTests {
   }
 
   @Test
-  func championsBecomesLabelWithCurrentRegulation() {
-    // Masthead.test.tsx: "champions" → contains "Champions" and "Reg M-B".
-    let label = ScopeTag.label(for: "champions")
-    #expect(label == "Champions · Reg M-B")
-    #expect(label.contains("Champions"))
-    #expect(label.contains("Reg M-B"))
+  func championsUsesTheLiveChipLabel() {
+    #expect(ScopeTag.label(for: "champions") == "Champions")
+    #expect(
+      ScopeTag.label(for: "champions", championsChipLabel: "Champions · Reg M-C")
+        == "Champions · Reg M-C"
+    )
   }
 
   @Test

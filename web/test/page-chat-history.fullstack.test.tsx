@@ -33,6 +33,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import Home from "@/app/page";
+import { regulationChipLabel } from "@/data/formats";
 import { formatSseEvent } from "@/lib/sse/sse-types";
 import { MINIMAL_ANSWER } from "@/components/test-fixtures";
 import type { ChatTurn, OakAnswer } from "@/components/types";
@@ -286,7 +287,7 @@ describe("Home — chat-history sidebar", () => {
     expect(screen.getByText("Here is a rain team")).toBeInTheDocument();
     // The loaded conversation's Champions scope carries forward (AC-5.4), shown
     // by the header scope chip.
-    expect(screen.getByTestId("scope-chip")).toHaveTextContent("Champions · Reg M-B");
+    expect(screen.getByTestId("scope-chip")).toHaveTextContent(regulationChipLabel());
     await sendAndAwait("another rain question", 2);
     expect(lastChatBody!.champions_mode).toBeUndefined();
     expect(lastChatBody!.scope_seed).toBeUndefined();
@@ -305,7 +306,7 @@ describe("Home — chat-history sidebar", () => {
     expect(screen.queryByTestId("user-turn")).not.toBeInTheDocument();
     expect(screen.queryByTestId("assistant-turn")).not.toBeInTheDocument();
     expect(screen.getByTestId("scope-chip")).toHaveTextContent(
-      "Champions · Reg M-B",
+      regulationChipLabel(),
     );
     expect(screen.getByTestId("scope-chip")).not.toHaveTextContent(
       /National Dex/i,

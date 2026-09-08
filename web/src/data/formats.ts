@@ -84,10 +84,48 @@ export const NATDEX_FORMAT: Format = "national-dex";
 /**
  * The regulation the base `champions` @pkmn mod currently tracks (it always
  * tracks the LATEST regulation; bumping `@pkmn/mods` + re-ingesting advances it).
- * Surfaced to users via `generation_basis.note` in Champions answers. Update
- * this one line when the regulation rotates.
+ * Surfaced to users via `generation_basis.note` in Champions answers and via
+ * {@link currentRegulationMeta} (`GET /api/scope`). Update this one line when
+ * the regulation rotates.
  */
 export const CHAMPIONS_REGULATION = "Regulation M-B";
+
+/**
+ * Public product-facts payload for the current Champions regulation — the
+ * body of `GET /api/scope`. Native chips fetch this; web chrome imports the
+ * helpers below (same deploy as the API).
+ */
+export interface RegulationMeta {
+  format: "champions";
+  regulation: string;
+  chipLabel: string;
+  hint: string;
+}
+
+/** `"Regulation M-B"` → `"Champions · Reg M-B"` for the header pill. */
+export function regulationChipLabel(
+  regulation: string = CHAMPIONS_REGULATION,
+): string {
+  const short = regulation.replace(/^Regulation\b/i, "Reg").trim();
+  return `Champions · ${short}`;
+}
+
+/** Accessibility / tooltip copy for the regulation chip. */
+export function regulationHint(
+  regulation: string = CHAMPIONS_REGULATION,
+): string {
+  return `Current Champions regulation: ${regulation}`;
+}
+
+/** The current regulation as served by `GET /api/scope`. */
+export function currentRegulationMeta(): RegulationMeta {
+  return {
+    format: "champions",
+    regulation: CHAMPIONS_REGULATION,
+    chipLabel: regulationChipLabel(),
+    hint: regulationHint(),
+  };
+}
 
 /**
  * Map the turn's agent mode to the data format the repos should query.

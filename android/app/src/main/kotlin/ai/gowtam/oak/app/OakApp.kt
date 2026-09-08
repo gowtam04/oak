@@ -18,6 +18,7 @@ import ai.gowtam.oak.ui.ConnectionBanner
 import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.LocalRegulation
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberReduceMotion
@@ -50,6 +51,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,7 +62,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.launch
 
 private enum class OakTab(val label: String) {
@@ -125,6 +130,18 @@ fun OakApp(
         }
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    DisposableEffect(lifecycleOwner, services) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                scope.launch { appState.refreshRegulation(services.scope) }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val oak = LocalOakColors.current
     Scaffold(
         bottomBar = {
@@ -162,7 +179,11 @@ fun OakApp(
         // own. See [LocalServices]'s doc for why this is scoped narrowly rather than
         // becoming the primary DI seam (ViewModels still take services as constructor
         // params).
-        CompositionLocalProvider(LocalServices provides services) {
+        val regulation by appState.regulation.collectAsState()
+        CompositionLocalProvider(
+            LocalServices provides services,
+            LocalRegulation provides regulation,
+        ) {
             Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                 ConnectionBanner(status = connectionStatus)
                 // Tab content crossfades on switch (reduce-motion: an instant swap —

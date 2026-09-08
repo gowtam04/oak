@@ -3,10 +3,12 @@ package ai.gowtam.oak.app
 import ai.gowtam.oak.services.AuthService
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.services.HistoryService
+import ai.gowtam.oak.services.ScopeService
 import ai.gowtam.oak.wire.AnswerDensity
 import ai.gowtam.oak.wire.ChatTurn
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.OakAnswer
+import ai.gowtam.oak.wire.RegulationMeta
 import android.util.Log
 import androidx.compose.runtime.Stable
 import java.util.UUID
@@ -31,6 +33,7 @@ private const val TAG = "Oak.AppState"
 @Stable
 class AppState(
     private val appearanceStore: AppearanceStore = InMemoryAppearanceStore(),
+    private val regulationStore: RegulationStore = InMemoryRegulationStore(),
 ) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Guest)
 
@@ -139,6 +142,22 @@ class AppState(
     fun setAppearance(preference: AppearancePreference) {
         _appearance.value = preference
         appearanceStore.save(preference)
+    }
+
+    private val _regulation = MutableStateFlow(
+        regulationStore.load() ?: RegulationMeta.fallback,
+    )
+    val regulation: StateFlow<RegulationMeta> = _regulation.asStateFlow()
+
+    /**
+     * Refreshes the regulation chip from `GET /api/scope`. A miss keeps last-known
+     * (or the generic `"Champions"` fallback) — never a stale compile-time letter.
+     */
+    suspend fun refreshRegulation(scope: ScopeService) {
+        val meta = scope.current() ?: return
+        if (!meta.isUsable) return
+        _regulation.value = meta
+        regulationStore.save(meta)
     }
 
     /**

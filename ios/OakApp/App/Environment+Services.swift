@@ -71,6 +71,10 @@ struct ServiceContainer: Sendable {
   /// ``LiveUsageService`` in production.
   let usage: any UsageService
 
+  /// Public current-regulation facts (`GET /api/scope`). Backed by
+  /// ``LiveRegulationService`` in production.
+  let regulation: any RegulationService
+
   /// The production wiring (real `Live…` services).
   ///
   /// All services share **one** ``TokenStore`` (the Keychain) and **one**
@@ -94,7 +98,8 @@ struct ServiceContainer: Sendable {
       updates: LiveUpdateService(),
       calc: LiveCalcService(apiClient: api),
       artifactPins: LiveArtifactPinService(apiClient: api),
-      usage: LiveUsageService(apiClient: api)
+      usage: LiveUsageService(apiClient: api),
+      regulation: LiveRegulationService(apiClient: api)
     )
   }
 
@@ -118,7 +123,8 @@ struct ServiceContainer: Sendable {
       updates: PreviewStubUpdateService(),
       calc: PreviewStubCalcService(),
       artifactPins: PreviewStubArtifactPinService(),
-      usage: PreviewStubUsageService()
+      usage: PreviewStubUsageService(),
+      regulation: PreviewStubRegulationService()
     )
     #else
     live()
@@ -385,6 +391,10 @@ struct PreviewStubUsageService: UsageService {
   func species(slug: String, ladder: UsageLadder) async throws -> UsageSpeciesResponse {
     .unavailable
   }
+}
+
+struct PreviewStubRegulationService: RegulationService {
+  func current() async -> RegulationMeta? { nil }
 }
 
 struct PreviewStubArtifactPinService: ArtifactPinService {

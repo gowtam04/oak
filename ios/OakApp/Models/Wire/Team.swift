@@ -120,15 +120,14 @@ enum Format: Sendable, Hashable {
     }
   }
 
-  /// A fuller display label with the game-pair/regulation suffix — mirrors
-  /// `scopeLabel` in `web/src/lib/scope/scope-label.ts` exactly. The Champions
-  /// regulation string is duplicated from web's `CHAMPIONS_REGULATION` (no
-  /// shared module between the two clients); update it here when that rotates.
-  /// `.unknown` echoes its raw value.
+  /// A fuller display label with the game-pair suffix — mirrors `scopeLabel`
+  /// in `web/src/lib/scope/scope-label.ts` for archived formats. Champions
+  /// is `"Champions"` here; the live regulation letter lives on the chip
+  /// (`GET /api/scope`), not this enum. `.unknown` echoes its raw value.
   var displayLabel: String {
     switch self {
     case .nationalDex: return "National Dex · All Gens"
-    case .champions: return "Champions · Reg M-B"
+    case .champions: return "Champions"
     case .scarletViolet: return "Gen 9 · Scarlet/Violet"
     case .gen8: return "Gen 8 · Sword/Shield"
     case .gen7: return "Gen 7 · USUM"

@@ -50,7 +50,7 @@ import { createShare } from "@/lib/api/share-client";
 import { parseSlashCommand } from "@/lib/chat/slash-commands";
 import type { FollowUpChip } from "@/lib/chat/follow-up-chips";
 import { parseMentions } from "@/lib/chat/mentions";
-import { CHAMPIONS_REGULATION, isFormat, type Format } from "@/data/formats";
+import { isFormat, regulationChipLabel, type Format } from "@/data/formats";
 import type {
   ChatStatus,
   ChatTurn,
@@ -65,7 +65,7 @@ const CALC_EXPLAIN_KEY = "oak-calc-explain";
 const GUEST_DENSITY_KEY = "oak-answer-density";
 
 /** Empty-desk regulation stamp — always the current Champions regulation. */
-const CHAMPIONS_REGULATION_LABEL = `Champions · ${CHAMPIONS_REGULATION.replace(/^Regulation\b/, "Reg").trim()}`;
+const CHAMPIONS_REGULATION_LABEL = regulationChipLabel();
 
 function readGuestDensity(): "full" | "compact" {
   try {
