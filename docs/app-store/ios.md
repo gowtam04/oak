@@ -11,7 +11,7 @@ National Dex default, no Smogon OU, no generation toggle.
 ```
 Oak – AI Coach
 ```
-**13 / 30 chars.** Home-screen name stays `Oak` (`CFBundleDisplayName`); only
+**14 / 30 chars.** Home-screen name stays `Oak` (`CFBundleDisplayName`); only
 the App Store display name uses this string. Oak *coaches* — it reasons and
 explains — rather than just looking up. `battle` lives in Keywords so "battle
 calculator" still combines with the subtitle.
@@ -73,13 +73,18 @@ by this listing).
 
 ## What's New (this release)
 
-**1.2 (build 51) — Champions-first.** Submitted 2026-09-08
-(`WAITING_FOR_REVIEW`, `releaseType: AFTER_APPROVAL`). Same ASC version
-record as 1.1.1 (created 2026-08-16): the 1.1.1 review was cancelled and
-retargeted to 1.2 + build 51 so the Champions listing ships instead of the
-pre-Champions 1.1.1 binary. Live 1.0.2 promotional text was updated the
-same day (no resubmission). App name on this version is `Oak – AI Coach`
-(live 1.0.2 still shows `Oak – AI Battle Coach` until 1.2 is approved).
+**1.2 (build 51) — Champions-first.** In review as of 2026-09-08
+(`WAITING_FOR_REVIEW`, `releaseType: AFTER_APPROVAL`, submission
+`1684bee2-bc06-4f83-aaf9-c8617fe95efb`). Same ASC version record as 1.1.1
+(created 2026-08-16): the 1.1.1 review was cancelled and retargeted to
+1.2 + build 51 so the Champions listing ships instead of the
+pre-Champions 1.1.1 binary. An earlier 1.2 submit the same day was
+developer-rejected (`DEVELOPER_REJECTED`, item `REMOVED`) and resubmitted
+with this copy unchanged. Live 1.0.2 promotional text is already the
+Champions line (no resubmission). App name on this version is
+`Oak – AI Coach` (live 1.0.2 still shows `Oak – AI Battle Coach` until 1.2
+is approved). TestFlight what-to-test and beta description were updated
+to the same Champions-only framing.
 
 ```
 What's new

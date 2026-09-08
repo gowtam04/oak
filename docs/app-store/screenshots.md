@@ -54,18 +54,18 @@ No trademarked wording in marketing headlines. In-app UI may show species names,
 
 ### Frame 5 of 6 — Core feature: artifact viewer drill-down
 
-**Headline:** "See the Math Behind It"
-**Subheadline:** "Drill into damage calcs and type matchups without losing your chat."
-**App screen featured:** The chat shown dimmed/blurred in the background, with the artifact-viewer bottom sheet raised over it mid-drag, displaying either a damage-calculation breakdown or a type-matchup grid using the 18-color type-badge palette.
-**Composition and device:** Device centered, cropped slightly at the bottom edge so the bottom sheet appears to emerge from the frame's bottom third, emphasizing the edge-to-edge sheet feel.
-**Background and color treatment:** Light neutral `#F4F1EA` — kept deliberately quiet so the colorful type badges are the visual focus.
+**Headline:** "See the math"
+**Subheadline:** "Open a species, move, or calc without leaving the thread."
+**App screen featured:** Chat dimmed behind a raised sheet: Choice Band Outrage vs Flutter Mane, roll 108–128%, OHKO after rocks, `Inferred` Stat Points at level 50.
+**Composition and device:** Device centered; sheet occupies the lower half.
+**Background and color treatment:** Signal canvas `#F6F7F9` — same as the rest of the set.
 **Mood and energy:** Detailed, satisfying — the "aha, now I get it" moment.
 
-### Frame 6 of 6 — Social proof / CTA: guest vs. account
+### Frame 6 of 6 — CTA: guest first
 
-**Headline:** "Start Free, Sync Anywhere"
-**Subheadline:** "Chat instantly as a guest. Sign in with an email code to save it all."
-**App screen featured:** The Account tab, showing the guest-state tier section alongside a secondary callout of the email one-time-code sign-in sheet (email field + 6-digit code field).
-**Composition and device:** Main device centered; a smaller, semi-transparent secondary phone frame offset behind/beside it displaying the sign-in sheet — a two-device "before/after" storytelling composition.
-**Background and color treatment:** A soft closing "brand wash" — all three brand colors (red, gold, azure) blended at low opacity into the neutral background, with a slightly stronger gold accent in one corner to feel like a warm close to the set.
-**Mood and energy:** Welcoming, low-friction — this is the closing CTA frame.
+**Headline:** "Start now. Sign in later."
+**Subheadline:** "Ask as a guest. Save chats and teams when you want them."
+**App screen featured:** Empty Chat with the `Champions · Reg M-B` chip and four starters (Battle / Teams / Rules / Usage), including Stat Points and Mega Garchomp legality.
+**Composition and device:** Device centered, same mockup as frames 1–4.
+**Background and color treatment:** Signal canvas `#F6F7F9`. No gold wash.
+**Mood and energy:** Welcoming, low-friction — closing CTA.
