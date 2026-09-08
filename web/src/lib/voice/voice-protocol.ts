@@ -217,7 +217,13 @@ export type ServerEvent =
     }
   | { type: "response.done" }
   | { type: "ping"; ping_timestamp?: number }
-  | { type: "error"; code?: string; message?: string };
+  | {
+      type: "error";
+      code?: string;
+      message?: string;
+      params?: string;
+      event_id?: string;
+    };
 
 /** Server event type strings that are aliased to a canonical name. */
 const TYPE_ALIASES: Record<string, ServerEvent["type"]> = {
@@ -285,8 +291,10 @@ export function parseServerEvent(data: string): ServerEvent | null {
       };
     case "error": {
       // xAI (and the OpenAI-compatible realtime wire) nests the payload under
-      // `error: { code, message }`. Older / test frames put `code`/`message`
-      // at the top level. Prefer the nested object, fall back to top-level.
+      // `error: { code, message, params }`. Older / test frames put
+      // `code`/`message` at the top level. Prefer the nested object, fall back
+      // to top-level. `params` carries pydantic's `input_value='…'` for
+      // invalid_event.
       const nested =
         typeof obj.error === "object" && obj.error !== null
           ? (obj.error as Record<string, unknown>)
@@ -303,11 +311,84 @@ export function parseServerEvent(data: string): ServerEvent | null {
           : typeof obj.message === "string"
             ? obj.message
             : undefined;
-      return { type, code, message };
+      const params = jsonTextField(nested, "params") ?? jsonTextField(obj, "params");
+      const event_id =
+        typeof nested?.event_id === "string"
+          ? nested.event_id
+          : typeof obj.event_id === "string"
+            ? obj.event_id
+            : undefined;
+      return { type, code, message, params, event_id };
     }
     default:
       return null;
   }
+}
+
+/**
+ * Overlay/log copy for a server `error` frame. When pydantic's `params`
+ * include `input_value='…'`, that rejected type is appended so the overlay
+ * is never a bare "Invalid event received".
+ */
+export function formatVoiceServerError(
+  message?: string,
+  params?: string,
+): string {
+  const msg = message?.trim() || "The voice service reported an error.";
+  const trimmedParams = params?.trim();
+  if (!trimmedParams) return msg;
+  const value = extractVoiceErrorInputValue(trimmedParams);
+  if (value) return `${msg} (rejected type: ${value})`;
+  return `${msg} — ${trimmedParams}`;
+}
+
+/** Pull pydantic `input_value='…'` (or a JSON `"input_value":"…"`) from params. */
+export function extractVoiceErrorInputValue(params: string): string | undefined {
+  const patterns = [
+    /input_value='([^']*)'/,
+    /input_value="([^"]*)"/,
+    /"input_value"\s*:\s*"([^"]*)"/,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(params);
+    const value = match?.[1];
+    if (value) return value;
+  }
+  return undefined;
+}
+
+/**
+ * Top-level `type` of an outbound JSON frame, or `undefined` if the text is
+ * not a JSON object with a string `type`. Logs may use this — never log the
+ * body (audio / session.update instructions+tools).
+ */
+export function voiceOutboundType(json: string): string | undefined {
+  try {
+    const raw: unknown = JSON.parse(json);
+    if (typeof raw !== "object" || raw === null) return undefined;
+    const type = (raw as Record<string, unknown>).type;
+    return typeof type === "string" && type.length > 0 ? type : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Read a JSON object field as text: a string as-is, an object/array as JSON. */
+function jsonTextField(
+  obj: Record<string, unknown> | undefined,
+  key: string,
+): string | undefined {
+  if (!obj) return undefined;
+  const value = obj[key];
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------

@@ -80,6 +80,9 @@ actor LiveVoiceRealtimeConnection: VoiceRealtimeConnection {
     let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
     self.session = session
     self.task = session.webSocketTask(with: url, protocols: [subprotocol])
+    // Default is 1 MiB inbound; a session.update with the full tool list is
+    // well under that, but fail-closed rather than truncate if it ever is not.
+    self.task.maximumMessageSize = 16 * 1024 * 1024
     self.task.resume()
     // Bridge the delegate's Sendable event stream into the actor. Start receive
     // immediately — waiting until inbound() is attached is how didOpen never
@@ -98,9 +101,40 @@ actor LiveVoiceRealtimeConnection: VoiceRealtimeConnection {
   func send(_ text: String) async {
     await awaitOpen()
     guard !closed else { return }
-    // A failed send is non-fatal — the close/receive-error path drives teardown,
-    // mirroring the web client. Never log frame contents (they carry audio).
-    try? await task.send(.string(text))
+    let byteCount = text.utf8.count
+    let outboundType = voiceOutboundType(from: text) ?? "unparseable_outbound"
+    // Type + size only — never the body (audio / session.update instructions).
+    // Mic appends are ~10/s; keep those at debug so Console still shows the
+    // configuring frame (session.update / pong / tools) at info.
+    if outboundType == "input_audio_buffer.append" {
+      Log.network.debug(
+        "voice outbound type=\(outboundType, privacy: .public) bytes=\(byteCount)"
+      )
+    } else {
+      Log.network.info(
+        "voice outbound type=\(outboundType, privacy: .public) bytes=\(byteCount)"
+      )
+    }
+    if byteCount > task.maximumMessageSize {
+      Log.network.error(
+        "voice outbound frame exceeds maximumMessageSize type=\(outboundType, privacy: .public) bytes=\(byteCount)"
+      )
+      recordFailure("Voice connection failed.")
+      return
+    }
+    // Fail closed: a swallowed send used to let start() proceed to mic appends
+    // after a dropped/partial session.update. One complete text frame, or the
+    // session errors.
+    do {
+      try await task.send(.string(text))
+    } catch {
+      Log.network.error(
+        "voice websocket send failed type=\(outboundType, privacy: .public) bytes=\(byteCount)"
+      )
+      if !explicitClose {
+        recordFailure("Voice connection failed.")
+      }
+    }
   }
 
   nonisolated func close() {

@@ -37,6 +37,44 @@ struct VoiceRealtimeProtocolTests {
     return try #require(raw as? [String: Any])
   }
 
+  /// JSONSerialization can ignore trailing bytes that pydantic will still see.
+  /// Walk the first object and require the remainder to be whitespace-only.
+  private func assertSingleJSONObject(_ text: String) throws {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    #expect(trimmed.first == "{")
+    var depth = 0
+    var inString = false
+    var escape = false
+    var end: String.Index?
+    var i = trimmed.startIndex
+    while i < trimmed.endIndex {
+      let c = trimmed[i]
+      if inString {
+        if escape {
+          escape = false
+        } else if c == "\\" {
+          escape = true
+        } else if c == "\"" {
+          inString = false
+        }
+      } else if c == "\"" {
+        inString = true
+      } else if c == "{" {
+        depth += 1
+      } else if c == "}" {
+        depth -= 1
+        if depth == 0 {
+          end = trimmed.index(after: i)
+          break
+        }
+      }
+      i = trimmed.index(after: i)
+    }
+    let close = try #require(end)
+    let trailing = trimmed[close...].trimmingCharacters(in: .whitespacesAndNewlines)
+    #expect(trailing.isEmpty, "trailing JSON after first object: \(trailing.prefix(40))")
+  }
+
   @Test
   func sessionUpdateEncodesExactStructure() throws {
     let tools = [
@@ -56,8 +94,13 @@ struct VoiceRealtimeProtocolTests {
       tools: tools
     )
 
-    let obj = try decodeJSONObject(event.encode())
+    let encoded = try event.encode()
+    try assertSingleJSONObject(encoded)
+    #expect(encoded.hasPrefix("{\"type\":\"session.update\""))
+    #expect(encoded.contains("\"type\":\"session.update\""))
+    let obj = try decodeJSONObject(encoded)
     #expect(obj["type"] as? String == "session.update")
+    #expect(Set(obj.keys) == ["type", "session"])
 
     let session = try #require(obj["session"] as? [String: Any])
     #expect(session["instructions"] as? String == "Speak as Oak.")
@@ -93,16 +136,22 @@ struct VoiceRealtimeProtocolTests {
 
   @Test
   func inputAudioAppendEncodesStructure() throws {
-    let obj = try decodeJSONObject(VoiceClientEvent.inputAudioAppend(base64: "AQA=").encode())
+    let encoded = try VoiceClientEvent.inputAudioAppend(base64: "AQA=").encode()
+    try assertSingleJSONObject(encoded)
+    #expect(encoded.contains("\"type\":\"input_audio_buffer.append\""))
+    let obj = try decodeJSONObject(encoded)
     #expect(obj["type"] as? String == "input_audio_buffer.append")
     #expect(obj["audio"] as? String == "AQA=")
   }
 
   @Test
   func functionCallOutputEncodesStructure() throws {
-    let obj = try decodeJSONObject(
-      VoiceClientEvent.functionCallOutput(callId: "call_1", output: "{\"found\":true}").encode()
-    )
+    let encoded = try VoiceClientEvent.functionCallOutput(
+      callId: "call_1", output: "{\"found\":true}"
+    ).encode()
+    try assertSingleJSONObject(encoded)
+    #expect(encoded.contains("\"type\":\"conversation.item.create\""))
+    let obj = try decodeJSONObject(encoded)
     #expect(obj["type"] as? String == "conversation.item.create")
     let item = try #require(obj["item"] as? [String: Any])
     #expect(item["type"] as? String == "function_call_output")
@@ -112,23 +161,86 @@ struct VoiceRealtimeProtocolTests {
 
   @Test
   func responseCreateEncodesStructure() throws {
-    let obj = try decodeJSONObject(VoiceClientEvent.responseCreate.encode())
+    let encoded = try VoiceClientEvent.responseCreate.encode()
+    try assertSingleJSONObject(encoded)
+    #expect(encoded.contains("\"type\":\"response.create\""))
+    let obj = try decodeJSONObject(encoded)
     #expect(obj["type"] as? String == "response.create")
     #expect(obj.count == 1)
   }
 
   @Test
   func pongEncodesWithTimestamp() throws {
-    let obj = try decodeJSONObject(VoiceClientEvent.pong(pingTimestamp: 42.5).encode())
+    let encoded = try VoiceClientEvent.pong(pingTimestamp: 42.5).encode()
+    try assertSingleJSONObject(encoded)
+    #expect(encoded.contains("\"type\":\"pong\""))
+    let obj = try decodeJSONObject(encoded)
     #expect(obj["type"] as? String == "pong")
     #expect(obj["ping_timestamp"] as? Double == 42.5)
   }
 
   @Test
   func pongEncodesWithoutTimestampWhenNil() throws {
-    let obj = try decodeJSONObject(VoiceClientEvent.pong(pingTimestamp: nil).encode())
+    let encoded = try VoiceClientEvent.pong(pingTimestamp: nil).encode()
+    try assertSingleJSONObject(encoded)
+    #expect(encoded.contains("\"type\":\"pong\""))
+    let obj = try decodeJSONObject(encoded)
     #expect(obj["type"] as? String == "pong")
     #expect(obj["ping_timestamp"] == nil)
+  }
+
+  @Test
+  func everyClientEventTypeIsInTheLiveAllowedSet() throws {
+    let allowed: Set<String> = [
+      "session.update",
+      "input_audio_buffer.append",
+      "conversation.item.create",
+      "response.create",
+      "pong",
+    ]
+    let events: [VoiceClientEvent] = [
+      .sessionUpdate(
+        instructions: "x",
+        voice: "rex",
+        idleTimeoutMs: 1,
+        sampleRate: 24_000,
+        reasoningEffort: "none",
+        tools: []
+      ),
+      .inputAudioAppend(base64: "AQA="),
+      .functionCallOutput(callId: "c", output: "{}"),
+      .responseCreate,
+      .pong(pingTimestamp: 1),
+      .pong(pingTimestamp: nil),
+    ]
+    for event in events {
+      let encoded = try event.encode()
+      try assertSingleJSONObject(encoded)
+      let type = try #require(voiceOutboundType(from: encoded))
+      #expect(allowed.contains(type), "unexpected outbound type \(type)")
+    }
+  }
+
+  @Test
+  func sessionUpdateFromTokenFixtureIsASingleEnvelope() throws {
+    let bootstrap = try Fixtures.decode(VoiceTokenResponse.self, from: "voice_token.json").session
+    let encoded = try VoiceClientEvent.sessionUpdate(
+      instructions: bootstrap.instructions,
+      voice: bootstrap.voice,
+      idleTimeoutMs: bootstrap.idleTimeoutMs,
+      sampleRate: 24_000,
+      reasoningEffort: bootstrap.reasoningEffort,
+      tools: bootstrap.tools
+    ).encode()
+    try assertSingleJSONObject(encoded)
+    #expect(encoded.contains("\"type\":\"session.update\""))
+    let obj = try decodeJSONObject(encoded)
+    #expect(obj["type"] as? String == "session.update")
+    #expect(Set(obj.keys) == ["type", "session"])
+    let session = try #require(obj["session"] as? [String: Any])
+    let toolsOut = try #require(session["tools"] as? [[String: Any]])
+    #expect(toolsOut.count == 3)
+    #expect(toolsOut[0]["type"] as? String == "function")
   }
 
   // MARK: server event parsing
@@ -189,13 +301,68 @@ struct VoiceRealtimeProtocolTests {
     #expect(parseServerEvent(#"{"type":"ping"}"#) == .ping(timestamp: nil))
     #expect(
       parseServerEvent(#"{"type":"error","code":"bad_request","message":"oops"}"#)
-        == .errorEvent(code: "bad_request", message: "oops")
+        == .errorEvent(code: "bad_request", message: "oops", params: nil, eventId: nil)
     )
-    #expect(parseServerEvent(#"{"type":"error"}"#) == .errorEvent(code: nil, message: nil))
+    #expect(
+      parseServerEvent(#"{"type":"error"}"#)
+        == .errorEvent(code: nil, message: nil, params: nil, eventId: nil)
+    )
     #expect(
       parseServerEvent(
         #"{"type":"error","error":{"type":"invalid_request_error","code":"bad_request","message":"nested oops"}}"#
-      ) == .errorEvent(code: "bad_request", message: "nested oops")
+      ) == .errorEvent(code: "bad_request", message: "nested oops", params: nil, eventId: nil)
+    )
+  }
+
+  @Test
+  func nestedInvalidEventKeepsParamsAndEventId() throws {
+    let params =
+      "1 validation error for RealtimeClientEvent\ntype\n  Input should be '<enum>' [type=enum, input_value='not.a.real.event', input_type=str]"
+    let payload: [String: Any] = [
+      "type": "error",
+      "event_id": "evt_1",
+      "error": [
+        "type": "invalid_request_error",
+        "code": "invalid_event",
+        "message": "Invalid event received",
+        "params": params,
+      ],
+    ]
+    let data = try JSONSerialization.data(withJSONObject: payload)
+    let frame = String(decoding: data, as: UTF8.self)
+    let parsed = parseServerEvent(frame)
+    #expect(
+      parsed
+        == .errorEvent(
+          code: "invalid_event",
+          message: "Invalid event received",
+          params: params,
+          eventId: "evt_1"
+        )
+    )
+    #expect(
+      formatVoiceServerError(message: "Invalid event received", params: params)
+        == "Invalid event received (rejected type: not.a.real.event)"
+    )
+  }
+
+  @Test
+  func formatVoiceServerErrorFallsBackToParamsThenMessage() {
+    #expect(
+      formatVoiceServerError(message: "Invalid event received", params: nil)
+        == "Invalid event received"
+    )
+    #expect(
+      formatVoiceServerError(message: nil, params: nil) == "Voice connection failed."
+    )
+    #expect(
+      formatVoiceServerError(message: "boom", params: "field x is required")
+        == "boom — field x is required"
+    )
+    #expect(
+      extractVoiceErrorInputValue(
+        from: #""input_value": "session.Update""#
+      ) == "session.Update"
     )
   }
 

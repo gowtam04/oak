@@ -129,15 +129,19 @@ final class VoiceSession {
     }
 
     // 4. Push the single session.update built from the bootstrap + our sample rate.
-    let sessionUpdate = VoiceClientEvent.sessionUpdate(
-      instructions: bootstrap.session.instructions,
-      voice: bootstrap.session.voice,
-      idleTimeoutMs: bootstrap.session.idleTimeoutMs,
-      sampleRate: audio.sampleRate,
-      reasoningEffort: bootstrap.session.reasoningEffort,
-      tools: bootstrap.session.tools
-    ).encode()
-    guard !sessionUpdate.isEmpty else {
+    //    Encode and send are fail-closed: an empty/thrown encode or a failed
+    //    send must not proceed to mic appends on a dead socket.
+    let sessionUpdate: String
+    do {
+      sessionUpdate = try VoiceClientEvent.sessionUpdate(
+        instructions: bootstrap.session.instructions,
+        voice: bootstrap.session.voice,
+        idleTimeoutMs: bootstrap.session.idleTimeoutMs,
+        sampleRate: audio.sampleRate,
+        reasoningEffort: bootstrap.session.reasoningEffort,
+        tools: bootstrap.session.tools
+      ).encode()
+    } catch {
       fail("Voice connection failed.")
       return
     }
@@ -236,12 +240,17 @@ final class VoiceSession {
         await self?.send(VoiceClientEvent.pong(pingTimestamp: ts))
       }
 
-    case let .errorEvent(code, message):
+    case let .errorEvent(code, message, params, eventId):
       if code == "timeout" || code == "max_duration" {
         // A benign end-of-session signal — tear down cleanly, not as an error.
         end()
       } else {
-        fail(message ?? "Voice connection failed.")
+        // Never log token / PCM / session.update body. params carries pydantic
+        // input_value for invalid_event — that's the overlay diagnosis.
+        Log.network.error(
+          "voice server error code=\(code ?? "", privacy: .public) event_id=\(eventId ?? "", privacy: .public) params=\(params ?? "", privacy: .public)"
+        )
+        fail(formatVoiceServerError(message: message, params: params))
       }
 
     case .sessionCreated, .sessionUpdated, .speechStopped, .committed:
@@ -326,10 +335,17 @@ final class VoiceSession {
     connection = nil
   }
 
-  /// Send one client event if encoding produced a frame. An empty encode is a
-  /// no-op on the live path (never a blank socket frame).
+  /// Send one client event. Encode failure is logged and skipped (never a blank
+  /// socket frame). `session.update` is encoded in ``start()`` so a thrown
+  /// encode there fails the session instead of dropping the configuring frame.
   private func send(_ event: VoiceClientEvent) async {
-    let frame = event.encode()
+    let frame: String
+    do {
+      frame = try event.encode()
+    } catch {
+      Log.network.error("voice outbound encode failed")
+      return
+    }
     guard !frame.isEmpty else { return }
     await connection?.send(frame)
   }
