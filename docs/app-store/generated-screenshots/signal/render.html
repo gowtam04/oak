@@ -181,14 +181,14 @@
     .tabs {
       flex-shrink: 0;
       height: 10.4%;
-      display: grid; grid-template-columns: repeat(4, 1fr);
+      display: grid; grid-template-columns: repeat(5, 1fr);
       background: rgba(246,247,249,0.96);
       border-top: 1px solid var(--line);
       padding-bottom: 2.6%;
     }
     .tab {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 4px; color: var(--mute); font-size: calc(var(--w) * 0.022); font-weight: 500;
+      gap: 4px; color: var(--mute); font-size: calc(var(--w) * 0.018); font-weight: 500;
     }
     .tab.on { color: var(--red); }
     .tab .ic { font-size: calc(var(--w) * 0.042); line-height: 1; }
@@ -211,6 +211,10 @@
     .row .who { flex: 1; }
     .row .who strong { display: block; font-size: calc(var(--w) * 0.032); font-weight: 600; }
     .row .who span { color: var(--mute); font-size: calc(var(--w) * 0.024); font-weight: 500; }
+    .rank {
+      flex: 0 0 28px; font-family: Plex, ui-monospace, monospace;
+      font-size: calc(var(--w) * 0.026); font-weight: 500; color: var(--mute);
+    }
     .menu {
       margin-top: 2.4%;
       background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
@@ -280,14 +284,24 @@
     </div>
   </div>
   <script>
+    const dock = (on) => `
+          <div class="tabs">
+            <div class="tab${on==="chat"?" on":""}"><div class="ic">▣</div>Chat</div>
+            <div class="tab${on==="teams"?" on":""}"><div class="ic">▦</div>Teams</div>
+            <div class="tab${on==="usage"?" on":""}"><div class="ic">▤</div>Usage</div>
+            <div class="tab${on==="dex"?" on":""}"><div class="ic">☰</div>Dex</div>
+            <div class="tab${on==="settings"?" on":""}"><div class="ic">●</div>Settings</div>
+          </div>`;
+    const chip = `
+            <div class="scope"><span class="led"></span>Champions · Reg M-B</div>`;
     const frames = {
       1: {
         h: "Answers, with the why",
-        s: "Reasoning, sources, and a clear flag when something is inferred.",
+        s: "Champions reasoning, sources, and a clear flag when something is inferred.",
         ui: `
           <div class="header">
             <div class="wordmark">Oak<i>.</i></div>
-            <div class="scope"><span class="led"></span>National Dex</div>
+            ${chip}
             <div class="new">✎</div>
           </div>
           <div class="body">
@@ -295,11 +309,11 @@
             <div class="note">Does Garchomp outspeed Dragapult at +1?</div>
             <div class="plate">
               <div class="lead">Not without a scarf or a bigger Speed investment.</div>
-              <div class="prose">Dragapult’s 142 base Speed still wins the unboosted race. A +1 Garchomp needs 252 Speed and a boosting nature to get close — and still loses to a similarly invested Dragapult.</div>
+              <div class="prose">Dragapult’s 142 base Speed still wins the unboosted race. A +1 Garchomp needs 32 Speed Stat Points and a boosting nature to get close — and still loses to a similarly invested Dragapult.</div>
               <div class="facts">
                 <div class="fact"><span class="k">Garchomp base Spe</span><span class="v">102</span></div>
                 <div class="fact"><span class="k">Dragapult base Spe</span><span class="v">142</span></div>
-                <div class="fact"><span class="k">+1 Garchomp, 252 Jolly</span><span class="v">253</span></div>
+                <div class="fact"><span class="k">+1 Garchomp, 32 Spe Jolly</span><span class="v">253</span></div>
               </div>
               <div class="subject">
                 <div class="sprite"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/445.png" alt=""></div>
@@ -308,45 +322,35 @@
                   <div class="types"><span class="type dragon">Dragon</span><span class="type ground">Ground</span></div>
                 </div>
               </div>
-              <div class="inferred"><b>Inferred</b> from base stats at level 50 — no EV spread was given for Dragapult.</div>
+              <div class="inferred"><b>Inferred</b> from base stats at level 50 — no Stat Point spread was given for Dragapult.</div>
               <div class="meta-row"><span class="pill">Why</span><span class="pill">Sources · 2</span></div>
             </div>
           </div>
           <div class="composer"><div class="ph">Ask Oak…</div><div class="send">↑</div></div>
-          <div class="tabs">
-            <div class="tab on"><div class="ic">▣</div>Chat</div>
-            <div class="tab"><div class="ic">▦</div>Teams</div>
-            <div class="tab"><div class="ic">▤</div>Dex</div>
-            <div class="tab"><div class="ic">●</div>Account</div>
-          </div>`
+          ${dock("chat")}`
       },
       2: {
-        h: "Build a full team",
-        s: "Species, item, moves, nature, EVs, IVs — then save it for chat.",
+        h: "Build a Champions team",
+        s: "Species, item, moves, nature, Stat Points — then save it for chat.",
         ui: `
-          <div class="title-lg">Reg H Balance</div>
-          <div class="title-sub">6 / 6 · National Dex</div>
+          <div class="title-lg">Reg M-B Doubles</div>
+          <div class="title-sub">6 / 6 · Champions</div>
           <div class="body" style="padding-top:0">
             ${[
-              [445,"Garchomp","Jolly · Choice Scarf","dragon","ground"],
-              [887,"Dragapult","Timid · Choice Specs","dragon","ghost"],
-              [1008,"Miraidon","Modest · Choice Specs","electric","dragon"],
-              [1000,"Gholdengo","Timid · Air Balloon","steel","ghost"],
-              [983,"Kingambit","Adamant · Leftovers","dark","steel"],
-              [908,"Meowscarada","Jolly · Choice Band","grass","dark"],
-            ].map(([n,name,meta,a,b]) => `
+              [445,"Garchomp","Jolly · Choice Scarf","dragon"],
+              [887,"Dragapult","Timid · Choice Specs","dragon"],
+              [1008,"Miraidon","Modest · Choice Specs","electric"],
+              [1000,"Gholdengo","Timid · Air Balloon","steel"],
+              [983,"Kingambit","Adamant · Leftovers","dark"],
+              [908,"Meowscarada","Jolly · Choice Band","grass"],
+            ].map(([n,name,meta,a]) => `
               <div class="row">
                 <div class="sprite"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${n}.png" alt=""></div>
                 <div class="who"><strong>${name}</strong><span>${meta}</span></div>
                 <div class="types"><span class="type ${a}">${a[0].toUpperCase()+a.slice(1)}</span></div>
               </div>`).join("")}
           </div>
-          <div class="tabs">
-            <div class="tab"><div class="ic">▣</div>Chat</div>
-            <div class="tab on"><div class="ic">▦</div>Teams</div>
-            <div class="tab"><div class="ic">▤</div>Dex</div>
-            <div class="tab"><div class="ic">●</div>Account</div>
-          </div>`
+          ${dock("teams")}`
       },
       3: {
         h: "Retry, share, keep going",
@@ -354,24 +358,24 @@
         ui: `
           <div class="header">
             <div class="wordmark">Oak<i>.</i></div>
-            <div class="scope"><span class="led"></span>National Dex</div>
+            ${chip}
             <div class="new">✎</div>
           </div>
           <div class="body">
-            <div class="note">Best Tera for Kingambit into Flutter Mane?</div>
+            <div class="note">Best Mega for Garchomp into Flutter Mane?</div>
             <div class="plate">
-              <div class="lead">Tera Dark keeps the STAB and the immunity.</div>
-              <div class="prose">Flutter Mane’s Fairy STAB is the problem. Tera Dark keeps Kowtow Cleave and Sucker Punch, and it turns Fairy into a resist instead of a KO.</div>
+              <div class="lead">Mega Garchomp wins the Speed tier and the KO.</div>
+              <div class="prose">Flutter Mane’s Fairy STAB is the problem. Mega Garchomp’s extra Attack and Speed let Outrage (or Dragon Claw) force the KO before Flutter Mane can fire.</div>
               <div class="subject">
-                <div class="sprite"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/983.png" alt=""></div>
+                <div class="sprite"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/445.png" alt=""></div>
                 <div>
-                  <div><span class="name">Kingambit</span><span class="dex">#0983</span></div>
-                  <div class="types"><span class="type dark">Dark</span><span class="type steel">Steel</span></div>
+                  <div><span class="name">Garchomp</span><span class="dex">#0445</span></div>
+                  <div class="types"><span class="type dragon">Dragon</span><span class="type ground">Ground</span></div>
                 </div>
               </div>
               <div class="chips">
-                <span class="chip">Open Kingambit in Dex</span>
-                <span class="chip">Switch to Champions</span>
+                <span class="chip">Open Garchomp in Dex</span>
+                <span class="chip">Place on team</span>
               </div>
               <div class="menu">
                 <button>Copy as human text</button>
@@ -382,42 +386,30 @@
             </div>
           </div>
           <div class="composer"><div class="ph">Ask Oak…</div><div class="send">↑</div></div>
-          <div class="tabs">
-            <div class="tab on"><div class="ic">▣</div>Chat</div>
-            <div class="tab"><div class="ic">▦</div>Teams</div>
-            <div class="tab"><div class="ic">▤</div>Dex</div>
-            <div class="tab"><div class="ic">●</div>Account</div>
-          </div>`
+          ${dock("chat")}`
       },
       4: {
-        h: "One tap, new ruleset",
-        s: "Scope sticks the moment you pick it — chat, Dex, and teams follow.",
+        h: "Live Champions usage",
+        s: "Doubles by default, Singles as a second view — dated as a snapshot.",
         ui: `
-          <div class="header">
-            <div class="wordmark">Oak<i>.</i></div>
-            <div class="scope"><span class="led"></span>National Dex</div>
-            <div class="new">✎</div>
+          <div class="title-lg">Usage</div>
+          <div class="title-sub">Doubles · Regulation M-B</div>
+          <div class="body" style="padding-top:0">
+            ${[
+              [1,983,"Kingambit","Dark / Steel"],
+              [2,445,"Garchomp","Dragon / Ground"],
+              [3,1000,"Gholdengo","Steel / Ghost"],
+              [4,887,"Dragapult","Dragon / Ghost"],
+              [5,908,"Meowscarada","Grass / Dark"],
+              [6,1008,"Miraidon","Electric / Dragon"],
+            ].map(([rank,n,name,meta]) => `
+              <div class="row">
+                <div class="rank">${rank}</div>
+                <div class="sprite"><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${n}.png" alt=""></div>
+                <div class="who"><strong>${name}</strong><span>${meta}</span></div>
+              </div>`).join("")}
           </div>
-          <div class="body">
-            <div class="picker">
-              <div class="pick head">Recent</div>
-              <div class="pick on"><span class="bar"></span><span class="lab">National Dex</span></div>
-              <div class="pick"><span class="bar"></span><span class="lab">Champions</span></div>
-              <div class="pick head">All scopes</div>
-              <div class="pick"><span class="bar"></span><span class="lab">Scarlet &amp; Violet</span></div>
-              <div class="pick"><span class="bar"></span><span class="lab">Sword &amp; Shield</span></div>
-              <div class="pick"><span class="bar"></span><span class="lab">Ultra Sun / Ultra Moon</span></div>
-              <div class="pick"><span class="bar"></span><span class="lab">XY / ORAS</span></div>
-              <div class="pick"><span class="bar"></span><span class="lab">Black 2 / White 2</span></div>
-            </div>
-          </div>
-          <div class="composer"><div class="ph">Ask Oak…</div><div class="send">↑</div></div>
-          <div class="tabs">
-            <div class="tab on"><div class="ic">▣</div>Chat</div>
-            <div class="tab"><div class="ic">▦</div>Teams</div>
-            <div class="tab"><div class="ic">▤</div>Dex</div>
-            <div class="tab"><div class="ic">●</div>Account</div>
-          </div>`
+          ${dock("usage")}`
       },
       5: {
         h: "See the math",
@@ -425,7 +417,7 @@
         ui: `
           <div class="header">
             <div class="wordmark">Oak<i>.</i></div>
-            <div class="scope"><span class="led"></span>National Dex</div>
+            ${chip}
             <div class="new">✎</div>
           </div>
           <div class="body" style="opacity:.38">
@@ -433,12 +425,7 @@
             <div class="plate"><div class="lead">It KOs from full after Stealth Rock.</div></div>
           </div>
           <div class="composer"><div class="ph">Ask Oak…</div><div class="send">↑</div></div>
-          <div class="tabs">
-            <div class="tab on"><div class="ic">▣</div>Chat</div>
-            <div class="tab"><div class="ic">▦</div>Teams</div>
-            <div class="tab"><div class="ic">▤</div>Dex</div>
-            <div class="tab"><div class="ic">●</div>Account</div>
-          </div>
+          ${dock("chat")}
           <div class="sheet">
             <div class="grab"></div>
             <div class="subject" style="margin-top:0">
@@ -455,9 +442,9 @@
               <div class="fact"><span class="k">After rocks</span><span class="v">OHKO</span></div>
               <div class="fact"><span class="k">Defender</span><span class="v">Flutter Mane</span></div>
             </div>
-            <div class="inferred" style="margin-top:12px"><b>Inferred</b> level 50, 252 Atk Adamant vs 0/0 Flutter Mane.</div>
+            <div class="inferred" style="margin-top:12px"><b>Inferred</b> level 50, 32 Atk Stat Points Adamant vs 0/0 Flutter Mane.</div>
           </div>
-          ` 
+          `
       },
       6: {
         h: "Start now. Sign in later.",
@@ -465,7 +452,7 @@
         ui: `
           <div class="header">
             <div class="wordmark">Oak<i>.</i></div>
-            <div class="scope"><span class="led"></span>National Dex</div>
+            ${chip}
             <div class="new">✎</div>
           </div>
           <div class="body starters">
@@ -474,22 +461,17 @@
               <div class="who"><div class="cat">Battle</div><strong>Who outspeeds Dragapult after one Dragon Dance?</strong></div>
             </div>
             <div class="row">
-              <div class="who"><div class="cat">Dex</div><strong>What does Armor Tail actually block?</strong></div>
+              <div class="who"><div class="cat">Teams</div><strong>How should I spend 66 Stat Points on Kingambit?</strong></div>
             </div>
             <div class="row">
-              <div class="who"><div class="cat">Rules</div><strong>Is Terapagos legal in the current regulation?</strong></div>
+              <div class="who"><div class="cat">Rules</div><strong>Is Mega Garchomp legal in Regulation M-B?</strong></div>
             </div>
             <div class="row">
-              <div class="who"><div class="cat">Meta</div><strong>What’s seeing the most usage in Champions right now?</strong></div>
+              <div class="who"><div class="cat">Usage</div><strong>What’s seeing the most usage in Doubles right now?</strong></div>
             </div>
           </div>
           <div class="composer"><div class="ph">Ask Oak…</div><div class="send">↑</div></div>
-          <div class="tabs">
-            <div class="tab on"><div class="ic">▣</div>Chat</div>
-            <div class="tab"><div class="ic">▦</div>Teams</div>
-            <div class="tab"><div class="ic">▤</div>Dex</div>
-            <div class="tab"><div class="ic">●</div>Account</div>
-          </div>`
+          ${dock("chat")}`
       }
     };
 

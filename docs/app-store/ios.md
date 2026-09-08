@@ -73,9 +73,13 @@ by this listing).
 
 ## What's New (this release)
 
-**1.2 (build 51) — Champions-first.** Pair this listing with the 1.2 TestFlight
-binary (regulation chip, Usage tab, archive, Stat Point editor). 1.1.1 below is
-the previous in-review train and is **not** this listing.
+**1.2 (build 51) — Champions-first.** Submitted 2026-09-08
+(`WAITING_FOR_REVIEW`, `releaseType: AFTER_APPROVAL`). Same ASC version
+record as 1.1.1 (created 2026-08-16): the 1.1.1 review was cancelled and
+retargeted to 1.2 + build 51 so the Champions listing ships instead of the
+pre-Champions 1.1.1 binary. Live 1.0.2 promotional text was updated the
+same day (no resubmission). App name on this version is `Oak – AI Coach`
+(live 1.0.2 still shows `Oak – AI Battle Coach` until 1.2 is approved).
 
 ```
 What's new
@@ -86,12 +90,12 @@ What's new
 • Other games are declined; off-roster names are called out honestly
 ```
 
-**1.1.1 (build 50) — in-review train (not Champions listing)** — submitted
-2026-09-07 (`WAITING_FOR_REVIEW`, `releaseType: AFTER_APPROVAL`). ASC version
-was the 1.1 record (created 2026-08-16, approved then held as
-`PENDING_DEVELOPER_RELEASE` on build 45); that hold was developer-rejected and
-retargeted as 1.1.1 so users never got the stale 1.1 binary. What's New covers
-everything since 1.0.2 (the last version that shipped). 1.0.3 and 1.1 were
+**1.1.1 (build 50) — cancelled 2026-09-08** so 1.2 could take the listing.
+Submitted 2026-09-07 (`WAITING_FOR_REVIEW`, `releaseType: AFTER_APPROVAL`),
+then developer-rejected. ASC version was the 1.1 record (created 2026-08-16,
+approved then held as `PENDING_DEVELOPER_RELEASE` on build 45); that hold was
+developer-rejected and retargeted as 1.1.1 so users never got the stale 1.1
+binary. What's New covered everything since 1.0.2. 1.0.3 and 1.1 were
 TestFlight / unreleased.
 
 ```

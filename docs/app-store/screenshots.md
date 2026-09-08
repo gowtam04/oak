@@ -1,6 +1,12 @@
 # Oak — App Store Screenshot Guide (iOS)
 
-6 frames for **1.1**, rebuilt in **Signal** (`docs/design/signal.md`). Source renderer: `docs/app-store/generated-screenshots/signal/render.html`. Uploaded PNGs live in `generated-screenshots/signal/flat-1290/` (6.7") and `1284x2778/` (6.5"). Promo preview: `generated-screenshots/signal/oak-1.1-preview.mp4` (26s, 886×1920).
+6 frames for **1.2 (Champions-first)**, rebuilt in **Signal**
+(`docs/design/signal.md`). Source renderer:
+`docs/app-store/generated-screenshots/signal/render.html`. Uploaded PNGs live
+in `generated-screenshots/signal/flat-1290/` / `1290x2796/` (6.7") and
+`1284x2778/` (6.5"). Uploaded to ASC on 2026-09-08 with the 1.2 listing.
+Promo preview `oak-1.1-preview.mp4` is the prior 1.1 train and was **not**
+attached to 1.2.
 
 No trademarked wording in marketing headlines. In-app UI may show species names, as the product does.
 
@@ -10,7 +16,8 @@ No trademarked wording in marketing headlines. In-app UI may show species names,
 - **Typography**: Figtree 600 headlines / 400–500 body. IBM Plex Mono only in fact tables.
 - **Mood**: calm daylight. No cream, no gold wash, no red header, no Instrument chassis.
 - **Device**: generic black iPhone with Dynamic Island, no tilt.
-- **Tabs**: Chat / Teams / Dex / Account — match `RootView`.
+- **Tabs**: Chat / Teams / Usage / Dex / Settings — match `OakAppTab`.
+- **Chip**: display-only `Champions · Reg M-B` (not a National Dex / gen picker).
 
 ## Screenshot dimensions
 
@@ -23,39 +30,27 @@ No trademarked wording in marketing headlines. In-app UI may show species names,
 
 ### Frame 1 of 6 — Hook: reasoned, cited answers
 
-**Headline:** "Answers, Not Just Data"
-**Subheadline:** "Ask anything — get reasoning, sources, and honesty about what's uncertain."
-**App screen featured:** The Chat tab's thread view (`ChatThreadScreen`), scrolled to a fully expanded `AnswerCardView` — the answer markdown text, an expanded "Reasoning" section beneath it, 2–3 small citation chips, and one visible inference/uncertainty flag (icon + short label, not color-only).
-**Composition and device:** iPhone mockup centered, tilted ~8° clockwise. Headline sits above the device; subheadline directly beneath the headline, above the device's top edge.
-**Background and color treatment:** Soft top-to-bottom gradient from warm cream `#FBF7EE` to a pale red-tinted cream `#F7E9E6` — introduces the brand red without overwhelming a frame about trust and clarity.
-**Mood and energy:** Calm, confident, trustworthy — this frame has to work as a standalone hook.
+**Headline:** "Answers, with the why"
+**Subheadline:** "Champions reasoning, sources, and a clear flag when something is inferred."
+**App screen featured:** Chat thread with a Garchomp vs Dragapult Speed answer, Stat Points (not EVs), `Inferred` flag, and the `Champions · Reg M-B` chip.
 
-### Frame 2 of 6 — Core feature: competitive team builder
+### Frame 2 of 6 — Core feature: Champions team builder
 
-**Headline:** "Build Your Battle Team"
-**Subheadline:** "Full competitive sets — species, item, moves, nature, EVs, IVs, Tera type."
-**App screen featured:** The team editor screen (Teams feature) with one roster slot mid-edit — move-slot pickers, a nature dropdown, and EV sliders all visible and partially filled — plus 2–3 other completed slots shown collapsed in a list below it.
-**Composition and device:** Device centered, no tilt (this frame is about precision, not motion). Headline above the device.
-**Background and color treatment:** Bold gradient from brand red `#EE5A5A` to a deeper red `#D94545`; the editor's light-card UI floats with a soft drop shadow for contrast.
-**Mood and energy:** Energetic, capable — "you can build something real here."
+**Headline:** "Build a Champions team"
+**Subheadline:** "Species, item, moves, nature, Stat Points — then save it for chat."
+**App screen featured:** Teams list titled `Reg M-B Doubles`, six Champions slots, Teams tab selected.
 
-### Frame 3 of 6 — Core feature: team import/export
+### Frame 3 of 6 — Core feature: retry / share
 
-**Headline:** "Import Teams Instantly"
-**Subheadline:** "Paste a team string from your favorite calculator — Oak builds it for you."
-**App screen featured:** The team-import sheet, showing a block of pasted team text on one side visually transforming (via a small arrow/transform motif) into a populated, formatted team list on the other.
-**Composition and device:** Device centered; a small secondary translucent card floats beside the phone showing a "paste" icon/cursor, illustrating the import action without needing extra screen real estate inside the mockup.
-**Background and color treatment:** Light gradient from white to brand azure `#3AA0E3` at the edges — ties the frame to the accent color used for actions/links in the real app.
-**Mood and energy:** Efficient, frictionless — emphasize speed.
+**Headline:** "Retry, share, keep going"
+**Subheadline:** "Edit a typo, copy a clean answer, or share a public link."
+**App screen featured:** Mega Garchomp vs Flutter Mane answer with copy/share/pin/retry.
 
-### Frame 4 of 6 — Core feature: regulation-format toggle
+### Frame 4 of 6 — Core feature: live usage
 
-**Headline:** "Switch Formats Instantly"
-**Subheadline:** "One toggle scopes your entire chat to the current competitive ruleset."
-**App screen featured:** The header/toolbar area showing the format toggle control mid-tap (a two-state switch), with the chat content below visibly reflecting the alternate format's data/tag.
-**Composition and device:** Device tilted ~8° counter-clockwise (opposite of Frame 1, for set rhythm). Headline above the device.
-**Background and color treatment:** Split-gradient background — left half fades from brand gold `#F5A524`, right half fades from brand red `#EE5A5A` — visually representing "before/after the switch."
-**Mood and energy:** Precise, in control.
+**Headline:** "Live Champions usage"
+**Subheadline:** "Doubles by default, Singles as a second view — dated as a snapshot."
+**App screen featured:** Usage tab leaderboard (Kingambit #1), `Doubles · Regulation M-B`.
 
 ### Frame 5 of 6 — Core feature: artifact viewer drill-down
 
