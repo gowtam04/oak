@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Full species usage drill-in for a Pokémon artifact (Summary's sibling tab).
-/// Same lists as the Usage tab: ladder, snapshot, six share rows, Apply.
+/// Same lists as the Usage tab: ladder, snapshot, six share rows.
 struct PokemonUsagePane: View {
   let slug: String
   var onOpen: (EntityKind, String) -> Void
@@ -51,7 +51,7 @@ struct PokemonUsagePane: View {
   }
 }
 
-/// Snapshot + share lists + Apply, laid out for a parent `ScrollView`
+/// Snapshot + share lists, laid out for a parent `ScrollView`
 /// (the artifact sheet already scrolls — do not nest a `List`).
 struct UsageSpeciesStack: View {
   let detail: UsageSpeciesResponse
@@ -108,8 +108,6 @@ struct UsageSpeciesStack: View {
     usageGroup("Natures", kind: .natures, entries: detail.natures)
     usageGroup("Spreads", kind: .spreads, entries: detail.spreads)
     usageGroup("Teammates", kind: .teammates, entries: detail.teammates)
-
-    ApplyChampionsSetButton(species: detail.slug ?? slug)
   }
 
   @ViewBuilder

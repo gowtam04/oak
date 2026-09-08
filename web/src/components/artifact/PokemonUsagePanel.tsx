@@ -1,7 +1,7 @@
 /**
  * Live Champions usage drill-in for a Pokémon artifact's Usage tab.
  * Same payload as `/usage/[slug]`: ladder, snapshot chrome, six share lists,
- * representative set, Apply. Nested names stay in the artifact stack.
+ * representative set. Nested names stay in the artifact stack.
  */
 
 "use client";
@@ -9,7 +9,6 @@
 import { useEffect, useState } from "react";
 
 import CopyShowdownSet from "@/components/meta/CopyShowdownSet";
-import ApplyUsageSet from "@/app/(reference)/usage/apply-usage-set";
 import UsageFetchedAt from "@/app/(reference)/usage/usage-fetched-at";
 import UsageSourceNote from "@/app/(reference)/usage/usage-source-note";
 import { CHAMPIONS_REGULATION } from "@/data/formats";
@@ -116,7 +115,6 @@ function FoundBody({
         <CopyShowdownSet
           exportText={usageShowdownExport(view.saved_name, view)}
         />
-        <ApplyUsageSet species={view.slug} />
       </section>
     </>
   );

@@ -42,7 +42,7 @@ const found = {
 };
 
 describe("PokemonUsagePanel", () => {
-  it("renders the six usage lists, set, and apply from a found payload", async () => {
+  it("renders the six usage lists and representative set from a found payload", async () => {
     vi.mocked(fetchUsageSpecies).mockResolvedValue(found);
     render(<PokemonUsagePanel slug="garchomp" />);
 
@@ -56,7 +56,7 @@ describe("PokemonUsagePanel", () => {
     expect(screen.getByText("Farigiraf")).toBeInTheDocument();
     expect(screen.getByText("90.3%")).toBeInTheDocument();
     expect(screen.getByTestId("copy-showdown-set")).toBeInTheDocument();
-    expect(screen.getByTestId("apply-usage-set")).toBeInTheDocument();
+    expect(screen.queryByTestId("apply-usage-set")).not.toBeInTheDocument();
     expect(fetchUsageSpecies).toHaveBeenCalledWith("garchomp", "doubles");
   });
 
