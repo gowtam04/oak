@@ -8,7 +8,7 @@ Champions-first (CF-INT-BR-10, CF-AS-6): listing copy describes Oak as a **Poké
 
 - [`ios.md`](./ios.md) — App Store Connect fields (Name, Subtitle, Promotional Text, Description, Keywords, What's New) with character counts.
 - [`aso-keywords.md`](./aso-keywords.md) — keyword research: Tier 1/2/3 terms, the literal iOS Keywords string, and competitor analysis.
-- [`screenshots.md`](./screenshots.md) — 6-frame screenshot production guide (Signal, Champions-first).
+- [`screenshots.md`](./screenshots.md) — 6-frame screenshot production guide. The 1.2 set currently on App Store Connect is still Signal; regenerate in Enamel with [`enamel-screenshots-agent-prompt.md`](./enamel-screenshots-agent-prompt.md).
 
 ## Trademark policy applied throughout
 
