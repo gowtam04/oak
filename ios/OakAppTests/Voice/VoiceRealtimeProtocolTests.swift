@@ -96,7 +96,7 @@ struct VoiceRealtimeProtocolTests {
 
     let encoded = try event.encode()
     try assertSingleJSONObject(encoded)
-    #expect(encoded.hasPrefix("{\"type\":\"session.update\""))
+    // JSONEncoder does not guarantee key order; pin the value, not the prefix.
     #expect(encoded.contains("\"type\":\"session.update\""))
     let obj = try decodeJSONObject(encoded)
     #expect(obj["type"] as? String == "session.update")
