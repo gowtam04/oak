@@ -1,6 +1,13 @@
 import AVFoundation
 import Foundation
 
+/// Kill switch for starting a realtime voice session from the composer.
+/// Capture is off on iOS until the overlay is reliable; voice-origin answer
+/// chrome (mic glyph, hydrate retry) stays so web-spoken turns still render.
+enum VoiceCapture {
+  static let isEnabled = false
+}
+
 /// The composer's mic-button decision, factored out of ``ComposerView`` so the
 /// sign-in / permission / start branches are unit-testable without standing up
 /// the composer or `AVAudioApplication`.

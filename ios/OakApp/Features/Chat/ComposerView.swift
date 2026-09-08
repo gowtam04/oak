@@ -4,7 +4,8 @@ import SwiftUI
 import UIKit
 
 /// The chat composer (chat-experience.md M-CHAT-US-1/5): a growing text field, a
-/// send button, a voice-mode mic (signed-in starts a session; guests get a
+/// send button, a voice-mode mic gated by ``VoiceCapture/isEnabled`` (off until
+/// the realtime overlay is reliable; signed-in starts a session; guests get a
 /// sign-in nudge), and (P8) image attach — the photo library (`PhotosPicker`) or
 /// the camera (``CameraPicker``) behind one attach menu — with thumbnail/remove
 /// UI and permission handling. Scope is no longer set here: the header scope chip
@@ -102,7 +103,9 @@ struct ComposerView: View {
 
       HStack(alignment: .bottom, spacing: 8) {
         attachControls(model: model)
-        voiceControl(model: model)
+        if VoiceCapture.isEnabled {
+          voiceControl(model: model)
+        }
 
         TextField("Ask Oak", text: $model.composerText, axis: .vertical)
           .font(Theme.body(.body))
@@ -249,7 +252,8 @@ struct ComposerView: View {
 
   // MARK: Voice control (mic button)
 
-  /// The mic button: always visible (matches the attach control), disabled only
+  /// The mic button: hidden while ``VoiceCapture/isEnabled`` is false. When
+  /// capture is on it matches the attach control and is disabled only
   /// mid-stream. A tap runs ``handleMicTap()``, which branches on sign-in state
   /// and then the microphone permission before ever calling ``onVoice``.
   @ViewBuilder
@@ -282,6 +286,7 @@ struct ComposerView: View {
   /// `.fullScreenCover` over a live first responder is a SwiftUI failure mode
   /// (the cover flashes and tears down), which looks like "voice does nothing."
   private func handleMicTap() {
+    guard VoiceCapture.isEnabled else { return }
     isInputFocused = false
     switch VoiceMicGate.action(
       voiceReady: voiceReady,

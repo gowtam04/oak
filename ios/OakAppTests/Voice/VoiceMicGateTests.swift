@@ -9,6 +9,11 @@ import Testing
 struct VoiceMicGateTests {
 
   @Test
+  func composerCaptureIsDisabled() {
+    #expect(VoiceCapture.isEnabled == false)
+  }
+
+  @Test
   func signedOutAlwaysNudgeSignInRegardlessOfPermission() {
     #expect(
       VoiceMicGate.action(voiceReady: false, permission: .granted) == .signIn

@@ -124,7 +124,10 @@ struct ChatView: View {
       }
       ComposerView(
         model: model,
-        onVoice: { isVoicePresented = true },
+        onVoice: {
+          guard VoiceCapture.isEnabled else { return }
+          isVoicePresented = true
+        },
         voiceReady: voiceReady,
         onSignInNudge: signInAction,
         sendPulse: sendPulse,
@@ -279,12 +282,15 @@ struct ChatView: View {
     // Host the artifact bottom sheet once at the screen level; pushing an entity
     // opens it, an empty back stack closes it (M-AC-A3.3, M-BR-ART-5).
     .artifactViewerHost(artifactModel)
-    // Voice mode (T5): a fresh `VoiceLauncher` — and a fresh `VoiceSession` — is
-    // built every time this opens. However it closes (End button, `.onDisappear`
-    // teardown, anything else), the `isVoicePresented` binding flips back to
-    // false, which is what triggers the post-session refresh below.
+    // Voice mode (T5): capture is gated by ``VoiceCapture/isEnabled``. When on,
+    // a fresh `VoiceLauncher` — and a fresh `VoiceSession` — is built every
+    // time this opens. However it closes (End button, `.onDisappear` teardown,
+    // anything else), the `isVoicePresented` binding flips back to false,
+    // which is what triggers the post-session refresh below.
     .fullScreenCover(isPresented: $isVoicePresented) {
-      VoiceLauncher(sessionId: model.sessionId, format: model.displayFormat)
+      if VoiceCapture.isEnabled {
+        VoiceLauncher(sessionId: model.sessionId, format: model.displayFormat)
+      }
     }
     .onChange(of: isVoicePresented) { wasPresented, isPresented in
       if wasPresented, !isPresented { refreshAfterVoice() }
