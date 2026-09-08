@@ -58,8 +58,8 @@ enum ExamplePrompts {
       prompt: "Damage from a 120 BP STAB super-effective hit vs 95 Defense"
     ),
     FiledStarter(
-      category: .battle, typeDot: "water",
-      prompt: "How much HP does a fully invested Blissey have?"
+      category: .battle, typeDot: "rock",
+      prompt: "How much HP does Garganacl have with max HP Stat Points?"
     ),
     FiledStarter(
       category: .battle, typeDot: "dragon",
@@ -79,7 +79,7 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .battle, typeDot: "dragon",
-      prompt: "Can Dragapult outspeed Flutter Mane with a Choice Scarf?"
+      prompt: "Can Dragapult outspeed Gholdengo with a Choice Scarf?"
     ),
     FiledStarter(
       category: .battle, typeDot: "dark",
@@ -106,8 +106,8 @@ enum ExamplePrompts {
       prompt: "How do I build a team from the Pokémon I own?"
     ),
     FiledStarter(
-      category: .battle, typeDot: "fairy",
-      prompt: "Best Stat Point spread for Flutter Mane in Champions"
+      category: .battle, typeDot: "steel",
+      prompt: "Best Stat Point spread for Gholdengo in Champions"
     ),
     FiledStarter(
       category: .battle, typeDot: "dragon",
@@ -122,12 +122,12 @@ enum ExamplePrompts {
       prompt: "What's a bulky HP investment for Toxapex?"
     ),
     FiledStarter(
-      category: .battle, typeDot: "fire",
-      prompt: "Can Heatran live a Close Combat from Great Tusk?"
+      category: .battle, typeDot: "dark",
+      prompt: "Can Kingambit live a Close Combat from Garchomp?"
     ),
     FiledStarter(
       category: .battle, typeDot: "fighting",
-      prompt: "What nature should I run on Iron Hands?"
+      prompt: "What nature should I run on Annihilape?"
     ),
     FiledStarter(
       category: .battle, typeDot: "dark",
@@ -154,20 +154,20 @@ enum ExamplePrompts {
       prompt: "What beats Kingambit?"
     ),
     FiledStarter(
-      category: .battle, typeDot: "fairy",
-      prompt: "What's strong against Flutter Mane?"
+      category: .battle, typeDot: "steel",
+      prompt: "What's strong against Gholdengo?"
     ),
     FiledStarter(
       category: .battle, typeDot: "ground",
-      prompt: "Best counters to Great Tusk"
+      prompt: "Best counters to Excadrill"
     ),
     FiledStarter(
       category: .battle, typeDot: "water",
-      prompt: "Can Rapid Strike Urshifu OHKO Incineroar?"
+      prompt: "Can Palafin OHKO Incineroar?"
     ),
     FiledStarter(
       category: .battle, typeDot: "steel",
-      prompt: "Does Gholdengo outspeed Amoonguss?"
+      prompt: "Does Gholdengo outspeed Sinistcha?"
     ),
     FiledStarter(
       category: .battle, typeDot: "rock",
@@ -175,11 +175,11 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .battle, typeDot: "dragon",
-      prompt: "Can a +1 Dragonite Extreme Speed OHKO Flutter Mane?"
+      prompt: "Can a +1 Dragonite Extreme Speed OHKO Dragapult?"
     ),
     FiledStarter(
-      category: .battle, typeDot: "dark",
-      prompt: "What's the Speed tier for Timid Chi-Yu?"
+      category: .battle, typeDot: "steel",
+      prompt: "What's the Speed tier for Timid Gholdengo?"
     ),
     FiledStarter(
       category: .battle, typeDot: "fire",
@@ -191,7 +191,7 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .battle, typeDot: "grass",
-      prompt: "Best Stat Point spread for Rillaboom in Champions"
+      prompt: "Best Stat Point spread for Meowscarada in Champions"
     ),
     FiledStarter(
       category: .battle, typeDot: "electric",
@@ -202,8 +202,8 @@ enum ExamplePrompts {
       prompt: "What's the best nature for Galarian Slowking?"
     ),
     FiledStarter(
-      category: .battle, typeDot: "grass",
-      prompt: "How much HP does Ferrothorn have with max HP Stat Points?"
+      category: .battle, typeDot: "steel",
+      prompt: "How much HP does Corviknight have with max HP Stat Points?"
     ),
     FiledStarter(
       category: .battle, typeDot: "flying",
@@ -211,7 +211,7 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .battle, typeDot: "psychic",
-      prompt: "Can Trick Room let Amoonguss move before Flutter Mane?"
+      prompt: "Can Trick Room let Hatterene move before Dragapult?"
     ),
     FiledStarter(
       category: .battle, typeDot: "ice",
@@ -231,7 +231,7 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .battle, typeDot: "psychic",
-      prompt: "Build me a doubles team around Indeedee"
+      prompt: "Build me a doubles team around Farigiraf"
     ),
     FiledStarter(
       category: .battle, typeDot: "ghost",
@@ -251,15 +251,15 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .dex, typeDot: "fighting",
-      prompt: "Tell me about Iron Valiant"
+      prompt: "Tell me about Annihilape"
     ),
     FiledStarter(
       category: .dex, typeDot: "steel",
       prompt: "Gholdengo's stats and typing"
     ),
     FiledStarter(
-      category: .dex, typeDot: "normal",
-      prompt: "How does Eevee evolve?"
+      category: .dex, typeDot: "psychic",
+      prompt: "What's Gardevoir's evolution line?"
     ),
     FiledStarter(
       category: .dex, typeDot: "normal",
@@ -267,7 +267,7 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .dex, typeDot: "grass",
-      prompt: "How do I evolve Applin?"
+      prompt: "What's Hydrapple's typing?"
     ),
     FiledStarter(
       category: .dex, typeDot: "flying",
@@ -322,8 +322,8 @@ enum ExamplePrompts {
       prompt: "Pokémon with base Attack over 130"
     ),
     FiledStarter(
-      category: .dex, typeDot: "ghost",
-      prompt: "How do I evolve Gimmighoul?"
+      category: .dex, typeDot: "steel",
+      prompt: "What's Gholdengo's evolution line?"
     ),
     FiledStarter(
       category: .dex, typeDot: "electric",
@@ -334,20 +334,20 @@ enum ExamplePrompts {
       prompt: "Which type combination has the most Pokémon?"
     ),
     FiledStarter(
-      category: .dex, typeDot: "poison",
-      prompt: "How many Pokémon are purple?"
+      category: .dex, typeDot: "grass",
+      prompt: "Tell me about Whimsicott"
     ),
     FiledStarter(
       category: .dex, typeDot: "electric",
       prompt: "What are Rotom's forms and their types?"
     ),
     FiledStarter(
-      category: .dex, typeDot: "bug",
-      prompt: "How does Wurmple evolve?"
+      category: .dex, typeDot: "dragon",
+      prompt: "What's Hydreigon's evolution line?"
     ),
     FiledStarter(
-      category: .dex, typeDot: "electric",
-      prompt: "How do I evolve Pawmo?"
+      category: .dex, typeDot: "water",
+      prompt: "What's Palafin's evolution line?"
     ),
     FiledStarter(
       category: .dex, typeDot: "dark",
@@ -355,27 +355,27 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .dex, typeDot: "ground",
-      prompt: "Tell me about Great Tusk"
+      prompt: "Tell me about Excadrill"
     ),
     FiledStarter(
-      category: .dex, typeDot: "water",
-      prompt: "Combined weight of Wailord and Skitty"
+      category: .dex, typeDot: "ghost",
+      prompt: "What's Mimikyu's typing?"
     ),
     FiledStarter(
-      category: .dex, typeDot: "normal",
-      prompt: "Which Pokémon go from dual type to monotype on evolution?"
+      category: .dex, typeDot: "fire",
+      prompt: "Show me Mega Charizard X"
     ),
     FiledStarter(
-      category: .dex, typeDot: "normal",
-      prompt: "Which Pokémon have a higher catch rate than their pre-evolution?"
+      category: .dex, typeDot: "psychic",
+      prompt: "What are Farigiraf's abilities?"
     ),
     FiledStarter(
-      category: .dex, typeDot: "normal",
-      prompt: "Which Pokémon are based on cats?"
+      category: .dex, typeDot: "steel",
+      prompt: "Tell me about Archaludon"
     ),
     FiledStarter(
-      category: .dex, typeDot: "electric",
-      prompt: "How many signature moves does Pikachu have?"
+      category: .dex, typeDot: "steel",
+      prompt: "What's Corviknight's stats?"
     ),
     FiledStarter(
       category: .dex, typeDot: "ice",
@@ -390,12 +390,12 @@ enum ExamplePrompts {
       prompt: "Fastest Electric types"
     ),
     FiledStarter(
-      category: .dex, typeDot: "water",
-      prompt: "Heaviest Pokémon"
+      category: .dex, typeDot: "fighting",
+      prompt: "Tell me about Sneasler"
     ),
     FiledStarter(
-      category: .dex, typeDot: "steel",
-      prompt: "Lightest Pokémon"
+      category: .dex, typeDot: "fire",
+      prompt: "What's Ceruledge's typing?"
     ),
     FiledStarter(
       category: .dex, typeDot: "normal",
@@ -443,15 +443,15 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .dex, typeDot: "water",
-      prompt: "Tell me about Walking Wake"
+      prompt: "Tell me about Basculegion"
     ),
     FiledStarter(
       category: .dex, typeDot: "grass",
-      prompt: "What types does Ogerpon have?"
+      prompt: "What types does Meowscarada have?"
     ),
     FiledStarter(
-      category: .dex, typeDot: "psychic",
-      prompt: "How does Ralts evolve?"
+      category: .dex, typeDot: "fighting",
+      prompt: "What's Gallade's evolution line?"
     ),
     FiledStarter(
       category: .dex, typeDot: "rock",
@@ -459,19 +459,19 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .dex, typeDot: "grass",
-      prompt: "Show me Rillaboom"
+      prompt: "Show me Sinistcha"
     ),
     FiledStarter(
       category: .dex, typeDot: "dark",
       prompt: "Tell me about Incineroar"
     ),
     FiledStarter(
-      category: .dex, typeDot: "fairy",
-      prompt: "What are Flutter Mane's stats?"
+      category: .dex, typeDot: "dark",
+      prompt: "What are Kingambit's stats?"
     ),
     FiledStarter(
-      category: .dex, typeDot: "fighting",
-      prompt: "What types does Urshifu have?"
+      category: .dex, typeDot: "water",
+      prompt: "What types does Palafin have?"
     ),
     FiledStarter(
       category: .rules, typeDot: "ghost",
@@ -498,8 +498,8 @@ enum ExamplePrompts {
       prompt: "What does Armor Tail do?"
     ),
     FiledStarter(
-      category: .rules, typeDot: "grass",
-      prompt: "What does Protosynthesis do?"
+      category: .rules, typeDot: "fire",
+      prompt: "What does Tough Claws do?"
     ),
     FiledStarter(
       category: .rules, typeDot: "electric",
@@ -530,8 +530,8 @@ enum ExamplePrompts {
       prompt: "How does Supreme Overlord work?"
     ),
     FiledStarter(
-      category: .rules, typeDot: "electric",
-      prompt: "What does Booster Energy do?"
+      category: .rules, typeDot: "grass",
+      prompt: "What does Sitrus Berry do?"
     ),
     FiledStarter(
       category: .rules, typeDot: "psychic",
@@ -998,8 +998,8 @@ enum ExamplePrompts {
       prompt: "What is Gholdengo's role in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "water",
-      prompt: "Who has the highest usage in Champions right now?"
+      category: .meta, typeDot: "dragon",
+      prompt: "What's Garchomp's usage in Champions right now?"
     ),
     FiledStarter(
       category: .meta, typeDot: "dark",
@@ -1007,19 +1007,19 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .meta, typeDot: "fire",
-      prompt: "Who is the most used Mega in Champions?"
+      prompt: "What's Mega Charizard X's usage in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "fairy",
-      prompt: "What moves is Flutter Mane running in Champions?"
+      category: .meta, typeDot: "dragon",
+      prompt: "What moves is Dragapult running in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "grass",
-      prompt: "What's Rillaboom's role in Champions?"
+      prompt: "What's Sinistcha's role in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "fighting",
-      prompt: "How common is Urshifu in Champions?"
+      category: .meta, typeDot: "water",
+      prompt: "How common is Palafin in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "dark",
@@ -1027,163 +1027,155 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .meta, typeDot: "ground",
-      prompt: "What's Landorus's role in Champions?"
+      prompt: "What's Excadrill's role in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "grass",
-      prompt: "What's Amoonguss's usage in Champions?"
+      prompt: "What's Whimsicott's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "water",
-      prompt: "Most used Water type in Champions"
+      prompt: "What's Pelipper's usual set in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "dragon",
       prompt: "What's Dragonite's role in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "electric",
-      prompt: "Who is the top restricted Pokémon in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "fairy",
-      prompt: "What item does Flutter Mane usually hold in Champions?"
+      category: .meta, typeDot: "dragon",
+      prompt: "What item does Dragapult usually hold in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "dark",
       prompt: "What's Incineroar's most common item in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "water",
-      prompt: "Who is the most used Pokémon in Champions Doubles?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "water",
-      prompt: "What's the top rain core in Champions?"
+      category: .meta, typeDot: "dragon",
+      prompt: "What's Garchomp's usage in Champions Doubles?"
     ),
     FiledStarter(
       category: .meta, typeDot: "grass",
-      prompt: "Common partners for Rillaboom in Champions"
+      prompt: "Common partners for Sinistcha in Champions"
     ),
     FiledStarter(
-      category: .meta, typeDot: "fairy",
-      prompt: "What's Flutter Mane's usual spread in Champions?"
+      category: .meta, typeDot: "steel",
+      prompt: "What's Gholdengo's usual spread in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "dark",
       prompt: "Who checks Incineroar in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "fire",
-      prompt: "What's the most used Mega stone in Champions?"
+      category: .meta, typeDot: "water",
+      prompt: "What's Mega Swampert's usual item in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "psychic",
-      prompt: "How common is Trick Room in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "What's the best lead in Champions Doubles?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "Who is rising in Champions usage?"
+      prompt: "How common is Hatterene in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "grass",
-      prompt: "What's Amoonguss usually holding in Champions?"
+      prompt: "What's Whimsicott's role in Champions Doubles?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fighting",
-      prompt: "Common items on Urshifu in Champions"
+      prompt: "What's Annihilape's usage in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "ground",
-      prompt: "What's Landorus-Therian's usual set in Champions?"
+      category: .meta, typeDot: "poison",
+      prompt: "What's Toxapex usually holding in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "water",
+      prompt: "Common items on Palafin in Champions"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dragon",
+      prompt: "What's Garchomp's usual set in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "water",
       prompt: "Who pairs with Pelipper in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "dragon",
-      prompt: "What's the most used restricted in Champions Doubles?"
+      category: .meta, typeDot: "steel",
+      prompt: "What's Archaludon's usage in Champions Doubles?"
     ),
     FiledStarter(
       category: .meta, typeDot: "flying",
-      prompt: "How common is Tailwind in Champions?"
+      prompt: "What's Staraptor's usual item in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "dragon",
       prompt: "What's Dragonite's usual item in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "fairy",
-      prompt: "Who are the top supports in Champions?"
+      category: .meta, typeDot: "psychic",
+      prompt: "What's Farigiraf's role in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "steel",
       prompt: "What's Gholdengo's usual moveset in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "How often is Fake Out used in Champions?"
+      category: .meta, typeDot: "dark",
+      prompt: "What's Incineroar's usual moveset in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fire",
-      prompt: "What's the top sun core in Champions?"
+      prompt: "What's Torkoal's usual set in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fire",
       prompt: "Common partners for Torkoal in Champions"
     ),
     FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "Who is the best redirection user in Champions?"
+      category: .meta, typeDot: "fairy",
+      prompt: "What's Clefable's role in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "grass",
-      prompt: "What's Rillaboom's usual item in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "How common is Follow Me in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "flying",
-      prompt: "What's the best speed control in Champions?"
+      prompt: "What's Meowscarada's usual item in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fairy",
-      prompt: "Who is the most used Fairy in Champions?"
+      prompt: "How common is Clefable in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "dark",
-      prompt: "What's Chi-Yu's role in Champions?"
+      category: .meta, typeDot: "flying",
+      prompt: "What's Whimsicott's usual moveset in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "fighting",
-      prompt: "How common is Iron Hands in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "ground",
-      prompt: "What's Great Tusk's usual set in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "ground",
-      prompt: "Who is the best spread attacker in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "psychic",
-      prompt: "Common partners for Indeedee in Champions"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "psychic",
-      prompt: "What's the top Trick Room core in Champions?"
+      category: .meta, typeDot: "fairy",
+      prompt: "What's Sylveon's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "dragon",
-      prompt: "Who is the most used Dragon in Champions?"
+      prompt: "What's Hydreigon's role in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fighting",
+      prompt: "How common is Annihilape in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "ground",
+      prompt: "What's Excadrill's usual set in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dragon",
+      prompt: "What's Garchomp's usual moveset in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "psychic",
+      prompt: "Common partners for Farigiraf in Champions"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "psychic",
+      prompt: "What's Hatterene's usual set in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dragon",
+      prompt: "What's Dragapult's role in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fighting",
@@ -1198,40 +1190,40 @@ enum ExamplePrompts {
       prompt: "What's Mega Swampert's role in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "dark",
-      prompt: "Who is the best Intimidate user in Champions?"
+      category: .meta, typeDot: "fire",
+      prompt: "What's Arcanine's role in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fighting",
-      prompt: "What's the most used Fighting type in Champions?"
+      prompt: "What's Annihilape's role in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "dark",
       prompt: "How common is Kingambit in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "fairy",
-      prompt: "Who checks Flutter Mane in Champions?"
+      category: .meta, typeDot: "steel",
+      prompt: "Who checks Gholdengo in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "steel",
-      prompt: "What's the best Steel type in Champions right now?"
+      prompt: "What's Corviknight's role in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fire",
-      prompt: "How common is Heatran in Champions?"
+      prompt: "How common is Torkoal in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "flying",
-      prompt: "What's Tornadus's role in Champions?"
+      prompt: "What's Staraptor's role in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "ghost",
-      prompt: "Who is the most used Ghost in Champions?"
+      prompt: "What's Gengar's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "rock",
-      prompt: "What's the top sand core in Champions?"
+      prompt: "Who pairs with Tyranitar in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "rock",
@@ -1239,47 +1231,43 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .meta, typeDot: "ice",
-      prompt: "What's the most used Ice type in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "flying",
-      prompt: "Who is the best Tailwind setter in Champions?"
+      prompt: "What's Alolan Ninetales's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "grass",
-      prompt: "What's Ogerpon's usage in Champions?"
+      prompt: "Does Whimsicott set Tailwind in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "grass",
+      prompt: "What's Meowscarada's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "water",
-      prompt: "How common is Walking Wake in Champions?"
+      prompt: "How common is Basculegion in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "electric",
-      prompt: "What's the most used Electric type in Champions?"
+      prompt: "What's Raichu's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "psychic",
-      prompt: "Who is the best terrain setter in Champions?"
+      prompt: "What's Hatterene's role in Champions Doubles?"
     ),
     FiledStarter(
       category: .meta, typeDot: "psychic",
-      prompt: "What's Indeedee's role in Champions Doubles?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "psychic",
-      prompt: "How common is Psychic Terrain in Champions?"
+      prompt: "What's Farigiraf's usual item in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "rock",
-      prompt: "What's the best hazard setter in Champions?"
+      prompt: "What's Glimmora's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "rock",
-      prompt: "Who is the most used Rock type in Champions?"
+      prompt: "What's Garganacl's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "rock",
-      prompt: "What's Salt Cure's usage in Champions?"
+      prompt: "What's Garganacl's usual moveset in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "rock",
@@ -1287,79 +1275,67 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .meta, typeDot: "bug",
-      prompt: "What's the most used Bug type in Champions?"
+      prompt: "What's Volcarona's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "water",
-      prompt: "Who is the best pivot in Champions Doubles?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "dark",
-      prompt: "What's the top hyper offense core in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "How common is Choice Scarf in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "steel",
-      prompt: "What's the most used item in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "fighting",
-      prompt: "Who holds the most Assault Vests in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "ghost",
-      prompt: "What's Covert Cloak usage like in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "How common is Clear Amulet in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "water",
-      prompt: "What's the best rain sweeper in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "grass",
-      prompt: "How often is Grassy Terrain used in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "grass",
-      prompt: "What's the best Grassy Glide user in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "fighting",
-      prompt: "Who checks Urshifu in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "water",
-      prompt: "What's Rapid Strike Urshifu's role in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "dark",
-      prompt: "How common is Single Strike Urshifu in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "dark",
-      prompt: "What's the most used Dark type in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "Who is the best Fake Out user in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "How common is Wide Guard in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "What's the most used Protect user in Champions?"
+      prompt: "What's Pelipper's role in Champions Doubles?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fire",
-      prompt: "Who is rising among Megas in Champions?"
+      prompt: "What's Mega Charizard X's usual set in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dragon",
+      prompt: "What's Garchomp's most common item in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "poison",
+      prompt: "What's Toxapex's usual item in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "psychic",
+      prompt: "Does Farigiraf run Covert Cloak in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dragon",
+      prompt: "Does Garchomp run Clear Amulet in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "water",
+      prompt: "What's Palafin's role in rain in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "grass",
+      prompt: "What's Meowscarada's usual moveset in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "water",
+      prompt: "Who checks Palafin in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "water",
+      prompt: "What's Palafin's role in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "fighting",
+      prompt: "What's Sneasler's role in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dark",
+      prompt: "What's Grimmsnarl's usage in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "normal",
+      prompt: "Does Incineroar run Fake Out in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "poison",
+      prompt: "What's Toxapex's usual moveset in Champions?"
+    ),
+    FiledStarter(
+      category: .meta, typeDot: "dragon",
+      prompt: "What's Mega Garchomp's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "ghost",
@@ -1371,11 +1347,11 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .meta, typeDot: "ice",
-      prompt: "What's the best snow team look in Champions?"
+      prompt: "What's Alolan Ninetales's usual set in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "ice",
-      prompt: "Who is the most used Ice setter in Champions?"
+      prompt: "How common is Alolan Ninetales in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "ice",
@@ -1383,11 +1359,11 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .meta, typeDot: "ice",
-      prompt: "How common is Aurora Veil in Champions?"
+      prompt: "Does Alolan Ninetales run Aurora Veil in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "rock",
-      prompt: "What's the best sand setter in Champions?"
+      prompt: "What's Tyranitar's role in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "ground",
@@ -1395,43 +1371,35 @@ enum ExamplePrompts {
     ),
     FiledStarter(
       category: .meta, typeDot: "ground",
-      prompt: "What's the most used Ground type in Champions?"
+      prompt: "What's Excadrill's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fire",
-      prompt: "What's Entei's role in Champions?"
+      prompt: "What's Arcanine's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fire",
-      prompt: "Who is the most used Fire type in Champions?"
+      prompt: "What's Ceruledge's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "fire",
-      prompt: "What's the top sun sweeper in Champions?"
+      prompt: "What's Mega Charizard Y's usage in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "fire",
-      prompt: "How common is Drought in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "normal",
-      prompt: "What's the most used ability in Champions?"
-    ),
-    FiledStarter(
-      category: .meta, typeDot: "fairy",
-      prompt: "Who is the best support Pokémon in Champions?"
+      category: .meta, typeDot: "grass",
+      prompt: "What's Whimsicott's usual item in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "poison",
       prompt: "What's Toxapex's usage in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "poison",
-      prompt: "How common is Amoonguss over Toedscruel?"
+      category: .meta, typeDot: "grass",
+      prompt: "How common is Sinistcha vs Whimsicott right now?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "poison",
-      prompt: "Who is the most used Poison type in Champions?"
+      category: .meta, typeDot: "rock",
+      prompt: "What's Glimmora's role in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "bug",
@@ -1442,12 +1410,12 @@ enum ExamplePrompts {
       prompt: "How common is Volcarona in Champions?"
     ),
     FiledStarter(
-      category: .meta, typeDot: "electric",
-      prompt: "What's Miraidon's usage in Champions?"
+      category: .meta, typeDot: "steel",
+      prompt: "What's Archaludon's usage in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "electric",
-      prompt: "How common is Raging Bolt in Champions?"
+      prompt: "How common is Raichu in Champions?"
     ),
     FiledStarter(
       category: .meta, typeDot: "ghost",
