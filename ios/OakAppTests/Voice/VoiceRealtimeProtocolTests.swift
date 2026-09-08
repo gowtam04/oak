@@ -21,6 +21,14 @@ struct VoiceRealtimeProtocolTests {
     #expect(VoiceRealtimeProtocol.clientSecretSubprotocol(token: "tok_123") == "xai-client-secret.tok_123")
   }
 
+  @Test
+  func clientSecretSubprotocolDoesNotDoublePrefix() {
+    #expect(
+      VoiceRealtimeProtocol.clientSecretSubprotocol(token: "xai-client-secret.tok_123")
+        == "xai-client-secret.tok_123"
+    )
+  }
+
   // MARK: client event encoding
 
   private func decodeJSONObject(_ text: String) throws -> [String: Any] {
@@ -184,6 +192,11 @@ struct VoiceRealtimeProtocolTests {
         == .errorEvent(code: "bad_request", message: "oops")
     )
     #expect(parseServerEvent(#"{"type":"error"}"#) == .errorEvent(code: nil, message: nil))
+    #expect(
+      parseServerEvent(
+        #"{"type":"error","error":{"type":"invalid_request_error","code":"bad_request","message":"nested oops"}}"#
+      ) == .errorEvent(code: "bad_request", message: "nested oops")
+    )
   }
 
   @Test

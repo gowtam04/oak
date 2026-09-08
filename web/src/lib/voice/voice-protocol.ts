@@ -33,9 +33,13 @@ export function realtimeUrl(model: string): string {
   return `${VOICE_REALTIME_URL}?model=${encodeURIComponent(model)}`;
 }
 
-/** The WebSocket subprotocol that carries the ephemeral client secret. */
+/** The WebSocket subprotocol that carries the ephemeral client secret.
+ * Idempotent: a mint `value` that already includes the `xai-client-secret.`
+ * prefix is returned as-is so we never double-wrap. */
 export function clientSecretSubprotocol(token: string): string {
-  return `xai-client-secret.${token}`;
+  return token.startsWith("xai-client-secret.")
+    ? token
+    : `xai-client-secret.${token}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -279,12 +283,28 @@ export function parseServerEvent(data: string): ServerEvent | null {
             ? obj.ping_timestamp
             : undefined,
       };
-    case "error":
-      return {
-        type,
-        code: typeof obj.code === "string" ? obj.code : undefined,
-        message: typeof obj.message === "string" ? obj.message : undefined,
-      };
+    case "error": {
+      // xAI (and the OpenAI-compatible realtime wire) nests the payload under
+      // `error: { code, message }`. Older / test frames put `code`/`message`
+      // at the top level. Prefer the nested object, fall back to top-level.
+      const nested =
+        typeof obj.error === "object" && obj.error !== null
+          ? (obj.error as Record<string, unknown>)
+          : undefined;
+      const code =
+        typeof nested?.code === "string"
+          ? nested.code
+          : typeof obj.code === "string"
+            ? obj.code
+            : undefined;
+      const message =
+        typeof nested?.message === "string"
+          ? nested.message
+          : typeof obj.message === "string"
+            ? obj.message
+            : undefined;
+      return { type, code, message };
+    }
     default:
       return null;
   }

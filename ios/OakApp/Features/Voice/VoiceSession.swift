@@ -109,27 +109,44 @@ final class VoiceSession {
     )
     connection = conn
 
-    // 3. Consume inbound frames; an unexpected finish is a clean end (web onClose).
+    // 3. Consume inbound frames. A drop after we're live is a clean end (web
+    //    onClose). A drop still in `.connecting` — handshake never completed —
+    //    is a connection failure.
     inboundTask = Task { [weak self] in
       for await text in conn.inbound() {
         guard let self, !self.finished else { return }
         self.handle(parseServerEvent(text))
       }
-      self?.end()
+      guard let self, !self.finished else { return }
+      let reason = await conn.failureMessage()
+      if let reason {
+        self.fail(reason)
+      } else if self.phase == .connecting {
+        self.fail("Voice connection failed.")
+      } else {
+        self.end()
+      }
     }
 
     // 4. Push the single session.update built from the bootstrap + our sample rate.
-    await conn.send(
-      VoiceClientEvent.sessionUpdate(
-        instructions: bootstrap.session.instructions,
-        voice: bootstrap.session.voice,
-        idleTimeoutMs: bootstrap.session.idleTimeoutMs,
-        sampleRate: audio.sampleRate,
-        reasoningEffort: bootstrap.session.reasoningEffort,
-        tools: bootstrap.session.tools
-      ).encode()
-    )
+    let sessionUpdate = VoiceClientEvent.sessionUpdate(
+      instructions: bootstrap.session.instructions,
+      voice: bootstrap.session.voice,
+      idleTimeoutMs: bootstrap.session.idleTimeoutMs,
+      sampleRate: audio.sampleRate,
+      reasoningEffort: bootstrap.session.reasoningEffort,
+      tools: bootstrap.session.tools
+    ).encode()
+    guard !sessionUpdate.isEmpty else {
+      fail("Voice connection failed.")
+      return
+    }
+    await conn.send(sessionUpdate)
     guard !finished else { return }
+    if let reason = await conn.failureMessage() {
+      fail(reason)
+      return
+    }
 
     // 5. Arm the client-side auto-end at the session cap.
     let maxMs = bootstrap.session.maxSessionMs
@@ -155,7 +172,7 @@ final class VoiceSession {
     captureTask = Task { [weak self] in
       for await chunk in chunks {
         guard let self, !self.finished else { return }
-        await self.connection?.send(VoiceClientEvent.inputAudioAppend(base64: chunk).encode())
+        await self.send(VoiceClientEvent.inputAudioAppend(base64: chunk))
       }
     }
 
@@ -216,7 +233,7 @@ final class VoiceSession {
     case let .ping(timestamp):
       let ts = timestamp ?? clock.now().timeIntervalSince1970 * 1000
       Task { [weak self] in
-        await self?.connection?.send(VoiceClientEvent.pong(pingTimestamp: ts).encode())
+        await self?.send(VoiceClientEvent.pong(pingTimestamp: ts))
       }
 
     case let .errorEvent(code, message):
@@ -260,12 +277,12 @@ final class VoiceSession {
         for (callId, task) in batch {
           let output = await task.value
           guard let self, !self.finished else { return }
-          await self.connection?.send(
-            VoiceClientEvent.functionCallOutput(callId: callId, output: output.serialized()).encode()
+          await self.send(
+            VoiceClientEvent.functionCallOutput(callId: callId, output: output.serialized())
           )
         }
         guard let self, !self.finished else { return }
-        await self.connection?.send(VoiceClientEvent.responseCreate.encode())
+        await self.send(.responseCreate)
       }
       return
     }
@@ -307,6 +324,14 @@ final class VoiceSession {
     audio.close()
     connection?.close()
     connection = nil
+  }
+
+  /// Send one client event if encoding produced a frame. An empty encode is a
+  /// no-op on the live path (never a blank socket frame).
+  private func send(_ event: VoiceClientEvent) async {
+    let frame = event.encode()
+    guard !frame.isEmpty else { return }
+    await connection?.send(frame)
   }
 
   private func fail(_ message: String) {

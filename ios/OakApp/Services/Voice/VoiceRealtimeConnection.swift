@@ -6,12 +6,10 @@ import Foundation
 /// `AsyncStream` the session iterates, rather than the web's callback quartet
 /// (`onOpen`/`onMessage`/`onClose`/`onError`).
 ///
-/// PROTOCOL ONLY — the live `URLSessionWebSocketTask` implementation is a later
-/// task. Tests drive a scripted fake, so the session never opens a real socket.
+/// Tests drive a scripted fake, so the session never opens a real socket.
 protocol VoiceRealtimeConnection: Sendable {
   /// Inbound text frames from the socket. The stream FINISHES when the socket
-  /// closes (whether cleanly or because it dropped) — the session treats an
-  /// unexpected finish as a clean end, mirroring the web client's `onClose`.
+  /// closes (whether cleanly or because it dropped).
   func inbound() -> AsyncStream<String>
 
   /// Send one text frame. A send on a closing/closed socket is a no-op, never a
@@ -20,6 +18,12 @@ protocol VoiceRealtimeConnection: Sendable {
 
   /// Close the socket, releasing it and finishing ``inbound()``.
   func close()
+
+  /// A user-facing reason when the socket died before a successful handshake
+  /// (or with close code 4401 — expired ephemeral). `nil` after a clean close
+  /// of a live session. Read after ``inbound()`` finishes or after a send that
+  /// may have raced a handshake failure.
+  func failureMessage() async -> String?
 }
 
 // MARK: - Live implementation
@@ -39,7 +43,18 @@ protocol VoiceRealtimeConnection: Sendable {
 /// finishes. ``send(_:)`` therefore AWAITS an explicit open gate (driven by the
 /// delegate's `didOpenWithProtocol`) so that first frame is queued, never dropped
 /// — a lost `session.update` is an undebuggable dead session.
+///
+/// Receive starts in `init` (xAI iOS cookbook): `URLSessionWebSocketTask` often
+/// does not fire `didOpenWithProtocol` until `receive()` is running. Frames that
+/// arrive before ``inbound()`` attaches are buffered.
 actor LiveVoiceRealtimeConnection: VoiceRealtimeConnection {
+  /// Cookbook silent-handshake timeout — if `didOpen` never arrives, fail the
+  /// gate rather than hang ``VoiceSession/start()`` in `.connecting`.
+  private static let openTimeout: Duration = .seconds(10)
+
+  /// xAI uses WebSocket close code 4401 to signal an expired ephemeral token.
+  private static let ephemeralExpiredCloseCode = 4401
+
   private let session: URLSession
   private let task: URLSessionWebSocketTask
   private let delegate: WebSocketDelegate
@@ -48,11 +63,16 @@ actor LiveVoiceRealtimeConnection: VoiceRealtimeConnection {
   /// ``openWaiters`` and resume in FIFO order when it opens (or when closed, so a
   /// parked send unblocks and no-ops instead of hanging forever).
   private var isOpen = false
+  private var openedOnce = false
   private var openWaiters: [CheckedContinuation<Void, Never>] = []
 
   private var closed = false
-  private var receiveStarted = false
+  private var explicitClose = false
+  private var inboundAttached = false
   private var inboundContinuation: AsyncStream<String>.Continuation?
+  private var pendingInbound: [String] = []
+  private var closeFailure: String?
+  private var openTimeoutTask: Task<Void, Never>?
 
   init(url: URL, subprotocol: String) {
     let delegate = WebSocketDelegate()
@@ -61,15 +81,17 @@ actor LiveVoiceRealtimeConnection: VoiceRealtimeConnection {
     self.session = session
     self.task = session.webSocketTask(with: url, protocols: [subprotocol])
     self.task.resume()
-    // Bridge the delegate's Sendable event stream into the actor.
-    Task { await self.consumeDelegateEvents() }
+    // Bridge the delegate's Sendable event stream into the actor. Start receive
+    // immediately — waiting until inbound() is attached is how didOpen never
+    // fires on Apple platforms.
+    Task { await self.bootstrapLoops() }
   }
 
   // MARK: Protocol
 
   nonisolated func inbound() -> AsyncStream<String> {
     AsyncStream { continuation in
-      Task { await self.startReceiving(continuation) }
+      Task { await self.attachInbound(continuation) }
     }
   }
 
@@ -82,7 +104,11 @@ actor LiveVoiceRealtimeConnection: VoiceRealtimeConnection {
   }
 
   nonisolated func close() {
-    Task { await self.shutdown() }
+    Task { await self.shutdown(explicit: true) }
+  }
+
+  func failureMessage() async -> String? {
+    closeFailure
   }
 
   // MARK: Open gate
@@ -103,6 +129,8 @@ actor LiveVoiceRealtimeConnection: VoiceRealtimeConnection {
   private func markOpen() {
     guard !isOpen, !closed else { return }
     isOpen = true
+    openedOnce = true
+    cancelOpenTimeout()
     resumeWaiters()
   }
 
@@ -112,15 +140,47 @@ actor LiveVoiceRealtimeConnection: VoiceRealtimeConnection {
     for waiter in waiters { waiter.resume() }
   }
 
+  private func bootstrapLoops() {
+    openTimeoutTask = Task { await self.runOpenTimeout() }
+    Task { await self.consumeDelegateEvents() }
+    Task { await self.receiveLoop() }
+  }
+
+  private func runOpenTimeout() async {
+    do {
+      try await Task.sleep(for: Self.openTimeout)
+    } catch {
+      return
+    }
+    guard !isOpen, !closed else { return }
+    Log.network.error("voice websocket open timed out")
+    recordFailure("Voice connection failed.")
+    handleClosed()
+  }
+
+  private func cancelOpenTimeout() {
+    openTimeoutTask?.cancel()
+    openTimeoutTask = nil
+  }
+
   // MARK: Inbound
 
-  private func startReceiving(_ continuation: AsyncStream<String>.Continuation) {
+  private func attachInbound(_ continuation: AsyncStream<String>.Continuation) {
     // Only VoiceSession calls inbound(), exactly once; a second call no-ops.
-    guard !receiveStarted else { continuation.finish(); return }
-    receiveStarted = true
+    guard !inboundAttached else { continuation.finish(); return }
+    inboundAttached = true
     guard !closed else { continuation.finish(); return }
     inboundContinuation = continuation
-    Task { await self.receiveLoop() }
+    for frame in pendingInbound { continuation.yield(frame) }
+    pendingInbound = []
+  }
+
+  private func yieldInbound(_ text: String) {
+    if let inboundContinuation {
+      inboundContinuation.yield(text)
+    } else {
+      pendingInbound.append(text)
+    }
   }
 
   private func receiveLoop() async {
@@ -129,21 +189,31 @@ actor LiveVoiceRealtimeConnection: VoiceRealtimeConnection {
       do {
         message = try await task.receive()
       } catch {
-        // Any throw (close, cancel, transport fault) ends the stream — the
-        // session treats an inbound finish as a clean end.
+        if !closed, !explicitClose, !openedOnce {
+          recordFailure("Voice connection failed.")
+        }
         break
       }
-      if case let .string(text) = message {
-        inboundContinuation?.yield(text)
+      switch message {
+      case let .string(text):
+        yieldInbound(text)
+      case let .data(data):
+        // Cookbook + xAIRealtimeKit treat binary frames as UTF-8 JSON too.
+        if let text = String(data: data, encoding: .utf8) {
+          yieldInbound(text)
+        }
+      @unknown default:
+        break
       }
-      // Ignore .data frames — the realtime protocol is JSON text only.
     }
     handleClosed()
   }
 
   // MARK: Close
 
-  private func shutdown() {
+  private func shutdown(explicit: Bool) {
+    explicitClose = explicit
+    cancelOpenTimeout()
     task.cancel(with: .goingAway, reason: nil)
     // Release the delegate URLSession strongly retains, after the going-away
     // frame drains.
@@ -155,20 +225,57 @@ actor LiveVoiceRealtimeConnection: VoiceRealtimeConnection {
   /// stream, and unblocks any parked sends. Reached from a receive error, a
   /// delegate close/complete, or an explicit ``close()`` — whichever wins.
   private func handleClosed() {
+    cancelOpenTimeout()
     inboundContinuation?.finish()
     inboundContinuation = nil
+    pendingInbound = []
     guard !closed else { return }
     closed = true
+    if !openedOnce, closeFailure == nil, !explicitClose {
+      recordFailure("Voice connection failed.")
+    }
     resumeWaiters()
+  }
+
+  private func recordFailure(_ message: String) {
+    if closeFailure == nil { closeFailure = message }
   }
 
   private func consumeDelegateEvents() async {
     for await event in delegate.events {
       switch event {
-      case .open: markOpen()
-      case .close: handleClosed()
+      case .open:
+        markOpen()
+      case let .close(httpStatus, closeCode, errorDomain, errorCode):
+        applyClose(
+          httpStatus: httpStatus,
+          closeCode: closeCode,
+          errorDomain: errorDomain,
+          errorCode: errorCode
+        )
       }
     }
+  }
+
+  private func applyClose(
+    httpStatus: Int?,
+    closeCode: Int?,
+    errorDomain: String?,
+    errorCode: Int?
+  ) {
+    if let httpStatus, httpStatus != 101 {
+      Log.network.error("voice websocket upgrade HTTP \(httpStatus)")
+      if !openedOnce { recordFailure("Voice connection failed.") }
+    }
+    if let errorDomain, let errorCode, errorCode != NSURLErrorCancelled {
+      Log.network.error("voice websocket failed domain=\(errorDomain, privacy: .public) code=\(errorCode)")
+      if !openedOnce { recordFailure("Voice connection failed.") }
+    }
+    if closeCode == Self.ephemeralExpiredCloseCode {
+      Log.network.error("voice websocket close 4401 (ephemeral expired)")
+      recordFailure("Voice session expired. Start again.")
+    }
+    handleClosed()
   }
 }
 
@@ -182,7 +289,10 @@ actor LiveVoiceRealtimeConnection: VoiceRealtimeConnection {
 /// (itself Sendable and thread-safe); the URLSession delivers callbacks serially
 /// on its delegate queue.
 private final class WebSocketDelegate: NSObject, URLSessionWebSocketDelegate, @unchecked Sendable {
-  enum Event: Sendable { case open, close }
+  enum Event: Sendable {
+    case open
+    case close(httpStatus: Int?, closeCode: Int?, errorDomain: String?, errorCode: Int?)
+  }
 
   let events: AsyncStream<Event>
   private let continuation: AsyncStream<Event>.Continuation
@@ -208,7 +318,10 @@ private final class WebSocketDelegate: NSObject, URLSessionWebSocketDelegate, @u
     didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
     reason: Data?
   ) {
-    continuation.yield(.close)
+    let status = (webSocketTask.response as? HTTPURLResponse)?.statusCode
+    continuation.yield(
+      .close(httpStatus: status, closeCode: closeCode.rawValue, errorDomain: nil, errorCode: nil)
+    )
     continuation.finish()
   }
 
@@ -219,7 +332,17 @@ private final class WebSocketDelegate: NSObject, URLSessionWebSocketDelegate, @u
     task: URLSessionTask,
     didCompleteWithError error: Error?
   ) {
-    continuation.yield(.close)
+    let status = (task.response as? HTTPURLResponse)?.statusCode
+    let closeCode = (task as? URLSessionWebSocketTask)?.closeCode.rawValue
+    let ns = error.map { $0 as NSError }
+    continuation.yield(
+      .close(
+        httpStatus: status,
+        closeCode: closeCode,
+        errorDomain: ns?.domain,
+        errorCode: ns?.code
+      )
+    )
     continuation.finish()
   }
 }

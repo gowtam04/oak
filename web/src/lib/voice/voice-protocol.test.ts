@@ -21,6 +21,12 @@ describe("voice-protocol — connection helpers", () => {
   it("prefixes the ephemeral token as the client-secret subprotocol", () => {
     expect(clientSecretSubprotocol("abc123")).toBe("xai-client-secret.abc123");
   });
+
+  it("does not double-prefix an already-namespaced token", () => {
+    expect(clientSecretSubprotocol("xai-client-secret.abc123")).toBe(
+      "xai-client-secret.abc123",
+    );
+  });
 });
 
 describe("voice-protocol — nearestSupportedRate", () => {
@@ -156,6 +162,18 @@ describe("voice-protocol — parseServerEvent", () => {
         JSON.stringify({ type: "error", code: "timeout", message: "gone" }),
       ),
     ).toEqual({ type: "error", code: "timeout", message: "gone" });
+    expect(
+      parseServerEvent(
+        JSON.stringify({
+          type: "error",
+          error: {
+            type: "invalid_request_error",
+            code: "bad_request",
+            message: "nested oops",
+          },
+        }),
+      ),
+    ).toEqual({ type: "error", code: "bad_request", message: "nested oops" });
   });
 });
 
