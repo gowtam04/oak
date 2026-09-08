@@ -1,23 +1,29 @@
 # Oak — App Store Screenshot Guide (iOS)
 
-6 frames for **1.2 (Champions-first)**, rebuilt in **Signal**
-(`docs/design/signal.md`). Source renderer:
-`docs/app-store/generated-screenshots/signal/render.html`. Uploaded PNGs live
-in `generated-screenshots/signal/flat-1290/` / `1290x2796/` (6.7") and
-`1284x2778/` (6.5"). Uploaded to ASC on 2026-09-08 with the 1.2 listing.
-Promo preview `oak-1.1-preview.mp4` is the prior 1.1 train and was **not**
-attached to 1.2.
+6 frames for **1.2 (Champions-first)**, rebuilt in **Enamel & Paper**
+(`docs/design/enamel-paper.md`). Phone art is an Imagine `image_edit` of the
+Signal Champions masters (`generated-screenshots/signal/flat-1290/`); marketing
+headlines are composited in Fredoka / Nunito Sans via
+`generated-screenshots/enamel/overlay/render.html`. Uploaded PNGs live in
+`generated-screenshots/enamel/1290x2796/` (6.7") and `1284x2778/` (6.5").
+Uploaded to ASC **1.2 only** — not submitted for review. Live 1.0.2 screenshots
+are untouched. The Signal set is kept as history. Promo preview
+`oak-1.1-preview.mp4` is the prior 1.1 train and was **not** attached to 1.2.
 
 No trademarked wording in marketing headlines. In-app UI may show species names, as the product does.
 
+Do not re-upload the old cream HTML set at `generated-screenshots/render.html`
+(pre-Champions: EVs, IVs, Tera, “Switch Formats Instantly”).
+
 ## Global style notes (apply to every frame)
 
-- **Signal palette**: canvas `#F6F7F9`, plates `#FFFFFF`, hairline `#E3E8EF`, ink `#1B2430`, mute `#5B6B7C`, red `#E3350D` only on Send, the wordmark period, the scope LED, and the word *Inferred*.
-- **Typography**: Figtree 600 headlines / 400–500 body. IBM Plex Mono only in fact tables.
-- **Mood**: calm daylight. No cream, no gold wash, no red header, no Instrument chassis.
-- **Device**: generic black iPhone with Dynamic Island, no tilt.
-- **Tabs**: Chat / Teams / Usage / Dex / Settings — match `OakAppTab`.
-- **Chip**: display-only `Champions · Reg M-B` (not a National Dex / gen picker).
+- **Enamel & Paper**: lid `#EE5A5A` through the status bar, canvas `#FBF7F4` with a faint 4% coral wash, plates `#FFFFFF`, hairline `#E9E0D8`, warm umber shadow. Composer is an opaque white pill with coral send.
+- **Typography**: Fredoka 600 headlines / chrome titles. Nunito Sans 400–500 body. JetBrains Mono only in fact tables.
+- **Mood**: hard enamel Pokédex lid over rag-paper pages. Not Signal cool gray, not Figtree, not a 2px `#E3350D` LED, not cream without the lid.
+- **Device**: generic black iPhone with Dynamic Island, no tilt, centered on a quiet cream/coral wash.
+- **Tabs**: Chat / Teams / Usage / Dex / Settings — match `OakAppTab` / `OakTabDock` (opaque paper shelf, selected coral).
+- **Chip**: display-only `Champions · Reg M-B` (not a National Dex / gen picker), inset white-on-coral on the lid.
+- **In-app mark**: white Fredoka “Oak” (optional 32px coral tile with white O). Not `Oak.` with a red period.
 
 ## Screenshot dimensions
 
@@ -58,7 +64,7 @@ No trademarked wording in marketing headlines. In-app UI may show species names,
 **Subheadline:** "Open a species, move, or calc without leaving the thread."
 **App screen featured:** Chat dimmed behind a raised sheet: Choice Band Outrage vs Flutter Mane, roll 108–128%, OHKO after rocks, `Inferred` Stat Points at level 50.
 **Composition and device:** Device centered; sheet occupies the lower half.
-**Background and color treatment:** Signal canvas `#F6F7F9` — same as the rest of the set.
+**Background and color treatment:** Cream canvas `#FBF7F4` — same as the rest of the set.
 **Mood and energy:** Detailed, satisfying — the "aha, now I get it" moment.
 
 ### Frame 6 of 6 — CTA: guest first
@@ -67,5 +73,5 @@ No trademarked wording in marketing headlines. In-app UI may show species names,
 **Subheadline:** "Ask as a guest. Save chats and teams when you want them."
 **App screen featured:** Empty Chat with the `Champions · Reg M-B` chip and four starters (Battle / Teams / Rules / Usage), including Stat Points and Mega Garchomp legality.
 **Composition and device:** Device centered, same mockup as frames 1–4.
-**Background and color treatment:** Signal canvas `#F6F7F9`. No gold wash.
+**Background and color treatment:** Cream canvas `#FBF7F4`. No gold wash.
 **Mood and energy:** Welcoming, low-friction — closing CTA.

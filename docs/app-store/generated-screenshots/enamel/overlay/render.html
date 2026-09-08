@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Oak Enamel screenshot headline overlay</title>
+  <style>
+    @font-face {
+      font-family: Fredoka;
+      src: url("../../../../../ios/OakApp/Resources/Fonts/Fredoka-SemiBold.ttf") format("truetype");
+      font-weight: 600;
+    }
+    @font-face {
+      font-family: "Nunito Sans";
+      src: url("../../../../../ios/OakApp/Resources/Fonts/NunitoSans-Medium.ttf") format("truetype");
+      font-weight: 500;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 1290px; height: 2796px; overflow: hidden; }
+    .frame {
+      position: relative;
+      width: 1290px;
+      height: 2796px;
+      background: #FBF7F4;
+    }
+    .frame::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(120% 60% at 50% -10%, #fcebeb, #FBF7F4 55%);
+      z-index: 0;
+    }
+    img.art {
+      position: absolute;
+      inset: 0;
+      width: 1290px;
+      height: 2796px;
+      object-fit: cover;
+      object-position: center bottom;
+      z-index: 1;
+    }
+    .veil {
+      position: absolute;
+      left: 0; right: 0; top: 0;
+      z-index: 2;
+      background: linear-gradient(
+        180deg,
+        #FBF7F4 0%,
+        #FBF7F4 78%,
+        rgba(251, 247, 244, 0.88) 88%,
+        rgba(251, 247, 244, 0) 100%
+      );
+    }
+    .copy {
+      position: absolute;
+      left: 90px;
+      right: 90px;
+      top: 128px;
+      text-align: center;
+      z-index: 3;
+    }
+    h1 {
+      font-family: Fredoka, sans-serif;
+      font-weight: 600;
+      font-size: 86px;
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      color: #2A2521;
+    }
+    p {
+      margin-top: 22px;
+      font-family: "Nunito Sans", sans-serif;
+      font-weight: 500;
+      font-size: 34px;
+      line-height: 1.28;
+      color: #6E625A;
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <img class="art" id="art" alt="" />
+    <div class="veil" id="veil"></div>
+    <div class="copy">
+      <h1 id="h"></h1>
+      <p id="s"></p>
+    </div>
+  </div>
+  <script>
+    const frames = {
+      1: {
+        h: "Answers, with the why",
+        s: "Champions reasoning, sources, and a clear flag when something is inferred.",
+        src: "../src/frame-1-v2.jpg",
+        veil: 520,
+      },
+      2: {
+        h: "Build a Champions team",
+        s: "Species, item, moves, nature, Stat Points — then save it for chat.",
+        src: "../src/frame-2-v2.jpg",
+        veil: 520,
+      },
+      3: {
+        h: "Retry, share, keep going",
+        s: "Edit a typo, copy a clean answer, or share a public link.",
+        src: "../src/frame-3-v2.jpg",
+        veil: 520,
+      },
+      4: {
+        h: "Live Champions usage",
+        s: "Doubles by default, Singles as a second view — dated as a snapshot.",
+        src: "../src/frame-4-v2.jpg",
+        veil: 520,
+      },
+      5: {
+        h: "See the math",
+        s: "Open a species, move, or calc without leaving the thread.",
+        src: "../src/frame-5-v2.jpg",
+        veil: 620,
+      },
+      6: {
+        h: "Start now. Sign in later.",
+        s: "Ask as a guest. Save chats and teams when you want them.",
+        src: "../src/frame-6-v2.jpg",
+        veil: 640,
+        pos: "center 48%",
+      },
+    };
+    const id = new URLSearchParams(location.search).get("frame") || "1";
+    const f = frames[id];
+    document.getElementById("h").textContent = f.h;
+    document.getElementById("s").textContent = f.s;
+    const art = document.getElementById("art");
+    art.src = f.src;
+    art.style.objectPosition = f.pos || "center bottom";
+    document.getElementById("veil").style.height = f.veil + "px";
+  </script>
+</body>
+</html>

@@ -74,10 +74,11 @@ by this listing).
 ## What's New (this release)
 
 **1.2 (build 51) — Champions-first.** Listing copy, keywords, screenshots,
-and What's New are on this version in App Store Connect. Not submitted
-for review. Same ASC version record as 1.1.1 (created 2026-08-16): the
-1.1.1 review was cancelled and retargeted to 1.2 + build 51 so the
-Champions listing can ship instead of the pre-Champions 1.1.1 binary.
+and What's New are on this version in App Store Connect. Screenshots were
+regenerated in Enamel & Paper; still not submitted for review. Same ASC
+version record as 1.1.1 (created 2026-08-16): the 1.1.1 review was
+cancelled and retargeted to 1.2 + build 51 so the Champions listing can
+ship instead of the pre-Champions 1.1.1 binary.
 Live 1.0.2 promotional text is already the Champions line (that field
 updates without a new version). App name on this version is
 `Oak – AI Coach` (live 1.0.2 still shows `Oak – AI Battle Coach` until
