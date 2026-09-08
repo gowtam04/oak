@@ -56,15 +56,6 @@ struct UsageView: View {
       .padding(.vertical, Theme.Spacing.sm)
       .accessibilityLabel("Ladder")
 
-      if let asOf = asOfLabel {
-        Text(asOf)
-          .font(Theme.body(.caption))
-          .foregroundStyle(Theme.textSecondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.horizontal, Theme.Spacing.md)
-          .padding(.bottom, Theme.Spacing.sm)
-      }
-
       if model.isUnavailable {
         ContentUnavailableView {
           Label("Usage unavailable", systemImage: "chart.bar.xaxis")
@@ -75,6 +66,11 @@ struct UsageView: View {
         .background(Theme.canvas)
       } else {
         List {
+          if model.season != nil || model.fetchedAt != nil {
+            UsageSnapshotHeader(season: model.season, fetchedAt: model.fetchedAt)
+              .listRowSeparator(.hidden)
+              .listRowBackground(Theme.canvas)
+          }
           ForEach(model.rows) { row in
             Button {
               path.append(row.slug)
@@ -83,6 +79,11 @@ struct UsageView: View {
             }
             .buttonStyle(.plain)
             .listRowBackground(Theme.surface)
+          }
+          if let attribution = model.attribution, !attribution.isEmpty {
+            UsageSourceFooter(attribution: attribution)
+              .listRowSeparator(.hidden)
+              .listRowBackground(Theme.canvas)
           }
         }
         .listStyle(.plain)
@@ -112,17 +113,6 @@ struct UsageView: View {
         Task { await model.selectLadder(next) }
       }
     )
-  }
-
-  private var asOfLabel: String? {
-    guard model.available else { return nil }
-    var parts: [String] = ["Live \(model.ladder.title)"]
-    if let season = model.season { parts.append(season) }
-    if let fetchedAt = model.fetchedAt {
-      parts.append("fetched \(formatUsageFetchedAt(fetchedAt))")
-    }
-    if let attribution = model.attribution { parts.append(attribution) }
-    return parts.joined(separator: " · ")
   }
 }
 
@@ -200,12 +190,16 @@ private struct UsageSpeciesView: View {
             LabeledContent("Season", value: season)
           }
           if let fetchedAt = detail.fetchedAt {
-            LabeledContent("Fetched", value: formatUsageFetchedAt(fetchedAt))
+            LabeledContent("Updated", value: formatUsageFetchedAt(fetchedAt))
           }
-          if let attribution = detail.attribution {
-            Text(attribution)
-              .font(Theme.body(.caption))
-              .foregroundStyle(Theme.textSecondary)
+          if let attribution = detail.attribution, !attribution.isEmpty {
+            let parts = parseUsageAttribution(attribution)
+            LabeledContent("Source", value: parts.source)
+            if let legal = parts.legal {
+              Text(legal)
+                .font(Theme.body(.caption))
+                .foregroundStyle(Theme.textMuted)
+            }
           }
         }
         usageSection("Moves", entries: detail.moves)
@@ -244,9 +238,69 @@ private struct UsageSpeciesView: View {
 
 }
 
-func formatUsageFetchedAt(_ ms: Int64) -> String {
-  let date = Date(timeIntervalSince1970: TimeInterval(ms) / 1000)
-  let formatter = ISO8601DateFormatter()
-  formatter.formatOptions = [.withInternetDateTime]
-  return formatter.string(from: date).replacingOccurrences(of: "T", with: " ")
+/// Compact LIVE · season + local fetched time. Lives inside the `List` so it
+/// scrolls away (not a `Section` header — those pin on iOS).
+private struct UsageSnapshotHeader: View {
+  let season: String?
+  let fetchedAt: Int64?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+      Text(liveLine)
+        .instrumentLabel()
+        .foregroundStyle(Theme.textMuted)
+      if let fetchedAt {
+        Text(formatUsageFetchedAt(fetchedAt))
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.textSecondary)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.vertical, Theme.Spacing.xs)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(accessibilityLabel)
+  }
+
+  private var liveLine: String {
+    ["Live", season].compactMap { $0 }.joined(separator: " · ")
+  }
+
+  private var accessibilityLabel: String {
+    var parts = ["Live Champions usage"]
+    if let season { parts.append(season) }
+    if let fetchedAt { parts.append("updated \(formatUsageFetchedAt(fetchedAt))") }
+    return parts.joined(separator: ", ")
+  }
+}
+
+/// Source domain + legal caption at the end of the ranked list.
+private struct UsageSourceFooter: View {
+  let attribution: String
+
+  var body: some View {
+    let parts = parseUsageAttribution(attribution)
+    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+      Text("Source")
+        .instrumentLabel()
+        .foregroundStyle(Theme.textMuted)
+      Text(parts.source)
+        .font(Theme.body(.footnote))
+        .foregroundStyle(Theme.textSecondary)
+      if let legal = parts.legal {
+        Text(legal)
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.textMuted)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.vertical, Theme.Spacing.sm)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(spokenLabel(parts))
+  }
+
+  private func spokenLabel(_ parts: UsageAttributionParts) -> String {
+    var chunks = ["Source", parts.source]
+    if let legal = parts.legal { chunks.append(legal) }
+    return chunks.joined(separator: ", ")
+  }
 }

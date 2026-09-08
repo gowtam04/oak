@@ -8,9 +8,11 @@ import type { Metadata } from "next";
 import { CHAMPIONS_REGULATION } from "@/data/formats";
 import { parseUsageLadder } from "@/server/champions-usage/ladder";
 import type { UsageLeaderboardResponse } from "@/server/champions-usage/usage-gateway";
-import { formatFetchedAt, ladderTabs, usageHref } from "./ladder-href";
+import { ladderTabs, usageHref } from "./ladder-href";
+import UsageFetchedAt from "./usage-fetched-at";
 import UsageLadderTabs from "./usage-ladder-tabs";
 import UsageLeaderboardTable from "./usage-leaderboard-table";
+import UsageSourceNote from "./usage-source-note";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,7 +62,6 @@ export default async function UsageIndexPage({
   const parsed = parseUsageLadder((await searchParams).ladder);
   const ladder = parsed ?? "doubles";
   const view = await loadView(ladder);
-  const label = ladder === "singles" ? "Singles" : "Doubles";
 
   return (
     <main className="ref-page">
@@ -80,10 +81,14 @@ export default async function UsageIndexPage({
       ) : (
         <section className="ref-card ref-meta-card">
           <div className="ref-meta-card__header">
-            <p className="ref-meta-snapshot">
-              Live {label} · {view.season} · fetched {formatFetchedAt(view.fetched_at)}{" "}
-              · {view.attribution}
-            </p>
+            <div className="ref-meta-snapshot-block">
+              <p className="ref-meta-snapshot">
+                Live{view.season ? ` · ${view.season}` : ""}
+              </p>
+              <p className="ref-meta-fetched">
+                <UsageFetchedAt ms={view.fetched_at} />
+              </p>
+            </div>
           </div>
           {view.rows.length === 0 ? (
             <p className="ref-intro">No Champions usage rows for this ladder.</p>
@@ -99,6 +104,9 @@ export default async function UsageIndexPage({
               }))}
             />
           )}
+          {view.attribution ? (
+            <UsageSourceNote attribution={view.attribution} />
+          ) : null}
         </section>
       )}
     </main>

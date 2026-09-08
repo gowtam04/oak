@@ -14,8 +14,10 @@ import { parseUsageLadder, toEntitySlug } from "@/server/champions-usage/ladder"
 import type { UsageSpeciesResponse } from "@/server/champions-usage/usage-gateway";
 import type { UsageEntry } from "@/agent/schemas";
 import ApplyUsageSet from "../apply-usage-set";
-import { formatFetchedAt, ladderTabs, usageHref } from "../ladder-href";
+import { ladderTabs, usageHref } from "../ladder-href";
+import UsageFetchedAt from "../usage-fetched-at";
 import UsageLadderTabs from "../usage-ladder-tabs";
+import UsageSourceNote from "../usage-source-note";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -204,15 +206,19 @@ export default async function UsageSpeciesPage({
                 <Link href={`/pokedex/${view.slug}`}>View in Pokédex</Link>
               </p>
               <p className="ref-intro">
-                Live {label} usage · {view.season} · {CHAMPIONS_REGULATION} ·
-                fetched {formatFetchedAt(view.fetched_at)}
+                Live {label} usage · {view.season} · {CHAMPIONS_REGULATION}
+              </p>
+              <p className="ref-meta-fetched">
+                <UsageFetchedAt ms={view.fetched_at} />
               </p>
             </div>
           </div>
 
           <section className="ref-card ref-meta-card">
             <MetaUsageLists sections={usageSections(view, ladder)} />
-            <p className="ref-meta-snapshot">{view.attribution}</p>
+            {view.attribution ? (
+              <UsageSourceNote attribution={view.attribution} />
+            ) : null}
           </section>
 
           <section className="ref-card ref-meta-card">

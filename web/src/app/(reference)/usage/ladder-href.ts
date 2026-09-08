@@ -23,10 +23,3 @@ export function ladderTabs(active: UsageLadder, slug?: string) {
   ];
 }
 
-export function formatFetchedAt(ms: number): string {
-  try {
-    return new Date(ms).toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
-  } catch {
-    return String(ms);
-  }
-}

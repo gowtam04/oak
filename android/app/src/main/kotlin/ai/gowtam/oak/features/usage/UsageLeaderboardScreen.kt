@@ -36,11 +36,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import java.text.DateFormat
-import java.util.Date
 
 /**
  * Live Champions usage leaderboard (ADR-6 Dex section). Doubles default,
@@ -115,19 +115,6 @@ private fun UsageLeaderboardList(
                 ),
             )
         }
-        val asOf = buildString {
-            state.season?.takeIf { it.isNotBlank() }?.let { append(it) }
-            state.fetchedAt?.let { fetched ->
-                if (isNotEmpty()) append(" · ")
-                append(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(fetched)))
-            }
-        }
-        if (asOf.isNotEmpty()) {
-            Text(asOf, style = MaterialTheme.typography.labelSmall, color = oak.textMuted)
-        }
-        state.attribution?.takeIf { it.isNotBlank() }?.let { attr ->
-            Text(attr, style = MaterialTheme.typography.labelSmall, color = oak.textMuted)
-        }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
                 state.isLoading && state.rows.isEmpty() -> {
@@ -161,8 +148,22 @@ private fun UsageLeaderboardList(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
+                        if (state.season != null || state.fetchedAt != null) {
+                            item(key = "snapshot") {
+                                UsageSnapshotHeader(
+                                    season = state.season,
+                                    fetchedAt = state.fetchedAt,
+                                )
+                            }
+                        }
                         items(state.rows, key = { it.slug }) { row ->
                             UsageRow(row, onClick = { onOpen(row.slug) })
+                        }
+                        val attribution = state.attribution?.takeIf { it.isNotBlank() }
+                        if (attribution != null) {
+                            item(key = "source") {
+                                UsageSourceFooter(attribution)
+                            }
                         }
                     }
                 }
@@ -217,9 +218,10 @@ private fun UsageSpeciesDetail(
             else -> {
                 val title = detail.savedName ?: detail.slug ?: "Species"
                 Text(title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold))
-                val asOf = listOfNotNull(detail.season, detail.format).joinToString(" · ")
-                if (asOf.isNotEmpty()) Text(asOf, style = MaterialTheme.typography.labelSmall, color = oak.textMuted)
-                detail.attribution?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = oak.textMuted) }
+                if (detail.season != null || detail.fetchedAt != null) {
+                    UsageSnapshotHeader(season = detail.season, fetchedAt = detail.fetchedAt)
+                }
+                detail.attribution?.takeIf { it.isNotBlank() }?.let { UsageSourceFooter(it) }
                 val slug = detail.slug
                 if (onApply != null && !slug.isNullOrBlank()) {
                     OakButton(onClick = { onApply(slug) }, style = OakButtonStyle.Primary, modifier = Modifier.fillMaxWidth()) {
@@ -245,6 +247,60 @@ private fun UsageSection(title: String, entries: List<UsageEntry>) {
     for (entry in entries.take(8)) {
         val pct = entry.pct?.let { "${"%.1f".format(it)}%" } ?: "—"
         Text("${entry.name} · $pct", style = MaterialTheme.typography.bodyMedium, color = oak.text)
+    }
+}
+
+@Composable
+private fun UsageSnapshotHeader(season: String?, fetchedAt: Long?) {
+    val oak = LocalOakColors.current
+    val liveLine = listOfNotNull("Live", season?.takeIf { it.isNotBlank() }).joinToString(" · ")
+    val fetchedLabel = fetchedAt?.let { formatUsageFetchedAt(it) }
+    val spoken = buildString {
+        append("Live Champions usage")
+        season?.takeIf { it.isNotBlank() }?.let { append(", "); append(it) }
+        fetchedLabel?.let { append(", updated "); append(it) }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = OakSpacing.xs)
+            .semantics { contentDescription = spoken },
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        if (liveLine.isNotEmpty()) {
+            Text(
+                liveLine.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = oak.textMuted,
+            )
+        }
+        fetchedLabel?.let { label ->
+            Text(label, style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
+        }
+    }
+}
+
+@Composable
+private fun UsageSourceFooter(attribution: String) {
+    val oak = LocalOakColors.current
+    val parts = parseUsageAttribution(attribution)
+    val spoken = buildString {
+        append("Source, ")
+        append(parts.source)
+        parts.legal?.let { append(", "); append(it) }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = OakSpacing.sm)
+            .semantics { contentDescription = spoken },
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text("SOURCE", style = MaterialTheme.typography.labelSmall, color = oak.textMuted)
+        Text(parts.source, style = MaterialTheme.typography.bodySmall, color = oak.text)
+        parts.legal?.let { legal ->
+            Text(legal, style = MaterialTheme.typography.bodySmall, color = oak.textMuted)
+        }
     }
 }
 
