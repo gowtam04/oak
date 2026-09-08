@@ -172,12 +172,15 @@ struct StreamingStatusView: View {
             .font(Theme.body(.footnote, weight: .medium))
             .foregroundStyle(Theme.textStrong)
             .lineLimit(1)
+            .layoutPriority(1)
           if let secondary = row.secondary {
             Spacer(minLength: Theme.Spacing.sm)
             Text(secondary)
               .font(Theme.body(.caption))
               .foregroundStyle(Theme.textMuted)
               .lineLimit(1)
+              .truncationMode(.tail)
+              .frame(minWidth: 0)
           }
         }
         .frame(minHeight: 28)
@@ -523,42 +526,57 @@ enum ToolTrail {
       .trimmingCharacters(in: .whitespaces)
   }
 
-  /// Extracts the subject entity from a cleaned label when one is clearly present:
-  /// a “curly-quoted” or "straight-quoted" phrase (resolve/search/sql labels), else
-  /// the last capitalised word-run in a "Looking up X" / "Looking up Fake Out"
-  /// phrase. Returns `nil` when nothing reads as a distinct subject, so the caller
-  /// falls back to the cleaned label / friendly noun.
+  /// Subject entity from a cleaned server label. Lock-step with web
+  /// `subjectFromLabel` and Android `subjectFromLabel`.
+  ///
+  /// Order: quoted phrase, else the clause after the first colon (Pokédex
+  /// filters), else the first capitalised run after the sentence-initial
+  /// verb. Trailing `'s` / `’s` is stripped so "Checking Torkoal’s learnset"
+  /// yields "Torkoal", not "Checking Torkoal's".
   static func subject(from cleaned: String) -> String? {
-    // Quoted subject: “…”, "…", or ‟…”.
     if let quoted = firstQuoted(in: cleaned) {
       let trimmed = quoted.trimmingCharacters(in: .whitespaces)
       return trimmed.isEmpty ? nil : trimmed
     }
-    // Last contiguous capitalised run, e.g. "Looking up Garchomp", "Looking up
-    // Fake Out", "Looking up the move Will-O-Wisp".
-    let words = cleaned
-      .trimmingCharacters(in: CharacterSet(charactersIn: "….'s "))
-      .split(whereSeparator: { $0 == " " })
-      .map(String.init)
-    var lastRun: [String] = []
-    var lastRunStart = -1
-    var currentRun: [String] = []
-    var currentStart = -1
-    for (index, word) in words.enumerated() {
+
+    let stripped = cleaned
+      .trimmingCharacters(in: CharacterSet(charactersIn: "…."))
+      .trimmingCharacters(in: .whitespaces)
+    guard !stripped.isEmpty else { return nil }
+
+    if let colon = stripped.firstIndex(of: ":") {
+      let after = String(stripped[stripped.index(after: colon)...])
+        .trimmingCharacters(in: CharacterSet(charactersIn: "…."))
+        .trimmingCharacters(in: .whitespaces)
+      return after.isEmpty ? nil : after
+    }
+
+    let words = stripped.split(whereSeparator: { $0 == " " }).map(String.init)
+    let search: ArraySlice<String>
+    if let first = words.first, first.first?.isUppercase == true {
+      search = words.dropFirst()
+    } else {
+      search = words[...]
+    }
+
+    var run: [String] = []
+    for word in search {
       if let first = word.first, first.isUppercase {
-        if currentRun.isEmpty { currentStart = index }
-        currentRun.append(word)
-        lastRun = currentRun
-        lastRunStart = currentStart
-      } else {
-        currentRun = []
+        run.append(word)
+      } else if !run.isEmpty {
+        break
       }
     }
-    // A real subject is a later capitalised run — never the sentence-initial
-    // "Looking" / "Reading" on its own.
-    guard !lastRun.isEmpty else { return nil }
-    if lastRun.count == 1, lastRunStart == 0 { return nil }
-    return lastRun.joined(separator: " ")
+    guard !run.isEmpty else { return nil }
+    return stripTrailingPossessive(run.joined(separator: " "))
+  }
+
+  /// `Torkoal's` / `Torkoal’s` (U+2019, as emitted by `describeToolCall`).
+  private static func stripTrailingPossessive(_ text: String) -> String {
+    if text.hasSuffix("'s") || text.hasSuffix("\u{2019}s") {
+      return String(text.dropLast(2))
+    }
+    return text
   }
 
   /// The first substring wrapped in a matched quote pair (curly or straight).

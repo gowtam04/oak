@@ -20,8 +20,8 @@ import UIKit
 /// pushed signed-in thread (where "New Chat" lives on the list and Back returns to
 /// it), and ``signInAction`` — set for a guest only — renders a quiet "Sign in to
 /// save your conversations" row inside the scrollable thread, above the empty
-/// state when empty and at the top of the scroll otherwise (accounts-and-access.md
-/// M-ACCT-US-1) — not a full-width band under the header.
+/// state when empty and with the bottom-anchored conversation cluster otherwise
+/// (accounts-and-access.md M-ACCT-US-1) — not a full-width band under the header.
 struct ChatView: View {
   @State private var model: ChatViewModel
 
@@ -90,7 +90,7 @@ struct ChatView: View {
   /// New Chat back to the tab's stack (TestFlight AG4sZ6E).
   private let onNewConversation: (() -> Void)?
 
-  /// When non-nil, renders the guest sign-in nudge above the thread; the "Sign in"
+  /// When non-nil, renders the guest sign-in nudge in the thread; the "Sign in"
   /// button calls this (it presents the sign-in sheet). `nil` for a signed-in thread.
   private let signInAction: (() -> Void)?
 
@@ -325,12 +325,13 @@ struct ChatView: View {
 
   /// A single quiet row inviting a guest to sign in so their conversations persist
   /// (accounts-and-access.md M-ACCT-US-1). Lives INSIDE the scrollable thread area
-  /// (above the empty state when empty, top of the scroll otherwise) — **not** a
-  /// full-width band under the header (soul.md: red is a record light, not
-  /// wallpaper; chrome stays quiet). Muted footnote text + an inline red
-  /// text-button; a small icloud glyph pairs with the text so the invitation isn't
-  /// carried by the red button color alone (M-AC-UI9.3). No surface fill, no
-  /// padding beyond breathing room — it reads as a caption, not a card.
+  /// (above the empty state when empty; with the bottom-anchored conversation
+  /// cluster otherwise) — **not** a full-width band under the header (soul.md: red
+  /// is a record light, not wallpaper; chrome stays quiet). Muted footnote text +
+  /// an inline red text-button; a small icloud glyph pairs with the text so the
+  /// invitation isn't carried by the red button color alone (M-AC-UI9.3). No
+  /// surface fill, no padding beyond breathing room — it reads as a caption, not a
+  /// card.
   @ViewBuilder
   private func signInNudge(action: @escaping () -> Void) -> some View {
     HStack(spacing: 6) {
@@ -373,11 +374,6 @@ struct ChatView: View {
             .frame(minHeight: geo.size.height, alignment: .top)
           } else {
             VStack(spacing: 0) {
-              if let signInAction {
-                signInNudge(action: signInAction)
-                  .padding(.horizontal, Theme.Spacing.lg)
-                  .padding(.top, Theme.Spacing.sm)
-              }
               PinStripView(
                 pins: pinItems,
                 onJump: { id in
@@ -393,6 +389,10 @@ struct ChatView: View {
               )
               Spacer(minLength: 0)
               LazyVStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+                if let signInAction {
+                  signInNudge(action: signInAction)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 ForEach(model.turns) { turn in
                   turnView(turn)
                     .id(turn.id)
@@ -428,27 +428,32 @@ struct ChatView: View {
     let isLastAssistant = model.isLastAssistant(turn)
     switch turn.content {
     case let .user(text, imageCount):
-      VStack(alignment: .trailing, spacing: 6) {
-        UserMessageView(text: text, imageCount: imageCount)
-        HStack {
-          if isLastUser, model.canUndoSend {
-            Button("Undo") { model.undoSend() }
-              .font(Theme.body(.caption, weight: .semibold))
-          }
-          if isLastUser, model.canEditLastUser {
-            TurnActions(
-              isAssistant: false,
-              isLastCard: true,
-              isSignedIn: model.isSignedIn,
-              isPinned: false,
-              onRetry: nil,
-              onEdit: { model.beginEditLast() },
-              onCopyHuman: {},
-              onCopyAgents: nil,
-              onShare: nil,
-              onPin: nil,
-              onFork: nil
-            )
+      HStack(alignment: .top) {
+        Spacer(minLength: 32)
+        VStack(alignment: .trailing, spacing: 6) {
+          UserMessageView(text: text, imageCount: imageCount)
+          if isLastUser, model.canUndoSend || model.canEditLastUser {
+            HStack(spacing: 8) {
+              if model.canUndoSend {
+                Button("Undo") { model.undoSend() }
+                  .font(Theme.body(.caption, weight: .semibold))
+              }
+              if model.canEditLastUser {
+                TurnActions(
+                  isAssistant: false,
+                  isLastCard: true,
+                  isSignedIn: model.isSignedIn,
+                  isPinned: false,
+                  onRetry: nil,
+                  onEdit: { model.beginEditLast() },
+                  onCopyHuman: {},
+                  onCopyAgents: nil,
+                  onShare: nil,
+                  onPin: nil,
+                  onFork: nil
+                )
+              }
+            }
           }
         }
       }
@@ -759,35 +764,32 @@ private struct UserMessageView: View {
   let imageCount: Int
 
   var body: some View {
-    HStack {
-      Spacer(minLength: 32)
-      VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
-        if !text.isEmpty {
-          Text(text)
-            .font(Theme.body(.body, weight: .medium))
-            .foregroundStyle(Theme.textStrong)
-            .padding(.horizontal, Theme.Spacing.lg)
-            .padding(.vertical, Theme.Spacing.md)
-            .background(Theme.userBubble, in: noteShape)
-            .overlay {
-              noteShape.strokeBorder(Theme.userBubbleBorder, lineWidth: 1)
-            }
-            .shadow(
-              color: colorScheme == .dark ? .clear : Theme.Shadow.card.ambient.color,
-              radius: Theme.Shadow.card.ambient.radius,
-              y: Theme.Shadow.card.ambient.y
-            )
-            .shadow(
-              color: colorScheme == .dark ? .clear : Theme.Shadow.card.key.color,
-              radius: Theme.Shadow.card.key.radius,
-              y: Theme.Shadow.card.key.y
-            )
-        }
-        if imageCount > 0 {
-          Label("\(imageCount) image(s) attached", systemImage: "photo")
-            .font(Theme.body(.caption))
-            .foregroundStyle(Theme.textSecondary)
-        }
+    VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
+      if !text.isEmpty {
+        Text(text)
+          .font(Theme.body(.body, weight: .medium))
+          .foregroundStyle(Theme.textStrong)
+          .padding(.horizontal, Theme.Spacing.lg)
+          .padding(.vertical, Theme.Spacing.md)
+          .background(Theme.userBubble, in: noteShape)
+          .overlay {
+            noteShape.strokeBorder(Theme.userBubbleBorder, lineWidth: 1)
+          }
+          .shadow(
+            color: colorScheme == .dark ? .clear : Theme.Shadow.card.ambient.color,
+            radius: Theme.Shadow.card.ambient.radius,
+            y: Theme.Shadow.card.ambient.y
+          )
+          .shadow(
+            color: colorScheme == .dark ? .clear : Theme.Shadow.card.key.color,
+            radius: Theme.Shadow.card.key.radius,
+            y: Theme.Shadow.card.key.y
+          )
+      }
+      if imageCount > 0 {
+        Label("\(imageCount) image(s) attached", systemImage: "photo")
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.textSecondary)
       }
     }
     .transition(entrance)

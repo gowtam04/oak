@@ -85,7 +85,42 @@ class StreamingHeuristicTest {
     fun `subjectFromLabel pulls quoted and capitalised runs`() {
         assertEquals("garchom", subjectFromLabel("Resolving “garchom”…"))
         assertEquals("Fake Out", subjectFromLabel("Looking up Fake Out"))
+        assertEquals("Will-O-Wisp", subjectFromLabel("Looking up the move Will-O-Wisp"))
         assertNull(subjectFromLabel("Resolving name"))
+    }
+
+    @Test
+    fun `subjectFromLabel strips the verb and trailing possessive from learnset labels`() {
+        assertEquals("Torkoal", subjectFromLabel("Checking Torkoal's learnset…"))
+        assertEquals("Torkoal", subjectFromLabel("Checking Torkoal’s learnset…"))
+        assertEquals(
+            "Charizard-Mega-Y",
+            subjectFromLabel("Checking Charizard-Mega-Y’s learnset…"),
+        )
+    }
+
+    @Test
+    fun `subjectFromLabel takes the clause after a colon`() {
+        assertEquals("Fire", subjectFromLabel("Searching the Pokédex: Fire…"))
+        assertEquals(
+            "Fire · Speed > 100",
+            subjectFromLabel("Searching the Pokédex: Fire · Speed > 100…"),
+        )
+    }
+
+    @Test
+    fun `subjectFromLabel prefers the species over a later format word`() {
+        assertEquals(
+            "Torkoal",
+            subjectFromLabel("Checking Torkoal’s live Doubles usage…"),
+        )
+    }
+
+    @Test
+    fun `subjectFromLabel reads ability evolution and matchup labels`() {
+        assertEquals("Drought", subjectFromLabel("Reading the Drought ability…"))
+        assertEquals("Garchomp", subjectFromLabel("Tracing Garchomp’s evolution…"))
+        assertEquals("Fire/Flying", subjectFromLabel("Checking Fire/Flying matchups…"))
     }
 
     @Test

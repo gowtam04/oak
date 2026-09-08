@@ -69,8 +69,13 @@ export function stripLeadingEmoji(label: string): string {
 }
 
 /**
- * Subject entity from a cleaned label: a quoted phrase, else the last
- * capitalised word-run that isn't the sentence-initial verb.
+ * Subject entity from a cleaned server label. Lock-step with iOS
+ * `ToolTrail.subject` and Android `subjectFromLabel`.
+ *
+ * Order: quoted phrase, else the clause after the first colon (Pokédex
+ * filters), else the first capitalised run after the sentence-initial
+ * verb. Trailing `'s` / `’s` is stripped so "Checking Torkoal’s learnset"
+ * yields "Torkoal", not "Checking Torkoal's".
  */
 export function subjectFromLabel(cleaned: string): string | null {
   const quoted = firstQuoted(cleaned);
@@ -78,29 +83,45 @@ export function subjectFromLabel(cleaned: string): string | null {
     const trimmed = quoted.trim();
     return trimmed.length > 0 ? trimmed : null;
   }
-  const words = cleaned
-    .replace(/[….]+$/u, "")
-    .trim()
-    .split(/\s+/u)
-    .filter(Boolean);
-  let lastRun: string[] = [];
-  let lastRunStart = -1;
-  let currentRun: string[] = [];
-  let currentStart = -1;
-  words.forEach((word, index) => {
-    const first = word[0];
-    if (first && first === first.toUpperCase() && first !== first.toLowerCase()) {
-      if (currentRun.length === 0) currentStart = index;
-      currentRun.push(word);
-      lastRun = currentRun;
-      lastRunStart = currentStart;
-    } else {
-      currentRun = [];
+
+  const stripped = cleaned.replace(/[….]+$/u, "").trim();
+  if (!stripped) return null;
+
+  const colon = stripped.indexOf(":");
+  if (colon >= 0) {
+    const after = stripped
+      .slice(colon + 1)
+      .replace(/[….]+$/u, "")
+      .trim();
+    return after.length > 0 ? after : null;
+  }
+
+  const words = stripped.split(/\s+/u).filter(Boolean);
+  const search =
+    words[0] && isCapitalized(words[0]) ? words.slice(1) : words;
+
+  const run: string[] = [];
+  for (const word of search) {
+    if (isCapitalized(word)) {
+      run.push(word);
+    } else if (run.length > 0) {
+      break;
     }
-  });
-  if (lastRun.length === 0) return null;
-  if (lastRun.length === 1 && lastRunStart === 0) return null;
-  return lastRun.join(" ");
+  }
+  if (run.length === 0) return null;
+  return stripTrailingPossessive(run.join(" "));
+}
+
+function isCapitalized(word: string): boolean {
+  const first = word[0];
+  return Boolean(
+    first && first === first.toUpperCase() && first !== first.toLowerCase(),
+  );
+}
+
+/** `Torkoal's` / `Torkoal’s` (U+2019, as emitted by `describeToolCall`). */
+function stripTrailingPossessive(text: string): string {
+  return text.replace(/['\u2019]s$/u, "");
 }
 
 function firstQuoted(text: string): string | null {

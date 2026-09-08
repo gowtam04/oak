@@ -50,12 +50,41 @@ describe("stripLeadingEmoji / subjectFromLabel", () => {
     expect(subjectFromLabel("Resolving “garchom”…")).toBe("garchom");
   });
 
-  it("pulls the last capitalised run, not the leading verb", () => {
+  it("pulls the first capitalised run after the leading verb", () => {
     expect(subjectFromLabel("Looking up Fake Out")).toBe("Fake Out");
     expect(subjectFromLabel("Looking up the move Will-O-Wisp")).toBe(
       "Will-O-Wisp",
     );
     expect(subjectFromLabel("Resolving name")).toBeNull();
+  });
+
+  it("strips the verb and trailing possessive from learnset labels", () => {
+    expect(subjectFromLabel("Checking Torkoal's learnset…")).toBe("Torkoal");
+    expect(subjectFromLabel("Checking Torkoal’s learnset…")).toBe("Torkoal");
+    expect(subjectFromLabel("Checking Charizard-Mega-Y’s learnset…")).toBe(
+      "Charizard-Mega-Y",
+    );
+  });
+
+  it("takes the clause after a colon (Pokédex filters)", () => {
+    expect(subjectFromLabel("Searching the Pokédex: Fire…")).toBe("Fire");
+    expect(
+      subjectFromLabel("Searching the Pokédex: Fire · Speed > 100…"),
+    ).toBe("Fire · Speed > 100");
+  });
+
+  it("prefers the species over a later capitalised format word", () => {
+    expect(
+      subjectFromLabel("Checking Torkoal’s live Doubles usage…"),
+    ).toBe("Torkoal");
+  });
+
+  it("reads ability / evolution / matchup labels", () => {
+    expect(subjectFromLabel("Reading the Drought ability…")).toBe("Drought");
+    expect(subjectFromLabel("Tracing Garchomp’s evolution…")).toBe("Garchomp");
+    expect(subjectFromLabel("Checking Fire/Flying matchups…")).toBe(
+      "Fire/Flying",
+    );
   });
 });
 
@@ -80,6 +109,24 @@ describe("traceRows", () => {
       active: true,
     });
     expect(rows.some((r) => r.tool === "submit_answer")).toBe(false);
+  });
+
+  it("extracts learnset and Pokédex subjects from describeToolCall sentences", () => {
+    const rows = traceRows([
+      { tool: "get_pokemon", label: "📇 Looking up Torkoal…" },
+      { tool: "get_learnset", label: "📖 Checking Torkoal’s learnset…" },
+      { tool: "query_pokedex", label: "📊 Searching the Pokédex: Fire…" },
+      {
+        tool: "get_learnset",
+        label: "📖 Checking Charizard-Mega-Y’s learnset…",
+      },
+    ]);
+    expect(rows.map((r) => [r.primary, r.secondary])).toEqual([
+      ["Looking up Pokémon", "Torkoal"],
+      ["Checking learnset", "Torkoal"],
+      ["Searching Pokédex", "Fire"],
+      ["Checking learnset", "Charizard-Mega-Y"],
+    ]);
   });
 
   it("never emits a raw tool id", () => {

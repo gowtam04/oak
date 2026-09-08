@@ -806,10 +806,20 @@
   align-items: flex-end;
   gap: var(--space-2);
 }
+/* Bubble + Undo/Edit share one trailing column so Edit sits under the note,
+   not at the thread's right edge on a short message. */
+.chat-turn--user .chat-turn__note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  max-width: 70%;
+  min-width: 0;
+}
 /* User note: poke-red-soft mix, 30% red border, sm radius on the bottom-right. */
 .chat-turn--user .chat-turn__content {
   position: relative;
-  max-width: 70%;
+  max-width: 100%;
   padding: var(--space-3) var(--space-5) var(--space-3) var(--space-4);
   background: color-mix(in srgb, var(--poke-red-soft) 55%, var(--surface));
   color: var(--text-strong);
@@ -2691,6 +2701,7 @@ button.thinking-trace__header:hover {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
   min-height: 28px;
   padding: 2px 6px;
   animation: thinking-row-in var(--motion-enter) both;
@@ -2724,6 +2735,7 @@ button.thinking-trace__header:hover {
   color: var(--text-faint);
 }
 .thinking-trace__primary {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2736,8 +2748,13 @@ button.thinking-trace__header:hover {
   color: var(--text);
 }
 .thinking-trace__secondary {
-  flex: none;
+  flex: 1 1 0;
+  min-width: 0;
   margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
   font-size: 11.5px;
   color: var(--text-faint);
 }
@@ -5939,7 +5956,7 @@ button.scope-chip:focus-visible {
 /* ---- ≤480px: tightest portrait ------------------------------------------ */
 @media (max-width: 480px) {
   /* Reclaim width for typed questions (was capped at 70% ≈ 217px). */
-  .chat-turn--user .chat-turn__content {
+  .chat-turn--user .chat-turn__note {
     max-width: 90%;
   }
   /* Sprite cards fill the column / sit two-up instead of stranding dead space. */
