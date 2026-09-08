@@ -319,6 +319,161 @@
   gap: var(--space-4);
 }
 
+/* Summary / Usage tabs — same pill language as the Usage ladder switcher. */
+.pokemon-artifact__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.pokemon-artifact__tab {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--space-4);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+.pokemon-artifact__tab:hover {
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+}
+.pokemon-artifact__tab[aria-selected="true"] {
+  color: var(--poke-red);
+  background: var(--poke-red-soft);
+}
+
+.pokemon-usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.pokemon-usage__ladders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.pokemon-usage__ladder {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--space-4);
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.pokemon-usage__ladder:hover {
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+}
+.pokemon-usage__ladder[aria-pressed="true"] {
+  color: var(--poke-red);
+  background: var(--poke-red-soft);
+}
+.pokemon-usage__kicker,
+.pokemon-usage__fetched,
+.pokemon-usage__status {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.pokemon-usage__group-title {
+  margin: 0 0 var(--space-2);
+}
+.pokemon-usage__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.pokemon-usage__item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  padding: var(--space-1) 0;
+}
+.pokemon-usage__name {
+  color: var(--text-strong);
+  text-decoration: none;
+  text-align: left;
+}
+button.pokemon-usage__name:hover,
+.pokemon-usage__name.entity-link:hover {
+  color: var(--poke-red);
+}
+.pokemon-usage__pct {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.pokemon-usage__set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+/* CopyShowdownSet / ApplyUsageSet / UsageSourceNote keep their reference
+ * class names; restyle them here so they paint on the chat page too. */
+.pokemon-usage .ref-meta-set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.pokemon-usage .ref-meta-set__text {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  white-space: pre-wrap;
+  margin: 0;
+}
+.pokemon-usage .ref-meta-set__button {
+  align-self: flex-start;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--poke-red);
+  background: var(--poke-red-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+.pokemon-usage .ref-meta-source {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.pokemon-usage .ref-meta-source__label {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 /* Hero header (UI §4 screen 06 + soul.md Phase 2): type-glow radial well
  * mirroring SpriteCard — primary/secondary types via --plate-a / --plate-b. */
 .pokemon-artifact__head {

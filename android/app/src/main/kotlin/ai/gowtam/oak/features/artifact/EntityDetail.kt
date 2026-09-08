@@ -27,6 +27,7 @@ import ai.gowtam.oak.wire.MovepoolGroup
 import ai.gowtam.oak.wire.MovepoolMove
 import ai.gowtam.oak.wire.MoveArtifactData
 import ai.gowtam.oak.wire.PokemonArtifactData
+import ai.gowtam.oak.wire.TeamMember
 import ai.gowtam.oak.wire.TypeArtifactData
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -52,11 +53,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -88,17 +95,24 @@ import androidx.compose.ui.unit.dp
  * types, an ability's holders, an item's wild holders — each calling [onOpen] to push
  * a new artifact onto the viewer's back stack.
  */
+private enum class PokemonProfileTab { Summary, Usage }
+
 @Composable
 fun EntityDetail(
     artifact: EntityArtifactOk,
     requestFormat: Format,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
+    onAddToTeam: ((TeamMember) -> Unit)? = null,
+    onApplySpecies: ((String) -> Unit)? = null,
 ) {
     val oak = LocalOakColors.current
     val dark = oak.isDark
     val plateShape = RoundedCornerShape(OakRadius.lg)
     val umber = Color(0xFF4A352A)
+    var pokemonTab by remember(artifact.resolved.slug) { mutableStateOf(PokemonProfileTab.Summary) }
+    val isPokemon = artifact.data is EntityData.Pokemon
+    val showGrounding = !isPokemon || pokemonTab == PokemonProfileTab.Summary
 
     Column(
         modifier = modifier
@@ -124,13 +138,55 @@ fun EntityDetail(
         verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
     ) {
         when (val data = artifact.data) {
-            is EntityData.Pokemon -> PokemonBody(data.v, onOpen)
+            is EntityData.Pokemon -> {
+                PokemonProfileTabs(tab = pokemonTab, onTab = { pokemonTab = it })
+                if (pokemonTab == PokemonProfileTab.Summary) {
+                    PokemonBody(data.v, onOpen)
+                } else {
+                    PokemonUsagePane(
+                        slug = artifact.resolved.slug,
+                        onOpen = onOpen,
+                        onAddToTeam = onAddToTeam,
+                        onApplySpecies = onApplySpecies,
+                    )
+                }
+            }
             is EntityData.Move -> MoveBody(data.v, onOpen)
             is EntityData.Ability -> AbilityBody(data.v, onOpen)
             is EntityData.Item -> ItemBody(data.v)
             is EntityData.Type -> TypeBody(data.v, onOpen)
         }
-        GroundingSection(artifact, requestFormat)
+        if (showGrounding) {
+            GroundingSection(artifact, requestFormat)
+        }
+    }
+}
+
+@Composable
+private fun PokemonProfileTabs(
+    tab: PokemonProfileTab,
+    onTab: (PokemonProfileTab) -> Unit,
+) {
+    val oak = LocalOakColors.current
+    Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+        FilterChip(
+            selected = tab == PokemonProfileTab.Summary,
+            onClick = { onTab(PokemonProfileTab.Summary) },
+            label = { Text("Summary") },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = oak.accentSoft,
+                selectedLabelColor = oak.accent,
+            ),
+        )
+        FilterChip(
+            selected = tab == PokemonProfileTab.Usage,
+            onClick = { onTab(PokemonProfileTab.Usage) },
+            label = { Text("Usage") },
+            colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = oak.accentSoft,
+                selectedLabelColor = oak.accent,
+            ),
+        )
     }
 }
 

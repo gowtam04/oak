@@ -6,7 +6,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 /** Medium date + short time in [timeZone] (device zone by default). Never a trailing `Z`. */
-internal fun formatUsageFetchedAt(
+fun formatUsageFetchedAt(
     ms: Long,
     timeZone: TimeZone = TimeZone.getDefault(),
     locale: Locale = Locale.getDefault(),
@@ -16,10 +16,10 @@ internal fun formatUsageFetchedAt(
     return fmt.format(Date(ms))
 }
 
-internal data class UsageAttributionParts(val source: String, val legal: String?)
+data class UsageAttributionParts(val source: String, val legal: String?)
 
 /** Split `"championsbattledata.com — a community-maintained …"` into name + remainder. */
-internal fun parseUsageAttribution(raw: String): UsageAttributionParts {
+fun parseUsageAttribution(raw: String): UsageAttributionParts {
     val trimmed = raw.trim()
     if (trimmed.isEmpty()) return UsageAttributionParts(trimmed, null)
     for (sep in listOf(" — ", " – ", " - ")) {

@@ -298,7 +298,12 @@ private fun ArtifactContentDispatch(
 ) {
     when (content) {
         ArtifactContent.Loading -> LoadingView()
-        is ArtifactContent.Entity -> EntityDetail(artifact = content.v, requestFormat = requestFormat, onOpen = onOpen)
+        is ArtifactContent.Entity -> EntityDetail(
+            artifact = content.v,
+            requestFormat = requestFormat,
+            onOpen = onOpen,
+            onAddToTeam = onAddToTeam,
+        )
         is ArtifactContent.TeamSheet -> TeamArtifactDetail(team = content.v, onOpenSpecies = { onOpen(EntityKind.POKEMON, it) })
         is ArtifactContent.Comparison -> ComparisonView(
             subjects = content.subjects,

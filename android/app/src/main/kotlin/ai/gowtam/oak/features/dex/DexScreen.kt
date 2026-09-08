@@ -341,6 +341,7 @@ fun DexDetailScreen(
                             requestFormat = Format.Champions,
                             onOpen = onOpen,
                             modifier = Modifier.fillMaxWidth(),
+                            onApplySpecies = onApplySpecies,
                         )
                     }
                 }

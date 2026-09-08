@@ -7,6 +7,8 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
+
 import TypeBadge from "@/components/TypeBadge";
 import SpriteImg from "@/components/SpriteImg";
 import { typeDisplayIndex, type TypeName } from "@/agent/schemas";
@@ -16,6 +18,7 @@ import { typeCssVar } from "@/lib/plate-types";
 
 import EntityLink from "./EntityLink";
 import MatchupRow from "./MatchupRow";
+import PokemonUsagePanel from "./PokemonUsagePanel";
 import { statValueTier } from "./stat-tier";
 
 const STAT_ROWS: { key: keyof PokemonArtifactData["base_stats"]; label: string }[] =
@@ -73,11 +76,21 @@ function sortMovesByType<T extends { type: string; display_name: string }>(
 
 export interface PokemonArtifactProps {
   data: PokemonArtifactData;
+  /** Canonical slug — when set, the Usage tab loads `GET /api/usage/:slug`. */
+  slug?: string;
 }
+
+type PokemonArtifactTab = "summary" | "usage";
 
 export default function PokemonArtifact({
   data,
+  slug,
 }: PokemonArtifactProps): React.JSX.Element {
+  const [tab, setTab] = useState<PokemonArtifactTab>("summary");
+  useEffect(() => {
+    setTab("summary");
+  }, [slug]);
+
   const { abilities, matchups } = data;
   // Titleize the DISPLAY label but keep the raw slug for EntityLink q= (#3);
   // the hidden flag drives a separate badge rather than inline text (#4).
@@ -121,8 +134,57 @@ export default function PokemonArtifact({
     "--plate-b": typeCssVar(data.types[1] ?? data.types[0]),
   };
 
+  const showTabs = Boolean(slug);
+
   return (
     <div className="pokemon-artifact" data-testid="pokemon-artifact">
+      {showTabs && slug ? (
+        <div
+          className="pokemon-artifact__tabs"
+          role="tablist"
+          aria-label="Pokémon profile"
+        >
+          <button
+            type="button"
+            role="tab"
+            id="pokemon-artifact-tab-summary"
+            aria-selected={tab === "summary"}
+            aria-controls="pokemon-artifact-panel-summary"
+            className="pokemon-artifact__tab"
+            data-testid="pokemon-artifact-tab-summary"
+            onClick={() => setTab("summary")}
+          >
+            Summary
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="pokemon-artifact-tab-usage"
+            aria-selected={tab === "usage"}
+            aria-controls="pokemon-artifact-panel-usage"
+            className="pokemon-artifact__tab"
+            data-testid="pokemon-artifact-tab-usage"
+            onClick={() => setTab("usage")}
+          >
+            Usage
+          </button>
+        </div>
+      ) : null}
+
+      {showTabs && tab === "usage" && slug ? (
+        <div
+          role="tabpanel"
+          id="pokemon-artifact-panel-usage"
+          aria-labelledby="pokemon-artifact-tab-usage"
+        >
+          <PokemonUsagePanel slug={slug} />
+        </div>
+      ) : (
+        <div
+          role={showTabs ? "tabpanel" : undefined}
+          id={showTabs ? "pokemon-artifact-panel-summary" : undefined}
+          aria-labelledby={showTabs ? "pokemon-artifact-tab-summary" : undefined}
+        >
       <div className="pokemon-artifact__head">
         <span
           className="pokemon-artifact__halo"
@@ -284,6 +346,8 @@ export default function PokemonArtifact({
           </div>
         )}
       </section>
+        </div>
+      )}
     </div>
   );
 }

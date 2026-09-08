@@ -15,6 +15,11 @@ import SwiftUI
 /// a Pokémon's movepool moves and matchup types, a move/type's matchup types, an ability's
 /// holders, an item's wild holders — each calling ``onOpen`` to push a new artifact onto the
 /// viewer's back stack.
+private enum PokemonArtifactTab: String, CaseIterable {
+  case summary
+  case usage
+}
+
 struct EntityDetailView: View {
   let artifact: EntityArtifactOk
 
@@ -26,11 +31,15 @@ struct EntityDetailView: View {
   /// Defaults to a no-op so the view renders in isolation / previews.
   var onOpen: (EntityKind, String) -> Void = { _, _ in }
 
+  @State private var pokemonTab: PokemonArtifactTab = .summary
+
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
         kindBody
-        groundingSection
+        if showsGrounding {
+          groundingSection
+        }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(Theme.Spacing.lg)
@@ -39,15 +48,39 @@ struct EntityDetailView: View {
       .padding(.vertical, Theme.Spacing.sm)
     }
     .background(Theme.canvas)
+    .onChange(of: artifact.resolved.slug) { _, _ in
+      pokemonTab = .summary
+    }
+  }
+
+  private var showsGrounding: Bool {
+    if case .pokemon = artifact.data, pokemonTab == .usage {
+      return false
+    }
+    return true
   }
 
   // MARK: Kind dispatch
+
+  private var pokemonTabs: some View {
+    Picker("Profile section", selection: $pokemonTab) {
+      Text("Summary").tag(PokemonArtifactTab.summary)
+      Text("Usage").tag(PokemonArtifactTab.usage)
+    }
+    .pickerStyle(.segmented)
+    .accessibilityLabel("Pokémon profile")
+  }
 
   @ViewBuilder
   private var kindBody: some View {
     switch artifact.data {
     case .pokemon(let data):
-      pokemonBody(data)
+      pokemonTabs
+      if pokemonTab == .summary {
+        pokemonBody(data)
+      } else {
+        PokemonUsagePane(slug: artifact.resolved.slug, onOpen: onOpen)
+      }
     case .move(let data):
       moveBody(data)
     case .ability(let data):
@@ -722,6 +755,7 @@ private func previewPokemonArtifact() -> EntityArtifactOk? {
 #Preview("Pokémon profile") {
   if let ok = previewPokemonArtifact() {
     EntityDetailView(artifact: ok)
+      .oakServices(.preview())
   } else {
     Text("decode failed")
   }
