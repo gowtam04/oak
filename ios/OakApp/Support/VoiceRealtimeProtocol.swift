@@ -30,8 +30,11 @@ enum VoiceRealtimeProtocol {
   }
 
   /// The WebSocket subprotocol that carries the ephemeral client secret.
+  /// Idempotent: a mint `value` that already includes the `xai-client-secret.`
+  /// prefix is returned as-is so we never double-wrap.
   static func clientSecretSubprotocol(token: String) -> String {
-    "xai-client-secret.\(token)"
+    if token.hasPrefix("xai-client-secret.") { return token }
+    return "xai-client-secret.\(token)"
   }
 }
 
@@ -57,10 +60,11 @@ enum VoiceClientEvent: Sendable {
   case responseCreate
   case pong(pingTimestamp: Double?)
 
-  /// JSON text to send on the socket.
+  /// JSON text to send on the socket. Empty if encoding failed — callers must
+  /// not send an empty frame (a lost `session.update` is a dead session).
   func encode() -> String {
     let encoder = JSONEncoder()
-    let data: Data
+    let data: Data?
     switch self {
     case let .sessionUpdate(instructions, voice, idleTimeoutMs, sampleRate, reasoningEffort, tools):
       let payload = SessionUpdatePayload(
@@ -80,22 +84,23 @@ enum VoiceClientEvent: Sendable {
           tools: tools
         )
       )
-      data = (try? encoder.encode(payload)) ?? Data()
+      data = try? encoder.encode(payload)
     case let .inputAudioAppend(base64):
       let payload = InputAudioAppendPayload(type: "input_audio_buffer.append", audio: base64)
-      data = (try? encoder.encode(payload)) ?? Data()
+      data = try? encoder.encode(payload)
     case let .functionCallOutput(callId, output):
       let payload = FunctionCallOutputPayload(
         type: "conversation.item.create",
         item: .init(type: "function_call_output", callId: callId, output: output)
       )
-      data = (try? encoder.encode(payload)) ?? Data()
+      data = try? encoder.encode(payload)
     case .responseCreate:
-      data = (try? encoder.encode(ResponseCreatePayload(type: "response.create"))) ?? Data()
+      data = try? encoder.encode(ResponseCreatePayload(type: "response.create"))
     case let .pong(pingTimestamp):
       let payload = PongPayload(type: "pong", pingTimestamp: pingTimestamp)
-      data = (try? encoder.encode(payload)) ?? Data()
+      data = try? encoder.encode(payload)
     }
+    guard let data, !data.isEmpty else { return "" }
     return String(decoding: data, as: UTF8.self)
   }
 }
@@ -271,7 +276,13 @@ func parseServerEvent(_ text: String) -> VoiceServerEvent? {
   case "ping":
     return .ping(timestamp: obj["ping_timestamp"] as? Double)
   case "error":
-    return .errorEvent(code: obj["code"] as? String, message: obj["message"] as? String)
+    // xAI (and the OpenAI-compatible realtime wire) nests the payload under
+    // `error: { code, message }`. Older / test frames put `code`/`message` at
+    // the top level. Prefer the nested object, fall back to top-level.
+    let nested = obj["error"] as? [String: Any]
+    let code = (nested?["code"] as? String) ?? (obj["code"] as? String)
+    let message = (nested?["message"] as? String) ?? (obj["message"] as? String)
+    return .errorEvent(code: code, message: message)
   default:
     return nil
   }

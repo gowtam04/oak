@@ -384,6 +384,48 @@ struct VoiceSessionTests {
   }
 
   @Test
+  func aNestedServerErrorSurfacesItsMessage() async {
+    let h = makeHarness()
+    await connect(h)
+
+    h.connection.emit([
+      "type": "error",
+      "error": ["type": "invalid_request_error", "code": "bad_request", "message": "nested boom"],
+    ])
+    await settle()
+
+    #expect(h.session.phase == .error)
+    #expect(h.session.errorMessage == "nested boom")
+  }
+
+  @Test
+  func aNestedTimeoutErrorCodeIsACleanEnd() async {
+    let h = makeHarness()
+    await connect(h)
+
+    h.connection.emit([
+      "type": "error",
+      "error": ["code": "timeout", "message": "idle"],
+    ])
+    await settle()
+
+    #expect(h.session.phase == .ended)
+  }
+
+  @Test
+  func aHandshakeFailureDuringStartSurfacesAsError() async {
+    let h = makeHarness()
+    h.connection.nextFailureMessage = "Voice connection failed."
+
+    await h.session.start()
+    await settle()
+
+    #expect(h.session.phase == .error)
+    #expect(h.session.errorMessage == "Voice connection failed.")
+    #expect(h.audio.calls.contains("close") || h.session.phase == .error)
+  }
+
+  @Test
   func theMaxSessionTimerEndsTheSession() async {
     let service = FakeVoiceService()
     service.tokenResponse = .fixture(maxSessionMs: 5_000)
