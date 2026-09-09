@@ -29,7 +29,13 @@ export default defineConfig({
             "test/**/*.test.ts",
             "eval/**/*.test.ts",
           ],
-          exclude: ["src/components/**", "node_modules/**"],
+          exclude: [
+            "src/components/**",
+            // Portable chat oracles (slash parse/picker/search) are Docker-free
+            // jsdom unit tests — slash-discovery architecture.
+            "src/lib/chat/**/*.test.ts",
+            "node_modules/**",
+          ],
           // One shared Postgres container AND one shared Redis container for the
           // whole node run (Testcontainers → needs a Docker daemon). The jsdom
           // project below has none, so component tests still run without Docker.
@@ -60,6 +66,7 @@ export default defineConfig({
           include: [
             "src/components/**/*.test.tsx",
             "src/lib/**/*.test.tsx",
+            "src/lib/chat/**/*.test.ts",
             "test/**/*.test.tsx",
           ],
           setupFiles: ["@testing-library/jest-dom/vitest"],
