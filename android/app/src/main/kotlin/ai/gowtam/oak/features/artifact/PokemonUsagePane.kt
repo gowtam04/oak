@@ -62,7 +62,6 @@ fun PokemonUsagePane(
     val idle = remember { kotlinx.coroutines.flow.MutableStateFlow(PokemonUsageLoader.State()) }
     val state by (loader?.state ?: idle).collectAsState()
     var note by remember { mutableStateOf<String?>(null) }
-    val teams = LocalServices.current?.teams
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(slug, loader) {
@@ -122,22 +121,7 @@ fun PokemonUsagePane(
                         if (onApplySpecies != null) {
                             onApplySpecies(it)
                         } else {
-                            val teamService = teams
-                            if (teamService == null || onAddToTeam == null) {
-                                note = "Sign in to apply this Champions set to a team."
-                            } else {
-                                scope.launch {
-                                    val result = teamService.setTemplate(it)
-                                    val member = result.member
-                                    if (!result.found || member == null) {
-                                        note = result.notes.firstOrNull()
-                                            ?: "Usage is unavailable or no set is listed for this species."
-                                    } else {
-                                        note = null
-                                        onAddToTeam(member)
-                                    }
-                                }
-                            }
+                            note = "Sign in to apply this Champions set to a team."
                         }
                     },
                 )

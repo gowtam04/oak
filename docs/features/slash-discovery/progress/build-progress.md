@@ -32,10 +32,11 @@ Status: `in-progress`
 
 ## Current Phase
 
-- Phase name / number / manifest id: p1
-- Requirement refs: SD-BR-1, SD-BR-4, SD-BR-5, SD-BR-6, SD-BR-10, SD-BR-17, SD-BR-18, SD-AC-1.2, SD-AC-1.3, SD-AC-1.4, SD-AC-4.3, SD-AC-7.1
+- Phase name / number / manifest id: p2/p3/p4 tests (parallel, disjoint)
+- Requirement refs: SD-US-1..8 (web), SD-AC-8.6 / SD-AC-9.1 (native), SD-AC-5.7 (Android Usage slug)
 - Status: `in-progress`
-- Active workers (role → owned files / isolation): [explore] conventions; [test-author] P1 oracle tests (`slash-commands.test.ts`, `slash-picker.test.ts`)
+- Active workers: [test-author] P2 web tests; [test-author] P3 iOS tests; [test-author] P4 Android tests (shared worktree, disjoint files)
+- P1 verified: oracle-stable commit `0002f1f`
 
 ## Phase Log
 
@@ -83,6 +84,8 @@ Checkpoint: oracle-stable — natives can clone without guessing.
 - Unresolved risks:
 
 ## Parent-Local Fixes
+
+- Android `develop` did not compile: `TeamService.setTemplate` missing (`PokemonUsagePane.kt`) and `DexDetailScreen` passed undeclared `onApplySpecies`. Glue so P4 tests can compile. Not slash product behavior.
 
 - Symlink `web/node_modules` was stale; ran `npm install` in the worktree.
 - First P1 red runner reported missing `src/lib/chat/` — files exist in the worktree; runner cwd was wrong. Retrying with `--project jsdom` after a vitest include glue so oracles do not start Testcontainers (architecture: no Docker for oracle tests).

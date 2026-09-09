@@ -281,6 +281,7 @@ fun DexDetailScreen(
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
     onAddToTeam: (() -> Unit)? = null,
+    onApplySpecies: ((String) -> Unit)? = null,
 ) {
     val detail by viewModel.detail.collectAsState()
     val list by viewModel.list.collectAsState()
