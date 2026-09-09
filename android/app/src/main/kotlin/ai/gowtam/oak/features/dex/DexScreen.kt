@@ -78,11 +78,21 @@ fun DexListScreen(
     usage: UsageService,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
+    pendingUsageSlug: String? = null,
+    pendingUsageGen: Int = 0,
+    onUsageSlugConsumed: () -> Unit = {},
 ) {
     val list by viewModel.list.collectAsState()
     val oak = LocalOakColors.current
     val usageViewModel = remember(usage) { UsageLeaderboardViewModel(usage) }
     val showingUsage = list.section == DexSection.Usage
+
+    LaunchedEffect(pendingUsageGen) {
+        if (pendingUsageGen == 0) return@LaunchedEffect
+        val slug = pendingUsageSlug
+        if (!slug.isNullOrBlank()) usageViewModel.openSpecies(slug)
+        onUsageSlugConsumed()
+    }
 
     Scaffold(
         modifier = modifier,

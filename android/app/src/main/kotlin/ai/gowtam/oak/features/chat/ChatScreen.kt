@@ -465,6 +465,13 @@ fun ChatScreen(
                 onPickMention = viewModel::insertMention,
                 deadMentions = uiState.deadMentions,
                 missingImagesNote = uiState.missingImagesNote,
+                signedIn = uiState.isSignedIn,
+                slashNameRows = uiState.slashNameRows,
+                slashTeamRows = uiState.slashTeamRows,
+                slashArgReady = uiState.slashArgReady,
+                onInsertSlashCommand = viewModel::insertSlashCommand,
+                onInsertSlashName = viewModel::insertSlashName,
+                onInsertSlashTeam = viewModel::insertSlashTeam,
             )
         }
     }

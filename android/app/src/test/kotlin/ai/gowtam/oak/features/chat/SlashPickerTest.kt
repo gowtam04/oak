@@ -265,7 +265,7 @@ class SlashPickerTest {
     }
 
     @Test
-    fun `orders Pokémon, then move, then ability, then item; keeps within-kind input order (SD-BR-17)`() {
+    fun `orders Pokémon, then move, then ability, then item — keeps within-kind input order (SD-BR-17)`() {
         val item = DexNameRow(
             kind = DexNameKind.Item,
             slug = "metronome",

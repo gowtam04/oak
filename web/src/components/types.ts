@@ -46,6 +46,8 @@ import type {
   ErrorEvent,
   ChatRequestBody,
 } from "@/lib/sse/sse-types";
+import type { DexBind } from "@/lib/chat/slash-commands";
+import type { DexNameRow } from "@/lib/chat/slash-picker";
 
 // Re-export the payload sub-types so leaf authors can import everything they
 // need from `@/components/types` alone (one frontend contract surface).
@@ -353,8 +355,16 @@ export interface ComposerProps {
   /**
    * Submit a new user turn. `images` is empty for a text-only turn; `message`
    * may be empty when `images` is non-empty (an image-only upload).
+   * `slashMeta.dexBind` is set when a Dex (or usage species) name row was
+   * picked this session and the argument text still matches. `argRows` is
+   * the last picker list for this command+query (Send can hop without a
+   * network wait when the list is already on screen).
    */
-  onSend: (message: string, images: PendingImage[]) => void;
+  onSend: (
+    message: string,
+    images: PendingImage[],
+    slashMeta?: { dexBind?: DexBind; argRows?: DexNameRow[] },
+  ) => void;
   /** Disabled while a turn is streaming (default: false). */
   disabled?: boolean;
   /**

@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
                 ChatViewModel(
                     chat = oakApplication.services.chat,
                     appState = oakApplication.appState,
+                    dexLookup = oakApplication.services.dexLookup,
                     history = oakApplication.services.history,
                     teams = oakApplication.services.teams,
                     scope = oakApplication.services.scope,

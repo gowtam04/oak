@@ -5,11 +5,13 @@ import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberReduceMotion
+import ai.gowtam.oak.wire.TeamSummary
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,6 +53,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -107,10 +110,17 @@ fun Composer(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
     mentionQuery: String? = null,
-    mentionSuggestions: List<ai.gowtam.oak.wire.TeamSummary> = emptyList(),
-    onPickMention: (ai.gowtam.oak.wire.TeamSummary) -> Unit = {},
+    mentionSuggestions: List<TeamSummary> = emptyList(),
+    onPickMention: (TeamSummary) -> Unit = {},
     deadMentions: List<String> = emptyList(),
     missingImagesNote: String? = null,
+    signedIn: Boolean = false,
+    slashNameRows: List<DexNameRow> = emptyList(),
+    slashTeamRows: List<TeamSummary> = emptyList(),
+    slashArgReady: Boolean = false,
+    onInsertSlashCommand: (String) -> Unit = {},
+    onInsertSlashName: (DexNameRow) -> Unit = {},
+    onInsertSlashTeam: (TeamSummary) -> Unit = {},
 ) {
     val oak = LocalOakColors.current
     val context = LocalContext.current
@@ -119,6 +129,34 @@ fun Composer(
     var menuExpanded by remember { mutableStateOf(false) }
     var attachNote by remember { mutableStateOf<String?>(null) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var slashDismissed by remember { mutableStateOf(false) }
+
+    val slashPhase = slashPickerPhase(composerText)
+    val slashTokenKey = when (slashPhase) {
+        is SlashPickerPhase.Commands -> slashPhase.prefix
+        is SlashPickerPhase.Args -> slashPhase.command
+        is SlashPickerPhase.Rest -> slashPhase.command
+        SlashPickerPhase.Hidden -> ""
+    }
+    LaunchedEffect(slashTokenKey) { slashDismissed = false }
+    val slashVisible = !slashDismissed && when (slashPhase) {
+        is SlashPickerPhase.Commands, is SlashPickerPhase.Args -> true
+        SlashPickerPhase.Hidden, is SlashPickerPhase.Rest -> false
+    }
+    val slashEmpty = when (val phase = slashPhase) {
+        is SlashPickerPhase.Args -> when (phase.command) {
+            "dex" -> if (slashArgReady && slashNameRows.isEmpty()) EMPTY_DEX else null
+            "usage" -> if (slashArgReady && slashNameRows.isEmpty()) EMPTY_USAGE else null
+            "team" -> when {
+                !signedIn -> EMPTY_TEAMS_GUEST
+                slashTeamRows.isEmpty() -> EMPTY_TEAMS
+                else -> null
+            }
+            else -> null
+        }
+        else -> null
+    }
+    BackHandler(enabled = slashVisible) { slashDismissed = true }
 
     val remaining = ChatViewModel.MAX_ATTACHED_IMAGES - pendingImages.size
     val canAttachMore = remaining > 0 && !isStreaming
@@ -187,11 +225,32 @@ fun Composer(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        MentionAutocomplete(
-            suggestions = mentionSuggestions,
-            query = mentionQuery,
-            onPick = onPickMention,
-        )
+        if (slashVisible) {
+            SlashAutocomplete(
+                commands = (slashPhase as? SlashPickerPhase.Commands)?.rows.orEmpty(),
+                names = if (slashPhase is SlashPickerPhase.Args && slashPhase.command != "team") {
+                    slashNameRows
+                } else {
+                    emptyList()
+                },
+                teams = if (slashPhase is SlashPickerPhase.Args && slashPhase.command == "team") {
+                    slashTeamRows
+                } else {
+                    emptyList()
+                },
+                empty = slashEmpty,
+                guest = !signedIn,
+                onPickCommand = onInsertSlashCommand,
+                onPickName = onInsertSlashName,
+                onPickTeam = onInsertSlashTeam,
+            )
+        } else {
+            MentionAutocomplete(
+                suggestions = mentionSuggestions,
+                query = mentionQuery,
+                onPick = onPickMention,
+            )
+        }
 
         if (pendingImages.isNotEmpty()) {
             Row(

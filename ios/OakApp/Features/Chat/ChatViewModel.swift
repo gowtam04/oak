@@ -95,6 +95,42 @@ final class ChatViewModel {
   /// Teams matching the in-progress `@` query (empty when not mentioning).
   private(set) var mentionSuggestions: [TeamSummary] = []
 
+  /// Dex entity bound by a slash name-row pick (SD-BR-17). Cleared when the
+  /// `/dex` argument no longer equals `displayName`.
+  var dexBind: DexBind?
+
+  /// Arg-phase Dex / Usage name rows for ``SlashAutocomplete``.
+  private(set) var slashNameRows: [DexNameRow] = []
+
+  /// Arg-phase saved-team rows for ``SlashAutocomplete``.
+  private(set) var slashTeamRows: [TeamSummary] = []
+
+  /// Arg-phase empty line (`No Dex matches` / guest Teams copy). `nil` while
+  /// a search is in flight or the picker is not in the arg phase.
+  private(set) var slashEmptyCopy: String?
+
+  /// Last completed Dex / Usage arg-phase search (send-time exact resolve).
+  private var lastSlashNameRows: [DexNameRow] = []
+
+  /// Arg-phase command currently driving the picker, if any.
+  private var lastSlashArgCommand: SlashPickerPhase.ArgsCommand?
+
+  /// Leading slash token when the picker was last dismissed (SD-AC-8.6).
+  private var slashDismissedToken: String = ""
+  private var slashPickerDismissed = false
+
+  /// Send-time hop Tasks; a newer send invalidates in-flight resolve.
+  private var slashHopGeneration = 0
+
+  /// Whether the `/` picker should show (command or arg phase).
+  var isSlashPickerVisible: Bool {
+    guard !slashPickerDismissed else { return false }
+    switch SlashPicker.phase(composerText) {
+    case .commands, .args: return true
+    case .hidden, .rest: return false
+    }
+  }
+
   /// Mention ids that failed to bind (deleted / not owned). Blocks send.
   private(set) var deadMentionIds: Set<String> = []
 
@@ -134,6 +170,11 @@ final class ChatViewModel {
   private let teams: (any TeamService)?
   private let shares: (any ShareService)?
   private let voice: (any VoiceService)?
+  private let dexLookup: (any DexLookupService)?
+
+  /// Debounced Dex / Usage fan-out for the slash picker.
+  private var slashSearchTask: Task<Void, Never>?
+  private var slashSearchGeneration = 0
 
   /// The client thread id sent as `session_id` (equals the conversation id on
   /// resume). Rotated by ``startNewConversation()`` so a new thread has no prior
@@ -215,6 +256,7 @@ final class ChatViewModel {
     teams: (any TeamService)? = nil,
     shares: (any ShareService)? = nil,
     voice: (any VoiceService)? = nil,
+    dexLookup: (any DexLookupService)? = nil,
     usesBackgroundGrace: Bool = true
   ) {
     self.chat = chat
@@ -223,6 +265,7 @@ final class ChatViewModel {
     self.teams = teams
     self.shares = shares
     self.voice = voice
+    self.dexLookup = dexLookup
     self.usesBackgroundGrace = usesBackgroundGrace
     self.sessionId = appState.activeConversationId ?? UUID().uuidString
   }
@@ -294,6 +337,8 @@ final class ChatViewModel {
   /// the event stream.
   func send() {
     guard canSend else { return }
+    slashHopGeneration += 1
+    let hopGeneration = slashHopGeneration
     let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
 
     // Handled slashes are not a chat turn — skip them while editing the last
@@ -301,12 +346,30 @@ final class ChatViewModel {
     if !isEditingLast {
       switch SlashCommands.parse(text, hasUsagePage: true) {
       case .navigate(let target):
-        handleSlash(target, argument: SlashCommands.argument(text))
+        let argument = SlashCommands.argument(text)
+        let bind = dexBind
+        let cached = lastSlashNameRows
+        handleSlash(
+          target,
+          argument: argument,
+          bind: bind,
+          cachedRows: cached,
+          hopGeneration: hopGeneration
+        )
         composerText = ""
+        dexBind = nil
+        updateSlashPicker()
         return
       case .calc(let rest):
         openCalculator(rest: rest)
         composerText = ""
+        dexBind = nil
+        updateSlashPicker()
+        return
+      case .help, .bare:
+        composerText = "/"
+        slashPickerDismissed = false
+        updateSlashPicker()
         return
       case .message:
         break
@@ -613,6 +676,17 @@ final class ChatViewModel {
     mentionTokens = []
     mentionSuggestions = []
     deadMentionIds = []
+    dexBind = nil
+    slashNameRows = []
+    slashTeamRows = []
+    slashEmptyCopy = nil
+    lastSlashNameRows = []
+    lastSlashArgCommand = nil
+    slashPickerDismissed = false
+    slashDismissedToken = ""
+    slashSearchTask?.cancel()
+    slashSearchGeneration += 1
+    slashHopGeneration += 1
     isEditingLast = false
     missingImagesNote = nil
     pinnedMessageIds = []
@@ -1243,21 +1317,135 @@ final class ChatViewModel {
     }
   }
 
-  private func handleSlash(_ target: SlashCommand.Target, argument: String?) {
+  private func handleSlash(
+    _ target: SlashCommand.Target,
+    argument: String?,
+    bind: DexBind?,
+    cachedRows: [DexNameRow],
+    hopGeneration: Int
+  ) {
     switch target {
     case .new:
+      let images = pendingImages
       startNewConversation()
+      pendingImages = images
     case .team:
       appState.pendingDestination = .teams(query: argument)
     case .dex:
-      appState.pendingDestination = .dex(query: argument)
+      hopDex(
+        argument: argument,
+        bind: bind,
+        cachedRows: cachedRows,
+        hopGeneration: hopGeneration
+      )
     case .usage:
-      appState.pendingDestination = .usage(slug: argument)
+      hopUsage(
+        argument: argument,
+        bind: bind,
+        cachedRows: cachedRows,
+        hopGeneration: hopGeneration
+      )
     }
+  }
+
+  /// `/dex` with no arg opens the index. A still-valid pick bind or an exact
+  /// display-name / slug hit hops ``AppDestination/dexHop``. Unresolved names
+  /// (including fuzzy-only search hits) hop to the index.
+  private func hopDex(
+    argument: String?,
+    bind: DexBind?,
+    cachedRows: [DexNameRow],
+    hopGeneration: Int
+  ) {
+    let query = argument?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if query.isEmpty {
+      appState.pendingDestination = .dex(query: nil)
+      return
+    }
+    if let bind, slashBindMatches(bind, query: query, dex: true) {
+      appState.pendingDestination = .dexHop(
+        DexArtifactHop(kind: bind.kind.entityKind, query: bind.slug, format: .champions)
+      )
+      return
+    }
+    if let hit = exactNameRow(in: cachedRows, query: query) {
+      appState.pendingDestination = .dexHop(
+        DexArtifactHop(kind: hit.kind.entityKind, query: hit.slug, format: .champions)
+      )
+      return
+    }
+    Task { @MainActor in
+      let rows = await searchSlashDex(query: query)
+      guard hopGeneration == slashHopGeneration else { return }
+      if let hit = exactNameRow(in: rows, query: query) {
+        appState.pendingDestination = .dexHop(
+          DexArtifactHop(kind: hit.kind.entityKind, query: hit.slug, format: .champions)
+        )
+      } else {
+        appState.pendingDestination = .dex(query: nil)
+      }
+    }
+  }
+
+  /// `/usage` with no arg (or an unresolved token, including `ou`) opens the
+  /// leaderboard. A Champions species slug drills in only on an exact name/slug hit.
+  private func hopUsage(
+    argument: String?,
+    bind: DexBind?,
+    cachedRows: [DexNameRow],
+    hopGeneration: Int
+  ) {
+    let query = argument?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if query.isEmpty {
+      appState.pendingDestination = .usage(slug: nil)
+      return
+    }
+    if let bind, slashBindMatches(bind, query: query, dex: false) {
+      appState.pendingDestination = .usage(slug: bind.slug)
+      return
+    }
+    if let hit = exactNameRow(in: cachedRows, query: query, pokemonOnly: true) {
+      appState.pendingDestination = .usage(slug: hit.slug)
+      return
+    }
+    Task { @MainActor in
+      let rows = await searchSlashUsage(query: query)
+      guard hopGeneration == slashHopGeneration else { return }
+      appState.pendingDestination = .usage(
+        slug: exactNameRow(in: rows, query: query, pokemonOnly: true)?.slug
+      )
+    }
+  }
+
+  /// Exact display-name match first, then exact slug (case-insensitive). Never
+  /// the first row of a fuzzy list.
+  private func exactNameRow(
+    in rows: [DexNameRow],
+    query: String,
+    pokemonOnly: Bool = false
+  ) -> DexNameRow? {
+    let needle = query.lowercased()
+    let pool = pokemonOnly ? rows.filter { $0.kind == .pokemon } : rows
+    if let byName = pool.first(where: { $0.displayName.lowercased() == needle }) {
+      return byName
+    }
+    return pool.first(where: { $0.slug.lowercased() == needle })
+  }
+
+  private func slashBindMatches(_ bind: DexBind, query: String, dex: Bool) -> Bool {
+    let needle = query.lowercased()
+    let nameOrSlug =
+      bind.displayName.lowercased() == needle || bind.slug.lowercased() == needle
+    if dex { return nameOrSlug }
+    return bind.kind == .pokemon && nameOrSlug
   }
 
   /// Refresh mention suggestions as the composer text changes.
   func updateMentionQuery() {
+    if isSlashPickerVisible {
+      mentionSuggestions = []
+      return
+    }
     guard isSignedIn else {
       mentionSuggestions = []
       return
@@ -1270,6 +1458,180 @@ final class ChatViewModel {
     let needle = query.lowercased()
     mentionSuggestions = savedTeams.filter { team in
       needle.isEmpty || team.name.lowercased().contains(needle)
+    }
+  }
+
+  /// Recompute picker rows from ``composerText``. Dex / Usage searches debounce
+  /// 150ms; stale generations are dropped. Previous name rows stay until the
+  /// new generation lands.
+  func updateSlashPicker() {
+    let token = leadingSlashToken(composerText)
+    if token != slashDismissedToken {
+      slashPickerDismissed = false
+      slashDismissedToken = token
+    }
+    if let bind = dexBind, !slashBindStillValid(bind) {
+      dexBind = nil
+    }
+    switch SlashPicker.phase(composerText) {
+    case .hidden, .rest, .commands:
+      slashSearchTask?.cancel()
+      slashSearchGeneration += 1
+      slashNameRows = []
+      slashTeamRows = []
+      slashEmptyCopy = nil
+      lastSlashArgCommand = nil
+    case .args(let command, let query):
+      if lastSlashArgCommand != command {
+        slashNameRows = []
+        slashTeamRows = []
+        slashEmptyCopy = nil
+        lastSlashArgCommand = command
+      }
+      scheduleSlashArgSearch(command: command, query: query)
+    }
+  }
+
+  /// Hide the picker until the leading slash token changes (SD-AC-8.6).
+  func dismissSlashPicker() {
+    switch SlashPicker.phase(composerText) {
+    case .commands, .args:
+      slashPickerDismissed = true
+      slashDismissedToken = leadingSlashToken(composerText)
+    default:
+      break
+    }
+  }
+
+  func insertSlashCommand(_ token: String) {
+    composerText = SlashPicker.insertCommand(token)
+    dexBind = nil
+    slashPickerDismissed = false
+    updateSlashPicker()
+    updateMentionQuery()
+  }
+
+  func insertSlashName(_ row: DexNameRow) {
+    switch SlashPicker.phase(composerText) {
+    case .args(.dex, _):
+      composerText = SlashPicker.insertName("/dex", row.displayName)
+      dexBind = DexBind(kind: row.kind, slug: row.slug, displayName: row.displayName)
+    case .args(.usage, _):
+      composerText = SlashPicker.insertName("/usage", row.displayName)
+      dexBind = DexBind(kind: row.kind, slug: row.slug, displayName: row.displayName)
+    default:
+      return
+    }
+    if !lastSlashNameRows.contains(where: { $0.id == row.id }) {
+      lastSlashNameRows.insert(row, at: 0)
+    }
+    slashPickerDismissed = false
+    updateSlashPicker()
+    updateMentionQuery()
+  }
+
+  func insertSlashTeam(_ team: TeamSummary) {
+    composerText = SlashPicker.insertName("/team", team.name)
+    dexBind = nil
+    slashPickerDismissed = false
+    updateSlashPicker()
+    updateMentionQuery()
+  }
+
+  private func scheduleSlashArgSearch(command: SlashPickerPhase.ArgsCommand, query: String) {
+    slashSearchTask?.cancel()
+    slashSearchGeneration += 1
+    let generation = slashSearchGeneration
+
+    switch command {
+    case .team:
+      applyTeamSlashRows(query: query)
+    case .dex:
+      slashSearchTask = Task { @MainActor in
+        try? await Task.sleep(nanoseconds: 150_000_000)
+        guard !Task.isCancelled, generation == slashSearchGeneration else { return }
+        let rows = await searchSlashDex(query: query)
+        guard !Task.isCancelled, generation == slashSearchGeneration else { return }
+        slashNameRows = rows
+        lastSlashNameRows = rows
+        slashTeamRows = []
+        slashEmptyCopy = rows.isEmpty ? SlashPicker.emptyDex : nil
+      }
+    case .usage:
+      slashSearchTask = Task { @MainActor in
+        try? await Task.sleep(nanoseconds: 150_000_000)
+        guard !Task.isCancelled, generation == slashSearchGeneration else { return }
+        let rows = await searchSlashUsage(query: query)
+        guard !Task.isCancelled, generation == slashSearchGeneration else { return }
+        slashNameRows = rows
+        lastSlashNameRows = rows
+        slashTeamRows = []
+        slashEmptyCopy = rows.isEmpty ? SlashPicker.emptyUsage : nil
+      }
+    }
+  }
+
+  private func applyTeamSlashRows(query: String) {
+    slashSearchTask?.cancel()
+    slashNameRows = []
+    guard isSignedIn else {
+      slashTeamRows = []
+      slashEmptyCopy = SlashPicker.emptyTeamsGuest
+      return
+    }
+    let needle = query.lowercased()
+    let rows = savedTeams.filter { team in
+      team.isLiving && (needle.isEmpty || team.name.lowercased().contains(needle))
+    }
+    slashTeamRows = Array(rows.prefix(8))
+    slashEmptyCopy = slashTeamRows.isEmpty ? SlashPicker.emptyTeams : nil
+  }
+
+  private func leadingSlashToken(_ text: String) -> String {
+    let trimmed = String(text.drop(while: \.isWhitespace))
+    guard trimmed.hasPrefix("/") else { return "" }
+    if let match = trimmed.range(of: #"^\S+"#, options: .regularExpression) {
+      return String(trimmed[match])
+    }
+    return ""
+  }
+
+  private func slashBindStillValid(_ bind: DexBind) -> Bool {
+    if SlashPicker.bindStillValid(bind, composerText: composerText) { return true }
+    let parsed = SlashCommands.parse(composerText, hasUsagePage: true)
+    guard parsed == .navigate(target: .usage), bind.kind == .pokemon else { return false }
+    return SlashCommands.slashArg(composerText).lowercased() == bind.displayName.lowercased()
+  }
+
+  private func searchSlashDex(query: String) async -> [DexNameRow] {
+    guard let dexLookup else { return [] }
+    async let pokemon = dexLookup.search(kind: .pokemon, query: query, format: .champions)
+    async let move = dexLookup.search(kind: .move, query: query, format: .champions)
+    async let ability = dexLookup.search(kind: .ability, query: query, format: .champions)
+    async let item = dexLookup.search(kind: .item, query: query, format: .champions)
+    let groups: [(kind: DexNameRow.Kind, matches: [DexNameRow])] = [
+      (kind: .pokemon, matches: dexRows(from: await pokemon, kind: .pokemon)),
+      (kind: .move, matches: dexRows(from: await move, kind: .move)),
+      (kind: .ability, matches: dexRows(from: await ability, kind: .ability)),
+      (kind: .item, matches: dexRows(from: await item, kind: .item)),
+    ]
+    return SlashPicker.mergeDexNameRows(groups, limit: 8)
+  }
+
+  private func searchSlashUsage(query: String) async -> [DexNameRow] {
+    guard let dexLookup else { return [] }
+    let matches = await dexLookup.search(kind: .pokemon, query: query, format: .champions)
+    return dexRows(from: matches, kind: .pokemon)
+  }
+
+  private func dexRows(from matches: [SearchMatch], kind: DexNameRow.Kind) -> [DexNameRow] {
+    matches.prefix(8).map { match in
+      DexNameRow(
+        kind: DexNameRow.Kind(entityKind: match.kind) ?? kind,
+        slug: match.slug,
+        displayName: match.displayName,
+        spriteUrl: match.spriteUrl
+      )
     }
   }
 
@@ -1286,6 +1648,9 @@ final class ChatViewModel {
   func loadMentionTeams() async {
     guard isSignedIn, let teams else { return }
     savedTeams = (try? await teams.list(format: nil)) ?? []
+    if case .args(.team, let query) = SlashPicker.phase(composerText) {
+      applyTeamSlashRows(query: query)
+    }
   }
 
   func loadEmptyDeskRecents() async {

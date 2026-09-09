@@ -514,6 +514,56 @@ describe("Home — Dex / Usage hops (SD-US-5, SD-BR-11, SD-BR-12, ADR-6)", () =>
     expect(dest).not.toContain("zzq");
     expect(chatBodies).toHaveLength(0);
   });
+
+  it("sends /usage ou to /usage, not a neighbouring species (SD-AC-5.7, SD-BR-12)", async () => {
+    render(<Home />);
+    await screen.findByTestId("composer");
+    fireEvent.change(composerInput(), { target: { value: "/usage ou" } });
+    await clickSend();
+    await waitFor(() => expect(routerPush).toHaveBeenCalled());
+    const dest = String(routerPush.mock.calls[0]![0]);
+    expect(dest).toBe("/usage");
+    expect(dest).not.toMatch(/garchomp/i);
+    expect(chatBodies).toHaveLength(0);
+    expect(chatFetchCalls()).toHaveLength(0);
+  });
+
+  it("sends unmatched /usage zzq to /usage (SD-AC-5.7, SD-BR-11)", async () => {
+    render(<Home />);
+    await screen.findByTestId("composer");
+    fireEvent.change(composerInput(), { target: { value: "/usage zzq" } });
+    await clickSend();
+    await waitFor(() => expect(routerPush).toHaveBeenCalled());
+    expect(String(routerPush.mock.calls[0]![0])).toBe("/usage");
+    expect(chatBodies).toHaveLength(0);
+  });
+
+  it("picked Metronome item hops to /items/metronome (SD-AC-5.3, SD-BR-17)", async () => {
+    render(<Home />);
+    const input = await screen.findByTestId("composer-input");
+    fireEvent.change(input, { target: { value: "/dex metronome" } });
+    const picker = await screen.findByTestId("slash-autocomplete");
+    const item = await waitFor(() => {
+      const row = within(picker)
+        .getAllByRole("option")
+        .find(
+          (el) =>
+            /metronome/i.test(el.textContent ?? "") &&
+            /item/i.test(el.textContent ?? ""),
+        );
+      expect(row).toBeTruthy();
+      return row!;
+    });
+    fireEvent.click(item);
+    expect(composerInput().value).toBe("/dex Metronome");
+    await clickSend();
+    await waitFor(() => expect(routerPush).toHaveBeenCalled());
+    expect(String(routerPush.mock.calls[0]![0])).toBe(
+      `/items/${encodeURIComponent("metronome")}`,
+    );
+    expect(chatBodies).toHaveLength(0);
+    expect(chatFetchCalls()).toHaveLength(0);
+  });
 });
 
 describe("Home — /help and lone / (SD-US-4, SD-US-7)", () => {

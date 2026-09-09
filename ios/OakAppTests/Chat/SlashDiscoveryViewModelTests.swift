@@ -162,6 +162,24 @@ struct SlashDiscoveryViewModelTests {
   }
 
   @Test
+  func usageFuzzySearchHitDoesNotHopThatSpecies() async {
+    let fake = FakeChatService()
+    let dex = FakeDexLookupService()
+    dex.searchResults["pokemon:ou"] = [
+      SearchMatch(slug: "incineroar", displayName: "Incineroar", kind: .pokemon),
+    ]
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState, dexLookup: dex)
+    vm.composerText = "/usage ou"
+
+    vm.send()
+    await waitUntil { appState.pendingDestination != nil }
+
+    #expect(fake.sendCount == 0)
+    #expect(appState.pendingDestination == .usage(slug: nil))
+  }
+
+  @Test
   func usageMoveNameHopsUsageIndexNotASpecies() async {
     let fake = FakeChatService()
     let dex = FakeDexLookupService()
@@ -233,6 +251,24 @@ struct SlashDiscoveryViewModelTests {
   }
 
   @Test
+  func unmatchedDexNameHopsDexIndex() async {
+    let fake = FakeChatService()
+    let dex = FakeDexLookupService()
+    dex.searchResults["pokemon:zzq"] = [
+      SearchMatch(slug: "garchomp", displayName: "Garchomp", kind: .pokemon),
+    ]
+    let appState = AppState()
+    let vm = makeViewModel(fake: fake, appState: appState, dexLookup: dex)
+    vm.composerText = "/dex zzq"
+
+    vm.send()
+    await waitUntil { appState.pendingDestination != nil }
+
+    #expect(fake.sendCount == 0)
+    #expect(appState.pendingDestination == .dex(query: nil))
+  }
+
+  @Test
   func dexHopDoesNotClearPendingImages() async {
     let fake = FakeChatService()
     let appState = AppState()
@@ -247,6 +283,21 @@ struct SlashDiscoveryViewModelTests {
     #expect(appState.pendingDestination == .dex(query: nil))
     #expect(vm.pendingImages.count == 1)
     #expect(vm.composerText == "")
+  }
+
+  @Test
+  func newChatHopKeepsPendingImages() {
+    let fake = FakeChatService()
+    let vm = makeViewModel(fake: fake)
+    attachOneImage(vm)
+    vm.composerText = "/new"
+
+    vm.send()
+
+    #expect(fake.sendCount == 0)
+    #expect(vm.turns.isEmpty)
+    #expect(vm.composerText == "")
+    #expect(vm.pendingImages.count == 1)
   }
 
   // MARK: SD-AC-2.5 / SD-BR-8 — edit last is not intercepted

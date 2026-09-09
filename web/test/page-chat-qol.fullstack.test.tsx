@@ -605,8 +605,8 @@ describe("Home — slash intercept (SLASH-US-1, ADR-10)", () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId("composer-send"));
     });
+    await waitFor(() => expect(routerPush).toHaveBeenCalled());
     expect(chatBodies).toHaveLength(0);
-    expect(routerPush).toHaveBeenCalled();
     const dest = String(routerPush.mock.calls[0]![0]);
     expect(dest).toMatch(/pokedex|dex/i);
   });

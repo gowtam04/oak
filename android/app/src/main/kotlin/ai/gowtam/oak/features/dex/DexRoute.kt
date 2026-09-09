@@ -29,7 +29,14 @@ import androidx.compose.ui.Modifier
  * state survives a detail push and pops cleanly.
  */
 @Composable
-fun DexRoute(services: ServiceContainer, appState: AppState, modifier: Modifier = Modifier) {
+fun DexRoute(
+    services: ServiceContainer,
+    appState: AppState,
+    modifier: Modifier = Modifier,
+    pendingUsageSlug: String? = null,
+    pendingSelectDexSection: DexSection? = null,
+    onConsumeUsageHop: () -> Unit = {},
+) {
     val viewModel = remember(services) {
         DexViewModel(
             dexLookup = services.dexLookup,
@@ -43,20 +50,54 @@ fun DexRoute(services: ServiceContainer, appState: AppState, modifier: Modifier 
     val stack = rememberSaveable(saver = dexStackSaver()) { mutableStateListOf<DexEntityRoute>() }
 
     val surface by appState.surfaceRequest.collectAsState()
-    LaunchedEffect(surface) {
+    var openUsageSlug by remember { mutableStateOf<String?>(null) }
+    var openUsageGen by remember { mutableStateOf(0) }
+    var usageHopHandled by remember { mutableStateOf(false) }
+    LaunchedEffect(surface, pendingSelectDexSection, pendingUsageSlug) {
         when (val req = surface) {
-            is ai.gowtam.oak.app.AppState.SurfaceRequest.Dex -> {
+            is AppState.SurfaceRequest.Dex -> {
+                usageHopHandled = false
                 val query = req.query
                 if (!query.isNullOrBlank()) {
                     val kind = req.kind ?: EntityKind.POKEMON
+                    DexSection.entries.find { it.entityKind == kind }?.let { viewModel.selectSection(it) }
                     viewModel.applyHop(kind, query, Format.Champions)
                     stack.add(DexEntityRoute(kind, query))
                 }
                 appState.consumeSurfaceRequest()
             }
-            ai.gowtam.oak.app.AppState.SurfaceRequest.Usage -> {
-                viewModel.selectSection(DexSection.Usage)
+            is AppState.SurfaceRequest.Usage -> {
+                applyUsageHop(
+                    slug = req.slug,
+                    stack = stack,
+                    viewModel = viewModel,
+                    onSlug = { slug ->
+                        openUsageSlug = slug
+                        openUsageGen++
+                    },
+                )
+                usageHopHandled = true
                 appState.consumeSurfaceRequest()
+                onConsumeUsageHop()
+            }
+            AppState.SurfaceRequest.None -> {
+                val fromOak = pendingSelectDexSection == DexSection.Usage
+                if (!fromOak) {
+                    usageHopHandled = false
+                    return@LaunchedEffect
+                }
+                if (usageHopHandled) return@LaunchedEffect
+                applyUsageHop(
+                    slug = pendingUsageSlug,
+                    stack = stack,
+                    viewModel = viewModel,
+                    onSlug = { slug ->
+                        openUsageSlug = slug
+                        openUsageGen++
+                    },
+                )
+                usageHopHandled = true
+                onConsumeUsageHop()
             }
             else -> Unit
         }
@@ -78,6 +119,9 @@ fun DexRoute(services: ServiceContainer, appState: AppState, modifier: Modifier 
             usage = services.usage,
             onOpen = { kind, query -> stack.add(DexEntityRoute(kind, query)) },
             modifier = modifier,
+            pendingUsageSlug = openUsageSlug,
+            pendingUsageGen = openUsageGen,
+            onUsageSlugConsumed = { openUsageSlug = null },
         )
     } else {
         DexDetailScreen(
@@ -111,6 +155,18 @@ fun DexRoute(services: ServiceContainer, appState: AppState, modifier: Modifier 
             },
         )
     }
+}
+
+private fun applyUsageHop(
+    slug: String?,
+    stack: MutableList<DexEntityRoute>,
+    viewModel: DexViewModel,
+    onSlug: (String) -> Unit,
+) {
+    stack.clear()
+    viewModel.clearDetail()
+    viewModel.selectSection(DexSection.Usage)
+    if (!slug.isNullOrBlank()) onSlug(slug)
 }
 
 private fun dexStackSaver() = listSaver<MutableList<DexEntityRoute>, String>(

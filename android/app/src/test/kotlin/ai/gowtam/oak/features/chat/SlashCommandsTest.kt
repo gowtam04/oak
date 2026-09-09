@@ -172,7 +172,7 @@ class SlashCommandsTest {
     }
 
     @Test
-    fun `classifies slash-help as help; extra words are ignored (SD-AC-4_3, SD-BR-18)`() {
+    fun `classifies slash-help as help — extra words are ignored (SD-AC-4_3, SD-BR-18)`() {
         assertEquals(SlashCommand.Help, parseSlashCommand("/help", web))
         assertEquals(SlashCommand.Help, parseSlashCommand("/help", native))
         assertEquals(SlashCommand.Help, parseSlashCommand("/help extra words", web))

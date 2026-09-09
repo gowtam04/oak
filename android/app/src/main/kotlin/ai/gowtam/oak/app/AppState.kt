@@ -174,8 +174,8 @@ class AppState(
         data class Teams(val id: String? = null, val name: String? = null) : SurfaceRequest
         data class ShareSnapshot(val id: String) : SurfaceRequest
         data class Calculator(val scenario: ai.gowtam.oak.wire.CalcScenario?) : SurfaceRequest
-        /** Open the Dex tab on the Usage section (ADR-6). */
-        data object Usage : SurfaceRequest
+        /** Open the Dex tab on the Usage section (ADR-6), optionally a species drill-in. */
+        data class Usage(val slug: String? = null) : SurfaceRequest
     }
 
     private val _surfaceRequest = MutableStateFlow<SurfaceRequest>(SurfaceRequest.None)
@@ -201,8 +201,8 @@ class AppState(
         _surfaceRequest.value = SurfaceRequest.Calculator(scenario)
     }
 
-    fun requestUsage() {
-        _surfaceRequest.value = SurfaceRequest.Usage
+    fun requestUsage(slug: String? = null) {
+        _surfaceRequest.value = SurfaceRequest.Usage(slug)
     }
 
     fun consumeSurfaceRequest() {

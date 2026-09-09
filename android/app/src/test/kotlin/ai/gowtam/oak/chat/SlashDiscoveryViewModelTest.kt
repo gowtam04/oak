@@ -2,6 +2,8 @@ package ai.gowtam.oak.chat
 
 import ai.gowtam.oak.app.AppState
 import ai.gowtam.oak.features.chat.ChatViewModel
+import ai.gowtam.oak.features.chat.DexNameKind
+import ai.gowtam.oak.features.chat.DexNameRow
 import ai.gowtam.oak.services.DexLookupService
 import ai.gowtam.oak.support.FakeChatService
 import ai.gowtam.oak.support.MainDispatcherRule
@@ -283,6 +285,35 @@ class SlashDiscoveryViewModelTest {
     }
 
     @Test
+    fun slashDexMetronomeBindOpensPickedKind() = runTest(mainDispatcherRule.dispatcher) {
+        val chat = FakeChatService()
+        val appState = AppState()
+        val dex = ScriptedDexLookup(
+            mapOf(
+                EntityKind.MOVE to listOf(metronomeMoveMatch),
+                EntityKind.ITEM to listOf(metronomeItemMatch),
+            ),
+        )
+        val vm = newModel(chat = chat, appState = appState, dexLookup = dex)
+        vm.setComposerText("/dex ")
+        vm.insertSlashName(
+            DexNameRow(
+                kind = DexNameKind.Item,
+                slug = "metronome",
+                displayName = "Metronome",
+            ),
+        )
+
+        vm.send()
+        advanceUntilIdle()
+
+        assertTrue(chat.sendWithImagesCalls.isEmpty())
+        val req = appState.surfaceRequest.value as AppState.SurfaceRequest.Dex
+        assertEquals("metronome", req.query)
+        assertEquals(EntityKind.ITEM, req.kind)
+    }
+
+    @Test
     fun unmatchedDexNameRequestsDexIndexNotAGuessedSlug() = runTest(mainDispatcherRule.dispatcher) {
         val chat = FakeChatService()
         val appState = AppState()
@@ -495,6 +526,16 @@ class SlashDiscoveryViewModelTest {
             slug = "earthquake",
             displayName = "Earthquake",
             kind = EntityKind.MOVE,
+        )
+        val metronomeMoveMatch = SearchMatch(
+            slug = "metronome",
+            displayName = "Metronome",
+            kind = EntityKind.MOVE,
+        )
+        val metronomeItemMatch = SearchMatch(
+            slug = "metronome",
+            displayName = "Metronome",
+            kind = EntityKind.ITEM,
         )
     }
 }

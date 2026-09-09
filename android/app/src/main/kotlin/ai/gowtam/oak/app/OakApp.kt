@@ -8,6 +8,7 @@ import ai.gowtam.oak.features.auth.AuthViewModel
 import ai.gowtam.oak.features.chat.ChatScreen
 import ai.gowtam.oak.features.chat.ChatViewModel
 import ai.gowtam.oak.features.dex.DexRoute
+import ai.gowtam.oak.features.dex.DexSection
 import ai.gowtam.oak.features.history.HistoryScreen
 import ai.gowtam.oak.features.history.HistoryViewModel
 import ai.gowtam.oak.features.share.ShareSnapshotScreen
@@ -114,11 +115,17 @@ fun OakApp(
     val reduceMotion = rememberReduceMotion()
     var shareSnapshotId by remember { mutableStateOf<String?>(null) }
     var calculatorScenario by remember { mutableStateOf<ai.gowtam.oak.wire.CalcScenario?>(null) }
+    var pendingUsageSlug by remember { mutableStateOf<String?>(null) }
+    var pendingSelectDexSection by remember { mutableStateOf<DexSection?>(null) }
 
     LaunchedEffect(surface) {
         when (val req = surface) {
             is AppState.SurfaceRequest.Dex -> selectedTab = OakTab.Dex
-            AppState.SurfaceRequest.Usage -> selectedTab = OakTab.Dex
+            is AppState.SurfaceRequest.Usage -> {
+                selectedTab = OakTab.Dex
+                pendingUsageSlug = req.slug
+                pendingSelectDexSection = DexSection.Usage
+            }
             is AppState.SurfaceRequest.Teams -> selectedTab = OakTab.Teams
             is AppState.SurfaceRequest.ShareSnapshot -> {
                 shareSnapshotId = req.id
@@ -245,7 +252,16 @@ fun OakApp(
                                 },
                             )
                             OakTab.Teams -> TeamsRoute(services = services, appState = appState)
-                            OakTab.Dex -> DexRoute(services = services, appState = appState)
+                            OakTab.Dex -> DexRoute(
+                                services = services,
+                                appState = appState,
+                                pendingUsageSlug = pendingUsageSlug,
+                                pendingSelectDexSection = pendingSelectDexSection,
+                                onConsumeUsageHop = {
+                                    pendingUsageSlug = null
+                                    pendingSelectDexSection = null
+                                },
+                            )
                             OakTab.Calculator -> {
                                 val chatFormat = chatViewModel.uiState.collectAsState().value.displayFormat
                                 ai.gowtam.oak.features.calc.CalculatorScreen(
