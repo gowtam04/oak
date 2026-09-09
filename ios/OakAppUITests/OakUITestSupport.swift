@@ -63,15 +63,17 @@ enum OakUITest {
 
   // MARK: Visible-label targets (mirror the app's labels)
 
-  /// Tab-bar button labels (`RootView`). The app ships FOUR tabs — Chat, Teams, Dex,
-  /// and Account. History folded into the Chat tab (signed-in users see a conversation
-  /// list there); Account is a first-class tab (no intermediate More list).
+  /// Tab-bar button labels (`OakTabDock`). Five tabs: Chat / Teams / Usage / Dex /
+  /// Settings. Calc stays a cover (ADR-6). History is folded into Chat.
   enum Tab {
+    /// Accessibility identifier of the custom paper dock (the system `UITabBar` is hidden).
+    static let dockIdentifier = "oak-tab-dock"
     static let chat = "Chat"
     static let teams = "Teams"
+    static let usage = "Usage"
     static let dex = "Dex"
-    static let account = "Account"
-    static let all = [chat, teams, dex, account]
+    static let account = "Settings"
+    static let all = [chat, teams, usage, dex, account]
   }
 
   /// Chat surface (`ChatView` / `ComposerView`).
@@ -88,13 +90,13 @@ enum OakUITest {
 
   /// Streaming status phases (`StreamingStatusView`).
   enum Streaming {
-    static let thinking = "Thinking…"
-    static let usingTools = "Looking things up…"
-    /// Prefix of the live "Looking up {nouns}" sentence (Signal streaming).
-    static let lookingUpPrefix = "Looking up"
-    static let answering = "Writing the answer…"
-    static let reconnecting = "Reconnecting…"
-    static let all = [thinking, usingTools, answering, reconnecting]
+    static let thinking = "Thinking"
+    static let usingTools = "Thinking"
+    /// Prefix of the settled thinking header.
+    static let thoughtPrefix = "Thought for"
+    static let answering = "Thought for"
+    static let reconnecting = "Reconnecting"
+    static let all = [thinking, reconnecting]
   }
 
   /// Finalized-answer structural markers (`AnswerCardView` tree).
@@ -103,9 +105,9 @@ enum OakUITest {
     static let openTeamInViewer = "Open team in viewer"
   }
 
-  /// Account / Settings surface (`AccountView`) — first-class tab root.
+  /// Settings surface (`AccountView`) — first-class tab root.
   enum Account {
-    static let navigationTitle = "Account"
+    static let navigationTitle = "Settings"
     static let signIn = "Sign in"
     static let signOut = "Sign out"
     static let deleteAccount = "Delete account"
@@ -151,6 +153,12 @@ extension XCUIApplication {
     let byPlaceholder = textFields[OakUITest.Chat.composerPlaceholder]
     return byPlaceholder.exists ? byPlaceholder : textFields.firstMatch
   }
+
+  /// Oak's paper tab dock. The system `UITabBar` is hidden so iOS 26 cannot
+  /// draw Liquid Glass; XCTest queries this identifier instead of `tabBars`.
+  var oakTabBar: XCUIElement {
+    otherElements[OakUITest.Tab.dockIdentifier]
+  }
 }
 
 // MARK: - Navigation helpers
@@ -160,7 +168,7 @@ extension XCTestCase {
   @MainActor
   @discardableResult
   func goToTab(_ label: String, in app: XCUIApplication, timeout: TimeInterval = 10) -> Bool {
-    let tab = app.tabBars.buttons[label]
+    let tab = app.oakTabBar.buttons[label]
     guard tab.waitForExistence(timeout: timeout) else { return false }
     tab.tap()
     return true

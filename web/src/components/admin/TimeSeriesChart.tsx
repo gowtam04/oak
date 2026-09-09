@@ -87,7 +87,7 @@ const DEFAULT_HEIGHT = 180;
  */
 const DEFAULT_PALETTE = [
   "var(--info, #2b7dd1)",
-  "var(--poke-red, #e3350d)",
+  "var(--poke-red, #ee5a5a)",
   "var(--success, #1f9d61)",
   "var(--warning, #e08700)",
   "var(--neutral-500, #8a9096)",

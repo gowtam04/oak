@@ -26,7 +26,14 @@ import {
   within,
 } from "@testing-library/react";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 import Home from "@/app/page";
+import { regulationChipLabel } from "@/data/formats";
 import { formatSseEvent } from "@/lib/sse/sse-types";
 import { MINIMAL_ANSWER } from "@/components/test-fixtures";
 import type { ChatTurn, OakAnswer } from "@/components/types";
@@ -133,10 +140,21 @@ beforeEach(() => {
       if (path === "/api/chat") {
         const body = JSON.parse(init!.body!);
         lastChatBody = { champions_mode: body.champions_mode, scope_seed: body.scope_seed };
-        return sseAnswerResponse(makeAnswer(`answer to: ${body.message}`));
+        const answer = makeAnswer(`answer to: ${body.message}`);
+        const convo = serverConvos.find((c) => c.id === body.session_id);
+        if (convo) {
+          convo.turns = [
+            ...convo.turns,
+            { id: `u-${++clock}`, role: "user", content: body.message },
+            { id: `a-${clock}`, role: "assistant", answer },
+          ];
+        }
+        return sseAnswerResponse(answer);
       }
 
       // --- conversations ---
+      if (path === "/api/folders") return jsonResponse(200, { folders: [] });
+      if (path === "/api/teams") return jsonResponse(200, { teams: [] });
       if (path === "/api/conversations" && method === "GET") {
         const list = [...serverConvos]
           .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt)
@@ -269,13 +287,13 @@ describe("Home — chat-history sidebar", () => {
     expect(screen.getByText("Here is a rain team")).toBeInTheDocument();
     // The loaded conversation's Champions scope carries forward (AC-5.4), shown
     // by the header scope chip.
-    expect(screen.getByTestId("scope-chip")).toHaveTextContent("Champions · Reg M-B");
+    expect(screen.getByTestId("scope-chip")).toHaveTextContent(regulationChipLabel());
     await sendAndAwait("another rain question", 2);
     expect(lastChatBody!.champions_mode).toBeUndefined();
     expect(lastChatBody!.scope_seed).toBeUndefined();
   });
 
-  it("New chat resets to an empty thread (AC-6.1) and the chip to the National Dex default", async () => {
+  it("New chat resets to an empty thread (AC-6.1) and the chip stays Champions regulation", async () => {
     render(<Home />);
     await screen.findByTestId("auth-signin-button");
     await sendAndAwait("a question", 1);
@@ -287,9 +305,11 @@ describe("Home — chat-history sidebar", () => {
     });
     expect(screen.queryByTestId("user-turn")).not.toBeInTheDocument();
     expect(screen.queryByTestId("assistant-turn")).not.toBeInTheDocument();
-    // …and the chip resets to the National Dex default on the fresh thread.
     expect(screen.getByTestId("scope-chip")).toHaveTextContent(
-      "National Dex · All Gens",
+      regulationChipLabel(),
+    );
+    expect(screen.getByTestId("scope-chip")).not.toHaveTextContent(
+      /National Dex/i,
     );
   });
 
@@ -352,6 +372,7 @@ describe("Home — chat-history sidebar", () => {
   });
 
   it("deleting the open conversation resets to a new chat (AC-8.2)", async () => {
+    seedConvo({ id: "keep-me", title: "Keep this thread" });
     seedConvo({
       id: "to-delete",
       title: "Doomed thread",
@@ -373,7 +394,9 @@ describe("Home — chat-history sidebar", () => {
     await waitFor(() => expect(screen.getByText("doomed question")).toBeInTheDocument());
 
     // Delete it from its row (confirm step).
-    const rowEl = within(sidebar).getByTestId("conversation-row");
+    const rowEl = within(sidebar)
+      .getByTitle("Doomed thread")
+      .closest("[data-testid='conversation-row']") as HTMLElement;
     await act(async () => {
       fireEvent.click(within(rowEl).getByRole("button", { name: "Delete conversation" }));
     });

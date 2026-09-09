@@ -81,6 +81,25 @@ describe("PokemonArtifact", () => {
     expect(() => fireEvent.click(moveBtn)).not.toThrow();
   });
 
+  it("shows Summary / Usage tabs when a slug is provided and stays on Summary", () => {
+    render(<PokemonArtifact data={POKEMON_WITH_QUAD} slug="garchomp" />);
+    expect(screen.getByTestId("pokemon-artifact-tab-summary")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByTestId("pokemon-stats")).toBeInTheDocument();
+    expect(screen.queryByTestId("pokemon-usage")).not.toBeInTheDocument();
+  });
+
+  it("opens the Usage tab without losing the summary on toggle back", async () => {
+    render(<PokemonArtifact data={POKEMON_WITH_QUAD} slug="garchomp" />);
+    fireEvent.click(screen.getByTestId("pokemon-artifact-tab-usage"));
+    expect(await screen.findByTestId("pokemon-usage")).toBeInTheDocument();
+    expect(screen.queryByTestId("pokemon-stats")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("pokemon-artifact-tab-summary"));
+    expect(screen.getByTestId("pokemon-stats")).toBeInTheDocument();
+  });
+
   it("orders movepool types and matchup rows by Champions display order", () => {
     render(<PokemonArtifact data={POKEMON_WITH_QUAD} />);
 
@@ -150,6 +169,67 @@ describe("ComparisonArtifact", () => {
     expect(screen.getByTestId("comparison-subject-0")).toBeInTheDocument();
     expect(screen.getByTestId("sprite-card")).toBeInTheDocument();
   });
+
+  it("renders a P5 profile diff and both format tags (CMP-US-1, CMP-AC-2.1)", () => {
+    render(
+      <ComparisonArtifact
+        subjects={[SUBJECT_GARCHOMP, SUBJECT_GARCHOMP]}
+        signedIn
+        diff={{
+          left: { format: "gen-4", name: "Garchomp" },
+          right: { format: "scarlet-violet", name: "Garchomp" },
+          stats: {
+            hp: { left: 108, right: 108, delta: 0 },
+            attack: { left: 130, right: 130, delta: 0 },
+            defense: { left: 95, right: 95, delta: 0 },
+            special_attack: { left: 80, right: 80, delta: 0 },
+            special_defense: { left: 85, right: 85, delta: 0 },
+            speed: { left: 102, right: 102, delta: 0 },
+          },
+          types: { left: ["dragon", "ground"], right: ["dragon", "ground"] },
+          abilities: {
+            left: ["sand-veil"],
+            right: ["sand-veil"],
+            onlyLeft: [],
+            onlyRight: [],
+            shared: ["sand-veil"],
+          },
+          speed: {
+            left: 102,
+            right: 102,
+            delta: 0,
+            level: 50,
+            nature: "hardy",
+            source: "default",
+          },
+          movepool: { onlyLeft: ["outrage"], onlyRight: [], shared: ["earthquake"] },
+          matchups: {
+            defensive: {
+              weak_to: { onlyLeft: [], onlyRight: [], shared: ["ice"] },
+              resists: { onlyLeft: [], onlyRight: [], shared: ["fire"] },
+              immune_to: { onlyLeft: [], onlyRight: [], shared: ["electric"] },
+            },
+            offensive: {
+              super_effective_against: { onlyLeft: [], onlyRight: [], shared: [] },
+              not_very_effective_against: {
+                onlyLeft: [],
+                onlyRight: [],
+                shared: [],
+              },
+              no_effect_against: { onlyLeft: [], onlyRight: [], shared: [] },
+            },
+          },
+        }}
+      />,
+    );
+    const diff = screen.getByTestId("comparison-diff");
+    expect(diff).toHaveTextContent(/movepool/i);
+    expect(screen.getByText("Gen 4")).toBeInTheDocument();
+    expect(screen.getByText("Scarlet/Violet")).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: /add to team/i }).length,
+    ).toBeGreaterThan(0);
+  });
 });
 
 describe("DamageCalcArtifact", () => {
@@ -157,5 +237,17 @@ describe("DamageCalcArtifact", () => {
     render(<DamageCalcArtifact damageCalc={DAMAGE_CALC_GARCHOMP} />);
     expect(screen.getByTestId("damage-calc-artifact")).toBeInTheDocument();
     expect(screen.getByTestId("damage-readout")).toBeInTheDocument();
+  });
+});
+
+describe("renderers — Dex stays on the viewer header (DEX-AC-1.2)", () => {
+  it("does not put Open in Dex on the standalone Pokémon / type renderer", () => {
+    render(<PokemonArtifact data={POKEMON_ARTIFACT.data} />);
+    expect(screen.queryByRole("link", { name: /open in dex/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /open in dex/i })).toBeNull();
+    cleanup();
+    render(<TypeMatchupsArtifact data={TYPE_ARTIFACT.data} />);
+    expect(screen.queryByRole("link", { name: /open in dex/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /open in dex/i })).toBeNull();
   });
 });

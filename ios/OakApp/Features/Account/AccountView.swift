@@ -1,12 +1,11 @@
 import SwiftUI
 
-/// The Account / Settings screen (M-UI-US-7): sign in/out, the current tier &
-/// what it unlocks, the **account-deletion** flow (M-ACCT-US-6 / M-NFR-6), and
-/// standard about/legal links. The former "Champions mode by default" preference
-/// was removed — scope is chosen per conversation via the header scope chip
-/// (`ChatView`), matching web (which also dropped its default toggle).
+/// The Settings screen (M-UI-US-7): appearance, answer-card density, sign in/out,
+/// the **account-deletion** flow (M-ACCT-US-6 / M-NFR-6), and about/legal links.
+/// Account actions live in an Account section inside Settings — the tab itself
+/// is Settings, not Account.
 ///
-/// Hosted as a first-class tab root (Chat / Teams / Dex / Account). The tab wraps
+/// Hosted as a first-class tab root (Chat / Teams / Dex / Settings). The tab wraps
 /// this view in a `NavigationStack`; this view supplies the `Form` and title.
 ///
 /// The view owns its ``AccountViewModel`` (`@State`) and drives it from `Task`s;
@@ -16,16 +15,17 @@ import SwiftUI
 /// carried by color alone (M-AC-UI9.3). Interactive controls carry VoiceOver
 /// labels/hints (M-AC-UI9.1).
 ///
-/// Chrome (UI-polish P6): a **profile header card** sits above the Form — a gradient
-/// wash with a 56pt avatar (email initial or `person.fill`), the tier title in the
-/// display face, and the email/sub-line beneath. The old `tierRow` folds into it.
-/// The header crossfades between the guest and signed-in faces (a crossfade is the
-/// Reduce-Motion-safe treatment; it's still gated so nothing animates when Reduce
-/// Motion is on). The color/gradient is decorative — the tier is always spelled out
-/// in text (M-AC-UI9.3).
+/// Chrome: a **paper profile card** sits above the Form — a 56pt enamel avatar
+/// (email initial or `person.fill`), the tier title in Fredoka, and the
+/// email/sub-line beneath. The old `tierRow` folds into it. The header
+/// crossfades between the guest and signed-in faces (gated under Reduce Motion).
+/// The avatar wash is decorative — the tier is always spelled out in text
+/// (M-AC-UI9.3).
 struct AccountView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(UpdateViewModel.self) private var updateModel
+  @Environment(\.services) private var services
+  @Environment(AppState.self) private var appState
   @State private var model: AccountViewModel
 
   /// Drives the sign-in sheet (presented over the guest state).
@@ -42,6 +42,9 @@ struct AccountView: View {
   var body: some View {
     Form {
       profileHeaderSection
+      appearanceSection
+      answerCardsSection
+      toolsSection
       accountSection
       if let message = model.errorMessage {
         errorSection(message)
@@ -54,10 +57,11 @@ struct AccountView: View {
     .scrollContentBackground(.hidden)
     .background(Theme.canvas)
     .listRowBackground(Theme.surface)
-    .navigationTitle("Account")
+    .navigationTitle("Settings")
     .navigationBarTitleDisplayMode(.inline)
     .sheet(isPresented: $showingSignIn) {
       AuthView(model: model.makeAuthViewModel())
+        .oakPaperSheet()
     }
     // Dismiss the sign-in sheet automatically once verification flips the app to
     // signed-in (the AuthView itself is presenter-agnostic).
@@ -117,16 +121,7 @@ struct AccountView: View {
     }
     .padding(16)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background {
-      RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-        .fill(
-          LinearGradient(
-            colors: [Theme.accent.opacity(0.14), Theme.azure.opacity(0.10)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
-        )
-    }
+    .oakCard()
     // Guest ↔ signed-in crossfade. A crossfade is inherently Reduce-Motion-safe, but
     // gate it anyway so nothing animates when the user has asked for stillness.
     .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.isSignedIn)
@@ -173,8 +168,8 @@ struct AccountView: View {
 
   // MARK: Account actions
 
-  /// The sign-in / sign-out control. The tier row it used to sit beside now lives in
-  /// the profile header above; this section keeps the primary account action.
+  /// Sign-in / sign-out and public shares. Lives under an Account header so the
+  /// Settings tab can hold appearance and other prefs above it.
   @ViewBuilder
   private var accountSection: some View {
     Section {
@@ -186,16 +181,83 @@ struct AccountView: View {
         }
         .disabled(model.isBusy)
         .accessibilityHint("Returns the app to guest mode and removes your session from this device.")
+        NavigationLink {
+          SharedByMeView(shares: services.shares)
+        } label: {
+          actionLabel(title: "Shared by me", systemImage: "link")
+        }
       } else {
         Button {
           showingSignIn = true
         } label: {
-          actionLabel(title: "Sign in", systemImage: "person.crop.circle.badge.plus")
+          actionLabel(title: "Sign in", systemImage: "person.crop.circle.badge.plus", tint: Theme.accent)
         }
         .accessibilityHint("Sign in with your email to unlock saved history and the team builder.")
       }
+    } header: {
+      Text("Account").instrumentLabel().foregroundStyle(Theme.textSecondary)
     } footer: {
       Text(model.tierDescription)
+    }
+  }
+
+  /// Full-row Light / Dark / System choices so the control is a labelled
+  /// settings list, not an unlabeled segmented picker mixed into other rows.
+  @ViewBuilder
+  private var appearanceSection: some View {
+    Section {
+      ForEach(AppearancePreference.allCases, id: \.self) { pref in
+        Button {
+          Haptics.tap()
+          appState.appearance = pref
+        } label: {
+          HStack {
+            actionLabel(title: pref.title, systemImage: pref.symbol)
+            Spacer()
+            if appState.appearance == pref {
+              Image(systemName: "checkmark")
+                .foregroundStyle(Theme.accent)
+                .accessibilityHidden(true)
+            }
+          }
+        }
+        .accessibilityAddTraits(appState.appearance == pref ? .isSelected : [])
+        .accessibilityHint("Sets the app appearance to \(pref.title).")
+      }
+    } header: {
+      Text("Appearance").instrumentLabel().foregroundStyle(Theme.textSecondary)
+    } footer: {
+      Text("System follows your iPhone's Light/Dark setting.")
+    }
+  }
+
+  @ViewBuilder
+  private var answerCardsSection: some View {
+    Section {
+      Picker(
+        "Answer cards",
+        selection: Binding(
+          get: { model.answerDensity },
+          set: { next in Task { await model.setAnswerDensity(next) } }
+        )
+      ) {
+        Text("Full").tag(AnswerDensity.full)
+        Text("Compact").tag(AnswerDensity.compact)
+      }
+    } footer: {
+      Text("Compact hides Why / Sources on answer cards. Facts and caveats stay visible.")
+    }
+  }
+
+  @ViewBuilder
+  private var toolsSection: some View {
+    Section {
+      Button {
+        appState.pendingDestination = .calculator(nil)
+      } label: {
+        actionLabel(title: "Calculator", systemImage: "function")
+      }
+      .accessibilityHint("Opens the damage calculator")
     }
   }
 
@@ -328,6 +390,7 @@ private struct PreviewAccountAuthService: AuthService {
   func me() async throws -> MeSnapshot { .guest }
   func signOut() async throws {}
   func deleteAccount() async throws {}
+  func setAnswerDensity(_ density: AnswerDensity) async throws -> AnswerDensity { density }
 }
 
 #Preview("Guest") {
@@ -339,6 +402,7 @@ private struct PreviewAccountAuthService: AuthService {
   return NavigationStack {
     AccountView(model: AccountViewModel(auth: PreviewAccountAuthService(), appState: state))
   }
+  .oakEnamelNav()
   .environment(state)
   .environment(updates)
 }
@@ -353,6 +417,7 @@ private struct PreviewAccountAuthService: AuthService {
   return NavigationStack {
     AccountView(model: AccountViewModel(auth: PreviewAccountAuthService(), appState: state))
   }
+  .oakEnamelNav()
   .environment(state)
   .environment(updates)
 }

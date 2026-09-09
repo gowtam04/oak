@@ -1,20 +1,17 @@
 /**
- * eval/cases.test.ts — structural unit tests for the G1..G60 case definitions.
+ * eval/cases.test.ts — structural unit tests for the Champions-first goldens.
  *
- * Owned by: phase "Eval" / track "cases".
+ * Owned by: phase "Eval" / track "cases" (champions-first P9).
  *
  * Tests the STRUCTURE and INTENT of cases.ts without any LLM or DB calls:
- *  - all 60 cases present with unique IDs G1..G60
- *  - every case has the required fields with valid types
- *  - multi-turn input (G19) is correctly shaped
- *  - deterministic subset matches the design.md + Oak v2 §7 spec
- *  - tool-efficiency cases (G1/G5/G6/G8) specify query_pokedex + maxPerPokemonFetches=0
+ *  - G1–G26 + G61 present, unique IDs, no wiki/SQL/OU/G55-fallback leftovers
+ *  - every case is Champions-scoped
+ *  - deterministic subset matches the CI plan
+ *  - tool-efficiency cases specify query_pokedex (or the named tool)
  *  - status values are valid OakAnswer status strings
- *  - key requirement IDs are covered across the suite
- *  - derived exports (caseById, deterministicCases, rebuildRegressionCases) are consistent
- *  - G26..G54 (Oak v2 §7) map 1:1 to benchmark questions BQ-1..BQ-29
- *  - G56..G59 (national-dex-scope feature) regression-pin whole-dex routing +
- *    LEAST/GREATEST slot-order normalization + form-awareness
+ *  - Champions success-criteria IDs are covered
+ *  - derived exports are consistent
+ *  - G61 team-from-box keep-and-warn via lookup_box
  */
 
 import { describe, it, expect } from "vitest";
@@ -26,10 +23,6 @@ import {
   type GoldenCase,
 } from "./cases";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const VALID_STATUSES = new Set<string>([
   "answered",
   "clarification_needed",
@@ -37,16 +30,11 @@ const VALID_STATUSES = new Set<string>([
   "insufficient_data",
 ]);
 
-/**
- * IDs expected in the deterministic CI subset per design.md:
- *  - G3  (resolve_entity suggestion)
- *  - G11 (type immunity assertion)
- *  - G15 (compute_stat value = 169)
- *  - G1, G5, G6, G8 (tool-efficiency assertions)
- *  - G26, G32, G35, G44, G47 (Oak v2 §7 run_sql aggregations)
- *  - G56, G57 (national-dex-scope whole-dex-routing + LEAST/GREATEST
- *    slot-order-normalization regression cases)
- */
+const EXPECTED_IDS = [
+  ...Array.from({ length: 26 }, (_, i) => `G${i + 1}`),
+  "G61",
+];
+
 const EXPECTED_DETERMINISTIC_IDS = new Set([
   "G1",
   "G3",
@@ -55,45 +43,37 @@ const EXPECTED_DETERMINISTIC_IDS = new Set([
   "G8",
   "G11",
   "G15",
-  "G26",
-  "G32",
-  "G35",
-  "G44",
-  "G47",
-  "G56",
-  "G57",
+  "G17",
+  "G61",
 ]);
 
-/** Benchmark-question IDs (docs/features/oak-v2/benchmark-questions.md) that
- * G26..G54 must cover 1:1 (Oak v2 §7). */
-const EXPECTED_BQ_IDS = Array.from(
-  { length: 29 },
-  (_, i) => `BQ-${i + 1}`,
-);
-
-/**
- * Index-rebuild regression set per evaluation.md § Regression Approach.
- * G25 joins to catch ingest drift of the move spread-damage fields
- * (spread_modifier_doubles / hits_allies) after every re-ingest.
- */
 const EXPECTED_REBUILD_REGRESSION_IDS = new Set([
   "G1",
   "G5",
   "G6",
   "G7",
-  "G17",
   "G25",
 ]);
 
-/**
- * Cases that must carry toolEfficiency assertions (evaluation.md § Metrics:
- * "Assert query_pokedex used … on G1/G5/G6/G8").
- */
-const TOOL_EFFICIENCY_IDS = ["G1", "G5", "G6", "G8"];
+const QUERY_POKEDEX_EFFICIENCY_IDS = ["G1", "G5", "G6", "G8"];
 
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
+const DROPPED_IDS = [
+  "G27",
+  "G28",
+  "G32",
+  "G35",
+  "G44",
+  "G47",
+  "G54",
+  "G55",
+  "G56",
+  "G57",
+  "G58",
+  "G59",
+  "G60",
+];
+
+const REMOVED_TOOLS = ["run_sql", "search_wiki", "get_meta_usage", "get_encounters"];
 
 function getCase(id: string): GoldenCase {
   const c = caseById[id];
@@ -101,62 +81,58 @@ function getCase(id: string): GoldenCase {
   return c;
 }
 
-// ---------------------------------------------------------------------------
-// Suite
-// ---------------------------------------------------------------------------
-
 describe("eval/cases", () => {
-  // -------------------------------------------------------------------------
-  // Top-level structure
-  // -------------------------------------------------------------------------
-
-  it("exports exactly 60 cases", () => {
-    expect(cases).toHaveLength(60);
+  it("exports G1–G26 plus G61 (27 Champions goldens)", () => {
+    expect(cases).toHaveLength(27);
+    expect(cases.map((c) => c.id)).toEqual(EXPECTED_IDS);
   });
 
-  it("all IDs follow the G<number> pattern", () => {
-    for (const c of cases) {
-      expect(c.id).toMatch(/^G\d{1,2}$/);
+  it("all IDs follow the G<number> pattern and are unique", () => {
+    const ids = cases.map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) {
+      expect(id).toMatch(/^G\d{1,2}$/);
     }
   });
 
-  it("all IDs G1..G60 are present and unique", () => {
+  it("caseById indexes every case", () => {
+    expect(Object.keys(caseById)).toHaveLength(27);
+    for (const id of EXPECTED_IDS) {
+      expect(caseById[id], `caseById["${id}"] should be defined`).toBeDefined();
+    }
+  });
+
+  it("does not keep wiki/SQL/OU/G55-fallback/National Dex cases", () => {
     const ids = new Set(cases.map((c) => c.id));
-    expect(ids.size).toBe(60);
-    for (let n = 1; n <= 60; n++) {
-      expect(ids.has(`G${n}`), `G${n} should be present`).toBe(true);
+    for (const id of DROPPED_IDS) {
+      expect(ids.has(id), `${id} should have been dropped or retargeted away`).toBe(
+        false,
+      );
     }
   });
 
-  it("caseById indexes all 60 cases", () => {
-    expect(Object.keys(caseById)).toHaveLength(60);
-    for (let n = 1; n <= 60; n++) {
-      expect(
-        caseById[`G${n}`],
-        `caseById["G${n}"] should be defined`,
-      ).toBeDefined();
+  it("never requires a removed tool as usedTool", () => {
+    for (const c of cases) {
+      const used = c.expect.toolEfficiency?.usedTool;
+      if (used) {
+        expect(REMOVED_TOOLS).not.toContain(used);
+      }
     }
   });
 
-  it("cases array order matches G1..G60 numerically", () => {
-    for (let i = 0; i < cases.length; i++) {
-      const expected = `G${i + 1}`;
-      expect(cases[i].id).toBe(expected);
-    }
-  });
-
-  // -------------------------------------------------------------------------
-  // Per-case required-field shape
-  // -------------------------------------------------------------------------
+  it.each(cases.map((c) => [c.id, c] as [string, GoldenCase]))(
+    "%s is Champions-scoped",
+    (_id, c) => {
+      expect(c.mode).toBe("champions");
+    },
+  );
 
   it.each(cases.map((c) => [c.id, c] as [string, GoldenCase]))(
     "%s — required fields are present and well-typed",
     (_id, c) => {
-      // id
       expect(typeof c.id).toBe("string");
       expect(c.id.length).toBeGreaterThan(0);
 
-      // input: string or non-empty string[]
       if (Array.isArray(c.input)) {
         expect((c.input as string[]).length).toBeGreaterThanOrEqual(2);
         for (const turn of c.input as string[]) {
@@ -168,12 +144,10 @@ describe("eval/cases", () => {
         expect((c.input as string).length).toBeGreaterThan(0);
       }
 
-      // expect object exists
       expect(c.expect).toBeDefined();
       expect(typeof c.expect).toBe("object");
       expect(c.expect).not.toBeNull();
 
-      // status (optional) must be a valid OakAnswer status
       if (c.expect.status !== undefined) {
         expect(
           VALID_STATUSES.has(c.expect.status),
@@ -181,13 +155,11 @@ describe("eval/cases", () => {
         ).toBe(true);
       }
 
-      // minCandidates (optional) must be a positive integer
       if (c.expect.minCandidates !== undefined) {
         expect(Number.isInteger(c.expect.minCandidates)).toBe(true);
         expect(c.expect.minCandidates).toBeGreaterThan(0);
       }
 
-      // mustCite (optional) must be a non-empty array of non-empty strings
       if (c.expect.mustCite !== undefined) {
         expect(Array.isArray(c.expect.mustCite)).toBe(true);
         expect(c.expect.mustCite.length).toBeGreaterThan(0);
@@ -197,7 +169,6 @@ describe("eval/cases", () => {
         }
       }
 
-      // mustInclude (optional) must be a non-empty array of non-empty strings
       if (c.expect.mustInclude !== undefined) {
         expect(Array.isArray(c.expect.mustInclude)).toBe(true);
         expect(c.expect.mustInclude.length).toBeGreaterThan(0);
@@ -207,7 +178,6 @@ describe("eval/cases", () => {
         }
       }
 
-      // toolEfficiency (optional) must have usedTool string + non-negative integer
       if (c.expect.toolEfficiency !== undefined) {
         expect(typeof c.expect.toolEfficiency.usedTool).toBe("string");
         expect(c.expect.toolEfficiency.usedTool.length).toBeGreaterThan(0);
@@ -219,12 +189,25 @@ describe("eval/cases", () => {
         ).toBeGreaterThanOrEqual(0);
       }
 
-      // deterministic (optional) must be a boolean when present
+      for (const key of [
+        "forbiddenTools",
+        "proposedTeamSpecies",
+        "proposedTeamWarningCodes",
+      ] as const) {
+        const arr = c.expect[key];
+        if (arr === undefined) continue;
+        expect(Array.isArray(arr)).toBe(true);
+        expect(arr.length).toBeGreaterThan(0);
+        for (const s of arr) {
+          expect(typeof s).toBe("string");
+          expect(s.length).toBeGreaterThan(0);
+        }
+      }
+
       if (c.expect.deterministic !== undefined) {
         expect(typeof c.expect.deterministic).toBe("boolean");
       }
 
-      // covers must be a non-empty array of non-empty strings
       expect(Array.isArray(c.covers)).toBe(true);
       expect(c.covers.length).toBeGreaterThan(0);
       for (const req of c.covers) {
@@ -233,10 +216,6 @@ describe("eval/cases", () => {
       }
     },
   );
-
-  // -------------------------------------------------------------------------
-  // Multi-turn: only G19 has an array input
-  // -------------------------------------------------------------------------
 
   describe("multi-turn (G19)", () => {
     it("G19 input is an array of exactly 2 turns", () => {
@@ -259,18 +238,10 @@ describe("eval/cases", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Deterministic CI subset
-  // -------------------------------------------------------------------------
-
   describe("deterministic CI subset", () => {
     it("deterministicCases contains all expected IDs", () => {
       const actual = new Set(deterministicCases.map((c) => c.id));
-      for (const id of EXPECTED_DETERMINISTIC_IDS) {
-        expect(actual.has(id), `${id} should be in deterministicCases`).toBe(
-          true,
-        );
-      }
+      expect(actual).toEqual(EXPECTED_DETERMINISTIC_IDS);
     });
 
     it("every entry in deterministicCases has deterministic:true", () => {
@@ -302,63 +273,40 @@ describe("eval/cases", () => {
       expect(g11.expect.mustInclude).toContain("immune");
     });
 
-    it("G15 is deterministic — compute_stat value = 169", () => {
+    it("G15 is deterministic — Champions Stat Points Speed = 169", () => {
       const g15 = getCase("G15");
       expect(g15.expect.deterministic).toBe(true);
       expect(g15.expect.mustInclude).toContain("169");
+      expect((g15.input as string).toLowerCase()).toContain("stat point");
+    });
+
+    it("G17 is deterministic — off-roster decline names Excadrill", () => {
+      const g17 = getCase("G17");
+      expect(g17.expect.deterministic).toBe(true);
+      expect(g17.expect.status).toBe("answered");
+      expect(g17.expect.mustInclude).toContain("Excadrill");
+      expect(g17.expect.mustInclude).toContain("not in the Champions roster");
+      expect(g17.expect.toolEfficiency?.usedTool).toBe("resolve_entity");
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Tool-efficiency assertions (G1/G5/G6/G8)
-  // -------------------------------------------------------------------------
-
   describe("tool-efficiency assertions", () => {
-    it.each(TOOL_EFFICIENCY_IDS)("%s has a toolEfficiency assertion", (id) => {
-      expect(
-        getCase(id).expect.toolEfficiency,
-        `${id} should have toolEfficiency`,
-      ).toBeDefined();
-    });
-
-    it.each(TOOL_EFFICIENCY_IDS)(
-      "%s uses 'query_pokedex' as the required tool",
+    it.each(QUERY_POKEDEX_EFFICIENCY_IDS)(
+      "%s has a query_pokedex toolEfficiency assertion",
       (id) => {
         expect(getCase(id).expect.toolEfficiency?.usedTool).toBe(
           "query_pokedex",
         );
-      },
-    );
-
-    it.each(TOOL_EFFICIENCY_IDS)(
-      "%s forbids per-Pokémon brute-force (maxPerPokemonFetches === 0)",
-      (id) => {
         expect(getCase(id).expect.toolEfficiency?.maxPerPokemonFetches).toBe(0);
-      },
-    );
-
-    it.each(TOOL_EFFICIENCY_IDS)(
-      "%s is marked deterministic (tool-efficiency is a CI check)",
-      (id) => {
         expect(getCase(id).expect.deterministic).toBe(true);
       },
     );
   });
 
-  // -------------------------------------------------------------------------
-  // Index-rebuild regression set
-  // -------------------------------------------------------------------------
-
   describe("rebuildRegressionCases", () => {
-    it("contains exactly G1/G5/G6/G7/G17/G25", () => {
+    it("contains G1/G5/G6/G7/G25 (Champions roster filters + spread mechanics)", () => {
       const actual = new Set(rebuildRegressionCases.map((c) => c.id));
-      expect(actual.size).toBe(6);
-      for (const id of EXPECTED_REBUILD_REGRESSION_IDS) {
-        expect(
-          actual.has(id),
-          `${id} should be in rebuildRegressionCases`,
-        ).toBe(true);
-      }
+      expect(actual).toEqual(EXPECTED_REBUILD_REGRESSION_IDS);
     });
 
     it("is a subset of cases (same objects by reference)", () => {
@@ -368,10 +316,6 @@ describe("eval/cases", () => {
       }
     });
   });
-
-  // -------------------------------------------------------------------------
-  // Status coverage
-  // -------------------------------------------------------------------------
 
   describe("status coverage", () => {
     it("at least one case asserts each of: answered, clarification_needed, insufficient_data", () => {
@@ -389,93 +333,84 @@ describe("eval/cases", () => {
       expect(getCase("G3").expect.status).toBe("clarification_needed");
     });
 
-    it("G22 status is insufficient_data (PokeAPI/cache unavailable)", () => {
+    it("G22 status is insufficient_data (index unavailable)", () => {
       expect(getCase("G22").expect.status).toBe("insufficient_data");
-    });
-
-    it("all non-out-of-scope main cases assert status: answered", () => {
-      const answeredCases = [
-        "G1",
-        "G2",
-        "G4",
-        "G5",
-        "G6",
-        "G7",
-        "G8",
-        "G9",
-        "G10",
-        "G11",
-        "G12",
-        "G13",
-        "G14",
-        "G15",
-        "G16",
-        "G17",
-        "G19",
-        "G24",
-      ];
-      for (const id of answeredCases) {
-        expect(getCase(id).expect.status, `${id} should be answered`).toBe(
-          "answered",
-        );
-      }
-    });
-
-    it("all G26..G54 (Oak v2 benchmark) cases assert status: answered", () => {
-      for (let n = 26; n <= 54; n++) {
-        const id = `G${n}`;
-        expect(getCase(id).expect.status, `${id} should be answered`).toBe(
-          "answered",
-        );
-      }
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Citation checks: key cases must have mustCite
-  // -------------------------------------------------------------------------
-
   describe("mustCite presence on factual cases", () => {
     it("G1 cites both learnsets", () => {
-      const g1 = getCase("G1");
-      expect(g1.expect.mustCite).toBeDefined();
-      const sources = g1.expect.mustCite!;
+      const sources = getCase("G1").expect.mustCite!;
       expect(sources.some((s) => s.includes("trick-room"))).toBe(true);
       expect(sources.some((s) => s.includes("will-o-wisp"))).toBe(true);
     });
 
     it("G4 cites the move and the ability", () => {
-      const g4 = getCase("G4");
-      expect(g4.expect.mustCite).toBeDefined();
-      const sources = g4.expect.mustCite!;
+      const sources = getCase("G4").expect.mustCite!;
       expect(sources.some((s) => s.includes("fake-out"))).toBe(true);
       expect(sources.some((s) => s.includes("armor-tail"))).toBe(true);
     });
 
     it("G11 cites the ground type", () => {
-      const g11 = getCase("G11");
-      expect(g11.expect.mustCite?.some((s) => s.includes("ground"))).toBe(true);
+      expect(getCase("G11").expect.mustCite?.some((s) => s.includes("ground"))).toBe(
+        true,
+      );
     });
 
     it("G13 cites the leftovers item", () => {
-      const g13 = getCase("G13");
-      expect(g13.expect.mustCite?.some((s) => s.includes("leftovers"))).toBe(
-        true,
-      );
+      expect(
+        getCase("G13").expect.mustCite?.some((s) => s.includes("leftovers")),
+      ).toBe(true);
     });
 
     it("G24 cites leftovers despite the citation-suppression prompt injection", () => {
-      const g24 = getCase("G24");
-      expect(g24.expect.mustCite).toBeDefined();
-      expect(g24.expect.mustCite?.some((s) => s.includes("leftovers"))).toBe(
-        true,
-      );
+      expect(
+        getCase("G24").expect.mustCite?.some((s) => s.includes("leftovers")),
+      ).toBe(true);
     });
   });
 
-  // -------------------------------------------------------------------------
-  // mustInclude checks: critical term assertions
-  // -------------------------------------------------------------------------
+  describe("Champions goldens (Stat Points, T15, Mega, off-roster)", () => {
+    it("G10 is a Mega Evolution case (no Tera)", () => {
+      const g10 = getCase("G10");
+      expect((g10.input as string).toLowerCase()).toContain("mega");
+      expect(g10.expect.mustInclude).toContain("Mega");
+      expect(g10.expect.rubricNote?.toLowerCase()).toContain("tera");
+      expect(g10.covers).toEqual(
+        expect.arrayContaining(["CF-INT-BR-1"]),
+      );
+    });
+
+    it("G14 requires the 66/32 Stat Point budget", () => {
+      const g14 = getCase("G14");
+      expect(g14.expect.mustInclude).toEqual(
+        expect.arrayContaining(["66", "32"]),
+      );
+      expect((g14.input as string).toLowerCase()).toContain("stat point");
+    });
+
+    it("G15 asks for max Speed Stat Points, not 252 EVs", () => {
+      const input = (getCase("G15").input as string).toLowerCase();
+      expect(input).toContain("stat point");
+      expect(input).not.toContain("ev");
+    });
+
+    it("G17 declines Excadrill / Gen 5 with the user-facing roster phrase", () => {
+      const g17 = getCase("G17");
+      expect((g17.input as string).toLowerCase()).toContain("excadrill");
+      expect((g17.input as string).toLowerCase()).toContain("gen 5");
+      expect(g17.expect.mustInclude).toContain("not in the Champions roster");
+    });
+
+    it("G26 routes live usage through get_usage_stats and forbids Smogon/wiki/SQL", () => {
+      const g26 = getCase("G26");
+      expect(g26.expect.toolEfficiency?.usedTool).toBe("get_usage_stats");
+      expect(g26.expect.forbiddenTools).toEqual(
+        expect.arrayContaining(["get_meta_usage", "run_sql", "search_wiki"]),
+      );
+      expect(g26.expect.deterministic).toBeUndefined();
+    });
+  });
 
   describe("mustInclude critical terms", () => {
     it("G11 requires 'immune' (not just 'not very effective')", () => {
@@ -503,25 +438,16 @@ describe("eval/cases", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // G18 — Ambiguous form: minCandidates check
-  // -------------------------------------------------------------------------
-
   it("G18 requires minCandidates >= 2 (multiple Tauros forms must be shown)", () => {
     const g18 = getCase("G18");
     expect(g18.expect.minCandidates).toBeDefined();
     expect(g18.expect.minCandidates!).toBeGreaterThanOrEqual(2);
   });
 
-  // -------------------------------------------------------------------------
-  // Requirement coverage across the suite
-  // -------------------------------------------------------------------------
-
   describe("requirement coverage", () => {
     const allCovers = cases.flatMap((c) => c.covers);
 
     const keyRequirements = [
-      // User Stories
       "US-1",
       "US-2",
       "US-3",
@@ -530,8 +456,6 @@ describe("eval/cases", () => {
       "US-10",
       "US-11",
       "US-12",
-      "US-13",
-      // Acceptance Criteria
       "AC-1.2",
       "AC-1.3",
       "AC-2.2",
@@ -539,7 +463,6 @@ describe("eval/cases", () => {
       "AC-3.2",
       "AC-3.3",
       "AC-4.1",
-      "AC-5.1",
       "AC-6.1",
       "AC-7.1",
       "AC-7.2",
@@ -548,8 +471,6 @@ describe("eval/cases", () => {
       "AC-9.1",
       "AC-9.2",
       "AC-10.1",
-      // Business Rules
-      "BR-1",
       "BR-2",
       "BR-3",
       "BR-4",
@@ -557,10 +478,16 @@ describe("eval/cases", () => {
       "BR-6",
       "BR-7",
       "BR-9",
-      // Technical Decisions
       "D8",
-      // Non-functional
       "NFR-reliability",
+      "BOX-AC-1.2",
+      "BOX-AC-2.4",
+      "BOX-AC-3.1",
+      "CF-SC-2",
+      "CF-SC-4",
+      "CF-INT-BR-1",
+      "CF-INT-BR-4",
+      "CF-CHAT-AC-2.1",
     ];
 
     it.each(keyRequirements)("%s is covered by at least one case", (req) => {
@@ -571,65 +498,36 @@ describe("eval/cases", () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Oak v2 §7 — G26..G54 map 1:1 onto the 29 benchmark questions
-  // (docs/features/oak-v2/benchmark-questions.md BQ-1..BQ-29).
-  // -------------------------------------------------------------------------
-
-  describe("Oak v2 benchmark coverage (G26..G54)", () => {
-    const benchmarkCases = cases.filter((c) => /^G(2[6-9]|[3-4]\d|5[0-4])$/.test(c.id));
-
-    it("has exactly 29 benchmark cases (G26..G54)", () => {
-      expect(benchmarkCases).toHaveLength(29);
+  describe("G61 team-from-box (Mega Kangaskhan keep-and-warn)", () => {
+    it("is deterministic and routes through lookup_box", () => {
+      const g61 = getCase("G61");
+      expect(g61.expect.deterministic).toBe(true);
+      expect(g61.expect.status).toBe("answered");
+      expect(g61.expect.toolEfficiency?.usedTool).toBe("lookup_box");
+      expect(g61.expect.toolEfficiency?.maxPerPokemonFetches).toBe(0);
     });
 
-    it.each(EXPECTED_BQ_IDS)("%s is covered by exactly one case", (bq) => {
-      const matches = benchmarkCases.filter((c) => c.covers.includes(bq));
-      expect(matches, `${bq} should be covered by exactly one case`).toHaveLength(1);
+    it("structurally requires kangaskhan-mega on proposed_team with learnset_unavailable", () => {
+      const g61 = getCase("G61");
+      expect(g61.expect.proposedTeamSpecies).toEqual(["kangaskhan-mega"]);
+      expect(g61.expect.proposedTeamWarningCodes).toEqual([
+        "learnset_unavailable",
+      ]);
+      expect(g61.expect.forbiddenTools).toEqual(
+        expect.arrayContaining(["run_sql", "search_wiki"]),
+      );
     });
 
-    it("every benchmark case carries a layer tag (SQL/WIKI/POLICY/TYPED)", () => {
-      const layerTags = new Set(["SQL", "WIKI", "POLICY", "TYPED"]);
-      for (const c of benchmarkCases) {
-        expect(
-          c.covers.some((tag) => layerTags.has(tag)),
-          `${c.id} should carry a layer tag`,
-        ).toBe(true);
-      }
+    it("covers BOX-AC-1.2, BOX-AC-2.4, and BOX-AC-3.1", () => {
+      expect(getCase("G61").covers).toEqual(
+        expect.arrayContaining(["BOX-AC-1.2", "BOX-AC-2.4", "BOX-AC-3.1"]),
+      );
     });
 
-    it("run_sql-tagged cases assert toolEfficiency.usedTool === 'run_sql'", () => {
-      // G35 (BQ-10) verifies a false premise via run_sql but is tagged POLICY
-      // (the benchmark layer), not SQL — both are valid companions to run_sql.
-      for (const c of benchmarkCases) {
-        if (c.expect.toolEfficiency?.usedTool === "run_sql") {
-          expect(
-            c.covers.some((tag) => tag === "SQL" || tag === "POLICY"),
-          ).toBe(true);
-        }
-      }
-    });
-
-    it("search_wiki-tagged cases assert toolEfficiency.usedTool === 'search_wiki'", () => {
-      for (const c of benchmarkCases) {
-        if (c.expect.toolEfficiency?.usedTool === "search_wiki") {
-          expect(c.covers).toContain("WIKI");
-        }
-      }
-    });
-
-    it("the 5 deterministic Oak v2 cases (G26/G32/G35/G44/G47) all use run_sql", () => {
-      const detIds = ["G26", "G32", "G35", "G44", "G47"];
-      for (const id of detIds) {
-        const c = getCase(id);
-        expect(c.expect.deterministic).toBe(true);
-        expect(c.expect.toolEfficiency?.usedTool).toBe("run_sql");
-      }
-    });
-
-    it("G35 (Fire-Fang-Gen-3-bug false premise) rejects the premise, not fabricates one", () => {
-      const g35 = getCase("G35");
-      expect(g35.expect.mustInclude).toContain("Generation 4");
+    it("input is a box-build paste that names Mega Kangaskhan", () => {
+      const input = getCase("G61").input;
+      expect(typeof input).toBe("string");
+      expect((input as string).toLowerCase()).toContain("mega kangaskhan");
     });
   });
 });

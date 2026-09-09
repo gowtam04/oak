@@ -2,12 +2,15 @@ import { describe, it, expect } from "vitest";
 import {
   base64ToInt16,
   clientSecretSubprotocol,
+  extractVoiceErrorInputValue,
   float32ToInt16,
+  formatVoiceServerError,
   int16ToBase64,
   int16ToFloat32,
   nearestSupportedRate,
   parseServerEvent,
   realtimeUrl,
+  voiceOutboundType,
   voiceToolLabel,
 } from "./voice-protocol";
 
@@ -20,6 +23,12 @@ describe("voice-protocol — connection helpers", () => {
 
   it("prefixes the ephemeral token as the client-secret subprotocol", () => {
     expect(clientSecretSubprotocol("abc123")).toBe("xai-client-secret.abc123");
+  });
+
+  it("does not double-prefix an already-namespaced token", () => {
+    expect(clientSecretSubprotocol("xai-client-secret.abc123")).toBe(
+      "xai-client-secret.abc123",
+    );
   });
 });
 
@@ -155,7 +164,73 @@ describe("voice-protocol — parseServerEvent", () => {
       parseServerEvent(
         JSON.stringify({ type: "error", code: "timeout", message: "gone" }),
       ),
-    ).toEqual({ type: "error", code: "timeout", message: "gone" });
+    ).toEqual({
+      type: "error",
+      code: "timeout",
+      message: "gone",
+      params: undefined,
+      event_id: undefined,
+    });
+    expect(
+      parseServerEvent(
+        JSON.stringify({
+          type: "error",
+          error: {
+            type: "invalid_request_error",
+            code: "bad_request",
+            message: "nested oops",
+          },
+        }),
+      ),
+    ).toEqual({
+      type: "error",
+      code: "bad_request",
+      message: "nested oops",
+      params: undefined,
+      event_id: undefined,
+    });
+  });
+
+  it("keeps nested invalid_event params and formats input_value for the overlay", () => {
+    const params =
+      "1 validation error for RealtimeClientEvent\ntype\n  Input should be '<enum>' [type=enum, input_value='not.a.real.event', input_type=str]";
+    expect(
+      parseServerEvent(
+        JSON.stringify({
+          type: "error",
+          event_id: "evt_1",
+          error: {
+            type: "invalid_request_error",
+            code: "invalid_event",
+            message: "Invalid event received",
+            params,
+          },
+        }),
+      ),
+    ).toEqual({
+      type: "error",
+      code: "invalid_event",
+      message: "Invalid event received",
+      params,
+      event_id: "evt_1",
+    });
+    expect(formatVoiceServerError("Invalid event received", params)).toBe(
+      "Invalid event received (rejected type: not.a.real.event)",
+    );
+    expect(extractVoiceErrorInputValue(params)).toBe("not.a.real.event");
+    expect(formatVoiceServerError("boom", "field x is required")).toBe(
+      "boom — field x is required",
+    );
+    expect(formatVoiceServerError(undefined, undefined)).toBe(
+      "The voice service reported an error.",
+    );
+  });
+
+  it("reads the top-level outbound type without needing the body", () => {
+    expect(voiceOutboundType('{"type":"session.update","session":{}}')).toBe(
+      "session.update",
+    );
+    expect(voiceOutboundType("not json")).toBeUndefined();
   });
 });
 

@@ -53,11 +53,49 @@ const requestBodySchema = z
   })
   .strict();
 
-function jsonError(status: number, error: string, message: string): Response {
-  return new Response(JSON.stringify({ error, message }), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+function jsonError(
+  status: number,
+  error: string,
+  message: string,
+  extraHeaders?: Record<string, string>,
+  extraBody?: Record<string, unknown>,
+): Response {
+  return new Response(
+    JSON.stringify({ code: error, error, message, ...extraBody }),
+    {
+      status,
+      headers: { "Content-Type": "application/json", ...extraHeaders },
+    },
+  );
+}
+
+const SPEND_CHECK_FAILED_MESSAGE =
+  "Could not verify usage limits. Please try again.";
+
+function spendRefuseResponse(admit: {
+  code: "account_denied" | "daily_limit" | "spend_check_failed";
+  message?: string;
+  resetAt?: string;
+  retryAfterMs?: number;
+}): Response {
+  const message = admit.message ?? SPEND_CHECK_FAILED_MESSAGE;
+  if (admit.code === "daily_limit") {
+    const headers: Record<string, string> = {};
+    if (typeof admit.retryAfterMs === "number") {
+      headers["Retry-After"] = String(Math.ceil(admit.retryAfterMs / 1000));
+    }
+    return jsonError(
+      429,
+      admit.code,
+      message,
+      headers,
+      admit.resetAt !== undefined ? { reset_at: admit.resetAt } : undefined,
+    );
+  }
+  if (admit.code === "account_denied") {
+    return jsonError(403, admit.code, message);
+  }
+  return jsonError(503, admit.code, message);
 }
 
 function jsonOk(body: VoiceToolResponseBody): Response {
@@ -93,6 +131,23 @@ export async function POST(req: Request): Promise<Response> {
   const account = await getCurrentAccount();
   if (!account) {
     return jsonError(401, "sign_in_required", "Sign in to use voice mode.");
+  }
+
+  // 1b) Denylist only — no increment (voice session was counted at token mint).
+  const { assertNotDenylisted } = await import("@/server/spend-control");
+  const deny = await assertNotDenylisted(account.email);
+  if (!deny.ok) {
+    logger.info(
+      {
+        event: "spend_refused",
+        code: deny.code,
+        subject_key: `acct:${account.id}`,
+        request_id: requestId,
+        session_id,
+      },
+      "oak_spend_refused",
+    );
+    return spendRefuseResponse(deny);
   }
 
   // 2) RATE LIMIT — one signed-in tier, keyed by account.
@@ -158,6 +213,23 @@ export async function POST(req: Request): Promise<Response> {
       signal: req.signal,
     });
     const output = await dispatch(name, args, ctx);
+    try {
+      const { appendVoiceTrace } = await import(
+        "@/server/voice/tool-trace-store"
+      );
+      appendVoiceTrace(session_id, { name, input: args, output });
+    } catch (traceErr) {
+      logger.warn(
+        {
+          event: "voice_tool_trace_append_failed",
+          request_id: requestId,
+          session_id,
+          tool: name,
+          err: traceErr instanceof Error ? traceErr.message : String(traceErr),
+        },
+        "oak_voice_tool_trace_append_failed",
+      );
+    }
     return jsonOk({ output });
   } catch (err) {
     logger.error(

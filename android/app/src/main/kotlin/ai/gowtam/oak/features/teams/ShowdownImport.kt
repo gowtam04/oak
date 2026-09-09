@@ -4,6 +4,7 @@ import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.OakTopBar
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.ImportNote
 import ai.gowtam.oak.wire.Team
@@ -33,7 +34,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,57 +61,41 @@ import androidx.compose.ui.window.DialogProperties
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShowdownImportDialog(
-    initialFormat: Format,
-    onImport: (paste: String, format: Format, onResult: (Team?, List<ImportNote>) -> Unit) -> Unit,
+    onImport: (paste: String, onResult: (Team?, List<ImportNote>) -> Unit) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var format by remember { mutableStateOf(initialFormat) }
     var paste by remember { mutableStateOf("") }
     var isImporting by remember { mutableStateOf(false) }
     var importedTeam by remember { mutableStateOf<Team?>(null) }
     var notes by remember { mutableStateOf<List<ImportNote>>(emptyList()) }
-    var formatMenuOpen by remember { mutableStateOf(false) }
     val oak = LocalOakColors.current
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column {
-                TopAppBar(
+                OakTopBar(
                     title = { Text("Import team", modifier = Modifier.semantics { heading() }) },
                     navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Cancel") } },
                     actions = {
                         when {
-                            isImporting -> CircularProgressIndicator(modifier = Modifier.padding(end = OakSpacing.md), strokeWidth = 2.dp, color = LocalOakColors.current.accent)
+                            isImporting -> CircularProgressIndicator(modifier = Modifier.padding(end = OakSpacing.md), strokeWidth = 2.dp, color = oak.onRed)
                             importedTeam == null -> TextButton(
                                 enabled = paste.isNotBlank(),
                                 onClick = {
                                     isImporting = true
-                                    onImport(paste, format) { team, resultNotes ->
+                                    onImport(paste) { team, resultNotes ->
                                         isImporting = false
                                         importedTeam = team
                                         notes = resultNotes
                                         if (team != null && resultNotes.isEmpty()) onDismiss()
                                     }
                                 },
-                            ) { Text("Import", fontWeight = FontWeight.SemiBold) }
-                            else -> TextButton(onClick = onDismiss) { Text("Done", fontWeight = FontWeight.SemiBold) }
+                            ) { Text("Import", fontWeight = FontWeight.SemiBold, color = oak.onRed) }
+                            else -> TextButton(onClick = onDismiss) { Text("Done", fontWeight = FontWeight.SemiBold, color = oak.onRed) }
                         }
                     },
                 )
                 LazyColumn(modifier = Modifier.padding(OakSpacing.lg), verticalArrangement = Arrangement.spacedBy(OakSpacing.md)) {
-                    item {
-                        Box {
-                            OakButton(onClick = { formatMenuOpen = true }, style = OakButtonStyle.Secondary) { Text(format.shortLabel) }
-                            DropdownMenu(expanded = formatMenuOpen, onDismissRequest = { formatMenuOpen = false }) {
-                                Format.knownCases.forEach { candidate ->
-                                    DropdownMenuItem(
-                                        text = { Text(candidate.shortLabel) },
-                                        onClick = { format = candidate; formatMenuOpen = false },
-                                    )
-                                }
-                            }
-                        }
-                    }
                     item {
                         OutlinedTextField(
                             value = paste,

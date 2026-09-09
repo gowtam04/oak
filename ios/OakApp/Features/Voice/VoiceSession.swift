@@ -109,18 +109,31 @@ final class VoiceSession {
     )
     connection = conn
 
-    // 3. Consume inbound frames; an unexpected finish is a clean end (web onClose).
+    // 3. Consume inbound frames. A drop after we're live is a clean end (web
+    //    onClose). A drop still in `.connecting` — handshake never completed —
+    //    is a connection failure.
     inboundTask = Task { [weak self] in
       for await text in conn.inbound() {
         guard let self, !self.finished else { return }
         self.handle(parseServerEvent(text))
       }
-      self?.end()
+      guard let self, !self.finished else { return }
+      let reason = await conn.failureMessage()
+      if let reason {
+        self.fail(reason)
+      } else if self.phase == .connecting {
+        self.fail("Voice connection failed.")
+      } else {
+        self.end()
+      }
     }
 
     // 4. Push the single session.update built from the bootstrap + our sample rate.
-    await conn.send(
-      VoiceClientEvent.sessionUpdate(
+    //    Encode and send are fail-closed: an empty/thrown encode or a failed
+    //    send must not proceed to mic appends on a dead socket.
+    let sessionUpdate: String
+    do {
+      sessionUpdate = try VoiceClientEvent.sessionUpdate(
         instructions: bootstrap.session.instructions,
         voice: bootstrap.session.voice,
         idleTimeoutMs: bootstrap.session.idleTimeoutMs,
@@ -128,8 +141,16 @@ final class VoiceSession {
         reasoningEffort: bootstrap.session.reasoningEffort,
         tools: bootstrap.session.tools
       ).encode()
-    )
+    } catch {
+      fail("Voice connection failed.")
+      return
+    }
+    await conn.send(sessionUpdate)
     guard !finished else { return }
+    if let reason = await conn.failureMessage() {
+      fail(reason)
+      return
+    }
 
     // 5. Arm the client-side auto-end at the session cap.
     let maxMs = bootstrap.session.maxSessionMs
@@ -155,7 +176,7 @@ final class VoiceSession {
     captureTask = Task { [weak self] in
       for await chunk in chunks {
         guard let self, !self.finished else { return }
-        await self.connection?.send(VoiceClientEvent.inputAudioAppend(base64: chunk).encode())
+        await self.send(VoiceClientEvent.inputAudioAppend(base64: chunk))
       }
     }
 
@@ -216,15 +237,20 @@ final class VoiceSession {
     case let .ping(timestamp):
       let ts = timestamp ?? clock.now().timeIntervalSince1970 * 1000
       Task { [weak self] in
-        await self?.connection?.send(VoiceClientEvent.pong(pingTimestamp: ts).encode())
+        await self?.send(VoiceClientEvent.pong(pingTimestamp: ts))
       }
 
-    case let .errorEvent(code, message):
+    case let .errorEvent(code, message, params, eventId):
       if code == "timeout" || code == "max_duration" {
         // A benign end-of-session signal — tear down cleanly, not as an error.
         end()
       } else {
-        fail(message ?? "Voice connection failed.")
+        // Never log token / PCM / session.update body. params carries pydantic
+        // input_value for invalid_event — that's the overlay diagnosis.
+        Log.network.error(
+          "voice server error code=\(code ?? "", privacy: .public) event_id=\(eventId ?? "", privacy: .public) params=\(params ?? "", privacy: .public)"
+        )
+        fail(formatVoiceServerError(message: message, params: params))
       }
 
     case .sessionCreated, .sessionUpdated, .speechStopped, .committed:
@@ -260,12 +286,12 @@ final class VoiceSession {
         for (callId, task) in batch {
           let output = await task.value
           guard let self, !self.finished else { return }
-          await self.connection?.send(
-            VoiceClientEvent.functionCallOutput(callId: callId, output: output.serialized()).encode()
+          await self.send(
+            VoiceClientEvent.functionCallOutput(callId: callId, output: output.serialized())
           )
         }
         guard let self, !self.finished else { return }
-        await self.connection?.send(VoiceClientEvent.responseCreate.encode())
+        await self.send(.responseCreate)
       }
       return
     }
@@ -309,6 +335,21 @@ final class VoiceSession {
     connection = nil
   }
 
+  /// Send one client event. Encode failure is logged and skipped (never a blank
+  /// socket frame). `session.update` is encoded in ``start()`` so a thrown
+  /// encode there fails the session instead of dropping the configuring frame.
+  private func send(_ event: VoiceClientEvent) async {
+    let frame: String
+    do {
+      frame = try event.encode()
+    } catch {
+      Log.network.error("voice outbound encode failed")
+      return
+    }
+    guard !frame.isEmpty else { return }
+    await connection?.send(frame)
+  }
+
   private func fail(_ message: String) {
     guard !finished else { return }
     finished = true
@@ -320,12 +361,22 @@ final class VoiceSession {
   // MARK: Helpers
 
   /// Maps a token-mint failure to user-facing copy. An auth failure (voice is
-  /// signed-in only) points the user at signing in; everything else is generic.
+  /// signed-in only) points the user at signing in; denylist / daily cap show
+  /// the server message (SC-AC-6.3 / SC-AC-5.4 / SC-BR-14); everything else is
+  /// generic so a mint 502 does not leak.
   private static func startFailureMessage(_ error: Error) -> String {
-    if let oak = error as? OakError, case .unauthorized = oak {
-      return "Sign in to use voice mode."
+    guard let oak = error as? OakError else {
+      return "Couldn't start voice mode."
     }
-    return "Couldn't start voice mode."
+    switch oak {
+    case .unauthorized:
+      return "Sign in to use voice mode."
+    case let .http(_, code, message)
+      where (code == "account_denied" || code == "daily_limit") && !message.isEmpty:
+      return message
+    default:
+      return "Couldn't start voice mode."
+    }
   }
 
   /// Folds a thrown tool call into the error object the web sends back as the

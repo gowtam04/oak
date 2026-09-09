@@ -37,6 +37,7 @@ private struct SubjectCard: View {
   var body: some View {
     HStack(alignment: .center, spacing: Theme.Spacing.md) {
       SpriteImage(url: URL(string: subject.spriteUrl), name: subject.name, size: spriteSize)
+        .allowsHitTesting(false)
 
       VStack(alignment: .leading, spacing: 2) {
         Text(subject.name)
@@ -56,6 +57,7 @@ private struct SubjectCard: View {
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    .contentShape(Rectangle())
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(accessibilityLabel)
   }

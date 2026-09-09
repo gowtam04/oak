@@ -104,7 +104,14 @@ struct ChatThreadScreen: View {
       // in-memory thread) so the new `ChatViewModel` mints a fresh session id.
       appState.activeConversationId = nil
       if case .guest = appState.authState { appState.guestThread = [] }
-      model = ChatViewModel(chat: services.chat, appState: appState)
+      model = ChatViewModel(
+        chat: services.chat,
+        appState: appState,
+        history: services.history,
+        teams: services.teams,
+        shares: services.shares,
+        voice: services.voice
+      )
 
     case .existing(let summary):
       let detailVM = HistoryDetailViewModel(
@@ -116,7 +123,14 @@ struct ChatThreadScreen: View {
       if let detail = detailVM.detail {
         // Bind the active conversation, then seed a thread with its rehydrated turns.
         detailVM.resume()
-        let vm = ChatViewModel(chat: services.chat, appState: appState)
+        let vm = ChatViewModel(
+          chat: services.chat,
+          appState: appState,
+          history: services.history,
+          teams: services.teams,
+          shares: services.shares,
+          voice: services.voice
+        )
         // Honor the conversation's `active_turn` (design §5.4): if a turn is still
         // generating for this thread, `loadResumed` records it and reattaches to its
         // live stream — so reopening a mid-generation conversation (even after an app
@@ -125,7 +139,8 @@ struct ChatThreadScreen: View {
           conversationId: detail.id,
           format: detail.format,
           turns: detail.turns,
-          activeTurnId: detail.activeTurn?.turnId
+          activeTurnId: detail.activeTurn?.turnId,
+          pinnedMessageIds: detail.pinnedMessageIds
         )
         model = vm
       } else {

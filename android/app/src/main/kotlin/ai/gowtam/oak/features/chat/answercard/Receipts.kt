@@ -43,8 +43,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
- * Why + Sources disclosure (Signal). Unifies reasoning + citations into one
- * expandable drawer. Tab label: `Why · Sources (N)` or `Why`. Closed by default.
+ * Why + Sources disclosure. Unifies reasoning + citations into one expandable
+ * drawer on the paper plate. Tab label: `Why · Sources (N)` or `Why`. Closed by
+ * default.
  *
  * Keeps stable instrumentation tags [AnswerSection.REASONING] /
  * [AnswerSection.CITATIONS] on always-mounted section shells so
@@ -56,6 +57,7 @@ fun ReceiptsFooter(
     citations: List<Citation>,
     modifier: Modifier = Modifier,
     onOpenEntity: (EntityKind, String) -> Unit = { _, _ -> },
+    onHighlight: (Citation) -> Unit = {},
     /** Type-tinted top border when the parent plate has a primary type. */
     edgeColor: Color? = null,
 ) {
@@ -156,7 +158,7 @@ fun ReceiptsFooter(
                             color = oak.textMuted,
                         )
                         for (citation in citations) {
-                            ReceiptCitationRow(citation, onOpenEntity)
+                            ReceiptCitationRow(citation, onOpenEntity, onHighlight)
                         }
                     }
                 }
@@ -166,7 +168,11 @@ fun ReceiptsFooter(
 }
 
 @Composable
-private fun ReceiptCitationRow(citation: Citation, onOpenEntity: (EntityKind, String) -> Unit) {
+private fun ReceiptCitationRow(
+    citation: Citation,
+    onOpenEntity: (EntityKind, String) -> Unit,
+    onHighlight: (Citation) -> Unit,
+) {
     val oak = LocalOakColors.current
     val parsed = parseCitationSource(citation.source)
     Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), verticalAlignment = Alignment.Top) {
@@ -183,9 +189,12 @@ private fun ReceiptCitationRow(citation: Citation, onOpenEntity: (EntityKind, St
                 color = if (parsed != null) oak.azure else oak.textStrong,
                 modifier = if (parsed != null) {
                     val (kind, query) = parsed
-                    Modifier.clickable { onOpenEntity(kind, query) }
+                    Modifier.clickable {
+                        onHighlight(citation)
+                        onOpenEntity(kind, query)
+                    }
                 } else {
-                    Modifier
+                    Modifier.clickable { onHighlight(citation) }
                 },
             )
             Text(text = citation.detail, style = MaterialTheme.typography.bodySmall, color = oak.textMuted)

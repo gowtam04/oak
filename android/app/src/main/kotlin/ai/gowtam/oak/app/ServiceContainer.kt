@@ -4,20 +4,34 @@ import ai.gowtam.oak.networking.BaseUrl
 import ai.gowtam.oak.networking.OakApiClient
 import ai.gowtam.oak.networking.SseClient
 import ai.gowtam.oak.networking.TokenStore
+import ai.gowtam.oak.services.ArtifactPinService
 import ai.gowtam.oak.services.ArtifactService
 import ai.gowtam.oak.services.AuthService
+import ai.gowtam.oak.services.CalcService
 import ai.gowtam.oak.services.ChatService
 import ai.gowtam.oak.services.DexLookupService
 import ai.gowtam.oak.services.HistoryService
+import ai.gowtam.oak.services.LiveArtifactPinService
 import ai.gowtam.oak.services.LiveArtifactService
 import ai.gowtam.oak.services.LiveAuthService
+import ai.gowtam.oak.services.LiveCalcService
 import ai.gowtam.oak.services.LiveChatService
 import ai.gowtam.oak.services.LiveDexLookupService
 import ai.gowtam.oak.services.LiveHistoryService
+import ai.gowtam.oak.services.LivePreferencesService
+import ai.gowtam.oak.services.LiveScopeService
+import ai.gowtam.oak.services.LiveShareService
 import ai.gowtam.oak.services.LiveTeamService
 import ai.gowtam.oak.services.LiveTeamsAssistantService
+import ai.gowtam.oak.services.LiveUsageService
+import ai.gowtam.oak.services.LiveVoiceHydrateService
+import ai.gowtam.oak.services.PreferencesService
+import ai.gowtam.oak.services.ScopeService
+import ai.gowtam.oak.services.ShareService
 import ai.gowtam.oak.services.TeamService
 import ai.gowtam.oak.services.TeamsAssistantService
+import ai.gowtam.oak.services.UsageService
+import ai.gowtam.oak.services.VoiceHydrateService
 import android.content.Context
 import androidx.compose.runtime.staticCompositionLocalOf
 
@@ -42,6 +56,13 @@ data class ServiceContainer(
     val dexLookup: DexLookupService,
     /** The team-builder assistant seam (signed-in only). Backed by [LiveTeamsAssistantService]. */
     val teamsAssistant: TeamsAssistantService,
+    val scope: ScopeService,
+    val shares: ShareService,
+    val calc: CalcService,
+    val pins: ArtifactPinService,
+    val preferences: PreferencesService,
+    val hydrate: VoiceHydrateService,
+    val usage: UsageService,
 ) {
     companion object {
         /**
@@ -63,6 +84,13 @@ data class ServiceContainer(
                 teams = LiveTeamService(apiClient),
                 dexLookup = LiveDexLookupService(apiClient),
                 teamsAssistant = LiveTeamsAssistantService(sseClient),
+                scope = LiveScopeService(apiClient),
+                shares = LiveShareService(apiClient),
+                calc = LiveCalcService(apiClient),
+                pins = LiveArtifactPinService(apiClient),
+                preferences = LivePreferencesService(apiClient),
+                hydrate = LiveVoiceHydrateService(apiClient),
+                usage = LiveUsageService(apiClient),
             )
         }
     }

@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { OPERATOR_ACCESS_DISCLOSURE_MARKDOWN } from "@/components/admin/operator-access-disclosure";
+import {
+  OPERATOR_ACCESS_DISCLOSURE_MARKDOWN,
+  PUBLIC_SNAPSHOT_DISCLOSURE_MARKDOWN,
+} from "@/components/admin/operator-access-disclosure";
 import Markdown from "@/components/Markdown";
 
 export const metadata: Metadata = {
@@ -18,14 +21,14 @@ export const metadata: Metadata = {
  */
 const PRIVACY_POLICY_MARKDOWN = `# Privacy Policy
 
-**Last updated: June 30, 2026**
+**Last updated: September 7, 2026**
 
 Oak ("Oak," "we," "us") is an independent, unofficial fan project — a chat
-companion for reasoning about competitive Pokémon teams. It is not affiliated
-with, endorsed by, sponsored by, or otherwise connected to Nintendo, Game
-Freak, Creatures Inc., or The Pokémon Company. This policy explains what
-information Oak collects when you use the app (on the web or on iOS), how
-it's used, and the choices you have.
+companion for reasoning about competitive Pokémon Champions teams. It is not
+affiliated with, endorsed by, sponsored by, or otherwise connected to Nintendo,
+Game Freak, Creatures Inc., or The Pokémon Company. This policy explains what
+information Oak collects when you use the app (on the web, iOS, or Android),
+how it's used, and the choices you have.
 
 ## Information we collect
 
@@ -38,8 +41,11 @@ it's used, and the choices you have.
   only in memory and is discarded once it ends. Separately, and regardless of
   whether you're signed in, Oak keeps an internal operational record of each
   message and answer (see "Operational records and operator access" below).
-- **Team data.** If you build or save a competitive team (species, ability,
-  held item, moves, nature, EVs, IVs, Tera type, and similar details), that
+- **Public share links.** If you're signed in, you can publish a snapshot of
+  one question and Oak's answer to a public link. Anyone with the link can
+  view it (see "Public share links" below).
+- **Team data.** If you build or save a competitive Champions team (species,
+  ability, held item, moves, nature, Stat Points, and similar details), that
   data is stored against your account.
 - **Images you attach.** A photo or screenshot you attach to a message is sent
   to the active AI model to help answer that one question. It's used only for
@@ -50,6 +56,8 @@ it's used, and the choices you have.
   tracking SDKs of any kind.
 
 ${OPERATOR_ACCESS_DISCLOSURE_MARKDOWN}
+
+${PUBLIC_SNAPSHOT_DISCLOSURE_MARKDOWN}
 
 ## How we use this information
 
@@ -77,6 +85,7 @@ personal information to anyone.
 
 - Signed-in account data (chats, saved teams) is retained until you delete it
   or delete your account.
+- Public share links stay live until you revoke them or delete your account.
 - A guest's live conversation isn't tied to an account and can't be reloaded
   later — it exists only in memory and is discarded when the session ends.
 - The internal operational records described above (one per chat turn, one per
@@ -86,11 +95,11 @@ personal information to anyone.
 
 ## Your rights and account deletion
 
-You can permanently delete your account — including all chat history and
-saved teams — at any time from the iOS app (Account → Delete account).
-Deletion is immediate and can't be undone. If you'd like help deleting or
-accessing your data, or have any other question about your information,
-email us at gowtam@gowtam.ai.
+You can permanently delete your account — including all chat history, saved
+teams, and public share links — at any time from the iOS or Android app
+(Account → Delete account). Deletion is immediate and can't be undone. If
+you'd like help deleting or accessing your data, or have any other question
+about your information, email us at gowtam@gowtam.ai.
 
 ## Children's privacy
 

@@ -81,6 +81,13 @@ struct OakAnswer: Codable, Sendable, Equatable {
   let savedTeam: SavedTeamRef?
   let proposedTeamWarnings: [TeamWarning]?
 
+  /// Server-owned (VOICE-AC-1.2). Present on spoken turns; never model-emitted.
+  let origin: Origin?
+
+  enum Origin: String, Codable, Sendable, Equatable {
+    case voice
+  }
+
   enum CodingKeys: String, CodingKey {
     case status
     case answerMarkdown = "answer_markdown"
@@ -97,6 +104,63 @@ struct OakAnswer: Codable, Sendable, Equatable {
     case proposedTeam = "proposed_team"
     case savedTeam = "saved_team"
     case proposedTeamWarnings = "proposed_team_warnings"
+    case origin
+  }
+
+  init(
+    status: Status,
+    answerMarkdown: String,
+    reasoningMarkdown: String,
+    citations: [Citation],
+    inferences: [Inference],
+    generationBasis: GenerationBasis,
+    subjects: [Subject]?,
+    candidates: Candidates?,
+    damageCalc: DamageCalc?,
+    suggestions: [String]?,
+    question: ClarifyQuestion?,
+    uncertaintyFlags: [String]?,
+    proposedTeam: ProposedTeam?,
+    savedTeam: SavedTeamRef?,
+    proposedTeamWarnings: [TeamWarning]?,
+    origin: Origin? = nil
+  ) {
+    self.status = status
+    self.answerMarkdown = answerMarkdown
+    self.reasoningMarkdown = reasoningMarkdown
+    self.citations = citations
+    self.inferences = inferences
+    self.generationBasis = generationBasis
+    self.subjects = subjects
+    self.candidates = candidates
+    self.damageCalc = damageCalc
+    self.suggestions = suggestions
+    self.question = question
+    self.uncertaintyFlags = uncertaintyFlags
+    self.proposedTeam = proposedTeam
+    self.savedTeam = savedTeam
+    self.proposedTeamWarnings = proposedTeamWarnings
+    self.origin = origin
+  }
+
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    status = try container.decode(Status.self, forKey: .status)
+    answerMarkdown = try container.decode(String.self, forKey: .answerMarkdown)
+    reasoningMarkdown = try container.decode(String.self, forKey: .reasoningMarkdown)
+    citations = try container.decode([Citation].self, forKey: .citations)
+    inferences = try container.decode([Inference].self, forKey: .inferences)
+    generationBasis = try container.decode(GenerationBasis.self, forKey: .generationBasis)
+    subjects = try container.decodeIfPresent([Subject].self, forKey: .subjects)
+    candidates = try container.decodeIfPresent(Candidates.self, forKey: .candidates)
+    damageCalc = try container.decodeIfPresent(DamageCalc.self, forKey: .damageCalc)
+    suggestions = try container.decodeIfPresent([String].self, forKey: .suggestions)
+    question = try container.decodeIfPresent(ClarifyQuestion.self, forKey: .question)
+    uncertaintyFlags = try container.decodeIfPresent([String].self, forKey: .uncertaintyFlags)
+    proposedTeam = try container.decodeIfPresent(ProposedTeam.self, forKey: .proposedTeam)
+    savedTeam = try container.decodeIfPresent(SavedTeamRef.self, forKey: .savedTeam)
+    proposedTeamWarnings = try container.decodeIfPresent([TeamWarning].self, forKey: .proposedTeamWarnings)
+    origin = try container.decodeIfPresent(Origin.self, forKey: .origin)
   }
 }
 
@@ -112,17 +176,43 @@ extension OakAnswer.Status: Codable {
   }
 }
 
+/// Highlight target on a citation (CIT-US-1). Invalid anchors are stripped server-side.
+struct CitationAnchor: Codable, Sendable, Equatable {
+  enum Target: String, Codable, Sendable, Equatable {
+    case answerSpan = "answer_span"
+    case factRow = "fact_row"
+  }
+
+  let target: Target
+  let id: String
+}
+
 /// A cited source backing the answer (mirrors `citationSchema`).
 struct Citation: Codable, Sendable, Equatable {
   let source: String
   let detail: String
   let endpointUrl: String?
+  let anchor: CitationAnchor?
 
   enum CodingKeys: String, CodingKey {
     case source
     case detail
     case endpointUrl = "endpoint_url"
+    case anchor
   }
+
+  init(source: String, detail: String, endpointUrl: String?, anchor: CitationAnchor? = nil) {
+    self.source = source
+    self.detail = detail
+    self.endpointUrl = endpointUrl
+    self.anchor = anchor
+  }
+}
+
+/// Compact / full answer-card density (COMPACT-US-1).
+enum AnswerDensity: String, Codable, Sendable, Equatable {
+  case full
+  case compact
 }
 
 /// A claim the agent deduced rather than read directly (mirrors `inferenceSchema`).

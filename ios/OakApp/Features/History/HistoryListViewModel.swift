@@ -34,9 +34,26 @@ final class HistoryListViewModel {
   /// The search text (M-AC-H2.2). Applied server-side via `?q=` on ``reload()``.
   var searchQuery: String = ""
 
-  /// The active format filter (M-AC-H2.3); `nil` = all formats. Applied server-side
-  /// via `?format=`.
+  /// Leftover generation filter. Champions-first: always `nil` — History does
+  /// not filter by game (CF-UI-AC-1.2 / CF-HIST-AC-1.1).
   private(set) var formatFilter: Format?
+
+  /// Folder list (signed-in organize).
+  private(set) var folders: [ConversationFolder] = []
+
+  /// `nil` = All (non-archived). `"unfiled"` or a folder id filters. Archive is
+  /// ``showingArchive``.
+  private(set) var folderFilter: String?
+
+  /// Archive view (ORG-US-2).
+  private(set) var showingArchive = false
+
+  /// Multi-select for bulk actions.
+  var isSelecting = false
+  private(set) var selectedIds: Set<String> = []
+
+  /// Include archived rows when searching (ORG-AC-2.4).
+  var includeArchivedInSearch = false
 
   // MARK: Dependencies
 
@@ -57,7 +74,14 @@ final class HistoryListViewModel {
     errorMessage = nil
     defer { isLoading = false }
     do {
-      conversations = try await history.list(query: trimmedQuery, format: formatFilter)
+      conversations = try await history.list(
+        query: trimmedQuery,
+        format: nil,
+        folderId: folderFilter,
+        archived: showingArchive ? true : false,
+        includeArchived: includeArchivedInSearch && trimmedQuery != nil
+      )
+      folders = (try? await history.listFolders()) ?? folders
     } catch let error as OakError {
       errorMessage = Self.message(for: error)
     } catch {
@@ -71,11 +95,10 @@ final class HistoryListViewModel {
     await reload()
   }
 
-  /// Switches the format filter and re-fetches (M-AC-H2.3). A no-op when unchanged.
+  /// Leftover trampoline — there is no generation picker. A gen-N value must
+  /// not refetch another game (CF-UI-AC-1.2).
   func setFormatFilter(_ format: Format?) async {
-    guard format != formatFilter else { return }
-    formatFilter = format
-    await reload()
+    _ = format
   }
 
   /// The trimmed search text, or `nil` when blank (so an empty field sends no `?q=`).
@@ -145,6 +168,131 @@ final class HistoryListViewModel {
     errorMessage = nil
   }
 
+  func showAll() async {
+    folderFilter = nil
+    showingArchive = false
+    await reload()
+  }
+
+  func showUnfiled() async {
+    folderFilter = "unfiled"
+    showingArchive = false
+    await reload()
+  }
+
+  func showFolder(_ id: String) async {
+    folderFilter = id
+    showingArchive = false
+    await reload()
+  }
+
+  func showArchive() async {
+    showingArchive = true
+    folderFilter = nil
+    await reload()
+  }
+
+  func createFolder(named name: String) async {
+    do {
+      let folder = try await history.createFolder(name: name)
+      folders.append(folder)
+    } catch let error as OakError {
+      errorMessage = Self.message(for: error)
+    } catch {
+      errorMessage = Self.genericMessage
+    }
+  }
+
+  func renameFolder(_ folder: ConversationFolder, to name: String) async {
+    do {
+      try await history.renameFolder(id: folder.id, name: name)
+      if let index = folders.firstIndex(where: { $0.id == folder.id }) {
+        folders[index] = ConversationFolder(id: folder.id, name: name, createdAt: folder.createdAt)
+      }
+    } catch let error as OakError {
+      errorMessage = Self.message(for: error)
+    } catch {
+      errorMessage = Self.genericMessage
+    }
+  }
+
+  func deleteFolder(_ folder: ConversationFolder) async {
+    do {
+      try await history.deleteFolder(id: folder.id)
+      folders.removeAll { $0.id == folder.id }
+      if folderFilter == folder.id {
+        folderFilter = nil
+        await reload()
+      }
+    } catch let error as OakError {
+      errorMessage = Self.message(for: error)
+    } catch {
+      errorMessage = Self.genericMessage
+    }
+  }
+
+  func archive(_ summary: ConversationSummary) async {
+    do {
+      try await history.setArchived(id: summary.id, archived: !summary.archived)
+      await reload()
+    } catch let error as OakError {
+      errorMessage = Self.message(for: error)
+    } catch {
+      errorMessage = Self.genericMessage
+    }
+  }
+
+  func move(_ summary: ConversationSummary, to folderId: String?) async {
+    do {
+      try await history.setFolder(id: summary.id, folderId: folderId)
+      await reload()
+    } catch let error as OakError {
+      errorMessage = Self.message(for: error)
+    } catch {
+      errorMessage = Self.genericMessage
+    }
+  }
+
+  func toggleSelected(_ id: String) {
+    if selectedIds.contains(id) {
+      selectedIds.remove(id)
+    } else {
+      selectedIds.insert(id)
+    }
+  }
+
+  func export(_ summary: ConversationSummary, as format: ConversationExportFormat) async -> URL? {
+    do {
+      let data = try await history.exportConversation(id: summary.id, format: format)
+      let safe = summary.title
+        .replacingOccurrences(of: "/", with: "-")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+      let name = (safe.isEmpty ? "conversation" : safe) + ".\(format.fileExtension)"
+      return try Self.writeExportFile(data: data, filename: name)
+    } catch let error as OakError {
+      errorMessage = Self.message(for: error)
+      return nil
+    } catch {
+      errorMessage = Self.genericMessage
+      return nil
+    }
+  }
+
+  func bulk(_ action: BulkConversationAction, folderId: String? = nil) async {
+    let ids = Array(selectedIds)
+    guard !ids.isEmpty else { return }
+    do {
+      _ = try await history.bulkUpdate(ids: ids, action: action, folderId: folderId)
+      selectedIds = []
+      isSelecting = false
+      await reload()
+    } catch let error as OakError {
+      errorMessage = Self.message(for: error)
+    } catch {
+      errorMessage = Self.genericMessage
+    }
+  }
+
   // MARK: Local list edits
 
   /// Replaces the conversation with the same id and re-sorts (pinned first, then
@@ -163,6 +311,12 @@ final class HistoryListViewModel {
   static let connectionMessage = "No connection. Check your network and try again."
   static let sessionExpiredMessage = "Your session expired. Please sign in again."
   static let genericMessage = "Something went wrong. Please try again."
+
+  private static func writeExportFile(data: Data, filename: String) throws -> URL {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+    try data.write(to: url, options: .atomic)
+    return url
+  }
 
   /// Maps an ``OakError`` to a user-facing message.
   static func message(for error: OakError) -> String {
@@ -186,11 +340,17 @@ final class HistoryListViewModel {
 private extension ConversationSummary {
   /// A copy with a new `pinned` flag (the DTO's stored fields are immutable).
   func withPinned(_ pinned: Bool) -> ConversationSummary {
-    ConversationSummary(id: id, title: title, format: format, pinned: pinned, updatedAt: updatedAt)
+    ConversationSummary(
+      id: id, title: title, format: format, pinned: pinned, updatedAt: updatedAt,
+      archived: archived, folderId: folderId
+    )
   }
 
   /// A copy with a new `title`.
   func withTitle(_ title: String) -> ConversationSummary {
-    ConversationSummary(id: id, title: title, format: format, pinned: pinned, updatedAt: updatedAt)
+    ConversationSummary(
+      id: id, title: title, format: format, pinned: pinned, updatedAt: updatedAt,
+      archived: archived, folderId: folderId
+    )
   }
 }

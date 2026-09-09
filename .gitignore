@@ -41,6 +41,13 @@ yarn-error.log*
 coverage/
 .vitest/
 
+# App Store screenshot build junk (renderer + final PNG sets are tracked)
+docs/app-store/generated-screenshots/signal/1290x2796/
+docs/app-store/generated-screenshots/signal/fonts/
+docs/app-store/generated-screenshots/signal/preview-work/
+docs/app-store/generated-screenshots/signal/oak-1.1-preview.mp4
+tmp-thinking-animation.html
+
 # Editor / OS
 .DS_Store
 .idea/

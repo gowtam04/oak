@@ -1,7 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <!-- Oak favicon: a stylized "O" (the wordmark initial, in the geometric
-       monolinear spirit of Space Grotesk) in white on the brand red (poke-red
-       #E3350D). Rounded square container matches the app icon. -->
-  <rect width="32" height="32" rx="7" fill="#E3350D"/>
+  <!-- In-app tile: coral rounded square, white O ring. Not the home-screen glyph. -->
+  <rect width="32" height="32" rx="7" fill="#ee5a5a"/>
   <circle cx="16" cy="16" r="7.7" fill="none" stroke="#ffffff" stroke-width="4.6"/>
 </svg>

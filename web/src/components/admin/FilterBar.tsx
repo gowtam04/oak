@@ -61,6 +61,9 @@ const STATUS_OPTIONS: { value: TurnRecordStatus; label: string }[] = [
   { value: "resolution_failed", label: "Resolution failed" },
   { value: "insufficient_data", label: "Insufficient data" },
   { value: "rate_limited", label: "Rate limited" },
+  { value: "account_denied", label: "Account denied" },
+  { value: "daily_limit", label: "Daily limit" },
+  { value: "spend_check_failed", label: "Spend check failed" },
 ];
 
 const KIND_OPTIONS: { value: TurnKind; label: string }[] = [

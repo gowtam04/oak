@@ -28,6 +28,9 @@ struct ServiceContainer: Sendable {
   /// production.
   let chat: any ChatService
 
+  /// Public-share create / list / revoke / view. Backed by ``LiveShareService``.
+  let shares: any ShareService
+
   /// The artifact-viewer data seam (entity profiles + saved-team detail) read by
   /// ``ArtifactViewModel``. Backed by ``LiveArtifactService`` in production.
   let artifact: any ArtifactService
@@ -58,6 +61,20 @@ struct ServiceContainer: Sendable {
   /// production — a separate host from the Oak API, no Bearer token.
   let updates: any UpdateService
 
+  /// `POST /api/calc` — public estimate engine.
+  let calc: any CalcService
+
+  /// Conversation artifact pins (signed-in).
+  let artifactPins: any ArtifactPinService
+
+  /// Public live Champions usage (GET `/api/usage`). Backed by
+  /// ``LiveUsageService`` in production.
+  let usage: any UsageService
+
+  /// Public current-regulation facts (`GET /api/scope`). Backed by
+  /// ``LiveRegulationService`` in production.
+  let regulation: any RegulationService
+
   /// The production wiring (real `Live…` services).
   ///
   /// All services share **one** ``TokenStore`` (the Keychain) and **one**
@@ -71,13 +88,18 @@ struct ServiceContainer: Sendable {
     return ServiceContainer(
       auth: LiveAuthService(apiClient: api, tokenStore: tokenStore),
       history: LiveHistoryService(apiClient: api),
-      chat: LiveChatService(sseClient: SSEClient(apiClient: api)),
+      chat: LiveChatService(sseClient: SSEClient(apiClient: api), apiClient: api),
+      shares: LiveShareService(apiClient: api),
       artifact: LiveArtifactService(apiClient: api),
       teams: LiveTeamService(apiClient: api),
       dexLookup: LiveDexLookupService(apiClient: api),
       teamsAssistant: LiveTeamsAssistantService(sseClient: SSEClient(apiClient: api)),
       voice: LiveVoiceService(apiClient: api),
-      updates: LiveUpdateService()
+      updates: LiveUpdateService(),
+      calc: LiveCalcService(apiClient: api),
+      artifactPins: LiveArtifactPinService(apiClient: api),
+      usage: LiveUsageService(apiClient: api),
+      regulation: LiveRegulationService(apiClient: api)
     )
   }
 
@@ -92,12 +114,17 @@ struct ServiceContainer: Sendable {
       auth: PreviewStubAuthService(),
       history: PreviewStubHistoryService(),
       chat: PreviewStubChatService(),
+      shares: PreviewStubShareService(),
       artifact: PreviewStubArtifactService(),
       teams: PreviewStubTeamService(),
       dexLookup: EmptyDexLookupService(),
       teamsAssistant: PreviewStubTeamsAssistantService(),
       voice: PreviewStubVoiceService(),
-      updates: PreviewStubUpdateService()
+      updates: PreviewStubUpdateService(),
+      calc: PreviewStubCalcService(),
+      artifactPins: PreviewStubArtifactPinService(),
+      usage: PreviewStubUsageService(),
+      regulation: PreviewStubRegulationService()
     )
     #else
     live()
@@ -146,12 +173,20 @@ struct PreviewStubAuthService: AuthService {
   func signOut() async throws {}
 
   func deleteAccount() async throws {}
+
+  func setAnswerDensity(_ density: AnswerDensity) async throws -> AnswerDensity { density }
 }
 
 /// No-network ``HistoryService`` for SwiftUI previews: an empty conversation list,
 /// a trivially-empty detail on load, and a no-op import.
 struct PreviewStubHistoryService: HistoryService {
-  func list(query: String?, format: Format?) async throws -> [ConversationSummary] { [] }
+  func list(
+    query: String?,
+    format: Format?,
+    folderId: String?,
+    archived: Bool?,
+    includeArchived: Bool
+  ) async throws -> [ConversationSummary] { [] }
 
   func get(id: String) async throws -> ConversationDetail {
     ConversationDetail(
@@ -174,6 +209,23 @@ struct PreviewStubHistoryService: HistoryService {
     format: Format,
     turns: [ChatTurn]
   ) async throws -> String? { nil }
+
+  func listFolders() async throws -> [ConversationFolder] { [] }
+  func createFolder(name: String) async throws -> ConversationFolder {
+    ConversationFolder(id: "preview", name: name, createdAt: 0)
+  }
+  func renameFolder(id: String, name: String) async throws {}
+  func deleteFolder(id: String) async throws {}
+  func setArchived(id: String, archived: Bool) async throws {}
+  func setFolder(id: String, folderId: String?) async throws {}
+  func bulkUpdate(ids: [String], action: BulkConversationAction, folderId: String?) async throws -> BulkUpdateResponse {
+    BulkUpdateResponse(updated: ids, skipped: [])
+  }
+  func setTurnPinned(conversationId: String, messageId: String, pinned: Bool) async throws -> [String] { [] }
+  func fork(conversationId: String, throughMessageId: String) async throws -> ForkResponse {
+    ForkResponse(id: "fork", title: "Preview (fork)")
+  }
+  func exportConversation(id: String, format: ConversationExportFormat) async throws -> Data { Data() }
 }
 
 /// No-network ``ArtifactService`` for SwiftUI previews: every fetch resolves to
@@ -192,6 +244,8 @@ struct PreviewStubTeamService: TeamService {
   private var notFound: OakError { .http(status: 404, code: "not_found", message: "Preview stub.") }
 
   func list(format: Format?) async throws -> [TeamSummary] { [] }
+
+  func list(archived: Bool) async throws -> [TeamSummary] { [] }
 
   func get(id: String) async throws -> (team: Team, validation: TeamValidationResult) {
     throw notFound
@@ -241,7 +295,9 @@ struct PreviewStubChatService: ChatService {
     sessionId: String,
     message: String,
     images: [UIImage],
-    scopeSeed: Format?
+    scopeSeed: Format?,
+    recovery: ChatRecovery?,
+    mentionedTeamIds: [String]?
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     AsyncThrowingStream { continuation in
       continuation.yield(.answerStart)
@@ -255,6 +311,26 @@ struct PreviewStubChatService: ChatService {
   }
 
   func stop(turnId: String, sessionId: String) async throws {}
+
+  func persistScope(
+    format: Format,
+    conversationId: String?,
+    sessionId: String
+  ) async throws -> [Format] { [] }
+}
+
+struct PreviewStubShareService: ShareService {
+  func create(conversationId: String, assistantMessageId: String) async throws -> CreatedShare {
+    CreatedShare(id: "preview", url: "https://example.test/a/preview")
+  }
+  func list() async throws -> [ShareSummary] { [] }
+  func revoke(id: String) async throws {}
+  func getPublic(id: String) async throws -> PublicShare {
+    throw OakError.http(status: 404, code: "not_found", message: "Preview stub.")
+  }
+  func importTeam(id: String) async throws -> String {
+    throw OakError.http(status: 404, code: "not_found", message: "Preview stub.")
+  }
 }
 
 /// No-network ``TeamsAssistantService`` for SwiftUI previews: a tiny scripted stream
@@ -291,6 +367,42 @@ struct PreviewStubVoiceService: VoiceService {
   }
 
   func postTranscript(sessionId: String, format: Format, userText: String, assistantText: String) async {}
+
+  func hydrate(conversationId: String, assistantMessageId: String) async throws -> VoiceHydrateResponse {
+    VoiceHydrateResponse(status: .running)
+  }
+}
+
+struct PreviewStubCalcService: CalcService {
+  func estimate(_ scenario: CalcScenario) async -> CalcResult? { nil }
+}
+
+struct PreviewStubUsageService: UsageService {
+  func leaderboard(ladder: UsageLadder) async throws -> UsageLeaderboard {
+    .unavailable(ladder: ladder)
+  }
+
+  func species(slug: String, ladder: UsageLadder) async throws -> UsageSpeciesResponse {
+    .unavailable
+  }
+}
+
+struct PreviewStubRegulationService: RegulationService {
+  func current() async -> RegulationMeta? { nil }
+}
+
+struct PreviewStubArtifactPinService: ArtifactPinService {
+  func list(conversationId: String) async -> [PinnedArtifactSummary] { [] }
+  func create(
+    conversationId: String,
+    kind: ArtifactPinKind,
+    title: String,
+    snapshot: Artifact
+  ) async -> ArtifactPinCreateResult {
+    .failure(.failed)
+  }
+  func get(conversationId: String, pinId: String) async -> Artifact? { nil }
+  func delete(conversationId: String, pinId: String) async -> [PinnedArtifactSummary] { [] }
 }
 
 /// No-network ``UpdateService`` for SwiftUI previews: always reports up-to-date so

@@ -1,155 +1,111 @@
+import type { ComponentProps } from "react";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 afterEach(() => cleanup());
 import ScopeChip from "./ScopeChip";
-import { SCOPE_PICKER_ORDER } from "@/data/formats";
-import { scopeLabelShort } from "@/lib/scope/scope-label";
+import { CHAMPIONS_REGULATION } from "@/data/formats";
 
 /**
- * jsdom project — fixture props ONLY (never imports db/repos/runtime). Pins the
- * chip's per-format copy, which is sourced from the portable `scopeLabel` helper
- * so the same strings render on web and a future iOS client.
+ * jsdom project — fixture props ONLY (never imports db/repos/runtime).
+ * Champions-first: the header chip is a display-only current-regulation
+ * indicator, not a National Dex / Gens 1–8 / Scarlet-Violet picker.
  */
-describe("ScopeChip", () => {
-  it("renders the National Dex label", () => {
-    render(<ScopeChip format="national-dex" />);
-    const chip = screen.getByTestId("scope-chip");
-    expect(chip).toHaveTextContent("National Dex · All Gens");
-    expect(chip).toHaveAttribute("data-format", "national-dex");
+
+type ChipProps = ComponentProps<typeof ScopeChip>;
+
+function renderChip(over: Partial<ChipProps> = {}) {
+  const props = { format: "champions", ...over } as ChipProps;
+  return render(<ScopeChip {...props} />);
+}
+
+function chip() {
+  return screen.getByTestId("scope-chip");
+}
+
+/** "Regulation M-B" → "Reg M-B" (short chip form) or the full constant. */
+const REGULATION_RE = new RegExp(
+  `${escapeRe(CHAMPIONS_REGULATION)}|${escapeRe(
+    CHAMPIONS_REGULATION.replace(/^Regulation\b/, "Reg").trim(),
+  )}`,
+);
+
+function escapeRe(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function expectNoGameMenu() {
+  expect(screen.queryByRole("menu")).toBeNull();
+  expect(screen.queryByRole("listbox")).toBeNull();
+  expect(screen.queryByRole("menuitemradio")).toBeNull();
+  expect(screen.queryByRole("menuitem")).toBeNull();
+  expect(screen.queryByTestId("scope-chip-menu")).toBeNull();
+  expect(screen.queryByTestId("scope-chip-mru")).toBeNull();
+  for (const format of [
+    "national-dex",
+    "scarlet-violet",
+    "gen-1",
+    "gen-2",
+    "gen-3",
+    "gen-4",
+    "gen-5",
+    "gen-6",
+    "gen-7",
+    "gen-8",
+  ] as const) {
+    expect(screen.queryByTestId(`scope-chip-option-${format}`)).toBeNull();
+  }
+  const body = document.body.textContent ?? "";
+  expect(body).not.toMatch(/National Dex/i);
+  expect(body).not.toMatch(/Scarlet/i);
+  expect(body).not.toMatch(/\bGen [1-9]\b/);
+  expect(body).not.toMatch(/Answer scope/i);
+}
+
+describe("ScopeChip — regulation display (CF-CHAT-AC-1.2, CF-UI-US-2)", () => {
+  it("shows the current Champions regulation name", () => {
+    renderChip();
+    const el = chip();
+    expect(el).toBeInTheDocument();
+    expect(el).toHaveTextContent(REGULATION_RE);
+    expect(el).toHaveAttribute("data-format", "champions");
   });
 
-  it("renders the Champions label with the short regulation", () => {
-    render(<ScopeChip format="champions" />);
-    const chip = screen.getByTestId("scope-chip");
-    expect(chip).toHaveTextContent("Champions · Reg M-B");
-    expect(chip).toHaveAttribute("data-format", "champions");
+  it("stays on the current regulation even if a non-Champions format is passed (CF-UI-AC-2.1)", () => {
+    renderChip({ format: "national-dex" });
+    const el = chip();
+    expect(el).toHaveTextContent(REGULATION_RE);
+    expect(el).not.toHaveTextContent(/National Dex/i);
+    expect(el.getAttribute("data-format")).not.toBe("national-dex");
   });
 
-  it("renders the Gen 9 / Scarlet-Violet label", () => {
-    render(<ScopeChip format="scarlet-violet" />);
-    const chip = screen.getByTestId("scope-chip");
-    expect(chip).toHaveTextContent("Gen 9 · Scarlet/Violet");
-    expect(chip).toHaveAttribute("data-format", "scarlet-violet");
+  it("is not a menu of National Dex / Gens 1–8 / Scarlet-Violet (CF-UI-AC-1.1)", () => {
+    renderChip();
+    expect(chip().getAttribute("aria-haspopup")).not.toBe("menu");
+    expectNoGameMenu();
   });
 
-  it("renders a mainline gen scope label (gen-7)", () => {
-    render(<ScopeChip format="gen-7" />);
-    const chip = screen.getByTestId("scope-chip");
-    expect(chip).toHaveTextContent("Gen 7 · USUM");
-    expect(chip).toHaveAttribute("data-format", "gen-7");
+  it("click/tap does not switch games (CF-UI-AC-2.2)", () => {
+    const onSelect = vi.fn();
+    renderChip({ onSelect });
+    fireEvent.click(chip());
+    expect(onSelect).not.toHaveBeenCalled();
+    expectNoGameMenu();
   });
 
-  it("exposes an explanatory title tied to the resolved scope", () => {
-    render(<ScopeChip format="gen-5" />);
-    expect(screen.getByTestId("scope-chip")).toHaveAttribute(
-      "title",
-      "Answers are scoped to Gen 5 · Black/White",
-    );
-  });
-
-  describe("interactive (onSelect provided)", () => {
-    it("renders a button rather than the plain display-only span", () => {
-      render(<ScopeChip format="champions" onSelect={vi.fn()} />);
-      const chip = screen.getByTestId("scope-chip");
-      expect(chip.tagName).toBe("BUTTON");
-      expect(chip).toHaveAttribute("aria-haspopup", "menu");
-      expect(chip).toHaveAttribute("aria-expanded", "false");
-    });
-
-    it("opens a menu listing all eleven formats on click, each as a two-line row", () => {
-      render(<ScopeChip format="champions" onSelect={vi.fn()} />);
-      fireEvent.click(screen.getByTestId("scope-chip"));
-      const menu = screen.getByTestId("scope-chip-menu");
-      expect(menu).toBeInTheDocument();
-      // Header instrument label.
-      expect(menu).toHaveTextContent("Answer scope");
-      expect(SCOPE_PICKER_ORDER).toHaveLength(11);
-      for (const f of SCOPE_PICKER_ORDER) {
-        // Row shows the short name…
-        expect(screen.getByTestId(`scope-chip-option-${f}`)).toHaveTextContent(
-          scopeLabelShort(f),
-        );
-      }
-      // National Dex appears first (default scope, display-order first).
-      const options = screen
-        .getAllByRole("menuitemradio")
-        .map((el) => el.getAttribute("data-testid")?.replace("scope-chip-option-", ""));
-      expect(options[0]).toBe("national-dex");
-    });
-
-    it("each row carries a one-line description under the name", () => {
-      render(<ScopeChip format="champions" onSelect={vi.fn()} />);
-      fireEvent.click(screen.getByTestId("scope-chip"));
-      // A representative sample of the per-scope descriptions.
-      expect(
-        screen.getByTestId("scope-chip-option-national-dex"),
-      ).toHaveTextContent("All Pokémon · Every generation");
-      expect(
-        screen.getByTestId("scope-chip-option-gen-7"),
-      ).toHaveTextContent("Ultra Sun / Ultra Moon");
-      expect(
-        screen.getByTestId("scope-chip-option-gen-8"),
-      ).toHaveTextContent("Sword / Shield");
-      expect(
-        screen.getByTestId("scope-chip-option-gen-1"),
-      ).toHaveTextContent("Red / Blue");
-      // Champions rides the live regulation constant.
-      expect(
-        screen.getByTestId("scope-chip-option-champions"),
-      ).toHaveTextContent("Regulation");
-    });
-
-    it("marks the current scope's row as checked (the red-rail selection)", () => {
-      render(<ScopeChip format="gen-7" onSelect={vi.fn()} />);
-      fireEvent.click(screen.getByTestId("scope-chip"));
-      expect(screen.getByTestId("scope-chip-option-gen-7")).toHaveAttribute(
-        "aria-checked",
-        "true",
-      );
-      expect(
-        screen.getByTestId("scope-chip-option-champions"),
-      ).toHaveAttribute("aria-checked", "false");
-    });
-
-    it("honors a custom testId so a second instance stays uniquely queryable", () => {
-      render(
-        <ScopeChip format="champions" onSelect={vi.fn()} testId="scope-chip-hero" />,
-      );
-      const chip = screen.getByTestId("scope-chip-hero");
-      expect(chip.tagName).toBe("BUTTON");
-      fireEvent.click(chip);
-      expect(screen.getByTestId("scope-chip-hero-menu")).toBeInTheDocument();
-      expect(
-        screen.getByTestId("scope-chip-hero-option-gen-5"),
-      ).toBeInTheDocument();
-      // The default testid is NOT present for this instance.
-      expect(screen.queryByTestId("scope-chip")).toBeNull();
-    });
-
-    it("picking an option fires onSelect and closes the menu", () => {
-      const onSelect = vi.fn();
-      render(<ScopeChip format="champions" onSelect={onSelect} />);
-      fireEvent.click(screen.getByTestId("scope-chip"));
-      fireEvent.click(screen.getByTestId("scope-chip-option-gen-5"));
-      expect(onSelect).toHaveBeenCalledWith("gen-5");
-      expect(screen.queryByTestId("scope-chip-menu")).not.toBeInTheDocument();
-    });
-
-    it("disabled prevents opening the menu", () => {
-      render(<ScopeChip format="champions" onSelect={vi.fn()} disabled />);
-      const chip = screen.getByTestId("scope-chip");
-      expect(chip).toBeDisabled();
-      fireEvent.click(chip);
-      expect(screen.queryByTestId("scope-chip-menu")).not.toBeInTheDocument();
-    });
-
-    it("Escape closes the menu", () => {
-      render(<ScopeChip format="champions" onSelect={vi.fn()} />);
-      fireEvent.click(screen.getByTestId("scope-chip"));
-      expect(screen.getByTestId("scope-chip-menu")).toBeInTheDocument();
-      fireEvent.keyDown(document, { key: "Escape" });
-      expect(screen.queryByTestId("scope-chip-menu")).not.toBeInTheDocument();
-    });
+  it("may expose an informational tooltip/note, not a game switcher (CF-UI-AC-2.2)", () => {
+    renderChip();
+    const el = chip();
+    const hint = [el.getAttribute("title"), el.getAttribute("aria-label")]
+      .filter(Boolean)
+      .join(" ");
+    if (hint.length > 0) {
+      expect(hint).not.toMatch(/National Dex/i);
+      expect(hint).not.toMatch(/Scarlet/i);
+      expect(hint).not.toMatch(/\bGen [1-8]\b/);
+    }
+    fireEvent.click(el);
+    // A short note about the current regulation is allowed; a game list is not.
+    expectNoGameMenu();
   });
 });

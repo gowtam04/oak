@@ -17,6 +17,9 @@ struct ArtifactSheetView: View {
   let model: ArtifactViewModel
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(AppState.self) private var appState
+  @State private var compareSpecies = ""
+  @State private var showingCompare = false
   /// Mirrors the back-stack depth of the *previous* render so the drill transition can tell a
   /// push (depth grew → new content slides in from the trailing edge) from a back (depth shrank →
   /// from the leading edge). Updated in `.onChange` after each swap, so during the render that
@@ -53,19 +56,81 @@ struct ArtifactSheetView: View {
             }
             .accessibilityLabel("Back to previous artifact")
           }
+          .oakLidItem()
         }
         ToolbarItem(placement: .topBarTrailing) {
-          Button("Done") {
-            model.dismiss()
+          HStack(spacing: 12) {
+            if model.canOpenInDex {
+              Button {
+                if let hop = model.openInDex() {
+                  appState.pendingDestination = .dexHop(hop)
+                }
+              } label: {
+                Label("Open in Dex", systemImage: "books.vertical")
+              }
+              .accessibilityLabel("Open in Dex")
+            }
+            if case .entity(let ok)? = model.current?.content, ok.kind == .pokemon {
+              Button {
+                showingCompare = true
+              } label: {
+                Label("Compare with…", systemImage: "rectangle.split.2x1")
+              }
+            }
+            if model.canPin {
+              Button {
+                Task { _ = await model.pin() }
+              } label: {
+                Label("Pin", systemImage: "pin")
+              }
+            }
+            Button("Done") {
+              model.dismiss()
+            }
           }
         }
+        .oakLidItem()
       }
     }
+    .oakEnamelNav()
+    .sheet(isPresented: $showingCompare) {
+      NavigationStack {
+        Form {
+          TextField("Species", text: $compareSpecies)
+            .textInputAutocapitalization(.never)
+          if let message = model.compareErrorMessage {
+            Text(message).foregroundStyle(Theme.warning)
+          }
+        }
+        .navigationTitle("Compare with…")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") { showingCompare = false }
+          }
+          .oakLidItem()
+          ToolbarItem(placement: .confirmationAction) {
+            Button("Compare") {
+              let species = compareSpecies
+              Task {
+                await model.compareWith(species: species, format: .champions)
+                if model.compareErrorMessage == nil {
+                  compareSpecies = ""
+                  showingCompare = false
+                }
+              }
+            }
+            .disabled(compareSpecies.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          }
+          .oakLidItem()
+        }
+      }
+      .oakEnamelNav()
+      .presentationDetents([.medium])
+      .oakPaperSheet()
+    }
     .presentationDetents([.medium, .large])
-    .presentationDragIndicator(.visible)
-    // Desk canvas under specimen plates — continuation of chat paper (§5.8 / soul.md).
-    .presentationBackground(Theme.canvas)
-    .presentationCornerRadius(24)
+    .oakPaperSheet()
   }
 
   /// Push (deeper) slides content in from the trailing edge and out to the leading edge; back
@@ -97,7 +162,7 @@ struct ArtifactSheetView: View {
         Task { await model.openEntity(kind: .pokemon, query: species) }
       }
     case .comparison(let subjects):
-      ComparisonArtifactView(subjects: subjects) { species in
+      ComparisonArtifactView(subjects: subjects, diff: model.lastCompareDiff) { species in
         Task { await model.openEntity(kind: .pokemon, query: species) }
       }
     case .damageCalc(let damageCalc):
@@ -105,7 +170,7 @@ struct ArtifactSheetView: View {
         DamageCalcView(damageCalc: damageCalc)
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(Theme.Spacing.lg)
-          .oakSpecimenPlate(.mechanics)
+          .oakCard()
           .padding(Theme.Spacing.sm)
       }
       .background(Theme.canvas)
@@ -159,8 +224,7 @@ struct ArtifactSheetView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(Theme.Spacing.lg)
-    // Soft ink-plate skeleton while the entity fetch settles (soul.md Phase 2).
-    .oakSpecimenPlate(.mechanics)
+    .oakCard()
     .padding(Theme.Spacing.sm)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Loading")
@@ -271,8 +335,7 @@ private struct TeamArtifactDetail: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(Theme.Spacing.lg)
-      // Team artifacts have no subject types — ink plate (mechanics).
-      .oakSpecimenPlate(.mechanics)
+      .oakCard()
       .padding(.horizontal, Theme.Spacing.sm)
       .padding(.vertical, Theme.Spacing.sm)
     }
@@ -356,6 +419,7 @@ private struct TeamArtifactDetail: View {
           }
           .buttonStyle(.plain)
           .accessibilityHint("Opens \(titleize(species))")
+          AddToTeamButton(incoming: member, compact: true)
         }
         if let detail = abilityTeraLine(member) {
           Text(detail)

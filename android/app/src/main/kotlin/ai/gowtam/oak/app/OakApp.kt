@@ -10,31 +10,46 @@ import ai.gowtam.oak.features.chat.ChatViewModel
 import ai.gowtam.oak.features.dex.DexRoute
 import ai.gowtam.oak.features.history.HistoryScreen
 import ai.gowtam.oak.features.history.HistoryViewModel
+import ai.gowtam.oak.features.share.ShareSnapshotScreen
+import ai.gowtam.oak.features.share.ShareSnapshotViewModel
 import ai.gowtam.oak.features.teams.TeamsRoute
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.ConnectionBanner
 import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.LocalRegulation
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberReduceMotion
 import ai.gowtam.oak.wire.ConversationSummary
+import ai.gowtam.oak.wire.Format
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import ai.gowtam.oak.ui.imeAwareBottomPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Functions
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -46,27 +61,35 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.launch
 
 private enum class OakTab(val label: String) {
     Chat("Chat"),
     Teams("Teams"),
     Dex("Dex"),
-    Account("Account"),
+    Calculator("Calc"),
+    Settings("Settings"),
 }
 
 /**
- * The app's root composable — the 4-tab `NavigationBar` shell (Chat / Teams /
- * Dex / Account). Chat, Teams, Dex, and Account are all fully wired. The
+ * The app's root composable — the tab `NavigationBar` shell (Chat / Teams /
+ * Dex / Calc / Settings). Chat, Teams, Dex, Calc, and Settings are all fully wired. The
  * [ChatViewModel] and [ArtifactViewModel] are owned by the caller
  * (`MainActivity`) and passed in so their stream/back-stack state survives a tab
  * switch away from Chat and back.
@@ -86,8 +109,29 @@ fun OakApp(
 ) {
     var selectedTab by remember { mutableStateOf(OakTab.Chat) }
     val authState by appState.authState.collectAsState()
+    val surface by appState.surfaceRequest.collectAsState()
     val connectionStatus by rememberConnectionStatus()
     val reduceMotion = rememberReduceMotion()
+    var shareSnapshotId by remember { mutableStateOf<String?>(null) }
+    var calculatorScenario by remember { mutableStateOf<ai.gowtam.oak.wire.CalcScenario?>(null) }
+
+    LaunchedEffect(surface) {
+        when (val req = surface) {
+            is AppState.SurfaceRequest.Dex -> selectedTab = OakTab.Dex
+            AppState.SurfaceRequest.Usage -> selectedTab = OakTab.Dex
+            is AppState.SurfaceRequest.Teams -> selectedTab = OakTab.Teams
+            is AppState.SurfaceRequest.ShareSnapshot -> {
+                shareSnapshotId = req.id
+                appState.consumeSurfaceRequest()
+            }
+            is AppState.SurfaceRequest.Calculator -> {
+                calculatorScenario = req.scenario
+                selectedTab = OakTab.Calculator
+                appState.consumeSurfaceRequest()
+            }
+            AppState.SurfaceRequest.None -> Unit
+        }
+    }
 
     LaunchedEffect(appState, services) {
         appState.authState.collect { state ->
@@ -97,14 +141,36 @@ fun OakApp(
         }
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    DisposableEffect(lifecycleOwner, services) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                scope.launch { appState.refreshRegulation(services.scope) }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val oak = LocalOakColors.current
+    val layoutDirection = LocalLayoutDirection.current
+    val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
     Scaffold(
+        // Keep the paper dock at the physical bottom; IME is applied to tab
+        // content as a replacement for the nav reservation, not stacked on it.
+        contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
         bottomBar = {
             Column {
                 // Hairline that separates the nav band from the canvas above it —
                 // the branded stand-in for Material's tonal-elevation shadow.
                 HorizontalDivider(color = oak.border, thickness = 1.dp)
-                NavigationBar(containerColor = MaterialTheme.colorScheme.background) {
+                // Opaque paper dock (`--surface`). No tonal elevation — frost is banned.
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 0.dp,
+                    windowInsets = WindowInsets.navigationBars,
+                ) {
                     OakTab.entries.forEach { tab ->
                         NavigationBarItem(
                             selected = selectedTab == tab,
@@ -130,8 +196,27 @@ fun OakApp(
         // own. See [LocalServices]'s doc for why this is scoped narrowly rather than
         // becoming the primary DI seam (ViewModels still take services as constructor
         // params).
-        CompositionLocalProvider(LocalServices provides services) {
-            Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        val regulation by appState.regulation.collectAsState()
+        CompositionLocalProvider(
+            LocalServices provides services,
+            LocalRegulation provides regulation,
+        ) {
+            val bottom = imeAwareBottomPadding(
+                nav = innerPadding.calculateBottomPadding(),
+                ime = imeBottom,
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        PaddingValues(
+                            start = innerPadding.calculateStartPadding(layoutDirection),
+                            top = innerPadding.calculateTopPadding(),
+                            end = innerPadding.calculateEndPadding(layoutDirection),
+                            bottom = bottom,
+                        ),
+                    ),
+            ) {
                 ConnectionBanner(status = connectionStatus)
                 // Tab content crossfades on switch (reduce-motion: an instant swap —
                 // AnimatedContent's default transitionSpec already collapses to
@@ -154,12 +239,29 @@ fun OakApp(
                                 authState = authState,
                                 chatViewModel = chatViewModel,
                                 artifactViewModel = artifactViewModel,
+                                onOpenCalculator = {
+                                    calculatorScenario = null
+                                    selectedTab = OakTab.Calculator
+                                },
                             )
                             OakTab.Teams -> TeamsRoute(services = services, appState = appState)
                             OakTab.Dex -> DexRoute(services = services, appState = appState)
-                            OakTab.Account -> {
+                            OakTab.Calculator -> {
+                                val chatFormat = chatViewModel.uiState.collectAsState().value.displayFormat
+                                ai.gowtam.oak.features.calc.CalculatorScreen(
+                                    calc = services.calc,
+                                    format = calculatorScenario?.format ?: chatFormat,
+                                    initialScenario = calculatorScenario,
+                                    dexLookup = services.dexLookup,
+                                    onBack = { selectedTab = OakTab.Chat },
+                                    onExplain = { prompt ->
+                                        chatViewModel.sendFollowUp(prompt)
+                                    },
+                                )
+                            }
+                            OakTab.Settings -> {
                                 val accountViewModel = remember(services, appState) {
-                                    AccountViewModel(services.auth, appState)
+                                    AccountViewModel(services.auth, appState, preferences = services.preferences)
                                 }
                                 AccountScreen(viewModel = accountViewModel, onBack = null)
                             }
@@ -169,13 +271,58 @@ fun OakApp(
             }
         }
     }
+
+    val snapshotId = shareSnapshotId
+    val importScope = rememberCoroutineScope()
+    if (snapshotId != null) {
+        val shareVm = remember(services) { ShareSnapshotViewModel(services.shares) }
+        var showShareSignIn by remember { mutableStateOf(false) }
+        ShareSnapshotScreen(
+            viewModel = shareVm,
+            shareId = snapshotId,
+            onBack = { shareSnapshotId = null },
+            onOpenInOak = { snap ->
+                if (snap.answer.proposedTeam == null) {
+                    shareSnapshotId = null
+                    selectedTab = OakTab.Chat
+                } else if (authState is AuthState.SignedIn) {
+                    shareSnapshotId = null
+                    importScope.launch {
+                        runCatching { services.shares.importTeam(snap.id) }
+                            .onSuccess { appState.requestTeams(id = it) }
+                        selectedTab = OakTab.Teams
+                    }
+                } else {
+                    appState.setPendingShareImport(snap.id)
+                    showShareSignIn = true
+                }
+            },
+        )
+        if (showShareSignIn) {
+            val authViewModel = remember(services, appState) { AuthViewModel(services.auth, appState) }
+            AuthDialog(viewModel = authViewModel, onDismissRequest = { showShareSignIn = false })
+        }
+    }
+
+    val pendingImport by appState.pendingShareImportId.collectAsState()
+    LaunchedEffect(authState, pendingImport) {
+        val id = pendingImport
+        if (authState is AuthState.SignedIn && id != null) {
+            appState.setPendingShareImport(null)
+            shareSnapshotId = null
+            runCatching { services.shares.importTeam(id) }
+                .onSuccess { appState.requestTeams(id = it) }
+            selectedTab = OakTab.Teams
+        }
+    }
 }
 
 private fun OakTab.icon() = when (this) {
     OakTab.Chat -> Icons.AutoMirrored.Filled.Chat
     OakTab.Teams -> Icons.Filled.Groups
     OakTab.Dex -> Icons.AutoMirrored.Filled.MenuBook
-    OakTab.Account -> Icons.Filled.AccountCircle
+    OakTab.Calculator -> Icons.Filled.Functions
+    OakTab.Settings -> Icons.Filled.Settings
 }
 
 // ---------------------------------------------------------------------------
@@ -212,10 +359,11 @@ private fun ChatTab(
     authState: AuthState,
     chatViewModel: ChatViewModel,
     artifactViewModel: ArtifactViewModel,
+    onOpenCalculator: () -> Unit = {},
 ) {
     when (authState) {
-        is AuthState.SignedIn -> SignedInChatHome(services, appState, chatViewModel, artifactViewModel)
-        AuthState.Guest -> GuestChatHome(services, appState, chatViewModel, artifactViewModel)
+        is AuthState.SignedIn -> SignedInChatHome(services, appState, chatViewModel, artifactViewModel, onOpenCalculator)
+        AuthState.Guest -> GuestChatHome(services, appState, chatViewModel, artifactViewModel, onOpenCalculator)
     }
 }
 
@@ -238,12 +386,14 @@ private fun SignedInChatHome(
     appState: AppState,
     chatViewModel: ChatViewModel,
     artifactViewModel: ArtifactViewModel,
+    onOpenCalculator: () -> Unit,
 ) {
     var route by remember { mutableStateOf<ChatTabRoute>(ChatTabRoute.New) }
     // The last conversation the user opened from the list, remembered in-memory so the
     // list can mark that row on return (survives the list⟷thread navigation because this
     // state lives above the route `when`). Not persisted across process death by design.
     var lastOpenedConversationId by remember { mutableStateOf<String?>(null) }
+    val density by appState.answerDensity.collectAsState()
     // System/predictive back pops a pushed thread back to the conversation list,
     // mirroring iOS's NavigationStack pop (Back returns to "Chats").
     BackHandler(enabled = route != ChatTabRoute.ConversationList) {
@@ -272,6 +422,34 @@ private fun SignedInChatHome(
                 artifactViewModel = artifactViewModel,
                 showsNewConversationButton = false,
                 onBack = { route = ChatTabRoute.ConversationList },
+                onOpenTeam = { id, name -> appState.requestTeams(id, name) },
+                onOpenInDex = { hop -> appState.requestDex(hop.query, hop.kind, hop.format) },
+                onOpenCalculator = onOpenCalculator,
+                conversationId = appState.activeConversationId.value,
+                density = density,
+                onResumeConversation = { id ->
+                    route = ChatTabRoute.Existing(
+                        ConversationSummary(
+                            id = id,
+                            title = "Conversation",
+                            format = Format.Champions,
+                            pinned = false,
+                            updatedAt = 0L,
+                        ),
+                    )
+                },
+                onForked = { id ->
+                    lastOpenedConversationId = id
+                    route = ChatTabRoute.Existing(
+                        ConversationSummary(
+                            id = id,
+                            title = "Fork",
+                            format = Format.Champions,
+                            pinned = false,
+                            updatedAt = 0L,
+                        ),
+                    )
+                },
             )
         }
 
@@ -279,9 +457,22 @@ private fun SignedInChatHome(
             ExistingConversationThread(
                 summary = current.summary,
                 services = services,
+                appState = appState,
                 chatViewModel = chatViewModel,
                 artifactViewModel = artifactViewModel,
                 onBack = { route = ChatTabRoute.ConversationList },
+                onForked = { id ->
+                    lastOpenedConversationId = id
+                    route = ChatTabRoute.Existing(
+                        ConversationSummary(
+                            id = id,
+                            title = "Fork",
+                            format = Format.Champions,
+                            pinned = false,
+                            updatedAt = 0L,
+                        ),
+                    )
+                },
             )
         }
     }
@@ -298,9 +489,11 @@ private fun SignedInChatHome(
 private fun ExistingConversationThread(
     summary: ConversationSummary,
     services: ServiceContainer,
+    appState: AppState,
     chatViewModel: ChatViewModel,
     artifactViewModel: ArtifactViewModel,
     onBack: () -> Unit,
+    onForked: (String) -> Unit = {},
 ) {
     var isLoaded by remember(summary.id) { mutableStateOf(false) }
     var loadError by remember(summary.id) { mutableStateOf<String?>(null) }
@@ -318,6 +511,9 @@ private fun ExistingConversationThread(
                 // A durable turn still generating server-side (survives an app relaunch,
                 // when the client's own pending pointer is gone) — reattach on open.
                 activeTurnId = detail.activeTurn?.turnId,
+                pinnedMessageIds = detail.pinnedMessageIds,
+                hydrate = detail.hydrate,
+                pinnedArtifacts = detail.pinnedArtifacts,
             )
             isLoaded = true
         } catch (e: Exception) {
@@ -331,6 +527,12 @@ private fun ExistingConversationThread(
             artifactViewModel = artifactViewModel,
             showsNewConversationButton = false,
             onBack = onBack,
+            onOpenTeam = { id, name -> appState.requestTeams(id, name) },
+            onForked = onForked,
+            onOpenInDex = { hop -> appState.requestDex(hop.query, hop.kind, hop.format) },
+            onOpenCalculator = { appState.requestCalculator(null) },
+            conversationId = summary.id,
+            density = appState.answerDensity.collectAsState().value,
         )
         loadError != null -> LoadErrorState(message = loadError!!, onRetry = { retryToken++ }, onBack = onBack)
         else -> LoadingState()
@@ -374,14 +576,20 @@ private fun GuestChatHome(
     appState: AppState,
     chatViewModel: ChatViewModel,
     artifactViewModel: ArtifactViewModel,
+    onOpenCalculator: () -> Unit,
 ) {
     var showSignIn by remember { mutableStateOf(false) }
+    val density by appState.answerDensity.collectAsState()
 
     ChatScreen(
         viewModel = chatViewModel,
         artifactViewModel = artifactViewModel,
         showsNewConversationButton = true,
         signInAction = { showSignIn = true },
+        onOpenInDex = { hop -> appState.requestDex(hop.query, hop.kind, hop.format) },
+        onOpenCalculator = onOpenCalculator,
+        conversationId = appState.activeConversationId.value,
+        density = density,
     )
 
     if (showSignIn) {

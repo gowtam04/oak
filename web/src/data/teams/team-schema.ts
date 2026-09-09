@@ -13,8 +13,9 @@
  *     names; `null` means "empty / not set". `moves` may hold fewer than 4 (a
  *     partial team is valid, BR-T4).
  *   - EV/IV stats accept the raw 0..255 range Showdown lets users type; the
- *     warn-but-allow validator (server/teams/validate-team.ts) flags >252 / a
- *     total >508 / IVs outside 0..31 — the schema itself never blocks them.
+ *     warn-but-allow validator (server/teams/validate-team.ts) flags Stat Point
+ *     caps (66 total / 32 per stat) / IVs outside 0..31 — the schema itself
+ *     never blocks them.
  *   - `.strict()` rejects unknown keys (every team object is strict, matching the
  *     OakAnswer sub-object convention).
  *   - Cosmetic fields (nickname/gender/shiny) are `.optional()` — preserved on
@@ -25,8 +26,8 @@ import { z } from "zod";
 
 /**
  * One EV or IV spread. Raw 0..255 per stat (Showdown permits the full byte
- * range on input); legality (≤252 per EV, ≤508 total, IV 0..31) is a warn-only
- * concern handled by validateTeam, not enforced here.
+ * range on input); legality (Champions: ≤32 per stat, ≤66 total; IV 0..31) is
+ * a warn-only concern handled by validateTeam, not enforced here.
  */
 export const statSpreadSchema = z
   .object({
@@ -89,14 +90,15 @@ export type TeamMembers = z.infer<typeof teamMembersSchema>;
 /** The validity/legality rules validateTeam can flag (BR-T5). */
 export const warningCodeSchema = z.enum([
   "incomplete", // informational (BR-T4)
-  "ev_total_exceeded", // sum(evs) > 508
-  "ev_stat_exceeded", // an EV > 252
+  "ev_total_exceeded", // sum(stat points) > 66
+  "ev_stat_exceeded", // a stat point > 32
   "iv_out_of_range", // an IV outside 0..31
-  "species_illegal", // species not in the format roster
+  "species_illegal", // species not in the Champions roster
   "ability_not_for_species", // ability not one of the species' legal abilities
   "item_illegal", // item not legal in the format
   "item_missing", // battle-ready member (4 moves) with no held item
   "move_not_in_learnset", // move not in the species' learnset for the format
+  "learnset_unavailable", // empty/missing learnset; warn-but-allow on box-build
   "duplicate_species", // species clause
   "duplicate_item", // item clause
 ]);

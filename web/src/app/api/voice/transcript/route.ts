@@ -20,8 +20,8 @@ import { z } from "zod";
 
 import { readJsonBodyWithLimit } from "@/server/body-limit";
 import { checkRateLimit, type RateLimitConfig } from "@/server/rate-limit";
-import { basisForFormat, FORMATS, type Format } from "@/data/formats";
-import { oakAnswerSchema, type OakAnswer } from "@/agent/schemas";
+import { FORMATS, type Format } from "@/data/formats";
+import { oakAnswerSchema } from "@/agent/schemas";
 import { logger } from "@/server/logger";
 
 export const runtime = "nodejs";
@@ -46,37 +46,49 @@ const requestBodySchema = z
   })
   .strict();
 
-function jsonError(status: number, error: string, message: string): Response {
-  return new Response(JSON.stringify({ error, message }), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+function jsonError(
+  status: number,
+  error: string,
+  message: string,
+  extraHeaders?: Record<string, string>,
+  extraBody?: Record<string, unknown>,
+): Response {
+  return new Response(
+    JSON.stringify({ code: error, error, message, ...extraBody }),
+    {
+      status,
+      headers: { "Content-Type": "application/json", ...extraHeaders },
+    },
+  );
 }
 
-/**
- * Build the minimal schema-valid `answered` OakAnswer for a voice turn. Voice
- * speech carries no structured citations/inferences, so those are empty; the
- * basis is stamped from the turn's format so a gen-scoped (or Champions) voice
- * turn reports the right generation, not a hardcoded gen-9 (mirrors runtime.ts's
- * fallback synthesizers).
- */
-function synthesizeVoiceAnswer(
-  assistantText: string,
-  format: Format,
-): OakAnswer {
-  return {
-    status: "answered",
-    answer_markdown: assistantText,
-    reasoning_markdown:
-      "This answer was spoken in voice mode, so it carries no structured " +
-      "citations or inferences.",
-    citations: [],
-    inferences: [],
-    generation_basis: {
-      generation: basisForFormat(format),
-      fallback: false,
-    },
-  };
+const SPEND_CHECK_FAILED_MESSAGE =
+  "Could not verify usage limits. Please try again.";
+
+function spendRefuseResponse(admit: {
+  code: "account_denied" | "daily_limit" | "spend_check_failed";
+  message?: string;
+  resetAt?: string;
+  retryAfterMs?: number;
+}): Response {
+  const message = admit.message ?? SPEND_CHECK_FAILED_MESSAGE;
+  if (admit.code === "daily_limit") {
+    const headers: Record<string, string> = {};
+    if (typeof admit.retryAfterMs === "number") {
+      headers["Retry-After"] = String(Math.ceil(admit.retryAfterMs / 1000));
+    }
+    return jsonError(
+      429,
+      admit.code,
+      message,
+      headers,
+      admit.resetAt !== undefined ? { reset_at: admit.resetAt } : undefined,
+    );
+  }
+  if (admit.code === "account_denied") {
+    return jsonError(403, admit.code, message);
+  }
+  return jsonError(503, admit.code, message);
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -115,6 +127,22 @@ export async function POST(req: Request): Promise<Response> {
     return jsonError(401, "sign_in_required", "Sign in to use voice mode.");
   }
 
+  // 1b) Denylist only — no increment (voice session was counted at token mint).
+  const { assertNotDenylisted } = await import("@/server/spend-control");
+  const deny = await assertNotDenylisted(account.email);
+  if (!deny.ok) {
+    logger.info(
+      {
+        event: "spend_refused",
+        code: deny.code,
+        subject_key: `acct:${account.id}`,
+        session_id,
+      },
+      "oak_spend_refused",
+    );
+    return spendRefuseResponse(deny);
+  }
+
   // 2) RATE LIMIT — one signed-in tier, keyed by account.
   const gate = await checkRateLimit(
     `acct:${account.id}`,
@@ -142,6 +170,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 3) SYNTHESIZE + VALIDATE — the stored answer_json must always parse.
+  const { synthesizeVoiceAnswer } = await import("@/server/voice/voice-session");
   const candidate = synthesizeVoiceAnswer(assistant_text, format);
   const validated = oakAnswerSchema.safeParse(candidate);
   if (!validated.success) {
@@ -164,15 +193,16 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   // 4) PERSIST — the same signed-in turn-pair write /api/chat uses.
+  const repo = await import("@/data/repos/conversation-repo");
+  const assistantTurnId = repo.newTurnId();
   try {
-    const repo = await import("@/data/repos/conversation-repo");
     await repo.appendTurnPair({
       accountId: account.id,
       conversationId: session_id,
       format,
       userTurnId: repo.newTurnId(),
       userMessage: user_text,
-      assistantTurnId: repo.newTurnId(),
+      assistantTurnId,
       answer: validated.data,
       now: Date.now(),
     });
@@ -190,6 +220,43 @@ export async function POST(req: Request): Promise<Response> {
       500,
       "internal_error",
       "Could not record the voice turn. Please try again.",
+    );
+  }
+
+  // 5) Hydrate fire-and-forget (VOICE-BR-1) — 200 without waiting.
+  try {
+    const { setHydrateRunning } = await import("@/server/voice/hydrate-store");
+    setHydrateRunning(session_id, assistantTurnId);
+    const { runVoiceCompile } = await import("@/server/voice/run-voice-compile");
+    void runVoiceCompile({
+      accountId: account.id,
+      conversationId: session_id,
+      assistantMessageId: assistantTurnId,
+      sessionId: session_id,
+      userText: user_text,
+      assistantText: assistant_text,
+      format,
+    }).catch((err) => {
+      logger.error(
+        {
+          event: "voice_compile_failed",
+          account_id: account.id,
+          session_id,
+          assistant_message_id: assistantTurnId,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "oak_voice_compile_failed",
+      );
+    });
+  } catch (err) {
+    logger.error(
+      {
+        event: "voice_compile_start_failed",
+        account_id: account.id,
+        session_id,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "oak_voice_compile_start_failed",
     );
   }
 

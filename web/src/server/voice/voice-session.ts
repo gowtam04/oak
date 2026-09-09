@@ -26,8 +26,9 @@ import { env } from "@/env";
 import { tools } from "@/agent/tools";
 import { VOICE_EXCLUDED_TOOLS } from "@/agent/tools/voice-gating";
 import { buildVoiceInstructions } from "@/agent/prompts/voice";
+import type { OakAnswer } from "@/agent/schemas";
 import type { ChatMessage } from "@/agent/types";
-import type { Format } from "@/data/formats";
+import { basisForFormat, type Format } from "@/data/formats";
 import type {
   VoiceSessionBootstrap,
   VoiceToolDefWire,
@@ -158,5 +159,32 @@ export function buildSessionBootstrap(opts: {
     idle_timeout_ms: VOICE_IDLE_TIMEOUT_MS,
     max_session_ms: VOICE_MAX_SESSION_MS,
     tools: voiceToolDefs(),
+  };
+}
+
+/** Spoken-card disclaimer — also used to detect pre-stamp voice origin. */
+export const VOICE_SPOKEN_DISCLAIMER =
+  "This answer was spoken in voice mode, so it carries no structured " +
+  "citations or inferences.";
+
+/**
+ * Minimal schema-valid `answered` OakAnswer for a voice turn (VOICE-AC-1.2).
+ * Speech carries no structured citations; `origin: "voice"` is server-stamped.
+ */
+export function synthesizeVoiceAnswer(
+  assistantText: string,
+  format: Format,
+): OakAnswer {
+  return {
+    status: "answered",
+    answer_markdown: assistantText,
+    reasoning_markdown: VOICE_SPOKEN_DISCLAIMER,
+    citations: [],
+    inferences: [],
+    generation_basis: {
+      generation: basisForFormat(format),
+      fallback: false,
+    },
+    origin: "voice",
   };
 }

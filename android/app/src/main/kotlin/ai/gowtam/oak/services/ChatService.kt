@@ -3,6 +3,7 @@ package ai.gowtam.oak.services
 import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.networking.SseClient
 import ai.gowtam.oak.wire.ChatImage
+import ai.gowtam.oak.wire.ChatRecovery
 import ai.gowtam.oak.wire.ChatRequest
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.SseEvent
@@ -45,6 +46,19 @@ interface ChatService {
         images: List<SourceImage>,
         scopeSeed: Format?,
     ): Flow<SseEvent>
+
+    /**
+     * Same as [send] plus chat-qol recovery / mention fields. Default
+     * implementation drops the extras so existing test doubles keep compiling.
+     */
+    fun send(
+        sessionId: String,
+        message: String,
+        images: List<SourceImage>,
+        scopeSeed: Format?,
+        recovery: ChatRecovery?,
+        mentionedTeamIds: List<String>?,
+    ): Flow<SseEvent> = send(sessionId, message, images, scopeSeed)
 
     /**
      * Text-only convenience: opens the stream for an already-built [request] with no
@@ -108,6 +122,31 @@ class LiveChatService(
                 message = message,
                 images = encodedImages.ifEmpty { null },
                 scopeSeed = scopeSeed,
+            ),
+        )
+    }
+
+    override fun send(
+        sessionId: String,
+        message: String,
+        images: List<SourceImage>,
+        scopeSeed: Format?,
+        recovery: ChatRecovery?,
+        mentionedTeamIds: List<String>?,
+    ): Flow<SseEvent> {
+        val encodedImages: List<ChatImage> = try {
+            imageEncoder.encode(images)
+        } catch (e: OakError) {
+            return flow { throw e }
+        }
+        return send(
+            ChatRequest(
+                sessionId = sessionId,
+                message = message,
+                images = encodedImages.ifEmpty { null },
+                scopeSeed = scopeSeed,
+                recovery = recovery,
+                mentionedTeamIds = mentionedTeamIds?.takeIf { it.isNotEmpty() },
             ),
         )
     }

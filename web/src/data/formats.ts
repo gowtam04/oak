@@ -1,12 +1,14 @@
 /**
- * Data-scope formats — the discriminator that scopes the index to a game.
+ * Data-scope formats — the discriminator stored on index rows, teams, and
+ * conversations.
  *
- * After the @pkmn migration the SQLite index stores one row-set PER FORMAT
- * (a `format` column on pokemon/learnset/reference_cache/searchable_names and a
- * per-format ingest_meta row). Repos filter by the active format, which is
+ * Champions-first (ADR-3 / ADR-4): ingest and runtime are Champions-only
+ * (`DEFAULT_FORMATS` is `["champions"]`). The historical {@link FORMATS} union
+ * remains so archived teams and old conversations still decode
+ * (`isFormat("gen-7")` etc.). Repos filter by the active format, which is
  * derived from the turn's {@link AgentMode} (server-controlled — see
  * `@/agent/types`). This module holds ONLY pure constants/mappings (no @pkmn or
- * SQLite imports) so it is safe to import from repos, tools, ingest, and tests.
+ * DB imports) so it is safe to import from repos, tools, ingest, and tests.
  */
 
 import type { AgentMode } from "@/agent/types";
@@ -39,7 +41,10 @@ export type GenFormat = "gen-5" | "gen-6" | "gen-7" | "gen-8" | "gen-4" | "gen-3
  */
 export type Format = "scarlet-violet" | "champions" | "national-dex" | GenFormat;
 
-/** All formats the ingest builds, in stable order. Append-only. */
+/**
+ * Historical stored-row union (archived teams, old conversations, turn_record).
+ * Append-only. Not the ingest/runtime set — see {@link DEFAULT_FORMATS}.
+ */
 export const FORMATS = [
   "scarlet-violet",
   "champions",
@@ -54,31 +59,18 @@ export const FORMATS = [
   "gen-1",
 ] as const;
 
-/** Default set of formats `runIngest` builds when none are specified. */
-export const DEFAULT_FORMATS: readonly Format[] = FORMATS;
+/**
+ * Formats `runIngest` builds when none are specified. Champions-first (ADR-4):
+ * ingest and runtime are Champions-only — not the full {@link FORMATS} tuple.
+ */
+export const DEFAULT_FORMATS = ["champions"] as const satisfies readonly Format[];
 
 /**
- * Display order for scope pickers (chat header chip, team menus, etc.).
- * National Dex first (the default scope), then Champions, then mainline
- * generations in release-date descending order. Does NOT reorder
- * {@link FORMATS} — that array feeds ingest/prompt/test lock-steps and must
- * stay stable.
- *
- * iOS/Android `Format.knownCases` should match this order.
+ * Display order for remaining product pickers. Champions-first (ADR-3):
+ * Champions is the only live format — National Dex is not the default.
+ * {@link FORMATS} is unchanged so archived stored rows still decode.
  */
-export const SCOPE_PICKER_ORDER: readonly Format[] = [
-  "national-dex",
-  "champions",
-  "scarlet-violet",
-  "gen-8",
-  "gen-7",
-  "gen-6",
-  "gen-5",
-  "gen-4",
-  "gen-3",
-  "gen-2",
-  "gen-1",
-] as const;
+export const SCOPE_PICKER_ORDER: readonly Format[] = ["champions"];
 
 /** The standard (non-Champions) format — today's Gen 9 scope. */
 export const STANDARD_FORMAT: Format = "scarlet-violet";
@@ -92,10 +84,48 @@ export const NATDEX_FORMAT: Format = "national-dex";
 /**
  * The regulation the base `champions` @pkmn mod currently tracks (it always
  * tracks the LATEST regulation; bumping `@pkmn/mods` + re-ingesting advances it).
- * Surfaced to users via `generation_basis.note` in Champions answers. Update
- * this one line when the regulation rotates.
+ * Surfaced to users via `generation_basis.note` in Champions answers and via
+ * {@link currentRegulationMeta} (`GET /api/scope`). Update this one line when
+ * the regulation rotates.
  */
 export const CHAMPIONS_REGULATION = "Regulation M-B";
+
+/**
+ * Public product-facts payload for the current Champions regulation — the
+ * body of `GET /api/scope`. Native chips fetch this; web chrome imports the
+ * helpers below (same deploy as the API).
+ */
+export interface RegulationMeta {
+  format: "champions";
+  regulation: string;
+  chipLabel: string;
+  hint: string;
+}
+
+/** `"Regulation M-B"` → `"Champions · Reg M-B"` for the header pill. */
+export function regulationChipLabel(
+  regulation: string = CHAMPIONS_REGULATION,
+): string {
+  const short = regulation.replace(/^Regulation\b/i, "Reg").trim();
+  return `Champions · ${short}`;
+}
+
+/** Accessibility / tooltip copy for the regulation chip. */
+export function regulationHint(
+  regulation: string = CHAMPIONS_REGULATION,
+): string {
+  return `Current Champions regulation: ${regulation}`;
+}
+
+/** The current regulation as served by `GET /api/scope`. */
+export function currentRegulationMeta(): RegulationMeta {
+  return {
+    format: "champions",
+    regulation: CHAMPIONS_REGULATION,
+    chipLabel: regulationChipLabel(),
+    hint: regulationHint(),
+  };
+}
 
 /**
  * Map the turn's agent mode to the data format the repos should query.
@@ -152,7 +182,11 @@ export function basisForFormat(format: Format): string {
   return format; // "national-dex" (falls through intentionally) or "gen-1"…"gen-8"
 }
 
-/** Type guard for a known format string (e.g. when reading CLI args). */
+/**
+ * Type guard for a known stored-row format string (archived teams, old
+ * conversations). Accepts the full historical {@link FORMATS} union (ADR-3).
+ * Ingest/runtime do not use this to accept other games — those are Champions-only.
+ */
 export function isFormat(value: string): value is Format {
   return (FORMATS as readonly string[]).includes(value);
 }

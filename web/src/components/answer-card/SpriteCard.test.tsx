@@ -20,8 +20,17 @@ afterEach(() => {
   cleanup();
   openEntity.mockClear();
 });
+import type { ComponentProps } from "react";
 import SpriteCard from "./SpriteCard";
 import { SUBJECT_GARCHOMP, SUBJECT_MEWTWO_FALLBACK } from "@/components/test-fixtures";
+
+type SpriteCardP6Props = ComponentProps<typeof SpriteCard> & {
+  signedIn?: boolean;
+};
+
+function renderSprite(over: SpriteCardP6Props) {
+  render(<SpriteCard {...(over as ComponentProps<typeof SpriteCard>)} />);
+}
 
 describe("SpriteCard", () => {
   describe("normal (non-fallback) subject", () => {
@@ -99,5 +108,26 @@ describe("SpriteCard", () => {
     render(<SpriteCard subject={maliciousSubject} />);
     const img = screen.getByRole("img", { name: "Garchomp" });
     expect(img.getAttribute("src")).not.toMatch(/^javascript:/);
+  });
+});
+
+describe("SpriteCard — Add to team (ADD-US-1, AUTH-BR-1)", () => {
+  it("shows Add to team when signed in (ADD-AC-1.1)", () => {
+    renderSprite({ subject: SUBJECT_GARCHOMP, signedIn: true });
+    expect(
+      screen.getByRole("button", { name: /add to team/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides Add to team for guests — absent, not disabled (ADD-AC-1.2, AUTH-BR-1)", () => {
+    renderSprite({ subject: SUBJECT_GARCHOMP, signedIn: false });
+    expect(screen.queryByRole("button", { name: /add to team/i })).toBeNull();
+    expect(screen.queryByText(/add to team/i)).toBeNull();
+  });
+
+  it("does not put Open in Dex on the sprite card (DEX-AC-1.2)", () => {
+    renderSprite({ subject: SUBJECT_GARCHOMP, signedIn: true });
+    expect(screen.queryByRole("link", { name: /open in dex/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /open in dex/i })).toBeNull();
   });
 });

@@ -8,8 +8,8 @@
  * memory backend itself does no I/O.
  *
  * Covers: getHistory, appendTurn, estimateTokens, trim, clearSession,
- * activeSessionCount, getSessionScope/setSessionScope. No external I/O — pure
- * in-memory Map.
+ * activeSessionCount, getSessionScope/setSessionScope, replaceLastPair.
+ * No external I/O — pure in-memory Map.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -540,5 +540,119 @@ describe("getSessionScope / setSessionScope", () => {
     // clearSession wipes the message history only; the sticky scope survives.
     expect(await getHistory(SESSION_A)).toEqual([]);
     expect(await getSessionScope(SESSION_A)).toBe("gen-5");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// replaceLastPair — guest retry/edit persist (REC-BR-2, REC-BR-4)
+// ---------------------------------------------------------------------------
+
+describe("replaceLastPair", () => {
+  type ReplaceLastPair = (
+    sessionId: string,
+    userContent: string,
+    assistantContent: string,
+  ) => Promise<void>;
+
+  async function replaceLastPair(
+    sessionId: string,
+    userContent: string,
+    assistantContent: string,
+  ): Promise<void> {
+    const mod = (await import("@/server/session-store")) as Record<string, unknown>;
+    const fn = mod.replaceLastPair as ReplaceLastPair | undefined;
+    if (typeof fn !== "function") {
+      throw new Error("replaceLastPair is not exported from session-store");
+    }
+    return fn(sessionId, userContent, assistantContent);
+  }
+
+  function errorText(err: unknown): string {
+    if (err instanceof Error) {
+      const extra = (err as Error & { code?: string }).code;
+      return extra ? `${extra} ${err.message}` : err.message;
+    }
+    if (err && typeof err === "object" && "code" in err) {
+      return String((err as { code: unknown }).code);
+    }
+    return String(err);
+  }
+
+  it("drops the last user+assistant pair and appends the new pair (REC-BR-2)", async () => {
+    await appendTurn(SESSION_A, msg("user", "q1"));
+    await appendTurn(SESSION_A, msg("assistant", "a1"));
+    await appendTurn(SESSION_A, msg("user", "q2"));
+    await appendTurn(SESSION_A, msg("assistant", "a2"));
+
+    await replaceLastPair(SESSION_A, "q2-edit", "a2-retry");
+
+    expect(await getHistory(SESSION_A)).toEqual([
+      { role: "user", content: "q1" },
+      { role: "assistant", content: "a1" },
+      { role: "user", content: "q2-edit" },
+      { role: "assistant", content: "a2-retry" },
+    ]);
+  });
+
+  it("replaces the only pair when that is the last pair", async () => {
+    await appendTurn(SESSION_A, msg("user", "original"));
+    await appendTurn(SESSION_A, msg("assistant", "first answer"));
+
+    await replaceLastPair(SESSION_A, "edited", "second answer");
+
+    expect(await getHistory(SESSION_A)).toEqual([
+      { role: "user", content: "edited" },
+      { role: "assistant", content: "second answer" },
+    ]);
+  });
+
+  it("rejects an empty session (nothing_to_replace)", async () => {
+    await expect(replaceLastPair(SESSION_A, "q", "a")).rejects.toSatisfy((e) =>
+      errorText(e).includes("nothing_to_replace"),
+    );
+    expect(await getHistory(SESSION_A)).toEqual([]);
+  });
+
+  it("rejects when there is no completed user+assistant pair (nothing_to_replace)", async () => {
+    await appendTurn(SESSION_A, msg("user", "only user"));
+    await expect(replaceLastPair(SESSION_A, "q", "a")).rejects.toSatisfy((e) =>
+      errorText(e).includes("nothing_to_replace"),
+    );
+    expect(await getHistory(SESSION_A)).toEqual([
+      { role: "user", content: "only user" },
+    ]);
+  });
+
+  it("rejects when the last two messages are not [user, assistant] (nothing_to_replace)", async () => {
+    await appendTurn(SESSION_A, msg("user", "q1"));
+    await appendTurn(SESSION_A, msg("assistant", "a1"));
+    await appendTurn(SESSION_A, msg("user", "trailing"));
+
+    await expect(replaceLastPair(SESSION_A, "q", "a")).rejects.toSatisfy((e) =>
+      errorText(e).includes("nothing_to_replace"),
+    );
+    expect(await getHistory(SESSION_A)).toEqual([
+      { role: "user", content: "q1" },
+      { role: "assistant", content: "a1" },
+      { role: "user", content: "trailing" },
+    ]);
+  });
+
+  it("does not touch another session", async () => {
+    await appendTurn(SESSION_A, msg("user", "from A"));
+    await appendTurn(SESSION_A, msg("assistant", "reply A"));
+    await appendTurn(SESSION_B, msg("user", "from B"));
+    await appendTurn(SESSION_B, msg("assistant", "reply B"));
+
+    await replaceLastPair(SESSION_A, "edited A", "new A");
+
+    expect(await getHistory(SESSION_A)).toEqual([
+      { role: "user", content: "edited A" },
+      { role: "assistant", content: "new A" },
+    ]);
+    expect(await getHistory(SESSION_B)).toEqual([
+      { role: "user", content: "from B" },
+      { role: "assistant", content: "reply B" },
+    ]);
   });
 });

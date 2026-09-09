@@ -3,9 +3,12 @@ package ai.gowtam.oak.app
 import ai.gowtam.oak.services.AuthService
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.services.HistoryService
+import ai.gowtam.oak.services.ScopeService
+import ai.gowtam.oak.wire.AnswerDensity
 import ai.gowtam.oak.wire.ChatTurn
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.OakAnswer
+import ai.gowtam.oak.wire.RegulationMeta
 import android.util.Log
 import androidx.compose.runtime.Stable
 import java.util.UUID
@@ -28,7 +31,10 @@ private const val TAG = "Oak.AppState"
  * `collectAsState()` the flows they need.
  */
 @Stable
-class AppState {
+class AppState(
+    private val appearanceStore: AppearanceStore = InMemoryAppearanceStore(),
+    private val regulationStore: RegulationStore = InMemoryRegulationStore(),
+) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Guest)
 
     /** Whether the user is a guest or signed in. */
@@ -61,7 +67,7 @@ class AppState {
      */
     private val pendingTurns = java.util.concurrent.ConcurrentHashMap<String, String>()
 
-    private val _guestThreadScope = MutableStateFlow<Format>(Format.NationalDex)
+    private val _guestThreadScope = MutableStateFlow<Format>(Format.Champions)
 
     /**
      * The guest thread's resolved data scope, mirrored from the chat reducer's
@@ -112,6 +118,108 @@ class AppState {
         _lastUsedScope.value = format
     }
 
+    private val _lastUsedScopes = MutableStateFlow<List<Format>>(emptyList())
+
+    /**
+     * Signed-in MRU scopes (SCOPE-US-2), most recent first. Empty for guests.
+     */
+    val lastUsedScopes: StateFlow<List<Format>> = _lastUsedScopes.asStateFlow()
+
+    fun setLastUsedScopes(formats: List<Format>) {
+        _lastUsedScopes.value = formats
+    }
+
+    private val _answerDensity = MutableStateFlow<AnswerDensity>(AnswerDensity.Full)
+    val answerDensity: StateFlow<AnswerDensity> = _answerDensity.asStateFlow()
+
+    fun setAnswerDensity(density: AnswerDensity) {
+        _answerDensity.value = density
+    }
+
+    private val _appearance = MutableStateFlow(appearanceStore.load())
+    val appearance: StateFlow<AppearancePreference> = _appearance.asStateFlow()
+
+    fun setAppearance(preference: AppearancePreference) {
+        _appearance.value = preference
+        appearanceStore.save(preference)
+    }
+
+    private val _regulation = MutableStateFlow(
+        regulationStore.load() ?: RegulationMeta.fallback,
+    )
+    val regulation: StateFlow<RegulationMeta> = _regulation.asStateFlow()
+
+    /**
+     * Refreshes the regulation chip from `GET /api/scope`. A miss keeps last-known
+     * (or the generic `"Champions"` fallback) — never a stale compile-time letter.
+     */
+    suspend fun refreshRegulation(scope: ScopeService) {
+        val meta = scope.current() ?: return
+        if (!meta.isUsable) return
+        _regulation.value = meta
+        regulationStore.save(meta)
+    }
+
+    /**
+     * One-shot hop to Dex / Teams from a slash, chip, or empty-desk row.
+     * Consumed by [OakApp] so Chat does not own tab navigation.
+     */
+    sealed interface SurfaceRequest {
+        data object None : SurfaceRequest
+        data class Dex(
+            val query: String?,
+            val kind: ai.gowtam.oak.wire.EntityKind? = null,
+            val format: Format? = null,
+        ) : SurfaceRequest
+        data class Teams(val id: String? = null, val name: String? = null) : SurfaceRequest
+        data class ShareSnapshot(val id: String) : SurfaceRequest
+        data class Calculator(val scenario: ai.gowtam.oak.wire.CalcScenario?) : SurfaceRequest
+        /** Open the Dex tab on the Usage section (ADR-6). */
+        data object Usage : SurfaceRequest
+    }
+
+    private val _surfaceRequest = MutableStateFlow<SurfaceRequest>(SurfaceRequest.None)
+    val surfaceRequest: StateFlow<SurfaceRequest> = _surfaceRequest.asStateFlow()
+
+    fun requestDex(
+        query: String?,
+        kind: ai.gowtam.oak.wire.EntityKind? = null,
+        format: Format? = null,
+    ) {
+        _surfaceRequest.value = SurfaceRequest.Dex(query, kind, format)
+    }
+
+    fun requestTeams(id: String? = null, name: String? = null) {
+        _surfaceRequest.value = SurfaceRequest.Teams(id, name)
+    }
+
+    fun requestShareSnapshot(id: String) {
+        _surfaceRequest.value = SurfaceRequest.ShareSnapshot(id)
+    }
+
+    fun requestCalculator(scenario: ai.gowtam.oak.wire.CalcScenario?) {
+        _surfaceRequest.value = SurfaceRequest.Calculator(scenario)
+    }
+
+    fun requestUsage() {
+        _surfaceRequest.value = SurfaceRequest.Usage
+    }
+
+    fun consumeSurfaceRequest() {
+        _surfaceRequest.value = SurfaceRequest.None
+    }
+
+    /**
+     * A public share whose proposed team should be imported after the viewer
+     * signs in (SHARE-AC-5.2 / ADR-12).
+     */
+    private val _pendingShareImportId = MutableStateFlow<String?>(null)
+    val pendingShareImportId: StateFlow<String?> = _pendingShareImportId.asStateFlow()
+
+    fun setPendingShareImport(id: String?) {
+        _pendingShareImportId.value = id
+    }
+
     // -------------------------------------------------------------------
     // Pending durable turns (background-turns/design.md §6.3)
     // -------------------------------------------------------------------
@@ -132,7 +240,7 @@ class AppState {
     /** Clears the in-memory guest thread back to its defaults (e.g. on quick-stop). */
     fun clearGuestThread() {
         _guestThread.value = emptyList()
-        _guestThreadScope.value = Format.NationalDex
+        _guestThreadScope.value = Format.Champions
     }
 
     // -------------------------------------------------------------------
@@ -151,8 +259,13 @@ class AppState {
         try {
             val snapshot = auth.me()
             _authState.value = snapshot.state
-            _lastUsedScope.value =
-                if (snapshot.state is AuthState.SignedIn) snapshot.lastUsedScope else null
+            if (snapshot.state is AuthState.SignedIn) {
+                _lastUsedScope.value = snapshot.lastUsedScope
+                _lastUsedScopes.value = snapshot.lastUsedScopes
+            } else {
+                _lastUsedScope.value = null
+                _lastUsedScopes.value = emptyList()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "session restore failed; remaining a guest (${e::class.simpleName})")
         }
@@ -238,7 +351,9 @@ class AppState {
     private fun resetToGuest() {
         _authState.value = AuthState.Guest
         _lastUsedScope.value = null
+        _lastUsedScopes.value = emptyList()
         _activeConversationId.value = null
+        _surfaceRequest.value = SurfaceRequest.None
     }
 
     // -------------------------------------------------------------------

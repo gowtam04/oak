@@ -19,6 +19,7 @@ import {
   clearSession,
   getHistory,
   getSessionScope,
+  replaceLastPair,
   setSessionScope,
   trim,
 } from "@/server/session-store";
@@ -205,5 +206,85 @@ describe("_resetStoreForTests (redis)", () => {
 
     expect(await getHistory(sid)).toEqual([]);
     expect(await getSessionScope(sid)).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// replaceLastPair (redis) — rewrite from parsed history, not raw LTRIM
+// ---------------------------------------------------------------------------
+
+describe("replaceLastPair (redis)", () => {
+  function errorText(err: unknown): string {
+    if (err instanceof Error) {
+      const extra = (err as Error & { code?: string }).code;
+      return extra ? `${extra} ${err.message}` : err.message;
+    }
+    if (err && typeof err === "object" && "code" in err) {
+      return String((err as { code: unknown }).code);
+    }
+    return String(err);
+  }
+
+  it("drops the last user+assistant pair and appends the new pair", async () => {
+    const sid = "redis-session-replace";
+    await appendTurn(sid, msg("user", "q1"));
+    await appendTurn(sid, msg("assistant", "a1"));
+    await appendTurn(sid, msg("user", "q2"));
+    await appendTurn(sid, msg("assistant", "a2"));
+
+    await replaceLastPair(sid, "q2-edit", "a2-retry");
+
+    expect(await getHistory(sid)).toEqual([
+      { role: "user", content: "q1" },
+      { role: "assistant", content: "a1" },
+      { role: "user", content: "q2-edit" },
+      { role: "assistant", content: "a2-retry" },
+    ]);
+  });
+
+  it("rejects an empty session (nothing_to_replace)", async () => {
+    await expect(
+      replaceLastPair("redis-session-replace-empty", "q", "a"),
+    ).rejects.toSatisfy((e) => errorText(e).includes("nothing_to_replace"));
+    expect(await getHistory("redis-session-replace-empty")).toEqual([]);
+  });
+
+  it("does not touch another session", async () => {
+    const a = "redis-session-replace-a";
+    const b = "redis-session-replace-b";
+    await appendTurn(a, msg("user", "from A"));
+    await appendTurn(a, msg("assistant", "reply A"));
+    await appendTurn(b, msg("user", "from B"));
+    await appendTurn(b, msg("assistant", "reply B"));
+
+    await replaceLastPair(a, "edited A", "new A");
+
+    expect(await getHistory(a)).toEqual([
+      { role: "user", content: "edited A" },
+      { role: "assistant", content: "new A" },
+    ]);
+    expect(await getHistory(b)).toEqual([
+      { role: "user", content: "from B" },
+      { role: "assistant", content: "reply B" },
+    ]);
+  });
+
+  it("rewrites from parsed history when a corrupt list element sits in the last pair", async () => {
+    const sid = "redis-session-replace-corrupt";
+    const client = getRedisClient()!;
+    await appendTurn(sid, msg("user", "keep"));
+    await appendTurn(sid, msg("assistant", "keep-a"));
+    await appendTurn(sid, msg("user", "old-q"));
+    await client.rpush(histKey(sid), "{not valid json");
+    await appendTurn(sid, msg("assistant", "old-a"));
+
+    await replaceLastPair(sid, "new-q", "new-a");
+
+    expect(await getHistory(sid)).toEqual([
+      { role: "user", content: "keep" },
+      { role: "assistant", content: "keep-a" },
+      { role: "user", content: "new-q" },
+      { role: "assistant", content: "new-a" },
+    ]);
   });
 });

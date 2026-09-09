@@ -1,44 +1,162 @@
 package ai.gowtam.oak.features.chat
 
 import ai.gowtam.oak.ui.LocalOakColors
+import ai.gowtam.oak.ui.MarkdownBlockView
 import ai.gowtam.oak.ui.OakMotion
+import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.orbs.OrbState
 import ai.gowtam.oak.ui.rememberReduceMotion
-import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
- * Signal streaming status (`docs/design/signal.md` §6.2): a 7.dp red pip, a mute
- * sentence of friendly nouns, and a 2.dp red bar that eases 24% → 72%. No
- * instrument ticker, no raw tool ids, no type-lit plate. Renders nothing when idle.
+ * Live turn chrome: expandable thinking trace, then a neutral answer plate
+ * once [streamingText] is non-empty. The trace stays visible (collapsed to
+ * "Thought for N seconds") above the plate.
  *
- * [elapsedSeconds] is accepted for call-site stability and is not shown — the
- * bar + pip carry the live state.
+ * [elapsedSeconds] is the wall-clock age of the stream; it is frozen into the
+ * header the moment tokens start.
+ */
+@Composable
+fun IncomingAnswerPlate(
+    phase: StreamingPhase,
+    activities: List<ToolActivity>,
+    reconnecting: Boolean,
+    streamingText: String,
+    modifier: Modifier = Modifier,
+    elapsedSeconds: Int? = null,
+) {
+    if (phase == StreamingPhase.IDLE && streamingText.isEmpty()) return
+    val reduceMotion = rememberReduceMotion()
+    val awaitingTokens = streamingText.isEmpty()
+    var frozenElapsed by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(awaitingTokens, elapsedSeconds) {
+        if (!awaitingTokens && frozenElapsed == null) {
+            frozenElapsed = elapsedSeconds ?: 0
+        }
+        if (awaitingTokens) frozenElapsed = null
+    }
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
+    ) {
+        if (phase != StreamingPhase.IDLE) {
+            StreamingStatus(
+                phase = phase,
+                activities = activities,
+                reconnecting = reconnecting,
+                settled = !awaitingTokens,
+                elapsedSeconds = frozenElapsed ?: elapsedSeconds,
+            )
+        }
+        if (!awaitingTokens) {
+            val enter = if (reduceMotion) {
+                fadeIn(animationSpec = snap())
+            } else {
+                fadeIn(
+                    animationSpec = tween(
+                        durationMillis = OakMotion.ENTER_MILLIS,
+                        easing = OakMotion.fastEasing,
+                    ),
+                ) + slideInVertically(
+                    animationSpec = tween(
+                        durationMillis = OakMotion.ENTER_MILLIS,
+                        easing = OakMotion.fastEasing,
+                    ),
+                ) { 8 }
+            }
+            AnimatedVisibility(visible = true, enter = enter) {
+                StreamingAnswerPlate(streamingText = streamingText)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StreamingAnswerPlate(streamingText: String) {
+    val oak = LocalOakColors.current
+    val plateShape = RoundedCornerShape(OakRadius.lg)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(plateShape)
+            .background(MaterialTheme.colorScheme.surface, plateShape)
+            .border(1.dp, oak.border, plateShape)
+            .padding(OakSpacing.xl),
+    ) {
+        MarkdownBlockView(markdown = streamingText, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/**
+ * Expandable thinking trace: 22.dp Poké Ball + shimmering "Thinking", then one
+ * row per live tool call. Collapses to "Thought for N seconds" once tokens start.
+ * Chat thinking uses the ball (`docs/design/enamel-paper.md` Key Decision 17),
+ * not [ai.gowtam.oak.ui.orbs.ThinkingOrb].
  */
 @Composable
 fun StreamingStatus(
@@ -46,129 +164,478 @@ fun StreamingStatus(
     activities: List<ToolActivity>,
     reconnecting: Boolean,
     modifier: Modifier = Modifier,
-    @Suppress("UNUSED_PARAMETER") elapsedSeconds: Int? = null,
+    settled: Boolean = false,
+    elapsedSeconds: Int? = null,
 ) {
     if (phase == StreamingPhase.IDLE) return
     val oak = LocalOakColors.current
     val reduceMotion = rememberReduceMotion()
-    val sentence = streamingStatusSentence(phase, activities, reconnecting)
+    val rows = if (reconnecting) emptyList() else traceRows(activities, settled)
+    val header = thinkingHeader(reconnecting, settled, elapsedSeconds)
+    var userOpen by remember { mutableStateOf<Boolean?>(null) }
+    val autoOpen = rows.isNotEmpty() && !settled && !reconnecting
+    val open = userOpen ?: autoOpen
+    val scene = "${if (reconnecting) 1 else 0}:${if (settled) 1 else 0}:${if (rows.isEmpty()) 0 else 1}"
+    LaunchedEffect(scene) { userOpen = null }
 
-    val pipAlpha = if (reduceMotion) {
-        1f
+    val expandAnim = if (reduceMotion) {
+        fadeIn(snap()) + expandVertically(snap())
     } else {
-        val transition = rememberInfiniteTransition(label = "sigPip")
-        val animated by transition.animateFloat(
-            initialValue = 1f,
-            targetValue = 0.25f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1_200, easing = OakMotion.fastEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "sigPipAlpha",
-        )
-        animated
+        fadeIn(tween(OakMotion.ENTER_MILLIS, easing = OakMotion.fastEasing)) +
+            expandVertically(tween(OakMotion.ENTER_MILLIS, easing = OakMotion.fastEasing))
     }
-    val barFraction = if (reduceMotion) {
-        0.48f
+    val collapseAnim = if (reduceMotion) {
+        fadeOut(snap()) + shrinkVertically(snap())
     } else {
-        val transition = rememberInfiniteTransition(label = "sigBar")
-        val animated by transition.animateFloat(
-            initialValue = 0.24f,
-            targetValue = 0.72f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2_400, easing = OakMotion.fastEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "sigBarWidth",
-        )
-        animated
+        fadeOut(tween(OakMotion.FAST_MILLIS, easing = OakMotion.fastEasing)) +
+            shrinkVertically(tween(OakMotion.FAST_MILLIS, easing = OakMotion.fastEasing))
     }
 
     Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                liveRegion = LiveRegionMode.Polite
+                contentDescription = header.text
+            },
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
-            horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+                .clip(RoundedCornerShape(OakRadius.sm))
+                .then(
+                    if (rows.isNotEmpty()) {
+                        Modifier.clickable { userOpen = !open }
+                    } else {
+                        Modifier
+                    },
+                )
+                .padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(oak.accent.copy(alpha = pipAlpha)),
+            ThinkingBall(
+                spinning = header.live,
+                reduceMotion = reduceMotion,
             )
-            Text(
-                text = sentence,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = oak.textMuted,
+            ShimmerLabel(
+                text = header.text,
+                live = header.live && !reduceMotion,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                ),
+            )
+            if (rows.isNotEmpty()) {
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = oak.textFaint,
+                    modifier = Modifier
+                        .size(14.dp)
+                        .rotate(if (open) 180f else 0f),
+                )
+            }
+        }
+        AnimatedVisibility(
+            visible = open && rows.isNotEmpty(),
+            enter = expandAnim,
+            exit = collapseAnim,
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+                    .padding(start = 10.dp, top = 2.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 4.dp, bottom = 4.dp)
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(oak.border),
+                )
+                Column(
+                    modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    rows.forEach { row ->
+                        TraceRowView(row = row, reduceMotion = reduceMotion)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 22.dp CSS Poké Ball — red top / black equator / white bottom / inner white ring. */
+@Composable
+private fun ThinkingBall(spinning: Boolean, reduceMotion: Boolean) {
+    val oak = LocalOakColors.current
+    val transition = rememberInfiniteTransition(label = "pokeBallSpin")
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1_100, easing = LinearEasing),
+        ),
+        label = "pokeBallAngle",
+    )
+    val enamel = oak.accent
+    Canvas(
+        modifier = Modifier
+            .size(22.dp)
+            .rotate(if (spinning && !reduceMotion) angle else 0f),
+    ) {
+        val stroke = 2.dp.toPx()
+        val radius = size.minDimension / 2f
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val disk = Path().apply {
+            addOval(Rect(center = center, radius = radius - stroke / 2f))
+        }
+        clipPath(disk) {
+            drawRect(color = enamel, size = Size(size.width, size.height * 0.46f))
+            drawRect(
+                color = Color(0xFF1A1A1A),
+                topLeft = Offset(0f, size.height * 0.46f),
+                size = Size(size.width, size.height * 0.08f),
+            )
+            drawRect(
+                color = Color.White,
+                topLeft = Offset(0f, size.height * 0.54f),
+                size = Size(size.width, size.height * 0.46f),
             )
         }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(barFraction)
-                .height(2.dp)
-                .clip(RoundedCornerShape(1.dp))
-                .background(oak.accent),
+        drawCircle(
+            color = Color(0xFF1A1A1A),
+            radius = radius - stroke / 2f,
+            center = center,
+            style = Stroke(width = stroke),
+        )
+        drawCircle(
+            color = Color.White,
+            radius = (radius - stroke - 2.dp.toPx()).coerceAtLeast(1f),
+            center = center,
+            style = Stroke(width = 2.dp.toPx()),
+        )
+    }
+}
+
+@Composable
+private fun TraceRowView(row: TraceRow, reduceMotion: Boolean) {
+    val oak = LocalOakColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+    ) {
+        if (row.active) {
+            SpinningRing(color = oak.textMuted, reduceMotion = reduceMotion)
+        } else {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = oak.textFaint,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+        Text(
+            text = row.primary,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.5.sp,
+            ),
+            color = oak.textStrong,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (row.secondary != null) {
+            Text(
+                text = row.secondary,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                color = oak.textFaint,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.End,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShimmerLabel(text: String, live: Boolean, style: TextStyle) {
+    val oak = LocalOakColors.current
+    if (!live) {
+        Text(text = text, style = style, color = oak.textMuted)
+        return
+    }
+    val transition = rememberInfiniteTransition(label = "thinkShimmer")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1_400, easing = LinearEasing),
+        ),
+        label = "thinkShimmerPhase",
+    )
+    var widthPx by remember { mutableFloatStateOf(1f) }
+    val brush = Brush.linearGradient(
+        colors = listOf(oak.textFaint, oak.textStrong, oak.textFaint),
+        start = Offset(widthPx * (phase * 2f - 1.5f), 0f),
+        end = Offset(widthPx * (phase * 2f - 0.5f), 0f),
+    )
+    Text(
+        text = text,
+        style = style.copy(brush = brush),
+        modifier = Modifier.onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) },
+    )
+}
+
+@Composable
+private fun SpinningRing(color: Color, reduceMotion: Boolean) {
+    val transition = rememberInfiniteTransition(label = "thinkSpin")
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 700, easing = LinearEasing),
+        ),
+        label = "thinkSpinAngle",
+    )
+    Canvas(
+        modifier = Modifier
+            .size(12.dp)
+            .rotate(if (reduceMotion) 0f else angle),
+    ) {
+        drawArc(
+            color = color,
+            startAngle = -90f,
+            sweepAngle = 260f,
+            useCenter = false,
+            style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round),
+        )
+    }
+}
+
+/** Verb + mute rest for legacy callers. New chrome uses [thinkingHeader]. */
+internal data class StreamingStatusCopy(
+    val verb: String,
+    val rest: String,
+) {
+    val sentence: String
+        get() = if (rest.isEmpty()) verb else "$verb $rest"
+}
+
+internal data class ThinkingHeader(
+    val live: Boolean,
+    val text: String,
+)
+
+internal data class TraceRow(
+    val tool: String,
+    val primary: String,
+    val secondary: String?,
+    val active: Boolean,
+)
+
+private val SOLVING_TOOLS = setOf(
+    "compute_stat",
+    "estimate_damage",
+    "run_sql",
+    "get_usage_stats",
+    "get_meta_usage",
+)
+private val SEARCHING_TOOLS = setOf(
+    "resolve_entity",
+    "query_pokedex",
+    "get_pokemon",
+    "get_move",
+    "get_ability",
+    "get_item",
+    "get_type_matchups",
+    "get_evolution_chain",
+    "get_encounters",
+    "get_learnset",
+    "lookup_box",
+    "get_team",
+    "list_teams",
+    "save_team",
+    "search_wiki",
+)
+
+/** Lock-step with web `orbStateForActivity` / iOS `ThinkingTraceCopy.orbState`. */
+internal fun orbStateForActivity(
+    reconnecting: Boolean,
+    latestTool: String?,
+    writing: Boolean = false,
+): OrbState {
+    if (reconnecting) return OrbState.Connecting
+    if (writing) return OrbState.Composing
+    val tool = latestTool
+    if (tool.isNullOrEmpty() || tool in HIDDEN_TOOLS) return OrbState.Breathing
+    if (tool in SOLVING_TOOLS) return OrbState.Solving
+    if (tool in SEARCHING_TOOLS) return OrbState.Searching
+    return OrbState.Breathing
+}
+
+internal fun thinkingHeader(
+    reconnecting: Boolean,
+    settled: Boolean,
+    elapsedSeconds: Int?,
+): ThinkingHeader {
+    if (reconnecting) return ThinkingHeader(live = true, text = "Reconnecting")
+    if (!settled) return ThinkingHeader(live = true, text = "Thinking")
+    return ThinkingHeader(live = false, text = thoughtFor(elapsedSeconds))
+}
+
+internal fun thoughtFor(elapsedSeconds: Int?): String {
+    val n = elapsedSeconds ?: 0
+    return when {
+        n <= 0 -> "Thought for a moment"
+        n == 1 -> "Thought for 1 second"
+        else -> "Thought for $n seconds"
+    }
+}
+
+internal fun traceRows(activities: List<ToolActivity>, settled: Boolean): List<TraceRow> {
+    val visible = activities.filter { it.tool !in HIDDEN_TOOLS }
+    return visible.mapIndexed { index, activity ->
+        val cleaned = stripLeadingEmoji(activity.label)
+        TraceRow(
+            tool = activity.tool,
+            primary = instrumentToken(activity.tool),
+            secondary = subjectFromLabel(cleaned),
+            active = !settled && index == visible.lastIndex,
         )
     }
 }
 
 /**
- * Mute sentence for the streaming line. Friendly nouns come from [instrumentToken]
- * (the same map as web `instrumentToken` / iOS `ToolTrail.friendlyNoun`) — never
- * a raw `GET_*` tool id.
+ * Status copy split for the incoming plate. Action labels come from
+ * [instrumentToken] — never a raw `GET_*` tool id.
  */
+internal fun streamingStatusCopy(
+    phase: StreamingPhase,
+    activities: List<ToolActivity>,
+    reconnecting: Boolean,
+): StreamingStatusCopy {
+    val settled = phase == StreamingPhase.ANSWERING
+    val header = thinkingHeader(reconnecting, settled, elapsedSeconds = null)
+    return StreamingStatusCopy(verb = header.text, rest = "")
+}
+
+/** Combined mute sentence — same words as [streamingStatusCopy], no ellipsis. */
 internal fun streamingStatusSentence(
     phase: StreamingPhase,
     activities: List<ToolActivity>,
     reconnecting: Boolean,
-): String {
-    if (reconnecting) return "Reconnecting…"
-    val nouns = activities.map { instrumentToken(it.tool) }.distinct()
-    if (nouns.isNotEmpty()) return "Looking up ${nouns.joinToString(", ")}"
-    return when (phase) {
-        StreamingPhase.IDLE -> ""
-        StreamingPhase.THINKING -> "Thinking through your question…"
-        StreamingPhase.USING_TOOLS -> "Looking things up…"
-        StreamingPhase.ANSWERING -> "Writing the answer…"
-    }
-}
+): String = streamingStatusCopy(phase, activities, reconnecting).sentence
 
 /**
- * Tool → friendly noun. Pinned to the cross-platform copy table (web
+ * Tool → action label. Pinned to the cross-platform copy table (web
  * `instrumentToken`, iOS `ToolTrail.friendlyNoun`). Unknown tools become
- * `"Lookup"` — never the raw id.
+ * `"Looking up"` — never the raw id.
  */
 internal fun instrumentToken(tool: String): String = INSTRUMENT_TOKENS[tool] ?: UNKNOWN_INSTRUMENT_TOKEN
 
-private const val UNKNOWN_INSTRUMENT_TOKEN = "Lookup"
+internal fun stripLeadingEmoji(label: String): String {
+    val stripped = EMOJI_PREFIX.replace(label, "")
+    return stripped.trim()
+}
+
+/**
+ * Subject entity from a cleaned server label. Lock-step with web
+ * `subjectFromLabel` and iOS `ToolTrail.subject`.
+ *
+ * Order: quoted phrase, else the clause after the first colon (Pokédex
+ * filters), else the first capitalised run after the sentence-initial
+ * verb. Trailing `'s` / `’s` is stripped so "Checking Torkoal’s learnset"
+ * yields "Torkoal", not "Checking Torkoal's".
+ */
+internal fun subjectFromLabel(cleaned: String): String? {
+    firstQuoted(cleaned)?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    val stripped = cleaned.trimEnd('…', '.').trim()
+    if (stripped.isEmpty()) return null
+    val colon = stripped.indexOf(':')
+    if (colon >= 0) {
+        val after = stripped.substring(colon + 1).trimEnd('…', '.').trim()
+        return after.takeIf { it.isNotEmpty() }
+    }
+    val words = stripped.split(Regex("\\s+")).filter { it.isNotEmpty() }
+    val search = if (words.isNotEmpty() && words[0].firstOrNull()?.isUpperCase() == true) {
+        words.drop(1)
+    } else {
+        words
+    }
+    val run = mutableListOf<String>()
+    for (word in search) {
+        val first = word.firstOrNull()
+        if (first != null && first.isUpperCase()) {
+            run.add(word)
+        } else if (run.isNotEmpty()) {
+            break
+        }
+    }
+    if (run.isEmpty()) return null
+    return stripTrailingPossessive(run.joinToString(" "))
+}
+
+/** `Torkoal's` / `Torkoal’s` (U+2019, as emitted by `describeToolCall`). */
+private fun stripTrailingPossessive(text: String): String =
+    if (text.endsWith("'s") || text.endsWith("’s")) text.dropLast(2) else text
+
+private fun firstQuoted(text: String): String? {
+    val pairs = mapOf('“' to '”', '"' to '"', '‟' to '”', '‘' to '’')
+    var closer: Char? = null
+    val buf = StringBuilder()
+    for (ch in text) {
+        val expected = closer
+        if (expected != null) {
+            if (ch == expected) return buf.toString()
+            buf.append(ch)
+        } else {
+            val close = pairs[ch]
+            if (close != null) {
+                closer = close
+                buf.clear()
+            }
+        }
+    }
+    return null
+}
+
+private const val UNKNOWN_INSTRUMENT_TOKEN = "Looking up"
+
+private val HIDDEN_TOOLS = setOf("reasoning", "submit_answer", "submit_builder_answer")
+
+private val EMOJI_PREFIX = Regex("^[\\p{So}\\p{Cn}\\uFE0F\\u200D\\s]+")
 
 private val INSTRUMENT_TOKENS: Map<String, String> = mapOf(
-    "resolve_entity" to "Dex lookup",
-    "query_pokedex" to "Pokédex search",
-    "get_pokemon" to "Pokémon",
-    "get_move" to "Move",
-    "get_ability" to "Ability",
-    "get_item" to "Item",
-    "get_type_matchups" to "Type matchups",
-    "type_matchup" to "Type matchups",
-    "get_type_chart" to "Type matchups",
-    "get_evolution_chain" to "Evolution",
-    "compute_stat" to "Stats",
-    "estimate_damage" to "Damage calc",
-    "get_usage_stats" to "Usage",
-    "get_meta_usage" to "Usage",
-    "get_encounters" to "Locations",
-    "get_learnset" to "Movepool",
-    "get_team" to "Teams",
-    "list_teams" to "Teams",
-    "save_team" to "Teams",
-    "run_sql" to "Game data",
-    "search_wiki" to "Wiki",
+    "resolve_entity" to "Identifying",
+    "query_pokedex" to "Searching Pokédex",
+    "get_pokemon" to "Looking up Pokémon",
+    "get_move" to "Looking up move",
+    "get_ability" to "Reading ability",
+    "get_item" to "Looking up item",
+    "get_type_matchups" to "Checking matchups",
+    "type_matchup" to "Checking matchups",
+    "get_type_chart" to "Checking matchups",
+    "get_evolution_chain" to "Tracing evolution",
+    "compute_stat" to "Computing stats",
+    "estimate_damage" to "Calculating damage",
+    "get_usage_stats" to "Checking live usage",
+    "get_meta_usage" to "Checking ladder usage",
+    "get_encounters" to "Finding locations",
+    "get_learnset" to "Checking learnset",
+    "lookup_box" to "Looking up box",
+    "get_team" to "Reading team",
+    "list_teams" to "Listing teams",
+    "save_team" to "Saving team",
+    "run_sql" to "Querying game data",
+    "search_wiki" to "Searching wiki",
     "submit_answer" to "Answer",
     "submit_builder_answer" to "Teams",
 )

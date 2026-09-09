@@ -1,0 +1,8 @@
+Vendored snapshot of thinking-orbs 0.3.1 (MIT © Jakub Antalik).
+
+https://github.com/Jakubantalik/thinking-orbs
+https://orbs.jakubantalik.com
+
+Oak keeps the geometry engine (and a trimmed golden-vector fixture) so
+web / iOS / Android can share one math surface. The official React
+component is not vendored — Oak paints frames itself.

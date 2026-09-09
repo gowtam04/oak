@@ -1,5 +1,6 @@
 package ai.gowtam.oak.features.auth
 
+import ai.gowtam.oak.ui.JetBrainsMonoFamily
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakMotion
@@ -46,6 +47,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -104,6 +106,7 @@ fun AuthScreen(viewModel: AuthViewModel, modifier: Modifier = Modifier) {
             text = "Sign in",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.SemiBold,
+            color = colors.textStrong,
             modifier = Modifier.semantics { heading() },
         )
         Spacer(Modifier.height(OakSpacing.sm))
@@ -312,10 +315,8 @@ private fun DigitBox(digit: Char?, isActive: Boolean) {
     val colors = LocalOakColors.current
     val reduceMotion = rememberReduceMotion()
     val filled = digit != null
-    // Azure focus ring on the box awaiting input (Oak reserves red for the live state);
-    // a filled box firms its hairline and pops in on the snappy spring.
     val borderColor = when {
-        isActive -> colors.azure
+        isActive -> colors.accent
         filled -> colors.borderStrong
         else -> colors.border
     }
@@ -331,12 +332,16 @@ private fun DigitBox(digit: Char?, isActive: Boolean) {
         modifier = Modifier
             .size(width = 44.dp, height = 56.dp)
             .graphicsLayer { scaleX = pop.value; scaleY = pop.value }
-            .background(colors.surfaceSunken, shape)
+            .background(MaterialTheme.colorScheme.surface, shape)
             .border(if (isActive) 2.dp else 1.dp, borderColor, shape),
         contentAlignment = Alignment.Center,
     ) {
         if (digit != null) {
-            Text(text = digit.toString(), style = MaterialTheme.typography.headlineSmall, color = colors.textStrong)
+            Text(
+                text = digit.toString(),
+                style = MaterialTheme.typography.headlineSmall.copy(fontFamily = JetBrainsMonoFamily),
+                color = colors.textStrong,
+            )
         }
     }
 }
@@ -413,10 +418,20 @@ fun AuthDialog(viewModel: AuthViewModel, onDismissRequest: () -> Unit) {
             onDismissRequest()
         }
     }
+    val oak = LocalOakColors.current
+    val cardShape = RoundedCornerShape(OakRadius.lg)
+    val umber = Color(0xFF4A352A)
     BasicAlertDialog(onDismissRequest = onDismissRequest) {
         Box(
             modifier = Modifier
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(OakRadius.lg))
+                .shadow(
+                    elevation = 16.dp,
+                    shape = cardShape,
+                    ambientColor = umber.copy(alpha = 0.18f),
+                    spotColor = umber.copy(alpha = 0.18f),
+                )
+                .background(MaterialTheme.colorScheme.surface, cardShape)
+                .border(1.dp, oak.border, cardShape)
                 .padding(OakSpacing.lg),
         ) {
             AuthScreen(viewModel = viewModel)

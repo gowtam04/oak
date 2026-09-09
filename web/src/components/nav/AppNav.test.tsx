@@ -41,6 +41,12 @@ describe("AppNav — New chat control", () => {
 });
 
 describe("AppNav — primary items", () => {
+  it("includes Usage as a primary destination (CF-USAGE-US-1, ADR-6)", () => {
+    expect(PRIMARY_NAV_ITEMS).toEqual(
+      expect.arrayContaining([{ label: "Usage", href: "/usage" }]),
+    );
+  });
+
   it("renders every primary item with its href", () => {
     render(<AppNav pathname="/" />);
     for (const item of PRIMARY_NAV_ITEMS) {
@@ -86,6 +92,23 @@ describe("AppNav — landmarks", () => {
     render(<AppNav pathname="/" />);
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Reference" })).toBeInTheDocument();
+  });
+});
+
+describe("AppNav — Calculator destination (CALC-US-1, CALC-AC-1.1–1.2)", () => {
+  it("lists Calculator as a first-class primary destination at /calc", () => {
+    const calc = PRIMARY_NAV_ITEMS.find(
+      (item) => item.href === "/calc" || /calculator/i.test(item.label),
+    );
+    expect(calc).toBeDefined();
+    expect(calc!.href).toBe("/calc");
+    expect(calc!.label).toMatch(/calculator/i);
+
+    render(<AppNav pathname="/calc" />);
+    const link = screen.getByTestId("app-nav-calculator");
+    expect(link).toHaveAttribute("href", "/calc");
+    expect(link).toHaveClass("app-nav__link--active");
+    expect(link).toHaveAttribute("aria-current", "page");
   });
 });
 

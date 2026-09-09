@@ -4,11 +4,10 @@ import ai.gowtam.oak.features.chat.answercard.SubjectCard
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
-import ai.gowtam.oak.ui.OakType
 import ai.gowtam.oak.wire.Subject
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,12 +15,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
@@ -32,8 +31,8 @@ import androidx.compose.ui.unit.dp
  * itself renders — so the sprites, names, mute dex captions, and any fallback pill
  * stay identical to the answer.
  *
- * Phase 2: the comparison sits in a multi-subject specimen plate shell (neutral-ish
- * multi wash from [OakType.plateWashForTypes]), continuing the answer-plate language.
+ * Enamel paper plate (Key Decision 16): white `--surface` + hairline + umber
+ * shadow. No type-glow chassis.
  *
  * Each card is tappable to drill into that Pokémon's full profile (AV-US-5), pushing
  * a new artifact onto the viewer's back stack via [onOpen].
@@ -43,52 +42,101 @@ fun ComparisonView(
     subjects: List<Subject>,
     onOpen: (String) -> Unit,
     modifier: Modifier = Modifier,
+    diff: PokemonCompareDiff? = null,
+    onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)? = null,
 ) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
-    val wash = remember(
-        subjects,
-        dark,
-        oak.surfaceRaised,
-        oak.surfaceSunken,
-        oak.border,
-        oak.borderStrong,
-    ) {
-        OakType.plateWashForTypes(
-            subjectTypes = subjects.map { it.types },
-            surface = oak.surfaceRaised,
-            surfaceSunken = oak.surfaceSunken,
-            border = oak.border,
-            borderStrong = oak.borderStrong,
-            dark = dark,
-        )
-    }
-    val plateShape = RoundedCornerShape(OakRadius.xl)
-    val plateBrush = remember(wash, oak.surfaceRaised, oak.surfaceSunken) {
-        when {
-            wash.fillSecondary != null ->
-                Brush.linearGradient(listOf(wash.fill, wash.fillSecondary, oak.surfaceRaised))
-            wash.isMechanics ->
-                Brush.verticalGradient(listOf(oak.surfaceSunken, oak.surfaceRaised))
-            else ->
-                Brush.linearGradient(listOf(wash.fill, oak.surfaceRaised))
-        }
-    }
+    val dark = oak.isDark
+    val plateShape = RoundedCornerShape(OakRadius.lg)
+    val umber = Color(0xFF4A352A)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(OakSpacing.lg)
-            .then(if (dark) Modifier else Modifier.shadow(6.dp, plateShape))
+            .then(
+                if (dark) {
+                    Modifier
+                } else {
+                    Modifier.shadow(
+                        elevation = 4.dp,
+                        shape = plateShape,
+                        ambientColor = umber.copy(alpha = 0.07f),
+                        spotColor = umber.copy(alpha = 0.10f),
+                    )
+                },
+            )
             .clip(plateShape)
-            .background(plateBrush, plateShape)
-            .border(1.dp, wash.border, plateShape)
-            .padding(OakSpacing.lg),
+            .background(MaterialTheme.colorScheme.surface, plateShape)
+            .border(1.dp, oak.border, plateShape)
+            .padding(OakSpacing.xl),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
         for (subject in subjects) {
-            SubjectCard(subject = subject, onClick = { onOpen(subject.name) })
+            Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+                SubjectCard(subject = subject, onClick = { onOpen(subject.name) })
+                if (onAddToTeam != null) {
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            onAddToTeam(ai.gowtam.oak.features.teams.incomingMemberFromSubject(subject))
+                        },
+                    ) {
+                        androidx.compose.material3.Text("Add to team", color = oak.accent)
+                    }
+                }
+            }
+        }
+        if (diff != null) {
+            CompareDiffBlock(diff)
         }
     }
+}
+
+@Composable
+private fun CompareDiffBlock(diff: PokemonCompareDiff) {
+    val oak = LocalOakColors.current
+    androidx.compose.material3.Text(
+        "${diff.left.displayName} (${diff.left.format.shortLabel}) vs ${diff.right.displayName} (${diff.right.format.shortLabel})",
+        color = oak.textStrong,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+    )
+    StatDiffRow("HP", diff.stats.left.hp, diff.stats.right.hp)
+    StatDiffRow("Atk", diff.stats.left.atk, diff.stats.right.atk)
+    StatDiffRow("Def", diff.stats.left.def, diff.stats.right.def)
+    StatDiffRow("SpA", diff.stats.left.spa, diff.stats.right.spa)
+    StatDiffRow("SpD", diff.stats.left.spd, diff.stats.right.spd)
+    StatDiffRow("Spe", diff.stats.left.spe, diff.stats.right.spe)
+    SetDiffRow("Types", diff.types)
+    SetDiffRow("Abilities", diff.abilities)
+    androidx.compose.material3.Text(
+        "Speed @ L${diff.speed.defaultLevel}: ${diff.speed.leftValue} vs ${diff.speed.rightValue}",
+        color = oak.textMuted,
+    )
+    SetDiffRow("Movepool", diff.movepool)
+    SetDiffRow("Weak to", diff.matchups.weakTo)
+    SetDiffRow("Resists", diff.matchups.resists)
+    SetDiffRow("Immune", diff.matchups.immuneTo)
+}
+
+@Composable
+private fun StatDiffRow(label: String, left: Int, right: Int) {
+    val oak = LocalOakColors.current
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        androidx.compose.material3.Text(label, color = oak.textMuted)
+        androidx.compose.material3.Text("$left  ·  $right", color = oak.textStrong)
+    }
+}
+
+@Composable
+private fun SetDiffRow(label: String, set: PokemonCompareSetDiff) {
+    val oak = LocalOakColors.current
+    androidx.compose.material3.Text(
+        "$label — only ${set.onlyLeft.joinToString().ifBlank { "—" }} / shared ${set.shared.joinToString().ifBlank { "—" }} / only ${set.onlyRight.joinToString().ifBlank { "—" }}",
+        color = oak.textMuted,
+        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+    )
 }

@@ -2,32 +2,32 @@
  * src/data/reference-pages.ts — view-model assembler for the programmatic SEO
  * reference pages (/pokedex, /moves, /abilities, /items).
  *
+ * Champions-first (CF-DEX-US-1): every loader reads the Champions partition
+ * only. There is no other-format fallback and no National Dex secondary
+ * lookup. An unknown slug is `null` (→ page 404).
+ *
  * It sits ON TOP of `entity-profile.ts` (the artifact assembler): each detail
- * loader resolves an entity through `assembleEntityProfile`. By default it walks
- * a fixed scarlet-violet → champions → gen-8 … gen-5 fallback chain; when the
- * Pokédex page passes an optional preferred format (`?format=`), that scope is
- * tried first and only the fallback chain runs if the species is missing there.
- * The scope that wins becomes `sourceFormat`. Detail loaders additionally batch
- * in cross-scope availability, evolution edges, ability effect prose, learnset
- * enrichment, and — when Champions is relevant for the displayed view —
- * best-effort live usage (bounded by a timeout; never fails the page). Index
- * loaders enumerate a whole kind for the crawl.
+ * loader resolves an entity through `assembleEntityProfile` in Champions.
+ * Detail loaders additionally batch evolution edges, ability effect prose,
+ * learnset enrichment, and best-effort live Champions usage (bounded by a
+ * timeout; never fails the page). Index loaders enumerate a whole kind for
+ * the crawl.
  *
  * INDEX-UNAVAILABLE CONTRACT. B1's list repos return `[]` on an unreadable index
  * (no distinction between "empty" and "broken"). A reference page must NOT
  * render an empty-but-200 index off a pre-ingest DB — a crawler would cache the
- * empty page. So every loader first checks `isIndexAvailable(STANDARD_FORMAT)`
- * (the primary index) and THROWS `Error("index_unavailable")` when it is not
- * built. Pages let that propagate → a 500 the crawler retries, never a soft-200
- * or a wrong 404. A per-format miss DURING the fallback chain is NOT unavailable
- * (that scope simply isn't built) — only the primary index gates the throw.
+ * empty page. So every loader first checks `isIndexAvailable(CHAMPIONS_FORMAT)`
+ * and THROWS `Error("index_unavailable")` when it is not built. Pages let that
+ * propagate → a 500 the crawler retries, never a soft-200 or a wrong 404.
  *
  * CACHING. Detail loaders are wrapped in React `cache()` so a page and its
- * `generateMetadata` share one query per request. Index loaders are ALSO wrapped
- * in `unstable_cache(..., { revalidate: 86400 })` so per-request renders don't
- * re-enumerate the whole dex. Tests call the UNCACHED inner `*Uncached(db)`
- * variants directly with an injected fixture handle — they never touch the
- * `@/data/db` singleton or the Next cache.
+ * `generateMetadata` share one query per request. Index loaders for Pokédex /
+ * moves / abilities are ALSO wrapped in `unstable_cache(..., { revalidate: 86400 })`
+ * so per-request renders don't re-enumerate. The items index SKIPS that cache
+ * because `champions_item_exclusion` can change without ingest (CF-DEX-AC-1.2).
+ * Tests call the UNCACHED inner `*Uncached(db)` variants directly with an
+ * injected fixture handle — they never touch the `@/data/db` singleton or the
+ * Next cache.
  *
  * `server-only`: it reads the repo/DB layer and must never reach a client
  * bundle. It is itself only ever dynamically imported by the reference pages.
@@ -35,13 +35,13 @@
 
 import "server-only";
 
-import { asc, eq, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 
 import type { OakDb } from "@/data/db";
-import { FORMATS, STANDARD_FORMAT, type Format } from "@/data/formats";
-import { ingest_meta, pokemon } from "@/data/schema";
+import { CHAMPIONS_FORMAT, type Format } from "@/data/formats";
+import { ingest_meta } from "@/data/schema";
 import {
   assembleEntityProfile,
   isIndexAvailable,
@@ -54,13 +54,11 @@ import type {
 } from "@/agent/schemas";
 import {
   listAllPokemon,
-  pokemonFormats,
   pokemonRequiringItem,
 } from "@/data/repos/pokedex-repo";
 import { learnersOfMove } from "@/data/repos/learnset-repo";
 import {
   allMoveSummaries,
-  entityFormats,
   getReference,
   listNamesByKind,
   moveSummaries,
@@ -86,23 +84,8 @@ import type {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Thrown message when the primary index is not built (→ page 500s). */
+/** Thrown message when the Champions index is not built (→ page 500s). */
 export const INDEX_UNAVAILABLE = "index_unavailable";
-
-/**
- * Detail fallback order: try the standard Gen 9 scope first, then Champions,
- * then mainline gens newest→oldest. The FIRST scope that resolves the entity
- * wins and its format becomes `sourceFormat` (e.g. a Mega that no longer exists
- * in Gen 9 resolves from gen-8).
- */
-const DETAIL_FALLBACK: readonly Format[] = [
-  "scarlet-violet",
-  "champions",
-  "gen-8",
-  "gen-7",
-  "gen-6",
-  "gen-5",
-];
 
 /** Best-effort Champions-usage bound; a slower/failed lookup yields null. */
 const USAGE_TIMEOUT_MS = 2500;
@@ -133,40 +116,22 @@ async function singletonDb(): Promise<OakDb> {
 }
 
 /**
- * Resolve an entity to its `ok` artifact envelope + the scope it came from.
- * When `preferredFormat` is set (Pokédex `?format=`), that scope is tried first;
- * on a miss the loader soft-falls back to {@link DETAIL_FALLBACK} so an invalid
- * or unavailable format never blanks a valid slug. Without a preferred format
- * the fallback chain alone runs (unchanged SV-first behavior). Throws
- * `index_unavailable` if the PRIMARY index isn't built; returns null when the
- * entity resolves in NO scope. A per-format `unavailable`/`not_found` during
- * the walk is skipped, not fatal.
+ * Resolve an entity to its Champions `ok` artifact envelope.
+ * `preferredFormat` is ignored (old `?format=` clients must not pull another
+ * game). Throws `index_unavailable` if the Champions index isn't built;
+ * returns null when the slug is not on the roster.
  */
 async function resolveEntityProfile(
   kind: EntityKind,
   slug: string,
   db: OakDb,
-  preferredFormat?: Format,
+  _preferredFormat?: Format,
 ): Promise<{ ok: EntityArtifactOk; sourceFormat: Format } | null> {
-  requireIndex(await isIndexAvailable(STANDARD_FORMAT, db));
+  requireIndex(await isIndexAvailable(CHAMPIONS_FORMAT, db));
 
-  if (preferredFormat) {
-    const preferred = await assembleEntityProfile(
-      kind,
-      slug,
-      preferredFormat,
-      db,
-    );
-    if (preferred.status === "ok") {
-      return { ok: preferred, sourceFormat: preferredFormat };
-    }
-  }
-
-  for (const format of DETAIL_FALLBACK) {
-    // Already tried above — skip a redundant assemble.
-    if (format === preferredFormat) continue;
-    const res = await assembleEntityProfile(kind, slug, format, db);
-    if (res.status === "ok") return { ok: res, sourceFormat: format };
+  const res = await assembleEntityProfile(kind, slug, CHAMPIONS_FORMAT, db);
+  if (res.status === "ok") {
+    return { ok: res, sourceFormat: CHAMPIONS_FORMAT };
   }
   return null;
 }
@@ -254,27 +219,17 @@ export async function loadPokemonPageUncached(
 
   const moveSlugs = data.movepool.flatMap((g) => g.moves.map((m) => m.slug));
 
-  const [availability, evolutionRef, abilityRefs, summaries] =
-    await Promise.all([
-      pokemonFormats(slug, db),
-      getReference("evolution", slug, sourceFormat, { db }),
-      Promise.all(
-        abilitySlots.map((a) =>
-          getReference("ability", a.slug, sourceFormat, { db }),
-        ),
+  const [evolutionRef, abilityRefs, summaries] = await Promise.all([
+    getReference("evolution", slug, sourceFormat, { db }),
+    Promise.all(
+      abilitySlots.map((a) =>
+        getReference("ability", a.slug, sourceFormat, { db }),
       ),
-      moveSummaries(moveSlugs, sourceFormat, db),
-    ]);
+    ),
+    moveSummaries(moveSlugs, sourceFormat, db),
+  ]);
 
-  // Champions ladder only when the species is champions-available AND the
-  // viewer is not explicitly looking at a different scope. Default (no
-  // preferred format) keeps today's "show usage on SV-first pages when the mon
-  // is also on Champions" behavior; selecting Champions still shows it;
-  // selecting Gen 1–8 / National Dex / SV hides it.
-  const wantUsage =
-    availability.includes("champions") &&
-    (preferredFormat === undefined || preferredFormat === "champions");
-  const usage = wantUsage ? await bestEffortUsage(data.display_name) : null;
+  const usage = await bestEffortUsage(data.display_name);
 
   const abilities: AbilityEntry[] = abilitySlots.map((a, i) => {
     const ref = abilityRefs[i]!;
@@ -336,7 +291,7 @@ export async function loadPokemonPageUncached(
     movepool,
     ...(evolution && evolution.length > 0 ? { evolution } : {}),
     forms: data.forms,
-    availability,
+    availability: [CHAMPIONS_FORMAT],
     isNative: data.is_gen9_native,
     spriteUrl: data.sprite_url,
     artworkUrl: data.artwork_url,
@@ -348,16 +303,19 @@ export async function loadPokemonPageUncached(
 export async function loadMovePageUncached(
   slug: string,
   db: OakDb,
+  preferredFormat?: Format,
 ): Promise<MovePageData | null> {
-  const resolved = await resolveEntityProfile("move", slug, db);
+  const resolved = await resolveEntityProfile(
+    "move",
+    slug,
+    db,
+    preferredFormat,
+  );
   if (!resolved || resolved.ok.kind !== "move") return null;
   const { ok, sourceFormat } = resolved;
   const data = ok.data;
 
-  const [learners, availability] = await Promise.all([
-    learnersOfMove(slug, sourceFormat, db),
-    entityFormats("move", slug, db),
-  ]);
+  const learners = await learnersOfMove(slug, sourceFormat, db);
 
   return {
     slug,
@@ -373,7 +331,7 @@ export async function loadMovePageUncached(
     effectFull: data.effect_full,
     learners,
     learnerCount: learners.length,
-    availability,
+    availability: [CHAMPIONS_FORMAT],
     sourceFormat,
   };
 }
@@ -381,13 +339,17 @@ export async function loadMovePageUncached(
 export async function loadAbilityPageUncached(
   slug: string,
   db: OakDb,
+  preferredFormat?: Format,
 ): Promise<AbilityPageData | null> {
-  const resolved = await resolveEntityProfile("ability", slug, db);
+  const resolved = await resolveEntityProfile(
+    "ability",
+    slug,
+    db,
+    preferredFormat,
+  );
   if (!resolved || resolved.ok.kind !== "ability") return null;
   const { ok, sourceFormat } = resolved;
   const data = ok.data;
-
-  const availability = await entityFormats("ability", slug, db);
 
   return {
     slug,
@@ -398,7 +360,7 @@ export async function loadAbilityPageUncached(
       slug: h.slug,
       displayName: h.display_name,
     })),
-    availability,
+    availability: [CHAMPIONS_FORMAT],
     sourceFormat,
   };
 }
@@ -406,16 +368,19 @@ export async function loadAbilityPageUncached(
 export async function loadItemPageUncached(
   slug: string,
   db: OakDb,
+  preferredFormat?: Format,
 ): Promise<ItemPageData | null> {
-  const resolved = await resolveEntityProfile("item", slug, db);
+  const resolved = await resolveEntityProfile(
+    "item",
+    slug,
+    db,
+    preferredFormat,
+  );
   if (!resolved || resolved.ok.kind !== "item") return null;
   const { ok, sourceFormat } = resolved;
   const data = ok.data;
 
-  const [requiredBy, availability] = await Promise.all([
-    pokemonRequiringItem(slug, sourceFormat, db),
-    entityFormats("item", slug, db),
-  ]);
+  const requiredBy = await pokemonRequiringItem(slug, sourceFormat, db);
 
   return {
     slug,
@@ -427,7 +392,7 @@ export async function loadItemPageUncached(
       rarityPercent: h.rarity_percent,
     })),
     requiredBy,
-    availability,
+    availability: [CHAMPIONS_FORMAT],
     sourceFormat,
   };
 }
@@ -436,70 +401,21 @@ export async function loadItemPageUncached(
 // Index loaders (uncached inner fns)
 // ===========================================================================
 
-/**
- * Pokémon that exist ONLY outside scarlet-violet — a local cross-format query
- * (not in a repo, per the B2 scope). Each such slug is tagged with the earliest
- * (in {@link FORMATS} order) scope it appears in, so it still gets a crawlable
- * link on the /pokedex index. Returns `[]` on an unreadable index.
- */
-async function pokemonExtras(
-  db: OakDb,
-  svSlugs: Set<string>,
-): Promise<{ slug: string; displayName: string; sourceFormat: Format }[]> {
-  let rows: { id: string; displayName: string; format: string }[];
-  try {
-    rows = await db
-      .select({
-        id: pokemon.id,
-        displayName: pokemon.display_name,
-        format: pokemon.format,
-      })
-      .from(pokemon)
-      .where(ne(pokemon.format, STANDARD_FORMAT))
-      .orderBy(asc(pokemon.national_dex_number), asc(pokemon.id));
-  } catch {
-    return [];
-  }
-
-  const bySlug = new Map<
-    string,
-    { slug: string; displayName: string; sourceFormat: Format }
-  >();
-  for (const r of rows) {
-    if (svSlugs.has(r.id)) continue;
-    const fmt = r.format as Format;
-    const existing = bySlug.get(r.id);
-    if (
-      !existing ||
-      FORMATS.indexOf(fmt) < FORMATS.indexOf(existing.sourceFormat)
-    ) {
-      bySlug.set(r.id, {
-        slug: r.id,
-        displayName: r.displayName,
-        sourceFormat: fmt,
-      });
-    }
-  }
-  return [...bySlug.values()];
-}
-
 export async function loadPokedexIndexUncached(
   db: OakDb,
 ): Promise<PokedexIndexData> {
-  requireIndex(await isIndexAvailable(STANDARD_FORMAT, db));
-  const rows = await listAllPokemon(STANDARD_FORMAT, db);
-  const svSlugs = new Set(rows.map((r) => r.slug));
-  const extras = await pokemonExtras(db, svSlugs);
-  return { rows, extras };
+  requireIndex(await isIndexAvailable(CHAMPIONS_FORMAT, db));
+  const rows = await listAllPokemon(CHAMPIONS_FORMAT, db);
+  return { rows, extras: [] };
 }
 
 export async function loadMovesIndexUncached(
   db: OakDb,
 ): Promise<MovesIndexData> {
-  requireIndex(await isIndexAvailable(STANDARD_FORMAT, db));
+  requireIndex(await isIndexAvailable(CHAMPIONS_FORMAT, db));
   const [names, summaries] = await Promise.all([
-    listNamesByKind("move", STANDARD_FORMAT, db),
-    allMoveSummaries(STANDARD_FORMAT, db),
+    listNamesByKind("move", CHAMPIONS_FORMAT, db),
+    allMoveSummaries(CHAMPIONS_FORMAT, db),
   ]);
   const rows: MoveIndexRow[] = names.map((n) => {
     const s = summaries.get(n.slug);
@@ -517,19 +433,25 @@ export async function loadMovesIndexUncached(
 export async function loadAbilitiesIndexUncached(
   db: OakDb,
 ): Promise<NamesIndexData> {
-  requireIndex(await isIndexAvailable(STANDARD_FORMAT, db));
-  return { rows: await listNamesByKind("ability", STANDARD_FORMAT, db) };
+  requireIndex(await isIndexAvailable(CHAMPIONS_FORMAT, db));
+  return { rows: await listNamesByKind("ability", CHAMPIONS_FORMAT, db) };
 }
 
 export async function loadItemsIndexUncached(
   db: OakDb,
 ): Promise<NamesIndexData> {
-  requireIndex(await isIndexAvailable(STANDARD_FORMAT, db));
-  return { rows: await listNamesByKind("item", STANDARD_FORMAT, db) };
+  requireIndex(await isIndexAvailable(CHAMPIONS_FORMAT, db));
+  const rows = await listNamesByKind("item", CHAMPIONS_FORMAT, db);
+  const { loadChampionsItemExclusions } = await import(
+    "@/data/repos/champions-items-repo"
+  );
+  const excluded = await loadChampionsItemExclusions({ db });
+  if (excluded.size === 0) return { rows };
+  return { rows: rows.filter((r) => !excluded.has(r.slug)) };
 }
 
 /**
- * The scarlet-violet index's last successful ingest, as a Date for the sitemap's
+ * The Champions index's last successful ingest, as a Date for the sitemap's
  * `lastModified`. Null when the index isn't built or the read fails (the sitemap
  * omits the field). Does NOT throw — the sitemap should still emit URLs.
  */
@@ -540,7 +462,7 @@ export async function referenceLastModifiedUncached(
     const rows = await db
       .select({ ts: ingest_meta.last_success_at })
       .from(ingest_meta)
-      .where(eq(ingest_meta.format, STANDARD_FORMAT))
+      .where(eq(ingest_meta.format, CHAMPIONS_FORMAT))
       .limit(1);
     const ts = rows[0]?.ts;
     return ts != null ? new Date(ts) : null;
@@ -562,16 +484,25 @@ export const loadPokemonPage = cache(
     loadPokemonPageUncached(slug, await singletonDb(), preferredFormat),
 );
 export const loadMovePage = cache(
-  async (slug: string): Promise<MovePageData | null> =>
-    loadMovePageUncached(slug, await singletonDb()),
+  async (
+    slug: string,
+    preferredFormat?: Format,
+  ): Promise<MovePageData | null> =>
+    loadMovePageUncached(slug, await singletonDb(), preferredFormat),
 );
 export const loadAbilityPage = cache(
-  async (slug: string): Promise<AbilityPageData | null> =>
-    loadAbilityPageUncached(slug, await singletonDb()),
+  async (
+    slug: string,
+    preferredFormat?: Format,
+  ): Promise<AbilityPageData | null> =>
+    loadAbilityPageUncached(slug, await singletonDb(), preferredFormat),
 );
 export const loadItemPage = cache(
-  async (slug: string): Promise<ItemPageData | null> =>
-    loadItemPageUncached(slug, await singletonDb()),
+  async (
+    slug: string,
+    preferredFormat?: Format,
+  ): Promise<ItemPageData | null> =>
+    loadItemPageUncached(slug, await singletonDb(), preferredFormat),
 );
 
 /** `referenceLastModified` — deduped per request for the sitemap. */
@@ -599,12 +530,6 @@ const cachedAbilitiesIndex = unstable_cache(
   ["ref-abilities-index"],
   { revalidate: 86400 },
 );
-const cachedItemsIndex = unstable_cache(
-  async (): Promise<NamesIndexData> =>
-    loadItemsIndexUncached(await singletonDb()),
-  ["ref-items-index"],
-  { revalidate: 86400 },
-);
 
 export function loadPokedexIndex(): Promise<PokedexIndexData> {
   return cachedPokedexIndex();
@@ -615,6 +540,7 @@ export function loadMovesIndex(): Promise<MovesIndexData> {
 export function loadAbilitiesIndex(): Promise<NamesIndexData> {
   return cachedAbilitiesIndex();
 }
-export function loadItemsIndex(): Promise<NamesIndexData> {
-  return cachedItemsIndex();
+/** Live read — exclusions can change without ingest, so no 24h snapshot. */
+export async function loadItemsIndex(): Promise<NamesIndexData> {
+  return loadItemsIndexUncached(await singletonDb());
 }

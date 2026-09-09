@@ -23,17 +23,26 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import ai.gowtam.oak.app.AppearancePreference
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,7 +69,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -71,7 +83,7 @@ import kotlinx.coroutines.launch
  * deletion** flow, and about/legal links. Mirrors iOS `AccountView` in
  * structure, re-expressed for Compose/Material 3.
  *
- * Hosted as a first-class tab root (Chat / Teams / Dex / Account). [onBack]
+ * Hosted as a first-class tab root (Chat / Teams / Dex / Settings). [onBack]
  * renders a back affordance only when this screen is pushed; pass `null` as the
  * tab root.
  *
@@ -137,11 +149,67 @@ fun AccountScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(rememberScrollState())
                 .padding(OakSpacing.lg),
         ) {
             ProfileHeader(isSignedIn = authState is AuthState.SignedIn, email = viewModel.email, tierTitle = viewModel.tierTitle)
             Spacer(Modifier.height(OakSpacing.lg))
+            val density by viewModel.answerDensity.collectAsState()
+            val appearance by viewModel.appState.appearance.collectAsState()
+            SectionTitle("Appearance")
+            SectionCard {
+                Column {
+                    for ((index, pref) in AppearancePreference.entries.withIndex()) {
+                        if (index > 0) HorizontalDivider(color = colors.border)
+                        ChoiceRow(
+                            icon = pref.icon(),
+                            title = pref.title,
+                            selected = appearance == pref,
+                            onClick = { viewModel.appState.setAppearance(pref) },
+                        )
+                    }
+                }
+            }
+            Text(
+                text = "System follows your phone's Light/Dark setting.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textMuted,
+                modifier = Modifier.padding(top = OakSpacing.sm, start = OakSpacing.xs, end = OakSpacing.xs),
+            )
+            Spacer(Modifier.height(OakSpacing.lg))
+            SectionTitle("Answer cards")
+            SectionCard {
+                ActionRow(
+                    icon = Icons.Filled.Info,
+                    title = if (density is ai.gowtam.oak.wire.AnswerDensity.Compact) {
+                        "Answers: Compact"
+                    } else {
+                        "Answers: Full"
+                    },
+                    enabled = true,
+                    onClick = {
+                        scope.launch {
+                            viewModel.setAnswerDensity(
+                                if (density is ai.gowtam.oak.wire.AnswerDensity.Compact) {
+                                    ai.gowtam.oak.wire.AnswerDensity.Full
+                                } else {
+                                    ai.gowtam.oak.wire.AnswerDensity.Compact
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+            Text(
+                text = "Compact hides Why / Sources on answer cards. Facts and caveats stay visible.",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textMuted,
+                modifier = Modifier.padding(top = OakSpacing.sm, start = OakSpacing.xs, end = OakSpacing.xs),
+            )
+            Spacer(Modifier.height(OakSpacing.lg))
 
+            SectionTitle("Account")
             SectionCard {
                 if (authState is AuthState.SignedIn) {
                     ActionRow(
@@ -169,6 +237,11 @@ fun AccountScreen(
             if (actionState.errorMessage != null) {
                 Spacer(Modifier.height(OakSpacing.md))
                 ErrorRow(message = actionState.errorMessage!!, onDismiss = viewModel::dismissError)
+            }
+
+            if (authState is AuthState.SignedIn) {
+                Spacer(Modifier.height(OakSpacing.lg))
+                SharedByMe()
             }
 
             if (authState is AuthState.SignedIn) {
@@ -206,8 +279,7 @@ fun AccountScreen(
             }
 
             Spacer(Modifier.height(OakSpacing.xl))
-            Text(text = "About", style = MaterialTheme.typography.titleSmall, color = colors.textMuted)
-            Spacer(Modifier.height(OakSpacing.sm))
+            SectionTitle("About")
             SectionCard {
                 Column {
                     LinkRow(title = "Privacy Policy") { openUrl(context, PRIVACY_URL) }
@@ -289,12 +361,26 @@ private fun ProfileHeader(isSignedIn: Boolean, email: String?, tierTitle: String
 @Composable
 private fun SectionCard(danger: Boolean = false, content: @Composable () -> Unit) {
     val oak = LocalOakColors.current
+    val dark = oak.isDark
     val shape = RoundedCornerShape(OakRadius.lg)
-    val fill = if (danger) oak.dangerSoft else oak.surfaceRaised
+    val fill = if (danger) oak.dangerSoft else MaterialTheme.colorScheme.surface
     val stroke = if (danger) oak.danger.copy(alpha = 0.35f) else oak.border
+    val umber = Color(0xFF4A352A)
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (dark || danger) {
+                    Modifier
+                } else {
+                    Modifier.shadow(
+                        elevation = 4.dp,
+                        shape = shape,
+                        ambientColor = umber.copy(alpha = 0.07f),
+                        spotColor = umber.copy(alpha = 0.10f),
+                    )
+                },
+            )
             .background(fill, shape)
             .border(1.dp, stroke, shape),
     ) {
@@ -303,7 +389,49 @@ private fun SectionCard(danger: Boolean = false, content: @Composable () -> Unit
 }
 
 @Composable
-private fun ActionRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, enabled: Boolean, onClick: () -> Unit) {
+private fun SectionTitle(text: String) {
+    val colors = LocalOakColors.current
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = colors.textMuted,
+        modifier = Modifier.padding(bottom = OakSpacing.sm),
+    )
+}
+
+@Composable
+private fun ChoiceRow(
+    icon: ImageVector,
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = LocalOakColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .semantics { this.selected = selected }
+            .padding(OakSpacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = colors.accent)
+        Spacer(Modifier.width(OakSpacing.sm))
+        Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        if (selected) {
+            Icon(Icons.Filled.Check, contentDescription = "Selected", tint = colors.accent)
+        }
+    }
+}
+
+private fun AppearancePreference.icon(): ImageVector = when (this) {
+    AppearancePreference.System -> Icons.Filled.BrightnessAuto
+    AppearancePreference.Light -> Icons.Filled.LightMode
+    AppearancePreference.Dark -> Icons.Filled.DarkMode
+}
+
+@Composable
+private fun ActionRow(icon: ImageVector, title: String, enabled: Boolean, onClick: () -> Unit) {
     val colors = LocalOakColors.current
     Row(
         modifier = Modifier

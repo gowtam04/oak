@@ -1,10 +1,15 @@
 package ai.gowtam.oak.features.dex
 
 import ai.gowtam.oak.features.artifact.EntityDetail
+import ai.gowtam.oak.features.usage.UsageLeaderboardScreen
+import ai.gowtam.oak.features.usage.UsageLeaderboardViewModel
+import ai.gowtam.oak.services.UsageService
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.OakTopBar
+import ai.gowtam.oak.ui.SpriteImage
+import ai.gowtam.oak.ui.resolvedSpriteUrl
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.SearchMatch
@@ -37,7 +42,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -71,12 +75,14 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun DexListScreen(
     viewModel: DexViewModel,
+    usage: UsageService,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val list by viewModel.list.collectAsState()
     val oak = LocalOakColors.current
-    var scopeMenuOpen by remember { mutableStateOf(false) }
+    val usageViewModel = remember(usage) { UsageLeaderboardViewModel(usage) }
+    val showingUsage = list.section == DexSection.Usage
 
     Scaffold(
         modifier = modifier,
@@ -84,30 +90,10 @@ fun DexListScreen(
             OakTopBar(
                 title = { Text("Dex", modifier = Modifier.semantics { heading() }) },
                 actions = {
-                    Box {
-                        TextButton(onClick = { scopeMenuOpen = true }) {
-                            Text(list.format.shortLabel, color = oak.accent, fontWeight = FontWeight.SemiBold)
-                        }
-                        DropdownMenu(
-                            expanded = scopeMenuOpen,
-                            onDismissRequest = { scopeMenuOpen = false },
-                        ) {
-                            Format.knownCases.forEach { format ->
-                                DropdownMenuItem(
-                                    text = { Text(format.displayLabel) },
-                                    onClick = {
-                                        scopeMenuOpen = false
-                                        viewModel.selectFormat(format)
-                                    },
-                                    leadingIcon = if (format == list.format) {
-                                        { Icon(Icons.Filled.Check, contentDescription = null, tint = oak.accent) }
-                                    } else {
-                                        null
-                                    },
-                                )
-                            }
-                        }
-                    }
+                    ai.gowtam.oak.ui.RegulationChip(
+                        onLid = true,
+                        modifier = Modifier.padding(end = OakSpacing.md),
+                    )
                 },
             )
         },
@@ -123,6 +109,15 @@ fun DexListScreen(
                 onSelect = viewModel::selectSection,
                 modifier = Modifier.padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
             )
+
+            if (showingUsage) {
+                UsageLeaderboardScreen(
+                    viewModel = usageViewModel,
+                    onOpenDex = onOpen,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+                return@Column
+            }
 
             OutlinedTextField(
                 value = list.query,
@@ -141,12 +136,13 @@ fun DexListScreen(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(OakRadius.md),
+                shape = RoundedCornerShape(OakRadius.pill),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = oak.accent,
                     unfocusedBorderColor = oak.border,
-                    focusedContainerColor = oak.surfaceRaised,
-                    unfocusedContainerColor = oak.surfaceRaised,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    cursorColor = oak.accent,
                 ),
             )
 
@@ -165,10 +161,16 @@ fun DexListScreen(
                         )
                     }
                     else -> {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                                horizontal = OakSpacing.md,
+                                vertical = OakSpacing.sm,
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
                             items(list.matches, key = { "${it.kind.rawValue}:${it.slug}" }) { match ->
                                 MatchRow(match = match, onClick = { onOpen(match.kind, match.slug) })
-                                HorizontalDivider(color = oak.border)
                             }
                         }
                     }
@@ -211,13 +213,27 @@ private fun SectionChips(
 @Composable
 private fun MatchRow(match: SearchMatch, onClick: () -> Unit) {
     val oak = LocalOakColors.current
+    val shape = RoundedCornerShape(OakRadius.md)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface, shape)
+            .border(1.dp, oak.border, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = OakSpacing.md, vertical = OakSpacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (match.kind == EntityKind.POKEMON) {
+            SpriteImage(
+                url = match.resolvedSpriteUrl(),
+                name = match.displayName,
+                size = 36.dp,
+                animated = false,
+                decorative = true,
+            )
+            Spacer(Modifier.size(OakSpacing.sm))
+        }
         Text(
             text = match.displayName,
             style = MaterialTheme.typography.bodyLarge,
@@ -240,9 +256,9 @@ private fun EmptyMatches(hasQuery: Boolean, modifier: Modifier = Modifier) {
         Spacer(Modifier.size(OakSpacing.xs))
         Text(
             if (hasQuery) {
-                "Try a different name or scope."
+                "Nothing on the Champions roster matched."
             } else {
-                "No entries in this scope."
+                "No entries in the Champions roster."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = oak.textMuted,
@@ -264,6 +280,7 @@ fun DexDetailScreen(
     onBack: () -> Unit,
     onOpen: (EntityKind, String) -> Unit,
     modifier: Modifier = Modifier,
+    onAddToTeam: (() -> Unit)? = null,
 ) {
     val detail by viewModel.detail.collectAsState()
     val list by viewModel.list.collectAsState()
@@ -305,12 +322,26 @@ fun DexDetailScreen(
                     )
                 }
                 is DexViewModel.DetailState.Ready -> {
-                    EntityDetail(
-                        artifact = d.artifact,
-                        requestFormat = list.format,
-                        onOpen = onOpen,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        if (kind == EntityKind.POKEMON && onAddToTeam != null) {
+                            ai.gowtam.oak.ui.OakButton(
+                                onClick = onAddToTeam,
+                                style = ai.gowtam.oak.ui.OakButtonStyle.Secondary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
+                            ) {
+                                Text("Add to team")
+                            }
+                        }
+                        EntityDetail(
+                            artifact = d.artifact,
+                            requestFormat = Format.Champions,
+                            onOpen = onOpen,
+                            modifier = Modifier.fillMaxWidth(),
+                            onApplySpecies = onApplySpecies,
+                        )
+                    }
                 }
                 is DexViewModel.DetailState.Unavailable -> {
                     Column(
@@ -329,7 +360,7 @@ fun DexDetailScreen(
                         )
                         Spacer(Modifier.size(OakSpacing.sm))
                         Text(
-                            "Oak doesn't have a ${d.kind.rawValue} profile for “${d.query}” in this format.",
+                            "Oak doesn't have a ${d.kind.rawValue} profile for “${d.query}” in the Champions roster.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = oak.textMuted,
                             textAlign = TextAlign.Center,

@@ -3,7 +3,9 @@
  *
  *   ?kind=pokemon|move|ability|item|type
  *   ?q=<partial display name or slug>
- *   ?format=scarlet-violet|champions
+ *   ?format= optional — ignored for lookup; always the Champions index
+ *     (old clients sending scarlet-violet / gen-N still search Champions).
+ *     A garbage value that is not a stored Format is 400.
  *
  * A thin, public (no-auth — Pokédex data) wrapper over the in-memory fuzzy
  * `resolveEntity` index (the same matcher behind `resolve_entity` / `/api/entity`).
@@ -11,9 +13,11 @@
  * display names while storing canonical slugs — no more typing raw slugs.
  *
  * Responses (all in-domain results ride a 200, mirroring `/api/entity`):
- *   - 200 { matches: { slug, display_name, kind }[] }   (typed: ≤ LIMIT best-first;
- *           blank query: the full kind, alphabetical — Dex browse + picker focus)
- *   - 400 { error }         for a malformed/missing kind or format
+ *   - 200 { matches: { slug, display_name, kind, sprite_url? }[] }
+ *           typed: ≤ LIMIT best-first; blank query: the full kind, alphabetical
+ *           (Dex browse + picker focus). `sprite_url` is present only on
+ *           pokemon matches that resolve to a `pokemon` row.
+ *   - 400 { error }         for a malformed/missing kind, or a garbage format
  *
  * Never throws for in-domain misses: an unreadable index degrades to an empty
  * match list. `@/data/db` (and its repo dependents) import `@/env` at module
@@ -22,7 +26,7 @@
  */
 
 import { json, retryAfterHeader } from "@/app/api/auth/_lib/http";
-import { isFormat, type Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, isFormat } from "@/data/formats";
 import { ENTITY_KINDS, type EntityKind } from "@/agent/schemas";
 import { checkRateLimit, PUBLIC_READ_CONFIG } from "@/server/rate-limit";
 import { clientIp } from "@/server/client-ip";
@@ -57,12 +61,14 @@ export async function GET(req: Request): Promise<Response> {
   const q = (url.searchParams.get("q")?.trim() ?? "").slice(0, MAX_Q);
   const formatParam = url.searchParams.get("format")?.trim() ?? "";
 
-  // --- Param validation (a bad kind/format is a real 4xx, not an envelope) ---
+  // --- Param validation (a bad kind / garbage format is a real 4xx) ---
   if (!KINDS.has(kindParam)) return json(400, { error: "invalid_kind" });
-  if (!isFormat(formatParam)) return json(400, { error: "invalid_format" });
+  if (formatParam.length > 0 && !isFormat(formatParam)) {
+    return json(400, { error: "invalid_format" });
+  }
 
   const kind = kindParam as EntityKind;
-  const format = formatParam as Format;
+  const format = CHAMPIONS_FORMAT;
 
   try {
     const repo = await import("@/data/repos/resolve-index");
@@ -72,12 +78,40 @@ export async function GET(req: Request): Promise<Response> {
       q.length === 0
         ? await repo.listEntities(kind, undefined, format)
         : await repo.resolveEntity(q, kind, LIMIT, format);
+
+    // Sprite thumbs are additive: a lookup fault must not wipe name matches.
+    let sprites = new Map<string, string>();
+    if (kind === "pokemon" && matches.length > 0) {
+      try {
+        const { db } = await import("@/data/db");
+        const { spriteUrlsByIds } = await import("@/data/repos/pokedex-repo");
+        sprites = await spriteUrlsByIds(
+          matches.map((m) => m.slug),
+          format,
+          db,
+        );
+      } catch (err) {
+        const { logger } = await import("@/server/logger");
+        logger.error({
+          event: "search_sprites_failed",
+          kind,
+          query: q,
+          format,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     return json(200, {
-      matches: matches.map((m) => ({
-        slug: m.slug,
-        display_name: m.display_name,
-        kind: m.kind,
-      })),
+      matches: matches.map((m) => {
+        const sprite_url = sprites.get(m.slug);
+        return {
+          slug: m.slug,
+          display_name: m.display_name,
+          kind: m.kind,
+          ...(sprite_url ? { sprite_url } : {}),
+        };
+      }),
     });
   } catch (err) {
     // Transport/DB fault — degrade to an empty list (the picker just shows no

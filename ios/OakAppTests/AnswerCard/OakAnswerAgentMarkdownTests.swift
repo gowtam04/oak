@@ -122,6 +122,18 @@ struct OakAnswerAgentMarkdownTests {
   }
 
   @Test
+  func stripsCitationSpanCommentsFromTheAnswerBody() {
+    let md = OakAnswerAgentMarkdown.build(
+      makeAnswer(
+        answerMarkdown: "<!-- span:c0 -->Garchomp is a Dragon/Ground pseudo-legendary.<!-- /span:c0 -->"
+      )
+    )
+    #expect(md.contains("Garchomp is a Dragon/Ground pseudo-legendary."))
+    #expect(!md.contains("<!--"))
+    #expect(!md.contains("span:c0"))
+  }
+
+  @Test
   func fixtureAnswerBuildsNonEmptyMarkdown() throws {
     let data = try Fixtures.load("oakanswer_answered_full.json")
     let answer = try JSONDecoder().decode(OakAnswer.self, from: data)

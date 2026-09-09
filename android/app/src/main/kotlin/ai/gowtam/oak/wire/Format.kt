@@ -38,6 +38,15 @@ sealed interface Format {
     /** A format string outside the known set — preserves the original wire value. */
     data class Unknown(val raw: String) : Format
 
+    /**
+     * Living work is Champions only (ADR-3). Any other stored format — including
+     * [Unknown] — is archived and must not appear in pickers.
+     */
+    val isArchived: Boolean get() = this != Champions
+
+    /** Inverse of [isArchived]: only [Champions] is a living format. */
+    val isLiving: Boolean get() = this == Champions
+
     /** The wire string for a known case, or the original raw string for [Unknown]. */
     val rawValue: String
         get() = when (this) {
@@ -77,15 +86,15 @@ sealed interface Format {
         }
 
     /**
-     * A fuller display label with the game-pair/regulation suffix — mirrors
-     * `scopeLabel` (`web/src/lib/scope/scope-label.ts`) exactly. The Champions
-     * regulation string is duplicated from web's `CHAMPIONS_REGULATION` — update
-     * this when that rotates. [Unknown] echoes its raw value.
+     * A fuller display label with the game-pair suffix — mirrors `scopeLabel`
+     * for archived formats. Champions is `"Champions"` here; the live
+     * regulation letter lives on the chip (`GET /api/scope`). [Unknown] echoes
+     * its raw value.
      */
     val displayLabel: String
         get() = when (this) {
             NationalDex -> "National Dex · All Gens"
-            Champions -> "Champions · Reg M-B"
+            Champions -> "Champions"
             ScarletViolet -> "Gen 9 · Scarlet/Violet"
             Gen8 -> "Gen 8 · Sword/Shield"
             Gen7 -> "Gen 7 · USUM"
@@ -109,6 +118,12 @@ sealed interface Format {
                 NationalDex, Champions, ScarletViolet,
                 Gen8, Gen7, Gen6, Gen5, Gen4, Gen3, Gen2, Gen1,
             )
+
+        /**
+         * Formats offered by living pickers. Historical [knownCases] still decode
+         * archived rows; the UI must not list them (CF-UI-AC-1.1, ADR-3).
+         */
+        val pickerCases: List<Format> = listOf(Champions)
 
         /** Maps a wire string to its case, falling back to [Unknown] otherwise. */
         fun fromRaw(raw: String): Format = when (raw) {

@@ -19,7 +19,7 @@ import Observation
 /// `answer_delta` appends; the terminal answer attaches to the in-flight turn and
 /// stops. A transport fault (thrown `OakError` or an in-band `error` event) drops the
 /// half-finished turn, surfaces a friendly banner, and exposes a Retry — exactly like
-/// the web hook.
+/// the web hook — except denylist / daily-cap refusals hide Retry (SC-AC-5.4 / SC-BR-14).
 @MainActor
 @Observable
 final class TeamsAssistantViewModel: Identifiable {
@@ -60,6 +60,10 @@ final class TeamsAssistantViewModel: Identifiable {
   /// A transport-fault banner message (in-domain failures ride a normal answer).
   /// `nil` when clear.
   private(set) var errorMessage: String?
+
+  /// Whether the banner's Retry should show. `false` for denylist / daily cap
+  /// (SC-AC-5.4 / SC-BR-14); `true` for transport and per-minute rate limits.
+  private(set) var errorIsRetryable: Bool = true
 
   // MARK: Apply / Undo state
 
@@ -123,6 +127,7 @@ final class TeamsAssistantViewModel: Identifiable {
     activity = nil
     streamingMarkdown = ""
     errorMessage = nil
+    errorIsRetryable = true
 
     let draft = TeamsAssistantDraft(
       name: editor.name,
@@ -201,7 +206,11 @@ final class TeamsAssistantViewModel: Identifiable {
       // Panel reset / unmount — drop silently (never leaves a banner).
       return
     } catch let error as OakError {
-      finishWithFailure(turnId: turnId, message: TeamEditorViewModel.message(for: error))
+      finishWithFailure(
+        turnId: turnId,
+        message: TeamEditorViewModel.message(for: error),
+        isRetryable: Self.isRetryable(error)
+      )
       return
     } catch {
       finishWithFailure(turnId: turnId, message: TeamEditorViewModel.genericMessage)
@@ -223,13 +232,26 @@ final class TeamsAssistantViewModel: Identifiable {
     }
   }
 
-  /// Drops the in-flight turn and raises a recoverable banner (mirrors the web hook's
-  /// catch path: a retry re-sends cleanly rather than duplicating a half-turn).
-  private func finishWithFailure(turnId: Int, message: String) {
+  /// Drops the in-flight turn and raises a banner (mirrors the web hook's catch
+  /// path: a retry re-sends cleanly rather than duplicating a half-turn). Denied
+  /// and daily-cap refusals keep Retry hidden.
+  private func finishWithFailure(turnId: Int, message: String, isRetryable: Bool = true) {
     turns.removeAll { $0.id == turnId }
     errorMessage = message
+    errorIsRetryable = isRetryable
     status = .error
     activity = nil
     streamingMarkdown = ""
+  }
+
+  /// Denylist (`account_denied`) and daily cap (`daily_limit`) are not retryable
+  /// (SC-AC-5.4 / SC-BR-14). Every other `OakError` keeps Retry.
+  private static func isRetryable(_ error: OakError) -> Bool {
+    switch error {
+    case .http(_, let code, _) where code == "account_denied" || code == "daily_limit":
+      return false
+    default:
+      return true
+    }
   }
 }

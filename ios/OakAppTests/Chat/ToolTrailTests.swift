@@ -76,36 +76,39 @@ struct ToolTrailTests {
     #expect(out == "Searching the wiki")
   }
 
-  // MARK: Friendly noun mapping (copy-tables.md §1) — a raw tool id must never render
+  // MARK: Action-label mapping — a raw tool id must never render
 
   @Test
   func friendlyNounCoversEveryDocumentedTool() {
-    #expect(ToolTrail.friendlyNoun("resolve_entity") == "Dex lookup")
-    #expect(ToolTrail.friendlyNoun("query_pokedex") == "Pokédex search")
-    #expect(ToolTrail.friendlyNoun("get_pokemon") == "Pokémon")
-    #expect(ToolTrail.friendlyNoun("get_move") == "Move")
-    #expect(ToolTrail.friendlyNoun("get_ability") == "Ability")
-    #expect(ToolTrail.friendlyNoun("get_item") == "Item")
-    #expect(ToolTrail.friendlyNoun("get_type_matchups") == "Type matchups")
-    #expect(ToolTrail.friendlyNoun("get_evolution_chain") == "Evolution")
-    #expect(ToolTrail.friendlyNoun("compute_stat") == "Stats")
-    #expect(ToolTrail.friendlyNoun("estimate_damage") == "Damage calc")
-    #expect(ToolTrail.friendlyNoun("get_usage_stats") == "Usage")
-    #expect(ToolTrail.friendlyNoun("get_meta_usage") == "Usage")
-    #expect(ToolTrail.friendlyNoun("get_encounters") == "Locations")
-    #expect(ToolTrail.friendlyNoun("get_learnset") == "Movepool")
-    #expect(ToolTrail.friendlyNoun("get_team") == "Teams")
-    #expect(ToolTrail.friendlyNoun("list_teams") == "Teams")
-    #expect(ToolTrail.friendlyNoun("save_team") == "Teams")
-    #expect(ToolTrail.friendlyNoun("run_sql") == "Game data")
-    #expect(ToolTrail.friendlyNoun("search_wiki") == "Wiki")
+    #expect(ToolTrail.friendlyNoun("resolve_entity") == "Identifying")
+    #expect(ToolTrail.friendlyNoun("query_pokedex") == "Searching Pokédex")
+    #expect(ToolTrail.friendlyNoun("get_pokemon") == "Looking up Pokémon")
+    #expect(ToolTrail.friendlyNoun("get_move") == "Looking up move")
+    #expect(ToolTrail.friendlyNoun("get_ability") == "Reading ability")
+    #expect(ToolTrail.friendlyNoun("get_item") == "Looking up item")
+    #expect(ToolTrail.friendlyNoun("get_type_matchups") == "Checking matchups")
+    #expect(ToolTrail.friendlyNoun("type_matchup") == "Checking matchups")
+    #expect(ToolTrail.friendlyNoun("get_type_chart") == "Checking matchups")
+    #expect(ToolTrail.friendlyNoun("get_evolution_chain") == "Tracing evolution")
+    #expect(ToolTrail.friendlyNoun("compute_stat") == "Computing stats")
+    #expect(ToolTrail.friendlyNoun("estimate_damage") == "Calculating damage")
+    #expect(ToolTrail.friendlyNoun("get_usage_stats") == "Checking live usage")
+    #expect(ToolTrail.friendlyNoun("get_meta_usage") == "Checking ladder usage")
+    #expect(ToolTrail.friendlyNoun("get_encounters") == "Finding locations")
+    #expect(ToolTrail.friendlyNoun("get_learnset") == "Checking learnset")
+    #expect(ToolTrail.friendlyNoun("lookup_box") == "Looking up box")
+    #expect(ToolTrail.friendlyNoun("get_team") == "Reading team")
+    #expect(ToolTrail.friendlyNoun("list_teams") == "Listing teams")
+    #expect(ToolTrail.friendlyNoun("save_team") == "Saving team")
+    #expect(ToolTrail.friendlyNoun("run_sql") == "Querying game data")
+    #expect(ToolTrail.friendlyNoun("search_wiki") == "Searching wiki")
     #expect(ToolTrail.friendlyNoun("submit_answer") == "Answer")
     #expect(ToolTrail.friendlyNoun("submit_builder_answer") == "Teams")
   }
 
   @Test
-  func friendlyNounFallsBackToLookupForUnknownTools() {
-    #expect(ToolTrail.friendlyNoun("totally_new_tool") == "Lookup")
+  func friendlyNounFallsBackToLookingUpForUnknownTools() {
+    #expect(ToolTrail.friendlyNoun("totally_new_tool") == "Looking up")
   }
 
   // MARK: Row label — noun · subject
@@ -115,7 +118,7 @@ struct ToolTrailTests {
     // resolve_entity's label carries a curly-quoted query.
     #expect(
       ToolTrail.rowLabel(tool: "resolve_entity", label: "🔍 Resolving “Garchomp”…")
-        == "Dex lookup · Garchomp"
+        == "Identifying · Garchomp"
     )
   }
 
@@ -123,7 +126,7 @@ struct ToolTrailTests {
   func parsesTrailingCapitalisedSubject() {
     #expect(
       ToolTrail.rowLabel(tool: "get_pokemon", label: "📇 Looking up Garchomp…")
-        == "Pokémon · Garchomp"
+        == "Looking up Pokémon · Garchomp"
     )
   }
 
@@ -131,6 +134,45 @@ struct ToolTrailTests {
   func parsesMultiWordCapitalisedSubject() {
     #expect(ToolTrail.subject(from: "Looking up Fake Out") == "Fake Out")
     #expect(ToolTrail.subject(from: "Looking up Armor Tail") == "Armor Tail")
+    #expect(
+      ToolTrail.subject(from: "Looking up the move Will-O-Wisp") == "Will-O-Wisp"
+    )
+  }
+
+  @Test
+  func stripsVerbAndTrailingPossessiveFromLearnsetLabels() {
+    #expect(ToolTrail.subject(from: "Checking Torkoal's learnset…") == "Torkoal")
+    #expect(ToolTrail.subject(from: "Checking Torkoal’s learnset…") == "Torkoal")
+    #expect(
+      ToolTrail.subject(from: "Checking Charizard-Mega-Y’s learnset…")
+        == "Charizard-Mega-Y"
+    )
+  }
+
+  @Test
+  func takesTheClauseAfterAColon() {
+    #expect(ToolTrail.subject(from: "Searching the Pokédex: Fire…") == "Fire")
+    #expect(
+      ToolTrail.subject(from: "Searching the Pokédex: Fire · Speed > 100…")
+        == "Fire · Speed > 100"
+    )
+  }
+
+  @Test
+  func prefersTheSpeciesOverALaterFormatWord() {
+    #expect(
+      ToolTrail.subject(from: "Checking Torkoal’s live Doubles usage…")
+        == "Torkoal"
+    )
+  }
+
+  @Test
+  func readsAbilityEvolutionAndMatchupLabels() {
+    #expect(ToolTrail.subject(from: "Reading the Drought ability…") == "Drought")
+    #expect(ToolTrail.subject(from: "Tracing Garchomp’s evolution…") == "Garchomp")
+    #expect(
+      ToolTrail.subject(from: "Checking Fire/Flying matchups…") == "Fire/Flying"
+    )
   }
 
   @Test
@@ -143,12 +185,12 @@ struct ToolTrailTests {
   func fallsBackToFriendlyNounWhenLabelEmpty() {
     // A raw tool id must never render — the empty-label path falls back to the
     // friendly noun, not the wire tool id.
-    #expect(ToolTrail.rowLabel(tool: "run_sql", label: "") == "Game data")
+    #expect(ToolTrail.rowLabel(tool: "run_sql", label: "") == "Querying game data")
   }
 
   @Test
   func fallsBackToFriendlyNounForUnknownToolWithEmptyLabel() {
-    #expect(ToolTrail.rowLabel(tool: "totally_new_tool", label: "") == "Lookup")
+    #expect(ToolTrail.rowLabel(tool: "totally_new_tool", label: "") == "Looking up")
   }
 
   // MARK: Summary chip
@@ -200,8 +242,81 @@ struct ToolTrailTests {
       (tool: "get_move", label: ""),
       (tool: "get_pokemon", label: ""),
     ])
-    #expect(sentence == "Looking up Move, Pokémon")
+    #expect(sentence == "Looking up Looking up move, Looking up Pokémon")
     #expect(!sentence.contains("get_move"))
     #expect(!sentence.contains("get_pokemon"))
+  }
+
+  // MARK: Incoming-plate status copy (verb + rest)
+
+  @Test
+  func orbStateMatchesCrossPlatformTable() {
+    #expect(ThinkingTraceCopy.orbState(reconnecting: true, latestTool: "get_pokemon") == .connecting)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: nil) == .breathing)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "get_pokemon") == .searching)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "search_wiki") == .searching)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "lookup_box") == .searching)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "compute_stat") == .solving)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "run_sql") == .solving)
+    #expect(ThinkingTraceCopy.orbState(reconnecting: false, latestTool: "submit_answer") == .breathing)
+    #expect(
+      ThinkingTraceCopy.orbState(
+        reconnecting: false, latestTool: "get_pokemon", writing: true
+      ) == .composing
+    )
+    #expect(
+      ThinkingTraceCopy.orbState(
+        reconnecting: true, latestTool: "get_pokemon", writing: true
+      ) == .connecting
+    )
+  }
+
+  @Test
+  func thinkingHeaderIsLiveUntilSettled() {
+    #expect(
+      ThinkingTraceCopy.header(reconnecting: false, settled: false, elapsedSeconds: 3)
+        == .init(live: true, text: "Thinking")
+    )
+    #expect(
+      ThinkingTraceCopy.header(reconnecting: false, settled: true, elapsedSeconds: 4)
+        == .init(live: false, text: "Thought for 4 seconds")
+    )
+    #expect(ThinkingTraceCopy.thoughtFor(1) == "Thought for 1 second")
+    #expect(ThinkingTraceCopy.thoughtFor(0) == "Thought for a moment")
+    #expect(
+      ThinkingTraceCopy.header(reconnecting: true, settled: false)
+        == .init(live: true, text: "Reconnecting")
+    )
+  }
+
+  @Test
+  func thinkingRowsMapFriendlyNounsAndSubjects() {
+    let rows = ThinkingTraceCopy.rows(
+      activities: [
+        (tool: "resolve_entity", label: "🔍 Resolving “Farigiraf”…"),
+        (tool: "get_move", label: "Looking up Fake Out…"),
+        (tool: "submit_answer", label: "✍️ Composing the answer…"),
+      ],
+      settled: false
+    )
+    #expect(rows.count == 2)
+    #expect(rows[0].primary == "Identifying")
+    #expect(rows[0].secondary == "Farigiraf")
+    #expect(rows[0].active == false)
+    #expect(rows[1].primary == "Looking up move")
+    #expect(rows[1].secondary == "Fake Out")
+    #expect(rows[1].active == true)
+    #expect(!rows.contains { $0.tool == "submit_answer" })
+  }
+
+  @Test
+  func answeringAndReconnectCopy() {
+    let writing = StreamingStatusCopy.parts(phase: .answering, activities: [], reconnecting: false)
+    #expect(writing.verb == "Thought for a moment")
+    let reconnect = StreamingStatusCopy.parts(
+      phase: .thinking, activities: [], reconnecting: true
+    )
+    #expect(reconnect.verb == "Reconnecting")
+    #expect(reconnect.rest == "")
   }
 }

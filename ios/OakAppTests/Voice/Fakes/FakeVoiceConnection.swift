@@ -20,6 +20,11 @@ final class FakeVoiceConnection: VoiceRealtimeConnection, @unchecked Sendable {
   private(set) var sent: [String] = []
   private(set) var closed = false
 
+  /// When set, ``send(_:)`` records this as ``failureMessage()`` and finishes
+  /// inbound — the handshake-failed production path.
+  var nextFailureMessage: String?
+
+  private var closeFailure: String?
   private var continuation: AsyncStream<String>.Continuation?
   /// Frames emitted before the session began iterating are buffered and flushed
   /// on the first ``inbound()`` call, so a test is never order-sensitive to when
@@ -31,17 +36,30 @@ final class FakeVoiceConnection: VoiceRealtimeConnection, @unchecked Sendable {
       self.continuation = continuation
       for frame in self.buffer { continuation.yield(frame) }
       self.buffer = []
+      if self.closed {
+        continuation.finish()
+        self.continuation = nil
+      }
     }
   }
 
   func send(_ text: String) async {
     sent.append(text)
+    if let message = nextFailureMessage {
+      nextFailureMessage = nil
+      closeFailure = message
+      finishInbound()
+    }
   }
 
   func close() {
     closed = true
     continuation?.finish()
     continuation = nil
+  }
+
+  func failureMessage() async -> String? {
+    closeFailure
   }
 
   // MARK: Test drivers

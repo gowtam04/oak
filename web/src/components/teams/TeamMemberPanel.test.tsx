@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+} from "@testing-library/react";
 
 // The Move pickers load a species' legal movepool via this client.
 const learnset = vi.hoisted(() => ({ fetchLearnset: vi.fn() }));
@@ -47,12 +52,31 @@ const GARCHOMP_BASE: MemberBaseStats = {
 
 function noop() {}
 
+const CHAMPIONS_SP = {
+  hp: 4,
+  atk: 30,
+  def: 0,
+  spa: 0,
+  spd: 0,
+  spe: 32,
+};
+
+function livingMember(overrides: Partial<TeamMember> = {}): TeamMember {
+  return member({
+    evs: { ...CHAMPIONS_SP },
+    tera_type: null,
+    level: 50,
+    ...overrides,
+  });
+}
+
 describe("TeamMemberPanel", () => {
-  it("renders every set field as a controlled input", () => {
+  it("renders every living-editor set field as a controlled input (CF-TEAM-AC-1.2)", () => {
     render(
       <TeamMemberPanel
         slot={0}
-        member={member()}
+        member={livingMember()}
+        format="champions"
         warnings={[]}
         onChange={noop}
         onRemove={noop}
@@ -62,12 +86,16 @@ describe("TeamMemberPanel", () => {
     expect(screen.getByTestId("member-0-ability")).toHaveValue("Rough Skin");
     expect(screen.getByTestId("member-0-item")).toHaveValue("Life Orb");
     expect(screen.getByTestId("member-0-nature")).toHaveValue("Jolly");
-    expect(screen.getByTestId("member-0-tera")).toHaveValue("Steel");
-    expect(screen.getByTestId("member-0-level")).toHaveValue(50);
     expect(screen.getByTestId("member-0-move-0")).toHaveValue("Earthquake");
     expect(screen.getByTestId("member-0-move-1")).toHaveValue("Dragon Claw");
-    expect(screen.getByTestId("member-0-ev-spe")).toHaveValue(252);
-    expect(screen.getByTestId("member-0-iv-hp")).toHaveValue(31);
+    expect(screen.getByTestId("member-0-ev-spe")).toHaveValue(32);
+    expect(screen.queryByTestId("member-0-tera")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("member-0-level")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("member-0-iv-hp")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /apply this champions set/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("member-0-apply-set")).not.toBeInTheDocument();
   });
 
   it("commits a selected option and clears a field to null", () => {
@@ -135,41 +163,99 @@ describe("TeamMemberPanel", () => {
     expect(screen.getByTestId("member-0-move-0")).toBeDisabled();
   });
 
-  it("hides Tera and tightens the EV budget in Champions", () => {
+  it("hides Tera, IV knobs, and the level knob on the living editor (CF-TEAM-AC-1.2, CF-UI-AC-1.3)", () => {
     render(
       <TeamMemberPanel
         slot={0}
-        member={member()}
+        member={livingMember({ level: 100, tera_type: "steel" })}
         format="champions"
         warnings={[]}
         onChange={noop}
         onRemove={noop}
       />,
     );
-    // No Terastallization in Champions.
     expect(screen.queryByTestId("member-0-tera")).not.toBeInTheDocument();
-    // Stat-Point budget reads "/ 66" and each EV input caps at 32.
-    expect(screen.getByTestId("member-0-ev-total")).toHaveTextContent("/ 66");
-    expect(screen.getByTestId("member-0-ev-spe")).toHaveAttribute("max", "32");
+    expect(screen.queryByLabelText(/tera type/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("member-0-iv-hp")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("member-0-iv-atk")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("spinbutton", { name: /iv/i }),
+    ).not.toBeInTheDocument();
+    // Level is 50 in Champions and is not a user knob (not even a disabled one).
+    expect(screen.queryByTestId("member-0-level")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("spinbutton", { name: /^level$/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("slider", { name: /^level$/i }),
+    ).not.toBeInTheDocument();
   });
 
-  it("locks Level to 50 and hides the IV editor in Champions", () => {
-    render(
+  it("shows a running Stat Point total of 66 with max 32 (CF-TEAM-AC-1.3, CF-UI-US-4)", () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
       <TeamMemberPanel
         slot={0}
-        member={member({ level: 100 })}
+        member={livingMember()}
         format="champions"
         warnings={[]}
-        onChange={noop}
+        onChange={onChange}
         onRemove={noop}
       />,
     );
-    // Champions is Level-50-only: the field is fixed at 50 and disabled.
-    const level = screen.getByTestId("member-0-level");
-    expect(level).toBeDisabled();
-    expect(level).toHaveValue(50);
-    // IVs are fixed at 31 in Champions, so the IV editor is absent.
-    expect(screen.queryByTestId("member-0-iv-hp")).not.toBeInTheDocument();
+    expect(screen.getByText(/stat points/i)).toBeInTheDocument();
+    // 4 + 30 + 32 = 66
+    expect(screen.getByTestId("member-0-ev-total")).toHaveTextContent("66 / 66");
+    expect(screen.getByTestId("member-0-ev-spe")).toHaveAttribute("max", "32");
+    expect(screen.getByTestId("member-0-ev-atk")).toHaveAttribute("max", "32");
+    expect(screen.getByTestId("member-0-ev-spe")).toHaveAttribute(
+      "aria-label",
+      "Spe Stat Points",
+    );
+
+    fireEvent.change(screen.getByTestId("member-0-ev-atk"), {
+      target: { value: "10" },
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        evs: expect.objectContaining({ atk: 10 }),
+      }),
+    );
+    const next = onChange.mock.calls.at(-1)![0] as TeamMember;
+    rerender(
+      <TeamMemberPanel
+        slot={0}
+        member={next}
+        format="champions"
+        warnings={[]}
+        onChange={onChange}
+        onRemove={noop}
+      />,
+    );
+    // Running total updates while editing: 4 + 10 + 32 = 46
+    expect(screen.getByTestId("member-0-ev-total")).toHaveTextContent("46 / 66");
+  });
+
+  it("clamps a Stat Point edit into 0..32 on the living editor (CF-TEAM-AC-1.3)", () => {
+    const onChange = vi.fn();
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={livingMember()}
+        format="champions"
+        warnings={[]}
+        onChange={onChange}
+        onRemove={noop}
+      />,
+    );
+    fireEvent.change(screen.getByTestId("member-0-ev-atk"), {
+      target: { value: "99" },
+    });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        evs: expect.objectContaining({ atk: 32 }),
+      }),
+    );
   });
 
   it("computes Champions Stat-Point stats (1 Stat Point = +1)", () => {
@@ -433,5 +519,92 @@ describe("TeamMemberPanel", () => {
       />,
     );
     expect(screen.getByText(/can't learn Surf/)).toBeInTheDocument();
+  });
+
+  it("readOnly archive shows stored spreads and Tera without Stat Point chrome", () => {
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member({
+          tera_type: "ground",
+          evs: { hp: 4, atk: 252, def: 0, spa: 0, spd: 0, spe: 252 },
+        })}
+        format="champions"
+        readOnly
+        warnings={[
+          {
+            code: "ability_not_for_species",
+            message: 'Ability "rough-skin" is not in the Champions roster.',
+            slot: 0,
+            field: "ability",
+          },
+          {
+            code: "move_not_in_learnset",
+            message: 'Move "earthquake" is not in the Champions roster.',
+            slot: 0,
+            field: "moves[0]",
+          },
+        ]}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(screen.getByTestId("member-0-ev-atk")).toHaveValue(252);
+    expect(screen.getByTestId("member-0-ev-spe")).toHaveValue(252);
+    expect(screen.getByTestId("member-0-ev-atk")).not.toHaveAttribute(
+      "max",
+      "32",
+    );
+    expect(screen.queryByTestId("member-0-ev-total")).not.toBeInTheDocument();
+    expect(screen.queryByText(/stat points/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("slider")).not.toBeInTheDocument();
+    expect(screen.getByTestId("member-0-tera")).toHaveValue("Ground");
+    expect(
+      screen.getByTestId("member-0-ability").closest(".team-member-panel__field"),
+    ).toHaveTextContent(/not in the Champions roster/);
+    expect(screen.getByTestId("member-0-move-0").closest("td")).toHaveTextContent(
+      /not in the Champions roster/,
+    );
+  });
+
+  it("labels ability/move/item in place when only species_illegal is present", () => {
+    render(
+      <TeamMemberPanel
+        slot={0}
+        member={member({
+          species: "excadrill",
+          ability: "sand-rush",
+          item: "air-balloon",
+          moves: ["earthquake", "iron-head", "rock-slide", "toxic"],
+        })}
+        format="champions"
+        readOnly
+        warnings={[
+          {
+            code: "species_illegal",
+            message: 'Species "excadrill" is not in the Champions roster.',
+            slot: 0,
+            field: "species",
+          },
+        ]}
+        onChange={noop}
+        onRemove={noop}
+      />,
+    );
+    expect(
+      screen.getByTestId("member-0-species").closest(".team-member-panel__field"),
+    ).toHaveTextContent(/not in the Champions roster/);
+    expect(
+      screen.getByTestId("member-0-ability").closest(".team-member-panel__field"),
+    ).toHaveTextContent(/not in the Champions roster/);
+    expect(
+      screen.getByTestId("member-0-item").closest(".team-member-panel__field"),
+    ).toHaveTextContent(/not in the Champions roster/);
+    expect(screen.getByTestId("member-0-move-0").closest("td")).toHaveTextContent(
+      /not in the Champions roster/,
+    );
+    expect(screen.getByTestId("member-0-move-3").closest("td")).toHaveTextContent(
+      /not in the Champions roster/,
+    );
   });
 });

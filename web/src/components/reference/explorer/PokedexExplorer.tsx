@@ -2,29 +2,30 @@
 
 /**
  * PokedexExplorer — the hero of the reference section: the /pokedex index as a
- * searchable, facet-filterable, generation-grouped card grid.
+ * searchable, facet-filterable, generation-grouped card grid of the current
+ * Champions roster.
  *
  * Crawl-path contract (see PokemonCard): every species is a plain `<a>` present
  * in the server-rendered HTML. This is a client component only for interactivity
- * — Next SSRs it, so all ~1000 anchors ship in the initial payload. Never swap
+ * — Next SSRs it, so all roster anchors ship in the initial payload. Never swap
  * the cards for next/link (mass prefetch) or gate this behind next/dynamic
  * ssr:false (drops the anchors from the crawlable HTML).
  *
  * View states (shared index semantics):
- *   - idle (no query, no facet): all 9 generation sections + a trailing "Other
- *     formats" section of extras.
- *   - facet-only: generation sections kept, empty ones dropped; extras hidden.
- *   - query: flattens to one dex-ordered "N results" grid (matching extras
- *     included — they're search-visible but facet-exempt).
+ *   - idle (no query, no facet): generation sections for roster species.
+ *   - facet-only: generation sections kept, empty ones dropped.
+ *   - query: flattens to one dex-ordered "N results" grid.
+ * Other-format extras are ignored even if the loader still ships an empty
+ * `extras` array.
  */
 
 import { useMemo } from "react";
 
 import { TYPE_NAMES, type TypeName } from "@/agent/schemas";
 import type { PokedexIndexData } from "@/lib/reference-pages-types";
-import PokemonCard, { ExtraCard } from "./PokemonCard";
+import PokemonCard from "./PokemonCard";
 import RefToolbar, { type ChipGroupSpec } from "./RefToolbar";
-import { matchesQuery, useRefFilter } from "./useRefFilter";
+import { useRefFilter } from "./useRefFilter";
 
 const EMPTY_SET: ReadonlySet<string> = new Set();
 
@@ -67,7 +68,7 @@ const GEN_OPTIONS = ALL_GENS.map((n) => ({
 }));
 
 export default function PokedexExplorer({ data }: { data: PokedexIndexData }) {
-  const { query, setQuery, deferredQuery, selected, toggle, clearAll, filtered, searching } =
+  const { query, setQuery, selected, toggle, clearAll, filtered, searching } =
     useRefFilter(data.rows, CONFIG);
 
   const anyFacet = useMemo(
@@ -75,16 +76,6 @@ export default function PokedexExplorer({ data }: { data: PokedexIndexData }) {
     [selected],
   );
   const active = searching || anyFacet;
-
-  // Extras are facet-EXEMPT (they vanish the moment any facet is picked) but
-  // search-visible; when idle they trail as their own section.
-  const matchingExtras = useMemo(() => {
-    if (anyFacet) return [];
-    if (!searching) return data.extras;
-    return data.extras.filter((e) =>
-      matchesQuery([e.displayName, e.slug], deferredQuery),
-    );
-  }, [data.extras, anyFacet, searching, deferredQuery]);
 
   const byGen = useMemo(() => {
     const map = new Map<number, typeof filtered>();
@@ -114,8 +105,8 @@ export default function PokedexExplorer({ data }: { data: PokedexIndexData }) {
     },
   ];
 
-  const shownCount = filtered.length + matchingExtras.length;
-  const totalCount = data.rows.length + data.extras.length;
+  const shownCount = filtered.length;
+  const totalCount = data.rows.length;
   const empty = active && shownCount === 0;
 
   return (
@@ -133,7 +124,9 @@ export default function PokedexExplorer({ data }: { data: PokedexIndexData }) {
 
       {empty ? (
         <div className="ref-empty ref-card" data-testid="ref-empty">
-          <p className="ref-empty__text">No Pokémon match your filters.</p>
+          <p className="ref-empty__text">
+            Nothing on the Champions roster matched.
+          </p>
           <button type="button" className="ref-empty__clear" onClick={clearAll}>
             Clear filters
           </button>
@@ -143,14 +136,6 @@ export default function PokedexExplorer({ data }: { data: PokedexIndexData }) {
           <ul className="ref-cardgrid">
             {filtered.map((r) => (
               <PokemonCard key={r.slug} row={r} />
-            ))}
-            {matchingExtras.map((e) => (
-              <ExtraCard
-                key={e.slug}
-                slug={e.slug}
-                displayName={e.displayName}
-                sourceFormat={e.sourceFormat}
-              />
             ))}
           </ul>
         </section>
@@ -172,24 +157,6 @@ export default function PokedexExplorer({ data }: { data: PokedexIndexData }) {
               </section>
             );
           })}
-          {matchingExtras.length > 0 && (
-            <section className="ref-explorer__section">
-              <h2 className="ref-genhead">
-                Other formats{" "}
-                <span className="ref-genhead__count">· {matchingExtras.length}</span>
-              </h2>
-              <ul className="ref-cardgrid">
-                {matchingExtras.map((e) => (
-                  <ExtraCard
-                    key={e.slug}
-                    slug={e.slug}
-                    displayName={e.displayName}
-                    sourceFormat={e.sourceFormat}
-                  />
-                ))}
-              </ul>
-            </section>
-          )}
         </>
       )}
     </>

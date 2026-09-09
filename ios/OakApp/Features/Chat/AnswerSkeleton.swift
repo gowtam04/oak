@@ -1,44 +1,84 @@
 import SwiftUI
 
-/// The answer's landing zone, held from the moment of send until the first answer
-/// token arrives: one lead bar plus two prose lines, built from ``SkeletonBlock``
-/// so they inherit the soft shimmer and the Reduce-Motion static dimming. Sized
-/// to sit flush where the real answer prose lands.
-///
-/// Surface + 12pt radius + hairline — the same plate chrome as a finalized
-/// answer. Purely decorative and hidden from VoiceOver — the streaming status
-/// view announces the working state (M-AC-UI9.3).
-struct AnswerSkeleton: View {
-  /// Unused (kept so existing call sites compile). Signal streaming no longer
-  /// washes the skeleton with a type color.
-  var washType: String? = nil
+/// Live turn chrome: expandable thinking trace, then a neutral answer plate
+/// once `streamingText` is non-empty. The trace stays visible (collapsed to
+/// "Thought for N seconds") above the plate.
+struct IncomingAnswerPlate: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  let phase: ChatViewModel.StreamingPhase
+  let activities: [ChatViewModel.ToolActivity]
+  var reconnecting: Bool = false
+  let streamingText: String
+  var startedAt: Date? = nil
+
+  private var awaitingTokens: Bool { streamingText.isEmpty }
 
   var body: some View {
     VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-      SkeletonBlock(width: 220, height: 20)
-      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-        SkeletonBlock(height: 12)
-        SkeletonBlock(width: 180, height: 12)
+      if phase != .idle {
+        StreamingStatusView(
+          phase: phase,
+          activities: activities,
+          reconnecting: reconnecting,
+          startedAt: startedAt,
+          settled: !awaitingTokens
+        )
+      }
+      if !awaitingTokens {
+        MarkdownBlockView(streamingText)
+          .font(Theme.body(.body))
+          .foregroundStyle(Theme.textPrimary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(Theme.Spacing.lg)
+          .background(Theme.surface, in: plateShape)
+          .overlay {
+            plateShape.strokeBorder(Theme.separator, lineWidth: 1)
+          }
+          .clipShape(plateShape)
+          .transition(
+            .asymmetric(
+              insertion: .opacity.combined(with: .offset(y: 8)),
+              removal: .opacity
+            )
+          )
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(Theme.Spacing.lg)
-    .background(
-      Theme.surface,
-      in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-    )
-    .overlay {
-      RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-        .strokeBorder(Theme.separator, lineWidth: 1)
-    }
-    .accessibilityHidden(true)
+    .padding(.bottom, Theme.Spacing.md)
+    .animation(reduceMotion ? nil : Theme.Motion.enter, value: awaitingTokens)
+  }
+
+  private var plateShape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
   }
 }
 
 #if DEBUG
-#Preview("Answer skeleton") {
+#Preview("Incoming plate") {
   VStack(spacing: 24) {
-    AnswerSkeleton()
+    IncomingAnswerPlate(
+      phase: .thinking,
+      activities: [],
+      streamingText: "",
+      startedAt: Date()
+    )
+    IncomingAnswerPlate(
+      phase: .usingTools,
+      activities: [
+        .init(tool: "get_pokemon", label: "Looking up Dragapult…"),
+      ],
+      streamingText: "",
+      startedAt: Date().addingTimeInterval(-3)
+    )
+    IncomingAnswerPlate(
+      phase: .answering,
+      activities: [
+        .init(tool: "get_pokemon", label: "Looking up Dragapult…"),
+      ],
+      streamingText: "**Dragapult** is a Dragon/Ghost glass cannon.",
+      startedAt: Date().addingTimeInterval(-4)
+    )
   }
   .padding()
   .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

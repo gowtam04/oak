@@ -1,50 +1,51 @@
 /**
  * Starter prompts for the fresh-session empty state (ChatThread). A large,
- * curated pool spanning *all* of Oak's capabilities so that, across repeated
- * visits, a user discovers the full range of help on offer — filters, learnsets,
- * mechanics reasoning, type matchups, stat/damage math, lookups, ability/item
- * effects, evolution, catch locations, in-game events/progression, glitches,
- * spin-off games like Mystery Dungeon, and competitive Champions content.
+ * curated pool of **Pokémon Champions** questions (battle, Dex, rules, meta)
+ * so that, across repeated visits, a user discovers the coach's range —
+ * team building, Stat Points, Mega Evolution, type matchups, damage math,
+ * roster lookups, and live usage (CF-CHAT-AC-1.3, CF-UI-AC-3.2).
  *
- * Phrasing is **mostly mode-agnostic** (valid in both Standard and Champions),
- * plus a handful of Champions-flavored prompts — Champions is Oak's default
- * scope, so the empty state should reflect that. All prompts avoid out-of-scope
- * topics (franchise MEDIA: anime, movies, TV, manga) so a chip never leads to a
- * dead-end decline. Drawn from the eval golden cases and benchmark questions.
+ * Every prompt is a valid Champions question Oak can answer from tools and
+ * the current roster. None mention other generations, Mystery Dungeon,
+ * glitches, catch locations, Tera, or Smogon OU. Named species are on the
+ * current Champions roster, except explicit legality questions whose correct
+ * answer is "no" (e.g. Zacian, Mega Rayquaza). No Pokédex trivia Oak cannot
+ * ground (weight, color, catch rate, "based on", signature moves) and no
+ * format-wide usage leaderboards (T15 is per-species).
  *
- * Specimen-desk filed starters carry a **category** (Battle / Dex / Rules / Meta
- * — soul.md starter table, synced across clients) and an optional **type** token
- * for the type-dot. The flat string array remains available for older call sites
- * and cross-platform parity mirrors of prompt text only.
+ * This file is the **only authored pool**. iOS and Android copies are generated:
+ *
+ *   cd web && npm run sync:starters
+ *
+ * Empty chat samples one prompt per category (Battle → Dex → Rules → Meta) on
+ * the client. Do not fetch this list from an API; the desk must stay instant
+ * and offline. `Math.random()` belongs in `pickFiledStarters` only — never at
+ * render time (hydration).
  *
  * The "Teams" chips double as discoverability for referring to a saved team by
  * name in chat ("how's my rain team?"): a build chip always produces a team, and
  * "how does my team look?" leads Oak to read the user's saved teams (or, with
  * none / for a guest, offer to build one) — an on-scope reply, never a decline.
- *
- * This pool is the single canonical source — iOS
- * (`ios/OakApp/Features/Chat/ExamplePrompts.swift`) and Android
- * (`android/app/src/main/kotlin/ai/gowtam/oak/features/chat/ExamplePrompts.kt`)
- * each mirror it (same entries, same order) since there is no shared package
- * between the three clients. Keep all three in sync when editing.
  */
 
-/** soul.md starter categories — use these four labels everywhere. */
-export type StarterCategory = "Battle" | "Dex" | "Rules" | "Meta";
+/** Filed-starter categories — fixed labels, sync across web/iOS/Android. */
+export const STARTER_CATEGORIES = ["Battle", "Dex", "Rules", "Meta"] as const;
+
+export type StarterCategory = (typeof STARTER_CATEGORIES)[number];
 
 /**
- * One filed starter: category stamp + optional type-dot + prompt text.
+ * One filed starter: category stamp + type-dot token + prompt text.
  * `type` is a Pokémon type token matching a `--type-*` CSS variable.
  */
 export interface StarterPrompt {
   category: StarterCategory;
-  /** Type token for the type-dot (e.g. `"dragon"`); omit for a neutral row. */
-  type?: string;
+  /** Type token for the type-dot (e.g. `"dragon"`). */
+  type: string;
   text: string;
 }
 
 export const STARTER_ENTRIES: StarterPrompt[] = [
-  // Battle — competitive / nature / damage
+  // Battle — competitive / nature / damage / Stat Points
   { category: "Battle", type: "dragon", text: "What's Garchomp's best nature for Speed?" },
   { category: "Battle", type: "fighting", text: "Can Garchomp OHKO Gholdengo with Earthquake?" },
   { category: "Battle", type: "fire", text: "Garchomp's Speed at level 50 with max Speed and Jolly" },
@@ -53,24 +54,62 @@ export const STARTER_ENTRIES: StarterPrompt[] = [
   { category: "Battle", type: "fighting", text: "How does my team look?" },
   { category: "Battle", type: "water", text: "Build me a Champions team around Mega Swampert" },
   { category: "Battle", type: "dark", text: "Best Stat Point spread for Incineroar in Champions" },
-  { category: "Battle", type: "dragon", text: "Was Excadrill good in Gen 5?" },
-  { category: "Battle", type: "steel", text: "Best Steel types in Gen 7?" },
   { category: "Battle", type: "fire", text: "Damage from a 120 BP STAB super-effective hit vs 95 Defense" },
-  { category: "Battle", type: "water", text: "How much HP does a fully invested Blissey have?" },
+  { category: "Battle", type: "rock", text: "How much HP does Garganacl have with max HP Stat Points?" },
   { category: "Battle", type: "dragon", text: "What's strong against Dragapult?" },
   { category: "Battle", type: "fairy", text: "Best counters to Fairy types" },
   { category: "Battle", type: "water", text: "What beats Water types?" },
   { category: "Battle", type: "steel", text: "What is Gholdengo weak to?" },
+  { category: "Battle", type: "dragon", text: "Can Dragapult outspeed Gholdengo with a Choice Scarf?" },
+  { category: "Battle", type: "dark", text: "What's the best nature for Kingambit?" },
+  { category: "Battle", type: "ground", text: "Does Choice Band Garchomp OHKO Toxapex with Earthquake?" },
+  { category: "Battle", type: "fire", text: "Build me a sun team" },
+  { category: "Battle", type: "ground", text: "Build me a sand team" },
+  { category: "Battle", type: "ice", text: "Build me a snow team" },
+  { category: "Battle", type: "normal", text: "How do I build a team from the Pokémon I own?" },
+  { category: "Battle", type: "steel", text: "Best Stat Point spread for Gholdengo in Champions" },
+  { category: "Battle", type: "dragon", text: "Best Stat Point spread for Dragonite in Champions" },
+  { category: "Battle", type: "dragon", text: "How much Speed does Jolly Dragapult have at level 50?" },
+  { category: "Battle", type: "poison", text: "What's a bulky HP investment for Toxapex?" },
+  { category: "Battle", type: "dark", text: "Can Kingambit live a Close Combat from Garchomp?" },
+  { category: "Battle", type: "fighting", text: "What nature should I run on Annihilape?" },
+  { category: "Battle", type: "dark", text: "Build me a hyper offense team" },
+  { category: "Battle", type: "steel", text: "Build me a bulky offense team" },
+  { category: "Battle", type: "water", text: "Build me a team around Pelipper" },
+  { category: "Battle", type: "fire", text: "Build me a team around Torkoal" },
+  { category: "Battle", type: "water", text: "How does my rain team look?" },
+  { category: "Battle", type: "dark", text: "What beats Kingambit?" },
+  { category: "Battle", type: "steel", text: "What's strong against Gholdengo?" },
+  { category: "Battle", type: "ground", text: "Best counters to Excadrill" },
+  { category: "Battle", type: "water", text: "Can Palafin OHKO Incineroar?" },
+  { category: "Battle", type: "steel", text: "Does Gholdengo outspeed Sinistcha?" },
+  { category: "Battle", type: "rock", text: "How much damage does Salt Cure do to Steel types?" },
+  { category: "Battle", type: "dragon", text: "Can a +1 Dragonite Extreme Speed OHKO Dragapult?" },
+  { category: "Battle", type: "steel", text: "What's the Speed tier for Timid Gholdengo?" },
+  { category: "Battle", type: "fire", text: "Should I run Jolly or Adamant on Mega Charizard X?" },
+  { category: "Battle", type: "fighting", text: "Build me a Champions team around Mega Lucario" },
+  { category: "Battle", type: "grass", text: "Best Stat Point spread for Meowscarada in Champions" },
+  { category: "Battle", type: "electric", text: "Can Pikachu OHKO a 4x weak target with Thunderbolt?" },
+  { category: "Battle", type: "poison", text: "What's the best nature for Galarian Slowking?" },
+  { category: "Battle", type: "steel", text: "How much HP does Corviknight have with max HP Stat Points?" },
+  { category: "Battle", type: "flying", text: "Does Tailwind let my team outspeed Dragapult?" },
+  { category: "Battle", type: "psychic", text: "Can Trick Room let Hatterene move before Dragapult?" },
+  { category: "Battle", type: "ice", text: "What beats Ice types in Champions?" },
+  { category: "Battle", type: "dark", text: "Best counters to Dark types" },
+  { category: "Battle", type: "bug", text: "Does Technician Scizor outdamage Choice Band?" },
+  { category: "Battle", type: "water", text: "How much Attack does Huge Power Azumarill have?" },
+  { category: "Battle", type: "psychic", text: "Build me a doubles team around Farigiraf" },
+  { category: "Battle", type: "ghost", text: "Should I Mega evolve Gengar or keep it base?" },
 
-  // Dex — species / typing / immunity lists
+  // Dex — species / typing / learnsets on the Champions roster
   { category: "Dex", type: "ground", text: "Which Pokémon are immune to Ground?" },
   { category: "Dex", type: "dragon", text: "Show me Garchomp" },
   { category: "Dex", type: "dragon", text: "What are Dragapult's abilities?" },
-  { category: "Dex", type: "fighting", text: "Tell me about Iron Valiant" },
+  { category: "Dex", type: "fighting", text: "Tell me about Annihilape" },
   { category: "Dex", type: "steel", text: "Gholdengo's stats and typing" },
-  { category: "Dex", type: "normal", text: "How does Eevee evolve?" },
+  { category: "Dex", type: "psychic", text: "What's Gardevoir's evolution line?" },
   { category: "Dex", type: "normal", text: "What forms does Tauros have?" },
-  { category: "Dex", type: "grass", text: "How do I evolve Applin?" },
+  { category: "Dex", type: "grass", text: "What's Hydrapple's typing?" },
   { category: "Dex", type: "flying", text: "Is Ground super effective against Flying?" },
   { category: "Dex", type: "ghost", text: "Pokémon that learn Trick Room and Will-O-Wisp" },
   { category: "Dex", type: "ground", text: "What can learn Spikes?" },
@@ -84,67 +123,323 @@ export const STARTER_ENTRIES: StarterPrompt[] = [
   { category: "Dex", type: "electric", text: "Fastest Pokémon in the game" },
   { category: "Dex", type: "normal", text: "Highest base stat total" },
   { category: "Dex", type: "fighting", text: "Pokémon with base Attack over 130" },
-  { category: "Dex", type: "ghost", text: "How do I evolve Gimmighoul?" },
-  { category: "Dex", type: "steel", text: "Did Garchomp get Scale Shot in Gen 8?" },
-  { category: "Dex", type: "ghost", text: "What could Aegislash learn in Gen 6?" },
+  { category: "Dex", type: "steel", text: "What's Gholdengo's evolution line?" },
   { category: "Dex", type: "electric", text: "What's the average base Speed of Electric types?" },
   { category: "Dex", type: "normal", text: "Which type combination has the most Pokémon?" },
-  { category: "Dex", type: "flying", text: "Name all the Route 1 birds" },
-  { category: "Dex", type: "poison", text: "How many Pokémon are purple?" },
-  { category: "Dex", type: "normal", text: "Which Pokémon are exclusive to Violet?" },
+  { category: "Dex", type: "grass", text: "Tell me about Whimsicott" },
+  { category: "Dex", type: "electric", text: "What are Rotom's forms and their types?" },
+  { category: "Dex", type: "dragon", text: "What's Hydreigon's evolution line?" },
+  { category: "Dex", type: "water", text: "What's Palafin's evolution line?" },
+  { category: "Dex", type: "dark", text: "What's Kingambit's typing?" },
+  { category: "Dex", type: "ground", text: "Tell me about Excadrill" },
+  { category: "Dex", type: "ghost", text: "What's Mimikyu's typing?" },
+  { category: "Dex", type: "fire", text: "Show me Mega Charizard X" },
+  { category: "Dex", type: "psychic", text: "What are Farigiraf's abilities?" },
+  { category: "Dex", type: "steel", text: "Tell me about Archaludon" },
+  { category: "Dex", type: "steel", text: "What's Corviknight's stats?" },
+  { category: "Dex", type: "ice", text: "Is there a Fire/Ice type combination?" },
+  { category: "Dex", type: "normal", text: "How many unique type combinations are missing?" },
+  { category: "Dex", type: "electric", text: "Fastest Electric types" },
+  { category: "Dex", type: "fighting", text: "Tell me about Sneasler" },
+  { category: "Dex", type: "fire", text: "What's Ceruledge's typing?" },
+  { category: "Dex", type: "normal", text: "Highest base HP" },
+  { category: "Dex", type: "electric", text: "Who learns both U-turn and Volt Switch?" },
+  { category: "Dex", type: "flying", text: "What can learn Defog?" },
+  { category: "Dex", type: "steel", text: "Steel types that learn Recover" },
+  { category: "Dex", type: "ghost", text: "Ghost types with Levitate" },
+  { category: "Dex", type: "bug", text: "Bug types with base Attack over 120" },
+  { category: "Dex", type: "ice", text: "Ice types that can set Aurora Veil" },
+  { category: "Dex", type: "fairy", text: "Fairy types with Magic Bounce" },
+  { category: "Dex", type: "fighting", text: "What's the average base Attack of Fighting types?" },
+  { category: "Dex", type: "dragon", text: "Dragon types immune to Electric" },
+  { category: "Dex", type: "dark", text: "Who gets both Rapid Spin and Knock Off?" },
+  { category: "Dex", type: "water", text: "Tell me about Basculegion" },
+  { category: "Dex", type: "grass", text: "What types does Meowscarada have?" },
+  { category: "Dex", type: "fighting", text: "What's Gallade's evolution line?" },
+  { category: "Dex", type: "rock", text: "Show me Tyranitar" },
+  { category: "Dex", type: "grass", text: "Show me Sinistcha" },
+  { category: "Dex", type: "dark", text: "Tell me about Incineroar" },
+  { category: "Dex", type: "dark", text: "What are Kingambit's stats?" },
+  { category: "Dex", type: "water", text: "What types does Palafin have?" },
 
-  // Rules — mechanics / abilities / gen rules
+  // Rules — Champions mechanics / abilities / items / format
   { category: "Rules", type: "ghost", text: "Does Prankster work on Dark types?" },
   { category: "Rules", type: "normal", text: "Does Fake Out work on Farigiraf?" },
   { category: "Rules", type: "ground", text: "Does Earthquake hit everyone in doubles?" },
   { category: "Rules", type: "normal", text: "How does Fake Out's priority work?" },
   { category: "Rules", type: "normal", text: "What does Leftovers do?" },
   { category: "Rules", type: "psychic", text: "What does Armor Tail do?" },
-  { category: "Rules", type: "grass", text: "What does Protosynthesis do?" },
-  { category: "Rules", type: "normal", text: "What item does Snorlax hold in the wild?" },
+  { category: "Rules", type: "fire", text: "What does Tough Claws do?" },
   { category: "Rules", type: "electric", text: "Can Levitate dodge Earthquake?" },
   { category: "Rules", type: "dragon", text: "Is Dragapult legal in Champions?" },
   { category: "Rules", type: "normal", text: "How does the Physical/Special split work?" },
-  { category: "Rules", type: "normal", text: "How does the MissingNo glitch work?" },
-  { category: "Rules", type: "psychic", text: "What is the Mew glitch in Red and Blue?" },
-  { category: "Rules", type: "normal", text: "Do encounter rates change by time of day?" },
-  { category: "Rules", type: "flying", text: "Where do I get HM Fly in HeartGold?" },
-  { category: "Rules", type: "water", text: "What's the best strategy to catch Feebas in Gen 3?" },
-  { category: "Rules", type: "normal", text: "How do I get the Shiny Charm in Scarlet and Violet?" },
-  { category: "Rules", type: "normal", text: "How does recruiting work in Pokémon Mystery Dungeon?" },
-  { category: "Rules", type: "grass", text: "What starters can you play as in Mystery Dungeon: Explorers of Sky?" },
+  { category: "Rules", type: "dark", text: "How does Intimidate work in doubles?" },
+  { category: "Rules", type: "ground", text: "Does Mold Breaker ignore Levitate?" },
+  { category: "Rules", type: "steel", text: "What does Good as Gold do?" },
+  { category: "Rules", type: "dark", text: "How does Supreme Overlord work?" },
+  { category: "Rules", type: "grass", text: "What does Sitrus Berry do?" },
+  { category: "Rules", type: "psychic", text: "Does Magic Bounce reflect Stealth Rock?" },
+  { category: "Rules", type: "bug", text: "Can Rage Powder redirect a spread move?" },
+  { category: "Rules", type: "psychic", text: "How does Psychic Terrain stop priority?" },
+  { category: "Rules", type: "normal", text: "What does Choice Scarf do?" },
+  { category: "Rules", type: "rock", text: "How does Salt Cure's residual damage work?" },
+  { category: "Rules", type: "poison", text: "Does Sheer Force remove Life Orb recoil?" },
+  { category: "Rules", type: "poison", text: "How does Neutralizing Gas work?" },
+  { category: "Rules", type: "water", text: "Can Unaware ignore Calm Mind boosts?" },
+  { category: "Rules", type: "rock", text: "What does Loaded Dice do?" },
+  { category: "Rules", type: "normal", text: "How does Parental Bond work?" },
+  { category: "Rules", type: "fire", text: "Does Flash Fire absorb Will-O-Wisp?" },
+  { category: "Rules", type: "fire", text: "Are Mega Evolutions legal in Champions?" },
+  { category: "Rules", type: "fairy", text: "Is Zacian legal in Champions?" },
+  { category: "Rules", type: "dragon", text: "Is Mega Rayquaza legal in Champions?" },
+  { category: "Rules", type: "fighting", text: "How do Stat Points work in Champions?" },
+  { category: "Rules", type: "fighting", text: "What's the Stat Point budget in Champions?" },
+  { category: "Rules", type: "fighting", text: "Can I put 32 Stat Points into one stat?" },
+  { category: "Rules", type: "normal", text: "Does Champions use Stat Points instead of EVs?" },
+  { category: "Rules", type: "normal", text: "How does level 50 stat calculation work?" },
+  { category: "Rules", type: "dragon", text: "How do restricted Pokémon work in Champions?" },
+  { category: "Rules", type: "dragon", text: "How many restricted Pokémon can I bring?" },
+  { category: "Rules", type: "normal", text: "What's the team size in Champions Doubles?" },
+  { category: "Rules", type: "normal", text: "Can I bring six and pick four in Champions?" },
+  { category: "Rules", type: "normal", text: "How does species clause work in Champions?" },
+  { category: "Rules", type: "steel", text: "Can two Pokémon hold the same item in Champions?" },
+  { category: "Rules", type: "fire", text: "How does Mega Evolution work in Champions?" },
+  { category: "Rules", type: "fire", text: "Can a Mega share a team with its base form?" },
+  { category: "Rules", type: "normal", text: "Are Z-Moves legal in Champions?" },
+  { category: "Rules", type: "flying", text: "How does Tailwind work in doubles?" },
+  { category: "Rules", type: "ground", text: "Does Wide Guard block Earthquake?" },
+  { category: "Rules", type: "normal", text: "Can Follow Me redirect a spread move?" },
+  { category: "Rules", type: "normal", text: "Does Protect fail on consecutive uses?" },
+  { category: "Rules", type: "psychic", text: "Can Prankster Tailwind go through Psychic Terrain?" },
+  { category: "Rules", type: "normal", text: "How does Helping Hand work in doubles?" },
+  { category: "Rules", type: "fighting", text: "What does Coaching do?" },
+  { category: "Rules", type: "psychic", text: "How does Ally Switch work?" },
+  { category: "Rules", type: "normal", text: "What does Assault Vest do?" },
+  { category: "Rules", type: "fighting", text: "What does Choice Band do?" },
+  { category: "Rules", type: "psychic", text: "What does Choice Specs do?" },
+  { category: "Rules", type: "dragon", text: "What does Life Orb do?" },
+  { category: "Rules", type: "normal", text: "What does Focus Sash do?" },
+  { category: "Rules", type: "rock", text: "Can Sturdy survive a multi-hit move?" },
+  { category: "Rules", type: "flying", text: "How does Multiscale work?" },
+  { category: "Rules", type: "normal", text: "Does Unaware ignore Intimidate?" },
+  { category: "Rules", type: "fairy", text: "How does Friend Guard work in doubles?" },
+  { category: "Rules", type: "grass", text: "What does Safety Goggles do?" },
+  { category: "Rules", type: "bug", text: "Does Overcoat block Spore?" },
+  { category: "Rules", type: "water", text: "How does Storm Drain redirect Water moves?" },
+  { category: "Rules", type: "electric", text: "How does Lightning Rod redirect Electric moves?" },
+  { category: "Rules", type: "fighting", text: "Does Bulletproof block Aura Sphere?" },
+  { category: "Rules", type: "psychic", text: "How does Magic Guard interact with Life Orb?" },
+  { category: "Rules", type: "ghost", text: "What does Covert Cloak do?" },
+  { category: "Rules", type: "normal", text: "How does Clear Amulet work?" },
+  { category: "Rules", type: "normal", text: "Does Red Card trigger before Eject Button?" },
+  { category: "Rules", type: "fighting", text: "How does Fake Out interact with Inner Focus?" },
+  { category: "Rules", type: "steel", text: "What does Rocky Helmet do?" },
+  { category: "Rules", type: "water", text: "How does Rough Skin work?" },
+  { category: "Rules", type: "steel", text: "Does Iron Barbs stack with Rocky Helmet?" },
+  { category: "Rules", type: "fire", text: "How does Flame Body's burn chance work?" },
+  { category: "Rules", type: "electric", text: "What does Static do on contact?" },
+  { category: "Rules", type: "poison", text: "How does Poison Touch work?" },
+  { category: "Rules", type: "fighting", text: "Does Guts ignore the burn Attack drop?" },
+  { category: "Rules", type: "water", text: "How does Huge Power work?" },
+  { category: "Rules", type: "normal", text: "What does Simple do to stat changes?" },
+  { category: "Rules", type: "water", text: "How does Contrary work?" },
+  { category: "Rules", type: "fighting", text: "Does Defiant trigger on Intimidate?" },
+  { category: "Rules", type: "psychic", text: "How does Competitive work?" },
+  { category: "Rules", type: "steel", text: "What does Mirror Armor do?" },
+  { category: "Rules", type: "normal", text: "How does Imposter work?" },
+  { category: "Rules", type: "dark", text: "Can Illusion copy a Mega?" },
+  { category: "Rules", type: "ghost", text: "How does Disguise work on Mimikyu?" },
+  { category: "Rules", type: "flying", text: "What does Air Balloon do?" },
+  { category: "Rules", type: "steel", text: "How does Heavy-Duty Boots ignore hazards?" },
+  { category: "Rules", type: "psychic", text: "Does Magic Bounce reflect Taunt?" },
+  { category: "Rules", type: "dark", text: "How does Taunt work in doubles?" },
+  { category: "Rules", type: "normal", text: "What does Encore do?" },
+  { category: "Rules", type: "normal", text: "How does Disable work?" },
+  { category: "Rules", type: "electric", text: "Does Throat Spray trigger on a blocked sound move?" },
+  { category: "Rules", type: "fighting", text: "How does Punching Glove work?" },
+  { category: "Rules", type: "rock", text: "How does Skill Link work with Rock Blast?" },
+  { category: "Rules", type: "bug", text: "Does Technician boost Ice Spinner?" },
+  { category: "Rules", type: "water", text: "How does Adaptability STAB work?" },
+  { category: "Rules", type: "bug", text: "What does Tinted Lens do?" },
+  { category: "Rules", type: "dragon", text: "Does Sniper boost crits?" },
+  { category: "Rules", type: "normal", text: "How does Super Luck work?" },
+  { category: "Rules", type: "normal", text: "What does Scope Lens do?" },
+  { category: "Rules", type: "fighting", text: "How does Focus Energy work?" },
+  { category: "Rules", type: "poison", text: "What does Mortal Spin do?" },
+  { category: "Rules", type: "water", text: "How does Court Change work?" },
+  { category: "Rules", type: "poison", text: "How does Clear Smog work?" },
+  { category: "Rules", type: "normal", text: "Does Roar phaze through Suction Cups?" },
+  { category: "Rules", type: "normal", text: "How does Shed Tail work?" },
+  { category: "Rules", type: "fairy", text: "What does Revival Blessing do?" },
+  { category: "Rules", type: "psychic", text: "How does Healing Wish work?" },
+  { category: "Rules", type: "psychic", text: "How does Wish timing work?" },
+  { category: "Rules", type: "water", text: "What does Aqua Ring do?" },
+  { category: "Rules", type: "grass", text: "Does Leech Seed fail on Grass types?" },
+  { category: "Rules", type: "grass", text: "How does Strength Sap work?" },
+  { category: "Rules", type: "dark", text: "What does Parting Shot do?" },
+  { category: "Rules", type: "water", text: "How does Flip Turn work?" },
+  { category: "Rules", type: "bug", text: "Does U-turn trigger Intimidate on the switch-in?" },
+  { category: "Rules", type: "electric", text: "How does Volt Switch work in doubles?" },
+  { category: "Rules", type: "normal", text: "What does Eject Pack do?" },
+  { category: "Rules", type: "fighting", text: "How does Weakness Policy work?" },
+  { category: "Rules", type: "grass", text: "Does White Herb clear Intimidate?" },
+  { category: "Rules", type: "normal", text: "How do Stat Points interact with nature?" },
+  { category: "Rules", type: "ice", text: "How does Aurora Veil work in doubles?" },
+  { category: "Rules", type: "ice", text: "Does Snow Warning set snow in Champions?" },
+  { category: "Rules", type: "rock", text: "How does Sand Stream work in doubles?" },
+  { category: "Rules", type: "fire", text: "How does Drought work in doubles?" },
+  { category: "Rules", type: "water", text: "How does Drizzle work in doubles?" },
+  { category: "Rules", type: "grass", text: "How does Grassy Terrain change Grassy Glide?" },
+  { category: "Rules", type: "electric", text: "Does Electric Terrain stop sleep?" },
+  { category: "Rules", type: "fairy", text: "How does Misty Terrain block status?" },
+  { category: "Rules", type: "ghost", text: "Are Z-Moves and Dynamax legal in Champions?" },
 
-  // Meta — usage / role / format niche
+  // Meta — live per-species Champions usage / roles / cores
   { category: "Meta", type: "steel", text: "What is Gholdengo's role in Champions?" },
-  { category: "Meta", type: "water", text: "Who has the highest usage in Champions right now?" },
-  { category: "Meta", type: "fire", text: "How many gym leaders are Fire type?" },
-  { category: "Meta", type: "normal", text: "Who leads the guild in Pokémon Mystery Dungeon Explorers?" },
-  { category: "Meta", type: "normal", text: "What are the most populous cities in the mainline games?" },
+  { category: "Meta", type: "dragon", text: "What's Garchomp's usage in Champions right now?" },
+  { category: "Meta", type: "dark", text: "What's Incineroar's usage in Champions right now?" },
+  { category: "Meta", type: "fire", text: "What's Mega Charizard X's usage in Champions?" },
+  { category: "Meta", type: "dragon", text: "What moves is Dragapult running in Champions?" },
+  { category: "Meta", type: "grass", text: "What's Sinistcha's role in Champions?" },
+  { category: "Meta", type: "water", text: "How common is Palafin in Champions?" },
+  { category: "Meta", type: "dark", text: "Who partners with Incineroar in Champions?" },
+  { category: "Meta", type: "ground", text: "What's Excadrill's role in Champions?" },
+  { category: "Meta", type: "grass", text: "What's Whimsicott's usage in Champions?" },
+  { category: "Meta", type: "water", text: "What's Pelipper's usual set in Champions?" },
+  { category: "Meta", type: "dragon", text: "What's Dragonite's role in Champions?" },
+  { category: "Meta", type: "dragon", text: "What item does Dragapult usually hold in Champions?" },
+  { category: "Meta", type: "dark", text: "What's Incineroar's most common item in Champions?" },
+  { category: "Meta", type: "dragon", text: "What's Garchomp's usage in Champions Doubles?" },
+  { category: "Meta", type: "grass", text: "Common partners for Sinistcha in Champions" },
+  { category: "Meta", type: "steel", text: "What's Gholdengo's usual spread in Champions?" },
+  { category: "Meta", type: "dark", text: "Who checks Incineroar in Champions?" },
+  { category: "Meta", type: "water", text: "What's Mega Swampert's usual item in Champions?" },
+  { category: "Meta", type: "psychic", text: "How common is Hatterene in Champions?" },
+  { category: "Meta", type: "grass", text: "What's Whimsicott's role in Champions Doubles?" },
+  { category: "Meta", type: "fighting", text: "What's Annihilape's usage in Champions?" },
+  { category: "Meta", type: "poison", text: "What's Toxapex usually holding in Champions?" },
+  { category: "Meta", type: "water", text: "Common items on Palafin in Champions" },
+  { category: "Meta", type: "dragon", text: "What's Garchomp's usual set in Champions?" },
+  { category: "Meta", type: "water", text: "Who pairs with Pelipper in Champions?" },
+  { category: "Meta", type: "steel", text: "What's Archaludon's usage in Champions Doubles?" },
+  { category: "Meta", type: "flying", text: "What's Staraptor's usual item in Champions?" },
+  { category: "Meta", type: "dragon", text: "What's Dragonite's usual item in Champions?" },
+  { category: "Meta", type: "psychic", text: "What's Farigiraf's role in Champions?" },
+  { category: "Meta", type: "steel", text: "What's Gholdengo's usual moveset in Champions?" },
+  { category: "Meta", type: "dark", text: "What's Incineroar's usual moveset in Champions?" },
+  { category: "Meta", type: "fire", text: "What's Torkoal's usual set in Champions?" },
+  { category: "Meta", type: "fire", text: "Common partners for Torkoal in Champions" },
+  { category: "Meta", type: "fairy", text: "What's Clefable's role in Champions?" },
+  { category: "Meta", type: "grass", text: "What's Meowscarada's usual item in Champions?" },
+  { category: "Meta", type: "fairy", text: "How common is Clefable in Champions?" },
+  { category: "Meta", type: "flying", text: "What's Whimsicott's usual moveset in Champions?" },
+  { category: "Meta", type: "fairy", text: "What's Sylveon's usage in Champions?" },
+  { category: "Meta", type: "dragon", text: "What's Hydreigon's role in Champions?" },
+  { category: "Meta", type: "fighting", text: "How common is Annihilape in Champions?" },
+  { category: "Meta", type: "ground", text: "What's Excadrill's usual set in Champions?" },
+  { category: "Meta", type: "dragon", text: "What's Garchomp's usual moveset in Champions?" },
+  { category: "Meta", type: "psychic", text: "Common partners for Farigiraf in Champions" },
+  { category: "Meta", type: "psychic", text: "What's Hatterene's usual set in Champions?" },
+  { category: "Meta", type: "dragon", text: "What's Dragapult's role in Champions?" },
+  { category: "Meta", type: "fighting", text: "What's Mega Lucario's usage in Champions?" },
+  { category: "Meta", type: "fire", text: "How often is Mega Charizard X used in Champions?" },
+  { category: "Meta", type: "water", text: "What's Mega Swampert's role in Champions?" },
+  { category: "Meta", type: "fire", text: "What's Arcanine's role in Champions?" },
+  { category: "Meta", type: "fighting", text: "What's Annihilape's role in Champions?" },
+  { category: "Meta", type: "dark", text: "How common is Kingambit in Champions?" },
+  { category: "Meta", type: "steel", text: "Who checks Gholdengo in Champions?" },
+  { category: "Meta", type: "steel", text: "What's Corviknight's role in Champions?" },
+  { category: "Meta", type: "fire", text: "How common is Torkoal in Champions?" },
+  { category: "Meta", type: "flying", text: "What's Staraptor's role in Champions?" },
+  { category: "Meta", type: "ghost", text: "What's Gengar's usage in Champions?" },
+  { category: "Meta", type: "rock", text: "Who pairs with Tyranitar in Champions?" },
+  { category: "Meta", type: "rock", text: "How common is Tyranitar in Champions?" },
+  { category: "Meta", type: "ice", text: "What's Alolan Ninetales's usage in Champions?" },
+  { category: "Meta", type: "grass", text: "Does Whimsicott set Tailwind in Champions?" },
+  { category: "Meta", type: "grass", text: "What's Meowscarada's usage in Champions?" },
+  { category: "Meta", type: "water", text: "How common is Basculegion in Champions?" },
+  { category: "Meta", type: "electric", text: "What's Raichu's usage in Champions?" },
+  { category: "Meta", type: "psychic", text: "What's Hatterene's role in Champions Doubles?" },
+  { category: "Meta", type: "psychic", text: "What's Farigiraf's usual item in Champions?" },
+  { category: "Meta", type: "rock", text: "What's Glimmora's usage in Champions?" },
+  { category: "Meta", type: "rock", text: "What's Garganacl's usage in Champions?" },
+  { category: "Meta", type: "rock", text: "What's Garganacl's usual moveset in Champions?" },
+  { category: "Meta", type: "rock", text: "How common is Garganacl in Champions?" },
+  { category: "Meta", type: "bug", text: "What's Volcarona's usage in Champions?" },
+  { category: "Meta", type: "water", text: "What's Pelipper's role in Champions Doubles?" },
+  { category: "Meta", type: "fire", text: "What's Mega Charizard X's usual set in Champions?" },
+  { category: "Meta", type: "dragon", text: "What's Garchomp's most common item in Champions?" },
+  { category: "Meta", type: "poison", text: "What's Toxapex's usual item in Champions?" },
+  { category: "Meta", type: "psychic", text: "Does Farigiraf run Covert Cloak in Champions?" },
+  { category: "Meta", type: "dragon", text: "Does Garchomp run Clear Amulet in Champions?" },
+  { category: "Meta", type: "water", text: "What's Palafin's role in rain in Champions?" },
+  { category: "Meta", type: "grass", text: "What's Meowscarada's usual moveset in Champions?" },
+  { category: "Meta", type: "water", text: "Who checks Palafin in Champions?" },
+  { category: "Meta", type: "water", text: "What's Palafin's role in Champions?" },
+  { category: "Meta", type: "fighting", text: "What's Sneasler's role in Champions?" },
+  { category: "Meta", type: "dark", text: "What's Grimmsnarl's usage in Champions?" },
+  { category: "Meta", type: "normal", text: "Does Incineroar run Fake Out in Champions?" },
+  { category: "Meta", type: "poison", text: "What's Toxapex's usual moveset in Champions?" },
+  { category: "Meta", type: "dragon", text: "What's Mega Garchomp's usage in Champions?" },
+  { category: "Meta", type: "ghost", text: "What's Mega Gengar's usage in Champions?" },
+  { category: "Meta", type: "normal", text: "How common is Mega Kangaskhan in Champions?" },
+  { category: "Meta", type: "ice", text: "What's Alolan Ninetales's usual set in Champions?" },
+  { category: "Meta", type: "ice", text: "How common is Alolan Ninetales in Champions?" },
+  { category: "Meta", type: "ice", text: "What's Alolan Ninetales's role in Champions?" },
+  { category: "Meta", type: "ice", text: "Does Alolan Ninetales run Aurora Veil in Champions?" },
+  { category: "Meta", type: "rock", text: "What's Tyranitar's role in Champions?" },
+  { category: "Meta", type: "ground", text: "Who pairs with Excadrill in Champions?" },
+  { category: "Meta", type: "ground", text: "What's Excadrill's usage in Champions?" },
+  { category: "Meta", type: "fire", text: "What's Arcanine's usage in Champions?" },
+  { category: "Meta", type: "fire", text: "What's Ceruledge's usage in Champions?" },
+  { category: "Meta", type: "fire", text: "What's Mega Charizard Y's usage in Champions?" },
+  { category: "Meta", type: "grass", text: "What's Whimsicott's usual item in Champions?" },
+  { category: "Meta", type: "poison", text: "What's Toxapex's usage in Champions?" },
+  { category: "Meta", type: "grass", text: "How common is Sinistcha vs Whimsicott right now?" },
+  { category: "Meta", type: "rock", text: "What's Glimmora's role in Champions?" },
+  { category: "Meta", type: "bug", text: "What's Scizor's role in Champions?" },
+  { category: "Meta", type: "bug", text: "How common is Volcarona in Champions?" },
+  { category: "Meta", type: "steel", text: "What's Archaludon's usage in Champions?" },
+  { category: "Meta", type: "electric", text: "How common is Raichu in Champions?" },
+  { category: "Meta", type: "ghost", text: "What's Dragapult's usage in Champions Doubles?" },
+  { category: "Meta", type: "steel", text: "How common is Kingambit vs Gholdengo right now?" },
 ];
 
-/** Flat prompt strings — derived from {@link STARTER_ENTRIES} for parity mirrors. */
+/** Flat prompt strings — derived from {@link STARTER_ENTRIES}. */
 export const STARTER_PROMPTS: string[] = STARTER_ENTRIES.map((e) => e.text);
 
-/**
- * Sample `count` distinct prompts from {@link STARTER_PROMPTS} at random, via a
- * partial Fisher–Yates shuffle (sampling without replacement). Uses
- * `Math.random()`, so call it **client-side only** (e.g. inside a `useEffect`)
- * to keep server/client renders byte-stable and avoid a hydration mismatch.
- */
-export function pickRandomPrompts(count = 4): string[] {
-  return pickRandomStarters(count).map((e) => e.text);
+function firstOfCategory(category: StarterCategory): StarterPrompt {
+  const entry = STARTER_ENTRIES.find((e) => e.category === category);
+  if (!entry) {
+    throw new Error(`STARTER_ENTRIES has no ${category} prompt`);
+  }
+  return entry;
+}
+
+function bucket(category: StarterCategory): StarterPrompt[] {
+  const entries = STARTER_ENTRIES.filter((e) => e.category === category);
+  if (entries.length === 0) {
+    throw new Error(`STARTER_ENTRIES has no ${category} prompt`);
+  }
+  return entries;
 }
 
 /**
- * Sample `count` distinct filed starters from {@link STARTER_ENTRIES}. Same
- * client-only random rules as {@link pickRandomPrompts}.
+ * Deterministic one-per-category slice (first entry of each category in file
+ * order). Safe for SSR / the first client paint — no `Math.random()`.
  */
-export function pickRandomStarters(count = 4): StarterPrompt[] {
-  const pool = [...STARTER_ENTRIES];
-  const n = Math.min(count, pool.length);
-  for (let i = 0; i < n; i++) {
-    const j = i + Math.floor(Math.random() * (pool.length - i));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-  return pool.slice(0, n);
+export function firstFiledStarters(): StarterPrompt[] {
+  return STARTER_CATEGORIES.map(firstOfCategory);
+}
+
+/**
+ * One random starter per category, in Battle → Dex → Rules → Meta order.
+ * Client-side only (`Math.random()`): call from `useEffect` / `onAppear`,
+ * never during render.
+ */
+export function pickFiledStarters(): StarterPrompt[] {
+  return STARTER_CATEGORIES.map((category) => {
+    const entries = bucket(category);
+    return entries[Math.floor(Math.random() * entries.length)]!;
+  });
 }

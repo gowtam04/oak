@@ -27,20 +27,20 @@ struct DexView: View {
         ToolbarItem(placement: .principal) {
           Text("Dex")
             .font(Theme.display(.headline))
-            .foregroundStyle(Theme.textStrong)
+            .foregroundStyle(Theme.onRed)
             .accessibilityAddTraits(.isHeader)
         }
-        if let model {
-          ToolbarItem(placement: .topBarTrailing) {
-            scopeMenu(model: model)
-          }
+        .oakLidItem()
+        ToolbarItem(placement: .topBarTrailing) {
+          RegulationChip()
         }
+        .oakLidItem()
       }
       .navigationDestination(for: DexEntityRoute.self) { route in
         DexEntityDetailContainer(
           kind: route.kind,
           query: route.query,
-          format: model?.format ?? .nationalDex,
+          format: .champions,
           artifactService: services.artifact,
           onOpen: { kind, query in
             path.append(DexEntityRoute(kind: kind, query: query))
@@ -48,14 +48,49 @@ struct DexView: View {
         )
       }
     }
+    .oakEnamelNav()
     .task {
-      if model == nil {
-        let initial = appState.lastUsedScope ?? .nationalDex
-        let vm = DexViewModel(dexLookup: services.dexLookup, format: initial)
-        model = vm
-        vm.start()
-      }
+      ensureModel()
+      consumePendingDestination()
     }
+    .onAppear {
+      ensureModel()
+      consumePendingDestination()
+    }
+    .onChange(of: appState.pendingDestination) { _, _ in
+      consumePendingDestination()
+    }
+  }
+
+  /// TabView lazily creates this tab after RootView has already written
+  /// `pendingDestination`, so `onChange` alone never fires on first hop.
+  private func consumePendingDestination() {
+    if case let .dexHop(artifactHop) = appState.pendingDestination {
+      model?.applyArtifactHop(artifactHop)
+      if let route = model?.pendingRoute {
+        var next = NavigationPath()
+        next.append(route)
+        path = next
+        _ = model?.consumePendingRoute()
+      }
+      appState.pendingDestination = nil
+      return
+    }
+    guard let hop = PendingDexHop.consume(appState.pendingDestination) else { return }
+    model?.query = hop.query
+    if let route = hop.route {
+      var next = NavigationPath()
+      next.append(route)
+      path = next
+    }
+    appState.pendingDestination = nil
+  }
+
+  private func ensureModel() {
+    guard model == nil else { return }
+    let vm = DexViewModel(dexLookup: services.dexLookup, format: .champions)
+    model = vm
+    vm.start()
   }
 
   @ViewBuilder
@@ -79,8 +114,8 @@ struct DexView: View {
           } description: {
             Text(
               model.query.isEmpty
-                ? "No entries in this scope."
-                : "Try a different name or scope."
+                ? "Nothing on the Champions roster matched."
+                : "Nothing on the Champions roster matched."
             )
           }
           .listRowBackground(Color.clear)
@@ -90,7 +125,16 @@ struct DexView: View {
             Button {
               path.append(DexEntityRoute(kind: match.kind, query: match.slug))
             } label: {
-              HStack {
+              HStack(spacing: Theme.Spacing.sm) {
+                if match.kind == .pokemon {
+                  SpriteImage(
+                    urlString: match.resolvedSpriteURL,
+                    name: match.displayName,
+                    size: 36,
+                    animated: false,
+                    decorative: true
+                  )
+                }
                 Text(match.displayName)
                   .font(Theme.body(.body))
                   .foregroundStyle(Theme.textPrimary)
@@ -132,7 +176,7 @@ struct DexView: View {
               .font(Theme.body(.subheadline, weight: .semibold))
               .padding(.horizontal, 12)
               .padding(.vertical, 8)
-              .background(selected ? Theme.accentSoft : Theme.surfaceRaised, in: Capsule())
+              .background(selected ? Theme.accentSoft : Theme.surface, in: Capsule())
               .foregroundStyle(selected ? Theme.accent : Theme.textSecondary)
               .overlay(
                 Capsule()
@@ -170,42 +214,13 @@ struct DexView: View {
     }
     .padding(.horizontal, Theme.Spacing.md)
     .padding(.vertical, Theme.Spacing.sm)
-    .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
+    .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
     .overlay(
       RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
         .strokeBorder(Theme.border, lineWidth: 1)
     )
   }
 
-  private func scopeMenu(model: DexViewModel) -> some View {
-    Menu {
-      ForEach(Format.knownCases, id: \.self) { format in
-        Button {
-          path = NavigationPath()
-          model.selectFormat(format)
-        } label: {
-          if format == model.format {
-            Label(format.displayLabel, systemImage: "checkmark")
-          } else {
-            Text(format.displayLabel)
-          }
-        }
-      }
-    } label: {
-      HStack(spacing: 4) {
-        Text(model.format.shortLabel)
-          .font(Theme.body(.caption, weight: .semibold))
-        Image(systemName: "chevron.down")
-          .font(.caption2.weight(.semibold))
-      }
-      .foregroundStyle(Theme.accent)
-      .padding(.horizontal, 10)
-      .padding(.vertical, 6)
-      .background(Theme.accentSoft, in: Capsule())
-    }
-    .accessibilityLabel("Scope")
-    .accessibilityValue(model.format.displayLabel)
-  }
 }
 
 #if DEBUG

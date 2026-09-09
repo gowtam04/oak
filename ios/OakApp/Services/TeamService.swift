@@ -22,7 +22,13 @@ protocol TeamService: Sendable {
   /// Lists the account's teams, most-recently-edited first
   /// (`GET /api/teams?format=`). `format` filters by data scope (`nil` = all).
   /// Returns the cheap completeness summaries the library list renders (M-TEAM-US-6).
+  /// Champions-first: living lists should use ``list(archived:)`` instead of a
+  /// gen-N `format=` picker.
   func list(format: Format?) async throws -> [TeamSummary]
+
+  /// Living Champions teams (`archived: false`, `GET /api/teams`) or archived
+  /// other-format teams (`archived: true`, `GET /api/teams?archived=1`).
+  func list(archived: Bool) async throws -> [TeamSummary]
 
   /// Loads one full team with its members + computed warnings
   /// (`GET /api/teams/{id}`, M-AC-T1.2/AC-T5.4). Throws `.http(404)` for a missing /
@@ -104,6 +110,11 @@ struct TeamSummary: Decodable, Sendable, Equatable, Identifiable {
   let species: [String]
   /// Epoch-ms of the last edit (camelCase wire key). Used for the "edited" stamp.
   let updatedAt: Int64
+
+  /// Living iff `format == champions` (ADR-3).
+  var isLiving: Bool { format.isLiving }
+  /// Archived iff `format != champions`.
+  var isArchived: Bool { format.isArchived }
 }
 
 // MARK: - Import notes (resolve-or-clarify)
@@ -156,6 +167,20 @@ struct LiveTeamService: TeamService {
     var queryItems: [URLQueryItem] = []
     if let format {
       queryItems.append(URLQueryItem(name: "format", value: format.rawValue))
+    }
+    let endpoint = Endpoint(
+      method: .get,
+      path: "/api/teams",
+      queryItems: queryItems,
+      requiresAuth: true
+    )
+    return try await apiClient.send(endpoint, as: TeamsListEnvelope.self).teams
+  }
+
+  func list(archived: Bool) async throws -> [TeamSummary] {
+    var queryItems: [URLQueryItem] = []
+    if archived {
+      queryItems.append(URLQueryItem(name: "archived", value: "1"))
     }
     let endpoint = Endpoint(
       method: .get,

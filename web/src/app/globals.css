@@ -1,9 +1,9 @@
 /* ==========================================================================
    Oak — Design System
    Single source of truth. Tokens (light + dark) → base → app shell → components.
-   Implements docs/design/signal.md. Component styles target the existing BEM
+   Implements docs/design/enamel-paper.md. Component styles target the existing BEM
    class names; nothing here references a raw hex outside the token block below.
-   Cool daylight neutrals, Pokéball red as a signal, Figtree + IBM Plex Mono.
+   Warm taupe paper, enamel coral #ee5a5a, Fredoka + Nunito Sans + JetBrains Mono.
    ========================================================================== */
 
 /* Cascade layers: only the bare element-tag resets live in @layer base, so any
@@ -16,54 +16,55 @@
    -------------------------------------------------------------------------- */
 :root {
   /* Brand */
-  --poke-red: #e3350d;
-  --poke-red-hover: #c92e0b;
-  --poke-red-active: #b02a0a;
-  --poke-red-soft: #fde8e3;
-  /* Text ink for a solid --poke-red fill. White clears AA in light mode
-     (4.4:1); dark mode's lifted #FF4A22 record red is too bright for white
-     text (3.4:1, fails AA) so dark swaps to a near-black ink (#1B1410). */
+  --poke-red: #ee5a5a;
+  --poke-red-hover: #e04545;
+  --poke-red-active: #c93b3b;
+  --poke-red-soft: #fcebeb;
+  /* Ink on a solid enamel fill. White in both themes — do not use Signal's
+     near-black #1b1410. Light lid #ee5a5a is ~3.36:1 (large-text AA). */
   --on-red: #ffffff;
-  --azure: #2b7dd1;
-  --azure-soft: #e5f0fa;
+  --sunflower: #f5a524;
+  --sunflower-soft: #fdf1dc;
+  --azure: #3aa0e3;
+  --azure-soft: #e6f2fb;
 
-  /* Neutral ramp (cool, theme-stable — Signal §3.1) */
+  /* Neutral ramp (warm taupe, theme-stable — enamel-paper.md) */
   --neutral-0: #ffffff;
-  --neutral-50: #f6f7f9;
-  --neutral-100: #eef0f3;
-  --neutral-200: #e3e8ef;
-  --neutral-300: #d0d6de;
-  --neutral-400: #b4bcc6;
-  --neutral-500: #8a94a0;
-  --neutral-600: #5b6b7c;
-  --neutral-700: #3d4a58;
-  --neutral-800: #2a3340;
-  --neutral-900: #1b2430;
-  --neutral-950: #121417;
+  --neutral-50: #fbf7f4;
+  --neutral-100: #f3ece6;
+  --neutral-200: #e9e0d8;
+  --neutral-300: #d8ccc1;
+  --neutral-400: #b8a99c;
+  --neutral-500: #94867a;
+  --neutral-600: #6e625a;
+  --neutral-700: #4e453f;
+  --neutral-800: #332d29;
+  --neutral-900: #231f1c;
+  --neutral-950: #161311;
 
-  /* Semantic */
-  --success: #1f9d61;
-  --success-soft: #e4f4ec;
-  --warning: #e08700;
-  --warning-soft: #fbf0dc;
-  --danger: #d6303f;
-  --danger-soft: #fae7e9;
-  --info: #2b7dd1;
-  --info-soft: #e5f0fa;
+  /* Semantic — danger stays distinct from poke-red */
+  --success: #2fb573;
+  --success-soft: #e3f6ec;
+  --warning: #f08c00;
+  --warning-soft: #fdefd9;
+  --danger: #e0394a;
+  --danger-soft: #fce8ea;
+  --info: var(--azure);
+  --info-soft: var(--azure-soft);
 
-  /* Surfaces / text (Signal §3.1 light) */
-  --bg: #f6f7f9;
+  /* Surfaces / text (enamel-paper.md light) */
+  --bg: #fbf7f4;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --surface-sunken: #eef0f3;
-  --border: #e3e8ef;
-  --border-strong: #d0d6de;
-  --text-strong: #1b2430;
-  --text: #2a3340;
-  --text-muted: #5b6b7c;
-  --text-faint: #8a94a0;
+  --surface-sunken: #f7f1eb;
+  --border: #e9e0d8;
+  --border-strong: #d8ccc1;
+  --text-strong: #2a2521;
+  --text: #3d362f;
+  --text-muted: #6e625a;
+  --text-faint: #94867a;
 
-  /* Signal aliases — same values, guide names. Prefer these in new CSS. */
+  /* Signal aliases — leftover CSS compiles. New CSS uses the historical names. */
   --red: var(--poke-red);
   --red-hover: var(--poke-red-hover);
   --red-active: var(--poke-red-active);
@@ -94,11 +95,11 @@
   --type-steel: #b7b7ce;
   --type-fairy: #d685ad;
 
-  /* Radius (Signal §3.4) */
-  --radius-sm: 8px;
+  /* Radius (historical 6/10/16/24 — Signal 8/10/12/16 is out) */
+  --radius-sm: 6px;
   --radius-md: 10px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
   --radius-pill: 999px;
 
   /* Spacing (4px base) */
@@ -113,25 +114,26 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* Motion (Signal §3.6) */
-  --ease: cubic-bezier(0.2, 0, 0, 1);
-  --motion-fast: 180ms var(--ease);
-  --motion-base: 180ms var(--ease);
-  --motion-enter: 280ms var(--ease);
-  --motion-spring: 180ms var(--ease);
+  /* Motion (enamel-paper.md). --ease / --motion-enter kept for leftover CSS. */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-fast: 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-base: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-enter: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-spring: 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
 
-  /* Shadows — hairline is the default on plates. Floating uses the Signal tint. */
-  --shadow-raised: 0 1px 2px rgba(27, 36, 48, 0.05),
-    0 8px 22px -14px rgba(27, 36, 48, 0.14);
-  --shadow-floating: 0 12px 32px -16px rgba(27, 36, 48, 0.18);
-  --shadow-overlay: 0 20px 48px -16px rgba(27, 36, 48, 0.28);
-  --shadow-well: inset 0 2px 8px rgba(27, 36, 48, 0.12);
+  /* Shadows — warm umber. --shadow-well is not a brand device (none, not inset). */
+  --shadow-raised: 0 1px 2px rgba(74, 53, 42, 0.05),
+    0 4px 12px rgba(74, 53, 42, 0.07);
+  --shadow-floating: 0 6px 16px rgba(74, 53, 42, 0.1),
+    0 2px 6px rgba(74, 53, 42, 0.08);
+  --shadow-overlay: 0 16px 40px rgba(74, 53, 42, 0.18);
+  --shadow-well: none;
 
-  /* Focus ring: 2px red with a canvas-colored offset. Azure is fallback only. */
+  /* Focus ring: 2px poke-red with a canvas-colored offset. Composer halo is PR2. */
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--poke-red);
 
-  /* Type families (next/font sets --font-body / --font-mono on <html>) */
-  --display: var(--font-body), system-ui, -apple-system, sans-serif;
+  /* Type families (next/font sets --font-display / --font-body / --font-mono) */
+  --display: var(--font-display), system-ui, -apple-system, sans-serif;
   --body: var(--font-body), system-ui, -apple-system, sans-serif;
   --mono: var(--font-mono), ui-monospace, "SF Mono", monospace;
 
@@ -166,8 +168,8 @@
   --composer-max: 680px; /* composer field column */
   --artifact-panel-w: 320px; /* Signal §5.5 right sheet */
 
-  /* Neutral ink overlay scrim (behind modals / drawers). */
-  --scrim: rgba(13, 16, 18, 0.45);
+  /* Umber overlay scrim (behind modals / drawers). */
+  --scrim: rgba(74, 53, 42, 0.45);
 
   /* CSS-only icon set — masked SVGs, tinted via currentColor */
   --brand-mark: url("/oak-app-icon.png");
@@ -188,43 +190,45 @@
    opt-in only, applied when the user toggles it (`data-theme="dark"`).
    -------------------------------------------------------------------------- */
 [data-theme="dark"] {
-  --poke-red: #ff4a22;
-  --poke-red-hover: #ff5f3c;
-  --poke-red-active: #e8431e;
-  --poke-red-soft: #33170f;
-  /* AA pass (phase 3): white text on the lifted dark record red is 3.4:1 —
-     fails. This near-black ink reads at 5.7:1. */
-  --on-red: #1b1410;
-  --azure: #55a0e8;
-  --azure-soft: #142433;
+  --poke-red: #c44545;
+  --poke-red-hover: #d45656;
+  --poke-red-active: #b33a3a;
+  --poke-red-soft: #3a1e1e;
+  /* White ink on #c44545 is ~4.9:1 (AA). Not historical #ff6b6b; not Signal
+     near-black #1b1410. */
+  --on-red: #ffffff;
+  --sunflower: #f8b73e;
+  --sunflower-soft: #3a2e14;
+  --azure: #5bb4ef;
+  --azure-soft: #16263a;
 
-  --success: #34c27f;
-  --success-soft: #123821;
-  --warning: #f0a030;
-  --warning-soft: #3a2a0d;
-  --danger: #f04a58;
-  --danger-soft: #3a1216;
-  --info: #55a0e8;
-  --info-soft: #142a3e;
+  --success: #46c98a;
+  --success-soft: #10301f;
+  --warning: #fba53b;
+  --warning-soft: #3a2a0f;
+  --danger: #ff5c6b;
+  --danger-soft: #3a1518;
+  --info: var(--azure);
+  --info-soft: var(--azure-soft);
 
-  --bg: #121417;
-  --surface: #1a1d22;
-  --surface-raised: #22262c;
-  --surface-sunken: #0e1013;
-  --border: #2a3038;
-  --border-strong: #3a434c;
-  --text-strong: #f2f4f6;
-  --text: #d5dae0;
-  --text-muted: #8b949e;
-  --text-faint: #6a737d;
+  --bg: #161311;
+  --surface: #231f1c;
+  --surface-raised: #332d29;
+  --surface-sunken: #1c1916;
+  --border: #3a332e;
+  --border-strong: #4e453f;
+  --text-strong: #f5efe9;
+  --text: #e4dad0;
+  --text-muted: #b7a99c;
+  --text-faint: #8a7d72;
 
-  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.28);
-  --shadow-floating: 0 12px 32px -16px rgba(0, 0, 0, 0.4);
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 6px 16px rgba(0, 0, 0, 0.34), 0 2px 6px rgba(0, 0, 0, 0.28);
   --shadow-overlay: 0 16px 40px rgba(0, 0, 0, 0.45);
-  --shadow-well: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-well: none;
 
   /* Deeper scrim in dark mode so overlays still read against the near-black canvas. */
-  --scrim: rgba(0, 0, 0, 0.6);
+  --scrim: rgba(0, 0, 0, 0.60);
 }
 
 /* --------------------------------------------------------------------------
@@ -344,23 +348,28 @@
   flex-direction: column;
   height: 100dvh;
   overflow: hidden;
-  background: var(--bg);
+  background: radial-gradient(
+      120% 60% at 50% -10%,
+      color-mix(in srgb, var(--poke-red) 4%, var(--bg)),
+      var(--bg) 55%
+    )
+    no-repeat;
 }
 
-/* Signal wordmark — Figtree 600 / 18px, period is --red. */
+/* Fredoka wordmark — white on the enamel lid; --text-strong on paper. */
 .oak-wordmark {
   font-family: var(--display);
   font-weight: 600;
-  font-size: 18px;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  color: var(--ink);
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: var(--text-strong);
 }
-.oak-wordmark__period {
-  color: var(--poke-red);
+.chat-page__header .oak-wordmark {
+  color: var(--neutral-0);
+  font-size: inherit;
 }
 
-/* Canvas header, hairline only. No red thread. */
+/* The signature Pokédex-red header band */
 .chat-page__header {
   position: sticky;
   top: 0;
@@ -376,25 +385,49 @@
   padding-bottom: var(--space-4);
   padding-left: max(var(--space-10), env(safe-area-inset-left));
   padding-right: max(var(--space-10), env(safe-area-inset-right));
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  background: linear-gradient(
+    180deg,
+    var(--poke-red) 0%,
+    color-mix(in srgb, var(--poke-red-active) 60%, var(--poke-red)) 100%
+  );
+  border-bottom: 2px solid
+    color-mix(in srgb, var(--neutral-900) 12%, var(--poke-red-active));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--poke-red) 22%, transparent);
+  color: var(--neutral-0);
 }
 
 .chat-page__title {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   border: 0;
   background: none;
   appearance: none;
-  color: inherit;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  color: var(--neutral-0);
   text-decoration: none;
   cursor: pointer;
 }
 .chat-page__title:hover,
 .chat-page__title:focus-visible {
-  opacity: 0.75;
+  opacity: 0.85;
+}
+.chat-page__title::before {
+  content: "";
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--brand-mark) center / cover no-repeat;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--neutral-0) 62%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.24);
 }
 
 /* Right-side header controls: logical groups wrapped in a cluster, split by a
@@ -420,17 +453,32 @@
   height: 44px;
   flex: none;
   border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
-  transition: background var(--motion-fast), border-color var(--motion-fast);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--neutral-0);
+  transition: background var(--motion-fast);
 }
 .chat-page__more:hover {
-  background: var(--surface-sunken);
+  background: rgba(255, 255, 255, 0.28);
 }
 .chat-page__more svg {
   width: 22px;
   height: 22px;
+}
+/* Vertical divider between lid clusters (scope vs theme/auth). Markup may
+   omit the element; the controls group paints the same 1×20 hairline. */
+.chat-page__header-divider {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.chat-page__controls::before {
+  content: "";
+  flex: none;
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.35);
 }
 /* "Active team" label + its <select>, kept apart so they don't glue together. */
 .active-team-selector {
@@ -439,12 +487,13 @@
   gap: var(--space-2);
 }
 .active-team-selector__label {
-  color: var(--text-muted);
+  color: var(--neutral-0);
   font-weight: 600;
   font-size: 0.8125rem;
   white-space: nowrap;
+  opacity: 0.92;
 }
-/* Secondary control on the paper header (was a translucent-white pill). */
+/* Inset enamel pill on the lid (was a paper secondary control). */
 .active-team-selector__select {
   appearance: none;
   -webkit-appearance: none;
@@ -452,9 +501,9 @@
   height: 40px;
   padding-inline: var(--space-3);
   border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--neutral-0);
   font: inherit;
   font-size: 1rem; /* avoid iOS focus-zoom */
   font-weight: 600;
@@ -466,8 +515,7 @@
   color: var(--neutral-900, #111);
 }
 
-/* Theme toggle + sidebar toggle (both use this class) — secondary control on
-   the paper header. */
+/* Theme toggle + sidebar toggle (both use this class) — inset enamel pill. */
 .theme-toggle {
   display: inline-flex;
   align-items: center;
@@ -475,14 +523,14 @@
   width: 40px;
   height: 40px;
   border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
-  transition: background var(--motion-fast), border-color var(--motion-fast),
-    transform var(--motion-fast);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--neutral-0);
+  font-weight: 600;
+  transition: background var(--motion-fast), transform var(--motion-fast);
 }
 .theme-toggle:hover {
-  background: var(--surface-sunken);
+  background: rgba(255, 255, 255, 0.28);
 }
 .theme-toggle:active {
   transform: scale(0.94);
@@ -544,7 +592,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  height: 36px;
+  height: 40px;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: var(--poke-red);
@@ -575,11 +623,15 @@
   background: var(--surface);
   color: var(--text-strong);
 }
-/* Active = white row + 2px red inset. Not a red fill rail. */
+/* Active = poke-red-soft fill + poke-red ink (historical selected). */
 .app-nav__link--active {
-  background: var(--surface);
-  box-shadow: inset 2px 0 0 var(--poke-red);
-  color: var(--text-strong);
+  background: var(--poke-red-soft);
+  box-shadow: none;
+  color: var(--poke-red);
+}
+.app-nav__link--active:hover {
+  background: var(--poke-red-soft);
+  color: var(--poke-red);
 }
 .app-nav__slot {
   flex: 1;
@@ -754,18 +806,29 @@
   align-items: flex-end;
   gap: var(--space-2);
 }
-/* User note: sunken fill + hairline. No red bubble, no corner pip. */
+/* Bubble + Undo/Edit share one trailing column so Edit sits under the note,
+   not at the thread's right edge on a short message. */
+.chat-turn--user .chat-turn__note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  max-width: 70%;
+  min-width: 0;
+}
+/* User note: poke-red-soft mix, 30% red border, sm radius on the bottom-right. */
 .chat-turn--user .chat-turn__content {
   position: relative;
-  max-width: 70%;
+  max-width: 100%;
   padding: var(--space-3) var(--space-5) var(--space-3) var(--space-4);
-  background: var(--surface-sunken);
+  background: color-mix(in srgb, var(--poke-red-soft) 55%, var(--surface));
   color: var(--text-strong);
   font-size: 0.9375rem;
   font-weight: 500;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--poke-red) 30%, var(--border));
   border-radius: var(--radius-lg);
-  box-shadow: none;
+  border-bottom-right-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
 }
 .chat-turn--user .chat-turn__content::before {
   content: none;
@@ -792,65 +855,52 @@
 }
 
 /* --------------------------------------------------------------------------
-   6. Type badge — the signature recipe + 18 modifiers
+   6. Type badge — tinted pills (16/72/30 mix; dark 26/45)
    -------------------------------------------------------------------------- */
 .type-badge {
   --type: var(--type-normal);
-  --type-ink: #16181a;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-family: var(--body);
-  font-weight: 600;
-  font-size: 11px;
-  line-height: 1;
-  letter-spacing: 0;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font: 600 11px/1 var(--body);
+  letter-spacing: 0.03em;
   text-transform: capitalize;
   white-space: nowrap;
-  background: var(--type);
-  color: var(--type-ink);
-  border: none;
+  background: color-mix(in srgb, var(--type) 16%, var(--surface));
+  color: color-mix(in srgb, var(--type) 72%, var(--text-strong));
+  border: 1px solid color-mix(in srgb, var(--type) 30%, transparent);
+}
+[data-theme="dark"] .type-badge {
+  background: color-mix(in srgb, var(--type) 26%, var(--surface));
+  color: color-mix(in srgb, var(--type) 45%, #ffffff);
 }
 
-/* Full-chroma solids are theme-stable — no dark-mode pastel override. Ink is
-   picked per-type for contrast (WCAG-legible white or near-black on the raw
-   type color), not derived from the theme. */
-.type-badge--normal { --type: var(--type-normal); --type-ink: #16181a; }
-.type-badge--fire { --type: var(--type-fire); --type-ink: #16181a; }
-.type-badge--water { --type: var(--type-water); --type-ink: #16181a; }
-.type-badge--electric { --type: var(--type-electric); --type-ink: #16181a; }
-.type-badge--grass { --type: var(--type-grass); --type-ink: #16181a; }
-.type-badge--ice { --type: var(--type-ice); --type-ink: #16181a; }
-.type-badge--fighting { --type: var(--type-fighting); --type-ink: #ffffff; }
-.type-badge--poison { --type: var(--type-poison); --type-ink: #ffffff; }
-.type-badge--ground { --type: var(--type-ground); --type-ink: #16181a; }
-.type-badge--flying { --type: var(--type-flying); --type-ink: #16181a; }
-.type-badge--psychic { --type: var(--type-psychic); --type-ink: #16181a; }
-.type-badge--bug { --type: var(--type-bug); --type-ink: #16181a; }
-.type-badge--rock { --type: var(--type-rock); --type-ink: #16181a; }
-.type-badge--ghost { --type: var(--type-ghost); --type-ink: #ffffff; }
-.type-badge--dragon { --type: var(--type-dragon); --type-ink: #ffffff; }
-.type-badge--dark { --type: var(--type-dark); --type-ink: #ffffff; }
-.type-badge--steel { --type: var(--type-steel); --type-ink: #16181a; }
-.type-badge--fairy { --type: var(--type-fairy); --type-ink: #16181a; }
+.type-badge--normal { --type: var(--type-normal); }
+.type-badge--fire { --type: var(--type-fire); }
+.type-badge--water { --type: var(--type-water); }
+.type-badge--electric { --type: var(--type-electric); }
+.type-badge--grass { --type: var(--type-grass); }
+.type-badge--ice { --type: var(--type-ice); }
+.type-badge--fighting { --type: var(--type-fighting); }
+.type-badge--poison { --type: var(--type-poison); }
+.type-badge--ground { --type: var(--type-ground); }
+.type-badge--flying { --type: var(--type-flying); }
+.type-badge--ghost { --type: var(--type-ghost); }
+.type-badge--psychic { --type: var(--type-psychic); }
+.type-badge--bug { --type: var(--type-bug); }
+.type-badge--rock { --type: var(--type-rock); }
+.type-badge--dragon { --type: var(--type-dragon); }
+.type-badge--dark { --type: var(--type-dark); }
+.type-badge--steel { --type: var(--type-steel); }
+.type-badge--fairy { --type: var(--type-fairy); }
 
 /* --------------------------------------------------------------------------
-   7. Answer card + its sections — TYPE-LIGHT plate (soul.md Instrument redesign)
+   7. Answer card + its sections — white paper plate (enamel-paper.md)
    -------------------------------------------------------------------------- */
-/* Type-light dial values live on :root so the dev plate tuner can dial them.
-   These are the SAME 5 custom properties the old pastel-wash recipe used
-   (PlateTuner.tsx keys are unchanged) but their meaning is remapped for the
-   "type is a light, not a wash" recipe:
-     --plate-radial-a  the plate's own corner glow (answer-card / artifact-viewer)
-     --plate-radial-b  the sprite WELL's glow — the light SOURCE, stronger
-     --plate-wash-a    the streaming skeleton's softer corner glow
-     --plate-wash-b    roster slots' ambient glow
-     --plate-edge      border color-mix strength (the hairline tint under the
-                        bold edge light); also reused as the multi-plate's
-                        faint edge-segment opacity (see .answer-card--multi)
-   Dark theme raises every glow so the light still reads on graphite. */
+/* Leftover plate-tuner vars (PlateTuner.tsx). Not used as type-light on the
+   answer card; kept so leftover CSS compiles. */
 :root {
   --plate-radial-a: 12%;
   --plate-radial-b: 28%;
@@ -866,18 +916,14 @@
   --plate-edge: 38%;
 }
 .answer-card {
-  --plate-a: var(--neutral-500);
-  --plate-b: var(--neutral-600);
-  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: 16px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
+  gap: var(--space-6);
+  padding: var(--space-6);
   background: var(--surface);
-  box-shadow: none;
-  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
   animation: answer-enter var(--motion-enter) both;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -895,39 +941,24 @@
     transform: translateY(0);
   }
 }
-/* Leading-edge light — a 3px inset strip in the primary type color; a linear
-   split at 60/40 folds in the secondary type without a second pseudo-element
-   (single subject collapses to one solid color since --plate-a === --plate-b). */
-.answer-card::before {
-  content: none;
-}
-/* Glow — ONE radial anchored where the sprite well sits (top-right on desktop),
-   layered above the solid surface via its own pseudo-element so the base panel
-   never has to fade (only the light does, for the "reading latches" moment). */
+/* Type-light radials stay off — do not revive. */
+.answer-card::before,
 .answer-card::after {
   content: none;
 }
-/* Mechanics / no subjects — sunken ink plate. Neutral, no type light. */
 .answer-card--ink {
-  --plate-a: var(--neutral-500);
-  --plate-b: var(--neutral-600);
   background: var(--surface);
-  box-shadow: none;
+  box-shadow: var(--shadow-raised);
   border-color: var(--border);
 }
 .answer-card--ink::before,
 .answer-card--ink::after {
   content: none;
 }
-/* Multi-subject: neutral-ish shell + a faint dual-segment edge (don't fight
-   several glows at once) — no card-corner glow. */
 .answer-card--multi {
   border-color: var(--border);
 }
-.answer-card--multi::before {
-  /* Faint — reuses the edge dial's own percentage as the segment's opacity. */
-  --latch-opacity: var(--plate-edge);
-}
+.answer-card--multi::before,
 .answer-card--multi::after {
   content: none;
 }
@@ -1005,8 +1036,8 @@
    width (UI §3) — the card itself stays wide; only the text is held narrow. */
 .answer-body__content {
   max-width: var(--measure-prose);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 1rem;
+  line-height: 1.6;
   color: var(--text);
   /* A long URL / hyphen-free identifier must break rather than widen the card
      past a 390px viewport. Only acts on otherwise-unbreakable tokens. */
@@ -1017,14 +1048,14 @@
   font-weight: 700;
 }
 
-/* Answer lead — Figtree 600 / 22. Rest of markdown stays 15/400. */
+/* Lead stays Nunito (Fredoka is chrome titles only — enamel-paper.md). */
 .answer-body__content.markdown-body > p:first-child {
-  font-family: var(--display);
+  font-family: var(--body);
   font-weight: 600;
-  font-size: 22px;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.6;
+  letter-spacing: 0;
+  color: var(--text-strong);
 }
 
 /* Evidence rail — AnswerBody + subjects[] share a row so sprite cards sit
@@ -1115,10 +1146,10 @@
 .markdown-body h5,
 .markdown-body h6 {
   margin: var(--space-5) 0 var(--space-2);
-  font-family: var(--display);
+  font-family: var(--body);
   font-weight: 600;
   line-height: 1.25;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--text-strong);
 }
 .markdown-body h1 {
@@ -1328,6 +1359,7 @@
   font-size: 1rem;
   line-height: 1.6;
   color: var(--text);
+  animation: answer-enter var(--motion-enter) both;
 }
 .chat-thread__streaming .markdown-body p:last-child::after {
   content: "";
@@ -1350,13 +1382,16 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .chat-thread__streaming {
+    animation: none;
+  }
   .chat-thread__streaming .markdown-body p:last-child::after {
     animation: none;
   }
 }
 
 /* --------------------------------------------------------------------------
-   8. Sprite card — type-glow specimen well (soul.md)
+   8. Sprite card — paper well (no type-glow chassis)
    -------------------------------------------------------------------------- */
 .sprite-card {
   --plate-a: var(--type-normal);
@@ -1376,24 +1411,15 @@
 .sprite-card:hover {
   transform: scale(1.03);
 }
-/* Type-glow radial well — the light SOURCE (soul.md Instrument redesign):
-   an inset well (machined into the chassis) with a saturated glow stronger
-   than the card's own corner light (--plate-radial-b, tuned higher). */
 .sprite-card__well {
   width: 120px;
   height: 120px;
-  border-radius: 22px;
+  border-radius: var(--radius-lg);
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(
-      circle at 50% 45%,
-      color-mix(in srgb, var(--plate-a) var(--plate-radial-b), transparent),
-      transparent 65%
-    ),
-    var(--surface-sunken);
-  border: 1px solid color-mix(in srgb, var(--plate-a) 32%, var(--border-strong));
-  box-shadow: var(--shadow-well);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  box-shadow: none;
 }
 .sprite-card__sprite-link {
   display: block;
@@ -1459,6 +1485,121 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
+}
+.candidate-table__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.candidate-table__sorts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.candidate-table__sort-btn,
+.candidate-table__tsv,
+.candidate-table__row-pin,
+.candidate-table__add,
+.sprite-card__add,
+.damage-readout__open-calc,
+.artifact-viewer__verb {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-strong);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.candidate-table__filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+.candidate-table__filter select,
+.candidate-table__filter input {
+  height: 28px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.75rem;
+}
+.citation-highlight__span[data-highlighted="true"],
+[data-highlighted="true"] {
+  background: color-mix(in srgb, var(--sunflower) 35%, transparent);
+  box-shadow: inset 0 -2px 0 var(--sunflower);
+  outline: 1px dashed var(--sunflower);
+}
+.answer-card__voice-glyph {
+  display: inline-flex;
+  margin-inline: var(--space-4);
+  font-size: 0.85rem;
+}
+.answer-card__hydrate {
+  margin: 0 var(--space-4) var(--space-2);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+.pinned-artifact-strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+}
+.pinned-artifact-strip__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pinned-artifact-strip__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.pinned-artifact-strip__open,
+.pinned-artifact-strip__unpin {
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: var(--radius-pill);
+  padding: 2px var(--space-2);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.pinned-artifact-strip__cap,
+.artifact-viewer__cap {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--warning);
+}
+.artifact-viewer__verbs,
+.artifact-viewer__compare {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-2);
+}
+.auth-menu__density {
+  border: 0;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.8125rem;
 }
 .candidate-table__header {
   display: flex;
@@ -1636,7 +1777,7 @@
 /* --------------------------------------------------------------------------
    10. Composer — sticky bottom dock
    -------------------------------------------------------------------------- */
-/* Sticky dock: the field floats above the page, so fade to --bg (not a panel) */
+/* Sticky dock: fade-to-paper only. No backdrop-filter (enamel-paper dock rule). */
 .composer {
   position: sticky;
   bottom: 0;
@@ -1655,8 +1796,6 @@
   transform: translateY(calc(-1 * var(--kb-inset, 0px)));
   transition: transform var(--motion-fast);
   background: linear-gradient(180deg, transparent, var(--bg) 38%);
-  backdrop-filter: blur(6px); /* softens the thread scrolling under the dock */
-  -webkit-backdrop-filter: blur(6px);
 }
 
 /* The unified "Pokédex console" field — leading icon · input · nested Send */
@@ -1665,22 +1804,26 @@
   /* Anchor the attach/Send buttons to the bottom as the textarea auto-grows. */
   align-items: flex-end;
   gap: var(--space-2);
-  padding: 12px 16px;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: none;
-  transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-floating);
+  transition: border-color var(--motion-fast), box-shadow var(--motion-base),
+    transform var(--motion-base);
 }
-/* Focus = 2px red ring, 2px canvas offset. No lift, no glow. */
 .composer__field:focus-within {
   border-color: var(--poke-red);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--poke-red);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-floating),
+    0 0 0 4px color-mix(in srgb, var(--poke-red) 18%, transparent);
 }
 .composer__field--live,
 .composer__field--live:focus-within {
   border-color: var(--poke-red);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--poke-red);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-floating),
+    0 0 0 4px color-mix(in srgb, var(--poke-red) 18%, transparent);
 }
 
 /* Leading Poké Ball icon — faint, brightens to red on focus */
@@ -1829,36 +1972,39 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
+  width: 44px;
   height: 44px;
-  padding: 0 14px;
   flex: none;
-  font-family: var(--body);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1;
+  font-size: 0; /* hide "Send" text node; accessible name preserved */
   color: var(--on-red);
   background: var(--poke-red);
   border: none;
-  border-radius: var(--radius-sm);
-  box-shadow: none;
-  transition: background var(--motion-fast), transform var(--motion-fast);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--poke-red) 40%, transparent);
+  transition: background var(--motion-fast), transform var(--motion-spring),
+    opacity var(--motion-fast);
 }
 .composer__send::before {
-  content: none;
+  content: "";
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  -webkit-mask: var(--icon-send) center / contain no-repeat;
+  mask: var(--icon-send) center / contain no-repeat;
 }
 .composer__send:hover:not(:disabled) {
   background: var(--poke-red-hover);
+  transform: scale(1.06);
 }
 .composer__send:active:not(:disabled) {
   background: var(--poke-red-active);
-  transform: scale(0.98);
+  transform: scale(0.94);
 }
 .composer__send:disabled {
   background: var(--surface-sunken);
   color: var(--text-faint);
   box-shadow: none;
-  transform: none;
+  transform: scale(0.85);
   cursor: not-allowed;
 }
 
@@ -1897,12 +2043,11 @@
    11. Disclosures — Receipts footer · Sources (artifacts) · Assumptions
    -------------------------------------------------------------------------- */
 
-/* Specimen-plate RECEIPTS footer (soul.md) — full-width expandable tab
-   unifying reasoning + citations. */
+/* Receipts footer — Why / Sources disclosure on the paper plate. */
 .receipts {
   margin: var(--space-2) calc(-1 * var(--space-6)) 0;
-  border-top: 1px solid color-mix(in srgb, var(--plate-a) 18%, var(--border));
-  background: color-mix(in srgb, var(--surface-sunken) 65%, transparent);
+  border-top: 1px solid var(--border);
+  background: var(--surface-sunken);
 }
 .receipts__tab {
   width: 100%;
@@ -1963,7 +2108,11 @@
   display: none;
 }
 .receipts__label {
-  color: var(--text-muted);
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 1.125rem;
+  line-height: 1.35;
+  color: var(--text-strong);
 }
 .receipts__chevron {
   flex: none;
@@ -2148,16 +2297,16 @@
 }
 
 /* --------------------------------------------------------------------------
-   13. Inference callout — "my deduction, not stated data"
+   13. Inference callout — "my deduction, not stated data" (dashed azure)
    -------------------------------------------------------------------------- */
 .inference-callout {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
+  padding: var(--space-4);
+  background: var(--azure-soft);
+  border: 1px dashed var(--azure);
+  border-radius: var(--radius-md);
 }
 .inference-callout__title {
   display: none;
@@ -2171,14 +2320,14 @@
 .inference-callout__word {
   font-style: normal;
   font-weight: 600;
-  color: var(--poke-red);
+  color: color-mix(in srgb, var(--azure) 55%, var(--text-strong));
 }
 .inference-callout__item {
   position: relative;
   padding-left: 0;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--text);
 }
 .inference-callout__item::before {
   content: none;
@@ -2394,256 +2543,220 @@
 }
 
 /* --------------------------------------------------------------------------
-   16. Progress / loading — the Poké Ball spinner
+   16. Thinking trace — expandable Steps (live tool_activity rows)
    -------------------------------------------------------------------------- */
-/* Streaming "field notes" trail (specimen desk / soul.md): the agent's
-   tool-loop rendered as a cascading stack of instrument chips + an answer
-   skeleton, collapsing to a summary chip once prose streams. */
-.chat-thread__progress {
+.chat-thread__incoming {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-1) 0;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 2px 0 4px;
 }
-.chat-thread__trail {
+.thinking-trace {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-}
-.chat-thread__notes {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-/* One field-note chip: status glyph · mono tool token · human-readable subject.
-   Each enters with the shared turn-in cascade on mount (the live trail's chips
-   arrive seconds apart, so their real timing IS the stagger). */
-.chat-thread__note {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin: 0;
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  line-height: 1.4;
-  color: var(--text-muted);
-  animation: turn-in var(--motion-base) both;
-}
-.chat-thread__note--done {
-  color: var(--text-faint);
-}
-/* Active row = the record light — status glyph + label read in red while the
-   loop is live on this call (soul.md "Red's jobs" #2). */
-.chat-thread__note--active {
-  color: var(--poke-red);
-}
-.chat-thread__note--active .chat-thread__note-tool {
-  color: var(--poke-red);
-}
-.chat-thread__note-tool {
-  flex: none;
-}
-.chat-thread__note-desc {
+  align-items: flex-start;
   min-width: 0;
+  max-width: 100%;
 }
-.chat-thread__note--active .chat-thread__note-desc {
-  font-weight: 600;
-}
-/* Status glyph — pokeball micro-spinner while in flight, a tick once done. */
-.chat-thread__note-glyph {
-  flex: none;
-  align-self: center;
-  width: 15px;
-  height: 15px;
-}
-.chat-thread__note-glyph[data-state="active"] {
-  border-radius: 50%;
-  border: 1.5px solid var(--text-strong);
-  background:
-    radial-gradient(
-        circle at center,
-        var(--neutral-0) 0 2.4px,
-        var(--text-strong) 2.4px 3.4px,
-        transparent 3.4px
-      ),
-    linear-gradient(var(--text-strong) 0 0) center / 100% 1.5px no-repeat,
-    linear-gradient(180deg, var(--poke-red) 0 50%, var(--neutral-0) 50% 100%);
-  animation: pokeball-spin 0.9s linear infinite;
-}
-/* Dim success tick once a call has moved on (soul.md — completed readouts
-   settle, only the active one stays bright). */
-.chat-thread__note-glyph[data-state="done"] {
-  background: var(--success);
-  opacity: 0.6;
-  -webkit-mask: var(--icon-check) center / 13px 13px no-repeat;
-  mask: var(--icon-check) center / 13px 13px no-repeat;
-  --icon-check: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><path d='M5 13l4 4L19 7'/></svg>");
-}
-@keyframes pokeball-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.chat-thread__elapsed {
-  font-size: 0.75rem;
-  color: var(--text-faint);
-  padding-left: calc(15px + var(--space-2));
-}
-
-/* Batch reveal (expanding the collapsed summary shows every note at once): here
-   the 60ms stagger is a real simultaneous cascade, so apply it via nth-child. */
-.chat-thread__notes--batch .chat-thread__note:nth-child(2) {
-  animation-delay: 60ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(3) {
-  animation-delay: 120ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(4) {
-  animation-delay: 180ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(5) {
-  animation-delay: 240ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(6) {
-  animation-delay: 300ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(7) {
-  animation-delay: 360ms;
-}
-.chat-thread__notes--batch .chat-thread__note:nth-child(n + 8) {
-  animation-delay: 420ms;
-}
-
-/* Collapsed summary chip pinned above the streaming answer. */
-.chat-thread__summary {
-  align-self: flex-start;
+.thinking-trace__header {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   margin: 0;
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface-sunken);
+  padding: 4px 6px;
+  margin-left: -6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--text-muted);
+  font: inherit;
+  cursor: default;
+  text-align: left;
+}
+button.thinking-trace__header {
   cursor: pointer;
-  animation: turn-in var(--motion-base) both;
-  transition: background var(--motion-fast), border-color var(--motion-fast);
 }
-.chat-thread__summary:hover {
-  background: var(--surface);
-  border-color: var(--border-strong);
+button.thinking-trace__header:hover {
+  background: var(--surface-sunken);
 }
-.chat-thread__summary:focus-visible {
-  outline: 2px solid var(--azure);
+.thinking-trace__header:focus-visible {
+  outline: 2px solid var(--poke-red);
   outline-offset: 2px;
 }
-.chat-thread__summary-sep {
-  color: var(--text-faint);
+.thinking-trace__orb {
+  flex: none;
+  display: block;
 }
-.chat-thread__summary-time {
-  font-size: 0.75rem;
+.thinking-trace__orb[data-live="false"] {
+  opacity: 0.55;
+}
+/* 22px CSS Poké Ball — chat thinking mark (enamel-paper.md KD-17). */
+.ball {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(
+    180deg,
+    var(--poke-red) 0 46%,
+    #1a1a1a 46% 54%,
+    #fff 54% 100%
+  );
+  border: 2px solid #1a1a1a;
+  box-shadow: 0 0 0 2px #fff inset;
+  animation: spin 1.1s linear infinite;
+}
+.ball[data-size="64"] {
+  width: 64px;
+  height: 64px;
+}
+.ball[data-paused="true"] {
+  animation: none;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ball {
+    animation: none;
+  }
+}
+.thinking-trace__label {
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+  white-space: nowrap;
   color: var(--text-muted);
 }
-.chat-thread__summary-caret {
+.thinking-trace__label--live {
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    var(--text-faint) 35%,
+    var(--ink) 50%,
+    var(--text-faint) 65%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: thinking-shimmer 1.4s linear infinite;
+}
+@keyframes thinking-shimmer {
+  to {
+    background-position: -100% 0;
+  }
+}
+.thinking-trace__caret {
   width: 0;
   height: 0;
-  margin-left: var(--space-1);
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
   border-top: 5px solid var(--text-faint);
-  transition: transform var(--motion-fast);
+  transition: transform var(--motion-base);
 }
-.chat-thread__summary-caret[data-open="true"] {
+.thinking-trace__caret[data-open="true"] {
   transform: rotate(180deg);
 }
-.chat-thread__trail--collapsed .chat-thread__notes {
-  margin-top: var(--space-2);
+.thinking-trace__body {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  width: 100%;
+  transition:
+    grid-template-rows var(--motion-enter),
+    opacity var(--motion-enter);
 }
-
-/* Answer skeleton — masthead bar + prose lines with a soft opacity pulse; holds
-   the layout so the streamed answer replaces it in place with no jump. */
-/* Streaming skeleton — a softer echo of the answer-card's type-light when
-   activity hints a type; else a plain raised panel. No leading-edge light
-   (that's reserved for the confirmed terminal answer) — just a faint glow. */
-.chat-thread__skeleton {
-  --plate-a: var(--neutral-500);
-  --plate-b: var(--neutral-600);
+.thinking-trace__body[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.thinking-trace__clip {
+  overflow: hidden;
+  min-height: 0;
+}
+.thinking-trace__rows {
   position: relative;
+  margin: 2px 0 0;
+  padding: 4px 0 4px 20px;
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-5) var(--space-6);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-raised);
-  overflow: hidden;
+  gap: 4px;
 }
-.chat-thread__skeleton::after {
+.thinking-trace__rows::before {
   content: "";
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    90% 70% at 88% 18%,
-    color-mix(in srgb, var(--plate-a) var(--plate-wash-a), transparent),
-    transparent 60%
-  );
+  left: 10px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
 }
-.chat-thread__skeleton--desk {
-  background: var(--surface-raised);
-  border-color: var(--border);
+.thinking-trace__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 28px;
+  padding: 2px 6px;
+  animation: thinking-row-in var(--motion-enter) both;
 }
-.chat-thread__skeleton--desk::after {
-  content: none;
+@keyframes thinking-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
-.chat-thread__skeleton-masthead,
-.chat-thread__skeleton-line {
-  position: relative;
-  background: var(--surface-sunken);
-  border-radius: var(--radius-sm);
-  animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
-}
-/* Record light — a glowing red dot beside the masthead placeholder while a
-   turn is live (soul.md "LED scope stamp" / "reading latches": red while
-   streaming, latches to the resolved status color once the card finalizes). */
-.chat-thread__skeleton-masthead::before {
-  content: "";
-  position: absolute;
-  left: -14px;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
+.thinking-trace__spin {
+  flex: none;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: var(--poke-red);
-  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--poke-red) 55%, transparent);
-  animation: chat-skeleton-pulse 1.4s ease-in-out infinite;
+  border: 1.5px solid var(--border-strong);
+  border-top-color: var(--text-muted);
+  animation: thinking-spin 700ms linear infinite;
 }
-.chat-thread__skeleton-masthead {
-  height: 1.6rem;
-  width: 62%;
-  margin-bottom: var(--space-1);
-  border-radius: var(--radius-md);
-}
-.chat-thread__skeleton-line {
-  height: 0.85rem;
-}
-.chat-thread__skeleton-line--short {
-  width: 45%;
-}
-@keyframes chat-skeleton-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
+@keyframes thinking-spin {
+  to {
+    transform: rotate(360deg);
   }
-  50% {
-    opacity: 0.9;
-  }
+}
+.thinking-trace__check {
+  flex: none;
+  color: var(--text-faint);
+}
+.thinking-trace__primary {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.thinking-trace__row--active .thinking-trace__primary {
+  color: var(--text);
+}
+.thinking-trace__secondary {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--text-faint);
 }
 
 /* Transport error — distinct from in-domain answer statuses */
@@ -2688,7 +2801,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   17. First-run empty state — blank specimen plate (soul.md)
+   17. First-run empty state — current landing on enamel paper
    -------------------------------------------------------------------------- */
 .chat-empty {
   margin: auto;
@@ -2700,6 +2813,7 @@
   width: 100%;
   padding: var(--space-8) var(--space-4);
   text-align: left;
+  background: transparent;
 }
 /* Hero variant: the composer is promoted into the plate, so the composition
    widens to the composer measure. */
@@ -2708,7 +2822,7 @@
   gap: var(--space-5);
 }
 
-/* Empty chat — title, mute sub, four starter rows. No STANDBY plate. */
+/* Empty chat — title, mute sub, four starter rows. Cream canvas, no STANDBY. */
 .blank-plate {
   position: relative;
   overflow: hidden;
@@ -2729,31 +2843,20 @@
   gap: var(--space-2);
   flex-wrap: wrap;
 }
-/* LED scope stamp — inset well chip + a glowing red record dot, standing in
-   for "the device is on, waiting" (soul.md "Standby readout"). */
+/* STANDBY / LED well is dropped (enamel-paper empty landing). */
 .blank-plate__ilabel {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-2) var(--space-1) 18px;
-  background: var(--surface-sunken);
-  box-shadow: var(--shadow-well);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  border: none;
   color: var(--text-faint);
 }
 .blank-plate__ilabel::before {
-  content: "";
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 50%;
-  background: var(--poke-red);
-  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--poke-red) 55%, transparent);
+  content: none;
 }
 .blank-plate__scope {
   margin: 0;
@@ -2766,9 +2869,9 @@
   font-family: var(--display);
   font-size: 28px;
   font-weight: 600;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  color: var(--ink);
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  color: var(--text-strong);
 }
 .blank-plate__sub {
   margin: 0 0 18px;
@@ -2797,7 +2900,7 @@
   -webkit-backdrop-filter: none;
 }
 
-/* Signal starters — four full-width surface rows, optional mute prefix. */
+/* Filed starters — white paper rows, red hover lift. */
 .starters {
   display: flex;
   flex-direction: column;
@@ -2820,14 +2923,17 @@
   line-height: 1.35;
   color: var(--text-strong);
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-raised);
   cursor: pointer;
-  transition: border-color var(--motion-fast), background var(--motion-fast);
+  transition: background var(--motion-spring), border-color var(--motion-fast),
+    transform var(--motion-spring), box-shadow var(--motion-fast);
 }
 .starter:hover {
-  border-color: var(--border-strong);
-  background: var(--surface);
+  background: var(--poke-red-soft);
+  border-color: var(--poke-red);
+  transform: translateY(-2px);
 }
 .starter:active {
   transform: none;
@@ -2991,24 +3097,26 @@
   .composer__send:disabled {
     transform: none;
   }
-  /* Streaming trail: keep the pokeball spinner turning (it signals liveness),
-     but drop the note cascade, the summary chip's entrance, and the skeleton
-     pulse — motion for feedback stays, decorative motion goes. */
-  .chat-thread__note,
-  .chat-thread__summary {
+  /* Thinking trace: freeze the shimmer and row cascade; keep the live
+     spinner as a static ring (liveness still reads from the header). */
+  .thinking-trace__label--live {
+    animation: none !important;
+    color: var(--text-muted);
+    background: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+  }
+  .thinking-trace__row,
+  .thinking-trace__spin,
+  .ball {
     animation: none !important;
   }
-  .chat-thread__skeleton-masthead,
-  .chat-thread__skeleton-line {
-    animation: none !important;
-    opacity: 0.7;
+  .thinking-trace__body,
+  .thinking-trace__caret {
+    transition: none !important;
   }
-  .chat-thread__skeleton-masthead::before {
+  .chat-thread__streaming {
     animation: none !important;
-    opacity: 0.8;
-  }
-  .chat-thread__summary-caret {
-    transition: none;
   }
   /* "Reading latches" — instant swap, no fade/color-blip. */
   .answer-card::before,
@@ -3123,9 +3231,7 @@
   opacity: 0.85;
 }
 
-/* Interactive scope chip (champions-default) — the header's menu-button variant
-   of ScopeChip. The trigger keeps the display-only pill's look (pill, muted
-   surface) plus a caret; the popover lists all six formats as radio options. */
+/* Interactive scope chip — inset enamel pill on the lid. Menu is a paper plate. */
 .scope-chip-container {
   position: relative;
   display: inline-flex;
@@ -3134,41 +3240,36 @@
 .scope-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: var(--space-1) var(--space-2);
+  height: 40px;
+  padding: 0 14px;
   border-radius: var(--radius-pill);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
   font-family: var(--body);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
 .scope-chip__led {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--poke-red);
-  flex: none;
+  display: none;
 }
 button.scope-chip {
   cursor: pointer;
-  transition:
-    background var(--motion-fast),
-    border-color var(--motion-fast);
+  transition: background var(--motion-fast);
 }
 button.scope-chip:hover:not(:disabled) {
-  background: var(--surface);
-  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.28);
 }
 button.scope-chip:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
 button.scope-chip:focus-visible {
-  outline: 2px solid var(--poke-red);
+  outline: 2px solid var(--neutral-0);
   outline-offset: 2px;
 }
 .scope-chip__caret {
@@ -3203,7 +3304,7 @@ button.scope-chip:focus-visible {
   padding: var(--space-2);
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: var(--surface-raised);
+  background: var(--surface);
   box-shadow: var(--shadow-floating);
   overflow-y: auto;
   animation: turn-in var(--motion-base) both;
@@ -3246,23 +3347,12 @@ button.scope-chip:focus-visible {
 }
 .scope-chip__option[aria-checked="true"] .scope-chip__option-name {
   color: var(--poke-red);
-  padding-left: 14px;
-  position: relative;
 }
 .scope-chip__option[aria-checked="true"] .scope-chip__option-name::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 50%;
-  background: var(--poke-red);
-  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--poke-red) 55%, transparent);
+  content: none;
 }
 
-/* Auth header control — account email + the translucent sign-in/out pills */
+/* Auth header control — account email + inset enamel sign-in/out pills */
 .auth-menu {
   display: inline-flex;
   align-items: center;
@@ -3273,44 +3363,42 @@ button.scope-chip:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-muted);
+  color: var(--neutral-0);
   font-family: var(--body);
   font-weight: 600;
   font-size: var(--text-md);
   line-height: 1.2;
+  opacity: 0.92;
 }
-/* Secondary control on the paper header (was a translucent-white pill). "Sign
-   in" keeps a red fill via the .auth-pill--primary modifier below (red = the
-   primary action). */
 .auth-pill {
   display: inline-flex;
   align-items: center;
-  height: var(--space-10);
+  height: 40px;
   padding-inline: var(--space-3);
   border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
   font-family: var(--body);
   font-weight: 600;
   font-size: var(--text-md);
   line-height: 1.2;
   white-space: nowrap;
   cursor: pointer;
-  transition: background var(--motion-fast), border-color var(--motion-fast);
+  transition: background var(--motion-fast);
 }
 .auth-pill:hover:not(:disabled) {
-  background: var(--surface-sunken);
+  background: rgba(255, 255, 255, 0.28);
 }
-/* Sign in — the header's primary action keeps a red fill (red = primary). */
+/* Sign in — same inset enamel as the other lid pills (not a solid red fill). */
 .auth-pill--primary {
-  border-color: transparent;
-  background: var(--poke-red);
-  color: var(--on-red);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--poke-red) 40%, transparent);
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  box-shadow: none;
 }
 .auth-pill--primary:hover:not(:disabled) {
-  background: var(--poke-red-hover);
+  background: rgba(255, 255, 255, 0.28);
 }
 .auth-pill:disabled {
   cursor: not-allowed;
@@ -3593,7 +3681,7 @@ button.scope-chip:focus-visible {
   font-weight: 600;
   font-size: 22px;
   line-height: 1.3;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--text-strong);
 }
 .auth-dialog__close {
@@ -3646,16 +3734,13 @@ button.scope-chip:focus-visible {
   line-height: 1.5;
   color: var(--text-strong);
 }
-/* Sunken-borderless (UI §3 "inputs invert"): sunken fill, no border at rest —
-   a border + focus ring appear only on focus, same recipe as the teams-page
-   inputs. */
 .auth-dialog__input {
   width: 100%;
   box-sizing: border-box;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
   color: var(--text);
   font-family: var(--body);
   font-weight: 400;
@@ -3666,13 +3751,13 @@ button.scope-chip:focus-visible {
     background var(--motion-fast);
 }
 .auth-dialog__input:hover {
-  background: color-mix(in srgb, var(--surface-sunken) 72%, var(--border));
+  border-color: var(--border-strong);
 }
 .auth-dialog__input:focus-visible {
   outline: none;
   background: var(--surface);
-  border-color: var(--azure);
-  box-shadow: var(--focus-ring);
+  border-color: var(--poke-red);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--poke-red) 18%, transparent);
 }
 
 /* ----- OTP segmented input (code step) -----------------------------------
@@ -3716,23 +3801,25 @@ button.scope-chip:focus-visible {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-family: var(--mono);
+  letter-spacing: 0.12em;
   font-size: 1.25rem;
   color: var(--text-strong);
   transition: border-color var(--motion-fast), box-shadow var(--motion-fast),
     background var(--motion-fast);
 }
 .auth-dialog__otp-cell--filled {
-  background: color-mix(in srgb, var(--surface-sunken) 55%, var(--surface));
-  border-color: var(--border);
+  background: var(--surface);
+  border-color: var(--border-strong);
 }
 .auth-dialog__otp-cell--active {
-  border-color: var(--azure);
-  box-shadow: var(--focus-ring);
+  border-color: var(--poke-red);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--poke-red) 18%, transparent);
 }
 .auth-dialog__submit {
-  height: 38px;
+  height: 40px;
   padding: 0 var(--space-4);
   border-radius: var(--radius-md);
   border: none;
@@ -3862,7 +3949,12 @@ button.scope-chip:focus-visible {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background: var(--bg);
+  background: radial-gradient(
+      120% 60% at 50% -10%,
+      color-mix(in srgb, var(--poke-red) 4%, var(--bg)),
+      var(--bg) 55%
+    )
+    no-repeat;
 }
 .teams-page__band {
   position: sticky;
@@ -3877,8 +3969,15 @@ button.scope-chip:focus-visible {
   padding-bottom: var(--space-4);
   padding-left: max(var(--space-10), env(safe-area-inset-left));
   padding-right: max(var(--space-10), env(safe-area-inset-right));
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  background: linear-gradient(
+    180deg,
+    var(--poke-red) 0%,
+    color-mix(in srgb, var(--poke-red-active) 60%, var(--poke-red)) 100%
+  );
+  border-bottom: 2px solid
+    color-mix(in srgb, var(--neutral-900) 12%, var(--poke-red-active));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--poke-red) 22%, transparent);
+  color: var(--neutral-0);
 }
 .teams-page__brand {
   display: inline-flex;
@@ -3889,12 +3988,33 @@ button.scope-chip:focus-visible {
 .teams-page__wordmark {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-3);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  color: var(--neutral-0);
   text-decoration: none;
-  color: inherit;
+}
+.teams-page__wordmark::before {
+  content: "";
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--brand-mark) center / cover no-repeat;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--neutral-0) 62%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.24);
+}
+.teams-page__band .oak-wordmark {
+  color: var(--neutral-0);
+  font-size: inherit;
 }
 .teams-page__wordmark:hover,
 .teams-page__wordmark:focus-visible {
-  opacity: 0.75;
+  opacity: 0.85;
   text-decoration: none;
 }
 .teams-page__band-controls {
@@ -3907,13 +4027,14 @@ button.scope-chip:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--text-muted);
+  color: var(--neutral-0);
   font-family: var(--body);
   font-weight: 600;
   font-size: var(--text-sm);
 }
 .teams-page__format-text {
-  color: var(--text-muted);
+  color: var(--neutral-0);
+  opacity: 0.85;
 }
 .teams-page__select-wrap {
   position: relative;
@@ -3926,27 +4047,28 @@ button.scope-chip:focus-visible {
   height: var(--space-10);
   padding-inline: var(--space-3) var(--space-8);
   border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--neutral-0);
   font-family: var(--body);
   font-weight: 600;
   font-size: var(--text-input);
   line-height: 1.2;
   cursor: pointer;
-  transition: background var(--motion-fast), border-color var(--motion-fast);
+  transition: background var(--motion-fast);
 }
 .teams-page__format-select:hover {
-  background: var(--surface-sunken);
+  background: rgba(255, 255, 255, 0.28);
 }
 .teams-page__format-select option {
   color: var(--text);
+  background: var(--surface);
 }
 .teams-page__select-wrap .pill-caret {
   position: absolute;
   right: var(--space-3);
   pointer-events: none;
-  color: var(--text-muted);
+  color: var(--neutral-0);
 }
 /* ----- Teams rail shell ---------------------------------------------------
    Wraps AppNav (as `.teams-page__rail`) and the existing body content in a
@@ -4620,9 +4742,7 @@ button.scope-chip:focus-visible {
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--surface) 86%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--surface);
   box-shadow: var(--shadow-floating);
 }
 .team-editor__savebar-meta {
@@ -4689,8 +4809,6 @@ button.scope-chip:focus-visible {
   gap: var(--space-3);
 }
 .roster-slot {
-  /* Filled slot = type edge + a small glow (soul.md "six sockets in a
-     device" — the party tray). --plate-a/--plate-b set per-slot in TSX. */
   --plate-a: var(--neutral-500);
   --plate-b: var(--neutral-600);
   display: flex;
@@ -4703,9 +4821,7 @@ button.scope-chip:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
-  box-shadow:
-    0 0 10px color-mix(in srgb, var(--plate-a) var(--plate-wash-b), transparent),
-    var(--shadow-raised);
+  box-shadow: var(--shadow-raised);
   cursor: pointer;
   transition:
     border-color var(--motion-fast),
@@ -4713,54 +4829,32 @@ button.scope-chip:focus-visible {
     background var(--motion-fast),
     transform var(--motion-spring);
 }
-/* Leading-edge light, same recipe as the answer plate — small, top-inset. */
 .roster-slot::before {
-  content: "";
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 0;
-  width: 3px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, var(--plate-a) 0 60%, var(--plate-b) 60% 100%);
+  content: none;
 }
 .roster-slot:hover {
   transform: translateY(-2px);
-  box-shadow:
-    0 0 14px color-mix(in srgb, var(--plate-a) var(--plate-wash-b), transparent),
-    var(--shadow-floating);
+  box-shadow: var(--shadow-floating);
 }
-/* Selection = red record-light ring (not a left list rail). */
 .roster-slot[data-selected="true"] {
-  border-color: var(--poke-red);
-  box-shadow: 0 0 0 1px var(--poke-red), var(--shadow-floating);
-  background: radial-gradient(
-    120% 80% at 50% 20%,
-    var(--poke-red-soft),
-    var(--surface) 80%
-  );
+  border: 2px solid var(--poke-red);
+  box-shadow: var(--shadow-raised);
+  background: var(--surface);
   transform: translateY(-2px);
 }
-/* Empty / unknown-type filled slots: a solid hairline socket machined into
-   the chassis (inset well) — no type edge, no dashed placeholder. */
 .roster-slot[data-empty="true"] {
   border-style: solid;
   border-color: var(--border);
   background: var(--surface-sunken);
-  box-shadow: var(--shadow-well);
+  box-shadow: none;
 }
 .roster-slot[data-empty="true"]::before {
   content: none;
 }
 .roster-slot[data-empty="true"][data-selected="true"] {
-  border-style: solid;
-  border-color: var(--poke-red);
-  box-shadow: 0 0 0 1px var(--poke-red);
-  background: radial-gradient(
-    120% 80% at 50% 20%,
-    var(--poke-red-soft),
-    var(--surface) 80%
-  );
+  border: 2px solid var(--poke-red);
+  box-shadow: var(--shadow-raised);
+  background: var(--surface);
 }
 .roster-slot__index {
   position: absolute;
@@ -5347,8 +5441,6 @@ button.scope-chip:focus-visible {
   justify-content: center;
   padding: var(--space-4);
   background: var(--scrim);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   z-index: var(--z-overlay);
   animation: scrim-in var(--motion-fast) both;
 }
@@ -5552,8 +5644,10 @@ button.scope-chip:focus-visible {
   gap: var(--space-2);
   align-items: center;
 }
+.proposed-team__add,
 .proposed-team__open-viewer,
 .proposed-team__save-new,
+.proposed-team__showdown,
 .proposed-team__apply {
   display: inline-flex;
   align-items: center;
@@ -5747,8 +5841,6 @@ button.scope-chip:focus-visible {
     inset: 0;
     z-index: var(--z-scrim);
     background: var(--scrim);
-    backdrop-filter: blur(1px);
-    -webkit-backdrop-filter: blur(1px);
     animation: scrim-in var(--motion-fast) both;
   }
   /* /teams collapses to a single column (list rail stacks above the editor). */
@@ -5792,6 +5884,9 @@ button.scope-chip:focus-visible {
   .answer-card {
     padding: var(--space-4);
   }
+  .receipts {
+    margin-inline: calc(-1 * var(--space-4));
+  }
   /* The account email (clamped to 200px, hover-only on desktop) would crowd /
      overflow the phone header — drop it; "Sign out" + the avatar carry the
      signed-in state. */
@@ -5815,10 +5910,15 @@ button.scope-chip:focus-visible {
     min-width: 230px;
     max-width: min(320px, calc(100vw - 2 * var(--space-4)));
     padding: var(--space-4);
-    /* Paper popover panel (matches the demoted header). The controls inside are
-       paper secondary controls now, so they read correctly here. */
-    background: var(--surface-raised);
-    border: 1px solid var(--border);
+    /* Re-use the enamel band so the translucent-white pills keep contrast
+       on the panel instead of vanishing against a light surface. */
+    background: linear-gradient(
+      180deg,
+      var(--poke-red) 0%,
+      color-mix(in srgb, var(--poke-red-active) 60%, var(--poke-red)) 100%
+    );
+    border: 1px solid
+      color-mix(in srgb, var(--neutral-900) 12%, var(--poke-red-active));
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-overlay);
     /* Scroll internally on short / landscape phones instead of being clipped by
@@ -5829,6 +5929,10 @@ button.scope-chip:focus-visible {
   }
   .chat-page__controls--open {
     display: flex;
+  }
+  .chat-page__controls::before,
+  .chat-page__controls .chat-page__header-divider {
+    display: none;
   }
   /* Each control becomes a full-width menu row. */
   .chat-page__controls .active-team-selector {
@@ -5852,7 +5956,7 @@ button.scope-chip:focus-visible {
 /* ---- ≤480px: tightest portrait ------------------------------------------ */
 @media (max-width: 480px) {
   /* Reclaim width for typed questions (was capped at 70% ≈ 217px). */
-  .chat-turn--user .chat-turn__content {
+  .chat-turn--user .chat-turn__note {
     max-width: 90%;
   }
   /* Sprite cards fill the column / sit two-up instead of stranding dead space. */
@@ -6263,9 +6367,7 @@ button.scope-chip:focus-visible {
   align-items: center;
   justify-content: center;
   padding: var(--space-6);
-  background: color-mix(in srgb, var(--bg) 74%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--scrim);
 }
 .voice-overlay__panel {
   position: relative;
@@ -6506,4 +6608,537 @@ button.scope-chip:focus-visible {
 .plate-tuner__reset {
   align-self: flex-end;
   margin-top: var(--space-1);
+}
+
+/* Dev thinking-orb playground — ?orbs=1 */
+.orb-playground {
+  position: fixed;
+  left: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-overlay, 1000);
+  width: min(280px, calc(100vw - 2rem));
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-floating);
+  font-size: 0.75rem;
+  color: var(--text);
+}
+.orb-playground__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.orb-playground__title {
+  color: var(--text-muted);
+}
+.orb-playground__toggle {
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 2px var(--space-2);
+  cursor: pointer;
+}
+.orb-playground__toggle:hover {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+.orb-playground__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.orb-playground__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 80px;
+  justify-content: center;
+}
+.orb-playground__caption {
+  color: var(--text-faint);
+  font-family: var(--mono, ui-monospace, monospace);
+}
+.orb-playground__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.orb-playground__chip {
+  font: inherit;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.orb-playground__chip--on,
+.orb-playground__chip:hover {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+.orb-playground__row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ===== Chat QoL (Phase 8) ===== */
+.turn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+.chat-turn--user .turn-actions {
+  justify-content: flex-end;
+}
+.turn-actions__btn,
+.chat-turn__undo {
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.turn-actions__btn:hover,
+.chat-turn__undo:hover {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+.pin-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+.pin-strip__link {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+}
+.pin-strip__link:hover {
+  color: var(--poke-red);
+}
+.follow-up-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.follow-up-chips__chip {
+  padding: 6px var(--space-3);
+  background: var(--surface);
+  color: var(--text-strong);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.follow-up-chips__chip:hover:not(:disabled) {
+  background: var(--azure-soft);
+  border-color: var(--azure);
+}
+.follow-up-chips__chip:disabled {
+  color: var(--text-faint);
+  background: var(--surface-sunken);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+.empty-desk {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+.empty-desk__row {
+  padding: var(--space-2) 0;
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.empty-desk__row:hover:not(.empty-desk__row--static) {
+  color: var(--poke-red);
+}
+.empty-desk__row--static {
+  cursor: default;
+  color: var(--text-muted);
+}
+.mention-ac {
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  z-index: var(--z-popover);
+  display: flex;
+  flex-direction: column;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-floating);
+}
+.mention-ac__option {
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  color: var(--text-strong);
+}
+.mention-ac__option:hover {
+  background: var(--surface-sunken);
+}
+.mention-ac__empty {
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.cmd-palette-backdrop,
+.shortcut-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh var(--space-4) var(--space-4);
+  background: var(--scrim);
+}
+.cmd-palette,
+.shortcut-overlay {
+  width: min(560px, 100%);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
+  overflow: hidden;
+}
+.cmd-palette__input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-input);
+}
+.cmd-palette__list {
+  display: flex;
+  flex-direction: column;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.cmd-palette__option {
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: var(--text-strong);
+  cursor: pointer;
+}
+.cmd-palette__option:hover {
+  background: var(--surface-sunken);
+}
+.shortcut-overlay__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.shortcut-overlay__title {
+  margin: 0;
+  font-size: var(--text-md);
+}
+.shortcut-overlay__close {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.shortcut-overlay__list {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.shortcut-overlay__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+.shortcut-overlay__chords kbd {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+}
+.shared-by-me__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.shared-by-me__item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+.shared-by-me__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.shared-by-me__title {
+  font-weight: 600;
+}
+.shared-by-me__url {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shared-by-me__revoke {
+  flex: none;
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.shared-by-me__empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.auth-menu {
+  position: relative;
+}
+.auth-menu__account {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: var(--z-popover);
+  width: min(360px, 80vw);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-floating);
+}
+.auth-menu__account-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+}
+.auth-menu__shortcuts {
+  margin-top: var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.conv-list__views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.conv-list__view {
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.conv-list__view[aria-pressed="true"] {
+  border-color: var(--poke-red);
+  color: var(--poke-red);
+}
+.conv-list__include {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.conv-list__bulk {
+  display: flex;
+  gap: var(--space-2);
+}
+.conv-list__bulk-btn {
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.conv-row__folder {
+  position: relative;
+}
+.conv-row__folder-menu {
+  position: absolute;
+  right: 0;
+  z-index: var(--z-popover);
+  min-width: 140px;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-floating);
+}
+.conv-row__folder-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.scope-chip__mru {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--border);
+}
+.scope-chip__mru-label {
+  padding: 0 var(--space-2);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+.chat-page__images-missing {
+  margin: 0 var(--space-4) var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.composer__dead {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+.composer__field--dead-mention {
+  border-color: var(--danger);
+}
+.conv-list__folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.conv-list__folder-act {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-xs);
+  padding: 2px 4px;
+}
+.conv-list__folder-act--danger {
+  color: var(--danger);
+  font-weight: 600;
+}
+.conv-list__folder-rename {
+  width: 7rem;
+  font: inherit;
+  font-size: var(--text-xs);
+  padding: 2px 6px;
+}
+.conv-list__new-folder {
+  display: flex;
+  gap: var(--space-1);
+}
+.conv-list__new-folder-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-xs);
+}
+.conv-list__bulk-move {
+  position: relative;
+}
+.conv-list__bulk-menu {
+  position: absolute;
+  z-index: var(--z-popover);
+  min-width: 140px;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-floating);
+}
+.conv-list__bulk-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.conv-list__export {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
 }

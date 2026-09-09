@@ -12,17 +12,14 @@
 
 /* ---------------------------------------------------------------------------
    Toolbar — sticky under the header (parks at `--ref-header-h`, defined in
-   reference.css next to `.ref-header`). Translucent paper + blur so scrolled
-   content reads through it, like the header itself.
+   reference.css next to `.ref-header`). Opaque paper; no blur.
    ------------------------------------------------------------------------- */
 
 .ref-toolbar {
   position: sticky;
   top: var(--ref-header-h);
   z-index: calc(var(--z-header) - 1);
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
   padding: var(--space-4) 0;
   margin-bottom: var(--space-6);

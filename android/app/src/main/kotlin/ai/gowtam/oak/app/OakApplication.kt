@@ -29,7 +29,12 @@ import coil3.gif.GifDecoder
  */
 class OakApplication : Application(), SingletonImageLoader.Factory {
     val services: ServiceContainer by lazy { ServiceContainer.live(this) }
-    val appState: AppState by lazy { AppState() }
+    val appState: AppState by lazy {
+        AppState(
+            appearanceStore = SharedPreferencesAppearanceStore(this),
+            regulationStore = SharedPreferencesRegulationStore(this),
+        )
+    }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)

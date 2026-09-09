@@ -15,82 +15,72 @@ import SwiftUI
 /// a Pokémon's movepool moves and matchup types, a move/type's matchup types, an ability's
 /// holders, an item's wild holders — each calling ``onOpen`` to push a new artifact onto the
 /// viewer's back stack.
+private enum PokemonArtifactTab: String, CaseIterable {
+  case summary
+  case usage
+}
+
 struct EntityDetailView: View {
   let artifact: EntityArtifactOk
 
-  /// The scope the viewer actually asked for (its fixed request format). On the National-Dex
-  /// fallback path the artifact's own `format`/`source_format` are both `national-dex`, so the
-  /// requested scope has to be threaded in here for the "not found in <this scope>" badge/caption.
-  /// `nil` (previews / no-context renders) simply suppresses the fallback chrome.
+  /// Requested lookup scope. Champions-first: leftover values are ignored and
+  /// National Dex fallback chrome is not shown.
   var requestFormat: Format?
 
   /// Pushes another entity onto the viewer's back stack when one inside this profile is tapped.
   /// Defaults to a no-op so the view renders in isolation / previews.
   var onOpen: (EntityKind, String) -> Void = { _, _ in }
 
-  /// The National-Dex fallback source when the requested scope missed (#2): the profile was
-  /// assembled outside `requestFormat`, so its `source_format` differs from the request. `nil`
-  /// on the normal in-scope path (or when the request scope is unknown) — suppresses the badge.
-  private var fallbackSource: Format? {
-    guard let source = artifact.sourceFormat, let request = requestFormat, source != request else {
-      return nil
-    }
-    return source
-  }
-
-  /// Specimen-plate atmosphere from this entity's types (soul.md Phase 2.1).
-  /// Pokémon / move / type → typed wash; ability / item / unsupported → ink plate.
-  private var plateAtmosphere: Theme.PlateAtmosphere {
-    switch artifact.data {
-    case .pokemon(let data):
-      return Theme.PlateAtmosphere.resolve(subjectTypes: [data.types])
-    case .move(let data):
-      return Theme.PlateAtmosphere.resolve(subjectTypes: [[data.type]])
-    case .type(let data):
-      return Theme.PlateAtmosphere.resolve(subjectTypes: [data.types])
-    case .ability, .item, .unsupported:
-      return .mechanics
-    }
-  }
+  @State private var pokemonTab: PokemonArtifactTab = .summary
 
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-        if let source = fallbackSource, let request = requestFormat {
-          fallbackCaption(request: request, source: source)
-        }
         kindBody
-        groundingSection
+        if showsGrounding {
+          groundingSection
+        }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(Theme.Spacing.lg)
-      // Artifact chrome is a specimen-plate continuation of the answer card.
-      .oakSpecimenPlate(plateAtmosphere)
+      .oakCard()
       .padding(.horizontal, Theme.Spacing.sm)
       .padding(.vertical, Theme.Spacing.sm)
     }
     .background(Theme.canvas)
+    .onChange(of: artifact.resolved.slug) { _, _ in
+      pokemonTab = .summary
+    }
   }
 
-  /// The short "not found in <requested scope> — showing <source> data" note at the top of a
-  /// fallback profile, so the user knows the data isn't from the scope they asked for (#2).
-  private func fallbackCaption(request: Format, source: Format) -> some View {
-    Label(
-      "Not found in \(request.shortLabel) — showing \(source.shortLabel) data",
-      systemImage: "arrow.triangle.branch"
-    )
-    .font(Theme.body(.caption))
-    .foregroundStyle(Theme.azure)
-    .fixedSize(horizontal: false, vertical: true)
+  private var showsGrounding: Bool {
+    if case .pokemon = artifact.data, pokemonTab == .usage {
+      return false
+    }
+    return true
   }
 
   // MARK: Kind dispatch
+
+  private var pokemonTabs: some View {
+    Picker("Profile section", selection: $pokemonTab) {
+      Text("Summary").tag(PokemonArtifactTab.summary)
+      Text("Usage").tag(PokemonArtifactTab.usage)
+    }
+    .pickerStyle(.segmented)
+    .accessibilityLabel("Pokémon profile")
+  }
 
   @ViewBuilder
   private var kindBody: some View {
     switch artifact.data {
     case .pokemon(let data):
-      pokemonBody(data)
+      pokemonTabs
+      if pokemonTab == .summary {
+        pokemonBody(data)
+      } else {
+        PokemonUsagePane(slug: artifact.resolved.slug, onOpen: onOpen)
+      }
     case .move(let data):
       moveBody(data)
     case .ability(let data):
@@ -139,24 +129,20 @@ struct EntityDetailView: View {
     movepoolSection(data.movepool)
   }
 
-  /// The full-width Pokémon hero band: type-glow artwork well (SubjectsView quality)
-  /// over a neutral band lit by a single primary-type radial glow (Phase 2 plate-
-  /// glow language, `Theme.typeGlowBand`), plus display name, mono dex, and
-  /// tappable type chips. Glow is enhancement only — chips carry typing as color
-  /// **and** label (M-AC-UI9.3). Soul.md Phase 2.1 artifact continuation.
+  /// Pokémon hero: artwork in a paper well, display name, mono dex, and
+  /// tappable type chips. Chips carry typing as color **and** label (M-AC-UI9.3).
   private func pokemonHeader(_ data: PokemonArtifactData) -> some View {
-    let primary = data.types.first ?? "normal"
-    let secondary = data.types.count > 1 ? data.types[1] : nil
-    return VStack(spacing: 12) {
+    VStack(spacing: 12) {
       SpriteImage(urlString: data.artworkUrl, name: data.displayName, size: 112)
         .padding(Theme.Spacing.md)
-        .oakTypeGlowWell(
-          primary: primary,
-          secondary: secondary,
-          cornerRadius: Theme.Radius.xl,
-          glowEndRadius: 96
+        .background(
+          Theme.surfaceSunken,
+          in: RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
         )
-        .shadow(color: Color.black.opacity(0.14), radius: 10, x: 0, y: 4)
+        .overlay {
+          RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
+            .strokeBorder(Theme.separator, lineWidth: 1)
+        }
       VStack(spacing: 6) {
         Text(data.displayName)
           .font(Theme.display(.title))
@@ -166,43 +152,43 @@ struct EntityDetailView: View {
           .instrumentLabel(.caption)
           .foregroundStyle(Theme.textMuted)
         typeChips(data.types)
+        AddToTeamButton(
+          incoming: incomingTeamMember(
+            species: artifact.resolved.slug,
+            ability: data.abilities.slot1
+          )
+        )
       }
     }
     .frame(maxWidth: .infinity)
     .padding(.vertical, 20)
     .padding(.horizontal, 16)
     .background(
-      Theme.typeGlowBand(primary),
+      Theme.surface,
       in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
     )
+    .overlay {
+      RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+        .strokeBorder(Theme.separator, lineWidth: 1)
+    }
   }
 
-  /// A tinted header band for the non-Pokémon kinds — a left-aligned title (and, for a move, its
-  /// type/damage-class chips) over a neutral band with a single radial type glow (Phase 2 plate-
-  /// glow language). Callers pass the background: a move/type uses `Theme.typeGlowBand`, and
-  /// abilities/items use the neutral accent wash (they have no single type to key off). Radius
-  /// matches the Pokémon hero (`Radius.lg`).
-  private func headerBand<Background: ShapeStyle, Content: View>(
-    background: Background, @ViewBuilder content: () -> Content
-  ) -> some View {
+  /// Paper header band for non-Pokémon kinds — title (and, for a move, its
+  /// type/damage-class chips) on `--surface` + hairline. Radius matches the
+  /// Pokémon hero (`Radius.lg`).
+  private func headerBand<Content: View>(@ViewBuilder content: () -> Content) -> some View {
     VStack(alignment: .leading, spacing: 8) {
       content()
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(16)
     .background(
-      background, in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+      Theme.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
     )
-  }
-
-  /// The neutral accent wash used for ability/item bands — the low-opacity accent diagonal that
-  /// stands in where there's no type color to tint the band with.
-  private var accentBandGradient: LinearGradient {
-    LinearGradient(
-      colors: [Theme.accent.opacity(0.14), Theme.accent.opacity(0.05)],
-      startPoint: .topLeading,
-      endPoint: .bottomTrailing
-    )
+    .overlay {
+      RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+        .strokeBorder(Theme.separator, lineWidth: 1)
+    }
   }
 
   private func abilitiesSection(_ abilities: Abilities) -> some View {
@@ -345,7 +331,7 @@ struct EntityDetailView: View {
   @ViewBuilder
   private func moveBody(_ data: MoveArtifactData) -> some View {
     VStack(alignment: .leading, spacing: 14) {
-      headerBand(background: Theme.typeGlowBand(data.type)) {
+      headerBand {
         Text(data.displayName)
           .font(Theme.display(.title2))
           .foregroundStyle(Theme.textPrimary)
@@ -374,7 +360,7 @@ struct EntityDetailView: View {
   @ViewBuilder
   private func abilityBody(_ data: AbilityArtifactData) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      headerBand(background: accentBandGradient) {
+      headerBand {
         Text(data.displayName)
           .font(Theme.display(.title2))
           .foregroundStyle(Theme.textPrimary)
@@ -410,7 +396,7 @@ struct EntityDetailView: View {
   @ViewBuilder
   private func itemBody(_ data: ItemArtifactData) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      headerBand(background: accentBandGradient) {
+      headerBand {
         Text(data.displayName)
           .font(Theme.display(.title2))
           .foregroundStyle(Theme.textPrimary)
@@ -433,9 +419,7 @@ struct EntityDetailView: View {
   @ViewBuilder
   private func typeBody(_ data: TypeArtifactData) -> some View {
     VStack(alignment: .leading, spacing: 14) {
-      headerBand(
-        background: Theme.typeGlowBand(data.types.first ?? "normal")
-      ) {
+      headerBand {
         flow {
           ForEach(data.types, id: \.self) { type in
             TypeBadge(type: type)
@@ -467,22 +451,10 @@ struct EntityDetailView: View {
       Divider()
       HStack(spacing: 8) {
         formatBadge(artifact.format)
-        if let source = fallbackSource {
-          sourceFormatBadge(source)
-        }
         Text(artifact.generation)
           .font(Theme.body(.caption))
           .foregroundStyle(Theme.textSecondary)
         Spacer(minLength: 0)
-      }
-      if artifact.isFallback {
-        Label(
-          artifact.fallbackNote ?? "Showing fallback data from an earlier generation.",
-          systemImage: "clock.arrow.circlepath"
-        )
-        .font(Theme.body(.caption))
-        .foregroundStyle(Theme.warning)
-        .fixedSize(horizontal: false, vertical: true)
       }
       if !artifact.citations.isEmpty {
         ForEach(Array(artifact.citations.enumerated()), id: \.offset) { _, citation in
@@ -593,19 +565,6 @@ struct EntityDetailView: View {
       .padding(.vertical, 3)
       .foregroundStyle(Theme.textSecondary)
       .background(Theme.surfaceRaised, in: Capsule())
-  }
-
-  /// The National-Dex fallback badge (#2) — an azure-tinted capsule beside the format badge
-  /// naming the scope the profile was actually resolved from, so the grounding chrome stays
-  /// honest about the cross-scope fallback. Same capsule shape as ``formatBadge``.
-  private func sourceFormatBadge(_ source: Format) -> some View {
-    Text(source.shortLabel)
-      .font(Theme.body(.caption2, weight: .semibold))
-      .padding(.horizontal, 8)
-      .padding(.vertical, 3)
-      .foregroundStyle(Theme.azure)
-      .background(Theme.azureSoft, in: Capsule())
-      .accessibilityLabel("Resolved from \(source.shortLabel)")
   }
 
   /// A simple wrapping container for chips. Uses an adaptive grid so chips reflow at large
@@ -795,6 +754,7 @@ private func previewPokemonArtifact() -> EntityArtifactOk? {
 #Preview("Pokémon profile") {
   if let ok = previewPokemonArtifact() {
     EntityDetailView(artifact: ok)
+      .oakServices(.preview())
   } else {
     Text("decode failed")
   }

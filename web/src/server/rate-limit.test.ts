@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("server-only", () => ({}));
+
 // The route-keying suite below mocks the agent + auth seams so `POST /api/chat`
 // never opens Postgres, reads a real cookie, or hits the model — Docker-light,
 // mirroring test/api-chat.integration.test.ts. `checkRateLimit` itself is left
@@ -37,6 +39,7 @@ vi.mock("@/data/repos/conversation-repo", () => ({
   getConversation: mockGetConversation,
   getMessages: mockGetMessages,
   appendTurnPair: mockAppendTurnPair,
+  updateConversationFormat: vi.fn(async () => {}),
   newTurnId: () => "test-turn-id",
 }));
 // The route resolves the active model via factory.activeModelKey(), which
@@ -54,6 +57,11 @@ vi.mock("@/data/repos/settings-repo", () => ({
     updatedAt: null,
   }),
   setActiveModelKey: vi.fn(),
+}));
+// Spend admission is a separate gate; this suite pins per-minute keying only.
+vi.mock("@/server/spend-control", () => ({
+  admitAgentTurn: vi.fn(async () => ({ ok: true })),
+  assertNotDenylisted: vi.fn(async () => ({ ok: true })),
 }));
 vi.mock("@/server/rate-limit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/rate-limit")>();
@@ -766,16 +774,11 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
     expect(keys).toEqual(["ip:5.5.5.5", "acct:acct-42"]);
   });
 
-  // GS-D3 (amends BR-A11): the Champions toggle is a SEED for a NEW guest session,
-  // not a per-turn lock. Once a guest session resolves to Champions it is STICKY —
-  // a later turn that omits the toggle (and carries no explicit in-message game
-  // signal) stays in Champions. A brand-new session with NO seed at all (no toggle,
-  // no scope_seed) now falls back to the NATIONAL DEX default (the scope flip).
-  // (Leaving Champions mid-session requires an explicit signal or a new session;
-  // see docs/features/generation-scope GS-D3.)
+  // Champions-first (CF-DATA-BR-1, CF-DATA-BR-7): every guest turn is Champions,
+  // including a brand-new session with no seed. champions_mode is ignored.
   it("Champions toggle SEEDS a guest session and the resolved scope is sticky (GS-D3, amends BR-A11)", async () => {
     mockGetCurrentAccount.mockResolvedValue(null);
-    // Turn 1: toggle ON seeds the fresh session → champions.
+    // Turn 1: toggle ON — still champions (the only data scope).
     const champ = await post({
       session_id: "s-champ",
       message: "hi",
@@ -786,7 +789,7 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
       expect.objectContaining({ sessionId: "s-champ", mode: "champions" }),
     );
 
-    // Turn 2: same session, toggle omitted, no in-message signal → STAYS champions (sticky).
+    // Turn 2: same session, toggle omitted → still champions.
     mockCreateAgentContext.mockClear();
     const again = await post({ session_id: "s-champ", message: "hi again" });
     await drain(again);
@@ -794,12 +797,12 @@ describe("POST /api/chat — tiered rate-limit keying", () => {
       expect.objectContaining({ sessionId: "s-champ", mode: "champions" }),
     );
 
-    // A brand-new session with no seed at all falls back to the National Dex default.
+    // A brand-new session with no seed is also Champions (not National Dex).
     mockCreateAgentContext.mockClear();
     const fresh = await post({ session_id: "s-fresh", message: "hello" });
     await drain(fresh);
     expect(mockCreateAgentContext).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: "s-fresh", mode: "national-dex" }),
+      expect.objectContaining({ sessionId: "s-fresh", mode: "champions" }),
     );
   });
 });

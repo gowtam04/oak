@@ -4,9 +4,11 @@ import SwiftUI
 import UIKit
 
 /// The chat composer (chat-experience.md M-CHAT-US-1/5): a growing text field, a
-/// send button, and (P8) image attach — the photo library (`PhotosPicker`) or the
-/// camera (``CameraPicker``) behind one attach menu — with thumbnail/remove UI and
-/// permission handling. Scope is no longer set here: the header scope chip
+/// send button, a voice-mode mic gated by ``VoiceCapture/isEnabled`` (off until
+/// the realtime overlay is reliable; signed-in starts a session; guests get a
+/// sign-in nudge), and (P8) image attach — the photo library (`PhotosPicker`) or
+/// the camera (``CameraPicker``) behind one attach menu — with thumbnail/remove
+/// UI and permission handling. Scope is no longer set here: the header scope chip
 /// (`ChatView`) is the sole scope control (the Champions pill was removed).
 ///
 /// It reads and writes the feature's ``ChatViewModel`` directly (a sibling view in
@@ -33,14 +35,13 @@ struct ComposerView: View {
   /// Motion (the caller only toggles it when motion is allowed).
   var sendPulse: Bool = false
 
-  @FocusState private var isInputFocused: Bool
+  /// Owned by ``ChatView`` so the thread can resign focus on an outside tap.
+  @FocusState.Binding var isInputFocused: Bool
 
   /// Drives the one-shot send-button scale pulse, flipped on for a beat when
   /// ``sendPulse`` changes and released by ``Theme/Motion/snappy``.
   @State private var isPulsing = false
 
-  /// Drives the light-mode-only upward lift shadow (dark mode leans on the divider).
-  @Environment(\.colorScheme) private var colorScheme
   /// Gates the focus/toggle/thumbnail motion (constraint 2).
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -84,12 +85,25 @@ struct ComposerView: View {
           .frame(maxWidth: .infinity, alignment: .leading)
           .accessibilityLabel(attachNote)
       }
+      if let missing = model.missingImagesNote {
+        Text(missing)
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.warning)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      if !model.deadMentionIds.isEmpty {
+        Text("That @mention isn't one of your teams. Remove it to send.")
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.danger)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      MentionAutocomplete(suggestions: model.mentionSuggestions, onPick: model.insertMention)
 
       thumbnailRow(model: model)
 
       HStack(alignment: .bottom, spacing: 8) {
         attachControls(model: model)
-        if Self.showsVoiceControl {
+        if VoiceCapture.isEnabled {
           voiceControl(model: model)
         }
 
@@ -100,42 +114,35 @@ struct ComposerView: View {
           .focused($isInputFocused)
           .padding(.horizontal, Theme.Spacing.md)
           .padding(.vertical, Theme.Spacing.sm)
-          .background(Theme.surfaceSunken, in: RoundedRectangle(cornerRadius: Theme.Radius.lg))
-          // Rest: hairline. Focus: 2pt red stroke offset 2pt on canvas — no
-          // chassis glow / record-ready halo.
+          .background(Theme.surface, in: Capsule())
           .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-              .strokeBorder(Theme.separator, lineWidth: 1)
+            Capsule()
+              .strokeBorder(
+                isInputFocused ? Theme.accent : Theme.borderStrong,
+                lineWidth: 1
+              )
           }
           .overlay {
             if isInputFocused {
-              RoundedRectangle(cornerRadius: Theme.Radius.lg + 4, style: .continuous)
-                .strokeBorder(Theme.accent, lineWidth: 2)
-                .padding(-4)
+              Capsule()
+                .stroke(Theme.accent.opacity(0.18), lineWidth: 4)
+                .padding(-2)
             }
           }
-          .animation(Theme.Motion.snappy, value: isInputFocused)
+          .oakShadow(.raised)
+          .offset(y: isInputFocused && !reduceMotion ? -1 : 0)
+          .animation(reduceMotion ? nil : Theme.Motion.snappy, value: isInputFocused)
 
         sendButton
       }
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
-    // A quiet chassis bar lifted off the thread (Instrument redesign): a flat
-    // `canvas` fill (no frosted-glass material — the bar reads as part of the
-    // device, not a floating pane) plus a themed hairline top edge and (light
-    // mode only) a faint upward shadow; dark mode leans on the hairline alone.
+    // Padding on paper; the pill carries elevation. Opaque canvas — no
+    // frost, no `.bar`, no material, no upward shadow-as-frost.
     .background {
-      Rectangle()
-        .fill(Theme.canvas.opacity(0.92))
-        .overlay(alignment: .top) {
-          Rectangle().fill(Theme.separator).frame(height: 1)
-        }
-        .shadow(
-          color: colorScheme == .dark ? .clear : .black.opacity(0.05),
-          radius: 8, y: -3
-        )
-        .ignoresSafeArea(edges: .bottom)
+      Theme.canvas.ignoresSafeArea(edges: .bottom)
+        .allowsHitTesting(false)
     }
     // The attach dialog and active typing are mutually exclusive (feedback
     // APFrit48yRdOdP2IKOX6tBM): gaining text focus, or the text itself changing,
@@ -145,6 +152,7 @@ struct ComposerView: View {
     }
     .onChange(of: model.composerText) { _, _ in
       isAttachDialogPresented = false
+      model.updateMentionQuery()
     }
     .confirmationDialog("Attach Image", isPresented: $isAttachDialogPresented, titleVisibility: .hidden) {
       Button("Photo Library") {
@@ -215,12 +223,6 @@ struct ComposerView: View {
     remainingSlots > 0 && !model.isStreaming
   }
 
-  /// Voice mode is temporarily hidden from the composer (kept implemented); flip to
-  /// re-show. Everything downstream (``voiceControl(model:)``, ``handleMicTap()``,
-  /// the mic/sign-in alerts, `onVoice`/`voiceReady`/`onSignInNudge`) stays wired and
-  /// compiled — this is the single gate.
-  private static let showsVoiceControl = false
-
   // MARK: Image attach control (one dialog → photo library / camera)
 
   /// A single attach affordance: a paperclip that opens a `confirmationDialog` with
@@ -240,7 +242,8 @@ struct ComposerView: View {
       Image(systemName: "paperclip")
         .font(Theme.body(.title3))
         .symbolRenderingMode(.hierarchical)
-        .frame(width: 38, height: 38)
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
     }
     .tint(Theme.textSecondary)
     .disabled(!canAttachMore)
@@ -249,7 +252,8 @@ struct ComposerView: View {
 
   // MARK: Voice control (mic button)
 
-  /// The mic button: always visible (matches the attach control), disabled only
+  /// The mic button: hidden while ``VoiceCapture/isEnabled`` is false. When
+  /// capture is on it matches the attach control and is disabled only
   /// mid-stream. A tap runs ``handleMicTap()``, which branches on sign-in state
   /// and then the microphone permission before ever calling ``onVoice``.
   @ViewBuilder
@@ -261,6 +265,8 @@ struct ComposerView: View {
       Image(systemName: "mic.fill")
         .font(Theme.body(.title3))
         .symbolRenderingMode(.hierarchical)
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
     }
     // At rest the mic is quiet `textSecondary` — red is reserved for *live* recording,
     // which happens in the voice overlay, not here (§4.02: red = live, not "audio
@@ -275,24 +281,31 @@ struct ComposerView: View {
   /// (`AVAudioApplication`, iOS 17+): granted fires ``onVoice`` immediately,
   /// undetermined requests permission and fires ``onVoice`` only if granted, and
   /// denied shows the "enable in Settings" alert.
+  ///
+  /// Keyboard focus is always dropped first. Presenting the voice
+  /// `.fullScreenCover` over a live first responder is a SwiftUI failure mode
+  /// (the cover flashes and tears down), which looks like "voice does nothing."
   private func handleMicTap() {
-    guard voiceReady else {
+    guard VoiceCapture.isEnabled else { return }
+    isInputFocused = false
+    switch VoiceMicGate.action(
+      voiceReady: voiceReady,
+      permission: AVAudioApplication.shared.recordPermission
+    ) {
+    case .start:
+      // Yield so SwiftUI commits the focus change (keyboard down) before
+      // the voice `.fullScreenCover` presents.
+      Task { @MainActor in onVoice?() }
+    case .signIn:
       showVoiceSignInAlert = true
-      return
-    }
-    switch AVAudioApplication.shared.recordPermission {
-    case .granted:
-      onVoice?()
-    case .undetermined:
+    case .openSettings:
+      showMicDeniedAlert = true
+    case .requestPermission:
       AVAudioApplication.requestRecordPermission { granted in
         Task { @MainActor in
           if granted { onVoice?() }
         }
       }
-    case .denied:
-      showMicDeniedAlert = true
-    @unknown default:
-      showMicDeniedAlert = true
     }
   }
 
@@ -461,9 +474,20 @@ private struct OakSendButtonStyle: ButtonStyle {
 
 #if DEBUG
 #Preview("Composer") {
-  VStack {
-    Spacer()
-    ComposerView(model: ChatViewModel(chat: PreviewChatService(), appState: AppState()))
+  ComposerPreviewHost()
+}
+
+private struct ComposerPreviewHost: View {
+  @FocusState private var isInputFocused: Bool
+
+  var body: some View {
+    VStack {
+      Spacer()
+      ComposerView(
+        model: ChatViewModel(chat: PreviewChatService(), appState: AppState()),
+        isInputFocused: $isInputFocused
+      )
+    }
   }
 }
 #endif

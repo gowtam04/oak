@@ -10,6 +10,7 @@ import ai.gowtam.oak.ui.rememberHaptics
 import ai.gowtam.oak.wire.TeamPatch
 import ai.gowtam.oak.wire.describeTeamPatch
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -52,6 +53,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -115,7 +117,14 @@ fun TeamsAssistantSheet(
             if (state.status == AssistantStatus.THINKING) {
                 item { PendingBlock(activity = state.activity, streamingMarkdown = state.streamingMarkdown) }
             }
-            state.errorMessage?.let { message -> item { ErrorRow(message, onRetry = viewModel::retry) } }
+            state.errorMessage?.let { message ->
+                item {
+                    ErrorRow(
+                        message,
+                        onRetry = if (state.errorIsRetryable) viewModel::retry else null,
+                    )
+                }
+            }
         }
         HorizontalDivider()
 
@@ -161,11 +170,20 @@ private fun TurnBlock(turn: AssistantTurn, state: TeamsAssistantUiState, viewMod
     val oak = LocalOakColors.current
     Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            val bubbleShape = RoundedCornerShape(
+                topStart = OakRadius.lg,
+                topEnd = OakRadius.lg,
+                bottomStart = OakRadius.lg,
+                bottomEnd = OakRadius.sm,
+            )
+            val fill = lerp(MaterialTheme.colorScheme.surface, oak.accentSoft, 0.55f)
+            val stroke = lerp(oak.border, oak.accent, 0.30f)
             Text(
                 text = turn.user,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier
-                    .background(oak.accent.copy(alpha = 0.14f), RoundedCornerShape(OakRadius.md))
+                    .background(fill, bubbleShape)
+                    .border(1.dp, stroke, bubbleShape)
                     .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
             )
         }
@@ -200,7 +218,8 @@ private fun PatchCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(oak.surfaceRaised, RoundedCornerShape(OakRadius.md))
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(OakRadius.md))
+            .border(1.dp, oak.border, RoundedCornerShape(OakRadius.md))
             .padding(OakSpacing.md),
         verticalArrangement = Arrangement.spacedBy(OakSpacing.sm),
     ) {
@@ -247,7 +266,7 @@ private fun PendingBlock(activity: String?, streamingMarkdown: String) {
 }
 
 @Composable
-private fun ErrorRow(message: String, onRetry: () -> Unit) {
+private fun ErrorRow(message: String, onRetry: (() -> Unit)?) {
     val oak = LocalOakColors.current
     Row(
         modifier = Modifier
@@ -259,7 +278,9 @@ private fun ErrorRow(message: String, onRetry: () -> Unit) {
     ) {
         Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = oak.warning, modifier = Modifier.size(18.dp))
         Text(message, style = MaterialTheme.typography.bodySmall, color = oak.textStrong, modifier = Modifier.weight(1f))
-        TextButton(onClick = onRetry) { Text("Retry") }
+        if (onRetry != null) {
+            TextButton(onClick = onRetry) { Text("Retry") }
+        }
     }
 }
 

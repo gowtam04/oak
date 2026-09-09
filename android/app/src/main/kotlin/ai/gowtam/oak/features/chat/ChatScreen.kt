@@ -1,11 +1,20 @@
 package ai.gowtam.oak.features.chat
 
+import ai.gowtam.oak.app.LocalServices
 import ai.gowtam.oak.features.artifact.ArtifactSheet
 import ai.gowtam.oak.features.artifact.ArtifactViewModel
+import ai.gowtam.oak.features.artifact.PinnedArtifactStrip
+import ai.gowtam.oak.features.calc.CalculatorOverlay
+import ai.gowtam.oak.features.calc.CalculatorViewModel
 import ai.gowtam.oak.features.chat.answercard.AnswerCard
 import ai.gowtam.oak.features.chat.answercard.AnswerCardActions
+import ai.gowtam.oak.features.teams.AddToTeamSheet
+import ai.gowtam.oak.features.teams.AddToTeamViewModel
+import ai.gowtam.oak.wire.TeamMember
+import ai.gowtam.oak.features.share.shareExportedFile
 import ai.gowtam.oak.ui.LocalOakColors
-import ai.gowtam.oak.ui.MarkdownBlockView
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakTopBar
@@ -22,16 +31,22 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -44,9 +59,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Functions
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -69,7 +88,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -80,6 +105,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The chat thread screen (chat-experience.md M-CHAT-US-1/2/3/4; component-design.md
@@ -115,11 +141,27 @@ fun ChatScreen(
      * D-HIST-1) alongside system/predictive back. `null` for the guest single
      * thread and the list's own "New Chat" push. */
     onBack: (() -> Unit)? = null,
+    onOpenTeam: (id: String?, name: String?) -> Unit = { _, _ -> },
+    onResumeConversation: (String) -> Unit = {},
+    onForked: (String) -> Unit = {},
+    onOpenInDex: (ai.gowtam.oak.features.artifact.DexHop) -> Unit = {},
+    onOpenCalculator: () -> Unit = {},
+    conversationId: String? = null,
+    density: ai.gowtam.oak.wire.AnswerDensity = ai.gowtam.oak.wire.AnswerDensity.Full,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val oak = LocalOakColors.current
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    fun shareUrl(url: String) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, url)
+        }
+        context.startActivity(Intent.createChooser(intent, "Share"))
+    }
     val listState = rememberLazyListState()
-    var showScopePicker by remember { mutableStateOf(false) }
+    var pinJumpId by remember { mutableStateOf<String?>(null) }
     val haptics = rememberHaptics()
 
     // Haptics are always redundant with a visible cue (the new AnswerCard / the error
@@ -161,7 +203,16 @@ fun ChatScreen(
     // fetched under the old format.
     LaunchedEffect(uiState.displayFormat) { artifactViewModel.updateFormat(uiState.displayFormat) }
 
-    val cardActions = remember(viewModel, artifactViewModel) {
+    val services = LocalServices.current
+    var addIncoming by remember { mutableStateOf<TeamMember?>(null) }
+    LaunchedEffect(uiState.isSignedIn, conversationId, services) {
+        artifactViewModel.bindSession(
+            signedIn = uiState.isSignedIn,
+            conversationId = conversationId,
+            pins = services?.pins,
+        )
+    }
+    val cardActions = remember(viewModel, artifactViewModel, uiState.canAddToTeam, uiState.displayFormat) {
         AnswerCardActions(
             onFollowUp = viewModel::sendFollowUp,
             onOpenEntity = artifactViewModel::openEntity,
@@ -169,6 +220,9 @@ fun ChatScreen(
             onOpenProposedTeam = artifactViewModel::openProposedTeam,
             onOpenComparison = artifactViewModel::openComparison,
             onOpenDamageCalc = artifactViewModel::openDamageCalc,
+            onOpenCalculator = viewModel::openCalculator,
+            calculatorFormat = uiState.displayFormat,
+            onAddToTeam = if (uiState.canAddToTeam) { member -> addIncoming = member } else null,
         )
     }
 
@@ -177,6 +231,9 @@ fun ChatScreen(
     // in-flight UI from the resume replay (background-turns/design.md §6.3). A no-op when
     // nothing is pending or a live subscription is already running.
     LaunchedEffect(viewModel) { viewModel.reattachIfPending() }
+    LaunchedEffect(viewModel, uiState.turns.isEmpty(), uiState.isSignedIn) {
+        if (uiState.turns.isEmpty()) viewModel.refreshEmptyDesk()
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, viewModel) {
@@ -197,15 +254,30 @@ fun ChatScreen(
         }
     }
 
+    val focusManager = LocalFocusManager.current
     val showEmptyState = uiState.turns.isEmpty() && !uiState.isStreaming
     val showInProgress = uiState.isStreaming || uiState.streamingText.isNotEmpty()
     val itemCount = uiState.turns.size + (if (showEmptyState) 1 else 0) + (if (showInProgress) 1 else 0)
     LaunchedEffect(uiState.turns.size, uiState.streamingText, uiState.toolActivities.size) {
-        if (itemCount > 0) listState.animateScrollToItem(itemCount - 1)
+        if (itemCount > 0 && pinJumpId == null) listState.animateScrollToItem(itemCount - 1)
+    }
+    LaunchedEffect(pinJumpId, uiState.turns) {
+        val jump = pinJumpId ?: return@LaunchedEffect
+        var offset = 0
+        if (signInAction != null) offset++
+        if (uiState.turns.isEmpty() && !uiState.isStreaming) offset++
+        if (uiState.pinnedMessageIds.isNotEmpty()) offset++
+        val turnIndex = uiState.turns.indexOfFirst { it.id == jump }
+        if (turnIndex >= 0) listState.animateScrollToItem(offset + turnIndex)
+        pinJumpId = null
     }
 
     Scaffold(
         modifier = modifier,
+        // Parent `OakApp` already IME-pads tab content; don't stack a second IME inset
+        // on top of the nav-bar reservation (that would sit the composer above the bar
+        // which itself would sit above the keyboard).
+        contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
         topBar = {
             OakTopBar(
                 title = { OakWordmark() },
@@ -217,11 +289,38 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    ScopeChip(
-                        format = uiState.displayFormat,
-                        enabled = !uiState.isStreaming,
-                        onClick = { showScopePicker = true },
-                    )
+                    ai.gowtam.oak.ui.RegulationChip(onLid = true)
+                    IconButton(onClick = onOpenCalculator) {
+                        Icon(Icons.Filled.Functions, contentDescription = "Calculator")
+                    }
+                    if (uiState.isSignedIn && uiState.turns.isNotEmpty()) {
+                        var exportOpen by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { exportOpen = true }) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = "Export conversation")
+                            }
+                            DropdownMenu(expanded = exportOpen, onDismissRequest = { exportOpen = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("Export Markdown") },
+                                    onClick = {
+                                        exportOpen = false
+                                        viewModel.exportConversation("md") { bytes, name ->
+                                            shareExportedFile(context, bytes, name)
+                                        }
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Export PDF") },
+                                    onClick = {
+                                        exportOpen = false
+                                        viewModel.exportConversation("pdf") { bytes, name ->
+                                            shareExportedFile(context, bytes, name)
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
                     if (showsNewConversationButton) {
                         IconButton(onClick = viewModel::startNewConversation) {
                             Icon(Icons.Filled.Add, contentDescription = "New conversation")
@@ -235,7 +334,18 @@ fun ChatScreen(
             Box(modifier = Modifier.weight(1f)) {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (event.type == PointerEventType.Press) {
+                                        focusManager.clearFocus()
+                                    }
+                                }
+                            }
+                        },
                     contentPadding = PaddingValues(OakSpacing.lg),
                     verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
                 ) {
@@ -251,11 +361,53 @@ fun ChatScreen(
                     }
                     if (showEmptyState) {
                         item(key = "empty-state") {
-                            EmptyState(onExampleTap = viewModel::sendFollowUp)
+                            EmptyState(
+                                onExampleTap = viewModel::sendFollowUp,
+                                recents = uiState.emptyDeskRecents,
+                                onContinueConversation = onResumeConversation,
+                                onOpenTeam = { onOpenTeam(it, null) },
+                            )
+                        }
+                    }
+                    if (uiState.pinnedMessageIds.isNotEmpty()) {
+                        item(key = "pin-strip") {
+                            val pinItems = uiState.pinnedMessageIds.mapNotNull { id ->
+                                val asst = uiState.turns.firstOrNull { turn ->
+                                    turn is ChatTurnItem.Assistant && (turn.serverId == id || turn.id == id)
+                                } as? ChatTurnItem.Assistant
+                                asst?.let { PinStripItem(it.id, it.answer.answerMarkdown.take(48)) }
+                            }
+                            PinStrip(items = pinItems, onJump = { pinJumpId = it })
                         }
                     }
                     items(uiState.turns, key = { it.id }) { turn ->
-                        TurnRow(turn, actions = cardActions)
+                        TurnRow(
+                            turn = turn,
+                            actions = cardActions,
+                            density = density,
+                            isLastUser = turn.id == uiState.lastUserTurnId,
+                            isLastAssistant = turn.id == uiState.lastAssistantTurnId,
+                            canRetry = uiState.canRetryLast,
+                            canEdit = uiState.canEditLast && !uiState.isStreaming,
+                            isSignedIn = uiState.isSignedIn,
+                            showUndo = uiState.isStreaming &&
+                                turn.id == uiState.lastUserTurnId &&
+                                uiState.undoUntilMillis != null,
+                            isPinned = turn is ChatTurnItem.Assistant &&
+                                (turn.serverId ?: turn.id) in uiState.pinnedMessageIds,
+                            chips = if (turn.id == uiState.lastAssistantTurnId) uiState.followUpChips else emptyList(),
+                            onRetry = viewModel::retryLastAnswer,
+                            onEdit = viewModel::beginEditLast,
+                            onUndo = viewModel::undoSend,
+                            onPin = { viewModel.pinTurn(turn.id, (turn as? ChatTurnItem.Assistant)?.let { (it.serverId ?: it.id) !in uiState.pinnedMessageIds } ?: true) },
+                            onFork = {
+                                viewModel.forkFrom(turn.id, onForked)
+                            },
+                            onShare = {
+                                viewModel.shareTurn(turn.id) { created -> shareUrl(created.url) }
+                            },
+                            onChip = viewModel::activateChip,
+                        )
                     }
                     if (showInProgress) {
                         item(key = "in-progress") {
@@ -269,6 +421,30 @@ fun ChatScreen(
                         }
                     }
                 }
+            }
+            if (uiState.pinnedArtifacts.isNotEmpty()) {
+                PinnedArtifactStrip(
+                    pins = uiState.pinnedArtifacts,
+                    onOpen = { pin ->
+                        val pinService = services?.pins ?: return@PinnedArtifactStrip
+                        val conv = conversationId ?: return@PinnedArtifactStrip
+                        scope.launch {
+                            val detail = pinService.get(conv, pin.id)
+                            if (detail != null) {
+                                artifactViewModel.openPinned(detail.kind, detail.title, detail.snapshot)
+                            }
+                        }
+                    },
+                    onUnpin = { pin -> viewModel.unpinArtifact(pin.id) },
+                    modifier = Modifier.padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
+                )
+            }
+            uiState.hydrateBanner?.let { banner ->
+                HydrateBannerRow(
+                    banner = banner,
+                    showRetry = uiState.showsHydrateRetry,
+                    onRetry = viewModel::retryHydrate,
+                )
             }
             HorizontalDivider(color = oak.border)
             uiState.errorBanner?.let { banner ->
@@ -284,161 +460,190 @@ fun ChatScreen(
                 onRemoveImage = viewModel::removeImage,
                 onSend = viewModel::send,
                 onStop = viewModel::stopStreaming,
+                mentionQuery = uiState.mentionQuery,
+                mentionSuggestions = uiState.mentionSuggestions,
+                onPickMention = viewModel::insertMention,
+                deadMentions = uiState.deadMentions,
+                missingImagesNote = uiState.missingImagesNote,
             )
         }
     }
 
-    if (showScopePicker) {
-        val sheetState = rememberModalBottomSheetState()
-        ModalBottomSheet(
-            onDismissRequest = { showScopePicker = false },
-            sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface,
-            scrimColor = oak.scrim,
-            shape = RoundedCornerShape(topStart = OakRadius.xl, topEnd = OakRadius.xl),
-        ) {
-            ScopePickerSheet(
-                current = uiState.displayFormat,
-                onSelect = { format ->
-                    viewModel.selectScope(format)
-                    showScopePicker = false
-                },
-            )
-        }
-    }
+
 
     // The artifact bottom sheet overlays the chat (co-visible, not a separate tab —
     // component-design.md "Navigation graph"); it self-hides when its back stack is
     // empty, so it is always safe to host unconditionally.
-    ArtifactSheet(artifactViewModel)
-}
+    ArtifactSheet(
+        artifactViewModel,
+        onOpenInDex = onOpenInDex,
+        onAddToTeam = if (uiState.canAddToTeam) { member -> addIncoming = member } else null,
+    )
 
-// ---------------------------------------------------------------------------
-// Scope chip + picker
-// ---------------------------------------------------------------------------
+    val incoming = addIncoming
+    if (incoming != null && services != null && uiState.canAddToTeam) {
+        val addVm = remember(incoming) {
+            AddToTeamViewModel(services.teams, incoming, uiState.displayFormat)
+        }
+        AddToTeamSheet(
+            viewModel = addVm,
+            onDismiss = { addIncoming = null },
+            onDone = { teamId, _ ->
+                addIncoming = null
+                onOpenTeam(teamId, null)
+            },
+        )
+    }
 
-@Composable
-private fun ScopeChip(format: Format, enabled: Boolean, onClick: () -> Unit) {
-    val oak = LocalOakColors.current
-    val chipShape = RoundedCornerShape(OakRadius.pill)
-    Row(
-        modifier = Modifier
-            .padding(end = OakSpacing.sm)
-            .clip(chipShape)
-            .background(oak.surfaceSunken, chipShape)
-            .border(1.dp, oak.border, chipShape)
-            .then(if (enabled) Modifier.clickableChip(onClick) else Modifier)
-            .padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // Signal scope LED — always on, not only when scope ≠ national-dex.
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(oak.accent),
-        )
-        Text(
-            text = format.shortLabel,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-            color = oak.textMuted,
-        )
-        Icon(
-            Icons.Filled.KeyboardArrowDown,
-            contentDescription = null,
-            tint = if (enabled) oak.textMuted else oak.textFaint,
-            modifier = Modifier.height(16.dp),
+    val overlay = uiState.calcOverlay
+    if (overlay != null && services != null) {
+        val calcVm = remember(overlay.rest, overlay.scenario) {
+            CalculatorViewModel(services.calc, overlay.scenario.format, overlay.scenario)
+        }
+        CalculatorOverlay(
+            viewModel = calcVm,
+            onDismiss = viewModel::dismissCalculator,
+            onExpand = viewModel::expandCalculator,
+            onExplain = { prompt -> viewModel.sendFollowUp(prompt) },
+            dexLookup = services.dexLookup,
         )
     }
 }
 
-private fun Modifier.clickableChip(onClick: () -> Unit): Modifier =
-    this.clickable(onClick = onClick)
-
 @Composable
-private fun ScopePickerSheet(current: Format, onSelect: (Format) -> Unit) {
+private fun HydrateBannerRow(
+    banner: HydrateBanner,
+    showRetry: Boolean,
+    onRetry: () -> Unit,
+) {
     val oak = LocalOakColors.current
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
-            text = "Answer scope",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = oak.textStrong,
-            modifier = Modifier
-                .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm)
-                .semantics { heading() },
-        )
-        Text(
-            text = "Choose which game or generation answers are based on.",
+            text = when (banner) {
+                HydrateBanner.Finishing -> "Finishing card…"
+                HydrateBanner.Failed -> "Couldn't finish this spoken answer."
+            },
             style = MaterialTheme.typography.bodySmall,
             color = oak.textMuted,
-            modifier = Modifier.padding(horizontal = OakSpacing.lg),
         )
-        Spacer(Modifier.height(OakSpacing.sm))
-        // The known-scopes list now runs to 11 rows (national-dex + gen-1..8 + champions),
-        // which overflows a fixed-height ModalBottomSheet on most phones — scroll the rows
-        // so every option stays reachable instead of clipping off the bottom.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = OakSpacing.xxl),
-        ) {
-            for (format in Format.knownCases) {
-                val selected = format == current
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickableChip { onSelect(format) }
-                        .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.md),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = format.displayLabel,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = oak.textStrong,
-                    )
-                    if (selected) {
-                        // Selected row: a red LED dot, not a checkmark (soul.md — the
-                        // record light reads "active"/"selected" across the app).
-                        LedDot(
-                            dotSize = 8.dp,
-                            haloSize = 14.dp,
-                            modifier = Modifier.semantics { contentDescription = "Selected" },
-                        )
-                    }
-                }
-            }
+        if (showRetry) {
+            TextButton(onClick = onRetry) { Text("Retry") }
         }
     }
 }
+
+
 
 // ---------------------------------------------------------------------------
 // Thread rows
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun TurnRow(turn: ChatTurnItem, actions: AnswerCardActions) {
+private fun TurnRow(
+    turn: ChatTurnItem,
+    actions: AnswerCardActions,
+    density: ai.gowtam.oak.wire.AnswerDensity = ai.gowtam.oak.wire.AnswerDensity.Full,
+    isLastUser: Boolean,
+    isLastAssistant: Boolean,
+    canRetry: Boolean,
+    canEdit: Boolean,
+    isSignedIn: Boolean,
+    showUndo: Boolean,
+    isPinned: Boolean,
+    chips: List<FollowUpChip>,
+    onRetry: () -> Unit,
+    onEdit: () -> Unit,
+    onUndo: () -> Unit,
+    onPin: () -> Unit,
+    onFork: () -> Unit,
+    onShare: () -> Unit,
+    onChip: (FollowUpChip) -> Unit,
+) {
     when (turn) {
-        is ChatTurnItem.User -> UserMessageRow(turn)
-        is ChatTurnItem.Assistant -> AnswerCard(answer = turn.answer, actions = actions)
+        is ChatTurnItem.User -> UserMessageRow(
+            turn = turn,
+            showUndo = showUndo,
+            showEdit = isLastUser && canEdit && !showUndo,
+            onUndo = onUndo,
+            onEdit = onEdit,
+        )
+        is ChatTurnItem.Assistant -> {
+            Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
+                if (turn.isVoiceOrigin) {
+                    Text(
+                        text = "Spoken",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LocalOakColors.current.textMuted,
+                    )
+                }
+                AnswerCard(answer = turn.answer, actions = actions, density = density)
+                TurnActions(
+                    answer = turn.answer,
+                    isLastAssistant = isLastAssistant,
+                    isSignedIn = isSignedIn,
+                    isPinned = isPinned,
+                    canRetry = canRetry && isLastAssistant,
+                    onRetry = onRetry,
+                    onPin = onPin,
+                    onFork = onFork,
+                    onShare = onShare,
+                )
+                if (isLastAssistant) {
+                    FollowUpChipRow(chips = chips, onChip = onChip)
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun UserMessageRow(turn: ChatTurnItem.User) {
+private fun UserMessageRow(
+    turn: ChatTurnItem.User,
+    showUndo: Boolean = false,
+    showEdit: Boolean = false,
+    onUndo: () -> Unit = {},
+    onEdit: () -> Unit = {},
+) {
     val oak = LocalOakColors.current
-    // Signal user note: sunken fill + hairline, ink text. No red bubble, no corner pip.
-    val noteShape = RoundedCornerShape(OakRadius.lg)
+    val dark = oak.isDark
+    val surface = MaterialTheme.colorScheme.surface
+    // Enamel user bubble: poke-red-soft mixed 55% with surface, 30% red border,
+    // sm radius on the bottom-right. Not surfaceSunken (Key Decision 9).
+    val bubbleFill = lerp(surface, oak.accentSoft, 0.55f)
+    val bubbleBorder = lerp(oak.border, oak.accent, 0.30f)
+    val noteShape = RoundedCornerShape(
+        topStart = OakRadius.lg,
+        topEnd = OakRadius.lg,
+        bottomStart = OakRadius.lg,
+        bottomEnd = OakRadius.sm,
+    )
+    val umber = Color(0xFF4A352A)
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.widthIn(max = 320.dp)) {
             if (turn.text.isNotEmpty()) {
                 Box(
                     modifier = Modifier
+                        .then(
+                            if (dark) {
+                                Modifier
+                            } else {
+                                Modifier.shadow(
+                                    elevation = 4.dp,
+                                    shape = noteShape,
+                                    ambientColor = umber.copy(alpha = 0.07f),
+                                    spotColor = umber.copy(alpha = 0.10f),
+                                )
+                            },
+                        )
                         .clip(noteShape)
-                        .background(oak.surfaceSunken)
-                        .border(1.dp, oak.border, noteShape)
+                        .background(bubbleFill)
+                        .border(1.dp, bubbleBorder, noteShape)
                         .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
                 ) {
                     Text(
@@ -462,6 +667,11 @@ private fun UserMessageRow(turn: ChatTurnItem.User) {
                     )
                 }
             }
+            if (showUndo) {
+                TextButton(onClick = onUndo) { Text("Undo", color = oak.accent) }
+            } else if (showEdit) {
+                TextButton(onClick = onEdit) { Text("Edit", color = oak.textMuted) }
+            }
         }
     }
 }
@@ -474,12 +684,13 @@ private fun InProgressRow(
     streamingText: String,
     elapsedSeconds: Int? = null,
 ) {
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(OakSpacing.md)) {
-        StreamingStatus(phase = phase, activities = activities, reconnecting = reconnecting, elapsedSeconds = elapsedSeconds)
-        if (streamingText.isNotEmpty()) {
-            MarkdownBlockView(markdown = streamingText, modifier = Modifier.fillMaxWidth())
-        }
-    }
+    IncomingAnswerPlate(
+        phase = phase,
+        activities = activities,
+        reconnecting = reconnecting,
+        streamingText = streamingText,
+        elapsedSeconds = elapsedSeconds,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -542,17 +753,22 @@ private fun ErrorBannerRow(banner: ErrorBanner, onRetry: () -> Unit) {
 }
 
 // ---------------------------------------------------------------------------
-// Empty state — Signal hero + filed starter rows
+// Empty state — current landing on paper under the enamel lid
 // ---------------------------------------------------------------------------
 
 /**
- * Empty-thread hero (`docs/design/signal.md` §6.1): large title, one mute
- * sentence, four full-width starter rows. Scope LED lives in the header only —
- * no STANDBY plate, no LED well, no centered logo.
- * Starters are sampled once per composition via [ExamplePrompts.pickFiled].
+ * Empty-thread landing (`docs/design/enamel-paper.md` Empty chat): Fredoka title
+ * on paper, recents, categorized filed starters. No STANDBY plate, no LED well,
+ * no centered Oak lockup. Starters are sampled once per composition via
+ * [ExamplePrompts.pickFiled].
  */
 @Composable
-private fun EmptyState(onExampleTap: (String) -> Unit) {
+private fun EmptyState(
+    onExampleTap: (String) -> Unit,
+    recents: EmptyDeskRecents? = null,
+    onContinueConversation: (String) -> Unit = {},
+    onOpenTeam: (String) -> Unit = {},
+) {
     val oak = LocalOakColors.current
     val starters = remember { ExamplePrompts.pickFiled() }
 
@@ -563,16 +779,25 @@ private fun EmptyState(onExampleTap: (String) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
         Text(
-            text = "What do you want to know?",
+            text = ChatEmptyCopy.headline,
             style = MaterialTheme.typography.displaySmall,
             color = oak.textStrong,
             modifier = Modifier.semantics { heading() },
         )
         Text(
-            text = "Mechanics, locations, teams, damage. Oak will show its work.",
+            text = ChatEmptyCopy.supporting,
             style = MaterialTheme.typography.bodyMedium,
             color = oak.textMuted,
         )
+        recents?.lastConversation?.let { convo ->
+            FiledActionRow(label = "Continue", title = convo.title, onClick = { onContinueConversation(convo.id) })
+        }
+        recents?.lastTeam?.let { team ->
+            FiledActionRow(label = "Team", title = team.name, onClick = { onOpenTeam(team.id) })
+        }
+        recents?.let {
+            FiledActionRow(label = "Regulation", title = it.scope.displayLabel, onClick = {})
+        }
         Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
             for (starter in starters) {
                 FiledStarterRow(starter = starter, onClick = { onExampleTap(starter.prompt) })
@@ -582,52 +807,62 @@ private fun EmptyState(onExampleTap: (String) -> Unit) {
 }
 
 /**
- * The Instrument "record light" LED: a solid `oak.accent` dot with a soft halo behind
- * it (a larger, low-alpha same-color disc — cheap, no `RenderEffect` blur needed).
- * Shared by the empty-state scope stamp and the scope picker's selected row.
+ * One empty-desk recent row: mute category prefix + title. White plate, strong
+ * hairline, raised umber shadow. Text only — no LED chip.
  */
 @Composable
-private fun LedDot(modifier: Modifier = Modifier, dotSize: Dp = 6.dp, haloSize: Dp = 10.dp) {
+private fun FiledActionRow(label: String, title: String, onClick: () -> Unit) {
     val oak = LocalOakColors.current
-    Box(modifier = modifier.size(haloSize), contentAlignment = Alignment.Center) {
-        Box(
-            modifier = Modifier
-                .size(haloSize)
-                .clip(CircleShape)
-                .background(oak.accent.copy(alpha = 0.35f)),
+    val shape = RoundedCornerShape(OakRadius.md)
+    val dark = oak.isDark
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (dark) Modifier else Modifier.shadow(4.dp, shape))
+            .background(MaterialTheme.colorScheme.surface, shape)
+            .border(1.dp, oak.borderStrong, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = OakSpacing.md, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+            color = oak.textMuted,
+            modifier = Modifier.widthIn(min = 48.dp),
         )
-        Box(
-            modifier = Modifier
-                .size(dotSize)
-                .clip(CircleShape)
-                .background(oak.accent),
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            color = oak.textStrong,
+            modifier = Modifier.weight(1f),
         )
     }
 }
 
-/**
- * One filed-starter row: mute category prefix + prompt. Surface, 10.dp radius,
- * hairline. Text only — no type-dot, no equal hero chip.
- */
 @Composable
 private fun FiledStarterRow(starter: ExamplePrompts.FiledStarter, onClick: () -> Unit) {
     val oak = LocalOakColors.current
     val reduceMotion = rememberReduceMotion()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.98f else 1f,
-        animationSpec = if (reduceMotion) snap() else OakMotion.snappy,
-        label = "filedStarterScale",
+    val lift by animateFloatAsState(
+        targetValue = if (pressed && !reduceMotion) -2f else 0f,
+        animationSpec = if (reduceMotion) snap() else OakMotion.spring,
+        label = "filedStarterLift",
     )
     val shape = RoundedCornerShape(OakRadius.md)
+    val dark = oak.isDark
+    val fill = if (pressed) oak.accentSoft else MaterialTheme.colorScheme.surface
+    val stroke = if (pressed) oak.accent else oak.borderStrong
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface, shape)
-            .border(1.dp, oak.border, shape)
+            .offset(y = lift.dp)
+            .then(if (dark) Modifier else Modifier.shadow(4.dp, shape))
+            .background(fill, shape)
+            .border(1.dp, stroke, shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = OakSpacing.md, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm),

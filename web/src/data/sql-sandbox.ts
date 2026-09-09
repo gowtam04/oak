@@ -42,7 +42,26 @@ import "server-only";
 import { Pool, type PoolClient } from "pg";
 
 import { env } from "@/env";
-import type { RunSqlOutput } from "@/agent/schemas";
+
+/** One returned cell — always coerced to a JSON primitive by the executor. */
+type RunSqlCell = string | number | boolean | null;
+
+/**
+ * Local equivalent of the retired T18 `RunSqlOutput` contract (P3 deleted the
+ * Zod schema from `@/agent/schemas`). Success is a capped row-set; in-domain
+ * failures are `{ error, hint? }` — never thrown.
+ */
+type RunSqlOutput =
+  | {
+      columns: string[];
+      rows: RunSqlCell[][];
+      row_count: number;
+      truncated: boolean;
+    }
+  | {
+      error: "query_failed" | "query_timeout";
+      hint?: string;
+    };
 
 /** Hard row cap — the outer wrap's LIMIT and the truncation signal. */
 const ROW_LIMIT = 200;
@@ -54,20 +73,39 @@ const MAX_CELL_CHARS = 400;
 const READONLY_ROLE = "oak_readonly";
 
 /**
- * Sensitive tables that carry user / auth / operator data. The READ ONLY
- * transaction already blocks any WRITE to them; this deny-list is a
- * defense-in-depth guard against SELECT-exfiltration and is the enforced floor
- * when the `oak_readonly` role is unavailable. Matched as whole identifiers.
+ * Sensitive tables that carry user / auth / operator data, plus other-game
+ * warehouse tables DROPped by migration 0023. Remaining readable tables are
+ * the Champions index + item allowlist: pokemon, learnset, reference_cache,
+ * searchable_names, ingest_meta, champions_item_exclusion. The READ ONLY
+ * transaction already blocks any WRITE; this deny-list is a defense-in-depth
+ * guard against SELECT-exfiltration and is the enforced floor when the
+ * `oak_readonly` role is unavailable. Matched as whole identifiers.
  */
 const DENIED_TABLES = [
   "account",
+  "account_scope_mru",
   "auth_session",
   "otp_code",
   "conversation",
+  "conversation_folder",
   "conversation_message",
+  "shared_answer",
   "team",
   "turn_record",
   "auth_event",
+  "account_denylist",
+  "account_cap_exempt",
+  "spend_daily_usage",
+  // Dropped by 0023 — keep restricted so a leftover query never hits the pool.
+  "wiki_page",
+  "wiki_chunk",
+  "natdex_species",
+  "natdex_machines",
+  "natdex_moves",
+  "classic_encounters",
+  "pmd_recruits",
+  "meta_snapshot",
+  "meta_usage",
 ];
 
 const DENY_RE = new RegExp(`\\b(?:${DENIED_TABLES.join("|")})\\b`, "i");

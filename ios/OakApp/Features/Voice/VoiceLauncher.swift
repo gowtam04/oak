@@ -20,17 +20,18 @@ struct VoiceLauncher: View {
   @Environment(\.dismiss) private var dismiss
 
   @State private var session: VoiceSession?
-  /// Guards ``finish()`` so a second call (End button, then the resulting
-  /// `.onDisappear`, or vice versa) never re-enters teardown.
-  @State private var finished = false
+  /// Guards ``endAndDismiss()`` so End + the resulting `.onDisappear` cannot
+  /// `dismiss()` twice. Does **not** gate ``endSession()`` — a spurious
+  /// disappear before `.task` assigns `session` must not lock out `start()`.
+  @State private var dismissed = false
 
   var body: some View {
     Group {
       if let session {
-        VoiceOverlayView(session: session, onEnd: finish)
+        VoiceOverlayView(session: session, onEnd: endAndDismiss)
       } else {
         // First frame only, before the `.task` below builds the session.
-        Theme.background.ignoresSafeArea()
+        Theme.canvas.ignoresSafeArea()
       }
     }
     .task {
@@ -39,10 +40,12 @@ struct VoiceLauncher: View {
       session = built
       await built.start()
     }
-    // Belt-and-braces: whatever caused this view to go away — the End button's
-    // `dismiss()`, a future interactive-dismiss affordance, or anything else —
-    // the session must not outlive the screen. `finish()` is idempotent.
-    .onDisappear { finish() }
+    // The session must not outlive the screen, but `.onDisappear` must NOT
+    // dismiss the cover. SwiftUI fires disappear spuriously while presenting
+    // `.fullScreenCover` (especially with the keyboard still up); calling
+    // `dismiss()` there flips `isVoicePresented` back to false and the overlay
+    // never stays up.
+    .onDisappear { endSession() }
   }
 
   /// Builds one live ``VoiceSession``: the audio IO is constructed first so its
@@ -63,13 +66,20 @@ struct VoiceLauncher: View {
     return newSession
   }
 
-  /// Ends the session (idempotent) and dismisses the cover. Called from the End
-  /// button and from `.onDisappear`; the `finished` guard makes running it twice
-  /// harmless.
-  private func finish() {
-    guard !finished else { return }
-    finished = true
+  /// Ends the realtime session if one exists. Idempotent at the session
+  /// (`VoiceSession.end()`). Does not dismiss the cover — `.onDisappear` uses
+  /// this so a spurious disappear cannot pop the overlay.
+  private func endSession() {
     session?.end()
+  }
+
+  /// End button: tear the session down, then dismiss the cover. The
+  /// `.onDisappear` that follows calls ``endSession()`` again, which is a no-op
+  /// on an already-ended session.
+  private func endAndDismiss() {
+    guard !dismissed else { return }
+    dismissed = true
+    endSession()
     dismiss()
   }
 }

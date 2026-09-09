@@ -48,10 +48,32 @@ final class FakeHistoryService: HistoryService, @unchecked Sendable {
 
   // MARK: HistoryService
 
-  func list(query: String?, format: Format?) async throws -> [ConversationSummary] {
+  private(set) var lastListFolderId: String?
+  private(set) var lastListArchived: Bool?
+  private(set) var lastListIncludeArchived: Bool?
+  var folders: [ConversationFolder] = []
+  var forkResult: Result<ForkResponse, OakError> = .success(ForkResponse(id: "fork_1", title: "Fork"))
+  private(set) var lastForkConversationId: String?
+  private(set) var lastForkThroughId: String?
+  private(set) var lastPinnedMessageId: String?
+  private(set) var lastTurnPinned: Bool?
+  private(set) var lastBulkAction: BulkConversationAction?
+  private(set) var lastBulkIds: [String]?
+  var pinnedMessageIds: [String] = []
+
+  func list(
+    query: String?,
+    format: Format?,
+    folderId: String?,
+    archived: Bool?,
+    includeArchived: Bool
+  ) async throws -> [ConversationSummary] {
     listCount += 1
     lastListQuery = query
     lastListFormat = format
+    lastListFolderId = folderId
+    lastListArchived = archived
+    lastListIncludeArchived = includeArchived
     return try listResult.get()
   }
 
@@ -94,5 +116,41 @@ final class FakeHistoryService: HistoryService, @unchecked Sendable {
     lastImportFormat = format
     lastImportTurns = turns
     return try importResult.get()
+  }
+
+  func listFolders() async throws -> [ConversationFolder] { folders }
+  func createFolder(name: String) async throws -> ConversationFolder {
+    ConversationFolder(id: "folder_\(folders.count + 1)", name: name, createdAt: 0)
+  }
+  func renameFolder(id: String, name: String) async throws {}
+  func deleteFolder(id: String) async throws {}
+  func setArchived(id: String, archived: Bool) async throws {}
+  func setFolder(id: String, folderId: String?) async throws {}
+  func bulkUpdate(
+    ids: [String],
+    action: BulkConversationAction,
+    folderId: String?
+  ) async throws -> BulkUpdateResponse {
+    lastBulkAction = action
+    lastBulkIds = ids
+    return BulkUpdateResponse(updated: ids, skipped: [])
+  }
+  func setTurnPinned(conversationId: String, messageId: String, pinned: Bool) async throws -> [String] {
+    lastPinnedMessageId = messageId
+    lastTurnPinned = pinned
+    if pinned {
+      if !pinnedMessageIds.contains(messageId) { pinnedMessageIds.append(messageId) }
+    } else {
+      pinnedMessageIds.removeAll { $0 == messageId }
+    }
+    return pinnedMessageIds
+  }
+  func fork(conversationId: String, throughMessageId: String) async throws -> ForkResponse {
+    lastForkConversationId = conversationId
+    lastForkThroughId = throughMessageId
+    return try forkResult.get()
+  }
+  func exportConversation(id: String, format: ConversationExportFormat) async throws -> Data {
+    Data("export".utf8)
   }
 }

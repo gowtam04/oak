@@ -42,14 +42,27 @@ fun Subjects(
     onOpenEntity: (EntityKind, String) -> Unit,
     onOpenComparison: (List<Subject>) -> Unit,
     modifier: Modifier = Modifier,
+    onAddToTeam: ((ai.gowtam.oak.wire.TeamMember) -> Unit)? = null,
 ) {
     val oak = LocalOakColors.current
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
         for (subject in subjects) {
-            SubjectCard(
-                subject = subject,
-                onClick = { onOpenEntity(EntityKind.POKEMON, subject.name) },
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+                SubjectCard(
+                    subject = subject,
+                    onClick = { onOpenEntity(EntityKind.POKEMON, subject.name) },
+                )
+                if (onAddToTeam != null) {
+                    OakButton(
+                        onClick = {
+                            onAddToTeam(ai.gowtam.oak.features.teams.incomingMemberFromSubject(subject))
+                        },
+                        style = OakButtonStyle.Secondary,
+                    ) {
+                        Text("Add to team", color = oak.accent)
+                    }
+                }
+            }
         }
         if (subjects.size >= 2) {
             OakButton(onClick = { onOpenComparison(subjects) }, style = OakButtonStyle.Secondary) {

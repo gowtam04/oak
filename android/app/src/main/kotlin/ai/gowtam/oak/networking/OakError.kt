@@ -32,14 +32,17 @@ sealed class OakError : Exception() {
 
     /**
      * A non-2xx response carrying the `{ code, message }` envelope (4xx/5xx
-     * that is neither a 401 nor a 429).
+     * that is neither a 401 nor a per-minute 429). Spend-control daily-cap
+     * refusals (`429` `daily_limit`) land here so banners can show the
+     * server message instead of the per-minute rate-limit copy.
      */
     data class Http(val status: Int, val code: String, override val message: String) : OakError()
 
     /**
-     * `429 Too Many Requests`; [retryAfterSeconds] is parsed from the
-     * `Retry-After` header when present (numeric delta-seconds, or an
-     * HTTP-date converted to a delta).
+     * Per-minute `429 Too Many Requests` (`rate_limited`, or a 429 with no
+     * envelope). [retryAfterSeconds] is parsed from the `Retry-After` header
+     * when present (numeric delta-seconds, or an HTTP-date converted to a
+     * delta). A `429` whose body `code` is `daily_limit` is [Http], not this.
      */
     data class RateLimited(val retryAfterSeconds: Long?) : OakError()
 
@@ -66,7 +69,9 @@ sealed class OakError : Exception() {
          * [OakError] (api-usage.md "Error mapping"):
          *   * `2xx`                            → success(body)
          *   * `401`                            → [Unauthorized]
-         *   * `429` (+ optional `Retry-After`) → [RateLimited]
+         *   * `429` `daily_limit`              → [Http] (spend-controls
+         *     SC-AC-5.4 / SC-BR-14 — must not collapse into [RateLimited])
+         *   * other `429` (+ optional `Retry-After`) → [RateLimited]
          *   * any other non-2xx                → [Http] from the
          *     `{ code, message }` envelope
          *
@@ -76,7 +81,7 @@ sealed class OakError : Exception() {
         fun validate(status: Int, headers: Headers, body: ByteArray): Result<ByteArray> = when (status) {
             in 200..299 -> Result.success(body)
             401 -> Result.failure(Unauthorized)
-            429 -> Result.failure(RateLimited(retryAfterSeconds(headers)))
+            429 -> Result.failure(map429(headers, body))
             else -> Result.failure(httpError(status, body))
         }
 
@@ -89,22 +94,46 @@ sealed class OakError : Exception() {
             Transport(error::class.simpleName ?: "unknown")
 
         /**
-         * Builds an [Http] error from a non-2xx (non-401/429) body, decoding
-         * the shared `{ code, message }` envelope when present.
+         * Denylist (`account_denied`) and daily-cap (`daily_limit`) refusals —
+         * banners show the server message and hide Retry (SC-AC-5.4 / SC-BR-14).
+         * The per-minute `rate_limited` code is not this.
+         */
+        fun isSpendControlRefusal(code: String): Boolean =
+            code == "account_denied" || code == "daily_limit"
+
+        /**
+         * A 429 is the per-minute limiter ([RateLimited]) unless the body
+         * envelope is `daily_limit`, which must surface as [Http] so the
+         * banner can show the server reset copy and hide Retry.
+         */
+        private fun map429(headers: Headers, body: ByteArray): OakError {
+            val envelope = decodeEnvelope(body)
+            return if (envelope?.code == "daily_limit") {
+                Http(429, envelope.code, envelope.message)
+            } else {
+                RateLimited(retryAfterSeconds(headers))
+            }
+        }
+
+        /**
+         * Builds an [Http] error from a non-2xx (non-401 / non-per-minute-429)
+         * body, decoding the shared `{ code, message }` envelope when present.
          */
         private fun httpError(status: Int, body: ByteArray): OakError {
-            val envelope = try {
-                OakJson.decodeFromString(ApiErrorBody.serializer(), body.decodeToString())
-            } catch (e: SerializationException) {
-                null
-            } catch (e: IllegalArgumentException) {
-                null
-            }
+            val envelope = decodeEnvelope(body)
             return if (envelope != null) {
                 Http(status, envelope.code, envelope.message)
             } else {
                 Http(status, "unknown", "")
             }
+        }
+
+        private fun decodeEnvelope(body: ByteArray): ApiErrorBody? = try {
+            OakJson.decodeFromString(ApiErrorBody.serializer(), body.decodeToString())
+        } catch (e: SerializationException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
         }
 
         /**

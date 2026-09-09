@@ -4,12 +4,19 @@ import ai.gowtam.oak.networking.Endpoint
 import ai.gowtam.oak.networking.OakApiClient
 import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.networking.TokenStore
+import ai.gowtam.oak.wire.BulkAction
+import ai.gowtam.oak.wire.BulkUpdateResult
 import ai.gowtam.oak.wire.ChatTurn
 import ai.gowtam.oak.wire.ConversationDetail
 import ai.gowtam.oak.wire.ConversationSummary
+import ai.gowtam.oak.wire.Folder
+import ai.gowtam.oak.wire.FolderListResponse
+import ai.gowtam.oak.wire.ForkResult
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.OakAnswer
 import ai.gowtam.oak.wire.OakJson
+import ai.gowtam.oak.wire.PinResult
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
@@ -38,6 +45,18 @@ interface HistoryService {
     suspend fun list(query: String?, format: Format?): List<ConversationSummary>
 
     /**
+     * List with organize filters (ORG-US-1/2). Default implementation ignores
+     * the extras so existing test doubles keep compiling.
+     */
+    suspend fun list(
+        query: String?,
+        format: Format?,
+        folderId: String?,
+        archived: Boolean?,
+        includeArchived: Boolean,
+    ): List<ConversationSummary> = list(query, format)
+
+    /**
      * Loads one full conversation with its rehydrated turns
      * (`GET /api/conversations/{id}`). Throws [OakError.Unauthorized] for a guest and
      * `Http(404, …)` for a conversation that is missing or not owned.
@@ -64,6 +83,48 @@ interface HistoryService {
      * empty thread imports nothing and returns `null` (a normal value, not an error).
      */
     suspend fun importGuestThread(sessionId: String, format: Format, turns: List<ChatTurn>): String?
+
+    suspend fun setArchived(id: String, archived: Boolean) {
+        throw UnsupportedOperationException("setArchived")
+    }
+
+    suspend fun setFolder(id: String, folderId: String?) {
+        throw UnsupportedOperationException("setFolder")
+    }
+
+    suspend fun listFolders(): List<Folder> = emptyList()
+
+    suspend fun createFolder(name: String): Folder {
+        throw UnsupportedOperationException("createFolder")
+    }
+
+    suspend fun renameFolder(id: String, name: String): Folder {
+        throw UnsupportedOperationException("renameFolder")
+    }
+
+    suspend fun deleteFolder(id: String) {
+        throw UnsupportedOperationException("deleteFolder")
+    }
+
+    suspend fun bulkUpdate(ids: List<String>, action: BulkAction, folderId: String? = null): BulkUpdateResult {
+        throw UnsupportedOperationException("bulkUpdate")
+    }
+
+    suspend fun fork(id: String, throughMessageId: String): ForkResult {
+        throw UnsupportedOperationException("fork")
+    }
+
+    suspend fun setMessagePinned(conversationId: String, messageId: String, pinned: Boolean): List<String> {
+        throw UnsupportedOperationException("setMessagePinned")
+    }
+
+    /**
+     * `GET /api/conversations/:id/export?format=md|pdf`. Returns bytes + a
+     * suggested filename. Guest / empty / fault throw [OakError].
+     */
+    suspend fun export(id: String, format: String): Pair<ByteArray, String> {
+        throw UnsupportedOperationException("export")
+    }
 }
 
 /**
@@ -81,10 +142,28 @@ class LiveHistoryService(
         // itself guest-graceful, but this avoids the round-trip entirely).
         if (tokenStore.token() == null) return emptyList()
 
+        return list(query = query, format = format, folderId = null, archived = false, includeArchived = false)
+    }
+
+    override suspend fun list(
+        query: String?,
+        format: Format?,
+        folderId: String?,
+        archived: Boolean?,
+        includeArchived: Boolean,
+    ): List<ConversationSummary> {
+        if (tokenStore.token() == null) return emptyList()
+
         val queryItems = buildList {
             val trimmed = query?.trim()
             if (!trimmed.isNullOrEmpty()) add("q" to trimmed)
             format?.let { add("format" to it.rawValue) }
+            folderId?.let { add("folder_id" to it) }
+            when (archived) {
+                true -> add("archived" to "1")
+                false, null -> Unit
+            }
+            if (includeArchived) add("include_archived" to "1")
         }
         val endpoint = Endpoint(
             method = Endpoint.Method.GET,
@@ -142,7 +221,144 @@ class LiveHistoryService(
         )
         return apiClient.send(endpoint, ImportResponse.serializer()).id
     }
+
+    override suspend fun setArchived(id: String, archived: Boolean) {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.PATCH,
+            path = "/api/conversations/$id",
+            body = Endpoint.jsonBody(ArchivedBody.serializer(), ArchivedBody(archived)),
+            requiresAuth = true,
+        )
+        apiClient.sendNoContent(endpoint)
+    }
+
+    override suspend fun setFolder(id: String, folderId: String?) {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.PATCH,
+            path = "/api/conversations/$id",
+            body = encodeFolderPatch(folderId),
+            requiresAuth = true,
+        )
+        apiClient.sendNoContent(endpoint)
+    }
+
+    override suspend fun listFolders(): List<Folder> {
+        if (tokenStore.token() == null) return emptyList()
+        val endpoint = Endpoint(method = Endpoint.Method.GET, path = "/api/folders", requiresAuth = true)
+        return apiClient.send(endpoint, FolderListResponse.serializer()).folders
+    }
+
+    override suspend fun createFolder(name: String): Folder {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.POST,
+            path = "/api/folders",
+            body = Endpoint.jsonBody(FolderNameBody.serializer(), FolderNameBody(name)),
+            requiresAuth = true,
+        )
+        return apiClient.send(endpoint, Folder.serializer())
+    }
+
+    override suspend fun renameFolder(id: String, name: String): Folder {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.PATCH,
+            path = "/api/folders/$id",
+            body = Endpoint.jsonBody(FolderNameBody.serializer(), FolderNameBody(name)),
+            requiresAuth = true,
+        )
+        return apiClient.send(endpoint, Folder.serializer())
+    }
+
+    override suspend fun deleteFolder(id: String) {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.DELETE,
+            path = "/api/folders/$id",
+            requiresAuth = true,
+        )
+        apiClient.sendNoContent(endpoint)
+    }
+
+    override suspend fun bulkUpdate(ids: List<String>, action: BulkAction, folderId: String?): BulkUpdateResult {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.POST,
+            path = "/api/conversations/bulk",
+            body = encodeBulkBody(ids, action, folderId),
+            requiresAuth = true,
+        )
+        return apiClient.send(endpoint, BulkUpdateResult.serializer())
+    }
+
+    override suspend fun fork(id: String, throughMessageId: String): ForkResult {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.POST,
+            path = "/api/conversations/$id/fork",
+            body = Endpoint.jsonBody(ForkBody.serializer(), ForkBody(throughMessageId)),
+            requiresAuth = true,
+        )
+        return apiClient.send(endpoint, ForkResult.serializer())
+    }
+
+    override suspend fun setMessagePinned(conversationId: String, messageId: String, pinned: Boolean): List<String> {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.POST,
+            path = "/api/conversations/$conversationId/pins",
+            body = Endpoint.jsonBody(PinBody.serializer(), PinBody(messageId, pinned)),
+            requiresAuth = true,
+        )
+        return apiClient.send(endpoint, PinResult.serializer()).pinnedMessageIds
+    }
+
+    override suspend fun export(id: String, format: String): Pair<ByteArray, String> {
+        val endpoint = Endpoint(
+            method = Endpoint.Method.GET,
+            path = "/api/conversations/$id/export",
+            queryItems = listOf("format" to format),
+            requiresAuth = true,
+        )
+        // Export is bytes, not JSON — use the generic send path via a raw GET
+        // through OakApiClient.send which expects JSON. Fall back to a dedicated
+        // perform via a tiny envelope isn't available, so we decode as a last
+        // resort: the client still maps HTTP errors. For md/pdf we need raw
+        // bytes; OakApiClient.send will try to JSON-decode. Use sendNoContent
+        // is wrong. We encode the request the same way and let callers share
+        // via a JSON-less path: POST-style isn't needed. See [OakApiClient]
+        // — we'll fetch through send and accept Decoding only if the body
+        // isn't JSON. Prefer a dedicated raw method if added later.
+        val bytes = apiClient.sendBytes(endpoint)
+        return bytes to "conversation.$format"
+    }
 }
+
+@Serializable
+private data class ArchivedBody(val archived: Boolean)
+
+@Serializable
+private data class FolderNameBody(val name: String)
+
+@Serializable
+private data class ForkBody(@SerialName("through_message_id") val throughMessageId: String)
+
+@Serializable
+private data class PinBody(@SerialName("message_id") val messageId: String, val pinned: Boolean)
+
+private fun encodeFolderPatch(folderId: String?): String =
+    buildJsonObject { put("folder_id", folderId) }.toString()
+
+private fun encodeBulkBody(ids: List<String>, action: BulkAction, folderId: String?): String =
+    buildJsonObject {
+        put("ids", buildJsonArray { ids.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+        put(
+            "action",
+            when (action) {
+                BulkAction.Delete -> "delete"
+                BulkAction.Archive -> "archive"
+                BulkAction.Unarchive -> "unarchive"
+                BulkAction.Move -> "move"
+            },
+        )
+        if (folderId != null || action == BulkAction.Move) {
+            put("folder_id", folderId)
+        }
+    }.toString()
 
 // ---------------------------------------------------------------------------
 // Wire bodies & envelopes (private to the service)

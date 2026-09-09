@@ -1,57 +1,140 @@
 package ai.gowtam.oak.features.chat
 
+import ai.gowtam.oak.ui.orbs.OrbState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** Signal streaming copy: friendly nouns, never raw tool ids. */
+/** Incoming-plate thinking-trace copy: never raw tool ids. */
 class StreamingHeuristicTest {
 
     @Test
     fun `instrumentToken matches the cross-platform copy table`() {
-        assertEquals("Dex lookup", instrumentToken("resolve_entity"))
-        assertEquals("Pokémon", instrumentToken("get_pokemon"))
-        assertEquals("Move", instrumentToken("get_move"))
-        assertEquals("Game data", instrumentToken("run_sql"))
-        assertEquals("Wiki", instrumentToken("search_wiki"))
-        assertEquals("Usage", instrumentToken("get_meta_usage"))
+        assertEquals("Identifying", instrumentToken("resolve_entity"))
+        assertEquals("Looking up Pokémon", instrumentToken("get_pokemon"))
+        assertEquals("Looking up move", instrumentToken("get_move"))
+        assertEquals("Looking up box", instrumentToken("lookup_box"))
+        assertEquals("Querying game data", instrumentToken("run_sql"))
+        assertEquals("Searching wiki", instrumentToken("search_wiki"))
+        assertEquals("Checking ladder usage", instrumentToken("get_meta_usage"))
         assertEquals("Teams", instrumentToken("submit_builder_answer"))
-        assertEquals("Lookup", instrumentToken("totally_unknown"))
+        assertEquals("Looking up", instrumentToken("totally_unknown"))
     }
 
     @Test
-    fun `sentence uses unique friendly nouns, never raw GET ids`() {
-        val sentence = streamingStatusSentence(
-            phase = StreamingPhase.USING_TOOLS,
+    fun `trace rows use friendly nouns and subjects`() {
+        val rows = traceRows(
             activities = listOf(
-                ToolActivity(tool = "resolve_entity", label = "GET_RESOLVE_ENTITY"),
-                ToolActivity(tool = "get_pokemon", label = "GET_POKEMON"),
-                ToolActivity(tool = "get_pokemon", label = "GET_POKEMON"),
+                ToolActivity(tool = "resolve_entity", label = "🔍 Resolving “Farigiraf”…"),
+                ToolActivity(tool = "get_pokemon", label = "📇 Looking up Garchomp…"),
+                ToolActivity(tool = "submit_answer", label = "✍️ Composing the answer…"),
             ),
-            reconnecting = false,
+            settled = false,
         )
-        assertEquals("Looking up Dex lookup, Pokémon", sentence)
-        assertFalse(sentence.contains("GET_"))
-        assertFalse(sentence.contains("get_pokemon"))
+        assertEquals(2, rows.size)
+        assertEquals("Identifying", rows[0].primary)
+        assertEquals("Farigiraf", rows[0].secondary)
+        assertFalse(rows[0].active)
+        assertEquals("Looking up Pokémon", rows[1].primary)
+        assertEquals("Garchomp", rows[1].secondary)
+        assertEquals(true, rows[1].active)
+        assertFalse(rows.any { it.tool == "submit_answer" })
+        assertFalse(rows.any { it.primary.contains("get_") })
     }
 
     @Test
-    fun `thinking with no tools uses the mute thinking line`() {
+    fun `orb state matches the cross-platform table`() {
+        assertEquals(OrbState.Connecting, orbStateForActivity(reconnecting = true, latestTool = "get_pokemon"))
+        assertEquals(OrbState.Breathing, orbStateForActivity(reconnecting = false, latestTool = null))
+        assertEquals(OrbState.Searching, orbStateForActivity(reconnecting = false, latestTool = "get_pokemon"))
+        assertEquals(OrbState.Searching, orbStateForActivity(reconnecting = false, latestTool = "search_wiki"))
+        assertEquals(OrbState.Searching, orbStateForActivity(reconnecting = false, latestTool = "lookup_box"))
+        assertEquals(OrbState.Solving, orbStateForActivity(reconnecting = false, latestTool = "compute_stat"))
+        assertEquals(OrbState.Solving, orbStateForActivity(reconnecting = false, latestTool = "run_sql"))
+        assertEquals(OrbState.Breathing, orbStateForActivity(reconnecting = false, latestTool = "submit_answer"))
         assertEquals(
-            "Thinking through your question…",
-            streamingStatusSentence(StreamingPhase.THINKING, emptyList(), reconnecting = false),
+            OrbState.Composing,
+            orbStateForActivity(reconnecting = false, latestTool = "get_pokemon", writing = true),
+        )
+        assertEquals(
+            OrbState.Connecting,
+            orbStateForActivity(reconnecting = true, latestTool = "get_pokemon", writing = true),
         )
     }
 
     @Test
-    fun `reconnecting wins over activity`() {
+    fun `thinking header is live until settled`() {
         assertEquals(
-            "Reconnecting…",
-            streamingStatusSentence(
-                StreamingPhase.USING_TOOLS,
-                listOf(ToolActivity(tool = "get_pokemon", label = "Garchomp")),
-                reconnecting = true,
-            ),
+            ThinkingHeader(live = true, text = "Thinking"),
+            thinkingHeader(reconnecting = false, settled = false, elapsedSeconds = 3),
         )
+        assertEquals(
+            ThinkingHeader(live = false, text = "Thought for 4 seconds"),
+            thinkingHeader(reconnecting = false, settled = true, elapsedSeconds = 4),
+        )
+        assertEquals("Thought for 1 second", thoughtFor(1))
+        assertEquals("Thought for a moment", thoughtFor(0))
+        assertEquals(
+            ThinkingHeader(live = true, text = "Reconnecting"),
+            thinkingHeader(reconnecting = true, settled = false, elapsedSeconds = 2),
+        )
+    }
+
+    @Test
+    fun `subjectFromLabel pulls quoted and capitalised runs`() {
+        assertEquals("garchom", subjectFromLabel("Resolving “garchom”…"))
+        assertEquals("Fake Out", subjectFromLabel("Looking up Fake Out"))
+        assertEquals("Will-O-Wisp", subjectFromLabel("Looking up the move Will-O-Wisp"))
+        assertNull(subjectFromLabel("Resolving name"))
+    }
+
+    @Test
+    fun `subjectFromLabel strips the verb and trailing possessive from learnset labels`() {
+        assertEquals("Torkoal", subjectFromLabel("Checking Torkoal's learnset…"))
+        assertEquals("Torkoal", subjectFromLabel("Checking Torkoal’s learnset…"))
+        assertEquals(
+            "Charizard-Mega-Y",
+            subjectFromLabel("Checking Charizard-Mega-Y’s learnset…"),
+        )
+    }
+
+    @Test
+    fun `subjectFromLabel takes the clause after a colon`() {
+        assertEquals("Fire", subjectFromLabel("Searching the Pokédex: Fire…"))
+        assertEquals(
+            "Fire · Speed > 100",
+            subjectFromLabel("Searching the Pokédex: Fire · Speed > 100…"),
+        )
+    }
+
+    @Test
+    fun `subjectFromLabel prefers the species over a later format word`() {
+        assertEquals(
+            "Torkoal",
+            subjectFromLabel("Checking Torkoal’s live Doubles usage…"),
+        )
+    }
+
+    @Test
+    fun `subjectFromLabel reads ability evolution and matchup labels`() {
+        assertEquals("Drought", subjectFromLabel("Reading the Drought ability…"))
+        assertEquals("Garchomp", subjectFromLabel("Tracing Garchomp’s evolution…"))
+        assertEquals("Fire/Flying", subjectFromLabel("Checking Fire/Flying matchups…"))
+    }
+
+    @Test
+    fun `legacy streamingStatusCopy follows the new header`() {
+        val thinking = streamingStatusCopy(StreamingPhase.THINKING, emptyList(), reconnecting = false)
+        assertEquals("Thinking", thinking.verb)
+        assertEquals("", thinking.rest)
+        val writing = streamingStatusCopy(StreamingPhase.ANSWERING, emptyList(), reconnecting = false)
+        assertEquals("Thought for a moment", writing.sentence)
+        val reconnect = streamingStatusCopy(
+            StreamingPhase.USING_TOOLS,
+            listOf(ToolActivity(tool = "get_pokemon", label = "Garchomp")),
+            reconnecting = true,
+        )
+        assertEquals("Reconnecting", reconnect.sentence)
     }
 }

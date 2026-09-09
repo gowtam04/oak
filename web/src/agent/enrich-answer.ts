@@ -13,8 +13,9 @@
  * Provider-agnostic (fixes Grok and GPT-5.5; a no-op for an answer Claude already
  * filled). It NEVER throws and NEVER weakens an answer: any failure — or an
  * enriched payload that fails re-validation — returns the original answer
- * unchanged. It only ADDS missing fields; it never overwrites a value the model
- * supplied (e.g. base_stats copied verbatim).
+ * unchanged. Sprite URL and dex number are index-owned when a SpriteRef exists
+ * (a hallucinated PokeAPI form id must not win). Other model-supplied fields
+ * (base_stats, types already filled) are left untouched.
  *
  * It ALSO owns `candidates.hidden_rows` (the rows beyond `shown` for a truncated
  * list, so clients expand locally instead of firing a follow-up turn): the field
@@ -168,8 +169,8 @@ function enrichCandidates(
     const next = ref
       ? {
           ...row,
-          sprite_url: row.sprite_url ?? ref.sprite_url,
-          dex_number: row.dex_number ?? ref.dex_number,
+          sprite_url: ref.sprite_url,
+          dex_number: ref.dex_number,
           types: row.types.length > 0 ? row.types : asTypeNames(ref.types),
         }
       : { ...row };
@@ -273,8 +274,8 @@ function enrichSubjects(
     if (!ref) return s;
     return {
       ...s,
-      sprite_url: s.sprite_url || ref.sprite_url,
-      dex_number: s.dex_number ?? ref.dex_number,
+      sprite_url: ref.sprite_url,
+      dex_number: ref.dex_number,
       types: s.types.length > 0 ? s.types : asTypeNames(ref.types),
     };
   });

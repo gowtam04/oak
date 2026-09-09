@@ -4,7 +4,9 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- White O ring only, in the 66% adaptive safe zone (center 54,54; outer ~20–88). -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,30 A24,24 0 1 1 54,78 A24,24 0 1 1 54,30 Z" />
+        android:fillType="evenOdd"
+        android:pathData="M 20.250,54.000 A 33.750,33.750 0 1 1 87.750,54.000 A 33.750,33.750 0 1 1 20.250,54.000 Z M 35.775,54.000 A 18.225,18.225 0 1 0 72.225,54.000 A 18.225,18.225 0 1 0 35.775,54.000 Z" />
 </vector>

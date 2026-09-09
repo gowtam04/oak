@@ -26,17 +26,50 @@ final class AppState {
   /// here with a lightweight turn model; P6 populates it as the chat streams.
   var guestThread: [GuestTurn] = []
 
-  /// The guest thread's resolved data scope (GS-C), mirrored from the chat
-  /// reducer's `scope` events so the guest→sign-in import can persist the thread
-  /// under the scope it actually ran in. Defaults to national-dex (the server
-  /// default) until a turn resolves otherwise; reset with the guest thread.
-  var guestThreadScope: Format = .nationalDex
+  /// The guest thread's resolved data scope, mirrored from the chat reducer's
+  /// `scope` events so the guest→sign-in import can persist the thread under
+  /// the scope it actually ran in. Champions-first: defaults to Champions
+  /// (CF-DATA-BR-1); leftover other-format values are not used to pick a game.
+  var guestThreadScope: Format = .champions
 
   /// Signed-in account's last-used game scope for NEW chats (from `GET /api/auth/me`
   /// + every subsequent `scope` event while signed in). Survives New Chat so the
   /// chip doesn't flash National Dex for a user mid–Gen 7 run. `nil` for guests
   /// and never-chatted accounts. Mirrors web's `lastUsedScope` (`page.tsx`).
   var lastUsedScope: Format?
+
+  /// Signed-in MRU scopes (SCOPE-US-2), most recent first. Empty for guests.
+  var lastUsedScopes: [Format] = []
+
+  /// A pending in-app hop (slash / chip / share URL). Consumed by ``RootView``.
+  var pendingDestination: AppDestination?
+
+  /// Compact / full answer-card default (COMPACT-US-1). Full is the factory default.
+  var answerDensity: AnswerDensity = .full
+
+  /// Device-local Light / Dark / System appearance. Default System follows the
+  /// iPhone setting. Writes through to ``appearanceStore`` on change.
+  var appearance: AppearancePreference {
+    didSet {
+      guard appearance != oldValue else { return }
+      appearanceStore.preference = appearance
+    }
+  }
+
+  @ObservationIgnored
+  private let appearanceStore: any AppearanceStoring
+
+  @ObservationIgnored
+  private let regulationStore: any RegulationStoring
+
+  /// Header-chip / answer-tag label. Last-known from disk, else `"Champions"`.
+  private(set) var regulationChipLabel: String
+
+  /// Accessibility hint for the regulation chip.
+  private(set) var regulationHint: String
+
+  /// Explain-from-calculator should land as a normal chat send.
+  var pendingChatSend: String?
 
   /// Pending server-side turns keyed by conversation id (`session_id`) → the
   /// server-minted `turn_id` still generating for that thread
@@ -47,7 +80,27 @@ final class AppState {
   /// frame; cleared on any terminal event (answer/error/stopped) or a resume 404.
   private(set) var pendingTurns: [String: String] = [:]
 
-  init() {}
+  init(
+    appearanceStore: any AppearanceStoring = InMemoryAppearanceStore(),
+    regulationStore: any RegulationStoring = InMemoryRegulationStore()
+  ) {
+    self.appearanceStore = appearanceStore
+    self.regulationStore = regulationStore
+    self.appearance = appearanceStore.preference
+    let cached = regulationStore.snapshot
+    self.regulationChipLabel = cached?.chipLabel ?? RegulationMeta.fallback.chipLabel
+    self.regulationHint = cached?.hint ?? RegulationMeta.fallback.hint
+  }
+
+  /// Refreshes the regulation chip from `GET /api/scope`. A miss keeps last-known
+  /// (or the generic `"Champions"` fallback) — never a stale letter from a
+  /// compile-time constant.
+  func refreshRegulation(using service: any RegulationService) async {
+    guard let meta = await service.current(), meta.isUsable else { return }
+    regulationChipLabel = meta.chipLabel
+    regulationHint = meta.hint
+    regulationStore.snapshot = meta
+  }
 
   /// Records the turn generating for `conversationId` (the `turn` SSE frame).
   func setPendingTurn(conversationId: String, turnId: String) {
@@ -82,8 +135,10 @@ extension AppState {
       // Seed the new-chat chip from the account preference (signed-in only).
       if case .signedIn = snapshot.state {
         lastUsedScope = snapshot.lastUsedScope
+        lastUsedScopes = snapshot.lastUsedScopes
       } else {
         lastUsedScope = nil
+        lastUsedScopes = []
       }
     } catch {
       Log.auth.error("session restore failed; remaining a guest")
@@ -145,6 +200,8 @@ extension AppState {
     authState = .guest
     activeConversationId = nil
     lastUsedScope = nil
+    lastUsedScopes = []
+    pendingDestination = nil
     // Drop any pending-turn pointers — they belonged to the now-signed-out account
     // (or the prior guest session) and must not drive a reattach after the reset.
     pendingTurns.removeAll()
@@ -218,6 +275,21 @@ private extension GuestTurn {
 enum AuthState: Equatable, Sendable {
   case guest
   case signedIn(email: String)
+}
+
+/// In-app navigation requested by a slash, follow-up chip, or share URL.
+enum AppDestination: Equatable, Sendable {
+  case teams(query: String?)
+  case team(id: String)
+  case dex(query: String?)
+  case dexHop(DexArtifactHop)
+  /// First-class / Expand calculator. Associated scenario is carried into the
+  /// full-screen `CalculatorView` (CALC-AC-1.2 / 2.3) — never a chat bounce.
+  case calculator(CalcScenario?)
+  case conversation(id: String)
+  case share(id: String)
+  /// Usage tab (ADR-6). Optional species slug for a drill-in.
+  case usage(slug: String?)
 }
 
 /// One turn of the in-memory guest thread (session-only, never persisted).

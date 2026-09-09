@@ -291,6 +291,98 @@ export async function appendTurn(
   }
 }
 
+function codedError(code: string, message = code): Error {
+  const err = new Error(message);
+  (err as Error & { code: string }).code = code;
+  return err;
+}
+
+function assertReplaceablePair(history: ChatMessage[]): {
+  user: ChatMessage;
+  assistant: ChatMessage;
+} {
+  if (history.length < 2) {
+    throw codedError("nothing_to_replace");
+  }
+  const assistant = history[history.length - 1];
+  const user = history[history.length - 2];
+  if (user.role !== "user" || assistant.role !== "assistant") {
+    throw codedError("nothing_to_replace");
+  }
+  return { user, assistant };
+}
+
+function memReplaceLastPair(
+  sessionId: string,
+  userContent: string,
+  assistantContent: string,
+  now: number,
+): void {
+  const store = getMemStore();
+  const history = store.get(sessionId, now);
+  if (!history) {
+    throw codedError("nothing_to_replace");
+  }
+  assertReplaceablePair(history);
+  history.splice(history.length - 2, 2, {
+    role: "user",
+    content: userContent,
+  }, {
+    role: "assistant",
+    content: assistantContent,
+  });
+}
+
+/**
+ * Drop the last completed user+assistant pair and append a new pair
+ * (REC-BR-2 guest retry/edit). Throws `nothing_to_replace` when the last two
+ * messages are not a user then assistant turn.
+ */
+export async function replaceLastPair(
+  sessionId: string,
+  userContent: string,
+  assistantContent: string,
+  now: number = Date.now(),
+): Promise<void> {
+  const client = getRedisClient();
+  if (!client) {
+    memReplaceLastPair(sessionId, userContent, assistantContent, now);
+    return;
+  }
+  try {
+    const key = histKey(sessionId);
+    const rawEntries = await client.lrange(key, 0, -1);
+    const history: ChatMessage[] = [];
+    for (const entry of rawEntries) {
+      const parsed = parseHistoryElement(sessionId, entry);
+      if (parsed !== undefined) history.push(parsed);
+    }
+    assertReplaceablePair(history);
+    // Rewrite from the *parsed* prefix. A raw LTRIM of the last two list
+    // elements is wrong when corrupt JSON sits between the last user and
+    // assistant (getHistory skips those entries).
+    const next: ChatMessage[] = [
+      ...history.slice(0, -2),
+      { role: "user", content: userContent },
+      { role: "assistant", content: assistantContent },
+    ];
+    await client
+      .pipeline()
+      .del(key)
+      .rpush(key, ...next.map((m) => JSON.stringify(m)))
+      .pexpire(key, SESSION_TTL_MS)
+      .exec();
+  } catch (err) {
+    if (err instanceof Error && (err as Error & { code?: string }).code === "nothing_to_replace") {
+      throw err;
+    }
+    if (err instanceof Error && err.message.includes("nothing_to_replace")) {
+      throw err;
+    }
+    logRedisError("replaceLastPair", sessionId, err);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Guest scope stickiness (GS-B / GS-D3)
 // ---------------------------------------------------------------------------

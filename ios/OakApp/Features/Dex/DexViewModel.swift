@@ -23,6 +23,8 @@ final class DexViewModel {
   private(set) var matches: [SearchMatch] = []
   /// True while a search request is in flight (first paint / section switch).
   private(set) var isLoading = false
+  /// Entity route queued by an artifact hop (DEX-US-2). Written after format.
+  private(set) var pendingRoute: DexEntityRoute?
 
   private let dexLookup: any DexLookupService
   private var searchTask: Task<Void, Never>?
@@ -32,9 +34,10 @@ final class DexViewModel {
   /// after section/format changes (scheduled immediately via ``reload()``).
   private static let debounceNanoseconds: UInt64 = 280_000_000
 
-  init(dexLookup: any DexLookupService, format: Format = .nationalDex) {
+  init(dexLookup: any DexLookupService, format: Format = .champions) {
     self.dexLookup = dexLookup
-    self.format = format
+    self.format = .champions
+    _ = format
   }
 
   /// Initial load (blank browse for the default section). Call once from the view's
@@ -50,9 +53,24 @@ final class DexViewModel {
   }
 
   func selectFormat(_ next: Format) {
-    guard next != format else { return }
-    format = next
+    // Champions-only Dex: leftover writes must not reopen National Dex / gen-N.
+    _ = next
+  }
+
+  /// Queues the entity route. Format stays Champions (CF-DEX-US-1).
+  func applyArtifactHop(_ hop: DexArtifactHop) {
+    format = .champions
+    if let section = DexSection(entityKind: hop.kind) {
+      self.section = section
+    }
+    pendingRoute = DexEntityRoute(kind: hop.kind, query: hop.query)
     reload()
+  }
+
+  func consumePendingRoute() -> DexEntityRoute? {
+    let route = pendingRoute
+    pendingRoute = nil
+    return route
   }
 
   /// Cancels any pending debounce and fetches for the current inputs immediately.

@@ -1,65 +1,60 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  STARTER_ENTRIES,
-  STARTER_PROMPTS,
-  pickRandomPrompts,
-  pickRandomStarters,
-} from "./example-prompts";
+import { STARTER_ENTRIES, STARTER_PROMPTS } from "./example-prompts";
 
-const CATEGORIES = new Set(["Battle", "Dex", "Rules", "Meta"]);
+/**
+ * Champions-first starter pool (CF-CHAT-AC-1.3, CF-UI-AC-3.2).
+ * Imports the exported list only — does not restate production copy.
+ */
 
-describe("STARTER_ENTRIES", () => {
-  it("has no duplicate prompt texts", () => {
-    expect(new Set(STARTER_ENTRIES.map((e) => e.text)).size).toBe(
-      STARTER_ENTRIES.length,
-    );
-  });
+const OTHER_GAME: Array<[string, RegExp]> = [
+  ["other generations", /\bgen(?:eration)?s?\s*[1-9]\b|\bevery generation\b/i],
+  ["National Dex", /national\s*dex/i],
+  ["Scarlet/Violet", /\bscarlet\b|\bviolet\b/i],
+  ["Mystery Dungeon", /mystery\s*dungeon|\bpmd\b/i],
+  ["glitches", /\bglitch(?:es|ed)?\b/i],
+  [
+    "catch locations",
+    /\bcatch(?:es|ing)?\b(?!\s+rate)|\bwhere (?:can i|do (?:i|you)|to) (?:find|catch)\b|\bencounter locations?\b/i,
+  ],
+  ["Tera", /\btera(?:stall(?:iz(?:e|ation))?|blast| type)?\b/i],
+  ["Smogon OU", /\bsmogon\b|\bgen\s*9\s*ou\b|\bgen9ou\b/i],
+];
 
-  it("uses only soul.md categories (Battle / Dex / Rules / Meta)", () => {
-    for (const entry of STARTER_ENTRIES) {
-      expect(CATEGORIES.has(entry.category)).toBe(true);
-    }
-  });
+const TRIVIA: Array<[string, RegExp]> = [
+  ["weight", /\bweight\b/i],
+  ["heaviest", /\bheaviest\b/i],
+  ["lightest", /\blightest\b/i],
+  ["color trivia", /\bpurple\b/i],
+  ["catch rate", /\bcatch\s*rate\b/i],
+  ["based-on trivia", /\bbased on\b/i],
+  ["signature moves", /\bsignature moves?\b/i],
+];
 
-  it("covers all four categories", () => {
-    const seen = new Set(STARTER_ENTRIES.map((e) => e.category));
-    expect(seen).toEqual(CATEGORIES);
-  });
-});
-
-describe("STARTER_PROMPTS", () => {
-  it("mirrors STARTER_ENTRIES texts with no duplicates", () => {
+describe("STARTER_PROMPTS — Champions-only (CF-CHAT-AC-1.3)", () => {
+  it("exports a non-empty pool that matches STARTER_ENTRIES texts", () => {
+    expect(STARTER_PROMPTS.length).toBeGreaterThan(0);
     expect(STARTER_PROMPTS).toEqual(STARTER_ENTRIES.map((e) => e.text));
-    expect(new Set(STARTER_PROMPTS).size).toBe(STARTER_PROMPTS.length);
   });
-});
 
-describe("pickRandomPrompts", () => {
-  it("returns n distinct members of the pool", () => {
-    const picked = pickRandomPrompts(5);
-    expect(picked).toHaveLength(5);
-    expect(new Set(picked).size).toBe(5);
-    for (const prompt of picked) {
-      expect(STARTER_PROMPTS).toContain(prompt);
+  it("every starter is a valid Champions question: no other gens, PMD, glitches, catch locations, Tera, or Smogon OU", () => {
+    expect(STARTER_ENTRIES.length).toBeGreaterThan(0);
+    for (const entry of STARTER_ENTRIES) {
+      const text = entry.text;
+      expect(text.trim().length, "empty starter").toBeGreaterThan(0);
+      for (const [name, re] of OTHER_GAME) {
+        expect(text, `${name}: ${text}`).not.toMatch(re);
+      }
+      // Case-sensitive OU ladder tag (avoid matching "you").
+      expect(text, `Smogon OU: ${text}`).not.toMatch(/(?<![A-Za-z])OU(?![A-Za-z])/);
     }
   });
 
-  it("returns the whole pool when n exceeds the pool length", () => {
-    const picked = pickRandomPrompts(STARTER_PROMPTS.length + 10);
-    expect(picked).toHaveLength(STARTER_PROMPTS.length);
-    expect(new Set(picked).size).toBe(STARTER_PROMPTS.length);
-  });
-});
-
-describe("pickRandomStarters", () => {
-  it("returns n distinct filed starters with category + text", () => {
-    const picked = pickRandomStarters(4);
-    expect(picked).toHaveLength(4);
-    expect(new Set(picked.map((e) => e.text)).size).toBe(4);
-    for (const entry of picked) {
-      expect(CATEGORIES.has(entry.category)).toBe(true);
-      expect(STARTER_PROMPTS).toContain(entry.text);
+  it("does not ask Pokédex trivia Oak has no tool for", () => {
+    for (const entry of STARTER_ENTRIES) {
+      for (const [name, re] of TRIVIA) {
+        expect(entry.text, `${name}: ${entry.text}`).not.toMatch(re);
+      }
     }
   });
 });

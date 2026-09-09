@@ -1,82 +1,93 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChatThreadProps } from "@/components/types";
 import AnswerCard from "@/components/answer-card/AnswerCard";
 import Markdown from "@/components/Markdown";
-import { plateHintFromToolLabels } from "@/lib/plate-types";
 import {
-  STARTER_ENTRIES,
-  pickRandomStarters,
+  firstFiledStarters,
+  pickFiledStarters,
   type StarterPrompt,
 } from "@/lib/example-prompts";
+import { deriveFollowUpChips, type FollowUpChip } from "@/lib/chat/follow-up-chips";
+import type { Format } from "@/data/formats";
+import FollowUpChipRow from "./FollowUpChipRow";
+import PinStrip from "./PinStrip";
+import TurnActions from "./TurnActions";
+import ThinkingTrace from "./ThinkingTrace";
+import { instrumentToken } from "@/lib/chat/thinking-trace";
 
-/**
- * Tool -> friendly instrument word (TestFlight feedback AH1b0N09K — raw wire
- * tool names like `GET_EVOLUTION_CHAIN`/`RUN_SQL` leaked into the streaming
- * chips). Pinned by the canonical cross-platform copy table (§1) — iOS/Android
- * mirror this vocabulary exactly. `.ilabel` uppercases visually via CSS
- * (`text-transform: uppercase`), so the map stores natural case.
- */
-const INSTRUMENT_TOKENS: Record<string, string> = {
-  resolve_entity: "Dex lookup",
-  query_pokedex: "Pokédex search",
-  get_pokemon: "Pokémon",
-  get_move: "Move",
-  get_ability: "Ability",
-  get_item: "Item",
-  get_type_matchups: "Type matchups",
-  get_evolution_chain: "Evolution",
-  compute_stat: "Stats",
-  estimate_damage: "Damage calc",
-  get_usage_stats: "Usage",
-  get_meta_usage: "Usage",
-  get_encounters: "Locations",
-  get_learnset: "Movepool",
-  get_team: "Teams",
-  list_teams: "Teams",
-  save_team: "Teams",
-  run_sql: "Game data",
-  search_wiki: "Wiki",
-  submit_answer: "Answer",
-  submit_builder_answer: "Teams",
-};
-const UNKNOWN_INSTRUMENT_TOKEN = "Lookup";
+export { instrumentToken };
 
-export function instrumentToken(tool: string): string {
-  return INSTRUMENT_TOKENS[tool] ?? UNKNOWN_INSTRUMENT_TOKEN;
+/** Denylist / daily-cap refusals are not user-retryable (SC-BR-14, SC-AC-5.4). */
+function isRetryableTransportCode(code: string): boolean {
+  return code !== "account_denied" && code !== "daily_limit";
+}
+
+function chipsForAnswer(
+  answer: import("@/components/types").OakAnswer,
+  mentionedTeam: { id: string; name: string } | null,
+  signedIn: boolean,
+): FollowUpChip[] {
+  const chips = deriveFollowUpChips({
+    answer,
+    mentionedTeam: signedIn ? (mentionedTeam ?? undefined) : undefined,
+  }).filter((c) => c.kind !== "scope");
+  return signedIn ? chips : chips.filter((c) => c.kind !== "team");
 }
 
 /**
- * One "field note" chip in the streaming trail: the mono instrument word
- * mapped from the tool name (e.g. `get_pokemon` -> "Pokémon", via
- * `instrumentToken`) beside the human-readable subject, with a pokeball
- * micro-spinner while in flight (the latest, unfinished call) or a tick once
- * the loop has moved on. Presentation only — data comes straight from the
- * `tool_activity` SSE payload the client already accumulates.
- */
-/**
  * ChatThread — renders the committed conversation (user + assistant turns) in
- * order, plus the streaming "field notes" experience while `status ===
- * "streaming"` (specimen desk field notes / soul.md):
- *   - a vertical trail of instrument chips, one per accumulated `tool_activity`
- *     event (mono tool token + subject); the latest carries the pokeball micro-
- *     spinner, completed ones a tick. Before the first tool it's a single
- *     "thinking" chip; a live elapsed-seconds counter sits below, in mono.
- *   - an answer-card skeleton (masthead bar + prose lines, soft pulse) shown the
- *     instant a turn starts, holding the layout so real content doesn't jump in.
- *   - once prose begins streaming (`answer_start`), the trail collapses to one
- *     compact summary chip ("6 lookups · 12s") pinned above the streaming card,
- *     re-expandable to the full trail — continuity, not deletion.
+ * order, plus the streaming status while `status === "streaming"`:
+ *   - an expandable thinking trace (shimmering "Thinking", then one row per
+ *     `tool_activity`) while the turn is live. No plate, no sheen, no glow.
+ *   - once prose begins streaming (`answer_start`), the trace collapses to
+ *     "Thought for N seconds" and the streaming-answer plate rises in.
  *   - a transport-fault affordance when `status === "error"` and
  *     `transportError` is set (in-domain failures arrive as normal answer cards,
- *     never here — sse-client.ts / integration.md); it replaces the skeleton in
- *     place, no layout jump.
+ *     never here — sse-client.ts / integration.md); it replaces the status in
+ *     place.
  *
  * Each assistant turn is rendered through `AnswerCard`, with `onFollowUp`
  * threaded down so suggestion-chip / candidate-row clicks POST a follow-up turn
  * on the same session. Visual styling deferred to the `frontend-design` skill.
  */
+export interface ChatThreadQolProps {
+  signedIn?: boolean;
+  undoTurnId?: string | null;
+  onUndo?: () => void;
+  onRetryLast?: () => void;
+  onEditLast?: () => void;
+  onPinTurn?: (id: string) => void;
+  onUnpinTurn?: (id: string) => void;
+  onForkTurn?: (id: string) => void;
+  pinnedIds?: string[];
+  onJumpToPin?: (id: string) => void;
+  onShareTurn?: (id: string) => void;
+  onFollowUpChip?: (chip: FollowUpChip) => void;
+  currentFormat?: Format;
+  mentionedTeam?: { id: string; name: string } | null;
+  /** When false, hold the empty plate until recents are ready (EMPTY-US-1). */
+  emptyReady?: boolean;
+  emptyDesk?: {
+    lastConversation?: { id: string; title: string } | null;
+    lastTeam?: { id: string; name: string } | null;
+    scopeLabel?: string;
+    onContinue?: () => void;
+    onOpenLastTeam?: () => void;
+  };
+  density?: "full" | "compact";
+  hydrate?: {
+    status: "running" | "failed";
+    assistant_message_id?: string;
+  } | null;
+  onHydrateRetry?: (turnId: string) => void;
+  onOpenCalculator?: (
+    calc: import("@/components/types").DamageCalc,
+    format: import("@/data/formats").Format,
+  ) => void;
+}
+
 export default function ChatThread({
   turns,
   activity,
@@ -88,21 +99,40 @@ export default function ChatThread({
   onFollowUp,
   imagePreviews,
   composerSlot,
-}: ChatThreadProps) {
+  signedIn = false,
+  undoTurnId = null,
+  onUndo,
+  onRetryLast,
+  onEditLast,
+  onPinTurn,
+  onUnpinTurn,
+  onForkTurn,
+  pinnedIds = [],
+  onJumpToPin,
+  onShareTurn,
+  onFollowUpChip,
+  currentFormat,
+  mentionedTeam = null,
+  emptyReady = true,
+  emptyDesk,
+  density = "full",
+  hydrate = null,
+  onHydrateRetry,
+  onOpenCalculator,
+}: ChatThreadProps & ChatThreadQolProps) {
   const showEmptyState = turns.length === 0 && status === "idle";
 
-  // Empty-state filed starters: show a fresh random 6 each time the empty state
-  // appears (page load, or returning to it after a "new chat" resets `turns`),
-  // so a user discovers Oak's full range over repeated visits. The initial value
-  // is the deterministic first-6 so the server render and first client render
-  // match (this is a Client Component — `Math.random()` at render time would
-  // hydration-mismatch); the post-mount effect then swaps in the random set.
-  // Each starter carries category + optional type-dot (specimen desk, soul.md).
+  // Empty-state filed starters: one random prompt per category (Battle → Dex
+  // → Rules → Meta) each time the empty state appears, so a user discovers
+  // Oak's range over repeated visits. The initial value is the deterministic
+  // first-of-each-category slice so the server render and first client render
+  // match (`Math.random()` at render time would hydration-mismatch); the
+  // post-mount effect then swaps in the random set.
   const [examples, setExamples] = useState<StarterPrompt[]>(() =>
-    STARTER_ENTRIES.slice(0, 4),
+    firstFiledStarters(),
   );
   useEffect(() => {
-    if (showEmptyState) setExamples(pickRandomStarters(4));
+    if (showEmptyState) setExamples(pickFiledStarters());
   }, [showEmptyState]);
 
   // Auto-scroll to the newest content (new turn / streamed token) — important on
@@ -146,34 +176,33 @@ export default function ChatThread({
     if (pinnedRef.current) bottomRef.current?.scrollIntoView?.({ block: "end" });
   }, [turns, streamingMarkdown, status]);
 
-  // Liveness heartbeat: while the turn is in flight, count wall-clock seconds so
-  // a slow turn (long model "thinking" before the first tool, or while composing)
-  // visibly keeps moving instead of reading as stuck. Computed from a start
-  // timestamp rather than incremented, so a throttled/backgrounded tab stays
-  // accurate. Resets whenever the turn ends.
-  // Also restart when a reconnect begins/ends so the counter measures the
-  // current attempt, not the cumulative wall-clock across a suspended gap (which
-  // would read as "stuck").
-  const hasActivity = activity.length > 0;
-  const skeletonPlate = useMemo(
-    () => plateHintFromToolLabels(activity.map((a) => a.label)),
-    [activity],
-  );
-  const thinkingLabel = reconnecting
-    ? "Reconnecting…"
-    : "Thinking through your question…";
+  const lastUserId = [...turns].reverse().find((t) => t.role === "user")?.id;
+  const lastAssistantId = [...turns]
+    .reverse()
+    .find((t) => t.role === "assistant")?.id;
+  const pinnedIdSet = new Set(pinnedIds);
+  const pins = pinnedIds.flatMap((id) => {
+    const turn = turns.find((t) => t.id === id && t.role === "assistant");
+    if (!turn || turn.role !== "assistant") return [];
+    const label =
+      turn.answer.subjects?.[0]?.name ??
+      turn.answer.answer_markdown.split("\n")[0]?.slice(0, 48) ??
+      "Pinned turn";
+    return [{ id, label }];
+  });
 
   return (
     <div className="chat-thread" data-testid="chat-thread">
       {showEmptyState && (
         <div
           className={"chat-empty" + (composerSlot ? " chat-empty--hero" : "")}
-          data-testid="chat-empty"
+          data-testid={emptyReady ? "chat-empty" : undefined}
         >
           <div className="blank-plate" data-testid="blank-plate">
             <h1 className="blank-plate__prompt">What do you want to know?</h1>
             <p className="blank-plate__sub">
-              Mechanics, locations, teams, damage. Oak will show its work.
+              Teams, calcs, and live usage for Pokémon Champions. Oak will show
+              its work.
             </p>
 
             {/* Composer promoted into the plate on desktop empty state; on
@@ -181,6 +210,39 @@ export default function ChatThread({
                 stays bottom-docked. */}
             {composerSlot && (
               <div className="chat-empty__composer">{composerSlot}</div>
+            )}
+
+            {signedIn && emptyDesk && (
+              <div className="empty-desk">
+                {emptyDesk.lastConversation && (
+                  <button
+                    type="button"
+                    className="empty-desk__row"
+                    data-testid="empty-desk-continue"
+                    onClick={emptyDesk.onContinue}
+                  >
+                    Continue {emptyDesk.lastConversation.title}
+                  </button>
+                )}
+                {emptyDesk.lastTeam && (
+                  <button
+                    type="button"
+                    className="empty-desk__row"
+                    data-testid="empty-desk-last-team"
+                    onClick={emptyDesk.onOpenLastTeam}
+                  >
+                    {emptyDesk.lastTeam.name}
+                  </button>
+                )}
+                {emptyDesk.scopeLabel && (
+                  <div
+                    className="empty-desk__row empty-desk__row--static"
+                    data-testid="empty-desk-scope"
+                  >
+                    {emptyDesk.scopeLabel}
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="starters" data-testid="filed-starters">
@@ -203,10 +265,15 @@ export default function ChatThread({
         </div>
       )}
 
+      {pins.length > 0 && onJumpToPin && (
+        <PinStrip pins={pins} onJump={onJumpToPin} />
+      )}
+
       {turns.map((turn) =>
         turn.role === "user" ? (
           <div
             key={turn.id}
+            id={`turn-${turn.id}`}
             className="chat-turn chat-turn--user"
             data-testid="user-turn"
           >
@@ -226,13 +293,32 @@ export default function ChatThread({
                 ))}
               </div>
             ) : null}
-            {turn.content ? (
-              <div className="chat-turn__content">{turn.content}</div>
-            ) : null}
+            <div className="chat-turn__note">
+              {turn.content ? (
+                <div className="chat-turn__content">{turn.content}</div>
+              ) : null}
+              {undoTurnId === turn.id && onUndo && (
+                <button
+                  type="button"
+                  className="chat-turn__undo"
+                  onClick={onUndo}
+                >
+                  Undo
+                </button>
+              )}
+              <TurnActions
+                role="user"
+                isLast={turn.id === lastUserId}
+                signedIn={signedIn}
+                streaming={status === "streaming"}
+                onEdit={onEditLast}
+              />
+            </div>
           </div>
         ) : (
           <div
             key={turn.id}
+            id={`turn-${turn.id}`}
             className="chat-turn chat-turn--assistant"
             data-testid="assistant-turn"
           >
@@ -240,61 +326,68 @@ export default function ChatThread({
               answer={turn.answer}
               onFollowUp={onFollowUp}
               disabled={status === "streaming"}
+              signedIn={signedIn}
+              onShare={
+                onShareTurn ? () => onShareTurn(turn.id) : undefined
+              }
+              density={density}
+              format={currentFormat}
+              hydrate={
+                hydrate &&
+                (!hydrate.assistant_message_id ||
+                  hydrate.assistant_message_id === turn.id)
+                  ? { status: hydrate.status }
+                  : undefined
+              }
+              onHydrateRetry={
+                onHydrateRetry ? () => onHydrateRetry(turn.id) : undefined
+              }
+              onOpenCalculator={onOpenCalculator}
             />
+            <TurnActions
+              role="assistant"
+              isLast={turn.id === lastAssistantId}
+              signedIn={signedIn}
+              streaming={status === "streaming"}
+              pinned={pinnedIdSet.has(turn.id)}
+              onRetry={onRetryLast}
+              onPin={onPinTurn ? () => onPinTurn(turn.id) : undefined}
+              onUnpin={onUnpinTurn ? () => onUnpinTurn(turn.id) : undefined}
+              onFork={onForkTurn ? () => onForkTurn(turn.id) : undefined}
+            />
+            {onFollowUpChip && (
+              <FollowUpChipRow
+                chips={chipsForAnswer(
+                  turn.answer,
+                  signedIn ? mentionedTeam : null,
+                  signedIn,
+                )}
+                onSelect={onFollowUpChip}
+                disabled={status === "streaming"}
+              />
+            )}
           </div>
         ),
       )}
 
       {status === "streaming" && (
-        <div className="chat-thread__progress" data-testid="progress">
-          <div className="sig-live" aria-live="polite">
-            <i className="sig-live__pip" aria-hidden="true" />
-            <span
-              className="sig-live__text"
-              data-testid={hasActivity ? "field-note" : "progress-thinking"}
-            >
-              {hasActivity
-                ? `Looking up ${[...new Set(activity.map((a) => instrumentToken(a.tool)))].join(", ")}`
-                : thinkingLabel}
-            </span>
-          </div>
-          <div className="sig-live__bar" aria-hidden="true" />
-        </div>
-      )}
-
-      {/* Answer skeleton — shown the instant a turn starts (before prose), so the
-          shape of what's coming holds the layout and the streamed answer (or the
-          error strip) replaces it in place with no jump. Mild type wash when
-          activity labels confidently name a type; else sunken desk tint. */}
-      {status === "streaming" && !streamingMarkdown && (
         <div
-          className={[
-            "chat-turn",
-            "chat-turn--assistant",
-            "chat-thread__skeleton",
-            skeletonPlate ? "" : "chat-thread__skeleton--desk",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          style={skeletonPlate?.style}
-          data-testid="answer-skeleton"
-          data-plate={skeletonPlate?.kind ?? "desk"}
-          aria-hidden="true"
+          className={
+            "chat-turn chat-turn--assistant chat-thread__incoming" +
+            (streamingMarkdown ? " chat-thread__streaming" : " chat-thread__skeleton")
+          }
+          data-testid={streamingMarkdown ? undefined : "answer-skeleton"}
         >
-          <div className="chat-thread__skeleton-masthead" />
-          <div className="chat-thread__skeleton-line" />
-          <div className="chat-thread__skeleton-line" />
-          <div className="chat-thread__skeleton-line chat-thread__skeleton-line--short" />
-        </div>
-      )}
-
-      {status === "streaming" && streamingMarkdown && (
-        <div
-          className="chat-turn chat-turn--assistant chat-thread__streaming"
-          data-testid="streaming-answer"
-          aria-live="polite"
-        >
-          <Markdown markdown={streamingMarkdown} />
+          <ThinkingTrace
+            activity={activity}
+            reconnecting={reconnecting}
+            settled={Boolean(streamingMarkdown)}
+          />
+          {streamingMarkdown ? (
+            <div data-testid="streaming-answer" aria-live="polite">
+              <Markdown markdown={streamingMarkdown} />
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -305,9 +398,9 @@ export default function ChatThread({
           role="alert"
         >
           <span className="chat-thread__error-text">
-            Something went wrong ({transportError.code}). Please try again.
+            {transportError.message}
           </span>
-          {onRetry && (
+          {onRetry && isRetryableTransportCode(transportError.code) && (
             <button
               type="button"
               className="chat-thread__error-retry"

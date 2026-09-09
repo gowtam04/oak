@@ -1,61 +1,30 @@
 import SwiftUI
 
-/// Oak's hero/empty-state mark — a soft radial-gradient disc with Oak's
-/// wordmark glyph (a bold "O" ring, drawn natively) at its center and two thin
-/// concentric rings. The glyph mirrors the app icon's own "O" (`icon.svg`),
-/// so the mark reads as the same brand across surfaces. Empty states and the
-/// auth/account headers layer their own sparkles and labels around it.
+/// Oak's in-app brand tile — coral rounded square + white O ring, matching
+/// `docs/design/prototypes/red-top-bar-assets/oak-mark.svg` (32×32, rx 7,
+/// circle r 7.7, stroke 4.6 white).
 ///
-/// **Trademark (constraint 1):** no Pokéball geometry — no bisecting band, no
-/// center button; just an O ring inside faint rings.
+/// This is the **lid / wordmark tile**, not the home-screen glyph (that is a
+/// full-bleed 1024 square). Do not mount this on the chat empty landing.
 ///
-/// **Accessibility (constraint 2):** the slow 6s breathing scale (1.0 ↔ 1.04)
-/// loops forever, so it's disabled under `@Environment(\.accessibilityReduceMotion)`.
-/// The mark is decorative — the surrounding view carries the meaning — so it's
-/// hidden from VoiceOver (M-AC-UI9.3).
+/// **Accessibility:** the mark is decorative — the surrounding view carries
+/// the meaning — so it's hidden from VoiceOver (M-AC-UI9.3).
 struct OakBrandMark: View {
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-  /// The overall diameter in points (default 96).
-  var size: CGFloat = 96
-
-  @State private var breathe = false
+  /// The overall box in points (default 32 — the lid tile).
+  var size: CGFloat = 32
 
   var body: some View {
+    let corner = size * 7 / 32
+    let ringDiameter = size * 7.7 / 16
+    let stroke = size * 4.6 / 32
     ZStack {
+      RoundedRectangle(cornerRadius: corner, style: .continuous)
+        .fill(Theme.accent)
       Circle()
-        .fill(
-          RadialGradient(
-            colors: [Theme.accent.opacity(0.18), .clear],
-            center: .center,
-            startRadius: 0,
-            endRadius: size * 0.5
-          )
-        )
-      Circle()
-        .strokeBorder(Theme.separator, lineWidth: 1)
-        .frame(width: size * 0.78, height: size * 0.78)
-      Circle()
-        .strokeBorder(Theme.separator, lineWidth: 1)
-        .frame(width: size * 0.54, height: size * 0.54)
-      // Mirrors the app icon's "O" (icon.svg: outer diameter 20/32 of its
-      // canvas, stroke 4.6/20 of that diameter). The leaf's old footprint
-      // (font-size 0.3 * size) is the glyph area here, so the diameter
-      // keeps that footprint while the stroke keeps the icon's ~23% ratio.
-      let oDiameter = size * 0.3
-      Circle()
-        .strokeBorder(Theme.accent, lineWidth: oDiameter * 0.23)
-        .frame(width: oDiameter, height: oDiameter)
+        .strokeBorder(Theme.onRed, lineWidth: stroke)
+        .frame(width: ringDiameter, height: ringDiameter)
     }
     .frame(width: size, height: size)
-    .scaleEffect(breathe ? 1.04 : 1.0)
-    .onAppear {
-      guard !reduceMotion else { return }
-      // 3s each way, autoreversing → a 6s breathing cycle.
-      withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
-        breathe = true
-      }
-    }
     .accessibilityHidden(true)
   }
 }

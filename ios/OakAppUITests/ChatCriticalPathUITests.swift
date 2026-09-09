@@ -23,7 +23,7 @@ final class ChatCriticalPathUITests: XCTestCase {
     try requireLiveBackend()
 
     let app = XCUIApplication().launchOak()
-    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
 
     XCTAssertTrue(goToTab(OakUITest.Tab.chat, in: app), "Chat tab unreachable.")
     try requireComposer(in: app)
@@ -43,7 +43,7 @@ final class ChatCriticalPathUITests: XCTestCase {
       NSPredicate(
         format: "label IN %@ OR label BEGINSWITH %@",
         OakUITest.Streaming.all,
-        OakUITest.Streaming.lookingUpPrefix
+        OakUITest.Streaming.thoughtPrefix
       )
     ).firstMatch
     XCTAssertTrue(

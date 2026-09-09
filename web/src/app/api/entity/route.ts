@@ -6,7 +6,9 @@
  *
  *   ?kind=pokemon|move|ability|item|type   (always known at the click site)
  *   ?q=<display name or canonical slug>
- *   ?format=scarlet-violet|champions        (snapshot at open time, BR-AV-7)
+ *   ?format= optional — ignored for lookup; data is always Champions
+ *     (old clients sending scarlet-violet / gen-N still get Champions).
+ *     A garbage value that is not a stored Format is 400.
  *
  * Responses (all valid envelopes ride a 200, mirroring the app's "in-domain
  * failure is a normal response" philosophy — the client switches on `status`):
@@ -15,13 +17,14 @@
  *
  * No auth gate — public Pokédex data; works for guests. Never throws for
  * in-domain misses (BR-AV-5, NFR-2): an unreadable index degrades to
- * `unavailable`. `@/data/db` (and its repo dependents) import `@/env` at module
- * load, so they are DYNAMICALLY imported inside the handler — keeping `next
- * build` from evaluating `env` (cf. the chat route).
+ * `unavailable`. There is no National Dex secondary lookup: an off-roster
+ * name is `not_found`. `@/data/db` (and its repo dependents) import `@/env` at
+ * module load, so they are DYNAMICALLY imported inside the handler — keeping
+ * `next build` from evaluating `env` (cf. the chat route).
  */
 
 import { json, retryAfterHeader } from "@/app/api/auth/_lib/http";
-import { isFormat, type Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, isFormat } from "@/data/formats";
 import { ENTITY_KINDS, type EntityKind } from "@/agent/schemas";
 import { checkRateLimit, PUBLIC_READ_CONFIG } from "@/server/rate-limit";
 import { clientIp } from "@/server/client-ip";
@@ -58,10 +61,14 @@ export async function GET(req: Request): Promise<Response> {
   // --- Param validation (pure; a bad param is a real 4xx, not an envelope) ---
   if (!KINDS.has(kindParam)) return json(400, { error: "invalid_kind" });
   if (q.length === 0) return json(400, { error: "missing_query" });
-  if (!isFormat(formatParam)) return json(400, { error: "invalid_format" });
+  // Omitted format → Champions. A stored Format (including old gen-N /
+  // national-dex / scarlet-violet) is ignored for lookup. Garbage → 400.
+  if (formatParam.length > 0 && !isFormat(formatParam)) {
+    return json(400, { error: "invalid_format" });
+  }
 
   const kind = kindParam as EntityKind;
-  const format = formatParam as Format;
+  const format = CHAMPIONS_FORMAT;
 
   try {
     const { db } = await import("@/data/db");
@@ -78,57 +85,22 @@ export async function GET(req: Request): Promise<Response> {
     );
     const { matches } = await resolveEntity(q, kind, 5, format);
 
-    // (a) EXACT match in the requested scope → assemble + return exactly as
-    // before (no new fields on this path). "Exact" is normalized string equality
-    // (findExactMatch), NOT the fuzzy top-ranked hit — so a nearest-name neighbour
-    // is never silently rendered as if it were the entity.
+    // Exact match on the Champions roster → assemble. "Exact" is normalized
+    // string equality (findExactMatch), NOT the fuzzy top-ranked hit.
     const exact = findExactMatch(matches, q);
     if (exact) {
       const result = await assembleEntityProfile(kind, exact.slug, format, db);
       return json(200, result);
     }
 
-    // (b) No exact in-scope match. Rather than render the fuzzy neighbour (the
-    // Eternatus∉gen-6 → "Tornadus" bug, #2), fall back to National Dex: if the
-    // requested scope isn't already national-dex and that index is available,
-    // look for an EXACT national-dex match and show THAT, stamped `source_format`
-    // so the client can badge it. Champions items the operator has excluded from
-    // the roster don't resolve in-scope, so they intentionally fall through here
-    // and surface via this National-Dex badge instead of a bare "not found".
-    const NATIONAL_DEX: Format = "national-dex";
-    if (format !== NATIONAL_DEX && (await isIndexAvailable(NATIONAL_DEX, db))) {
-      const { matches: ndMatches } = await resolveEntity(
-        q,
-        kind,
-        5,
-        NATIONAL_DEX,
-      );
-      const ndExact = findExactMatch(ndMatches, q);
-      if (ndExact) {
-        const result = await assembleEntityProfile(
-          kind,
-          ndExact.slug,
-          NATIONAL_DEX,
-          db,
-        );
-        // The envelope's `format` stays national-dex (what the profile was
-        // assembled from — honest for old clients); `source_format` marks the
-        // cross-scope fallback so the viewer shows the "not in <scope>" banner.
-        if (result.status === "ok") {
-          return json(200, { ...result, source_format: NATIONAL_DEX });
-        }
-        return json(200, result);
-      }
-    }
-
-    // (c) No exact match anywhere → not_found with POPULATED suggestions (the
-    // requested-scope fuzzy matches' display names, top 5) so the client can
-    // offer them as tappable "did you mean" options.
+    // Off-roster / unresolved → not_found. Do not echo the query (an
+    // off-roster name must not appear in the envelope — CF-DEX-AC-1.4) and
+    // do not suggest other-game neighbours.
     return json(200, {
       status: "not_found",
       kind,
       format,
-      query: q,
+      query: "",
       suggestions: matches.slice(0, 5).map((m) => m.display_name),
     });
   } catch (err) {

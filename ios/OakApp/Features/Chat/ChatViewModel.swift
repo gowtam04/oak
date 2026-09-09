@@ -79,18 +79,61 @@ final class ChatViewModel {
   /// `scopeSeed` (`web/src/app/page.tsx`).
   private(set) var scopeSeed: Format?
 
-  /// The scope the header chip displays and the artifact viewer scopes to: a
-  /// pending chip pick, else the server-resolved scope, else the signed-in
-  /// last-used preference, else the national-dex default — identical to web's
-  /// `displayFormat = scopeSeed ?? resolvedScope ?? lastUsedScope ?? "national-dex"`.
-  var displayFormat: Format {
-    scopeSeed ?? resolvedScope ?? appState.lastUsedScope ?? .nationalDex
-  }
+  /// Champions-first: the chip is always Champions. Leftover last-used / stored
+  /// gen-N values must not reopen another game (CF-CHAT-US-1 / CF-DATA-BR-21).
+  var displayFormat: Format { .champions }
+
+  /// Informational regulation chip — not a format picker (CF-UI-US-2).
+  var isRegulationChipPicker: Bool { false }
+
+  /// Current Champions regulation label from ``AppState`` (`GET /api/scope`).
+  var regulationLabel: String { appState.regulationChipLabel }
+
+  /// Mention tokens inserted via `@` autocomplete (MEN-US-1).
+  private(set) var mentionTokens: [FollowUpChips.MentionedTeam] = []
+
+  /// Teams matching the in-progress `@` query (empty when not mentioning).
+  private(set) var mentionSuggestions: [TeamSummary] = []
+
+  /// Mention ids that failed to bind (deleted / not owned). Blocks send.
+  private(set) var deadMentionIds: Set<String> = []
+
+  /// Note when retry/edit cannot re-attach consume-on-turn images (REC-BR-7).
+  private(set) var missingImagesNote: String?
+
+  /// Last send's bound team, for the follow-up team chip.
+  private(set) var lastMentionedTeam: FollowUpChips.MentionedTeam?
+
+  /// Saved-team list for mention autocomplete (signed-in only).
+  private var savedTeams: [TeamSummary] = []
+
+  /// Empty-desk recents (signed-in returning users).
+  private(set) var recentConversation: ConversationSummary?
+  private(set) var recentTeam: TeamSummary?
+
+  /// Per-turn pins for the open conversation (assistant message ids, thread order).
+  private(set) var pinnedMessageIds: [String] = []
+
+  /// `true` after ``beginEditLast()`` until the edited send finishes or is cancelled.
+  private(set) var isEditingLast = false
 
   // MARK: Dependencies + identity
 
+  /// Overlay hop from `/calc` or a damage-block Open (CALC-US-3).
+  private(set) var calculatorHop: CalculatorHop?
+  var isCalculatorPresented: Bool { calculatorHop != nil }
+
+  var showsAddToTeam: Bool { isSignedIn }
+  var showsPinArtifact: Bool { isSignedIn }
+
+  private var voiceHydrateByMessageId: [String: VoiceHydrateStatus] = [:]
+
   private let chat: any ChatService
   private let appState: AppState
+  private let history: (any HistoryService)?
+  private let teams: (any TeamService)?
+  private let shares: (any ShareService)?
+  private let voice: (any VoiceService)?
 
   /// The client thread id sent as `session_id` (equals the conversation id on
   /// resume). Rotated by ``startNewConversation()`` so a new thread has no prior
@@ -125,10 +168,9 @@ final class ChatViewModel {
   /// still authorize against the ORIGINAL session, so the deferred stop uses this.
   private var pendingStopSessionId: String?
 
-  /// The quick-stop window: a Stop tap within this of ``send()`` wipes the just-sent
-  /// turn and restores its text (vs. a later stop, which keeps the answer-less turn).
-  /// Mirrors web's `QUICK_STOP_MS` (2000ms).
-  static let quickStopThreshold: TimeInterval = 2
+  /// The undo window: an Undo tap within this of ``send()`` stops the turn and
+  /// restores composer state (ADR-3 / REC-US-3). After this, Stop remains.
+  static let quickStopThreshold: TimeInterval = 3
 
   /// Max automatic reattach attempts after a mid-stream connection drop with a known
   /// `turn_id` (BT-7): a small budget heals a transient blip by re-subscribing to the
@@ -142,8 +184,11 @@ final class ChatViewModel {
   private static let resumeBackoff: Duration = .milliseconds(400)
 
   /// When the current turn's stream started (set on ``send()``), for the quick-stop
-  /// window. `nil` when no turn is in flight.
+  /// window and the thinking-trace elapsed clock. `nil` when no turn is in flight.
   private var turnStartedAt: Date?
+
+  /// Public start time for the in-flight thinking trace. `nil` when idle.
+  var streamStartedAt: Date? { turnStartedAt }
 
   /// True while a reattach is pending or in flight — the turn stays "in flight" and
   /// the status view shows "Reconnecting…" instead of a dead-end error. Cleared once
@@ -163,21 +208,75 @@ final class ChatViewModel {
   /// touching the real UIKit background-task machinery.
   private let usesBackgroundGrace: Bool
 
-  init(chat: any ChatService, appState: AppState, usesBackgroundGrace: Bool = true) {
+  init(
+    chat: any ChatService,
+    appState: AppState,
+    history: (any HistoryService)? = nil,
+    teams: (any TeamService)? = nil,
+    shares: (any ShareService)? = nil,
+    voice: (any VoiceService)? = nil,
+    usesBackgroundGrace: Bool = true
+  ) {
     self.chat = chat
     self.appState = appState
+    self.history = history
+    self.teams = teams
+    self.shares = shares
+    self.voice = voice
     self.usesBackgroundGrace = usesBackgroundGrace
     self.sessionId = appState.activeConversationId ?? UUID().uuidString
   }
 
   // MARK: Derived state
 
-  /// Whether the composer can send: not already streaming, and either some text or
-  /// at least one attached image (an image-only turn is valid, M-AC-5.4).
+  /// Whether the composer can send: not already streaming (unless editing, which
+  /// stops first), no dead mentions, and either some text or an attached image.
   var canSend: Bool {
-    guard !isStreaming else { return false }
+    if isStreaming && !isEditingLast { return false }
+    guard deadMentionIds.isEmpty else { return false }
     let trimmed = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
     return !trimmed.isEmpty || !pendingImages.isEmpty
+  }
+
+  var isSignedIn: Bool {
+    if case .signedIn = appState.authState { return true }
+    return false
+  }
+
+  /// Undo is offered on the just-sent user bubble for ~3s while the turn streams.
+  var canUndoSend: Bool {
+    guard isStreaming, let started = turnStartedAt else { return false }
+    return Date().timeIntervalSince(started) < Self.quickStopThreshold
+  }
+
+  /// Retry is last-assistant-card only, and hidden while a turn is in flight.
+  var canRetryLastAnswer: Bool {
+    guard !isStreaming else { return false }
+    if case .assistant = turns.last?.content { return true }
+    return false
+  }
+
+  /// Edit is last-user-message only (the last *user* id, not the last row).
+  var canEditLastUser: Bool {
+    lastUserTurn() != nil
+  }
+
+  /// The last user turn's local id, even when an assistant card follows it.
+  var lastUserTurnId: UUID? {
+    lastUserIndex().map { turns[$0].id }
+  }
+
+  /// The last assistant turn's local id (retry is last-assistant-card only).
+  var lastAssistantTurnId: UUID? {
+    lastAssistantIndex().map { turns[$0].id }
+  }
+
+  func isLastUser(_ turn: ChatTurnItem) -> Bool {
+    lastUserTurnId == turn.id
+  }
+
+  func isLastAssistant(_ turn: ChatTurnItem) -> Bool {
+    lastAssistantTurnId == turn.id
   }
 
   /// The coarse in-progress phase, for the streaming status view (M-AC-4.3).
@@ -190,34 +289,103 @@ final class ChatViewModel {
 
   // MARK: Composer actions
 
-  /// Sends the composed turn: appends the user message immediately (M-AC-1.1),
-  /// resets the streaming state, and starts consuming the event stream. A no-op when
-  /// nothing can be sent.
+  /// Sends the composed turn: intercepts known slashes, binds `@` mentions,
+  /// appends the user message (unless this is an edit recovery), and starts
+  /// the event stream.
   func send() {
     guard canSend else { return }
     let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-    let images = pendingImages
 
-    // Tear down any prior local stream before starting a new turn (local only — a
-    // genuinely still-running server turn is caught by the POST's 409 and reattached).
+    // Handled slashes are not a chat turn — skip them while editing the last
+    // user message so "/new" in an edited typo still recovery-POSTs.
+    if !isEditingLast {
+      switch SlashCommands.parse(text, hasUsagePage: true) {
+      case .navigate(let target):
+        handleSlash(target, argument: SlashCommands.argument(text))
+        composerText = ""
+        return
+      case .calc(let rest):
+        openCalculator(rest: rest)
+        composerText = ""
+        return
+      case .message:
+        break
+      }
+    }
+
+    let mentions = resolveMentions(in: text)
+    if !deadMentionIds.isEmpty { return }
+
+    let images = pendingImages
+    let recovery: ChatRecovery? = isEditingLast ? .edit : nil
+
+    if isStreaming, isEditingLast {
+      performStop(now: Date())
+    }
+
     resetStreamState()
 
-    turns.append(ChatTurnItem(content: .user(text: text, imageCount: images.count)))
-    mirrorGuestTurn(GuestTurn(content: .user(text: text)))
+    if recovery == nil {
+      turns.append(ChatTurnItem(content: .user(text: text, imageCount: images.count)))
+      mirrorGuestTurn(GuestTurn(content: .user(text: text)))
+    }
 
     composerText = ""
     pendingImages = []
-    // Stamp the quick-stop window for this fresh turn.
+    isEditingLast = false
+    missingImagesNote = nil
+    lastMentionedTeam = mentions.first
     turnStartedAt = Date()
-    // The pending chip pick (if any) rides THIS turn as `scope_seed`; a `scope`
-    // event will clear `scopeSeed` mid-turn so it doesn't leak onto the next turn.
     let request = PendingRequest(
       message: text,
       images: images,
-      scopeSeed: scopeSeed
+      scopeSeed: outboundScopeSeed,
+      recovery: recovery,
+      mentionedTeamIds: mentions.map(\.id)
     )
     lastRequest = request
     beginStreaming(request)
+  }
+
+  /// Retry the last completed assistant answer (REC-US-1). Keeps the previous
+  /// pair on screen until the new answer succeeds.
+  func retryLastAnswer() {
+    guard canRetryLastAnswer else { return }
+    guard let user = lastUserTurn() else { return }
+    let images = lastRequest?.images ?? []
+    if user.imageCount > 0, images.isEmpty {
+      missingImagesNote = "The pictures from that message are no longer attached."
+    }
+    resetStreamState()
+    turnStartedAt = Date()
+    let request = PendingRequest(
+      message: user.text,
+      images: images,
+      scopeSeed: outboundScopeSeed,
+      recovery: .retry,
+      mentionedTeamIds: lastRequest?.mentionedTeamIds
+    )
+    lastRequest = request
+    beginStreaming(request)
+  }
+
+  /// Load the last user message into the composer for editing (REC-US-2).
+  /// Restores still-in-memory ``lastRequest`` images onto the composer.
+  func beginEditLast() {
+    guard let user = lastUserTurn() else { return }
+    composerText = user.text
+    isEditingLast = true
+    if let images = lastRequest?.images, !images.isEmpty {
+      pendingImages = images
+      missingImagesNote = nil
+    } else if user.imageCount > 0 {
+      missingImagesNote = "The pictures from that message are no longer attached."
+    }
+  }
+
+  /// Undo the just-sent turn: existing Stop + restore composer (ADR-3).
+  func undoSend() {
+    performStop(now: Date())
   }
 
   /// Re-opens the stream for the last turn after a recoverable failure or an
@@ -234,7 +402,7 @@ final class ChatViewModel {
     }
     // Resumed thread with no retained request: re-send the last user turn's text.
     if case let .user(text, _)? = turns.last?.content, !text.isEmpty {
-      let request = PendingRequest(message: text, images: [], scopeSeed: scopeSeed)
+      let request = PendingRequest(message: text, images: [], scopeSeed: outboundScopeSeed)
       lastRequest = request
       beginStreaming(request)
     }
@@ -289,11 +457,11 @@ final class ChatViewModel {
     finalizeStopUI(elapsed: elapsed, request: stopped)
   }
 
-  /// Applies the quick-stop-vs-late-stop UI decision, WITHOUT tearing the stream down
+  /// Applies the undo-vs-late-stop UI decision, WITHOUT tearing the stream down
   /// (the caller owns whether the read stays alive — the pre-`turn`-frame race keeps it
-  /// alive to capture the id). A quick stop (within ``quickStopThreshold`` of ``send()``)
-  /// wipes the thread, rotates the session, and restores the composer for a redo; a late
-  /// stop keeps the now-answerless user turn. A user stop is never a failure (no banner).
+  /// alive to capture the id). Undo (within ``quickStopThreshold``) restores the
+  /// composer and removes the just-sent user bubble; a late stop keeps the
+  /// answer-less user turn. A user stop is never a failure (no banner).
   private func finalizeStopUI(elapsed: TimeInterval, request: PendingRequest?) {
     isStreaming = false
     reconnecting = false
@@ -301,25 +469,24 @@ final class ChatViewModel {
     setIdleTimerDisabled(false)
 
     guard elapsed < Self.quickStopThreshold, let request else {
-      // Late stop: keep the answer-less user turn in the thread; nothing else to do.
       return
     }
 
-    // Quick stop: wipe to a brand-new session and restore the message for a redo. Scope
-    // is intentionally NOT reset (web keeps `resolvedScope`/`scopeSeed` on stop).
-    turns = []
+    if request.recovery == nil, case .user = turns.last?.content {
+      turns.removeLast()
+      if case .guest = appState.authState, let last = appState.guestThread.last, last.role == .user {
+        appState.guestThread.removeLast()
+      }
+    }
     streamingText = ""
     toolActivities = []
     errorBanner = nil
-    lastRequest = nil
     turnStartedAt = nil
-    sessionId = UUID().uuidString
-    appState.activeConversationId = nil
-    if case .guest = appState.authState {
-      appState.guestThread = []
-    }
     composerText = request.message
     pendingImages = request.images
+    if request.recovery == .edit {
+      isEditingLast = true
+    }
   }
 
   // MARK: Scene lifecycle (detach on background, reattach on foreground; design §6.2)
@@ -373,8 +540,39 @@ final class ChatViewModel {
   /// runs. Ignored mid-stream so a turn's scope is stable — the chip is disabled
   /// then in the UI. Mirrors web's `setScopeSeed` (`web/src/app/page.tsx`).
   func selectScope(_ format: Format) {
-    guard !isStreaming else { return }
-    scopeSeed = format
+    // Regulation chip is informational. Leftover calls must not persist or
+    // seed another game (CF-CHAT-US-1 / CF-DATA-BR-21).
+    _ = format
+  }
+
+  /// Never send a gen-N / National Dex `scope_seed`. Nil is preferred; Champions
+  /// is tolerated by the tests if a client still emits a seed.
+  private var outboundScopeSeed: Format? { nil }
+
+  /// Persist a chip pick with no follow-up message (SCOPE-US-1).
+  private func persistScopePick(_ format: Format) async {
+    do {
+      let conversationId = appState.activeConversationId
+      let scopes = try await chat.persistScope(
+        format: format,
+        conversationId: conversationId,
+        sessionId: sessionId
+      )
+      if !scopes.isEmpty {
+        appState.lastUsedScopes = scopes
+      } else {
+        touchLocalMRU(format)
+      }
+    } catch {
+      touchLocalMRU(format)
+    }
+  }
+
+  private func touchLocalMRU(_ format: Format) {
+    guard isSignedIn else { return }
+    var next = appState.lastUsedScopes.filter { $0 != format }
+    next.insert(format, at: 0)
+    appState.lastUsedScopes = next
   }
 
   /// Stages images for the next turn, capped at ``maxAttachedImages`` (the backend's
@@ -412,6 +610,12 @@ final class ChatViewModel {
     composerText = ""
     pendingImages = []
     lastRequest = nil
+    mentionTokens = []
+    mentionSuggestions = []
+    deadMentionIds = []
+    isEditingLast = false
+    missingImagesNote = nil
+    pinnedMessageIds = []
     sessionId = UUID().uuidString
     // A fresh thread has no resolved scope yet — the chip falls through to
     // lastUsedScope (signed-in preference) or national-dex (web `handleNewChat`).
@@ -422,7 +626,7 @@ final class ChatViewModel {
     appState.activeConversationId = nil
     if case .guest = appState.authState {
       appState.guestThread = []
-      appState.guestThreadScope = .nationalDex
+      appState.guestThreadScope = .champions
     }
   }
 
@@ -445,25 +649,32 @@ final class ChatViewModel {
     conversationId: String,
     format: Format,
     turns: [ChatTurn],
-    activeTurnId: String? = nil
+    activeTurnId: String? = nil,
+    pinnedMessageIds: [String] = []
   ) {
     resetStreamState()
     sessionId = conversationId
     self.turns = turns.map { turn in
       switch turn {
-      case let .user(_, content):
-        return ChatTurnItem(content: .user(text: content, imageCount: 0))
-      case let .assistant(_, answer):
-        return ChatTurnItem(content: .assistant(answer))
+      case let .user(id, content):
+        return ChatTurnItem(serverMessageId: id, content: .user(text: content, imageCount: 0))
+      case let .assistant(id, answer):
+        return ChatTurnItem(serverMessageId: id, content: .assistant(answer))
       }
     }
-    resolvedScope = format
+    _ = format
+    resolvedScope = .champions
     resolvedScopeSource = nil
     scopeSeed = nil
     streamingText = ""
     toolActivities = []
     errorBanner = nil
     currentTurnId = nil
+    self.pinnedMessageIds = pinnedMessageIds
+    mentionTokens = []
+    deadMentionIds = []
+    isEditingLast = false
+    missingImagesNote = nil
 
     // If the server reports a turn still generating for this thread, record it and
     // reattach — prefer the freshly-fetched `active_turn` over any stale local pointer.
@@ -538,18 +749,16 @@ final class ChatViewModel {
       toolActivities = []
       isStreaming = true
 
-    case let .scope(format, source):
-      // The server resolved this turn's scope. Adopt it and retire any pending
-      // chip pick — the conversation's scope is now sticky server-side and
-      // outranks a stale seed on the following turn (web clears `scopeSeed` here).
-      resolvedScope = format
+    case let .scope(_, source):
+      // Champions-first: ignore leftover other-format scope frames so the chip
+      // cannot become a picker or seed (CF-CHAT-US-1).
+      resolvedScope = .champions
       resolvedScopeSource = source
       scopeSeed = nil
-      // Signed-in only: remember for New Chat (server also persists on the account).
       if case .signedIn = appState.authState {
-        appState.lastUsedScope = format
+        appState.lastUsedScope = .champions
       }
-      mirrorGuestScope(format)
+      mirrorGuestScope(.champions)
 
     case let .toolActivity(tool, label):
       toolActivities.append(ToolActivity(tool: tool, label: label))
@@ -564,11 +773,8 @@ final class ChatViewModel {
 
     case let .answer(answer):
       // The terminal, authoritative answer replaces any streamed buffer and ends
-      // the turn. A non-`answered` status is rendered as a normal answer (M-AC-1.3).
-      turns.append(ChatTurnItem(content: .assistant(answer)))
-      // Mirror the FULL answer (not just its prose) so the guest→sign-in import is
-      // non-lossy — reasoning/citations/inferences survive.
-      mirrorGuestTurn(GuestTurn(content: .assistant(answer: answer)))
+      // the turn. A recovery success replaces the last pair (REC-BR-2).
+      applySuccessfulAnswer(answer)
       streamingText = ""
       toolActivities = []
       isStreaming = false
@@ -581,7 +787,11 @@ final class ChatViewModel {
       // not leave a half-rendered answer (M-AC-4.4). The user turn stays in place. An
       // in-band `error` frame is a real model/agent fault (not a connection drop), so
       // it is a genuine terminal — clear the pending turn; it is never reattached.
-      errorBanner = ErrorBanner(message: Self.bannerMessage(code: code, fallback: message), isRetryable: true)
+      // Spend-control refusals (denied/cap) hide Retry even on this path.
+      errorBanner = ErrorBanner(
+        message: Self.bannerMessage(code: code, fallback: message),
+        isRetryable: !Self.hidesRetry(code: code)
+      )
       streamingText = ""
       toolActivities = []
       isStreaming = false
@@ -622,7 +832,9 @@ final class ChatViewModel {
       sessionId: sessionId,
       message: request.message,
       images: request.images,
-      scopeSeed: request.scopeSeed
+      scopeSeed: request.scopeSeed,
+      recovery: request.recovery,
+      mentionedTeamIds: request.mentionedTeamIds
     )
     streamTask = Task { [weak self] in
       await self?.consume(stream, isResume: false)
@@ -831,7 +1043,10 @@ final class ChatViewModel {
   // MARK: Error copy (instance for the guest hint; statics for assertable strings)
 
   /// Maps an ``OakError`` to a banner. Rate-limited guests get the "sign in raises
-  /// the limit" hint (api-design.md "Error Handling").
+  /// the limit" hint (api-design.md "Error Handling") on the per-minute
+  /// ``OakError/rateLimited`` path only — denylist (`account_denied`) and daily
+  /// cap (`daily_limit`) show the server message with Retry hidden (SC-AC-5.4 /
+  /// SC-AC-6.5 / SC-BR-14).
   private func banner(for error: OakError) -> ErrorBanner {
     switch error {
     case .transport:
@@ -844,8 +1059,11 @@ final class ChatViewModel {
       return ErrorBanner(message: message, isRetryable: true)
     case .unauthorized:
       return ErrorBanner(message: Self.sessionExpiredMessage, isRetryable: false)
-    case let .http(_, _, message):
-      return ErrorBanner(message: message.isEmpty ? Self.genericMessage : message, isRetryable: true)
+    case let .http(_, code, message):
+      return ErrorBanner(
+        message: message.isEmpty ? Self.genericMessage : message,
+        isRetryable: !Self.hidesRetry(code: code)
+      )
     case let .imageRejected(reason):
       // Surface the ACTUAL reason (too large / unsupported / too many) rather than
       // the dead-end generic banner, so a rejected attachment is self-explanatory
@@ -876,6 +1094,11 @@ final class ChatViewModel {
     }
   }
 
+  /// Denylist and daily-cap refusals must not offer Retry (SC-AC-5.4 / SC-BR-14).
+  private static func hidesRetry(code: String) -> Bool {
+    code == "account_denied" || code == "daily_limit"
+  }
+
   /// Maps an in-band SSE `error` event to user-facing copy, falling back to the
   /// server-provided message.
   static func bannerMessage(code: String, fallback: String) -> String {
@@ -893,6 +1116,365 @@ final class ChatViewModel {
   /// Shown when a reattach finds the turn gone server-side (resume 404) — the
   /// response was interrupted and the retryable banner re-sends the last message.
   static let interruptedMessage = "That response was interrupted. Tap Retry to ask again."
+
+  // MARK: Recovery / mentions / slashes / chips / organize
+
+  private func applySuccessfulAnswer(_ answer: OakAnswer) {
+    if lastRequest?.recovery != nil, let lastIndex = lastAssistantIndex() {
+      let existing = turns[lastIndex]
+      turns[lastIndex] = ChatTurnItem(
+        id: existing.id,
+        serverMessageId: existing.serverMessageId,
+        content: .assistant(answer)
+      )
+      if lastRequest?.recovery == .edit, let userIndex = lastUserIndex() {
+        let user = turns[userIndex]
+        turns[userIndex] = ChatTurnItem(
+          id: user.id,
+          serverMessageId: user.serverMessageId,
+          content: .user(text: lastRequest?.message ?? "", imageCount: lastRequest?.images.count ?? 0)
+        )
+      }
+      replaceLastGuestAssistant(answer)
+    } else {
+      turns.append(ChatTurnItem(content: .assistant(answer)))
+      mirrorGuestTurn(GuestTurn(content: .assistant(answer: answer)))
+    }
+  }
+
+  private func lastUserIndex() -> Int? {
+    turns.lastIndex {
+      if case .user = $0.content { return true }
+      return false
+    }
+  }
+
+  private func lastAssistantIndex() -> Int? {
+    turns.lastIndex {
+      if case .assistant = $0.content { return true }
+      return false
+    }
+  }
+
+  private func lastUserTurn() -> (text: String, imageCount: Int)? {
+    guard let index = lastUserIndex(), case let .user(text, count) = turns[index].content else {
+      return nil
+    }
+    return (text, count)
+  }
+
+  private func replaceLastGuestAssistant(_ answer: OakAnswer) {
+    guard case .guest = appState.authState else { return }
+    if let last = appState.guestThread.indices.last,
+       appState.guestThread[last].role == .assistant
+    {
+      appState.guestThread[last] = GuestTurn(content: .assistant(answer: answer))
+    }
+  }
+
+  func openCalculator(
+    rest: String,
+    scenario: CalcScenario? = nil,
+    kind: CalculatorHop.Kind = .overlay
+  ) {
+    calculatorHop = CalculatorHop(
+      kind: kind,
+      rest: rest,
+      format: .champions,
+      scenario: scenario.map { hop in
+        var next = hop
+        next.format = .champions
+        next.attacker.level = 50
+        next.defender.level = 50
+        return next
+      }
+    )
+  }
+
+  func dismissCalculator() {
+    calculatorHop = nil
+  }
+
+  func explainCalculator() {
+    guard calculatorHop != nil else { return }
+    let scenario = parseCalcSlashRest(calculatorHop?.rest ?? "", format: calculatorHop?.format ?? displayFormat)
+      ?? CalcScenario(
+        format: calculatorHop?.format ?? displayFormat,
+        attacker: CalcSide(),
+        defender: CalcSide(),
+        move: CalcMove()
+      )
+    composerText = explainCalcPrompt(
+      scenario: scenario,
+      result: .failure(CalcFailure(error: .incomplete))
+    )
+    send()
+  }
+
+  func retryVoiceHydrate(assistantMessageId: String) async {
+    guard let voice else { return }
+    do {
+      let response = try await voice.hydrate(
+        conversationId: sessionId,
+        assistantMessageId: assistantMessageId
+      )
+      applyVoiceHydrate(assistantMessageId: assistantMessageId, status: response.status)
+    } catch {
+      applyVoiceHydrate(assistantMessageId: assistantMessageId, status: .failed)
+    }
+  }
+
+  func applyVoiceHydrate(assistantMessageId: String, status: VoiceHydrateStatus) {
+    voiceHydrateByMessageId[assistantMessageId] = status
+  }
+
+  func showsVoiceMic(for answer: OakAnswer) -> Bool {
+    answer.origin == .voice
+  }
+
+  func voiceHydrateBanner(for item: ChatTurnItem) -> VoiceHydrateBanner? {
+    guard let id = item.serverMessageId, let status = voiceHydrateByMessageId[id] else {
+      return nil
+    }
+    switch status {
+    case .running: return .finishing
+    case .failed: return .retry
+    case .succeeded: return nil
+    }
+  }
+
+  private func handleSlash(_ target: SlashCommand.Target, argument: String?) {
+    switch target {
+    case .new:
+      startNewConversation()
+    case .team:
+      appState.pendingDestination = .teams(query: argument)
+    case .dex:
+      appState.pendingDestination = .dex(query: argument)
+    case .usage:
+      appState.pendingDestination = .usage(slug: argument)
+    }
+  }
+
+  /// Refresh mention suggestions as the composer text changes.
+  func updateMentionQuery() {
+    guard isSignedIn else {
+      mentionSuggestions = []
+      return
+    }
+    let query = currentMentionQuery(in: composerText)
+    guard let query else {
+      mentionSuggestions = []
+      return
+    }
+    let needle = query.lowercased()
+    mentionSuggestions = savedTeams.filter { team in
+      needle.isEmpty || team.name.lowercased().contains(needle)
+    }
+  }
+
+  func insertMention(_ team: TeamSummary) {
+    let token = FollowUpChips.MentionedTeam(id: team.id, name: team.name)
+    if !mentionTokens.contains(where: { $0.id == team.id }) {
+      mentionTokens.append(token)
+    }
+    composerText = replaceCurrentMention(in: composerText, with: "@\(team.name) ")
+    mentionSuggestions = []
+    deadMentionIds.remove(team.id)
+  }
+
+  func loadMentionTeams() async {
+    guard isSignedIn, let teams else { return }
+    savedTeams = (try? await teams.list(format: nil)) ?? []
+  }
+
+  func loadEmptyDeskRecents() async {
+    guard isSignedIn, turns.isEmpty else {
+      recentConversation = nil
+      recentTeam = nil
+      return
+    }
+    if let history {
+      recentConversation = try? await history.list(
+        query: nil,
+        format: nil,
+        folderId: nil,
+        archived: false,
+        includeArchived: false
+      ).first
+    }
+    if let teams {
+      recentTeam = try? await teams.list(format: nil).first
+    }
+  }
+
+  func followUpChips(for answer: OakAnswer) -> [FollowUpChip] {
+    if !isSignedIn {
+      return FollowUpChips.derive(answer: answer, impliedFormat: impliedFormat(for: answer))
+        .filter { $0.kind != .team }
+    }
+    return FollowUpChips.derive(
+      answer: answer,
+      impliedFormat: impliedFormat(for: answer),
+      mentionedTeam: lastMentionedTeam
+    )
+  }
+
+  func handleChip(_ chip: FollowUpChip) {
+    switch chip.kind {
+    case .scope:
+      selectScope(Format(rawValue: chip.target))
+    case .dex:
+      appState.pendingDestination = .dex(query: chip.target)
+    case .team:
+      appState.pendingDestination = .team(id: chip.target)
+    }
+  }
+
+  func pinTurn(_ item: ChatTurnItem) async {
+    guard isSignedIn, let history, let messageId = item.serverMessageId else { return }
+    let pinning = !pinnedMessageIds.contains(messageId)
+    do {
+      pinnedMessageIds = try await history.setTurnPinned(
+        conversationId: sessionId,
+        messageId: messageId,
+        pinned: pinning
+      )
+    } catch {
+      errorBanner = banner(for: error as? OakError ?? .transport(underlying: "pin"))
+    }
+  }
+
+  func forkFrom(_ item: ChatTurnItem) async {
+    guard isSignedIn, let history, let messageId = item.serverMessageId else { return }
+    do {
+      let result = try await history.fork(conversationId: sessionId, throughMessageId: messageId)
+      appState.pendingDestination = .conversation(id: result.id)
+    } catch {
+      errorBanner = banner(for: error as? OakError ?? .transport(underlying: "fork"))
+    }
+  }
+
+  func shareTurn(_ item: ChatTurnItem) async -> URL? {
+    guard isSignedIn, let shares, let messageId = item.serverMessageId else { return nil }
+    do {
+      let created = try await shares.create(
+        conversationId: sessionId,
+        assistantMessageId: messageId
+      )
+      return URL(string: created.url)
+    } catch {
+      errorBanner = banner(for: error as? OakError ?? .transport(underlying: "share"))
+      return nil
+    }
+  }
+
+  func hydratePinnedIds(_ ids: [String]) {
+    pinnedMessageIds = ids
+  }
+
+  /// Export this thread as Markdown or PDF, then the caller presents the share sheet.
+  func exportConversation(as format: ConversationExportFormat) async -> URL? {
+    guard isSignedIn, let history, !turns.isEmpty else { return nil }
+    do {
+      let data = try await history.exportConversation(id: sessionId, format: format)
+      return try writeExportFile(data: data, filename: "oak-conversation.\(format.fileExtension)")
+    } catch let error as OakError {
+      errorBanner = banner(for: error)
+      return nil
+    } catch {
+      errorBanner = ErrorBanner(message: Self.genericMessage, isRetryable: false)
+      return nil
+    }
+  }
+
+  private func impliedFormat(for answer: OakAnswer) -> Format? {
+    _ = answer
+    return nil
+  }
+
+  /// Bind `@Name` tokens: autocomplete taps *or* free-typed names that match a
+  /// saved team. Unmatched `@tokens` are dead and block send (MEN-AC-1.3).
+  private func resolveMentions(in text: String) -> [FollowUpChips.MentionedTeam] {
+    deadMentionIds = []
+    guard isSignedIn else { return [] }
+
+    var bound: [FollowUpChips.MentionedTeam] = []
+    let teamsByLength = savedTeams.sorted { $0.name.count > $1.name.count }
+    var index = text.startIndex
+
+    while index < text.endIndex {
+      guard text[index] == "@",
+            index == text.startIndex || text[text.index(before: index)].isWhitespace
+      else {
+        index = text.index(after: index)
+        continue
+      }
+      let afterAt = text.index(after: index)
+      let rest = text[afterAt...]
+      if let team = matchSavedTeam(in: rest, teams: teamsByLength) {
+        if !bound.contains(where: { $0.id == team.id }) {
+          bound.append(FollowUpChips.MentionedTeam(id: team.id, name: team.name))
+        }
+        index = text.index(afterAt, offsetBy: team.name.count)
+        continue
+      }
+      let token = nextAtToken(in: rest)
+      if !token.isEmpty {
+        deadMentionIds.insert(token)
+        index = text.index(afterAt, offsetBy: token.count)
+      } else {
+        index = afterAt
+      }
+    }
+
+    return Array(bound.prefix(6))
+  }
+
+  private func matchSavedTeam(
+    in rest: Substring,
+    teams: [TeamSummary]
+  ) -> TeamSummary? {
+    for team in teams {
+      guard rest.count >= team.name.count else { continue }
+      let end = rest.index(rest.startIndex, offsetBy: team.name.count)
+      let slice = rest[rest.startIndex..<end]
+      guard slice.compare(team.name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+      else { continue }
+      if end == rest.endIndex || rest[end].isWhitespace { return team }
+    }
+    return nil
+  }
+
+  private func writeExportFile(data: Data, filename: String) throws -> URL {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+    try data.write(to: url, options: .atomic)
+    return url
+  }
+
+  private func nextAtToken(in rest: Substring) -> String {
+    var end = rest.startIndex
+    while end < rest.endIndex, !rest[end].isWhitespace {
+      end = rest.index(after: end)
+    }
+    return String(rest[rest.startIndex..<end])
+  }
+
+  private func currentMentionQuery(in text: String) -> String? {
+    guard let at = text.lastIndex(of: "@") else { return nil }
+    let after = text[text.index(after: at)...]
+    if after.contains(where: { $0.isNewline || $0 == " " && after.first == " " }) {
+      // still allow mid-token (no space yet)
+    }
+    if after.contains(where: \.isNewline) { return nil }
+    if after.contains(" ") { return nil }
+    return String(after)
+  }
+
+  private func replaceCurrentMention(in text: String, with replacement: String) -> String {
+    guard let at = text.lastIndex(of: "@") else { return text + replacement }
+    return String(text[..<at]) + replacement
+  }
 
   static func rateLimitMessage(retryAfter: TimeInterval?) -> String {
     if let seconds = retryAfter, seconds > 0 {
@@ -916,10 +1498,13 @@ extension ChatViewModel {
     }
 
     let id: UUID
+    /// Server message id when known (history / after persist). Needed for pin/fork/share.
+    let serverMessageId: String?
     let content: Content
 
-    init(id: UUID = UUID(), content: Content) {
+    init(id: UUID = UUID(), serverMessageId: String? = nil, content: Content) {
       self.id = id
+      self.serverMessageId = serverMessageId
       self.content = content
     }
   }
@@ -961,5 +1546,7 @@ extension ChatViewModel {
     let message: String
     let images: [UIImage]
     let scopeSeed: Format?
+    var recovery: ChatRecovery? = nil
+    var mentionedTeamIds: [String]? = nil
   }
 }

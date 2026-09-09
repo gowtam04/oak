@@ -52,15 +52,19 @@ export type TurnMode = AgentMode;
 
 /**
  * The recorded turn status. Superset of the agent's `TurnStatus`: it adds
- * `rate_limited`, because a rate-limit rejection is recorded as a `turn_record`
- * row too (AD-4) so "every turn is recorded" stays literally true.
+ * `rate_limited` (AD-4) plus the spend-control refusals (`account_denied`,
+ * `daily_limit`, `spend_check_failed`) so "every turn is recorded" stays
+ * literally true.
  */
 export type TurnRecordStatus =
   | "answered"
   | "clarification_needed"
   | "resolution_failed"
   | "insufficient_data"
-  | "rate_limited";
+  | "rate_limited"
+  | "account_denied"
+  | "daily_limit"
+  | "spend_check_failed";
 
 /** Guest-vs-signed-in filter dimension (API param `kind`). */
 export type TurnKind = "guest" | "signed";
@@ -82,7 +86,10 @@ export type ErrorCategoryKey =
   | "insufficient_data"
   | "tool_error"
   | "otp_email_failed"
-  | "rate_limited";
+  | "rate_limited"
+  | "account_denied"
+  | "daily_limit"
+  | "spend_check_failed";
 
 // ---------------------------------------------------------------------------
 // Common request shapes (built by the routes from query params; consumed by the
@@ -549,10 +556,35 @@ export interface AdminSettingsModel {
 }
 
 /**
+ * One denylist row as projected on the admin spend surface
+ * (`GET /api/admin/settings` `spend.denylist`; SC-AC-3.1).
+ */
+export interface AdminSpendDenylistEntry {
+  email: string;
+  addedAt: number;
+  addedBy: string | null;
+}
+
+/**
+ * Operator-controlled spend gates (daily caps + denylist + cap-exempt).
+ * Shared by `GET /api/admin/settings`, `POST /api/admin/spend/caps`
+ * (returned as the body), and `POST /api/admin/spend/denylist` /
+ * `POST /api/admin/spend/cap-exempt` (`{ ok: true, spend }`).
+ */
+export interface AdminSpendState {
+  signedCap: number;
+  guestCap: number;
+  denylist: AdminSpendDenylistEntry[];
+  /** Signed-in emails that skip the daily turn cap (SC-US-9, SC-BR-16). */
+  capExempt: AdminSpendDenylistEntry[];
+}
+
+/**
  * GET/POST /api/admin/settings — the active-model selection plus the full
- * registry (so the UI can render every model, configured or not) and audit
+ * registry (so the UI can render every model, configured or not), audit
  * fields for the last change (`source: "default"` when no admin selection is
- * stored yet, so `updatedBy`/`updatedAt` are null).
+ * stored yet, so `updatedBy`/`updatedAt` are null), and the spend-controls
+ * projection (`spend`).
  */
 export interface AdminSettingsResponse {
   activeModel: ModelKey;
@@ -560,6 +592,7 @@ export interface AdminSettingsResponse {
   updatedBy: string | null;
   updatedAt: number | null;
   models: AdminSettingsModel[];
+  spend: AdminSpendState;
 }
 
 /** POST /api/admin/settings request body — `model` is raw and validated server-side. */

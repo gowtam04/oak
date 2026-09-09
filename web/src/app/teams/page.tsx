@@ -1,24 +1,16 @@
 /**
  * /teams — the manual team builder (Phase 9; TEAM-US-1..5, 10, 11).
  *
- * A signed-in account's team workbench: a Pokédex-red header band (just the
- * clickable Oak wordmark + the format select — navigation now lives in the
- * {@link AppNav} rail below it, not the band) over a `teams-page__shell` that
- * puts the shared app rail (nav refactor Part 1 WP3) beside the existing
- * {@link TeamList} rail (create / import / duplicate / delete-with-confirm)
- * and {@link TeamEditor} — a roster strip + focused member editor — for the
- * selected team. The app rail renders for guests too (its "New chat" link and
- * Reference/Privacy footer need no auth); the guest soft-gate below is
- * unchanged. All team data flows through the Wave-4 client layer — `useTeams`
- * for the list + mutations and the teams-client for one-off detail/export — never
- * a raw `/api/teams` call. Guests get a sign-in prompt (BR-T2): no list, no
- * requests.
+ * A signed-in account's team workbench: a Pokédex-red header band (clickable
+ * Oak wordmark — navigation lives in the {@link AppNav} rail, not the band)
+ * over a `teams-page__shell` that puts the shared app rail beside
+ * {@link TeamList} (living Champions + optional Archived) and {@link TeamEditor}.
+ * Living teams are Champions (no format picker). Archived other-format teams
+ * are view+delete only. Guests get a sign-in prompt (BR-T2 / CF-AS-11).
  *
- * Sprites / types / base stats (for the roster chips, member type badges, and the
- * editor's live final-stat bars) are looked up in one batch from the index
- * (`resolveSprites`, never-throwing) and cached per slug, keyed to the active
- * format. The format selector scopes the list and is the format new/imported
- * teams are created under.
+ * All team data flows through the Wave-4 client layer — `useTeams` for the
+ * living list + mutations and `listTeams({ archived: true })` for the archive
+ * — never a raw `/api/teams` call.
  */
 
 "use client";
@@ -30,13 +22,14 @@ import AppNav from "@/components/nav/AppNav";
 import OakWordmark from "@/components/brand/OakWordmark";
 import { fetchMe, type MeResult } from "@/lib/api/auth-client";
 import { useTeams } from "@/lib/hooks/use-teams";
-import type { TeamDetail } from "@/lib/api/teams-client";
-import type { TeamMember } from "@/data/teams/team-schema";
 import {
-  NATDEX_FORMAT,
-  SCOPE_PICKER_ORDER,
-  type Format,
-} from "@/data/formats";
+  deleteTeam,
+  listTeams,
+  type TeamDetail,
+  type TeamSummary,
+} from "@/lib/api/teams-client";
+import type { TeamMember } from "@/data/teams/team-schema";
+import { CHAMPIONS_FORMAT, type Format } from "@/data/formats";
 import TeamList from "@/components/teams/TeamList";
 import TeamEditor, {
   type TeamEditorHandle,
@@ -44,7 +37,6 @@ import TeamEditor, {
 import TeamsAssistantPanel from "@/components/teams/TeamsAssistantPanel";
 import PasteImportDialog from "@/components/teams/PasteImportDialog";
 import ExportDialog from "@/components/teams/ExportDialog";
-import { formatLabel } from "@/components/teams/display-names";
 import type { TeamAnalysisOk } from "@/lib/teams/team-analysis";
 import { analysisSuggestionChips } from "@/lib/teams/role-inventory";
 import {
@@ -65,16 +57,31 @@ export default function TeamsPage() {
   }, []);
 
   const teams = useTeams(auth.signedIn);
-  const { setFormatFilter } = teams;
-
-  // List defaults to ALL formats so a team saved from chat (e.g. Champions) is
-  // visible without hunting for a filter. Create/import use the selected format,
-  // or national-dex when "All" is selected.
-  const [format, setFormat] = useState<Format | "all">("all");
-  const createFormat: Format = format === "all" ? NATDEX_FORMAT : format;
+  // Share import lands on `/teams?team=<id>`. Read from location (not
+  // useSearchParams) so jsdom page tests don't need a Next router mock.
+  const [deepLinkTeamId, setDeepLinkTeamId] = useState<string | null>(null);
   useEffect(() => {
-    setFormatFilter(format === "all" ? null : format);
-  }, [format, setFormatFilter]);
+    setDeepLinkTeamId(new URLSearchParams(window.location.search).get("team"));
+  }, []);
+
+  // Living list comes from useTeams (GET /api/teams). Archive is a second
+  // fetch (`?archived=1`) so other-format teams never mix into living.
+  const [archivedTeams, setArchivedTeams] = useState<TeamSummary[]>([]);
+  useEffect(() => {
+    if (!auth.signedIn) {
+      setArchivedTeams([]);
+      return;
+    }
+    let active = true;
+    void listTeams({ archived: true }).then((list) => {
+      if (active) setArchivedTeams(list);
+    });
+    return () => {
+      active = false;
+    };
+  }, [auth.signedIn, teams.teams]);
+
+  const createFormat: Format = CHAMPIONS_FORMAT;
 
   // Selected team detail (full members + validation), loaded on demand.
   const [selected, setSelected] = useState<TeamDetail | null>(null);
@@ -98,14 +105,25 @@ export default function TeamsPage() {
     [teams],
   );
 
-  // Auto-select the first team once per format so the workbench is rarely empty
-  // (resets on format switch; never fights a user who closes the editor).
+  // Auto-select the first living team so the workbench is rarely empty
+  // (never fights a user who closes the editor).
   const autoSelectedRef = useRef(false);
+  // `/teams?team=<id>` — share import (and any other deep link) wins over the
+  // first-team auto-select so the just-created team is the one that opens.
+  const openedDeepLink = useRef<string | null>(null);
   useEffect(() => {
-    autoSelectedRef.current = false;
-  }, [format]);
+    if (!auth.signedIn || !deepLinkTeamId) return;
+    if (openedDeepLink.current === deepLinkTeamId) return;
+    openedDeepLink.current = deepLinkTeamId;
+    autoSelectedRef.current = true;
+    void openTeam(deepLinkTeamId);
+  }, [auth.signedIn, deepLinkTeamId, openTeam]);
   useEffect(() => {
     if (autoSelectedRef.current) return;
+    if (deepLinkTeamId) {
+      autoSelectedRef.current = true;
+      return;
+    }
     if (selected) {
       autoSelectedRef.current = true;
       return;
@@ -115,7 +133,7 @@ export default function TeamsPage() {
       autoSelectedRef.current = true;
       void openTeam(first.id);
     }
-  }, [teams.teams, selected, openTeam]);
+  }, [teams.teams, selected, openTeam, deepLinkTeamId]);
 
   // Sprites/types/base-stats are resolved inside TeamEditor for its LIVE members
   // (so a just-added/edited Mega or alternate form shows immediately) — the page
@@ -199,10 +217,23 @@ export default function TeamsPage() {
 
   const handleDelete = useCallback(
     async (id: string) => {
+      const archivedRow = archivedTeams.find((t) => t.id === id);
+      if (archivedRow) {
+        setArchivedTeams((prev) => prev.filter((t) => t.id !== id));
+        const ok = await deleteTeam(id);
+        if (!ok) {
+          setArchivedTeams((prev) =>
+            prev.some((t) => t.id === id) ? prev : [...prev, archivedRow],
+          );
+          return;
+        }
+        setSelected((prev) => (prev && prev.id === id ? null : prev));
+        return;
+      }
       await teams.remove(id);
       setSelected((prev) => (prev && prev.id === id ? null : prev));
     },
-    [teams],
+    [teams, archivedTeams],
   );
 
   // Import + export dialogs.
@@ -238,31 +269,6 @@ export default function TeamsPage() {
             <OakWordmark />
           </Link>
         </div>
-        <div className="teams-page__band-controls">
-          <label className="teams-page__format">
-            <span className="teams-page__format-text">Format</span>
-            <span className="teams-page__select-wrap">
-              <select
-                data-testid="teams-format"
-                className="teams-page__format-select"
-                value={format}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setFormat(v === "all" ? "all" : (v as Format));
-                  setSelected(null);
-                }}
-              >
-                <option value="all">All formats</option>
-                {SCOPE_PICKER_ORDER.map((f) => (
-                  <option key={f} value={f}>
-                    {formatLabel(f)}
-                  </option>
-                ))}
-              </select>
-              <span className="pill-caret" aria-hidden />
-            </span>
-          </label>
-        </div>
       </header>
 
       <div className="teams-page__shell">
@@ -289,10 +295,11 @@ export default function TeamsPage() {
             </div>
           ) : (
             <div
-              className={`teams-grid${selected ? " teams-grid--assistant" : ""}`}
+              className={`teams-grid${selected && selected.format === CHAMPIONS_FORMAT ? " teams-grid--assistant" : ""}`}
             >
               <TeamList
                 teams={teams.teams}
+                archivedTeams={archivedTeams}
                 selectedId={selected?.id ?? null}
                 onSelect={(id) => void openTeam(id)}
                 onNew={() => void handleNew()}
@@ -357,34 +364,44 @@ export default function TeamsPage() {
                     onExport={() => void handleExport()}
                     onClose={() => setSelected(null)}
                     handleRef={editorRef}
-                    onAnalysisChange={setAnalysis}
-                    winCondition={winConditionDraft}
-                    onWinConditionChange={setWinConditionDraft}
-                  />
-                  <TeamsAssistantPanel
-                    teamId={selected.id}
-                    format={selected.format as Format}
-                    getDraft={() => {
-                      const d = editorRef.current?.getDraft();
-                      return {
-                        name: d?.name ?? selected.name,
-                        members: d?.members ?? selected.members,
-                        win_condition: winConditionDraft.trim() || null,
-                      };
-                    }}
-                    applyPatch={(patch) => {
-                      editorRef.current?.applyPatch(patch);
-                      if (patch.win_condition !== undefined) {
-                        setWinConditionDraft(patch.win_condition ?? "");
-                      }
-                    }}
-                    replaceDraft={(draft) =>
-                      editorRef.current?.replaceDraft(draft)
+                    onAnalysisChange={
+                      selected.format === CHAMPIONS_FORMAT
+                        ? setAnalysis
+                        : undefined
                     }
-                    suggestionChips={suggestionChips}
-                    seedMessage={assistantSeed}
-                    onSeedConsumed={() => setAssistantSeed(null)}
+                    winCondition={winConditionDraft}
+                    onWinConditionChange={
+                      selected.format === CHAMPIONS_FORMAT
+                        ? setWinConditionDraft
+                        : undefined
+                    }
                   />
+                  {selected.format === CHAMPIONS_FORMAT && (
+                    <TeamsAssistantPanel
+                      teamId={selected.id}
+                      format={CHAMPIONS_FORMAT}
+                      getDraft={() => {
+                        const d = editorRef.current?.getDraft();
+                        return {
+                          name: d?.name ?? selected.name,
+                          members: d?.members ?? selected.members,
+                          win_condition: winConditionDraft.trim() || null,
+                        };
+                      }}
+                      applyPatch={(patch) => {
+                        editorRef.current?.applyPatch(patch);
+                        if (patch.win_condition !== undefined) {
+                          setWinConditionDraft(patch.win_condition ?? "");
+                        }
+                      }}
+                      replaceDraft={(draft) =>
+                        editorRef.current?.replaceDraft(draft)
+                      }
+                      suggestionChips={suggestionChips}
+                      seedMessage={assistantSeed}
+                      onSeedConsumed={() => setAssistantSeed(null)}
+                    />
+                  )}
                 </>
               ) : (
                 <div

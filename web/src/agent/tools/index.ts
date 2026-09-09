@@ -1,41 +1,34 @@
 /**
- * Tool-layer barrel (Phase 4 assembly seam).
+ * Tool-layer barrel (Champions-first, ADR-2).
  *
- * Establishes the contract every parallel tool author targets and the surface
- * the agent runtime consumes:
+ * Establishes the contract every tool author targets and the surface the agent
+ * runtime consumes:
  *
- *   - `tools: ToolDef[]`  — the 11 tool definitions in T1..T11 order (tools.md),
- *     fed to the Anthropic SDK (name + description + generated `inputSchema`).
+ *   - `tools: ToolDef[]`  — the 17 remaining tool definitions in architecture
+ *     order (new cache prefix), fed to providers as name + description +
+ *     generated `inputSchema`.
  *   - `dispatch(name, args, ctx)` — name -> `run(args, ctx)` lookup used by the
  *     loop in src/agent/runtime.ts.
  *   - `submitAnswerSchema` — re-export of the OakAnswer Zod schema (the
- *     single source of truth in schemas.ts) for the runtime's payload validation
- *     (design.md tool-layer export surface).
+ *     single source of truth in schemas.ts) for the runtime's payload validation.
  *
- * EACH TOOL FILE MUST EXPORT exactly one `ToolDef` under the named const below
- * (do not change these names — this barrel imports them by name):
+ * Remaining tools (order, new cache prefix): resolve_entity, query_pokedex,
+ * get_pokemon, get_move, get_ability, get_type_matchups, get_evolution_chain,
+ * get_item, compute_stat, estimate_damage, submit_answer, get_team, save_team,
+ * get_usage_stats, list_teams, get_learnset, lookup_box.
  *
- *   resolve-entity.ts        -> export const resolveEntityTool: ToolDef
- *   query-pokedex.ts         -> export const queryPokedexTool: ToolDef
- *   get-pokemon.ts           -> export const getPokemonTool: ToolDef
- *   get-move.ts              -> export const getMoveTool: ToolDef
- *   get-ability.ts           -> export const getAbilityTool: ToolDef
- *   get-type-matchups.ts     -> export const getTypeMatchupsTool: ToolDef
- *   get-evolution-chain.ts   -> export const getEvolutionChainTool: ToolDef
- *   get-item.ts              -> export const getItemTool: ToolDef
- *   compute-stat.tool.ts     -> export const computeStatTool: ToolDef
- *   estimate-damage.tool.ts  -> export const estimateDamageTool: ToolDef
- *   submit-answer.ts         -> export const submitAnswerTool: ToolDef
+ * Removed (ADR-2): T14 get_encounters, T18 run_sql, T19 search_wiki, T21
+ * get_meta_usage. Dispatch of a hallucinated old name is `{ error: "unknown_tool" }`.
  *
  * Each `ToolDef` must set:
- *   - `name`        -> the EXACT tools.md T1..T11 slug (the model depends on it),
+ *   - `name`        -> the EXACT remaining-tool slug (the model depends on it),
  *   - `description` -> the tools.md "Description (for the model)",
  *   - `inputSchema` -> toJsonSchema(<that tool's input Zod schema from schemas.ts>),
  *   - `run(args, ctx)` -> parse `args` with the tool's input Zod schema, do the
- *     read/compute, and return the tools.md output shape. NEVER throw for an
+ *     read/compute, and return the documented output shape. NEVER throw for an
  *     in-domain failure: return the documented structured error/miss shape
  *     ({ found:false, suggestions }, { error:"upstream_unavailable" },
- *     { error:"index_unavailable" }, { unresolved:[...] }, { error:"invalid_input", detail }).
+ *     { error:"index_unavailable" }, { unresolved:[…] }, { error:"invalid_input", detail }).
  *     Only genuine transport/programming faults may throw.
  */
 
@@ -55,38 +48,15 @@ import { estimateDamageTool } from "./estimate-damage.tool";
 import { submitAnswerTool } from "./submit-answer";
 import { getTeamTool } from "./get-team.tool";
 import { saveTeamTool } from "./save-team.tool";
-import { getEncountersTool } from "./get-encounters";
 import { getUsageStatsTool } from "./get-usage-stats.tool";
 import { listTeamsTool } from "./list-teams.tool";
 import { getLearnsetTool } from "./get-learnset";
-import { runSqlTool } from "./run-sql";
-import { searchWikiTool } from "./search-wiki";
-import { getMetaUsageTool } from "./get-meta-usage.tool";
+import { lookupBoxTool } from "./lookup-box";
 
 /**
- * The 20 tools, in T1..T19 + T21 order (T20 `web_search` was removed 2026-07-03
- * — cost vs. marginal value, and the number stays permanently retired; see
- * CLAUDE.md). T1..T11 are the fixed agent-design contract; T12 (`get_team`)
- * loads a saved team by id and T13 (`save_team`) persists one (team-builder,
- * TEAM-AD-1 / TEAM-AD-7, reconciled into docs/agent-design); T14
- * (`get_encounters`) adds PokeAPI catch-location data (standard mode only); T15
- * (`get_usage_stats`) adds live championsbattledata.com competitive usage
- * (champions mode only); T16 (`list_teams`) lists the user's saved teams so the
- * model can resolve a by-name reference; T17 (`get_learnset`, B-13) lists a
- * form's legal movepool for the turn's format so proposed/edited teams stay
- * legal; T18 (`run_sql`, oak-v2 P2) runs guarded read-only SQL over Oak's
- * offline warehouse for whole-Pokédex aggregations the typed tools can't
- * express; T19 (`search_wiki`, oak-v2 P4) does full-text retrieval over the
- * self-built Fandom prose corpus for in-game/lore/spin-off/trivia questions;
- * T21 (`get_meta_usage`, B-5) reads STORED monthly Smogon ladder usage (v1
- * gen9ou) — available in every scope (the ladder is explicit input), appended
- * last after search_wiki. The two oak-v2 tools (`run_sql`/`search_wiki`) are
- * gated OUT of voice mode via `VOICE_EXCLUDED_TOOLS`
- * (`@/agent/tools/voice-gating`), not this barrel; `get_meta_usage` is
- * deliberately ADMITTED to voice (a fast DB read, like get_usage_stats). All
- * appended after T11 so the existing T1..T11 order — and thus most of the
- * cached prefix — is unchanged. The list is sent byte-identical for both modes;
- * each mode-gated tool self-gates on `ctx.mode`.
+ * The 17 remaining Champions tools, in architecture order (new cache prefix).
+ * T14/T18/T19/T21 are gone (ADR-2). `get_usage_stats` (T15) stays — live
+ * Champions usage. `lookup_box` is last.
  */
 export const tools: ToolDef[] = [
   resolveEntityTool,
@@ -102,13 +72,10 @@ export const tools: ToolDef[] = [
   submitAnswerTool,
   getTeamTool,
   saveTeamTool,
-  getEncountersTool,
   getUsageStatsTool,
   listTeamsTool,
   getLearnsetTool,
-  runSqlTool,
-  searchWikiTool,
-  getMetaUsageTool,
+  lookupBoxTool,
 ];
 
 /** name -> ToolDef lookup, built once at module load. */
@@ -119,9 +86,8 @@ const toolsByName: Map<string, ToolDef> = new Map(
 /**
  * Dispatch a tool call by name. The runtime maps each `tool_use` block to this.
  *
- * An unknown tool name is returned as an in-domain structured error so the loop
- * can continue (the fixed tool list means this only happens on a model
- * hallucination); it does not throw.
+ * An unknown tool name (including removed T14/T18/T19/T21) is returned as an
+ * in-domain structured error so the loop can continue; it does not throw.
  */
 export const dispatch: ToolDispatch = (name, args, ctx) => {
   const tool = toolsByName.get(name);

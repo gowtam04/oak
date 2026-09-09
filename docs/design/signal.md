@@ -1,9 +1,14 @@
 # Signal — Oak design guide
 
-> **Authority.** This is the visual language to implement. It supersedes
-> `soul.md` (Instrument / chassis), `fable-ui-strategy.md`, and
-> `docs/design-system/design-system.md` (warm paper + Fredoka). Those files
-> stay as history. Do not re-apply them.
+> **SUPERSEDED.** Do not implement from this file. The visual language to
+> implement is [`enamel-paper.md`](enamel-paper.md) (Enamel & Paper). This
+> document is history (cool daylight, Figtree + IBM Plex Mono, red as a 2px
+> LED). Do not re-apply Signal.
+
+> **Authority (historical).** This file is no longer the language to implement.
+> It once superseded `soul.md`, `fable-ui-strategy.md`, and
+> `docs/design-system/design-system.md`. Those files and this one stay as
+> history. Do not re-apply them. Implement from [`enamel-paper.md`](enamel-paper.md).
 >
 > **Lab.** The approved mock is `docs/design/theme-lab/` · world **Signal**
 > (`#sig/answer/web`, `#sig/answer/ios`). Open that if a token here and a

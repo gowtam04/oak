@@ -4,9 +4,15 @@ import Testing
 @testable import OakApp
 
 /// `TeamsListViewModel` against `FakeTeamService` (history-and-teams.md
-/// M-TEAM-US-4/6): loading + format filter, the library mutations (create / duplicate /
-/// delete), applying an agent-proposed team, and importing a Showdown paste. The view
-/// model is `@MainActor`, so the suite is too.
+/// M-TEAM-US-4/6): loading, living vs archived (Champions-first ADR-3), the library
+/// mutations (create / duplicate / delete), applying an agent-proposed team, and
+/// importing a Showdown paste. The view model is `@MainActor`, so the suite is too.
+///
+/// Expected P7 API additions:
+///   `archivedTeams: [TeamSummary]`
+///   `reloadArchived()` — GET `/api/teams?archived=1`
+///   `canEdit` / `canDuplicate` false for archived; `canDelete` true
+///   create/import always persist `champions` (format argument ignored)
 @MainActor
 struct TeamsListViewModelTests {
 
@@ -32,7 +38,7 @@ struct TeamsListViewModelTests {
   private func team(
     id: String,
     name: String = "Team",
-    format: Format = .scarletViolet,
+    format: Format = .champions,
     members: [TeamMember] = []
   ) -> Team {
     Team(id: id, name: name, format: format, members: members, createdAt: 1, updatedAt: 1)
@@ -89,25 +95,19 @@ struct TeamsListViewModelTests {
 
   @Test
   func setFormatFilterReloadsWithFormat() async {
+    // Champions-first: there is no format picker. Kept as a trampoline so a
+    // leftover call cannot reopen a gen-N living list (CF-TEAM-AC-1.7).
     let (vm, fake) = makeVM(seed: [
       team(id: "sv", format: .scarletViolet),
       team(id: "ch", format: .champions),
+      team(id: "g7", format: .gen7),
     ])
 
-    await vm.setFormatFilter(.champions)
+    await vm.reload()
 
-    #expect(vm.formatFilter == .champions)
-    #expect(fake.lastListFormat == .champions)
-    #expect(vm.teams.map(\.id) == ["ch"])
-  }
-
-  @Test
-  func setFormatFilterNoOpWhenUnchanged() async {
-    let (vm, fake) = makeVM()
-
-    await vm.setFormatFilter(nil)  // already nil ("all")
-
-    #expect(fake.listCount == 0)
+    #expect(Set(vm.teams.map(\.id)) == ["ch"])
+    #expect(vm.teams.allSatisfy { $0.isLiving })
+    #expect(fake.lastListArchived == false || fake.lastListFormat == .champions)
   }
 
   // MARK: Sprite hydration
@@ -119,14 +119,13 @@ struct TeamsListViewModelTests {
     // Keyed by the sorted, comma-joined name batch (FakeDexLookupService's convention).
     dex.spriteResults["swampert-mega"] = ["swampert-mega": ref]
     let (vm, _) = makeVM(
-      seed: [team(id: "a", format: .scarletViolet, members: [member(species: "swampert-mega")])],
+      seed: [team(id: "a", format: .champions, members: [member(species: "swampert-mega")])],
       dex: dex)
 
     await vm.reload()
 
     #expect(vm.spriteRef(for: "swampert-mega") == ref)
-    // Batched with the loaded team's format.
-    #expect(dex.spriteCalls.last?.format == .scarletViolet)
+    #expect(dex.spriteCalls.last?.format == .champions)
   }
 
   @Test
@@ -135,7 +134,7 @@ struct TeamsListViewModelTests {
     // transport/decode fault to an empty map (never throwing). The list still loads.
     let dex = FakeDexLookupService()
     let (vm, _) = makeVM(
-      seed: [team(id: "a", format: .scarletViolet, members: [member(species: "swampert-mega")])],
+      seed: [team(id: "a", format: .champions, members: [member(species: "swampert-mega")])],
       dex: dex)
 
     await vm.reload()
@@ -156,7 +155,7 @@ struct TeamsListViewModelTests {
     let (vm, _) = makeVM(
       seed: [
         team(
-          id: "a", format: .scarletViolet,
+          id: "a", format: .champions,
           members: [member(species: "swampert-mega"), member(species: "pikachu")])
       ],
       dex: dex)
@@ -181,6 +180,17 @@ struct TeamsListViewModelTests {
     #expect(fake.lastCreateFormat == .champions)
     #expect(fake.lastCreateName == "Fresh")
     #expect(vm.teams.first?.name == "Fresh")
+  }
+
+  @Test
+  func createTeamIgnoresOtherFormatsAndAlwaysStoresChampions() async {
+    let (vm, fake) = makeVM()
+
+    let created = await vm.createTeam(format: .gen7, name: "Alola")
+
+    #expect(created != nil)
+    #expect(fake.lastCreateFormat == .champions)
+    #expect(created?.format == .champions)
   }
 
   @Test
@@ -264,8 +274,79 @@ struct TeamsListViewModelTests {
     #expect(result != nil)
     #expect(result?.notes.count == 1)
     #expect(fake.importCount == 1)
-    #expect(fake.lastImportFormat == .scarletViolet)
+    #expect(fake.lastImportFormat == .champions)
+    #expect(result?.team.format == .champions)
     #expect(vm.teams.contains { $0.id == result?.team.id })
+  }
+
+  // MARK: Living vs archived (CF-TEAM-US-5, CF-UI-US-4, ADR-3)
+
+  @Test
+  func reloadLoadsLivingChampionsOnly() async {
+    let (vm, fake) = makeVM(seed: [
+      team(id: "sv", format: .scarletViolet),
+      team(id: "ch", format: .champions),
+      team(id: "g7", format: .gen7),
+      team(id: "nd", format: .nationalDex),
+    ])
+
+    await vm.reload()
+
+    #expect(vm.teams.map(\.id) == ["ch"])
+    #expect(vm.teams.allSatisfy { $0.format == .champions })
+    #expect(vm.teams.allSatisfy { $0.isLiving })
+    #expect(fake.lastListArchived == false)
+  }
+
+  @Test
+  func archivedSectionListsNonChampionsTeams() async {
+    let (vm, fake) = makeVM(seed: [
+      team(id: "sv", name: "SV core", format: .scarletViolet),
+      team(id: "ch", name: "Rain", format: .champions),
+      team(id: "g7", name: "Alola rain", format: .gen7),
+    ])
+
+    await vm.reload()
+    await vm.reloadArchived()
+
+    #expect(Set(vm.archivedTeams.map(\.id)) == ["sv", "g7"])
+    #expect(vm.archivedTeams.allSatisfy { $0.isArchived })
+    #expect(vm.archivedTeams.allSatisfy { $0.format != .champions })
+    #expect(fake.lastListArchived == true)
+    #expect(vm.teams.map(\.id) == ["ch"])
+  }
+
+  @Test
+  func archivedRowIsViewAndDeleteOnly() async {
+    let (vm, fake) = makeVM(seed: [
+      team(id: "g7", name: "Alola rain", format: .gen7),
+      team(id: "ch", format: .champions),
+    ])
+    await vm.reload()
+    await vm.reloadArchived()
+    let archived = vm.archivedTeams.first { $0.id == "g7" }!
+
+    #expect(vm.canEdit(archived) == false)
+    #expect(vm.canDuplicate(archived) == false)
+    #expect(vm.canDelete(archived))
+
+    let copy = await vm.duplicate(archived)
+    #expect(copy == nil)
+    #expect(fake.duplicateCount == 0)
+
+    await vm.delete(archived)
+    #expect(vm.archivedTeams.map(\.id).contains("g7") == false)
+    #expect(fake.deleteCount == 1)
+  }
+
+  @Test
+  func emptyArchiveDoesNotError() async {
+    let (vm, _) = makeVM(seed: [team(id: "ch", format: .champions)])
+    await vm.reload()
+    await vm.reloadArchived()
+
+    #expect(vm.archivedTeams.isEmpty)
+    #expect(vm.errorMessage == nil)
   }
 }
 

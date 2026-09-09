@@ -55,6 +55,16 @@ model can reason about**, never raw exceptions.
 > The retired T20 number (`web_search`, removed 2026-07-03) is NOT reused — this
 > tool is T21. See T21 below.
 
+> `lookup_box` (T22, team-from-box) bulk-looks-up up to 40 pasted owned-list
+> names in **one** call: each hit is the `get_pokemon` profile plus a **compact**
+> legal-move subset (≤16); each miss is suggestions (and, in Champions,
+> `exists_in_standard`). Extra names beyond 40 are ignored and `truncated_input`
+> is set. An empty/missing learnset is still `found: true` with
+> `learnset.available: false` — not a miss (keep-and-warn). `get_learnset` stays
+> the complete-movepool API. Voice-admitted (fast DB read, like `get_learnset`);
+> **not** added to the Teams assistant. Appended after T21 so T1–T21 order is
+> unchanged. See T22 below.
+
 Conventions:
 
 - Names accepted by detail tools are canonical PokeAPI slugs (`will-o-wisp`,
@@ -989,10 +999,66 @@ touching the data scope.
 
 **Side effects:** Read-only. Idempotent.
 
-**Cache-prefix note:** appended LAST, after `search_wiki` (T19), so the existing
+**Cache-prefix note:** appended after `search_wiki` (T19), so the existing
 T1–T19 tool order — and thus the prompt-cached prefix — is unchanged. The T20
 number (`web_search`, removed 2026-07-03) stays permanently retired and is NOT
-reused; this tool is T21.
+reused; this tool is T21. T22 `lookup_box` is appended after this tool.
+
+---
+
+## T22 — `lookup_box`
+
+_(Added by team-from-box — bulk species + compact learnset for a pasted box.)_
+
+**Purpose:** look up many owned-list names in **one** model-tool round so a
+box-build does not grind `get_pokemon` / `get_learnset` once per species
+(BOX-AC-3.2). Each hit is the existing `get_pokemon` profile plus a **compact**
+legal-move subset (at most 16) sufficient to pick a legal set; the complete
+movepool still comes from `get_learnset` when the user asks what a species can
+learn (BOX-BR-7). The prompt's Box-build section routes pasted owned lists here
+and forbids `run_sql` / `search_wiki` on that path.
+
+**Input:** `{ names: string[] }` — 1–40 non-empty names/slugs. Advertised Zod
+max is 40; extra names beyond 40 are ignored and the output sets
+`truncated_input: true`.
+
+**Output:** `{ format, truncated_input, results }`, where each result is either:
+
+- **Hit:** `{ query, found: true, pokemon, learnset }` — `pokemon` is the
+  `get_pokemon` hit shape; `learnset` is `{ available, count, truncated,
+  compact_moves }` with `compact_moves.length ≤ 16` (`slug`, `method`, `type`,
+  `category` `"physical" | "special" | "status"`, `power`; detail fields may be
+  null). `count` is the full legal-move count; `truncated` is true when
+  `compact_moves.length < count`.
+- **Miss:** `{ query, found: false, suggestions }` — unknown/ambiguous name
+  (same convention as every other detail tool). In **champions** scope only,
+  also `exists_in_standard?: boolean` (true when the species exists in mainline
+  Gen 9).
+
+**Empty learnset is a hit, not a miss.** A species that exists but has an empty
+or missing learnset in the active scope (the Mega Kangaskhan case) returns
+`found: true` with `learnset.available: false`, `count: 0`, `truncated: false`,
+`compact_moves: []`. The agent keeps that named species and warns; it does not
+treat the empty movepool as "not found."
+
+Never throws in-domain.
+
+**Data source:** server-side loop over the same pokedex / learnset / reference
+repos `get_pokemon` and `get_learnset` read (`pokedex-repo.getPokemon`,
+`learnset-repo.movesForPokemon`, `reference-cache.moveSummaries`). Compact
+selection is deterministic (`compactMoves`, ≤6 STAB damaging + ≤6 other
+damaging + ≤4 status).
+
+**Side effects:** Read-only. Idempotent.
+
+**Voice:** admitted (fast DB read, like `get_learnset`). Not in
+`VOICE_EXCLUDED_TOOLS`.
+
+**Teams assistant:** not added in v1 (box-build is main-chat only; the embedded
+builder UI is out of this feature).
+
+**Cache-prefix note:** appended LAST, after `get_meta_usage` (T21), so the
+existing T1–T21 tool order — and thus the prompt-cached prefix — is unchanged.
 
 ---
 
@@ -1011,7 +1077,8 @@ reused; this tool is T21.
 | save_team                                                                   | ✅      | Built by team-builder (TEAM-AD-7); the one write tool — saves server-bound `ctx.proposedTeam` on approval. |
 | get_encounters                                                              | ✅      | Catch-location / obtain-method data from a committed PokeAPI snapshot (standard mode only; Gen 1–8 coverage). |
 | get_learnset                                                                | ✅      | Added by B-13; a species' complete legal moveset in the active scope, reading the same `learnset` table the team validator checks against. |
-| get_meta_usage                                                              | ✅      | Added by B-5; stored monthly Smogon ladder usage (v1 `gen9ou`) from the `meta_snapshot`/`meta_usage` warehouse synced by `sync:meta`. Available in every scope (ladder is explicit input); Champions excluded (live via get_usage_stats). Appended last as T21 (T20 retired). |
+| get_meta_usage                                                              | ✅      | Added by B-5; stored monthly Smogon ladder usage (v1 `gen9ou`) from the `meta_snapshot`/`meta_usage` warehouse synced by `sync:meta`. Available in every scope (ladder is explicit input); Champions excluded (live via get_usage_stats). Appended as T21 after T19 (T20 retired). |
+| lookup_box                                                                  | ✅      | Added by team-from-box; bulk species + compact learnset (≤16) for a pasted owned list. Input names max 40; extras set `truncated_input`. Empty learnset is `found: true` + `available: false`. Voice admitted; not added to Teams assistant. Appended last as T22. |
 
 (The ❌ marks are the original agent-design backlog state; `get_team`,
 `list_teams`, and `save_team` are implemented as part of the team-builder

@@ -1,0 +1,26 @@
+/* Archive grouping — same row chrome as living; a labeled section, not a restyle. */
+.team-list__archived {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+.team-list__archived-title {
+  margin: 0;
+  font-family: var(--body);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.team-member-panel__off-roster {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--warning);
+}

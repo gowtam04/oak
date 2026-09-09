@@ -36,6 +36,10 @@ data class ConversationSummary(
     val pinned: Boolean,
     /** Epoch-ms of last activity. Wire key is camelCase. */
     val updatedAt: Long,
+    /** Hidden from the default list (ORG-US-2). Absent on older payloads. */
+    val archived: Boolean = false,
+    /** One folder or unfiled (ORG-US-1). Absent on older payloads. */
+    val folderId: String? = null,
 )
 
 /**
@@ -57,6 +61,12 @@ data class ConversationDetail(
      * is gone. `null` ⇒ nothing in flight; absent on older servers ⇒ decodes to `null`.
      */
     @SerialName("active_turn") val activeTurn: ActiveTurn? = null,
+    val archived: Boolean = false,
+    val folderId: String? = null,
+    /** Assistant message ids in thread (seq) order. */
+    val pinnedMessageIds: List<String> = emptyList(),
+    val pinnedArtifacts: List<PinnedArtifactSummary> = emptyList(),
+    val hydrate: VoiceHydrateStatus? = null,
 )
 
 /** The `active_turn` field of [ConversationDetail] — just the running turn's id. */
@@ -120,7 +130,11 @@ data class Team(
     val members: List<TeamMember>,
     val createdAt: Long,
     val updatedAt: Long,
-)
+) {
+    /** Archived iff the stored format is not Champions (ADR-3, no extra column). */
+    val isArchived: Boolean get() = format.isArchived
+    val isLiving: Boolean get() = format.isLiving
+}
 
 /**
  * `GET /api/teams` list-row projection (NOT the full [Team]) — mirrors
@@ -136,7 +150,11 @@ data class TeamSummary(
     val incomplete: Boolean,
     val species: List<String>,
     val updatedAt: Long,
-)
+) {
+    /** Archived iff the stored format is not Champions (ADR-3). */
+    val isArchived: Boolean get() = format.isArchived
+    val isLiving: Boolean get() = format.isLiving
+}
 
 /**
  * One entry in the `notes` array of `POST /api/teams/import` (Showdown import)

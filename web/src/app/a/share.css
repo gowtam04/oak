@@ -1,0 +1,140 @@
+/* Public share page (`/a/[id]`) — dedicated chrome, not the signed-in app shell. */
+
+.share-page {
+  min-height: 100dvh;
+  background: radial-gradient(
+      120% 60% at 50% -10%,
+      color-mix(in srgb, var(--poke-red) 4%, var(--bg)),
+      var(--bg) 55%
+    )
+    no-repeat;
+  color: var(--text);
+}
+
+.share-page__header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+  background: linear-gradient(
+    180deg,
+    var(--poke-red) 0%,
+    color-mix(in srgb, var(--poke-red-active) 60%, var(--poke-red)) 100%
+  );
+  border-bottom: 2px solid
+    color-mix(in srgb, var(--neutral-900) 12%, var(--poke-red-active));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--poke-red) 22%, transparent);
+  color: var(--neutral-0);
+}
+
+.share-page__header-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-top: max(var(--space-4), env(safe-area-inset-top));
+  padding-bottom: var(--space-4);
+  padding-left: max(var(--space-6), env(safe-area-inset-left));
+  padding-right: max(var(--space-6), env(safe-area-inset-right));
+}
+
+.share-page__wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-decoration: none;
+  color: inherit;
+}
+
+.share-page__header .share-page__wordmark {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  color: var(--neutral-0);
+}
+
+.share-page__header .share-page__wordmark::before {
+  content: "";
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--brand-mark) center / cover no-repeat;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--neutral-0) 62%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.share-page__header .oak-wordmark {
+  color: var(--neutral-0);
+  font-size: inherit;
+}
+
+.share-page__wordmark:hover,
+.share-page__wordmark:focus-visible {
+  opacity: 0.85;
+}
+
+.share-page__kicker {
+  margin: 0;
+  color: color-mix(in srgb, var(--neutral-0) 92%, transparent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.share-page__main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-6) max(var(--space-6), env(safe-area-inset-left))
+    max(var(--space-8), env(safe-area-inset-bottom))
+    max(var(--space-6), env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.share-page__question {
+  margin: 0;
+  font-family: var(--body);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-strong);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.share-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.share-page__unavailable {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  background: var(--bg);
+}
+
+.share-page__unavailable-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.share-page__unavailable-body {
+  margin: 0;
+  max-width: 28rem;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}

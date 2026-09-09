@@ -43,6 +43,10 @@ protocol AuthService: Sendable {
   /// than an already-orphaned token) propagates so the UI does not falsely claim
   /// deletion.
   func deleteAccount() async throws
+
+  /// `PATCH /api/account/preferences` — persist compact/full (COMPACT-US-2).
+  /// Guests have no server row (COMPACT-BR-4); callers skip this.
+  func setAnswerDensity(_ density: AnswerDensity) async throws -> AnswerDensity
 }
 
 /// The result of a successful ``AuthService/verify(email:code:)``.
@@ -60,11 +64,21 @@ struct MeSnapshot: Equatable, Sendable {
   let state: AuthState
   /// Present only when signed in and the account has a stored preference.
   let lastUsedScope: Format?
+  /// Signed-in MRU scopes (SCOPE-US-2). Empty for guests / never-used accounts.
+  let lastUsedScopes: [Format]
 
-  static let guest = MeSnapshot(state: .guest, lastUsedScope: nil)
+  static let guest = MeSnapshot(state: .guest, lastUsedScope: nil, lastUsedScopes: [])
 
-  static func signedIn(email: String, lastUsedScope: Format? = nil) -> MeSnapshot {
-    MeSnapshot(state: .signedIn(email: email), lastUsedScope: lastUsedScope)
+  static func signedIn(
+    email: String,
+    lastUsedScope: Format? = nil,
+    lastUsedScopes: [Format] = []
+  ) -> MeSnapshot {
+    MeSnapshot(
+      state: .signedIn(email: email),
+      lastUsedScope: lastUsedScope,
+      lastUsedScopes: lastUsedScopes
+    )
   }
 }
 
@@ -118,7 +132,12 @@ struct LiveAuthService: AuthService {
         if case .unknown = format { return nil }
         return format
       }
-      return .signedIn(email: email, lastUsedScope: scope)
+      let scopes = (response.lastUsedScopes ?? []).compactMap { raw -> Format? in
+        let format = Format(rawValue: raw)
+        if case .unknown = format { return nil }
+        return format
+      }
+      return .signedIn(email: email, lastUsedScope: scope, lastUsedScopes: scopes)
     }
     return .guest
   }
@@ -150,6 +169,29 @@ struct LiveAuthService: AuthService {
     // token intact, so the account is genuinely gone before we clear it.
     await tokenStore.clear()
   }
+
+  func setAnswerDensity(_ density: AnswerDensity) async throws -> AnswerDensity {
+    let endpoint = Endpoint(
+      method: .patch,
+      path: "/api/account/preferences",
+      body: PreferencesBody(answerDensity: density),
+      requiresAuth: true
+    )
+    let response = try await apiClient.send(endpoint, as: PreferencesResponse.self)
+    return response.answerDensity
+  }
+}
+
+private struct PreferencesBody: Encodable, Sendable {
+  let answerDensity: AnswerDensity
+
+  enum CodingKeys: String, CodingKey {
+    case answerDensity = "answer_density"
+  }
+}
+
+private struct PreferencesResponse: Decodable, Sendable {
+  let answerDensity: AnswerDensity
 }
 
 /// `POST /api/auth/request-code` body. `email` is identical on the wire, so no

@@ -30,8 +30,11 @@ enum VoiceRealtimeProtocol {
   }
 
   /// The WebSocket subprotocol that carries the ephemeral client secret.
+  /// Idempotent: a mint `value` that already includes the `xai-client-secret.`
+  /// prefix is returned as-is so we never double-wrap.
   static func clientSecretSubprotocol(token: String) -> String {
-    "xai-client-secret.\(token)"
+    if token.hasPrefix("xai-client-secret.") { return token }
+    return "xai-client-secret.\(token)"
   }
 }
 
@@ -40,9 +43,17 @@ let voiceTranscribeModel = "grok-transcribe"
 
 // MARK: - Client → server events
 
+/// Thrown when a client event cannot be serialized to a UTF-8 JSON frame.
+enum VoiceClientEncodeError: Error {
+  /// `JSONEncoder` produced empty bytes or non-UTF-8 output.
+  case invalidOutput
+}
+
 /// One outbound realtime socket frame. `encode()` produces the exact JSON text
 /// xAI expects — field names, nesting, and the flattened tool shape all mirror
-/// the web client's `ClientEvent` builders verbatim.
+/// the web client's `ClientEvent` builders verbatim. Encoding is fail-closed:
+/// callers must not send a blank or partial frame (a lost `session.update` is a
+/// dead session).
 enum VoiceClientEvent: Sendable {
   case sessionUpdate(
     instructions: String,
@@ -57,8 +68,9 @@ enum VoiceClientEvent: Sendable {
   case responseCreate
   case pong(pingTimestamp: Double?)
 
-  /// JSON text to send on the socket.
-  func encode() -> String {
+  /// JSON text to send on the socket. Throws rather than returning an empty
+  /// string — a silent empty encode used to drop `session.update` on the floor.
+  func encode() throws -> String {
     let encoder = JSONEncoder()
     let data: Data
     switch self {
@@ -80,23 +92,26 @@ enum VoiceClientEvent: Sendable {
           tools: tools
         )
       )
-      data = (try? encoder.encode(payload)) ?? Data()
+      data = try encoder.encode(payload)
     case let .inputAudioAppend(base64):
       let payload = InputAudioAppendPayload(type: "input_audio_buffer.append", audio: base64)
-      data = (try? encoder.encode(payload)) ?? Data()
+      data = try encoder.encode(payload)
     case let .functionCallOutput(callId, output):
       let payload = FunctionCallOutputPayload(
         type: "conversation.item.create",
         item: .init(type: "function_call_output", callId: callId, output: output)
       )
-      data = (try? encoder.encode(payload)) ?? Data()
+      data = try encoder.encode(payload)
     case .responseCreate:
-      data = (try? encoder.encode(ResponseCreatePayload(type: "response.create"))) ?? Data()
+      data = try encoder.encode(ResponseCreatePayload(type: "response.create"))
     case let .pong(pingTimestamp):
       let payload = PongPayload(type: "pong", pingTimestamp: pingTimestamp)
-      data = (try? encoder.encode(payload)) ?? Data()
+      data = try encoder.encode(payload)
     }
-    return String(decoding: data, as: UTF8.self)
+    guard !data.isEmpty, let text = String(data: data, encoding: .utf8), !text.isEmpty else {
+      throw VoiceClientEncodeError.invalidOutput
+    }
+    return text
   }
 }
 
@@ -213,7 +228,7 @@ enum VoiceServerEvent: Sendable, Equatable {
   case functionCallDone(name: String, callId: String, arguments: String)
   case responseDone
   case ping(timestamp: Double?)
-  case errorEvent(code: String?, message: String?)
+  case errorEvent(code: String?, message: String?, params: String?, eventId: String?)
 }
 
 /// Server event type strings that are aliased to a canonical name (mirrors
@@ -271,10 +286,79 @@ func parseServerEvent(_ text: String) -> VoiceServerEvent? {
   case "ping":
     return .ping(timestamp: obj["ping_timestamp"] as? Double)
   case "error":
-    return .errorEvent(code: obj["code"] as? String, message: obj["message"] as? String)
+    // xAI (and the OpenAI-compatible realtime wire) nests the payload under
+    // `error: { code, message, params }`. Older / test frames put `code`/
+    // `message` at the top level. Prefer the nested object, fall back to
+    // top-level. `params` carries pydantic's `input_value='…'` for invalid_event.
+    let nested = obj["error"] as? [String: Any]
+    let code = (nested?["code"] as? String) ?? (obj["code"] as? String)
+    let message = (nested?["message"] as? String) ?? (obj["message"] as? String)
+    let params = jsonTextField(nested, "params") ?? jsonTextField(obj, "params")
+    let eventId = (nested?["event_id"] as? String) ?? (obj["event_id"] as? String)
+    return .errorEvent(code: code, message: message, params: params, eventId: eventId)
   default:
     return nil
   }
+}
+
+/// Top-level `type` of an outbound JSON frame, or `nil` if the text is not a
+/// JSON object with a string `type`. Used for logs — never log the body
+/// (audio / session.update instructions+tools).
+func voiceOutboundType(from json: String) -> String? {
+  guard let data = json.data(using: .utf8),
+    let raw = try? JSONSerialization.jsonObject(with: data),
+    let obj = raw as? [String: Any],
+    let type = obj["type"] as? String,
+    !type.isEmpty
+  else { return nil }
+  return type
+}
+
+/// Overlay/log copy for a server `error` frame. When pydantic's `params` include
+/// `input_value='…'`, that rejected type is appended so the overlay is never a
+/// bare "Invalid event received".
+func formatVoiceServerError(message: String?, params: String?) -> String {
+  let trimmedMessage = message?.trimmingCharacters(in: .whitespacesAndNewlines)
+  let msg = (trimmedMessage?.isEmpty == false) ? trimmedMessage! : "Voice connection failed."
+  let trimmedParams = params?.trimmingCharacters(in: .whitespacesAndNewlines)
+  guard let trimmedParams, !trimmedParams.isEmpty else { return msg }
+  if let value = extractVoiceErrorInputValue(from: trimmedParams) {
+    return "\(msg) (rejected type: \(value))"
+  }
+  return "\(msg) — \(trimmedParams)"
+}
+
+func extractVoiceErrorInputValue(from params: String) -> String? {
+  let patterns = [
+    #"input_value='([^']*)'"#,
+    #"input_value=\"([^\"]*)\""#,
+    #""input_value"\s*:\s*"([^"]*)""#,
+  ]
+  for pattern in patterns {
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+    let range = NSRange(params.startIndex..., in: params)
+    guard let match = regex.firstMatch(in: params, range: range),
+      match.numberOfRanges >= 2,
+      let group = Range(match.range(at: 1), in: params)
+    else { continue }
+    let value = String(params[group])
+    if !value.isEmpty { return value }
+  }
+  return nil
+}
+
+/// Read a JSON object field as text: a string as-is, an object/array as compact
+/// JSON. Used for xAI `error.params` which is usually a pydantic string but may
+/// arrive as a structured object.
+private func jsonTextField(_ obj: [String: Any]?, _ key: String) -> String? {
+  guard let obj, let value = obj[key] else { return nil }
+  if let s = value as? String { return s }
+  if value is NSNull { return nil }
+  guard JSONSerialization.isValidJSONObject(value),
+    let data = try? JSONSerialization.data(withJSONObject: value),
+    let s = String(data: data, encoding: .utf8)
+  else { return nil }
+  return s
 }
 
 // MARK: - Tool-activity labels

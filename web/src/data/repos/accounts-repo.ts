@@ -42,11 +42,15 @@ import { db } from "@/data/db";
 import { isFormat, type Format } from "@/data/formats";
 import {
   account,
+  account_scope_mru,
   auth_event,
   auth_session,
   conversation,
+  conversation_artifact_pin,
+  conversation_folder,
   conversation_message,
   otp_code,
+  shared_answer,
   team,
   turn_record,
 } from "@/data/schema";
@@ -65,11 +69,23 @@ export interface Account {
    * never set / invalid. Used as the signed-in default for brand-new chats.
    */
   lastUsedScope: Format | null;
+  /**
+   * Compact vs full answer-card preference. NULL / omitted = full
+   * (COMPACT-BR-2). Omitted on create / unset so existing row shapes stay exact.
+   */
+  answerDensity?: "full" | "compact" | null;
 }
 
 /** Map a raw DB `last_used_scope` string to a validated Format (or null). */
 function parseLastUsedScope(raw: string | null | undefined): Format | null {
   if (typeof raw === "string" && isFormat(raw)) return raw;
+  return null;
+}
+
+function parseAnswerDensity(
+  raw: string | null | undefined,
+): "full" | "compact" | null {
+  if (raw === "full" || raw === "compact") return raw;
   return null;
 }
 
@@ -110,17 +126,21 @@ export async function findAccountByEmail(
       email: account.email,
       createdAt: account.created_at,
       lastUsedScope: account.last_used_scope,
+      answerDensity: account.answer_density,
     })
     .from(account)
     .where(eq(account.email, email))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
+  const answerDensity = parseAnswerDensity(row.answerDensity);
   return {
     id: row.id,
     email: row.email,
     createdAt: row.createdAt,
     lastUsedScope: parseLastUsedScope(row.lastUsedScope),
+    // Omit when unset so existing toEqual fixtures stay exact; NULL = full.
+    ...(answerDensity !== null ? { answerDensity } : {}),
   };
 }
 
@@ -152,6 +172,20 @@ export async function updateLastUsedScope(
   await db
     .update(account)
     .set({ last_used_scope: format })
+    .where(eq(account.id, accountId));
+}
+
+/**
+ * Persist the signed-in compact/full preference (COMPACT-BR-2). Account-scoped
+ * (AUTH-BR-2): another account's id is a no-op.
+ */
+export async function updateAnswerDensity(
+  accountId: string,
+  density: "full" | "compact",
+): Promise<void> {
+  await db
+    .update(account)
+    .set({ answer_density: density })
     .where(eq(account.id, accountId));
 }
 
@@ -312,7 +346,9 @@ export async function deleteExpiredSessions(now: number): Promise<number> {
  * `ON DELETE CASCADE` — see schema.ts), so every dependent row is removed
  * explicitly inside ONE transaction, in FK-safe (child-before-parent) order:
  *
- *   conversation_message → conversation → team → auth_session → turn_record
+ *   shared_answer → account_scope_mru → conversation_folder
+ *   → conversation_artifact_pin → conversation_message → conversation
+ *   → team → auth_session → turn_record
  *   (all by account_id) → auth_event (by account_id OR the account's email)
  *   → otp_code (by the account's email) → account (by id)
  *
@@ -342,6 +378,21 @@ export async function deleteAccount(accountId: string): Promise<void> {
       .where(eq(account.id, accountId))
       .limit(1);
     const email = rows[0]?.email;
+
+    // Chat-qol dependents first (folder_id is a logical FK; shares/mru/folders
+    // must go before conversation delete — CQ-OQ-1).
+    await tx
+      .delete(shared_answer)
+      .where(eq(shared_answer.account_id, accountId));
+    await tx
+      .delete(account_scope_mru)
+      .where(eq(account_scope_mru.account_id, accountId));
+    await tx
+      .delete(conversation_folder)
+      .where(eq(conversation_folder.account_id, accountId));
+    await tx
+      .delete(conversation_artifact_pin)
+      .where(eq(conversation_artifact_pin.account_id, accountId));
 
     await tx
       .delete(conversation_message)

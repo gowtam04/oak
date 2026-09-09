@@ -3,6 +3,7 @@ package ai.gowtam.oak.networking
 import okhttp3.Headers
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,10 +16,12 @@ import java.time.format.DateTimeFormatter
  * Verifies the `(status, Headers, body) -> success | OakError` mapping
  * ([OakError.validate]) and the transport-error wrapper
  * ([OakError.transportFailure]) against api-usage.md "Error mapping": `2xx`
- * -> success, `401` -> [OakError.Unauthorized], `429 (+Retry-After)` ->
- * [OakError.RateLimited] (numeric and HTTP-date forms), other non-2xx with a
- * `{ code, message }` envelope -> [OakError.Http], and a transport failure ->
- * [OakError.Transport]. Mirrors iOS `OakErrorMappingTests`.
+ * -> success, `401` -> [OakError.Unauthorized], `429` `rate_limited`
+ * (+Retry-After) -> [OakError.RateLimited] (numeric and HTTP-date forms),
+ * `429` `daily_limit` / other non-2xx with a `{ code, message }` envelope ->
+ * [OakError.Http] (spend-controls SC-AC-5.4 / SC-AC-6.5 / SC-BR-14 — a 429
+ * must not collapse `daily_limit` into [OakError.RateLimited]), and a
+ * transport failure -> [OakError.Transport]. Mirrors iOS `OakErrorMappingTests`.
  */
 class OakErrorMappingTest {
 
@@ -72,6 +75,48 @@ class OakErrorMappingTest {
     fun rateLimitedWithGarbageRetryAfterHasNullDelta() {
         val result = OakError.validate(429, headers("Retry-After" to "not-a-date"), ByteArray(0))
         assertEquals(OakError.RateLimited(null), result.exceptionOrNull())
+    }
+
+    @Test
+    fun rateLimitedEnvelopeOn429StaysRateLimited() {
+        // Per-minute limiter (SC-BR-7): 429 `rate_limited` is still RateLimited
+        // even when the body carries the shared `{ code, message }` envelope.
+        val body = "{\"code\":\"rate_limited\",\"message\":\"Too many requests\"}".toByteArray()
+        val result = OakError.validate(429, headers("Retry-After" to "20"), body)
+        assertEquals(OakError.RateLimited(20), result.exceptionOrNull())
+    }
+
+    @Test
+    fun dailyLimit429IsHttpNotRateLimited() {
+        // Daily cap (SC-AC-5.4 / SC-BR-14): 429 `daily_limit` ships Retry-After
+        // like the per-minute limiter, but must surface as Http so the banner
+        // can show the server message and hide Retry. Collapsing it into
+        // RateLimited is the pre-Phase-4 bug.
+        val message = "Daily limit reached. Try again tomorrow (resets at 2026-09-07T00:00:00.000Z UTC)."
+        val body = ("{\"code\":\"daily_limit\",\"message\":\"$message\"," +
+            "\"reset_at\":\"2026-09-07T00:00:00.000Z\"}").toByteArray()
+        val result = OakError.validate(429, headers("Retry-After" to "45"), body)
+        val err = result.exceptionOrNull()
+        assertFalse("429 daily_limit must not be RateLimited", err is OakError.RateLimited)
+        assertEquals(OakError.Http(429, "daily_limit", message), err)
+    }
+
+    @Test
+    fun dailyLimit429WithoutRetryAfterIsStillHttp() {
+        val message = "Daily limit reached. Try again tomorrow (resets at 2026-09-07T00:00:00.000Z UTC)."
+        val body = "{\"code\":\"daily_limit\",\"message\":\"$message\"}".toByteArray()
+        val result = OakError.validate(429, headers(), body)
+        val err = result.exceptionOrNull()
+        assertFalse("429 daily_limit must not be RateLimited", err is OakError.RateLimited)
+        assertEquals(OakError.Http(429, "daily_limit", message), err)
+    }
+
+    @Test
+    fun accountDenied403IsHttpWithCodeAndMessage() {
+        val message = "This account can't use chat."
+        val body = "{\"code\":\"account_denied\",\"message\":\"$message\"}".toByteArray()
+        val result = OakError.validate(403, headers(), body)
+        assertEquals(OakError.Http(403, "account_denied", message), result.exceptionOrNull())
     }
 
     @Test

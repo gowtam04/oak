@@ -12,9 +12,9 @@ export const CANONICAL_HOST = "oak.gowtam.ai";
 export const SITE_ORIGIN = `https://${CANONICAL_HOST}`;
 export const SITE_NAME = "Oak";
 export const SITE_TITLE =
-  "Oak — AI Pokémon Team Builder, Damage Calcs & Pokédex";
+  "Oak — Pokémon Champions Coach, Teams & Damage Calcs";
 export const SITE_DESCRIPTION =
-  "Ask anything about Pokémon — competitive team building, damage calcs, stat math, usage stats, and Pokédex lookups, with reasoning and cited sources.";
+  "Oak is an AI coach for Pokémon Champions — team building, damage calcs, live usage, and roster lookups, with reasoning and cited sources.";
 
 /**
  * WebApplication JSON-LD, serialized once here so both the root layout and

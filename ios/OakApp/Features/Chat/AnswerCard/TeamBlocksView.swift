@@ -224,6 +224,9 @@ struct TeamBlocksView: View {
             .foregroundStyle(Theme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
         }
+        if !isEmpty {
+          AddToTeamButton(incoming: member, compact: true)
+        }
       }
       Spacer(minLength: 0)
     }
@@ -393,7 +396,7 @@ private extension TeamWarning {
   var severityLabel: String {
     switch code {
     case .incomplete: return "Note"
-    case .evTotalExceeded, .evStatExceeded, .ivOutOfRange: return "Caution"
+    case .evTotalExceeded, .evStatExceeded, .ivOutOfRange, .learnsetUnavailable: return "Caution"
     case .speciesIllegal, .abilityNotForSpecies, .itemIllegal, .moveNotInLearnset,
       .duplicateSpecies, .duplicateItem:
       return "Legality"

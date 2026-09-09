@@ -2,8 +2,8 @@ import SwiftUI
 
 /// The animated voice orb — the focal element of ``VoiceOverlayView``, expressing
 /// ``VoicePhase`` through motion and color instead of a bare spinner. A layered
-/// gradient circle (the same "no Pokéball" language as ``OakBrandMark`` — no
-/// bisecting band, no center button) with a mic glyph at its center.
+/// gradient circle (no Pokéball seam or center button; the brand mark itself
+/// is the daylight ``OakBrandMark`` `O.`) with a mic glyph at its center.
 ///
 /// Motion per phase: `connecting` spins the outer ring and shimmers the core;
 /// `listening` breathes with a slow, gentle pulse; `thinking` shimmers (still,

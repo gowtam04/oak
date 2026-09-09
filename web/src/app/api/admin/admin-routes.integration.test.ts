@@ -458,6 +458,12 @@ describe("settings", () => {
     expect(byKey.get("claude-sonnet-5")!.configured).toBe(true);
     expect(byKey.get("claude-sonnet-4.6")!.configured).toBe(true);
     expect(byKey.get("gpt-5.5")!.configured).toBe(false);
+
+    // SC-BR-12 / SC-AC-4.1 / SC-BR-16 — launch spend defaults, empty lists.
+    expect(body.spend.signedCap).toBe(25);
+    expect(body.spend.guestCap).toBe(10);
+    expect(body.spend.denylist).toEqual([]);
+    expect(body.spend.capExempt).toEqual([]);
   });
 
   it("POST switches the active model and records the admin's email + a fresh GET reflects it", async () => {
@@ -633,7 +639,8 @@ describe("GET /api/admin/errors", () => {
       bucket: "day",
     });
 
-    // Stable display order (mirrors the ErrorCategoryKey union).
+    // Stable display order (mirrors the ErrorCategoryKey union). Spend-control
+    // refusals are additive at count 0 on this fixture (no such turn_record rows).
     expect(body.categories.map((c) => c.key)).toEqual([
       "resolution_failed",
       "clarification_needed",
@@ -641,6 +648,9 @@ describe("GET /api/admin/errors", () => {
       "tool_error",
       "otp_email_failed",
       "rate_limited",
+      "account_denied",
+      "daily_limit",
+      "spend_check_failed",
     ]);
 
     const byKey = new Map(body.categories.map((c) => [c.key, c]));
@@ -650,6 +660,9 @@ describe("GET /api/admin/errors", () => {
     expect(byKey.get("tool_error")!.count).toBe(2);
     expect(byKey.get("otp_email_failed")!.count).toBe(1);
     expect(byKey.get("rate_limited")!.count).toBe(1);
+    expect(byKey.get("account_denied")!.count).toBe(0);
+    expect(byKey.get("daily_limit")!.count).toBe(0);
+    expect(byKey.get("spend_check_failed")!.count).toBe(0);
     expect(byKey.get("tool_error")!.ratePct).toBeCloseTo((2 / 12) * 100, 9);
   });
 });
@@ -1098,3 +1111,277 @@ describe("GET /api/admin/live (window pinned to LIVE_NOW)", () => {
     expect(body.window.lastHourActive).toBe(LIVE.expectedLastHourActive);
   });
 });
+
+// ===========================================================================
+// POST/DELETE /api/admin/spend/* — operator spend-controls writes (SC-US-1..4, SC-US-9)
+//
+// Routes land in Phase 3; these cases dynamic-import so existing describes in
+// this file still collect if the modules are missing (the new tests go red).
+// ===========================================================================
+
+describe("POST /api/admin/spend/caps", () => {
+  function capsReq(body: unknown): Request {
+    return new Request("http://admin.test/api/admin/spend/caps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function load() {
+    return import("./spend/caps/route");
+  }
+
+  it("rejects a guest (401) and a non-admin (403) — gated like every route (SC-AC-2.2)", async () => {
+    const caps = await load();
+    asGuest();
+    expect((await caps.POST(capsReq({ signedCap: 40, guestCap: 5 }))).status).toBe(
+      401,
+    );
+    asNonAdmin();
+    expect((await caps.POST(capsReq({ signedCap: 40, guestCap: 5 }))).status).toBe(
+      403,
+    );
+  });
+
+  it("400s an admin on 0 / negative / non-integer caps (SC-AC-4.3)", async () => {
+    const caps = await load();
+    asAdmin();
+    for (const body of [
+      { signedCap: 0, guestCap: 10 },
+      { signedCap: 25, guestCap: -1 },
+      { signedCap: 1.5, guestCap: 10 },
+    ]) {
+      const res = await caps.POST(capsReq(body));
+      expect(res.status, JSON.stringify(body)).toBe(400);
+      expect((await res.json()).code).toBe("invalid_request");
+    }
+  });
+
+  it("200s an admin on a valid write and GET settings reflects the new caps (SC-AC-4.2)", async () => {
+    const caps = await load();
+    asAdmin();
+    const res = await caps.POST(capsReq({ signedCap: 40, guestCap: 5 }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(
+      expect.objectContaining({ signedCap: 40, guestCap: 5 }),
+    );
+
+    const follow = (await (
+      await settings.GET(adminReq("/api/admin/settings"))
+    ).json()) as AdminSettingsResponse;
+    expect(follow.spend.signedCap).toBe(40);
+    expect(follow.spend.guestCap).toBe(5);
+  });
+});
+
+describe("POST/DELETE /api/admin/spend/denylist", () => {
+  function postReq(body: unknown): Request {
+    return new Request("http://admin.test/api/admin/spend/denylist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function deleteReq(body: unknown): Request {
+    return new Request("http://admin.test/api/admin/spend/denylist", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function load() {
+    return import("./spend/denylist/route");
+  }
+
+  it("rejects a guest (401) and a non-admin (403) on POST and DELETE (SC-AC-2.2)", async () => {
+    const denylist = await load();
+    asGuest();
+    expect(
+      (await denylist.POST(postReq({ email: "blocked@example.com" }))).status,
+    ).toBe(401);
+    expect(
+      (await denylist.DELETE(deleteReq({ email: "blocked@example.com" }))).status,
+    ).toBe(401);
+    asNonAdmin();
+    expect(
+      (await denylist.POST(postReq({ email: "blocked@example.com" }))).status,
+    ).toBe(403);
+    expect(
+      (await denylist.DELETE(deleteReq({ email: "blocked@example.com" }))).status,
+    ).toBe(403);
+  });
+
+  it("400s an admin on an empty or invalid email", async () => {
+    const denylist = await load();
+    asAdmin();
+    const empty = await denylist.POST(postReq({ email: "" }));
+    expect(empty.status).toBe(400);
+    expect((await empty.json()).code).toBe("invalid_request");
+    const invalid = await denylist.POST(postReq({ email: "not-an-email" }));
+    expect(invalid.status).toBe(400);
+    expect((await invalid.json()).code).toBe("invalid_request");
+  });
+
+  it("409s admin_exempt when adding an ADMIN_EMAILS address (SC-AC-1.3, SC-BR-6)", async () => {
+    const denylist = await load();
+    asAdmin();
+    const res = await denylist.POST(postReq({ email: ADMIN_EMAIL }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("admin_exempt");
+
+    const follow = (await (
+      await settings.GET(adminReq("/api/admin/settings"))
+    ).json()) as AdminSettingsResponse;
+    expect(follow.spend.denylist.map((row) => row.email)).not.toContain(
+      ADMIN_EMAIL,
+    );
+  });
+
+  it("200s an idempotent add then an idempotent remove (SC-US-1, SC-US-2, SC-AC-2.1, SC-BR-12)", async () => {
+    const denylist = await load();
+    asAdmin();
+    const email = "blocked@oak.test";
+
+    const first = await denylist.POST(postReq({ email }));
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    expect(firstBody.ok).toBe(true);
+    expect(firstBody.spend.denylist.map((row: { email: string }) => row.email)).toContain(
+      email,
+    );
+
+    const second = await denylist.POST(postReq({ email }));
+    expect(second.status).toBe(200);
+
+    const listed = (await (
+      await settings.GET(adminReq("/api/admin/settings"))
+    ).json()) as AdminSettingsResponse;
+    expect(listed.spend.denylist.map((row) => row.email)).toContain(email);
+    expect(
+      listed.spend.denylist.filter((row) => row.email === email),
+    ).toHaveLength(1);
+    const added = listed.spend.denylist.find((row) => row.email === email)!;
+    expect(added.addedAt).toEqual(expect.any(Number));
+    expect(added.addedBy).toBe(ADMIN_EMAIL);
+
+    const removed = await denylist.DELETE(deleteReq({ email }));
+    expect(removed.status).toBe(200);
+    const absent = await denylist.DELETE(deleteReq({ email }));
+    expect(absent.status).toBe(200);
+
+    const after = (await (
+      await settings.GET(adminReq("/api/admin/settings"))
+    ).json()) as AdminSettingsResponse;
+    expect(after.spend.denylist.map((row) => row.email)).not.toContain(email);
+  });
+});
+
+describe("POST/DELETE /api/admin/spend/cap-exempt", () => {
+  function postReq(body: unknown): Request {
+    return new Request("http://admin.test/api/admin/spend/cap-exempt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function deleteReq(body: unknown): Request {
+    return new Request("http://admin.test/api/admin/spend/cap-exempt", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function load() {
+    return import("./spend/cap-exempt/route");
+  }
+
+  it("rejects a guest (401) and a non-admin (403) on POST and DELETE (SC-AC-2.2)", async () => {
+    const capExempt = await load();
+    asGuest();
+    expect(
+      (await capExempt.POST(postReq({ email: "friend@example.com" }))).status,
+    ).toBe(401);
+    expect(
+      (await capExempt.DELETE(deleteReq({ email: "friend@example.com" }))).status,
+    ).toBe(401);
+    asNonAdmin();
+    expect(
+      (await capExempt.POST(postReq({ email: "friend@example.com" }))).status,
+    ).toBe(403);
+    expect(
+      (await capExempt.DELETE(deleteReq({ email: "friend@example.com" }))).status,
+    ).toBe(403);
+  });
+
+  it("400s an admin on an empty or invalid email", async () => {
+    const capExempt = await load();
+    asAdmin();
+    const empty = await capExempt.POST(postReq({ email: "" }));
+    expect(empty.status).toBe(400);
+    expect((await empty.json()).code).toBe("invalid_request");
+    const invalid = await capExempt.POST(postReq({ email: "not-an-email" }));
+    expect(invalid.status).toBe(400);
+    expect((await invalid.json()).code).toBe("invalid_request");
+  });
+
+  it("200s when adding an ADMIN_EMAILS address (already uncapped; no 409)", async () => {
+    const capExempt = await load();
+    asAdmin();
+    const res = await capExempt.POST(postReq({ email: ADMIN_EMAIL }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).ok).toBe(true);
+
+    const follow = (await (
+      await settings.GET(adminReq("/api/admin/settings"))
+    ).json()) as AdminSettingsResponse;
+    expect(follow.spend.capExempt.map((row) => row.email)).toContain(
+      ADMIN_EMAIL,
+    );
+
+    await capExempt.DELETE(deleteReq({ email: ADMIN_EMAIL }));
+  });
+
+  it("200s an idempotent add then an idempotent remove (SC-US-9, SC-BR-16)", async () => {
+    const capExempt = await load();
+    asAdmin();
+    const email = "friend@oak.test";
+
+    const first = await capExempt.POST(postReq({ email }));
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    expect(firstBody.ok).toBe(true);
+    expect(
+      firstBody.spend.capExempt.map((row: { email: string }) => row.email),
+    ).toContain(email);
+
+    const second = await capExempt.POST(postReq({ email }));
+    expect(second.status).toBe(200);
+
+    const listed = (await (
+      await settings.GET(adminReq("/api/admin/settings"))
+    ).json()) as AdminSettingsResponse;
+    expect(listed.spend.capExempt.map((row) => row.email)).toContain(email);
+    expect(
+      listed.spend.capExempt.filter((row) => row.email === email),
+    ).toHaveLength(1);
+    const added = listed.spend.capExempt.find((row) => row.email === email)!;
+    expect(added.addedAt).toEqual(expect.any(Number));
+    expect(added.addedBy).toBe(ADMIN_EMAIL);
+
+    const removed = await capExempt.DELETE(deleteReq({ email }));
+    expect(removed.status).toBe(200);
+    const absent = await capExempt.DELETE(deleteReq({ email }));
+    expect(absent.status).toBe(200);
+
+    const after = (await (
+      await settings.GET(adminReq("/api/admin/settings"))
+    ).json()) as AdminSettingsResponse;
+    expect(after.spend.capExempt.map((row) => row.email)).not.toContain(email);
+  });
+});
+

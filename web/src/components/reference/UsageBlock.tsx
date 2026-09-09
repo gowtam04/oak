@@ -22,6 +22,8 @@ export interface UsageBlockData {
 
 export interface UsageBlockProps {
   usage: UsageBlockData;
+  /** Species slug — links the block to the live `/usage/:slug` drill-in. */
+  slug?: string;
 }
 
 function UsageList({
@@ -47,7 +49,7 @@ function UsageList({
   );
 }
 
-export default function UsageBlock({ usage }: UsageBlockProps) {
+export default function UsageBlock({ usage, slug }: UsageBlockProps) {
   return (
     <div className="ref-usage" data-testid="usage-block">
       {usage.season && <p className="ref-usage__season">{usage.season}</p>}
@@ -60,6 +62,11 @@ export default function UsageBlock({ usage }: UsageBlockProps) {
       <UsageList title="Top items" entries={usage.topItems} />
       <UsageList title="Top teammates" entries={usage.topTeammates} />
       <p className="ref-usage__attribution">{usage.attribution}</p>
+      {slug && (
+        <p className="ref-usage__more">
+          <a href={`/usage/${slug}`}>Full usage</a>
+        </p>
+      )}
     </div>
   );
 }

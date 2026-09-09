@@ -1,93 +1,374 @@
 import SwiftUI
 
-/// The live in-progress indicator shown while a turn streams (chat-experience.md
-/// M-CHAT-US-4): a 7pt red pip, a mute Figtree sentence of friendly nouns, and a
-/// 2pt red bar that eases ~24% → 72%.
-///
-/// No instrument ticker, no `N LOOKUPS` chip, no spinner. Reconnecting copy is
-/// kept. Friendly nouns come from ``ToolTrail`` — raw tool ids never render.
-///
-/// Purely presentational — it takes the reducer's coarse ``ChatViewModel/StreamingPhase``
-/// and the tool-activity list and renders them. Dynamic-Type styles and semantic
-/// colors adapt to text size and light/dark.
+/// Expandable thinking trace: 22pt Poké Ball + shimmering "Thinking", then one
+/// row per live tool call (spinner on the in-flight row, check on done).
+/// Collapses to "Thought for N seconds" once tokens start. Action labels come
+/// from ``ToolTrail`` — raw tool ids never render. The thinking mark is the
+/// drawn ball, not ``ThinkingOrbView``.
 struct StreamingStatusView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   let phase: ChatViewModel.StreamingPhase
   let activities: [ChatViewModel.ToolActivity]
-  /// When true, an auto-reconnect is pending/in flight after a backgrounding drop — the
-  /// status line shows "Reconnecting…" instead of the phase, matching web's UI.
+  /// When true, an auto-reconnect is pending/in flight after a backgrounding drop —
+  /// the header shows "Reconnecting" instead of the phase, matching web's UI.
   var reconnecting: Bool = false
-  /// Kept so existing call sites compile. Signal streaming no longer shows a timer.
+  /// Stream start, used to freeze "Thought for N seconds" when tokens arrive.
+  var startedAt: Date? = nil
+  /// True once `answer_markdown` tokens have started — header settles, list
+  /// auto-collapses.
+  var settled: Bool = false
+  /// Kept so existing call sites compile. Prefer ``startedAt``.
   var elapsedSeconds: Int? = nil
 
-  /// Pip blink phase (1 = on, 0.2 = dim). Solid under Reduce Motion.
-  @State private var pipLit = true
-  /// Live bar width as a fraction of the row (0.24 → 0.72).
-  @State private var barProgress: CGFloat = 0.24
+  @State private var userOpen: Bool?
+  @State private var frozenElapsed: Int?
+  @State private var spinAngle: Double = 0
 
   var body: some View {
     if phase != .idle {
-      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-        HStack(spacing: Theme.Spacing.sm) {
-          Circle()
-            .fill(Theme.accent)
-            .frame(width: 7, height: 7)
-            .opacity(reduceMotion || pipLit ? 1 : 0.2)
-            .accessibilityHidden(true)
-          Text(statusSentence)
-            .font(Theme.body(.subheadline))
-            .foregroundStyle(Theme.textSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .contentTransition(.opacity)
+      VStack(alignment: .leading, spacing: 2) {
+        header
+        if open, !rows.isEmpty {
+          rowList
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
-        .animation(reduceMotion ? nil : Theme.Motion.smooth, value: phase)
-
-        GeometryReader { geo in
-          Capsule()
-            .fill(Theme.accent)
-            .frame(width: max(2, geo.size.width * barProgress), height: 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(height: 2)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel(statusSentence)
-      .onAppear { startMotion() }
+      .animation(reduceMotion ? nil : Theme.Motion.enter, value: open)
+      .animation(reduceMotion ? nil : Theme.Motion.smooth, value: headerText)
+      .onAppear {
+        captureFreeze()
+      }
+      .onChange(of: settled) { _, _ in captureFreeze() }
+      .onChange(of: sceneKey) { _, _ in userOpen = nil }
+      .accessibilityElement(children: .contain)
     }
   }
 
-  /// Mute sentence: reconnecting, thinking, looking up {nouns}, or writing.
-  private var statusSentence: String {
-    if reconnecting { return "Reconnecting…" }
-    switch phase {
-    case .idle:
-      return ""
-    case .thinking:
-      return "Thinking…"
-    case .usingTools:
-      return ToolTrail.streamingSentence(
-        activities: activities.map { (tool: $0.tool, label: $0.label) }
-      )
-    case .answering:
-      return "Writing the answer…"
-    }
+  private var pairs: [(tool: String, label: String)] {
+    activities.map { (tool: $0.tool, label: $0.label) }
   }
 
-  private func startMotion() {
-    guard !reduceMotion else {
-      pipLit = true
-      barProgress = 0.24
+  private var rows: [ThinkingTraceCopy.Row] {
+    reconnecting ? [] : ThinkingTraceCopy.rows(activities: pairs, settled: settled)
+  }
+
+  private var autoOpen: Bool {
+    !rows.isEmpty && !settled && !reconnecting
+  }
+
+  private var open: Bool { userOpen ?? autoOpen }
+
+  private var sceneKey: String {
+    "\(reconnecting ? 1 : 0):\(settled ? 1 : 0):\(rows.isEmpty ? 0 : 1)"
+  }
+
+  private var live: Bool { ThinkingTraceCopy.header(reconnecting: reconnecting, settled: settled).live }
+
+  private var headerText: String {
+    ThinkingTraceCopy.header(
+      reconnecting: reconnecting,
+      settled: settled,
+      elapsedSeconds: displayedElapsed
+    ).text
+  }
+
+  private var displayedElapsed: Int {
+    if let frozenElapsed { return frozenElapsed }
+    if let elapsedSeconds { return elapsedSeconds }
+    guard let startedAt else { return 0 }
+    return max(0, Int(Date().timeIntervalSince(startedAt)))
+  }
+
+  private func captureFreeze() {
+    guard settled, frozenElapsed == nil else {
+      if !settled { frozenElapsed = nil }
       return
     }
-    // 1.2s step blink (0.6s each way). Solid pip under Reduce Motion.
-    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-      pipLit = false
+    if let elapsedSeconds {
+      frozenElapsed = elapsedSeconds
+    } else if let startedAt {
+      frozenElapsed = max(0, Int(Date().timeIntervalSince(startedAt)))
+    } else {
+      frozenElapsed = 0
     }
-    // 2pt bar eases 24% → 72% and back while the turn is live.
-    withAnimation(.timingCurve(0.2, 0, 0, 1, duration: 1.4).repeatForever(autoreverses: true)) {
-      barProgress = 0.72
+  }
+
+  @ViewBuilder
+  private var header: some View {
+    let label = HStack(spacing: Theme.Spacing.sm) {
+      ThinkingBallMark()
+      headerLabel
+      if !rows.isEmpty {
+        Image(systemName: "chevron.down")
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundStyle(Theme.textMuted)
+          .rotationEffect(.degrees(open ? 180 : 0))
+      }
     }
+
+    if rows.isEmpty {
+      label
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(headerText)
+        .accessibilityAddTraits(.updatesFrequently)
+    } else {
+      Button {
+        userOpen = !open
+      } label: {
+        label
+      }
+      .buttonStyle(.plain)
+      .padding(.vertical, 4)
+      .accessibilityLabel(headerText)
+      .accessibilityHint(open ? "Collapse steps" : "Expand steps")
+      .accessibilityAddTraits(.isButton)
+    }
+  }
+
+  @ViewBuilder
+  private var headerLabel: some View {
+    if live && !reduceMotion {
+      TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { context in
+        let t = context.date.timeIntervalSinceReferenceDate
+          .truncatingRemainder(dividingBy: 1.4) / 1.4
+        Text(headerText)
+          .font(Theme.body(.subheadline, weight: .medium))
+          .foregroundStyle(shimmerGradient(phase: t))
+      }
+    } else {
+      Text(headerText)
+        .font(Theme.body(.subheadline, weight: .medium))
+        .foregroundStyle(Theme.textSecondary)
+    }
+  }
+
+  private func shimmerGradient(phase: Double) -> LinearGradient {
+    LinearGradient(
+      stops: [
+        .init(color: Theme.textMuted, location: 0),
+        .init(color: Theme.textStrong, location: 0.5),
+        .init(color: Theme.textMuted, location: 1),
+      ],
+      startPoint: UnitPoint(x: -1 + phase * 2, y: 0.5),
+      endPoint: UnitPoint(x: phase * 2, y: 0.5)
+    )
+  }
+
+  private var rowList: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+        HStack(spacing: Theme.Spacing.sm) {
+          if row.active {
+            spinningRing
+          } else {
+            Image(systemName: "checkmark")
+              .font(.system(size: 11, weight: .semibold))
+              .foregroundStyle(Theme.textMuted)
+              .frame(width: 14, height: 14)
+          }
+          Text(row.primary)
+            .font(Theme.body(.footnote, weight: .medium))
+            .foregroundStyle(Theme.textStrong)
+            .lineLimit(1)
+            .layoutPriority(1)
+          if let secondary = row.secondary {
+            Spacer(minLength: Theme.Spacing.sm)
+            Text(secondary)
+              .font(Theme.body(.caption))
+              .foregroundStyle(Theme.textMuted)
+              .lineLimit(1)
+              .truncationMode(.tail)
+              .frame(minWidth: 0)
+          }
+        }
+        .frame(minHeight: 28)
+        .padding(.horizontal, 6)
+        .opacity(reduceMotion ? 1 : 1)
+        .transition(.opacity.combined(with: .offset(y: 4)))
+        .animation(
+          reduceMotion ? nil : Theme.Motion.staggered(index, base: Theme.Motion.enter, step: 0.12),
+          value: rows.count
+        )
+      }
+    }
+    .padding(.leading, 20)
+    .padding(.vertical, 4)
+    .overlay(alignment: .leading) {
+      Rectangle()
+        .fill(Theme.separator)
+        .frame(width: 1)
+        .padding(.leading, 10)
+        .padding(.vertical, 2)
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  private var spinningRing: some View {
+    Circle()
+      .trim(from: 0, to: 0.72)
+      .stroke(Theme.textSecondary, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+      .frame(width: 12, height: 12)
+      .rotationEffect(.degrees(reduceMotion ? 0 : spinAngle))
+      .onAppear {
+        guard !reduceMotion else { return }
+        withAnimation(.linear(duration: 0.7).repeatForever(autoreverses: false)) {
+          spinAngle = 360
+        }
+      }
+      .accessibilityHidden(true)
+  }
+}
+
+// MARK: - 22pt thinking ball
+
+/// Drawn CSS Poké Ball (Enamel & Paper `.ball`): red top / white bottom /
+/// black equator / inner white ring. 22pt. Spins 1.1s linear; Reduce Motion
+/// is a static ball. Not ``ThinkingOrbView``. ``OakSpinner`` and
+/// ``VoiceOrbView`` stay on their own surfaces.
+private struct ThinkingBallMark: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var spinning = false
+
+  private static let equator = Color(red: 26 / 255, green: 26 / 255, blue: 26 / 255)
+
+  var body: some View {
+    ZStack {
+      Circle()
+        .fill(
+          LinearGradient(
+            stops: [
+              .init(color: Theme.accent, location: 0),
+              .init(color: Theme.accent, location: 0.46),
+              .init(color: Self.equator, location: 0.46),
+              .init(color: Self.equator, location: 0.54),
+              .init(color: .white, location: 0.54),
+              .init(color: .white, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+          )
+        )
+      Circle()
+        .strokeBorder(Self.equator, lineWidth: 2)
+      Circle()
+        .strokeBorder(Color.white, lineWidth: 2)
+        .padding(2)
+    }
+    .frame(width: 22, height: 22)
+    .rotationEffect(.degrees(!reduceMotion && spinning ? 360 : 0))
+    .onAppear {
+      guard !reduceMotion else { return }
+      withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
+        spinning = true
+      }
+    }
+    .accessibilityHidden(true)
+  }
+}
+
+// MARK: - Copy (pure, testable)
+
+/// Header + row mapping for the thinking trace. Lock-step with web
+/// `thinking-trace.ts` and Android `thinkingHeader` / `traceRows`.
+enum ThinkingTraceCopy {
+  struct Row: Equatable {
+    var tool: String
+    var primary: String
+    var secondary: String?
+    var active: Bool
+  }
+
+  struct Header: Equatable {
+    var live: Bool
+    var text: String
+  }
+
+  static func header(
+    reconnecting: Bool,
+    settled: Bool,
+    elapsedSeconds: Int? = nil
+  ) -> Header {
+    if reconnecting { return Header(live: true, text: "Reconnecting") }
+    if !settled { return Header(live: true, text: "Thinking") }
+    return Header(live: false, text: thoughtFor(elapsedSeconds))
+  }
+
+  static func thoughtFor(_ elapsedSeconds: Int?) -> String {
+    let n = elapsedSeconds ?? 0
+    if n <= 0 { return "Thought for a moment" }
+    if n == 1 { return "Thought for 1 second" }
+    return "Thought for \(n) seconds"
+  }
+
+  static func rows(
+    activities: [(tool: String, label: String)],
+    settled: Bool
+  ) -> [Row] {
+    let visible = activities.filter { $0.tool != "reasoning" && $0.tool != "submit_answer" && $0.tool != "submit_builder_answer" }
+    return visible.enumerated().map { index, activity in
+      let cleaned = ToolTrail.strippingLeadingEmoji(activity.label)
+      return Row(
+        tool: activity.tool,
+        primary: ToolTrail.friendlyNoun(activity.tool),
+        secondary: ToolTrail.subject(from: cleaned),
+        active: !settled && index == visible.count - 1
+      )
+    }
+  }
+
+  /// Lock-step with web `orbStateForActivity` / Android `orbStateForActivity`.
+  static func orbState(
+    reconnecting: Bool,
+    latestTool: String?,
+    writing: Bool = false
+  ) -> OrbState {
+    if reconnecting { return .connecting }
+    if writing { return .composing }
+    guard let tool = latestTool, !tool.isEmpty else { return .breathing }
+    if Self.hiddenTools.contains(tool) { return .breathing }
+    if Self.solvingTools.contains(tool) { return .solving }
+    if Self.searchingTools.contains(tool) { return .searching }
+    return .breathing
+  }
+
+  private static let hiddenTools: Set<String> = [
+    "reasoning", "submit_answer", "submit_builder_answer",
+  ]
+  private static let solvingTools: Set<String> = [
+    "compute_stat", "estimate_damage", "run_sql", "get_usage_stats", "get_meta_usage",
+  ]
+  private static let searchingTools: Set<String> = [
+    "resolve_entity", "query_pokedex", "get_pokemon", "get_move", "get_ability",
+    "get_item", "get_type_matchups", "get_evolution_chain", "get_encounters",
+    "get_learnset", "lookup_box", "get_team", "list_teams", "save_team", "search_wiki",
+  ]
+}
+
+/// Legacy verb/rest split — kept so older tests and call sites still compile.
+/// New chrome uses ``ThinkingTraceCopy``.
+enum StreamingStatusCopy {
+  static func parts(
+    phase: ChatViewModel.StreamingPhase,
+    activities: [(tool: String, label: String)],
+    reconnecting: Bool
+  ) -> (verb: String, rest: String) {
+    let settled = phase == .answering
+    let header = ThinkingTraceCopy.header(
+      reconnecting: reconnecting,
+      settled: settled,
+      elapsedSeconds: nil
+    )
+    return (header.text, "")
+  }
+
+  static func accessibilityLabel(
+    phase: ChatViewModel.StreamingPhase,
+    activities: [(tool: String, label: String)],
+    reconnecting: Bool
+  ) -> String {
+    parts(phase: phase, activities: activities, reconnecting: reconnecting).verb
   }
 }
 
@@ -130,38 +411,42 @@ enum ToolTrail {
     }
   }
 
-  /// Maps a raw tool id to the friendly, non-technical noun users see (the same
-  /// vocabulary as web's `instrumentToken` — copy-tables.md §1). A raw tool id must
-  /// never reach the screen: every caller in this file routes through here,
-  /// including both bare fallback paths in ``rowLabel(tool:label:)``.
+  /// Maps a raw tool id to the action label users see (the same vocabulary as
+  /// web's `instrumentToken`). A raw tool id must never reach the screen: every
+  /// caller in this file routes through here, including both bare fallback
+  /// paths in ``rowLabel(tool:label:)``.
   static func friendlyNoun(_ tool: String) -> String {
     switch tool {
-    case "resolve_entity": return "Dex lookup"
-    case "query_pokedex": return "Pokédex search"
-    case "get_pokemon": return "Pokémon"
-    case "get_move": return "Move"
-    case "get_ability": return "Ability"
-    case "get_item": return "Item"
-    case "get_type_matchups": return "Type matchups"
-    case "get_evolution_chain": return "Evolution"
-    case "compute_stat": return "Stats"
-    case "estimate_damage": return "Damage calc"
-    case "get_usage_stats", "get_meta_usage": return "Usage"
-    case "get_encounters": return "Locations"
-    case "get_learnset": return "Movepool"
-    case "get_team", "list_teams", "save_team": return "Teams"
-    case "run_sql": return "Game data"
-    case "search_wiki": return "Wiki"
+    case "resolve_entity": return "Identifying"
+    case "query_pokedex": return "Searching Pokédex"
+    case "get_pokemon": return "Looking up Pokémon"
+    case "get_move": return "Looking up move"
+    case "get_ability": return "Reading ability"
+    case "get_item": return "Looking up item"
+    case "get_type_matchups", "type_matchup", "get_type_chart": return "Checking matchups"
+    case "get_evolution_chain": return "Tracing evolution"
+    case "compute_stat": return "Computing stats"
+    case "estimate_damage": return "Calculating damage"
+    case "get_usage_stats": return "Checking live usage"
+    case "get_meta_usage": return "Checking ladder usage"
+    case "get_encounters": return "Finding locations"
+    case "get_learnset": return "Checking learnset"
+    case "lookup_box": return "Looking up box"
+    case "get_team": return "Reading team"
+    case "list_teams": return "Listing teams"
+    case "save_team": return "Saving team"
+    case "run_sql": return "Querying game data"
+    case "search_wiki": return "Searching wiki"
     case "submit_answer": return "Answer"
     case "submit_builder_answer": return "Teams"
-    default: return "Lookup"
+    default: return "Looking up"
     }
   }
 
   /// The instrument-voice row text. When the label parses into a tool + subject —
-  /// e.g. `get_pokemon` + a resolvable "Garchomp" — it renders `Pokémon ·
+  /// e.g. `get_pokemon` + a resolvable "Garchomp" — it renders `Looking up Pokémon ·
   /// Garchomp`; otherwise it falls back to the cleaned (emoji-stripped) label, or
-  /// the friendly noun when there's no usable label at all. The `.instrumentLabel()`
+  /// the action label when there's no usable label at all. The `.instrumentLabel()`
   /// modifier applies the uppercasing + tracking, so this returns natural-case text.
   static func rowLabel(tool: String, label: String) -> String {
     let cleaned = strippingLeadingEmoji(label)
@@ -241,42 +526,57 @@ enum ToolTrail {
       .trimmingCharacters(in: .whitespaces)
   }
 
-  /// Extracts the subject entity from a cleaned label when one is clearly present:
-  /// a “curly-quoted” or "straight-quoted" phrase (resolve/search/sql labels), else
-  /// the last capitalised word-run in a "Looking up X" / "Looking up Fake Out"
-  /// phrase. Returns `nil` when nothing reads as a distinct subject, so the caller
-  /// falls back to the cleaned label / friendly noun.
+  /// Subject entity from a cleaned server label. Lock-step with web
+  /// `subjectFromLabel` and Android `subjectFromLabel`.
+  ///
+  /// Order: quoted phrase, else the clause after the first colon (Pokédex
+  /// filters), else the first capitalised run after the sentence-initial
+  /// verb. Trailing `'s` / `’s` is stripped so "Checking Torkoal’s learnset"
+  /// yields "Torkoal", not "Checking Torkoal's".
   static func subject(from cleaned: String) -> String? {
-    // Quoted subject: “…”, "…", or ‟…”.
     if let quoted = firstQuoted(in: cleaned) {
       let trimmed = quoted.trimmingCharacters(in: .whitespaces)
       return trimmed.isEmpty ? nil : trimmed
     }
-    // Last contiguous capitalised run, e.g. "Looking up Garchomp", "Looking up
-    // Fake Out", "Looking up the move Will-O-Wisp".
-    let words = cleaned
-      .trimmingCharacters(in: CharacterSet(charactersIn: "….'s "))
-      .split(whereSeparator: { $0 == " " })
-      .map(String.init)
-    var lastRun: [String] = []
-    var lastRunStart = -1
-    var currentRun: [String] = []
-    var currentStart = -1
-    for (index, word) in words.enumerated() {
+
+    let stripped = cleaned
+      .trimmingCharacters(in: CharacterSet(charactersIn: "…."))
+      .trimmingCharacters(in: .whitespaces)
+    guard !stripped.isEmpty else { return nil }
+
+    if let colon = stripped.firstIndex(of: ":") {
+      let after = String(stripped[stripped.index(after: colon)...])
+        .trimmingCharacters(in: CharacterSet(charactersIn: "…."))
+        .trimmingCharacters(in: .whitespaces)
+      return after.isEmpty ? nil : after
+    }
+
+    let words = stripped.split(whereSeparator: { $0 == " " }).map(String.init)
+    let search: ArraySlice<String>
+    if let first = words.first, first.first?.isUppercase == true {
+      search = words.dropFirst()
+    } else {
+      search = words[...]
+    }
+
+    var run: [String] = []
+    for word in search {
       if let first = word.first, first.isUppercase {
-        if currentRun.isEmpty { currentStart = index }
-        currentRun.append(word)
-        lastRun = currentRun
-        lastRunStart = currentStart
-      } else {
-        currentRun = []
+        run.append(word)
+      } else if !run.isEmpty {
+        break
       }
     }
-    // A real subject is a later capitalised run — never the sentence-initial
-    // "Looking" / "Reading" on its own.
-    guard !lastRun.isEmpty else { return nil }
-    if lastRun.count == 1, lastRunStart == 0 { return nil }
-    return lastRun.joined(separator: " ")
+    guard !run.isEmpty else { return nil }
+    return stripTrailingPossessive(run.joined(separator: " "))
+  }
+
+  /// `Torkoal's` / `Torkoal’s` (U+2019, as emitted by `describeToolCall`).
+  private static func stripTrailingPossessive(_ text: String) -> String {
+    if text.hasSuffix("'s") || text.hasSuffix("\u{2019}s") {
+      return String(text.dropLast(2))
+    }
+    return text
   }
 
   /// The first substring wrapped in a matched quote pair (curly or straight).
@@ -327,8 +627,15 @@ enum ToolTrail {
     activities: [
       .init(tool: "resolve_entity", label: "🔍 Resolving “Farigiraf”…"),
       .init(tool: "get_move", label: "Looking up Fake Out…"),
-    ]
+    ],
+    startedAt: Date().addingTimeInterval(-4),
+    settled: true
   )
   .padding()
+}
+
+#Preview("Reconnecting") {
+  StreamingStatusView(phase: .thinking, activities: [], reconnecting: true)
+    .padding()
 }
 #endif

@@ -7,7 +7,10 @@ import ai.gowtam.oak.features.auth.AuthViewModel
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakButton
+import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.OakTopBar
+import ai.gowtam.oak.ui.OakWordmark
 import ai.gowtam.oak.wire.DexSpriteRef
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.Team
@@ -28,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -45,8 +49,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import ai.gowtam.oak.ui.OakTopBar
-import ai.gowtam.oak.ui.OakWordmark
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,6 +59,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -97,6 +100,29 @@ fun TeamsRoute(services: ServiceContainer, appState: AppState, modifier: Modifie
 
     BackHandler(enabled = destination == 1) { backToList() }
 
+    val surface by appState.surfaceRequest.collectAsState()
+    LaunchedEffect(surface) {
+        val req = surface as? ai.gowtam.oak.app.AppState.SurfaceRequest.Teams ?: return@LaunchedEffect
+        val id = req.id
+        if (id != null) {
+            openEditor(
+                listViewModel.makeEditor(
+                    TeamSummary(
+                        id = id,
+                        name = req.name ?: "Team",
+                        format = Format.Champions,
+                        memberCount = 0,
+                        incomplete = true,
+                        species = emptyList(),
+                        updatedAt = 0L,
+                    ),
+                ),
+                loadOnAppear = true,
+            )
+        }
+        appState.consumeSurfaceRequest()
+    }
+
     val activeEditor = editorViewModel
     if (destination == 1 && activeEditor != null) {
         TeamEditor(
@@ -109,7 +135,7 @@ fun TeamsRoute(services: ServiceContainer, appState: AppState, modifier: Modifie
     } else {
         TeamsListScreen(
             viewModel = listViewModel,
-            onOpenNew = { format -> openEditor(listViewModel.makeEditor(format), loadOnAppear = false) },
+            onOpenNew = { openEditor(listViewModel.makeEditor(), loadOnAppear = false) },
             onOpenExisting = { summary -> openEditor(listViewModel.makeEditor(summary), loadOnAppear = true) },
             onOpenCreated = { team -> openEditor(listViewModel.makeEditor(team), loadOnAppear = false) },
             modifier = modifier,
@@ -158,7 +184,7 @@ private fun TeamsSignInPrompt(services: ServiceContainer, appState: AppState, mo
 @Composable
 private fun TeamsListScreen(
     viewModel: TeamsListViewModel,
-    onOpenNew: (Format) -> Unit,
+    onOpenNew: () -> Unit,
     onOpenExisting: (TeamSummary) -> Unit,
     onOpenCreated: (Team) -> Unit,
     modifier: Modifier = Modifier,
@@ -166,7 +192,7 @@ private fun TeamsListScreen(
     val state by viewModel.uiState.collectAsState()
     var isImporting by remember { mutableStateOf(false) }
     var showAddMenu by remember { mutableStateOf(false) }
-    var showFilterMenu by remember { mutableStateOf(false) }
+    var pendingArchivedDelete by remember { mutableStateOf<TeamSummary?>(null) }
 
     LaunchedEffect(Unit) { viewModel.reload() }
 
@@ -175,35 +201,15 @@ private fun TeamsListScreen(
         topBar = {
             OakTopBar(
                 title = { OakWordmark() },
-                navigationIcon = {
-                    Box {
-                        IconButton(onClick = { showFilterMenu = true }) { Icon(Icons.Filled.FilterList, contentDescription = "Filter") }
-                        DropdownMenu(expanded = showFilterMenu, onDismissRequest = { showFilterMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("All formats") },
-                                onClick = { viewModel.setFormatFilter(null); showFilterMenu = false },
-                                leadingIcon = if (state.formatFilter == null) { { Icon(Icons.Filled.Check, contentDescription = null) } } else null,
-                            )
-                            Format.knownCases.forEach { fmt ->
-                                DropdownMenuItem(
-                                    text = { Text(fmt.shortLabel) },
-                                    onClick = { viewModel.setFormatFilter(fmt); showFilterMenu = false },
-                                    leadingIcon = if (state.formatFilter == fmt) { { Icon(Icons.Filled.Check, contentDescription = null) } } else null,
-                                )
-                            }
-                        }
-                    }
-                },
                 actions = {
+                    ai.gowtam.oak.ui.RegulationChip(onLid = true)
                     Box {
                         IconButton(onClick = { showAddMenu = true }) { Icon(Icons.Filled.Add, contentDescription = "Add team") }
                         DropdownMenu(expanded = showAddMenu, onDismissRequest = { showAddMenu = false }) {
-                            Format.knownCases.forEach { fmt ->
-                                DropdownMenuItem(
-                                    text = { Text("New ${fmt.shortLabel} team") },
-                                    onClick = { showAddMenu = false; onOpenNew(fmt) },
-                                )
-                            }
+                            DropdownMenuItem(
+                                text = { Text("New team") },
+                                onClick = { showAddMenu = false; onOpenNew() },
+                            )
                             HorizontalDivider()
                             DropdownMenuItem(
                                 text = { Text("Import from Showdown") },
@@ -217,19 +223,43 @@ private fun TeamsListScreen(
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when {
-                state.teams.isEmpty() && state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                state.livingTeams.isEmpty() && state.archivedTeams.isEmpty() && state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = LocalOakColors.current.accent)
                 }
-                state.teams.isEmpty() -> EmptyState(formatFilter = state.formatFilter)
-                else -> LazyColumn {
-                    items(state.teams, key = { it.id }) { team ->
+                state.livingTeams.isEmpty() && state.archivedTeams.isEmpty() -> EmptyState()
+                else -> LazyColumn(
+                    modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = OakSpacing.sm),
+                ) {
+                    items(state.livingTeams, key = { it.id }) { team ->
                         TeamRow(
                             team = team,
                             spriteRefs = state.spriteRefs,
+                            archived = false,
                             onClick = { onOpenExisting(team) },
                             onDuplicate = { viewModel.duplicate(team) { created -> onOpenCreated(created) } },
                             onDelete = { viewModel.delete(team) },
                         )
+                    }
+                    if (state.archivedTeams.isNotEmpty()) {
+                        item(key = "archived-header") {
+                            Text(
+                                "Archived",
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
+                                color = LocalOakColors.current.textMuted,
+                            )
+                        }
+                        items(state.archivedTeams, key = { it.id }) { team ->
+                            TeamRow(
+                                team = team,
+                                spriteRefs = state.spriteRefs,
+                                archived = true,
+                                onClick = { onOpenExisting(team) },
+                                onDuplicate = {},
+                                onDelete = { pendingArchivedDelete = team },
+                            )
+                        }
                     }
                 }
             }
@@ -243,23 +273,41 @@ private fun TeamsListScreen(
         }
     }
 
+    pendingArchivedDelete?.let { team ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingArchivedDelete = null },
+            title = { Text("Delete archived team?") },
+            text = { Text("“${team.name}” will be removed. This cannot be undone.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        viewModel.delete(team)
+                        pendingArchivedDelete = null
+                    },
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { pendingArchivedDelete = null }) { Text("Cancel") }
+            },
+        )
+    }
+
     if (isImporting) {
         ShowdownImportDialog(
-            initialFormat = state.formatFilter ?: Format.ScarletViolet,
-            onImport = { paste, format, onResult -> viewModel.importPaste(paste, format, onResult) },
+            onImport = { paste, onResult -> viewModel.importPaste(paste, onResult) },
             onDismiss = { isImporting = false; viewModel.reload() },
         )
     }
 }
 
 @Composable
-private fun EmptyState(formatFilter: Format?) {
+private fun EmptyState() {
     val oak = LocalOakColors.current
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
             Icon(Icons.Filled.Groups, contentDescription = null, tint = oak.textMuted, modifier = Modifier.size(56.dp))
             Text(
-                text = if (formatFilter == null) "No teams yet" else "No teams in this format",
+                text = "No teams yet",
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
@@ -279,19 +327,25 @@ private fun EmptyState(formatFilter: Format?) {
 private fun TeamRow(
     team: TeamSummary,
     spriteRefs: Map<String, DexSpriteRef>,
+    archived: Boolean,
     onClick: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val oak = LocalOakColors.current
     var showMenu by remember { mutableStateOf(false) }
+    val rowShape = RoundedCornerShape(OakRadius.md)
 
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = OakSpacing.md, vertical = 4.dp)
+                .clip(rowShape)
+                .background(MaterialTheme.colorScheme.surface, rowShape)
+                .border(1.dp, oak.border, rowShape)
                 .clickable(onClick = onClick)
-                .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.md),
+                .padding(horizontal = OakSpacing.md, vertical = OakSpacing.md),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(OakSpacing.md),
         ) {
@@ -299,7 +353,11 @@ private fun TeamRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(team.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
                 Text(
-                    text = "${team.format.shortLabel} · ${compositionLabel(team)}",
+                    text = if (archived) {
+                        "${team.format.shortLabel} · archived"
+                    } else {
+                        "${team.format.shortLabel} · ${compositionLabel(team)}"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = oak.textMuted,
                     maxLines = 1,
@@ -308,13 +366,17 @@ private fun TeamRow(
             Box {
                 IconButton(onClick = { showMenu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text("Edit") }, onClick = { showMenu = false; onClick() })
-                    DropdownMenuItem(text = { Text("Duplicate") }, onClick = { showMenu = false; onDuplicate() })
+                    DropdownMenuItem(
+                        text = { Text(if (archived) "View" else "Edit") },
+                        onClick = { showMenu = false; onClick() },
+                    )
+                    if (!archived) {
+                        DropdownMenuItem(text = { Text("Duplicate") }, onClick = { showMenu = false; onDuplicate() })
+                    }
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { showMenu = false; onDelete() })
                 }
             }
         }
-        HorizontalDivider()
     }
 }
 

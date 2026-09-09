@@ -44,7 +44,8 @@ struct VoiceOverlayView: View {
     }
     .padding(.vertical, 32)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Theme.background.ignoresSafeArea())
+    // Opaque paper canvas — no material, no blur.
+    .background(Theme.canvas.ignoresSafeArea())
   }
 
   private var phaseLabel: String {

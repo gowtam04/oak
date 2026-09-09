@@ -1,8 +1,10 @@
 /**
  * /moves/[slug] — a single move reference page: a fact table (type, damage
- * class, power, accuracy, PP, priority, target), effect prose, availability
- * chips, the full "Pokémon that can learn it" reverse roster (the crawl spine),
- * and an "Ask Oak" CTA.
+ * class, power, accuracy, PP, priority, target), effect prose, the full
+ * "Pokémon that can learn it" reverse roster (the crawl spine), and an
+ * "Ask Oak" CTA.
+ *
+ * Champions-only (CF-DEX-US-1): unknown slugs 404; no generation picker.
  *
  * Detail route config + dynamic-import + notFound rules: see /pokedex/[slug].
  */
@@ -16,7 +18,6 @@ import type {
   RefRosterEntry,
   RefRosterGroup,
 } from "@/components/reference/RefRosterList";
-import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
 import TypeBadge from "@/components/TypeBadge";
 import type { TypeName } from "@/agent/schemas";
@@ -74,6 +75,7 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ format?: string | string[] }>;
 }): Promise<Metadata> {
   const { slug } = await params;
   const { loadMovePage } = await import("@/data/reference-pages");
@@ -90,6 +92,7 @@ export default async function MoveDetailPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ format?: string | string[] }>;
 }) {
   const { slug } = await params;
   const { loadMovePage } = await import("@/data/reference-pages");
@@ -151,11 +154,6 @@ export default async function MoveDetailPage({
       )}
 
       <section className="ref-card ref-detail-section">
-        <h2 className="ref-detail-section__title">Availability</h2>
-        <FormatChips formats={data.availability} />
-      </section>
-
-      <section className="ref-card ref-detail-section">
         <h2 className="ref-detail-section__title">
           Pokémon that can learn {data.displayName} ({data.learnerCount})
         </h2>
@@ -163,7 +161,7 @@ export default async function MoveDetailPage({
           <RefRosterList groups={learnerGroups(data.learners)} />
         ) : (
           <p className="ref-intro">
-            No Pokémon in this scope can learn {data.displayName}.
+            No Pokémon on the Champions roster can learn {data.displayName}.
           </p>
         )}
       </section>

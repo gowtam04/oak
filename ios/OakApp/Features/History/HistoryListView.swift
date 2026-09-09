@@ -2,7 +2,9 @@ import SwiftUI
 
 /// The saved-conversation list (history-and-teams.md M-HIST-US-2; M-UI-US-4): a
 /// searchable, format-filterable list of conversations with native list patterns —
-/// swipe actions, context menus, and pull-to-refresh (M-AC-H2.5).
+/// context menus, pull-to-refresh (M-AC-H2.5), and a right-to-left swipe that
+/// opens a new chat (same as the FAB). Per-row swipe actions are omitted so that
+/// screen-level swipe is not stolen by delete/pin/archive.
 ///
 /// **Content-only / signed-in only.** It does not own a `NavigationStack` — the Chat
 /// tab's signed-in home embeds it inside its own stack (titled "Chats") and supplies
@@ -11,13 +13,12 @@ import SwiftUI
 /// ``HistoryListViewModel`` (`@State`) and drives it; all logic lives in the view
 /// model. Tapping a row hands the conversation back to the Chat tab via ``onSelect``,
 /// which pushes the thread route (load detail + resume into chat); ``onNewChat`` (the
-/// floating action disc) starts a fresh thread.
+/// floating action disc, and the screen-level RTL swipe) starts a fresh thread.
 ///
-/// Chrome (history polish, §5.4 + soul.md): a custom **sunken search pill** (not
-/// `.searchable`) pinned above the list, a **new-chat FAB** bottom-trailing, dense
-/// rows (title + engraved mono meta), an **OPEN stamp + lifted plate** marking the
-/// last-opened thread (never a red left rail), and a **filter cue** when a format
-/// filter is on.
+/// Chrome: a custom **paper search pill** (not `.searchable`) pinned above the
+/// list, a **red enamel new-chat FAB** bottom-trailing, dense paper rows (title
+/// + mono meta), an **Open stamp** marking the last-opened thread (never a red
+/// left rail), and a **filter cue** when a format filter is on.
 struct ConversationListView: View {
   @State private var model: HistoryListViewModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -38,8 +39,18 @@ struct ConversationListView: View {
   /// user returns (web `[data-active]` parity). In-memory only — no persistence.
   @State private var lastOpenedId: String?
 
-  /// Drives the custom search pill's focus grammar (azure border + glow).
+  @State private var showingBulkDeleteConfirm = false
+  @State private var showingNewFolder = false
+  @State private var newFolderName = ""
+  @State private var folderToDelete: ConversationFolder?
+  @State private var folderToRename: ConversationFolder?
+  @State private var folderRenameText = ""
+
+  /// Drives the custom search pill's focus grammar (poke-red border + halo).
   @FocusState private var searchFocused: Bool
+
+  /// Dedupes a row-level + list-level simultaneous swipe both firing at once.
+  @State private var lastNewChatSwipeAt: Date?
 
   init(
     model: HistoryListViewModel,
@@ -55,17 +66,76 @@ struct ConversationListView: View {
     @Bindable var model = model
     VStack(spacing: 0) {
       searchField($model.searchQuery)
-      if let filter = model.formatFilter {
-        activeFilterPill(filter)
-      }
+      includeArchivedToggle
       listContent
     }
+    .simultaneousGesture(newChatSwipe)
     .background(Theme.canvas)
     .overlay(alignment: .bottomTrailing) { newChatFAB }
     .toolbar {
-      ToolbarItem(placement: .topBarTrailing) {
-        formatFilterMenu
+      ToolbarItem(placement: .topBarLeading) {
+        organizeMenu
       }
+      .oakLidItem()
+      ToolbarItem(placement: .topBarTrailing) {
+        HStack {
+          Button(model.isSelecting ? "Done" : "Select") {
+            model.isSelecting.toggle()
+            if !model.isSelecting { /* selection cleared on Done via bulk */ }
+          }
+        }
+      }
+      .oakLidItem()
+    }
+    .safeAreaInset(edge: .bottom) {
+      if model.isSelecting, !model.selectedIds.isEmpty {
+        bulkBar
+      }
+    }
+    .alert("Delete conversations?", isPresented: $showingBulkDeleteConfirm) {
+      Button("Delete", role: .destructive) {
+        Task { await model.bulk(.delete) }
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("This permanently removes \(model.selectedIds.count) conversation(s).")
+    }
+    .alert("New folder", isPresented: $showingNewFolder) {
+      TextField("Name", text: $newFolderName)
+      Button("Create") {
+        let name = newFolderName
+        newFolderName = ""
+        Task { await model.createFolder(named: name) }
+      }
+      Button("Cancel", role: .cancel) { newFolderName = "" }
+    }
+    .alert("Rename folder", isPresented: Binding(
+      get: { folderToRename != nil },
+      set: { if !$0 { folderToRename = nil } }
+    )) {
+      TextField("Name", text: $folderRenameText)
+      Button("Save") {
+        if let folder = folderToRename {
+          let name = folderRenameText
+          Task { await model.renameFolder(folder, to: name) }
+        }
+        folderToRename = nil
+      }
+      Button("Cancel", role: .cancel) { folderToRename = nil }
+    }
+    .alert("Delete folder?", isPresented: Binding(
+      get: { folderToDelete != nil },
+      set: { if !$0 { folderToDelete = nil } }
+    )) {
+      Button("Delete folder", role: .destructive) {
+        if let folder = folderToDelete {
+          Task { await model.deleteFolder(folder) }
+        }
+        folderToDelete = nil
+      }
+      Button("Cancel", role: .cancel) { folderToDelete = nil }
+    } message: {
+      Text("Conversations in this folder become unfiled. They are not deleted.")
     }
     // Initial load; pull-to-refresh and search/filter changes re-fetch on their own.
     .task { await model.reload() }
@@ -85,10 +155,10 @@ struct ConversationListView: View {
 
   // MARK: Search field (custom sunken pill — replaces `.searchable`, §5.4)
 
-  /// A borderless sunken search pill: `surfaceSunken` fill, no border at rest, an
-  /// **azure** focus border + soft glow (interaction), a leading magnifier, and a
-  /// trailing clear button. Wired to the same `searchQuery`/`search()` behavior as
-  /// the old `.searchable`, submitting on return.
+  /// A paper search pill: `--surface` fill + hairline at rest, **poke-red**
+  /// focus border + 18% red halo, a leading magnifier, and a trailing clear
+  /// button. Wired to the same `searchQuery`/`search()` behavior as the old
+  /// `.searchable`, submitting on return.
   private func searchField(_ query: Binding<String>) -> some View {
     HStack(spacing: Theme.Spacing.sm) {
       Image(systemName: "magnifyingglass")
@@ -97,7 +167,7 @@ struct ConversationListView: View {
       TextField("Search conversations", text: query)
         .font(Theme.body(.callout))
         .foregroundStyle(Theme.textPrimary)
-        .tint(Theme.azure)
+        .tint(Theme.accent)
         .submitLabel(.search)
         .focused($searchFocused)
         .autocorrectionDisabled()
@@ -116,50 +186,35 @@ struct ConversationListView: View {
     }
     .padding(.horizontal, Theme.Spacing.md)
     .padding(.vertical, 10)
-    .background(Theme.surfaceSunken, in: Capsule())
+    .background(Theme.surface, in: Capsule())
     .overlay {
-      Capsule().strokeBorder(searchFocused ? Theme.azure : .clear, lineWidth: 1.5)
+      Capsule().strokeBorder(searchFocused ? Theme.accent : Theme.border, lineWidth: searchFocused ? 1.5 : 1)
     }
-    .shadow(color: searchFocused ? Theme.azure.opacity(0.28) : .clear, radius: 6)
+    .shadow(color: searchFocused ? Theme.accent.opacity(0.18) : .clear, radius: 4)
     .padding(.horizontal, Theme.Spacing.lg)
     .padding(.top, Theme.Spacing.sm)
-    .padding(.bottom, model.formatFilter == nil ? Theme.Spacing.sm : Theme.Spacing.xs)
+    .padding(.bottom, Theme.Spacing.sm)
     .animation(reduceMotion ? nil : Theme.Motion.snappy, value: searchFocused)
   }
 
-  // MARK: Active filter cue (dismissible scope pill, §5.4)
-
-  /// A dismissible pill naming the active format filter; tapping the ✕ clears it.
-  /// The toolbar filter icon is also tinted/filled while a filter is on.
-  private func activeFilterPill(_ format: Format) -> some View {
-    HStack(spacing: Theme.Spacing.xs) {
-      Text(format.shortLabel)
-        .instrumentLabel(.caption2)
-        .foregroundStyle(Theme.accent)
-      Button {
-        Task { await model.setFormatFilter(nil) }
-      } label: {
-        Image(systemName: "xmark")
-          .font(.system(size: 9, weight: .bold))
-          .foregroundStyle(Theme.accent)
-      }
-      .accessibilityLabel("Clear \(format.shortLabel) filter")
+  /// Search-only opt-in to include archived threads (ORG-AC-2.4).
+  @ViewBuilder
+  private var includeArchivedToggle: some View {
+    if !(model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+      Toggle("Include archived", isOn: $model.includeArchivedInSearch)
+        .font(Theme.body(.caption))
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.bottom, Theme.Spacing.xs)
+        .onChange(of: model.includeArchivedInSearch) { _, _ in
+          Task { await model.search() }
+        }
     }
-    .padding(.horizontal, Theme.Spacing.sm)
-    .padding(.vertical, 5)
-    .background(Theme.accentSoft, in: Capsule())
-    .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1))
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, Theme.Spacing.lg)
-    .padding(.bottom, Theme.Spacing.sm)
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel("Filtered to \(format.shortLabel)")
   }
 
   // MARK: New-chat FAB (§5.4)
 
-  /// A floating action disc, bottom-trailing above the tab bar — a one-handed reach
-  /// for "new chat" (replaces the top-right toolbar compose button on this screen).
+  /// Enamel 56pt new-chat disc, bottom-trailing above the tab bar — a
+  /// one-handed reach (replaces the top-right toolbar compose button).
   private var newChatFAB: some View {
     Button {
       Haptics.tap()
@@ -167,7 +222,7 @@ struct ConversationListView: View {
     } label: {
       Image(systemName: "square.and.pencil")
         .font(.system(size: 22, weight: .semibold))
-        .foregroundStyle(.white)
+        .foregroundStyle(Theme.onRed)
         .frame(width: 56, height: 56)
         .background(Theme.accent, in: Circle())
         .oakShadow(.raised)
@@ -176,6 +231,26 @@ struct ConversationListView: View {
     .padding(.trailing, Theme.Spacing.lg)
     .padding(.bottom, Theme.Spacing.lg)
     .accessibilityLabel("New chat")
+  }
+
+  // MARK: Screen swipe → new chat
+
+  /// Right-to-left swipe on the list (including on a row) opens a new chat.
+  /// Vertical-dominant drags are ignored so scrolling and pull-to-refresh win.
+  /// Disabled in Select mode. Debounced so a parent + row simultaneous
+  /// recognizer cannot push `.new` twice.
+  private var newChatSwipe: some Gesture {
+    DragGesture(minimumDistance: 40)
+      .onEnded { value in
+        guard !model.isSelecting else { return }
+        let dx = value.translation.width
+        let dy = value.translation.height
+        guard dx < -72, abs(dx) > abs(dy) * 1.2 else { return }
+        if let last = lastNewChatSwipeAt, Date().timeIntervalSince(last) < 0.4 { return }
+        lastNewChatSwipeAt = Date()
+        Haptics.tap()
+        onNewChat()
+      }
   }
 
   // MARK: List
@@ -228,18 +303,28 @@ struct ConversationListView: View {
     model.conversations.filter { !$0.pinned }
   }
 
-  /// One row's full interaction surface (tap, swipe actions, context menu),
-  /// factored out so both the "Pinned" section and the main list share it.
+  /// One row's full interaction surface (tap, context menu). A right-to-left
+  /// swipe on the row opens a new chat rather than revealing row actions.
   @ViewBuilder
   private func conversationRow(_ conversation: ConversationSummary) -> some View {
-    // Active = last-opened thread: lifted mini-plate + mono OPEN stamp (soul.md).
+    // Active = last-opened thread: poke-red-soft paper row + Open stamp.
     // Never a red left selection rail. Pinned is still the pin glyph only.
     let isActive = conversation.id == lastOpenedId
     Button {
-      lastOpenedId = conversation.id
-      onSelect(conversation)
+      if model.isSelecting {
+        model.toggleSelected(conversation.id)
+      } else {
+        lastOpenedId = conversation.id
+        onSelect(conversation)
+      }
     } label: {
-      ConversationRow(conversation: conversation, isOpen: isActive)
+      HStack {
+        if model.isSelecting {
+          Image(systemName: model.selectedIds.contains(conversation.id) ? "checkmark.circle.fill" : "circle")
+            .foregroundStyle(Theme.accent)
+        }
+        ConversationRow(conversation: conversation, isOpen: isActive)
+      }
     }
     .buttonStyle(.plain)
     .listRowInsets(
@@ -254,39 +339,22 @@ struct ConversationListView: View {
       Group {
         if isActive {
           RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-            .fill(Theme.surface)
+            .fill(Theme.accentSoft)
             .overlay {
               RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                .strokeBorder(Theme.borderStrong, lineWidth: 1)
+                .strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1)
             }
-            .oakShadow(.card)
             .padding(.vertical, 2)
         } else {
-          Color.clear
+          Theme.surface
         }
       }
     )
+    .listRowSeparatorTint(Theme.separator)
     .listRowSeparator(isActive ? .hidden : .automatic)
     // Separator aligned to the text, not the row edge.
     .alignmentGuide(.listRowSeparatorLeading) { _ in Theme.Spacing.lg }
-    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-      Button(role: .destructive) {
-        Task { await model.delete(conversation) }
-      } label: {
-        Label("Delete", systemImage: "trash")
-      }
-    }
-    .swipeActions(edge: .leading) {
-      Button {
-        Task { await model.togglePin(conversation) }
-      } label: {
-        Label(
-          conversation.pinned ? "Unpin" : "Pin",
-          systemImage: conversation.pinned ? "pin.slash" : "pin"
-        )
-      }
-      .tint(Theme.accent)
-    }
+    .simultaneousGesture(newChatSwipe)
     .contextMenu {
       Button {
         renameText = conversation.title
@@ -302,12 +370,90 @@ struct ConversationListView: View {
           systemImage: conversation.pinned ? "pin.slash" : "pin"
         )
       }
+      Button {
+        Task { await model.archive(conversation) }
+      } label: {
+        Label(conversation.archived ? "Unarchive" : "Archive", systemImage: "archivebox")
+      }
+      Menu("Move to folder") {
+        Button("Unfiled") {
+          Task { await model.move(conversation, to: nil) }
+        }
+        ForEach(model.folders) { folder in
+          Button(folder.name) {
+            Task { await model.move(conversation, to: folder.id) }
+          }
+        }
+      }
+      Menu("Export") {
+        Button("Markdown") {
+          Task { await export(conversation, as: .markdown) }
+        }
+        Button("PDF") {
+          Task { await export(conversation, as: .pdf) }
+        }
+      }
       Button(role: .destructive) {
         Task { await model.delete(conversation) }
       } label: {
         Label("Delete", systemImage: "trash")
       }
     }
+  }
+
+  private var organizeMenu: some View {
+    Menu {
+      Button("All") { Task { await model.showAll() } }
+      Button("Unfiled") { Task { await model.showUnfiled() } }
+      ForEach(model.folders) { folder in
+        Button(folder.name) { Task { await model.showFolder(folder.id) } }
+      }
+      Button("Archive") { Task { await model.showArchive() } }
+      Divider()
+      Button("New folder") { showingNewFolder = true }
+      if let current = model.folders.first(where: { $0.id == model.folderFilter }) {
+        Button("Rename “\(current.name)”") {
+          folderRenameText = current.name
+          folderToRename = current
+        }
+        Button("Delete “\(current.name)”", role: .destructive) {
+          folderToDelete = current
+        }
+      }
+    } label: {
+      Label(
+        FolderSupport.filterLabel(
+          showingArchive: model.showingArchive,
+          folderFilter: model.folderFilter,
+          folders: model.folders
+        ),
+        systemImage: "folder"
+      )
+    }
+  }
+
+  private var bulkBar: some View {
+    HStack {
+      Button("Archive") { Task { await model.bulk(model.showingArchive ? .unarchive : .archive) } }
+      Menu("Move") {
+        Button("Unfiled") { Task { await model.bulk(.move, folderId: nil) } }
+        ForEach(model.folders) { folder in
+          Button(folder.name) { Task { await model.bulk(.move, folderId: folder.id) } }
+        }
+      }
+      Spacer()
+      Button("Delete", role: .destructive) { showingBulkDeleteConfirm = true }
+    }
+    .padding()
+    .background(Theme.surface)
+    .overlay(alignment: .top) {
+      Rectangle().fill(Theme.separator).frame(height: 1)
+    }
+  }
+
+  private func export(_ conversation: ConversationSummary, as format: ConversationExportFormat) async {
+    guard let url = await model.export(conversation, as: format) else { return }
+    SystemShare.present(items: [url])
   }
 
   /// Eight skeleton rows shown while the first page is loading, replacing the
@@ -322,39 +468,7 @@ struct ConversationListView: View {
     .listStyle(.plain)
     .scrollContentBackground(.hidden)
     .background(Theme.canvas)
-  }
-
-  /// Format filter spanning every known scope (`Format.knownCases`) — mirrors the
-  /// Teams list's filter and `FORMATS` in full so every conversation scope is
-  /// reachable from the history list. The icon fills + tints accent while a filter
-  /// is active (paired with the dismissible pill — never color alone).
-  private var formatFilterMenu: some View {
-    Menu {
-      filterButton(title: "All", format: nil)
-      ForEach(Format.knownCases, id: \.self) { format in
-        filterButton(title: format.shortLabel, format: format)
-      }
-    } label: {
-      Label(
-        "Filter",
-        systemImage: model.formatFilter == nil
-          ? "line.3.horizontal.decrease.circle"
-          : "line.3.horizontal.decrease.circle.fill"
-      )
-    }
-  }
-
-  @ViewBuilder
-  private func filterButton(title: String, format: Format?) -> some View {
-    Button {
-      Task { await model.setFormatFilter(format) }
-    } label: {
-      if model.formatFilter == format {
-        Label(title, systemImage: "checkmark")
-      } else {
-        Text(title)
-      }
-    }
+    .simultaneousGesture(newChatSwipe)
   }
 
   // MARK: Empty / error states
@@ -376,11 +490,11 @@ struct ConversationListView: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Theme.canvas)
+    .simultaneousGesture(newChatSwipe)
   }
 
   private var searchActive: Bool {
     !model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-      || model.formatFilter != nil
   }
 
   // MARK: Rename alert binding
@@ -409,10 +523,9 @@ private struct FloatingActionButtonStyle: ButtonStyle {
   }
 }
 
-/// One conversation row: the title and an engraved mono meta line ("GEN 9 · 19H
-/// AGO"). When `isOpen`, a mono **OPEN** stamp trails (soul.md history selection —
-/// never a red rail). Color is never the sole signal — the format is shown as text
-/// (M-AC-UI9.3 / conventions.md).
+/// One conversation row: the title and a mono meta line ("GEN 9 · 19H AGO").
+/// When `isOpen`, an **Open** stamp trails (never a red rail). Color is never
+/// the sole signal — the format is shown as text (M-AC-UI9.3).
 private struct ConversationRow: View {
   let conversation: ConversationSummary
   /// True when this is the last-opened / active thread — shows the OPEN stamp.
@@ -446,11 +559,11 @@ private struct ConversationRow: View {
           .padding(.horizontal, 7)
           .padding(.vertical, 3)
           .background(
-            Theme.accent.opacity(0.08),
-            in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+            Theme.accentSoft,
+            in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
           )
           .overlay {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
+            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
               .strokeBorder(Theme.accent.opacity(0.35), lineWidth: 1)
           }
           .accessibilityLabel("Open")
@@ -477,7 +590,13 @@ private struct ConversationRow: View {
 /// A preview-only ``HistoryService`` returning a small static list without the
 /// network, so the canvas renders the conversation list. Confined to this file.
 private struct PreviewHistoryService: HistoryService {
-  func list(query: String?, format: Format?) async throws -> [ConversationSummary] {
+  func list(
+    query: String?,
+    format: Format?,
+    folderId: String?,
+    archived: Bool?,
+    includeArchived: Bool
+  ) async throws -> [ConversationSummary] {
     [
       ConversationSummary(
         id: "1", title: "Garchomp's best moveset",
@@ -496,6 +615,22 @@ private struct PreviewHistoryService: HistoryService {
   func setPinned(id: String, pinned: Bool) async throws {}
   func delete(id: String) async throws {}
   func importGuestThread(sessionId: String, format: Format, turns: [ChatTurn]) async throws -> String? { nil }
+  func listFolders() async throws -> [ConversationFolder] { [] }
+  func createFolder(name: String) async throws -> ConversationFolder {
+    ConversationFolder(id: "f1", name: name, createdAt: 0)
+  }
+  func renameFolder(id: String, name: String) async throws {}
+  func deleteFolder(id: String) async throws {}
+  func setArchived(id: String, archived: Bool) async throws {}
+  func setFolder(id: String, folderId: String?) async throws {}
+  func bulkUpdate(ids: [String], action: BulkConversationAction, folderId: String?) async throws -> BulkUpdateResponse {
+    BulkUpdateResponse(updated: ids, skipped: [])
+  }
+  func setTurnPinned(conversationId: String, messageId: String, pinned: Bool) async throws -> [String] { [] }
+  func fork(conversationId: String, throughMessageId: String) async throws -> ForkResponse {
+    ForkResponse(id: "fork", title: "Preview (fork)")
+  }
+  func exportConversation(id: String, format: ConversationExportFormat) async throws -> Data { Data() }
 }
 
 #Preview("Conversations") {
@@ -507,5 +642,6 @@ private struct PreviewHistoryService: HistoryService {
     .navigationTitle("Chats")
     .navigationBarTitleDisplayMode(.inline)
   }
+  .oakEnamelNav()
 }
 #endif

@@ -8,13 +8,23 @@ import SwiftUI
 /// only to the Oak backend over HTTP/SSE (plus App Store Lookup for soft-update).
 @main
 struct OakApp: App {
-  @State private var appState = AppState()
+  @State private var appState = AppState(
+    appearanceStore: UserDefaultsAppearanceStore(),
+    regulationStore: UserDefaultsRegulationStore()
+  )
   @State private var updateModel: UpdateViewModel
   private let services: ServiceContainer
 
   init() {
-    // Paint the nav/tab bars onto Oak's canvas paper (not Apple's system
-    // material) before the first frame renders.
+    // Dex list + other sprite traffic; media responses are
+    // `Cache-Control: public, max-age=604800, immutable`.
+    URLCache.shared = URLCache(
+      memoryCapacity: 16 * 1024 * 1024,
+      diskCapacity: 80 * 1024 * 1024,
+      directory: nil
+    )
+    // Paint the enamel nav lid (not Apple's system material / Liquid Glass)
+    // before the first frame renders. The visible tab dock is `OakTabDock`.
     OakChrome.applyBarAppearance()
     let services = ServiceContainer.live()
     self.services = services
@@ -40,5 +50,7 @@ struct OakApp: App {
       .environment(appState)
       .environment(updateModel)
       .oakServices(services)
+      // `nil` (System) follows the iPhone setting; Light/Dark override it.
+      .preferredColorScheme(appState.appearance.colorScheme)
   }
 }

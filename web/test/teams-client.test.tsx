@@ -62,21 +62,39 @@ afterEach(() => {
 });
 
 describe("listTeams", () => {
-  it("returns the teams array on success and forwards the format filter", async () => {
+  it("returns the teams array on success and forwards format=champions", async () => {
     const summary = {
       id: "t1",
       name: "Rain",
-      format: "scarlet-violet",
+      format: "champions",
       memberCount: 1,
       incomplete: true,
       updatedAt: 2000,
     };
     const fn = stubFetch(async () => res(200, { teams: [summary] }));
-    const out = await listTeams({ format: "scarlet-violet" });
+    const out = await listTeams({ format: "champions" });
     expect(out).toEqual([summary]);
     expect(fn).toHaveBeenCalledWith(
-      "/api/teams?format=scarlet-violet",
+      "/api/teams?format=champions",
       expect.objectContaining({ method: "GET", credentials: "same-origin" }),
+    );
+  });
+
+  it("sends ?archived=1 when archived is true", async () => {
+    const fn = stubFetch(async () => res(200, { teams: [] }));
+    await listTeams({ archived: true });
+    expect(fn).toHaveBeenCalledWith(
+      "/api/teams?archived=1",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("sends format=champions and omits archived when both are set", async () => {
+    const fn = stubFetch(async () => res(200, { teams: [] }));
+    await listTeams({ format: "champions", archived: true });
+    expect(fn).toHaveBeenCalledWith(
+      "/api/teams?format=champions",
+      expect.anything(),
     );
   });
 
@@ -136,19 +154,18 @@ describe("getTeam", () => {
 describe("createTeam", () => {
   it("POSTs the input and returns the saved TeamDetail", async () => {
     const fn = stubFetch(async () => res(200, { team: TEAM, validation: [] }));
-    const out = await createTeam({ format: "scarlet-violet", name: "Rain" });
+    const out = await createTeam({ name: "Rain" });
     expect(out?.id).toBe("t1");
     const init = fn.mock.calls[0][1] as RequestInit;
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({
-      format: "scarlet-violet",
       name: "Rain",
     });
   });
 
   it("returns null for a guest (401)", async () => {
     stubFetch(async () => res(401, {}));
-    expect(await createTeam({ format: "scarlet-violet" })).toBeNull();
+    expect(await createTeam({ name: "x" })).toBeNull();
   });
 });
 

@@ -6,23 +6,37 @@
  * The entity-client is mocked so there is no network.
  */
 
+import type { ComponentType } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, act, waitFor, fireEvent, cleanup } from "@testing-library/react";
 
 vi.mock("@/lib/api/entity-client", () => ({ fetchEntityArtifact: vi.fn() }));
 
+const { createPinnedArtifact } = vi.hoisted(() => ({
+  createPinnedArtifact: vi.fn(),
+}));
+vi.mock("@/lib/api/artifact-pin-client", () => ({
+  createPinnedArtifact,
+  listPinnedArtifacts: vi.fn().mockResolvedValue([]),
+  deletePinnedArtifact: vi.fn(),
+  getPinnedArtifact: vi.fn(),
+}));
+
 import { fetchEntityArtifact } from "@/lib/api/entity-client";
-import { DAMAGE_CALC_GARCHOMP } from "@/components/test-fixtures";
+import { DAMAGE_CALC_GARCHOMP, SUBJECT_GARCHOMP } from "@/components/test-fixtures";
 
 import { ArtifactViewerProvider } from "./ArtifactViewerProvider";
 import ArtifactViewer from "./ArtifactViewer";
 import { useArtifactViewer } from "./useArtifactViewer";
 import type { ArtifactViewerApi } from "./types";
 import {
+  ABILITY_ARTIFACT,
+  ITEM_ARTIFACT,
   MOVE_ARTIFACT,
   NOT_FOUND_ARTIFACT,
   POKEMON_ARTIFACT,
   POKEMON_ARTIFACT_ND_FALLBACK,
+  TYPE_ARTIFACT,
   UNAVAILABLE_ARTIFACT,
 } from "./artifact-fixtures";
 
@@ -263,5 +277,216 @@ describe("ArtifactViewer — structured + controls", () => {
       fireEvent.keyDown(window, { key: "Escape" });
     });
     expect(screen.queryByTestId("artifact-viewer")).toBeNull();
+  });
+});
+
+/**
+ * P6 — header verbs: Open in Dex (four kinds only), Compare with…, Pin
+ * (rich artifacts, signed-in), Add to team (Pokémon, signed-in).
+ *
+ * Extra props (`signedIn`, `conversationId`, `onPinCap`) are passed at
+ * runtime before ArtifactViewer declares them.
+ *
+ * Requirement refs: DEX-US-1, DEX-AC-1.1–1.4, DEX-BR-2, CMP-US-1,
+ * PIN-US-1, PIN-AC-1.1–1.4, PIN-AC-3.1, ADD-US-1, AUTH-BR-1.
+ */
+type ViewerP6Props = {
+  signedIn?: boolean;
+  conversationId?: string;
+};
+
+function mountP6(over: ViewerP6Props = {}) {
+  const Viewer = ArtifactViewer as unknown as ComponentType<ViewerP6Props>;
+  return render(
+    <ArtifactViewerProvider format="scarlet-violet">
+      <Capture />
+      <Viewer signedIn={over.signedIn} conversationId={over.conversationId} />
+    </ArtifactViewerProvider>,
+  );
+}
+
+async function openOk(artifact: typeof POKEMON_ARTIFACT | typeof MOVE_ARTIFACT | typeof ABILITY_ARTIFACT | typeof ITEM_ARTIFACT | typeof TYPE_ARTIFACT) {
+  vi.mocked(fetchEntityArtifact).mockResolvedValue(artifact);
+  await act(async () => {
+    api.openEntity({ kind: artifact.kind, q: artifact.resolved.slug });
+  });
+}
+
+describe("ArtifactViewer — Open in Dex (DEX-US-1, DEX-BR-2)", () => {
+  it("opens the Pokémon Dex profile with the artifact format (DEX-AC-1.1, DEX-AC-2.1)", async () => {
+    mountP6();
+    await openOk(POKEMON_ARTIFACT);
+    const dex = screen.getByRole("link", { name: /open in dex/i });
+    expect(dex).toHaveAttribute("href", "/pokedex/garchomp?format=scarlet-violet");
+  });
+
+  it("opens move / ability / item Dex pages with ?format= (DEX-AC-1.1, DEX-BR-2)", async () => {
+    mountP6();
+    await openOk(MOVE_ARTIFACT);
+    expect(screen.getByRole("link", { name: /open in dex/i })).toHaveAttribute(
+      "href",
+      "/moves/earthquake?format=scarlet-violet",
+    );
+
+    await act(async () => {
+      api.close();
+    });
+    await openOk(ABILITY_ARTIFACT);
+    expect(screen.getByRole("link", { name: /open in dex/i })).toHaveAttribute(
+      "href",
+      "/abilities/rough-skin?format=scarlet-violet",
+    );
+
+    await act(async () => {
+      api.close();
+    });
+    await openOk(ITEM_ARTIFACT);
+    expect(screen.getByRole("link", { name: /open in dex/i })).toHaveAttribute(
+      "href",
+      "/items/leftovers?format=scarlet-violet",
+    );
+  });
+
+  it("does not offer Open in Dex on a type artifact (DEX-AC-1.3, DEX-BR-2)", async () => {
+    mountP6();
+    await openOk(TYPE_ARTIFACT);
+    expect(screen.getByTestId("artifact-viewer")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /open in dex/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /open in dex/i })).toBeNull();
+  });
+
+  it("is available to guests on the four kinds (DEX-AC-1.4)", async () => {
+    mountP6({ signedIn: false });
+    await openOk(POKEMON_ARTIFACT);
+    expect(screen.getByRole("link", { name: /open in dex/i })).toBeInTheDocument();
+  });
+});
+
+describe("ArtifactViewer — Compare with… (CMP-US-1)", () => {
+  it("offers Compare with… on a Pokémon artifact (CMP-AC-1.1)", async () => {
+    mountP6();
+    await openOk(POKEMON_ARTIFACT);
+    expect(
+      screen.getByRole("button", { name: /compare with/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not offer Compare with… on type / move / ability / item", async () => {
+    mountP6();
+    await openOk(TYPE_ARTIFACT);
+    expect(screen.queryByRole("button", { name: /compare with/i })).toBeNull();
+    await act(async () => {
+      api.close();
+    });
+    await openOk(MOVE_ARTIFACT);
+    expect(screen.queryByRole("button", { name: /compare with/i })).toBeNull();
+  });
+});
+
+describe("ArtifactViewer — Pin (PIN-US-1, AUTH-BR-1)", () => {
+  it("shows Pin on team / comparison / calc when signed in (PIN-AC-1.1)", async () => {
+    mountP6({ signedIn: true, conversationId: "conv-1" });
+    act(() =>
+      api.openStructured({
+        kind: "damage-calc",
+        damageCalc: DAMAGE_CALC_GARCHOMP,
+      }),
+    );
+    expect(screen.getByRole("button", { name: /^pin$/i })).toBeInTheDocument();
+
+    await act(async () => {
+      api.close();
+    });
+    act(() =>
+      api.openStructured({
+        kind: "comparison",
+        subjects: [SUBJECT_GARCHOMP],
+      }),
+    );
+    expect(screen.getByRole("button", { name: /^pin$/i })).toBeInTheDocument();
+
+    await act(async () => {
+      api.close();
+    });
+    act(() =>
+      api.openTeam({
+        team: {
+          name: "Rain",
+          format: "scarlet-violet",
+          members: [],
+        },
+      }),
+    );
+    expect(screen.getByRole("button", { name: /^pin$/i })).toBeInTheDocument();
+  });
+
+  it("has no Pin on entity artifacts (PIN-AC-1.2)", async () => {
+    mountP6({ signedIn: true, conversationId: "conv-1" });
+    await openOk(POKEMON_ARTIFACT);
+    expect(screen.queryByRole("button", { name: /^pin$/i })).toBeNull();
+    await act(async () => {
+      api.close();
+    });
+    await openOk(MOVE_ARTIFACT);
+    expect(screen.queryByRole("button", { name: /^pin$/i })).toBeNull();
+    await act(async () => {
+      api.close();
+    });
+    await openOk(TYPE_ARTIFACT);
+    expect(screen.queryByRole("button", { name: /^pin$/i })).toBeNull();
+  });
+
+  it("hides Pin for guests — absent, not disabled (PIN-AC-1.4, AUTH-BR-1)", () => {
+    mountP6({ signedIn: false, conversationId: "conv-1" });
+    act(() =>
+      api.openStructured({
+        kind: "damage-calc",
+        damageCalc: DAMAGE_CALC_GARCHOMP,
+      }),
+    );
+    expect(screen.queryByRole("button", { name: /^pin$/i })).toBeNull();
+    expect(screen.queryByText(/^pin$/i)).toBeNull();
+  });
+
+  it("explains the 5-pin cap instead of replacing an existing pin (PIN-AC-3.1)", async () => {
+    createPinnedArtifact.mockResolvedValue({
+      ok: false,
+      error: "pin_cap",
+      max: 5,
+    });
+    mountP6({ signedIn: true, conversationId: "conv-1" });
+    act(() =>
+      api.openStructured({
+        kind: "damage-calc",
+        damageCalc: DAMAGE_CALC_GARCHOMP,
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^pin$/i }));
+    expect(await screen.findByTestId("pin-cap-message")).toHaveTextContent(
+      /5|five/i,
+    );
+  });
+});
+
+describe("ArtifactViewer — Add to team on Pokémon (ADD-US-1, AUTH-BR-1)", () => {
+  it("shows Add to team on a Pokémon artifact when signed in (ADD-AC-1.1)", async () => {
+    mountP6({ signedIn: true });
+    await openOk(POKEMON_ARTIFACT);
+    expect(
+      screen.getByRole("button", { name: /add to team/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides Add to team for guests — absent, not disabled (ADD-AC-1.2, AUTH-BR-1)", async () => {
+    mountP6({ signedIn: false });
+    await openOk(POKEMON_ARTIFACT);
+    expect(screen.queryByRole("button", { name: /add to team/i })).toBeNull();
+    expect(screen.queryByText(/add to team/i)).toBeNull();
+  });
+
+  it("does not put Add to team on move / type artifacts", async () => {
+    mountP6({ signedIn: true });
+    await openOk(MOVE_ARTIFACT);
+    expect(screen.queryByRole("button", { name: /add to team/i })).toBeNull();
   });
 });

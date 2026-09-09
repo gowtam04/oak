@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type { MarkdownProps } from "@/components/types";
+import { stripHtmlComments } from "@/lib/strip-html-comments";
 
 /**
  * GFM tables need a real table layout (so columns hug content) plus an
@@ -32,9 +33,11 @@ const markdownComponents = {
  * and the in-flight streaming bubble (ChatThread).
  *
  * GFM is enabled (remark-gfm) so pipe tables, strikethrough, autolinks, and
- * task-lists render. NO `rehype-raw` / raw-HTML pass-through: `answer_markdown`
- * and `reasoning_markdown` are model output, so we keep react-markdown's
- * default-safe posture (raw HTML is ignored, `javascript:` URLs are stripped).
+ * task-lists render. HTML comments (citation-span markers) are stripped before
+ * parse so they never leak as visible text. NO `rehype-raw` / raw-HTML
+ * pass-through: `answer_markdown` and `reasoning_markdown` are model output, so
+ * we keep react-markdown's default-safe posture (raw HTML is ignored,
+ * `javascript:` URLs are stripped).
  *
  * react-markdown v9+ dropped the `className` prop on the component itself, so the
  * wrapper `<div className="markdown-body">` is both required and the single CSS
@@ -50,7 +53,7 @@ export default function Markdown({ markdown, className }: MarkdownProps) {
         remarkPlugins={[remarkGfm]}
         components={markdownComponents}
       >
-        {markdown}
+        {stripHtmlComments(markdown)}
       </ReactMarkdown>
     </div>
   );

@@ -45,17 +45,23 @@ enum Format: Sendable, Hashable {
   /// A format string not in the known eleven — preserves the original wire value.
   case unknown(String)
 
-  /// The known, orderable formats in scope-picker DISPLAY order — the default
-  /// (National Dex) first, then Champions/Scarlet-Violet, then by release date
-  /// descending (Gen 8 → Gen 1). This no longer mirrors the `FORMATS` array in
-  /// `formats.ts` (which stays in its own order to feed ingest/prompt
-  /// lock-steps); web exposes the same display order via a separate
-  /// `SCOPE_PICKER_ORDER` constant. Backs the eleven-way format pickers/filters;
-  /// `.unknown` is deliberately excluded (it has no fixed identity to list).
+  /// The known, orderable formats in historical DISPLAY order. `knownCases`
+  /// stays the eleven-value union so archived teams / old conversations still
+  /// decode (ADR-3). Living pickers use ``pickerCases`` (Champions only).
   static let knownCases: [Format] = [
     .nationalDex, .champions, .scarletViolet, .gen8, .gen7, .gen6, .gen5, .gen4, .gen3, .gen2,
     .gen1,
   ]
+
+  /// Champions-first pickers (CF-UI-AC-1.1). National Dex / Gens 1–8 remain on
+  /// ``knownCases`` for JSON decode of archived rows.
+  static let pickerCases: [Format] = [.champions]
+
+  /// Living reference / teams are Champions; any other stored format is archive.
+  var isLiving: Bool { self == .champions }
+
+  /// Inverse of ``isLiving`` — derived, no `archived_at` column (ADR-3).
+  var isArchived: Bool { self != .champions }
 
   /// The wire string for a known case, or the original raw string for `.unknown`.
   var rawValue: String {
@@ -114,15 +120,14 @@ enum Format: Sendable, Hashable {
     }
   }
 
-  /// A fuller display label with the game-pair/regulation suffix — mirrors
-  /// `scopeLabel` in `web/src/lib/scope/scope-label.ts` exactly. The Champions
-  /// regulation string is duplicated from web's `CHAMPIONS_REGULATION` (no
-  /// shared module between the two clients); update it here when that rotates.
-  /// `.unknown` echoes its raw value.
+  /// A fuller display label with the game-pair suffix — mirrors `scopeLabel`
+  /// in `web/src/lib/scope/scope-label.ts` for archived formats. Champions
+  /// is `"Champions"` here; the live regulation letter lives on the chip
+  /// (`GET /api/scope`), not this enum. `.unknown` echoes its raw value.
   var displayLabel: String {
     switch self {
     case .nationalDex: return "National Dex · All Gens"
-    case .champions: return "Champions · Reg M-B"
+    case .champions: return "Champions"
     case .scarletViolet: return "Gen 9 · Scarlet/Violet"
     case .gen8: return "Gen 8 · Sword/Shield"
     case .gen7: return "Gen 7 · USUM"
@@ -256,6 +261,7 @@ struct TeamWarning: Codable, Sendable, Equatable {
     case abilityNotForSpecies = "ability_not_for_species"
     case itemIllegal = "item_illegal"
     case moveNotInLearnset = "move_not_in_learnset"
+    case learnsetUnavailable = "learnset_unavailable"
     case duplicateSpecies = "duplicate_species"
     case duplicateItem = "duplicate_item"
   }

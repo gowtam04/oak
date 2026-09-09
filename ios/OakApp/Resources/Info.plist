@@ -26,25 +26,17 @@
 	<dict/>
 	<!-- Brand typefaces (Google Fonts, OFL) bundled under Resources/Fonts/ and
 	     registered here so `Font.custom` can resolve them by PostScript name:
-	     Figtree (display/body), IBM Plex Mono (fact tables). The previous
-	     Space Grotesk / Inter / JetBrains faces stay registered so leftover
-	     OakChrome UIFont(name:) calls do not silently fall back. -->
+	     Fredoka (display), Nunito Sans (body), JetBrains Mono (fact tables). -->
 	<key>UIAppFonts</key>
 	<array>
-		<string>Figtree-Regular.ttf</string>
-		<string>Figtree-Medium.ttf</string>
-		<string>Figtree-SemiBold.ttf</string>
-		<string>IBMPlexMono-Regular.ttf</string>
-		<string>IBMPlexMono-Medium.ttf</string>
-		<string>SpaceGrotesk-Medium.ttf</string>
-		<string>SpaceGrotesk-SemiBold.ttf</string>
-		<string>SpaceGrotesk-Bold.ttf</string>
-		<string>Inter-Regular.ttf</string>
-		<string>Inter-Medium.ttf</string>
-		<string>Inter-SemiBold.ttf</string>
-		<string>Inter-Bold.ttf</string>
 		<string>JetBrainsMono-Medium.ttf</string>
 		<string>JetBrainsMono-SemiBold.ttf</string>
+		<string>Fredoka-Medium.ttf</string>
+		<string>Fredoka-SemiBold.ttf</string>
+		<string>NunitoSans-Regular.ttf</string>
+		<string>NunitoSans-Medium.ttf</string>
+		<string>NunitoSans-SemiBold.ttf</string>
+		<string>NunitoSans-Bold.ttf</string>
 	</array>
 	<!-- Portrait-only (iPhone, M-CON-2): a chat/team-builder UI that matches the
 	     portrait App Store screenshots. -->

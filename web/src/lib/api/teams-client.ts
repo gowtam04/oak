@@ -89,15 +89,23 @@ function toDetail(body: Record<string, unknown>): TeamDetail | null {
 }
 
 /**
- * `GET /api/teams?format=…` — the signed-in account's team summaries. A guest
- * (401), or any failure, yields `[]`.
+ * `GET /api/teams` — living Champions summaries by default. Pass
+ * `{ archived: true }` for `?archived=1`. `{ format: "champions" }` is the
+ * living list (wins over `archived`). A guest (401), or any failure, yields `[]`.
  */
 export async function listTeams(opts?: {
   format?: string;
+  archived?: boolean;
 }): Promise<TeamSummary[]> {
   try {
     const params = new URLSearchParams();
-    if (opts?.format) params.set("format", opts.format);
+    if (opts?.format === "champions") {
+      params.set("format", "champions");
+    } else if (opts?.archived) {
+      params.set("archived", "1");
+    } else if (opts?.format) {
+      params.set("format", opts.format);
+    }
     const qs = params.toString();
     const res = await fetch(`/api/teams${qs ? `?${qs}` : ""}`, {
       method: "GET",
@@ -133,7 +141,8 @@ export async function getTeam(id: string): Promise<TeamDetail | null> {
  */
 export async function createTeam(input: {
   name?: string;
-  format: string;
+  /** Ignored by the server; living teams are always champions. */
+  format?: string;
   members?: TeamMember[];
 }): Promise<TeamDetail | null> {
   try {

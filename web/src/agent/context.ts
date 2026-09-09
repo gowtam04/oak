@@ -38,6 +38,7 @@ import { DEFAULT_MODEL_KEY, type ModelKey } from "@/agent/models";
 import type {
   AgentContext,
   AgentMode,
+  BoundTeam,
   DbCtx,
   ImageAttachment,
 } from "@/agent/types";
@@ -87,6 +88,12 @@ export interface CreateAgentContextOptions {
    * default) means a text-only turn. Server-controlled like `activeTeam`.
    */
   images?: ImageAttachment[];
+  /**
+   * Saved teams @mentioned on this turn (already resolved by the route).
+   * Bound straight onto `AgentContext.boundTeams`; `undefined`/empty (the
+   * default) means no mentions.
+   */
+  boundTeams?: BoundTeam[];
 }
 
 /**
@@ -146,6 +153,7 @@ export async function createAgentContext(
     sessionId: opts.sessionId,
     proposedTeam: opts.proposedTeam,
     images: opts.images,
+    boundTeams: opts.boundTeams,
   };
 }
 

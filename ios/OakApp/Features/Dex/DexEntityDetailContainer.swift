@@ -83,7 +83,7 @@ struct DexEntityDetailContainer: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(Theme.Spacing.lg)
-    .oakSpecimenPlate(.mechanics)
+    .oakCard()
     .padding(Theme.Spacing.sm)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Loading")
@@ -94,7 +94,7 @@ struct DexEntityDetailContainer: View {
       Label("Couldn't open \(query)", systemImage: "questionmark.circle")
     } description: {
       Text(
-        "Oak doesn't have a \(kind.rawValue) profile for \u{201C}\(query)\u{201D} in this format."
+        "\u{201C}\(query)\u{201D} is not in the Champions roster."
       )
     } actions: {
       if !suggestions.isEmpty {

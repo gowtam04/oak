@@ -33,9 +33,11 @@ struct TeamsAssistantSheet: View {
         ToolbarItem(placement: .topBarTrailing) {
           Button("Done") { dismiss() }
         }
+        .oakLidItem()
       }
       .onDisappear { model.cancel() }
     }
+    .oakEnamelNav()
   }
 
   // MARK: Thread
@@ -61,8 +63,8 @@ struct TeamsAssistantSheet: View {
           if let errorMessage = model.errorMessage {
             ErrorBanner(
               message: errorMessage,
-              retryTitle: "Retry",
-              onRetry: { model.retry() }
+              retryTitle: model.errorIsRetryable ? "Retry" : nil,
+              onRetry: model.errorIsRetryable ? { model.retry() } : nil
             )
             .id(errorAnchor)
           }

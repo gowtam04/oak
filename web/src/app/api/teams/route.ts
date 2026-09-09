@@ -1,16 +1,20 @@
 /**
  * `/api/teams` — list / create saved teams
- * (docs/features/team-builder § API Design; TEAM-US-1, TEAM-US-3, TEAM-US-4,
- * BR-T2, BR-T4).
+ * (docs/features/champions-first/architecture/api-design.md; CF-TEAM-US-1,
+ * CF-TEAM-AC-1.1, CF-TEAM-AC-1.7, CF-TEAM-AC-5.1, CF-DATA-BR-9).
  *
- *   GET  ?format=<scarlet-violet|champions>  → 200 { teams: TeamSummary[] }
- *   POST  body { name?, format, members? }   → 200 { team, validation }
+ *   GET  (default)              → 200 { teams } living (`format === "champions"`)
+ *   GET  ?archived=1|true       → 200 { teams } archived (`format !== "champions"`)
+ *   GET  ?format=champions      → 200 living list (old-client cutover)
+ *   GET  ?format=<other>        → 400 `invalid_request`
+ *   POST body { name?, members? } → 200 { team, validation }
+ *        `format` optional and ignored; always stored `champions`.
  *
- * Identity (BR-T2, mirroring the chat-history routes): teams are signed-in only.
- * Guests (`getCurrentAccount() === null`) get **401 `unauthorized`** everywhere;
- * every read/write is scoped to the resolved `account.id`. POST is also the
- * "apply proposed team as new" path (AC-6.3) — partial/empty members allowed
- * (BR-T4), warn-but-allow validation returned alongside the created team.
+ * Identity (BR-T2 / CF-AUTH-AC-2.1): teams are signed-in only. Guests get
+ * **401 `unauthorized`** everywhere; every read/write is scoped to the resolved
+ * `account.id`. POST is also the "apply proposed team as new" path (AC-6.3) —
+ * partial/empty members allowed (BR-T4), warn-but-allow validation returned
+ * alongside the created team.
  *
  * Thin adapter: repos/services and `getCurrentAccount` are reached via DYNAMIC
  * import so `next build` never evaluates `@/env` at page-data collection (the
@@ -18,7 +22,7 @@
  */
 
 import { json, jsonError, readJsonObject } from "@/app/api/auth/_lib/http";
-import { isFormat } from "@/data/formats";
+import { CHAMPIONS_FORMAT } from "@/data/formats";
 import { teamMembersSchema, type TeamMember } from "@/data/teams/team-schema";
 
 export const runtime = "nodejs";
@@ -38,21 +42,35 @@ async function currentAccount() {
 }
 
 // ---------------------------------------------------------------------------
-// GET — list this account's teams (updated_at DESC), optional format filter
+// GET — living Champions teams by default; ?archived=1 for the archive
 // ---------------------------------------------------------------------------
+
+function isArchivedQuery(value: string | null): boolean {
+  if (value === null) return false;
+  const v = value.trim().toLowerCase();
+  return v === "1" || v === "true";
+}
 
 export async function GET(req: Request): Promise<Response> {
   const account = await currentAccount();
   if (account === null) return UNAUTHORIZED();
 
   const url = new URL(req.url);
-  const format = url.searchParams.get("format") ?? undefined;
-  if (format !== undefined && !isFormat(format)) {
+  const format = url.searchParams.get("format");
+  // Old clients may still send ?format=champions (treat as living). Any other
+  // format picker is rejected so a gen filter cannot look like a living Dex.
+  if (format !== null && format !== CHAMPIONS_FORMAT) {
     return jsonError(400, "invalid_request", "Unknown format.");
   }
 
   const { listTeams } = await import("@/data/repos/team-repo");
-  const teams = await listTeams(account.id, format ? { format } : undefined);
+  // `?format=champions` wins over `?archived=1` so an old client that sends
+  // both still gets the living list (not a mixed/ambiguous archive).
+  const archived =
+    format === CHAMPIONS_FORMAT
+      ? false
+      : isArchivedQuery(url.searchParams.get("archived"));
+  const teams = await listTeams(account.id, { archived });
   return json(200, { teams });
 }
 
@@ -68,11 +86,6 @@ export async function POST(req: Request): Promise<Response> {
   if (body === null) {
     return jsonError(400, "invalid_request", "Request body must be a JSON object.");
   }
-
-  if (typeof body.format !== "string" || !isFormat(body.format)) {
-    return jsonError(400, "invalid_request", "A valid `format` is required.");
-  }
-  const format = body.format;
 
   let name = DEFAULT_TEAM_NAME;
   if (body.name !== undefined) {
@@ -101,12 +114,12 @@ export async function POST(req: Request): Promise<Response> {
 
   const team = await createTeam({
     accountId: account.id,
-    format,
+    format: CHAMPIONS_FORMAT,
     name,
     members,
     now: Date.now(),
   });
-  const validation = await validateTeam(team.members, format, db);
+  const validation = await validateTeam(team.members, CHAMPIONS_FORMAT, db);
 
   return json(200, { team, validation });
 }

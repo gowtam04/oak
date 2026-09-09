@@ -15,7 +15,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Types that drive the artifact specimen plate (soul.md Phase 2). */
+/** Types carried by an entity profile (empty for ability/item). */
 class EntityPlateTypesTest {
 
     @Test

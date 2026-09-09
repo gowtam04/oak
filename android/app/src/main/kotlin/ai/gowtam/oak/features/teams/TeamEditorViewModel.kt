@@ -55,6 +55,9 @@ data class EditableMember(
     /** The six-stat EV total (>508 is warned server-side, never blocked client-side). */
     val evTotal: Int get() = evs.hp + evs.atk + evs.def + evs.spa + evs.spd + evs.spe
 
+    /** Champions Stat Point total — same numbers as [evTotal] on the wire (ADR-7). */
+    val statPointTotal: Int get() = evTotal
+
     /** Converts to the wire [TeamMember]: trimmed-empty strings become `null`, blank
      * move slots are dropped, `shiny` is emitted only when true. */
     fun asTeamMember(): TeamMember {
@@ -163,6 +166,13 @@ class TeamEditorViewModel private constructor(
     private val _uiState = MutableStateFlow(initialState)
     val uiState: StateFlow<TeamEditorUiState> = _uiState.asStateFlow()
 
+    val isReadOnly: Boolean get() = format.isArchived
+    val showsTeraField: Boolean get() = false
+    val showsIvKnobs: Boolean get() = false
+    val showsLevelKnob: Boolean get() = false
+    val showsStatPoints: Boolean get() = true
+    val canDuplicate: Boolean get() = !isReadOnly
+
     /** The pending debounce timer for [scheduleAnalysis]; cancelled/relaunched on each edit. */
     private var analysisDebounceJob: Job? = null
 
@@ -244,7 +254,7 @@ class TeamEditorViewModel private constructor(
     /** Live typeahead over `/api/search`, scoped to this editor's fixed [format] — backs
      * the species/item pickers. An empty/failed lookup just shows no suggestions. */
     suspend fun searchEntities(kind: EntityKind, query: String): List<PickerOption> =
-        dexLookup.search(kind, query, format).map { PickerOption(it.slug, it.displayName) }
+        dexLookup.search(kind, query, Format.Champions).map { PickerOption(it.slug, it.displayName) }
 
     /** Re-resolves sprite/type/ability/base-stat refs for every filled species slot in
      * one batch call, then applies the Mega required-item auto-force. */
@@ -286,9 +296,9 @@ class TeamEditorViewModel private constructor(
             _uiState.update { it.copy(spriteRefsBySpecies = emptyMap()) }
             return
         }
-        val refs = dexLookup.sprites(species.toList(), format)
+        val refs = dexLookup.sprites(species.toList(), Format.Champions)
         _uiState.update { it.copy(spriteRefsBySpecies = refs) }
-        applyMegaAutoForce()
+        if (!isReadOnly) applyMegaAutoForce()
     }
 
     /** A Mega (or any form with a `required_item`) must hold its stone: force every
@@ -311,7 +321,7 @@ class TeamEditorViewModel private constructor(
             _uiState.update { it.copy(movepoolByMemberId = it.movepoolByMemberId - memberId) }
             return
         }
-        val moves = dexLookup.learnset(member.species, format)
+        val moves = dexLookup.learnset(member.species, Format.Champions)
         _uiState.update { it.copy(movepoolByMemberId = it.movepoolByMemberId + (memberId to moves)) }
     }
 
@@ -333,16 +343,19 @@ class TeamEditorViewModel private constructor(
     // ---- Member editing ----
 
     fun setName(name: String) {
+        if (isReadOnly) return
         _uiState.update { it.copy(name = name) }
     }
 
     /** Adds an empty member set; a no-op at the 6-slot cap. */
     fun addMember() {
+        if (isReadOnly) return
         _uiState.update { if (it.members.size < 6) it.copy(members = it.members + EditableMember()) else it }
         scheduleAnalysis()
     }
 
     fun removeMember(index: Int) {
+        if (isReadOnly) return
         _uiState.update { state ->
             if (index in state.members.indices) {
                 state.copy(members = state.members.filterIndexed { i, _ -> i != index })
@@ -353,11 +366,12 @@ class TeamEditorViewModel private constructor(
         scheduleAnalysis()
     }
 
-    val canAddMember: Boolean get() = uiState.value.members.size < 6
+    val canAddMember: Boolean get() = !isReadOnly && uiState.value.members.size < 6
 
     /** Applies [transform] to the member at [index] and, when the species changed,
      * re-resolves that slot's sprite/movepool. */
     fun updateMember(index: Int, transform: (EditableMember) -> EditableMember) {
+        if (isReadOnly) return
         val current = uiState.value.members.getOrNull(index) ?: return
         val updated = transform(current)
         if (updated == current) return
@@ -421,7 +435,7 @@ class TeamEditorViewModel private constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isAnalyzing = true) }
             try {
-                val result = teamService.analyze(format, members)
+                val result = teamService.analyze(Format.Champions, members)
                 if (generation != analysisGeneration) return@launch
                 _uiState.update { it.copy(analysis = result, isAnalyzing = false, analysisError = null) }
             } catch (e: OakError) {
@@ -440,6 +454,7 @@ class TeamEditorViewModel private constructor(
      * warnings**: the request always goes out, and the returned warnings are shown
      * afterward. */
     fun save() {
+        if (isReadOnly) return
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, errorMessage = null) }
             val memberPayload = uiState.value.members.map { it.asTeamMember() }
@@ -529,6 +544,7 @@ class TeamEditorViewModel private constructor(
      * hits Save. The slot edits reuse the exact pure [applyTeamPatch] the server
      * legality-gate ran, so applied ≡ validated. */
     fun applyAssistantPatch(patch: TeamPatch) {
+        if (isReadOnly) return
         val patched = applyTeamPatch(draftWireMembers(), patch)
         _uiState.update { state ->
             state.copy(
@@ -575,6 +591,11 @@ class TeamEditorViewModel private constructor(
             "fighting", "poison", "ground", "flying", "psychic", "bug",
             "rock", "ghost", "dragon", "dark", "steel", "fairy",
         )
+
+        const val STAT_POINT_BUDGET = 66
+        const val STAT_POINT_PER_STAT_MAX = 32
+        const val LEVEL = 50
+        const val OFF_ROSTER_LABEL = "not in the Champions roster"
 
         /** Debounce window collapsing rapid draft edits into one analysis request. */
         const val ANALYSIS_DEBOUNCE_MS = 750L

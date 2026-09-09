@@ -148,11 +148,13 @@ data class TeamWarning(
 ) {
     /**
      * The validity/legality rules `validateTeam` can flag (`warningCodeSchema`).
-     * **All 11** web codes are represented, including `item_missing` — the web
-     * schema has 11 codes but the iOS `TeamWarning.Code` mirror only has 10 and
-     * is missing `item_missing` (a drift found while porting; see the P1 report).
-     * [Unknown] makes decode tolerant of a future 12th code so a single
-     * unrecognized warning can never fail the parent team's decode.
+     * **All 12** web codes are represented, including `item_missing` and
+     * `learnset_unavailable` (warn-but-allow on box-build; not a hard
+     * violation). The iOS `TeamWarning.Code` mirror still omits `item_missing`
+     * (a drift found while porting; see the P1 report) but now names
+     * `learnsetUnavailable`. [Unknown] makes decode tolerant of a future 13th
+     * code so a single unrecognized warning can never fail the parent team's
+     * decode.
      */
     @Serializable(with = CodeSerializer::class)
     sealed interface Code {
@@ -165,10 +167,11 @@ data class TeamWarning(
         data object ItemIllegal : Code
         data object ItemMissing : Code
         data object MoveNotInLearnset : Code
+        data object LearnsetUnavailable : Code
         data object DuplicateSpecies : Code
         data object DuplicateItem : Code
 
-        /** A warning code string outside the known 11 — preserves the raw value. */
+        /** A warning code string outside the known 12 — preserves the raw value. */
         data class Unknown(val raw: String) : Code
 
         val rawValue: String
@@ -182,6 +185,7 @@ data class TeamWarning(
                 ItemIllegal -> "item_illegal"
                 ItemMissing -> "item_missing"
                 MoveNotInLearnset -> "move_not_in_learnset"
+                LearnsetUnavailable -> "learnset_unavailable"
                 DuplicateSpecies -> "duplicate_species"
                 DuplicateItem -> "duplicate_item"
                 is Unknown -> raw
@@ -198,6 +202,7 @@ data class TeamWarning(
                 "item_illegal" -> ItemIllegal
                 "item_missing" -> ItemMissing
                 "move_not_in_learnset" -> MoveNotInLearnset
+                "learnset_unavailable" -> LearnsetUnavailable
                 "duplicate_species" -> DuplicateSpecies
                 "duplicate_item" -> DuplicateItem
                 else -> Unknown(raw)
@@ -222,8 +227,9 @@ object CodeSerializer : KSerializer<TeamWarning.Code> {
 /**
  * Codes that make a team HARD-ILLEGAL in the format (mirrors web's
  * `HARD_VIOLATION_CODES`). `item_missing` is deliberately excluded — a member
- * with no held item is still a legal team. Single source of truth for both the
- * proposal gate and the save gate on the client side.
+ * with no held item is still a legal team. `learnset_unavailable` is also
+ * excluded (warn-but-allow on box-build; BOX-AC-1.2). Single source of truth
+ * for both the proposal gate and the save gate on the client side.
  */
 val HARD_VIOLATION_CODES: Set<TeamWarning.Code> = setOf(
     TeamWarning.Code.SpeciesIllegal,

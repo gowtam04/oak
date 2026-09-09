@@ -5,11 +5,12 @@
  *
  * Responsibilities (orchestration, NOT agent internals):
  *   1. Parse + validate the request body ({ session_id, message }).
- *   2. Apply the two orchestration guardrails BEFORE streaming: the input-length
- *      cap and the per-session rate limit (integration.md § Guardrails). These
- *      reject with a plain JSON HTTP error (413 / 429) — they are not in-domain
- *      answer conditions, and rejecting before the stream opens lets the client
- *      see a real HTTP status.
+ *   2. Apply orchestration guardrails BEFORE streaming: spend admission
+ *      (denylist / daily cap), then the input-length cap and the per-session
+ *      rate limit (integration.md § Guardrails). These reject with a plain JSON
+ *      HTTP error (403 / 413 / 429 / 503) — they are not in-domain answer
+ *      conditions, and rejecting before the stream opens lets the client see a
+ *      real HTTP status.
  *   3. Resolve the prior in-session history from the session store (trimming it
  *      to the context budget first), then drive `runOak` with hooks that
  *      stream `tool_activity` events as tools fire and `answer_start`/
@@ -36,16 +37,18 @@ import { randomUUID } from "node:crypto";
 
 import { proposedTeamSchema, type ProposedTeam } from "@/agent/schemas";
 import { modelLabel } from "@/agent/models";
-import type { AgentMode, ChatMessage, ImageAttachment } from "@/agent/types";
+import type {
+  AgentMode,
+  BoundTeam,
+  ChatMessage,
+  ImageAttachment,
+} from "@/agent/types";
 import type { Account } from "@/data/repos/accounts-repo";
 import {
   CHAMPIONS_FORMAT,
   isFormat,
-  modeForFormat,
-  NATDEX_FORMAT,
   type Format,
 } from "@/data/formats";
-import { detectScopeSignal } from "@/lib/scope/detect-scope";
 import { logger } from "@/server/logger";
 import {
   checkRateLimit,
@@ -57,7 +60,6 @@ import { readJsonBodyWithLimit } from "@/server/body-limit";
 import { clientIp } from "@/server/client-ip";
 import {
   getHistory,
-  getSessionScope,
   setSessionScope,
   trim,
   trimMessages,
@@ -87,6 +89,9 @@ export const dynamic = "force-dynamic";
  */
 const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 
+/** Composer @mentions: max 6 unique team UUIDs per turn (ADR-5). */
+const MAX_MENTIONED_TEAM_IDS = 6;
+
 // ---------------------------------------------------------------------------
 // Small JSON-error helper for the pre-stream rejection paths
 // ---------------------------------------------------------------------------
@@ -96,11 +101,41 @@ function jsonError(
   code: string,
   message: string,
   extraHeaders?: Record<string, string>,
+  extraBody?: Record<string, unknown>,
 ): Response {
-  return new Response(JSON.stringify({ code, message }), {
+  return new Response(JSON.stringify({ code, message, ...extraBody }), {
     status,
     headers: { "Content-Type": "application/json", ...extraHeaders },
   });
+}
+
+const SPEND_CHECK_FAILED_MESSAGE =
+  "Could not verify usage limits. Please try again.";
+
+function spendRefuseResponse(admit: {
+  code: "account_denied" | "daily_limit" | "spend_check_failed";
+  message?: string;
+  resetAt?: string;
+  retryAfterMs?: number;
+}): Response {
+  const message = admit.message ?? SPEND_CHECK_FAILED_MESSAGE;
+  if (admit.code === "daily_limit") {
+    const headers: Record<string, string> = {};
+    if (typeof admit.retryAfterMs === "number") {
+      headers["Retry-After"] = String(Math.ceil(admit.retryAfterMs / 1000));
+    }
+    return jsonError(
+      429,
+      admit.code,
+      message,
+      headers,
+      admit.resetAt !== undefined ? { reset_at: admit.resetAt } : undefined,
+    );
+  }
+  if (admit.code === "account_denied") {
+    return jsonError(403, admit.code, message);
+  }
+  return jsonError(503, admit.code, message);
 }
 
 // The guest rate-limit identity (`ip:<clientIp(req)>`) is derived by the shared
@@ -111,28 +146,61 @@ function jsonError(
 // Body validation
 // ---------------------------------------------------------------------------
 
+function parseRecovery(value: unknown): "retry" | "edit" | undefined {
+  return value === "retry" || value === "edit" ? value : undefined;
+}
+
+/** First-occurrence unique string ids, capped at {@link MAX_MENTIONED_TEAM_IDS}. */
+function parseMentionedTeamIds(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string" || item.length === 0) continue;
+    if (seen.has(item)) continue;
+    seen.add(item);
+    ids.push(item);
+    if (ids.length >= MAX_MENTIONED_TEAM_IDS) break;
+  }
+  return ids;
+}
+
+function lastPairIsUserAssistant(
+  messages: readonly { role: string }[],
+): boolean {
+  if (messages.length < 2) return false;
+  return (
+    messages[messages.length - 2]!.role === "user" &&
+    messages[messages.length - 1]!.role === "assistant"
+  );
+}
+
 function parseBody(
   value: unknown,
   hasImages: boolean,
 ): ChatRequestBody | null {
   if (typeof value !== "object" || value === null) return null;
-  const { session_id, message, champions_mode, scope_seed } =
-    value as Record<string, unknown>;
+  const {
+    session_id,
+    message,
+    champions_mode,
+    scope_seed,
+    recovery,
+    mentioned_team_ids,
+  } = value as Record<string, unknown>;
   if (typeof session_id !== "string" || session_id.length === 0) return null;
   // The message must be a string, but may be EMPTY when one or more images are
   // attached (an image-only "what is this?" upload). Text-only turns still
   // require non-empty text.
   if (typeof message !== "string") return null;
   if (message.length === 0 && !hasImages) return null;
-  // Tri-state: `champions_mode` is a DEPRECATED legacy seed (old clients always
-  // send a concrete boolean); keep true/false distinct from omitted so the
-  // seed-precedence chain below can tell "no legacy seed" from "seeded standard".
-  // `scope_seed` is the new explicit chip pick — a malformed/unknown value is
-  // silently dropped (defensive additive field), never a 400.
+  // `scope_seed` and `champions_mode` are parsed so old clients don't 400, then
+  // ignored — every turn is Champions (CF-CHAT-AC-1.1, ADR-3). A malformed
+  // `scope_seed` is silently dropped (defensive additive field), never a 400.
   // The answering model is NOT taken from the body — it is operator-controlled
   // via the admin Settings selection (resolved server-side below). Any `model`
-  // field a client happens to send is ignored. Saved teams are referenced by name in
-  // chat (resolved live via list_teams/get_team), so the body carries no team id.
+  // field a client happens to send is ignored. `mentioned_team_ids` are the
+  // @mention UUIDs bound this turn; a legacy `active_team_id` is ignored.
   return {
     session_id,
     message,
@@ -142,6 +210,8 @@ function parseBody(
       typeof scope_seed === "string" && isFormat(scope_seed)
         ? scope_seed
         : undefined,
+    recovery: parseRecovery(recovery),
+    mentioned_team_ids: parseMentionedTeamIds(mentioned_team_ids),
   };
 }
 
@@ -215,27 +285,14 @@ export async function POST(req: Request): Promise<Response> {
     );
   };
 
-  // Server-controlled query scope — never an LLM-visible tool field. The turn's
-  // ACTUAL scope is RESOLVED below from a six-tier precedence chain:
-  //   (explicit in-message signal) > (scope_seed chip pick) >
-  //   (conversation's sticky scope) > (legacy champions_mode seed) >
-  //   (signed-in account last_used_scope) > (National Dex default).
-  // Explicit chip pick — ranks above sticky (fresh user intent).
-  const explicitSeed: Format | undefined = body.scope_seed;
-  // DEPRECATED champions_mode — old iOS builds always send a concrete boolean.
-  // Ranks BELOW sticky (preserves BR-H6 resume semantics). A toggle-OFF now maps
-  // to National Dex (the new default), not scarlet-violet — a legacy client that
-  // never opted into Champions lands in the broad whole-dex scope.
-  const legacySeed: Format | undefined =
-    body.champions_mode === undefined
-      ? undefined
-      : body.champions_mode
-        ? CHAMPIONS_FORMAT
-        : NATDEX_FORMAT;
+  // Server-controlled query scope — never an LLM-visible tool field. Every new
+  // turn is Champions (CF-DATA-BR-1, CF-DATA-BR-7, ADR-3): `scope_seed`,
+  // `champions_mode`, in-message signals, sticky conversation format, and
+  // `account.last_used_scope` do not pick another game.
 
-  // 2. Orchestration guardrails — input-length cap + TIERED rate limit
-  //    (integration.md § Guardrails; account-creation design.md § API Design
-  //    "POST /api/chat (modified)", BR-A8 / AUTH-US-7). Resolve the account from
+  // 2. Orchestration guardrails — spend admission (denylist / daily cap) THEN
+  //    the input-length cap + TIERED per-minute rate limit (integration.md
+  //    § Guardrails; spend-controls SC-BR-7). Resolve the account from
   //    the session cookie BEFORE the gate, then key + configure by auth tier:
   //      signed in → `acct:<id>` + SIGNED_IN_CONFIG (60/60s).
   //      guest     → `ip:<clientIp>` + GUEST_CONFIG (20/60s).
@@ -267,27 +324,22 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
-  const rateLimitKey = account
-    ? `acct:${account.id}`
-    : `ip:${clientIp(req)}`;
+  const ip = clientIp(req);
+  const rateLimitKey = account ? `acct:${account.id}` : `ip:${ip}`;
   const rateLimitConfig = account ? SIGNED_IN_CONFIG : GUEST_CONFIG;
 
-  const gate = await checkRateLimit(rateLimitKey, message, rateLimitConfig);
-  if (!gate.allowed) {
-    if (gate.reason === "input_too_long") {
-      return jsonError(
-        413,
-        "input_too_long",
-        `Message exceeds the ${gate.maxLength}-character limit (got ${gate.actualLength}).`,
-      );
-    }
-    // rate_limited — record the rejected turn as a `turn_record` (design.md AD-4:
-    // "rate_limited" is a recorded-status superset, so the errors/heavy-user views
-    // have a single source). The model is unresolved on this pre-stream branch, so
-    // model/providerModel are null and there is no answer. Fire-and-forget: the
-    // recordTurn promise is NEVER awaited (only the cheap, cached module import is)
-    // and a write fault only logs. input_too_long is a separate rejection and is
-    // deliberately NOT recorded (it never reached the model path).
+  // Rejected-turn recording (rate_limited + spend refusals). Same shape as
+  // today's rate_limited branch: null model/answer, prompt stored. Await the
+  // module import only; never await the INSERT (ADMIN-BR-3). input_too_long is
+  // deliberately NOT recorded. Mode is always Champions (the gate runs before
+  // history load; other-game seeds are ignored).
+  const recordRejectedTurn = async (
+    status:
+      | "rate_limited"
+      | "account_denied"
+      | "daily_limit"
+      | "spend_check_failed",
+  ): Promise<void> => {
     try {
       const { recordTurn } = await import("@/data/repos/usage-repo");
       void recordTurn({
@@ -296,12 +348,8 @@ export async function POST(req: Request): Promise<Response> {
         accountId: account?.id ?? null,
         model: null,
         providerModel: null,
-        // The rate-limit gate runs BEFORE scope resolution (it must stay cheap,
-        // pre-history, before the sticky scope is even loaded), so record the
-        // best seed-derived mode available at this point: explicit chip pick >
-        // legacy champions_mode > the National Dex default.
-        mode: modeForFormat(explicitSeed ?? legacySeed ?? NATDEX_FORMAT),
-        status: "rate_limited",
+        mode: "champions",
+        status,
         inputTokens: 0,
         outputTokens: 0,
         thinkingTokens: 0,
@@ -318,6 +366,45 @@ export async function POST(req: Request): Promise<Response> {
     } catch (err) {
       logRecordFailure(err);
     }
+  };
+
+  // Spend admission (denylist → daily cap) BEFORE the per-minute limiter.
+  const [{ admitAgentTurn }, { isAdmin }] = await Promise.all([
+    import("@/server/spend-control"),
+    import("@/server/auth/admin"),
+  ]);
+  const admit = await admitAgentTurn({
+    subject: account
+      ? { kind: "account", accountId: account.id, email: account.email }
+      : { kind: "guest", ip },
+    isAdmin: account ? isAdmin(account) : false,
+    surface: "chat",
+  });
+  if (!admit.ok) {
+    logger.info(
+      {
+        event: "spend_refused",
+        code: admit.code,
+        subject_key: rateLimitKey,
+        request_id: requestId,
+        session_id,
+      },
+      "oak_spend_refused",
+    );
+    await recordRejectedTurn(admit.code);
+    return spendRefuseResponse(admit);
+  }
+
+  const gate = await checkRateLimit(rateLimitKey, message, rateLimitConfig);
+  if (!gate.allowed) {
+    if (gate.reason === "input_too_long") {
+      return jsonError(
+        413,
+        "input_too_long",
+        `Message exceeds the ${gate.maxLength}-character limit (got ${gate.actualLength}).`,
+      );
+    }
+    await recordRejectedTurn("rate_limited");
     return jsonError(
       429,
       "rate_limited",
@@ -334,30 +421,33 @@ export async function POST(req: Request): Promise<Response> {
   //
   //    SIGNED IN: the durable DB is the source of truth (chat-history HIST-AD-4).
   //    Load the conversation + its turns, derive the model history from the
-  //    stored text, trim it, and override `mode` from the stored format (BR-H6).
-  //    A DB blip here degrades gracefully to an empty history (never a 500),
-  //    consistent with the guest-first stance for account resolution.
+  //    stored text, and trim it. Stored conversation format is NOT used to pick
+  //    data (CF-CHAT-AC-3.2) — every new turn is Champions. A DB blip here
+  //    degrades gracefully to an empty history (never a 500), consistent with
+  //    the guest-first stance for account resolution.
   //    GUEST: the in-memory session store, exactly as before.
   let history: ChatMessage[];
   // The most recent team the agent proposed in this conversation (structured),
   // bound onto ctx so the agent can act on "save it" / "this team" reliably —
   // history forwards only the markdown, dropping the structured proposal.
   let proposedTeam: ProposedTeam | undefined;
-  // The turn's STICKY scope (GS-D3): a resumed signed-in conversation's stored
-  // format, or a guest session's remembered scope. `undefined` for a brand-new
-  // conversation (the seed then wins). `existingConversation` marks the signed-in
-  // resume path so a resolved switch below can be persisted (and compared against
-  // the CURRENT stored format, which `stickyFormat` holds).
+  // Historical conversation format (signed-in resume). Not used to pick data;
+  // compared only so an other-game thread can be stamped Champions (CF-CHAT-AC-3.3).
   let stickyFormat: Format | undefined;
   let existingConversation = false;
+  // Last stored pair is user+assistant — required before a recovery turn
+  // starts (ADR-4). Checked against the untrimmed source (DB or session
+  // store), not the context-budget trim.
+  let replaceableLastPair = false;
   if (account) {
     try {
       const repo = await import("@/data/repos/conversation-repo");
       const conv = await repo.getConversation(account.id, session_id);
       if (conv) {
         existingConversation = true;
-        stickyFormat = conv.format as Format; // BR-H6′ — sticky, switchable below
+        stickyFormat = conv.format as Format; // historical; not used to pick data
         const stored = await repo.getMessages(account.id, session_id);
+        replaceableLastPair = lastPairIsUserAssistant(stored);
         history = trimMessages(
           stored.map((m) => ({ role: m.role, content: m.textContent })),
         );
@@ -376,7 +466,7 @@ export async function POST(req: Request): Promise<Response> {
           }
         }
       } else {
-        history = []; // new conversation; scope resolves from the seed below
+        history = []; // new conversation; always Champions below
       }
     } catch (err) {
       logger.warn(
@@ -394,65 +484,63 @@ export async function POST(req: Request): Promise<Response> {
   } else {
     await trim(session_id);
     history = [...(await getHistory(session_id))];
-    stickyFormat = await getSessionScope(session_id); // guest sticky scope (GS-D3)
+    replaceableLastPair = lastPairIsUserAssistant(history);
+    // Guest sticky session format is not used to pick data (CF-CHAT-AC-3.3).
   }
 
-  // 3b. Resolve THIS turn's data scope (generation-scope GS-B / §3.4 step 3).
-  //     Six-tier precedence: an explicit, high-precision in-message signal wins
-  //     over an explicit scope_seed chip pick, which wins over the
-  //     conversation's sticky scope, which wins over the legacy champions_mode
-  //     seed, which wins over the signed-in account's last-used preference
-  //     (new-chat default), which falls back to the National Dex hard default.
-  //     The lexicon is DETERMINISTIC — no LLM pre-pass. `mode` then flows
-  //     downstream exactly as before (ctx / formatForMode(mode) at persist /
-  //     turn_record). Every generation (including Gens 1–4) is now a first-class
-  //     scope, and a whole-dex phrase ("national dex", "all Pokémon") resolves
-  //     to National Dex; the detector only ever returns a real format now (the
-  //     old `unsupported` honest-decline arm is GONE — oak-v2 §3 / National Dex).
-  const preferredFormat: Format | undefined =
-    account?.lastUsedScope ?? undefined;
-  const detection = detectScopeSignal(message);
-  const messageFormat: Format | undefined = detection?.format;
-  const format: Format =
-    messageFormat ??
-    explicitSeed ??
-    stickyFormat ??
-    legacySeed ??
-    preferredFormat ??
-    NATDEX_FORMAT;
-  const mode: AgentMode = modeForFormat(format);
-
-  // Observability for tuning the lexicon later (§3.4 step 3): one structured
-  // line whenever a signal fired, recording what it moved the scope from → to.
-  if (detection) {
-    logger.info(
-      {
-        event: "scope_signal",
-        request_id: requestId,
-        session_id,
-        matched: detection.matched,
-        from:
-          explicitSeed ??
-          stickyFormat ??
-          legacySeed ??
-          preferredFormat ??
-          NATDEX_FORMAT,
-        to: format,
-      },
-      "oak_scope_signal",
-    );
+  // 3a′. Mentions (MEN-BR-1..4, AUTH-BR-4) + recovery (ADR-4) — reject BEFORE
+  //     any Champions-stamp persist (conversation format / session scope) and
+  //     BEFORE startTurn. History is loaded; a dead mention or
+  //     nothing-to-replace must not write scope.
+  const mentionIds = body.mentioned_team_ids ?? [];
+  let boundTeams: BoundTeam[] = [];
+  if (mentionIds.length > 0) {
+    if (!account) {
+      return new Response(
+        JSON.stringify({ error: "unbound_mention", id: mentionIds[0] }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    const { resolveBoundTeams } = await import("@/server/chat/bound-teams");
+    const resolved = await resolveBoundTeams(account.id, mentionIds);
+    if (!resolved.ok) {
+      return new Response(
+        JSON.stringify({ error: "unbound_mention", id: resolved.id }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    // Living Champions teams only (CF-CHAT-AC-3.4). Archived / other-format
+    // uses the same unbound_mention code as missing/unowned.
+    const archived = resolved.teams.find((t) => t.format !== CHAMPIONS_FORMAT);
+    if (archived) {
+      return new Response(
+        JSON.stringify({ error: "unbound_mention", id: archived.id }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    boundTeams = resolved.teams;
+  }
+  if (body.recovery !== undefined && !replaceableLastPair) {
+    return new Response(JSON.stringify({ error: "nothing_to_replace" }), {
+      status: 409,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  // Persist a scope SWITCH (fire-and-forget, same non-blocking discipline as
-  // recording — never on the user's critical path). Signed-in + an existing
-  // conversation whose stored format actually moved → UPDATE it (appendTurnPair
-  // stamps format only on CREATE, so a mid-conversation switch needs this
-  // explicit write). Signed-in every turn → also refresh account.last_used_scope
-  // when it differs (drives the next new chat's default). Guest → refresh the
-  // session's sticky scope every turn (cheap + idempotent).
+  // 3b. Every new turn is Champions (CF-DATA-BR-1, CF-DATA-BR-7, ADR-3).
+  //     `scope_seed`, `champions_mode`, detect-scope, sticky conversation
+  //     format, and `account.last_used_scope` are not used to pick data.
+  const format: Format = CHAMPIONS_FORMAT;
+  const mode: AgentMode = "champions";
+  const scopeSource: ScopeEvent["source"] = "default";
+
+  // Treat an existing other-game thread as Champions from this message on
+  // (CF-CHAT-AC-3.3). Do not write last_used_scope / other-game MRU
+  // (CF-DATA-BR-21). Guest session sticky is overwritten to Champions so it
+  // cannot reopen another game. Fire-and-forget — never on the critical path.
   if (account) {
     const acctId = account.id;
-    if (existingConversation && format !== stickyFormat) {
+    if (existingConversation && stickyFormat !== CHAMPIONS_FORMAT) {
       const logScopePersistFailure = (err: unknown): void => {
         logger.error(
           {
@@ -468,42 +556,13 @@ export async function POST(req: Request): Promise<Response> {
       try {
         const repo = await import("@/data/repos/conversation-repo");
         void repo
-          .updateConversationFormat(acctId, session_id, format)
+          .updateConversationFormat(acctId, session_id, CHAMPIONS_FORMAT)
           .catch(logScopePersistFailure);
       } catch (err) {
         logScopePersistFailure(err);
       }
     }
-    // Remember this turn's resolved scope as the account default for future
-    // new chats. Only write when it moved (cheap skip on the common sticky path).
-    if (format !== account.lastUsedScope) {
-      const logPrefPersistFailure = (err: unknown): void => {
-        logger.error(
-          {
-            event: "account_last_used_scope_update_failed",
-            request_id: requestId,
-            account_id: acctId,
-            session_id,
-            err: err instanceof Error ? err.message : String(err),
-          },
-          "oak_account_last_used_scope_update_failed",
-        );
-      };
-      try {
-        const accounts = await import("@/data/repos/accounts-repo");
-        void accounts
-          .updateLastUsedScope(acctId, format)
-          .catch(logPrefPersistFailure);
-      } catch (err) {
-        logPrefPersistFailure(err);
-      }
-    }
   } else {
-    // Guest → refresh the session's sticky scope every turn (cheap +
-    // idempotent). Fire-and-forget, same non-blocking discipline as the
-    // signed-in branch above — never on the user's critical path; a Redis
-    // write fault only logs (session-store's own fail-soft policy already
-    // covers the memory-backend case, where this never rejects).
     const logScopePersistFailure = (err: unknown): void => {
       logger.error(
         {
@@ -515,7 +574,9 @@ export async function POST(req: Request): Promise<Response> {
         "oak_session_scope_persist_failed",
       );
     };
-    void setSessionScope(session_id, format).catch(logScopePersistFailure);
+    void setSessionScope(session_id, CHAMPIONS_FORMAT).catch(
+      logScopePersistFailure,
+    );
   }
 
   // 3c. Resolve the operator-selected active model (the admin Settings selection,
@@ -551,6 +612,10 @@ export async function POST(req: Request): Promise<Response> {
   //      - global in-process safety cap → 503 `server_busy`.
   //    The owner key is the SAME identity the rate limiter uses (`acct:<id>` /
   //    `ip:<clientIp>`), so the two spend controls stay aligned.
+  //    Voice hydrate is NOT a turn-store lock (VOICE-BR-5): abort it first so
+  //    a real send never 409s from an in-flight compile.
+  const { abortVoiceCompile } = await import("@/server/voice/hydrate-store");
+  abortVoiceCompile(session_id);
   const started = startTurn({
     sessionId: session_id,
     accountId: account?.id ?? null,
@@ -584,22 +649,6 @@ export async function POST(req: Request): Promise<Response> {
   }
   const turn = started;
 
-  // How the scope was resolved — surfaced on the `scope` event (GS-C). Any
-  // in-message signal is message-sourced, so `detection` present ⇒ "message".
-  // Preference is only reported when it actually decided the format (no higher
-  // tier matched).
-  const scopeSource: ScopeEvent["source"] = detection
-    ? "message"
-    : explicitSeed
-      ? "seed"
-      : stickyFormat
-        ? "conversation"
-        : legacySeed
-          ? "seed"
-          : preferredFormat
-            ? "preference"
-            : "default";
-
   // 5. Build the subscriber response FIRST — its ReadableStream.start() runs
   //    synchronously, emitting the `turn` frame and registering with the turn's
   //    fan-out — THEN detach the turn task (design §5.2 step 3: "the task starts
@@ -622,6 +671,8 @@ export async function POST(req: Request): Promise<Response> {
     images,
     activeModel,
     client,
+    recovery: body.recovery,
+    boundTeams,
   });
   return response;
 }

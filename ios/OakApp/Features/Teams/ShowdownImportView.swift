@@ -13,7 +13,6 @@ struct ShowdownImportView: View {
   @Environment(\.dismiss) private var dismiss
   let model: TeamsListViewModel
 
-  @State private var format: Format
   @State private var paste: String = ""
   @State private var notes: [ImportNote] = []
   @State private var importedTeamName: String?
@@ -22,20 +21,11 @@ struct ShowdownImportView: View {
 
   init(model: TeamsListViewModel) {
     self.model = model
-    _format = State(initialValue: model.formatFilter ?? .scarletViolet)
   }
 
   var body: some View {
     NavigationStack {
       Form {
-        Section("Format") {
-          Picker("Format", selection: $format) {
-            ForEach(Format.knownCases, id: \.self) { format in
-              Text(format.shortLabel).tag(format)
-            }
-          }
-        }
-
         Section("Showdown paste") {
           TextEditor(text: $paste)
             .font(Theme.mono(.footnote))
@@ -82,6 +72,7 @@ struct ShowdownImportView: View {
         ToolbarItem(placement: .topBarLeading) {
           Button("Cancel") { dismiss() }
         }
+        .oakLidItem()
         ToolbarItem(placement: .topBarTrailing) {
           if isImporting {
             ProgressView()
@@ -96,6 +87,7 @@ struct ShowdownImportView: View {
               .fontWeight(.semibold)
           }
         }
+        .oakLidItem()
       }
       .overlay(alignment: .bottom) {
         if let message = model.errorMessage {
@@ -105,6 +97,7 @@ struct ShowdownImportView: View {
         }
       }
     }
+    .oakEnamelNav()
   }
 
   /// Runs the import. On success: if there were no notes, dismiss immediately; otherwise
@@ -113,7 +106,7 @@ struct ShowdownImportView: View {
   private func runImport() async {
     isImporting = true
     defer { isImporting = false }
-    guard let result = await model.importPaste(paste, format: format) else { return }
+    guard let result = await model.importPaste(paste, format: .champions) else { return }
     notes = result.notes
     importedTeamName = result.team.name
     importedMembers = result.team.members

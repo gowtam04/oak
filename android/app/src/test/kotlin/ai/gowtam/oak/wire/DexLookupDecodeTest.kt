@@ -24,6 +24,15 @@ class DexLookupDecodeTest {
         assertEquals(2, envelope.matches.size)
         assertEquals("swampert-mega", envelope.matches[1].slug)
         assertEquals(EntityKind.POKEMON, envelope.matches[1].kind)
+        assertNull(envelope.matches[0].spriteUrl)
+    }
+
+    @Test
+    fun searchDecodesOptionalSpriteUrl() {
+        val envelope = OakJson.decodeFromString<SearchEnvelope>(
+            """{"matches":[{"slug":"garchomp","display_name":"Garchomp","kind":"pokemon","sprite_url":"https://example.test/garchomp.gif"}]}""",
+        )
+        assertEquals("https://example.test/garchomp.gif", envelope.matches[0].spriteUrl)
     }
 
     @Test

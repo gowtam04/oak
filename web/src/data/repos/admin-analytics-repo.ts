@@ -275,6 +275,9 @@ export async function getErrorBreakdown(
         count(*) FILTER (WHERE status = 'insufficient_data') AS insufficient_data,
         count(*) FILTER (WHERE tool_error_count > 0) AS tool_error,
         count(*) FILTER (WHERE status = 'rate_limited') AS rate_limited,
+        count(*) FILTER (WHERE status = 'account_denied') AS account_denied,
+        count(*) FILTER (WHERE status = 'daily_limit') AS daily_limit,
+        count(*) FILTER (WHERE status = 'spend_check_failed') AS spend_check_failed,
         count(*) AS total_turns
       FROM turn_record
       WHERE created_at >= ${r.from} AND created_at < ${r.to}
@@ -299,6 +302,9 @@ export async function getErrorBreakdown(
     tool_error: num(trRow?.tool_error),
     otp_email_failed: num(aeRow?.otp_email_failed),
     rate_limited: num(trRow?.rate_limited),
+    account_denied: num(trRow?.account_denied),
+    daily_limit: num(trRow?.daily_limit),
+    spend_check_failed: num(trRow?.spend_check_failed),
   };
 
   // Fixed display order (mirrors the ErrorCategoryKey union in admin-types).
@@ -309,6 +315,9 @@ export async function getErrorBreakdown(
     "tool_error",
     "otp_email_failed",
     "rate_limited",
+    "account_denied",
+    "daily_limit",
+    "spend_check_failed",
   ];
   const categories: ErrorCategory[] = order.map((key) => ({
     key,

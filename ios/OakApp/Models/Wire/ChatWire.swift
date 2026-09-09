@@ -13,10 +13,16 @@ import Foundation
 
 // MARK: - Request
 
+/// Replace-last-pair mode on `POST /api/chat` (REC-US-1/2 / ADR-4).
+enum ChatRecovery: String, Encodable, Sendable {
+    case retry
+    case edit
+}
+
 /// Request body for `POST /api/chat`.
 ///
 /// Saved teams are referenced **by name in chat** (resolved server-side via
-/// `list_teams` / `get_team`), so there is NO team id on this body.
+/// `list_teams` / `get_team`) **or** bound by `mentionedTeamIds` (MEN-US-1).
 struct ChatRequest: Encodable, Sendable {
     /// Client UUID for the thread; equals the conversation id on resume.
     let sessionId: String
@@ -34,12 +40,34 @@ struct ChatRequest: Encodable, Sendable {
     /// server-side scope precedence (in-message signal > `scope_seed` > sticky >
     /// champions default) makes its absence a no-op, and champions IS the default.
     let scopeSeed: Format?
+    /// Replace last pair on success. `nil` ⇒ a normal append.
+    let recovery: ChatRecovery?
+    /// Stable team UUIDs to bind this turn. Max 6, unique. `nil`/empty ⇒ none.
+    let mentionedTeamIds: [String]?
+
+    init(
+        sessionId: String,
+        message: String,
+        images: [ChatImage]?,
+        scopeSeed: Format?,
+        recovery: ChatRecovery? = nil,
+        mentionedTeamIds: [String]? = nil
+    ) {
+        self.sessionId = sessionId
+        self.message = message
+        self.images = images
+        self.scopeSeed = scopeSeed
+        self.recovery = recovery
+        self.mentionedTeamIds = mentionedTeamIds
+    }
 
     private enum CodingKeys: String, CodingKey {
         case sessionId = "session_id"
         case message
         case images
         case scopeSeed = "scope_seed"
+        case recovery
+        case mentionedTeamIds = "mentioned_team_ids"
     }
 }
 

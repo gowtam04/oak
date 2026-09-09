@@ -2,6 +2,7 @@ package ai.gowtam.oak.features.teams
 
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakSpacing
+import ai.gowtam.oak.ui.OakTopBar
 import ai.gowtam.oak.wire.EntityKind
 import ai.gowtam.oak.wire.titleizeTeamSlug
 import androidx.compose.foundation.background
@@ -26,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -149,9 +149,9 @@ private fun EntityPickerDialog(
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column {
-                TopAppBar(
+                OakTopBar(
                     title = { Text(title) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Cancel") }

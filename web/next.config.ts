@@ -19,6 +19,20 @@ const nextConfig: NextConfig = {
   //   - `ioredis`: same CommonJS-with-optional-native-bits shape as `pg`.
   // Must be TOP-LEVEL (not under experimental.*) on Next 15.
   serverExternalPackages: ["pg", "drizzle-orm", "ioredis"],
+  // Public share pages must never be cached (ADR-6 / SHARE-BR-4): revoke is
+  // immediate, and the HTML is noindex. `force-dynamic` on the page is the
+  // rendering half; this is the exact Cache-Control the design names.
+  async headers() {
+    return [
+      {
+        source: "/a/:id",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

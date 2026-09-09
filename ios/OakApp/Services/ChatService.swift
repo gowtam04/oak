@@ -25,13 +25,14 @@ protocol ChatService: Sendable {
   ///   `scope_seed`; `nil` ⇒ no pick (server precedence resolves the scope). Scope
   ///   is otherwise server-controlled — the model never sees it as a tool input.
   ///
-  /// Saved teams are referenced **by name in chat** (resolved server-side via
-  /// `list_teams` / `get_team`), so the body carries no team id.
+  /// Saved teams are referenced **by name in chat** or bound via `mentionedTeamIds`.
   func send(
     sessionId: String,
     message: String,
     images: [UIImage],
-    scopeSeed: Format?
+    scopeSeed: Format?,
+    recovery: ChatRecovery?,
+    mentionedTeamIds: [String]?
   ) -> AsyncThrowingStream<SSEEvent, Error>
 
   /// Reattaches to a durable turn's live stream (`GET /api/chat/turns/:id/stream`,
@@ -57,6 +58,14 @@ protocol ChatService: Sendable {
   /// by the composer's Stop affordance. Stopping an already-terminal turn is a
   /// no-op; the caller tears down its local stream regardless of the result.
   func stop(turnId: String, sessionId: String) async throws
+
+  /// Persist a scope-chip pick with no follow-up message (`PUT /api/scope`).
+  /// Returns the signed-in MRU list when present.
+  func persistScope(
+    format: Format,
+    conversationId: String?,
+    sessionId: String
+  ) async throws -> [Format]
 }
 
 /// Production ``ChatService`` over ``SSEClient`` (which borrows ``OakAPIClient`` for
@@ -64,16 +73,20 @@ protocol ChatService: Sendable {
 /// is `Sendable` without ceremony.
 struct LiveChatService: ChatService {
   private let sseClient: SSEClient
+  private let apiClient: OakAPIClient
 
-  init(sseClient: SSEClient) {
+  init(sseClient: SSEClient, apiClient: OakAPIClient) {
     self.sseClient = sseClient
+    self.apiClient = apiClient
   }
 
   func send(
     sessionId: String,
     message: String,
     images: [UIImage],
-    scopeSeed: Format?
+    scopeSeed: Format?,
+    recovery: ChatRecovery?,
+    mentionedTeamIds: [String]?
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     // Encode + validate the attached images BEFORE opening the stream (M-AC-5.5).
     // `encode` is synchronous and runs in the caller's context (the main actor),
@@ -96,7 +109,9 @@ struct LiveChatService: ChatService {
       sessionId: sessionId,
       message: message,
       images: encodedImages.isEmpty ? nil : encodedImages,
-      scopeSeed: scopeSeed
+      scopeSeed: scopeSeed,
+      recovery: recovery,
+      mentionedTeamIds: mentionedTeamIds
     )
     return sseClient.stream(request)
   }
@@ -107,5 +122,33 @@ struct LiveChatService: ChatService {
 
   func stop(turnId: String, sessionId: String) async throws {
     try await sseClient.stop(turnId: turnId, sessionId: sessionId)
+  }
+
+  func persistScope(
+    format: Format,
+    conversationId: String?,
+    sessionId: String
+  ) async throws -> [Format] {
+    let endpoint = Endpoint(
+      method: .put,
+      path: "/api/scope",
+      queryItems: [URLQueryItem(name: "session_id", value: sessionId)],
+      body: ScopePersistBody(format: format, conversationId: conversationId, sessionId: sessionId),
+      requiresAuth: true
+    )
+    let response = try await apiClient.send(endpoint, as: ScopePersistResponse.self)
+    return response.lastUsedScopes ?? []
+  }
+}
+
+private struct ScopePersistBody: Encodable, Sendable {
+  let format: Format
+  let conversationId: String?
+  let sessionId: String
+
+  enum CodingKeys: String, CodingKey {
+    case format
+    case conversationId = "conversation_id"
+    case sessionId = "session_id"
   }
 }

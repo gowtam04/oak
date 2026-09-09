@@ -1,105 +1,97 @@
 # Oak
 
-A chat agent for the Pokémon **games** — mainline titles across every
-generation, **Pokémon Champions**, and spin-offs like Pokémon Mystery Dungeon.
-It answers natural-language questions about the games: lookups and filter
-queries, mechanics reasoning, battle math, and in-game locations, events, and
-glitches. It is a **games** assistant, not a whole-franchise one — the anime,
-movies, TV, and manga are out of scope and gracefully declined. Its defining
-trait is that it **reasons on top of data**: tools supply the raw building
-blocks (move priority values, ability effect text, type charts, base stats),
-and the agent deduces how those pieces interact.
+A chat agent that **coaches Pokémon Champions** for the **current regulation**.
+It answers natural-language questions about the Champions roster, Stat Points,
+Mega Evolution, live ladder usage, and battle math. It is **not** a
+whole-franchise or multi-generation Pokédex: other games (mainline generations,
+National Dex, Mystery Dungeon, catch locations) and franchise media (anime,
+movies, TV, manga) are out of scope and declined. Its defining trait is that it
+**reasons on top of data**: tools supply the raw building blocks (move priority,
+ability effect text, type charts, base stats, live usage), and the agent
+deduces how those pieces interact.
 
 > Example: _"does Fake Out work on Farigiraf?"_ → "Fake Out is a +3 priority
 > move; Armor Tail negates priority moves; if Farigiraf has Armor Tail, Fake Out
 > fails." Every answer carries its reasoning, the cited data, an explicit
-> inference/uncertainty flag, and the generation/format it's based on.
+> inference/uncertainty flag, and that it is based on Pokémon Champions.
 
-It serves two blended use cases: **competitive team-building** (filter queries,
-mechanics reasoning, battle math across eleven data scopes) and **whole-games
-curiosity** (lookups, evolutions, matchups, where-to-catch, in-game trivia,
-glitches, Mystery Dungeon).
+Asking about something that is not on the current Champions roster is declined:
+Oak **names the entity and says it is not in the Champions roster**, with no
+other-game facts.
 
 ## Status
 
 ✅ **Implemented and deployed.** Runs in production on [Fly.io](https://fly.io)
 (app `oak-gowtam`). The codebase is the source of truth; the docs below describe
-the design intent.
+the design intent. Product identity after the Champions-first cut lives in
+[`docs/features/champions-first/`](docs/features/champions-first/).
 
 ## Features
 
 - **Reasoned, cited answers.** Each response is a Zod-validated `OakAnswer`
   rendered field-by-field: the answer, the reasoning, cited sources, explicit
-  inference/uncertainty flags, and the generation/format it's based on.
-- **Whole-games coverage** — beyond the typed competitive tools, the agent can
-  write **guarded read-only SQL** (`run_sql`) against an offline national-dex
-  warehouse for aggregations the typed tools can't express ("which species'
-  dex number equals its base-stat total?"), and do **full-text retrieval**
-  (`search_wiki`) over a self-built, games-only Fandom wiki corpus for in-game
-  locations, events, glitches, walkthrough prose, and Mystery Dungeon. Oak has
-  **no live web tool** — time-sensitive facts degrade honestly instead of
-  guessing.
+  inference/uncertainty flags, and the Champions generation/format it's based on.
+- **Pokémon Champions only.** Every new chat turn, Dex page, calculator, living
+  team, usage view, voice turn, box paste, and screenshot parse is Champions for
+  the **current regulation**. There is no generation picker and no National Dex
+  default. The header chip is a **display-only regulation** indicator (not an
+  eleven-scope menu).
 - **Accounts are optional.** Anyone can use Oak as a **guest** (in-memory,
   per-session multi-turn). Signing in with an **email one-time code** unlocks the
   durable, per-account features below. Guests and signed-in users get separate,
   tiered rate limits.
 - **Durable chat history** (signed-in) — conversations persist in Postgres, with
-  search, format filter, pin, rename, and delete. A guest thread is imported into
-  the account on first sign-in.
-- **Team builder** (signed-in) — create, edit, import, and export teams (Showdown
-  paste format). A team can be set **active** for a conversation, scoping the
-  agent's answers to that team.
-- **Competitive usage reference** — a public, web-only [`/meta`](web/src/app/(reference)/meta/)
-  section (no sign-in needed, like `/pokedex`): a leaderboard plus a per-species
-  drill-in with a usage-derived representative set, a Showdown-paste copy
-  affordance, and an "Ask Oak" deep link into chat. Backed by stored Smogon
-  monthly ladder usage stats (v1: Gen 9 OU) and the agent's matching
-  `get_meta_usage` tool (see [Data](#data)).
-- **Voice mode** (signed-in) — real-time spoken conversation with Oak (a Pokédex
-  persona). The browser talks directly to xAI's Grok Voice realtime API over
-  WebSocket with a server-minted ephemeral token; the voice model calls Oak's
-  same tool layer and the finished turns land in the same conversation history
+  search, pin, rename, and delete. A guest thread is imported into the account on
+  first sign-in. Old transcripts are not rewritten.
+- **Team builder** (signed-in) — create, edit, import, and export **living**
+  Champions teams (Showdown paste; Stat Points in the EV fields, no Tera, level
+  50). Other-format teams from before this cut are **archived**, not living. A
+  team can be set **active** for a conversation.
+- **Live Champions usage** — a public [`/usage`](web/src/app/(reference)/usage/)
+  section (no sign-in needed): Doubles ladder by default, Singles as a second
+  view, leaderboard plus species drill-in, dated as live. Backed by the same
+  live T15 `get_usage_stats` client as chat (championsbattledata.com). Smogon
+  monthly OU and `/meta` are gone (`/meta` redirects to `/usage`).
+- **Voice mode** (signed-in) — real-time spoken conversation with Oak as a
+  Champions coach. The browser talks directly to xAI's Grok Voice realtime API
+  over WebSocket with a server-minted ephemeral token; the voice model calls
+  Oak's same tool layer and finished turns land in the same conversation history
   (see [Voice mode](#voice-mode)).
 - **Artifact viewer** — answers can open rich, interactive side-panel artifacts
   (Pokémon, moves, abilities, items, teams, comparisons, damage calcs, type
   matchups) with clickable entity links and citations.
+- **Calculator** — a first-class `/calc` screen (and a chat overlay via the
+  `/calc` slash) for honest damage estimates at Level 50 with Stat Points.
+  Edits are not asks; **Explain this calc** is a normal chat turn.
 - **Image input (vision)** — attach up to 4 images per turn ("what is this?",
-  "rate this team sheet"); all three models are vision-capable.
-- **Multi-generation scope** — the typed competitive tools read one of **eleven
-  data scopes**: **National Dex** (all battle-relevant forms), **Pokémon
-  Champions**, Gen 9 / Scarlet-Violet, and mainline **Gens 1–8**
-  (Sword/Shield, Sun/Moon–USUM, XY/ORAS, Black/White, Diamond/Pearl, Emerald,
-  Red/Blue). New conversations default to **National Dex**. The scope is
-  **resolved per turn on the server** — an explicit mention ("analyze my **gen
-  7** team", "in **Scarlet and Violet**…", "for **gen 2**") switches it;
-  otherwise the conversation stays in its current scope. The header **scope
-  chip** is interactive: tap it to pick any of the eleven scopes (seeding the
-  next message), and it always shows which game the current answer is based on,
-  so a wrong guess is a one-tap correction rather than a silently mis-scoped
-  answer. In Champions scope, if you ask about something that only exists in
-  mainline Gen 9, Oak says so and points you at the scope chip.
+  "rate this team sheet"); images are interpreted as Champions (stats screen,
+  team sheet). All three models are vision-capable.
 - **Admin panel** (operator-only) — a private `/admin` dashboard for the single
   owner: usage/growth, estimated cost by model, error rollups, per-turn
-  drill-down, a live view, read-only account/conversation/team browsers, and a
-  **Settings** tab to switch the active model. It is gated by an `ADMIN_EMAILS`
-  allowlist on top of the existing email-OTP auth (see
+  drill-down, a live view, read-only account/conversation/team browsers, the
+  Champions item allowlist, and a **Settings** tab to switch the active model.
+  Gated by an `ADMIN_EMAILS` allowlist on top of email-OTP auth (see
   [Admin panel](#admin-panel)).
 
 ## Agent architecture
 
 One provider-agnostic tool-loop serves every question. A chat turn arrives at
 `POST /api/chat` (SSE), which rate-limits, validates any attached images, and
-**deterministically resolves the turn's scope** (an in-message signal beats a
-chip pick beats the conversation's sticky scope) — scope and model are
-server-controlled context, never LLM-visible tool inputs. The runtime then
-assembles a byte-stable, prompt-cached prefix (one canonical system prompt for
-all three providers, with the active scope's facts injected), and loops up to
-10 iterations: the model calls tools, tools return structured facts (they
-**never throw in-domain** — misses come back as documented shapes like
-`{ found: false, suggestions }`), and the turn ends when the model calls
-`submit_answer`, whose payload is validated against the `OakAnswer` Zod schema.
-In-domain failures still produce a valid `OakAnswer`; only transport faults
-surface as SSE errors.
+**always binds Champions** (`ctx.mode = "champions"`). `scope_seed`,
+`champions_mode`, and in-message generation signals do not switch games. The
+runtime then assembles a byte-stable, prompt-cached prefix (one canonical
+Champions system prompt for all three providers) and loops up to 10 iterations:
+the model calls tools, tools return structured facts (they **never throw
+in-domain** — misses come back as documented shapes like `{ found: false,
+suggestions }`), and the turn ends when the model calls `submit_answer`, whose
+payload is validated against the `OakAnswer` Zod schema. In-domain failures
+still produce a valid `OakAnswer`; only transport faults surface as SSE errors.
+
+**Tool barrel (ADR-2):** historically the list was append-only so the prompt
+cache stayed byte-stable. Champions-first **removes** T14 `get_encounters`,
+T18 `run_sql`, T19 `search_wiki`, and T21 `get_meta_usage` and **accepts a new
+prompt-cache prefix**. Dispatch of a hallucinated old name returns
+`{ error: "unknown_tool" }`. **17 tools** remain.
 
 ```mermaid
 flowchart TB
@@ -110,11 +102,11 @@ flowchart TB
     end
 
     subgraph edge["HTTP edge — src/app/api/chat/route.ts"]
-        ROUTE["Validate · rate limit · image checks<br/>deterministic scope resolution (eleven scopes)"]
+        ROUTE["Validate · rate limit · image checks<br/>always Champions"]
     end
 
     subgraph loop["Agent loop — src/agent/runtime.ts (provider-agnostic, ≤10 iterations)"]
-        RUNTIME["Cached prompt prefix (system + few-shot + tool defs)<br/>+ history + user turn"]
+        RUNTIME["Cached prompt prefix (Champions body + few-shot + 17 tool defs)<br/>+ history + user turn"]
     end
 
     subgraph providers["LLMProvider seam — src/agent/providers/"]
@@ -123,18 +115,15 @@ flowchart TB
         GPT["GPT-5.5"]
     end
 
-    subgraph tools["20 tools — src/agent/tools/ (never throw in-domain)"]
-        TYPED["Typed lookups (T1–T8)<br/>resolve_entity · query_pokedex · get_pokemon · get_move<br/>get_ability · get_type_matchups · get_evolution_chain · get_item"]
-        MATH["Battle math (T9–T10)<br/>compute_stat · estimate_damage — pure formulas"]
-        FEAT["Feature tools (T12–T17)<br/>get_team · save_team · get_encounters<br/>get_usage_stats · list_teams · get_learnset"]
-        SQL["run_sql (T18)<br/>guarded read-only SQL over the offline warehouse"]
-        WIKI["search_wiki (T19)<br/>Postgres full-text search over the Fandom game corpus"]
-        META["get_meta_usage (T21)<br/>stored Smogon monthly ladder usage stats"]
-        SUBMIT["submit_answer (T11)<br/>terminates the turn"]
+    subgraph tools["17 tools — src/agent/tools/ (never throw in-domain)"]
+        TYPED["Typed lookups<br/>resolve_entity · query_pokedex · get_pokemon · get_move<br/>get_ability · get_type_matchups · get_evolution_chain · get_item"]
+        MATH["Battle math<br/>compute_stat · estimate_damage — Champions Stat Points at L50"]
+        FEAT["Feature tools<br/>get_team · save_team · get_usage_stats (live T15)<br/>list_teams · get_learnset · lookup_box"]
+        SUBMIT["submit_answer<br/>terminates the turn"]
     end
 
     REPOS["Repos — src/data/repos/<br/>(sole Postgres readers)"]
-    PG[("Postgres<br/>eleven @pkmn format indexes · natdex warehouse<br/>wiki corpus · accounts / conversations / teams")]
+    PG[("Postgres<br/>Champions @pkmn index · accounts / conversations / teams")]
     REDIS[("Redis (or in-process)<br/>guest sessions · rate limiter · OTP throttle")]
     ANSWER["OakAnswer (Zod-validated)"]
 
@@ -145,9 +134,6 @@ flowchart TB
     RUNTIME -->|"tool_use → dispatch()"| tools
     TYPED --> REPOS
     FEAT --> REPOS
-    SQL --> REPOS
-    WIKI --> REPOS
-    META --> REPOS
     REPOS --> PG
     SUBMIT --> ANSWER --> ROUTE
     ROUTE -->|"SSE: turn · scope · tool_activity* · answer_start · answer_delta* · answer | stopped"| clients
@@ -158,10 +144,10 @@ flowchart TB
 ```
 
 The client sees the loop as an SSE stream: one `turn` event first (the
-server-minted `turn_id`), one `scope` event (which game this turn is answered
-from and why), a `tool_activity` event per tool call, then `answer_start` /
-`answer_delta`\* (token-by-token markdown) and exactly one terminal `answer` —
-or `stopped`, if the user explicitly stopped the turn.
+server-minted `turn_id`), one `scope` event (always Champions), a
+`tool_activity` event per tool call, then `answer_start` / `answer_delta`\*
+(token-by-token markdown) and exactly one terminal `answer` — or `stopped`, if
+the user explicitly stopped the turn.
 
 **Turns are durable server-side** (`docs/features/background-turns/design.md`):
 the SSE connection is only a *subscription*. If the phone sleeps, the tab
@@ -182,12 +168,11 @@ per account. Voice mode bypasses the text loop entirely — the
 A single **TypeScript / Next.js (App Router) monolith** — one language across
 frontend, API, agent loop, and the ingest CLI.
 
-- **Data** — **Postgres + Drizzle ORM** (node-postgres). Six format indexes
-  (`scarlet-violet`, `champions`, mainline `gen-5`…`gen-8`) built offline from
-  the [`@pkmn`](https://github.com/pkmn) ecosystem (`@pkmn/dex`, `@pkmn/data`,
-  `@pkmn/mods`), plus a global **national-dex warehouse** and a **wiki prose
-  corpus** built from committed/crawled snapshots — see [Data](#data).
-- **Agent** — a provider-agnostic tool-loop over **20 tools** that return
+- **Data** — **Postgres + Drizzle ORM** (node-postgres). One Champions format
+  index built offline from the [`@pkmn`](https://github.com/pkmn) ecosystem
+  (`@pkmn/dex`, `@pkmn/data`, `@pkmn/mods`). Wiki, national-dex warehouse,
+  encounter, PMD, and Smogon OU tables are dropped. See [Data](#data).
+- **Agent** — a provider-agnostic tool-loop over **17 tools** that return
   structured facts; the model reasons on top and emits a Zod-validated
   `OakAnswer`.
 - **Models** — **xAI Grok 4.6** (native Responses API) is the primary/default,
@@ -209,48 +194,23 @@ frontend, API, agent loop, and the ingest CLI.
 ## Data
 
 Everything the agent reads lives in Postgres, built by `npm run ingest` — which
-is **fully offline and deterministic** (it reads local packages and committed
-snapshot files, never the network). Pokémon `sprite_url` / `artwork_url` values
-are absolute first-party media links (`/api/media/sprite|artwork|dex-sprite`),
-proxied at request time from Showdown / PokeAPI with a long cache — after
-changing those URL helpers, **re-ingest** so index rows pick up the new hosts.
-Four sources feed ingest, plus one separately-run exception:
+is **fully offline and deterministic** (it reads local `@pkmn` packages, never
+the network). Pokémon `sprite_url` / `artwork_url` values are absolute
+first-party media links (`/api/media/sprite|artwork|dex-sprite`), proxied at
+request time from Showdown / PokeAPI with a long cache — after changing those
+URL helpers, **re-ingest** so index rows pick up the new hosts.
 
-1. **`@pkmn` format indexes** — Pokémon, moves, abilities, items, types, and
-   learnsets for the eleven data scopes, from the local `@pkmn` npm packages
-   (the gen scopes come from `Dex.forGen(n)`).
-2. **The national-dex warehouse** (backing `run_sql`) — committed snapshots in
-   `web/src/ingest/data/`, rebuilt manually and rarely via `npm run fetch:natdex`
-   (PokeAPI's veekun-derived CSVs plus a Mystery Dungeon dataset):
-   `natdex.json` (one row per species: dex number, gen, color/shape, capture
-   rate, BST, evolution, types), `machines.json` (TM/HM/TR per version group),
-   `natdex-moves.json` (every move's gen/type/class), `classic-encounters.json.gz`
-   (wild encounter tables, **Gens 1–7 only**, best-effort), and `pmd.json`
-   (Mystery Dungeon recruit locations/rates). These tables are global — no
-   format column.
-3. **Catch-location data** (backing `get_encounters`) — a committed snapshot at
-   `web/src/ingest/data/encounters.json`, crawled manually via
-   `npm run fetch:encounters`. Coverage is **Gen 1 → Sword/Shield + Let's Go**
-   — PokeAPI has no encounter records for Scarlet/Violet, Legends: Arceus, or
-   BDSP, and the agent surfaces that gap transparently. Results are annotated
-   against the active gen scope.
-4. **The wiki corpus** (backing `search_wiki`) — `npm run fetch:wiki` politely
-   crawls pokemon.fandom.com's MediaWiki API for **game-only** categories
-   (locations, routes/towns, glitches, in-game mechanics/events, items,
-   Mystery Dungeon — no anime/movie/manga categories) into the **gitignored**
-   `web/.wiki-cache/`; ingest builds `wiki_page`/`wiki_chunk` with Postgres
-   full-text search. Content is CC BY-SA 4.0 with per-page attribution stored
-   and cited (Bulbapedia, CC BY-NC-SA, is never crawled). The cache is not
-   committed — an unbuilt corpus just means `search_wiki` returns no results,
-   never an error.
+**Champions-only ingest (ADR-4).** `DEFAULT_FORMATS = ["champions"]`. Ingest
+builds the Champions pokedex, learnsets, searchable names, and reference cache,
+then writes `ingest_meta`. Other-game warehouse pipelines (wiki, national-dex,
+encounters, PMD, Smogon meta) are gone. `npm run sync:meta` is **retired** —
+live Champions usage is fetched at request time by T15, not stored as monthly
+OU rows.
 
-**The one exception:** `meta_snapshot` + `meta_usage` (backing `get_meta_usage`
-and the `/meta` reference pages) are **not** built by `npm run ingest` — they're
-built by a separate CLI, `npm run sync:meta`, which fetches Smogon's published
-monthly ladder usage stats (v1: Gen 9 OU) over the network and replaces each
-`(meta_format, month)` pair's rows idempotently. This is the codebase's **one
-network-fetching DB writer**; `sync:meta` is run manually, monthly, after
-Smogon publishes each month — it is never invoked as part of `ingest`.
+The historical `Format` union (`national-dex`, `gen-1`…`gen-8`,
+`scarlet-violet`, `champions`) remains so **archived teams** and old
+conversations still decode. Runtime, ingest, Dex, calc, and living teams are
+Champions only.
 
 ## Getting started
 
@@ -268,12 +228,8 @@ npm install
 cp .env.example .env.local   # add XAI_API_KEY (required); other keys are optional
 npm run docker:dev           # Postgres + next dev on :3000 (the intended dev environment)
 npm run docker:migrate       # apply Drizzle migrations
-npm run docker:ingest        # build the index from @pkmn + committed snapshots (migrates first)
+npm run docker:ingest        # build the Champions index from @pkmn (migrates first)
 ```
-
-The `search_wiki` corpus is the one piece that isn't committed: run
-`npm run fetch:wiki` (a polite, networked crawl) before ingest if you want wiki
-retrieval locally — without it, `search_wiki` simply returns no results.
 
 Only `XAI_API_KEY` is required to boot (Grok is the default model). The other
 keys are optional and validated on use:
@@ -314,11 +270,7 @@ npm run db:migrate && npm run ingest && npm run dev
 | `npm run lint`            | `eslint .`.                                                           |
 | `npm run db:generate`     | `drizzle-kit generate` — author a new migration from the schema.      |
 | `npm run db:migrate`      | Apply Drizzle migrations to `$DATABASE_URL`.                          |
-| `npm run ingest`          | (Re)build the Postgres index from `@pkmn` + snapshots (migrates first). Offline. |
-| `npm run sync:meta`       | Fetch + store Smogon monthly ladder usage stats (`meta_snapshot`/`meta_usage`). The one networked DB writer; run monthly, by hand. |
-| `npm run fetch:encounters`| Re-crawl the PokeAPI encounter snapshot (manual, networked, rare).    |
-| `npm run fetch:natdex`    | Re-crawl the natdex warehouse snapshots — veekun CSVs + PMD dataset (manual, networked, rare). |
-| `npm run fetch:wiki`      | Crawl the Fandom game-content corpus into `web/.wiki-cache/` (manual, networked; feeds `search_wiki`). |
+| `npm run ingest`          | (Re)build the Champions Postgres index from `@pkmn` (migrates first). Offline. Default `--formats=champions`. |
 | `npm run eval`            | Full LLM-judge golden suite (needs live `XAI_API_KEY` + `ANTHROPIC_API_KEY`). |
 | `npm run docker:*`        | Docker-Compose helpers (`dev`, `down`, `migrate`, `ingest`, `logs`, `psql`, `sh`). |
 
@@ -340,10 +292,9 @@ restart. A model whose provider API key isn't configured shows as disabled in
 the picker, and selecting it is rejected server-side with a 409. If the stored
 selection is ever missing or invalid, resolution fails soft to `grok-4.6`.
 
-All three providers share **one canonical prompt body** — the active scope's
-facts (Champions regulation or a mainline gen profile) are injected as a
-templated section, and each provider gets only a thin style wrapper, so the
-prompt-cached prefix stays byte-stable per scope.
+All three providers share **one canonical Champions prompt body**. Each
+provider gets only a thin style wrapper, so the prompt-cached prefix stays
+byte-stable (new prefix after ADR-2).
 
 ## Voice mode
 
@@ -354,10 +305,10 @@ to xAI's Grok Voice realtime API over WebSocket using a server-minted ephemeral
 token — there is no WebSocket proxy through Oak's server. The voice model is
 its own brain (not the text tool-loop): it calls Oak's existing tool layer as
 realtime function calls, relayed per-call through `/api/voice/tool` into the
-same `dispatch()` (minus `submit_answer`, `run_sql`, and `search_wiki`), and
-speaks its answers directly. Each finished voice turn is persisted into the
-signed-in conversation as a synthesized, schema-valid `OakAnswer`, so voice and
-text share one unified history. Design: [`docs/features/voice-mode/`](docs/features/voice-mode/).
+same `dispatch()` (minus `submit_answer` only), and speaks its answers
+directly. Each finished voice turn is persisted into the signed-in conversation
+as a synthesized, schema-valid `OakAnswer`, so voice and text share one unified
+history. Design: [`docs/features/voice-mode/`](docs/features/voice-mode/).
 
 ## Admin panel
 
@@ -365,10 +316,11 @@ A private operator dashboard for the single owner, served as a protected
 `/admin` route group inside the same Next.js app (no second deploy). It
 surfaces usage & growth, **estimated** cost by model, error rollups, a
 searchable per-turn drill-down, a live activity view, read-only browsers for
-accounts, conversations, and saved teams, and a **Settings** tab for switching
-the active model (see [Models](#models)). It was originally read-only — the
-only writes were the two append-only records below — until Settings added its
-first genuine mutation, an upsert into a Postgres `app_setting` table.
+accounts, conversations, and saved teams, the Champions item allowlist, and a
+**Settings** tab for switching the active model (see [Models](#models)). It was
+originally read-only — the only writes were the two append-only records below —
+until Settings added its first genuine mutation, an upsert into a Postgres
+`app_setting` table.
 
 - **Access** — reuses the existing email-OTP login, gated by an `ADMIN_EMAILS`
   allowlist (comma-separated). Set it as a secret:
@@ -406,16 +358,18 @@ Full requirements and design live in
 Deployed to Fly from `web/` (`cd web && fly deploy`) via the production
 `Dockerfile` (`output: "standalone"`). The
 release command runs `migrate.mjs` (a plain-ESM migration runner) before the new
-version takes traffic, so migrations apply atomically on each deploy. With
-`REDIS_URL` set, the guest session store, rate limiter, and OTP throttle all
-live in Redis and the app machine(s) are stateless (safe to scale out or
-recycle); with it unset, a single always-on machine backs those stores
-in-process instead. `/api/health` is a DB-free (and Redis-free) liveness probe.
-See [`docs/`](docs/) and the deployment notes for details.
+version takes traffic, so migrations apply atomically on each deploy. After the
+Champions-first schema cutover, re-ingest production with
+`npm run ingest` (Champions default). With `REDIS_URL` set, the guest session
+store, rate limiter, and OTP throttle all live in Redis and the app machine(s)
+are stateless (safe to scale out or recycle); with it unset, a single always-on
+machine backs those stores in-process instead. `/api/health` is a DB-free (and
+Redis-free) liveness probe. See [`docs/`](docs/) and the deployment notes for
+details.
 
 ### Redis (state tier)
 
-Guest session history/scope, the chat rate limiter, and the OTP throttle are
+Guest session history, the chat rate limiter, and the OTP throttle are
 dual-backend (`web/src/server/redis.ts`): in-process when `REDIS_URL` is unset,
 Redis when it's set. Production runs a small self-run Fly Redis machine
 (`web/deploy/redis/`, its own `fly.toml` + `Dockerfile`) reachable only over
@@ -437,16 +391,17 @@ on Redis being up.
 
 | Doc                                                                      | What it covers                                                                                          |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| [`docs/requirements/requirements.md`](docs/requirements/requirements.md) | Core business requirements — user stories, acceptance criteria, business rules.                         |
-| [`docs/agent-design/`](docs/agent-design/)                               | The agent's internals (fixed): topology, tools, data sources, prompts, output schema, eval spec.        |
-| [`docs/architecture/design.md`](docs/architecture/design.md)             | Technical design — stack, data store, ingest pipeline, file structure, interfaces, build phases.        |
-| [`docs/features/`](docs/features/)                                       | Per-feature requirements + design: account creation, chat history, team builder, artifact viewer, admin panel, generation scope, [oak-v2 (whole-games)](docs/features/oak-v2/), [voice mode](docs/features/voice-mode/), the [iOS app](docs/features/iphone-app/) and the [Android app](docs/features/android-app/). |
-| [`docs/agent-design/generation-scope-addendum.md`](docs/agent-design/generation-scope-addendum.md) | How the multi-generation scope (Gen 9 + Champions + Gens 5–8) amends the frozen agent-design contract. |
+| [`docs/features/champions-first/`](docs/features/champions-first/)       | **Current product** — Champions-only coach: requirements, ADRs, implementation plan.                    |
+| [`docs/requirements/requirements.md`](docs/requirements/requirements.md) | Historical core requirements — superseded where they conflict with champions-first.                     |
+| [`docs/agent-design/`](docs/agent-design/)                               | Historical agent internals; ADR-2 is the append-only exception (17 tools, new cache prefix).            |
+| [`docs/architecture/design.md`](docs/architecture/design.md)             | Technical design — stack, data store, ingest pipeline. Predates several choices.                        |
+| [`docs/features/`](docs/features/)                                       | Per-feature requirements + design (accounts, history, teams, admin, voice, iOS, Android).               |
 | [`docs/design/signal.md`](docs/design/signal.md)                         | Visual language to implement (**Signal**). Short contract: [`docs/design/soul.md`](docs/design/soul.md). |
 | [`docs/eval-reports/`](docs/eval-reports/)                               | Judged eval runs (incl. a Grok-vs-Claude A/B).                                                           |
+| [`docs/app-store/ios.md`](docs/app-store/ios.md)                         | iOS App Store listing copy (Champions coach).                                                           |
 
-> The architecture doc predates some implementation choices — notably the move
-> from PokeAPI/SQLite to `@pkmn`/Postgres (PokeAPI now survives only as the
-> manual encounter + natdex warehouse snapshots), the multi-user
-> account/history/team features, and the oak-v2 whole-games tools. Where they
-> disagree, trust the code and `CLAUDE.md`.
+> The architecture doc and older agent-design pages predate several
+> implementation choices — notably the move from PokeAPI/SQLite to
+> `@pkmn`/Postgres, multi-user accounts, and the Champions-first cut (17 tools,
+> no wiki/SQL/OU). Where they disagree, trust the code and `AGENTS.md` /
+> `CLAUDE.md` / this README.

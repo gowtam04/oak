@@ -1,7 +1,8 @@
 /**
- * /abilities/[slug] — a single ability reference page: effect prose,
- * availability chips, the full linked roster of Pokémon that can have it, and
- * an "Ask Oak" CTA.
+ * /abilities/[slug] — a single ability reference page: effect prose, the full
+ * linked roster of Pokémon that can have it, and an "Ask Oak" CTA.
+ *
+ * Champions-only (CF-DEX-US-1): unknown slugs 404; no generation picker.
  *
  * Detail route config + dynamic-import + notFound rules: see /pokedex/[slug].
  */
@@ -12,7 +13,6 @@ import { notFound } from "next/navigation";
 
 import RefRosterList from "@/components/reference/RefRosterList";
 import type { RefRosterGroup } from "@/components/reference/RefRosterList";
-import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
 import {
   buildAbilityDescription,
@@ -28,7 +28,10 @@ function holderGroups(data: AbilityPageData): RefRosterGroup[] {
   if (data.learnedBy.length === 0) return [];
   const entries = [...data.learnedBy]
     .sort((a, b) => a.displayName.localeCompare(b.displayName))
-    .map((h) => ({ href: `/pokedex/${h.slug}`, primary: h.displayName }));
+    .map((h) => ({
+      href: `/pokedex/${h.slug}`,
+      primary: h.displayName,
+    }));
   return [{ heading: `Pokémon with ${data.displayName}`, entries }];
 }
 
@@ -36,6 +39,7 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ format?: string | string[] }>;
 }): Promise<Metadata> {
   const { slug } = await params;
   const { loadAbilityPage } = await import("@/data/reference-pages");
@@ -52,6 +56,7 @@ export default async function AbilityDetailPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ format?: string | string[] }>;
 }) {
   const { slug } = await params;
   const { loadAbilityPage } = await import("@/data/reference-pages");
@@ -84,11 +89,6 @@ export default async function AbilityDetailPage({
       )}
 
       <section className="ref-card ref-detail-section">
-        <h2 className="ref-detail-section__title">Availability</h2>
-        <FormatChips formats={data.availability} />
-      </section>
-
-      <section className="ref-card ref-detail-section">
         <h2 className="ref-detail-section__title">
           Pokémon with {data.displayName} ({data.learnedBy.length})
         </h2>
@@ -96,7 +96,7 @@ export default async function AbilityDetailPage({
           <RefRosterList groups={holderGroups(data)} />
         ) : (
           <p className="ref-intro">
-            No Pokémon in this scope have {data.displayName}.
+            No Pokémon on the Champions roster have {data.displayName}.
           </p>
         )}
       </section>

@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// Renders an answer's `inferences[]` as Signal inferred lines — not a banner
-/// and not an azure "Oak's deductions" card.
+/// Renders an answer's `inferences[]` as an azure-soft callout with a dashed
+/// azure border (Enamel & Paper `.inference-callout`).
 ///
-/// Only the word **Inferred** is `Theme.accent` 600. The rest of the sentence
+/// Only the word **Inferred** is `Theme.azure` 600. The rest of the sentence
 /// is mute. When a `note` is present it is the short reason (`Inferred from
 /// {note}.`); otherwise the claim follows an em dash.
 ///
@@ -18,7 +18,19 @@ struct InferencesView: View {
           inferredLine(inference)
         }
       }
+      .padding(Theme.Spacing.md)
       .frame(maxWidth: .infinity, alignment: .leading)
+      .background(
+        Theme.azureSoft,
+        in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+          .strokeBorder(
+            Theme.azure,
+            style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+          )
+      }
     }
   }
 
@@ -36,7 +48,7 @@ struct InferencesView: View {
     return (
       Text("Inferred")
         .font(Theme.body(.subheadline, weight: .semibold))
-        .foregroundStyle(Theme.accent)
+        .foregroundStyle(Theme.azure)
       + Text(rest)
         .font(Theme.body(.subheadline))
         .foregroundStyle(Theme.textSecondary)

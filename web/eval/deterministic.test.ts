@@ -18,15 +18,13 @@
  *
  * Asserts:
  *   1. Every deterministic case
- *      (G1/G3/G5/G6/G8/G11/G15/G26/G32/G35/G44/G47/G56/G57) passes its
- *      structural checks against the real tools + fixture data, under EACH
- *      provider.
- *   2. The subset is exactly the one design.md + Oak v2 §7 specifies (a guard
- *      against the subset silently drifting), and every such case has a
- *      registered plan.
- *   3. Spot-checks on the load-bearing values: G15 = 169, G11 says "immune",
- *      G3 suggests "Will-O-Wisp", and G1 cites both learnsets — under each
- *      provider (the composed answer is derived from identical tool output).
+ *      (G1/G3/G5/G6/G8/G11/G15/G17/G61) passes its structural checks against
+ *      the real tools + Champions fixture data, under EACH provider.
+ *   2. The subset matches the Champions-first goldens (a guard against the
+ *      subset silently drifting), and every such case has a registered plan.
+ *   3. Spot-checks: G15 = 169 Stat Points Speed, G11 says "immune", G3
+ *      suggests "Will-O-Wisp", G1 cites both learnsets, G17 declines
+ *      Excadrill — under each provider.
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -44,7 +42,7 @@ import { createPgSchema, installAsSingleton, type PgFixture } from "../test/supp
 import type { AssertResult } from "./judge";
 import type { DeterministicProvider } from "./deterministic";
 
-/** IDs design.md + Oak v2 §7 pin to the deterministic CI subset. */
+/** IDs pinned to the Champions-first deterministic CI subset. */
 const EXPECTED_IDS = [
   "G1",
   "G3",
@@ -53,13 +51,8 @@ const EXPECTED_IDS = [
   "G8",
   "G11",
   "G15",
-  "G26",
-  "G32",
-  "G35",
-  "G44",
-  "G47",
-  "G56",
-  "G57",
+  "G17",
+  "G61",
 ];
 
 /** Both scripted transports are gated — Anthropic content-blocks AND native Grok. */
@@ -83,20 +76,16 @@ beforeAll(async () => {
   fix = await createPgSchema({ seed: "eval" });
   await installAsSingleton(fix);
 
-  // run_sql (G26/G32/G35/G44/G47) reads its OWN sandbox pool
-  // (src/data/sql-sandbox.ts), not ctx.db/the singleton above — install the
-  // same fixture pool there too, mirroring run-sql.oracle.test.ts.
-  const { installSandboxPool } = await import("@/data/sql-sandbox");
-  installSandboxPool(fix.bundle.pool);
-
   const { PLANNED_CASE_IDS, runDeterministic } = await import(
     "./deterministic"
   );
   plannedIds = PLANNED_CASE_IDS;
 
   // No `db` override → ctx binds the singleton (the seeded fixture schema), so
-  // the DB-backed tools AND resolve_entity read the same data.
-  ctx = await createAgentContext();
+  // the DB-backed tools AND resolve_entity read the same data. Champions-first:
+  // every golden is mode "champions" (cases.ts), but bind it on ctx too so a
+  // forgotten case.mode still hits the Champions partition.
+  ctx = await createAgentContext({ mode: "champions" });
   byProvider = {} as Record<DeterministicProvider, ProviderRun>;
   for (const provider of PROVIDERS) {
     const results = await runDeterministic(deterministicCases, ctx, provider);
@@ -108,13 +97,11 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
-  const { resetSandboxPool } = await import("@/data/sql-sandbox");
-  resetSandboxPool();
   await fix?.cleanup();
 });
 
 describe("deterministic subset — membership", () => {
-  it("matches the design.md-pinned set of case IDs", () => {
+  it("matches the Champions-first pinned set of case IDs", () => {
     const got = deterministicCases.map((c) => c.id).sort();
     expect(got).toEqual([...EXPECTED_IDS].sort());
   });
@@ -147,9 +134,10 @@ for (const provider of PROVIDERS) {
   });
 
   describe(`deterministic subset [${provider}] — load-bearing spot checks`, () => {
-    it("G15 computes Garchomp's Speed as exactly 169 (BR-6)", () => {
+    it("G15 computes Garchomp's Speed as exactly 169 with 32 Stat Points (BR-6)", () => {
       const { byId } = byProvider[provider];
       expect(byId.G15.answer.answer_markdown).toContain("169");
+      expect(byId.G15.answer.answer_markdown).toContain("Stat Point");
       expect(byId.G15.answer.damage_calc?.result.value).toBe(169);
     });
 
@@ -175,53 +163,26 @@ for (const provider of PROVIDERS) {
       );
     });
 
-    it("G35 rejects the Fire-Fang-Gen-3-bug premise: Fire Fang is Generation 4 (BQ-10)", () => {
-      const md = byProvider[provider].byId.G35.answer.answer_markdown;
-      expect(md).toContain("Generation 4");
+    it("G17 declines Excadrill as not in the Champions roster (CF-SC-2)", () => {
+      const a = byProvider[provider].byId.G17.answer;
+      expect(a.status).toBe("answered");
+      expect(a.answer_markdown).toContain("Excadrill");
+      expect(a.answer_markdown).toContain("not in the Champions roster");
     });
 
-    it("G32 finds the fixture's real purple species (gengar/koffing/weezing/grimer) (BQ-7)", () => {
-      const md = byProvider[provider].byId.G32.answer.answer_markdown;
-      expect(md).toContain("gengar");
-      expect(md).toMatch(/^\*\*4\*\*/);
-    });
-
-    it("G56 counts the whole-dex natdex_species table, not the narrower Champions roster", () => {
-      const a = byProvider[provider].byId.G56.answer;
-      // The fixture's natdex_species table (NATDEX_SPECIES_ROWS) has 9 rows —
-      // asserting the literal count pins that the aggregation ran over the
-      // whole table, not some narrower/filtered roster.
-      expect(a.answer_markdown).toContain("9");
-      expect(a.citations.some((c) => c.source.startsWith("natdex_species"))).toBe(
-        true,
-      );
-    });
-
-    it("G57 finds Darmanitan-Galar-Zen via LEAST/GREATEST-normalized, form-aware SQL", () => {
-      const a = byProvider[provider].byId.G57.answer;
-      expect(a.answer_markdown).toContain("Darmanitan");
+    it("G61 keeps kangaskhan-mega with a learnset-unavailable warning (BOX-AC-1.2)", () => {
+      const a = byProvider[provider].byId.G61.answer;
       expect(
-        a.citations.some((c) => c.source.startsWith("pokemon")),
+        (a.proposed_team?.members ?? []).some(
+          (m) => m.species === "kangaskhan-mega",
+        ),
+      ).toBe(true);
+      expect(
+        (a.proposed_team_warnings ?? []).some(
+          (w) => w.code === "learnset_unavailable",
+        ),
       ).toBe(true);
     });
   });
 }
 
-describe("G57 plan — type-combo slot-order normalization (production incident regression)", () => {
-  it("issues a query normalized with LEAST/GREATEST, not an ordered-pair comparison", async () => {
-    const { planQueries } = await import("./deterministic");
-    const queries = planQueries("G57");
-    expect(queries.length).toBeGreaterThan(0);
-    for (const q of queries) {
-      expect(q).toContain("LEAST");
-      expect(q).toContain("GREATEST");
-    }
-  });
-
-  it("queries the form-aware pokemon@national-dex partition, not natdex_species", async () => {
-    const { planQueries } = await import("./deterministic");
-    const [query] = planQueries("G57");
-    expect(query).toContain("format = 'national-dex'");
-    expect(query).not.toContain("natdex_species");
-  });
-});

@@ -12,8 +12,10 @@
  *     memory — the cache resets on deploy and a miss simply re-fetches, which is
  *     acceptable for live data and avoids a schema migration,
  *   - resolves an Oak species/display name to the API's form-specific
- *     `saved_name` (index match → `/api/metadata` form fallback → miss), and
- *   - normalizes the API's `rows[]` into typed, rank-sorted usage entries.
+ *     `saved_name` (index match → `/api/metadata` form fallback → miss),
+ *   - normalizes the API's `rows[]` into typed, rank-sorted usage entries, and
+ *   - `listLeaderboard(ladder)` maps a bulk index payload into ranked rows
+ *     (ADR-5 — never N+1 `/api/battle` per species; missing ranks → unavailable).
  *
  * Plain module (no `server-only` import) so node unit tests can load and mock it.
  * It THROWS only on a transport/parse fault; the tool maps that to the in-domain
@@ -22,6 +24,7 @@
 
 import { env } from "@/env";
 import type { UsageEntry, UsageFormat } from "@/agent/schemas";
+import { type UsageLadder } from "./ladder";
 
 // --- Tunables --------------------------------------------------------------
 
@@ -61,6 +64,23 @@ export interface UsageData {
 export type UsageLookup =
   | { found: true; data: UsageData }
   | { found: false; suggestions: string[] };
+
+/** One ranked species on a live Champions ladder (ADR-5 bulk index). */
+export interface LeaderboardRow {
+  rank: number;
+  name: string;
+  usage_pct?: number;
+  sprite?: string;
+}
+
+export type LeaderboardResult =
+  | {
+      available: true;
+      season: string;
+      fetched_at: number;
+      rows: LeaderboardRow[];
+    }
+  | { available: false };
 
 // --- Low-level fetch (timeout + single retry) ------------------------------
 
@@ -129,11 +149,50 @@ function parsePct(p: unknown): number | null {
 const CATEGORY_TO_KEY: Record<string, keyof CategoryBuckets> = {
   move: "moves",
   item: "items",
+  held_item: "items",
   ability: "abilities",
   nature: "natures",
+  stat_alignment: "natures",
   spread: "spreads",
+  stat_points: "spreads",
   teammate: "teammates",
 };
+
+/**
+ * Live `stat_points` columns → HP/Atk/Def/SpA/SpD/Spe.
+ * Live CSV uses `sp_atk_points` / `sp_def_points`; longer names are fallbacks.
+ */
+const SPREAD_POINT_KEYS: readonly (readonly string[])[] = [
+  ["hp_points", "hp"],
+  ["attack_points", "atk"],
+  ["defense_points", "def"],
+  ["sp_atk_points", "special_attack_points", "spa"],
+  ["sp_def_points", "special_defense_points", "spd"],
+  ["speed_points", "spe"],
+];
+
+function spreadNameFromPoints(r: Record<string, unknown>): string | null {
+  const parts: number[] = [];
+  for (const keys of SPREAD_POINT_KEYS) {
+    let n: number | null = null;
+    for (const k of keys) {
+      n = readFiniteNumber(r[k]);
+      if (n != null) break;
+    }
+    if (n == null) return null;
+    parts.push(n);
+  }
+  return parts.join("/");
+}
+
+function rowDisplayName(
+  r: Record<string, unknown>,
+  key: keyof CategoryBuckets,
+): string | null {
+  if (typeof r.name === "string" && r.name.trim() !== "") return r.name.trim();
+  if (key === "spreads") return spreadNameFromPoints(r);
+  return null;
+}
 
 interface CategoryBuckets {
   moves: UsageEntry[];
@@ -161,9 +220,18 @@ interface IndexData {
   defaultSeason: string;
   names: string[];
   fetchedAt: number;
+  /** Raw `/api` `pokemon` payload — objects may carry bulk ranks (ADR-5). */
+  pokemon: unknown;
 }
 
 let indexCache: IndexData | null = null;
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
 
 function extractNames(pokemon: unknown): string[] {
   if (!Array.isArray(pokemon)) return [];
@@ -180,20 +248,117 @@ function extractNames(pokemon: unknown): string[] {
   return out;
 }
 
+function parseIndexPayload(raw: unknown, now: number): IndexData {
+  const obj = asRecord(raw) ?? {};
+  const defaultSeason =
+    typeof obj.defaultSeason === "string" ? obj.defaultSeason : "";
+  return {
+    defaultSeason,
+    names: extractNames(obj.pokemon),
+    fetchedAt: now,
+    pokemon: obj.pokemon,
+  };
+}
+
 async function getIndex(now: number, signal?: AbortSignal): Promise<IndexData> {
   if (indexCache && now - indexCache.fetchedAt < INDEX_TTL_MS) return indexCache;
-  const raw = (await fetchJson(`${baseUrl()}/api`, signal)) as {
-    defaultSeason?: unknown;
-    pokemon?: unknown;
-  };
-  const defaultSeason =
-    typeof raw.defaultSeason === "string" ? raw.defaultSeason : "";
-  indexCache = {
-    defaultSeason,
-    names: extractNames(raw.pokemon),
-    fetchedAt: now,
-  };
+  const raw = await fetchJson(`${baseUrl()}/api`, signal);
+  indexCache = parseIndexPayload(raw, now);
   return indexCache;
+}
+
+/** Second bulk endpoint — only if `/api` has names but no ranks (no N+1). */
+async function getIndexAlternate(
+  now: number,
+  signal?: AbortSignal,
+): Promise<IndexData | null> {
+  try {
+    const raw = await fetchJson(`${baseUrl()}/api/index`, signal);
+    return parseIndexPayload(raw, now);
+  } catch {
+    return null;
+  }
+}
+
+function readFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value.trim())) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function readPosition(obj: Record<string, unknown> | null): number | null {
+  if (!obj) return null;
+  return readFiniteNumber(obj.position ?? obj.rank);
+}
+
+function pokemonDisplayName(p: unknown): string | null {
+  if (typeof p === "string") return p;
+  const rec = asRecord(p);
+  if (!rec) return null;
+  const n = rec.name ?? rec.saved_name ?? rec.base_name;
+  return typeof n === "string" ? n : null;
+}
+
+function ladderLabel(ladder: UsageLadder): string {
+  return ladder === "singles" ? "Singles" : "Doubles";
+}
+
+/**
+ * Pull ranked rows out of a bulk index payload. Returns null when no
+ * per-ladder position/rank is present — caller must NOT N+1 `/api/battle`.
+ */
+function extractLeaderboardRows(
+  pokemon: unknown,
+  ladder: UsageLadder,
+  season: string,
+): LeaderboardRow[] | null {
+  if (!Array.isArray(pokemon) || pokemon.length === 0) return null;
+  const formatLabel = ladderLabel(ladder);
+  const rows: LeaderboardRow[] = [];
+  for (const p of pokemon) {
+    const name = pokemonDisplayName(p);
+    if (!name) continue;
+    const rec = asRecord(p);
+    let pos = readPosition(rec);
+    let usage = rec ? parsePct(rec.usage_pct ?? rec.usage ?? rec.percentage) : null;
+    let sprite: string | undefined;
+    const summary = rec ? asRecord(rec.summary) : null;
+    if (summary) {
+      if (typeof summary.sprite === "string" && summary.sprite) {
+        sprite = summary.sprite;
+      }
+      const battle = asRecord(summary.battleSummary);
+      if (battle) {
+        const seasonBlock =
+          asRecord(battle[season]) ??
+          asRecord(Object.values(battle)[0]);
+        const ladderBlock = seasonBlock
+          ? (asRecord(seasonBlock[formatLabel]) ??
+            asRecord(seasonBlock[ladder]))
+          : null;
+        if (ladderBlock) {
+          pos = readPosition(ladderBlock) ?? pos;
+          usage =
+            parsePct(
+              ladderBlock.usage_pct ??
+                ladderBlock.usage ??
+                ladderBlock.percentage,
+            ) ?? usage;
+        }
+      }
+    }
+    if (pos == null) continue;
+    const row: LeaderboardRow = { rank: pos, name };
+    if (usage != null) row.usage_pct = usage;
+    if (sprite) row.sprite = sprite;
+    rows.push(row);
+  }
+  if (rows.length === 0) return null;
+  rows.sort((a, b) => a.rank - b.rank);
+  return rows;
 }
 
 // --- Name resolution (Oak name -> API saved_name) --------------------------
@@ -202,12 +367,62 @@ type Resolved =
   | { ok: true; savedName: string }
   | { ok: false; suggestions: string[] };
 
+/**
+ * Oak slugs / parenthetical formes use the region stem (`alola`, `galar`);
+ * championsbattledata saved_names use the adjective (`Alolan`, `Galarian`).
+ * Fold both directions onto the adjective so token-set match is order- and
+ * phrasing-independent: "ninetales-alola", "Ninetales (Alola)", "Alolan
+ * Ninetales" → {ninetales, alolan}.
+ */
+const REGION_ALIASES: Readonly<Record<string, string>> = {
+  alola: "alolan",
+  galar: "galarian",
+  hisui: "hisuian",
+  paldea: "paldean",
+};
+
+function tokensOf(s: string): string[] {
+  return normalize(s)
+    .split(" ")
+    .filter(Boolean)
+    .map((t) => REGION_ALIASES[t] ?? t);
+}
+
+function tokenSet(s: string): Set<string> {
+  return new Set(tokensOf(s));
+}
+
+function isSubset(wanted: Set<string>, have: Set<string>): boolean {
+  for (const t of wanted) if (!have.has(t)) return false;
+  return true;
+}
+
+/**
+ * Among `names`, pick the one whose tokens contain every wanted token, preferring
+ * fewer extra tokens (so "ninetales" → "Ninetales", not "Alolan Ninetales").
+ */
+function pickBestName(names: string[], wanted: Set<string>): string | null {
+  if (wanted.size === 0) return null;
+  let best: string | null = null;
+  let bestExtra = Number.POSITIVE_INFINITY;
+  for (const name of names) {
+    const have = tokenSet(name);
+    if (!isSubset(wanted, have)) continue;
+    const extra = have.size - wanted.size;
+    if (extra < bestExtra) {
+      bestExtra = extra;
+      best = name;
+    }
+  }
+  return best;
+}
+
 function suggestFrom(index: IndexData, name: string): string[] {
-  const wanted = new Set(normalize(name).split(" ").filter(Boolean));
+  const wanted = tokenSet(name);
   if (wanted.size === 0) return [];
   return index.names
     .map((n) => {
-      const tokens = new Set(normalize(n).split(" "));
+      const tokens = tokenSet(n);
       let score = 0;
       for (const t of wanted) if (tokens.has(t)) score += 1;
       return { n, score };
@@ -218,6 +433,18 @@ function suggestFrom(index: IndexData, name: string): string[] {
     .map((x) => x.n);
 }
 
+function savedNameOf(r: unknown): string | null {
+  if (!r || typeof r !== "object") return null;
+  const sn = (r as Record<string, unknown>).saved_name;
+  return typeof sn === "string" && sn.trim() !== "" ? sn : null;
+}
+
+function rowForm(r: unknown): string {
+  if (!r || typeof r !== "object") return "";
+  const form = (r as Record<string, unknown>).form;
+  return typeof form === "string" ? form.trim() : "";
+}
+
 function pickSavedNameFromMetadata(
   meta: unknown,
   requested: string,
@@ -225,26 +452,42 @@ function pickSavedNameFromMetadata(
   const rows = (meta as { rows?: unknown }).rows;
   if (!Array.isArray(rows) || rows.length === 0) return null;
   const target = normalize(requested);
-  const savedOf = (r: unknown): string | null =>
-    r && typeof r === "object" && typeof (r as Record<string, unknown>).saved_name === "string"
-      ? ((r as Record<string, unknown>).saved_name as string)
-      : null;
-  // 1. exact saved_name match
+  const wanted = tokenSet(requested);
+
+  // 1. exact saved_name match (normalized string)
   for (const r of rows) {
-    const sn = savedOf(r);
+    const sn = savedNameOf(r);
     if (sn && normalize(sn) === target) return sn;
   }
-  // 2. base form (empty `form`) when the request is just the base species
+
+  // 2. token-set / specific subset against saved_name, then saved_name+form
+  //    (covers Oak slugs and "Ninetales (Alola)" vs "Alolan Ninetales").
+  const savedNames = rows.map(savedNameOf).filter((n): n is string => n != null);
+  const bySaved = pickBestName(savedNames, wanted);
+  if (bySaved) return bySaved;
+
+  const labels: string[] = [];
+  const labelToSaved = new Map<string, string>();
   for (const r of rows) {
-    const sn = savedOf(r);
-    const form = (r as Record<string, unknown>)?.form;
-    if (sn && (!form || (typeof form === "string" && form.trim() === ""))) {
-      return sn;
-    }
+    const sn = savedNameOf(r);
+    if (!sn) continue;
+    const form = rowForm(r);
+    const label = form ? `${sn} ${form}` : sn;
+    labels.push(label);
+    if (!labelToSaved.has(label)) labelToSaved.set(label, sn);
   }
-  // 3. fall back to the first row that has a saved_name
+  const byLabel = pickBestName(labels, wanted);
+  if (byLabel) return labelToSaved.get(byLabel) ?? null;
+
+  // 3. Base-species only: empty `form`, then first saved_name. Never do this
+  //    when the request carried a form token — wrong form is worse than a miss.
+  if (wanted.size !== 1) return null;
   for (const r of rows) {
-    const sn = savedOf(r);
+    const sn = savedNameOf(r);
+    if (sn && rowForm(r) === "") return sn;
+  }
+  for (const r of rows) {
+    const sn = savedNameOf(r);
     if (sn) return sn;
   }
   return null;
@@ -256,21 +499,18 @@ async function resolveSavedName(
   signal?: AbortSignal,
 ): Promise<Resolved> {
   const target = normalize(name);
-  const wanted = target.split(" ").filter(Boolean);
+  const wanted = tokenSet(name);
 
   // 1. exact normalized match against the index names
   const exact = index.names.find((n) => normalize(n) === target);
   if (exact) return { ok: true, savedName: exact };
 
-  // 1b. token-subset match (handles forms whose saved_name is in the index,
-  //     e.g. "paldean tauros aqua breed" ⊆ "Paldean Tauros Aqua Breed").
-  if (wanted.length > 0) {
-    const subset = index.names.find((n) => {
-      const tokens = new Set(normalize(n).split(" "));
-      return wanted.every((t) => tokens.has(t));
-    });
-    if (subset) return { ok: true, savedName: subset };
-  }
+  // 1b. alias-folded token match (exact set first via extra=0, then subset).
+  //     "ninetales-alola" / "Ninetales (Alola)" → "Alolan Ninetales";
+  //     "tauros-paldea-aqua" → "Paldean Tauros Aqua Breed";
+  //     "ninetales" still prefers "Ninetales" over "Alolan Ninetales".
+  const best = pickBestName(index.names, wanted);
+  if (best) return { ok: true, savedName: best };
 
   // 2. metadata fallback — the endpoint is keyed by base name and lists this
   //    species' forms with their saved_names; pick the matching one.
@@ -308,12 +548,17 @@ function groupRows(
     for (const row of obj.rows) {
       if (!row || typeof row !== "object") continue;
       const r = row as Record<string, unknown>;
-      const key = typeof r.category === "string" ? CATEGORY_TO_KEY[r.category] : undefined;
+      const key =
+        typeof r.category === "string" ? CATEGORY_TO_KEY[r.category] : undefined;
       if (!key) continue;
-      const name = typeof r.name === "string" ? r.name : null;
+      const name = rowDisplayName(r, key);
       if (!name) continue;
       const rank = typeof r.rank === "number" ? r.rank : Number.MAX_SAFE_INTEGER;
-      buckets[key].push({ name, pct: parsePct(r.percentage), rank });
+      buckets[key].push({
+        name,
+        pct: parsePct(r.percentage ?? r.percentage_value),
+        rank,
+      });
     }
   }
   for (const key of Object.keys(buckets) as (keyof CategoryBuckets)[]) {
@@ -389,6 +634,47 @@ export async function getUsage(
 
   usageCache.set(key, { data, fetchedAt: now });
   return { found: true, data };
+}
+
+/**
+ * Bulk live ladder (ADR-5 / CF-USAGE-US-1). Reads ranks from the community
+ * index payload — never one `/api/battle` GET per species. If the index has
+ * names but no positions, returns `{ available: false }` rather than N+1.
+ * Transport faults also return unavailable (never throw).
+ */
+export async function listLeaderboard(
+  ladder: UsageFormat,
+  signal?: AbortSignal,
+): Promise<LeaderboardResult> {
+  const now = Date.now();
+  try {
+    const index = await getIndex(now, signal);
+    let rows = extractLeaderboardRows(
+      index.pokemon,
+      ladder,
+      index.defaultSeason,
+    );
+    if (!rows) {
+      const alt = await getIndexAlternate(now, signal);
+      if (alt) {
+        rows = extractLeaderboardRows(
+          alt.pokemon,
+          ladder,
+          alt.defaultSeason || index.defaultSeason,
+        );
+        if (rows) indexCache = alt;
+      }
+    }
+    if (!rows) return { available: false };
+    return {
+      available: true,
+      season: indexCache?.defaultSeason || index.defaultSeason || "current",
+      fetched_at: indexCache?.fetchedAt ?? index.fetchedAt,
+      rows,
+    };
+  } catch {
+    return { available: false };
+  }
 }
 
 /** Clear the module-level caches — for tests only. */

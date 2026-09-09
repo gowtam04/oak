@@ -63,38 +63,58 @@ describe("ChatThread — in-flight streaming bubble", () => {
 });
 
 describe("ChatThread — empty-state blank specimen plate", () => {
-  it("renders a Signal empty hero (not STANDBY, not a logo)", () => {
+  it("renders a Champions-oriented empty hero (CF-UI-AC-3.1, CF-UI-BR-1)", () => {
     render(<ChatThread {...props({ turns: [], status: "idle" })} />);
-    expect(screen.getByTestId("blank-plate")).toBeInTheDocument();
+    const plate = screen.getByTestId("blank-plate");
+    expect(plate).toBeInTheDocument();
     expect(screen.queryByText("STANDBY")).toBeNull();
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "What do you want to know?",
-    );
-    expect(
-      screen.getByText(
-        "Mechanics, locations, teams, damage. Oak will show its work.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Oak")).not.toBeInTheDocument();
+    const heading = within(plate).getByRole("heading", { level: 1 });
+    const sub = plate.querySelector(".blank-plate__sub");
+    expect(heading).toBeInTheDocument();
+    expect(sub).not.toBeNull();
+    const text = `${heading.textContent ?? ""} ${sub?.textContent ?? ""}`;
+    expect(text).toMatch(/champions/i);
+    expect(text).toMatch(/team|calc|usage|coach/i);
+    expect(text).not.toMatch(/locations/i);
+    expect(text).not.toMatch(/every generation/i);
+    expect(text).not.toMatch(/mystery dungeon/i);
+  });
+
+  it("has no tutorial overlay or first-run wizard (CF-UI-AC-3.3, CF-AS-12)", () => {
+    render(<ChatThread {...props({ turns: [], status: "idle" })} />);
+    expect(screen.queryByTestId("tutorial")).toBeNull();
+    expect(screen.queryByTestId("onboarding")).toBeNull();
+    expect(screen.queryByTestId("first-run-wizard")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("renders exactly 4 starter rows from the prompt pool with categories", () => {
     render(<ChatThread {...props({ turns: [], status: "idle" })} />);
     const chips = screen.getAllByTestId("chat-empty-example");
     expect(chips).toHaveLength(4);
-    const categories = new Set(["Battle", "Dex", "Rules", "Meta"]);
+    expect(chips.map((chip) => chip.getAttribute("data-category"))).toEqual([
+      "Battle",
+      "Dex",
+      "Rules",
+      "Meta",
+    ]);
     for (const chip of chips) {
       const prompt = chip.getAttribute("data-prompt");
       expect(prompt).toBeTruthy();
       expect(STARTER_PROMPTS).toContain(prompt);
-      expect(categories.has(chip.getAttribute("data-category") ?? "")).toBe(
-        true,
-      );
       expect(chip.querySelector(".starter__cat")).toBeTruthy();
       expect(chip.querySelector(".starter__text")?.textContent).toBe(prompt);
     }
     const shown = chips.map((c) => c.getAttribute("data-prompt"));
     expect(new Set(shown).size).toBe(4);
+  });
+
+  it("sends the starter prompt when a filed row is tapped", () => {
+    const onFollowUp = vi.fn();
+    render(<ChatThread {...props({ turns: [], status: "idle", onFollowUp })} />);
+    const chip = screen.getAllByTestId("chat-empty-example")[0]!;
+    fireEvent.click(chip);
+    expect(onFollowUp).toHaveBeenCalledWith(chip.getAttribute("data-prompt"));
   });
 
   it("shows no empty plate once the conversation has turns", () => {
@@ -196,6 +216,24 @@ describe("ChatThread — user-turn image thumbnails", () => {
     );
     expect(screen.queryByTestId("user-turn-images")).toBeNull();
   });
+
+  it("tucks Edit under the note, not as a sibling of the thread column", () => {
+    render(
+      <ChatThread
+        {...props({
+          turns: [{ id: "u4", role: "user", content: "Build me a team around Torkoal" }],
+          onEditLast: () => {},
+        })}
+      />,
+    );
+    const turn = screen.getByTestId("user-turn");
+    const note = turn.querySelector(".chat-turn__note");
+    expect(note).not.toBeNull();
+    expect(note!.querySelector(".chat-turn__content")).toHaveTextContent(
+      "Build me a team around Torkoal",
+    );
+    expect(within(note as HTMLElement).getByTestId("turn-actions")).toBeInTheDocument();
+  });
 });
 
 describe("ChatThread — answer-card follow-ups gated while streaming (U2)", () => {
@@ -251,18 +289,48 @@ describe("ChatThread — streaming field-notes trail", () => {
     },
   ];
 
-  it("shows a Looking up sentence of friendly nouns, never raw tool ids", () => {
+  it("renders friendly step nouns, never raw tool ids", () => {
     render(
       <ChatThread {...props({ status: "streaming", activity: twoTools })} />,
     );
     const note = screen.getByTestId("field-note");
-    expect(note).toHaveTextContent("Looking up Dex lookup, Pokémon");
-    expect(note.textContent).not.toContain("resolve_entity");
-    expect(note.textContent).not.toContain("get_pokemon");
+    expect(note).toHaveTextContent("Thinking");
+    const trace = screen.getByTestId("thinking-trace");
+    expect(trace).toHaveTextContent("Identifying");
+    expect(trace).toHaveTextContent("Looking up Pokémon");
+    expect(trace).toHaveTextContent("Garchomp");
+    expect(trace.textContent).not.toContain("resolve_entity");
+    expect(trace.textContent).not.toContain("get_pokemon");
     expect(screen.queryByTestId("progress-thinking")).toBeNull();
   });
 
-  it("falls back to a generic 'Lookup' token for an unrecognized tool", () => {
+  it("shows species names, not leftover Checking/Pokédex sentence fragments", () => {
+    render(
+      <ChatThread
+        {...props({
+          status: "streaming",
+          activity: [
+            { tool: "get_pokemon", label: "📇 Looking up Torkoal…" },
+            { tool: "get_learnset", label: "📖 Checking Torkoal’s learnset…" },
+            { tool: "query_pokedex", label: "📊 Searching the Pokédex: Fire…" },
+            {
+              tool: "get_learnset",
+              label: "📖 Checking Charizard-Mega-Y’s learnset…",
+            },
+          ],
+        })}
+      />,
+    );
+    const trace = screen.getByTestId("thinking-trace");
+    expect(trace).toHaveTextContent("Torkoal");
+    expect(trace).toHaveTextContent("Fire");
+    expect(trace).toHaveTextContent("Charizard-Mega-Y");
+    expect(trace.textContent).not.toContain("Checking Torkoal");
+    expect(trace.textContent).not.toContain("Pokédex: Fire");
+    expect(trace.textContent).not.toContain("Checking Charizard");
+  });
+
+  it("falls back to a generic 'Looking up' token for an unrecognized tool", () => {
     render(
       <ChatThread
         {...props({
@@ -271,37 +339,47 @@ describe("ChatThread — streaming field-notes trail", () => {
         })}
       />,
     );
-    const note = screen.getByTestId("field-note");
-    expect(note).toHaveTextContent("Looking up Lookup");
-    expect(note.textContent).not.toContain("SOME_FUTURE_TOOL");
+    const trace = screen.getByTestId("thinking-trace");
+    expect(trace).toHaveTextContent("Looking up");
+    expect(trace.textContent).not.toContain("SOME_FUTURE_TOOL");
+    expect(trace.textContent).not.toContain("some_future_tool");
   });
 
   it("exposes instrumentToken with the full copy-table mapping", () => {
-    expect(instrumentToken("run_sql")).toBe("Game data");
-    expect(instrumentToken("search_wiki")).toBe("Wiki");
-    expect(instrumentToken("get_meta_usage")).toBe("Usage");
+    expect(instrumentToken("run_sql")).toBe("Looking up");
+    expect(instrumentToken("search_wiki")).toBe("Looking up");
+    expect(instrumentToken("get_meta_usage")).toBe("Looking up");
     expect(instrumentToken("submit_builder_answer")).toBe("Teams");
-    expect(instrumentToken("totally_unknown")).toBe("Lookup");
+    expect(instrumentToken("totally_unknown")).toBe("Looking up");
   });
 
-  it("shows the answer skeleton while working, before prose streams", () => {
+  it("shows the quiet thinking sentence while working, before prose streams", () => {
     render(
       <ChatThread {...props({ status: "streaming", activity: twoTools })} />,
     );
     expect(screen.getByTestId("answer-skeleton")).toBeInTheDocument();
     expect(screen.getByTestId("field-note")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("answer-skeleton").querySelector(
+        ".chat-thread__skeleton-masthead, .chat-thread__skeleton-line",
+      ),
+    ).toBeNull();
   });
 
-  it("applies a desk tint skeleton when activity labels name no type", () => {
+  it("does not paint a plate or type-wash while thinking", () => {
     render(
       <ChatThread {...props({ status: "streaming", activity: twoTools })} />,
     );
-    const skeleton = screen.getByTestId("answer-skeleton");
-    expect(skeleton.getAttribute("data-plate")).toBe("desk");
-    expect(skeleton.className).toContain("chat-thread__skeleton--desk");
+    const status = screen.getByTestId("answer-skeleton");
+    expect(status).not.toHaveAttribute("data-unsigned");
+    expect(status.getAttribute("data-plate")).toBeNull();
+    expect(status.className).not.toContain("chat-thread__skeleton--desk");
+    expect(
+      (status as HTMLElement).style.getPropertyValue("--plate-a"),
+    ).toBe("");
   });
 
-  it("applies a mild type wash when activity labels name a single type", () => {
+  it("stays plateless even when activity labels name a type", () => {
     render(
       <ChatThread
         {...props({
@@ -315,24 +393,22 @@ describe("ChatThread — streaming field-notes trail", () => {
         })}
       />,
     );
-    const skeleton = screen.getByTestId("answer-skeleton");
-    expect(skeleton.getAttribute("data-plate")).toBe("typed");
-    expect(skeleton.className).not.toContain("chat-thread__skeleton--desk");
+    const status = screen.getByTestId("answer-skeleton");
+    expect(status).not.toHaveAttribute("data-unsigned");
+    expect(status.getAttribute("data-plate")).toBeNull();
     expect(
-      (skeleton as HTMLElement).style.getPropertyValue("--plate-a"),
-    ).toBe("var(--type-dragon)");
+      (status as HTMLElement).style.getPropertyValue("--plate-a"),
+    ).toBe("");
   });
 
-  it("falls back to a generic thinking chip before the first tool runs", () => {
+  it("falls back to a shimmering Thinking header before the first tool runs", () => {
     render(<ChatThread {...props({ status: "streaming" })} />);
-    expect(screen.getByTestId("progress-thinking")).toHaveTextContent(
-      "Thinking through your question",
-    );
-    // Skeleton still holds the layout even before the first tool lands.
+    expect(screen.getByTestId("progress-thinking")).toHaveTextContent("Thinking");
     expect(screen.getByTestId("answer-skeleton")).toBeInTheDocument();
+    expect(screen.queryByRole("listitem")).toBeNull();
   });
 
-  it("keeps the Looking up line once prose starts streaming", () => {
+  it("keeps a collapsed Thought-for header once prose starts streaming", () => {
     render(
       <ChatThread
         {...props({
@@ -342,8 +418,156 @@ describe("ChatThread — streaming field-notes trail", () => {
         })}
       />,
     );
-    expect(screen.getByTestId("field-note")).toHaveTextContent("Looking up");
+    const header = screen.getByTestId("field-note");
+    expect(header).toHaveTextContent(/Thought for/);
+    expect(header).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("answer-skeleton")).toBeNull();
     expect(screen.getByTestId("streaming-answer")).toBeInTheDocument();
+    fireEvent.click(header);
+    expect(header).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("thinking-trace")).toHaveTextContent("Pokémon");
+  });
+});
+
+describe("ChatThread — spend-control transport banners (SC-AC-5.4, SC-AC-6.5, SC-BR-14)", () => {
+  const RESET_AT = "2026-09-07T00:00:00.000Z";
+  const ACCOUNT_DENIED_MESSAGE = "This account can't use chat.";
+  const DAILY_LIMIT_MESSAGE = `Daily limit reached. Try again tomorrow (resets at ${RESET_AT} UTC).`;
+  const RATE_LIMITED_MESSAGE =
+    "Too many requests. Please wait a moment and try again.";
+
+  function renderTransportError(
+    error: { code: string; message: string },
+    onRetry: (() => void) | undefined = vi.fn(),
+  ) {
+    return render(
+      <ChatThread
+        {...props({
+          status: "error",
+          transportError: error,
+          onRetry,
+        })}
+      />,
+    );
+  }
+
+  /** Visible banner copy, excluding the Retry control when present. */
+  function bannerMessage(): string {
+    const banner = screen.getByTestId("transport-error");
+    const retry = within(banner).queryByTestId("transport-error-retry");
+    const text = banner.textContent ?? "";
+    if (!retry?.textContent) return text.trim();
+    return text.replace(retry.textContent, "").trim();
+  }
+
+  it("account_denied shows the server message, not the generic wrapper (SC-AC-6.1, SC-BR-14)", () => {
+    renderTransportError({
+      code: "account_denied",
+      message: ACCOUNT_DENIED_MESSAGE,
+    });
+
+    const banner = screen.getByTestId("transport-error");
+    expect(banner).toBeInTheDocument();
+    expect(bannerMessage()).toBe(ACCOUNT_DENIED_MESSAGE);
+    expect(banner).not.toHaveTextContent(/Something went wrong/i);
+  });
+
+  it("account_denied hides Retry even when onRetry is provided (SC-BR-14)", () => {
+    const onRetry = vi.fn();
+    renderTransportError(
+      { code: "account_denied", message: ACCOUNT_DENIED_MESSAGE },
+      onRetry,
+    );
+
+    expect(
+      screen.queryByTestId("transport-error-retry"),
+    ).not.toBeInTheDocument();
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it("daily_limit shows the server reset message, not the generic wrapper (SC-AC-5.2, SC-AC-5.4)", () => {
+    renderTransportError({
+      code: "daily_limit",
+      message: DAILY_LIMIT_MESSAGE,
+    });
+
+    const banner = screen.getByTestId("transport-error");
+    expect(banner).toBeInTheDocument();
+    expect(bannerMessage()).toBe(DAILY_LIMIT_MESSAGE);
+    expect(banner).toHaveTextContent(RESET_AT);
+    expect(banner).toHaveTextContent(/resets at/i);
+    expect(banner).not.toHaveTextContent(/Something went wrong/i);
+  });
+
+  it("daily_limit hides Retry even when onRetry is provided (SC-AC-5.4)", () => {
+    const onRetry = vi.fn();
+    renderTransportError(
+      { code: "daily_limit", message: DAILY_LIMIT_MESSAGE },
+      onRetry,
+    );
+
+    expect(
+      screen.queryByTestId("transport-error-retry"),
+    ).not.toBeInTheDocument();
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it("rate_limited still shows Retry when onRetry is provided", () => {
+    const onRetry = vi.fn();
+    renderTransportError(
+      { code: "rate_limited", message: RATE_LIMITED_MESSAGE },
+      onRetry,
+    );
+
+    expect(screen.getByTestId("transport-error")).toBeInTheDocument();
+    const retry = screen.getByTestId("transport-error-retry");
+    expect(retry).toHaveTextContent("Retry");
+    fireEvent.click(retry);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("a generic transport error still shows Retry when onRetry is provided", () => {
+    const onRetry = vi.fn();
+    renderTransportError(
+      { code: "network_error", message: "Network request failed" },
+      onRetry,
+    );
+
+    expect(screen.getByTestId("transport-error-retry")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("transport-error-retry"));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("account_denied, daily_limit, and rate_limited are distinguishable (SC-AC-6.5, SC-BR-14)", () => {
+    const { unmount: unmountDenied } = renderTransportError({
+      code: "account_denied",
+      message: ACCOUNT_DENIED_MESSAGE,
+    });
+    const denied = bannerMessage();
+    unmountDenied();
+
+    const { unmount: unmountDaily } = renderTransportError({
+      code: "daily_limit",
+      message: DAILY_LIMIT_MESSAGE,
+    });
+    const daily = bannerMessage();
+    unmountDaily();
+
+    renderTransportError({
+      code: "rate_limited",
+      message: RATE_LIMITED_MESSAGE,
+    });
+    const rate = bannerMessage();
+
+    expect(denied).toBe(ACCOUNT_DENIED_MESSAGE);
+    expect(daily).toBe(DAILY_LIMIT_MESSAGE);
+    expect(denied).not.toBe(daily);
+    expect(rate).not.toBe(denied);
+    expect(rate).not.toBe(daily);
+    expect(denied).not.toMatch(/Daily limit reached/i);
+    expect(daily).not.toMatch(/can't use chat/i);
+    expect(rate).not.toMatch(/can't use chat/i);
+    expect(rate).not.toMatch(/Daily limit reached/i);
+    expect(new Set([denied, daily, rate]).size).toBe(3);
   });
 });

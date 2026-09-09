@@ -77,10 +77,8 @@ struct ThemeFoundationTests {
   }
 
   @Test
-  func typeGlowWellAndSpecimenPlateModifiersCompile() {
+  func typeGlowWellModifierCompiles() {
     _ = Color.clear.oakTypeGlowWell(primary: "dragon", secondary: "ground")
-    _ = Color.clear.oakSpecimenPlate(.mechanics)
-    _ = Color.clear.oakSpecimenPlate(.typed(primary: "fire", secondary: nil))
     #expect(Bool(true))
   }
 
@@ -116,10 +114,25 @@ struct ThemeFoundationTests {
     _ = Color.clear.oakCard()
     _ = Color.clear.oakCard(radius: Theme.Radius.md, tint: Theme.type("water"))
     _ = Color.clear.oakShadow(.card)
+    _ = Color.clear.oakEnamelNav()
+    _ = Color.clear.oakPaperSheet()
+    _ = Color.clear.oakHidesSystemTabBar()
+    _ = OakTabDock(selection: .constant(.chat))
     _ = Color.clear.oakInsetWell()
     _ = Color.clear.shimmer()
     _ = Color.clear.shimmer(active: false)
     _ = OakPressableButtonStyle()
+    #expect(Bool(true))
+  }
+
+  @Test
+  func typeBadgeChromeMixesConstruct() {
+    _ = Theme.TypeBadgeChrome.fill("fire")
+    _ = Theme.TypeBadgeChrome.ink("water")
+    _ = Theme.TypeBadgeChrome.border("dragon")
+    _ = TypeBadge(type: "grass")
+    _ = Theme.userBubble
+    _ = Theme.userBubbleBorder
     #expect(Bool(true))
   }
 
@@ -136,6 +149,11 @@ struct ThemeFoundationTests {
     _ = Theme.surface
     _ = Theme.surfaceRaised
     _ = Theme.surfaceSunken
+    _ = Theme.sunflower
+    _ = Theme.uiSurface
+    _ = Theme.uiOnRed
+    _ = Theme.uiPokeRed
+    _ = Theme.Motion.spring
     #expect(Bool(true))
   }
 

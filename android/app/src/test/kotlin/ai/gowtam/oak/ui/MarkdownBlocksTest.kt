@@ -5,6 +5,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -222,6 +223,49 @@ class MarkdownBlocksTest {
             ),
             kinds,
         )
+    }
+
+    // ---- HTML comments (citation-span markers) ----
+
+    @Test
+    fun `citation span comments are stripped from prose`() {
+        assertEquals(
+            listOf(MdBlock.Paragraph("Garchomp is fast.")),
+            MarkdownBlocks.parse("<!-- span:c0 -->Garchomp is fast.<!-- /span:c0 -->"),
+        )
+    }
+
+    @Test
+    fun `citation span comments leave surrounding prose`() {
+        assertEquals(
+            listOf(MdBlock.Paragraph("X Y Z")),
+            MarkdownBlocks.parse("X <!-- span:c0 -->Y<!-- /span:c0 --> Z"),
+        )
+    }
+
+    @Test
+    fun `html comments inside a closed fence stay intact`() {
+        val source = "```\n<!-- span:c0 -->kept<!-- /span:c0 -->\n```"
+        assertEquals(
+            listOf(MdBlock.CodeBlock(language = null, code = "<!-- span:c0 -->kept<!-- /span:c0 -->")),
+            MarkdownBlocks.parse(source),
+        )
+    }
+
+    @Test
+    fun `unclosed html comment is dropped`() {
+        assertEquals(
+            listOf(MdBlock.Paragraph("before")),
+            MarkdownBlocks.parse("before <!-- span:c0"),
+        )
+    }
+
+    @Test
+    fun `stripHtmlComments is the shared helper`() {
+        val raw = "<!-- span:c0 -->Ceruledge is Fire/Ghost.<!-- /span:c0 --> It has no Ground immunity."
+        val stripped = MarkdownBlocks.stripHtmlComments(raw)
+        assertEquals("Ceruledge is Fire/Ghost. It has no Ground immunity.", stripped)
+        assertFalse(stripped.contains("<!--"))
     }
 
     // ---- Streaming safety ----

@@ -1,7 +1,9 @@
 /**
- * /items/[slug] — a single item reference page: effect prose, availability
- * chips, wild holders, the forms that require it (Mega stones → their Mega
- * form, linked), and an "Ask Oak" CTA.
+ * /items/[slug] — a single item reference page: effect prose, wild holders,
+ * the forms that require it (Mega stones → their Mega form, linked), and an
+ * "Ask Oak" CTA.
+ *
+ * Champions-only (CF-DEX-US-1): unknown slugs 404; no generation picker.
  *
  * Detail route config + dynamic-import + notFound rules: see /pokedex/[slug].
  */
@@ -10,12 +12,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import FormatChips from "@/components/reference/FormatChips";
 import AskOakCta from "@/components/reference/AskOakCta";
 import { buildItemDescription, buildItemTitle } from "@/data/reference-metadata";
 
 export const runtime = "nodejs";
-export const revalidate = 86400;
+export const dynamic = "force-dynamic";
 
 /** Title-case a slug ("mystic-water" → "Mystic Water"). */
 function titleCase(slug: string): string {
@@ -29,6 +30,7 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ format?: string | string[] }>;
 }): Promise<Metadata> {
   const { slug } = await params;
   const { loadItemPage } = await import("@/data/reference-pages");
@@ -45,6 +47,7 @@ export default async function ItemDetailPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ format?: string | string[] }>;
 }) {
   const { slug } = await params;
   const { loadItemPage } = await import("@/data/reference-pages");
@@ -75,11 +78,6 @@ export default async function ItemDetailPage({
           <p className="ref-intro">{effect}</p>
         </section>
       )}
-
-      <section className="ref-card ref-detail-section">
-        <h2 className="ref-detail-section__title">Availability</h2>
-        <FormatChips formats={data.availability} />
-      </section>
 
       {data.requiredBy.length > 0 && (
         <section className="ref-card ref-detail-section">

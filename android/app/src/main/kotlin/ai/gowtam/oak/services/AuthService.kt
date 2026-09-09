@@ -84,12 +84,16 @@ sealed interface AuthState {
 data class MeSnapshot(
     val state: AuthState,
     val lastUsedScope: Format? = null,
+    val lastUsedScopes: List<Format> = emptyList(),
 ) {
     companion object {
         val Guest = MeSnapshot(AuthState.Guest, null)
 
-        fun signedIn(email: String, lastUsedScope: Format? = null) =
-            MeSnapshot(AuthState.SignedIn(email), lastUsedScope)
+        fun signedIn(
+            email: String,
+            lastUsedScope: Format? = null,
+            lastUsedScopes: List<Format> = emptyList(),
+        ) = MeSnapshot(AuthState.SignedIn(email), lastUsedScope, lastUsedScopes)
     }
 }
 
@@ -137,7 +141,13 @@ class LiveAuthService(
                     else -> f
                 }
             }
-            return MeSnapshot.signedIn(email, scope)
+            val scopes = response.lastUsedScopes.orEmpty().mapNotNull { raw ->
+                when (val f = Format.fromRaw(raw)) {
+                    is Format.Unknown -> null
+                    else -> f
+                }
+            }
+            return MeSnapshot.signedIn(email, scope, scopes)
         }
         return MeSnapshot.Guest
     }

@@ -10,7 +10,10 @@ import type { DamageReadoutProps } from "@/components/types";
  * Assumptions are expandable via a `<details>` element to avoid visual clutter.
  * Visual styling deferred to `frontend-design`.
  */
-export default function DamageReadout({ damageCalc }: DamageReadoutProps) {
+export default function DamageReadout({
+  damageCalc,
+  onOpenCalculator,
+}: DamageReadoutProps & { onOpenCalculator?: (calc: DamageReadoutProps["damageCalc"]) => void }) {
   const { assumptions, result, breakdown } = damageCalc;
 
   return (
@@ -62,6 +65,14 @@ export default function DamageReadout({ damageCalc }: DamageReadoutProps) {
           ))}
         </ul>
       </details>
+
+      <button
+        type="button"
+        className="damage-readout__open-calc"
+        onClick={() => onOpenCalculator?.(damageCalc)}
+      >
+        Open in calculator
+      </button>
     </div>
   );
 }

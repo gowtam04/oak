@@ -5,15 +5,33 @@ import ai.gowtam.oak.app.GuestTurn
 import ai.gowtam.oak.networking.ImageRejectReason
 import ai.gowtam.oak.networking.OakError
 import ai.gowtam.oak.networking.TurnInProgressSignal
+import ai.gowtam.oak.features.calc.explainCalcPrompt
+import ai.gowtam.oak.features.calc.parseCalcSlashRest
+import ai.gowtam.oak.services.ArtifactPinService
 import ai.gowtam.oak.services.AuthState
 import ai.gowtam.oak.services.BitmapSourceImage
+import ai.gowtam.oak.services.CalcService
 import ai.gowtam.oak.services.ChatService
+import ai.gowtam.oak.services.HistoryService
+import ai.gowtam.oak.services.ScopeService
+import ai.gowtam.oak.services.ShareService
 import ai.gowtam.oak.services.SourceImage
+import ai.gowtam.oak.services.TeamService
+import ai.gowtam.oak.services.VoiceHydrateService
+import ai.gowtam.oak.wire.CalcMove
+import ai.gowtam.oak.wire.CalcResult
+import ai.gowtam.oak.wire.CalcScenario
+import ai.gowtam.oak.wire.CalcSide
+import ai.gowtam.oak.wire.ChatRecovery
 import ai.gowtam.oak.wire.ChatTurn
+import ai.gowtam.oak.wire.CreatedShare
 import ai.gowtam.oak.wire.Format
 import ai.gowtam.oak.wire.OakAnswer
+import ai.gowtam.oak.wire.PinnedArtifactSummary
 import ai.gowtam.oak.wire.ScopeSource
 import ai.gowtam.oak.wire.SseEvent
+import ai.gowtam.oak.wire.TeamSummary
+import ai.gowtam.oak.wire.VoiceHydrateStatus
 import android.graphics.Bitmap
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
@@ -59,8 +77,15 @@ import kotlinx.coroutines.launch
 class ChatViewModel(
     private val chat: ChatService,
     private val appState: AppState,
-    /** Monotonic clock (millis) for the quick-stop window; injectable for tests. */
+    /** Monotonic clock (millis) for the quick-stop / undo window; injectable for tests. */
     private val now: () -> Long = { System.currentTimeMillis() },
+    private val history: HistoryService? = null,
+    private val teams: TeamService? = null,
+    private val scope: ScopeService? = null,
+    private val shares: ShareService? = null,
+    private val calc: CalcService? = null,
+    private val hydrate: VoiceHydrateService? = null,
+    private val pins: ArtifactPinService? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -91,6 +116,23 @@ class ChatViewModel(
     private var pendingImages: List<Bitmap> = emptyList()
     private var composerText: String = ""
     private var reconnecting: Boolean = false
+    private var undoUntilMillis: Long? = null
+    private var pendingRecovery: ChatRecovery? = null
+    private var editingLast: Boolean = false
+    private var deadMentions: List<String> = emptyList()
+    private var mentionQuery: String? = null
+    private var mentionSuggestions: List<TeamSummary> = emptyList()
+    private var savedTeams: List<TeamSummary> = emptyList()
+    private var followUpChips: List<FollowUpChip> = emptyList()
+    private var lastMentionedTeam: MentionedTeam? = null
+    private var pinnedMessageIds: List<String> = emptyList()
+    private var missingImagesNote: String? = null
+    private var lastShareUrl: String? = null
+    private var emptyDeskRecents: EmptyDeskRecents? = null
+    private var calcOverlay: CalcOverlayState? = null
+    private var hydrateBanner: HydrateBanner? = null
+    private var hydrateAssistantId: String? = null
+    private var pinnedArtifacts: List<PinnedArtifactSummary> = emptyList()
 
     // ---- State-machine bookkeeping (NOT part of [uiState]) ----
 
@@ -147,13 +189,14 @@ class ChatViewModel(
     // ---- Derived state ----
 
     /**
-     * The scope the header chip displays and the artifact viewer scopes to: a pending
-     * chip pick, else the server-resolved scope, else the signed-in last-used preference,
-     * else the national-dex default — identical to web's
-     * `displayFormat = scopeSeed ?? resolvedScope ?? lastUsedScope ?? "national-dex"`.
+     * The regulation chip is display-only Champions (CF-CHAT-AC-1.2, ADR-3).
+     * Other stored formats never relabel the chip.
      */
-    private fun displayFormat(): Format =
-        scopeSeed ?: resolvedScope ?: appState.lastUsedScope.value ?: Format.NationalDex
+    private fun displayFormat(): Format = Format.Champions
+
+    /** Other-game seeds are never sent (CF-CHAT-AC-1.1). Champions may be omitted. */
+    private fun livingScopeSeed(seed: Format?): Format? =
+        if (seed == Format.Champions) Format.Champions else null
 
     /**
      * Whether the composer can send: not already streaming, and either some text or at
@@ -185,6 +228,32 @@ class ChatViewModel(
             reconnecting = reconnecting,
             canSend = canSend(),
             streamingPhase = streamingPhase(),
+            undoUntilMillis = undoUntilMillis,
+            lastUserTurnId = lastUserTurn()?.id,
+            lastAssistantTurnId = lastAssistantTurn()?.id,
+            canRetryLast = !isStreaming && lastAssistantTurn() != null && turns.lastOrNull() is ChatTurnItem.Assistant,
+            canEditLast = lastUserTurn() != null,
+            deadMentions = deadMentions,
+            mentionQuery = mentionQuery,
+            mentionSuggestions = mentionSuggestions,
+            followUpChips = followUpChips,
+            pinnedMessageIds = pinnedMessageIds,
+            missingImagesNote = missingImagesNote,
+            lastShareUrl = lastShareUrl,
+            isSignedIn = appState.authState.value is AuthState.SignedIn,
+            emptyDeskRecents = emptyDeskRecents,
+            editingLast = editingLast,
+            lastUsedScopes = if (appState.authState.value is AuthState.SignedIn) {
+                appState.lastUsedScopes.value
+            } else {
+                emptyList()
+            },
+            calcOverlay = calcOverlay,
+            canAddToTeam = appState.authState.value is AuthState.SignedIn,
+            canPin = appState.authState.value is AuthState.SignedIn,
+            hydrateBanner = hydrateBanner,
+            showsHydrateRetry = hydrateBanner == HydrateBanner.Failed,
+            pinnedArtifacts = pinnedArtifacts,
         )
     }
 
@@ -193,6 +262,9 @@ class ChatViewModel(
     /** Two-way composer text setter (the `TextField`'s `onValueChange`). */
     fun setComposerText(text: String) {
         composerText = text
+        deadMentions = emptyList()
+        mentionQuery = extractMentionQuery(text)
+        refreshMentionSuggestions()
         publish()
     }
 
@@ -222,29 +294,83 @@ class ChatViewModel(
      * be sent.
      */
     fun send() {
-        if (!canSend()) return
+        if (!canSend() && !editingLast) return
         val text = composerText.trim()
         val images = pendingImages
+
+        when (val slash = parseSlashCommand(text)) {
+            is SlashCommand.Navigate -> {
+                handleSlash(slash.target, slashArgs(text))
+                composerText = ""
+                mentionQuery = null
+                publish()
+                return
+            }
+            is SlashCommand.Calc -> {
+                val format = Format.Champions
+                calcOverlay = CalcOverlayState(
+                    scenario = parseCalcSlashRest(slash.rest, format) ?: CalcScenario(
+                        format = format,
+                        attacker = CalcSide(),
+                        defender = CalcSide(),
+                        move = CalcMove(),
+                    ),
+                    rest = slash.rest,
+                )
+                composerText = ""
+                mentionQuery = null
+                errorBanner = null
+                publish()
+                return
+            }
+            SlashCommand.Message -> Unit
+        }
+
+        val signedIn = appState.authState.value is AuthState.SignedIn
+        val mentions = if (signedIn) resolveMentions(text) else MentionResolution.empty()
+        if (signedIn && mentions.dead.isNotEmpty()) {
+            deadMentions = mentions.dead
+            publish()
+            return
+        }
+
+        val recovery = if (editingLast) ChatRecovery.Edit else null
 
         // Sending a new message in the SAME conversation while one is still running
         // stops that turn server-side first (BT-4 / §6.3), then starts fresh. (The
         // composer is normally disabled while streaming, so this is a defensive path.)
-        stopInFlightTurn()
-
-        turns = turns + ChatTurnItem.User(text = text, imageCount = images.size)
-        mirrorGuestTurn(GuestTurn(content = GuestTurn.Content.User(text)))
+        if (recovery == null) {
+            stopInFlightTurn()
+            turns = turns + ChatTurnItem.User(text = text, imageCount = images.size)
+            mirrorGuestTurn(GuestTurn(content = GuestTurn.Content.User(text)))
+        } else if (isStreaming) {
+            stopInFlightTurn()
+        }
 
         composerText = ""
         pendingImages = emptyList()
-        // Reset reattach bookkeeping for this fresh turn and stamp the quick-stop window.
-        turnStartedAt = now()
+        mentionQuery = null
+        missingImagesNote = null
+        // Reset reattach bookkeeping for this fresh turn and stamp the quick-stop / undo window.
+        val started = now()
+        turnStartedAt = started
+        undoUntilMillis = if (recovery == null) started + UNDO_WINDOW_MS else null
         reattachAttempts = 0
         pendingReattach = false
         reconnecting = false
+        pendingRecovery = recovery
+        lastMentionedTeam = mentions.bound.firstOrNull()
         // A pending chip pick (if any) rides THIS turn as `scope_seed`; a `scope` event
         // clears `scopeSeed` mid-turn so it never leaks onto the next turn.
-        val request = PendingRequest(message = text, images = images, scopeSeed = scopeSeed)
+        val request = PendingRequest(
+            message = text,
+            images = images,
+            scopeSeed = livingScopeSeed(scopeSeed),
+            recovery = recovery,
+            mentionedTeamIds = mentions.ids.takeIf { it.isNotEmpty() },
+        )
         lastRequest = request
+        editingLast = false
         beginStreaming(request)
     }
 
@@ -272,6 +398,64 @@ class ChatViewModel(
         reattachAttempts = 0
         pendingReattach = false
         beginStreaming(request)
+    }
+
+    /**
+     * Retry the last completed assistant answer (REC-US-1). Keeps the previous
+     * card visible until a successful replacement arrives.
+     */
+    fun retryLastAnswer() {
+        if (isStreaming) return
+        val lastUser = lastUserTurn() ?: return
+        if (turns.lastOrNull() !is ChatTurnItem.Assistant) return
+        val retained = lastRequest?.takeIf { it.message == lastUser.text }?.images.orEmpty()
+        missingImagesNote = if (lastUser.imageCount > 0 && retained.isEmpty()) IMAGES_GONE_NOTE else null
+        val request = PendingRequest(
+            message = lastUser.text,
+            images = retained,
+            scopeSeed = livingScopeSeed(lastRequest?.scopeSeed ?: scopeSeed),
+            recovery = ChatRecovery.Retry,
+            mentionedTeamIds = lastRequest?.mentionedTeamIds,
+        )
+        lastRequest = request
+        pendingRecovery = ChatRecovery.Retry
+        turnStartedAt = now()
+        undoUntilMillis = null
+        beginStreaming(request)
+    }
+
+    /**
+     * Load the last user message into the composer for edit (REC-US-2).
+     */
+    fun beginEditLast() {
+        if (isStreaming) return
+        val lastUser = lastUserTurn() ?: return
+        editingLast = true
+        composerText = lastUser.text
+        missingImagesNote = if (lastUser.imageCount > 0) IMAGES_GONE_NOTE else null
+        publish()
+    }
+
+    /** Undo a just-sent turn within [UNDO_WINDOW_MS] (REC-US-3): Stop + restore composer. */
+    fun undoSend() {
+        if (!isStreaming) return
+        val deadline = undoUntilMillis ?: return
+        if (now() > deadline) return
+        val stopped = lastRequest ?: return
+        requestStop()
+        isStreaming = false
+        reconnecting = false
+        pendingReattach = false
+        streamingText = ""
+        toolActivities = emptyList()
+        pendingRecovery = null
+        undoUntilMillis = null
+        if (turns.lastOrNull() is ChatTurnItem.User) {
+            turns = turns.dropLast(1)
+        }
+        composerText = stopped.message
+        pendingImages = stopped.images
+        publish()
     }
 
     /**
@@ -358,9 +542,148 @@ class ChatViewModel(
      * turn's scope stays stable (the chip is disabled then in the UI).
      */
     fun selectScope(format: Format) {
+        // Regulation chip is not a generation picker (CF-UI-AC-2.2).
+        if (format != Format.Champions) return
         if (isStreaming) return
-        scopeSeed = format
+        scopeSeed = null
         publish()
+    }
+
+    /** Apply a follow-up chip (CHIP-US-1). */
+    fun openCalculator(scenario: CalcScenario) {
+        calcOverlay = CalcOverlayState(scenario = scenario, rest = "")
+        publish()
+    }
+
+    fun dismissCalculator() {
+        calcOverlay = null
+        publish()
+    }
+
+    fun expandCalculator() {
+        val overlay = calcOverlay ?: return
+        appState.requestCalculator(overlay.scenario)
+        calcOverlay = null
+        publish()
+    }
+
+    fun explainCalculator() {
+        val overlay = calcOverlay ?: return
+        val prompt = explainCalcPrompt(overlay.scenario, CalcResult.Error(error = "incomplete"))
+        sendFollowUp(prompt)
+    }
+
+    fun unpinArtifact(pinId: String) {
+        val conversationId = sessionId
+        val service = pins ?: return
+        viewModelScope.launch {
+            val remaining = service.delete(conversationId, pinId)
+            if (remaining != null) {
+                pinnedArtifacts = remaining
+                publish()
+            }
+        }
+    }
+
+    fun retryHydrate() {
+        if (hydrateBanner != HydrateBanner.Failed) return
+        val conversationId = sessionId
+        val assistantId = hydrateAssistantId ?: return
+        val service = hydrate ?: return
+        viewModelScope.launch {
+            service.retry(conversationId, assistantId)
+            hydrateBanner = HydrateBanner.Finishing
+            publish()
+        }
+    }
+
+    fun activateChip(chip: FollowUpChip) {
+        when (chip.kind) {
+            FollowUpChip.Kind.Scope -> Unit
+            FollowUpChip.Kind.Dex -> appState.requestDex(chip.target)
+            FollowUpChip.Kind.Team -> appState.requestTeams(id = chip.target)
+        }
+    }
+
+    fun insertMention(team: TeamSummary) {
+        val text = composerText
+        val at = text.lastIndexOf('@')
+        val prefix = if (at >= 0) text.substring(0, at) else text
+        composerText = "$prefix@${team.name} "
+        mentionQuery = null
+        mentionSuggestions = emptyList()
+        deadMentions = emptyList()
+        publish()
+    }
+
+    fun pinTurn(assistantTurnId: String, pinned: Boolean) {
+        val hist = history ?: return
+        val serverId = (turns.firstOrNull { it.id == assistantTurnId } as? ChatTurnItem.Assistant)?.serverId
+            ?: return
+        if (appState.authState.value !is AuthState.SignedIn) return
+        viewModelScope.launch {
+            runCatching { hist.setMessagePinned(sessionId, serverId, pinned) }
+                .onSuccess { pinnedMessageIds = it; publish() }
+        }
+    }
+
+    fun forkFrom(assistantTurnId: String, onForked: (String) -> Unit) {
+        val hist = history ?: return
+        val serverId = (turns.firstOrNull { it.id == assistantTurnId } as? ChatTurnItem.Assistant)?.serverId
+            ?: return
+        if (appState.authState.value !is AuthState.SignedIn) return
+        viewModelScope.launch {
+            runCatching { hist.fork(sessionId, serverId) }
+                .onSuccess { onForked(it.id) }
+        }
+    }
+
+    fun shareTurn(assistantTurnId: String, onShared: (CreatedShare) -> Unit) {
+        val share = shares ?: return
+        val serverId = (turns.firstOrNull { it.id == assistantTurnId } as? ChatTurnItem.Assistant)?.serverId
+            ?: return
+        if (appState.authState.value !is AuthState.SignedIn) return
+        viewModelScope.launch {
+            runCatching { share.create(sessionId, serverId) }
+                .onSuccess {
+                    lastShareUrl = it.url
+                    publish()
+                    onShared(it)
+                }
+        }
+    }
+
+    fun exportConversation(format: String, onReady: (ByteArray, String) -> Unit) {
+        val hist = history ?: return
+        if (appState.authState.value !is AuthState.SignedIn) return
+        if (turns.isEmpty()) return
+        viewModelScope.launch {
+            runCatching { hist.export(sessionId, format) }
+                .onSuccess { (bytes, filename) -> onReady(bytes, filename) }
+        }
+    }
+
+    fun refreshEmptyDesk() {
+        if (appState.authState.value !is AuthState.SignedIn) {
+            emptyDeskRecents = null
+            publish()
+            return
+        }
+        viewModelScope.launch {
+            val lastConvo = runCatching { history?.list(query = null, format = null).orEmpty() }
+                .getOrDefault(emptyList())
+                .firstOrNull()
+            val lastTeam = runCatching { teams?.list(archived = false).orEmpty() }
+                .getOrDefault(emptyList())
+                .firstOrNull()
+            emptyDeskRecents = EmptyDeskRecents(
+                lastConversation = lastConvo?.let { EmptyDeskRecents.Conversation(it.id, it.title) },
+                lastTeam = lastTeam?.let { EmptyDeskRecents.Team(it.id, it.name) },
+                scope = Format.Champions,
+            )
+            savedTeams = runCatching { teams?.list(archived = false).orEmpty() }.getOrDefault(savedTeams)
+            publish()
+        }
     }
 
     // ---- Conversation lifecycle ----
@@ -398,9 +721,20 @@ class ChatViewModel(
         resolvedScope = null
         resolvedScopeSource = null
         scopeSeed = null
+        pendingRecovery = null
+        editingLast = false
+        undoUntilMillis = null
+        followUpChips = emptyList()
+        pinnedMessageIds = emptyList()
+        deadMentions = emptyList()
+        mentionQuery = null
+        mentionSuggestions = emptyList()
+        missingImagesNote = null
+        lastMentionedTeam = null
         if (appState.authState.value is AuthState.Guest) {
             appState.clearGuestThread()
         }
+        refreshEmptyDesk()
         publish()
     }
 
@@ -423,6 +757,9 @@ class ChatViewModel(
         format: Format,
         turns: List<ChatTurn>,
         activeTurnId: String? = null,
+        pinnedMessageIds: List<String> = emptyList(),
+        hydrate: VoiceHydrateStatus? = null,
+        pinnedArtifacts: List<PinnedArtifactSummary> = emptyList(),
     ) {
         // Close the socket for the PREVIOUS conversation without cancelling its durable
         // turn — its pending pointer stays in AppState (keyed by the old session id), so
@@ -432,10 +769,30 @@ class ChatViewModel(
         appState.setActiveConversationId(conversationId)
         this.turns = turns.map { turn ->
             when (turn) {
-                is ChatTurn.User -> ChatTurnItem.User(text = turn.content, imageCount = 0)
-                is ChatTurn.Assistant -> ChatTurnItem.Assistant(answer = turn.answer)
+                is ChatTurn.User -> ChatTurnItem.User(
+                    id = turn.id,
+                    text = turn.content,
+                    imageCount = 0,
+                    serverId = turn.id,
+                )
+                is ChatTurn.Assistant -> ChatTurnItem.Assistant(
+                    id = turn.id,
+                    answer = turn.answer,
+                    serverId = turn.id,
+                )
             }
         }
+        this.pinnedMessageIds = pinnedMessageIds
+        this.pinnedArtifacts = pinnedArtifacts
+        hydrateAssistantId = hydrate?.assistantMessageId
+        hydrateBanner = when (hydrate?.status) {
+            VoiceHydrateStatus.Status.Running -> HydrateBanner.Finishing
+            VoiceHydrateStatus.Status.Failed -> HydrateBanner.Failed
+            else -> null
+        }
+        followUpChips = (this.turns.lastOrNull() as? ChatTurnItem.Assistant)
+            ?.let { chipsFor(it.answer) }
+            .orEmpty()
         resolvedScope = format
         resolvedScopeSource = null
         scopeSeed = null
@@ -447,6 +804,8 @@ class ChatViewModel(
         pendingReattach = false
         reattachAttempts = 0
         currentTurnId = null
+        pendingRecovery = null
+        undoUntilMillis = null
         if (activeTurnId != null) appState.setPendingTurn(conversationId, activeTurnId)
         publish()
         reattachIfPending()
@@ -525,6 +884,10 @@ class ChatViewModel(
             SseEvent.Stopped -> {
                 // The durable turn was stopped (this device or another). Nothing is
                 // persisted; clear the in-flight state with no error banner.
+                // Recovery stop keeps the previous pair (REC-BR-2 / REC-BR-4).
+                restoreComposerAfterFailedRecovery()
+                pendingRecovery = null
+                undoUntilMillis = null
                 clearPendingTurn()
                 streamingText = ""
                 toolActivities = emptyList()
@@ -533,17 +896,15 @@ class ChatViewModel(
             }
 
             is SseEvent.Scope -> {
-                // Adopt this turn's scope and retire any pending chip pick — the
-                // conversation's scope is now sticky server-side and outranks a stale
-                // seed on the following turn.
-                resolvedScope = event.format
+                resolvedScope = Format.Champions
                 resolvedScopeSource = event.source
                 scopeSeed = null
-                // Signed-in only: remember for New Chat (server also persists on the account).
                 if (appState.authState.value is AuthState.SignedIn) {
-                    appState.setLastUsedScope(event.format)
+                    appState.setLastUsedScope(Format.Champions)
+                    val mru = listOf(Format.Champions) + appState.lastUsedScopes.value.filter { it != Format.Champions }
+                    appState.setLastUsedScopes(mru)
                 }
-                mirrorGuestScope(event.format)
+                mirrorGuestScope(Format.Champions)
             }
 
             is SseEvent.ToolActivity ->
@@ -559,14 +920,24 @@ class ChatViewModel(
             is SseEvent.Answer -> {
                 // The terminal, authoritative answer replaces the streamed buffer and ends
                 // the turn. A non-`answered` status is rendered as a normal answer.
-                turns = turns + ChatTurnItem.Assistant(answer = event.answer)
-                // Mirror the FULL answer so the guest→sign-in import is non-lossy.
-                mirrorGuestTurn(GuestTurn(content = GuestTurn.Content.Assistant(event.answer)))
+                // Recovery (retry/edit) replaces the last pair only on success (REC-BR-2).
+                when (pendingRecovery) {
+                    ChatRecovery.Retry -> replaceLastAssistant(event.answer)
+                    ChatRecovery.Edit -> replaceLastPair(lastRequest?.message.orEmpty(), event.answer)
+                    null -> {
+                        turns = turns + ChatTurnItem.Assistant(answer = event.answer)
+                        mirrorGuestTurn(GuestTurn(content = GuestTurn.Content.Assistant(event.answer)))
+                    }
+                }
+                pendingRecovery = null
+                undoUntilMillis = null
+                followUpChips = chipsFor(event.answer)
                 clearPendingTurn()
                 streamingText = ""
                 toolActivities = emptyList()
                 isStreaming = false
                 setKeepScreenOn(false)
+                refreshIdsIfSignedIn()
             }
 
             is SseEvent.Error -> {
@@ -574,10 +945,15 @@ class ChatViewModel(
                 // half-rendered answer. The user turn stays. An in-band `error` frame is
                 // NEVER auto-retried (it's a real model/agent fault, not a connection
                 // drop) — this runs inside `apply`, outside the retry gate.
+                // Spend-control refusals are pre-stream HTTP, but if they ever
+                // arrive in-band they still hide Retry (SC-AC-5.4 / SC-BR-14).
                 errorBanner = ErrorBanner(
                     message = bannerMessage(event.code, event.message),
-                    isRetryable = true,
+                    isRetryable = !OakError.isSpendControlRefusal(event.code),
                 )
+                restoreComposerAfterFailedRecovery()
+                pendingRecovery = null
+                undoUntilMillis = null
                 clearPendingTurn()
                 streamingText = ""
                 toolActivities = emptyList()
@@ -606,6 +982,8 @@ class ChatViewModel(
             message = request.message,
             images = images,
             scopeSeed = request.scopeSeed,
+            recovery = request.recovery,
+            mentionedTeamIds = request.mentionedTeamIds,
         )
         streamJob = viewModelScope.launch { consume(stream, isResume = false) }
     }
@@ -685,6 +1063,9 @@ class ChatViewModel(
      * answer; the user turn remains so the user can retry.
      */
     private fun applyStreamFailure(error: OakError) {
+        restoreComposerAfterFailedRecovery()
+        pendingRecovery = null
+        undoUntilMillis = null
         errorBanner = banner(error)
         streamingText = ""
         toolActivities = emptyList()
@@ -870,8 +1251,10 @@ class ChatViewModel(
     // ---- Error copy ----
 
     /**
-     * Maps an [OakError] to a banner. Rate-limited guests get the "sign in raises the
-     * limit" hint.
+     * Maps an [OakError] to a banner. Per-minute [OakError.RateLimited] guests
+     * get the "sign in raises the limit" hint; denylist / daily-cap [OakError.Http]
+     * refusals show the server message, hide Retry, and never attach that hint
+     * (SC-AC-5.4 / SC-AC-6.5 / SC-BR-14).
      */
     private fun banner(error: OakError): ErrorBanner = when (error) {
         is OakError.Transport -> ErrorBanner(CONNECTION_MESSAGE, isRetryable = true)
@@ -883,7 +1266,10 @@ class ChatViewModel(
             ErrorBanner(message, isRetryable = true)
         }
         OakError.Unauthorized -> ErrorBanner(SESSION_EXPIRED_MESSAGE, isRetryable = false)
-        is OakError.Http -> ErrorBanner(error.message.ifEmpty { GENERIC_MESSAGE }, isRetryable = true)
+        is OakError.Http -> ErrorBanner(
+            error.message.ifEmpty { GENERIC_MESSAGE },
+            isRetryable = !OakError.isSpendControlRefusal(error.code),
+        )
         is OakError.ImageRejected -> ErrorBanner(imageRejectedMessage(error.reason), isRetryable = true)
         is OakError.Decoding -> ErrorBanner(GENERIC_MESSAGE, isRetryable = true)
     }
@@ -893,7 +1279,187 @@ class ChatViewModel(
         val message: String,
         val images: List<Bitmap>,
         val scopeSeed: Format?,
+        val recovery: ChatRecovery? = null,
+        val mentionedTeamIds: List<String>? = null,
     )
+
+    private fun lastUserTurn(): ChatTurnItem.User? = turns.lastOrNull { it is ChatTurnItem.User } as? ChatTurnItem.User
+
+    private fun lastAssistantTurn(): ChatTurnItem.Assistant? =
+        turns.lastOrNull { it is ChatTurnItem.Assistant } as? ChatTurnItem.Assistant
+
+    private fun replaceLastAssistant(answer: OakAnswer) {
+        val index = turns.indexOfLast { it is ChatTurnItem.Assistant }
+        if (index < 0) {
+            turns = turns + ChatTurnItem.Assistant(answer = answer)
+        } else {
+            val previous = turns[index] as ChatTurnItem.Assistant
+            turns = turns.toMutableList().apply {
+                this[index] = previous.copy(answer = answer)
+            }
+        }
+    }
+
+    private fun replaceLastPair(userText: String, answer: OakAnswer) {
+        val userIndex = turns.indexOfLast { it is ChatTurnItem.User }
+        val asstIndex = turns.indexOfLast { it is ChatTurnItem.Assistant }
+        val updated = turns.toMutableList()
+        if (userIndex >= 0) {
+            val previous = updated[userIndex] as ChatTurnItem.User
+            updated[userIndex] = previous.copy(text = userText)
+        }
+        if (asstIndex >= 0) {
+            val previous = updated[asstIndex] as ChatTurnItem.Assistant
+            updated[asstIndex] = previous.copy(answer = answer)
+        } else {
+            updated += ChatTurnItem.Assistant(answer = answer)
+        }
+        turns = updated
+    }
+
+    private fun restoreComposerAfterFailedRecovery() {
+        if (pendingRecovery != ChatRecovery.Edit) return
+        val stopped = lastRequest ?: return
+        composerText = stopped.message
+        pendingImages = stopped.images
+        editingLast = true
+    }
+
+    private fun persistScopePick(format: Format) {
+        val svc = scope ?: return
+        val conversationId = appState.activeConversationId.value
+        viewModelScope.launch {
+            runCatching { svc.persist(format, conversationId, sessionId) }
+                .onSuccess { result ->
+                    result.lastUsedScopes?.let { appState.setLastUsedScopes(it) }
+                }
+        }
+    }
+
+    private fun chipsFor(answer: OakAnswer): List<FollowUpChip> {
+        val implied = impliedFormat(answer)
+        val signedIn = appState.authState.value is AuthState.SignedIn
+        val mentioned = lastMentionedTeam.takeIf { signedIn }
+        return deriveFollowUpChips(answer, implied, mentioned)
+            .filter { it.kind != FollowUpChip.Kind.Team || signedIn }
+    }
+
+    private fun impliedFormat(answer: OakAnswer): Format? {
+        if (!answer.generationBasis.fallback) return null
+        val raw = answer.generationBasis.generation
+        val format = Format.fromRaw(raw)
+        if (format is Format.Unknown) return null
+        if (format == displayFormat()) return null
+        return format
+    }
+
+    private fun handleSlash(target: SlashCommand.Target, args: String) {
+        when (target) {
+            SlashCommand.Target.New -> startNewConversation()
+            SlashCommand.Target.Team -> {
+                val match = savedTeams.firstOrNull { it.name.equals(args, ignoreCase = true) }
+                appState.requestTeams(id = match?.id, name = args.ifBlank { null })
+            }
+            SlashCommand.Target.Dex -> appState.requestDex(args.ifBlank { null })
+            SlashCommand.Target.Usage -> appState.requestUsage()
+        }
+    }
+
+    private data class MentionResolution(
+        val ids: List<String>,
+        val names: List<String>,
+        val bound: List<MentionedTeam>,
+        val dead: List<String>,
+    ) {
+        companion object {
+            fun empty() = MentionResolution(emptyList(), emptyList(), emptyList(), emptyList())
+        }
+    }
+
+    private fun resolveMentions(text: String): MentionResolution {
+        if (text.indexOf('@') < 0) {
+            return MentionResolution(emptyList(), emptyList(), emptyList(), emptyList())
+        }
+        val teamsByName = savedTeams.sortedByDescending { it.name.length }
+        val ids = mutableListOf<String>()
+        val names = mutableListOf<String>()
+        val bound = mutableListOf<MentionedTeam>()
+        val dead = mutableListOf<String>()
+        // Longest-name scan: for each '@', try saved team names.
+        var i = 0
+        while (i < text.length) {
+            val at = text.indexOf('@', i)
+            if (at < 0) break
+            val rest = text.substring(at + 1)
+            val match = teamsByName.firstOrNull { rest.startsWith(it.name) }
+            if (match != null) {
+                ids += match.id
+                names += match.name
+                bound += MentionedTeam(match.id, match.name)
+                i = at + 1 + match.name.length
+            } else {
+                val token = rest.takeWhile { !it.isWhitespace() }
+                if (token.isNotEmpty()) dead += token
+                i = at + 1 + token.length
+            }
+        }
+        return MentionResolution(ids.distinct(), names, bound, dead)
+    }
+
+    private fun extractMentionQuery(text: String): String? {
+        if (appState.authState.value !is AuthState.SignedIn) return null
+        val at = text.lastIndexOf('@')
+        if (at < 0) return null
+        val after = text.substring(at + 1)
+        if (after.contains('\n')) return null
+        return after
+    }
+
+    private fun refreshMentionSuggestions() {
+        val query = mentionQuery
+        if (query == null) {
+            mentionSuggestions = emptyList()
+            return
+        }
+        if (savedTeams.isEmpty()) {
+            viewModelScope.launch {
+                savedTeams = runCatching { teams?.list(archived = false).orEmpty() }.getOrDefault(emptyList())
+                mentionSuggestions = filterTeams(mentionQuery.orEmpty())
+                publish()
+            }
+        } else {
+            mentionSuggestions = filterTeams(query)
+        }
+    }
+
+    private fun filterTeams(query: String): List<TeamSummary> {
+        val q = query.trim()
+        return if (q.isEmpty()) savedTeams.take(8)
+        else savedTeams.filter { it.name.contains(q, ignoreCase = true) }.take(8)
+    }
+
+    private fun refreshIdsIfSignedIn() {
+        if (appState.authState.value !is AuthState.SignedIn) return
+        val hist = history ?: return
+        viewModelScope.launch {
+            runCatching { hist.get(sessionId) }.onSuccess { detail ->
+                pinnedMessageIds = detail.pinnedMessageIds
+                val serverTurns = detail.turns
+                if (serverTurns.size == turns.size) {
+                    turns = turns.mapIndexed { index, item ->
+                        when {
+                            item is ChatTurnItem.User && serverTurns[index] is ChatTurn.User ->
+                                item.copy(serverId = serverTurns[index].id, id = serverTurns[index].id)
+                            item is ChatTurnItem.Assistant && serverTurns[index] is ChatTurn.Assistant ->
+                                item.copy(serverId = serverTurns[index].id, id = serverTurns[index].id)
+                            else -> item
+                        }
+                    }
+                }
+                publish()
+            }
+        }
+    }
 
     companion object {
         /** Max images attachable to one turn — the backend's `MAX_IMAGES`. */
@@ -901,6 +1467,11 @@ class ChatViewModel(
 
         /** The quick-stop window: a Stop within this of [send] wipes the just-sent turn. */
         const val QUICK_STOP_MS = 2000L
+
+        /** Undo-send bubble window (REC-US-3 / ADR-3). */
+        const val UNDO_WINDOW_MS = 3000L
+
+        const val IMAGES_GONE_NOTE = "Pictures from this turn will not be attached."
 
         /** Max consecutive transport-drop reattach attempts before giving the turn up
          * for dead (background-turns/design.md §6.3, "bounded ~2 attempts"). */
@@ -948,7 +1519,7 @@ data class ChatUiState(
     val toolActivities: List<ToolActivity> = emptyList(),
     val isStreaming: Boolean = false,
     val errorBanner: ErrorBanner? = null,
-    val displayFormat: Format = Format.NationalDex,
+    val displayFormat: Format = Format.Champions,
     val resolvedScope: Format? = null,
     val scopeSeed: Format? = null,
     val pendingImages: List<Bitmap> = emptyList(),
@@ -956,7 +1527,54 @@ data class ChatUiState(
     val reconnecting: Boolean = false,
     val canSend: Boolean = false,
     val streamingPhase: StreamingPhase = StreamingPhase.IDLE,
+    val undoUntilMillis: Long? = null,
+    val lastUserTurnId: String? = null,
+    val lastAssistantTurnId: String? = null,
+    val canRetryLast: Boolean = false,
+    val canEditLast: Boolean = false,
+    val deadMentions: List<String> = emptyList(),
+    val mentionQuery: String? = null,
+    val mentionSuggestions: List<TeamSummary> = emptyList(),
+    val followUpChips: List<FollowUpChip> = emptyList(),
+    val pinnedMessageIds: List<String> = emptyList(),
+    val missingImagesNote: String? = null,
+    val lastShareUrl: String? = null,
+    val isSignedIn: Boolean = false,
+    val emptyDeskRecents: EmptyDeskRecents? = null,
+    val editingLast: Boolean = false,
+    val lastUsedScopes: List<Format> = emptyList(),
+    val calcOverlay: CalcOverlayState? = null,
+    val canAddToTeam: Boolean = false,
+    val canPin: Boolean = false,
+    val hydrateBanner: HydrateBanner? = null,
+    val showsHydrateRetry: Boolean = false,
+    val pinnedArtifacts: List<PinnedArtifactSummary> = emptyList(),
 )
+
+@Immutable
+data class CalcOverlayState(
+    val scenario: CalcScenario,
+    val rest: String = "",
+)
+
+sealed interface HydrateBanner {
+    data object Finishing : HydrateBanner
+    data object Failed : HydrateBanner
+}
+
+/** Signed-in empty-desk continue-last rows (EMPTY-US-1). */
+@Immutable
+data class EmptyDeskRecents(
+    val lastConversation: Conversation?,
+    val lastTeam: Team?,
+    val scope: Format,
+) {
+    @Immutable
+    data class Conversation(val id: String, val title: String)
+
+    @Immutable
+    data class Team(val id: String, val name: String)
+}
 
 /** One rendered entry in the chat thread: a user message or a finalized answer. */
 @Immutable
@@ -968,13 +1586,17 @@ sealed interface ChatTurnItem {
         override val id: String = UUID.randomUUID().toString(),
         val text: String,
         val imageCount: Int,
+        val serverId: String? = null,
     ) : ChatTurnItem
 
     /** A finalized, authoritative answer rendered through the answer card. */
     data class Assistant(
         override val id: String = UUID.randomUUID().toString(),
         val answer: OakAnswer,
-    ) : ChatTurnItem
+        val serverId: String? = null,
+    ) : ChatTurnItem {
+        val isVoiceOrigin: Boolean get() = answer.origin == "voice"
+    }
 }
 
 /** One live tool-activity item (`tool_activity` event), shown while the loop runs. */

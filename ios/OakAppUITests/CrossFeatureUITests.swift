@@ -29,7 +29,7 @@ final class CrossFeatureUITests: XCTestCase {
     let credentials = try requireTestOTP()
 
     let app = XCUIApplication().launchOak()
-    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
 
     // Ask one question as a guest to establish an in-memory thread.
     XCTAssertTrue(goToTab(OakUITest.Tab.chat, in: app), "Chat tab unreachable.")
@@ -45,8 +45,8 @@ final class CrossFeatureUITests: XCTestCase {
       "Guest answer should finalize before sign-in."
     )
 
-    // Sign in from the Account tab (Chat / Teams / Dex / Account).
-    XCTAssertTrue(goToTab(OakUITest.Tab.account, in: app), "Account tab unreachable.")
+    // Sign in from the Settings tab (Chat / Teams / Dex / Settings).
+    XCTAssertTrue(goToTab(OakUITest.Tab.account, in: app), "Settings tab unreachable.")
     let signIn = app.buttons[OakUITest.Account.signIn]
     let signInReachable = signIn.waitForExistence(timeout: 10)
     try XCTSkipUnless(
@@ -94,7 +94,7 @@ final class CrossFeatureUITests: XCTestCase {
     try requireLiveBackend()
 
     let app = XCUIApplication().launchOak()
-    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
 
     XCTAssertTrue(goToTab(OakUITest.Tab.chat, in: app), "Chat tab unreachable.")
     try requireComposer(in: app)

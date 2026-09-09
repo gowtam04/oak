@@ -154,6 +154,38 @@ struct TeamsAssistantViewModelTests {
 
     #expect(vm.status == .error)
     #expect(vm.errorMessage == TeamEditorViewModel.message(for: .rateLimited(retryAfter: 30)))
+    #expect(vm.errorIsRetryable == true)
+  }
+
+  @Test
+  func accountDeniedBannerShowsServerMessageAndHidesRetry() async {
+    let fake = FakeTeamsAssistantService()
+    let message = "This account can't use the teams assistant."
+    fake.thrownError = .http(status: 403, code: "account_denied", message: message)
+    let vm = makeModel(fake: fake, editor: makeEditor())
+
+    vm.send("go")
+    await vm.streamTask?.value
+
+    #expect(vm.status == .error)
+    #expect(vm.errorMessage == message)
+    #expect(vm.errorIsRetryable == false)
+  }
+
+  @Test
+  func dailyLimitBannerShowsServerMessageAndHidesRetry() async {
+    let fake = FakeTeamsAssistantService()
+    let message =
+      "Daily limit reached. Try again tomorrow (resets at 2026-09-07T00:00:00.000Z UTC)."
+    fake.thrownError = .http(status: 429, code: "daily_limit", message: message)
+    let vm = makeModel(fake: fake, editor: makeEditor())
+
+    vm.send("go")
+    await vm.streamTask?.value
+
+    #expect(vm.status == .error)
+    #expect(vm.errorMessage == message)
+    #expect(vm.errorIsRetryable == false)
   }
 
   @Test

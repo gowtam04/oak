@@ -2,8 +2,9 @@
  * Tests for src/data/schema.ts — Phase 2 schema / migration unit tests (Postgres).
  *
  * Success criteria (design.md Phase 2, adapted to Postgres):
- *   1. The migration creates all 5 tables + all expected indexes + the composite
- *      primary keys on a fresh schema (introspected via the Postgres catalogs).
+ *   1. The migration creates the remaining app tables + expected indexes + the
+ *      composite primary keys on a fresh schema (introspected via the Postgres
+ *      catalogs). Champions-first 0023 DROPs wiki/natdex/encounters/pmd/meta.
  *   2. EXPLAIN confirms stat/type/move-slug queries CAN use their indexes — with
  *      enable_seqscan off (so the planner doesn't seq-scan the tiny fixture),
  *      each query plan names its index rather than a Seq Scan.
@@ -126,12 +127,12 @@ beforeAll(async () => {
          base_stat_total, sprite_url, artwork_url,
          generation, is_gen9_native, source_generation)
       VALUES
-        ('scarlet-violet', 'garchomp', 'garchomp', NULL, 'Garchomp', 445,
+        ('champions', 'garchomp', 'garchomp', NULL, 'Garchomp', 445,
          'dragon', 'ground', 'sand-veil', NULL, 'rough-skin',
          108, 130, 95, 80, 85, 102,
          600, 'https://sprites.example/445.png', 'https://art.example/445.png',
          'gen-9', 1, NULL),
-        ('scarlet-violet', 'tauros', 'tauros', NULL, 'Tauros', 128,
+        ('champions', 'tauros', 'tauros', NULL, 'Tauros', 128,
          'normal', NULL, 'intimidate', 'anger-point', 'sheer-force',
          75, 100, 95, 40, 70, 110,
          490, 'https://sprites.example/128.png', 'https://art.example/128.png',
@@ -139,7 +140,7 @@ beforeAll(async () => {
   );
   await db.execute(
     sql.raw(`INSERT INTO learnset (pokemon_id, move_slug, format, method)
-             VALUES ('garchomp', 'dragon-claw', 'scarlet-violet', 'machine')`),
+             VALUES ('garchomp', 'dragon-claw', 'champions', 'machine')`),
   );
 }, 60_000);
 
@@ -152,11 +153,11 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("Drizzle migration — table creation", () => {
-  it("creates all 24 tables (5 Pokédex index + 3 auth + 2 chat-history + 1 team + 2 admin + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse + 1 app settings)", async () => {
+  it("creates the 22 remaining app tables after champions-first cutover (CF-DATA-BR-3, CF-OPS-AC-1.2, CF-OPS-AC-1.5, ADR-4)", async () => {
     const tables = await tableNames(db);
     expect(tables).toEqual(
       expect.arrayContaining([
-        // Pokédex index tables (format-scoped)
+        // Pokédex index tables (format-scoped; champions rows only after 0023)
         "ingest_meta",
         "learnset",
         "pokemon",
@@ -177,28 +178,60 @@ describe("Drizzle migration — table creation", () => {
         "auth_event",
         // Champions item availability (operator-curated) — added by the 0007 migration.
         "champions_item_exclusion",
-        // Global natdex warehouse (Oak v2, NOT format-scoped) — added by the 0008 migration.
-        "natdex_species",
-        "natdex_machines",
-        "natdex_moves",
-        "classic_encounters",
-        "pmd_recruits",
-        // Fandom wiki corpus (Oak v2, NOT format-scoped) — added by the 0010 migration.
-        "wiki_page",
-        "wiki_chunk",
-        // Smogon metagame warehouse (backlog B-5, NOT format-scoped) — added by
-        // the 0011 migration.
-        "meta_snapshot",
-        "meta_usage",
         // Generic operator-controlled key/value settings (multi-model switch,
         // NOT format-scoped) — added by the 0013 migration.
         "app_setting",
+        // Chat QoL (folders / scope MRU / public shares) — added by the 0019 migration.
+        "conversation_folder",
+        "account_scope_mru",
+        "shared_answer",
+        // Answer-card artifact pins — added by the 0020 migration (already
+        // present in a fully migrated catalog; previously omitted from this list).
+        "conversation_artifact_pin",
+        // Spend controls (denylist + UTC-day counters) — added by the 0021 migration.
+        "account_denylist",
+        "spend_daily_usage",
+        // Cap-exempt emails — added by the 0022 migration (SC-US-9 / SC-BR-16).
+        "account_cap_exempt",
       ]),
     );
-    // Exactly 24 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
-    // + 1 champions-items + 5 natdex warehouse + 2 wiki corpus + 2 meta warehouse
-    // + 1 app settings).
-    expect(tables).toHaveLength(24);
+    // 22 user tables (5 index + 3 auth + 2 chat-history + 1 team + 2 admin
+    // + 1 champions-items + 1 app settings + 3 chat-qol + 1 artifact pin + 3 spend).
+    // Other-game warehouse tables are DROPPED by 0023 (CF-OPS-AC-1.2).
+    expect(tables).toHaveLength(22);
+  });
+
+  it("drops other-game reference tables (CF-DATA-BR-3, CF-OPS-AC-1.2, CF-INT-BR-3, ADR-4)", async () => {
+    const tables = await tableNames(db);
+    const dropped = [
+      "wiki_page",
+      "wiki_chunk",
+      "natdex_species",
+      "natdex_machines",
+      "natdex_moves",
+      "classic_encounters",
+      "pmd_recruits",
+      "meta_snapshot",
+      "meta_usage",
+    ];
+    for (const name of dropped) {
+      expect(tables, `cutover must DROP ${name}`).not.toContain(name);
+    }
+  });
+
+  it("does not wipe conversations, teams, accounts, turn_record, or shares (CF-OPS-AC-1.5)", async () => {
+    const tables = await tableNames(db);
+    for (const name of [
+      "account",
+      "conversation",
+      "conversation_message",
+      "team",
+      "turn_record",
+      "shared_answer",
+      "champions_item_exclusion",
+    ]) {
+      expect(tables, `cutover must KEEP ${name}`).toContain(name);
+    }
   });
 
   it("migration creates the 2 chat-history tables with the correct columns, PKs, and indexes", async () => {
@@ -209,6 +242,8 @@ describe("Drizzle migration — table creation", () => {
         "title",
         "format",
         "pinned",
+        "folder_id",
+        "archived",
         "created_at",
         "updated_at",
       ]),
@@ -216,7 +251,7 @@ describe("Drizzle migration — table creation", () => {
     // The 0003 team-builder `active_team_id` column was dropped in 0004 (saved
     // teams are now referenced by name in chat, not bound to a conversation).
     expect(await columnNames(db, "conversation")).not.toContain("active_team_id");
-    expect(await columnNames(db, "conversation")).toHaveLength(7);
+    expect(await columnNames(db, "conversation")).toHaveLength(9);
     expect(await pkColumns(db, "conversation")).toEqual(["id"]);
 
     expect(await columnNames(db, "conversation_message")).toEqual(
@@ -228,14 +263,17 @@ describe("Drizzle migration — table creation", () => {
         "role",
         "text_content",
         "answer_json",
+        "pinned",
         "created_at",
       ]),
     );
-    expect(await columnNames(db, "conversation_message")).toHaveLength(8);
+    expect(await columnNames(db, "conversation_message")).toHaveLength(9);
     expect(await pkColumns(db, "conversation_message")).toEqual(["id"]);
 
     const indexes = await indexNames(db);
     expect(indexes).toContain("conversation_account_updated_idx");
+    expect(indexes).toContain("conversation_account_folder_idx");
+    expect(indexes).toContain("conversation_account_archived_idx");
     expect(indexes).toContain("message_conversation_seq_idx"); // UNIQUE (seq backstop)
     expect(indexes).toContain("message_account_idx");
   });
@@ -244,9 +282,15 @@ describe("Drizzle migration — table creation", () => {
     // migration_applies_auth_tables: account / auth_session / otp_code exist on
     // a fresh schema with the exact columns and primary keys from § Data Model.
     expect(await columnNames(db, "account")).toEqual(
-      expect.arrayContaining(["id", "email", "created_at", "last_used_scope"]),
+      expect.arrayContaining([
+        "id",
+        "email",
+        "created_at",
+        "last_used_scope",
+        "answer_density",
+      ]),
     );
-    expect(await columnNames(db, "account")).toHaveLength(4);
+    expect(await columnNames(db, "account")).toHaveLength(5);
     expect(await pkColumns(db, "account")).toEqual(["id"]);
 
     expect(await columnNames(db, "auth_session")).toEqual(
@@ -420,6 +464,72 @@ describe("Drizzle migration — table creation", () => {
     // Backs the per-account list (ORDER BY updated_at DESC, scoped by account_id).
     expect(indexes).toContain("team_account_updated_idx");
   });
+
+  it("migration creates the 3 chat-qol tables with the correct columns, PKs, and indexes", async () => {
+    expect(await columnNames(db, "conversation_folder")).toEqual(
+      expect.arrayContaining(["id", "account_id", "name", "created_at"]),
+    );
+    expect(await columnNames(db, "conversation_folder")).toHaveLength(4);
+    expect(await pkColumns(db, "conversation_folder")).toEqual(["id"]);
+
+    expect(await columnNames(db, "account_scope_mru")).toEqual(
+      expect.arrayContaining(["account_id", "format", "last_used_at"]),
+    );
+    expect(await columnNames(db, "account_scope_mru")).toHaveLength(3);
+    expect(await pkColumns(db, "account_scope_mru")).toEqual([
+      "account_id",
+      "format",
+    ]);
+
+    expect(await columnNames(db, "shared_answer")).toEqual(
+      expect.arrayContaining([
+        "id",
+        "account_id",
+        "conversation_id",
+        "conversation_title",
+        "question_text",
+        "answer_json",
+        "created_at",
+        "revoked_at",
+      ]),
+    );
+    expect(await columnNames(db, "shared_answer")).toHaveLength(8);
+    expect(await pkColumns(db, "shared_answer")).toEqual(["id"]);
+
+    const indexes = await indexNames(db);
+    expect(indexes).toContain("conversation_folder_account_name_unique");
+    expect(indexes).toContain("conversation_folder_account_name_idx");
+    expect(indexes).toContain("conversation_account_folder_idx");
+    expect(indexes).toContain("conversation_account_archived_idx");
+    expect(indexes).toContain("shared_answer_account_created_idx");
+  });
+
+  it("migration creates account_denylist with email PK + added_at + added_by", async () => {
+    expect(await columnNames(db, "account_denylist")).toEqual(
+      expect.arrayContaining(["email", "added_at", "added_by"]),
+    );
+    expect(await columnNames(db, "account_denylist")).toHaveLength(3);
+    expect(await pkColumns(db, "account_denylist")).toEqual(["email"]);
+  });
+
+  it("migration creates account_cap_exempt with email PK + added_at + added_by", async () => {
+    expect(await columnNames(db, "account_cap_exempt")).toEqual(
+      expect.arrayContaining(["email", "added_at", "added_by"]),
+    );
+    expect(await columnNames(db, "account_cap_exempt")).toHaveLength(3);
+    expect(await pkColumns(db, "account_cap_exempt")).toEqual(["email"]);
+  });
+
+  it("migration creates spend_daily_usage with composite PK (subject_key, day_utc)", async () => {
+    expect(await columnNames(db, "spend_daily_usage")).toEqual(
+      expect.arrayContaining(["subject_key", "day_utc", "admitted_count"]),
+    );
+    expect(await columnNames(db, "spend_daily_usage")).toHaveLength(3);
+    expect(await pkColumns(db, "spend_daily_usage")).toEqual([
+      "subject_key",
+      "day_utc",
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -490,7 +600,7 @@ describe("EXPLAIN — indexes are used (enable_seqscan off)", () => {
       `SELECT pokemon_id
          FROM learnset
         WHERE move_slug IN ('dragon-claw', 'earthquake')
-          AND format IN ('scarlet-violet')
+          AND format IN ('champions')
         GROUP BY pokemon_id
        HAVING COUNT(DISTINCT move_slug) = 2`,
     );
@@ -554,6 +664,22 @@ describe("Schema constraints", () => {
         .insert(learnset)
         .values({ pokemon_id: "bulbasaur", move_slug: "tackle", format: "champions", method: "level-up" }),
     ).resolves.toBeDefined();
+  });
+
+  it("still accepts historical format='gen-7' on the column, but gen-7 is not a default ingest format (ADR-3, CF-DEX-AC-1.3)", async () => {
+    // 0023 DELETEs non-champions index rows; it does not add a CHECK that
+    // forbids the stored-row union (archived teams / old conversations).
+    await expect(
+      cdb.insert(learnset).values({
+        pokemon_id: "tyranitar",
+        move_slug: "crunch",
+        format: "gen-7",
+        method: "level-up",
+      }),
+    ).resolves.toBeDefined();
+    const { DEFAULT_FORMATS } = await import("@/data/formats");
+    expect([...DEFAULT_FORMATS]).toEqual(["champions"]);
+    expect(DEFAULT_FORMATS).not.toContain("gen-7");
   });
 
   it("searchable_names composite PK rejects duplicate (format, kind, slug)", async () => {

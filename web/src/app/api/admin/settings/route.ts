@@ -2,10 +2,12 @@
  * `/api/admin/settings` — the operator-controlled active-model switch.
  *
  *   GET  → AdminSettingsResponse { activeModel, source, updatedBy, updatedAt,
- *          models } — the resolved `app_setting` selection (or the
+ *          models, spend } — the resolved `app_setting` selection (or the
  *          `DEFAULT_MODEL_KEY` fallback, `source: "default"`) plus every
  *          registry model flagged `configured` (its provider API key present
- *          on this server), so the UI can render unconfigured models disabled.
+ *          on this server), so the UI can render unconfigured models disabled,
+ *          plus the spend-controls projection (`getCaps` + `getDenylist` +
+ *          `getCapExempt`).
  *   POST → body { model } sets the active-model selection (upsert), and
  *          returns the freshly re-read AdminSettingsResponse. `model` must be
  *          a known `ModelKey` (else 400 `invalid_request`) whose provider is
@@ -21,17 +23,41 @@
  */
 
 import { json, jsonError, readJsonObject } from "@/app/api/auth/_lib/http";
-import type { AdminSettingsModel, AdminSettingsResponse } from "@/lib/admin/admin-types";
+import type {
+  AdminSettingsModel,
+  AdminSettingsResponse,
+  AdminSpendState,
+} from "@/lib/admin/admin-types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+async function loadSpend(): Promise<AdminSpendState> {
+  const { getCaps, getDenylist, getCapExempt } = await import(
+    "@/data/repos/spend-repo"
+  );
+  const [caps, denylist, capExempt] = await Promise.all([
+    getCaps(),
+    getDenylist(),
+    getCapExempt(),
+  ]);
+  return {
+    signedCap: caps.signedCap,
+    guestCap: caps.guestCap,
+    denylist,
+    capExempt,
+  };
+}
 
 async function buildSettingsResponse(): Promise<AdminSettingsResponse> {
   const { resolveActiveModel } = await import("@/data/repos/settings-repo");
   const { MODELS } = await import("@/agent/models");
   const { isModelConfigured } = await import("@/agent/providers/factory");
 
-  const active = await resolveActiveModel();
+  const [active, spend] = await Promise.all([
+    resolveActiveModel(),
+    loadSpend(),
+  ]);
   const models: AdminSettingsModel[] = MODELS.map((m) => ({
     key: m.key,
     label: m.label,
@@ -45,6 +71,7 @@ async function buildSettingsResponse(): Promise<AdminSettingsResponse> {
     updatedBy: active.updatedBy,
     updatedAt: active.updatedAt,
     models,
+    spend,
   };
 }
 

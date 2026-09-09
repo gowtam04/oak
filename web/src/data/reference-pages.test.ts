@@ -1,26 +1,21 @@
 /**
- * Unit tests for the B2 reference-page view-model assembler.
+ * Reference-page loaders — Champions roster only (P6c).
  *
- * Exercises the UNCACHED inner loaders (`*Uncached(db)`) directly against a
- * fresh, migrated Postgres schema (Testcontainers) seeded with the shared
- * "tools" fixture — no @/data/db singleton, no Next cache. The Champions usage
- * client is vi.mock'd so no network is touched and failure paths are forced.
+ * Index/detail loaders read the Champions partition. Other-game rows that we
+ * inject (Incineroar gen-7, Eternatus National Dex) must not appear, and an
+ * unknown slug is null (→ page 404) rather than a natdex/SV fallback.
+ * Usage is the live Champions client, not Smogon.
  *
- * Fixture facts relied on (see test/fixtures/tools-fixture.ts):
- *   - garchomp exists in scarlet-violet, champions, AND gen-7.
- *   - incineroar / decidueye / hidden-power are gen-7 ONLY (fallback probes).
- *   - scarlet-violet holds 8 pokemon, 6 move names, 5 abilities, 2 items.
+ * Requirement refs: CF-DEX-US-1, CF-DEX-AC-1.1–1.6.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
-// reference-pages.ts (and its repo deps) statically `import "server-only"`,
-// which throws under the node test env. Neutralize it; we inject fixture DB
-// handles into the uncached loaders and never resolve the @/data/db singleton.
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
 vi.mock("server-only", () => ({}));
 
-// The Champions usage client is dynamically imported by the assembler; mock the
-// module so no live network is hit and we can force success / failure per test.
 const getUsageMock = vi.fn();
 vi.mock("@/server/champions-usage/usage-client", () => ({
   getUsage: (...args: unknown[]) => getUsageMock(...args),
@@ -28,9 +23,11 @@ vi.mock("@/server/champions-usage/usage-client", () => ({
 }));
 
 import type { OakDb } from "@/data/db";
+import { CHAMPIONS_FORMAT } from "@/data/formats";
 import {
   loadAbilitiesIndexUncached,
   loadAbilityPageUncached,
+  loadItemPageUncached,
   loadItemsIndexUncached,
   loadMovePageUncached,
   loadMovesIndexUncached,
@@ -47,14 +44,22 @@ import {
   buildPokemonTitle,
   clampDescription,
 } from "@/data/reference-metadata";
-import type {
-  MovePageData,
-  PokemonPageData,
-} from "@/lib/reference-pages-types";
+import type { MovePageData, PokemonPageData } from "@/lib/reference-pages-types";
+import {
+  champions_item_exclusion,
+  ingest_meta,
+  pokemon,
+  reference_cache,
+  searchable_names,
+} from "@/data/schema";
+import { SEARCHABLE_NAMES_SEED } from "../../test/fixtures/tools-fixture";
+import { createPgSchema, type PgDb, type PgFixture } from "../../test/support/pg";
 
-import { createPgSchema, type PgFixture } from "../../test/support/pg";
+const SRC = readFileSync(
+  fileURLToPath(new URL("./reference-pages.ts", import.meta.url)),
+  "utf8",
+);
 
-/** A minimal UsageData-shaped success payload for the usage-client mock. */
 function fakeUsage() {
   return {
     found: true as const,
@@ -74,16 +79,117 @@ function fakeUsage() {
   };
 }
 
-// ---------------------------------------------------------------------------
-// DB-backed loaders (shared read-only "tools" fixture)
-// ---------------------------------------------------------------------------
+async function seedOtherGameOnly(db: PgDb): Promise<void> {
+  const now = Date.now();
+  await db.insert(pokemon).values({
+    id: "incineroar",
+    format: "gen-7",
+    species_name: "incineroar",
+    form_name: null,
+    display_name: "Incineroar",
+    national_dex_number: 727,
+    type1: "fire",
+    type2: "dark",
+    ability_slot1: "blaze",
+    ability_slot2: null,
+    ability_hidden: "intimidate",
+    stat_hp: 95,
+    stat_attack: 115,
+    stat_defense: 90,
+    stat_special_attack: 80,
+    stat_special_defense: 90,
+    stat_speed: 60,
+    base_stat_total: 530,
+    sprite_url: "https://img.example/sprite/727.png",
+    artwork_url: "https://img.example/art/727.png",
+    generation: "gen-7",
+    is_gen9_native: 0,
+    source_generation: "gen-7",
+  });
+  await db.insert(searchable_names).values([
+    {
+      format: "gen-7",
+      kind: "pokemon",
+      slug: "incineroar",
+      display_name: "Incineroar",
+    },
+    {
+      format: "gen-7",
+      kind: "move",
+      slug: "hidden-power",
+      display_name: "Hidden Power",
+    },
+    {
+      format: "national-dex",
+      kind: "pokemon",
+      slug: "eternatus",
+      display_name: "Eternatus",
+    },
+  ]);
+  await db.insert(reference_cache).values({
+    format: "gen-7",
+    resource_key: "move/hidden-power",
+    resource_kind: "move",
+    payload: JSON.stringify({
+      found: true,
+      display_name: "Hidden Power",
+      type: "normal",
+      damage_class: "special",
+      power: 60,
+      accuracy: 100,
+      pp: 15,
+      priority: 0,
+      target: "selected-pokemon",
+      effect_short: "Varies with the user's IVs.",
+      effect_full: "Type and power depend on IVs.",
+    }),
+    endpoint_url: "https://pokeapi.co/api/v2/move/hidden-power",
+    fetched_at: now,
+  });
+  await db.insert(ingest_meta).values([
+    {
+      format: "gen-7",
+      last_success_at: now,
+      pokemon_count: 1,
+      learnset_count: 0,
+      names_count: 2,
+      schema_version: "2",
+    },
+    {
+      format: "national-dex",
+      last_success_at: now,
+      pokemon_count: 0,
+      learnset_count: 0,
+      names_count: 1,
+      schema_version: "2",
+    },
+  ]);
+}
 
-describe("reference-pages loaders (tools fixture)", () => {
+describe("reference-pages module — Champions only (CF-DEX-AC-1.1, CF-DEX-AC-1.6)", () => {
+  it("does not walk other-format extras, DETAIL_FALLBACK gens, or Smogon", () => {
+    expect(SRC).not.toMatch(/DETAIL_FALLBACK/);
+    expect(SRC).not.toMatch(/pokemonExtras/);
+    expect(SRC).not.toMatch(/Other formats/);
+    expect(SRC).not.toMatch(/meta-pages/);
+    expect(SRC).not.toMatch(/smogon/i);
+    expect(SRC).not.toMatch(/STANDARD_FORMAT/);
+    expect(SRC).toMatch(/champions-usage\/usage-client/);
+    expect(SRC).toMatch(/CHAMPIONS_FORMAT|"champions"/);
+    expect(SRC).toMatch(/loadChampionsItemExclusions/);
+    expect(SRC).not.toMatch(/cachedItemsIndex/);
+  });
+});
+
+describe("reference-pages loaders (tools fixture + other-game decoys)", () => {
   let fix: PgFixture;
   let db: OakDb;
 
   beforeAll(async () => {
-    fix = await createPgSchema({ seed: "tools" });
+    fix = await createPgSchema({
+      seed: "tools",
+      after: seedOtherGameOnly,
+    });
     db = fix.db;
   }, 60_000);
 
@@ -96,7 +202,7 @@ describe("reference-pages loaders (tools fixture)", () => {
   });
 
   describe("loadPokemonPageUncached", () => {
-    it("assembles garchomp: blocks present, three-scope availability, SV source, usage", async () => {
+    it("assembles garchomp from Champions data and fetches live usage (CF-DEX-AC-1.5, CF-DEX-AC-1.6)", async () => {
       getUsageMock.mockResolvedValue(fakeUsage());
 
       const page = await loadPokemonPageUncached("garchomp", db);
@@ -107,15 +213,12 @@ describe("reference-pages loaders (tools fixture)", () => {
       expect(p.displayName).toBe("Garchomp");
       expect(p.dexNumber).toBe(445);
       expect(p.types).toEqual(["dragon", "ground"]);
-      expect(p.sourceFormat).toBe("scarlet-violet");
-      expect(p.availability).toEqual([
-        "champions",
-        "scarlet-violet",
-        "gen-7",
-      ]);
-      expect(p.isNative).toBe(true);
+      expect(p.sourceFormat).toBe(CHAMPIONS_FORMAT);
+      expect(p.availability).toEqual([CHAMPIONS_FORMAT]);
+      expect(p.availability).not.toContain("scarlet-violet");
+      expect(p.availability).not.toContain("gen-7");
+      expect(p.availability).not.toContain("national-dex");
 
-      // stats mapped to short keys.
       expect(p.stats).toEqual({
         hp: 108,
         atk: 130,
@@ -126,7 +229,6 @@ describe("reference-pages loaders (tools fixture)", () => {
       });
       expect(p.baseStatTotal).toBe(600);
 
-      // abilities: slot1 sand-veil + hidden rough-skin (no slot2).
       expect(p.abilities.map((a) => a.slug)).toEqual([
         "sand-veil",
         "rough-skin",
@@ -134,21 +236,14 @@ describe("reference-pages loaders (tools fixture)", () => {
       expect(p.abilities.find((a) => a.slug === "rough-skin")?.isHidden).toBe(
         true,
       );
-      expect(p.abilities.find((a) => a.slug === "sand-veil")?.isHidden).toBe(
-        undefined,
-      );
 
-      // matchups present (arrays).
       expect(Array.isArray(p.matchups.weak_to)).toBe(true);
-      expect(Array.isArray(p.matchups.quad_weak_to)).toBe(true);
 
-      // movepool carries garchomp's SV learnset moves.
       const moveSlugs = p.movepool.flatMap((g) => g.moves.map((m) => m.slug));
       expect(moveSlugs).toEqual(
         expect.arrayContaining(["earthquake", "dragon-claw", "fire-fang"]),
       );
 
-      // champions-available → usage was fetched and mapped.
       expect(getUsageMock).toHaveBeenCalledWith(
         "Garchomp",
         "doubles",
@@ -159,81 +254,61 @@ describe("reference-pages loaders (tools fixture)", () => {
       expect(p.usage!.topMoves[0]).toEqual({ name: "earthquake", pct: 90 });
     });
 
-    it("resolves a gen-7-only species via the fallback chain (sourceFormat gen-7)", async () => {
-      const page = await loadPokemonPageUncached("incineroar", db);
-      expect(page).not.toBeNull();
-      expect(page!.sourceFormat).toBe("gen-7");
-      expect(page!.availability).toEqual(["gen-7"]);
-      // not champions-available → usage never fetched.
-      expect(page!.usage).toBeNull();
+    it("returns null for a gen-7-only species (no fallback) (CF-DEX-AC-1.4)", async () => {
+      expect(await loadPokemonPageUncached("incineroar", db)).toBeNull();
       expect(getUsageMock).not.toHaveBeenCalled();
     });
 
-    it("returns null for an unknown slug (resolves in no scope)", async () => {
+    it("returns null for a National Dex-only name", async () => {
+      expect(await loadPokemonPageUncached("eternatus", db)).toBeNull();
+    });
+
+    it("returns null for an unknown slug", async () => {
       expect(await loadPokemonPageUncached("mystery-mon", db)).toBeNull();
     });
 
-    it("survives a usage-client failure — usage null, page still loads", async () => {
+    it("survives a usage-client failure — usage null, page still loads (CF-DEX-AC-1.6)", async () => {
       getUsageMock.mockRejectedValue(new Error("upstream down"));
 
       const page = await loadPokemonPageUncached("garchomp", db);
       expect(page).not.toBeNull();
       expect(page!.displayName).toBe("Garchomp");
+      expect(page!.sourceFormat).toBe(CHAMPIONS_FORMAT);
       expect(page!.usage).toBeNull();
     });
 
-    it("preferredFormat gen-7 loads that scope's profile and learnset", async () => {
-      const page = await loadPokemonPageUncached("garchomp", db, "gen-7");
-      expect(page).not.toBeNull();
-      expect(page!.sourceFormat).toBe("gen-7");
-      expect(page!.displayName).toBe("Garchomp");
-      // Gen-7 fixture learnset is a subset (no fire-fang).
-      const moveSlugs = page!.movepool.flatMap((g) =>
-        g.moves.map((m) => m.slug),
-      );
-      expect(moveSlugs).toEqual(
-        expect.arrayContaining(["earthquake", "dragon-claw"]),
-      );
-      expect(moveSlugs).not.toContain("fire-fang");
-      // Explicit non-champions scope → no Champions usage fetch.
-      expect(getUsageMock).not.toHaveBeenCalled();
-      expect(page!.usage).toBeNull();
-    });
-
-    it("preferredFormat champions loads Champions profile and fetches usage", async () => {
+    it("ignores preferredFormat gen-7 and still loads Champions (CF-DEX-AC-1.5)", async () => {
       getUsageMock.mockResolvedValue(fakeUsage());
 
-      const page = await loadPokemonPageUncached("garchomp", db, "champions");
+      const page = await loadPokemonPageUncached("garchomp", db, "gen-7");
       expect(page).not.toBeNull();
-      expect(page!.sourceFormat).toBe("champions");
+      expect(page!.sourceFormat).toBe(CHAMPIONS_FORMAT);
+      expect(page!.sourceFormat).not.toBe("gen-7");
       expect(getUsageMock).toHaveBeenCalled();
       expect(page!.usage).not.toBeNull();
     });
 
-    it("unavailable preferredFormat soft-falls back to the default chain", async () => {
-      getUsageMock.mockResolvedValue(fakeUsage());
-
-      // gen-1 is not seeded for garchomp in the tools fixture.
-      const page = await loadPokemonPageUncached("garchomp", db, "gen-1");
-      expect(page).not.toBeNull();
-      expect(page!.sourceFormat).toBe("scarlet-violet");
-      // preferred was gen-1 (not champions) → usage gated off even on SV fallback.
-      expect(getUsageMock).not.toHaveBeenCalled();
-      expect(page!.usage).toBeNull();
+    it("does not resurrect Incineroar via preferredFormat gen-7", async () => {
+      expect(
+        await loadPokemonPageUncached("incineroar", db, "gen-7"),
+      ).toBeNull();
     });
   });
 
   describe("loadMovePageUncached", () => {
-    it("resolves a gen-7-only move (hidden-power) with its reverse roster", async () => {
-      const page = await loadMovePageUncached("hidden-power", db);
+    it("loads a Champions move", async () => {
+      const page = await loadMovePageUncached("earthquake", db);
       expect(page).not.toBeNull();
-      const m = page!;
-      expect(m.sourceFormat).toBe("gen-7");
-      expect(m.availability).toEqual(["gen-7"]);
-      expect(m.type).toBe("normal");
-      expect(m.damageClass).toBe("special");
-      expect(m.learners.map((l) => l.slug)).toContain("incineroar");
-      expect(m.learnerCount).toBe(m.learners.length);
+      expect(page!.sourceFormat).toBe(CHAMPIONS_FORMAT);
+      expect(page!.type).toBe("ground");
+      expect(page!.availability).toEqual([CHAMPIONS_FORMAT]);
+    });
+
+    it("returns null for a gen-7-only move (hidden-power) (CF-DEX-AC-1.4)", async () => {
+      expect(await loadMovePageUncached("hidden-power", db)).toBeNull();
+      expect(
+        await loadMovePageUncached("hidden-power", db, "gen-7"),
+      ).toBeNull();
     });
 
     it("returns null for an unknown move", async () => {
@@ -241,41 +316,61 @@ describe("reference-pages loaders (tools fixture)", () => {
     });
   });
 
-  describe("loadAbilityPageUncached", () => {
-    it("returns null for an ability with no reference row (rough-skin unseeded)", async () => {
-      // The tools fixture has no ability reference_cache rows, so the ability
-      // detail can't be assembled in any scope → null.
+  describe("loadAbilityPageUncached / loadItemPageUncached", () => {
+    it("returns null for an ability with no Champions reference row", async () => {
       expect(await loadAbilityPageUncached("rough-skin", db)).toBeNull();
+      expect(
+        await loadAbilityPageUncached("rough-skin", db, "gen-5"),
+      ).toBeNull();
+    });
+
+    it("returns null for an item with no Champions reference row", async () => {
+      expect(await loadItemPageUncached("leftovers", db)).toBeNull();
+      expect(
+        await loadItemPageUncached("leftovers", db, "gen-5"),
+      ).toBeNull();
     });
   });
 
   describe("index loaders", () => {
-    it("loadPokedexIndex: 9 SV rows + 2 cross-scope extras (incineroar, decidueye)", async () => {
+    it("loadPokedexIndex: Champions roster only, including Mega, no extras (CF-DEX-AC-1.1)", async () => {
       const index = await loadPokedexIndexUncached(db);
-      expect(index.rows).toHaveLength(9);
-      expect(index.extras.map((e) => e.slug).sort()).toEqual([
-        "decidueye",
-        "incineroar",
-      ]);
-      expect(index.extras.every((e) => e.sourceFormat === "gen-7")).toBe(true);
+      const expected = SEARCHABLE_NAMES_SEED.filter((n) => n.kind === "pokemon");
+      expect(index.rows).toHaveLength(expected.length);
+      const extras =
+        "extras" in index
+          ? (index as { extras: unknown }).extras
+          : [];
+      expect(extras).toEqual([]);
+      const slugs = new Set(index.rows.map((r) => r.slug));
+      for (const p of expected) {
+        expect(slugs.has(p.slug)).toBe(true);
+      }
+      expect(slugs.has("swampert-mega")).toBe(true);
+      expect(slugs.has("incineroar")).toBe(false);
+      expect(slugs.has("eternatus")).toBe(false);
     });
 
-    it("loadMovesIndex: 9 SV move names, flamethrower hydrated from its summary", async () => {
+    it("loadMovesIndex: Champions moves only (CF-DEX-AC-1.2)", async () => {
       const index = await loadMovesIndexUncached(db);
-      expect(index.rows).toHaveLength(9);
-      const flamethrower = index.rows.find((r) => r.slug === "flamethrower");
-      expect(flamethrower?.type).toBe("fire");
-      expect(flamethrower?.power).toBe(90);
+      const expected = SEARCHABLE_NAMES_SEED.filter((n) => n.kind === "move");
+      expect(index.rows).toHaveLength(expected.length);
+      expect(index.rows.some((r) => r.slug === "hidden-power")).toBe(false);
+      expect(index.rows.some((r) => r.slug === "flamethrower")).toBe(true);
+      const earthquake = index.rows.find((r) => r.slug === "earthquake");
+      expect(earthquake?.type).toBe("ground");
+      expect(earthquake?.power).toBe(100);
     });
 
-    it("loadAbilitiesIndex: 5 SV abilities", async () => {
+    it("loadAbilitiesIndex: Champions abilities only", async () => {
       const index = await loadAbilitiesIndexUncached(db);
-      expect(index.rows).toHaveLength(5);
+      const expected = SEARCHABLE_NAMES_SEED.filter((n) => n.kind === "ability");
+      expect(index.rows).toHaveLength(expected.length);
     });
 
-    it("loadItemsIndex: 3 SV items", async () => {
+    it("loadItemsIndex: Champions items only", async () => {
       const index = await loadItemsIndexUncached(db);
-      expect(index.rows.map((r) => r.slug)).toEqual([
+      expect(index.rows.map((r) => r.slug).sort()).toEqual([
         "leftovers",
         "life-orb",
         "swampertite",
@@ -283,18 +378,48 @@ describe("reference-pages loaders (tools fixture)", () => {
     });
   });
 
+  describe("champions_item_exclusion (CF-DEX-AC-1.2)", () => {
+    it("drops an excluded slug from the index and 404s its detail", async () => {
+      const now = Date.now();
+      await db.insert(reference_cache).values({
+        format: CHAMPIONS_FORMAT,
+        resource_key: "item/leftovers",
+        resource_kind: "item",
+        payload: JSON.stringify({
+          found: true,
+          display_name: "Leftovers",
+          effect_short: "Restores HP each turn.",
+          effect_full: "The holder restores 1/16 max HP at the end of each turn.",
+        }),
+        endpoint_url: "https://pokeapi.co/api/v2/item/leftovers",
+        fetched_at: now,
+      });
+      expect(await loadItemPageUncached("leftovers", db)).not.toBeNull();
+
+      await db.insert(champions_item_exclusion).values({
+        slug: "leftovers",
+        excluded_at: now,
+        excluded_by: "test",
+      });
+
+      const index = await loadItemsIndexUncached(db);
+      expect(index.rows.map((r) => r.slug).sort()).toEqual([
+        "life-orb",
+        "swampertite",
+      ]);
+      expect(index.rows.some((r) => r.slug === "leftovers")).toBe(false);
+      expect(await loadItemPageUncached("leftovers", db)).toBeNull();
+    });
+  });
+
   describe("referenceLastModifiedUncached", () => {
-    it("returns the scarlet-violet ingest timestamp as a Date", async () => {
+    it("returns the Champions ingest timestamp as a Date", async () => {
       const at = await referenceLastModifiedUncached(db);
       expect(at).toBeInstanceOf(Date);
       expect(at!.getTime()).toBeGreaterThan(0);
     });
   });
 });
-
-// ---------------------------------------------------------------------------
-// index_unavailable — an unbuilt index THROWS (page 500s, crawler retries)
-// ---------------------------------------------------------------------------
 
 describe("reference-pages loaders — index unavailable", () => {
   let none: PgFixture;
@@ -307,13 +432,13 @@ describe("reference-pages loaders — index unavailable", () => {
     await none?.cleanup();
   });
 
-  it("detail loader throws index_unavailable when the primary index is unbuilt", async () => {
+  it("detail loader throws index_unavailable when the Champions index is unbuilt", async () => {
     await expect(
       loadPokemonPageUncached("garchomp", none.db),
     ).rejects.toThrow(/index_unavailable/);
   });
 
-  it("index loader throws index_unavailable when the primary index is unbuilt", async () => {
+  it("index loader throws index_unavailable when the Champions index is unbuilt", async () => {
     await expect(loadPokedexIndexUncached(none.db)).rejects.toThrow(
       /index_unavailable/,
     );
@@ -323,10 +448,6 @@ describe("reference-pages loaders — index unavailable", () => {
     expect(await referenceLastModifiedUncached(none.db)).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Pure title/description builders (no DB)
-// ---------------------------------------------------------------------------
 
 describe("reference-metadata builders", () => {
   const basePokemon: PokemonPageData = {
@@ -346,21 +467,21 @@ describe("reference-metadata builders", () => {
     },
     movepool: [],
     forms: [],
-    availability: ["scarlet-violet", "champions"],
+    availability: ["champions"],
     isNative: true,
     spriteUrl: "s",
     artworkUrl: "a",
-    sourceFormat: "scarlet-violet",
+    sourceFormat: "champions",
     usage: null,
   };
 
-  it("buildPokemonTitle: Champions-available species gets the usage segment", () => {
+  it("buildPokemonTitle: Champions species gets the usage segment", () => {
     expect(buildPokemonTitle(basePokemon)).toBe(
       "Garchomp — Stats, Moveset & Champions Usage",
     );
   });
 
-  it("buildPokemonTitle: non-Champions species omits the usage segment", () => {
+  it("buildPokemonTitle: non-Champions availability omits the usage segment", () => {
     expect(
       buildPokemonTitle({ ...basePokemon, availability: ["scarlet-violet"] }),
     ).toBe("Garchomp — Stats, Abilities & Movepool");
@@ -388,8 +509,8 @@ describe("reference-metadata builders", () => {
     effectFull: "Inflicts regular damage.",
     learners: [],
     learnerCount: 3,
-    availability: ["scarlet-violet"],
-    sourceFormat: "scarlet-violet",
+    availability: ["champions"],
+    sourceFormat: "champions",
   };
 
   it("buildMoveTitle: type + class", () => {
@@ -414,7 +535,7 @@ describe("reference-metadata builders", () => {
         effectFull: "x",
         learnedBy: [],
         availability: [],
-        sourceFormat: "scarlet-violet",
+        sourceFormat: "champions",
       }),
     ).toBe("Rough Skin — Ability Effect & Pokémon");
     expect(
@@ -426,7 +547,7 @@ describe("reference-metadata builders", () => {
         heldByWild: [],
         requiredBy: [],
         availability: [],
-        sourceFormat: "scarlet-violet",
+        sourceFormat: "champions",
       }),
     ).toBe("Leftovers — Held Item Effect");
   });

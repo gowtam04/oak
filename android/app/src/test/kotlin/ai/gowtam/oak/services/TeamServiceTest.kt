@@ -52,22 +52,28 @@ class TeamServiceTest {
     }
 
     @Test
-    fun listSendsFormatQuery() = runTest {
+    fun listLivingOmitsFormatPicker() = runTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"teams":[]}"""))
-        service.list(Format.Gen5)
+        service.list(archived = false)
 
         val recorded = server.takeRequest()
         assertEquals("GET", recorded.method)
-        assertTrue(recorded.path?.startsWith("/api/teams?") == true)
-        assertTrue(recorded.path?.contains("format=gen-5") == true)
+        assertTrue(recorded.path == "/api/teams" || recorded.path?.startsWith("/api/teams?") == true)
+        assertTrue(recorded.path?.contains("format=") != true)
         assertEquals("Bearer secret-token", recorded.getHeader("Authorization"))
     }
 
     @Test
-    fun listOmitsQueryWhenFormatIsNull() = runTest {
+    fun listArchivedSendsArchivedQuery() = runTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("""{"teams":[]}"""))
-        service.list(null)
-        assertEquals("/api/teams", server.takeRequest().path)
+        service.list(archived = true)
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        val path = recorded.path ?: ""
+        assertTrue(path.contains("archived=1") || path.contains("archived=true"))
+        assertTrue(!path.contains("format="))
+        assertEquals("Bearer secret-token", recorded.getHeader("Authorization"))
     }
 
     @Test

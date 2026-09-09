@@ -310,6 +310,51 @@ struct MarkdownBlocksTests {
     #expect(MarkdownBlocks.parse(source) == [.paragraph("```swift\nlet x = 1")])
   }
 
+  // MARK: - HTML comments (citation-span markers)
+
+  @Test
+  func citationSpanCommentsAreStrippedFromProse() {
+    #expect(
+      MarkdownBlocks.parse("<!-- span:c0 -->Garchomp is fast.<!-- /span:c0 -->")
+        == [.paragraph("Garchomp is fast.")]
+    )
+  }
+
+  @Test
+  func citationSpanCommentsLeaveSurroundingProse() {
+    #expect(
+      MarkdownBlocks.parse("X <!-- span:c0 -->Y<!-- /span:c0 --> Z")
+        == [.paragraph("X Y Z")]
+    )
+  }
+
+  @Test
+  func htmlCommentsInsideAClosedFenceStayIntact() {
+    let source = "```\n<!-- span:c0 -->kept<!-- /span:c0 -->\n```"
+    #expect(
+      MarkdownBlocks.parse(source)
+        == [.codeBlock(language: nil, code: "<!-- span:c0 -->kept<!-- /span:c0 -->")]
+    )
+  }
+
+  @Test
+  func unclosedHtmlCommentIsDropped() {
+    #expect(
+      MarkdownBlocks.parse("before <!-- span:c0")
+        == [.paragraph("before")]
+    )
+  }
+
+  @Test
+  func stripHtmlCommentsIsTheSharedHelper() {
+    let raw = "<!-- span:c0 -->Ceruledge is Fire/Ghost.<!-- /span:c0 --> It has no Ground immunity."
+    #expect(
+      MarkdownBlocks.stripHtmlComments(raw)
+        == "Ceruledge is Fire/Ghost. It has no Ground immunity."
+    )
+    #expect(!MarkdownBlocks.stripHtmlComments(raw).contains("<!--"))
+  }
+
   // MARK: - Blockquotes & thematic breaks
 
   @Test

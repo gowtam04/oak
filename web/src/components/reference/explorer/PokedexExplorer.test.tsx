@@ -46,7 +46,7 @@ const DATA: PokedexIndexData = {
 };
 
 describe("PokedexExplorer", () => {
-  it("renders every species and extra link unfiltered", () => {
+  it("renders every Champions species and ignores other-format extras (CF-DEX-AC-1.1)", () => {
     render(<PokedexExplorer data={DATA} />);
     expect(screen.getByRole("link", { name: /Charmander/ })).toHaveAttribute(
       "href",
@@ -54,11 +54,9 @@ describe("PokedexExplorer", () => {
     );
     expect(screen.getByRole("link", { name: /Squirtle/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Chespin/ })).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: /Charizard/ }),
-    ).toHaveAttribute("href", "/pokedex/charizard-mega-x");
-    // Idle count uses the noun.
-    expect(screen.getByRole("status")).toHaveTextContent("4 POKÉMON");
+    expect(screen.queryByRole("link", { name: /Charizard/ })).toBeNull();
+    expect(screen.queryByText(/Other formats/)).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("3 POKÉMON");
   });
 
   it("drops empty generation groups and extras when a type facet is active", () => {
@@ -75,24 +73,26 @@ describe("PokedexExplorer", () => {
     expect(screen.getByRole("status")).toHaveTextContent("1 RESULTS");
   });
 
-  it("flattens on a query, updates the count, and searches extras", async () => {
+  it("flattens on a query and does not surface other-game extras (CF-DEX-AC-1.3)", async () => {
     render(<PokedexExplorer data={DATA} />);
     fireEvent.change(screen.getByRole("searchbox"), {
       target: { value: "char" },
     });
-    // Charmander + the Charizard extra (search-visible), Squirtle gone.
     expect(await screen.findByRole("link", { name: /Charmander/ })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Charizard/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Charizard/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /Squirtle/ })).toBeNull();
-    expect(screen.getByRole("status")).toHaveTextContent("2 RESULTS");
+    expect(screen.getByRole("status")).toHaveTextContent("1 RESULTS");
   });
 
-  it("shows a friendly empty state when nothing matches", () => {
+  it("shows a Champions-roster empty state when nothing matches (CF-UI-AC-7.2)", () => {
     render(<PokedexExplorer data={DATA} />);
     fireEvent.change(screen.getByRole("searchbox"), {
       target: { value: "zzzznope" },
     });
     expect(screen.getByTestId("ref-empty")).toBeInTheDocument();
+    expect(screen.getByTestId("ref-empty")).toHaveTextContent(
+      /champions roster/i,
+    );
     expect(screen.getByRole("status")).toHaveTextContent("0 RESULTS");
   });
 });

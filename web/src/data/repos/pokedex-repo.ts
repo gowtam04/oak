@@ -652,6 +652,39 @@ export async function spriteRefsByNames(
 }
 
 // ===========================================================================
+// spriteUrlsByIds — Dex/search typeahead thumbs (id → sprite_url)
+// ===========================================================================
+
+/**
+ * Resolve a batch of Pokémon ids (canonical slugs) to `sprite_url` for
+ * `format`, in ONE query. Unknown / empty ids are simply absent from the map.
+ * Never throws (an unreadable index → an empty map).
+ */
+export async function spriteUrlsByIds(
+  ids: string[],
+  format: Format,
+  db: OakDb,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const wanted = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (wanted.length === 0) return out;
+
+  try {
+    const rows = await db
+      .select({ id: pokemon.id, sprite_url: pokemon.sprite_url })
+      .from(pokemon)
+      .where(and(eq(pokemon.format, format), inArray(pokemon.id, wanted)));
+    for (const r of rows) {
+      if (r.sprite_url) out.set(r.id, r.sprite_url);
+    }
+  } catch {
+    // Index unreadable (table missing) — caller omits sprite_url.
+    return out;
+  }
+  return out;
+}
+
+// ===========================================================================
 // pokemonWithAbility — backs the ability artifact's `learned_by` (B-4)
 // ===========================================================================
 

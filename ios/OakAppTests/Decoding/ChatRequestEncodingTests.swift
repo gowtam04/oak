@@ -38,14 +38,33 @@ struct ChatRequestEncodingTests {
     #expect(object["images"] == nil)
     // The deprecated field is gone entirely — never emitted.
     #expect(object["champions_mode"] == nil)
+    #expect(object["recovery"] == nil)
+    #expect(object["mentioned_team_ids"] == nil)
     // No camelCase leakage of the renamed keys.
     #expect(object["sessionId"] == nil)
     #expect(object["scopeSeed"] == nil)
   }
 
-  /// An image-bearing turn may carry an empty `message`; a scope pick encodes as
-  /// its `Format` rawValue under `scope_seed`; each image keeps camelCase `mimeType`
-  /// and raw base64.
+  @Test
+  func recoveryAndMentionedTeamIdsEncodeSnakeCase() throws {
+    let request = ChatRequest(
+      sessionId: "sess-rec",
+      message: "retry this",
+      images: nil,
+      scopeSeed: nil,
+      recovery: .retry,
+      mentionedTeamIds: ["team-1", "team-2"]
+    )
+    let object = try encodedObject(request)
+    #expect(object["recovery"] as? String == "retry")
+    #expect(object["mentioned_team_ids"] as? [String] == ["team-1", "team-2"])
+    #expect(object["mentionedTeamIds"] == nil)
+  }
+
+  /// An image-bearing turn may carry an empty `message`; a Champions seed (if the
+  /// client still sends `scope_seed` at all) encodes as its `Format` rawValue;
+  /// each image keeps camelCase `mimeType` and raw base64. Other-format seeds are
+  /// a decode leftover — ChatViewModel must not send them (CF-CHAT-US-1).
   @Test
   func imageTurnEncodesScopeSeedAndRawBase64Images() throws {
     let request = ChatRequest(
@@ -55,14 +74,14 @@ struct ChatRequestEncodingTests {
         ChatImage(mimeType: "image/jpeg", data: "AQIDBA=="),
         ChatImage(mimeType: "image/png", data: "BQYHCA=="),
       ],
-      scopeSeed: .gen7
+      scopeSeed: .champions
     )
     let object = try encodedObject(request)
 
     #expect(object["session_id"] as? String == "sess-456")
     #expect(object["message"] as? String == "")
     // scope_seed carries the wire rawValue, not a case name.
-    #expect(object["scope_seed"] as? String == "gen-7")
+    #expect(object["scope_seed"] as? String == "champions")
     #expect(object["champions_mode"] == nil)
 
     let images = try #require(object["images"] as? [[String: Any]])

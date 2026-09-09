@@ -20,8 +20,8 @@ import UIKit
 /// pushed signed-in thread (where "New Chat" lives on the list and Back returns to
 /// it), and ``signInAction`` — set for a guest only — renders a quiet "Sign in to
 /// save your conversations" row inside the scrollable thread, above the empty
-/// state when empty and at the top of the scroll otherwise (accounts-and-access.md
-/// M-ACCT-US-1) — not a full-width band under the header.
+/// state when empty and with the bottom-anchored conversation cluster otherwise
+/// (accounts-and-access.md M-ACCT-US-1) — not a full-width band under the header.
 struct ChatView: View {
   @State private var model: ChatViewModel
 
@@ -48,14 +48,12 @@ struct ChatView: View {
   /// once (staggered fade), rather than snapping in with the hero.
   @State private var emptyStateAppeared = false
 
-  /// When the current in-flight turn began, for the field-notes trail's elapsed timer
-  /// (§4.03). Set the first frame streaming becomes active, cleared when it ends —
-  /// pure view-layer presentation, so the elapsed reads live without touching the VM.
-  @State private var streamStartedAt: Date?
-
   /// A single scale pulse on the send button, fired when an example chip is tapped so
   /// the eye lands where the action is (§4.01). Skipped under Reduce Motion.
   @State private var sendPulse = false
+
+  /// Composer focus — lifted so tapping the thread can dismiss the keyboard.
+  @FocusState private var composerFocused: Bool
 
   /// The empty desk's four filed starters (Battle / Dex / Rules / Meta), resampled
   /// from ``ExamplePrompts/filedPool`` each time the empty state (re)appears —
@@ -69,6 +67,15 @@ struct ChatView: View {
   /// (M-BR-ART-4); rebuilding clears the back stack, which is fine since the sheet is
   /// closed when the composer toggle is reached.
   @State private var artifactModel: ArtifactViewModel?
+  @State private var calculator: CalculatorViewModel?
+  @State private var pinStrip: PinnedArtifactStripViewModel?
+
+  private var calculatorPresented: Binding<Bool> {
+    Binding(
+      get: { model.isCalculatorPresented },
+      set: { if !$0 { model.dismissCalculator() } }
+    )
+  }
 
   /// Drives the voice-mode `.fullScreenCover` (``VoiceLauncher``). Flipped true by
   /// the composer's mic button (only after it's cleared the sign-in + microphone
@@ -86,7 +93,7 @@ struct ChatView: View {
   /// New Chat back to the tab's stack (TestFlight AG4sZ6E).
   private let onNewConversation: (() -> Void)?
 
-  /// When non-nil, renders the guest sign-in nudge above the thread; the "Sign in"
+  /// When non-nil, renders the guest sign-in nudge in the thread; the "Sign in"
   /// button calls this (it presents the sign-in sheet). `nil` for a signed-in thread.
   private let signInAction: (() -> Void)?
 
@@ -104,6 +111,11 @@ struct ChatView: View {
 
   var body: some View {
     VStack(spacing: 0) {
+      if let pinStrip {
+        PinnedArtifactStrip(model: pinStrip) { artifact in
+          artifactModel?.openSnapshot(artifact)
+        }
+      }
       thread
       Divider()
       if let banner = model.errorBanner {
@@ -112,10 +124,14 @@ struct ChatView: View {
       }
       ComposerView(
         model: model,
-        onVoice: { isVoicePresented = true },
+        onVoice: {
+          guard VoiceCapture.isEnabled else { return }
+          isVoicePresented = true
+        },
         voiceReady: voiceReady,
         onSignInNudge: signInAction,
-        sendPulse: sendPulse
+        sendPulse: sendPulse,
+        isInputFocused: $composerFocused
       )
     }
     // The error banner slides up from the composer seam as it appears/clears.
@@ -125,42 +141,52 @@ struct ChatView: View {
     .onChange(of: model.turns.count) { _, _ in
       if case .assistant = model.turns.last?.content { Haptics.success() }
     }
-    // Stamp/clear the trail's elapsed-timer origin as a turn starts/ends — view-layer
-    // only, so the timer never reaches into the VM's private `turnStartedAt`.
-    .onChange(of: model.isStreaming) { _, streaming in
-      streamStartedAt = streaming ? Date() : nil
-    }
     .navigationTitle("Oak")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
-      // Signal wordmark (`Oak.` + red period) leading, so the Chat root reads as
-      // Oak the instant it opens. Only on the root (guest single thread); a
-      // pushed signed-in thread keeps the system back button leading.
+      // Enamel lockup (coral tile + white Fredoka "Oak") leading, so the Chat
+      // root reads as Oak the instant it opens. Only on the root (guest single
+      // thread); a pushed signed-in thread keeps the system back button leading.
       if showsNewConversationButton {
         ToolbarItem(placement: .topBarLeading) {
           OakWordmarkLockup()
+            .fixedSize()
         }
+        .oakLidItem()
       }
-      // The scope control (GS-C): the header's visible counterpart to the `scope`
-      // SSE event and the ONLY interactive scope control (the Champions pill +
-      // Account toggle are gone). Centered so it reads as the thread's scope, not
-      // an action; disabled mid-stream so a turn's scope stays stable.
+      // Informational regulation chip (CF-UI-US-2) — not a format picker.
       ToolbarItem(placement: .principal) {
         scopeChip
       }
-      if showsNewConversationButton || onNewConversation != nil {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button {
-            if let onNewConversation {
-              onNewConversation()
-            } else {
-              model.startNewConversation()
+      .oakLidItem()
+      ToolbarItem(placement: .topBarTrailing) {
+        HStack(spacing: 12) {
+          if model.isSignedIn, !model.turns.isEmpty {
+            Menu {
+              Button("Export Markdown") {
+                Task { await exportThread(.markdown) }
+              }
+              Button("Export PDF") {
+                Task { await exportThread(.pdf) }
+              }
+            } label: {
+              Label("Export", systemImage: "square.and.arrow.up")
             }
-          } label: {
-            Label("New conversation", systemImage: "square.and.pencil")
+          }
+          if showsNewConversationButton || onNewConversation != nil {
+            Button {
+              if let onNewConversation {
+                onNewConversation()
+              } else {
+                model.startNewConversation()
+              }
+            } label: {
+              Label("New conversation", systemImage: "square.and.pencil")
+            }
           }
         }
       }
+      .oakLidItem()
     }
     // Navigating away UNSUBSCRIBES — it never cancels generation (background-turns
     // design §6.2). `detach` closes the socket, keeps the pending-turn pointer, and
@@ -169,7 +195,10 @@ struct ChatView: View {
     .onDisappear { model.detach() }
     // Returning to the thread: if a turn is still generating for it but the socket has
     // dropped, reattach to its live stream and rebuild the in-flight UI from the replay.
-    .onAppear { model.reattachIfNeeded() }
+    .onAppear {
+      model.reattachIfNeeded()
+      Task { await model.loadMentionTeams() }
+    }
     // Background: take a short grace window so a nearly-done turn finishes streaming.
     // Foreground: reattach to a still-running turn whose socket dropped.
     .onChange(of: scenePhase) { _, newPhase in
@@ -186,22 +215,82 @@ struct ChatView: View {
     // changes (a chip pick or a resolved `scope` event) so its fixed format
     // re-scopes to the active scope (M-BR-ART-4; web scopes the viewer to
     // `displayFormat` too).
+    .task(id: "\(model.sessionId)-\(model.isSignedIn)") {
+      guard model.isSignedIn else {
+        pinStrip = nil
+        return
+      }
+      let strip = PinnedArtifactStripViewModel(
+        pins: services.artifactPins,
+        isSignedIn: true,
+        conversationId: model.sessionId
+      )
+      pinStrip = strip
+      await strip.load()
+    }
     .task(id: model.displayFormat) {
       let viewer = ArtifactViewModel(
         service: services.artifact,
-        format: model.displayFormat
+        format: model.displayFormat,
+        isSignedIn: model.isSignedIn,
+        pins: services.artifactPins,
+        conversationId: model.sessionId
       )
       artifactModel = viewer
+    }
+    .sheet(isPresented: calculatorPresented) {
+      if let calculator {
+        CalculatorView(
+          model: calculator,
+          onExplain: { prompt in
+            model.composerText = prompt
+            model.send()
+          },
+          onExpand: {
+            let scenario = calculator.scenario
+            model.dismissCalculator()
+            appState.pendingDestination = .calculator(scenario)
+          },
+          onDismiss: { model.dismissCalculator() }
+        )
+        .oakPaperSheet()
+      }
+    }
+    .onChange(of: model.calculatorHop) { _, hop in
+      guard let hop else {
+        calculator = nil
+        return
+      }
+      let vm = calculator ?? CalculatorViewModel(
+        calc: services.calc,
+        format: hop.format,
+        presentation: hop.kind == .fullScreen ? .fullScreen : .overlay
+      )
+      if let scenario = hop.scenario {
+        vm.applyPrefill(scenario)
+      } else {
+        vm.applySlashRest(hop.rest)
+      }
+      calculator = vm
+    }
+    .onChange(of: appState.pendingChatSend) { _, prompt in
+      guard let prompt else { return }
+      appState.pendingChatSend = nil
+      model.composerText = prompt
+      model.send()
     }
     // Host the artifact bottom sheet once at the screen level; pushing an entity
     // opens it, an empty back stack closes it (M-AC-A3.3, M-BR-ART-5).
     .artifactViewerHost(artifactModel)
-    // Voice mode (T5): a fresh `VoiceLauncher` — and a fresh `VoiceSession` — is
-    // built every time this opens. However it closes (End button, `.onDisappear`
-    // teardown, anything else), the `isVoicePresented` binding flips back to
-    // false, which is what triggers the post-session refresh below.
+    // Voice mode (T5): capture is gated by ``VoiceCapture/isEnabled``. When on,
+    // a fresh `VoiceLauncher` — and a fresh `VoiceSession` — is built every
+    // time this opens. However it closes (End button, `.onDisappear` teardown,
+    // anything else), the `isVoicePresented` binding flips back to false,
+    // which is what triggers the post-session refresh below.
     .fullScreenCover(isPresented: $isVoicePresented) {
-      VoiceLauncher(sessionId: model.sessionId, format: model.displayFormat)
+      if VoiceCapture.isEnabled {
+        VoiceLauncher(sessionId: model.sessionId, format: model.displayFormat)
+      }
     }
     .onChange(of: isVoicePresented) { wasPresented, isPresented in
       if wasPresented, !isPresented { refreshAfterVoice() }
@@ -210,50 +299,12 @@ struct ChatView: View {
 
   // MARK: Scope chip (generation-scope GS-C)
 
-  /// The header scope control: a compact pill showing the displayed scope's short
-  /// label, opening a menu of all known formats as an inline radio list
-  /// (checkmark on the current pick). Picking one seeds the next turn's scope
-  /// (`selectScope`). Disabled while a turn streams so the scope can't change
-  /// mid-turn — mirrors `ScopeChip.tsx` (label = the scope, menu =
-  /// `Format.knownCases`, disabled while streaming).
+  /// Display-only regulation chip (CF-CHAT-US-1 / CF-UI-US-2). Not a menu of
+  /// games — tap does not switch scope.
   @ViewBuilder
   private var scopeChip: some View {
-    Menu {
-      Picker(
-        "Answer scope",
-        selection: Binding(
-          get: { model.displayFormat },
-          set: { model.selectScope($0) }
-        )
-      ) {
-        ForEach(Format.knownCases, id: \.self) { format in
-          Text(format.displayLabel).tag(format)
-        }
-      }
-    } label: {
-      HStack(spacing: 6) {
-        // Always-on 6pt scope LED — Signal's header mark, not a "changed from
-        // default" indicator.
-        Circle()
-          .fill(Theme.accent)
-          .frame(width: 6, height: 6)
-          .accessibilityHidden(true)
-        Text(model.displayFormat.shortLabel)
-          .font(Theme.body(.caption, weight: .medium))
-        Image(systemName: "chevron.down")
-          .font(.system(size: 9, weight: .bold))
-      }
-      .foregroundStyle(Theme.textSecondary)
-      .padding(.horizontal, 10)
-      .padding(.vertical, 5)
-      .background(Theme.surface, in: Capsule())
-      .overlay(Capsule().strokeBorder(Theme.separator, lineWidth: 1))
-      .contentShape(Capsule())
-    }
-    .disabled(model.isStreaming)
-    .accessibilityLabel("Answer scope")
-    .accessibilityValue(model.displayFormat.displayLabel)
-    .accessibilityHint("Choose which game or generation answers are based on")
+    RegulationChip()
+      .accessibilityValue(model.regulationLabel)
   }
 
   // MARK: Voice mode (T5)
@@ -284,12 +335,13 @@ struct ChatView: View {
 
   /// A single quiet row inviting a guest to sign in so their conversations persist
   /// (accounts-and-access.md M-ACCT-US-1). Lives INSIDE the scrollable thread area
-  /// (above the empty state when empty, top of the scroll otherwise) — **not** a
-  /// full-width band under the header (soul.md: red is a record light, not
-  /// wallpaper; chrome stays quiet). Muted footnote text + an inline red
-  /// text-button; a small icloud glyph pairs with the text so the invitation isn't
-  /// carried by the red button color alone (M-AC-UI9.3). No surface fill, no
-  /// padding beyond breathing room — it reads as a caption, not a card.
+  /// (above the empty state when empty; with the bottom-anchored conversation
+  /// cluster otherwise) — **not** a full-width band under the header (soul.md: red
+  /// is a record light, not wallpaper; chrome stays quiet). Muted footnote text +
+  /// an inline red text-button; a small icloud glyph pairs with the text so the
+  /// invitation isn't carried by the red button color alone (M-AC-UI9.3). No
+  /// surface fill, no padding beyond breathing room — it reads as a caption, not a
+  /// card.
   @ViewBuilder
   private func signInNudge(action: @escaping () -> Void) -> some View {
     HStack(spacing: 6) {
@@ -330,15 +382,28 @@ struct ChatView: View {
             }
             .padding(Theme.Spacing.lg)
             .frame(minHeight: geo.size.height, alignment: .top)
+            .oakDismissesComposerKeyboard { composerFocused = false }
           } else {
             VStack(spacing: 0) {
-              if let signInAction {
-                signInNudge(action: signInAction)
-                  .padding(.horizontal, Theme.Spacing.lg)
-                  .padding(.top, Theme.Spacing.sm)
-              }
+              PinStripView(
+                pins: pinItems,
+                onJump: { id in
+                  if let turn = model.turns.first(where: { $0.serverMessageId == id }) {
+                    withAnimation { proxy.scrollTo(turn.id, anchor: .top) }
+                  }
+                },
+                onUnpin: { id in
+                  if let turn = model.turns.first(where: { $0.serverMessageId == id }) {
+                    Task { await model.pinTurn(turn) }
+                  }
+                }
+              )
               Spacer(minLength: 0)
               LazyVStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+                if let signInAction {
+                  signInNudge(action: signInAction)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 ForEach(model.turns) { turn in
                   turnView(turn)
                     .id(turn.id)
@@ -356,6 +421,7 @@ struct ChatView: View {
             }
             .padding(Theme.Spacing.lg)
             .frame(minHeight: geo.size.height, alignment: .bottom)
+            .oakDismissesComposerKeyboard { composerFocused = false }
           }
         }
         .background(Theme.canvas)
@@ -370,33 +436,119 @@ struct ChatView: View {
 
   @ViewBuilder
   private func turnView(_ turn: ChatViewModel.ChatTurnItem) -> some View {
+    let isLastUser = model.isLastUser(turn)
+    let isLastAssistant = model.isLastAssistant(turn)
     switch turn.content {
     case let .user(text, imageCount):
-      UserMessageView(text: text, imageCount: imageCount)
-    case let .assistant(answer):
-      // The full field-by-field card. A clarify-option / suggestion tap sends its
-      // text verbatim as the next user turn; tapping a candidate / subject / type or
-      // a proposed/saved team opens it in the artifact viewer (M-ART-US-1/2/3).
-      AnswerCardView(
-        answer: answer,
-        onFollowUp: sendFollowUp,
-        onOpenSavedTeam: { ref in
-          Task { await artifactModel?.openSavedTeam(id: ref.id, name: ref.name) }
-        },
-        onOpenEntity: { kind, query in
-          Task { await artifactModel?.openEntity(kind: kind, query: query) }
-        },
-        onOpenProposedTeam: { team, warnings in
-          artifactModel?.openProposedTeam(team, warnings: warnings)
-        },
-        onOpenComparison: { subjects in
-          artifactModel?.openComparison(subjects)
-        },
-        onOpenDamageCalc: { damageCalc in
-          artifactModel?.openDamageCalc(damageCalc)
+      HStack(alignment: .top) {
+        Spacer(minLength: 32)
+        VStack(alignment: .trailing, spacing: 6) {
+          UserMessageView(text: text, imageCount: imageCount)
+          if isLastUser, model.canUndoSend || model.canEditLastUser {
+            HStack(spacing: 8) {
+              if model.canUndoSend {
+                Button("Undo") { model.undoSend() }
+                  .font(Theme.body(.caption, weight: .semibold))
+              }
+              if model.canEditLastUser {
+                TurnActions(
+                  isAssistant: false,
+                  isLastCard: true,
+                  isSignedIn: model.isSignedIn,
+                  isPinned: false,
+                  onRetry: nil,
+                  onEdit: { model.beginEditLast() },
+                  onCopyHuman: {},
+                  onCopyAgents: nil,
+                  onShare: nil,
+                  onPin: nil,
+                  onFork: nil
+                )
+              }
+            }
+          }
         }
-      )
+      }
+    case let .assistant(answer):
+      VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+        // The full field-by-field card. A clarify-option / suggestion tap sends its
+        // text verbatim as the next user turn; tapping a candidate / subject / type or
+        // a proposed/saved team opens it in the artifact viewer (M-ART-US-1/2/3).
+        if model.showsVoiceMic(for: answer) {
+          Label("Voice turn", systemImage: "mic.fill")
+            .font(Theme.body(.caption, weight: .medium))
+            .foregroundStyle(Theme.textSecondary)
+            .accessibilityLabel("Voice turn")
+        }
+        if let banner = model.voiceHydrateBanner(for: turn) {
+          voiceHydrateBanner(banner, messageId: turn.serverMessageId)
+        }
+        AnswerCardView(
+          answer: answer,
+          density: appState.answerDensity,
+          onFollowUp: sendFollowUp,
+          onOpenSavedTeam: { ref in
+            Task { await artifactModel?.openSavedTeam(id: ref.id, name: ref.name) }
+          },
+          onOpenEntity: { kind, query in
+            Task { await artifactModel?.openEntity(kind: kind, query: query) }
+          },
+          onOpenProposedTeam: { team, warnings in
+            artifactModel?.openProposedTeam(team, warnings: warnings)
+          },
+          onOpenComparison: { subjects in
+            artifactModel?.openComparison(subjects)
+          },
+          onOpenDamageCalc: { calc in
+            model.openCalculator(
+              rest: "",
+              scenario: scenarioFromDamageCalc(calc, format: model.displayFormat)
+            )
+          },
+          onCopyHuman: {
+            UIPasteboard.general.string = OakAnswerHumanMarkdown.build(answer)
+          }
+        )
+        TurnActions(
+          isAssistant: true,
+          isLastCard: isLastAssistant && !model.isStreaming,
+          isSignedIn: model.isSignedIn,
+          isPinned: turn.serverMessageId.map { model.pinnedMessageIds.contains($0) } ?? false,
+          onRetry: (isLastAssistant && model.canRetryLastAnswer) ? { model.retryLastAnswer() } : nil,
+          onEdit: nil,
+          onCopyHuman: {
+            UIPasteboard.general.string = OakAnswerHumanMarkdown.build(answer)
+          },
+          onCopyAgents: {
+            UIPasteboard.general.string = OakAnswerAgentMarkdown.build(answer)
+          },
+          onShare: model.isSignedIn ? { Task { await share(turn) } } : nil,
+          onPin: model.isSignedIn ? { Task { await model.pinTurn(turn) } } : nil,
+          onFork: model.isSignedIn ? { Task { await model.forkFrom(turn) } } : nil
+        )
+        FollowUpChipRow(chips: model.followUpChips(for: answer), onTap: model.handleChip)
+      }
     }
+  }
+
+  private var pinItems: [PinStripView.PinItem] {
+    model.pinnedMessageIds.compactMap { id in
+      guard let turn = model.turns.first(where: { $0.serverMessageId == id }),
+            case let .assistant(answer) = turn.content
+      else { return nil }
+      let title = answer.subjects?.first?.name ?? "Pinned answer"
+      return PinStripView.PinItem(messageId: id, title: title)
+    }
+  }
+
+  private func share(_ turn: ChatViewModel.ChatTurnItem) async {
+    guard let url = await model.shareTurn(turn) else { return }
+    SystemShare.present(items: [url])
+  }
+
+  private func exportThread(_ format: ConversationExportFormat) async {
+    guard let url = await model.exportConversation(as: format) else { return }
+    SystemShare.present(items: [url])
   }
 
   /// Sends `text` verbatim as the next user message (clarify options + suggestion
@@ -406,52 +558,64 @@ struct ChatView: View {
     model.send()
   }
 
-  /// The live streaming section: the field-notes trail (with its elapsed timer), then
-  /// either the answer skeleton holding the landing zone (§4.03) or, once prose
-  /// arrives, the streamed markdown (which the terminal answer later replaces,
-  /// authoritatively). A `TimelineView` ticks the trail's elapsed seconds each second
-  /// without a stored counter.
-  private var inProgressView: some View {
-    TimelineView(.periodic(from: .now, by: 1)) { context in
-      let elapsed = streamStartedAt.map { max(0, Int(context.date.timeIntervalSince($0))) }
-      VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-        StreamingStatusView(
-          phase: model.streamingPhase,
-          activities: model.toolActivities,
-          reconnecting: model.reconnecting,
-          elapsedSeconds: elapsed
-        )
-        if !model.streamingText.isEmpty {
-          MarkdownBlockView(model.streamingText)
-            .font(Theme.body(.body))
-            .foregroundStyle(Theme.textPrimary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-          AnswerSkeleton()
+  @ViewBuilder
+  private func voiceHydrateBanner(_ banner: VoiceHydrateBanner, messageId: String?) -> some View {
+    HStack {
+      switch banner {
+      case .finishing:
+        Text("Finishing card…")
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.textSecondary)
+      case .retry:
+        Text("Couldn't finish this card.")
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.textSecondary)
+        if let messageId {
+          Button("Retry") {
+            Task { await model.retryVoiceHydrate(assistantMessageId: messageId) }
+          }
+          .font(Theme.body(.caption, weight: .semibold))
         }
       }
+      Spacer(minLength: 0)
     }
+    .accessibilityElement(children: .combine)
+  }
+
+  /// Thinking trace while empty, then a rising answer plate once tokens
+  /// arrive (the terminal answer later replaces it authoritatively).
+  private var inProgressView: some View {
+    IncomingAnswerPlate(
+      phase: model.streamingPhase,
+      activities: model.toolActivities,
+      reconnecting: model.reconnecting,
+      streamingText: model.streamingText,
+      startedAt: model.streamStartedAt
+    )
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  /// Signal empty chat: large title, mute sub, four full-width starter rows.
-  /// Scope LED lives in the header only — not repeated on this plate.
+  /// Empty chat: Fredoka title on paper, mute sub, four full-width starter
+  /// rows. Current landing IA — not the July centered Oak lockup.
   private var emptyState: some View {
-    blankSpecimenPlate
+    emptyLanding
       .frame(maxWidth: Self.plateMaxWidth)
       .frame(maxWidth: .infinity)
       .onAppear {
         filedStarters = ExamplePrompts.pickFiledStarters()
         emptyStateAppeared = true
+        Task {
+          await model.loadEmptyDeskRecents()
+          await model.loadMentionTeams()
+        }
       }
   }
 
   /// Max width the empty-chat column snaps to.
   private static let plateMaxWidth: CGFloat = 520
 
-  /// Title + sub + starter rows. No Standby label, no LED well, no type-dot
-  /// hero composition.
-  private var blankSpecimenPlate: some View {
+  /// Title + sub + starter rows. No Standby label, no LED well, no brand tile.
+  private var emptyLanding: some View {
     VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
       Text("What do you want to know?")
         .font(Theme.display(.title))
@@ -460,11 +624,16 @@ struct ChatView: View {
         .accessibilityAddTraits(.isHeader)
         .accessibilityIdentifier("empty-desk-prompt")
 
-      Text("Mechanics, locations, teams, damage. Oak will show its work.")
+      Text("Teams, calcs, and live usage for Pokémon Champions. Oak will show its work.")
         .font(Theme.body(.subheadline))
         .foregroundStyle(Theme.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
         .padding(.bottom, Theme.Spacing.sm)
+
+      if model.isSignedIn {
+        emptyDeskRecents
+          .padding(.bottom, Theme.Spacing.sm)
+      }
 
       VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
         ForEach(Array(filedStarters.enumerated()), id: \.element.id) { index, starter in
@@ -474,6 +643,35 @@ struct ChatView: View {
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.top, Theme.Spacing.xl)
+  }
+
+  @ViewBuilder
+  private var emptyDeskRecents: some View {
+    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+      if let recent = model.recentConversation {
+        Button {
+          appState.pendingDestination = .conversation(id: recent.id)
+        } label: {
+          Label("Continue \(recent.title)", systemImage: "clock.arrow.circlepath")
+            .font(Theme.body(.subheadline, weight: .medium))
+            .foregroundStyle(Theme.textStrong)
+        }
+        .buttonStyle(.plain)
+      }
+      if let team = model.recentTeam {
+        Button {
+          appState.pendingDestination = .team(id: team.id)
+        } label: {
+          Label("Open \(team.name)", systemImage: "square.grid.3x2")
+            .font(Theme.body(.subheadline, weight: .medium))
+            .foregroundStyle(Theme.textStrong)
+        }
+        .buttonStyle(.plain)
+      }
+      Text(model.regulationLabel)
+        .font(Theme.body(.caption))
+        .foregroundStyle(Theme.textMuted)
+    }
   }
 
   /// One starter row: mute category prefix + prompt. Surface + hairline, r10.
@@ -509,8 +707,9 @@ struct ChatView: View {
       )
       .overlay {
         RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-          .strokeBorder(Theme.separator, lineWidth: 1)
+          .strokeBorder(Theme.borderStrong, lineWidth: 1)
       }
+      .oakShadow(.card)
     }
     .buttonStyle(OakPressableButtonStyle())
     .opacity(shown ? 1 : 0)
@@ -565,42 +764,59 @@ struct ChatView: View {
   }
 }
 
-// MARK: - User note (sunken + hairline; no red bubble, no corner pip)
+// MARK: - User note (red-soft bubble)
 
-/// A user's note, trailing-aligned. Sunken fill + hairline — **not** an
-/// accent-filled iMessage/ChatGPT bubble and **not** a red-pipped instrument card.
+/// A user's note, trailing-aligned. Enamel restores the red-soft bubble:
+/// `Theme.userBubble` fill, 30% poke-red hairline, `radius-lg` with `radius-sm`
+/// on the bottom-right — not Signal's sunken gray note.
 private struct UserMessageView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.colorScheme) private var colorScheme
   let text: String
   let imageCount: Int
 
   var body: some View {
-    HStack {
-      Spacer(minLength: 32)
-      VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
-        if !text.isEmpty {
-          Text(text)
-            .font(Theme.body(.body, weight: .medium))
-            .foregroundStyle(Theme.textStrong)
-            .padding(.horizontal, Theme.Spacing.lg)
-            .padding(.vertical, Theme.Spacing.md)
-            .background(Theme.surfaceSunken, in: noteShape)
-            .overlay {
-              noteShape.strokeBorder(Theme.separator, lineWidth: 1)
-            }
-        }
-        if imageCount > 0 {
-          Label("\(imageCount) image(s) attached", systemImage: "photo")
-            .font(Theme.body(.caption))
-            .foregroundStyle(Theme.textSecondary)
-        }
+    VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
+      if !text.isEmpty {
+        Text(text)
+          .font(Theme.body(.body, weight: .medium))
+          .foregroundStyle(Theme.textStrong)
+          .padding(.horizontal, Theme.Spacing.lg)
+          .padding(.vertical, Theme.Spacing.md)
+          .background(Theme.userBubble, in: noteShape)
+          .overlay {
+            noteShape.strokeBorder(Theme.userBubbleBorder, lineWidth: 1)
+          }
+          .shadow(
+            color: colorScheme == .dark ? .clear : Theme.Shadow.card.ambient.color,
+            radius: Theme.Shadow.card.ambient.radius,
+            y: Theme.Shadow.card.ambient.y
+          )
+          .shadow(
+            color: colorScheme == .dark ? .clear : Theme.Shadow.card.key.color,
+            radius: Theme.Shadow.card.key.radius,
+            y: Theme.Shadow.card.key.y
+          )
+      }
+      if imageCount > 0 {
+        Label("\(imageCount) image(s) attached", systemImage: "photo")
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.textSecondary)
       }
     }
     .transition(entrance)
   }
 
-  private var noteShape: RoundedRectangle {
-    RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+  private var noteShape: UnevenRoundedRectangle {
+    UnevenRoundedRectangle(
+      cornerRadii: RectangleCornerRadii(
+        topLeading: Theme.Radius.lg,
+        bottomLeading: Theme.Radius.lg,
+        bottomTrailing: Theme.Radius.sm,
+        topTrailing: Theme.Radius.lg
+      ),
+      style: .continuous
+    )
   }
 
   /// Pops in from the sending corner (scale + rise + fade); Reduce Motion keeps only
@@ -619,6 +835,16 @@ private struct UserMessageView: View {
 // MARK: - Optional artifact-viewer host
 
 private extension View {
+  /// Tapping empty canvas (and simultaneous with chip/button taps) resigns the
+  /// composer. Applied to the scroll *content*, not the ScrollView, so dragging
+  /// a long thread still works. `.scrollDismissesKeyboard(.interactively)` covers
+  /// drag-to-dismiss once the thread is actually scrollable.
+  func oakDismissesComposerKeyboard(_ dismiss: @escaping () -> Void) -> some View {
+    self
+      .contentShape(Rectangle())
+      .simultaneousGesture(TapGesture().onEnded(dismiss))
+  }
+
   /// Hosts the artifact bottom sheet once the thread's ``ArtifactViewModel`` has been
   /// built (it's created lazily in `.task`, so it's `nil` for the first frame).
   ///
@@ -645,7 +871,9 @@ struct PreviewChatService: ChatService {
     sessionId: String,
     message: String,
     images: [UIImage],
-    scopeSeed: Format?
+    scopeSeed: Format?,
+    recovery: ChatRecovery?,
+    mentionedTeamIds: [String]?
   ) -> AsyncThrowingStream<SSEEvent, Error> {
     AsyncThrowingStream { continuation in
       let answer = OakAnswer(
@@ -678,6 +906,12 @@ struct PreviewChatService: ChatService {
   }
 
   func stop(turnId: String, sessionId: String) async throws {}
+
+  func persistScope(
+    format: Format,
+    conversationId: String?,
+    sessionId: String
+  ) async throws -> [Format] { [] }
 }
 
 #Preview("Chat") {
@@ -685,6 +919,7 @@ struct PreviewChatService: ChatService {
   return NavigationStack {
     ChatView(model: ChatViewModel(chat: PreviewChatService(), appState: state))
   }
+  .oakEnamelNav()
   .environment(state)
 }
 
@@ -696,6 +931,7 @@ struct PreviewChatService: ChatService {
       signInAction: {}
     )
   }
+  .oakEnamelNav()
   .environment(state)
 }
 #endif

@@ -10,7 +10,7 @@
  *      CURRENT user message as a JSON preamble — it is not AgentContext state
  *      and it is not stored in history (history keeps only the typed
  *      messages; the model is told the latest message carries the live
- *      draft). `draft.format` IS the turn's scope — no scope resolution, no
+ *      draft). `draft.format` is ignored — the turn is always Champions. No
  *      `scope` event.
  *   3. The loop runs with the builder hooks (scoped read-only tools,
  *      BuilderAnswer contract, patch-legality gate) instead of the OakAnswer
@@ -40,7 +40,7 @@ import {
   type TeamsAssistantSseEventDataMap,
   type TeamsAssistantSseEventName,
 } from "@/lib/sse/teams-assistant-sse-types";
-import { FORMATS, modeForFormat, type Format } from "@/data/formats";
+import { CHAMPIONS_FORMAT, FORMATS, type Format } from "@/data/formats";
 import { teamMembersSchema } from "@/data/teams/team-schema";
 import { ProviderTransportError } from "@/agent/providers/errors";
 import { modelLabel } from "@/agent/models";
@@ -64,11 +64,41 @@ function jsonError(
   code: string,
   message: string,
   extraHeaders?: Record<string, string>,
+  extraBody?: Record<string, unknown>,
 ): Response {
-  return new Response(JSON.stringify({ code, message }), {
+  return new Response(JSON.stringify({ code, message, ...extraBody }), {
     status,
     headers: { "Content-Type": "application/json", ...extraHeaders },
   });
+}
+
+const SPEND_CHECK_FAILED_MESSAGE =
+  "Could not verify usage limits. Please try again.";
+
+function spendRefuseResponse(admit: {
+  code: "account_denied" | "daily_limit" | "spend_check_failed";
+  message?: string;
+  resetAt?: string;
+  retryAfterMs?: number;
+}): Response {
+  const message = admit.message ?? SPEND_CHECK_FAILED_MESSAGE;
+  if (admit.code === "daily_limit") {
+    const headers: Record<string, string> = {};
+    if (typeof admit.retryAfterMs === "number") {
+      headers["Retry-After"] = String(Math.ceil(admit.retryAfterMs / 1000));
+    }
+    return jsonError(
+      429,
+      admit.code,
+      message,
+      headers,
+      admit.resetAt !== undefined ? { reset_at: admit.resetAt } : undefined,
+    );
+  }
+  if (admit.code === "account_denied") {
+    return jsonError(403, admit.code, message);
+  }
+  return jsonError(503, admit.code, message);
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +139,7 @@ async function composeMessage(body: TeamsAssistantBody): Promise<string> {
   const draftJson = JSON.stringify(
     {
       name: body.draft.name,
-      format: body.draft.format,
+      format: CHAMPIONS_FORMAT,
       members: body.draft.members,
       win_condition: body.draft.win_condition ?? null,
     },
@@ -126,7 +156,7 @@ async function composeMessage(body: TeamsAssistantBody): Promise<string> {
       );
       const analysis = await analyzeTeamForFormat(
         body.draft.members,
-        body.draft.format,
+        CHAMPIONS_FORMAT,
         db,
       );
       if (analysis.status === "ok") {
@@ -212,6 +242,34 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  // 1b) Spend admission (denylist → daily cap) BEFORE the per-minute limiter.
+  const [{ admitAgentTurn }, { isAdmin }] = await Promise.all([
+    import("@/server/spend-control"),
+    import("@/server/auth/admin"),
+  ]);
+  const admit = await admitAgentTurn({
+    subject: {
+      kind: "account",
+      accountId: account.id,
+      email: account.email,
+    },
+    isAdmin: isAdmin(account),
+    surface: "teams_assistant",
+  });
+  if (!admit.ok) {
+    logger.info(
+      {
+        event: "spend_refused",
+        code: admit.code,
+        subject_key: `acct:${account.id}`,
+        request_id: requestId,
+        session_id,
+      },
+      "oak_spend_refused",
+    );
+    return spendRefuseResponse(admit);
+  }
+
   // 2) RATE LIMIT — one signed-in tier, keyed by account (no guest branch).
   const gate = await checkRateLimit(
     `acct:${account.id}`,
@@ -255,7 +313,7 @@ export async function POST(req: Request): Promise<Response> {
   await trim(historyKey);
   const history = [...(await getHistory(historyKey))];
 
-  const mode = modeForFormat(body.draft.format);
+  const mode = "champions" as const;
   const composedMessage = await composeMessage(body);
 
   const encoder = new TextEncoder();

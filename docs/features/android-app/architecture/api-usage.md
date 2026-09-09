@@ -82,7 +82,7 @@ terminal `answer` (a `BuilderAnswer`). **No `scope` event.** `error` = transport
 | Method | Path | Query | Returns |
 |---|---|---|---|
 | GET | `/api/entity` | `kind` (pokemon\|move\|ability\|item\|type) `& q & format` | `{ status:"ok", … }` \| `{ status:"not_found", suggestions }` \| `{ status:"unavailable" }` (all 200); bad params 400 |
-| GET | `/api/search` | `kind & q & format` (blank `q` = alphabetical browse) | `{ matches: SearchMatch[] }` |
+| GET | `/api/search` | `kind & q & format` (blank `q` = alphabetical browse) | `{ matches: SearchMatch[] }` (optional `sprite_url` on pokemon matches) |
 | GET | `/api/sprites` | `format & names` (comma-sep slugs, **≤ 24** — server slices) | `{ refs: { slug: DexSpriteRef } }` |
 | GET | `/api/learnset` | `pokemon & format` | `{ moves: LearnsetMove[] }` |
 | GET | `/api/health` | — | `{ status:"ok" }` |

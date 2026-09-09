@@ -1,28 +1,18 @@
 /**
- * INDEPENDENT ORACLE — generation-scope (GS-A/GS-B, §2.8). Proves a
- * `ctx.mode = "gen-7"` turn reads the GEN-7 row-set through the public tool
- * dispatch, and that the gen-7 learnset diverges from gen 9, against the small
- * deterministic fixture DB (seed "tools" now carries a gen-7 slice alongside
- * scarlet-violet).
+ * INDEPENDENT ORACLE — Champions-first entity miss (ADR-8, CF-DATA-BR-5).
  *
- * Behaviour derived from the plan (locked decisions GS-D1/D2/D3) — NOT the impl:
- *   - Scope is SERVER-controlled: the turn's mode selects the data format via
- *     `formatForMode` (gen scopes map 1:1). The model has no scope tool input.
- *   - get_pokemon / query_pokedex under gen-7 return the gen-7 rows; a species
- *     seeded ONLY under gen-7 (Incineroar) is a miss under standard/gen-9.
- *   - The DIVERGENCE: `hidden-power` is gen-7-legal (Incineroar learns it) but
- *     absent from every scarlet-violet learnset — a moves filter resolves it
- *     under gen-7 yet reports `unresolved` under standard, pinning the cut.
- *   - resolve_entity is per-format: a gen-7 name resolves against the gen-7
- *     searchable_names slice.
+ * Off-roster names are not found. Tools must not attach `exists_in_standard`
+ * or fall back to a Scarlet/Violet evolution chain (`source_format`).
  *
- * Wiring (per the RISK DIRECTIVES / the resolve-index Gotcha):
- *   - migrate + seed an isolated Postgres schema (createPgSchema) and install it
- *     as the @/data/db singleton (installAsSingleton) BEFORE importing the tool
- *     layer — resolve_entity reads the SINGLETON (not ctx.db), while the DB-backed
- *     tools read the bound ctx.db.
- *   - `import "server-only"` is neutralized so the repos/tools load under the
- *     vitest node environment.
+ * Gen-7 index partitions are gone (P2); these cases use the champions slice
+ * of seed "tools" (Garchomp on-roster; Excadrill / nonsense off-roster).
+ * Dracovish, Farigiraf, and the Eevee evolution-chain row ARE in the fixture
+ * (P2 remaining oracles) and must not be used as off-roster names.
+ *
+ * Wiring: migrate + seed an isolated Postgres schema and install it as the
+ * @/data/db singleton BEFORE importing the tool layer (resolve-index Gotcha).
+ *
+ * Refs: ADR-8, CF-DATA-BR-5, CF-CHAT-AC-2.1, CF-CHAT-US-2.
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -37,7 +27,7 @@ import {
   resolveEntityOutputSchema,
   type QueryPokedexResult,
 } from "@/agent/schemas";
-import type { AgentContext, AgentMode } from "@/agent/types";
+import type { AgentContext } from "@/agent/types";
 import type { OakDb } from "@/data/db";
 
 import {
@@ -80,15 +70,14 @@ function ensureLoaded(): void {
   }
 }
 
-function ctxFor(mode: AgentMode): Promise<AgentContext> {
+function ctxChampions(): Promise<AgentContext> {
   return createAgentContext({
     db: fix.db as unknown as OakDb,
     requestId: "oracle",
-    mode,
+    mode: "champions",
   });
 }
 
-/** Assert a query_pokedex call returned the success union, and return it. */
 function expectSuccess(out: unknown): QueryPokedexResult {
   expect(
     queryPokedexOutputSchema.safeParse(out).success,
@@ -102,177 +91,84 @@ function expectSuccess(out: unknown): QueryPokedexResult {
   return result.data as QueryPokedexResult;
 }
 
-describe("get_pokemon reads the active format's row-set (GS-A)", () => {
-  it("gen-7 mode returns the gen-7 Incineroar profile", async () => {
+describe("champions get_pokemon — on-roster hit, off-roster miss (ADR-8)", () => {
+  it("returns the Champions Garchomp profile", async () => {
     ensureLoaded();
-    const ctx = await ctxFor("gen-7");
-    const out = await dispatch("get_pokemon", { name: "incineroar" }, ctx);
+    const ctx = await ctxChampions();
+    const out = await dispatch("get_pokemon", { name: "garchomp" }, ctx);
 
     expect(getPokemonOutputSchema.safeParse(out).success).toBe(true);
     expect(out).toMatchObject({
       found: true,
-      display_name: "Incineroar",
-      national_dex_number: 727,
-      types: ["fire", "dark"],
-      abilities: { slot1: "blaze", hidden: "intimidate" },
-      base_stats: {
-        hp: 95,
-        attack: 115,
-        defense: 90,
-        special_attack: 80,
-        special_defense: 90,
-        speed: 60,
-      },
-      base_stat_total: 530,
-      // Native to THIS format's game — the field name is historical (§0).
-      is_gen9_native: true,
+      display_name: "Garchomp",
+      national_dex_number: 445,
     });
+    expect(out).not.toHaveProperty("exists_in_standard");
   });
 
-  it("a gen-7-only species is a miss under standard (gen-9) mode — the formats are isolated", async () => {
+  it("off-roster (Excadrill) is not found, with no exists_in_standard", async () => {
     ensureLoaded();
-    const ctx = await ctxFor("standard");
-    const out = await dispatch("get_pokemon", { name: "incineroar" }, ctx);
-    // Incineroar is seeded ONLY under gen-7, so standard mode never sees it.
+    const ctx = await ctxChampions();
+    const out = await dispatch("get_pokemon", { name: "excadrill" }, ctx);
+    expect(getPokemonOutputSchema.safeParse(out).success).toBe(true);
     expect(out).toMatchObject({ found: false });
+    expect(out).not.toHaveProperty("exists_in_standard");
+  });
+
+  it("a nonsense name is not found, with no exists_in_standard", async () => {
+    ensureLoaded();
+    const ctx = await ctxChampions();
+    const out = await dispatch(
+      "get_pokemon",
+      { name: "definitely-not-a-pokemon" },
+      ctx,
+    );
+    expect(getPokemonOutputSchema.safeParse(out).success).toBe(true);
+    expect(out).toMatchObject({ found: false });
+    expect(out).not.toHaveProperty("exists_in_standard");
   });
 });
 
-describe("query_pokedex reads the active format's row-set (GS-A)", () => {
-  it("gen-7 mode with no filters returns exactly the three gen-7 rows", async () => {
+describe("champions query_pokedex — Champions roster only", () => {
+  it("includes Garchomp among results", async () => {
     ensureLoaded();
-    const ctx = await ctxFor("gen-7");
+    const ctx = await ctxChampions();
     const r = expectSuccess(await dispatch("query_pokedex", {}, ctx));
-    expect(r.total_count).toBe(3);
-    expect(new Set(r.results.map((x) => x.display_name))).toEqual(
-      new Set(["Incineroar", "Decidueye", "Garchomp"]),
-    );
+    expect(r.results.map((x) => x.display_name)).toContain("Garchomp");
   });
 });
 
-describe("the gen-7 learnset diverges from gen 9 (GS-A divergence)", () => {
-  it("gen-7 mode resolves `hidden-power` and returns Incineroar", async () => {
+describe("champions resolve_entity / get_move miss — no exists_in_standard", () => {
+  it("resolve_entity on an off-roster name returns matches: [] without exists_in_standard", async () => {
     ensureLoaded();
-    const ctx = await ctxFor("gen-7");
-    const r = expectSuccess(
-      await dispatch("query_pokedex", { moves: ["hidden-power"] }, ctx),
-    );
-    expect(r.total_count).toBe(1);
-    expect(r.results.map((x) => x.display_name)).toEqual(["Incineroar"]);
+    const ctx = await ctxChampions();
+    const out = await dispatch("resolve_entity", { query: "Excadrill" }, ctx);
+    expect(resolveEntityOutputSchema.safeParse(out).success).toBe(true);
+    expect(out).toMatchObject({ matches: [] });
+    expect(out).not.toHaveProperty("exists_in_standard");
   });
 
-  it("standard (gen-9) mode reports `hidden-power` UNRESOLVED — it was removed in Gen 8+", async () => {
+  it("get_move on a Champions-absent slug is a plain miss", async () => {
     ensureLoaded();
-    const ctx = await ctxFor("standard");
+    const ctx = await ctxChampions();
+    const out = await dispatch("get_move", { name: "not-a-real-move" }, ctx);
+    expect(out).toMatchObject({ found: false });
+    expect(out).not.toHaveProperty("exists_in_standard");
+  });
+});
+
+describe("champions get_evolution_chain — no SV fallback (ADR-8)", () => {
+  it("a roster-absent species is not found, with no source_format", async () => {
+    ensureLoaded();
+    const ctx = await ctxChampions();
     const out = await dispatch(
-      "query_pokedex",
-      { moves: ["hidden-power"] },
+      "get_evolution_chain",
+      { species: "excadrill" },
       ctx,
     );
-    // Not a throw, not a silent empty: the slug isn't in the gen-9 learnset.
-    expect(queryPokedexOutputSchema.safeParse(out).success).toBe(true);
-    expect(out).toHaveProperty("unresolved");
-    expect((out as { unresolved: string[] }).unresolved).toContain(
-      "hidden-power",
-    );
-  });
-});
-
-describe("resolve_entity is per-format (resolve-index Gotcha)", () => {
-  it("gen-7 mode resolves a gen-7 species name to its slug", async () => {
-    ensureLoaded();
-    const ctx = await ctxFor("gen-7");
-    const out = await dispatch("resolve_entity", { query: "Incineroar" }, ctx);
-    expect(resolveEntityOutputSchema.safeParse(out).success).toBe(true);
-    const matches = (out as { matches: { slug: string }[] }).matches;
-    expect(matches.length).toBeGreaterThan(0);
-    expect(matches[0]?.slug).toBe("incineroar");
-  });
-});
-
-describe("champions cross-scope hint (exists_in_standard)", () => {
-  it("champions get_pokemon on an SV-only species misses with exists_in_standard: true", async () => {
-    ensureLoaded();
-    const ctx = await ctxFor("champions");
-    // Dracovish is seeded under scarlet-violet only (not copied into champions).
-    const out = await dispatch("get_pokemon", { name: "dracovish" }, ctx);
-    expect(getPokemonOutputSchema.safeParse(out).success).toBe(true);
-    expect(out).toMatchObject({ found: false, exists_in_standard: true });
-  });
-
-  it("champions get_pokemon on a nonsense name misses with exists_in_standard: false", async () => {
-    ensureLoaded();
-    const ctx = await ctxFor("champions");
-    const out = await dispatch(
-      "get_pokemon",
-      { name: "definitely-not-a-pokemon" },
-      ctx,
-    );
-    expect(getPokemonOutputSchema.safeParse(out).success).toBe(true);
-    expect(out).toMatchObject({ found: false, exists_in_standard: false });
-  });
-
-  it("champions get_move on the SV-seeded champions-absent slug misses with exists_in_standard: true", async () => {
-    ensureLoaded();
-    const ctx = await ctxFor("champions");
-    // flamethrower is seeded ONLY under scarlet-violet (REFERENCE_CACHE_SEED_SV_EXTRA).
-    const out = await dispatch("get_move", { name: "flamethrower" }, ctx);
-    expect(out).toMatchObject({ found: false, exists_in_standard: true });
-  });
-
-  it("champions resolve_entity on an SV-resolvable name returns {matches: [], exists_in_standard: true}", async () => {
-    ensureLoaded();
-    const ctx = await ctxFor("champions");
-    // Farigiraf resolves under scarlet-violet but has no champions searchable_names row.
-    const out = await dispatch("resolve_entity", { query: "Farigiraf" }, ctx);
-    expect(resolveEntityOutputSchema.safeParse(out).success).toBe(true);
-    expect(out).toEqual({ matches: [], exists_in_standard: true });
-  });
-
-  it("champions get_evolution_chain on an SV-seeded roster-absent species returns the mainline chain with source_format", async () => {
-    ensureLoaded();
-    const ctx = await ctxFor("champions");
-    // Eevee's evolution chain is seeded under scarlet-violet only, and Eevee is
-    // absent from the champions roster — so the tool falls back to the mainline
-    // chain and stamps source_format rather than declining.
-    const out = await dispatch("get_evolution_chain", { species: "eevee" }, ctx);
     expect(getEvolutionChainOutputSchema.safeParse(out).success).toBe(true);
-    expect(out).toMatchObject({ found: true, source_format: "scarlet-violet" });
-  });
-
-  it("the same misses under standard mode carry NO exists_in_standard key", async () => {
-    ensureLoaded();
-    const ctx = await ctxFor("standard");
-    const pokemonOut = await dispatch(
-      "get_pokemon",
-      { name: "definitely-not-a-pokemon" },
-      ctx,
-    );
-    expect(pokemonOut).not.toHaveProperty("exists_in_standard");
-
-    const moveOut = await dispatch(
-      "get_move",
-      { name: "definitely-not-a-move" },
-      ctx,
-    );
-    expect(moveOut).not.toHaveProperty("exists_in_standard");
-
-    const resolveOut = await dispatch(
-      "resolve_entity",
-      { query: "zzzznonexistent" },
-      ctx,
-    );
-    expect(resolveOut).not.toHaveProperty("exists_in_standard");
-  });
-
-  it("the same misses under gen-7 mode carry NO exists_in_standard key", async () => {
-    ensureLoaded();
-    const ctx = await ctxFor("gen-7");
-    const pokemonOut = await dispatch(
-      "get_pokemon",
-      { name: "definitely-not-a-pokemon" },
-      ctx,
-    );
-    expect(pokemonOut).not.toHaveProperty("exists_in_standard");
+    expect(out).toMatchObject({ found: false });
+    expect(out).not.toHaveProperty("source_format");
+    expect(out).not.toHaveProperty("exists_in_standard");
   });
 });

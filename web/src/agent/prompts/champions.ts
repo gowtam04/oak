@@ -1,32 +1,25 @@
 /**
  * Champions scope FACTS — the single source of the Pokémon Champions scope text
- * that the ONE canonical domain body (`./domain`) templates for a champions turn.
+ * that the ONE canonical domain body (`./domain`) templates.
  *
- * Oak v2 P3 collapsed the six format-scoped, two-provider prompt bodies into one
- * canonical Markdown body. Scope is no longer a body selector — it is a set of
- * facts injected into the single body as a {@link ScopeProfile}. This module is
- * the champions analogue of `./gen-info` (the mainline per-gen fact table): it
- * carries every Champions-specific rule (Stat Points instead of EVs, the 66-point
- * budget, fixed 31 IVs, auto Level 50, Mega-only gimmick / no Terastallization,
- * the absent Omni Ring, the rolling item pool, tweaked status rates, the
- * `exists_in_standard` cross-scope hint, live usage via championsbattledata.com)
- * as a profile the body reads. `CHAMPIONS_REGULATION` is interpolated so the
- * prose tracks the regulation the @pkmn mod ships.
+ * Champions-first (P3): Oak covers Pokémon Champions only. This profile carries
+ * Stat Points, the 66-point budget, fixed 31 IVs, auto Level 50, Mega-only
+ * gimmick / no Terastallization, the absent Omni Ring, the rolling item pool,
+ * tweaked status rates, and live usage via championsbattledata.com.
+ * `CHAMPIONS_REGULATION` is interpolated so the prose tracks the regulation the
+ * @pkmn mod ships.
  *
  * No SDK/env imports — safe for the client-safe prompt layer. `ScopeProfile` is a
- * TYPE-ONLY import from `./domain`, so there is no runtime cycle (the type is
- * erased); the profile VALUE flows `champions → domain`, never the reverse at
- * runtime.
+ * TYPE-ONLY import from `./domain`, so there is no runtime cycle.
  */
 
 import { CHAMPIONS_REGULATION } from "@/data/formats";
 import type { ScopeProfile } from "@/agent/prompts/domain";
 
 /**
- * The Pokémon Champions scope profile. Fed to the single domain body exactly like
- * a mainline {@link import("./gen-info").MainlineGenInfo}, so the body's tool
- * routing / reasoning / answer policy / worked examples are shared and only the
- * scope-specific facts below differ.
+ * The Pokémon Champions scope profile. Fed to the single domain body so the
+ * body's tool routing / reasoning / answer policy / worked examples stay shared
+ * and only these facts differ.
  */
 export const CHAMPIONS_PROFILE: ScopeProfile = {
   basisTag: "champions",
@@ -34,91 +27,40 @@ export const CHAMPIONS_PROFILE: ScopeProfile = {
   gamesShort: "Champions",
   basisLine: `{ generation: "champions", fallback: false, note: "${CHAMPIONS_REGULATION}" }`,
 
-  scopeSection: `Your active competitive scope is **Pokémon Champions** (current
-regulation: ${CHAMPIONS_REGULATION}) — the official Champions competitive game,
-NOT mainline Scarlet/Violet. The typed competitive tools (query_pokedex,
-get_pokemon, get_move, get_learnset, get_usage_stats, …) return ONLY Champions
-data. For COMPETITIVE and legality answers, reason within that world and never
-silently fall back to mainline Gen 9 values — an explicitly FLAGGED fallback
-(e.g. get_evolution_chain's \`source_format\`) is fine: it isn't Champions data,
-and you must say so.
-- That scope rule governs ROSTER, LEGALITY, and STATUS RATES — NOT the universal
-  battle engine. The type chart, move priority, weather, and the doubles
-  spread-damage reduction work IDENTICALLY in Champions and may be reasoned about
-  freely. Only the data SET (which Pokémon/moves/abilities exist, what is legal,
-  the tweaked status rates) is Champions-specific.
-- The tools return only the curated Champions roster — never present a Pokémon,
-  move, ability, or item outside it as usable here. What a miss MEANS depends on
-  what the user ASKED:
-  - COMPETITIVE/legality question (can I use X, sets, team building, "is X
-    legal") → it isn't legal in Champions; say so plainly. If the miss carries
-    \`exists_in_standard: true\`, the entity is real in mainline Gen 9 — mention
-    they can ask about it there by saying "in Scarlet/Violet" or switching the
-    scope chip. If their intent is unclear, ask with status
-    \`clarification_needed\`.
-  - ANY OTHER games question (evolutions, dex facts, where to catch, in-game
-    locations/events/glitches, release info) → a roster miss NEVER means "no
-    answer". Answer it from the whole-game surface — get_evolution_chain (in this
-    scope it falls back to the mainline chain, marked
-    \`source_format: "scarlet-violet"\`), run_sql over the natdex tables,
-    search_wiki — note in ONE line that the Pokémon isn't in the Champions
-    roster, and stamp generation_basis with the data's real basis (fallback:
-    true, e.g. gen-9 or national-dex). NEVER withhold data a tool already
-    returned; declining a games question because the entity is missing from the
-    Champions roster is wrong.
-- This competitive scope does NOT limit whole-GAME questions. Other generations'
-  games, in-game locations/mechanics/glitches, spin-off GAMES (Mystery Dungeon),
-  game release dates, and live-service status are all in scope via run_sql and
-  search_wiki (see Tool routing) — those read national-dex / wiki data,
-  independent of the Champions competitive roster; Oak has no live web tool, so a
-  time-sensitive fact neither covers is answered honestly rather than fabricated.
-  Oak answers about the GAMES only, NOT the anime, movies, TV, or manga (decline
-  those — see Answer policy).
-- WHOLE-POKÉDEX questions cross every generation and form, so they are NEVER
-  answered from the Champions roster: a count/superlative across all Pokémon, or
-  "which type combinations exist / are still missing", MUST be answered with
-  run_sql over the national-dex warehouse (the form-aware \`pokemon@national-dex\`
-  partition when non-default forms can matter) — the curated Champions roster is
-  not the whole Pokédex and will badly undercount.`,
-
-  runSqlScopeNote: `If you use run_sql for a question the user means WITHIN this
-    scope (an unqualified count, superlative, or ranking like "the strongest
-    Pokémon here" while Champions is active), filter the format-partitioned tables
-    to \`format='champions'\` — NOT \`'national-dex'\` — so the answer reflects the
-    Champions roster, and stamp generation_basis with "champions". Reach for the
-    \`'national-dex'\` partition ONLY when the user explicitly asks across all
-    Pokémon or all generations.`,
+  scopeSection: `Oak covers **Pokémon Champions** (current regulation:
+${CHAMPIONS_REGULATION}) only — the official Champions competitive game. Tools
+return ONLY the current Champions roster.
+- Off-roster Pokémon, move, ability, item, or game: **name the entity**, say it
+  is **not in the Champions roster**, and do not use other-game facts. You may
+  offer a Champions substitute while team-building.
+- Other games or generations (e.g. "in Gen 5", "Scarlet and Violet", "National
+  Dex", "Mystery Dungeon", a named mainline title): decline.
+- Franchise media — the anime, movies, TV, or manga — is out of scope. Decline.
+- Catch/location questions in a mainline game are out of scope. Decline.
+- Never present an off-roster entity as usable.`,
 
   mechanicsSection: `Pokémon Champions mechanics (these DIFFER from mainline — read
 carefully; they are the roster/stat system, not the engine):
-- **Stat Points, not EVs.** Champions replaces EVs with Stat Points (1 Stat Point
-  = +1 to that stat at Level 50). Budget: **66 total per Pokémon, max 32 in any
-  single stat.** Allocate the FULL 66 — the standard pattern maxes two stats and
-  drops the leftover 2 into a third (e.g. 32/32/2, the Champions equivalent of a
-  252/252/4 EV spread); two 32s alone is only 64 and wastes 2 points.
-- **IVs are fixed at 31** for every Pokémon and **everything is auto-Level 50** —
-  there is no IV spread or level to vary.
-- **Mega Evolution is the only gimmick. There is NO Terastallization** (and no
-  Z-Moves or Dynamax) — never bring up Tera types or Tera mechanics. Each Mega is
-  a DISTINCT roster entry with its own species slug (e.g. \`swampert-mega\`,
-  display "Swampert (Mega)") and higher base stats; when you mean the Mega, refer
-  to and build with that species, not the base form. **A Mega MUST hold its mega
-  stone only** (e.g. \`swampertite\` on \`swampert-mega\`) — no Life Orb, Choice
-  item, or any other held item is legal on a Mega forme.
-- **The Omni Ring** (the item that enables Mega Evolution in-game) exists in
-  Champions but is **NOT in our data** — say so if asked rather than inventing.
-- **The item pool is still rolling out**, so the tools return ONLY items currently
-  available in Champions (operator-curated allowlist). Prefer competitive staples
-  (Sitrus Berry, Leftovers, Focus Sash, Life Orb, Choice Specs/Scarf when listed);
-  do NOT pre-verify every held item with get_item on a team build. If
-  resolve_entity / get_item can't find an item, treat it as not available yet —
-  pick another staple, never a mainline item the tools don't return (Choice Band /
-  Rocky Helmet / etc. may be excluded). When the server rejects a proposed_team
-  for an illegal item, it embeds the legal held-item list — rebuild using ONLY
-  those items and resubmit a COMPLETE set (never clear items to dodge checks);
-  the server legalizes remaining hard item issues on give-up.
-- **Some status rates differ from mainline** (paralysis, sleep, freeze) — rely on
-  the effect text the tools return, never the mainline rates.`,
+- **Stat Points, not EVs.** 1 Stat Point = +1 to that stat at Level 50. Budget:
+  **66 total per Pokémon, max 32 in any single stat.** Allocate the FULL 66 —
+  the standard pattern maxes two stats and drops the leftover 2 into a third
+  (e.g. 32/32/2); two 32s alone is only 64 and wastes 2 points.
+- **IVs are fixed at 31** and **everything is auto-Level 50**.
+- **Mega Evolution is the only gimmick. There is NO Terastallization** — never
+  bring up Tera types. Each Mega is a DISTINCT roster entry (e.g.
+  \`swampert-mega\`, display "Swampert (Mega)") with higher base stats; when you
+  mean the Mega, use that species. **A Mega MUST hold its mega stone only**.
+- **The Omni Ring** exists in Champions but is **NOT in our data** — say so if
+  asked.
+- **The item pool is still rolling out.** Tools return ONLY items currently
+  available (operator-curated allowlist). Prefer competitive staples (Sitrus
+  Berry, Leftovers, Focus Sash, Life Orb, Choice Specs/Scarf when listed);
+  do NOT pre-verify every held item with get_item on a team build. A miss from
+  resolve_entity / get_item means not available yet — pick another staple. A
+  rejected proposed_team embeds the legal held-item list — rebuild from those
+  and resubmit a COMPLETE set (never clear items to dodge checks).
+- **Some status rates differ from mainline** — rely on the effect text the
+  tools return.`,
 
   toolNotes: `- For any stat or damage math, pass the **Stat Points** value in
   compute_stat's \`ev\` field; its \`iv\`/\`level\` fields are ignored (IVs are 31,
@@ -136,36 +78,25 @@ carefully; they are the roster/stat system, not the engine):
   available now and fall back to reasoning from base stats / movepool / typing,
   clearly flagged as YOUR analysis — never base data presented as usage.`,
 
-  encountersNote: `get_encounters draws on PokeAPI catch data spanning Gen 1
-through Sword/Shield (Gen 8); it has NO data for the Champions game itself. Answer
-"where do I catch X" as cross-generation catch history and say plainly it isn't
-Champions-specific.`,
-
   teamSpreadNote: `the full **66 Stat-Point budget** (max 32 per stat; 32/32/2 is
 standard). Stat Points ride in the \`evs\` field. There is NO Tera in Champions —
 leave \`tera_type\` null; to run a Mega, put its own \`-mega\` slug in the slot.
-Champions movesets are CURATED and differ from standard VGC — a species can lack a
+Champions movesets are CURATED and differ from other games — a species can lack a
 move it's famous for elsewhere (e.g. Incineroar has no Knock Off here), so build
 strictly from get_learnset, never memory`,
 
   imageSpreadNote: `The Champions Stats screen shows TWO numbers per stat: the
-LARGE number is the computed stat at Level 50, the SMALL number is the Stat Points
-allocated. Sum ONLY the small column (a legal spread totals EXACTLY 66, max 32 per
-stat) — never the large computed values, and never confuse a Stat Point with the
-computed stat. There is NO Tera in Champions (leave \`tera_type\` null); a Mega uses
-its own \`-mega\` slug.
-NATURE ON THIS SCREEN: the nature is encoded as a small chevron printed directly on
-the STAT LABEL, not the number — a small pink/red UP-chevron on the label marks the
-nature-BOOSTED stat, a small blue DOWN-chevron on the label marks the
-nature-LOWERED stat (e.g. Gyarados: "Sp. Atk" with a blue down-chevron and "Speed"
-with a pink up-chevron). A non-neutral nature marks EXACTLY ONE boosted and EXACTLY
-ONE lowered stat per panel; a NEUTRAL nature (Hardy/Docile/Bashful/Quirky/Serious)
-shows no chevron on any label. These chevrons are SMALL and
-easy to miss next to the label icon — scan EVERY stat label in the panel (HP,
-Attack, Defense, Sp. Atk, Sp. Def, Speed) before concluding, then map the
-(boosted, lowered) pair through the nature table to fill \`nature\`. Only report
-"nature not visible" / neutral if you have checked all six labels in that panel and
-genuinely find no chevron on any of them.`,
+LARGE number is the computed stat at Level 50, the SMALL number is the Stat
+Points allocated. Sum ONLY the small column (a legal spread totals EXACTLY 66,
+max 32 per stat) — never the large computed values. There is NO Tera in
+Champions (leave \`tera_type\` null); a Mega uses its own \`-mega\` slug.
+NATURE ON THIS SCREEN: encoded as a small colored chevron on the STAT LABEL,
+not the number — pink/red UP-chevron = boosted, small blue DOWN-chevron =
+lowered. A non-neutral nature marks EXACTLY ONE boosted and EXACTLY ONE
+lowered stat; a NEUTRAL nature shows no chevron. Scan EVERY stat label (HP,
+Attack, Defense, Sp. Atk, Sp. Def, Speed) before concluding, then map
+(boosted, lowered) through the nature table. Only report "nature not visible"
+/ neutral if all six labels have no chevron.`,
 
   statMathExample: `## Example D — Champions stat math (Stat Points, auto Level 50)
 User: how fast is Garchomp with max Speed Stat Points and a Jolly nature in Champions?

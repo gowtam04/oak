@@ -15,9 +15,17 @@ import Foundation
 protocol HistoryService: Sendable {
   /// Lists the signed-in account's conversations, pinned first then most-recent
   /// (`GET /api/conversations`). `query` filters by title/message text (`?q=`),
-  /// `format` filters by data scope (`?format=`). Returns `[]` for guests
-  /// (M-BR-H1) — the route answers a guest with `{ conversations: [] }` (200).
-  func list(query: String?, format: Format?) async throws -> [ConversationSummary]
+  /// `format` filters by data scope (`?format=`). `folderId` is a folder UUID
+  /// or the literal `"unfiled"`. `archived` is `false` for the default list
+  /// and `true` for Archive; `includeArchived` is search-only. Returns `[]`
+  /// for guests (M-BR-H1).
+  func list(
+    query: String?,
+    format: Format?,
+    folderId: String?,
+    archived: Bool?,
+    includeArchived: Bool
+  ) async throws -> [ConversationSummary]
 
   /// Loads one full conversation with its rehydrated turns
   /// (`GET /api/conversations/{id}`), so earlier answers re-render with full
@@ -48,6 +56,26 @@ protocol HistoryService: Sendable {
     format: Format,
     turns: [ChatTurn]
   ) async throws -> String?
+
+  func listFolders() async throws -> [ConversationFolder]
+  func createFolder(name: String) async throws -> ConversationFolder
+  func renameFolder(id: String, name: String) async throws
+  func deleteFolder(id: String) async throws
+
+  func setArchived(id: String, archived: Bool) async throws
+  func setFolder(id: String, folderId: String?) async throws
+
+  func bulkUpdate(ids: [String], action: BulkConversationAction, folderId: String?) async throws -> BulkUpdateResponse
+
+  func setTurnPinned(conversationId: String, messageId: String, pinned: Bool) async throws -> [String]
+  func fork(conversationId: String, throughMessageId: String) async throws -> ForkResponse
+  func exportConversation(id: String, format: ConversationExportFormat) async throws -> Data
+}
+
+extension HistoryService {
+  func list(query: String?, format: Format?) async throws -> [ConversationSummary] {
+    try await list(query: query, format: format, folderId: nil, archived: nil, includeArchived: false)
+  }
 }
 
 /// Production ``HistoryService`` over ``OakAPIClient``. A value type holding one
@@ -61,7 +89,13 @@ struct LiveHistoryService: HistoryService {
     self.apiClient = apiClient
   }
 
-  func list(query: String?, format: Format?) async throws -> [ConversationSummary] {
+  func list(
+    query: String?,
+    format: Format?,
+    folderId: String?,
+    archived: Bool?,
+    includeArchived: Bool
+  ) async throws -> [ConversationSummary] {
     var queryItems: [URLQueryItem] = []
     if let query {
       let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -71,6 +105,15 @@ struct LiveHistoryService: HistoryService {
     }
     if let format {
       queryItems.append(URLQueryItem(name: "format", value: format.rawValue))
+    }
+    if let folderId {
+      queryItems.append(URLQueryItem(name: "folder_id", value: folderId))
+    }
+    if let archived {
+      queryItems.append(URLQueryItem(name: "archived", value: archived ? "1" : "0"))
+    }
+    if includeArchived {
+      queryItems.append(URLQueryItem(name: "include_archived", value: "1"))
     }
     let endpoint = Endpoint(
       method: .get,
@@ -137,6 +180,102 @@ struct LiveHistoryService: HistoryService {
     )
     let response = try await apiClient.send(endpoint, as: ImportResponse.self)
     return response.id
+  }
+
+  func listFolders() async throws -> [ConversationFolder] {
+    let endpoint = Endpoint(method: .get, path: "/api/folders", requiresAuth: true)
+    let response = try await apiClient.send(endpoint, as: FolderListResponse.self)
+    return response.folders
+  }
+
+  func createFolder(name: String) async throws -> ConversationFolder {
+    let endpoint = Endpoint(
+      method: .post,
+      path: "/api/folders",
+      body: FolderNameBody(name: name),
+      requiresAuth: true
+    )
+    return try await apiClient.send(endpoint, as: ConversationFolder.self)
+  }
+
+  func renameFolder(id: String, name: String) async throws {
+    let endpoint = Endpoint(
+      method: .patch,
+      path: "/api/folders/\(id)",
+      body: FolderNameBody(name: name),
+      requiresAuth: true
+    )
+    try await apiClient.sendNoContent(endpoint)
+  }
+
+  func deleteFolder(id: String) async throws {
+    let endpoint = Endpoint(method: .delete, path: "/api/folders/\(id)", requiresAuth: true)
+    try await apiClient.sendNoContent(endpoint)
+  }
+
+  func setArchived(id: String, archived: Bool) async throws {
+    let endpoint = Endpoint(
+      method: .patch,
+      path: "/api/conversations/\(id)",
+      body: ArchivedBody(archived: archived),
+      requiresAuth: true
+    )
+    try await apiClient.sendNoContent(endpoint)
+  }
+
+  func setFolder(id: String, folderId: String?) async throws {
+    let endpoint = Endpoint(
+      method: .patch,
+      path: "/api/conversations/\(id)",
+      body: FolderIdBody(folderId: folderId),
+      requiresAuth: true
+    )
+    try await apiClient.sendNoContent(endpoint)
+  }
+
+  func bulkUpdate(
+    ids: [String],
+    action: BulkConversationAction,
+    folderId: String?
+  ) async throws -> BulkUpdateResponse {
+    let endpoint = Endpoint(
+      method: .post,
+      path: "/api/conversations/bulk",
+      body: BulkBody(ids: ids, action: action, folderId: folderId),
+      requiresAuth: true
+    )
+    return try await apiClient.send(endpoint, as: BulkUpdateResponse.self)
+  }
+
+  func setTurnPinned(conversationId: String, messageId: String, pinned: Bool) async throws -> [String] {
+    let endpoint = Endpoint(
+      method: .post,
+      path: "/api/conversations/\(conversationId)/pins",
+      body: PinBody(messageId: messageId, pinned: pinned),
+      requiresAuth: true
+    )
+    let response = try await apiClient.send(endpoint, as: PinsResponse.self)
+    return response.pinnedMessageIds
+  }
+
+  func fork(conversationId: String, throughMessageId: String) async throws -> ForkResponse {
+    let endpoint = Endpoint(
+      method: .post,
+      path: "/api/conversations/\(conversationId)/fork",
+      body: ForkBody(throughMessageId: throughMessageId),
+      requiresAuth: true
+    )
+    return try await apiClient.send(endpoint, as: ForkResponse.self)
+  }
+
+  func exportConversation(id: String, format: ConversationExportFormat) async throws -> Data {
+    let endpoint = Endpoint(
+      method: .get,
+      path: "/api/conversations/\(id)/export",
+      queryItems: [URLQueryItem(name: "format", value: format.rawValue)],
+      requiresAuth: true
+    )
+    return try await apiClient.sendData(endpoint)
   }
 }
 
@@ -209,5 +348,55 @@ private struct ImportTurn: Encodable, Sendable {
       try container.encode("assistant", forKey: .role)
       try container.encode(answer, forKey: .answer)
     }
+  }
+}
+
+private struct FolderListResponse: Decodable, Sendable {
+  let folders: [ConversationFolder]
+}
+
+private struct FolderNameBody: Encodable, Sendable {
+  let name: String
+}
+
+private struct ArchivedBody: Encodable, Sendable {
+  let archived: Bool
+}
+
+private struct FolderIdBody: Encodable, Sendable {
+  let folderId: String?
+
+  enum CodingKeys: String, CodingKey {
+    case folderId = "folder_id"
+  }
+}
+
+private struct BulkBody: Encodable, Sendable {
+  let ids: [String]
+  let action: BulkConversationAction
+  let folderId: String?
+
+  enum CodingKeys: String, CodingKey {
+    case ids
+    case action
+    case folderId = "folder_id"
+  }
+}
+
+private struct PinBody: Encodable, Sendable {
+  let messageId: String
+  let pinned: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case messageId = "message_id"
+    case pinned
+  }
+}
+
+private struct ForkBody: Encodable, Sendable {
+  let throughMessageId: String
+
+  enum CodingKeys: String, CodingKey {
+    case throughMessageId = "through_message_id"
   }
 }

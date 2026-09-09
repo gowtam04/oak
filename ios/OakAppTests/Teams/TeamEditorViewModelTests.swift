@@ -7,6 +7,11 @@ import Testing
 /// the full-set editor's load, the create-vs-update save path, the **warn-but-allow**
 /// guarantee (warnings render but never block save, M-AC-T3.1), member add/remove, the
 /// editable↔wire conversion, and export. `@MainActor`.
+///
+/// Champions-first P7 expected API (parity with Android P8 names):
+///   `showsTeraField` / `showsIVKnobs` / `showsLevelKnob` — false on living
+///   `showsStatPoints` — true; `statPointBudget` 66 / `statPointStatCap` 32
+///   `isReadOnly` / `canSave` — archived is view-only
 @MainActor
 struct TeamEditorViewModelTests {
 
@@ -37,7 +42,7 @@ struct TeamEditorViewModelTests {
   private func team(
     id: String,
     name: String = "Team",
-    format: Format = .scarletViolet,
+    format: Format = .champions,
     members: [TeamMember] = []
   ) -> Team {
     Team(id: id, name: name, format: format, members: members, createdAt: 1, updatedAt: 1)
@@ -52,7 +57,7 @@ struct TeamEditorViewModelTests {
     #expect(vm.teamId == nil)
     #expect(vm.members.count == 1)
     #expect(vm.members[0].species.isEmpty)
-    #expect(vm.format == .scarletViolet)
+    #expect(vm.format == .champions)
   }
 
   // MARK: Save (create / update)
@@ -336,5 +341,62 @@ struct TeamEditorViewModelTests {
 
     #expect(fake.analyzeCalls == 2)
     #expect(vm.analysis == second)
+  }
+
+  // MARK: Champions-first editor (CF-TEAM-AC-1.2, CF-UI-US-4, ADR-7)
+
+  @Test
+  func livingEditorHidesTeraIVsAndLevelAndShowsStatPoints() {
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), format: .champions)
+
+    #expect(vm.format == .champions)
+    #expect(vm.isReadOnly == false)
+    #expect(vm.showsTeraField == false)
+    #expect(vm.showsIVKnobs == false)
+    #expect(vm.showsLevelKnob == false)
+    #expect(vm.showsStatPoints)
+    #expect(vm.statPointBudget == 66)
+    #expect(vm.statPointStatCap == 32)
+    vm.members[0].evs = EditableStatSpread(hp: 4, atk: 30, def: 0, spa: 0, spd: 0, spe: 32)
+    #expect(vm.members[0].evs.total == 66)
+  }
+
+  @Test
+  func leftoverFormatArgumentStillOpensAChampionsEditor() {
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), format: .gen7)
+    #expect(vm.format == .champions)
+    #expect(vm.showsTeraField == false)
+  }
+
+  @Test
+  func saveStripsTeraForcesLevel50AndKeepsStatPointsInEVs() async {
+    let fake = FakeTeamService()
+    let vm = TeamEditorViewModel(teamService: fake, format: .champions, name: "Rain")
+    vm.members[0].species = "garchomp"
+    vm.members[0].teraType = "steel"
+    vm.members[0].level = 100
+    vm.members[0].ivs = EditableStatSpread(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0)
+    vm.members[0].evs = EditableStatSpread(hp: 4, atk: 30, def: 0, spa: 0, spd: 0, spe: 32)
+
+    let saved = await vm.save()
+
+    #expect(saved != nil)
+    #expect(fake.lastCreateFormat == .champions)
+    #expect(fake.lastCreateMembers?.first?.teraType == nil)
+    #expect(fake.lastCreateMembers?.first?.level == 50)
+    #expect(fake.lastCreateMembers?.first?.evs.spe == 32)
+    #expect(fake.lastCreateMembers?.first?.ivs.hp == 31)
+  }
+
+  @Test
+  func archivedEditorIsReadOnly() {
+    let archived = team(id: "g7", name: "Alola rain", format: .gen7, members: [
+      member(species: "tapu-koko", moves: ["thunderbolt"]),
+    ])
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(seed: [archived]), team: archived)
+
+    #expect(vm.isReadOnly)
+    #expect(vm.format == .gen7)
+    #expect(vm.canSave == false)
   }
 }

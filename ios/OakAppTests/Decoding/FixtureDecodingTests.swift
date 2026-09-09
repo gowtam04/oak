@@ -401,6 +401,44 @@ struct FixtureDecodingTests {
     #expect(error.message.isEmpty == false)
     #expect(error.status == nil)
   }
+
+  /// `sprite_url` is additive. The committed search fixture predates the field,
+  /// so Pokémon matches decode with `spriteUrl == nil`.
+  @Test
+  func searchMatchOmitsSpriteUrlWhenKeyAbsentFromFixture() throws {
+    let env = try Fixtures.decode(SearchEnvelope.self, from: "search_response.json")
+    #expect(env.matches.count == 2)
+    #expect(env.matches[0].slug == "swampert")
+    #expect(env.matches[0].spriteUrl == nil)
+    #expect(env.matches[1].spriteUrl == nil)
+  }
+
+  /// A present `"sprite_url"` string binds onto `spriteUrl`.
+  @Test
+  func searchMatchDecodesSpriteUrlWhenPresent() throws {
+    let json = Data(
+      """
+      {"slug":"garchomp","display_name":"Garchomp","kind":"pokemon",\
+      "sprite_url":"https://example.test/garchomp.gif"}
+      """.utf8)
+    let match = try JSONDecoder().decode(SearchMatch.self, from: json)
+    #expect(match.spriteUrl == "https://example.test/garchomp.gif")
+    #expect(match.slug == "garchomp")
+    #expect(match.displayName == "Garchomp")
+    #expect(match.kind == .pokemon)
+  }
+
+  /// JSON without `sprite_url` decodes as `nil` (the field is optional).
+  @Test
+  func searchMatchDecodesMissingSpriteUrlAsNil() throws {
+    let json = Data(
+      """
+      {"slug":"earthquake","display_name":"Earthquake","kind":"move"}
+      """.utf8)
+    let match = try JSONDecoder().decode(SearchMatch.self, from: json)
+    #expect(match.spriteUrl == nil)
+    #expect(match.kind == .move)
+  }
 }
 
 // MARK: - Test-local response envelopes

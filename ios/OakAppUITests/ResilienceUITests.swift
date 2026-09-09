@@ -16,7 +16,7 @@ final class ResilienceUITests: XCTestCase {
   @MainActor
   func testTabNavigationNeverCrashes() {
     let app = XCUIApplication().launchOak()
-    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
 
     // Two passes, so re-selecting an already-active tab is covered too.
     for _ in 0..<2 {
@@ -38,7 +38,7 @@ final class ResilienceUITests: XCTestCase {
   @MainActor
   func testTransportErrorSurfacesRetryWithoutCrash() throws {
     let app = XCUIApplication().launchOak(.mockTransportError)
-    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
 
     guard goToTab(OakUITest.Tab.chat, in: app),
       app.oakComposerField.waitForExistence(timeout: 10)
@@ -75,13 +75,13 @@ final class ResilienceUITests: XCTestCase {
   @MainActor
   func testBackgroundForegroundKeepsShell() {
     let app = XCUIApplication().launchOak()
-    XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
 
     XCUIDevice.shared.press(.home)
     app.activate()
 
     XCTAssertTrue(
-      app.tabBars.firstMatch.waitForExistence(timeout: 15),
+      app.oakTabBar.firstMatch.waitForExistence(timeout: 15),
       "Tab shell should be intact after returning from the background (M-NFR-5)."
     )
     XCTAssertEqual(app.state, .runningForeground)

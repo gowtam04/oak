@@ -18,10 +18,17 @@ struct ArtifactViewModelTests {
   private func makeVM(
     entityResult: EntityArtifact? = nil,
     savedTeamResult: (team: Team, validation: TeamValidationResult)? = nil,
-    format: Format = .scarletViolet
+    format: Format = .champions,
+    signedIn: Bool = true,
+    pins: FakeArtifactPinService = FakeArtifactPinService()
   ) -> (ArtifactViewModel, FakeArtifactService) {
     let service = FakeArtifactService(entityResult: entityResult, savedTeamResult: savedTeamResult)
-    let vm = ArtifactViewModel(service: service, format: format)
+    let vm = ArtifactViewModel(
+      service: service,
+      format: format,
+      isSignedIn: signedIn,
+      pins: pins
+    )
     return (vm, service)
   }
 
@@ -87,11 +94,11 @@ struct ArtifactViewModelTests {
     #expect(vm.canGoBack == false)
     #expect(entityOk(vm.current)?.resolved.displayName == "Garchomp")
     #expect(vm.current?.title == "Garchomp")
-    // The fetch went through the service with the active format (M-BR-ART-4).
+    // Champions-first: leftover format arguments still fetch Champions.
     #expect(service.entityCallCount == 1)
     #expect(service.lastEntityKind == .pokemon)
     #expect(service.lastEntityQuery == "Garchomp")
-    #expect(service.lastEntityFormat == .scarletViolet)
+    #expect(service.lastEntityFormat == .champions)
   }
 
   @Test
@@ -105,7 +112,7 @@ struct ArtifactViewModelTests {
 
     #expect(service.lastEntityQuery == "Mr. Mime")
     #expect(service.lastEntityKind == .pokemon)
-    #expect(service.lastEntityFormat == .scarletViolet)
+    #expect(service.lastEntityFormat == .champions)
   }
 
   @Test
@@ -331,5 +338,150 @@ struct ArtifactViewModelTests {
     vm.back()
     #expect(vm.stack.count == 1)
     #expect(entityOk(vm.current)?.resolved.displayName == "Garchomp")
+  }
+
+  // MARK: Open in Dex (DEX-US-1 / DEX-US-2) — four kinds, not type
+
+  @Test
+  func openInDexOnPokemonWritesTheArtifactFormatThenHops() async throws {
+    let ok = try Fixtures.decode(EntityArtifact.self, from: "entity_pokemon.json")
+    let (vm, _) = makeVM(entityResult: ok, format: .gen5)
+
+    await vm.openEntity(kind: .pokemon, query: "Garchomp")
+    let hop = vm.openInDex()
+
+    #expect(vm.canOpenInDex)
+    #expect(hop?.kind == .pokemon)
+    #expect(hop?.query == "Garchomp")
+    #expect(hop?.format == .champions)
+  }
+
+  @Test
+  func openInDexIsOfferedForMoveAbilityAndItem() async throws {
+    for (kind, fixture) in [
+      (EntityKind.move, "entity_move.json"),
+      (.ability, "entity_ability.json"),
+      (.item, "entity_item.json"),
+    ] {
+      let ok = try Fixtures.decode(EntityArtifact.self, from: fixture)
+      let (vm, _) = makeVM(entityResult: ok, format: .champions)
+      await vm.openEntity(kind: kind, query: "query")
+      #expect(vm.canOpenInDex, "\(kind) should offer Open in Dex")
+      #expect(vm.openInDex()?.format == .champions)
+    }
+  }
+
+  @Test
+  func openInDexIsNotOfferedOnATypeArtifact() async throws {
+    let ok = try Fixtures.decode(EntityArtifact.self, from: "entity_type.json")
+    let (vm, _) = makeVM(entityResult: ok)
+
+    await vm.openEntity(kind: .type, query: "dragon")
+
+    #expect(vm.canOpenInDex == false)
+    #expect(vm.openInDex() == nil)
+  }
+
+  @Test
+  func openInDexIsDisabledWhenTheArtifactFailedToLoad() async {
+    let (vm, _) = makeVM(entityResult: nil)
+    await vm.openEntity(kind: .pokemon, query: "garchom")
+
+    #expect(vm.canOpenInDex == false)
+    #expect(vm.openInDex() == nil)
+  }
+
+  // MARK: Compare with… (CMP-US-1 / CMP-BR-4)
+
+  @Test
+  func compareWithPushesATwoColumnComparisonAndDoesNotSendATurn() async throws {
+    let first = try Fixtures.decode(EntityArtifact.self, from: "entity_pokemon.json")
+    let (vm, service) = makeVM(entityResult: first)
+    await vm.openEntity(kind: .pokemon, query: "Garchomp")
+    let before = service.entityCallCount
+
+    await vm.compareWith(species: "Dragapult", format: .gen7)
+
+    #expect(vm.canGoBack)
+    #expect(comparisonSubjects(vm.current)?.count == 2)
+    #expect(comparisonSubjects(vm.current)?.map(\.name).contains("Dragapult") == true)
+    #expect(service.entityCallCount > before)
+    #expect(service.lastEntityFormat == .champions)
+  }
+
+  @Test
+  func unresolvedCompareSubjectLeavesTheCurrentArtifact() async throws {
+    let first = try Fixtures.decode(EntityArtifact.self, from: "entity_pokemon.json")
+    let (vm, service) = makeVM(entityResult: first)
+    await vm.openEntity(kind: .pokemon, query: "Garchomp")
+    service.entityResult = nil
+
+    await vm.compareWith(species: "not-a-species", format: nil)
+
+    #expect(entityOk(vm.current)?.resolved.displayName == "Garchomp")
+    #expect(comparisonSubjects(vm.current) == nil)
+    #expect(vm.compareErrorMessage != nil)
+  }
+
+  // MARK: Pin — rich artifacts only (PIN-AC-1.1 / PIN-AC-1.2 / AUTH-BR-1)
+
+  @Test
+  func pinIsOfferedOnTeamComparisonAndCalcWhenSignedIn() {
+    let (vm, _) = makeVM(signedIn: true)
+
+    vm.openComparison([subject("Garchomp"), subject("Dragapult")])
+    #expect(vm.canPin)
+
+    vm.dismiss()
+    vm.openDamageCalc(
+      DamageCalc(assumptions: [:], result: [:], isEstimate: true, breakdown: nil)
+    )
+    #expect(vm.canPin)
+
+    vm.dismiss()
+    vm.openProposedTeam(
+      ProposedTeam(name: "Sun", format: .scarletViolet, members: [member(species: "garchomp")]),
+      warnings: []
+    )
+    #expect(vm.canPin)
+  }
+
+  @Test
+  func pinIsNotOfferedOnEntityArtifacts() async throws {
+    let ok = try Fixtures.decode(EntityArtifact.self, from: "entity_pokemon.json")
+    let (vm, _) = makeVM(entityResult: ok, signedIn: true)
+    await vm.openEntity(kind: .pokemon, query: "Garchomp")
+    #expect(vm.canPin == false)
+
+    let move = try Fixtures.decode(EntityArtifact.self, from: "entity_move.json")
+    let (moveVM, _) = makeVM(entityResult: move, signedIn: true)
+    await moveVM.openEntity(kind: .move, query: "earthquake")
+    #expect(moveVM.canPin == false)
+  }
+
+  @Test
+  func guestNeverSeesPinOnARichArtifact() {
+    let (vm, _) = makeVM(signedIn: false)
+    vm.openComparison([subject("Garchomp"), subject("Dragapult")])
+    #expect(vm.canPin == false)
+  }
+
+  @Test
+  func pinAtCapSurfacesAnExplanationAndLeavesTheStripUnchanged() async {
+    let pins = FakeArtifactPinService(
+      seed: (1...5).map {
+        PinnedArtifactSummary(id: "p\($0)", kind: .calc, title: "c\($0)", createdAt: Int64($0))
+      }
+    )
+    let (vm, _) = makeVM(signedIn: true, pins: pins)
+    vm.openDamageCalc(
+      DamageCalc(assumptions: [:], result: [:], isEstimate: true, breakdown: nil)
+    )
+
+    let result = await vm.pin()
+
+    #expect(result == .failure(.pinCap(max: 5)))
+    #expect(pins.store.count == 5)
+    #expect(vm.pinErrorMessage != nil)
   }
 }

@@ -80,12 +80,12 @@ private fun statusPresentation(
 
 /**
  * The masthead status LED — soul.md "the reading latches": a small dot that blips
- * `oak.accent` (the live/record-light red, matching [StreamingStatus]'s in-flight
- * icon) then settles into the answer's resolved status tint over 300ms the instant
- * an already-finalized [AnswerCard] first mounts (this is the ANDROID equivalent of a
- * live streaming→answered transition — the card itself only ever renders a finalized
- * answer, so the "latch" plays as a one-shot mount animation, the visual handoff from
- * the streaming ticker's accent-tinted icon into the settled plate). Always mounted —
+ * `oak.accent` (the live red of [IncomingAnswerPlate]) then settles into the
+ * answer's resolved status tint over 300ms the instant an already-finalized
+ * [AnswerCard] first mounts (this is the ANDROID equivalent of a live
+ * streaming→answered transition — the card itself only ever renders a finalized
+ * answer, so the "latch" plays as a one-shot mount animation, the visual handoff
+ * from the incoming plate's live accent into the settled plate). Always mounted —
  * never gated on status — so [answerSections]'s render-if-present rule for
  * [StatusBadge] (label + icon, non-`answered` only) is untouched. Instant, no
  * animation, under [rememberReduceMotion].

@@ -83,7 +83,7 @@ class TeamsAssistantViewModelTest {
 
     @Test
     fun sendCarriesTheEditorsCurrentDraftIncludingFormatAndName() = runTest(mainDispatcherRule.dispatcher) {
-        val editorVm = editor(Format.Gen5)
+        val editorVm = editor(Format.Champions)
         editorVm.setName("My Squad")
         editorVm.updateMember(0) { it.copy(species = "garchomp") }
         advanceUntilIdle()
@@ -97,7 +97,7 @@ class TeamsAssistantViewModelTest {
         val (_, message, draft) = service.sendCalls.single()
         assertEquals("fill slot 2", message)
         assertEquals("My Squad", draft.name)
-        assertEquals(Format.Gen5, draft.format)
+        assertEquals(Format.Champions, draft.format)
         assertEquals("garchomp", draft.members[0].species)
     }
 

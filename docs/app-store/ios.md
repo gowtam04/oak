@@ -2,41 +2,53 @@
 
 Category: **Reference**. Age rating: **4+**. Price: **Free, no in-app purchases.**
 
+Champions-first (CF-INT-BR-10, CF-AS-6): listing copy describes Oak as a
+**Pokémon Champions coach**, not a whole-franchise or every-generation Dex. No
+National Dex default, no Smogon OU, no generation toggle.
+
 ## App Name (30 chars max)
 
 ```
-Oak – AI Battle Coach
+Oak – Champions Coach
 ```
-**21 / 30 chars.** The bare name "Oak" was unavailable in the App Store, so a short descriptor was appended to make the store name unique. The bundle id (`us.optiwise.oak`), the `oak.gowtam.ai` domain, and the in-app "Oak" assistant persona are all unchanged — only the *store display name* carries the descriptor, so no code change is required. "AI Battle Coach" also pulls double duty for ASO: it puts `ai`, `battle`, and `coach` into Apple's most heavily-weighted field (the bare "Oak" wasted it on 3 characters) and names Oak's category-defining wedge — it *coaches*: it reasons and explains, rather than just computing like the manual-tool competitors (ChampDex, VGC Helper). Separator is an en dash; swap for `:` or `|` to taste (all stay ≤30). (App Store name availability is only confirmed at name-reservation time in App Store Connect — "Battle Coach" is a generic phrase, so collision risk is low.)
+**21 / 30 chars.** Home-screen name stays `Oak` (`CFBundleDisplayName`); only
+the App Store display name uses this string. Indexes `oak`, `champions`,
+`coach` so the subtitle supplies "champions team builder" and "champions
+calculator". `ai` moved to Keywords (it used to live in this field). Zero
+trademarked words — "Champions" names the format without "Pokémon".
 
 ## Subtitle (30 chars max)
 
 ```
 Team Builder & Calculator
 ```
-**25 / 30 chars.** Reworked now that "AI" and "Battle" live in the App Name — the subtitle no longer repeats them and instead carries the next tier of high-intent terms. It locks the exact phrase "team builder" (a Tier-1 search term) into a heavily-weighted field, and "Calculator" combines cross-field with the App Name's "Battle" → "battle calculator" (Tier 1) and with the keyword "damage" → "damage calculator" (Tier 2). Zero trademarked words. (5 chars of headroom remain if you later want to append a term.)
+**25 / 30 chars.** Locks "team builder" into a heavily-weighted field.
+"Calculator" combines cross-field with Keywords `battle` → "battle calculator"
+and `damage` → "damage calculator". Zero trademarked words.
 
 ## Promotional Text (170 chars max, updatable without resubmission)
 
 ```
-New: a one-tap format toggle scopes your whole team chat and battle calculator to the current competitive regulation ruleset — no separate app, no manual rule lookups.
+Oak now coaches Pokémon Champions only — Stat Points, Mega Evolution, and live Doubles/Singles usage for the current regulation. Other games are declined.
 ```
-**167 / 170 chars.**
+**154 / 170 chars.**
 
 ## Description (4000 chars max)
 
 ```
-Oak is your AI battle coach — a chat companion for building and reasoning about competitive creature-battle teams. Ask any question about your roster and get a reasoned, cited answer, not a stat dump.
+Oak is your AI coach for Pokémon Champions — a chat companion for building and reasoning about competitive teams in the current regulation. Ask a question about your roster and get a reasoned, cited answer, not a stat dump.
 
 Most reference apps hand you raw numbers and leave the thinking to you. Oak reasons on top of the data: every answer comes with its reasoning, the sources it's grounded in, and explicit "this part is inferred" flags whenever the data doesn't fully cover your question — so you always know what's fact and what's a best guess.
 
+Oak covers Pokémon Champions only. Other games and a National Dex are out of scope.
+
 WHAT YOU CAN DO
 
-• Build full competitive teams — set species, ability, held item, all four moves, nature, EVs, IVs, and Tera type for every slot on your roster.
-• Import and export teams using the popular Showdown text format — bring a team in from a calculator or a friend, or take yours out to use elsewhere.
+• Build Champions teams — species, ability, held item, moves, nature, and Stat Points (66 total, max 32 per stat) for every slot. Everything is Level 50; Mega Evolution is the gimmick, with no Tera.
+• Import and export teams using the popular Showdown text format — Stat Points ride in the EV fields.
+• Check live Champions ladder usage (Doubles by default, Singles as a second view) — leaderboard plus per-species sets, dated as a snapshot.
 • Ask anything in plain English and get the direct answer plus the reasoning behind it, with cited sources and clear flags when something is uncertain or inferred.
-• Switch your entire chat and team builder to the official competitive regulation format with one toggle — no separate app, no manual rule lookups.
-• Attach a photo or screenshot — a team sheet, a card, an in-game moment — and ask Oak about it directly.
+• Attach a photo or screenshot — a Champions stats screen or team sheet — and ask Oak about it directly.
 • Drill into any move, ability, type matchup, or damage calculation in a dedicated detail view without losing your place in the conversation.
 • Start chatting instantly as a guest, no account required. Sign in with a one-time email code (no password) when you want your chats and teams saved and synced across devices.
 
@@ -48,18 +60,76 @@ Oak is an independent, unofficial fan project. It is not affiliated with, endors
 
 Questions or feedback? Reach us at www.gowtam.ai/#contact.
 ```
-**2,085 / 4000 chars** (well within budget).
 
 ## Keywords (100 chars max, hidden, comma-separated, no spaces)
 
 ```
-type,chart,weakness,coverage,moveset,damage,ev,iv,tera,speed,regulation,showdown,import,reasoning
+type,chart,weakness,coverage,moveset,damage,mega,speed,battle,showdown,import,ai,chat,usage
 ```
-**97 / 100 chars.** Rebuilt for the new App Name/Subtitle: dropped `builder` (now in the Subtitle), `ai` (now in the App Name), and the two lowest-value terms `stat` and `trainer`; added `weakness`, `coverage`, and `speed` — high-intent terms matching the type-matchup and speed-tier features the direct competitors lead with. Full rationale + the deliberately-ceded `vgc` note in `aso-keywords.md`.
+**91 / 100 chars.** `champions` and `coach` now live in the App Name, so they
+are omitted here. `ai` moved in from the old name (`Oak – AI Coach`) and sits
+next to `chat` for "ai chat" / "ai coach" (cross-field with the name). Dropped
+`reasoning` to make room (still in the Description). `battle` stays so "battle
+calculator" still combines with the subtitle. Full rationale in
+`aso-keywords.md`.
 
 ## What's New (this release)
 
-**1.0.3 (build 36)** — uploaded to App Store Connect 2026-08-13; awaiting review submission.
+**1.2 (build 51) — Champions-first.** Listing copy, keywords, screenshots,
+and What's New are on this version in App Store Connect. Screenshots were
+regenerated in Enamel & Paper; still not submitted for review. Same ASC
+version record as 1.1.1 (created 2026-08-16): the 1.1.1 review was
+cancelled and retargeted to 1.2 + build 51 so the Champions listing can
+ship instead of the pre-Champions 1.1.1 binary.
+Live 1.0.2 promotional text is already the Champions line (that field
+updates without a new version). App name on this version is
+`Oak – Champions Coach` (live 1.0.2 still shows `Oak – AI Battle Coach` until
+1.2 is submitted and approved). TestFlight what-to-test and beta
+description use the same Champions-only framing.
+
+```
+What's new
+
+• Oak now coaches Pokémon Champions only — current regulation, no generation picker
+• Team builder uses Stat Points and Mega Evolution (no Tera)
+• Live Champions usage: Doubles default, Singles as a second view
+• Other games are declined; off-roster names are called out honestly
+```
+
+**1.1.1 (build 50) — cancelled 2026-09-08** so 1.2 could take the listing.
+Submitted 2026-09-07 (`WAITING_FOR_REVIEW`, `releaseType: AFTER_APPROVAL`),
+then developer-rejected. ASC version was the 1.1 record (created 2026-08-16,
+approved then held as `PENDING_DEVELOPER_RELEASE` on build 45); that hold was
+developer-rejected and retargeted as 1.1.1 so users never got the stale 1.1
+binary. What's New covered everything since 1.0.2. 1.0.3 and 1.1 were
+TestFlight / unreleased.
+
+```
+What's new in 1.1.1
+
+• Retry an answer, edit a typo, or undo a send — no retyping
+• Copy, share, or export a chat; pin turns and organize with folders
+• Place a Pokémon on a team, compare, or open the calculator from an answer
+• Light, Dark, or System appearance — now in Settings
+• A refreshed enamel look, new app icon, and clearer thinking steps
+```
+**348 / 4000 chars.**
+
+Covered since 1.0.2: Chat QoL (`d718812` — retry/edit/undo, copy/share/export, pins/forks/folders, @mention, follow-up chips); answer-card verbs (place-on-team, compare, calculator, artifact pins); Settings tab + Light/Dark/System; enamel-paper refresh + daylight `O.` icon + thinking steps; Dex list sprites. Omitted as too internal or small: spend-control banners, iOS 26 tab-bar inset, starter-prompt pool, HTML-comment hide, Grok 4.6 default.
+
+**1.1 (build 45)** — approved 2026-08-20, never released (`PENDING_DEVELOPER_RELEASE` cancelled 2026-09-07 so 1.1.1 could submit). Prior What's New:
+
+```
+What's new in 1.1
+
+• Retry an answer, edit a typo, or undo a send — no retyping
+• Copy answers as readable text, share a public link, or export a chat
+• Pin turns, fork a thread, and organize history with folders
+• @mention a saved team and tap follow-up chips to keep going
+• A calmer look — quieter chrome, clearer answer cards
+```
+
+**1.0.3 (build 36)** — TestFlight only; train never submitted.
 
 ```
 What's new in 1.0.3
@@ -68,7 +138,6 @@ What's new in 1.0.3
 • Clearer answer cards, tables, and chat layout
 • Same Dex, teams, and calculator — just easier to read
 ```
-**~180 / 4000 chars.**
 
 **1.0.2 (build 34)** — approved; train closed.
 
@@ -76,4 +145,4 @@ What's new in 1.0.3
 
 - **Privacy Policy URL** — `AccountView` already links to `oak.gowtam.ai/privacy`. Apple requires a live URL at submission; confirm it resolves before submitting.
 - **Support URL** — points to `www.gowtam.ai/#contact` (an existing, live page), referenced above in the Description's contact line. Confirm the `#contact` section is reachable before submission.
-- **App Icon** — still a placeholder in `Assets.xcassets/AppIcon.appiconset`; needs a final design before screenshots/marketing assets that show the icon can be finalized.
+- **App Icon** — daylight `O.` lockup in `Assets.xcassets/AppIcon.appiconset` (ink oval + red period on `#F6F7F9`). Same mark as web/Android.

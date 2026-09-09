@@ -31,7 +31,8 @@ enum OakAnswerAgentMarkdown {
       }
     }
 
-    let body = answer.answerMarkdown.trimmingCharacters(in: .whitespacesAndNewlines)
+    let body = MarkdownBlocks.stripHtmlComments(answer.answerMarkdown)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
     if !body.isEmpty {
       parts.append("")
       parts.append("## Answer")

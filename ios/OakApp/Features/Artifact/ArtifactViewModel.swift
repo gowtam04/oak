@@ -33,6 +33,15 @@ final class ArtifactViewModel {
   /// The active data scope for entity fetches (M-BR-ART-4) — derived from the chat's mode and
   /// fixed for the viewer's lifetime, so the model has no way to widen scope.
   private let format: Format
+  private let isSignedIn: Bool
+  private let pins: (any ArtifactPinService)?
+  var conversationId: String?
+
+  private(set) var compareErrorMessage: String?
+  private(set) var pinErrorMessage: String?
+  private(set) var lastCompareDiff: PokemonCompareDiff?
+  private var lastEntityQuery: String?
+  private var lastEntityKind: EntityKind?
 
   /// The viewer's fixed request scope — what every entity fetch is scoped to. Exposed so the
   /// entity detail can badge a National-Dex fallback ("not found in <this scope>"): on the
@@ -40,9 +49,19 @@ final class ArtifactViewModel {
   /// requested scope has to come from here, not the envelope.
   var requestFormat: Format { format }
 
-  init(service: any ArtifactService, format: Format) {
+  init(
+    service: any ArtifactService,
+    format: Format,
+    isSignedIn: Bool = false,
+    pins: (any ArtifactPinService)? = nil,
+    conversationId: String? = nil
+  ) {
     self.service = service
-    self.format = format
+    self.format = .champions
+    self.isSignedIn = isSignedIn
+    self.pins = pins
+    self.conversationId = conversationId
+    _ = format
   }
 
   // MARK: Derived presentation state
@@ -64,6 +83,8 @@ final class ArtifactViewModel {
   /// result resolves to `.unavailable` so the sheet never breaks. `async` so the View can fire it
   /// in a `Task` and tests can await the settled state.
   func openEntity(kind: EntityKind, query: String) async {
+    lastEntityKind = kind
+    lastEntityQuery = query
     let entry = Artifact(title: query, content: .loading)
     stack.append(entry)
     let result = await service.entity(kind: kind, q: query, format: format)
@@ -106,6 +127,7 @@ final class ArtifactViewModel {
   /// data delivered with the answer (no fetch — mirrors web's `comparison` structured
   /// artifact). Synchronous: the sheet appears instantly.
   func openComparison(_ subjects: [Subject]) {
+    lastCompareDiff = nil
     stack.append(Artifact(title: "Comparison", content: .comparison(subjects: subjects)))
   }
 
@@ -148,11 +170,109 @@ final class ArtifactViewModel {
     stack.removeLast()
   }
 
+  func openSnapshot(_ artifact: Artifact) {
+    stack.append(artifact)
+  }
+
   /// Closes the viewer and clears the back stack — the single-gesture return to chat
   /// (M-AC-A3.3, M-BR-ART-5). Artifacts are ephemeral (M-BR-ART-2), so nothing is persisted.
   func dismiss() {
     stack.removeAll()
+    lastEntityQuery = nil
+    lastEntityKind = nil
+    compareErrorMessage = nil
+    pinErrorMessage = nil
+    lastCompareDiff = nil
   }
+
+  // MARK: Open in Dex / Compare / Pin
+
+  var canOpenInDex: Bool {
+    guard case .entity(let ok)? = current?.content else { return false }
+    switch ok.kind {
+    case .pokemon, .move, .ability, .item: return true
+    case .type, .unsupported: return false
+    }
+  }
+
+  func openInDex() -> DexArtifactHop? {
+    guard canOpenInDex, case .entity(let ok)? = current?.content else { return nil }
+    let query = lastEntityQuery ?? ok.resolved.displayName
+    return DexArtifactHop(kind: ok.kind, query: query, format: .champions)
+  }
+
+  func compareWith(species: String, format: Format?) async {
+    guard case .entity(let first)? = current?.content, case .pokemon(let leftData) = first.data else { return }
+    compareErrorMessage = nil
+    _ = format
+    let scope = Format.champions
+    let result = await service.entity(kind: .pokemon, q: species, format: scope)
+    guard case .ok(let second)? = result, case .pokemon(let rightData) = second.data else {
+      compareErrorMessage = "Couldn't find \(species) to compare."
+      return
+    }
+    lastCompareDiff = diffPokemonProfiles(
+      PokemonCompareSubject(format: first.format, profile: leftData, set: nil, offensive: nil),
+      PokemonCompareSubject(format: scope, profile: rightData, set: nil, offensive: nil)
+    )
+    let left = subject(from: first, nameOverride: nil)
+    let right = subject(from: second, nameOverride: species)
+    stack.append(Artifact(title: "Comparison", content: .comparison(subjects: [left, right].compactMap { $0 })))
+  }
+
+  var canPin: Bool {
+    guard isSignedIn, let current else { return false }
+    switch current.content {
+    case .team, .comparison, .damageCalc: return true
+    default: return false
+    }
+  }
+
+  func pin() async -> ArtifactPinCreateResult {
+    guard canPin, let current, let pins else {
+      return .failure(.failed)
+    }
+    let kind: ArtifactPinKind
+    switch current.content {
+    case .team: kind = .teamSheet
+    case .comparison: kind = .comparison
+    case .damageCalc: kind = .calc
+    default:
+      return .failure(.failed)
+    }
+    let result = await pins.create(
+      conversationId: conversationId ?? "",
+      kind: kind,
+      title: current.title,
+      snapshot: current
+    )
+    if case .failure(.pinCap) = result {
+      pinErrorMessage = "You can pin up to 5 artifacts in a conversation."
+    } else {
+      pinErrorMessage = nil
+    }
+    return result
+  }
+
+  private func subject(from ok: EntityArtifactOk, nameOverride: String?) -> Subject? {
+    guard case .pokemon(let data) = ok.data else { return nil }
+    return Subject(
+      name: nameOverride ?? data.displayName,
+      dexNumber: data.nationalDexNumber,
+      spriteUrl: data.spriteUrl,
+      types: data.types,
+      isFallback: ok.isFallback,
+      sourceGeneration: data.sourceGeneration
+    )
+  }
+}
+
+/// Dex hop from an artifact header (DEX-US-1/2). Format is written before the
+/// entity route is queued so the tab does not silently fall back.
+struct DexArtifactHop: Equatable, Sendable {
+  let kind: EntityKind
+  let query: String
+  let format: Format
 }
 
 // MARK: - Artifact model

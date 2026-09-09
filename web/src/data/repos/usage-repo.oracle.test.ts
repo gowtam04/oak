@@ -230,7 +230,50 @@ describe("recordTurn", () => {
     // The prompt is still searchable even on a rejected turn.
     expect(row!.prompt_text).toBe("spammy message");
   });
+
+  // Spend-control refusal rows (same null-model shape as rate_limited). P2
+  // widens TurnRecordInput.status; the column is already unconstrained text.
+  it.each([
+    { status: "account_denied", prompt: "blocked chat" },
+    { status: "daily_limit", prompt: "over daily cap" },
+    { status: "spend_check_failed", prompt: "check threw" },
+  ] as const)(
+    "stores a $status row with null model/provider_model AND null answer",
+    async ({ status, prompt }) => {
+      const input = {
+        id: randomUUID(),
+        sessionId: `sess-${status}`,
+        accountId: "acct-1",
+        model: null,
+        providerModel: null,
+        mode: "standard",
+        status,
+        inputTokens: 0,
+        outputTokens: 0,
+        thinkingTokens: 0,
+        toolTrace: [],
+        citationCount: 0,
+        turnLatencyMs: 0,
+        imagesCount: 0,
+        promptText: prompt,
+        answerText: null,
+        answer: null,
+        createdAt: 1_700_000_600_000,
+      } as unknown as TurnRecordInput;
+      await repo.recordTurn(input);
+
+      const row = await readTurn(input.id);
+      expect(row).not.toBeNull();
+      expect(row!.status).toBe(status);
+      expect(row!.model).toBeNull();
+      expect(row!.provider_model).toBeNull();
+      expect(row!.answer_text).toBeNull();
+      expect(row!.answer_json).toBeNull();
+      expect(row!.prompt_text).toBe(prompt);
+    },
+  );
 });
+
 
 // ---------------------------------------------------------------------------
 // recordAuthEvent — insert + read-back (id minted by the repo)

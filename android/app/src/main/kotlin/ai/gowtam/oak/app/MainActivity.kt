@@ -9,6 +9,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
@@ -39,14 +40,26 @@ class MainActivity : ComponentActivity() {
     private val chatViewModel: ChatViewModel by lazy {
         ViewModelProvider(
             this,
-            factoryOf { ChatViewModel(oakApplication.services.chat, oakApplication.appState) },
+            factoryOf {
+                ChatViewModel(
+                    chat = oakApplication.services.chat,
+                    appState = oakApplication.appState,
+                    history = oakApplication.services.history,
+                    teams = oakApplication.services.teams,
+                    scope = oakApplication.services.scope,
+                    shares = oakApplication.services.shares,
+                    calc = oakApplication.services.calc,
+                    hydrate = oakApplication.services.hydrate,
+                    pins = oakApplication.services.pins,
+                )
+            },
         )[ChatViewModel::class.java]
     }
 
     private val artifactViewModel: ArtifactViewModel by lazy {
         ViewModelProvider(
             this,
-            factoryOf { ArtifactViewModel(oakApplication.services.artifact, Format.NationalDex) },
+            factoryOf { ArtifactViewModel(oakApplication.services.artifact, Format.Champions) },
         )[ArtifactViewModel::class.java]
     }
 
@@ -56,8 +69,13 @@ class MainActivity : ComponentActivity() {
         val services = oakApplication.services
         val appState = oakApplication.appState
 
+        handleShareIntent(intent, appState)
+
         setContent {
-            LaunchedEffect(services) { appState.restoreSession(services.auth) }
+            LaunchedEffect(services) {
+                appState.restoreSession(services.auth)
+                appState.refreshRegulation(services.scope)
+            }
 
             val keepScreenOn by chatViewModel.keepScreenOn.collectAsState()
             LaunchedEffect(keepScreenOn) {
@@ -68,13 +86,29 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            OakTheme {
+            val appearance by appState.appearance.collectAsState()
+            val systemDark = isSystemInDarkTheme()
+            OakTheme(darkTheme = appearance.resolveDark(systemDark)) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     OakApp(services = services, appState = appState, chatViewModel = chatViewModel, artifactViewModel = artifactViewModel)
                 }
             }
         }
     }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleShareIntent(intent, oakApplication.appState)
+    }
+}
+
+private fun handleShareIntent(intent: android.content.Intent, appState: AppState) {
+    val data = intent.data ?: return
+    val path = data.path ?: return
+    val prefix = "/a/"
+    if (!path.startsWith(prefix)) return
+    val id = path.removePrefix(prefix).trim('/')
+    if (id.isNotEmpty()) appState.requestShareSnapshot(id)
 }
 
 /** A minimal [ViewModelProvider.Factory] built from a plain constructor lambda, so

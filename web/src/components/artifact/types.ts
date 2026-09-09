@@ -12,6 +12,7 @@
  */
 
 import type { DamageCalc, EntityKind, Subject } from "@/agent/schemas";
+import type { PokemonCompareDiff } from "@/lib/pokemon-compare";
 import type {
   ArtifactFormat,
   EntityArtifactResponse,
@@ -44,7 +45,13 @@ export interface EntityArtifactView {
 
 /** A payload-derived structured view (no fetch), with its format snapshot. */
 export type StructuredArtifact =
-  | { kind: "comparison"; format: ArtifactFormat; subjects: Subject[] }
+  | {
+      kind: "comparison";
+      format: ArtifactFormat;
+      subjects: Subject[];
+      /** Present when the user built this via Compare with… (CMP-US-1/3). */
+      diff?: PokemonCompareDiff;
+    }
   | { kind: "damage-calc"; format: ArtifactFormat; damageCalc: DamageCalc };
 
 export interface StructuredArtifactView {
@@ -93,7 +100,7 @@ export type TeamArtifactInput =
 
 /** Open-a-structured-artifact input — the provider stamps the format. */
 export type StructuredArtifactInput =
-  | { kind: "comparison"; subjects: Subject[] }
+  | { kind: "comparison"; subjects: Subject[]; diff?: PokemonCompareDiff }
   | { kind: "damage-calc"; damageCalc: DamageCalc };
 
 /** The viewer API exposed through context (no-op default when no provider). */

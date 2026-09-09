@@ -128,6 +128,12 @@ export interface TurnRequest {
   /** The provider-owned running transcript (history + prior turns). */
   transcript: ProviderTranscript;
   signal?: AbortSignal;
+  /**
+   * Per-turn reasoning override. Grok honors it; chat omits this so the
+   * provider constructor default (`low`) stays in force. Voice compile
+   * passes `"none"` so hydrate does not pay thinking (ADR-7).
+   */
+  effort?: ReasoningEffort;
 }
 
 /**

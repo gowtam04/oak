@@ -9,15 +9,27 @@ import ai.gowtam.oak.services.ChatService
 import ai.gowtam.oak.services.MeSnapshot
 import ai.gowtam.oak.services.DexLookupService
 import ai.gowtam.oak.services.HistoryService
+import ai.gowtam.oak.services.ScopeService
+import ai.gowtam.oak.services.ShareService
 import ai.gowtam.oak.services.SourceImage
 import ai.gowtam.oak.services.TeamService
 import ai.gowtam.oak.services.TeamsAssistantService
 import ai.gowtam.oak.wire.BuilderAnswer
 import ai.gowtam.oak.wire.BuilderSseEvent
+import ai.gowtam.oak.wire.BulkAction
+import ai.gowtam.oak.wire.BulkUpdateResult
+import ai.gowtam.oak.wire.ChatRecovery
 import ai.gowtam.oak.wire.ChatRequest
 import ai.gowtam.oak.wire.ChatTurn
 import ai.gowtam.oak.wire.ConversationDetail
 import ai.gowtam.oak.wire.ConversationSummary
+import ai.gowtam.oak.wire.CreatedShare
+import ai.gowtam.oak.wire.Folder
+import ai.gowtam.oak.wire.ForkResult
+import ai.gowtam.oak.wire.PersistScopeResult
+import ai.gowtam.oak.wire.RegulationMeta
+import ai.gowtam.oak.wire.PublicShare
+import ai.gowtam.oak.wire.ShareListItem
 import ai.gowtam.oak.wire.DexSpriteRef
 import ai.gowtam.oak.wire.EntityArtifact
 import ai.gowtam.oak.wire.EntityKind
@@ -108,15 +120,32 @@ class FakeChatService(
     val resumeCalls = mutableListOf<Pair<String, String>>()
     val stopCalls = mutableListOf<Pair<String, String>>()
 
-    data class Quadruple(val sessionId: String, val message: String, val images: List<SourceImage>, val scopeSeed: Format?)
+    data class Quadruple(
+        val sessionId: String,
+        val message: String,
+        val images: List<SourceImage>,
+        val scopeSeed: Format?,
+        val recovery: ChatRecovery? = null,
+        val mentionedTeamIds: List<String>? = null,
+    )
 
     override fun send(
         sessionId: String,
         message: String,
         images: List<SourceImage>,
         scopeSeed: Format?,
+    ): Flow<ai.gowtam.oak.wire.SseEvent> =
+        send(sessionId, message, images, scopeSeed, recovery = null, mentionedTeamIds = null)
+
+    override fun send(
+        sessionId: String,
+        message: String,
+        images: List<SourceImage>,
+        scopeSeed: Format?,
+        recovery: ChatRecovery?,
+        mentionedTeamIds: List<String>?,
     ): Flow<ai.gowtam.oak.wire.SseEvent> {
-        sendWithImagesCalls += Quadruple(sessionId, message, images, scopeSeed)
+        sendWithImagesCalls += Quadruple(sessionId, message, images, scopeSeed, recovery, mentionedTeamIds)
         return scriptedFlow()
     }
 
@@ -166,11 +195,97 @@ class FakeHistoryService(
     val setPinnedCalls = mutableListOf<Pair<String, Boolean>>()
     val deleteCalls = mutableListOf<String>()
     val importCalls = mutableListOf<Triple<String, Format, List<ChatTurn>>>()
+    val listFoldersCalls = mutableListOf<Unit>()
+    val setArchivedCalls = mutableListOf<Pair<String, Boolean>>()
+    val setFolderCalls = mutableListOf<Pair<String, String?>>()
+    val bulkCalls = mutableListOf<Triple<List<String>, BulkAction, String?>>()
+    val forkCalls = mutableListOf<Pair<String, String>>()
+    val pinCalls = mutableListOf<Triple<String, String, Boolean>>()
+    var folders: List<Folder> = emptyList()
+    var bulkResult: BulkUpdateResult = BulkUpdateResult()
+    var forkResult: ForkResult = ForkResult(id = "fork-1", title = "Fork")
+    var pinnedMessageIds: List<String> = emptyList()
 
     override suspend fun list(query: String?, format: Format?): List<ConversationSummary> {
         listCalls += query to format
         listError?.let { throw it }
         return listResult
+    }
+
+    override suspend fun list(
+        query: String?,
+        format: Format?,
+        folderId: String?,
+        archived: Boolean?,
+        includeArchived: Boolean,
+    ): List<ConversationSummary> {
+        listCalls += query to format
+        listError?.let { throw it }
+        return listResult.filter { row ->
+            val folderOk = folderId == null ||
+                (folderId == "unfiled" && row.folderId == null) ||
+                row.folderId == folderId
+            val archiveOk = when {
+                includeArchived -> true
+                archived == true -> row.archived
+                else -> !row.archived
+            }
+            folderOk && archiveOk
+        }
+    }
+
+    override suspend fun setArchived(id: String, archived: Boolean) {
+        setArchivedCalls += id to archived
+    }
+
+    override suspend fun setFolder(id: String, folderId: String?) {
+        setFolderCalls += id to folderId
+    }
+
+    override suspend fun listFolders(): List<Folder> {
+        listFoldersCalls += Unit
+        return folders
+    }
+
+    override suspend fun createFolder(name: String): Folder {
+        val folder = Folder(id = "folder-${folders.size + 1}", name = name, createdAt = 0L)
+        folders = folders + folder
+        return folder
+    }
+
+    override suspend fun renameFolder(id: String, name: String): Folder {
+        val updated = folders.first { it.id == id }.copy(name = name)
+        folders = folders.map { if (it.id == id) updated else it }
+        return updated
+    }
+
+    override suspend fun deleteFolder(id: String) {
+        folders = folders.filterNot { it.id == id }
+        listResult = listResult.map { if (it.folderId == id) it.copy(folderId = null) else it }
+    }
+
+    override suspend fun bulkUpdate(ids: List<String>, action: BulkAction, folderId: String?): BulkUpdateResult {
+        bulkCalls += Triple(ids, action, folderId)
+        return bulkResult
+    }
+
+    override suspend fun fork(id: String, throughMessageId: String): ForkResult {
+        forkCalls += id to throughMessageId
+        return forkResult
+    }
+
+    override suspend fun export(id: String, format: String): Pair<ByteArray, String> {
+        return ByteArray(0) to "conversation.$format"
+    }
+
+    override suspend fun setMessagePinned(conversationId: String, messageId: String, pinned: Boolean): List<String> {
+        pinCalls += Triple(conversationId, messageId, pinned)
+        pinnedMessageIds = if (pinned) {
+            (pinnedMessageIds + messageId).distinct()
+        } else {
+            pinnedMessageIds.filterNot { it == messageId }
+        }
+        return pinnedMessageIds
     }
 
     override suspend fun get(id: String): ConversationDetail {
@@ -218,7 +333,7 @@ class FakeTeamService(
     /** Optional per-call script (result / thrown error / a gate to suspend on) — overrides the defaults while non-empty. */
     var analyzeScript: ArrayDeque<AnalyzeStep>? = null,
 ) : TeamService {
-    val listCalls = mutableListOf<Format?>()
+    val listCalls = mutableListOf<Boolean>()
     val getCalls = mutableListOf<String>()
     val createCalls = mutableListOf<Triple<Format, String?, List<TeamMember>?>>()
     val updateCalls = mutableListOf<Triple<String, String?, List<TeamMember>?>>()
@@ -235,10 +350,10 @@ class FakeTeamService(
         val gate: CompletableDeferred<Unit>? = null,
     )
 
-    override suspend fun list(format: Format?): List<TeamSummary> {
-        listCalls += format
+    override suspend fun list(archived: Boolean): List<TeamSummary> {
+        listCalls += archived
         error?.let { throw it }
-        return listResult
+        return listResult.filter { it.format.isArchived == archived }
     }
 
     override suspend fun get(id: String): Pair<Team, List<TeamWarning>> {
@@ -375,5 +490,201 @@ class FakeTeamsAssistantService(
             error?.let { throw it }
             scriptedEvents.forEach { emit(it) }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ScopeService / ShareService
+// ---------------------------------------------------------------------------
+
+class FakeScopeService(
+    var result: PersistScopeResult = PersistScopeResult(format = Format.NationalDex),
+    var currentResult: RegulationMeta? = null,
+    var error: OakError? = null,
+) : ScopeService {
+    val persistCalls = mutableListOf<Triple<Format, String?, String>>()
+
+    override suspend fun persist(format: Format, conversationId: String?, sessionId: String): PersistScopeResult {
+        persistCalls += Triple(format, conversationId, sessionId)
+        error?.let { throw it }
+        return result.copy(format = format)
+    }
+
+    override suspend fun current(): RegulationMeta? = currentResult
+}
+
+class FakeShareService(
+    var created: CreatedShare = CreatedShare(id = "share-1", url = "https://oak.gowtam.ai/a/share-1"),
+    var listResult: List<ShareListItem> = emptyList(),
+    var publicResult: PublicShare? = null,
+    var importTeamId: String = "team-imported",
+    var error: OakError? = null,
+) : ShareService {
+    val createCalls = mutableListOf<Pair<String, String>>()
+    val revokeCalls = mutableListOf<String>()
+    val publicCalls = mutableListOf<String>()
+
+    override suspend fun create(conversationId: String, assistantMessageId: String): CreatedShare {
+        createCalls += conversationId to assistantMessageId
+        error?.let { throw it }
+        return created
+    }
+
+    override suspend fun list(): List<ShareListItem> {
+        error?.let { throw it }
+        return listResult
+    }
+
+    override suspend fun revoke(id: String) {
+        revokeCalls += id
+        error?.let { throw it }
+        listResult = listResult.filterNot { it.id == id }
+    }
+
+    override suspend fun getPublic(id: String): PublicShare {
+        publicCalls += id
+        error?.let { throw it }
+        return publicResult ?: throw OakError.Http(404, "not_found", "Share not found")
+    }
+
+    override suspend fun importTeam(id: String): String {
+        error?.let { throw it }
+        return importTeamId
+    }
+}
+
+// ---------------------------------------------------------------------------
+// P8 answer-cards fakes (compile-fail until the production interfaces land)
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /api/calc` — never-throw. Configure [result] (`null` = transport fold).
+ * Requirement refs: CALC-BR-1.
+ */
+class FakeCalcService(
+    var result: ai.gowtam.oak.wire.CalcResult? = null,
+) : ai.gowtam.oak.services.CalcService {
+    val estimateCalls = mutableListOf<ai.gowtam.oak.wire.CalcScenario>()
+
+    override suspend fun estimate(scenario: ai.gowtam.oak.wire.CalcScenario): ai.gowtam.oak.wire.CalcResult? {
+        estimateCalls += scenario
+        return result
+    }
+}
+
+/**
+ * `POST /api/voice/hydrate` retry. Android has no mic session — this is the
+ * history-path Retry only (VOICE-AC-3.1).
+ */
+class FakeVoiceHydrateService(
+    var status: ai.gowtam.oak.wire.VoiceHydrateStatus = ai.gowtam.oak.wire.VoiceHydrateStatus(
+        assistantMessageId = "a1",
+        status = ai.gowtam.oak.wire.VoiceHydrateStatus.Status.Running,
+    ),
+) : ai.gowtam.oak.services.VoiceHydrateService {
+    val retryCalls = mutableListOf<Pair<String, String>>()
+
+    override suspend fun retry(
+        conversationId: String,
+        assistantMessageId: String,
+    ): ai.gowtam.oak.wire.VoiceHydrateStatus {
+        retryCalls += conversationId to assistantMessageId
+        return status.copy(
+            assistantMessageId = assistantMessageId,
+            status = ai.gowtam.oak.wire.VoiceHydrateStatus.Status.Running,
+        )
+    }
+}
+
+/**
+ * Conversation pin strip (`/api/conversations/:id/artifact-pins`).
+ * Requirement refs: PIN-US-1, PIN-AC-3.1, AUTH-BR-1.
+ */
+class FakeArtifactPinService(
+    var listResult: List<ai.gowtam.oak.wire.PinnedArtifactSummary> = emptyList(),
+    var createResult: CreateResult = CreateResult.Ok,
+) : ai.gowtam.oak.services.ArtifactPinService {
+    data class CreateCall(
+        val conversationId: String,
+        val kind: ai.gowtam.oak.features.artifact.ArtifactPinKind,
+        val title: String,
+    )
+
+    sealed interface CreateResult {
+        data object Ok : CreateResult
+        data object Cap : CreateResult
+        data object Error : CreateResult
+    }
+
+    val createCalls = mutableListOf<CreateCall>()
+    val deleteCalls = mutableListOf<Pair<String, String>>()
+    val getCalls = mutableListOf<Pair<String, String>>()
+    private val snapshots = mutableMapOf<String, Any?>()
+
+    override suspend fun list(conversationId: String): List<ai.gowtam.oak.wire.PinnedArtifactSummary> = listResult
+
+    override suspend fun create(
+        conversationId: String,
+        kind: ai.gowtam.oak.features.artifact.ArtifactPinKind,
+        title: String,
+        snapshot: Any?,
+    ): ai.gowtam.oak.services.CreatePinResult {
+        createCalls += CreateCall(conversationId, kind, title)
+        return when (createResult) {
+            CreateResult.Ok -> {
+                val pin = ai.gowtam.oak.wire.PinnedArtifactSummary(
+                    id = "pin-${createCalls.size}",
+                    kind = kind.rawValue,
+                    title = title,
+                    createdAt = 0L,
+                )
+                listResult = listResult + pin
+                snapshots[pin.id] = snapshot
+                ai.gowtam.oak.services.CreatePinResult.Ok(pin, listResult)
+            }
+            CreateResult.Cap -> ai.gowtam.oak.services.CreatePinResult.Cap(max = 5)
+            CreateResult.Error -> ai.gowtam.oak.services.CreatePinResult.Error("couldnt_pin")
+        }
+    }
+
+    override suspend fun get(conversationId: String, pinId: String): ai.gowtam.oak.services.PinnedArtifact? {
+        getCalls += conversationId to pinId
+        val summary = listResult.firstOrNull { it.id == pinId } ?: return null
+        val snapshot = when (val stored = snapshots[pinId]) {
+            is kotlinx.serialization.json.JsonElement -> stored
+            is ai.gowtam.oak.features.artifact.PinSnapshotBody ->
+                ai.gowtam.oak.wire.OakJson.encodeToJsonElement(
+                    ai.gowtam.oak.features.artifact.PinSnapshotBody.serializer(),
+                    stored,
+                )
+            else -> null
+        }
+        return ai.gowtam.oak.services.PinnedArtifact(
+            id = summary.id,
+            kind = summary.kind,
+            title = summary.title,
+            snapshot = snapshot,
+        )
+    }
+
+    override suspend fun delete(conversationId: String, pinId: String): List<ai.gowtam.oak.wire.PinnedArtifactSummary>? {
+        deleteCalls += conversationId to pinId
+        listResult = listResult.filterNot { it.id == pinId }
+        return listResult
+    }
+}
+
+/**
+ * `PATCH /api/account/preferences` — signed-in compact/full (COMPACT-US-2).
+ * Guest writes must not call [setAnswerDensity].
+ */
+class FakePreferencesService : ai.gowtam.oak.services.PreferencesService {
+    val patchCalls = mutableListOf<ai.gowtam.oak.wire.AnswerDensity>()
+    var lastWritten: ai.gowtam.oak.wire.AnswerDensity? = null
+
+    override suspend fun setAnswerDensity(density: ai.gowtam.oak.wire.AnswerDensity): ai.gowtam.oak.wire.AnswerDensity {
+        patchCalls += density
+        lastWritten = density
+        return density
     }
 }

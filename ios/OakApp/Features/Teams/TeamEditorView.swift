@@ -41,6 +41,9 @@ struct TeamEditorView: View {
   /// transient "Saved" checkmark overlay (self-clearing after ~1s).
   @State private var showSaveConfirmation = false
 
+  /// Roster strip selection — 2px poke-red ring on the focused party slot.
+  @State private var selectedRosterIndex = 0
+
   /// When `true`, the editor fetches the full team on appear (existing-team path).
   private let loadsOnAppear: Bool
 
@@ -68,7 +71,9 @@ struct TeamEditorView: View {
               RosterStripView(
                 members: model.members,
                 spriteRefs: model.spriteRefsBySpecies,
+                selectedIndex: selectedRosterIndex,
                 onSelect: { index in
+                  selectedRosterIndex = index
                   withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
                     proxy.scrollTo(model.members[index].id, anchor: .top)
                   }
@@ -82,7 +87,13 @@ struct TeamEditorView: View {
           Section("Team") {
             TextField("Team name", text: $model.name)
               .textInputAutocapitalization(.words)
+              .disabled(model.isReadOnly)
             LabeledContent("Format", value: model.format.displayLabel)
+            if model.isReadOnly {
+              Text("Archived — view and delete only. Stored names that are not in the Champions roster stay labeled in place.")
+                .font(Theme.body(.footnote))
+                .foregroundStyle(Theme.textSecondary)
+            }
           }
 
           ForEach($model.members) { $member in
@@ -95,6 +106,13 @@ struct TeamEditorView: View {
                 abilityOptions: model.abilityOptions(for: member.species),
                 movepoolOptions: model.movepoolOptions(for: member.id),
                 search: model.searchEntities,
+                isReadOnly: model.isReadOnly,
+                showsTeraField: model.showsTeraField,
+                showsIVKnobs: model.showsIVKnobs,
+                showsLevelKnob: model.showsLevelKnob,
+                showsStatPoints: model.showsStatPoints,
+                statPointBudget: model.statPointBudget,
+                statPointStatCap: model.statPointStatCap,
                 onSpeciesChange: {
                   Task {
                     await model.refreshSprites()
@@ -107,7 +125,7 @@ struct TeamEditorView: View {
             }
           }
 
-          if model.canAddMember {
+          if model.canAddMember && !model.isReadOnly {
             Section {
               Button {
                 model.addMember()
@@ -132,37 +150,51 @@ struct TeamEditorView: View {
       }
       // Member edits flow through direct bindings, so the coverage analysis is (re)scheduled
       // from the view whenever the draft's members change; the view model debounces + coalesces.
-      .onChange(of: model.members) { _, _ in model.scheduleAnalysis() }
+      .onChange(of: model.members) { _, members in
+        model.scheduleAnalysis()
+        if selectedRosterIndex >= members.count {
+          selectedRosterIndex = max(0, members.count - 1)
+        }
+      }
       .scrollContentBackground(.hidden)
       .background(Theme.canvas)
       .listRowBackground(Theme.surface)
       .animation(reduceMotion ? nil : Theme.Motion.smooth, value: model.warnings)
-      .navigationTitle(model.savedTeam == nil ? "New team" : "Edit team")
+      .navigationTitle(
+        model.isReadOnly ? "Archived team" : (model.savedTeam == nil ? "New team" : "Edit team")
+      )
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button {
-            openAssistant()
-          } label: {
-            Label("Team assistant", systemImage: "sparkles")
-          }
-        }
-        // On iOS 26 liquid glass the two trailing items merge into one capsule,
-        // crowding the sparkle's tap target (TestFlight ANnTYLc). A fixed spacer
-        // splits them into separate capsules; availability-gated because the deploy
-        // target is iOS 18 (ToolbarContentBuilder supports `if #available`).
-        if #available(iOS 26.0, *) {
-          ToolbarSpacer(.fixed, placement: .topBarTrailing)
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-          if model.isSaving {
-            ProgressView()
-          } else {
-            Button("Save") {
-              Task { await saveAndConfirm() }
+        if !model.isReadOnly {
+          ToolbarItem(placement: .topBarTrailing) {
+            Button {
+              openAssistant()
+            } label: {
+              Label("Team assistant", systemImage: "sparkles")
             }
-            .fontWeight(.semibold)
+            .foregroundStyle(Theme.onRed)
           }
+          .oakLidItem()
+          if #available(iOS 26.0, *) {
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+          }
+          ToolbarItem(placement: .topBarTrailing) {
+            if model.isSaving {
+              ProgressView()
+                .tint(Theme.onRed)
+            } else if model.canSave {
+              Button("Save") {
+                Task { await saveAndConfirm() }
+              }
+              .font(Theme.body(.subheadline, weight: .semibold))
+              .foregroundStyle(Theme.onRed)
+              .padding(.horizontal, 12)
+              .padding(.vertical, 6)
+              .background(Theme.onRed.opacity(0.16), in: Capsule())
+              .overlay(Capsule().strokeBorder(Theme.onRed.opacity(0.45), lineWidth: 1))
+            }
+          }
+          .oakLidItem()
         }
         if model.teamId != nil {
           ToolbarItem(placement: .topBarLeading) {
@@ -176,6 +208,7 @@ struct TeamEditorView: View {
               Label("Export", systemImage: "square.and.arrow.up")
             }
           }
+          .oakLidItem()
         }
       }
       .overlay(alignment: .bottom) {
@@ -194,12 +227,14 @@ struct TeamEditorView: View {
       }
       .sheet(item: $exportedPaste) { payload in
         ExportSheet(text: payload.text)
+          .oakPaperSheet()
       }
       // `.sheet(item:)` on the presentation-only binding — a nil-model blank sheet is
       // then structurally impossible (the sheet only presents once the model exists) —
       // while the lifetime holder (`assistant`) is untouched by dismiss.
       .sheet(item: $presentedAssistant) { assistant in
         TeamsAssistantSheet(model: assistant)
+          .oakPaperSheet()
       }
       .task {
         // `load()` (existing-team path) fetches sprites/movepools itself once the members
@@ -290,16 +325,24 @@ private struct ExportSheet: View {
         ToolbarItem(placement: .topBarLeading) {
           Button("Copy") { UIPasteboard.general.string = text }
         }
+        .oakLidItem()
         ToolbarItem(placement: .topBarTrailing) {
           ShareLink(item: text) {
             Label("Share", systemImage: "square.and.arrow.up")
           }
         }
-        ToolbarItem(placement: .bottomBar) {
-          Button("Done") { dismiss() }
-        }
+        .oakLidItem()
+      }
+      .safeAreaInset(edge: .bottom) {
+        Button("Done") { dismiss() }
+          .buttonStyle(.oakPrimary)
+          .padding(.horizontal, Theme.Spacing.lg)
+          .padding(.vertical, Theme.Spacing.sm)
+          .frame(maxWidth: .infinity)
+          .background(Theme.canvas)
       }
     }
+    .oakEnamelNav()
   }
 }
 
@@ -324,6 +367,13 @@ private struct MemberEditorSection: View {
   /// Backs the species/item pickers' network search (routed through the owning
   /// ``TeamEditorViewModel``, never touching ``DexLookupService`` directly).
   let search: (EntityKind, String) async -> [PickerOption]
+  let isReadOnly: Bool
+  let showsTeraField: Bool
+  let showsIVKnobs: Bool
+  let showsLevelKnob: Bool
+  let showsStatPoints: Bool
+  let statPointBudget: Int
+  let statPointStatCap: Int
   /// Fired whenever `member.species` changes, so the owner can re-resolve sprites/
   /// movepool for the new (or cleared) species.
   let onSpeciesChange: () -> Void
@@ -347,23 +397,34 @@ private struct MemberEditorSection: View {
         identityFields
         moveFields
         naturePicker
-        teraPicker
-        Stepper(value: $member.level, in: 1...100) {
+        if showsTeraField {
+          teraPicker
+        }
+        if showsLevelKnob {
+          Stepper(value: $member.level, in: 1...100) {
+            LabeledContent("Level", value: "\(member.level)")
+          }
+        } else if isReadOnly {
           LabeledContent("Level", value: "\(member.level)")
+        } else {
+          LabeledContent("Level", value: "50")
         }
         StatStepperGrid(
-          title: "EVs",
+          title: showsStatPoints ? "Stat Points" : "EVs",
           spread: $member.evs,
-          range: 0...252,
-          step: 4,
+          range: showsStatPoints ? 0...statPointStatCap : 0...252,
+          step: showsStatPoints ? 1 : 4,
           footnote: evFootnote
         )
-        StatStepperGrid(
-          title: "IVs",
-          spread: $member.ivs,
-          range: 0...31,
-          step: 1
-        )
+        .disabled(isReadOnly)
+        if showsIVKnobs {
+          StatStepperGrid(
+            title: "IVs",
+            spread: $member.ivs,
+            range: 0...31,
+            step: 1
+          )
+        }
         cosmeticFields
 
         if !warnings.isEmpty {
@@ -395,14 +456,17 @@ private struct MemberEditorSection: View {
       HStack {
         Text(headerTitle)
         Spacer()
-        Button(role: .destructive, action: onRemove) {
-          Label("Remove", systemImage: "trash")
-            .labelStyle(.iconOnly)
+        if !isReadOnly {
+          Button(role: .destructive, action: onRemove) {
+            Label("Remove", systemImage: "trash")
+              .labelStyle(.iconOnly)
+          }
+          .accessibilityLabel("Remove Pokémon \(index + 1)")
         }
-        .accessibilityLabel("Remove Pokémon \(index + 1)")
       }
     }
     .onChange(of: member.species) { _, _ in onSpeciesChange() }
+    .disabled(isReadOnly)
   }
 
   /// One-shot entrance for a newly-surfaced per-slot legality warning.
@@ -432,6 +496,11 @@ private struct MemberEditorSection: View {
               ForEach(types, id: \.self) { TypeBadge(type: $0) }
             }
           }
+          if isOffRoster(field: "species") {
+            Text("not in the Champions roster")
+              .font(Theme.body(.caption))
+              .foregroundStyle(Theme.warning)
+          }
         }
         Spacer(minLength: 0)
       }
@@ -457,6 +526,7 @@ private struct MemberEditorSection: View {
       search: search,
       onChange: { member.species = $0 }
     )
+    offRosterNote(field: "species")
     EntityPickerRow(
       title: "Ability",
       value: member.ability,
@@ -466,6 +536,7 @@ private struct MemberEditorSection: View {
       search: search,
       onChange: { member.ability = $0 }
     )
+    offRosterNote(field: "ability")
     EntityPickerRow(
       title: requiredItem != nil ? "Item (Mega stone)" : "Item",
       value: member.item,
@@ -475,6 +546,7 @@ private struct MemberEditorSection: View {
       search: search,
       onChange: { member.item = $0 }
     )
+    offRosterNote(field: "item")
   }
 
   @ViewBuilder
@@ -532,14 +604,47 @@ private struct MemberEditorSection: View {
     Toggle("Shiny", isOn: $member.shiny)
   }
 
-  /// EV-budget footnote — informational, never blocking. Over 508 is the same advisory
-  /// the server flags (M-AC-T3.1).
+  @ViewBuilder
+  private func offRosterNote(field: String) -> some View {
+    if isOffRoster(field: field) {
+      Text("not in the Champions roster")
+        .font(Theme.body(.caption))
+        .foregroundStyle(Theme.warning)
+    }
+  }
+
+  private func isOffRoster(field: String) -> Bool {
+    guard isReadOnly else { return false }
+    if warnings.contains(where: { warning in
+      let matchesField =
+        warning.field == field
+        || (field == "species"
+          && (warning.field == nil || warning.code == .speciesIllegal))
+      return matchesField
+        && (warning.code == .speciesIllegal
+          || warning.message.localizedCaseInsensitiveContains("not in the Champions roster"))
+    }) {
+      return true
+    }
+    if field == "species", !member.species.isEmpty, spriteRef == nil { return true }
+    if field != "species", isOffRoster(field: "species") {
+      switch field {
+      case "ability": return !member.ability.isEmpty
+      case "item": return !member.item.isEmpty
+      default: return false
+      }
+    }
+    return false
+  }
+
+  /// EV / Stat Point budget footnote — informational, never blocking.
   private var evFootnote: String {
     let total = member.evs.total
-    if total > 508 {
-      return "Total \(total) / 508 — over the legal budget (saved anyway)."
+    let budget = showsStatPoints ? statPointBudget : 508
+    if total > budget {
+      return "Total \(total) / \(budget) — over the legal budget (saved anyway)."
     }
-    return "Total \(total) / 508"
+    return "Total \(total) / \(budget)"
   }
 
   /// A slug/search text field with no autocapitalization/autocorrection (slugs are
@@ -606,6 +711,7 @@ private struct MoveFieldRow: View {
 private struct RosterStripView: View {
   let members: [EditableMember]
   let spriteRefs: [String: DexSpriteRef]
+  let selectedIndex: Int
   let onSelect: (Int) -> Void
 
   var body: some View {
@@ -626,12 +732,11 @@ private struct RosterStripView: View {
     .accessibilityLabel("Team roster")
   }
 
-  /// One party slot: type-glow edge when species types are known (soul.md Phase
-  /// 2.2). Selection language stays scroll-to-focus, not a SaaS left rail.
+  /// One party slot. Selected slot gets a 2px poke-red ring (Enamel & Paper
+  /// roster-slot recipe). Empty slots sit in a quiet paper well.
   private func rosterSlot(member: EditableMember, index: Int) -> some View {
     let ref = member.species.isEmpty ? nil : spriteRefs[member.species]
-    let primary = ref?.types.first
-    let secondary = (ref?.types.count ?? 0) > 1 ? ref?.types[1] : nil
+    let selected = index == selectedIndex
     return VStack(spacing: 4) {
       SpriteImage(
         urlString: ref?.spriteUrl,
@@ -639,15 +744,17 @@ private struct RosterStripView: View {
         size: 44
       )
       .padding(6)
-      .background {
-        if primary == nil {
-          RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-            .fill(Theme.surfaceSunken)
-        }
+      .background(
+        Theme.surfaceSunken,
+        in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
+          .strokeBorder(selected ? Theme.accent : Theme.border, lineWidth: selected ? 2 : 1)
       }
-      .modifier(RosterTypeEdge(primary: primary, secondary: secondary))
       Text(slotLabel(member, index))
         .font(Theme.body(.caption2))
+        .foregroundStyle(selected ? Theme.accent : Theme.textPrimary)
         .lineLimit(1)
         .frame(width: 60)
     }

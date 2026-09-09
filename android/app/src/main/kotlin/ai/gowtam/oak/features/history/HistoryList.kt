@@ -1,11 +1,14 @@
 package ai.gowtam.oak.features.history
 
+import ai.gowtam.oak.features.share.shareExportedFile
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.OakMotion
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.rememberReduceMotion
+import ai.gowtam.oak.wire.BulkAction
 import ai.gowtam.oak.wire.ConversationSummary
+import ai.gowtam.oak.wire.Folder
 import ai.gowtam.oak.wire.Format
 import android.text.format.DateUtils
 import androidx.compose.animation.core.animateFloatAsState
@@ -13,9 +16,11 @@ import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,13 +59,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import ai.gowtam.oak.ui.OakTopBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -73,15 +75,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 
 /**
@@ -91,6 +95,8 @@ import kotlinx.coroutines.launch
  * **content-only, signed-in only** — the caller (the Chat tab) mounts this only once
  * signed in and supplies the "New Chat" action; a guest instead sees the single
  * in-memory thread with a sign-in nudge (mirrors `ChatTabView`'s guest/signed-in split).
+ * A right-to-left swipe on this screen opens a new chat (same as the FAB). Per-row
+ * swipe-to-delete is omitted so that screen-level swipe is not stolen.
  *
  * Selecting a row hands the conversation back via [onSelect], which the caller uses
  * to load the full detail and resume it into [ai.gowtam.oak.features.chat.ChatViewModel].
@@ -108,6 +114,8 @@ fun HistoryScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
+    val oak = LocalOakColors.current
+    val context = LocalContext.current
 
     // Initial load; pull-to-refresh and search/filter changes re-fetch on their own.
     LaunchedEffect(Unit) { viewModel.reload() }
@@ -122,10 +130,13 @@ fun HistoryScreen(
                 // New-chat moved to the floating disc for one-handed reach; the format
                 // filter stays a top-bar affordance and tints accent while a filter is on.
                 actions = {
-                    FilterAction(
-                        current = uiState.formatFilter,
-                        onSelect = { format -> scope.launch { viewModel.setFormatFilter(format) } },
-                    )
+                    IconButton(onClick = viewModel::toggleSelecting) {
+                        Icon(
+                            if (uiState.selecting) Icons.Filled.Close else Icons.Filled.Check,
+                            contentDescription = if (uiState.selecting) "Cancel select" else "Select",
+                            tint = if (uiState.selecting) oak.accent else oak.textMuted,
+                        )
+                    }
                 },
             )
         },
@@ -137,12 +148,24 @@ fun HistoryScreen(
                 onQueryChange = viewModel::onSearchQueryChange,
                 onSearch = { scope.launch { viewModel.search() } },
             )
-            uiState.formatFilter?.let { active ->
-                ActiveFilterPill(
-                    format = active,
-                    onClear = { scope.launch { viewModel.setFormatFilter(null) } },
-                )
-            }
+            OrganizeStrip(
+                folders = uiState.folders,
+                folderFilter = uiState.folderFilter,
+                showArchived = uiState.showArchived,
+                selecting = uiState.selecting,
+                selectedCount = uiState.selectedIds.size,
+                searchActive = uiState.searchQuery.isNotBlank(),
+                includeArchivedInSearch = uiState.includeArchivedInSearch,
+                onAll = { scope.launch { viewModel.setFolderFilter(null); viewModel.setShowArchived(false) } },
+                onUnfiled = { scope.launch { viewModel.setFolderFilter("unfiled") } },
+                onFolder = { scope.launch { viewModel.setFolderFilter(it) } },
+                onArchive = { scope.launch { viewModel.setShowArchived(true) } },
+                onCreateFolder = { scope.launch { viewModel.createFolder(it) } },
+                onBulkArchive = { scope.launch { viewModel.bulk(if (uiState.showArchived) BulkAction.Unarchive else BulkAction.Archive) } },
+                onBulkDelete = { scope.launch { viewModel.bulk(BulkAction.Delete) } },
+                onBulkMove = { folderId -> scope.launch { viewModel.bulk(BulkAction.Move, folderId) } },
+                onToggleIncludeArchived = { scope.launch { viewModel.setIncludeArchivedInSearch(!uiState.includeArchivedInSearch) } },
+            )
             Box(modifier = Modifier.weight(1f)) {
                 HistoryListContent(
                     uiState = uiState,
@@ -151,8 +174,21 @@ fun HistoryScreen(
                     onTogglePin = { scope.launch { viewModel.togglePin(it) } },
                     onRequestRename = { renameTarget = it },
                     onDelete = { scope.launch { viewModel.delete(it) } },
+                    onArchive = { scope.launch { viewModel.archive(it, !it.archived) } },
+                    folders = uiState.folders,
+                    onMoveToFolder = { summary, folderId -> scope.launch { viewModel.moveToFolder(summary, folderId) } },
+                    onExport = { summary, format ->
+                        scope.launch {
+                            val result = viewModel.export(summary.id, format) ?: return@launch
+                            shareExportedFile(context, result.first, result.second)
+                        }
+                    },
+                    selecting = uiState.selecting,
+                    selectedIds = uiState.selectedIds,
+                    onToggleSelected = viewModel::toggleSelected,
                     onRefresh = { scope.launch { viewModel.reload() } },
                     onDismissError = viewModel::dismissError,
+                    onNewChat = onNewChat,
                 )
             }
         }
@@ -173,24 +209,13 @@ fun HistoryScreen(
 @Composable
 private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch: () -> Unit) {
     val oak = LocalOakColors.current
-    // Sunken borderless pill (§5.4): no outline at rest, an azure ring + soft azure glow
-    // only while focused. The glow's tinted shadow is API 28+; older devices simply skip it.
-    var focused by remember { mutableStateOf(false) }
     val pillShape = RoundedCornerShape(OakRadius.pill)
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm)
-            .onFocusChanged { focused = it.isFocused }
-            .then(
-                if (focused) {
-                    Modifier.shadow(elevation = 6.dp, shape = pillShape, ambientColor = oak.azure, spotColor = oak.azure)
-                } else {
-                    Modifier
-                },
-            ),
+            .padding(horizontal = OakSpacing.lg, vertical = OakSpacing.sm),
         placeholder = { Text("Search conversations") },
         singleLine = true,
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = oak.textMuted) },
@@ -203,11 +228,11 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch
         },
         shape = pillShape,
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = oak.surfaceSunken,
-            unfocusedContainerColor = oak.surfaceSunken,
-            focusedBorderColor = oak.azure,
-            unfocusedBorderColor = Color.Transparent,
-            cursorColor = oak.azure,
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+            focusedBorderColor = oak.accent,
+            unfocusedBorderColor = oak.border,
+            cursorColor = oak.accent,
             focusedTextColor = oak.text,
             unfocusedTextColor = oak.text,
             focusedPlaceholderColor = oak.textFaint,
@@ -216,85 +241,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onSearch
     )
 }
 
-/**
- * The top-bar filter affordance (iOS parity: iterates the full known-scope set, same as
- * the Teams list's filter — this used to be a hardcoded All / Gen 9 / Champions trio,
- * which was a real divergence from iOS's `HistoryListView` once more scopes existed). A
- * filter icon that tints **accent** while a filter is active, opening a menu of every
- * known [Format] with a check on the current one.
- */
-@Composable
-private fun FilterAction(current: Format?, onSelect: (Format?) -> Unit) {
-    val oak = LocalOakColors.current
-    var expanded by remember { mutableStateOf(false) }
-    val active = current != null
-    Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(
-                Icons.Filled.FilterList,
-                contentDescription = if (active) "Filter (active)" else "Filter",
-                tint = if (active) oak.accent else oak.textMuted,
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            FilterMenuItem("All", current == null) { onSelect(null); expanded = false }
-            Format.knownCases.forEach { format ->
-                FilterMenuItem(format.shortLabel, current == format) { onSelect(format); expanded = false }
-            }
-        }
-    }
-}
 
-@Composable
-private fun FilterMenuItem(label: String, selected: Boolean, onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = { Text(label) },
-        onClick = onClick,
-        leadingIcon = if (selected) {
-            { Icon(Icons.Filled.Check, contentDescription = null, tint = LocalOakColors.current.accent) }
-        } else {
-            null
-        },
-    )
-}
-
-/**
- * The active-filter cue by the search field: a sunken pill naming the current scope with
- * an ✕ that clears it. Shown only while a format filter is on (mirrors iOS's active-filter
- * token). The scope label is the existing [Format.shortLabel], never a new name.
- */
-@Composable
-private fun ActiveFilterPill(format: Format, onClear: () -> Unit) {
-    val oak = LocalOakColors.current
-    val shape = RoundedCornerShape(OakRadius.pill)
-    Row(
-        modifier = Modifier.padding(horizontal = OakSpacing.lg, vertical = OakSpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            modifier = Modifier
-                .clip(shape)
-                .background(oak.accentSoft)
-                .clickable(onClickLabel = "Clear filter", onClick = onClear)
-                .padding(start = OakSpacing.md, end = OakSpacing.sm, top = 6.dp, bottom = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = format.shortLabel,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = oak.accent,
-            )
-            Icon(
-                Icons.Filled.Close,
-                contentDescription = "Clear filter",
-                tint = oak.accent,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    }
-}
 
 /**
  * The new-chat floating disc (moved off the top bar for one-handed reach): a 56dp accent
@@ -305,7 +252,7 @@ private fun ActiveFilterPill(format: Format, onClear: () -> Unit) {
 @Composable
 private fun NewChatFab(onClick: () -> Unit) {
     val oak = LocalOakColors.current
-    val dark = isSystemInDarkTheme()
+    val dark = oak.isDark
     val reduceMotion = rememberReduceMotion()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -333,7 +280,7 @@ private fun NewChatFab(onClick: () -> Unit) {
         Icon(
             Icons.Filled.Edit,
             contentDescription = "New chat",
-            tint = Color.White,
+            tint = oak.onRed,
             modifier = Modifier.size(22.dp),
         )
     }
@@ -348,10 +295,24 @@ private fun HistoryListContent(
     onTogglePin: (ConversationSummary) -> Unit,
     onRequestRename: (ConversationSummary) -> Unit,
     onDelete: (ConversationSummary) -> Unit,
+    onArchive: (ConversationSummary) -> Unit,
+    folders: List<Folder>,
+    onMoveToFolder: (ConversationSummary, String?) -> Unit,
+    onExport: (ConversationSummary, String) -> Unit,
+    selecting: Boolean,
+    selectedIds: Set<String>,
+    onToggleSelected: (String) -> Unit,
     onRefresh: () -> Unit,
     onDismissError: () -> Unit,
+    onNewChat: () -> Unit,
 ) {
-    PullToRefreshBox(isRefreshing = uiState.isLoading, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
+    PullToRefreshBox(
+        isRefreshing = uiState.isLoading,
+        onRefresh = onRefresh,
+        modifier = Modifier
+            .fillMaxSize()
+            .swipeToNewChat(enabled = !selecting, onNewChat = onNewChat),
+    ) {
         if (uiState.conversations.isEmpty()) {
             if (uiState.isLoading) {
                 LoadingState()
@@ -369,11 +330,11 @@ private fun HistoryListContent(
                 if (pinned.isNotEmpty()) {
                     item(key = "pinned-header") { SectionHeader("Pinned") }
                     items(pinned, key = { it.id }) { conversation ->
-                        ConversationRow(conversation, conversation.id == activeConversationId, onSelect, onTogglePin, onRequestRename, onDelete)
+                        ConversationRow(conversation, conversation.id == activeConversationId, onSelect, onTogglePin, onRequestRename, onDelete, onArchive, folders, onMoveToFolder, onExport, selecting, conversation.id in selectedIds, onToggleSelected)
                     }
                 }
                 items(others, key = { it.id }) { conversation ->
-                    ConversationRow(conversation, conversation.id == activeConversationId, onSelect, onTogglePin, onRequestRename, onDelete)
+                    ConversationRow(conversation, conversation.id == activeConversationId, onSelect, onTogglePin, onRequestRename, onDelete, onArchive, folders, onMoveToFolder, onExport, selecting, conversation.id in selectedIds, onToggleSelected)
                 }
             }
         }
@@ -398,11 +359,11 @@ private fun SectionHeader(title: String) {
 }
 
 /**
- * One conversation row's full interaction surface: tap to open, a trailing swipe to
- * delete (Material 3 [SwipeToDismissBox]), a leading pin toggle, and an overflow menu
- * (rename / pin / delete) — the same actions iOS exposes via swipe + context menu.
+ * One conversation row's full interaction surface: tap to open, a pin toggle,
+ * and an overflow menu (rename / pin / archive / delete) — the same actions iOS
+ * exposes via context menu. Row swipe is intentionally not used; a screen-level
+ * right-to-left swipe opens a new chat instead.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ConversationRow(
     conversation: ConversationSummary,
@@ -411,134 +372,205 @@ private fun ConversationRow(
     onTogglePin: (ConversationSummary) -> Unit,
     onRequestRename: (ConversationSummary) -> Unit,
     onDelete: (ConversationSummary) -> Unit,
+    onArchive: (ConversationSummary) -> Unit,
+    folders: List<Folder>,
+    onMoveToFolder: (ConversationSummary, String?) -> Unit,
+    onExport: (ConversationSummary, String) -> Unit,
+    selecting: Boolean,
+    selected: Boolean,
+    onToggleSelected: (String) -> Unit,
 ) {
     val oak = LocalOakColors.current
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
-                onDelete(conversation)
-                true
-            } else {
-                false
-            }
-        },
-    )
-
-    SwipeToDismissBox(
-        state = dismissState,
-        enableDismissFromStartToEnd = false,
-        enableDismissFromEndToStart = true,
-        backgroundContent = {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(oak.danger.copy(alpha = 0.85f))
-                    .padding(horizontal = OakSpacing.lg),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.Delete, contentDescription = null, tint = Color.White)
-            }
-        },
+    var showMenu by remember { mutableStateOf(false) }
+    val plateShape = RoundedCornerShape(OakRadius.md)
+    val highlighted = active || selected
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = OakSpacing.md, vertical = 4.dp)
+            .clip(plateShape)
+            .background(if (highlighted) oak.accentSoft else MaterialTheme.colorScheme.surface, plateShape)
+            .border(1.dp, if (highlighted) oak.accent.copy(alpha = 0.35f) else oak.border, plateShape)
+            .clickable { if (selecting) onToggleSelected(conversation.id) else onSelect(conversation) }
+            .padding(horizontal = OakSpacing.md, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        var showMenu by remember { mutableStateOf(false) }
-        // Specimen-desk selection (soul.md): NOT a red left rail. Active = lifted mini-
-        // plate (surface + hairline + raised shadow) + mono OPEN stamp. Pinned rows keep
-        // the pin icon only — no brand rail wash.
-        val plateShape = RoundedCornerShape(OakRadius.md)
-        val dark = isSystemInDarkTheme()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = OakSpacing.md, vertical = 4.dp)
-                .then(
-                    if (active) {
-                        Modifier
-                            .then(if (dark) Modifier else Modifier.shadow(4.dp, plateShape))
-                            .clip(plateShape)
-                            .background(MaterialTheme.colorScheme.surface, plateShape)
-                            .border(1.dp, oak.borderStrong, plateShape)
-                    } else {
-                        Modifier
-                            .clip(plateShape)
-                            .background(Color.Transparent)
-                    },
-                )
-                .clickable { onSelect(conversation) }
-                .padding(horizontal = OakSpacing.md, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (conversation.pinned) {
-                        Icon(
-                            Icons.Filled.PushPin,
-                            contentDescription = "Pinned",
-                            tint = oak.accent,
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
-                    Text(
-                        text = conversation.title,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = oak.textStrong,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (conversation.pinned) {
+                    Icon(
+                        Icons.Filled.PushPin,
+                        contentDescription = "Pinned",
+                        tint = oak.accent,
+                        modifier = Modifier.size(14.dp),
                     )
                 }
-                // Meta line in the instrument voice: "GEN 9 · 19H AGO" (existing scope
-                // label uppercased + compact relative time).
                 Text(
-                    text = "${conversation.format.shortLabel.uppercase()} · ${compactRelativeTime(conversation.updatedAt)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = oak.textMuted,
+                    text = conversation.title,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (highlighted) oak.accent else oak.textStrong,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (active) {
-                Text(
-                    text = "OPEN",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = oak.accent,
-                    modifier = Modifier
-                        .padding(end = OakSpacing.xs)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(oak.accent.copy(alpha = 0.08f))
-                        .border(1.dp, oak.accent.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 7.dp, vertical = 3.dp),
-                )
+            // Meta line in the instrument voice: "GEN 9 · 19H AGO" (existing scope
+            // label uppercased + compact relative time).
+            Text(
+                text = "${conversation.format.shortLabel.uppercase()} · ${compactRelativeTime(conversation.updatedAt)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = oak.textMuted,
+                maxLines = 1,
+            )
+        }
+        if (active) {
+            Text(
+                text = "OPEN",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = oak.accent,
+                modifier = Modifier
+                    .padding(end = OakSpacing.xs)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(oak.accent.copy(alpha = 0.08f))
+                    .border(1.dp, oak.accent.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 7.dp, vertical = 3.dp),
+            )
+        }
+        IconButton(onClick = { onTogglePin(conversation) }) {
+            Icon(
+                if (conversation.pinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
+                contentDescription = if (conversation.pinned) "Unpin" else "Pin",
+                tint = oak.textMuted,
+            )
+        }
+        Box {
+            IconButton(onClick = { showMenu = true }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = oak.textMuted)
             }
-            IconButton(onClick = { onTogglePin(conversation) }) {
-                Icon(
-                    if (conversation.pinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                    contentDescription = if (conversation.pinned) "Unpin" else "Pin",
-                    tint = oak.textMuted,
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text("Rename") },
+                    leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                    onClick = { showMenu = false; onRequestRename(conversation) },
                 )
-            }
-            Box {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = oak.textMuted)
+                DropdownMenuItem(
+                    text = { Text(if (conversation.pinned) "Unpin" else "Pin") },
+                    leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
+                    onClick = { showMenu = false; onTogglePin(conversation) },
+                )
+                DropdownMenuItem(
+                    text = { Text(if (conversation.archived) "Unarchive" else "Archive") },
+                    onClick = { showMenu = false; onArchive(conversation) },
+                )
+                DropdownMenuItem(
+                    text = { Text("Move to Unfiled") },
+                    onClick = { showMenu = false; onMoveToFolder(conversation, null) },
+                )
+                folders.forEach { folder ->
+                    DropdownMenuItem(
+                        text = { Text("Move to ${folder.name}") },
+                        onClick = { showMenu = false; onMoveToFolder(conversation, folder.id) },
+                    )
                 }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Rename") },
-                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-                        onClick = { showMenu = false; onRequestRename(conversation) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (conversation.pinned) "Unpin" else "Pin") },
-                        leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
-                        onClick = { showMenu = false; onTogglePin(conversation) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete") },
-                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = oak.danger) },
-                        onClick = { showMenu = false; onDelete(conversation) },
-                    )
+                DropdownMenuItem(
+                    text = { Text("Export Markdown") },
+                    onClick = { showMenu = false; onExport(conversation, "md") },
+                )
+                DropdownMenuItem(
+                    text = { Text("Export PDF") },
+                    onClick = { showMenu = false; onExport(conversation, "pdf") },
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete") },
+                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = oak.danger) },
+                    onClick = { showMenu = false; onDelete(conversation) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrganizeStrip(
+    folders: List<Folder>,
+    folderFilter: String?,
+    showArchived: Boolean,
+    selecting: Boolean,
+    selectedCount: Int,
+    searchActive: Boolean,
+    includeArchivedInSearch: Boolean,
+    onAll: () -> Unit,
+    onUnfiled: () -> Unit,
+    onFolder: (String) -> Unit,
+    onArchive: () -> Unit,
+    onCreateFolder: (String) -> Unit,
+    onBulkArchive: () -> Unit,
+    onBulkDelete: () -> Unit,
+    onBulkMove: (String?) -> Unit,
+    onToggleIncludeArchived: () -> Unit,
+) {
+    val oak = LocalOakColors.current
+    var newFolder by remember { mutableStateOf(false) }
+    var folderName by remember { mutableStateOf("") }
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = OakSpacing.lg, vertical = OakSpacing.xs)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.xs)) {
+            FilterChip(label = "All", selected = folderFilter == null && !showArchived, onClick = onAll)
+            FilterChip(label = "Unfiled", selected = folderFilter == "unfiled", onClick = onUnfiled)
+            FilterChip(label = "Archive", selected = showArchived, onClick = onArchive)
+            folders.forEach { folder ->
+                FilterChip(label = folder.name, selected = folderFilter == folder.id, onClick = { onFolder(folder.id) })
+            }
+            FilterChip(label = "+ Folder", selected = false, onClick = { newFolder = true })
+            if (searchActive) {
+                FilterChip(
+                    label = if (includeArchivedInSearch) "Including archived" else "Include archived",
+                    selected = includeArchivedInSearch,
+                    onClick = onToggleIncludeArchived,
+                )
+            }
+        }
+        if (selecting && selectedCount > 0) {
+            Row(horizontalArrangement = Arrangement.spacedBy(OakSpacing.sm), modifier = Modifier.padding(top = OakSpacing.xs)) {
+                TextButton(onClick = onBulkArchive) { Text(if (showArchived) "Unarchive" else "Archive", color = oak.accent) }
+                TextButton(onClick = onBulkDelete) { Text("Delete", color = oak.danger) }
+                TextButton(onClick = { onBulkMove(null) }) { Text("Unfile", color = oak.accent) }
+                folders.forEach { folder ->
+                    TextButton(onClick = { onBulkMove(folder.id) }) { Text(folder.name, color = oak.accent) }
                 }
             }
         }
     }
+    if (newFolder) {
+        AlertDialog(
+            onDismissRequest = { newFolder = false },
+            title = { Text("New folder") },
+            text = { OutlinedTextField(value = folderName, onValueChange = { folderName = it }, singleLine = true, label = { Text("Name") }) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onCreateFolder(folderName)
+                    folderName = ""
+                    newFolder = false
+                }) { Text("Create", color = oak.accent) }
+            },
+            dismissButton = { TextButton(onClick = { newFolder = false }) { Text("Cancel", color = oak.textMuted) } },
+        )
+    }
+}
+
+@Composable
+private fun FilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val oak = LocalOakColors.current
+    val shape = RoundedCornerShape(OakRadius.pill)
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (selected) oak.accent else oak.textMuted,
+        modifier = Modifier
+            .clip(shape)
+            .background(if (selected) oak.accentSoft else MaterialTheme.colorScheme.surface)
+            .border(1.dp, if (selected) oak.accent.copy(alpha = 0.35f) else oak.border, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = OakSpacing.sm, vertical = 4.dp),
+    )
 }
 
 @Composable
@@ -615,6 +647,42 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
         Icon(Icons.Filled.WarningAmber, contentDescription = null, tint = oak.danger, modifier = Modifier.size(18.dp))
         Text(message, style = MaterialTheme.typography.bodySmall, color = oak.textStrong, modifier = Modifier.weight(1f))
         TextButton(onClick = onDismiss) { Text("Dismiss") }
+    }
+}
+
+/**
+ * Observes a right-to-left swipe on the chats list and opens a new chat.
+ * Does not consume pointer events, so vertical scroll and pull-to-refresh still
+ * win. Gestures that begin in the system-back edge insets are ignored. No-ops
+ * while [enabled] is false (Select mode).
+ */
+private fun Modifier.swipeToNewChat(enabled: Boolean, onNewChat: () -> Unit): Modifier {
+    if (!enabled) return this
+    return pointerInput(onNewChat) {
+        val minDistance = 72.dp.toPx()
+        val edgeIgnore = 24.dp.toPx()
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val startX = down.position.x
+            var totalX = 0f
+            var totalY = 0f
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull() ?: break
+                totalX += change.position.x - change.previousPosition.x
+                totalY += change.position.y - change.previousPosition.y
+                if (event.changes.all { !it.pressed }) {
+                    val startedAtEdge = startX < edgeIgnore || startX > size.width - edgeIgnore
+                    if (!startedAtEdge &&
+                        totalX < -minDistance &&
+                        abs(totalX) > abs(totalY) * 1.2f
+                    ) {
+                        onNewChat()
+                    }
+                    break
+                }
+            }
+        }
     }
 }
 

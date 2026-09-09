@@ -6,6 +6,7 @@
  */
 
 import type { OakAnswer } from "@/agent/schemas";
+import { stripHtmlComments } from "@/lib/strip-html-comments";
 
 /**
  * Render a compact, structured markdown export of an OakAnswer.
@@ -30,7 +31,7 @@ export function oakAnswerToAgentMarkdown(answer: OakAnswer): string {
   lines.push("");
   lines.push("## Answer");
   lines.push("");
-  lines.push(answer.answer_markdown.trim() || "_(empty)_");
+  lines.push(stripHtmlComments(answer.answer_markdown).trim() || "_(empty)_");
 
   if (answer.subjects && answer.subjects.length > 0) {
     lines.push("");

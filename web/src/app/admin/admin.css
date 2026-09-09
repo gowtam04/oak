@@ -11,6 +11,7 @@
 
 /* --------------------------------------------------------------------------
    Shell — header bar, brand, nav, content region
+   Enamel & Paper: admin inherits tokens. No coral lid (Key Decision 11).
    -------------------------------------------------------------------------- */
 
 .admin-shell {
@@ -57,7 +58,7 @@
   flex: 0 0 auto;
   border-radius: 7px;
   background: var(--brand-mark) center / cover no-repeat;
-  box-shadow: 0 1px 2px rgba(13, 16, 18, 0.14);
+  box-shadow: 0 1px 2px rgba(74, 53, 42, 0.14);
 }
 
 .admin-shell__controls {
@@ -973,4 +974,125 @@
 .settings-view__audit {
   color: var(--text-muted);
   font-size: var(--text-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Spend controls — denylist + daily caps (under Settings)
+   -------------------------------------------------------------------------- */
+
+.spend-controls-view {
+  margin-top: var(--space-8);
+}
+
+.spend-controls-view__intro {
+  max-width: 60ch;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.spend-controls-view__error {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--danger, #c0392b);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--danger, #c0392b);
+  font-size: var(--text-sm);
+}
+
+.spend-controls-view__heading {
+  margin: var(--space-6) 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.spend-controls-view__caps,
+.spend-controls-view__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  max-width: 640px;
+}
+
+.spend-controls-view__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.spend-controls-view__field--grow {
+  flex: 1;
+  min-width: 220px;
+}
+
+.spend-controls-view__label {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.spend-controls-view__input {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-family: var(--body);
+  min-width: 8ch;
+}
+
+.spend-controls-view__btn {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-family: var(--body);
+  cursor: pointer;
+}
+
+.spend-controls-view__btn:hover:not(:disabled) {
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+}
+
+.spend-controls-view__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.spend-controls-view__btn--danger:hover:not(:disabled) {
+  color: var(--danger, #c0392b);
+}
+
+.spend-controls-view__empty {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.spend-controls-view__table {
+  width: 100%;
+  max-width: 640px;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.spend-controls-view__table th,
+.spend-controls-view__table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.spend-controls-view__table th {
+  color: var(--text-faint);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
 }

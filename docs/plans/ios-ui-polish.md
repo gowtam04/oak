@@ -1,5 +1,11 @@
 # iOS UI Polish — Design Plan
 
+> **NOT CURRENT.** The composer `.ultraThinMaterial` instruction in this plan
+> is **not** the visual language to implement. Chrome is Enamel & Paper:
+> [`docs/design/enamel-paper.md`](../design/enamel-paper.md). Do not add Liquid
+> Glass / `.ultraThinMaterial` / `glassEffect` as app chrome. Opaque enamel lid
+> + opaque paper pages. This plan remains as history.
+
 Owner: Fable orchestrator session, 2026-07-03. Integration branch: `agent/ios-polish`
 (orchestrator-owned — implementation agents must NEVER edit, build, or commit in its
 worktree). Each phase runs in its own dedicated worktree/branch named in that phase's
