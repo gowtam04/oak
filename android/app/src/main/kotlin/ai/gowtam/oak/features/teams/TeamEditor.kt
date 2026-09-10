@@ -6,6 +6,7 @@ import ai.gowtam.oak.ui.OakButton
 import ai.gowtam.oak.ui.OakButtonStyle
 import ai.gowtam.oak.ui.LocalOakColors
 import ai.gowtam.oak.ui.MarkdownBlockView
+import ai.gowtam.oak.ui.rememberHaptics
 import ai.gowtam.oak.ui.OakRadius
 import ai.gowtam.oak.ui.OakSpacing
 import ai.gowtam.oak.ui.OakTopBar
@@ -23,6 +24,7 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +35,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -82,17 +85,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 /**
@@ -104,7 +119,8 @@ import kotlinx.coroutines.delay
  *
  * **Warn-but-allow**: the server's legality/validity warnings render inline (per slot
  * and team-level) but Save is never disabled. Export renders the Showdown paste with
- * copy/share actions.
+ * copy/share actions. Long-press then drag a roster-strip sprite to reorder the draft;
+ * the member cards below follow on drop.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,6 +137,8 @@ fun TeamEditor(
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     var selectedSlot by remember { mutableStateOf(0) }
+    var isReorderingRoster by remember { mutableStateOf(false) }
+    val haptics = rememberHaptics()
 
     LaunchedEffect(Unit) {
         if (loadsOnAppear) {
@@ -170,6 +188,7 @@ fun TeamEditor(
                 modifier = Modifier.fillMaxSize().padding(horizontal = OakSpacing.lg),
                 verticalArrangement = Arrangement.spacedBy(OakSpacing.lg),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = OakSpacing.lg),
+                userScrollEnabled = !isReorderingRoster,
             ) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
@@ -197,12 +216,24 @@ fun TeamEditor(
                             members = state.members,
                             spriteRefs = state.spriteRefsBySpecies,
                             selectedIndex = selectedSlot.coerceIn(0, state.members.lastIndex),
+                            canReorder = !viewModel.isReadOnly && state.members.size > 1,
                             onSelect = { selectedSlot = it },
+                            onMove = { from, to ->
+                                val movedId = state.members.getOrNull(from)?.id
+                                viewModel.moveMember(from, to)
+                                val next = viewModel.uiState.value.members
+                                selectedSlot = movedId?.let { id -> next.indexOfFirst { it.id == id } }
+                                    ?.takeIf { it >= 0 }
+                                    ?: to
+                            },
+                            onReorderStateChange = { isReorderingRoster = it },
+                            onHaptic = { haptics.tap() },
                         )
                     }
                 }
 
                 itemsIndexed(state.members, key = { _, member -> member.id }) { index, member ->
+                    Box(modifier = Modifier.animateItem()) {
                     MemberEditorCard(
                         index = index,
                         selected = index == selectedSlot.coerceIn(0, state.members.lastIndex.coerceAtLeast(0)),
@@ -220,6 +251,7 @@ fun TeamEditor(
                         onChange = { transform -> viewModel.updateMember(index, transform) },
                         onRemove = { viewModel.removeMember(index) },
                     )
+                    }
                 }
 
                 if (viewModel.canAddMember) {
@@ -313,10 +345,24 @@ private fun RosterStrip(
     members: List<EditableMember>,
     spriteRefs: Map<String, DexSpriteRef>,
     selectedIndex: Int,
+    canReorder: Boolean,
     onSelect: (Int) -> Unit,
+    onMove: (Int, Int) -> Unit,
+    onReorderStateChange: (Boolean) -> Unit,
+    onHaptic: () -> Unit,
 ) {
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var hoverIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffsetX by remember { mutableStateOf(0f) }
+    val slotCenters = remember { mutableMapOf<Int, Float>() }
+    val slotWidths = remember { mutableMapOf<Int, Float>() }
+    val scrollState = rememberScrollState()
+    val spacingPx = with(LocalDensity.current) { OakSpacing.md.toPx() }
+
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState, enabled = draggingIndex == null),
         horizontalArrangement = Arrangement.spacedBy(OakSpacing.md),
     ) {
         members.forEachIndexed { index, member ->
@@ -326,18 +372,99 @@ private fun RosterStrip(
             } else {
                 ref?.displayName ?: titleizeTeamSlug(member.species)
             }
+            val isDragging = draggingIndex == index
+            val hover = hoverIndex
+            val from = draggingIndex
+            val gapShift = when {
+                from == null || hover == null || from == hover || isDragging -> 0f
+                from < hover && index in (from + 1)..hover -> -(slotWidths[from] ?: 0f) - spacingPx
+                hover < from && index in hover until from -> (slotWidths[from] ?: 0f) + spacingPx
+                else -> 0f
+            }
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .width(60.dp)
-                    .clickable { onSelect(index) },
+                    .zIndex(if (isDragging) 1f else 0f)
+                    .onGloballyPositioned { coords ->
+                        if (draggingIndex == null) {
+                            slotCenters[index] = coords.positionInParent().x + coords.size.width / 2f
+                            slotWidths[index] = coords.size.width.toFloat()
+                        }
+                    }
+                    .offset {
+                        val extra = if (isDragging) dragOffsetX else gapShift
+                        IntOffset(extra.roundToInt(), 0)
+                    }
+                    .graphicsLayer {
+                        if (isDragging) {
+                            scaleX = 1.08f
+                            scaleY = 1.08f
+                        }
+                    }
+                    .then(
+                        if (isDragging) Modifier.shadow(12.dp, RoundedCornerShape(OakRadius.md))
+                        else Modifier,
+                    )
+                    .clickable { onSelect(index) }
+                    .pointerInput(canReorder, index, members.size) {
+                        if (!canReorder) return@pointerInput
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                draggingIndex = index
+                                hoverIndex = index
+                                dragOffsetX = 0f
+                                onReorderStateChange(true)
+                                onHaptic()
+                            },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                dragOffsetX += amount.x
+                                val origin = slotCenters[index] ?: return@detectDragGesturesAfterLongPress
+                                val current = origin + dragOffsetX
+                                val nextHover = slotCenters.minByOrNull { (_, center) -> abs(center - current) }?.key
+                                if (nextHover != null && nextHover != hoverIndex) {
+                                    hoverIndex = nextHover
+                                    if (nextHover != draggingIndex) onHaptic()
+                                }
+                            },
+                            onDragEnd = {
+                                val fromIdx = draggingIndex
+                                val toIdx = hoverIndex
+                                if (fromIdx != null && toIdx != null && fromIdx != toIdx) {
+                                    onMove(fromIdx, toIdx)
+                                }
+                                draggingIndex = null
+                                hoverIndex = null
+                                dragOffsetX = 0f
+                                onReorderStateChange(false)
+                            },
+                            onDragCancel = {
+                                draggingIndex = null
+                                hoverIndex = null
+                                dragOffsetX = 0f
+                                onReorderStateChange(false)
+                            },
+                        )
+                    }
+                    .semantics {
+                        val actions = buildList {
+                            if (canReorder && index > 0) {
+                                add(CustomAccessibilityAction("Move left") { onMove(index, index - 1); true })
+                            }
+                            if (canReorder && index < members.lastIndex) {
+                                add(CustomAccessibilityAction("Move right") { onMove(index, index + 1); true })
+                            }
+                        }
+                        if (actions.isNotEmpty()) customActions = actions
+                    },
             ) {
                 TypeEdgeSlot(
                     spriteUrl = ref?.spriteUrl,
                     name = label,
                     types = ref?.types.orEmpty(),
                     size = 48.dp,
-                    selected = index == selectedIndex,
+                    selected = index == selectedIndex || (hoverIndex == index && draggingIndex != null && draggingIndex != index),
                 )
                 Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
