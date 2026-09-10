@@ -527,14 +527,16 @@ export async function updateAssistantAnswer(
 /**
  * Replace the last completed user+assistant pair in place (REC-BR-2).
  * Reuses the same two seq values, bumps updated_at, does not change title.
+ * Returns the new assistant message id so admin recording can join it
+ * (B-26) instead of dual-storing OakAnswer on turn_record.
  */
 export async function replaceLastPair(
   accountId: string,
   conversationId: string,
   userText: string,
   answer: OakAnswer,
-): Promise<void> {
-  await db.transaction(async (tx) => {
+): Promise<string> {
+  return db.transaction(async (tx) => {
     const existing = await tx
       .select({ id: conversation.id })
       .from(conversation)
@@ -579,6 +581,7 @@ export async function replaceLastPair(
     const userSeq = older.seq;
     const assistantSeq = newest.seq;
     const now = Date.now();
+    const assistantId = randomUUID();
 
     await tx
       .delete(conversation_message)
@@ -602,7 +605,7 @@ export async function replaceLastPair(
         created_at: now,
       },
       {
-        id: randomUUID(),
+        id: assistantId,
         conversation_id: conversationId,
         account_id: accountId,
         seq: assistantSeq,
@@ -622,6 +625,8 @@ export async function replaceLastPair(
           eq(conversation.id, conversationId),
         ),
       );
+
+    return assistantId;
   });
 }
 

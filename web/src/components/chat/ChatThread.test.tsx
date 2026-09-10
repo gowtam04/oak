@@ -9,14 +9,16 @@ import {
 } from "@testing-library/react";
 
 afterEach(() => cleanup());
-import ChatThread, { instrumentToken } from "./ChatThread";
+import ChatThread, { instrumentToken, type ChatThreadQolProps } from "./ChatThread";
 import type { ChatThreadProps } from "@/components/types";
 import { STARTER_PROMPTS } from "@/lib/example-prompts";
 
 import { RESOLUTION_FAILED_ANSWER } from "@/components/test-fixtures";
 
+type ThreadProps = ChatThreadProps & ChatThreadQolProps;
+
 /** Minimal props with sensible defaults; override per test. */
-function props(overrides: Partial<ChatThreadProps> = {}): ChatThreadProps {
+function props(overrides: Partial<ThreadProps> = {}): ThreadProps {
   return {
     turns: [],
     activity: [],

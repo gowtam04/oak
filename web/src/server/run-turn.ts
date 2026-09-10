@@ -190,30 +190,37 @@ export async function runTurn(params: RunTurnParams): Promise<void> {
 
     // PERSIST FIRST, then publish the terminal `answer` (design §5.2 step 2). A
     // persistence failure only logs — the answer event still publishes; the turn
-    // is not failed.
+    // is not failed. Capture the assistant message id so recordTurn can skip
+    // dual-storing OakAnswer when the conversation row is the source of truth
+    // (B-26). Guests and persist failures keep the full answer on turn_record.
+    let assistantMessageId: string | null = null;
+    let persistSucceeded = false;
     if (account) {
       try {
         const repo = await import("@/data/repos/conversation-repo");
         if (recovery) {
-          await repo.replaceLastPair(
+          assistantMessageId = await repo.replaceLastPair(
             account.id,
             sessionId,
             userTurnText,
             answer,
           );
         } else {
+          assistantMessageId = repo.newTurnId();
           await repo.appendTurnPair({
             accountId: account.id,
             conversationId: sessionId,
             format: formatForMode(mode),
             userTurnId: repo.newTurnId(),
             userMessage: userTurnText,
-            assistantTurnId: repo.newTurnId(),
+            assistantTurnId: assistantMessageId,
             answer,
             now: Date.now(),
           });
         }
+        persistSucceeded = true;
       } catch (err) {
+        assistantMessageId = null;
         logger.error(
           {
             event: "chat_persist_failed",
@@ -279,14 +286,14 @@ export async function runTurn(params: RunTurnParams): Promise<void> {
       }
     }
 
-    // Non-blocking admin recording (ADMIN-BR-3, AD-2/AD-3): one turn_record per
-    // COMPLETED turn, exactly as the route did before — never awaited, a write
-    // fault only logs. Fired BEFORE publishing the terminal `answer` (which
-    // closes the stream), so the recording is initiated while the turn is still
-    // observably in flight — same relative order the route had (answer → record
-    // → close), just persist-first now. (Transport-error and stopped turns are
-    // not recorded: the `turn_record` status enum has no such value, and errors
-    // were never recorded "as today" — see design §5.2.)
+    // Non-blocking admin recording (ADMIN-BR-3): one turn_record per COMPLETED
+    // turn — never awaited, a write fault only logs. Fired BEFORE publishing
+    // the terminal `answer` (which closes the stream). Signed-in persist
+    // success omits answer_json and stores assistant_message_id so admin
+    // drill-down joins conversation_message (B-26). Guests and persist
+    // failures still store the full OakAnswer. (Transport-error and stopped
+    // turns are not recorded.)
+    const skipAnswerJson = Boolean(account) && persistSucceeded;
     try {
       const { recordTurn } = await import("@/data/repos/usage-repo");
       void recordTurn({
@@ -309,7 +316,8 @@ export async function runTurn(params: RunTurnParams): Promise<void> {
         client,
         promptText: message,
         answerText: answer.answer_markdown,
-        answer,
+        answer: skipAnswerJson ? null : answer,
+        assistantMessageId: skipAnswerJson ? assistantMessageId : null,
         createdAt: Date.now(),
       }).catch(logRecordFailure);
     } catch (err) {

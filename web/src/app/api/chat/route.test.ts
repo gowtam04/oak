@@ -392,8 +392,13 @@ describe("POST /api/chat — turn recording", () => {
       imagesCount: 0,
       promptText: "hello oak",
       answerText: ANSWER.answer_markdown,
-      answer: ANSWER,
+      // B-26: signed-in persist succeeded → do not dual-store OakAnswer.
+      answer: null,
     });
+    expect(typeof input.assistantMessageId).toBe("string");
+    const turns = await convRepo.getMessages(ACCT_A, "rec1");
+    const assistant = turns.find((t) => t.role === "assistant");
+    expect(assistant?.id).toBe(input.assistantMessageId);
     // The turn PK is the request id; model is the operator-resolved ModelKey (a
     // non-null string for a real turn — only the rate-limited row has null model).
     expect(typeof input.id).toBe("string");
@@ -402,6 +407,45 @@ describe("POST /api/chat — turn recording", () => {
     expect(input.toolTrace).toHaveLength(FAKE_TRACE.tool_trace.length);
     // No X-Oak-Client header on this request → client is null (never invent web).
     expect(input.client).toBeNull();
+  });
+
+  it("records the full OakAnswer for a guest turn (no conversation row)", async () => {
+    cu.getCurrentAccount.mockResolvedValue(null);
+    await drain(await post({ session_id: "rec-guest", message: "hello guest" }));
+
+    expect(usage.recordTurn).toHaveBeenCalledTimes(1);
+    expect(usage.recordTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "rec-guest",
+        accountId: null,
+        promptText: "hello guest",
+        answerText: ANSWER.answer_markdown,
+        answer: ANSWER,
+        assistantMessageId: null,
+      }),
+    );
+  });
+
+  it("falls back to storing OakAnswer on turn_record when persist fails", async () => {
+    signedIn(ACCT_A);
+    const spy = vi
+      .spyOn(convRepo, "appendTurnPair")
+      .mockRejectedValueOnce(new Error("persist boom"));
+
+    const res = await post({ session_id: "rec-persist-fail", message: "hello oak" });
+    expect(res.status).toBe(200);
+    await drain(res);
+
+    expect(usage.recordTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "rec-persist-fail",
+        accountId: ACCT_A,
+        answer: ANSWER,
+        assistantMessageId: null,
+        answerText: ANSWER.answer_markdown,
+      }),
+    );
+    spy.mockRestore();
   });
 
   it("records client platform from X-Oak-Client when present", async () => {

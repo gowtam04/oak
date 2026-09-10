@@ -18,6 +18,7 @@
     "lint": "eslint .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/data/migrate.ts",
+    "db:prune-turns": "tsx scripts/prune-turn-records.ts",
     "ingest": "tsx src/ingest/run.ts",
     "sync:starters": "tsx scripts/sync-example-prompts.ts",
     "fetch:encounters": "tsx scripts/fetch-pokeapi-encounters.ts",

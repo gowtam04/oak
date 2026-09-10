@@ -709,6 +709,15 @@ persisted → **privacy-policy disclosure required (Phase 9)**; storage grows
 unbounded but is negligible at hobby volume (revisit retention if it grows).
 (User-confirmed.)
 
+**Superseded by B-26 (2026-09):** full content is still recorded, but only for a
+window — about 14 days for guests (`account_id IS NULL`) and about 90 days for
+signed-in turns — then fat columns (`answer_json`, `answer_text`, `tool_trace`,
+and guest `prompt_text`) are stripped. Analytics columns stay so cost/error
+charts still cover history. Rows are not deleted. Signed-in chat history
+(`conversation_message`) is unchanged. New signed-in completed turns omit
+`turn_record.answer_json` and join via `assistant_message_id`. See
+`web/src/data/repos/turn-record-retention.ts`.
+
 **AD-4 — Record rate-limited rejections as `turn_record` rows (`status:"rate_limited"`).**
 Chosen: a recorded "turn" superset status rather than a third table. Rationale:
 keeps "every turn is recorded" literally true, gives the errors view and
@@ -743,8 +752,9 @@ is O(scan); a `pg_trgm` GIN index is the noted upgrade path if it ever matters.
 - **Migrations:** `npm run db:generate` then `npm run db:migrate`; the deploy
   already runs `migrate.mjs` as its release command, so the new tables ship on
   deploy.
-- **Background jobs/queues:** none. Recording is in-process fire-and-forget; no
-  prune cron (indefinite retention).
+- **Background jobs/queues:** recording is in-process fire-and-forget. B-26
+  adds a daily in-process prune tick (`instrumentation.ts`) plus
+  `npm run db:prune-turns`; not hooked to `release_command`.
 - **Secrets:** add `ADMIN_EMAILS` via `fly secrets set ADMIN_EMAILS=you@…`
   (comma-separated). No `ADMIN_EMAILS` set ⇒ zero admins ⇒ panel is dark
   (safe default).

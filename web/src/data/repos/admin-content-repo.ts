@@ -332,9 +332,17 @@ export async function listTurns(
  * The full per-turn drill-down (ADMIN-AC-5.2): every {@link TurnSummary} field
  * plus the parsed `tool_trace`, the full `answer_text`, and the raw `answer_json`
  * (the complete `OakAnswer` for the answer-card re-render). `answerText` /
- * `answerJson` are null for a `rate_limited` row (AD-4). Returns `null` if no
+ * `answerJson` are null for a `rate_limited` row (AD-4) and for stripped
+ * rows with no joinable conversation message (B-26). Returns `null` if no
  * turn with `id` exists. The stored `tool_trace` JSON is parsed defensively (a
  * corrupt value yields an empty trace rather than throwing).
+ *
+ * Answer body resolution (B-26): prefer `turn_record.answer_json` /
+ * `answer_text` when present (guests, historical dual-store, persist-failure
+ * fallback, refusals-with-nulls). Else LEFT JOIN `conversation_message` on
+ * `assistant_message_id` and use that row's `answer_json` / `text_content`.
+ * Else null — stripped or never stored. A missing join must still return the
+ * turn (stats + empty body), never throw.
  */
 export async function getTurn(id: string): Promise<TurnDetail | null> {
   const rows = await db
@@ -358,10 +366,16 @@ export async function getTurn(id: string): Promise<TurnDetail | null> {
       promptText: turn_record.prompt_text,
       answerText: turn_record.answer_text,
       answerJson: turn_record.answer_json,
+      joinedAnswerText: conversation_message.text_content,
+      joinedAnswerJson: conversation_message.answer_json,
       createdAt: turn_record.created_at,
     })
     .from(turn_record)
     .leftJoin(account, eq(account.id, turn_record.account_id))
+    .leftJoin(
+      conversation_message,
+      eq(conversation_message.id, turn_record.assistant_message_id),
+    )
     .where(eq(turn_record.id, id))
     .limit(1);
 
@@ -394,8 +408,8 @@ export async function getTurn(id: string): Promise<TurnDetail | null> {
     turnLatencyMs: r.turnLatencyMs,
     imagesCount: r.imagesCount,
     promptText: r.promptText,
-    answerText: r.answerText,
-    answerJson: r.answerJson,
+    answerText: r.answerText ?? r.joinedAnswerText ?? null,
+    answerJson: r.answerJson ?? r.joinedAnswerJson ?? null,
     estUsd: estimateCostUsd({
       model: r.model,
       inputTokens: r.inputTokens,

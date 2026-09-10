@@ -16,12 +16,15 @@
  * privacy page.
  *
  * Operator-access copy must disclose (honest, plain copy):
- *  - Oak persists ONE record per chat turn — the user's message text AND Oak's
- *    answer — for EVERY turn, signed-in AND guest (ADMIN-BR-6/7, AD-3).
+ *  - Oak persists ONE record per chat turn — for EVERY turn, signed-in AND
+ *    guest (ADMIN-BR-6/7). Full message/answer/tool-trace is kept for a
+ *    limited window (about 14 days guests, about 90 days signed-in); after
+ *    that only usage stats remain on the operational record (B-26; AD-3
+ *    superseded). Signed-in chat history is separate and stays until the
+ *    user deletes the account.
  *  - A voice turn may later hold a full structured answer (same operator
  *    read as text chat). Do not describe voice as transcript-only.
  *  - Oak persists one record per auth event (code requested/verified/failed).
- *  - These records are retained INDEFINITELY (no prune job — AD-3).
  *  - The single owner/operator can READ them, including guest and account
  *    conversations, through a private admin-only dashboard (ADMIN-BR-4).
  *
@@ -39,21 +42,28 @@ To run Oak reliably — to understand how it is being used, what it costs, and
 where it is failing — Oak keeps an internal operational record of activity:
 
 - **One record per chat turn.** Each time you send a message and Oak replies,
-  Oak stores a record of that turn: your message text and Oak's answer, the model
-  and game format used, token counts, timing, and the tools Oak called. This
-  happens for every turn, whether you are signed in or using Oak as a guest. (The
-  images themselves are never stored — Oak keeps only a count of how many images a
-  message included.) A voice turn may later hold a full structured answer, which
-  the operator can read the same way as a text-chat answer.
+  Oak stores a record of that turn. This happens for every turn, whether you are
+  signed in or using Oak as a guest. (The images themselves are never stored —
+  Oak keeps only a count of how many images a message included.) A voice turn may
+  later hold a full structured answer, which the operator can read the same way
+  as a text-chat answer.
+- **Full message content is kept for a limited time.** Oak keeps your message
+  text, Oak's answer, and the tools Oak called for about **14 days** if you are
+  a guest, and about **90 days** if you are signed in. After that, the operational
+  record keeps only usage stats — the model, token counts, timing, and status —
+  for the operator dashboard.
+- **Signed-in chat history is separate.** If you have an account, your
+  conversations stay until you delete the account. Pruning operational records
+  does not erase that history.
 - **One record per sign-in event.** When a one-time sign-in code is requested,
   verified, or fails to send, Oak stores a small record of that event — the email
   involved and the outcome.
 
-These operational records are retained **indefinitely** and can be read by Oak's
-**operator** — the single owner who runs the service — through a private,
-administrator-only dashboard. For this purpose the operator can read the
-conversations and questions of both signed-in and guest users. This information
-is never shown to any other user, and Oak still does not sell your personal
+These operational records can be read by Oak's **operator** — the single owner
+who runs the service — through a private, administrator-only dashboard. For this
+purpose the operator can read the conversations and questions of both signed-in
+and guest users (while full content is still retained). This information is
+never shown to any other user, and Oak still does not sell your personal
 information or use it for advertising.`;
 
 export const PUBLIC_SNAPSHOT_DISCLOSURE_MARKDOWN = `## Public share links

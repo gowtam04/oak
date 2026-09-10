@@ -358,8 +358,8 @@ export async function deleteExpiredSessions(now: number): Promise<number> {
  * does, BR-A5), and `auth_event` rows recorded at "otp_requested" time carry
  * the email but a NULL `account_id` (no account existed yet) — so purging
  * `auth_event` by `account_id` alone would leave those rows behind. `turn_record`
- * (admin-panel usage recording, retained indefinitely) is scoped by `account_id`
- * only — it is never written before an account exists.
+ * (admin-panel usage recording; fat columns stripped after the B-26 windows)
+ * is scoped by `account_id` only — it is never written before an account exists.
  *
  * STRICTLY account-scoped (BR-A9 isolation): every delete filters on this
  * `accountId` / its email, so another account's rows are never touched.

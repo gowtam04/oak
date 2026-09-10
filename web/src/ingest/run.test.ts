@@ -25,6 +25,8 @@ import { CHAMPIONS_FORMAT, DEFAULT_FORMATS, type Format } from "@/data/formats";
 
 import { createPgSchema, type PgFixture } from "../../test/support/pg";
 import {
+  INDEX_VACUUM_TABLES,
+  vacuumIndexTables,
   writeIndex,
   type FormatReport,
   type IndexRows,
@@ -191,6 +193,21 @@ describe("writeIndex — champions replace (DATA-01, champions-only)", () => {
       last_success_at: 2000,
       pokemon_count: 3,
     });
+  });
+});
+
+describe("vacuumIndexTables (B-26)", () => {
+  it("issues VACUUM ANALYZE on the four index tables, outside any write txn", async () => {
+    const queries: string[] = [];
+    await vacuumIndexTables({
+      query: async (sql: string) => {
+        queries.push(sql);
+        return { rows: [] };
+      },
+    });
+    expect(queries).toEqual(
+      INDEX_VACUUM_TABLES.map((table) => `VACUUM ANALYZE ${table}`),
+    );
   });
 });
 

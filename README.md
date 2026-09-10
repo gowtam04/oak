@@ -344,11 +344,16 @@ until Settings added its first genuine mutation, an upsert into a Postgres
 - **Cost is an estimate** — dollar figures come from a static in-code per-model
   price table and are always labelled as estimates; provider billing is
   authoritative.
-- **Retention** — recorded turns and auth events are retained **indefinitely**
-  (no prune job). Because this means **guest** prompts and answers — previously
-  ephemeral — are now stored and readable by the operator, the
+- **Retention** — one `turn_record` is still written per chat turn (guest and
+  signed-in). Full message / answer / tool-trace is kept for about **14 days**
+  (guests) or about **90 days** (signed-in), then those fat columns are
+  stripped; analytics columns (model, tokens, timing, status) stay so `/admin`
+  cost and error charts still cover history. Auth events are still small and
+  unpruned. Signed-in **chat history** (`conversation_message`) is unchanged
+  and stays until the user deletes the account. A daily in-process prune plus
+  `npm run db:prune-turns` implement this (B-26). The
   [privacy policy](web/src/app/privacy/page.tsx) discloses operator read access
-  and usage recording.
+  and the windows.
 
 Full requirements and design live in
 [`docs/features/admin-panel/`](docs/features/admin-panel/).

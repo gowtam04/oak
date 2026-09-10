@@ -54,7 +54,7 @@ assistant.
 | B-23 | Prompt audit | **COMPLETE** (Champions-only prefix tightened in `6d89405`) |
 | B-24 | Production email sender identity | **OPEN** (was a B-1 deferral) |
 | B-25 | Account data export | **OPEN** (was a B-1 deferral; deletion already shipped) |
-| B-26 | `turn_record` retention + stop dual-storing `OakAnswer` | **OPEN** |
+| B-26 | `turn_record` retention + stop dual-storing `OakAnswer` | **COMPLETE** |
 
 Shipped in later feature packs, not given B-IDs: chat QoL (retry / edit / undo,
 human copy, share, export, pin, fork, folders, `@mention`, command palette),
@@ -78,8 +78,6 @@ box-from-paste (`lookup_box`), spend controls, iOS and Android clients.
    real users, not only the operator.
 6. **B-25** — signed-in data export (profile, conversations, teams). Account
    deletion already exists.
-7. **B-26** — prune / strip unbounded `turn_record` blobs; stop storing the
-   full `OakAnswer` twice. The Champions index is not the disk problem.
 
 ---
 
@@ -515,8 +513,14 @@ affordance on web + iOS + Android, privacy-page copy.
 
 ## B-26 — `turn_record` retention (and stop dual-storing `OakAnswer`)
 
-> **Status: OPEN** — ops/data-hygiene, not a product surface. The Champions
-> index is **not** the size problem: `pokemon` / `learnset` /
+> **Status: COMPLETE** — `web/src/data/repos/turn-record-retention.ts` strips
+> fat columns after **14 days** (guest, `account_id IS NULL`) / **90 days**
+> (signed-in). Rows are not deleted. Daily in-process tick via
+> `web/src/instrumentation.ts` + `npm run db:prune-turns`. New signed-in
+> completed turns omit `turn_record.answer_json` and store
+> `assistant_message_id` so admin `getTurn` joins `conversation_message`.
+> Ingest `VACUUM ANALYZE`s the four index tables after a successful write.
+> The Champions index is **not** the size problem: `pokemon` / `learnset` /
 > `searchable_names` / `reference_cache` are a fixed, rebuildable snapshot
 > (likely tens of MB, including indexes). Do not shrink, shard, or relocate
 > the dex to "fix disk."

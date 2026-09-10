@@ -189,6 +189,26 @@ export async function writeIndex(
   });
 }
 
+/** Champions index tables rebuilt by writeIndex (VACUUM cannot run in a txn). */
+export const INDEX_VACUUM_TABLES = [
+  "pokemon",
+  "learnset",
+  "searchable_names",
+  "reference_cache",
+] as const;
+
+/**
+ * Recover delete+insert bloat after a successful writeIndex. Must run outside
+ * the swap transaction. Table names are a fixed allowlist.
+ */
+export async function vacuumIndexTables(pool: {
+  query: (sql: string) => Promise<unknown>;
+}): Promise<void> {
+  for (const table of INDEX_VACUUM_TABLES) {
+    await pool.query(`VACUUM ANALYZE ${table}`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Orchestrator
 // ---------------------------------------------------------------------------
@@ -285,6 +305,8 @@ export async function runIngest(
       finishedAt,
       report,
     );
+    report("vacuum analyze index tables…");
+    await vacuumIndexTables(pool);
   } finally {
     await pool.end();
   }
