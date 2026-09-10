@@ -54,6 +54,7 @@ assistant.
 | B-23 | Prompt audit | **COMPLETE** (Champions-only prefix tightened in `6d89405`) |
 | B-24 | Production email sender identity | **OPEN** (was a B-1 deferral) |
 | B-25 | Account data export | **OPEN** (was a B-1 deferral; deletion already shipped) |
+| B-26 | `turn_record` retention + stop dual-storing `OakAnswer` | **OPEN** |
 
 Shipped in later feature packs, not given B-IDs: chat QoL (retry / edit / undo,
 human copy, share, export, pin, fork, folders, `@mention`, command palette),
@@ -77,6 +78,8 @@ box-from-paste (`lookup_box`), spend controls, iOS and Android clients.
    real users, not only the operator.
 6. **B-25** — signed-in data export (profile, conversations, teams). Account
    deletion already exists.
+7. **B-26** — prune / strip unbounded `turn_record` blobs; stop storing the
+   full `OakAnswer` twice. The Champions index is not the disk problem.
 
 ---
 
@@ -507,3 +510,66 @@ Oak holds on them. Before a genuinely public launch, a signed-in export
 affordance on web + iOS + Android, privacy-page copy.
 
 **Depends on:** B-1 (COMPLETE). Benefits from B-24 if delivery is email.
+
+---
+
+## B-26 — `turn_record` retention (and stop dual-storing `OakAnswer`)
+
+> **Status: OPEN** — ops/data-hygiene, not a product surface. The Champions
+> index is **not** the size problem: `pokemon` / `learnset` /
+> `searchable_names` / `reference_cache` are a fixed, rebuildable snapshot
+> (likely tens of MB, including indexes). Do not shrink, shard, or relocate
+> the dex to "fix disk."
+
+**Why:** Two append-only blobs grow without bound on the hottest Postgres:
+
+- `turn_record` — one row per chat turn, **guest and signed-in**, including
+  `prompt_text`, `answer_text`, full `answer_json`, and `tool_trace`. No
+  prune job. Guest prompts that used to be ephemeral are now durable.
+- `conversation_message.answer_json` — the signed-in re-render copy of the
+  same `OakAnswer`. Needed. The copy on `turn_record` is only for admin
+  drill-down.
+
+A signed-in turn therefore stores the card twice. Ingest
+(`writeIndex` delete-then-insert in one transaction) also leaves dead
+tuples until VACUUM; that peak is still small next to unbounded telemetry.
+Flagged in `docs/review/tech-debt-audit.md` §3.4 and
+`docs/scaling-plan.md` Phase 3b. Matters on the current unmanaged Fly
+volume and on any later host (Supabase Pro 8 GB included, etc.).
+
+**Scope:**
+- Measure first on prod (`pg_total_relation_size` per table). Confirm the
+  dex tables are not the top consumers before changing ingest.
+- Nightly (or similar) retention on `turn_record`: keep **full** rows for a
+  short window so `/admin` drill-down still works; after that **delete** or
+  **null** `answer_json` / `tool_trace` / long `answer_text` and keep the
+  numeric columns (tokens, model, status, latency). Guest rows: **shorter**
+  window than signed-in.
+- Stop writing a second full `OakAnswer` onto new `turn_record` rows when
+  `conversation_message` already has it; admin drill-down can join. Optional
+  backfill: null the duplicate on old signed-in rows.
+- `VACUUM ANALYZE` the four index tables after ingest (recovers
+  delete+insert bloat; no product change).
+- Do **not** partition `turn_record` until a prune is actually slow. Do not
+  split dex and user data into two databases.
+
+**Out of scope:** shrinking `reference_cache`, live-computing dex from
+`@pkmn` at request time, compressing JSON in Postgres, a second
+`DATABASE_URL`. `conversation_message` is user history — no retention
+policy there unless a later privacy/export spec says so (see B-25).
+
+**Open questions:**
+- Full-row window (30 vs 90 days) and guest window (e.g. 14 days).
+- Delete old rows vs. strip bulky columns (analytics rollups vs. disk).
+- Scheduler: Fly cron/machine vs. in-app interval vs. operator-run CLI.
+  `release_command` (`node migrate.mjs`) is the wrong place.
+
+**Touches:** `src/data/repos/` (usage / admin content insert + getTurn), a
+prune module + tests, ingest CLI (post-write VACUUM), possibly a small
+Fly-side schedule. No client UI required. Privacy-page copy if guest
+retention changes.
+
+**Depends on:** admin panel (shipped) — drill-down and cost rollups must
+keep working on stripped/old rows. Related to B-25's open question of
+whether `turn_record` is in the user export (operator analytics vs. user
+data).
