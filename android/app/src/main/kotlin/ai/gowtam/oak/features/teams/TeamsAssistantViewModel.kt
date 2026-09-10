@@ -50,8 +50,8 @@ data class TeamsAssistantUiState(
  * "TeamsAssistantViewModel"; mirrors iOS `TeamsAssistantViewModel` / web's
  * `useTeamsAssistant` + `TeamsAssistantPanel`). Holds the in-memory thread, folds a
  * [BuilderSseEvent] stream into UI state one event at a time, and brokers Apply/Undo of
- * a proposed `TeamPatch` against the owning [editor]'s **unsaved draft** — never the
- * DB (the user still reviews and hits Save).
+ * a proposed `TeamPatch` against the owning [editor]'s live draft. Apply mutates the
+ * draft; autosave persists it.
  *
  * Depends on the [TeamsAssistantService] **interface** (never `LiveTeamsAssistantService`)
  * so it unit-tests against a fake, and holds a reference to the LIVE [editor] so the

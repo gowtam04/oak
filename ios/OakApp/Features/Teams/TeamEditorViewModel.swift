@@ -4,9 +4,10 @@ import Observation
 /// The full-set team editor's view model (history-and-teams.md M-TEAM-US-1/3;
 /// component-design.md "TeamEditorViewModel"). Holds the editable team (name + up to 6
 /// member sets, each with species / ability / item / four moves / nature / EVs / IVs /
-/// Tera / level), drives save (create-or-update), and surfaces the server's
-/// **warn-but-allow** validation — warnings are rendered but **never block save**
-/// (M-AC-T3.1 / M-BR-T3).
+/// Tera / level), drives **debounced autosave** (create-or-update), and surfaces the
+/// server's **warn-but-allow** validation — warnings are rendered but **never block
+/// save** (M-AC-T3.1 / M-BR-T3). There is no Save button: every draft change persists
+/// automatically.
 ///
 /// `@MainActor @Observable` — the editable members are plain value-type structs the
 /// SwiftUI form binds to two-way (`$model.members[i].evs.hp`, etc.), so steppers /
@@ -32,7 +33,7 @@ final class TeamEditorViewModel {
   /// Archived teams are view + delete only (CF-TEAM-US-5).
   var isReadOnly: Bool { format.isArchived }
 
-  /// Save is offered only on living Champions teams.
+  /// Writes are offered only on living Champions teams (archived is view-only).
   var canSave: Bool { !isReadOnly }
 
   /// Living Champions editor hides Tera / IVs / level (CF-TEAM-AC-1.2, ADR-7).
@@ -63,6 +64,34 @@ final class TeamEditorViewModel {
 
   /// `true` while a save is in flight.
   private(set) var isSaving: Bool = false
+
+  /// Transient "Saved" confirmation flag; the screen self-clears it after ~1s.
+  private(set) var showSaveConfirmation: Bool = false
+
+  /// Debounce window before an autosave fires. Internal (not `private`) so unit tests
+  /// can collapse it to `.zero`. Production is 600 ms.
+  var saveDebounce: Duration = .milliseconds(600)
+
+  /// Last payload successfully persisted (or the draft at load). Autosave no-ops when
+  /// the current persistable snapshot equals this, so opening New and backing out
+  /// without edits does not create a ghost team.
+  private var lastPersisted: PersistableDraft
+
+  /// Debounce timer — cancelled and replaced on every `scheduleSave`. Never cancelled
+  /// mid-network: that lives on ``persistTask``.
+  private var debounceTask: Task<Void, Never>?
+
+  /// The in-flight persist loop. Concurrent `kickPersist` waiters await this instead of
+  /// starting a second create.
+  private var persistTask: Task<Void, Never>?
+
+  /// When `true`, the next persist loop writes even if the snapshot matches
+  /// ``lastPersisted`` (explicit ``save()`` / failed-retry flush).
+  private var forcePersist = false
+
+  /// The last persist attempt failed. Trailing `kickPersist` must not retry-loop on
+  /// a hard error; a new edit (`scheduleSave`) or `flushSave`/`save()` clears this.
+  private var persistFailed = false
 
   /// `true` while the initial load (existing team) is in flight.
   private(set) var isLoading: Bool = false
@@ -131,7 +160,9 @@ final class TeamEditorViewModel {
     self.dexLookup = dexLookup
     self.format = .champions
     self.name = name
-    self.members = [EditableMember()]
+    let seeded = [EditableMember()]
+    self.members = seeded
+    self.lastPersisted = Self.persistable(name: name, members: seeded)
     _ = format
   }
 
@@ -148,6 +179,7 @@ final class TeamEditorViewModel {
     self.format = summary.format
     self.name = summary.name
     self.members = []
+    self.lastPersisted = Self.persistable(name: summary.name, members: [])
   }
 
   /// Opens the editor on an already-loaded full team (e.g. straight after create /
@@ -163,9 +195,11 @@ final class TeamEditorViewModel {
     self.teamId = team.id
     self.format = team.format
     self.name = team.name
-    self.members = team.members.map(EditableMember.init(from:))
+    let rows = team.members.map(EditableMember.init(from:))
+    self.members = rows
     self.savedTeam = team
     self.warnings = warnings
+    self.lastPersisted = Self.persistable(name: team.name, members: rows)
   }
 
   // MARK: Loading
@@ -295,12 +329,14 @@ final class TeamEditorViewModel {
   func addMember() {
     guard members.count < 6 else { return }
     members.append(EditableMember())
+    scheduleSave()
   }
 
   /// Removes the member set at `index`.
   func removeMember(at index: Int) {
     guard members.indices.contains(index) else { return }
     members.remove(at: index)
+    scheduleSave()
   }
 
   /// Moves the member at `from` to `to` (insert, not swap). A no-op when
@@ -312,6 +348,7 @@ final class TeamEditorViewModel {
     guard members.indices.contains(from), members.indices.contains(to) else { return }
     let item = members.remove(at: from)
     members.insert(item, at: to)
+    scheduleSave()
   }
 
   /// `true` when another slot can be added (drives the "Add Pokémon" affordance).
@@ -333,41 +370,134 @@ final class TeamEditorViewModel {
     warnings.filter { $0.slot == nil }
   }
 
-  // MARK: Save (warn-but-allow — never blocked)
+  // MARK: Autosave (warn-but-allow — never blocked)
+
+  /// Schedules a debounced persist of the current draft. Rapid edits coalesce into one
+  /// write carrying the latest snapshot. A no-op when read-only or when the draft matches
+  /// the last successful persist (opening New and leaving without edits creates nothing).
+  func scheduleSave() {
+    guard canSave else { return }
+    persistFailed = false
+    debounceTask?.cancel()
+    let delay = saveDebounce
+    debounceTask = Task { [weak self] in
+      if delay > .zero { try? await Task.sleep(for: delay) }
+      if Task.isCancelled { return }
+      await self?.kickPersist()
+    }
+  }
+
+  /// Cancels the debounce window and persists immediately (leave / background / export).
+  /// Retries a previous failed write so a back-tap after a dropped request still lands.
+  func flushSave() async {
+    guard canSave else { return }
+    debounceTask?.cancel()
+    debounceTask = nil
+    persistFailed = false
+    if persistableSnapshot() != lastPersisted { forcePersist = true }
+    await kickPersist()
+  }
+
+  /// Awaits the in-flight debounce + persist, if any. Test support.
+  func awaitSave() async {
+    await debounceTask?.value
+    await persistTask?.value
+  }
+
+  /// Clears the transient "Saved" badge; the screen calls this after its ~1s window.
+  func consumeSaveConfirmation() {
+    showSaveConfirmation = false
+  }
 
   /// Saves the team (create when new, replace when existing). **Never blocked by
-  /// warnings** (M-AC-T3.1): the request always goes out, and the returned warnings are
-  /// shown afterward. Returns the saved ``Team`` or `nil` on a transport/HTTP failure.
+  /// warnings** (M-AC-T3.1). Explicit write used by tests and by ``flushSave`` when
+  /// the draft is dirty; always issues the request even if the snapshot is unchanged.
   @discardableResult
   func save() async -> Team? {
+    guard canSave else { return nil }
+    debounceTask?.cancel()
+    debounceTask = nil
+    persistFailed = false
+    forcePersist = true
+    await kickPersist()
+    return errorMessage == nil ? savedTeam : nil
+  }
+
+  /// Serializes persist loops so a create in flight never races a second create.
+  private func kickPersist() async {
+    guard canSave else { return }
+    if let persistTask {
+      await persistTask.value
+      if persistFailed { return }
+      if canSave, persistableSnapshot() != lastPersisted || forcePersist {
+        await kickPersist()
+      }
+      return
+    }
+    let task = Task { [weak self] in
+      guard let self else { return }
+      await self.runPersistLoop()
+    }
+    persistTask = task
+    await task.value
+    persistTask = nil
+    if persistFailed { return }
+    if canSave, persistableSnapshot() != lastPersisted || forcePersist {
+      await kickPersist()
+    }
+  }
+
+  private func runPersistLoop() async {
+    while canSave {
+      let snapshot = persistableSnapshot()
+      if snapshot == lastPersisted && !forcePersist { return }
+      forcePersist = false
+      if await persist(snapshot) == nil { return }
+    }
+  }
+
+  /// One create-or-update. On success, adopts `teamId` + warnings without rebuilding
+  /// the live member rows (autosave must not steal focus or mint new UUIDs).
+  @discardableResult
+  private func persist(_ snapshot: PersistableDraft) async -> Team? {
     isSaving = true
     errorMessage = nil
     defer { isSaving = false }
 
-    guard canSave else { return nil }
-    let memberPayload = members.map { Self.livingLegalize($0.asTeamMember()) }
-    let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    let namePayload = trimmedName.isEmpty ? nil : trimmedName
-
     do {
       let result: (team: Team, validation: TeamValidationResult)
       if let teamId {
-        result = try await teamService.update(id: teamId, name: namePayload, members: memberPayload)
+        result = try await teamService.update(
+          id: teamId, name: snapshot.name, members: snapshot.members)
       } else {
-        result = try await teamService.create(format: .champions, name: namePayload, members: memberPayload)
+        result = try await teamService.create(
+          format: .champions, name: snapshot.name, members: snapshot.members)
       }
-      apply(saved: result.team, validation: result.validation)
-      await refreshSprites()
-      await refreshAllMovepools()
-      scheduleAnalysis()
+      persistFailed = false
+      applySaveResult(team: result.team, validation: result.validation, sent: snapshot)
+      showSaveConfirmation = true
       return result.team
     } catch let error as OakError {
+      persistFailed = true
       errorMessage = Self.message(for: error)
       return nil
     } catch {
+      persistFailed = true
       errorMessage = Self.genericMessage
       return nil
     }
+  }
+
+  private func persistableSnapshot() -> PersistableDraft {
+    Self.persistable(name: name, members: members)
+  }
+
+  private static func persistable(name: String, members: [EditableMember]) -> PersistableDraft {
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    return PersistableDraft(
+      name: trimmed.isEmpty ? nil : trimmed,
+      members: members.map { livingLegalize($0.asTeamMember()) }
+    )
   }
 
   // MARK: Team analysis (draft coverage — debounced, never blocks)
@@ -440,9 +570,10 @@ final class TeamEditorViewModel {
 
   // MARK: Export
 
-  /// Renders the saved team as Showdown paste text (M-TEAM-US-2). Requires a saved team
-  /// (an id); for an unsaved team it surfaces a hint and returns `nil`.
+  /// Renders the saved team as Showdown paste text (M-TEAM-US-2). Flushes a pending
+  /// autosave first so a just-edited new team can export without a Save tap.
   func exportPaste() async -> String? {
+    await flushSave()
     guard let teamId else {
       errorMessage = "Save the team before exporting."
       return nil
@@ -500,12 +631,13 @@ final class TeamEditorViewModel {
     TeamDraftSnapshot(name: name, members: members)
   }
 
-  /// Restores a draft snapshot (assistant Undo). Nothing here touches the DB — the
-  /// user still reviews and Saves. Sprites/movepools re-resolve for the restored rows.
+  /// Restores a draft snapshot (assistant Undo). Sprites/movepools re-resolve for the
+  /// restored rows; autosave persists the restored draft.
   func restoreDraft(_ snapshot: TeamDraftSnapshot) {
     name = snapshot.name
     members = snapshot.members
     scheduleAnalysis()
+    scheduleSave()
     Task {
       await refreshSprites()
       await refreshAllMovepools()
@@ -513,10 +645,9 @@ final class TeamEditorViewModel {
   }
 
   /// Applies an assistant ``TeamPatch`` to the in-memory draft (mirrors the web panel's
-  /// Apply: `applyTeamPatch` on the current members + an optional rename). The DB is
-  /// untouched — the patched rows land in the editor's unsaved state and the user still
-  /// hits Save (which is where validation warnings refresh). The slot edits reuse the
-  /// exact pure ``applyTeamPatch`` the server legality-gate ran, so applied ≡ validated.
+  /// Apply: `applyTeamPatch` on the current members + an optional rename). Autosave
+  /// persists the patched rows. The slot edits reuse the exact pure ``applyTeamPatch``
+  /// the server legality-gate ran, so applied ≡ validated.
   func applyAssistantPatch(_ patch: TeamPatch) {
     let patched = applyTeamPatch(draftWireMembers(), patch)
     members = patched.map(EditableMember.init(from:))
@@ -524,6 +655,7 @@ final class TeamEditorViewModel {
       name = newName
     }
     scheduleAnalysis()
+    scheduleSave()
     Task {
       await refreshSprites()
       await refreshAllMovepools()
@@ -532,14 +664,30 @@ final class TeamEditorViewModel {
 
   // MARK: Internals
 
-  /// Adopts a server-returned team as the editor's canonical state — the server may
-  /// normalize fields, so the editable rows are rebuilt from the saved members.
+  /// Adopts a server-returned team as the editor's canonical state on **load** — the
+  /// server may normalize fields, so the editable rows are rebuilt from the saved members.
   private func apply(saved team: Team, validation: TeamValidationResult) {
     teamId = team.id
     name = team.name
     members = team.members.map(EditableMember.init(from:))
     savedTeam = team
     warnings = validation.warnings
+    lastPersisted = persistableSnapshot()
+  }
+
+  /// Autosave success: keep the live draft (and member UUIDs) intact so focus, steppers,
+  /// and pickers do not reset. Only identity, warnings, and the dirty snapshot update.
+  private func applySaveResult(
+    team: Team, validation: TeamValidationResult, sent: PersistableDraft
+  ) {
+    teamId = team.id
+    savedTeam = team
+    warnings = validation.warnings
+    lastPersisted = sent
+    if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      name = team.name
+      lastPersisted = PersistableDraft(name: team.name, members: sent.members)
+    }
   }
 
   // MARK: Picker option sets (fixed; no index reads)
@@ -591,6 +739,13 @@ final class TeamEditorViewModel {
 struct TeamDraftSnapshot: Equatable, Sendable {
   let name: String
   let members: [EditableMember]
+}
+
+/// Wire payload used for dirty-checking autosave. Compares legalized members, not
+/// UI identity UUIDs, so two empty slots with different ids are equal.
+private struct PersistableDraft: Equatable, Sendable {
+  let name: String?
+  let members: [TeamMember]
 }
 
 // MARK: - Editable value models (two-way bound by the form)

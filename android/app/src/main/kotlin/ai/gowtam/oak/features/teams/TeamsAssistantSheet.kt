@@ -147,8 +147,8 @@ private fun IntroBlock(onSuggestion: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(OakSpacing.sm)) {
         Text(
             text = "I can see the team you have open. Ask me to fill a slot, fix a moveset, " +
-                "check your coverage, or suggest a spread — edits apply to your unsaved draft, " +
-                "and you keep the Save button.",
+                "check your coverage, or suggest a spread — edits apply to this team and save " +
+                "automatically.",
             style = MaterialTheme.typography.bodyMedium,
             color = oak.textMuted,
         )
