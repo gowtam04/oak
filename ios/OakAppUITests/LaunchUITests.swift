@@ -67,4 +67,23 @@ final class LaunchUITests: XCTestCase {
       }
     }
   }
+
+  /// Teams is signed-in only: guests see the sign-in gate; a signed-in session
+  /// must expose the add-team disc (or the empty-state New team button).
+  @MainActor
+  func testTeamsTabShowsGuestGateOrAddTeam() {
+    let app = XCUIApplication().launchOak()
+    XCTAssertTrue(app.oakTabBar.firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(goToTab(OakUITest.Tab.teams, in: app), "Teams tab unreachable.")
+
+    let guest = app.staticTexts[OakUITest.Teams.guestTitle]
+    let addTeam = app.buttons[OakUITest.Teams.addTeam]
+    let newTeam = app.buttons[OakUITest.Teams.newTeam]
+    XCTAssertTrue(
+      guest.waitForExistence(timeout: 8)
+        || addTeam.waitForExistence(timeout: 1)
+        || newTeam.waitForExistence(timeout: 1),
+      "Expected the Teams guest gate or a visible create control."
+    )
+  }
 }
