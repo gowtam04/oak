@@ -198,4 +198,51 @@ describe("RosterStrip", () => {
     fireEvent.click(screen.getByTestId("team-add-member"));
     expect(onAdd).toHaveBeenCalledOnce();
   });
+
+  it("does not enable drag when onReorder is omitted", () => {
+    render(
+      <RosterStrip
+        members={[member("garchomp"), member("gyarados")]}
+        selectedSlot={0}
+        spriteBySpecies={{}}
+        onSelect={vi.fn()}
+        onAdd={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("roster-slot-0")).toHaveAttribute(
+      "draggable",
+      "false",
+    );
+  });
+
+  it("calls onReorder with from/to on drop", () => {
+    const onReorder = vi.fn();
+    const transfer = {
+      data: "",
+      effectAllowed: "",
+      dropEffect: "",
+      setData(_type: string, value: string) {
+        this.data = value;
+      },
+      getData() {
+        return this.data;
+      },
+    };
+    render(
+      <RosterStrip
+        members={[member("garchomp"), member("gyarados"), member("absol")]}
+        selectedSlot={0}
+        spriteBySpecies={{}}
+        onSelect={vi.fn()}
+        onReorder={onReorder}
+      />,
+    );
+    const from = screen.getByTestId("roster-slot-0");
+    const to = screen.getByTestId("roster-slot-2");
+    expect(from).toHaveAttribute("draggable", "true");
+    fireEvent.dragStart(from, { dataTransfer: transfer });
+    fireEvent.dragOver(to, { dataTransfer: transfer });
+    fireEvent.drop(to, { dataTransfer: transfer });
+    expect(onReorder).toHaveBeenCalledWith(0, 2);
+  });
 });

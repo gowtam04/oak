@@ -9,13 +9,14 @@
  * (soul.md Phase 2). Selection is a red record-light ring — not a left list rail.
  * Sprites/types come from the page's batch
  * `resolveSprites` lookup; an unknown species falls back to a Showdown sprite by
- * slug, then to a pokéball glyph. Pure presentational — selection, add, and the
- * member array all live in {@link TeamEditor}.
+ * slug, then to a pokéball glyph. Dragging a slot onto another (when `onReorder`
+ * is passed) inserts that member at the drop index. Pure presentational —
+ * selection, add, reorder, and the member array all live in {@link TeamEditor}.
  */
 
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
 
 import type { TeamMember } from "@/data/teams/team-schema";
 import type { SpriteRef } from "@/lib/api/sprites-client";
@@ -71,6 +72,8 @@ export interface RosterStripProps {
   onSelect: (index: number) => void;
   /** Omit to hide the trailing add tile (archived view-only). */
   onAdd?: () => void;
+  /** Omit to disable drag-to-reorder (archived / single-slot). */
+  onReorder?: (from: number, to: number) => void;
 }
 
 export default function RosterStrip({
@@ -79,7 +82,42 @@ export default function RosterStrip({
   spriteBySpecies,
   onSelect,
   onAdd,
+  onReorder,
 }: RosterStripProps) {
+  const canReorder = Boolean(onReorder) && members.length > 1;
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<number | null>(null);
+  const didDragRef = useRef(false);
+
+  const onSlotDragStart = (index: number, e: DragEvent<HTMLButtonElement>) => {
+    if (!canReorder) return;
+    setDragFrom(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(index));
+  };
+
+  const onSlotDragOver = (index: number, e: DragEvent<HTMLButtonElement>) => {
+    if (!canReorder) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dropTarget !== index) setDropTarget(index);
+  };
+
+  const onSlotDrop = (index: number, e: DragEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    didDragRef.current = true;
+    const raw = e.dataTransfer.getData("text/plain");
+    const from = dragFrom ?? (raw === "" ? Number.NaN : Number(raw));
+    if (onReorder && Number.isInteger(from)) onReorder(from, index);
+    setDragFrom(null);
+    setDropTarget(null);
+  };
+
+  const onSlotDragEnd = () => {
+    setDragFrom(null);
+    setDropTarget(null);
+  };
+
   return (
     <div className="roster-strip" data-testid="roster-strip" role="tablist" aria-label="Team roster">
       {members.map((member, i) => {
@@ -96,13 +134,26 @@ export default function RosterStrip({
             key={i}
             role="tab"
             aria-selected={selected}
+            draggable={canReorder}
             data-testid={`roster-slot-${i}`}
             data-selected={selected ? "true" : "false"}
             data-empty={species ? "false" : "true"}
             data-plate={plate?.kind}
+            data-dragging={dragFrom === i ? "true" : "false"}
+            data-drop-target={dropTarget === i && dragFrom !== i ? "true" : "false"}
             className="roster-slot"
             style={slotStyle}
-            onClick={() => onSelect(i)}
+            onClick={() => {
+              if (didDragRef.current) {
+                didDragRef.current = false;
+                return;
+              }
+              onSelect(i);
+            }}
+            onDragStart={(e) => onSlotDragStart(i, e)}
+            onDragOver={(e) => onSlotDragOver(i, e)}
+            onDrop={(e) => onSlotDrop(i, e)}
+            onDragEnd={onSlotDragEnd}
           >
             <span className="roster-slot__index mono-num">{i + 1}</span>
             <span className="roster-slot__sprite">

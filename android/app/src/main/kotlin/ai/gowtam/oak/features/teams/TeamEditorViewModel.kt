@@ -366,6 +366,21 @@ class TeamEditorViewModel private constructor(
         scheduleAnalysis()
     }
 
+    /** Moves the member at [from] to [to] (insert, not swap). A no-op when
+     * read-only, the indices match, or either index is out of bounds. Row
+     * identity is preserved so cached movepools stay attached. */
+    fun moveMember(from: Int, to: Int) {
+        if (isReadOnly) return
+        if (from == to) return
+        val members = uiState.value.members
+        if (from !in members.indices || to !in members.indices) return
+        val next = members.toMutableList()
+        val item = next.removeAt(from)
+        next.add(to, item)
+        _uiState.update { it.copy(members = next) }
+        scheduleAnalysis()
+    }
+
     val canAddMember: Boolean get() = !isReadOnly && uiState.value.members.size < 6
 
     /** Applies [transform] to the member at [index] and, when the species changed,

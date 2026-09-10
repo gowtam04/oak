@@ -111,6 +111,58 @@ class TeamEditorViewModelTest {
         assertEquals("keep-me", model.uiState.value.members[0].species)
     }
 
+    @Test
+    fun moveMemberInsertsAtDestinationAndPreservesIdentity() = runTest(mainDispatcherRule.dispatcher) {
+        val model = TeamEditorViewModel(FakeTeamService(), format = Format.Champions)
+        repeat(3) { model.addMember() }
+        model.updateMember(0) { it.copy(species = "a") }
+        model.updateMember(1) { it.copy(species = "b") }
+        model.updateMember(2) { it.copy(species = "c") }
+        model.updateMember(3) { it.copy(species = "d") }
+        val idA = model.uiState.value.members[0].id
+
+        model.moveMember(0, 3)
+
+        assertEquals(listOf("b", "c", "d", "a"), model.uiState.value.members.map { it.species })
+        assertEquals(idA, model.uiState.value.members[3].id)
+    }
+
+    @Test
+    fun moveMemberShiftsForwardTowardTheFront() = runTest(mainDispatcherRule.dispatcher) {
+        val model = TeamEditorViewModel(FakeTeamService(), format = Format.Champions)
+        repeat(3) { model.addMember() }
+        model.updateMember(0) { it.copy(species = "a") }
+        model.updateMember(1) { it.copy(species = "b") }
+        model.updateMember(2) { it.copy(species = "c") }
+        model.updateMember(3) { it.copy(species = "d") }
+        val idD = model.uiState.value.members[3].id
+
+        model.moveMember(3, 0)
+
+        assertEquals(listOf("d", "a", "b", "c"), model.uiState.value.members.map { it.species })
+        assertEquals(idD, model.uiState.value.members[0].id)
+    }
+
+    @Test
+    fun moveMemberNoopsWhenReadOnlyOrOutOfBounds() = runTest(mainDispatcherRule.dispatcher) {
+        val archived = TeamEditorViewModel(
+            FakeTeamService(),
+            team = fakeTeam(id = "t1").copy(
+                format = Format.ScarletViolet,
+                members = listOf(member("a"), member("b")),
+            ),
+        )
+        assertTrue(archived.isReadOnly)
+        archived.moveMember(0, 1)
+        assertEquals(listOf("a", "b"), archived.uiState.value.members.map { it.species })
+
+        val living = TeamEditorViewModel(FakeTeamService(), format = Format.Champions)
+        living.updateMember(0) { it.copy(species = "only") }
+        living.moveMember(0, 5)
+        living.moveMember(0, 0)
+        assertEquals(listOf("only"), living.uiState.value.members.map { it.species })
+    }
+
     // -------------------------------------------------------------------
     // Dex lookups: search / ability options / learnset-scoped moves
     // -------------------------------------------------------------------

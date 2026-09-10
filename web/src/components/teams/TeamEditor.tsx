@@ -242,16 +242,23 @@ export default function TeamEditor({
       return next;
     });
 
-  const moveMember = (index: number, dir: -1 | 1) =>
+  const moveMember = (from: number, to: number) =>
     setMembers((prev) => {
-      const target = index + dir;
-      if (target < 0 || target >= prev.length) return prev;
+      if (
+        from === to ||
+        from < 0 ||
+        to < 0 ||
+        from >= prev.length ||
+        to >= prev.length
+      ) {
+        return prev;
+      }
       const next = [...prev];
-      [next[index], next[target]] = [next[target]!, next[index]!];
+      const [item] = next.splice(from, 1);
+      if (item === undefined) return prev;
+      next.splice(to, 0, item);
       // Keep the focus on the member that moved.
-      setSelectedSlot((s) =>
-        s === index ? target : s === target ? index : s,
-      );
+      setSelectedSlot(to);
       return next;
     });
 
@@ -334,6 +341,7 @@ export default function TeamEditor({
         spriteBySpecies={sprites}
         onSelect={(i) => setSelectedSlot(i)}
         onAdd={archived ? undefined : addMember}
+        onReorder={archived ? undefined : moveMember}
       />
 
       {focused ? (
@@ -350,8 +358,8 @@ export default function TeamEditor({
           spriteRef={focused.species ? sprites[focused.species] : undefined}
           onChange={(next) => updateMember(slot, next)}
           onRemove={() => removeMember(slot)}
-          onMoveUp={() => moveMember(slot, -1)}
-          onMoveDown={() => moveMember(slot, 1)}
+          onMoveUp={() => moveMember(slot, slot - 1)}
+          onMoveDown={() => moveMember(slot, slot + 1)}
           canMoveUp={slot > 0}
           canMoveDown={slot < members.length - 1}
         />

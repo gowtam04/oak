@@ -189,6 +189,61 @@ struct TeamEditorViewModelTests {
     #expect(vm.members[0].species == "second")
   }
 
+  @Test
+  func moveMemberInsertsAtDestinationAndPreservesIdentity() {
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), format: .champions)
+    vm.addMember()
+    vm.addMember()
+    vm.addMember()
+    vm.members[0].species = "a"
+    vm.members[1].species = "b"
+    vm.members[2].species = "c"
+    vm.members[3].species = "d"
+    let idA = vm.members[0].id
+
+    vm.moveMember(from: 0, to: 3)
+
+    #expect(vm.members.map(\.species) == ["b", "c", "d", "a"])
+    #expect(vm.members[3].id == idA)
+  }
+
+  @Test
+  func moveMemberShiftsForwardTowardTheFront() {
+    let vm = TeamEditorViewModel(teamService: FakeTeamService(), format: .champions)
+    vm.addMember()
+    vm.addMember()
+    vm.addMember()
+    vm.members[0].species = "a"
+    vm.members[1].species = "b"
+    vm.members[2].species = "c"
+    vm.members[3].species = "d"
+    let idD = vm.members[3].id
+
+    vm.moveMember(from: 3, to: 0)
+
+    #expect(vm.members.map(\.species) == ["d", "a", "b", "c"])
+    #expect(vm.members[0].id == idD)
+  }
+
+  @Test
+  func moveMemberNoopsWhenReadOnlyOrOutOfBounds() {
+    let existing = team(
+      id: "t1",
+      format: .scarletViolet,
+      members: [member(species: "a"), member(species: "b")]
+    )
+    let archived = TeamEditorViewModel(teamService: FakeTeamService(), team: existing)
+    #expect(archived.isReadOnly)
+    archived.moveMember(from: 0, to: 1)
+    #expect(archived.members.map(\.species) == ["a", "b"])
+
+    let living = TeamEditorViewModel(teamService: FakeTeamService(), format: .champions)
+    living.members[0].species = "only"
+    living.moveMember(from: 0, to: 5)
+    living.moveMember(from: 0, to: 0)
+    #expect(living.members.map(\.species) == ["only"])
+  }
+
   // MARK: Editable ↔ wire conversion
 
   @Test

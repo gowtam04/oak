@@ -11,7 +11,8 @@ import UIKit
 /// `/api/search` live; ability offers only the resolved species' legal abilities; moves
 /// offer only the species' fetched learnset (`/api/learnset`) — exactly mirroring
 /// `TeamMemberPanel.tsx`'s two suggestion sources. A ``RosterStripView`` up top shows
-/// batch-resolved sprites (`/api/sprites`) and scrolls to a tapped slot; a Mega's stone is
+/// batch-resolved sprites (`/api/sprites`) and scrolls to a tapped slot; long-press then
+/// drag reorders the draft (the member list below follows on drop). A Mega's stone is
 /// auto-forced onto its held item once resolved (mirrors `TeamEditor.tsx`).
 ///
 /// **Warn-but-allow** (M-AC-T3.1 / M-BR-T3): the server's legality/validity warnings are
@@ -44,6 +45,10 @@ struct TeamEditorView: View {
   /// Roster strip selection — 2px poke-red ring on the focused party slot.
   @State private var selectedRosterIndex = 0
 
+  /// `true` while a roster-strip reorder drag is in flight — disables Form
+  /// scrolling so the nested horizontal strip can own the gesture.
+  @State private var isReorderingRoster = false
+
   /// When `true`, the editor fetches the full team on appear (existing-team path).
   private let loadsOnAppear: Bool
 
@@ -72,10 +77,25 @@ struct TeamEditorView: View {
                 members: model.members,
                 spriteRefs: model.spriteRefsBySpecies,
                 selectedIndex: selectedRosterIndex,
+                canReorder: !model.isReadOnly && model.members.count > 1,
+                isReordering: $isReorderingRoster,
                 onSelect: { index in
                   selectedRosterIndex = index
                   withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
                     proxy.scrollTo(model.members[index].id, anchor: .top)
+                  }
+                },
+                onMove: { from, to in
+                  guard model.members.indices.contains(from) else { return }
+                  let movedId = model.members[from].id
+                  withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
+                    model.moveMember(from: from, to: to)
+                    if let newIndex = model.members.firstIndex(where: { $0.id == movedId }) {
+                      selectedRosterIndex = newIndex
+                    }
+                  }
+                  withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
+                    proxy.scrollTo(movedId, anchor: .top)
                   }
                 }
               )
@@ -156,6 +176,7 @@ struct TeamEditorView: View {
           selectedRosterIndex = max(0, members.count - 1)
         }
       }
+      .scrollDisabled(isReorderingRoster)
       .scrollContentBackground(.hidden)
       .background(Theme.canvas)
       .listRowBackground(Theme.surface)
@@ -700,7 +721,7 @@ private struct MoveFieldRow: View {
   }
 }
 
-// MARK: - Roster strip (sprite overview + tap-to-scroll)
+// MARK: - Roster strip (sprite overview + tap-to-scroll / long-press reorder)
 
 /// A horizontal overview of the (up to six) member slots — sprite + name — sitting above
 /// the per-member sections. Tapping a slot scrolls the focused
@@ -708,28 +729,83 @@ private struct MoveFieldRow: View {
 /// `RosterStrip.tsx` (which additionally *selects* a single focused panel — this editor
 /// keeps every member's section expanded inline, better suited to a native `Form`, so
 /// "select" here means "scroll to" rather than "show only this one").
+///
+/// Long-press then drag reorders the draft (insert, not swap). The member list
+/// below is the same `members` array, so it refreshes on drop.
 private struct RosterStripView: View {
   let members: [EditableMember]
   let spriteRefs: [String: DexSpriteRef]
   let selectedIndex: Int
+  let canReorder: Bool
+  @Binding var isReordering: Bool
   let onSelect: (Int) -> Void
+  let onMove: (Int, Int) -> Void
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var draggingIndex: Int?
+  @State private var hoverIndex: Int?
+  @State private var dragTranslation: CGSize = .zero
+  @State private var slotFrames: [Int: CGRect] = [:]
+
+  private let rosterSpace = "roster-strip"
 
   var body: some View {
     ScrollView(.horizontal, showsIndicators: false) {
       HStack(spacing: 10) {
         ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
-          Button {
-            onSelect(index)
-          } label: {
-            rosterSlot(member: member, index: index)
-          }
-          .buttonStyle(.plain)
+          slotCell(member: member, index: index)
         }
       }
       .padding(.horizontal, 4)
       .padding(.vertical, 2)
+      .coordinateSpace(.named(rosterSpace))
+      .onPreferenceChange(RosterSlotFrameKey.self) { newFrames in
+        // Freeze frames while dragging so offset-driven layout does not cycle.
+        if draggingIndex == nil { slotFrames = newFrames }
+      }
     }
+    .scrollDisabled(draggingIndex != nil)
     .accessibilityLabel("Team roster")
+    .onChange(of: draggingIndex) { _, value in
+      isReordering = value != nil
+    }
+  }
+
+  @ViewBuilder
+  private func slotCell(member: EditableMember, index: Int) -> some View {
+    let slot = rosterSlot(member: member, index: index)
+      .offset(x: xOffset(for: index), y: index == draggingIndex ? dragTranslation.height : 0)
+      .zIndex(index == draggingIndex ? 1 : 0)
+      .scaleEffect(liftScale(for: index))
+      .modifier(RosterDragLift(enabled: index == draggingIndex && !reduceMotion))
+      .background {
+        GeometryReader { geo in
+          Color.clear.preference(
+            key: RosterSlotFrameKey.self,
+            value: [index: geo.frame(in: .named(rosterSpace))]
+          )
+        }
+      }
+      .contentShape(Rectangle())
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(slotLabel(member, index))
+      .accessibilityAddTraits(.isButton)
+      .accessibilityHint(canReorder ? "Hold, then drag to reorder." : "")
+      .accessibilityActions {
+        if canReorder, index > 0 {
+          Button("Move left") { onMove(index, index - 1) }
+        }
+        if canReorder, index < members.count - 1 {
+          Button("Move right") { onMove(index, index + 1) }
+        }
+      }
+
+    let tap = TapGesture().onEnded { onSelect(index) }
+    if canReorder {
+      slot.gesture(reorderGesture(for: index).exclusively(before: tap))
+    } else {
+      slot.gesture(tap)
+    }
   }
 
   /// One party slot. Selected slot gets a 2px poke-red ring (Enamel & Paper
@@ -750,7 +826,12 @@ private struct RosterStripView: View {
       )
       .overlay {
         RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-          .strokeBorder(selected ? Theme.accent : Theme.border, lineWidth: selected ? 2 : 1)
+          .strokeBorder(
+            hoverIndex == index && draggingIndex != nil && draggingIndex != index
+              ? Theme.accent
+              : (selected ? Theme.accent : Theme.border),
+            lineWidth: selected || (hoverIndex == index && draggingIndex != nil) ? 2 : 1
+          )
       }
       Text(slotLabel(member, index))
         .font(Theme.body(.caption2))
@@ -764,6 +845,86 @@ private struct RosterStripView: View {
     member.species.isEmpty
       ? "Slot \(index + 1)"
       : (spriteRefs[member.species]?.displayName ?? TeamBlocksView.titleizeNonNil(member.species))
+  }
+
+  /// Long-press sequenced into a drag. Combined with a tap via `exclusively(before:)`
+  /// so a short press still fires on lift (no 350ms tap delay).
+  private func reorderGesture(for index: Int) -> some Gesture {
+    LongPressGesture(minimumDuration: 0.35)
+      .sequenced(
+        before: DragGesture(minimumDistance: 0, coordinateSpace: .named(rosterSpace))
+      )
+      .onChanged { value in
+        guard case .second(true, let drag) = value, let drag else { return }
+        if draggingIndex == nil {
+          draggingIndex = index
+          hoverIndex = index
+          Haptics.tap()
+        }
+        dragTranslation = drag.translation
+        let nextHover = indexAt(drag.location)
+        if nextHover != hoverIndex {
+          hoverIndex = nextHover
+          if nextHover != draggingIndex {
+            Haptics.tap()
+          }
+        }
+      }
+      .onEnded { _ in
+        if let from = draggingIndex, let to = hoverIndex, from != to {
+          onMove(from, to)
+        }
+        draggingIndex = nil
+        hoverIndex = nil
+        dragTranslation = .zero
+      }
+  }
+
+  private func indexAt(_ point: CGPoint) -> Int {
+    let sorted = slotFrames.sorted { $0.key < $1.key }
+    guard !sorted.isEmpty else { return 0 }
+    if let hit = sorted.first(where: { $0.value.minX <= point.x && point.x < $0.value.maxX }) {
+      return hit.key
+    }
+    if let first = sorted.first, point.x < first.value.minX { return first.key }
+    return sorted.last?.key ?? 0
+  }
+
+  private func xOffset(for index: Int) -> CGFloat {
+    if index == draggingIndex { return dragTranslation.width }
+    guard let from = draggingIndex, let hover = hoverIndex, from != hover else { return 0 }
+    let width = slotFrames[from]?.width ?? 60
+    let stride = width + 10
+    if from < hover, index > from, index <= hover { return -stride }
+    if hover < from, index >= hover, index < from { return stride }
+    return 0
+  }
+
+  private func liftScale(for index: Int) -> CGFloat {
+    guard index == draggingIndex, !reduceMotion else { return 1 }
+    return 1.08
+  }
+}
+
+/// Slot frames in the roster strip's named coordinate space, used to map a
+/// drag location onto a destination index.
+private struct RosterSlotFrameKey: PreferenceKey {
+  static var defaultValue: [Int: CGRect] { [:] }
+  static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+    value.merge(nextValue(), uniquingKeysWith: { $1 })
+  }
+}
+
+/// Raised umber shadow only while a roster slot is lifted for reorder.
+private struct RosterDragLift: ViewModifier {
+  let enabled: Bool
+
+  func body(content: Content) -> some View {
+    if enabled {
+      content.oakShadow(Theme.Shadow.raised)
+    } else {
+      content
+    }
   }
 }
 

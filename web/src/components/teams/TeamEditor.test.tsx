@@ -134,6 +134,39 @@ describe("TeamEditor", () => {
     expect(screen.getByTestId("member-1-species")).toHaveValue("Gyarados");
   });
 
+  it("reorders members from a roster-strip drop and keeps focus on the moved slot", () => {
+    setup({
+      team: detail({
+        members: [
+          fullMember("gyarados"),
+          fullMember("garchomp"),
+          fullMember("absol"),
+        ],
+      }),
+    });
+    const transfer = {
+      data: "",
+      effectAllowed: "",
+      dropEffect: "",
+      setData(_type: string, value: string) {
+        this.data = value;
+      },
+      getData() {
+        return this.data;
+      },
+    };
+    fireEvent.dragStart(screen.getByTestId("roster-slot-0"), {
+      dataTransfer: transfer,
+    });
+    fireEvent.drop(screen.getByTestId("roster-slot-2"), {
+      dataTransfer: transfer,
+    });
+    // Gyarados moved to slot 2; the focused panel follows it.
+    expect(screen.getByTestId("member-2-species")).toHaveValue("Gyarados");
+    expect(screen.getByTestId("roster-slot-0")).toHaveTextContent("Garchomp");
+    expect(screen.getByTestId("roster-slot-1")).toHaveTextContent("Absol");
+  });
+
   it("saves even a partial team (BR-T4)", () => {
     const { props } = setup({ team: detail({ members: [] }) });
     fireEvent.click(screen.getByTestId("team-add-member"));

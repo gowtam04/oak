@@ -303,6 +303,17 @@ final class TeamEditorViewModel {
     members.remove(at: index)
   }
 
+  /// Moves the member at `from` to `to` (insert, not swap). A no-op when
+  /// read-only, the indices match, or either index is out of bounds. Row
+  /// identity is preserved so cached movepools stay attached.
+  func moveMember(from: Int, to: Int) {
+    guard !isReadOnly else { return }
+    guard from != to else { return }
+    guard members.indices.contains(from), members.indices.contains(to) else { return }
+    let item = members.remove(at: from)
+    members.insert(item, at: to)
+  }
+
   /// `true` when another slot can be added (drives the "Add Pokémon" affordance).
   var canAddMember: Bool { members.count < 6 }
 

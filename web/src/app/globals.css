@@ -4842,6 +4842,16 @@ button.scope-chip:focus-visible {
   background: var(--surface);
   transform: translateY(-2px);
 }
+.roster-slot[draggable="true"] {
+  cursor: grab;
+}
+.roster-slot[data-dragging="true"] {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+.roster-slot[data-drop-target="true"] {
+  border: 2px dashed var(--poke-red);
+}
 .roster-slot[data-empty="true"] {
   border-style: solid;
   border-color: var(--border);
