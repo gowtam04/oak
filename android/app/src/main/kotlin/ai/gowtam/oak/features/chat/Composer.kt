@@ -118,9 +118,12 @@ fun Composer(
     slashNameRows: List<DexNameRow> = emptyList(),
     slashTeamRows: List<TeamSummary> = emptyList(),
     slashArgReady: Boolean = false,
+    slashCaption: String = PICKER_CAPTION,
+    slashShowSkipMove: Boolean = false,
     onInsertSlashCommand: (String) -> Unit = {},
     onInsertSlashName: (DexNameRow) -> Unit = {},
     onInsertSlashTeam: (TeamSummary) -> Unit = {},
+    onInsertSlashSkipMove: () -> Unit = {},
 ) {
     val oak = LocalOakColors.current
     val context = LocalContext.current
@@ -147,6 +150,9 @@ fun Composer(
         is SlashPickerPhase.Args -> when (phase.command) {
             "dex" -> if (slashArgReady && slashNameRows.isEmpty()) EMPTY_DEX else null
             "usage" -> if (slashArgReady && slashNameRows.isEmpty()) EMPTY_USAGE else null
+            "calc" -> if (slashArgReady && slashNameRows.isEmpty() && !slashShowSkipMove) {
+                if (slashCaption == CALC_CAPTION_MOVE) EMPTY_CALC_MOVE else EMPTY_CALC_SPECIES
+            } else null
             "team" -> when {
                 !signedIn -> EMPTY_TEAMS_GUEST
                 slashTeamRows.isEmpty() -> EMPTY_TEAMS
@@ -240,9 +246,12 @@ fun Composer(
                 },
                 empty = slashEmpty,
                 guest = !signedIn,
+                caption = slashCaption,
+                skipMove = slashShowSkipMove,
                 onPickCommand = onInsertSlashCommand,
                 onPickName = onInsertSlashName,
                 onPickTeam = onInsertSlashTeam,
+                onSkipMove = onInsertSlashSkipMove,
             )
         } else {
             MentionAutocomplete(

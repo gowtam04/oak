@@ -107,9 +107,12 @@ struct ComposerView: View {
           teams: model.slashTeamRows,
           empty: model.slashEmptyCopy,
           isGuest: !model.isSignedIn,
+          caption: model.slashCaption,
+          skipMove: model.slashShowSkipMove,
           onPickCommand: model.insertSlashCommand,
           onPickName: model.insertSlashName,
-          onPickTeam: model.insertSlashTeam
+          onPickTeam: model.insertSlashTeam,
+          onSkipMove: model.insertSlashSkipMove
         )
       }
 

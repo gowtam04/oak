@@ -47,6 +47,7 @@ import type {
   ChatRequestBody,
 } from "@/lib/sse/sse-types";
 import type { DexBind } from "@/lib/chat/slash-commands";
+import type { CalcBind } from "@/lib/chat/slash-calc";
 import type { DexNameRow } from "@/lib/chat/slash-picker";
 
 // Re-export the payload sub-types so leaf authors can import everything they
@@ -363,7 +364,7 @@ export interface ComposerProps {
   onSend: (
     message: string,
     images: PendingImage[],
-    slashMeta?: { dexBind?: DexBind; argRows?: DexNameRow[] },
+    slashMeta?: { dexBind?: DexBind; argRows?: DexNameRow[]; calcBind?: CalcBind },
   ) => void;
   /** Disabled while a turn is streaming (default: false). */
   disabled?: boolean;

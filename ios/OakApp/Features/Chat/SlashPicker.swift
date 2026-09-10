@@ -14,7 +14,7 @@ enum SlashPicker {
     ),
     SlashCommandRow(token: "/dex", hint: "Open Dex", trailingSpace: true, arg: .dex),
     SlashCommandRow(token: "/usage", hint: "Open live usage", trailingSpace: true, arg: .usage),
-    SlashCommandRow(token: "/calc", hint: "Open calculator", trailingSpace: true, arg: .none),
+    SlashCommandRow(token: "/calc", hint: "Open calculator", trailingSpace: true, arg: .calc),
     SlashCommandRow(token: "/help", hint: "Show these commands", trailingSpace: false, arg: .none),
   ]
 
@@ -53,9 +53,9 @@ enum SlashPicker {
     case .dex: return .args(command: .dex, query: SlashCommands.slashArg(text))
     case .team: return .args(command: .team, query: SlashCommands.slashArg(text))
     case .usage: return .args(command: .usage, query: SlashCommands.slashArg(text))
+    case .calc: return .args(command: .calc, query: SlashCommands.slashArg(text))
     case .none:
       let rest = String(command.token.dropFirst())
-      if rest == "calc" { return .rest(command: .calc) }
       if rest == "new" { return .rest(command: .new) }
       if rest == "help" { return .rest(command: .help) }
       return .hidden
@@ -122,6 +122,7 @@ struct SlashCommandRow: Equatable, Sendable {
     case team
     case dex
     case usage
+    case calc
   }
 }
 
@@ -136,10 +137,10 @@ enum SlashPickerPhase: Equatable, Sendable {
     case dex
     case team
     case usage
+    case calc
   }
 
   enum RestCommand: String, Equatable, Sendable {
-    case calc
     case new
     case help
   }

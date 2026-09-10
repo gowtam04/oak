@@ -19,11 +19,14 @@
  *   onPick: (
  *     pick:
  *       | { type: "command"; token: string }
- *       | { type: "name"; row: DexNameRow },
+ *       | { type: "name"; row: DexNameRow }
+ *       | { type: "calc-skip-move" },
  *   ) => void
+ *   caption?: string — defaults to PICKER_CAPTION
+ *   skipMove?: boolean — pinned vs … row
  *
  * Container: data-testid="slash-autocomplete", role="listbox",
- * accessible name "Slash commands". Caption is always PICKER_CAPTION.
+ * accessible name "Slash commands". Caption defaults to PICKER_CAPTION.
  * Rows are role="option". Do not add extra chrome.
  *
  * Refs: SD-AC-1.1, SD-AC-1.5, SD-AC-3.5, SD-AC-3.7, SD-BR-9, SD-BR-13.
@@ -44,6 +47,11 @@ import {
   SLASH_COMMANDS,
   type DexNameRow,
 } from "@/lib/chat/slash-picker";
+import {
+  CALC_CAPTION_MOVE,
+  CALC_SKIP_MOVE,
+  CALC_SKIP_MOVE_HINT,
+} from "@/lib/chat/slash-calc";
 
 const NAMES: DexNameRow[] = [
   { slug: "garchomp", displayName: "Garchomp", kind: "pokemon" },
@@ -150,6 +158,36 @@ describe("SlashAutocomplete", () => {
     render(<SlashAutocomplete names={NAMES} onPick={onPick} />);
     fireEvent.click(screen.getByRole("option", { name: /garchomp/i }));
     expect(onPick).toHaveBeenCalledWith({ type: "name", row: NAMES[0] });
+  });
+
+  it("overrides the caption when caption is passed (SD-US-10)", () => {
+    render(
+      <SlashAutocomplete
+        names={NAMES}
+        caption={CALC_CAPTION_MOVE}
+        onPick={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(CALC_CAPTION_MOVE)).toBeInTheDocument();
+    expect(screen.queryByText(PICKER_CAPTION)).toBeNull();
+  });
+
+  it("renders a skip-move row that picks calc-skip-move (SD-US-10)", () => {
+    const onPick = vi.fn();
+    render(
+      <SlashAutocomplete
+        names={NAMES}
+        skipMove
+        highlightedIndex={0}
+        onPick={onPick}
+      />,
+    );
+    const skip = screen.getByTestId("slash-ac-skip-move");
+    expect(skip).toHaveTextContent(CALC_SKIP_MOVE);
+    expect(skip).toHaveTextContent(CALC_SKIP_MOVE_HINT);
+    expect(skip).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(skip);
+    expect(onPick).toHaveBeenCalledWith({ type: "calc-skip-move" });
   });
 
   it("marks the highlighted row aria-selected=true", () => {

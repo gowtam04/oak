@@ -8,13 +8,16 @@ struct SlashAutocomplete: View {
   var teams: [TeamSummary] = []
   var empty: String? = nil
   var isGuest: Bool = false
+  var caption: String = SlashPicker.pickerCaption
+  var skipMove: Bool = false
   var onPickCommand: (String) -> Void = { _ in }
   var onPickName: (DexNameRow) -> Void = { _ in }
   var onPickTeam: (TeamSummary) -> Void = { _ in }
+  var onSkipMove: () -> Void = {}
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      Text(SlashPicker.pickerCaption)
+      Text(caption)
         .font(Theme.body(.caption))
         .foregroundStyle(Theme.textMuted)
         .padding(.horizontal, Theme.Spacing.md)
@@ -27,7 +30,10 @@ struct SlashAutocomplete: View {
             ForEach(commands, id: \.token) { row in
               commandRow(row)
             }
-          } else if !names.isEmpty {
+          } else if skipMove || !names.isEmpty {
+            if skipMove {
+              skipMoveRow
+            }
             ForEach(names) { row in
               nameRow(row)
             }
@@ -79,6 +85,27 @@ struct SlashAutocomplete: View {
     }
     .buttonStyle(.plain)
     .accessibilityLabel("\(row.token), \(hint)")
+  }
+
+  private var skipMoveRow: some View {
+    Button {
+      onSkipMove()
+    } label: {
+      HStack {
+        Text(SlashCalc.skipMove)
+          .font(Theme.body(.subheadline))
+          .foregroundStyle(Theme.textStrong)
+        Spacer()
+        Text(SlashCalc.skipMoveHint)
+          .font(Theme.body(.caption))
+          .foregroundStyle(Theme.textMuted)
+      }
+      .padding(.horizontal, Theme.Spacing.md)
+      .padding(.vertical, Theme.Spacing.sm)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("\(SlashCalc.skipMove), \(SlashCalc.skipMoveHint)")
   }
 
   @ViewBuilder

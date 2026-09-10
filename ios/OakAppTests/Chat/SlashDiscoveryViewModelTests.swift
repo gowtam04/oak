@@ -300,6 +300,56 @@ struct SlashDiscoveryViewModelTests {
     #expect(vm.pendingImages.count == 1)
   }
 
+  // MARK: SD-US-10 — /calc sequential slots
+
+  @Test
+  func calcNamePicksInsertSlotsAndSendPrefillsScenario() async {
+    let fake = FakeChatService()
+    let dex = FakeDexLookupService()
+    dex.searchResults["pokemon:"] = [
+      SearchMatch(slug: "garchomp", displayName: "Garchomp", kind: .pokemon),
+      SearchMatch(slug: "gholdengo", displayName: "Gholdengo", kind: .pokemon),
+    ]
+    dex.searchResults["pokemon:garchomp"] = [
+      SearchMatch(slug: "garchomp", displayName: "Garchomp", kind: .pokemon),
+    ]
+    dex.searchResults["move:"] = [
+      SearchMatch(slug: "earthquake", displayName: "Earthquake", kind: .move),
+    ]
+    dex.searchResults["move:earthquake"] = [
+      SearchMatch(slug: "earthquake", displayName: "Earthquake", kind: .move),
+    ]
+    dex.searchResults["pokemon:gholdengo"] = [
+      SearchMatch(slug: "gholdengo", displayName: "Gholdengo", kind: .pokemon),
+    ]
+    let vm = makeViewModel(fake: fake, dexLookup: dex)
+    vm.composerText = "/calc "
+    vm.updateSlashPicker()
+    vm.insertSlashName(DexNameRow(kind: .pokemon, slug: "garchomp", displayName: "Garchomp"))
+    #expect(vm.composerText == "/calc Garchomp ")
+    vm.insertSlashName(DexNameRow(kind: .move, slug: "earthquake", displayName: "Earthquake"))
+    #expect(vm.composerText == "/calc Garchomp Earthquake vs ")
+    vm.insertSlashName(DexNameRow(kind: .pokemon, slug: "gholdengo", displayName: "Gholdengo"))
+    #expect(vm.composerText == "/calc Garchomp Earthquake vs Gholdengo")
+
+    vm.send()
+    await waitUntil { vm.calculatorHop?.scenario?.attacker.species == "garchomp" }
+
+    #expect(fake.sendCount == 0)
+    #expect(vm.calculatorHop?.scenario?.move.slug == "earthquake")
+    #expect(vm.calculatorHop?.scenario?.defender.species == "gholdengo")
+  }
+
+  @Test
+  func calcSkipMoveInsertsVsWithoutAMove() {
+    let fake = FakeChatService()
+    let vm = makeViewModel(fake: fake)
+    vm.composerText = "/calc "
+    vm.insertSlashName(DexNameRow(kind: .pokemon, slug: "garchomp", displayName: "Garchomp"))
+    vm.insertSlashSkipMove()
+    #expect(vm.composerText == "/calc Garchomp vs ")
+  }
+
   // MARK: SD-AC-2.5 / SD-BR-8 — edit last is not intercepted
 
   @Test

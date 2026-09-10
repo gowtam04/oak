@@ -44,7 +44,7 @@ val SLASH_COMMANDS: List<SlashCommandRow> = listOf(
         token = "/calc",
         hint = "Open calculator",
         trailingSpace = true,
-        arg = "none",
+        arg = "calc",
     ),
     SlashCommandRow(
         token = "/help",
@@ -102,12 +102,12 @@ fun slashPickerPhase(text: String): SlashPickerPhase {
     val command = SLASH_COMMANDS.find { it.token == token.lowercase() }
         ?: return SlashPickerPhase.Hidden
 
-    if (command.arg == "dex" || command.arg == "team" || command.arg == "usage") {
+    if (command.arg == "dex" || command.arg == "team" || command.arg == "usage" || command.arg == "calc") {
         return SlashPickerPhase.Args(command = command.arg, query = slashArgs(text))
     }
 
     val rest = command.token.removePrefix("/")
-    if (rest == "calc" || rest == "new" || rest == "help") {
+    if (rest == "new" || rest == "help") {
         return SlashPickerPhase.Rest(command = rest)
     }
     return SlashPickerPhase.Hidden

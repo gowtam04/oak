@@ -21,7 +21,7 @@ export const SLASH_COMMANDS = [
   },
   { token: "/dex", hint: "Open Dex", trailingSpace: true, arg: "dex" },
   { token: "/usage", hint: "Open live usage", trailingSpace: true, arg: "usage" },
-  { token: "/calc", hint: "Open calculator", trailingSpace: true, arg: "none" },
+  { token: "/calc", hint: "Open calculator", trailingSpace: true, arg: "calc" },
   { token: "/help", hint: "Show these commands", trailingSpace: false, arg: "none" },
 ] as const;
 
@@ -30,8 +30,8 @@ export type CommandRow = (typeof SLASH_COMMANDS)[number];
 export type SlashPickerPhase =
   | { phase: "hidden" }
   | { phase: "commands"; prefix: string; rows: CommandRow[] }
-  | { phase: "args"; command: "dex" | "team" | "usage"; query: string }
-  | { phase: "rest"; command: "calc" | "new" | "help" };
+  | { phase: "args"; command: "dex" | "team" | "usage" | "calc"; query: string }
+  | { phase: "rest"; command: "new" | "help" };
 
 export type DexNameRow = {
   kind: "pokemon" | "move" | "ability" | "item";
@@ -67,12 +67,17 @@ export function slashPickerPhase(text: string): SlashPickerPhase {
   );
   if (!command) return { phase: "hidden" };
 
-  if (command.arg === "dex" || command.arg === "team" || command.arg === "usage") {
+  if (
+    command.arg === "dex"
+    || command.arg === "team"
+    || command.arg === "usage"
+    || command.arg === "calc"
+  ) {
     return { phase: "args", command: command.arg, query: slashArg(text) };
   }
 
   const rest = command.token.slice(1);
-  if (rest === "calc" || rest === "new" || rest === "help") {
+  if (rest === "new" || rest === "help") {
     return { phase: "rest", command: rest };
   }
   return { phase: "hidden" };

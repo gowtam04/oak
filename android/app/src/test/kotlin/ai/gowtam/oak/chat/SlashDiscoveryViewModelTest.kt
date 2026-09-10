@@ -408,6 +408,51 @@ class SlashDiscoveryViewModelTest {
     }
 
     // -------------------------------------------------------------------
+    // SD-US-10 — /calc sequential slots
+    // -------------------------------------------------------------------
+
+    @Test
+    fun slashCalcNamePicksInsertSlotsAndSendPrefillsScenario() = runTest(mainDispatcherRule.dispatcher) {
+        val chat = FakeChatService()
+        val vm = newModel(chat)
+        vm.setComposerText("/calc ")
+        vm.insertSlashName(
+            DexNameRow(kind = DexNameKind.Pokemon, slug = "garchomp", displayName = "Garchomp"),
+        )
+        assertEquals("/calc Garchomp ", vm.uiState.value.composerText)
+        vm.insertSlashName(
+            DexNameRow(kind = DexNameKind.Move, slug = "earthquake", displayName = "Earthquake"),
+        )
+        assertEquals("/calc Garchomp Earthquake vs ", vm.uiState.value.composerText)
+        vm.insertSlashName(
+            DexNameRow(kind = DexNameKind.Pokemon, slug = "gholdengo", displayName = "Gholdengo"),
+        )
+        assertEquals("/calc Garchomp Earthquake vs Gholdengo", vm.uiState.value.composerText)
+
+        vm.send()
+        advanceUntilIdle()
+
+        assertTrue(chat.sendWithImagesCalls.isEmpty())
+        val overlay = requireNotNull(vm.uiState.value.calcOverlay)
+        assertEquals("garchomp", overlay.scenario.attacker.species)
+        assertEquals("earthquake", overlay.scenario.move.slug)
+        assertEquals("gholdengo", overlay.scenario.defender.species)
+    }
+
+    @Test
+    fun slashCalcSkipMoveInsertsVsWithoutAMove() = runTest(mainDispatcherRule.dispatcher) {
+        val chat = FakeChatService()
+        val vm = newModel(chat)
+        vm.setComposerText("/calc ")
+        vm.insertSlashName(
+            DexNameRow(kind = DexNameKind.Pokemon, slug = "garchomp", displayName = "Garchomp"),
+        )
+        vm.insertSlashSkipMove()
+        assertEquals("/calc Garchomp vs ", vm.uiState.value.composerText)
+        assertTrue(chat.sendWithImagesCalls.isEmpty())
+    }
+
+    // -------------------------------------------------------------------
     // SD-AC-7.2 / SD-BR-3 — unknown slash still POSTs
     // -------------------------------------------------------------------
 

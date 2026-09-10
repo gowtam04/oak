@@ -53,7 +53,16 @@ import {
   type DexBind,
 } from "@/lib/chat/slash-commands";
 import { bindStillValid, type DexNameRow } from "@/lib/chat/slash-picker";
-import { searchSlashDex, searchSlashUsage } from "@/lib/chat/slash-search";
+import {
+  emptyCalcScenario,
+  resolveCalcScenario,
+  type CalcBind,
+} from "@/lib/chat/slash-calc";
+import {
+  searchSlashDex,
+  searchSlashMove,
+  searchSlashUsage,
+} from "@/lib/chat/slash-search";
 import type { FollowUpChip } from "@/lib/chat/follow-up-chips";
 import { parseMentions } from "@/lib/chat/mentions";
 import { isFormat, regulationChipLabel, type Format } from "@/data/formats";
@@ -777,7 +786,7 @@ export default function Home() {
     (
       message: string,
       images: PendingImage[] = [],
-      slashMeta?: { dexBind?: DexBind; argRows?: DexNameRow[] },
+      slashMeta?: { dexBind?: DexBind; argRows?: DexNameRow[]; calcBind?: CalcBind },
     ) => {
       const slash = parseSlashCommand(message, { hasUsagePage: true });
       if (recoveryRef.current !== "edit") {
@@ -791,11 +800,29 @@ export default function Home() {
           return;
         }
         if (slash.type === "calc") {
-          slashHopGen.current += 1;
-          setCalcRest(slash.rest);
-          setCalcScenario(undefined);
-          setCalcOpen(true);
+          const gen = ++slashHopGen.current;
           setPrefill({ text: "", images });
+          if (!slash.rest) {
+            setCalcRest("");
+            setCalcScenario(emptyCalcScenario());
+            setCalcOpen(true);
+            return;
+          }
+          void resolveCalcScenario({
+            rest: slash.rest,
+            bind: slashMeta?.calcBind ?? null,
+            search: (kind, query) =>
+              boundedSlashSearch((signal) =>
+                kind === "move"
+                  ? searchSlashMove(query, signal)
+                  : searchSlashUsage(query, signal),
+              ),
+          }).then((scenario) => {
+            if (gen !== slashHopGen.current) return;
+            setCalcRest("");
+            setCalcScenario(scenario);
+            setCalcOpen(true);
+          });
           return;
         }
       }

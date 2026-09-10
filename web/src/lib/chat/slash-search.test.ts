@@ -27,7 +27,7 @@ import { mergeDexNameRows, type DexNameRow } from "./slash-picker";
 const search = vi.hoisted(() => ({ searchEntities: vi.fn() }));
 vi.mock("@/lib/api/search-client", () => search);
 
-import { searchSlashDex, searchSlashUsage } from "./slash-search";
+import { searchSlashDex, searchSlashMove, searchSlashUsage } from "./slash-search";
 
 const DEX_KINDS = ["pokemon", "move", "ability", "item"] as const;
 
@@ -247,5 +247,37 @@ describe("searchSlashUsage", () => {
   it("returns [] and never throws when pokemon search rejects", async () => {
     search.searchEntities.mockRejectedValue(new Error("usage down"));
     await expect(searchSlashUsage("gar")).resolves.toEqual([]);
+  });
+});
+
+describe("searchSlashMove", () => {
+  it("calls searchEntities only for move", async () => {
+    search.searchEntities.mockResolvedValue([
+      match("move", "earthquake", "Earthquake"),
+    ]);
+    const rows = await searchSlashMove("earth");
+    expect(search.searchEntities).toHaveBeenCalledTimes(1);
+    expect(search.searchEntities).toHaveBeenCalledWith(
+      "move",
+      "earth",
+      CHAMPIONS_FORMAT,
+    );
+    expect(rows).toEqual([
+      { slug: "earthquake", displayName: "Earthquake", kind: "move" },
+    ]);
+  });
+
+  it("caps move rows at 8 (SD-BR-10)", async () => {
+    search.searchEntities.mockResolvedValue(nMatches("move", 10));
+    const rows = await searchSlashMove("a");
+    expect(rows).toHaveLength(8);
+    expect(rows.map((row) => row.slug)).toEqual(
+      nMatches("move", 8).map((m) => m.slug),
+    );
+  });
+
+  it("returns [] and never throws when move search rejects", async () => {
+    search.searchEntities.mockRejectedValue(new Error("move down"));
+    await expect(searchSlashMove("earth")).resolves.toEqual([]);
   });
 });

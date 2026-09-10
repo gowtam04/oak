@@ -141,6 +141,7 @@ class ChatViewModel(
     private var hydrateAssistantId: String? = null
     private var pinnedArtifacts: List<PinnedArtifactSummary> = emptyList()
     private var dexBind: DexBind? = null
+    private var calcBind: CalcBind? = null
     private var slashNameRows: List<DexNameRow> = emptyList()
     private var slashTeamRows: List<TeamSummary> = emptyList()
     private var lastSlashNameRows: List<DexNameRow> = emptyList()
@@ -271,7 +272,22 @@ class ChatViewModel(
             slashNameRows = slashNameRows,
             slashTeamRows = slashTeamRows,
             slashArgReady = slashArgReady,
+            slashCaption = slashCaption(),
+            slashShowSkipMove = slashShowSkipMove(),
         )
+    }
+
+    private fun slashCaption(): String {
+        val phase = slashPickerPhase(composerText) as? SlashPickerPhase.Args ?: return PICKER_CAPTION
+        if (phase.command != "calc") return PICKER_CAPTION
+        return calcPickerCaption(calcPickerState(phase.query, calcBind).slot)
+    }
+
+    private fun slashShowSkipMove(): Boolean {
+        val phase = slashPickerPhase(composerText) as? SlashPickerPhase.Args ?: return false
+        if (phase.command != "calc") return false
+        val state = calcPickerState(phase.query, calcBind)
+        return showCalcSkipMove(state.slot, state.query)
     }
 
     // ---- Composer actions ----
@@ -282,6 +298,13 @@ class ChatViewModel(
         deadMentions = emptyList()
         val bind = dexBind
         if (bind != null && !bindStillValid(bind, text)) dexBind = null
+        val phase = slashPickerPhase(text)
+        calcBind = if (phase is SlashPickerPhase.Args && phase.command == "calc") {
+            val next = calcPickerState(phase.query, calcBind).bind
+            next.takeUnless { it.isEmpty() }
+        } else {
+            null
+        }
         mentionQuery = extractMentionQuery(text)
         refreshMentionSuggestions()
         refreshSlashSuggestions()
@@ -340,22 +363,31 @@ class ChatViewModel(
                     return
                 }
                 is SlashCommand.Calc -> {
-                    val format = Format.Champions
-                    calcOverlay = CalcOverlayState(
-                        scenario = parseCalcSlashRest(slash.rest, format) ?: CalcScenario(
-                            format = format,
-                            attacker = CalcSide(),
-                            defender = CalcSide(),
-                            move = CalcMove(),
-                        ),
-                        rest = slash.rest,
-                    )
+                    val bind = calcBind
+                    val rest = slash.rest
                     composerText = ""
                     mentionQuery = null
                     dexBind = null
+                    calcBind = null
                     errorBanner = null
                     cancelSlashSearch()
+                    val immediate = when {
+                        rest.isEmpty() -> emptyCalcScenario()
+                        bind != null && !bind.isEmpty() -> scenarioFromCalcBind(bind)
+                        else -> parseCalcSlashRest(rest, Format.Champions) ?: emptyCalcScenario()
+                    }
+                    calcOverlay = CalcOverlayState(scenario = immediate, rest = rest)
                     publish()
+                    if (rest.isNotEmpty()) {
+                        viewModelScope.launch {
+                            val scenario = resolveCalcScenario(rest, bind) { kind, query ->
+                                if (kind == DexNameKind.Move) searchSlashMove(query)
+                                else searchSlashUsage(query)
+                            }
+                            calcOverlay = CalcOverlayState(scenario = scenario, rest = rest)
+                            publish()
+                        }
+                    }
                     return
                 }
                 SlashCommand.Message -> Unit
@@ -653,15 +685,55 @@ class ChatViewModel(
     }
 
     fun insertSlashCommand(token: String) {
+        calcBind = null
         setComposerText(insertCommand(token))
+    }
+
+    fun insertSlashSkipMove() {
+        val phase = slashPickerPhase(composerText) as? SlashPickerPhase.Args ?: return
+        if (phase.command != "calc") return
+        val state = calcPickerState(phase.query, calcBind)
+        val attacker = state.bind.attacker ?: calcBind?.attacker ?: return
+        calcBind = CalcBind(attacker = attacker)
+        setComposerText(insertCalcSkipMove(attacker.displayName))
     }
 
     fun insertSlashName(row: DexNameRow) {
         val phase = slashPickerPhase(composerText) as? SlashPickerPhase.Args ?: return
+        if (phase.command == "calc") {
+            insertCalcName(row, phase.query)
+            return
+        }
         setComposerText(insertName("/${phase.command}", row.displayName))
         if (phase.command == "dex") {
             dexBind = DexBind(kind = row.kind, slug = row.slug, displayName = row.displayName)
             publish()
+        }
+    }
+
+    private fun insertCalcName(row: DexNameRow, query: String) {
+        val state = calcPickerState(query, calcBind)
+        when (state.slot) {
+            CalcSlot.Attacker -> {
+                calcBind = CalcBind(attacker = row)
+                setComposerText(insertCalcAttacker(row.displayName))
+            }
+            CalcSlot.Move -> {
+                val attacker = state.bind.attacker ?: return
+                calcBind = CalcBind(attacker = attacker, move = row)
+                setComposerText(insertCalcMove(attacker.displayName, row.displayName))
+            }
+            CalcSlot.Defender -> {
+                val attacker = state.bind.attacker ?: return
+                calcBind = CalcBind(attacker = attacker, move = state.bind.move, defender = row)
+                setComposerText(
+                    insertCalcDefender(
+                        attacker.displayName,
+                        state.bind.move?.displayName,
+                        row.displayName,
+                    ),
+                )
+            }
         }
     }
 
@@ -1477,6 +1549,7 @@ class ChatViewModel(
                 }
                 "dex" -> scheduleSlashSearch(allKinds = true, query = phase.query)
                 "usage" -> scheduleSlashSearch(allKinds = false, query = phase.query)
+                "calc" -> scheduleCalcSearch(phase.query)
                 else -> cancelSlashSearch()
             }
         }
@@ -1553,6 +1626,38 @@ class ChatViewModel(
         }.getOrDefault(emptyList())
             .take(8)
             .map { it.toDexNameRow(DexNameKind.Pokemon) }
+    }
+
+    private fun scheduleCalcSearch(rest: String) {
+        val state = calcPickerState(rest, calcBind)
+        slashSearchJob?.cancel()
+        slashTeamRows = emptyList()
+        slashNameRows = emptyList()
+        slashArgReady = false
+        val gen = ++slashSearchGeneration
+        slashSearchJob = viewModelScope.launch {
+            delay(SLASH_SEARCH_DEBOUNCE_MS)
+            if (gen != slashSearchGeneration) return@launch
+            val rows = if (state.slot == CalcSlot.Move) {
+                searchSlashMove(state.query)
+            } else {
+                searchSlashUsage(state.query)
+            }
+            if (gen != slashSearchGeneration) return@launch
+            slashNameRows = rows
+            lastSlashNameRows = rows
+            slashArgReady = true
+            publish()
+        }
+    }
+
+    private suspend fun searchSlashMove(query: String): List<DexNameRow> {
+        val lookup = dexLookup ?: return emptyList()
+        return runCatching {
+            lookup.search(EntityKind.MOVE, query, Format.Champions)
+        }.getOrDefault(emptyList())
+            .take(8)
+            .map { it.toDexNameRow(DexNameKind.Move) }
     }
 
     private data class MentionResolution(
@@ -1745,6 +1850,8 @@ data class ChatUiState(
     val slashNameRows: List<DexNameRow> = emptyList(),
     val slashTeamRows: List<TeamSummary> = emptyList(),
     val slashArgReady: Boolean = false,
+    val slashCaption: String = PICKER_CAPTION,
+    val slashShowSkipMove: Boolean = false,
 )
 
 private fun List<DexNameRow>.exactMatch(query: String): DexNameRow? =

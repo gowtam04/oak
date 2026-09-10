@@ -78,7 +78,7 @@ class SlashPickerTest {
                     token = "/calc",
                     hint = "Open calculator",
                     trailingSpace = true,
-                    arg = "none",
+                    arg = "calc",
                 ),
                 SlashCommandRow(
                     token = "/help",
@@ -231,20 +231,26 @@ class SlashPickerTest {
             SlashPickerPhase.Args(command = "usage", query = "garchomp"),
             slashPickerPhase("/usage garchomp"),
         )
+        assertEquals(
+            SlashPickerPhase.Args(command = "calc", query = ""),
+            slashPickerPhase("/calc "),
+        )
+        assertEquals(
+            SlashPickerPhase.Args(command = "calc", query = "foo vs bar"),
+            slashPickerPhase("/calc foo vs bar"),
+        )
+        assertEquals(
+            SlashPickerPhase.Args(command = "calc", query = "Garchomp Earthquake vs Gholdengo"),
+            slashPickerPhase("/CALC Garchomp Earthquake vs Gholdengo"),
+        )
     }
 
     @Test
-    fun `enters rest after a space on slash-calc slash-new slash-help — no name rows (SD-BR-6)`() {
-        assertEquals(SlashPickerPhase.Rest(command = "calc"), slashPickerPhase("/calc "))
-        assertEquals(SlashPickerPhase.Rest(command = "calc"), slashPickerPhase("/calc foo vs bar"))
+    fun `enters rest after a space on slash-new slash-help — no name rows (SD-BR-6)`() {
         assertEquals(SlashPickerPhase.Rest(command = "new"), slashPickerPhase("/new "))
         assertEquals(SlashPickerPhase.Rest(command = "new"), slashPickerPhase("/new rain team"))
         assertEquals(SlashPickerPhase.Rest(command = "help"), slashPickerPhase("/help "))
         assertEquals(SlashPickerPhase.Rest(command = "help"), slashPickerPhase("/help extra words"))
-        val calcRest = slashPickerPhase("/calc foo")
-        assertTrue(calcRest is SlashPickerPhase.Rest)
-        assertFalse(calcRest is SlashPickerPhase.Commands)
-        assertFalse(calcRest is SlashPickerPhase.Args)
     }
 
     @Test

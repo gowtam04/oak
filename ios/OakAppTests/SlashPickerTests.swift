@@ -16,8 +16,8 @@ import Testing
 ///   `SlashPicker.phase(_:)`             ← `slashPickerPhase`
 ///     `.hidden`
 ///     `.commands(prefix:rows:)`
-///     `.args(command:query:)`           command: `dex` | `team` | `usage`
-///     `.rest(command:)`                 command: `calc` | `new` | `help`
+///     `.args(command:query:)`           command: `dex` | `team` | `usage` | `calc`
+///     `.rest(command:)`                 command: `new` | `help`
 ///   `SlashPicker.filterCommands(_:)`
 ///   `SlashPicker.insertCommand(_:)`
 ///   `SlashPicker.insertName(_:_:)`      `insertName("/dex", "Garchomp")`
@@ -30,7 +30,7 @@ import Testing
 ///   `SlashPicker.emptyTeamsGuest`       ← `EMPTY_TEAMS_GUEST`
 ///
 ///   `SlashCommandRow`: token, hint, hintGuest?, trailingSpace, arg
-///     arg: `none` | `team` | `dex` | `usage`
+///     arg: `none` | `team` | `dex` | `usage` | `calc`
 ///   `DexNameRow` / `DexBind` share `DexNameRow.Kind`:
 ///     `pokemon` | `move` | `ability` | `item`
 ///
@@ -40,8 +40,8 @@ import Testing
 /// all six (SD-AC-1.2). `/DEX` with no space stays command phase (SD-AC-3.1).
 /// Unknown first token (`/foo`, `/newish`) → hidden, not an empty command
 /// list (SD-AC-1.3) — even though `filterCommands("/newish")` is `[]`.
-/// Space after dex|team|usage → `args`. Space after /calc|/new|/help →
-/// `rest` (no name rows) (SD-BR-6).
+/// Space after dex|team|usage|calc → `args` (SD-BR-6, SD-US-10). Space
+/// after /new|/help → `rest` (no name rows).
 ///
 /// filterCommands: commandToken.lowercased().hasPrefix(prefix.lowercased()).
 /// prefix "/" → all six. "/newish" → [].
@@ -92,7 +92,7 @@ struct SlashPickerTests {
           token: "/calc",
           hint: "Open calculator",
           trailingSpace: true,
-          arg: .none
+          arg: .calc
         ),
         SlashCommandRow(
           token: "/help",
@@ -217,28 +217,22 @@ struct SlashPickerTests {
     #expect(
       SlashPicker.phase("/usage garchomp") == .args(command: .usage, query: "garchomp")
     )
+    #expect(SlashPicker.phase("/calc ") == .args(command: .calc, query: ""))
+    #expect(
+      SlashPicker.phase("/calc foo vs bar") == .args(command: .calc, query: "foo vs bar")
+    )
+    #expect(
+      SlashPicker.phase("/CALC Garchomp Earthquake vs Gholdengo")
+        == .args(command: .calc, query: "Garchomp Earthquake vs Gholdengo")
+    )
   }
 
   @Test
-  func entersRestAfterASpaceOnCalcNewHelpNoNameRows() {
-    #expect(SlashPicker.phase("/calc ") == .rest(command: .calc))
-    #expect(SlashPicker.phase("/calc foo vs bar") == .rest(command: .calc))
+  func entersRestAfterASpaceOnNewHelpNoNameRows() {
     #expect(SlashPicker.phase("/new ") == .rest(command: .new))
     #expect(SlashPicker.phase("/new rain team") == .rest(command: .new))
     #expect(SlashPicker.phase("/help ") == .rest(command: .help))
     #expect(SlashPicker.phase("/help extra words") == .rest(command: .help))
-
-    if case .commands = SlashPicker.phase("/calc foo") {
-      Issue.record("rest phase must not carry command rows (SD-BR-6)")
-    }
-    if case .args = SlashPicker.phase("/calc foo") {
-      Issue.record("rest phase must not carry name-arg rows (SD-BR-6)")
-    }
-    if case .rest(let command) = SlashPicker.phase("/calc foo") {
-      #expect(command == .calc)
-    } else {
-      Issue.record("expected rest phase for /calc foo")
-    }
   }
 
   // MARK: insertCommand (SD-AC-2.1, SD-AC-2.2)

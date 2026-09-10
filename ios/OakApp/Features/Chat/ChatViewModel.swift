@@ -99,6 +99,9 @@ final class ChatViewModel {
   /// `/dex` argument no longer equals `displayName`.
   var dexBind: DexBind?
 
+  /// Sequential `/calc` slot binds (SD-US-10). Composer-local; never sent to the agent.
+  var calcBind: CalcBind?
+
   /// Arg-phase Dex / Usage name rows for ``SlashAutocomplete``.
   private(set) var slashNameRows: [DexNameRow] = []
 
@@ -129,6 +132,19 @@ final class ChatViewModel {
     case .commands, .args: return true
     case .hidden, .rest: return false
     }
+  }
+
+  var slashCaption: String {
+    guard case .args(.calc, let query) = SlashPicker.phase(composerText) else {
+      return SlashPicker.pickerCaption
+    }
+    return SlashCalc.caption(for: SlashCalc.pickerState(rest: query, bind: calcBind).slot)
+  }
+
+  var slashShowSkipMove: Bool {
+    guard case .args(.calc, let query) = SlashPicker.phase(composerText) else { return false }
+    let state = SlashCalc.pickerState(rest: query, bind: calcBind)
+    return SlashCalc.showSkipMove(slot: state.slot, query: state.query)
   }
 
   /// Mention ids that failed to bind (deleted / not owned). Blocks send.
@@ -361,10 +377,34 @@ final class ChatViewModel {
         updateSlashPicker()
         return
       case .calc(let rest):
-        openCalculator(rest: rest)
+        let bind = calcBind
         composerText = ""
         dexBind = nil
+        calcBind = nil
         updateSlashPicker()
+        if rest.isEmpty {
+          openCalculator(rest: "", scenario: SlashCalc.emptyScenario())
+          return
+        }
+        openCalculator(rest: rest, scenario: bind.map { SlashCalc.scenario(from: $0) })
+        let lookup = dexLookup
+        Task { @MainActor in
+          let scenario = await SlashCalc.resolveScenario(rest: rest, bind: bind) { kind, query in
+            guard let lookup else { return [] }
+            let entityKind: EntityKind = kind == .move ? .move : .pokemon
+            let matches = await lookup.search(kind: entityKind, query: query, format: .champions)
+            return matches.prefix(8).map { match in
+              DexNameRow(
+                kind: kind,
+                slug: match.slug,
+                displayName: match.displayName,
+                spriteUrl: match.spriteUrl
+              )
+            }
+          }
+          guard hopGeneration == self.slashHopGeneration else { return }
+          self.openCalculator(rest: rest, scenario: scenario)
+        }
         return
       case .help, .bare:
         composerText = "/"
@@ -1473,6 +1513,12 @@ final class ChatViewModel {
     if let bind = dexBind, !slashBindStillValid(bind) {
       dexBind = nil
     }
+    if case .args(.calc, let query) = SlashPicker.phase(composerText) {
+      let next = SlashCalc.pickerState(rest: query, bind: calcBind).bind
+      calcBind = next.isEmpty ? nil : next
+    } else {
+      calcBind = nil
+    }
     switch SlashPicker.phase(composerText) {
     case .hidden, .rest, .commands:
       slashSearchTask?.cancel()
@@ -1506,6 +1552,19 @@ final class ChatViewModel {
   func insertSlashCommand(_ token: String) {
     composerText = SlashPicker.insertCommand(token)
     dexBind = nil
+    calcBind = nil
+    slashPickerDismissed = false
+    updateSlashPicker()
+    updateMentionQuery()
+  }
+
+  func insertSlashSkipMove() {
+    let rest = SlashCommands.slashArg(composerText)
+    let state = SlashCalc.pickerState(rest: rest, bind: calcBind)
+    guard let attacker = state.bind.attacker ?? calcBind?.attacker else { return }
+    composerText = SlashCalc.insertSkipMove(attacker: attacker.displayName)
+    calcBind = CalcBind(attacker: attacker)
+    dexBind = nil
     slashPickerDismissed = false
     updateSlashPicker()
     updateMentionQuery()
@@ -1519,6 +1578,8 @@ final class ChatViewModel {
     case .args(.usage, _):
       composerText = SlashPicker.insertName("/usage", row.displayName)
       dexBind = DexBind(kind: row.kind, slug: row.slug, displayName: row.displayName)
+    case .args(.calc, let query):
+      insertCalcName(row, query: query)
     default:
       return
     }
@@ -1528,6 +1589,28 @@ final class ChatViewModel {
     slashPickerDismissed = false
     updateSlashPicker()
     updateMentionQuery()
+  }
+
+  private func insertCalcName(_ row: DexNameRow, query: String) {
+    let state = SlashCalc.pickerState(rest: query, bind: calcBind)
+    switch state.slot {
+    case .attacker:
+      composerText = SlashCalc.insertAttacker(row.displayName)
+      calcBind = CalcBind(attacker: row)
+    case .move:
+      guard let attacker = state.bind.attacker else { return }
+      composerText = SlashCalc.insertMove(attacker: attacker.displayName, move: row.displayName)
+      calcBind = CalcBind(attacker: attacker, move: row)
+    case .defender:
+      guard let attacker = state.bind.attacker else { return }
+      composerText = SlashCalc.insertDefender(
+        attacker: attacker.displayName,
+        move: state.bind.move?.displayName,
+        defender: row.displayName
+      )
+      calcBind = CalcBind(attacker: attacker, move: state.bind.move, defender: row)
+    }
+    dexBind = nil
   }
 
   func insertSlashTeam(_ team: TeamSummary) {
@@ -1567,6 +1650,26 @@ final class ChatViewModel {
         lastSlashNameRows = rows
         slashTeamRows = []
         slashEmptyCopy = rows.isEmpty ? SlashPicker.emptyUsage : nil
+      }
+    case .calc:
+      let state = SlashCalc.pickerState(rest: query, bind: calcBind)
+      let slotQuery = state.query
+      slashSearchTask = Task { @MainActor in
+        try? await Task.sleep(nanoseconds: 150_000_000)
+        guard !Task.isCancelled, generation == slashSearchGeneration else { return }
+        let rows = state.slot == .move
+          ? await searchSlashMove(query: slotQuery)
+          : await searchSlashUsage(query: slotQuery)
+        guard !Task.isCancelled, generation == slashSearchGeneration else { return }
+        slashNameRows = rows
+        lastSlashNameRows = rows
+        slashTeamRows = []
+        let skip = SlashCalc.showSkipMove(slot: state.slot, query: state.query)
+        if rows.isEmpty && !skip {
+          slashEmptyCopy = state.slot == .move ? SlashCalc.emptyMove : SlashCalc.emptySpecies
+        } else {
+          slashEmptyCopy = nil
+        }
       }
     }
   }
@@ -1622,6 +1725,12 @@ final class ChatViewModel {
     guard let dexLookup else { return [] }
     let matches = await dexLookup.search(kind: .pokemon, query: query, format: .champions)
     return dexRows(from: matches, kind: .pokemon)
+  }
+
+  private func searchSlashMove(query: String) async -> [DexNameRow] {
+    guard let dexLookup else { return [] }
+    let matches = await dexLookup.search(kind: .move, query: query, format: .champions)
+    return dexRows(from: matches, kind: .move)
   }
 
   private func dexRows(from matches: [SearchMatch], kind: DexNameRow.Kind) -> [DexNameRow] {

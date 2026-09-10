@@ -109,7 +109,7 @@ and Calc `CALC-US-3`.
 | `/team` | Teams, or that saved team if the name matches one of mine | Yes — signed-in saved team names. |
 | `/dex` | Dex index, or that entity if it resolves | Yes — Champions species, moves, abilities, items. |
 | `/usage` | Usage leaderboard, or that species’ Usage page if it resolves | Yes — species only. |
-| `/calc` | Calculator overlay (current thread); rest may prefill | No — free text after the token. |
+| `/calc` | Calculator overlay (current thread); rest may prefill | Yes — sequential species → move → species (SD-US-10). |
 | `/help` | Composer becomes `/`; picker shows every command | No. |
 
 Guests: `/team` still hops to the existing guest Teams / sign-in empty
@@ -217,10 +217,10 @@ command and a space so that I do not have to remember slugs.
   empty line (**No Dex matches** / **No usage matches** / **No saved
   teams match**) — not a toast, not a hidden picker. Send still hops
   (**SD-US-5**).
-- **SD-AC-3.8** — Given `/calc ` (space, optional rest) or `/new ` /
-  `/help ` with extra words, when I look for name rows, then there are
-  none. `/calc` rest is whatever I type. Extra words on `/new` and
-  `/help` do not open a name list.
+- **SD-AC-3.8** — Given `/new ` / `/help ` with extra words, when I
+  look for name rows, then there are none. Extra words on `/new` and
+  `/help` do not open a name list. `/calc ` is sequential slots
+  (**SD-US-10**), not a rest phase.
 
 ### SD-US-4 — `/help` is the same picker
 
@@ -392,8 +392,8 @@ As a player, I want the same slash discovery on web, iOS, and Android.
 - **SD-BR-5 — Picker filter is prefix-on-command.** A command row
   remains when `commandToken.startsWith(typedFirstToken)`
   (case-insensitive). Name rows use substring match on display name.
-- **SD-BR-6 — Space starts the arg phase** only for `/dex`, `/team`,
-  and `/usage`. `/calc`, `/new`, and `/help` never show name rows.
+- **SD-BR-6 — Space starts the arg phase** for `/dex`, `/team`,
+  `/usage`, and `/calc`. `/new` and `/help` never show name rows.
 - **SD-BR-7 — Pick inserts; Send hops.** Picker never navigates by
   itself except that sending `/help` or lone `/` only reshapes the
   composer/picker (**SD-AC-4.1**, **SD-AC-7.1**).
@@ -413,8 +413,9 @@ As a player, I want the same slash discovery on web, iOS, and Android.
 - **SD-BR-13 — Guests see `/team`** in the command list. They never see
   another account’s teams. They cannot mention teams (existing
   **MEN-BR-4**).
-- **SD-BR-14 — `/calc` has no name autocomplete.** Rest stays free text
-  and is handed to the existing calc overlay parse.
+- **SD-BR-14 — superseded by SD-US-10.** `/calc ` is a three-slot arg
+  phase (attacker species, move, defender species). Send remains legal
+  at any slot. Items, abilities, EVs, and weather are not slash-completed.
 - **SD-BR-15 — Three-client lockstep** for every user-facing behavior
   in this pack except web Enter/Arrow/Escape (**SD-US-8**). Palette
   remains web-only and unchanged.
@@ -428,6 +429,34 @@ As a player, I want the same slash discovery on web, iOS, and Android.
 - **SD-BR-19 — Do not teach a second query language.** Do not add
   `/dt`, `/weak`, `/learn`, `/get_pokemon`, or tool-named slashes in
   this pack.
+
+### SD-US-10 — Sequential `/calc` slots
+
+As a guest or signed-in user, I want `/calc` to suggest attacker, move,
+and defender the way `/dex` suggests names so I do not have to know
+`Attacker Move vs Defender`.
+
+- **SD-AC-10.1** — Given I pick `/calc` or type `/calc `, when the
+  picker is open, then it shows Champions **species** (attacker slot)
+  and the caption **Pick attacker · or Send to open empty**.
+- **SD-AC-10.2** — Given I pick an attacker, when the pick commits, then
+  the composer is `/calc {Name} ` and the picker shows **moves** plus a
+  pinned **vs …** skip-move row. Caption **Pick move · or Send**.
+- **SD-AC-10.3** — Given I pick a move, when the pick commits, then the
+  composer is `/calc {Attacker} {Move} vs ` (the picker inserts `vs`).
+  Caption **Pick defender · or Send**. Rows are species.
+- **SD-AC-10.4** — Given I pick **vs …**, when the pick commits, then
+  the composer is `/calc {Attacker} vs ` with no move. Defender slot
+  opens.
+- **SD-AC-10.5** — Given I Send at any slot (including empty `/calc`),
+  when it is handled, then the calculator overlay opens on this thread
+  with whatever sides resolved. Unresolved sides stay empty. No chat
+  turn (**CALC-AC-3.1–3.3**, **CALC-BR-4**).
+- **SD-AC-10.6** — Given I type rest without picking (including
+  multi-word names), when I Send, then the client resolves against
+  Champions search with longest-prefix match, not first-token split.
+- **SD-AC-10.7** — Slash does not complete items, abilities, natures,
+  EVs, or weather. Those stay on the overlay.
 
 ## Data and entities (business level)
 

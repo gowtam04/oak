@@ -71,3 +71,11 @@ export async function searchSlashUsage(
   if (signal?.aborted) return [];
   return searchKind("pokemon", query);
 }
+
+export async function searchSlashMove(
+  query: string,
+  signal?: AbortSignal,
+): Promise<DexNameRow[]> {
+  if (signal?.aborted) return [];
+  return searchKind("move", query);
+}

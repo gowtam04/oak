@@ -26,13 +26,31 @@ import {
   EMPTY_TEAMS,
   EMPTY_TEAMS_GUEST,
   EMPTY_USAGE,
+  PICKER_CAPTION,
   bindStillValid,
   insertCommand,
   insertName,
   slashPickerPhase,
   type DexNameRow,
 } from "@/lib/chat/slash-picker";
-import { searchSlashDex, searchSlashUsage } from "@/lib/chat/slash-search";
+import {
+  calcBindsEqual,
+  calcPickerCaption,
+  calcPickerState,
+  insertCalcAttacker,
+  insertCalcDefender,
+  insertCalcMove,
+  insertCalcSkipMove,
+  showCalcSkipMove,
+  EMPTY_CALC_MOVE,
+  EMPTY_CALC_SPECIES,
+  type CalcBind,
+} from "@/lib/chat/slash-calc";
+import {
+  searchSlashDex,
+  searchSlashMove,
+  searchSlashUsage,
+} from "@/lib/chat/slash-search";
 
 /** Max auto-grow height (px) for the textarea before it starts scrolling. */
 const MAX_INPUT_PX = 160;
@@ -123,10 +141,11 @@ export default function Composer({
   const [nameRows, setNameRows] = useState<DexNameRow[]>([]);
   const [argReady, setArgReady] = useState(false);
   const [dexBind, setDexBind] = useState<DexBind | null>(null);
+  const [calcBind, setCalcBind] = useState<CalcBind | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastArgRowsRef = useRef<DexNameRow[]>([]);
-  const lastArgCommandRef = useRef<"dex" | "usage" | null>(null);
+  const lastArgCommandRef = useRef<"dex" | "usage" | "calc" | null>(null);
   const lastArgQueryRef = useRef<string | null>(null);
   const searchGen = useRef(0);
 
@@ -183,8 +202,28 @@ export default function Composer({
     setDexBind(null);
   }, [value, dexBind]);
 
+  useEffect(() => {
+    if (!calcBind) return;
+    const parsed = parseSlashCommand(value, { hasUsagePage: true });
+    if (parsed.type !== "calc") {
+      setCalcBind(null);
+      return;
+    }
+    const next = calcPickerState(parsed.rest, calcBind).bind;
+    if (!calcBindsEqual(next, calcBind)) {
+      setCalcBind(Object.keys(next).length > 0 ? next : null);
+    }
+  }, [value, calcBind]);
+
   const argCommand = slashPhase.phase === "args" ? slashPhase.command : null;
   const argQuery = slashPhase.phase === "args" ? slashPhase.query : "";
+  const calcState =
+    argCommand === "calc" ? calcPickerState(argQuery, calcBind) : null;
+  const calcSlot = calcState?.slot ?? null;
+  const calcSlotQuery = calcState?.query ?? "";
+  const calcSkip = calcState
+    ? showCalcSkipMove(calcState.slot, calcState.query)
+    : false;
 
   // Drop Dex/Usage rows when the arg command changes (dex↔usage). Do not
   // clear on every query keystroke — the in-flight list stays until the
@@ -194,28 +233,31 @@ export default function Composer({
     lastArgRowsRef.current = [];
     lastArgCommandRef.current = null;
     lastArgQueryRef.current = null;
-  }, [argCommand]);
+  }, [argCommand, calcSlot]);
 
-  // Debounced Dex / Usage name fan-out. Teams stay in-memory (no HTTP).
+  // Debounced Dex / Usage / Calc name fan-out. Teams stay in-memory (no HTTP).
   useEffect(() => {
-    if (argCommand !== "dex" && argCommand !== "usage") {
+    if (argCommand !== "dex" && argCommand !== "usage" && argCommand !== "calc") {
       setArgReady(true);
       return;
     }
     setArgReady(false);
     const gen = ++searchGen.current;
     const ac = new AbortController();
+    const query = argCommand === "calc" ? calcSlotQuery : argQuery;
     const timer = window.setTimeout(() => {
       const run =
         argCommand === "dex"
-          ? searchSlashDex(argQuery, ac.signal)
-          : searchSlashUsage(argQuery, ac.signal);
+          ? searchSlashDex(query, ac.signal)
+          : argCommand === "calc" && calcSlot === "move"
+            ? searchSlashMove(query, ac.signal)
+            : searchSlashUsage(query, ac.signal);
       void run.then((rows) => {
         if (gen !== searchGen.current) return;
         setNameRows(rows);
         lastArgRowsRef.current = rows;
         lastArgCommandRef.current = argCommand;
-        lastArgQueryRef.current = argQuery;
+        lastArgQueryRef.current = query;
         setArgReady(true);
       });
     }, SLASH_SEARCH_DEBOUNCE_MS);
@@ -223,7 +265,7 @@ export default function Composer({
       window.clearTimeout(timer);
       ac.abort();
     };
-  }, [argCommand, argQuery]);
+  }, [argCommand, argQuery, calcSlot, calcSlotQuery]);
 
   const teamNameRows: DexNameRow[] =
     argCommand === "team" && signedIn
@@ -243,7 +285,7 @@ export default function Composer({
   const pickerNames: DexNameRow[] =
     argCommand === "team"
       ? teamNameRows
-      : argCommand === "dex" || argCommand === "usage"
+      : argCommand === "dex" || argCommand === "usage" || argCommand === "calc"
         ? nameRows
         : [];
   const pickerEmpty =
@@ -256,14 +298,18 @@ export default function Composer({
             ? EMPTY_DEX
             : argCommand === "usage" && argReady && nameRows.length === 0
               ? EMPTY_USAGE
-              : null
+              : argCommand === "calc" && argReady && nameRows.length === 0 && !calcSkip
+                ? calcSlot === "move"
+                  ? EMPTY_CALC_MOVE
+                  : EMPTY_CALC_SPECIES
+                : null
       : null;
   const pickerOptionsCount =
     slashPhase.phase === "commands"
       ? slashPhase.rows.length
-      : pickerEmpty
-        ? 0
-        : pickerNames.length;
+      : (calcSkip ? 1 : 0) + (pickerEmpty ? 0 : pickerNames.length);
+  const pickerCaption =
+    calcSlot != null ? calcPickerCaption(calcSlot) : PICKER_CAPTION;
 
   useEffect(() => {
     setHighlightedIndex(pickerOptionsCount > 0 ? 0 : -1);
@@ -381,10 +427,12 @@ export default function Composer({
     }
     const bind = resolveSlashBind(trimmed);
     const argRows = cachedArgRows(trimmed);
-    if (bind || argRows) {
+    const liveCalc = liveCalcBind(trimmed);
+    if (bind || argRows || liveCalc) {
       onSend(trimmed, pendingImages, {
         ...(bind ? { dexBind: bind } : {}),
         ...(argRows ? { argRows } : {}),
+        ...(liveCalc ? { calcBind: liveCalc } : {}),
       });
     } else {
       onSend(trimmed, pendingImages);
@@ -393,6 +441,7 @@ export default function Composer({
     setPendingImages([]);
     setAttachError(null);
     setDexBind(null);
+    setCalcBind(null);
     setPickerDismissed(false);
   }
 
@@ -401,11 +450,80 @@ export default function Composer({
     submit();
   }
 
+  function liveCalcBind(text: string): CalcBind | undefined {
+    const parsed = parseSlashCommand(text, { hasUsagePage: true });
+    if (parsed.type !== "calc") return undefined;
+    const next = calcPickerState(parsed.rest, calcBind).bind;
+    return Object.keys(next).length > 0 ? next : undefined;
+  }
+
+  function applyCalcPick(pick: SlashPick) {
+    const state = calcPickerState(slashArg(value), calcBind);
+    if (pick.type === "calc-skip-move") {
+      const attacker = state.bind.attacker ?? calcBind?.attacker;
+      if (!attacker) return;
+      setValue(insertCalcSkipMove(attacker.displayName));
+      setCalcBind({ attacker });
+      setDexBind(null);
+      setPickerDismissed(false);
+      return;
+    }
+    if (pick.type !== "name") return;
+    if (state.slot === "attacker") {
+      setValue(insertCalcAttacker(pick.row.displayName));
+      setCalcBind({ attacker: pick.row });
+    } else if (state.slot === "move") {
+      const attacker = state.bind.attacker;
+      if (!attacker) return;
+      setValue(insertCalcMove(attacker.displayName, pick.row.displayName));
+      setCalcBind({ attacker, move: pick.row });
+    } else {
+      const attacker = state.bind.attacker;
+      if (!attacker) return;
+      setValue(
+        insertCalcDefender(
+          attacker.displayName,
+          state.bind.move?.displayName,
+          pick.row.displayName,
+        ),
+      );
+      setCalcBind({ ...state.bind, attacker, defender: pick.row });
+    }
+    setDexBind(null);
+    setPickerDismissed(false);
+  }
+
+  function insertionForCalc(pick: SlashPick): string {
+    const state = calcPickerState(slashArg(value), calcBind);
+    if (pick.type === "calc-skip-move") {
+      const attacker = state.bind.attacker ?? calcBind?.attacker;
+      return attacker ? insertCalcSkipMove(attacker.displayName) : value;
+    }
+    if (pick.type !== "name") return value;
+    if (state.slot === "attacker") return insertCalcAttacker(pick.row.displayName);
+    if (state.slot === "move" && state.bind.attacker) {
+      return insertCalcMove(state.bind.attacker.displayName, pick.row.displayName);
+    }
+    if (state.slot === "defender" && state.bind.attacker) {
+      return insertCalcDefender(
+        state.bind.attacker.displayName,
+        state.bind.move?.displayName,
+        pick.row.displayName,
+      );
+    }
+    return value;
+  }
+
   function applySlashPick(pick: SlashPick) {
     if (pick.type === "command") {
       setValue(insertCommand(pick.token));
       setDexBind(null);
+      setCalcBind(null);
       setPickerDismissed(false);
+      return;
+    }
+    if (argCommand === "calc" || pick.type === "calc-skip-move") {
+      applyCalcPick(pick);
       return;
     }
     const command =
@@ -420,6 +538,7 @@ export default function Composer({
     } else {
       setDexBind(null);
     }
+    setCalcBind(null);
     setPickerDismissed(false);
   }
 
@@ -430,6 +549,11 @@ export default function Composer({
       return row ? { type: "command", token: row.token } : null;
     }
     if (slashPhase.phase === "args") {
+      if (argCommand === "calc" && calcSkip) {
+        if (highlightedIndex === 0) return { type: "calc-skip-move" };
+        const row = pickerNames[highlightedIndex - 1];
+        return row ? { type: "name", row } : null;
+      }
       const row = pickerNames[highlightedIndex];
       return row ? { type: "name", row } : null;
     }
@@ -438,6 +562,9 @@ export default function Composer({
 
   function insertionFor(pick: SlashPick): string {
     if (pick.type === "command") return insertCommand(pick.token);
+    if (argCommand === "calc" || pick.type === "calc-skip-move") {
+      return insertionForCalc(pick);
+    }
     const command =
       slashPhase.phase === "args" ? slashPhase.command : "dex";
     return insertName(`/${command}`, pick.row.displayName);
@@ -714,6 +841,8 @@ export default function Composer({
           guest={!signedIn}
           highlightedIndex={highlightedIndex}
           showKind={argCommand !== "team"}
+          caption={pickerCaption}
+          skipMove={calcSkip}
           onPick={applySlashPick}
         />
       )}

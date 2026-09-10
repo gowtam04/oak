@@ -469,9 +469,12 @@ fun ChatScreen(
                 slashNameRows = uiState.slashNameRows,
                 slashTeamRows = uiState.slashTeamRows,
                 slashArgReady = uiState.slashArgReady,
+                slashCaption = uiState.slashCaption,
+                slashShowSkipMove = uiState.slashShowSkipMove,
                 onInsertSlashCommand = viewModel::insertSlashCommand,
                 onInsertSlashName = viewModel::insertSlashName,
                 onInsertSlashTeam = viewModel::insertSlashTeam,
+                onInsertSlashSkipMove = viewModel::insertSlashSkipMove,
             )
         }
     }

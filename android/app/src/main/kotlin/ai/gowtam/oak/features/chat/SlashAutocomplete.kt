@@ -38,8 +38,11 @@ fun SlashAutocomplete(
     teams: List<TeamSummary> = emptyList(),
     empty: String? = null,
     guest: Boolean = false,
+    caption: String = PICKER_CAPTION,
+    skipMove: Boolean = false,
     onPickName: (DexNameRow) -> Unit = {},
     onPickTeam: (TeamSummary) -> Unit = {},
+    onSkipMove: () -> Unit = {},
 ) {
     val oak = LocalOakColors.current
     val shape = RoundedCornerShape(OakRadius.md)
@@ -56,7 +59,7 @@ fun SlashAutocomplete(
             .padding(vertical = OakSpacing.xs),
     ) {
         Text(
-            text = PICKER_CAPTION,
+            text = caption,
             style = MaterialTheme.typography.bodySmall,
             color = oak.textMuted,
             modifier = Modifier.padding(horizontal = OakSpacing.md, vertical = OakSpacing.xs),
@@ -80,7 +83,33 @@ fun SlashAutocomplete(
                     )
                 }
             }
-            names.isNotEmpty() -> {
+            skipMove || names.isNotEmpty() -> {
+                if (skipMove) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("slash-ac-skip-move")
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "$CALC_SKIP_MOVE $CALC_SKIP_MOVE_HINT"
+                            }
+                            .clickable { onSkipMove() }
+                            .padding(horizontal = OakSpacing.md, vertical = OakSpacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = CALC_SKIP_MOVE,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = oak.textStrong,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = CALC_SKIP_MOVE_HINT,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = oak.textMuted,
+                        )
+                    }
+                }
                 for (row in names) {
                     Row(
                         modifier = Modifier

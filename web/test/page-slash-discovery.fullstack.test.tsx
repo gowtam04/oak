@@ -10,11 +10,11 @@
  *   Send hops without /api/chat; /usage slug; unmatched /dex → /pokedex;
  *   /help prefills `/`; lone `/` stays; /foo is a message; edit last POSTs
  *   /new; images remain on hop; guest /team empty copy; @ hidden while
- *   slash picker visible; /calc overlay.
+ *   slash picker visible; /calc sequential slots + overlay.
  *
  * Refs: SD-US-1, SD-US-2, SD-US-3, SD-US-4, SD-US-5, SD-US-6, SD-US-7,
- * SD-US-8, SD-AC-5.9, SD-BR-2, SD-BR-3, SD-BR-7, SD-BR-8, SD-BR-9,
- * SD-BR-11, SD-BR-12, SD-BR-13, SD-BR-14, SD-BR-16.
+ * SD-US-8, SD-US-10, SD-AC-5.9, SD-BR-2, SD-BR-3, SD-BR-7, SD-BR-8, SD-BR-9,
+ * SD-BR-11, SD-BR-12, SD-BR-13, SD-BR-16.
  */
 
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
@@ -44,6 +44,12 @@ import {
   PICKER_CAPTION,
   SLASH_COMMANDS,
 } from "@/lib/chat/slash-picker";
+import {
+  CALC_CAPTION_ATTACKER,
+  CALC_CAPTION_DEFENDER,
+  CALC_CAPTION_MOVE,
+  CALC_SKIP_MOVE,
+} from "@/lib/chat/slash-calc";
 
 const EMAIL = "ash@pallet.town";
 
@@ -340,29 +346,45 @@ beforeEach(() => {
       if (path === "/api/search") {
         const kind = parsed.searchParams.get("kind");
         const q = (parsed.searchParams.get("q") ?? "").trim().toLowerCase();
-        const hit = (name: string) => q.length === 0 || name.includes(q);
+        const hit = (name: string, slug: string) =>
+          q.length === 0 || name.includes(q) || slug.includes(q);
         const matches: Array<{
           slug: string;
           display_name: string;
           kind: string;
           sprite_url?: string;
         }> = [];
-        if (kind === "pokemon" && hit("garchomp")) {
-          matches.push({
-            slug: "garchomp",
-            display_name: "Garchomp",
-            kind: "pokemon",
-            sprite_url: "https://img.example/sprite/garchomp.png",
-          });
+        if (kind === "pokemon") {
+          const pokemon = [
+            {
+              slug: "garchomp",
+              display_name: "Garchomp",
+              kind: "pokemon",
+              sprite_url: "https://img.example/sprite/garchomp.png",
+            },
+            { slug: "gholdengo", display_name: "Gholdengo", kind: "pokemon" },
+            { slug: "ironbundle", display_name: "Iron Bundle", kind: "pokemon" },
+            {
+              slug: "fluttermane",
+              display_name: "Flutter Mane",
+              kind: "pokemon",
+            },
+          ];
+          for (const row of pokemon) {
+            if (hit(row.display_name.toLowerCase(), row.slug)) matches.push(row);
+          }
         }
-        if (kind === "move" && hit("metronome")) {
-          matches.push({
-            slug: "metronome",
-            display_name: "Metronome",
-            kind: "move",
-          });
+        if (kind === "move") {
+          const moves = [
+            { slug: "metronome", display_name: "Metronome", kind: "move" },
+            { slug: "earthquake", display_name: "Earthquake", kind: "move" },
+            { slug: "playrough", display_name: "Play Rough", kind: "move" },
+          ];
+          for (const row of moves) {
+            if (hit(row.display_name.toLowerCase(), row.slug)) matches.push(row);
+          }
         }
-        if (kind === "item" && hit("metronome")) {
+        if (kind === "item" && hit("metronome", "metronome")) {
           matches.push({
             slug: "metronome",
             display_name: "Metronome",
@@ -698,16 +720,86 @@ describe("Home — guest /team and mentions vs slash (SD-AC-3.5, SD-BR-13, SD-BR
   });
 });
 
-describe("Home — /calc overlay (CALC-AC-3.1, SD-BR-14)", () => {
+describe("Home — /calc overlay (CALC-AC-3.1, SD-US-10)", () => {
   it("opens the calculator overlay for /calc without POSTing a chat turn", async () => {
     render(<Home />);
     await screen.findByTestId("composer");
-    fireEvent.change(composerInput(), {
-      target: { value: "/calc garchomp earthquake" },
-    });
+    fireEvent.change(composerInput(), { target: { value: "/calc" } });
     await clickSend();
     expect(chatBodies).toHaveLength(0);
     expect(chatFetchCalls()).toHaveLength(0);
     expect(screen.getByTestId("calculator-overlay")).toBeInTheDocument();
+  });
+
+  it("keeps the picker open after picking /calc and names the attacker slot", async () => {
+    render(<Home />);
+    const input = await screen.findByTestId("composer-input");
+    fireEvent.change(input, { target: { value: "/" } });
+    const picker = await screen.findByTestId("slash-autocomplete");
+    fireEvent.click(within(picker).getByRole("option", { name: /\/calc/ }));
+    expect(composerInput().value).toBe("/calc ");
+    expect(chatBodies).toHaveLength(0);
+    const calcPicker = await screen.findByTestId("slash-autocomplete");
+    expect(within(calcPicker).getByText(CALC_CAPTION_ATTACKER)).toBeInTheDocument();
+    expect(
+      await waitFor(() => within(calcPicker).getByRole("option", { name: /garchomp/i })),
+    ).toBeInTheDocument();
+  });
+
+  it("sequential picks insert attacker, move vs, and defender then Send prefills (SD-US-10)", async () => {
+    render(<Home />);
+    const input = await screen.findByTestId("composer-input");
+    fireEvent.change(input, { target: { value: "/calc " } });
+    const picker = await screen.findByTestId("slash-autocomplete");
+    fireEvent.click(
+      await waitFor(() =>
+        within(picker).getByRole("option", { name: /garchomp/i }),
+      ),
+    );
+    expect(composerInput().value).toBe("/calc Garchomp ");
+    const movePicker = await screen.findByTestId("slash-autocomplete");
+    expect(within(movePicker).getByText(CALC_CAPTION_MOVE)).toBeInTheDocument();
+    expect(within(movePicker).getByText(CALC_SKIP_MOVE)).toBeInTheDocument();
+    fireEvent.click(
+      await waitFor(() =>
+        within(movePicker).getByRole("option", { name: /earthquake/i }),
+      ),
+    );
+    expect(composerInput().value).toBe("/calc Garchomp Earthquake vs ");
+    const defPicker = await screen.findByTestId("slash-autocomplete");
+    expect(within(defPicker).getByText(CALC_CAPTION_DEFENDER)).toBeInTheDocument();
+    fireEvent.click(
+      await waitFor(() =>
+        within(defPicker).getByRole("option", { name: /gholdengo/i }),
+      ),
+    );
+    expect(composerInput().value).toBe(
+      "/calc Garchomp Earthquake vs Gholdengo",
+    );
+    await clickSend();
+    expect(chatBodies).toHaveLength(0);
+    expect(chatFetchCalls()).toHaveLength(0);
+    await screen.findByTestId("calculator-overlay");
+    expect(
+      within(screen.getByTestId("calc-side-attacker")).getByText(/garchomp/i),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("calc-side-defender")).getByText(/gholdengo/i),
+    ).toBeInTheDocument();
+  });
+
+  it("typed rest still opens the overlay without a chat turn (CALC-AC-3.2)", async () => {
+    render(<Home />);
+    await screen.findByTestId("composer");
+    fireEvent.change(composerInput(), {
+      target: { value: "/calc garchomp earthquake vs gholdengo" },
+    });
+    await clickSend();
+    expect(chatBodies).toHaveLength(0);
+    expect(chatFetchCalls()).toHaveLength(0);
+    await screen.findByTestId("calculator-overlay");
+    expect(
+      within(screen.getByTestId("calc-side-attacker")).getByText(/garchomp/i),
+    ).toBeInTheDocument();
   });
 });

@@ -10,8 +10,8 @@
  *   slashPickerPhase(text):
  *     | { phase: "hidden" }
  *     | { phase: "commands"; prefix: string; rows: CommandRow[] }
- *     | { phase: "args"; command: "dex" | "team" | "usage"; query: string }
- *     | { phase: "rest"; command: "calc" | "new" | "help" }
+ *     | { phase: "args"; command: "dex" | "team" | "usage" | "calc"; query: string }
+ *     | { phase: "rest"; command: "new" | "help" }
  *
  * Hidden unless the first non-space char is `/`. Empty / whitespace /
  * mid-sentence (`please /dex`) → hidden (SD-AC-1.4). No space after first
@@ -19,8 +19,8 @@
  * all six (SD-AC-1.2). `/DEX` with no space stays command phase (SD-AC-3.1).
  * Unknown first token (`/foo`, `/newish`) → hidden, not an empty command
  * list (SD-AC-1.3) — even though filterCommands("/newish") is [].
- * Space after dex|team|usage → `args`. Space after /calc|/new|/help →
- * `rest` (no name rows) (SD-BR-6).
+ * Space after dex|team|usage|calc → `args` (SD-BR-6, SD-US-10). Space
+ * after /new|/help → `rest` (no name rows).
  *
  * filterCommands: commandToken.toLowerCase().startsWith(prefix.toLowerCase()).
  * prefix "/" → all six. "/newish" → [].
@@ -84,7 +84,7 @@ describe("SLASH_COMMANDS catalog", () => {
         token: "/calc",
         hint: "Open calculator",
         trailingSpace: true,
-        arg: "none",
+        arg: "calc",
       },
       {
         token: "/help",
@@ -200,7 +200,7 @@ describe("slashPickerPhase", () => {
     expect(filterCommands("/newish")).toEqual([]);
   });
 
-  it("enters args after a space on /dex /team /usage (SD-BR-6)", () => {
+  it("enters args after a space on /dex /team /usage /calc (SD-BR-6, SD-US-10)", () => {
     expect(slashPickerPhase("/dex ")).toEqual({
       phase: "args",
       command: "dex",
@@ -241,17 +241,24 @@ describe("slashPickerPhase", () => {
       command: "usage",
       query: "garchomp",
     });
-  });
-
-  it("enters rest after a space on /calc /new /help — no name rows (SD-BR-6)", () => {
     expect(slashPickerPhase("/calc ")).toEqual({
-      phase: "rest",
+      phase: "args",
       command: "calc",
+      query: "",
     });
     expect(slashPickerPhase("/calc foo vs bar")).toEqual({
-      phase: "rest",
+      phase: "args",
       command: "calc",
+      query: "foo vs bar",
     });
+    expect(slashPickerPhase("/CALC Garchomp Earthquake vs Gholdengo")).toEqual({
+      phase: "args",
+      command: "calc",
+      query: "Garchomp Earthquake vs Gholdengo",
+    });
+  });
+
+  it("enters rest after a space on /new /help — no name rows (SD-BR-6)", () => {
     expect(slashPickerPhase("/new ")).toEqual({
       phase: "rest",
       command: "new",
