@@ -370,19 +370,19 @@ describe("/teams — manual build", () => {
     await screen.findByTestId("team-editor");
     expect(store).toHaveLength(1);
 
-    // Rename + add a member, then Save (partial team is first-class, BR-T4).
+    // Rename + add a member; autosave persists (partial team is first-class, BR-T4).
     fireEvent.change(screen.getByTestId("team-name"), {
       target: { value: "Ladder Core" },
     });
     fireEvent.click(screen.getByTestId("team-add-member"));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("team-save"));
-    });
 
-    await waitFor(() => {
-      expect(store[0].name).toBe("Ladder Core");
-      expect(store[0].members).toHaveLength(1);
-    });
+    await waitFor(
+      () => {
+        expect(store[0].name).toBe("Ladder Core");
+        expect(store[0].members).toHaveLength(1);
+      },
+      { timeout: 2000 },
+    );
   });
 
   it("imports a Showdown paste, surfaces notes, and opens the imported team (TEAM-US-10)", async () => {

@@ -5,8 +5,8 @@ import Observation
 /// assistant panel (parity with web's `useTeamsAssistant` + `TeamsAssistantPanel`).
 /// It holds the in-memory thread, folds a ``BuilderSSEEvent`` stream into UI state
 /// one event at a time, and brokers Apply/Undo of a proposed ``TeamPatch`` against
-/// the owning ``TeamEditorViewModel``'s **unsaved draft** — never the DB (the user
-/// still reviews and hits Save).
+/// the owning ``TeamEditorViewModel``'s live draft. Apply mutates the draft; autosave
+/// persists it.
 ///
 /// `@MainActor @Observable`. It depends on the ``TeamsAssistantService`` **protocol**
 /// (never `LiveTeamsAssistantService`) so it unit-tests against a fake, and holds a

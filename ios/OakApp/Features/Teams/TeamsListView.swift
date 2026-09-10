@@ -338,13 +338,18 @@ struct TeamsListView: View {
 
   @ViewBuilder
   private func editorView(for target: EditorTarget) -> some View {
+    let finished: () async -> Void = { [model] in
+      await model.reload()
+      await model.reloadArchived()
+    }
     switch target {
     case let .new(format):
-      TeamEditorView(model: model.makeEditor(forNewTeam: format))
+      TeamEditorView(model: model.makeEditor(forNewTeam: format), onFinished: finished)
     case let .existing(summary):
-      TeamEditorView(model: model.makeEditor(for: summary), loadsOnAppear: true)
+      TeamEditorView(
+        model: model.makeEditor(for: summary), loadsOnAppear: true, onFinished: finished)
     case let .created(team):
-      TeamEditorView(model: model.makeEditor(for: team))
+      TeamEditorView(model: model.makeEditor(for: team), onFinished: finished)
     }
   }
 

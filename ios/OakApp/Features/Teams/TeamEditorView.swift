@@ -16,9 +16,10 @@ import UIKit
 /// auto-forced onto its held item once resolved (mirrors `TeamEditor.tsx`).
 ///
 /// **Warn-but-allow** (M-AC-T3.1 / M-BR-T3): the server's legality/validity warnings are
-/// rendered inline (per slot and team-level) but **Save is never disabled** — an EV total
-/// over 508, a move outside the learnset, etc. all still save, clearly flagged. Export to
-/// Showdown text is offered via the native share sheet (M-AC-T2.3).
+/// rendered inline (per slot and team-level) but **autosave is never blocked** — an EV total
+/// over 508, a move outside the learnset, etc. all still persist, clearly flagged. Export to
+/// Showdown text is offered via the native share sheet (M-AC-T2.3). There is no Save
+/// button: every draft change debounces into create-or-update.
 struct TeamEditorView: View {
   @State private var model: TeamEditorViewModel
   @State private var exportedPaste: ExportPayload?
@@ -38,9 +39,11 @@ struct TeamEditorView: View {
   /// itself is untouched, which is what keeps the thread alive across reopens.
   @State private var presentedAssistant: TeamsAssistantViewModel?
 
-  /// `true` for a brief window right after a successful save — drives the
-  /// transient "Saved" checkmark overlay (self-clearing after ~1s).
-  @State private var showSaveConfirmation = false
+  @Environment(\.scenePhase) private var scenePhase
+
+  /// Optional hook after the editor disappears (list reload once the pending
+  /// autosave has flushed).
+  var onFinished: (() async -> Void)? = nil
 
   /// Roster strip selection — 2px poke-red ring on the focused party slot.
   @State private var selectedRosterIndex = 0
@@ -52,9 +55,14 @@ struct TeamEditorView: View {
   /// When `true`, the editor fetches the full team on appear (existing-team path).
   private let loadsOnAppear: Bool
 
-  init(model: TeamEditorViewModel, loadsOnAppear: Bool = false) {
+  init(
+    model: TeamEditorViewModel,
+    loadsOnAppear: Bool = false,
+    onFinished: (() async -> Void)? = nil
+  ) {
     _model = State(initialValue: model)
     self.loadsOnAppear = loadsOnAppear
+    self.onFinished = onFinished
   }
 
   var body: some View {
@@ -172,8 +180,30 @@ struct TeamEditorView: View {
       // from the view whenever the draft's members change; the view model debounces + coalesces.
       .onChange(of: model.members) { _, members in
         model.scheduleAnalysis()
+        model.scheduleSave()
         if selectedRosterIndex >= members.count {
           selectedRosterIndex = max(0, members.count - 1)
+        }
+      }
+      .onChange(of: model.name) { _, _ in
+        model.scheduleSave()
+      }
+      .onChange(of: scenePhase) { _, phase in
+        if phase != .active {
+          Task { await model.flushSave() }
+        }
+      }
+      .onChange(of: model.showSaveConfirmation) { _, show in
+        guard show else { return }
+        Task {
+          try? await Task.sleep(nanoseconds: 1_000_000_000)
+          model.consumeSaveConfirmation()
+        }
+      }
+      .onDisappear {
+        Task {
+          await model.flushSave()
+          await onFinished?()
         }
       }
       .scrollDisabled(isReorderingRoster)
@@ -196,26 +226,17 @@ struct TeamEditorView: View {
             .foregroundStyle(Theme.onRed)
           }
           .oakLidItem()
-          if #available(iOS 26.0, *) {
-            ToolbarSpacer(.fixed, placement: .topBarTrailing)
-          }
-          ToolbarItem(placement: .topBarTrailing) {
-            if model.isSaving {
+          if model.isSaving {
+            if #available(iOS 26.0, *) {
+              ToolbarSpacer(.fixed, placement: .topBarTrailing)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
               ProgressView()
                 .tint(Theme.onRed)
-            } else if model.canSave {
-              Button("Save") {
-                Task { await saveAndConfirm() }
-              }
-              .font(Theme.body(.subheadline, weight: .semibold))
-              .foregroundStyle(Theme.onRed)
-              .padding(.horizontal, 12)
-              .padding(.vertical, 6)
-              .background(Theme.onRed.opacity(0.16), in: Capsule())
-              .overlay(Capsule().strokeBorder(Theme.onRed.opacity(0.45), lineWidth: 1))
+                .accessibilityLabel("Saving")
             }
+            .oakLidItem()
           }
-          .oakLidItem()
         }
         if model.teamId != nil {
           ToolbarItem(placement: .topBarLeading) {
@@ -240,7 +261,7 @@ struct TeamEditorView: View {
         }
       }
       .overlay(alignment: .top) {
-        if showSaveConfirmation {
+        if model.showSaveConfirmation {
           saveConfirmationBadge
             .padding(.top, 4)
             .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
@@ -286,20 +307,6 @@ struct TeamEditorView: View {
   }
 
   // MARK: Save confirmation
-
-  /// Saves the team; on success, fires the success haptic and shows the transient
-  /// "Saved" badge for ~1s before fading it back out.
-  private func saveAndConfirm() async {
-    guard await model.save() != nil else { return }
-    Haptics.success()
-    withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
-      showSaveConfirmation = true
-    }
-    try? await Task.sleep(nanoseconds: 1_000_000_000)
-    withAnimation(reduceMotion ? nil : Theme.Motion.smooth) {
-      showSaveConfirmation = false
-    }
-  }
 
   private var saveConfirmationBadge: some View {
     Label("Saved", systemImage: "checkmark.circle.fill")

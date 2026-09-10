@@ -56,8 +56,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,6 +89,7 @@ fun TeamsRoute(services: ServiceContainer, appState: AppState, modifier: Modifie
     var destination by rememberSaveable(services) { mutableStateOf(0) } // 0 = list, 1 = editor
     var editorViewModel by remember { mutableStateOf<TeamEditorViewModel?>(null) }
     var loadsOnAppear by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     fun openEditor(vm: TeamEditorViewModel, loadOnAppear: Boolean) {
         editorViewModel = vm
@@ -95,9 +98,13 @@ fun TeamsRoute(services: ServiceContainer, appState: AppState, modifier: Modifie
     }
 
     fun backToList() {
+        val editor = editorViewModel
         destination = 0
         editorViewModel = null
-        listViewModel.reload()
+        scope.launch {
+            editor?.flushSave()
+            listViewModel.reload()
+        }
     }
 
     BackHandler(enabled = destination == 1) { backToList() }

@@ -77,6 +77,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,7 +89,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -118,9 +120,10 @@ import kotlinx.coroutines.delay
  * set is editable on a phone. Mirrors iOS `TeamEditorView`.
  *
  * **Warn-but-allow**: the server's legality/validity warnings render inline (per slot
- * and team-level) but Save is never disabled. Export renders the Showdown paste with
+ * and team-level) but autosave is never blocked. Export renders the Showdown paste with
  * copy/share actions. Long-press then drag a roster-strip sprite to reorder the draft;
- * the member cards below follow on drop.
+ * the member cards below follow on drop. There is no Save button: every draft change
+ * debounces into create-or-update.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -139,6 +142,7 @@ fun TeamEditor(
     var selectedSlot by remember { mutableStateOf(0) }
     var isReorderingRoster by remember { mutableStateOf(false) }
     val haptics = rememberHaptics()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     LaunchedEffect(Unit) {
         if (loadsOnAppear) {
@@ -152,6 +156,17 @@ fun TeamEditor(
         if (state.showSaveConfirmation) {
             delay(1200)
             viewModel.consumeSaveConfirmation()
+        }
+    }
+
+    DisposableEffect(viewModel, lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.flushSaveAsync()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.flushSaveAsync()
         }
     }
 
@@ -175,9 +190,11 @@ fun TeamEditor(
                         IconButton(onClick = { showAssistant = true }) { Icon(Icons.Filled.AutoAwesome, contentDescription = "Team assistant") }
                     }
                     if (state.isSaving) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp).padding(end = OakSpacing.md), strokeWidth = 2.dp, color = oak.onRed)
-                    } else if (!viewModel.isReadOnly) {
-                        LidSaveButton(onClick = viewModel::save)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp).padding(end = OakSpacing.md),
+                            strokeWidth = 2.dp,
+                            color = oak.onRed,
+                        )
                     }
                 },
             )
@@ -320,24 +337,6 @@ fun TeamEditor(
     }
 
     DisposableEffect(assistantViewModel) { onDispose { assistantViewModel.cancel() } }
-}
-
-@Composable
-private fun LidSaveButton(onClick: () -> Unit) {
-    val oak = LocalOakColors.current
-    val shape = RoundedCornerShape(OakRadius.pill)
-    Box(
-        modifier = Modifier
-            .padding(end = OakSpacing.sm)
-            .clip(shape)
-            .background(Color.White.copy(alpha = 0.16f), shape)
-            .border(1.dp, Color.White.copy(alpha = 0.45f), shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("Save", color = oak.onRed, fontWeight = FontWeight.SemiBold)
-    }
 }
 
 @Composable

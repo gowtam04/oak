@@ -103,8 +103,8 @@ struct TeamsAssistantSheet: View {
     VStack(alignment: .leading, spacing: 12) {
       Text(
         "I can see the team you have open. Ask me to fill a slot, fix a moveset, check "
-          + "your coverage, or suggest a spread — edits apply to your unsaved draft, and "
-          + "you keep the Save button."
+          + "your coverage, or suggest a spread — edits apply to this team and save "
+          + "automatically."
       )
       .font(Theme.body(.subheadline))
       .foregroundStyle(Theme.textSecondary)

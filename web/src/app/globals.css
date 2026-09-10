@@ -4759,6 +4759,15 @@ button.scope-chip:focus-visible {
   font-weight: 600;
   color: var(--text-muted);
 }
+.team-editor__save-status {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.team-editor__save-status[data-state="saved"] {
+  color: var(--success);
+}
 .team-editor__legality {
   margin-left: auto;
   display: inline-flex;
