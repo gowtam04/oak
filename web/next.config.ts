@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   // and excludes the heavy ingest-only `@pkmn/dex`/`mods`/`data` (~217 MB). The
   // small `@pkmn/sets` (the only @pkmn runtime import in the app graph) is traced
   // in. The Dockerfile copies `.next/standalone`, `.next/static` and runs
-  // `node server.js`. See docs/architecture + fly.toml.
+  // `node start.mjs` (prune tick + server.js). See docs/architecture + fly.toml.
   output: "standalone",
   // Keep these out of the server bundle and require them at runtime; with
   // standalone output, file tracing then copies them into

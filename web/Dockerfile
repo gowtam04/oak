@@ -49,8 +49,12 @@ COPY --from=build --chown=nextjs:nodejs /app/public ./public
 # committed SQL files and a plain-ESM runner that does NOT import src/env.ts.
 COPY --from=build --chown=nextjs:nodejs /app/drizzle ./drizzle
 COPY --from=build --chown=nextjs:nodejs /app/migrate.mjs ./migrate.mjs
+# B-26 prune: plain ESM (not instrumentation.ts — Next compiles that for Edge
+# and cannot bundle `pg`). start.mjs fires the daily tick then loads server.js.
+COPY --from=build --chown=nextjs:nodejs /app/prune-turn-records.mjs ./prune-turn-records.mjs
+COPY --from=build --chown=nextjs:nodejs /app/start.mjs ./start.mjs
 
 USER nextjs
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["node", "start.mjs"]

@@ -6,8 +6,9 @@
  * full-detail windows it STRIPS fat columns and keeps analytics columns.
  * It never DELETEs rows and never touches `conversation_message`.
  *
- * No `server-only` / `src/env.ts` so the `db:prune-turns` CLI can import it
- * under tsx with only DATABASE_URL.
+ * Tests import this module. Production / `npm run db:prune-turns` use the
+ * plain-ESM twin `web/prune-turn-records.mjs` (Next cannot load `pg` from
+ * instrumentation.ts). Keep the SQL and windows in sync.
  */
 
 import type { Pool, PoolClient } from "pg";

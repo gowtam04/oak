@@ -515,8 +515,9 @@ affordance on web + iOS + Android, privacy-page copy.
 
 > **Status: COMPLETE** — `web/src/data/repos/turn-record-retention.ts` strips
 > fat columns after **14 days** (guest, `account_id IS NULL`) / **90 days**
-> (signed-in). Rows are not deleted. Daily in-process tick via
-> `web/src/instrumentation.ts` + `npm run db:prune-turns`. New signed-in
+> (signed-in). Rows are not deleted. Daily in-process tick via `web/start.mjs`
+> (Docker CMD; not `instrumentation.ts` — Next compiles that for Edge and
+> cannot bundle `pg`) + `npm run db:prune-turns`. New signed-in
 > completed turns omit `turn_record.answer_json` and store
 > `assistant_message_id` so admin `getTurn` joins `conversation_message`.
 > Ingest `VACUUM ANALYZE`s the four index tables after a successful write.

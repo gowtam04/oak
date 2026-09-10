@@ -753,7 +753,8 @@ is O(scan); a `pg_trgm` GIN index is the noted upgrade path if it ever matters.
   already runs `migrate.mjs` as its release command, so the new tables ship on
   deploy.
 - **Background jobs/queues:** recording is in-process fire-and-forget. B-26
-  adds a daily in-process prune tick (`instrumentation.ts`) plus
+  adds a daily in-process prune tick (`start.mjs` as the process CMD, because
+  Next compiles `instrumentation.ts` for Edge and cannot bundle `pg`) plus
   `npm run db:prune-turns`; not hooked to `release_command`.
 - **Secrets:** add `ADMIN_EMAILS` via `fly secrets set ADMIN_EMAILS=you@…`
   (comma-separated). No `ADMIN_EMAILS` set ⇒ zero admins ⇒ panel is dark
